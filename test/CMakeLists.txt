@@ -7,6 +7,7 @@ add_executable(mm_tests
     unit/core/unit_SpscRing.cpp
     unit/core/unit_AnalogService.cpp
     unit/core/unit_AudioCapture.cpp
+    unit/core/unit_VideoService.cpp
     unit/core/unit_platform_audiofft.cpp
     unit/core/unit_Buffer.cpp
     unit/core/unit_ScratchBuffer.cpp
@@ -165,6 +166,7 @@ add_executable(mm_tests
     unit/light/unit_Shader.cpp
     unit/light/unit_PolarLut.cpp
     unit/light/unit_PolarLut_equivalence.cpp
+    unit/light/unit_AmbilightEffect.cpp
     unit/light/unit_AuroraEffect.cpp
     unit/light/unit_NoiseEffect.cpp
     unit/light/unit_Effects_framerate.cpp

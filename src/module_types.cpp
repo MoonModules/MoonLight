@@ -84,6 +84,7 @@
 #include "light/effects/RadialSpectrumEffect.h"
 #include "light/effects/VuMetersEffect.h"
 #include "light/effects/BeatRipplesEffect.h"
+#include "light/effects/AmbilightEffect.h"
 #include "light/effects/AudioSpectrumEffect.h"
 #include "light/effects/SineEffect.h"
 #include "light/effects/DistortionWavesEffect.h"
@@ -177,6 +178,7 @@
 #include "core/system/ControlModule.h"
 #include "core/services/Services.h"
 #include "core/services/AudioService.h"
+#include "core/services/VideoService.h"
 #include "core/services/OscModule.h"
 #include "core/system/I2cBusModule.h"
 #include "core/system/TasksModule.h"
@@ -237,6 +239,7 @@ void mm::registerModuleTypes() {
     mm::ModuleFactory::registerType<mm::TubesLayout>("TubesLayout", "light/layouts.md#tubes");
     mm::ModuleFactory::registerType<mm::WheelLayout>("WheelLayout", "light/layouts.md#wheel");
     // Effects, registered alphabetically by display name: @xref{what-registertype-captures}.
+    mm::ModuleFactory::registerType<mm::AmbilightEffect>("AmbilightEffect", "light/effects.md#ambilight");
     mm::ModuleFactory::registerType<mm::AudioSpectrumEffect>("AudioSpectrumEffect", "light/effects.md#audiospectrum");
     mm::ModuleFactory::registerType<mm::RadialSpectrumEffect>("RadialSpectrumEffect", "light/effects.md#radialspectrum");
     mm::ModuleFactory::registerType<mm::VuMetersEffect>("VuMetersEffect", "light/effects.md#vumeters");
@@ -355,6 +358,7 @@ void mm::registerModuleTypes() {
     mm::ModuleFactory::registerType<mm::ControlModule>("ControlModule", "core/system.md#control");
     mm::ModuleFactory::registerType<mm::Services>("Services", "core/services.md#services");
     mm::ModuleFactory::registerType<mm::AudioService>("AudioService", "core/services.md#audio");
+    mm::ModuleFactory::registerType<mm::VideoService>("VideoService", "core/services.md#video");
     mm::ModuleFactory::registerType<mm::OscModule>("OscModule", "core/services.md#osc");
     mm::ModuleFactory::registerType<mm::I2cBusModule>("I2cBusModule", "core/system.md#i2c-bus");
     mm::ModuleFactory::registerType<mm::TasksModule>("TasksModule", "core/system.md#tasks");

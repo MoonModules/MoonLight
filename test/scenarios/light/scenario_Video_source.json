@@ -1,0 +1,317 @@
+{
+  "name": "scenario_Video_source",
+  "module": "VideoService",
+  "mode": "mutate",
+  "also": [
+    "SystemModule",
+    "Services",
+    "Layouts",
+    "GridLayout",
+    "Effects",
+    "Layer",
+    "RainbowEffect",
+    "Drivers",
+    "PreviewDriver",
+    "AmbilightEffect"
+  ],
+  "description": "Add / configure / remove the VideoService while the render pipeline runs, the video half of what scenario_Audio_mutation pins for audio. A Service is user-added at runtime, so every step asserts the pipeline keeps RENDERING through it: adding the service, writing its controls one at a time (source is an affectsPrepare control, so that write drives a full prepareTree mid-render), and removing it again. This also pins the type REGISTRY, since the runner builds every module through the firmware's own src/module_types.cpp: a service left out of it cannot be named here, where the unit tests construct the class directly and pass either way. It then adds the AmbilightEffect consumer, configures it, and REMOVES the service while the consumer is still live. That last step is what the one-active-source seat exists for: latestFrame() falls back to the static kNoVideoFrame and the effect paints black instead of dereferencing a frame whose buffer went with the service. Pixel correctness is pinned by unit_AmbilightEffect and unit_VideoService; this is the live wired-pipeline gate.",
+  "fixture": [
+    {
+      "name": "fix-system",
+      "description": "SystemModule: the device's fixed identity/vitals root, mirroring main.cpp.",
+      "op": "add_module",
+      "id": "System",
+      "type": "SystemModule"
+    },
+    {
+      "name": "fix-services",
+      "description": "Services: the top-level container user-added capability modules hang under, mirroring main.cpp where VideoService is a Service, not a System child.",
+      "op": "add_module",
+      "id": "Services",
+      "type": "Services"
+    },
+    {
+      "name": "fix-layouts",
+      "op": "add_module",
+      "id": "Layouts",
+      "type": "Layouts"
+    },
+    {
+      "name": "fix-grid",
+      "description": "The grid the pipeline renders on: 16:9 at 96x54. No effect reads the video frame in this scenario, so the layout is here to give the pipeline something real to tick, not to be sampled.",
+      "op": "add_module",
+      "id": "Grid",
+      "type": "GridLayout",
+      "parent_id": "Layouts",
+      "props": {
+        "width": 96,
+        "height": 54
+      }
+    },
+    {
+      "name": "fix-layers",
+      "op": "add_module",
+      "id": "Effects",
+      "type": "Effects",
+      "props": {
+        "layouts": "Layouts"
+      }
+    },
+    {
+      "name": "fix-layer",
+      "op": "add_module",
+      "id": "Layer",
+      "type": "Layer",
+      "parent_id": "Effects",
+      "props": {
+        "channelsPerLight": 3
+      }
+    },
+    {
+      "name": "fix-rainbow",
+      "description": "A non-video effect so the pipeline has something to render before, and after, the video pair exists.",
+      "op": "add_module",
+      "id": "Rainbow",
+      "type": "RainbowEffect",
+      "parent_id": "Layer"
+    },
+    {
+      "name": "fix-drivers",
+      "op": "add_module",
+      "id": "Drivers",
+      "type": "Drivers",
+      "props": {
+        "effects": "Effects"
+      }
+    },
+    {
+      "name": "fix-preview",
+      "op": "add_module",
+      "id": "Preview",
+      "type": "PreviewDriver",
+      "parent_id": "Drivers"
+    }
+  ],
+  "steps": [
+    {
+      "name": "measure-pipeline-only",
+      "description": "Baseline: the render pipeline runs with no video module present.",
+      "op": "measure",
+      "measure": true,
+      "bounds": {
+        "fps": {
+          "min": 1
+        }
+      },
+      "observed": {
+        "desktop-macos": {
+          "tick_us": {
+            "p50": 16,
+            "p95": 16,
+            "min": 16,
+            "max": 16,
+            "n": 1,
+            "samples": [16]
+          },
+          "last_updated": "2026-10-10"
+        }
+      }
+    },
+    {
+      "name": "add-video-module",
+      "description": "Add the VideoService under the Services container. It claims the one-active-source seat on construction and renders its test pattern; the pipeline must keep rendering.",
+      "op": "add_module",
+      "id": "Video",
+      "type": "VideoService",
+      "parent_id": "Services"
+    },
+    {
+      "name": "measure-video-added",
+      "description": "Pipeline still renders with the video service added and no consumer reading it.",
+      "op": "measure",
+      "measure": true,
+      "bounds": {
+        "fps": {
+          "min": 1
+        }
+      },
+      "observed": {
+        "desktop-macos": {
+          "tick_us": {
+            "p50": 16,
+            "p95": 16,
+            "min": 16,
+            "max": 16,
+            "n": 1,
+            "samples": [16]
+          },
+          "last_updated": "2026-10-10"
+        }
+      }
+    },
+    {
+      "name": "configure-source",
+      "description": "Select the test-pattern source. This is an affectsPrepare control, so the write drives a full prepareTree mid-render: the buffer is resized and refilled while the pipeline ticks.",
+      "op": "set_control",
+      "id": "Video",
+      "key": "source",
+      "value": 0
+    },
+    {
+      "name": "measure-video-configured",
+      "description": "Pipeline still renders after the config writes, one of which rebuilt the tree.",
+      "op": "measure",
+      "measure": true,
+      "bounds": {
+        "fps": {
+          "min": 1
+        }
+      },
+      "observed": {
+        "desktop-macos": {
+          "tick_us": {
+            "p50": 16,
+            "p95": 16,
+            "min": 16,
+            "max": 16,
+            "n": 1,
+            "samples": [16]
+          },
+          "last_updated": "2026-10-10"
+        }
+      }
+    },
+    {
+      "name": "add-video-consumer",
+      "description": "Add an AmbilightEffect under the Layer. It reads the service through the static accessor, so it picks up the live frame with nothing having wired the two together.",
+      "op": "add_module",
+      "id": "Ambi",
+      "type": "AmbilightEffect",
+      "parent_id": "Layer"
+    },
+    {
+      "name": "measure-consumer-live",
+      "description": "Producer and consumer both live: the border is being painted from the published frame.",
+      "op": "measure",
+      "measure": true,
+      "bounds": {
+        "fps": {
+          "min": 1
+        }
+      },
+      "observed": {
+        "desktop-macos": {
+          "tick_us": {
+            "p50": 70,
+            "p95": 70,
+            "min": 70,
+            "max": 70,
+            "n": 1,
+            "samples": [70]
+          },
+          "last_updated": "2026-10-10"
+        }
+      }
+    },
+    {
+      "name": "configure-consumer-brightness",
+      "description": "Configure the consumer while it renders: a plain scalar write that touches no buffer, so the resize in the next step is the only allocation under test.",
+      "op": "set_control",
+      "id": "Ambi",
+      "key": "brightness",
+      "value": 200
+    },
+    {
+      "name": "configure-consumer-smoothing",
+      "description": "Smoothing allocates the 8.8 per-channel state in prepare(), so this write resizes a live effect's buffer mid-render.",
+      "op": "set_control",
+      "id": "Ambi",
+      "key": "smoothing",
+      "value": 64
+    },
+    {
+      "name": "measure-consumer-configured",
+      "description": "Pipeline still renders after both consumer writes, one of which resized a buffer.",
+      "op": "measure",
+      "measure": true,
+      "bounds": {
+        "fps": {
+          "min": 1
+        }
+      },
+      "observed": {
+        "desktop-macos": {
+          "tick_us": {
+            "p50": 114,
+            "p95": 114,
+            "min": 114,
+            "max": 114,
+            "n": 1,
+            "samples": [114]
+          },
+          "last_updated": "2026-10-10"
+        }
+      }
+    },
+    {
+      "name": "remove-video-module",
+      "description": "Remove the service while the consumer is STILL live. latestFrame() must fall back to the static kNoVideoFrame, and the effect must paint black rather than dereference a frame whose buffer went with the service. This is the robustness rule's hardest case for this pair, and the one the seat and the borrowed-buffer teardown order exist for.",
+      "op": "remove_module",
+      "id": "Video"
+    },
+    {
+      "name": "measure-after-video-removed",
+      "description": "Pipeline still renders with an orphaned consumer and no producer.",
+      "op": "measure",
+      "measure": true,
+      "bounds": {
+        "fps": {
+          "min": 1
+        }
+      },
+      "observed": {
+        "desktop-macos": {
+          "tick_us": {
+            "p50": 20,
+            "p95": 20,
+            "min": 20,
+            "max": 20,
+            "n": 1,
+            "samples": [20]
+          },
+          "last_updated": "2026-10-10"
+        }
+      }
+    },
+    {
+      "name": "remove-video-consumer",
+      "description": "Remove the orphaned consumer too: clean teardown, pipeline still live.",
+      "op": "remove_module",
+      "id": "Ambi"
+    },
+    {
+      "name": "measure-back-to-baseline",
+      "description": "Back to the baseline tree, still rendering.",
+      "op": "measure",
+      "measure": true,
+      "bounds": {
+        "fps": {
+          "min": 1
+        }
+      },
+      "observed": {
+        "desktop-macos": {
+          "tick_us": {
+            "p50": 16,
+            "p95": 16,
+            "min": 16,
+            "max": 16,
+            "n": 1,
+            "samples": [16]
+          },
+          "last_updated": "2026-10-10"
+        }
+      }
+    }
+  ]
+}

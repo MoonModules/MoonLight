@@ -10,6 +10,28 @@ Effects are built from the shared [power functions](power-functions.md): the dra
 
 ## MoonLight effects
 
+<a id="ambilight"></a>
+
+### Ambilight 📺
+
+<img src="../../assets/light/effects/AmbilightEffect.gif" width="300" alt="Ambilight effect preview">
+
+Paints the layer with the live frame from the [Video](../core/services.md#video) service, so lights around a display glow the color of the picture nearest them. Each light shows the **mean** of the rectangle mapping to it. Sampling, black bars and the layout's part: ⌄ details.
+
+- `brightness`: scales the sampled color, dimming the video not the output.
+- `saturation`: how far each channel is pushed from its zone's luma.
+- `smoothing`: how much of the gap to a new color closes per frame.
+- `snapAbove`: a channel moving further than this jumps instead of easing.
+- `edgeDepth`: how far into the picture the outermost lights look.
+- `detectBlackBars`: map the lights across the picture, not the frame.
+- `barLevel`: how dark a pixel counts as bar (0 to 64).
+
+Origin: MoonLight original, on the Ambilight / Hyperion behavior
+
+Detail: [technical](moxygen/AmbilightEffect.md)
+
+[Tests](../../reference/tests/unit-tests.md#ambilighteffect)
+
 <a id="colortrails"></a>
 
 ### ColorTrails 💫🖌️💨🌫️ · 3D
@@ -1367,3 +1389,15 @@ Origin: MoonLight (Sinus, AI-generated) · via [MoonLight](https://github.com/ew
 Detail: [technical](moxygen/SineEffect.md)
 
 [Tests](../../reference/tests/unit-tests.md#sineeffect)
+
+## Ambilight, details
+
+**Two spaces, and the layout decides the shape.** The SOURCE is the video frame, counted in pixels; the DESTINATION is the layer's logical box, counted in light positions. The source is far the bigger, a 640x480 picture onto a strip of 60 positions, so each position owns a whole rectangle of pixels and shows their average. The effect asks the mapping only one question, whether a position lights anything, and skips the averaging where the answer is no. On a border layout that is most of the box: the interior of a backlight strip's bounding box maps to no LED, so the perimeter shows the frame's border for free. On a full grid the same effect is a video wall. A [MoonLive layout](layouts.md#moonlive) running the library's `backlight.mll` is how a strip gets placed on a wall's edge pixels.
+
+**Averaging happens in linear light.** Each zone's pixels are summed through the frame's tone curve, averaged, then encoded once per light. Averaging the raw bytes instead averages a quantity that is not proportional to light: a zone half black and half white comes out at 128 where the light is 188, which reads as a dim mush rather than a bright scene. The accumulators are 32-bit because a 640x480 frame onto 32x18 positions is about 520 pixels each, and 520 full-scale 12-bit samples overflow 16 bits many times over.
+
+**`edgeDepth` widens the outermost zones.** A border light's own share is one row or column of the frame, a sliver at the very edge, which picks up the letterbox and the overscan junk before it picks up the picture. `edgeDepth` lets the outermost positions reach a percentage of the way in instead, without changing how many of them there are. It costs work in proportion: on a layout where every light is an edge light, 15% sends the pixel count up about sixfold.
+
+**Black bars move the zones, which `edgeDepth` cannot.** A letterboxed film puts bars exactly where the top and bottom lights look, so those lights go dark while the picture is bright. `edgeDepth` only widens a zone from its edge, so the bar stays inside it. `detectBlackBars` finds the bar and maps the lights across the picture within it. A reading is adopted only once several frames agree, because bars come and go at scene changes and a mapping that follows every dark frame twitches worse than one that ignores them. Reaching the scan ceiling reports no bar at all: darkness that deep is a dark scene rather than a letterbox.
+
+**No source paints black.** With nothing publishing, the effect fills its layer with black rather than returning early, or the previous effect's picture would stay frozen on the strip. A merely dropped frame never reaches that path, since the service keeps its buffer and only a removed service drops it.
