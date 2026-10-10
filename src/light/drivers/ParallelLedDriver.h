@@ -539,9 +539,9 @@ public:
             const uint64_t mask = maskLo32 | (static_cast<uint64_t>(maskHi32) << 32);   // constant shift: cheap
             if (shift) {
                 // DATA WORDS ONLY: the pulse-start and tail are frame constants, prefilled once.
-                const uint32_t segT1 = platform::cycleCount();   // TEMP DIAGNOSTIC
+                const uint32_t segT1 = platform::cycleCount();   // the instrument's split: gather above, transpose below
                 encodeWs2812ShiftData<Slot>(wire, mask, physPins_, latchBit_, outputsPerPin(), outCh, out);
-                const uint32_t segT2 = platform::cycleCount();   // TEMP DIAGNOSTIC
+                const uint32_t segT2 = platform::cycleCount();
                 dbgSegGatherCy += segT1 - segT0;   // memset+mask+gather (since segT0 / previous row's end)
                 dbgSegEmitCy   += segT2 - segT1;   // the transpose+emit
                 dbgSegRows     += 1;

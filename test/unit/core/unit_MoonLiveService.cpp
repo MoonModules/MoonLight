@@ -11,6 +11,7 @@
 #include "core/module/Scheduler.h"
 #include "core/module/MoonModule.h"
 #include "core/system/FilesystemModule.h"
+#include "core/module/StateDocument.h"
 #include "platform/platform.h"
 
 #include <cstdio>
@@ -127,6 +128,23 @@ TEST_CASE("a scripted service declares its own controls, which a user can set") 
     }
     CHECK(sawPin);
     CHECK(sawThreshold);
+}
+
+// A script's controls exist only once it compiles, so a saved value for one lands after the compile rather than being dropped.
+TEST_CASE("a saved value of a script's own control survives the boot") {
+    Rig rig;
+    writeScript("t_saved.mls",
+                "class Saved {\n"
+                "  byte seconds = 180;\n"
+                "  void defineControls() { addControl(\"seconds\", seconds, 1, 255); }\n"
+                "  void tick20ms() { }\n"
+                "}\n");
+    const StateDocumentResult r = applyStateDocument(rig.scheduler, R"({"Script": {"script": "t_saved.mls", "seconds": 85}})", StateSource::Stored);
+    REQUIRE(r.ok);
+    rig.scheduler.prepareTree();
+    int32_t seconds = 0;
+    REQUIRE(rig.scheduler.getControlWide("Script", "seconds", seconds));
+    CHECK(seconds == 85);
 }
 
 // A script names its own choices, so a setting with a few modes reads as words on the card rather than as numbers on a slider.

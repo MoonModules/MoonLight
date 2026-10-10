@@ -38,11 +38,11 @@ void RiscvAssembler::emit32(uint32_t w) {
 }
 
 Label RiscvAssembler::newLabel() {
-    if (labelCount_ == 0) for (auto& p : labelPos_) p = -1;
+    if (labelCount_ == 0) for (auto& p : labelPos_) p = kUnbound;
     if (labelCount_ >= kMaxLabels) { overflow_ = true; return 0; }   // same overflow signal as emit32
-    Label l = labelCount_++; labelPos_[l] = -1; return l;
+    Label l = labelCount_++; labelPos_[l] = kUnbound; return l;
 }
-void RiscvAssembler::bind(Label l) { if (l < kMaxLabels) labelPos_[l] = static_cast<int32_t>(len_); }
+void RiscvAssembler::bind(Label l) { if (len_ >= kUnbound) overflow_ = true; else if (l < kMaxLabels) labelPos_[l] = static_cast<CodePos>(len_); }
 
 // A call to a function in this block, the script-to-script call, linking the return address into the standard register.
 // The callee's prologue saves it into its own frame, which is what lets calls nest and therefore recurse.
@@ -299,8 +299,8 @@ void RiscvAssembler::patchBranches() {
     if (!buf_ || overflow_) return;
     for (uint8_t i = 0; i < fixupCount_; i++) {
         const Fixup& f = fixups_[i];
-        if (labelPos_[f.label] < 0) continue;                  // unbound label — leave as-is (overflow_ already failed the compile)
-        int32_t off = labelPos_[f.label] - static_cast<int32_t>(f.at);
+        if (labelPos_[f.label] == kUnbound) continue;                  // unbound label: leave as-is (overflow_ already failed the compile)
+        int32_t off = static_cast<int32_t>(labelPos_[f.label]) - static_cast<int32_t>(f.at);
         uint32_t w; std::memcpy(&w, buf_ + f.at, 4);
         if (f.kind == FixKind::Branch) {
             // The short branch reaches a few kilobytes and no further, past which the mask below truncates the offset silently and the branch lands on whatever the low bits name.

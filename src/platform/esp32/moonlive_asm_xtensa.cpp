@@ -180,11 +180,11 @@ void XtensaAssembler::spillLoad(Reg r, uint8_t slot) {
 }
 
 Label XtensaAssembler::newLabel() {
-    if (labelCount_ == 0) for (auto& p : labelPos_) p = -1;
+    if (labelCount_ == 0) for (auto& p : labelPos_) p = kUnbound;
     if (labelCount_ >= kMaxLabels) { overflow_ = true; return 0; }   // same overflow signal as emit
-    Label l = labelCount_++; labelPos_[l] = -1; return l;
+    Label l = labelCount_++; labelPos_[l] = kUnbound; return l;
 }
-void XtensaAssembler::bind(Label l) { if (l < kMaxLabels) labelPos_[l] = static_cast<int32_t>(len_); }
+void XtensaAssembler::bind(Label l) { if (len_ >= kUnbound) overflow_ = true; else if (l < kMaxLabels) labelPos_[l] = static_cast<CodePos>(len_); }
 
 // Record a pending branch fixup, guarding the fixed table (overflow_ rather than an OOB write).
 void XtensaAssembler::addFixup(size_t at, Label label, FixKind kind) {
@@ -483,11 +483,11 @@ void XtensaAssembler::patchBranches() {
     if (!buf_ || overflow_) return;
     for (uint8_t i = 0; i < fixupCount_; i++) {
         const Fixup& f = fixups_[i];
-        if (labelPos_[f.label] < 0) continue;                                  // unbound label — leave as-is (overflow_ already failed the compile)
+        if (labelPos_[f.label] == kUnbound) continue;                                  // unbound label: leave as-is (overflow_ already failed the compile)
         uint32_t enc = 0;
         if (f.kind == FixKind::Jump) {
             // `j`: the displacement is relative to the byte AFTER the instruction and occupies bits 6..23: eighteen signed bits, so it reaches any script the code buffer can hold. Range-checked: refusing beats silently retargeting a jump.
-            const int32_t off = labelPos_[f.label] - (static_cast<int32_t>(f.at) + 4);
+            const int32_t off = static_cast<int32_t>(labelPos_[f.label]) - (static_cast<int32_t>(f.at) + 4);
             if (off < -131072 || off > 131071) { overflow_ = true; return; }
             enc = 0x06u | ((static_cast<uint32_t>(off) & 0x3ffffu) << 6);
         } else {
@@ -496,7 +496,7 @@ void XtensaAssembler::patchBranches() {
             // It stays because the alternative to noticing is a call landing mid-instruction, which the assembler rejects outright.
             // The indirect form has no such rule, which is why a call INTO a block always worked while one inside it did not.
             const int32_t base = static_cast<int32_t>(f.at & ~size_t(3));
-            const int32_t byteOff = labelPos_[f.label] - (base + 4);
+            const int32_t byteOff = static_cast<int32_t>(labelPos_[f.label]) - (base + 4);
             if ((byteOff & 3) != 0) { overflow_ = true; return; }
             const int32_t off = byteOff >> 2;
             if (off < -131072 || off > 131071) { overflow_ = true; return; }

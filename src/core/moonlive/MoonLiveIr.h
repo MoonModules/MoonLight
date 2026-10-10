@@ -139,10 +139,13 @@ constexpr uint8_t idxCount(int32_t p) { return uint8_t((p >> 16) & 0xff); }
 /// Branch targets one IR program may use.
 static constexpr uint8_t kIrLabels = 40;
 
-// THE COST IS STACK: doubling these would pass 2 KB, so move them to the heap instead.
+// THE COST IS STACK: a label is a two-byte code position, since no program passes the 16 KB code cap, so 96 of them take what 48 four-byte ones did.
 /// Labels and fixups an assembler's tables hold.
-static constexpr uint8_t kAsmLabels = 48;
+static constexpr uint8_t kAsmLabels = 96;
 static constexpr uint8_t kAsmFixups = 96;
+/// Where a label is bound in the code, or kUnbound before it is.
+using CodePos = uint16_t;
+static constexpr CodePos kUnbound = 0xFFFF;
 
 // What is live at once rather than a total, since a block hands its slots back at its brace.
 /// How many frame slots one program may hold at once.

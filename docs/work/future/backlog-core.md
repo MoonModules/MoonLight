@@ -134,15 +134,16 @@ Live slots are not saved, so after a boot only a target or a writer gives them a
 The followers then keep what they last had, and a refresh repairs them once the leader's target is back.
 Pinned by a test: a disabled target's slot produces no feedback datagram.
 
-## A MoonLive script has 48 branch labels in all (2026-10-08)
+## A MoonLive script's branch tables are fixed and on the stack (2026-10-08)
 
 **Found** on the StadBeest eyes: one more `if` in a helper turned a working script into `codegen failed: assembler overflow`.
-The assembler's label table holds 48 for the whole script, and each function takes three (entry, depth guard, exit) before its own `if`s, loops and divisions by a non-power-of-two, so eight functions leave 24.
-The compiler's own cap, `kIrLabels` at 40, follows close behind and reports "too many branches".
+Each function takes three labels (entry, depth guard, exit) before its own `if`s, loops and divisions by a non-power-of-two.
+The assembler's label table holds 96 two-byte code positions in the stack the 48 four-byte ones took (2026-10-10), which let Sauron blink.
+The nearer limits are now the compiler's own `kIrLabels` at 40, which reports "too many branches", and the 96 fixups.
 
-**The fix to build:** the label and fixup tables of all three assemblers move from members to the heap, as the code buffer already did, then `kAsmLabels`, `kAsmFixups` and `kIrLabels` rise (to 128, 255 and 96); `Label` stays a byte.
+**The fix to build:** the label and fixup tables of all three assemblers move from members to the heap, as the code buffer already did, then `kAsmFixups` and `kIrLabels` rise (to 255 and 96); `Label` stays a byte.
 The spill pass and the lowering hold `kIrLabels`-sized arrays on the stack too, so they move with it.
-Verified by compiling the shipped scripts on a classic ESP32, an S3 and a P4, whose compile stacks are the ones at risk, and pinned by a host test with a script past 48 labels on each backend.
+Verified by compiling the shipped scripts on a classic ESP32, an S3 and a P4, whose compile stacks are the ones at risk, and pinned by a host test with a script past 40 branches on each backend.
 
 ## Some devices stop answering mDNS over WiFi (2026-10-08)
 

@@ -1612,6 +1612,33 @@ TEST_CASE("a MIDI desk shows the surface: fader motors, SELECT lights and knob r
     midi.release();
 }
 
+// A ring shows a knob's value as its share of what the knob drives, so it is full at the target's top whatever that target's range.
+TEST_CASE("a MIDI desk's knob ring fills over the range of what the knob drives") {
+    Device d;
+    mm::MidiService midi;
+    midi.defineControls();
+    REQUIRE(d.scheduler.setControl("Control", "encoder2Target", "{\"value\":\"Drivers.motionHold\"}") == mm::Scheduler::SetControlResult::Ok);
+    REQUIRE(d.scheduler.setControl("Control", "encoder2", "{\"value\":240}") == mm::Scheduler::SetControlResult::Ok);   // motionHold's top
+    midi.prepare();
+    CHECK(deskSlot(midi, 17) == "b0312b");   // encoder2's ring, all eleven lights
+    midi.release();
+}
+
+// A knob given another target keeps its value, so its ring is sent again for the new range.
+TEST_CASE("a MIDI desk's knob ring follows a new target with the same value") {
+    Device d;
+    mm::MidiService midi;
+    midi.defineControls();
+    REQUIRE(d.scheduler.setControl("Drivers", "brightness", "{\"value\":200}") == mm::Scheduler::SetControlResult::Ok);
+    REQUIRE(d.scheduler.setControl("Drivers", "motionHold", "{\"value\":200}") == mm::Scheduler::SetControlResult::Ok);
+    REQUIRE(d.scheduler.setControl("Control", "encoder2Target", "{\"value\":\"Drivers.brightness\"}") == mm::Scheduler::SetControlResult::Ok);
+    midi.prepare();
+    CHECK(deskSlot(midi, 17) == "b03128");   // 200 of 255: eight lights
+    REQUIRE(d.scheduler.setControl("Control", "encoder2Target", "{\"value\":\"Drivers.motionHold\"}") == mm::Scheduler::SetControlResult::Ok);
+    CHECK(deskSlot(midi, 17) == "b03129");   // 200 of 240: nine
+    midi.release();
+}
+
 // A desk that reports its motorized fader's position back must land on the value it was sent, or the two would chase each other.
 TEST_CASE("a fader position sent to a MIDI desk decodes back to the same value") {
     Device d;
@@ -1967,6 +1994,49 @@ TEST_CASE("a Mackie desk shared over the network shows the display line of the d
         std::this_thread::sleep_for(std::chrono::milliseconds(5));
     }
     CHECK(bytes.find("brightness 200") != std::string::npos);
+    midi.release();
+    bridge.release();
+    mm::platform::setTestUsbMidiDesk(false);
+}
+
+// A quick turn arrives as several knob messages in one USB read and one network packet, so each must keep its direction on the way.
+TEST_CASE("a Mackie desk shared over the network turns a knob down as well as up") {
+    Device d;
+    mm::platform::setTestUsbMidiDesk(true);
+    mm::MidiService bridge;
+    bridge.source = mm::MidiService::kSourceUsb;
+    bridge.share = true;
+    bridge.port = 26104;
+    bridge.prepare();
+    mm::MidiService midi;
+    midi.defineControls();
+    midi.source = mm::MidiService::kSourceNetwork;
+    midi.port = 26204;
+    auto& cs = midi.controls();
+    for (uint8_t i = 0; i < cs.count(); i++)
+        if (std::strcmp(cs[i].name, "host") == 0) std::strcpy(static_cast<char*>(cs[i].ptr), "127.0.0.1:26104");
+    midi.prepare();
+    const auto exchange = [&] {
+        midi.tick20ms();
+        bridge.tick20ms();
+        sentToDesk();
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    };
+    for (int i = 0; i < 200 && std::string(bridge.status()).find("shared with") != 0; i++) exchange();
+    REQUIRE(std::string(bridge.status()).find("shared with") == 0);
+
+    const uint8_t start = surfaceValue(d, "encoder1");
+    const uint8_t up[1][4] = {{0x0B, 0xB0, 0x10, 0x0A}};
+    mm::platform::injectTestUsbMidi(up, 1);
+    for (int i = 0; i < 200 && surfaceValue(d, "encoder1") == start; i++) exchange();
+    const uint8_t raised = surfaceValue(d, "encoder1");
+    CHECK(raised > start);
+    const uint8_t down[5][4] = {{0x0B, 0xB0, 0x10, 0x41}, {0x0B, 0xB0, 0x10, 0x41}, {0x0B, 0xB0, 0x10, 0x42},
+                                {0x0B, 0xB0, 0x10, 0x41}, {0x0B, 0xB0, 0x10, 0x41}};
+    mm::platform::injectTestUsbMidi(down, 5);
+    for (int i = 0; i < 200 && surfaceValue(d, "encoder1") == raised; i++) exchange();
+    for (int i = 0; i < 20; i++) exchange();
+    CHECK(surfaceValue(d, "encoder1") == raised - 6);
     midi.release();
     bridge.release();
     mm::platform::setTestUsbMidiDesk(false);

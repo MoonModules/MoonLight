@@ -354,6 +354,7 @@ public:
         if (std::strstr(controlName, "Target") != nullptr) {
             rebuildControls();
             followTargets();
+            resendEncoders();
             return;
         }
         for (uint8_t i = 0; i < kFaderCount; i++) {
@@ -545,7 +546,16 @@ public:
         }
         for (uint8_t b = 0; b < 3; b++)
             for (; next[b] < kAutoSlots; next[b]++) changed |= setAuto(banks[b][next[b]], nullptr, nullptr);
-        if (changed) rebuildControls();   // the cards show what each slot drives now
+        if (!changed) return;
+        rebuildControls();   // the cards show what each slot drives now
+        followTargets();
+        resendEncoders();
+    }
+
+    /// Show every encoder again, since a ring is scaled by what its knob drives, which just changed.
+    void resendEncoders() {
+        for (uint8_t s = 0; s < surfaceCount_; s++)
+            for (uint8_t i = 0; i < kEncoderCount; i++) surfaces_[s]->sendValue(SurfaceControl::Encoder, i, encoders_[i]);
     }
 
     /// Automap after every rebuild walk, which is when the focus and a script's controls can change.
@@ -553,28 +563,24 @@ public:
 
     /// Drives whatever `switchTarget` declares.
     void driveSwitch(uint8_t index) {
-        const char* target = switchTarget(index);
-        if (!target || index >= kSwitchCount) return;
-        const char* dot = std::strchr(target, '.');
-        if (!dot) return;
+        if (index >= kSwitchCount) return;
+        char module[24];
+        const char* name = splitTarget(switchTarget(index), module);
+        if (!name) return;
         auto* sched = Scheduler::instance();
         if (!sched) return;
-        char module[24];
-        const size_t n = std::min(static_cast<size_t>(dot - target), sizeof(module) - 1);
-        std::memcpy(module, target, n);
-        module[n] = '\0';
         // A button takes every write as a press, so a switch drives one on the way down only.
-        const ControlDescriptor* tc = findControl(module, dot + 1);
+        const ControlDescriptor* tc = findControl(module, name);
         if (tc && tc->type == ControlType::Button && !switches_[index]) return;
         // An unchanged target is not rewritten, as in driveSurface; `enabled` is no declared control yet reads back the same way, and rewriting it rebuilds the tree.
         int32_t current = 0;
-        if ((!tc || tc->type != ControlType::Button) && sched->getControlWide(module, dot + 1, current)
+        if ((!tc || tc->type != ControlType::Button) && sched->getControlWide(module, name, current)
             && (current != 0) == switches_[index]) return;
         char body[32];
         std::snprintf(body, sizeof(body), "{\"value\":%s}", switches_[index] ? "true" : "false");
-        sched->setControl(module, dot + 1, body);
+        sched->setControl(module, name, body);
         // On or off rather than 1 or 0, and a module's `enabled` named by its module, since every such switch drives `enabled`.
-        writeStrip("%s %s", std::strcmp(dot + 1, "enabled") == 0 ? module : dot + 1, switches_[index] ? "on" : "off");
+        writeStrip("%s %s", std::strcmp(name, "enabled") == 0 ? module : name, switches_[index] ? "on" : "off");
     }
 
     /// Read every bound control back, so a surface FOLLOWS what it drives.
@@ -601,22 +607,48 @@ public:
         return nullptr;
     }
 
-    /// One control's read-back.
-    bool pullTarget(SurfaceControl kind, uint8_t index, uint8_t& value) {
-        const char* target = kind == SurfaceControl::Switch  ? switchTarget(index)
-                           : kind == SurfaceControl::Encoder ? encoderTarget(index)
-                                                             : surfaceTarget(index);
-        if (!target) return false;                    // unassigned: nothing to follow
-        const char* dot = std::strchr(target, '.');
-        if (!dot) return false;
-        auto* sched = Scheduler::instance();
-        if (!sched) return false;
-        char module[24];
+    /// What a surface control drives, as "Module.control", or null when it drives nothing yet.
+    const char* targetOf(SurfaceControl kind, uint8_t index) const {
+        return kind == SurfaceControl::Switch  ? switchTarget(index)
+             : kind == SurfaceControl::Encoder ? encoderTarget(index)
+                                               : surfaceTarget(index);
+    }
+
+    /// Split "Module.control" into the module's name, written to `module`, and the control's, returned; null when there is none.
+    static const char* splitTarget(const char* target, char (&module)[24]) {
+        const char* dot = target ? std::strchr(target, '.') : nullptr;
+        if (!dot) return nullptr;
         const size_t n = std::min(static_cast<size_t>(dot - target), sizeof(module) - 1);
         std::memcpy(module, target, n);
         module[n] = '\0';
+        return dot + 1;
+    }
+
+    /// The values a control takes, from `lo` to `hi`, a choice counted to its last option.
+    static void rangeOf(const ControlDescriptor& c, int& lo, int& hi) {
+        lo = c.min;
+        hi = (c.type == ControlType::Select || c.type == ControlType::Palette) ? static_cast<int>(c.max) - 1
+                                                                               : static_cast<int>(c.max);
+    }
+
+    /// The values what a surface control drives takes; false when it drives nothing.
+    bool targetRange(SurfaceControl kind, uint8_t index, int& lo, int& hi) const {
+        char module[24];
+        const char* name = splitTarget(targetOf(kind, index), module);
+        const ControlDescriptor* tc = name ? findControl(module, name) : nullptr;
+        if (tc) rangeOf(*tc, lo, hi);
+        return tc != nullptr;
+    }
+
+    /// One control's read-back.
+    bool pullTarget(SurfaceControl kind, uint8_t index, uint8_t& value) {
+        char module[24];
+        const char* name = splitTarget(targetOf(kind, index), module);
+        if (!name) return false;                      // unassigned: nothing to follow
+        auto* sched = Scheduler::instance();
+        if (!sched) return false;
         uint8_t live = 0;
-        if (!sched->getControl(module, dot + 1, live)) return false;
+        if (!sched->getControl(module, name, live)) return false;
         if (live == value) return false;
         value = live;
         return true;
@@ -624,34 +656,28 @@ public:
 
     /// Write a surface control's value onto whatever it targets.
     void driveSurface(SurfaceControl kind, uint8_t index) {
-        const char* target = kind == SurfaceControl::Encoder ? encoderTarget(index)
-                                                             : surfaceTarget(index);
-        if (!target) return;                          // unassigned
-        const char* dot = std::strchr(target, '.');
-        if (!dot) return;
+        char module[24];
+        const char* name = splitTarget(targetOf(kind, index), module);
+        if (!name) return;                            // unassigned
         auto* sched = Scheduler::instance();
         if (!sched) return;
-        char module[24];
-        const size_t n = std::min(static_cast<size_t>(dot - target), sizeof(module) - 1);
-        std::memcpy(module, target, n);
-        module[n] = '\0';
         uint8_t value = kind == SurfaceControl::Encoder ? encoders_[index] : faders_[index];
         // Clamped to the TARGET's range before writing:
-        if (const ControlDescriptor* tc = findControl(module, dot + 1)) {
-            const int hi = (tc->type == ControlType::Select || tc->type == ControlType::Palette)
-                               ? static_cast<int>(tc->max) - 1 : static_cast<int>(tc->max);
+        if (const ControlDescriptor* tc = findControl(module, name)) {
+            int lo = 0, hi = 255;
+            rangeOf(*tc, lo, hi);
             if (value > hi) value = static_cast<uint8_t>(hi < 0 ? 0 : hi);
-            if (value < tc->min) value = tc->min;
+            if (value < lo) value = static_cast<uint8_t>(lo);
         }
         // And the control itself holds what it wrote, so the next read agrees with the target.
         if (kind == SurfaceControl::Encoder) encoders_[index] = value; else faders_[index] = value;
         // An unchanged target is not rewritten: an OSC echo of a sent value would otherwise read as a player taking a self-playing game's control.
         int32_t current = 0;
-        if (sched->getControlWide(module, dot + 1, current) && current == value) return;
+        if (sched->getControlWide(module, name, current) && current == value) return;
         char body[32];
         std::snprintf(body, sizeof(body), "{\"value\":%u}", static_cast<unsigned>(value));
-        sched->setControl(module, dot + 1, body);
-        showOnStrip(module, dot + 1, value);
+        sched->setControl(module, name, body);
+        showOnStrip(module, name, value);
         followTargets();   // siblings on the same target update now, not at the next pass
     }
 

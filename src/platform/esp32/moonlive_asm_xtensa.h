@@ -166,7 +166,7 @@ private:
     size_t   len_ = 0;
     bool     overflow_ = false;
 
-    int32_t  labelPos_[kMaxLabels];
+    CodePos  labelPos_[kMaxLabels];
     uint8_t  labelCount_ = 0;
     Fixup    fixups_[kMaxFixups];
     uint8_t  fixupCount_ = 0;
