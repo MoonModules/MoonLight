@@ -72,6 +72,10 @@ public:
         // Applied unconditionally, so brightness works even before the fixture-profile library is up.
         const uint8_t tableBrightness = adoptBrightness(globalBrightness);
         correction_.whiteMode = static_cast<WhiteMode>(whiteMode_);
+        correction_.balRed = balanceRed_;
+        correction_.balGreen = balanceGreen_;
+        correction_.balBlue = balanceBlue_;
+        correction_.whiteLevel = whiteLevel_;
         correction_.curve = static_cast<Correction::Curve>(curveSel_);
         // A missing id falls back to the default, so a driver degrades rather than crashing.
         if (auto* lib = FixtureProfilesModule::active()) {
@@ -87,7 +91,7 @@ public:
         }
         // Allocated the first time the table is wanted and kept until release, since the encode task may be reading it while this rebuild runs.
         const bool firstTable = correction_.wantsTable() && !lut16_;
-        if (firstTable) lut16_.resize(256);
+        if (firstTable) lut16_.resize(Correction::kRows * 256);   // one row per trim, as briLut carries
         correction_.lut16 = lut16_.data();
         if (firstTable) correction_.rebuildBrightness(tableBrightness);   // a table that existed was filled by the rebuild above
         onCorrectionChanged();      // let a driver resize its correction-applied buffer
@@ -183,6 +187,8 @@ protected:
     uint32_t profileId_ = 0;          // stable id into the FixtureProfiles library (0 → resolve to default)
     uint8_t fixtureSel_ = 0;          // the fixture Select's chosen INDEX (mapped to an id in onControlChanged)
     uint8_t whiteMode_ = static_cast<uint8_t>(WhiteMode::Min);  // index into kWhiteModeOptions
+    uint8_t balanceRed_ = 255, balanceGreen_ = 255, balanceBlue_ = 255;   // per-channel white balance, 255 = untouched
+    uint8_t whiteLevel_ = 255;                                           // the white die's own trim
     uint8_t localBrightness_ = 255;  // per-driver dim, multiplied with the global brightness
     /// Which perceptual curve the output LUT is built through; CIE lightness by default.
     uint8_t curveSel_ = 0;           // index into kCurveOptions; 0 = CIE
@@ -208,10 +214,17 @@ protected:
         buildFixtureOptions();                        // fill fixtureOptions_ from the library, sync id and row
         controls_.addSelect("fixture", fixtureSel_, fixtureOptions_, fixtureOptionCount_);
         controls_.setPersistLabel(controls_.count() - 1);   // saved by name, so a longer or reordered library never moves it
+        // Trim DOWN only: there is no headroom above 255, so raising clips rather than balancing. A strip whose green die runs hot is corrected here rather than in every effect.
+        controls_.addControl("balanceRed", balanceRed_, 0, 255);
+        controls_.addControl("balanceGreen", balanceGreen_, 0, 255);
+        controls_.addControl("balanceBlue", balanceBlue_, 0, 255);
         controls_.addSelect("whiteMode", whiteMode_, kWhiteModeOptions, kWhiteModeCount);
         // Hidden unless the referenced profile carries a channel there is something to synthesize for.
         auto* lib = FixtureProfilesModule::active();
         controls_.setHidden(controls_.count() - 1, !(lib && lib->profileHasSynthChannel(profileId_)));
+        // A separate emitter the three RGB trims cannot reach, so it carries its own.
+        controls_.addControl("whiteLevel", whiteLevel_, 0, 255);
+        controls_.setHidden(controls_.count() - 1, !(lib && lib->profileHasWhiteDie(profileId_)));
         // Hidden, and only read: the name an older config saved.
         controls_.addText("fixtureRef", fixtureRef_, sizeof(fixtureRef_));
         controls_.setHidden(controls_.count() - 1, true);
@@ -223,7 +236,9 @@ protected:
     /// Whether `name` is one of the correction controls, for a driver's own prepare test.
     static bool isCorrectionControl(const char* name) {
         return std::strcmp(name, "fixture") == 0 || std::strcmp(name, "fixtureRef") == 0 || std::strcmp(name, "localBrightness") == 0
-            || std::strcmp(name, "whiteMode") == 0 || std::strcmp(name, "curve") == 0;
+            || std::strcmp(name, "whiteMode") == 0 || std::strcmp(name, "curve") == 0
+            || std::strcmp(name, "balanceRed") == 0 || std::strcmp(name, "balanceGreen") == 0
+            || std::strcmp(name, "balanceBlue") == 0 || std::strcmp(name, "whiteLevel") == 0;
     }
 
 private:

@@ -21,7 +21,9 @@ The block every driver card opens with, shown here on RMT LED. Added once by [`D
 - `localBrightness`: this driver's dim (0–255), multiplied with the global brightness.
 - `curve`: brightness to output: `CIE 1931`, `gamma 2.2`, `gamma 2.8`, or `linear`.
 - `fixture`: the [fixture profile](supporting.md) applied per light, for order and white.
+- `balanceRed`, `balanceGreen`, `balanceBlue`: trim one die down (0–255) to correct a color cast.
 - `whiteMode`: how W is derived, shown when the profile carries a W channel.
+- `whiteLevel`: the white die's own trim, shown when the profile carries one.
 - `start`: first light of the shared buffer this driver reads (default `0`).
 - `count`: how many lights from `start`. **Blank drives all of them.**
 
@@ -244,6 +246,13 @@ Detail: [technical](moxygen/RtspDriver.md) · [the RTP packetiser](moxygen/RtpH2
 <a id="shared-details"></a>
 
 ## Shared, details
+
+**White balance corrects the dies, not the picture.** An LED's three emitters are not equally efficient, and on an SK6812 the green runs hot, so a neutral triple renders green-cast and grey scenes come out tinted. `balanceRed`, `balanceGreen` and `balanceBlue` trim one channel down to meet the others. Trim **down only**: there is no headroom above 255, so raising a channel clips instead of balancing it. Set this once for the strip and every effect is corrected at the output, rather than each one guessing.
+
+**The white die carries its own trim.** `whiteLevel` reaches the W and warm-W emitters alone, which the three RGB trims cannot: a white phosphor is separate hardware, often brighter than the trio beside it. It is shown only when the referenced profile carries a white channel, a narrower test than `whiteMode`'s, so a profile with amber or UV but no white does not offer a slider that changes nothing. Amber and UV read an untrimmed row for the same reason: they are their own dies, and an RGB trim says nothing about them.
+
+**One table, not two stages.** A trim is a linear **pre-scale** folded into the same fill that applies the curve, so the hot path stays one lookup per channel and the curve still lands last. The table carries a row per trim, and the 16-bit table a driver allocates for fine channels carries the same rows, so a 16-bit output is balanced exactly as an 8-bit one is.
+
 **A `fixture` reference survives some changes and not others.** The driver holds the profile's stable id at runtime, so **reordering** profiles never disturbs it, and the reference **survives a reboot** because the profile's name is persisted and re-resolved on load. The caveat is **renaming**: within a session the id keeps the link, but after a reboot a renamed profile no longer matches the persisted name and the driver falls back to the default. Re-pick it if you rename a profile a driver uses.
 
 **`start` and `count` are how several drivers share one buffer.** Blank `count` drives every light; a number drives only that slice. An onboard status LED takes `start 0, count 1` while the main strip runs from `start 1`, both reading the same buffer.
