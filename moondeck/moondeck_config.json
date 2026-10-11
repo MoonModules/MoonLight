@@ -11,7 +11,7 @@
     },
     {
       "id": "compile_tests",
-      "tab": "desktop",
+      "tab": "repo",
       "group": "test",
       "label": "Compile Tests",
       "speed": "slow",
@@ -23,7 +23,7 @@
     },
     {
       "id": "test_desktop",
-      "tab": "desktop",
+      "tab": "repo",
       "group": "test",
       "label": "Unit Test",
       "speed": "medium",
@@ -33,7 +33,7 @@
     },
     {
       "id": "test_host",
-      "tab": "desktop",
+      "tab": "repo",
       "group": "test",
       "label": "Host Tests",
       "speed": "medium",
@@ -42,7 +42,7 @@
     },
     {
       "id": "scenario_pipeline",
-      "tab": "desktop",
+      "tab": "repo",
       "group": "test",
       "label": "Scenarios",
       "speed": "medium",
@@ -73,7 +73,7 @@
     },
     {
       "id": "preview_installer",
-      "tab": "desktop",
+      "tab": "repo",
       "group": "run",
       "label": "Installer Preview",
       "speed": "medium",
@@ -95,7 +95,7 @@
     },
     {
       "id": "check_module",
-      "tab": "desktop",
+      "tab": "repo",
       "group": "tools",
       "label": "All Tools on Module",
       "speed": "medium",
@@ -105,7 +105,7 @@
     },
     {
       "id": "check_clang_tidy",
-      "tab": "desktop",
+      "tab": "repo",
       "group": "tools",
       "label": "clang-tidy",
       "speed": "slow",
@@ -115,7 +115,7 @@
     },
     {
       "id": "check_clang_query",
-      "tab": "desktop",
+      "tab": "repo",
       "group": "tools",
       "label": "clang-query",
       "speed": "medium",
@@ -124,7 +124,7 @@
     },
     {
       "id": "check_nonblocking",
-      "tab": "desktop",
+      "tab": "repo",
       "group": "tools",
       "label": "clang-hotpath",
       "speed": "slow",
@@ -133,7 +133,7 @@
     },
     {
       "id": "check_code",
-      "tab": "desktop",
+      "tab": "repo",
       "group": "tools",
       "label": "Code report",
       "speed": "medium",
@@ -142,7 +142,7 @@
     },
     {
       "id": "check_codeql",
-      "tab": "desktop",
+      "tab": "repo",
       "group": "tools",
       "label": "CodeQL (CI alerts)",
       "speed": "instant",
@@ -159,7 +159,7 @@
     },
     {
       "id": "check_footprint",
-      "tab": "desktop",
+      "tab": "repo",
       "group": "tools",
       "label": "Footprint (ESP32)",
       "speed": "instant",
@@ -168,7 +168,7 @@
     },
     {
       "id": "check_specs",
-      "tab": "desktop",
+      "tab": "repo",
       "group": "check",
       "label": "Spec Check",
       "speed": "instant",
@@ -177,7 +177,7 @@
     },
     {
       "id": "check_docgen",
-      "tab": "desktop",
+      "tab": "repo",
       "group": "check",
       "label": "Docgen Check",
       "speed": "instant",
@@ -196,7 +196,7 @@
     },
     {
       "id": "check_devices",
-      "tab": "desktop",
+      "tab": "repo",
       "group": "check",
       "label": "Board Catalog",
       "speed": "instant",
@@ -205,7 +205,7 @@
     },
     {
       "id": "check_firmwares",
-      "tab": "desktop",
+      "tab": "repo",
       "group": "check",
       "label": "Firmware List",
       "speed": "instant",
@@ -214,7 +214,7 @@
     },
     {
       "id": "collect_kpi",
-      "tab": "desktop",
+      "tab": "repo",
       "group": "check",
       "label": "KPI Report",
       "speed": "slow",
@@ -223,7 +223,7 @@
     },
     {
       "id": "repo_health",
-      "tab": "desktop",
+      "tab": "repo",
       "group": "check",
       "label": "Repo Health",
       "speed": "medium",
@@ -232,7 +232,7 @@
     },
     {
       "id": "history_report",
-      "tab": "desktop",
+      "tab": "repo",
       "group": "check",
       "label": "History Report",
       "speed": "instant",
@@ -241,7 +241,7 @@
     },
     {
       "id": "install_playwright",
-      "tab": "desktop",
+      "tab": "repo",
       "group": "docs",
       "label": "Install Playwright",
       "speed": "slow",
@@ -250,7 +250,7 @@
     },
     {
       "id": "screenshot_modules",
-      "tab": "desktop",
+      "tab": "repo",
       "group": "docs",
       "label": "Screenshot Modules",
       "speed": "slow",
@@ -275,7 +275,7 @@
     },
     {
       "id": "update_module_docs",
-      "tab": "desktop",
+      "tab": "repo",
       "group": "docs",
       "label": "Update Module Docs",
       "speed": "slow",
@@ -284,7 +284,7 @@
     },
     {
       "id": "build_docs",
-      "tab": "desktop",
+      "tab": "repo",
       "group": "docs",
       "label": "Preview Docs Site",
       "speed": "slow",
@@ -488,6 +488,44 @@
       "help": "wled_migration_test",
       "script": "build/wled_migration_test.py",
       "needs_port": true
+    },
+    {
+      "id": "setup_teensy",
+      "tab": "teensy",
+      "group": "setup",
+      "label": "Setup SDK",
+      "speed": "slow",
+      "help": "setup_teensy",
+      "script": "build/setup_teensy.py"
+    },
+    {
+      "id": "build_teensy",
+      "tab": "teensy",
+      "group": "build",
+      "label": "Build",
+      "speed": "slow",
+      "help": "build_teensy",
+      "script": "build/build_teensy.py"
+    },
+    {
+      "id": "flash_teensy",
+      "tab": "teensy",
+      "group": "flash",
+      "label": "Flash",
+      "speed": "medium",
+      "help": "flash_teensy",
+      "script": "build/flash_teensy.py"
+    },
+    {
+      "id": "monitor_teensy",
+      "tab": "teensy",
+      "group": "run",
+      "label": "Monitor",
+      "speed": "medium",
+      "help": "monitor_teensy",
+      "script": "run/monitor_teensy.py",
+      "long_running": true,
+      "process_name": "monitor_teensy"
     }
   ]
 }

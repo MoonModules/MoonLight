@@ -75,7 +75,7 @@ Plus the [shared controls](#shared-driver-controls) above:
 
 Tests: [shared + peripherals](../../reference/tests/unit-tests.md#parallelleddriver)
 
-Detail: [technical](moxygen/ParallelLedDriver.md) · peripherals: [i80](moxygen/I80Peripheral.md) · [MoonI80](moxygen/MoonI80Peripheral.md) · [Parlio](moxygen/ParlioPeripheral.md)
+Detail: [technical](moxygen/ParallelLedDriver.md) · peripherals: [i80](moxygen/I80Peripheral.md) · [MoonI80](moxygen/MoonI80Peripheral.md) · [Parlio](moxygen/ParlioPeripheral.md) · [GPIO-DMA](moxygen/GpioDmaPeripheral.md)
 
 <a id="hub75"></a>
 
@@ -244,7 +244,7 @@ Detail: [technical](moxygen/RtspDriver.md) · [the RTP packetiser](moxygen/RtpH2
 <a id="shared-details"></a>
 
 ## Shared, details
-**A `fixture` reference survives some changes and not others.** The driver holds the profile's stable id at runtime, so **reordering** profiles never disturbs it, and the reference **survives a reboot** because the profile's name is persisted and re-resolved on load. The caveat is **renaming**: within a session the id keeps the link, but after a reboot a renamed profile no longer matches the persisted name and the driver falls back to the default. Re-pick it if you rename a profile a driver uses.
+**A `fixture` reference survives some changes and not others.** The driver holds the profile's stable id at runtime, so **reordering** profiles never disturbs it, and the reference **survives a reboot** because the profile's name is persisted and re-resolved on load. The caveat is **renaming**: within a session the id keeps the link, but after a reboot a renamed profile misses the persisted name and the driver falls back to the default. Re-pick it if you rename a profile a driver uses.
 
 **`start` and `count` are how several drivers share one buffer.** Blank `count` drives every light; a number drives only that slice. An onboard status LED takes `start 0, count 1` while the main strip runs from `start 1`, both reading the same buffer.
 
@@ -260,6 +260,8 @@ Detail: [technical](moxygen/RtspDriver.md) · [the RTP packetiser](moxygen/RtpH2
 
 **Whose work this is.** The clockless I2S / RMT / Parlio techniques come from [hpwit (Yves Bazin)](https://github.com/hpwit), whose work is why a single board can drive dozens of parallel strands at all ([analysis](../../work/future/leddriver-analysis-top-down.md)), on WS2812B prior art from FastLED and WLED.
 
+**`GPIO-DMA` on the Teensy 4.1.** A timer ticks every 373 ns, and on each tick one DMA channel writes the next slot of the encoded frame into the GPIO port, so the strands change together and the CPU is free while the frame clocks out. The encoding is the one every peripheral here shares: three slots per WS2812 bit. The port takes only 32-bit writes, so the platform widens each slot into a port word before the transfer. The DMA reads that wider copy, so the next frame encodes while the current one is still on the wire: the overlap `doubleBuffer` buys elsewhere, without a second buffer, and with the control having no effect. A 256-light strand clocks out in 7.2 ms. The lanes are the 16 pins of one GPIO port, in any order. The driver is MoonLight's own; OctoWS2811 and ObjectFLED were the prior art for the timer and DMA setup. Wiring, power and an example breadboard: [the Teensy 4.1 page](../../reference/hardware/teensy-4-1.md).
+
 **Which one do I want?**
 
 | Want | Use |
@@ -268,6 +270,7 @@ Detail: [technical](moxygen/RtspDriver.md) · [the RTP packetiser](moxygen/RtpH2
 | Many strands, up to 16 | Parallel LED on **`i80`**, the proven scale path |
 | Up to 16 strands on a **P4** | Parallel LED on **`Parlio`**, which needs no clock pin |
 | More lights than one DMA buffer holds, or more strands than you have GPIOs | Parallel LED on **`MoonI80`** |
+| Up to 16 strands on a **Teensy 4.1** | Parallel LED on **`GPIO-DMA`**, the one peripheral there |
 
 Start with `i80`. Choose `MoonI80` only when you hit one of those two limits: it drives the same pins the same way, streams the frame instead of holding it whole, and can drive a 74HCT595 pin expander so 6 pins reach 48 strands. Both are `peripheral` choices on the one Parallel LED driver, so switching is a control change on one board with no reflash.
 
@@ -278,6 +281,7 @@ Start with `i80`. Choose `MoonI80` only when you hit one of those two limits: it
 | **`i80`** | S3, P4, S31, and the classic ESP32 | 1 to 16 |
 | **`MoonI80`** | S3, P4, S31 | 1 to 16, or 8 per pin through an expander |
 | **`Parlio`** | P4 | 1 to 16 |
+| **`GPIO-DMA`** | Teensy 4.1 | 1 to 16, on pins 0, 1, 14 to 27 and 38 to 41 |
 
 RMT is its own driver rather than a `peripheral`, and runs on any ESP32: one strand per RMT channel, which is 8 on the classic and 4 on an S3 or P4.
 
@@ -285,7 +289,7 @@ RMT is its own driver rather than a `peripheral`, and runs on any ESP32: one str
 
 **Lane, pin, strand.** A lane is one bus data line, a strand is one chain of LEDs. Wired directly, one pin is one lane is one strand. Through an expander each data pin feeds one '595 and fans out to 8 strands, so 8 data pins reach the driver's ceiling of 64.
 
-How the frame is built, the DMA each peripheral programs, and the expert `ring*` tuning are on the API pages: [Parallel LED](moxygen/ParallelLedDriver.md), [i80](moxygen/I80Peripheral.md), [MoonI80](moxygen/MoonI80Peripheral.md), [Parlio](moxygen/ParlioPeripheral.md), [RMT](moxygen/RmtLedDriver.md), [slot encoder](moxygen/ParallelSlots.md).
+How the frame is built, the DMA each peripheral programs, and the expert `ring*` tuning are on the API pages: [Parallel LED](moxygen/ParallelLedDriver.md), [i80](moxygen/I80Peripheral.md), [MoonI80](moxygen/MoonI80Peripheral.md), [Parlio](moxygen/ParlioPeripheral.md), [GPIO-DMA](moxygen/GpioDmaPeripheral.md), [RMT](moxygen/RmtLedDriver.md), [slot encoder](moxygen/ParallelSlots.md).
 
 <a id="network-send-details"></a>
 
@@ -341,7 +345,7 @@ An encoder your ffmpeg lacks starts and exits immediately; the status then reads
 
 **The bitrate is derived, not a setting.** It follows from the grid size and `targetFps` at about 0.1 bits per pixel per frame, which puts a 512x512 wall at 30 fps near 800 kbit; a 128x128 lands under the 500 kbit floor the derivation clamps to. `targetFps` is the knob for bandwidth, and the better trade for LED content: fewer frames rather than a blockier picture.
 
-**Where the segments live.** On desktop, the transient `/.hls/` directory, served at `/hls/` and excluded from config backups. Large grids trade framerate, the render loop being single-threaded: 512x512 streams smoothly, TV-native resolutions do not yet.
+**Where the segments live.** On desktop, the transient `/.hls/` directory, served at `/hls/` and excluded from config backups. Large grids trade framerate, the render loop being single-threaded: 512x512 streams smoothly, TV-native resolutions stutter.
 
 <a id="rtsp-details"></a>
 

@@ -1,0 +1,780 @@
+/// @defgroup platform_teensy The Teensy 4.1 platform layer
+/// @{
+/// The platform seam on PJRC's Teensy 4 core: one core, no RTOS, settings in LittleFS on program flash, Ethernet through a W5500.
+
+#include "platform/platform.h"
+
+#include <Arduino.h>
+#include <CrashReport.h>
+#include <LittleFS.h>
+#include <QNEthernet.h>
+#include <qnethernet/QNDNSClient.h>
+#include <lwip/opt.h>
+
+#include <cerrno>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <malloc.h>
+#include <string>
+#include <vector>
+
+extern "C" {
+extern unsigned long _heap_start;   // the linker script's OCRAM heap, which sbrk grows through
+extern unsigned long _heap_end;
+extern char* __brkval;
+extern unsigned long _flashimagelen;
+
+// The desktop's live UI folder is tried through stdio first; with no stdio filesystem here, the open fails and the embedded UI is served.
+int _open(const char*, int, ...) { errno = ENOSYS; return -1; }
+}
+
+namespace mm::platform {
+
+
+// --- Time ---------------------------------------------------------------------------------------
+
+uint32_t millis() MM_NONBLOCKING { return ::millis(); }
+uint32_t micros() MM_NONBLOCKING { return ::micros(); }
+uintptr_t currentThreadId() MM_NONBLOCKING { return 1; }   // one thread, and the id is never zero
+uint32_t cycleCount() { return ARM_DWT_CYCCNT; }
+uint8_t currentCore() { return 0; }
+void yield() { ::yield(); }
+void pauseLoop() { ::yield(); }   // nothing else needs the core
+void delayMs(uint32_t ms) { ::delay(ms); }
+void delayUs(uint32_t us) { ::delayMicroseconds(us); }
+
+// --- Heap: malloc on OCRAM, with the size kept before each block so the counters stay exact -----
+
+namespace {
+constexpr size_t kAllocHeader = 8;   // malloc's alignment on the Cortex-M7
+size_t g_allocatedBytes = 0;
+size_t g_allocatedPeak = 0;
+uint32_t g_allocCount = 0;
+
+size_t heapTop() { return reinterpret_cast<size_t>(&_heap_end) - reinterpret_cast<size_t>(__brkval); }
+}  // namespace
+
+void* alloc(size_t bytes) {
+    void* raw = std::malloc(bytes + kAllocHeader);
+    if (!raw) return nullptr;
+    *static_cast<size_t*>(raw) = bytes;
+    g_allocatedBytes += bytes;
+    if (g_allocatedBytes > g_allocatedPeak) g_allocatedPeak = g_allocatedBytes;
+    g_allocCount++;
+    return static_cast<uint8_t*>(raw) + kAllocHeader;
+}
+
+void free(void* ptr) {
+    if (!ptr) return;
+    void* raw = static_cast<uint8_t*>(ptr) - kAllocHeader;
+    g_allocatedBytes -= *static_cast<size_t*>(raw);
+    g_allocCount--;
+    std::free(raw);
+}
+
+void* allocInternal(size_t bytes) { return alloc(bytes); }   // one RAM, no PSRAM to keep out of
+
+size_t allocatedBytes() { return g_allocatedBytes; }
+size_t allocatedPeak() { return g_allocatedPeak; }
+uint32_t allocatedCount() { return g_allocCount; }
+
+size_t freeHeap() { return heapTop() + mallinfo().fordblks; }
+size_t freeInternalHeap() { return freeHeap(); }
+// malloc keeps freed memory at the top as its "top chunk" (keepcost) rather than returning it, and that chunk borders the never-used space.
+size_t maxAllocBlock() { return heapTop() + mallinfo().keepcost; }
+size_t maxInternalAllocBlock() { return maxAllocBlock(); }
+size_t totalHeap() { return reinterpret_cast<size_t>(&_heap_end) - reinterpret_cast<size_t>(&_heap_start); }
+size_t totalInternalHeap() { return totalHeap(); }
+
+// No Thumb-2 backend yet, so nothing asks for executable memory.
+void* allocExec(size_t) { return nullptr; }
+void freeExec(void*, size_t) {}
+void writeExec(void*, const void*, size_t) {}
+size_t maxExecAllocBlock() { return 0; }
+
+// --- Tasks: none without an RTOS, so callers keep their work on the one loop -------------------
+
+size_t taskSnapshot(TaskInfo*, size_t) { return 0; }
+void currentTaskOnCore(int, char* out, size_t cap) { if (out && cap) out[0] = '\0'; }
+const char* renderTaskName() { return ""; }
+bool spawnPinnedTask(WorkerTask&, const char*, WorkerFn, void*, size_t, uint8_t, int) { return false; }
+void notifyTask(WorkerTask&) {}
+bool waitNotify(WorkerTask&, uint32_t) { return false; }
+void stopPinnedTask(WorkerTask&) {}
+void taskWdtSubscribe() {}
+void taskWdtUnsubscribe() {}
+void taskWdtReset() {}
+
+// --- GPIO and ADC -------------------------------------------------------------------------------
+
+GpioCapability gpioCapability(uint8_t gpio) {
+    GpioCapability c;
+    c.validGpio = gpio < CORE_NUM_DIGITAL;
+    c.outputCapable = c.validGpio;
+    return c;
+}
+
+namespace {
+bool ethOwnsPin(uint8_t gpio);   // with the Ethernet below
+}
+
+const char* gpioRefusal(uint8_t gpio) {
+    if (!gpioCapability(gpio).validGpio) return "does not exist on this board";
+    if (ethOwnsPin(gpio)) return "carries the W5500's SPI bus";
+    return nullptr;
+}
+
+GpioLiveState gpioLiveState(uint8_t gpio) {
+    GpioLiveState s;
+    if (gpio >= CORE_NUM_DIGITAL) return s;
+    s.valid = true;
+    s.level = digitalReadFast(gpio);
+    s.output = (*portModeRegister(gpio) & digitalPinToBitMask(gpio)) != 0;
+    s.input = true;
+    return s;
+}
+
+bool gpioInputBegin(uint8_t gpio, GpioPull pull) {
+    if (gpio >= CORE_NUM_DIGITAL) return false;
+    ::pinMode(gpio, pull == GpioPull::Up ? INPUT_PULLUP : pull == GpioPull::Down ? INPUT_PULLDOWN : INPUT);
+    return true;
+}
+
+bool gpioRead(uint8_t gpio) { return gpio < CORE_NUM_DIGITAL && ::digitalRead(gpio); }
+
+bool gpioWrite(uint8_t gpio, bool high) {
+    if (gpio >= CORE_NUM_DIGITAL) return false;
+    ::pinMode(gpio, OUTPUT);
+    ::digitalWrite(gpio, high ? HIGH : LOW);
+    return true;
+}
+
+namespace {
+// A0 to A13 are pins 14 to 27, A14 to A17 are pins 38 to 41.
+bool isAnalogPin(uint8_t gpio) { return (gpio >= 14 && gpio <= 27) || (gpio >= 38 && gpio <= 41); }
+constexpr uint16_t kAdcMax = 1023;   // the core's default 10-bit resolution
+}  // namespace
+
+bool adcRead(uint8_t gpio, uint16_t& raw) {
+    if (!isAnalogPin(gpio)) return false;
+    raw = static_cast<uint16_t>(::analogRead(gpio));
+    return true;
+}
+
+uint16_t adcMaxCount() { return kAdcMax; }
+
+bool adcReadMv(uint8_t gpio, uint16_t& mv) {
+    uint16_t raw = 0;
+    if (!adcRead(gpio, raw)) return false;
+    mv = static_cast<uint16_t>(uint32_t{raw} * 3300 / kAdcMax);
+    return true;
+}
+
+// --- Identity -----------------------------------------------------------------------------------
+
+void getMacAddress(uint8_t mac[6]) {
+    // PJRC programs a MAC into the fuses of every Teensy 4.1.
+    const uint32_t hi = HW_OCOTP_MAC1, lo = HW_OCOTP_MAC0;
+    mac[0] = hi >> 8; mac[1] = hi;
+    mac[2] = lo >> 24; mac[3] = lo >> 16; mac[4] = lo >> 8; mac[5] = lo;
+}
+
+const char* macString() {
+    static char buf[18] = {};
+    if (!buf[0]) {
+        uint8_t m[6];
+        getMacAddress(m);
+        std::snprintf(buf, sizeof(buf), "%02X:%02X:%02X:%02X:%02X:%02X", m[0], m[1], m[2], m[3], m[4], m[5]);
+    }
+    return buf;
+}
+
+const char* chipModel() { return "i.MX RT1062"; }
+const char* hostPlatform() { return ""; }
+const char* psramType() { return ""; }
+const char* hostIp() { return ""; }
+
+const char* sdkVersion() {
+    static char buf[48] = {};
+    if (!buf[0]) std::snprintf(buf, sizeof(buf), "Teensyduino %d.%02d, gcc %s", TEENSYDUINO / 100, TEENSYDUINO % 100, __VERSION__);
+    return buf;
+}
+
+const char* cpuInfo() {
+    static char buf[24] = {};
+    std::snprintf(buf, sizeof(buf), "%lu MHz, 1 core", static_cast<unsigned long>(F_CPU_ACTUAL / 1000000));
+    return buf;
+}
+
+// The reset status register keeps its bits across a warm reset, so it is read once and cleared for the next boot.
+namespace {
+// The cause the reset status register latched, the most specific first.
+const char* reasonFor(uint32_t srsr, bool faulted) {
+    if ((srsr & SRC_SRSR_LOCKUP_SYSRESETREQ) && faulted) return "PANIC";
+    if (srsr & (SRC_SRSR_WDOG_RST_B | SRC_SRSR_WDOG3_RST_B)) return "WDT";
+    if (srsr & SRC_SRSR_LOCKUP_SYSRESETREQ) return "SW";
+    if (srsr & SRC_SRSR_IPP_RESET_B) return "POWERON";
+    return "UNKNOWN";
+}
+}  // namespace
+
+const char* resetReason() {
+    static const char* reason = nullptr;
+    if (reason) return reason;
+    const uint32_t srsr = SRC_SRSR;
+    const bool faulted = SRC_GPR5 == 0x0BAD00F1;   // the core's mark for its reboot after a fault
+    SRC_SRSR = srsr;
+    SRC_GPR5 = 0;
+    reason = reasonFor(srsr, faulted);
+    return reason;
+}
+
+// Failed boots are counted once the watchdog arrives in phase 4; until then every boot reads as a first one.
+const BootRecord& bootRecord() {
+    static const BootRecord record{0, 0, true};
+    return record;
+}
+
+void setLogLevel(LogLevel) {}   // stdout goes straight to USB serial
+
+[[noreturn]] void reboot() {
+    SCB_AIRCR = 0x05FA0004;   // SYSRESETREQ with the write key
+    for (;;) {}
+}
+
+// --- Filesystem: LittleFS on the top of program flash -------------------------------------------
+
+namespace {
+constexpr uint32_t kFlashBytes = 8 * 1024 * 1024;
+constexpr uint32_t kReservedBytes = 256 * 1024;   // EEPROM emulation and the restore program, at the top of flash
+constexpr uint32_t kFsBytes = 1024 * 1024;
+LittleFS_Program g_fs;
+bool g_mounted = false;
+
+// Create every folder along the first `len` characters of `path`.
+void mkdirs(const char* path, size_t len) {
+    char buf[160];
+    if (len >= sizeof(buf)) return;
+    std::memcpy(buf, path, len);
+    buf[len] = 0;
+    for (size_t i = 1; i <= len; i++) {
+        if (buf[i] != '/' && buf[i] != 0) continue;
+        const char saved = buf[i];
+        buf[i] = 0;
+        if (!g_fs.exists(buf)) g_fs.mkdir(buf);
+        buf[i] = saved;
+    }
+}
+
+void makeParent(const char* path) {
+    const char* slash = std::strrchr(path, '/');
+    if (slash && slash != path) mkdirs(path, static_cast<size_t>(slash - path));
+}
+
+// Write `tmp`, then rename it over `path`, which LittleFS does atomically.
+template <class Fill>
+bool writeAtomic(const char* path, Fill fill) {
+    if (!g_mounted || !path) return false;
+    makeParent(path);
+    char tmp[168];
+    if (std::strlen(path) + 5 > sizeof(tmp)) return false;
+    std::snprintf(tmp, sizeof(tmp), "%s.tmp", path);
+    g_fs.remove(tmp);
+    File f = g_fs.open(tmp, FILE_WRITE_BEGIN);
+    if (!f) return false;
+    const bool ok = fill(f);
+    f.close();
+    if (!ok || !g_fs.rename(tmp, path)) { g_fs.remove(tmp); return false; }
+    return true;
+}
+}  // namespace
+
+const char* fsRootPath() { return "/"; }
+
+bool fsMount() {
+    if (!g_mounted) g_mounted = g_fs.begin(kFsBytes);
+    return g_mounted;
+}
+
+bool fsMkdir(const char* path) {
+    if (!g_mounted || !path) return false;
+    mkdirs(path, std::strlen(path));
+    return g_fs.exists(path);
+}
+
+bool fsRemove(const char* path) {
+    if (!g_mounted || !path) return false;
+    return g_fs.remove(path) || g_fs.rmdir(path);
+}
+
+int fsRead(const char* path, char* buf, size_t maxLen) {
+    if (!g_mounted || !buf || maxLen == 0) return -1;
+    File f = g_fs.open(path, FILE_READ);
+    if (!f || f.isDirectory()) return -1;
+    const size_t n = f.read(buf, maxLen - 1);
+    f.close();
+    buf[n] = 0;
+    return static_cast<int>(n);
+}
+
+long fsSize(const char* path) {
+    if (!g_mounted) return -1;
+    File f = g_fs.open(path, FILE_READ);
+    if (!f || f.isDirectory()) return -1;
+    const long size = static_cast<long>(f.size());
+    f.close();
+    return size;
+}
+
+int fsReadAt(const char* path, long offset, char* buf, size_t len) {
+    if (!g_mounted || !buf) return -1;
+    File f = g_fs.open(path, FILE_READ);
+    if (!f || f.isDirectory()) return -1;
+    if (!f.seek(static_cast<uint64_t>(offset))) { f.close(); return -1; }
+    const size_t n = f.read(buf, len);
+    f.close();
+    return static_cast<int>(n);
+}
+
+bool fsWriteAtomic(const char* path, const char* data, size_t len) {
+    return writeAtomic(path, [&](File& f) { return f.write(data, len) == len; });
+}
+
+bool fsWriteStream(const char* path, FsWriteSrc src, void* user) {
+    if (!src) return false;
+    return writeAtomic(path, [&](File& f) {
+        char chunk[512];
+        bool abort = false;
+        for (;;) {
+            const size_t got = src(chunk, sizeof(chunk), user, &abort);
+            if (abort) return false;
+            if (got == 0) return true;
+            if (f.write(chunk, got) != got) return false;
+        }
+    });
+}
+
+void fsList(const char* dir, FsListCb cb, void* user) {
+    if (!g_mounted || !cb) return;
+    File d = g_fs.open(dir);
+    if (!d || !d.isDirectory()) return;
+    while (File e = d.openNextFile()) {
+        const bool isDir = e.isDirectory();
+        cb(e.name(), isDir, isDir ? 0 : static_cast<uint32_t>(e.size()), user);
+        e.close();
+    }
+    d.close();
+}
+
+size_t filesystemUsed() { return g_mounted ? static_cast<size_t>(g_fs.usedSize()) : 0; }
+size_t filesystemTotal() { return g_mounted ? static_cast<size_t>(g_fs.totalSize()) : 0; }
+size_t firmwareSize() { return reinterpret_cast<size_t>(&_flashimagelen); }
+size_t firmwarePartition() { return kFlashBytes - kReservedBytes - kFsBytes; }
+size_t flashChipSize() { return kFlashBytes; }
+
+// --- Ethernet: a W5500 through QNEthernet, whose lwIP runs from yield() ----------------------------
+
+namespace {
+using qindesign::network::Ethernet;
+EthPinConfig g_ethConfig = ethConfigDefault;
+bool g_ethStarted = false;
+
+void copyIp(const IPAddress& from, uint8_t out[4]) {
+    if (out) for (int i = 0; i < 4; i++) out[i] = from[i];
+}
+
+// Reconfiguring an SPI pin takes it from the bus, and the network with it until a reboot.
+bool ethOwnsPin(uint8_t gpio) {
+    if (!g_ethStarted) return false;
+    const EthPinConfig& c = g_ethConfig;
+    return gpio == c.spiMiso || gpio == c.spiMosi || gpio == c.spiSck || gpio == c.spiCs;
+}
+}  // namespace
+
+void setEthConfig(const EthPinConfig& cfg) { g_ethConfig = cfg; }
+
+// Starts DHCP and returns at once; false when no W5500 answers on the SPI port.
+bool ethInit() {
+    if (g_ethConfig.phyType != ethW5500) return false;
+    g_ethStarted = Ethernet.begin();
+    std::printf("Ethernet: W5500 %s\n", g_ethStarted ? "found, DHCP started" : "not found, check the wiring");
+    return g_ethStarted;
+}
+
+void ethStop() {
+    if (g_ethStarted) Ethernet.end();
+    g_ethStarted = false;
+}
+
+bool ethLinkUp() MM_NONBLOCKING { return g_ethStarted && Ethernet.linkState(); }
+bool ethConnected() MM_NONBLOCKING { return ethLinkUp() && Ethernet.localIP() != INADDR_NONE; }
+void ethGetIPv4(uint8_t out[4]) MM_NONBLOCKING { copyIp(g_ethStarted ? Ethernet.localIP() : INADDR_NONE, out); }
+uint16_t ethLinkSpeedMbps() MM_NONBLOCKING { return ethLinkUp() ? static_cast<uint16_t>(Ethernet.linkInfo().speed) : 0; }
+bool ethRawL2Claimed() MM_NONBLOCKING { return false; }
+bool networkReady() { return ethConnected(); }
+
+void netSetStaticIPv4(NetIface, const uint8_t ip[4], const uint8_t gw[4], const uint8_t mask[4], const uint8_t dns[4]) {
+    Ethernet.setDHCPEnabled(false);
+    Ethernet.setLocalIP(IPAddress(ip));
+    Ethernet.setSubnetMask(IPAddress(mask));
+    Ethernet.setGatewayIP(IPAddress(gw));
+    if (dns) Ethernet.setDNSServerIP(IPAddress(dns));
+}
+
+void netSetDhcp(NetIface) { Ethernet.setDHCPEnabled(true); }
+
+void netGetIPv4(NetIface, uint8_t ip[4], uint8_t gw[4], uint8_t mask[4], uint8_t dns[4]) {
+    copyIp(Ethernet.localIP(), ip);
+    copyIp(Ethernet.gatewayIP(), gw);
+    copyIp(Ethernet.subnetMask(), mask);
+    copyIp(Ethernet.dnsServerIP(), dns);
+}
+
+void setHostname(const char* name) { if (name) Ethernet.setHostname(name); }
+
+// --- mDNS: QNEthernet's responder, with the records the ESP32 announces ---------------------------
+
+namespace {
+using qindesign::network::DNSClient;
+using qindesign::network::MDNS;
+
+constexpr uint16_t kHttpPort = 80;
+constexpr uint32_t kResolveTimeoutMs = 2000;   // bounded, as on the ESP32
+struct ExtraService { char type[16]; char proto[8]; uint16_t port; };
+ExtraService g_extraServices[4] = {};
+
+// `mm=1` tells a browsing MoonLight peer this is one of its own without an HTTP probe.
+std::vector<std::string> httpTxt() { return {"mm=1"}; }
+
+// The WLED apps key a device on `mac=`, lowercase hex without separators, and drop a record without it.
+std::vector<std::string> wledTxt() {
+    uint8_t m[6];
+    getMacAddress(m);
+    char buf[17];
+    std::snprintf(buf, sizeof(buf), "mac=%02x%02x%02x%02x%02x%02x", m[0], m[1], m[2], m[3], m[4], m[5]);
+    return {buf};
+}
+
+bool sameService(const ExtraService& e, const char* type, const char* proto) {
+    return e.port && std::strcmp(e.type, type) == 0 && std::strcmp(e.proto, proto) == 0;
+}
+
+void announceExtra(const ExtraService& e) {
+    MDNS.removeService(e.type, e.proto, e.port);   // a fresh announcement when the port moved
+    MDNS.addService(e.type, e.proto, e.port);
+}
+}  // namespace
+
+// Renames the responder when it already runs, so one path serves the first start and a rename.
+bool mdnsInit(const char* deviceName) {
+    if (!deviceName || !deviceName[0] || !MDNS.begin(deviceName)) return false;
+    MDNS.removeService(deviceName, "_http", "_tcp", kHttpPort);
+    MDNS.removeService(deviceName, "_wled", "_tcp", kHttpPort);
+    const bool ok = MDNS.addService(deviceName, "_http", "_tcp", kHttpPort, httpTxt);
+    MDNS.addService(deviceName, "_wled", "_tcp", kHttpPort, wledTxt);
+    for (const auto& e : g_extraServices) if (e.port) announceExtra(e);
+    std::printf("mDNS: %s.local%s\n", deviceName, ok ? "" : " (the _http._tcp record failed)");
+    return ok;
+}
+
+void mdnsAdvertise(const char* type, const char* proto, uint16_t port) {
+    ExtraService* slot = nullptr;
+    for (auto& e : g_extraServices) {
+        if (sameService(e, type, proto)) { slot = &e; break; }
+        if (!e.port && !slot) slot = &e;
+    }
+    if (!slot) return;   // the table is full: the service stays unannounced
+    if (slot->port && MDNS.hostname()[0]) MDNS.removeService(slot->type, slot->proto, slot->port);
+    std::snprintf(slot->type, sizeof(slot->type), "%s", type);
+    std::snprintf(slot->proto, sizeof(slot->proto), "%s", proto);
+    slot->port = port;
+    if (MDNS.hostname()[0]) announceExtra(*slot);
+}
+
+void mdnsWithdraw(const char* type, const char* proto) {
+    for (auto& e : g_extraServices) {
+        if (!sameService(e, type, proto)) continue;
+        if (MDNS.hostname()[0]) MDNS.removeService(e.type, e.proto, e.port);
+        e = ExtraService{};
+    }
+}
+
+uint16_t mdnsAdvertisedPort(const char* type, const char* proto) {
+    for (const auto& e : g_extraServices)
+        if (sameService(e, type, proto)) return e.port;
+    return 0;
+}
+
+// The responder restarts cheaply here, so stopping and shutting down are one call.
+void mdnsStop() { MDNS.end(); }
+void mdnsShutdown() { MDNS.end(); }
+
+// Unicast DNS through lwIP; lwIP's responder answers for this device but does not query, so a .local name fails.
+bool resolveHost(const char* name, uint8_t ip[4]) {
+    IPAddress addr;
+    if (!name || !ethConnected() || !DNSClient::getHostByName(name, addr, kResolveTimeoutMs)) return false;
+    copyIp(addr, ip);
+    return true;
+}
+
+// --- WiFi: none on a Teensy ---------------------------------------------------------------------
+
+void wifiStaGetIPv4(uint8_t out[4]) MM_NONBLOCKING { std::memset(out, 0, 4); }
+int wifiStaRssi() { return 0; }
+bool wifiScanStart() { return false; }
+int wifiScanResults(WifiNetwork*, int) { return 0; }
+void wifiStaBssid(uint8_t out[6]) { std::memset(out, 0, 6); }
+int wifiStaChannel() { return 0; }
+bool wifiApConnected() { return false; }
+int httpRequest(const char*, const char*, uint16_t, const char*, const char*, uint32_t, char* body, size_t bodyLen) {
+    if (body && bodyLen) body[0] = '\0';
+    return 0;
+}
+bool httpsAvailable() MM_NONBLOCKING { return false; }
+bool httpsPost(const char*, const char*, uint32_t) { return false; }
+bool hlsSegment(const char*, const uint8_t**, size_t*) { return false; }
+void hlsSegmentRelease() {}
+
+// --- Sockets: each class's descriptor is a slot in a fixed pool of QNEthernet objects -------------
+
+namespace {
+using qindesign::network::EthernetClient;
+using qindesign::network::EthernetServer;
+using qindesign::network::EthernetUDP;
+
+// As many as lwIP holds control blocks for; DHCP, mDNS and the DNS client each keep a UDP one of their own.
+constexpr int kTcpSlots = MEMP_NUM_TCP_PCB;
+constexpr int kServerSlots = 4;
+constexpr int kUdpSlots = MEMP_NUM_UDP_PCB - 3;
+// Datagrams queued per socket between two drains, so a burst of Art-Net or DDP universes survives a frame.
+constexpr size_t kUdpQueue = 16;
+
+EthernetClient g_tcp[kTcpSlots];
+bool g_tcpUsed[kTcpSlots] = {};
+EthernetServer g_servers[kServerSlots];
+bool g_serverUsed[kServerSlots] = {};
+EthernetUDP g_udp[kUdpSlots];
+bool g_udpUsed[kUdpSlots] = {};
+
+template <size_t N>
+int claimSlot(bool (&used)[N]) {
+    for (size_t i = 0; i < N; i++)
+        if (!used[i]) { used[i] = true; return static_cast<int>(i); }
+    return -1;
+}
+
+// Said at most once a second, so a burst of refusals shows without flooding the log.
+void degrade(const char* what) {
+    static uint32_t last = 0;
+    if (::millis() - last < 1000) return;
+    last = ::millis();
+    std::printf("  DEGRADE  %s\n", what);
+}
+
+int claimTcp(const EthernetClient& c) {
+    const int slot = claimSlot(g_tcpUsed);
+    if (slot < 0) {   // no slot: refuse the connection rather than leak it
+        EthernetClient(c).abort();
+        degrade("tcp: connection refused, all slots busy");
+        return -1;
+    }
+    g_tcp[slot] = c;
+    return slot;
+}
+}  // namespace
+
+UdpSocket::~UdpSocket() { close(); }
+
+bool UdpSocket::open() {
+    if (fd_ >= 0) return true;
+    fd_ = claimSlot(g_udpUsed);
+    if (fd_ >= 0) g_udp[fd_].setReceiveQueueCapacity(kUdpQueue);
+    return fd_ >= 0;
+}
+
+// One interface, so `localIp` selects nothing here.
+bool UdpSocket::bind(uint16_t port, const uint8_t[4]) {
+    if (fd_ < 0) return false;
+    if (g_udp[fd_].beginWithReuse(port)) return true;
+    degrade("udp: bind refused");
+    return false;
+}
+
+int UdpSocket::recvFrom(uint8_t* buf, size_t maxLen, uint8_t srcIp[4], uint16_t* srcPort) {
+    if (fd_ < 0) return -1;
+    EthernetUDP& udp = g_udp[fd_];
+    const int size = udp.parsePacket();
+    // 0-byte datagrams and an empty queue both mean nothing usable is pending.
+    if (size <= 0) { keepMembership(); return -1; }
+    heard();
+    const int n = udp.read(buf, maxLen < static_cast<size_t>(size) ? maxLen : static_cast<size_t>(size));
+    copyIp(udp.remoteIP(), srcIp);
+    if (srcPort) *srcPort = udp.remotePort();
+    return n;
+}
+
+bool UdpSocket::membership(const char* group, bool join) {
+    IPAddress ip;
+    if (fd_ < 0 || !group || !ip.fromString(group)) return false;
+    return join ? Ethernet.joinGroup(ip) : Ethernet.leaveGroup(ip);
+}
+
+bool UdpSocket::sendToAddr(const uint8_t ip[4], uint16_t port, const uint8_t* data, size_t len) {
+    return fd_ >= 0 && g_udp[fd_].send(IPAddress(ip), port, data, len);
+}
+
+void UdpSocket::close() {
+    if (fd_ >= 0) {
+        if (joined_) membership(group_, false);
+        g_udp[fd_].stop();
+        g_udpUsed[fd_] = false;
+        fd_ = -1;
+    }
+    group_[0] = 0;
+    joined_ = false;
+    joinCount_ = 0;
+}
+
+TcpConnection::~TcpConnection() { close(); }
+
+// Bytes read, 0 once the peer closed, -1 while nothing is pending.
+int TcpConnection::read(uint8_t* buf, size_t maxLen) {
+    if (fd_ < 0) return -1;
+    EthernetClient& c = g_tcp[fd_];
+    if (c.available() > 0) return c.read(buf, maxLen);
+    return c.connected() ? -1 : 0;
+}
+
+bool TcpConnection::peerIPv4(uint8_t out[4]) const {
+    if (fd_ < 0 || !out) return false;
+    copyIp(g_tcp[fd_].remoteIP(), out);
+    return true;
+}
+
+bool TcpConnection::localIPv4(uint8_t out[4]) const {
+    if (fd_ < 0 || !out) return false;
+    copyIp(g_tcp[fd_].localIP(), out);
+    return true;
+}
+
+// Bytes queued, 0 while the send buffer is full, -1 once the connection is gone.
+int TcpConnection::writeSome(const uint8_t* data, size_t len) {
+    if (fd_ < 0) return -1;
+    EthernetClient& c = g_tcp[fd_];
+    if (!c.connected()) return -1;
+    if (len == 0) return 0;
+    const int room = c.availableForWrite();
+    if (room <= 0) return 0;
+    const size_t n = c.write(data, len < static_cast<size_t>(room) ? len : static_cast<size_t>(room));
+    c.flush();   // hand the segment to lwIP now rather than on the next loop
+    return static_cast<int>(n);
+}
+
+// Every byte, bounded as on the other platforms: a stall without progress or a crawling peer gives up rather than hold the loop.
+bool TcpConnection::write(const uint8_t* data, size_t len) {
+    constexpr uint32_t kWriteStallMs = 2000;
+    constexpr uint32_t kWriteTotalMs = 8000;
+    const uint32_t start = ::millis();
+    uint32_t lastProgress = start;
+    size_t sent = 0;
+    while (sent < len) {
+        const int n = writeSome(data + sent, len - sent);
+        if (n < 0) return false;
+        const uint32_t now = ::millis();
+        if (n > 0) { sent += static_cast<size_t>(n); lastProgress = now; continue; }
+        if (now - lastProgress >= kWriteStallMs || now - start >= kWriteTotalMs) {
+            degrade("tcp: write gave up on a stalled peer");
+            return false;
+        }
+        ::yield();   // runs lwIP, which drains the send buffer as the peer acknowledges
+    }
+    return true;
+}
+
+bool TcpConnection::connectStart(const char* host, uint16_t port) {
+    if (!host || !host[0]) return false;
+    close();
+    EthernetClient c;
+    if (!c.connectNoWait(host, port)) return false;
+    fd_ = claimTcp(c);
+    return fd_ >= 0;
+}
+
+TcpConnection::ConnectResult TcpConnection::connectPoll() {
+    if (fd_ < 0) return ConnectResult::Failed;
+    EthernetClient& c = g_tcp[fd_];
+    if (c.connected()) return ConnectResult::Connected;
+    if (c.connecting()) return ConnectResult::Pending;
+    close();
+    return ConnectResult::Failed;
+}
+
+void TcpConnection::close() {
+    if (fd_ < 0) return;
+    g_tcp[fd_].close();
+    g_tcp[fd_] = EthernetClient{};
+    g_tcpUsed[fd_] = false;
+    fd_ = -1;
+}
+
+TcpServer::~TcpServer() { close(); }
+
+bool TcpServer::open(uint16_t port) {
+    if (fd_ >= 0) return true;
+    const int slot = claimSlot(g_serverUsed);
+    if (slot < 0) return false;
+    if (!g_servers[slot].beginWithReuse(port)) { g_serverUsed[slot] = false; return false; }
+    fd_ = slot;
+    return true;
+}
+
+TcpConnection TcpServer::accept() {
+    if (fd_ < 0) return TcpConnection();
+    EthernetClient c = g_servers[fd_].accept();
+    if (!c) return TcpConnection();
+    return TcpConnection(claimTcp(c));
+}
+
+void TcpServer::close() {
+    if (fd_ < 0) return;
+    g_servers[fd_].end();
+    g_serverUsed[fd_] = false;
+    fd_ = -1;
+}
+
+// --- Updates: over USB until FlasherX -----------------------------------------------------------
+
+bool http_fetch_to_ota(const char*, char* statusBuf, size_t statusBufLen, uint32_t* bytesReadOut, uint32_t* bytesTotalOut, const char*) {
+    if (statusBuf && statusBufLen) std::snprintf(statusBuf, statusBufLen, "updates go over USB");
+    if (bytesReadOut) *bytesReadOut = 0;
+    if (bytesTotalOut) *bytesTotalOut = 0;
+    return false;
+}
+bool otaHasMoonBase() { return false; }
+bool otaBootMoonBase() { return false; }
+bool otaRunningMoonBase() { return false; }
+bool otaMoonBaseVersion(char*, size_t) { return false; }
+bool otaMoonBaseBuild(char*, size_t) { return false; }
+bool otaMoonBaseSize(uint32_t*, uint32_t*) { return false; }
+void moonbaseClearStagedUrl() {}
+
+// --- Peripherals that arrive in phase 4 ---------------------------------------------------------
+
+bool i2cBusOpen(uint16_t, uint16_t) { return false; }
+void i2cBusClose() {}
+uint32_t i2cBusGeneration() MM_NONBLOCKING { return 0; }
+size_t i2cScan(uint8_t*, size_t) { return kI2cBusUnavailable; }
+bool irRead(uint16_t, uint32_t&) { return false; }
+void irStop() {}
+bool irChannelReady(uint16_t) { return false; }
+bool audioMicSharedBusFree(MicMode) { return true; }   // nothing shares a bus with a microphone here
+bool usbMidiBegin() { return false; }
+void usbMidiEnd() {}
+bool usbMidiConnected() { return false; }
+size_t usbMidiRead(uint8_t (*)[4], size_t) { return 0; }
+bool usbMidiWrite(const uint8_t (*)[4], size_t) { return false; }
+
+}  // namespace mm::platform
+
+/// @}

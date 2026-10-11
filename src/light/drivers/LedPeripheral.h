@@ -10,14 +10,13 @@ namespace mm {
 class ParallelLedDriver;   // the orchestrator; a backend reads shared state through this back-pointer
 
 /// The physical peripheral block a backend drives; two backends on one block conflict.
-enum class LedHwBlock : uint8_t { None = 0, LcdCam, I2s, Parlio };
+enum class LedHwBlock : uint8_t { None = 0, LcdCam, I2s, Parlio, GpioDma };
 
 /// A parallel-WS2812 output peripheral, behind a runtime strategy interface.
 ///
 /// ParallelLedDriver owns the controls, lifecycle, tick and encode machinery, driving one peripheral chosen at runtime. The peripheral supplies the variant operations: bring the bus up, hand back its DMA buffer, transmit, tear down.
 ///
-/// Not a hot-path boundary: every method here is called per frame or per reinit, never per light.
-/// The per-light encode writes into the raw buffer and never calls back into the peripheral.
+/// Not a hot-path boundary: every method here is called per frame or per reinit, never per light. The per-light encode writes into the raw buffer and never calls back into the peripheral.
 ///
 /// Prior art: the Strategy pattern, in the same shape this project's other pluggable seams take.
 class LedPeripheral {
@@ -55,6 +54,8 @@ public:
     virtual uint8_t* busBuffer(uint8_t i) = 0;
     /// Per-buffer byte capacity (fixed at bus creation; both buffers equal).
     virtual size_t busCapacity() const = 0;
+    /// The heap this bus holds, which the driver's memory readout shows: by default each buffer that exists, at its capacity.
+    virtual size_t busHeapBytes() { return busCapacity() * (busBuffer(1) ? 2 : 1); }
     /// Start the transfer of the first `bytes` of DMA buffer `i`, reporting whether it began.
     virtual bool busTransmit(uint8_t i, size_t bytes) = 0;
     /// Block up to `ms` for buffer `i`'s in-flight transfer to complete.

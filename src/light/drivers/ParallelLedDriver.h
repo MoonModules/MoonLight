@@ -14,7 +14,7 @@ namespace mm {
 
 /// The registered parallel WS2812B driver: up to 16 strands clocking out at once, one GPIO lane each, fed consecutive slices of the source buffer over whichever peripheral the control selects. Backends: I80Peripheral.h, MoonI80Peripheral.h, ParlioPeripheral.h.
 ///
-/// The whole frame is encoded up front and shipped as one autonomous transfer. So there is no CPU deadline while it is on the wire. The encode is a fused correct and transpose, per row (ParallelSlots.h). Vocabulary: strand, lane, slot, row, under
+/// The whole frame is encoded up front and shipped as one autonomous transfer. So there is no CPU deadline while it is on the wire: @xref{why-single-shot|why single-shot}. The encode is a fused correct and transpose, per row (ParallelSlots.h): @xref{the-frame-transpose-correct-transpose-per-row|the transpose}. Vocabulary: strand, lane, slot, row, under
 /// @xref{terminology|More info → Terminology}.
 /// @card ParallelLedDriver.png
 ///
@@ -792,13 +792,8 @@ protected:
     // The DMA buffers count: what a user needs is what choosing this driver costs.
     /// This driver's heap: the scratch, the ring snapshot, and the peripheral's DMA buffers.
     size_t driverHeapBytes() const override {
-        size_t dma = 0;
-        if (peripheral_) {
-            const size_t cap = peripheral_->busCapacity();
-            // Count the buffers that EXIST: a readout trusting the request reports unspent memory.
-            dma = cap;
-            if (peripheral_->busBuffer(1)) dma += cap;
-        }
+        // The buffers that EXIST, as the bus counts them: a readout trusting the request reports unspent memory.
+        const size_t dma = peripheral_ ? peripheral_->busHeapBytes() : 0;
         return DriverBase::driverHeapBytes() + snapshotCap_ + dma;
     }
     // The snapshot is serial; only the ring prime still forks to the core-0 helper.
@@ -1212,6 +1207,14 @@ protected:
         if (loopbackRxPin < 0) {
             clearFailBuf();
             setStatus("loopback: set loopbackRxPin (jumper it to the TX pin)", Severity::Status);
+            return;
+        }
+        // The test makes rxPin an input, which takes a pin the platform refuses from its owner: the Teensy's W5500 SPI, an ESP32's flash.
+        if (const char* why = platform::gpioRefusal(static_cast<uint8_t>(loopbackRxPin))) {
+            clearFailBuf();
+            std::snprintf(statusBuf_, sizeof(statusBuf_), "loopback: GPIO %d %s - pick another loopbackRxPin",
+                          int(loopbackRxPin), why);
+            setStatus(statusBuf_, Severity::Warning);
             return;
         }
         const uint8_t outCh = correction_.outChannels;

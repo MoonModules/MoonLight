@@ -2,19 +2,17 @@
 
 /// @defgroup platform_config_esp32 ESP32 platform configuration
 /// @{
-/// What each ESP32 chip can do, derived from the SDK's own capability flags wherever possible.
+/// What each ESP32 chip can do, derived from @xref{capabilities-not-chip-names|the SDK's own capability flags} wherever possible, with @xref{the-i80-gate-names-lcd-cams-own-mode|the i80 gate} and @xref{fixed-pads-are-published|the fixed pads} the exceptions.
 ///
 /// @moreinfo
 ///
 /// ## Capabilities, not chip names
 ///
-/// Gating keys off the SDK's own flags, so a new chip works untouched and only a seam the flags cannot answer earns an `is<Chip>` constant.
-/// Three chips earn one: the P4 and S3 for their Ethernet defaults, and the S31 for its RGMII PHY.
+/// Gating keys off the SDK's own flags, so a new chip works untouched and only a seam the flags cannot answer earns an `is<Chip>` constant. Three chips earn one: the P4 and S3 for their Ethernet defaults, and the S31 for its RGMII PHY.
 ///
 /// ## The i80 gate names LCD_CAM's own mode
 ///
-/// The classic chip sets the broader flag for an unrelated peripheral.
-/// Gating on it once wired the parallel driver onto that chip and hung its boot on a bus it lacks.
+/// The classic chip sets the broader flag for an unrelated peripheral. Gating on it once wired the parallel driver onto that chip and hung its boot on a bus it lacks.
 ///
 /// ## Fixed pads are published
 ///
@@ -24,6 +22,8 @@
 #include "sdkconfig.h"
 
 #include <cstdint>
+
+#include "platform/eth_config.h"   // EthPhyType, EthPinConfig
 
 // The only per-target definition of the RMT channel count since the SDK dropped its public macro.
 #ifdef CONFIG_SOC_RMT_SUPPORTED
@@ -219,34 +219,6 @@ constexpr bool hasEthW5500 = true;
 constexpr bool hasEthW5500 = false;
 #endif
 
-/// Which Ethernet PHY a board carries; plain integers, which keeps SDK includes out of this header.
-enum EthPhyType {
-    ethNone    = 0,  ///< no Ethernet on this board, the default
-    ethLan8720 = 1,  ///< RMII, generic PHY
-    ethIp101   = 2,  ///< RMII, IP101 PHY, P4 only
-    ethW5500   = 3,  ///< SPI, an external W5500 module
-    ethYt8531  = 4,  ///< RGMII, the S31's 1 Gb PHY
-    ethOpeneth = 5,  ///< the emulator's MAC, which is what gives an emulated device a real IP stack
-};
-
-/// How a board wires its Ethernet, set at runtime from the catalog; -1 leaves a field unused.
-///
-/// @moreinfo The RMII fields serve the internal EMAC and the SPI fields a W5500, with the default below seeding an un-provisioned board.
-/// The RMII data lines are absent because no board varies them: they are fixed in silicon or already defaulted by the SDK.
-struct EthPinConfig {
-    int phyType;          ///< which EthPhyType
-    int phyAddr;          ///< the PHY's address on the management bus
-    int mdcGpio;          ///< management clock
-    int mdioGpio;         ///< management data
-    int rstGpio;          ///< PHY reset
-    int rmiiClockGpio;    ///< the 50 MHz reference clock pin
-    bool rmiiClockExtIn;  ///< true when the board feeds the clock in, false when the chip drives it out
-    int spiMiso;          ///< W5500 data in
-    int spiMosi;          ///< W5500 data out
-    int spiSck;           ///< W5500 clock
-    int spiCs;            ///< W5500 chip select
-    int spiIrq;           ///< W5500 interrupt
-};
 
 // The per-chip default, so a board with no catalog entry still comes up on its usual wiring.
 constexpr EthPinConfig ethConfigDefault =

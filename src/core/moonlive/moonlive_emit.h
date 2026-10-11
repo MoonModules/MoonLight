@@ -7,7 +7,7 @@
 
 /// @defgroup moonlive_emit MoonLive backend seam
 /// @{
-/// A neutral declaration here, and the implementation per instruction set behind the platform boundary.
+/// A neutral declaration here, and the implementation per instruction set behind the platform boundary; the tests key on @xref{the-host-jit-macro|the host-JIT macro}.
 ///
 /// @moreinfo
 ///
@@ -15,8 +15,7 @@
 ///
 /// It is defined per platform, so the architecture check stays behind the boundary and this header stays neutral.
 /// It exists for the test harness alone, and no shipping code branches on it: a build with no backend degrades at run time, reporting the failure and rendering dark.
-/// A test that calls render cannot be compiled there at all, which is why it is a macro rather than a constant.
-/// One answers the program, the other answers the build.
+/// A test that calls render cannot be compiled there at all, which is why it is a macro rather than a constant. One answers the program, the other answers the build.
 
 namespace mm::moonlive {
 
@@ -42,10 +41,10 @@ struct IrProgram;   // src/core/moonlive/MoonLiveIr.h
 
 // Why the last lowering returned 0, since four distinct refusals once shared one return value.
 enum class LowerRefusal : uint8_t { None, Spill, NullCall, AsmOverflow, OverCap };
-inline LowerRefusal& lowerRefusal() { thread_local LowerRefusal r = LowerRefusal::None; return r; }
+inline LowerRefusal& lowerRefusal() { MM_THREAD_LOCAL LowerRefusal r = LowerRefusal::None; return r; }
 // Which allocator guard fired and the budget it saw, so a device names the cause.
 struct SpillDetail { uint8_t guard = 0, avail = 0, temps = 0, vregs = 0, slots = 0, spilled = 0; };
-inline SpillDetail& spillDetail() { thread_local SpillDetail d; return d; }
+inline SpillDetail& spillDetail() { MM_THREAD_LOCAL SpillDetail d; return d; }
 
 // What one target's register file offers the allocator, which is all the spill pass knows of an ISA.
 struct RegBudget {

@@ -2444,6 +2444,31 @@ bool parlioWs2812Wait(ParlioWs2812Handle& /*h*/, uint8_t /*buffer*/, uint32_t /*
 uint32_t parlioWs2812LastTransmitUs(const ParlioWs2812Handle& /*h*/) { return 0; }
 void parlioWs2812Deinit(ParlioWs2812Handle& h) { freeHostBus(h.impl); }
 
+// The GPIO-DMA bus on the same memory-backed bus: one buffer, as the Teensy's.
+bool gpioDmaWs2812Init(GpioDmaWs2812Handle& h, const uint16_t* /*dataPins*/, uint8_t /*laneCount*/,
+                       size_t bufferBytes) {
+    if (bufferBytes == 0) return false;
+    return hostBus(h.impl)->init(bufferBytes, false);
+}
+uint8_t* gpioDmaWs2812Buffer(const GpioDmaWs2812Handle& h) {
+    return h.impl ? static_cast<HostBus*>(h.impl)->buffer(0) : nullptr;
+}
+size_t gpioDmaWs2812BufferCapacity(const GpioDmaWs2812Handle& h) {
+    return h.impl ? static_cast<HostBus*>(h.impl)->capacity : 0;
+}
+size_t gpioDmaWs2812HeapBytes(const GpioDmaWs2812Handle& h) { return gpioDmaWs2812BufferCapacity(h); }
+bool gpioDmaWs2812Transmit(GpioDmaWs2812Handle& h, size_t bytes, uint32_t /*waitMs*/) {
+    return h.impl && static_cast<HostBus*>(h.impl)->transmit(0, bytes);
+}
+uint32_t gpioDmaWs2812LastTransmitUs(const GpioDmaWs2812Handle& /*h*/) { return 0; }
+void gpioDmaWs2812Deinit(GpioDmaWs2812Handle& h) { freeHostBus(h.impl); }
+RmtLoopbackResult gpioDmaWs2812Loopback(const uint16_t* /*dataPins*/, uint8_t /*laneCount*/,
+                                        uint16_t /*rxGpio*/, const uint8_t* /*frame*/,
+                                        size_t /*frameBytes*/, size_t /*dataBytes*/,
+                                        uint8_t /*rowBits*/) {
+    return {};   // no wire on a host
+}
+
 // No panel on a desktop, and inert rather than emulated: this port has no analogue worth faking, and its encoder is already tested on plain buffers. So the init refuses with a cause and the driver reports it as it would on a chip without the silicon.
 const char* hub75LastError() { return "HUB75 needs an ESP32-S3, P4 or S31"; }
 bool hub75BackendAvailable(Hub75Backend /*backend*/, size_t /*frameBytes*/) { return false; }

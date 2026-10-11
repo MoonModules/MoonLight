@@ -28,6 +28,7 @@
 // Compiles on every ESP32 chip: everything is under SOC_PARLIO_SUPPORTED with inert stubs otherwise; the driver never calls in (platform::parlioLanes == 0).
 
 #include "platform/platform.h"
+#include "platform/loopback_verify.h"   // the loopback pattern and its checks
 
 #include "sdkconfig.h"
 #include "soc/soc_caps.h"
@@ -287,10 +288,8 @@ RmtLoopbackResult parlioWs2812Loopback(const uint16_t* dataPins, uint8_t laneCou
                                        uint16_t rxGpio, const uint8_t* frame,
                                        size_t frameBytes, size_t dataBytes,
                                        uint8_t rowBits) {
-    RmtLoopbackResult r;
-    r.sent[0] = 0xA5; r.sent[1] = 0x00; r.sent[2] = 0xFF;  // pattern in every row
-    if (!dataPins || laneCount == 0 || !frame || frameBytes == 0
-        || dataBytes < 3 || dataBytes > frameBytes || rowBits < 8) return r;
+    RmtLoopbackResult r = detail::loopbackResult();
+    if (!detail::loopbackFrameValid(dataPins, laneCount, frame, frameBytes, dataBytes, rowBits)) return r;
     const uint16_t txGpio = dataPins[0];   // lane 0 carries the pattern
 
     r.jumperDetected = detail::loopbackJumperOk(static_cast<uint8_t>(txGpio),

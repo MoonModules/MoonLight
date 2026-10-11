@@ -66,6 +66,7 @@
 /// The component picks the first free instance rather than taking one by number, so the second is claimed by holding the first across bus creation and releasing it straight after.
 
 #include "platform/platform.h"
+#include "platform/loopback_verify.h"   // the loopback pattern and its checks
 
 #include "sdkconfig.h"
 #include "soc/soc_caps.h"
@@ -436,11 +437,9 @@ RmtLoopbackResult i80Ws2812Loopback(const uint16_t* dataPins, uint8_t laneCount,
                                     const uint8_t* frame, size_t frameBytes,
                                     size_t dataBytes, uint8_t rowBits,
                                     uint8_t clockMultiplier) {
-    RmtLoopbackResult r;
-    r.sent[0] = 0xA5; r.sent[1] = 0x00; r.sent[2] = 0xFF;  // pattern in every row
-    if (!dataPins || laneCount == 0 || !frame || frameBytes == 0
-        || dataBytes < 3 || dataBytes > frameBytes || rowBits < 8
-        || clockMultiplier == 0) return r;
+    RmtLoopbackResult r = detail::loopbackResult();
+    if (!detail::loopbackFrameValid(dataPins, laneCount, frame, frameBytes, dataBytes, rowBits) || clockMultiplier == 0)
+        return r;
     const uint16_t txGpio = dataPins[0];   // lane 0 carries the pattern
     const bool pinExpanderMode = clockMultiplier > 1;
 

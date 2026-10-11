@@ -155,6 +155,13 @@ Record before and after in performance.md per target.
 
 ## Drivers
 
+### LED output from a Raspberry Pi's own pins (robwomp, 2026-10-11)
+
+Suggested on Discord after the Teensy port: a Pi runs MoonLight today as the Linux desktop build, so its LEDs are reached only through the network drivers.
+Driving a strip from the Pi's own header needs the platform backend that does not exist yet (`src/platform/rpi/`, the same prerequisite as the sensor item below), and a `LedPeripheral` behind it.
+The routes differ by model: on a Pi 4 and earlier, DMA through the PWM, PCM or SPI peripheral, the way rpi_ws281x does; on a Pi 5 the header sits behind the RP1 chip, whose PIO blocks are the route.
+SPI is the one path every model shares, one lane per SPI bus with each WS2812 bit encoded in SPI bits, and the place to start.
+
 ### Logarithmic brightness, and a power budget the device knows about (2026-09-02)
 
 `Drivers.brightness` scales the output linearly, and perceived lightness is not linear: the eye is
@@ -339,10 +346,6 @@ ESP32-PICO-V3-02.
 
 **Prerequisite / sequencing:** tier 2 wants the **ISR-refill + `MM_HOT`** work done first (same as the classic ring above), since a high-rate Parlio refill benefits from the ISR-grade determinism. Confirm the CURRENT P4 Parlio tested ceiling first (re-measure on the P4 bench) before claiming a head-to-head — the ~21K figure is troyhacks' *buffer-fit* limit, not a verified-on-wire number, and his code steps the clock down at 256/512 LEDs per lane (signal integrity at long strands), which our own measurement must account for. Reference: the parlio source is `src/MoonLight/Nodes/Drivers/parlio.cpp` in the predecessor; our Parlio backend is `platform_esp32_parlio.cpp` + `ParlioLedDriver.h`.
 
-
-### Extract shared lane-driver scaffolding when the 3rd parallel backend lands (deferred)
-
-The `I80LedDriver` (classic-ESP32 I2S + S3/P4 LCD_CAM, both via the i80 bus) and `ParlioLedDriver` (P4 Parlio) share ~245 of 362 lines, and their platform-side loopback capture+verify is ~100 lines byte-for-byte identical (`platform_esp32_parlio.cpp` even notes "The RX capture half is byte-for-byte identical" to the i80 one). The status-string lifecycle (`failBuf_` / `configErr_` / `clearFailBuf` / `clearConfigErr`) is triplicated across all three LED drivers (RMT/i80/Parlio), ~60 lines. The branch deliberately extracted the *encoders* (`ParallelSlots.h` shared by i80+Parlio, `RmtSymbol.h`, `PinList.h`) on the "extract when the second user lands" rule, but stopped at the lifecycle/loopback scaffolding. **Accepted for this merge** (the reviewer agreed driver-level extraction can wait): the duplication is in mechanical lifecycle/test scaffolding, not domain logic, and a DriverBase-level refactor touching three drivers is riskier than the duplication it removes. **Do it when the third parallel backend arrives** (16-lane widening, or Teensy FlexIO), at which point the pattern is proven three ways: (a) a `detail::` platform helper for capture+verify (the only per-peripheral difference is the transmit call, pass a callback, beside the already-shared `loopbackJumperOk`), and (b) a small owned-status helper or DriverBase members for the fail/config strings. Until then the cost is line count, not correctness.
 
 ### Multicore Step 2b — ping-pong second output buffer (deferred, workload-gated)
 
@@ -961,8 +964,6 @@ The LED-driver increments **shipped**: increment 1 (RMT/WS2812B single-strand on
   hpwit's driver runs) is what lets the two coexist, on top of lifting the 2048-light cap. A
   standard I2S microphone (INMP441) is content on I2S1 and coexists today when the LED bus claims
   I2S0 first.
-
-(The shared lane-driver scaffolding extraction — when a 3rd parallel backend lands — is tracked separately under [§ Extract shared lane-driver scaffolding](#extract-shared-lane-driver-scaffolding-when-the-3rd-parallel-backend-lands-deferred) above.)
 
 ## FixedPoint fades outside the Layer's aggregation (2026-09-07)
 

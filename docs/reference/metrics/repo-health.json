@@ -1,8 +1,8 @@
 {
-  "commit": "48ab0058",
+  "commit": "17dae99d",
   "flash": {
-    "esp32s3-n16r8": 2336304,
-    "esp32": 2226256,
+    "esp32s3-n16r8": 2336688,
+    "esp32": 2234704,
     "esp32p4rev1-eth": 2177776,
     "esp32p4rev1-eth-wifi": 2358896,
     "esp32s3-n8r8": 2336304,
@@ -11,28 +11,30 @@
     "esp32-eth": 1681040,
     "esp32-wrover": 1843760,
     "qemu": 1383648,
-    "esp32p4rev3-eth": 2203712,
+    "esp32p4rev3-eth": 2229440,
     "esp32s3-zero": 2219120,
     "esp32-pico": 2107168,
-    "desktop-macos": 2270440,
+    "desktop-macos": 2273704,
     "desktop-windows": 1925120,
-    "esp32c3": 2335072
+    "esp32c3": 2335072,
+    "teensy41": 1172440
   },
   "measured": {
     "esp32p4rev1-eth": "2026-10-07",
     "esp32s31": "2026-10-10",
-    "esp32": "2026-10-09",
+    "esp32": "2026-10-11",
     "esp32-pico": "2026-09-09",
-    "esp32s3-n16r8": "2026-10-10",
+    "esp32s3-n16r8": "2026-10-11",
     "esp32s3-n8r8": "2026-10-10",
     "esp32s3-zero": "2026-10-10",
     "esp32-16mb": "2026-09-09",
     "esp32p4rev1-eth-wifi": "2026-09-30",
     "esp32-eth": "2026-09-11",
-    "esp32p4rev3-eth": "2026-10-08",
-    "desktop-macos": "2026-10-10",
+    "esp32p4rev3-eth": "2026-10-11",
+    "desktop-macos": "2026-10-11",
     "desktop-windows": "2026-09-30",
-    "esp32c3": "2026-10-10"
+    "esp32c3": "2026-10-10",
+    "teensy41": "2026-10-11"
   },
   "perf": {
     "esp32": {
@@ -52,6 +54,12 @@
           "p95": 2744,
           "n": 4,
           "last": "2026-10-04"
+        },
+        "teensy41": {
+          "p50": 2277,
+          "p95": 2277,
+          "n": 1,
+          "last": "2026-10-11"
         }
       },
       "Firmware_reports_what_is_running": {
@@ -78,6 +86,12 @@
           "p95": 215,
           "n": 1,
           "last": "2026-09-30"
+        },
+        "teensy41": {
+          "p50": 2142,
+          "p95": 2142,
+          "n": 1,
+          "last": "2026-10-11"
         }
       },
       "Network_hardware_reconfigures_live": {
@@ -104,6 +118,12 @@
           "p95": 21,
           "n": 1,
           "last": "2026-09-30"
+        },
+        "teensy41": {
+          "p50": 2147,
+          "p95": 2147,
+          "n": 1,
+          "last": "2026-10-11"
         }
       },
       "State_one_document_adds_an_effect_with_its_controls": {
@@ -118,6 +138,12 @@
           "p95": 2800,
           "n": 3,
           "last": "2026-10-04"
+        },
+        "teensy41": {
+          "p50": 8301,
+          "p95": 8301,
+          "n": 1,
+          "last": "2026-10-11"
         }
       },
       "Aurora_fps": {
@@ -168,6 +194,12 @@
           "p95": 7532,
           "n": 1,
           "last": "2026-09-30"
+        },
+        "teensy41": {
+          "p50": 33192,
+          "p95": 33192,
+          "n": 1,
+          "last": "2026-10-11"
         }
       },
       "Fluid_solver": {
@@ -218,6 +250,12 @@
           "p95": 3371,
           "n": 1,
           "last": "2026-09-30"
+        },
+        "teensy41": {
+          "p50": 14853,
+          "p95": 14853,
+          "n": 1,
+          "last": "2026-10-11"
         }
       },
       "GridLayout_resize": {
@@ -280,6 +318,12 @@
           "p95": 2005,
           "n": 1,
           "last": "2026-09-30"
+        },
+        "teensy41": {
+          "p50": 1521,
+          "p95": 1521,
+          "n": 1,
+          "last": "2026-10-11"
         }
       },
       "perf_full": {
@@ -330,6 +374,12 @@
           "p95": 2438,
           "n": 1,
           "last": "2026-09-30"
+        },
+        "teensy41": {
+          "p50": 6797,
+          "p95": 6797,
+          "n": 1,
+          "last": "2026-10-11"
         }
       },
       "perf_light": {
@@ -380,6 +430,12 @@
           "p95": 780,
           "n": 1,
           "last": "2026-09-30"
+        },
+        "teensy41": {
+          "p50": 662,
+          "p95": 662,
+          "n": 1,
+          "last": "2026-10-11"
         }
       },
       "peripheral_grid_sweep": {
@@ -430,6 +486,12 @@
           "p95": 2577,
           "n": 1,
           "last": "2026-09-30"
+        },
+        "teensy41": {
+          "p50": 6618,
+          "p95": 6618,
+          "n": 1,
+          "last": "2026-10-11"
         }
       },
       "peripheral_switch": {
@@ -480,6 +542,12 @@
           "p95": 341,
           "n": 1,
           "last": "2026-09-30"
+        },
+        "teensy41": {
+          "p50": 111,
+          "p95": 111,
+          "n": 1,
+          "last": "2026-10-11"
         }
       },
       "Drivers_output_and_brightness": {
@@ -506,6 +574,12 @@
           "p95": 218,
           "n": 1,
           "last": "2026-09-30"
+        },
+        "teensy41": {
+          "p50": 2173,
+          "p95": 2173,
+          "n": 1,
+          "last": "2026-10-11"
         }
       },
       "Effects_pipeline_builds_and_renders": {
@@ -546,6 +620,12 @@
           "p95": 287,
           "n": 1,
           "last": "2026-09-30"
+        },
+        "teensy41": {
+          "p50": 2236,
+          "p95": 2236,
+          "n": 1,
+          "last": "2026-10-11"
         }
       },
       "Effects_teardown_under_a_running_pipeline": {
@@ -572,6 +652,12 @@
           "p95": 482,
           "n": 1,
           "last": "2026-09-30"
+        },
+        "teensy41": {
+          "p50": 2160,
+          "p95": 2160,
+          "n": 1,
+          "last": "2026-10-11"
         }
       },
       "Layers_stack_and_blend_live": {
@@ -580,6 +666,12 @@
           "p95": 355,
           "n": 32,
           "last": "2026-10-10"
+        },
+        "teensy41": {
+          "p50": 7479,
+          "p95": 7479,
+          "n": 1,
+          "last": "2026-10-11"
         }
       },
       "Layouts_resize_reallocates_live": {
@@ -606,6 +698,12 @@
           "p95": 579,
           "n": 1,
           "last": "2026-09-30"
+        },
+        "teensy41": {
+          "p50": 7788,
+          "p95": 7788,
+          "n": 1,
+          "last": "2026-10-11"
         }
       },
       "Modifiers_reshape_the_mapping": {
@@ -632,6 +730,12 @@
           "p95": 273,
           "n": 1,
           "last": "2026-09-30"
+        },
+        "teensy41": {
+          "p50": 131,
+          "p95": 131,
+          "n": 1,
+          "last": "2026-10-11"
         }
       },
       "Palettes_a_script_drives_the_effects": {
@@ -640,6 +744,12 @@
           "p95": 74,
           "n": 32,
           "last": "2026-10-10"
+        },
+        "teensy41": {
+          "p50": 7763,
+          "p95": 7763,
+          "n": 1,
+          "last": "2026-10-11"
         }
       }
     },
@@ -681,54 +791,54 @@
     }
   },
   "loc": {
-    "core": 28271,
-    "light": 31027,
-    "platform": 17930,
+    "core": 28270,
+    "light": 31098,
+    "platform": 19268,
     "ui": 12307,
-    "test": 64597,
-    "moondeck": 30600
+    "test": 64718,
+    "moondeck": 30980
   },
   "comments": {
     "core": {
-      "lines": 6165,
+      "lines": 6164,
       "ratio": 0.242
     },
     "light": {
-      "lines": 7439,
+      "lines": 7462,
       "ratio": 0.269
     },
     "platform": {
-      "lines": 3659,
-      "ratio": 0.228
+      "lines": 3790,
+      "ratio": 0.22
     },
     "ui": {
       "lines": 3464,
       "ratio": 0.298
     },
     "test": {
-      "lines": 6968,
+      "lines": 6966,
       "ratio": 0.125
     },
     "moondeck": {
-      "lines": 4906,
-      "ratio": 0.183
+      "lines": 4931,
+      "ratio": 0.182
     }
   },
   "tests": {
-    "cases": 2398,
+    "cases": 2409,
     "scenarios": 30
   },
   "docs": {
-    "md_files": 150,
-    "md_lines": 32271,
-    "plans_files": 44,
-    "backlog_lines": 3319,
+    "md_files": 152,
+    "md_lines": 32560,
+    "plans_files": 45,
+    "backlog_lines": 3326,
     "lessons_lines": 532,
     "claude_md_lines": 283
   },
   "complexity": {
-    "functions": 4389,
-    "over_threshold": 331,
+    "functions": 4602,
+    "over_threshold": 330,
     "worst_ccn": 128
   }
 }

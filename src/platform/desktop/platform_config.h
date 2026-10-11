@@ -2,22 +2,22 @@
 
 /// @defgroup platform_config_desktop Desktop platform configuration
 /// @{
-/// What the host build claims to be: generous memory, every driver linked, no real silicon.
+/// What the host build claims to be: generous memory, every driver linked, no real silicon, with @xref{the-lane-counts-are-not-zero|lanes to drive} and @xref{types-exist-even-where-the-feature-does-not|every seam's types}.
 ///
 /// @moreinfo
 ///
 /// ## The lane counts are not zero
 ///
 /// A zero makes every parallel backend report "not my silicon", so the driver idles and its body never runs off-device: not runnable, not unit-testable, invisible to every check.
-/// Sixteen is the widest real rig, so the host exercises the same lane-splitting arithmetic the hardware does.
-/// The bus behind them is a heap buffer, holding real WS2812 patterns in real memory, with only the DMA hand-off absent.
+/// Sixteen is the widest real rig, so the host exercises the same lane-splitting arithmetic the hardware does. The bus behind them is a heap buffer, holding real WS2812 patterns in real memory, with only the DMA hand-off absent.
 ///
 /// ## Types exist even where the feature does not
 ///
-/// The platform header declares one signature per seam for every target, so the Ethernet and codec types must resolve here even though a host has neither.
-/// The stubs ignore them, and shared code gates on the capability flags instead.
+/// The platform header declares one signature per seam for every target, so the Ethernet and codec types must resolve here even though a host has neither. The stubs ignore them, and shared code gates on the capability flags instead.
 
 #include <cstdint>
+
+#include "platform/eth_config.h"   // EthPhyType, EthPinConfig
 
 // Desktop code always executes from RAM, so the ISR-residency attribute is empty here.
 #define MM_RAMFUNC
@@ -54,6 +54,8 @@ constexpr uint8_t parlioLanes = 16;
 
 /// Zero, because the i80 backend sums this with lcdLanes and would otherwise claim 32 lanes.
 constexpr uint8_t i2sLanes = 0;
+/// GPIO-DMA lanes the host reports, on the same reasoning as lcdLanes.
+constexpr uint8_t gpioDmaLanes = 16;
 
 /// No pin-wired microphone on a host; live audio arrives through capture devices instead.
 constexpr bool hasI2sMic = false;
@@ -64,24 +66,6 @@ constexpr bool hasAudioCapture = true;
 /// True, so the host compiles the WiFi path even though it ships stubs behind it.
 constexpr bool hasWiFi = true;
 
-/// Which Ethernet PHY a board carries; kept in step with the ESP32 list so every name resolves here.
-enum EthPhyType { ethNone = 0, ethLan8720 = 1, ethIp101 = 2, ethW5500 = 3,
-                  ethYt8531 = 4, ethOpeneth = 5 };
-/// How that PHY is wired, mirrored from the ESP32 struct; the host stub ignores it.
-struct EthPinConfig {
-    int phyType;          ///< which EthPhyType
-    int phyAddr;          ///< the PHY's address on the management bus
-    int mdcGpio;          ///< management clock
-    int mdioGpio;         ///< management data
-    int rstGpio;          ///< PHY reset
-    int rmiiClockGpio;    ///< the 50 MHz reference clock pin
-    bool rmiiClockExtIn;  ///< true when the board feeds the clock in, false when the chip drives it out
-    int spiMiso;          ///< W5500 data in
-    int spiMosi;          ///< W5500 data out
-    int spiSck;           ///< W5500 clock
-    int spiCs;            ///< W5500 chip select
-    int spiIrq;           ///< W5500 interrupt
-};
 /// False, so shared code compiles its Ethernet controls out and seeds itself from the default below.
 constexpr bool hasEthernet = false;
 

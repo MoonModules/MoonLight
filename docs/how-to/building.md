@@ -334,9 +334,17 @@ older layout adopts a new one only through a full serial flash (see the note und
 
 ## Teensy
 
-Teensy 4.x is in the supported target list. Buffers and pipeline configuration scale to 1 MB of internal RAM; OctoWS2811 gives excellent DMA-based LED output. Ethernet is built in on Teensy 4.1 and optional on 4.0.
+The `teensy41` firmware runs on a Teensy 4.1, with a W5500 module for Ethernet; pins, wiring and power are on [the Teensy 4.1 page](../reference/hardware/teensy-4-1.md).
+It builds with CMake over an SDK at pinned versions, and MoonDeck's [Teensy tab](../../moondeck/MoonDeck.md#teensy-tab) wraps every step:
 
-Build flow is via the root `CMakeLists.txt` with a Teensy toolchain file. The platform layer for Teensy is added when the first hardware target is wired in.
+```bash
+uv run moondeck/build/setup_teensy.py    # once: the SDK into ~/teensy
+uv run moondeck/build/build_teensy.py    # build/teensy41/MoonLight.hex
+uv run moondeck/build/flash_teensy.py    # over USB, no button press
+uv run moondeck/run/monitor_teensy.py    # USB serial
+```
+
+Settings live in 1 MB of the program flash and survive a flash. Firmware updates go over USB.
 
 ## Pre-compilation steps
 

@@ -5,38 +5,30 @@
 /// ## Why the registry is its own translation unit
 ///
 /// The composition root and the in-process scenario runner both need every type registered, and two hand-kept lists drift.
-/// A list that missed the default effect is what this file replaces, so the runner could not construct the module every device boots with.
-/// One home, included by both, and a type added here reaches both at once.
+/// A list that missed the default effect is what this file replaces, so the runner could not construct the module every device boots with. One home, included by both, and a type added here reaches both at once.
 ///
 /// ## Why LED drivers are gated by the preprocessor
 ///
-/// The preprocessor rather than `if constexpr`, because the goal is excluding the code and a constexpr branch still compiles every arm.
-/// These are capability macros, not the platform ones the boundary rule forbids.
-/// Each parallel-WS2812 backend header self-registers its factory into ParallelLedDriver's peripheral registry, gated by the chip's `CONFIG_SOC_*`.
-/// So including the ones this silicon supports is what populates the `peripheral` control's options.
+/// The preprocessor rather than `if constexpr`, because the goal is excluding the code and a constexpr branch still compiles every arm. These are capability macros, not the platform ones the boundary rule forbids.
+/// Each parallel-WS2812 backend header self-registers its factory into ParallelLedDriver's peripheral registry, gated by the chip's `CONFIG_SOC_*`. So including the ones this silicon supports is what populates the `peripheral` control's options.
 /// Registering only what the silicon can run keeps the type picker honest, offering no I80Peripheral on a chip without an i80 bus, and keeps the binary lean.
-/// NDI, HLS and RTSP are gated by CAPABILITY instead: their headers compile everywhere, since the platform calls are declared on every target.
-/// An `if constexpr` discarded branch must still PARSE, so those includes cannot be gated.
+/// NDI, HLS and RTSP are gated by CAPABILITY instead: their headers compile everywhere, since the platform calls are declared on every target. An `if constexpr` discarded branch must still PARSE, so those includes cannot be gated.
 ///
 /// ## Why panel cards are per firmware and HUB75 is per chip
 ///
-/// Panel receiver cards need a gigabit link, and no capability macro separates the boards that have one.
-/// So the firmware catalogue names the variants that get it, and everything else saves the flash.
+/// Panel receiver cards need a gigabit link, and no capability macro separates the boards that have one. So the firmware catalogue names the variants that get it, and everything else saves the flash.
 /// HUB75 is a GPIO panel rather than a receiver card, needing LCD_CAM or Parlio silicon and nothing else, so it gates on the chip like every other LED driver.
 /// Tying it to `MM_PANEL_CARDS` hid it from every S3 that is not a panel-card firmware, which is most of them.
 ///
 /// ## Why the quiesce-render hook is a function pointer
 ///
 /// Before core mutates the tree, adding, removing or replacing a child, core 1 stops so it cannot dereference a node being freed.
-/// Core cannot name Drivers, a light module, so it calls through this function-pointer seam: see MoonModule quiesceForMutation.
-/// Wired here, the one place that legitimately depends on both sides.
+/// Core cannot name Drivers, a light module, so it calls through this function-pointer seam: see MoonModule quiesceForMutation. Wired here, the one place that legitimately depends on both sides.
 ///
 /// ## What registerType captures
 ///
-/// The second argument is the module's spec page, which the UI turns into a help link.
-/// Effects, modifiers and leaf layouts share one page per type; the rest keep their own.
-/// `registerType<T>` also captures the type's `dimensions()` via if-constexpr when present.
-/// EffectBase and ModifierBase both expose one, so the UI's chip lights up without any per-domain wrapper.
+/// The second argument is the module's spec page, which the UI turns into a help link. Effects, modifiers and leaf layouts share one page per type; the rest keep their own.
+/// `registerType<T>` also captures the type's `dimensions()` via if-constexpr when present. EffectBase and ModifierBase both expose one, so the UI's chip lights up without any per-domain wrapper.
 /// Layouts, effects and modifiers are registered alphabetically by display name, matching the picker and the docs so the three orders agree at a glance.
 ///
 #include "module_types.h"
@@ -162,6 +154,9 @@
 #endif
 #if defined(CONFIG_SOC_PARLIO_SUPPORTED) || MM_LINKS_ALL_LED_DRIVERS
 #include "light/drivers/ParlioPeripheral.h"        // Parlio backend (ParlioPeripheral)
+#endif
+#if defined(__IMXRT1062__) || MM_LINKS_ALL_LED_DRIVERS
+#include "light/drivers/GpioDmaPeripheral.h"       // timer-paced GPIO DMA backend (GpioDmaPeripheral)
 #endif
 // Panel receiver cards are opt-in per firmware rather than per chip: @xref{why-panel-cards-are-per-firmware-and-hub75-is-per-chip}.
 #if defined(MM_PANEL_CARDS) || MM_LINKS_ALL_LED_DRIVERS
@@ -347,7 +342,8 @@ void mm::registerModuleTypes() {
     mm::ModuleFactory::registerType<mm::PwmLightDriver>("PwmLightDriver", "light/drivers.md#pwm-light");
 #endif
     // One driver for the parallel output whatever the DMA peripheral: each backend self-registers when its header is included, so the control offers exactly the ones this chip links.
-#if defined(CONFIG_SOC_LCD_I80_SUPPORTED) || defined(CONFIG_SOC_LCDCAM_I80_LCD_SUPPORTED) || defined(CONFIG_SOC_PARLIO_SUPPORTED) || MM_LINKS_ALL_LED_DRIVERS
+#if defined(CONFIG_SOC_LCD_I80_SUPPORTED) || defined(CONFIG_SOC_LCDCAM_I80_LCD_SUPPORTED) || defined(CONFIG_SOC_PARLIO_SUPPORTED) || \
+    defined(__IMXRT1062__) || MM_LINKS_ALL_LED_DRIVERS
     mm::ModuleFactory::registerType<mm::ParallelLedDriver>("ParallelLedDriver", "light/drivers.md#parallelled");
 #endif
     mm::ModuleFactory::registerType<mm::HttpServerModule>("HttpServerModule", "core/system.md");
@@ -382,7 +378,7 @@ void mm::registerModuleTypes() {
 
 namespace {
 
-// A module the device creates itself, under a parent type (top-level when there is none), with its name where that is not the type's default, and whether this build has it.
+// A module the device creates itself: its parent type (none at top level), its name where it differs from the type's, and whether this build has it.
 struct BootModule {
     const char* parentType;
     const char* type;

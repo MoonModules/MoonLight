@@ -13,8 +13,10 @@
         <h1>MoonDeck</h1>
         <span class="app-version">v{{VERSION}}</span>
         <nav id="tabs">
-            <button class="tab active" data-tab="desktop">Desktop</button>
+            <button class="tab active" data-tab="repo">Repo</button>
+            <button class="tab" data-tab="desktop">Desktop</button>
             <button class="tab" data-tab="esp32">ESP32</button>
+            <button class="tab" data-tab="teensy">Teensy</button>
             <button class="tab" data-tab="live">Live</button>
         </nav>
     </header>
@@ -37,7 +39,7 @@
                 </div>
             </div>
 
-            <section id="tab-desktop" class="tab-content active">
+            <section id="tab-desktop" class="tab-content">
                 <div id="scripts-desktop" class="script-grid"></div>
             </section>
 
@@ -80,6 +82,16 @@
                     <div id="port-device-hint" class="port-device-hint"></div>
                 </div>
                 <div id="scripts-esp32" class="script-grid"></div>
+            </section>
+
+            <!-- One firmware and a port found by PJRC's USB vendor id, so the tab needs no dropdowns. -->
+            <section id="tab-teensy" class="tab-content">
+                <div id="scripts-teensy" class="script-grid"></div>
+            </section>
+
+            <!-- The work on the source tree whatever the target: tests, checks, tools, docs. -->
+            <section id="tab-repo" class="tab-content active">
+                <div id="scripts-repo" class="script-grid"></div>
             </section>
 
             <section id="tab-live" class="tab-content">

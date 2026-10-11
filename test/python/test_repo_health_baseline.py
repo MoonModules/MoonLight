@@ -152,8 +152,8 @@ def test_the_baseline_falls_back_to_disk_when_git_cannot_answer(tmp_path, monkey
 
 # ---- gains since the last release ----
 
-def test_the_gains_compare_only_what_both_snapshots_hold():
-    """A metric the release did not record yet, such as the heap, is left out rather than shown as a jump from zero."""
+def test_the_gains_leave_out_a_metric_the_release_lacked_and_mark_a_new_firmware():
+    """A metric the release did not record yet, such as the heap, is left out rather than shown as a jump from zero, while a firmware the release did not ship shows as new."""
     host = repo_health.desktop_target()   # this machine's key, which the gains read, so the test holds on every host
     ref = {"flash": {"esp32": 2_000_000, "gone": 1}, "loc": {"core": 100}, "tests": {"cases": 10},
            "complexity": {"over_threshold": 300},
@@ -162,8 +162,9 @@ def test_the_gains_compare_only_what_both_snapshots_hold():
            "complexity": {"over_threshold": 290}, "perf": {host: {"scenario_p50": {"A": {"p50": 6}}},
                                                           "esp32": {"heap_free": 200_000}}}
     rows = repo_health.gains(new, ref, code=(1300, 1290))
-    assert [r[0] for r in rows] == ["flash esp32", f"tick A ({host})", "lines core", "code findings", "unit tests"]
+    assert [r[0] for r in rows] == ["flash esp32", "flash new", f"tick A ({host})", "lines core", "code findings", "unit tests"]
     assert ("lines core", "", 100, 90) in rows
+    assert ("flash new", "KB", None, 5) in rows
     # A firmware not rebuilt since the release carries its old number, which would read as no growth.
     new["measured"] = {"esp32": "2026-09-01"}
     assert "flash esp32" not in [r[0] for r in repo_health.gains(new, ref, since="2026-09-30")]
@@ -180,3 +181,6 @@ def test_the_gains_section_shows_each_change_with_its_share():
     assert "| flash esp32 |" in page and "+10.0 KB (+0.5%)" in page
     assert "| lines core | 100 | 90 | -10 (-10.0%) |" in page
     assert repo_health.render_gains(new, {}, "v6.0.0") == []   # a release before repo health: no section
+    new["flash"]["teensy41"] = 1_172_440
+    new["measured"]["teensy41"] = "2099-01-01"
+    assert "| flash teensy41 | - | 1,145 KB | new |" in "\n".join(repo_health.render_gains(new, ref, "v6.0.0"))

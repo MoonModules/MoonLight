@@ -225,6 +225,7 @@ add_executable(mm_tests
     unit/light/unit_Hub75Slots.cpp
     unit/light/unit_ParallelSlots.cpp
     unit/light/unit_ParlioPeripheral.cpp
+    unit/light/unit_GpioDmaPeripheral.cpp
     unit/light/unit_ParallelLedDriver_doublebuffer.cpp
     unit/light/unit_ParallelLedDriver_pinexpander.cpp
     unit/light/unit_ParallelLedDriver_ring.cpp

@@ -29,6 +29,11 @@
 ///
 /// A PSRAM-resident encode source measured about 595 microseconds per slice refill against a 151 microsecond drain budget. So a buffer an interrupt reads per byte comes from `allocInternal` rather than the PSRAM-first `alloc`.
 
+// Per-thread state; a target with one thread and no TLS support in its linker script defines it `static`.
+#ifndef MM_THREAD_LOCAL
+  #define MM_THREAD_LOCAL thread_local
+#endif
+
 // Format checking, where the compiler offers it: one toolchain parses the attribute as an unknown specifier and fails the whole class downstream.
 #if defined(__GNUC__) || defined(__clang__)
   #define MM_PRINTF_FORMAT(fmt_arg, va_arg) __attribute__((format(printf, fmt_arg, va_arg)))
@@ -1108,6 +1113,31 @@ RmtLoopbackResult parlioWs2812Loopback(const uint16_t* dataPins, uint8_t laneCou
                                        uint16_t rxGpio, const uint8_t* frame,
                                        size_t frameBytes, size_t dataBytes,
                                        uint8_t rowBits);
+
+// GPIO-DMA WS2812 output: one DMA channel writes each slot into a GPIO port's data register, paced by a timer, so any pins of that port are lanes.
+
+/// One configured GPIO-DMA bus with its frame buffer.
+struct GpioDmaWs2812Handle { void* impl = nullptr; };
+
+/// Claim `dataPins` as lanes, in order, and size the frame buffer the driver encodes 8-bit slots into (16-bit above 8 lanes).
+bool gpioDmaWs2812Init(GpioDmaWs2812Handle& h, const uint16_t* dataPins, uint8_t laneCount,
+                       size_t bufferBytes);
+/// The frame buffer the driver encodes into; null before init.
+uint8_t* gpioDmaWs2812Buffer(const GpioDmaWs2812Handle& h);
+/// The frame buffer's capacity; 0 before init.
+size_t gpioDmaWs2812BufferCapacity(const GpioDmaWs2812Handle& h);
+/// Every byte the bus holds, the frame buffer and any copy the transfer reads; 0 before init.
+size_t gpioDmaWs2812HeapBytes(const GpioDmaWs2812Handle& h);
+/// Wait up to `waitMs` for the previous frame to leave the wire, then start sending the first `bytes` of the frame buffer.
+bool gpioDmaWs2812Transmit(GpioDmaWs2812Handle& h, size_t bytes, uint32_t waitMs);
+/// How long the last completed transfer took, the pure wire time; 0 before the first.
+uint32_t gpioDmaWs2812LastTransmitUs(const GpioDmaWs2812Handle& h);
+/// Release the bus, returning its pins to plain GPIO.
+void gpioDmaWs2812Deinit(GpioDmaWs2812Handle& h);
+/// Verify a real frame of 8-bit slots on a private bus, on i80Ws2812Loopback's contract.
+RmtLoopbackResult gpioDmaWs2812Loopback(const uint16_t* dataPins, uint8_t laneCount,
+                                        uint16_t rxGpio, const uint8_t* frame,
+                                        size_t frameBytes, size_t dataBytes, uint8_t rowBits);
 
 // HUB75 panel output: a panel is scanned rather than addressed, one bit plane at a time.
 

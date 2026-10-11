@@ -537,7 +537,7 @@ def load_state():
         if "networks" not in state and ("devices" in state or "port" in state):
             state = _migrate_to_networks(state)
         return state
-    return {"networks": [], "active_network": "", "tab": "desktop"}
+    return {"networks": [], "active_network": "", "tab": "repo"}
 
 
 def _migrate_to_networks(old_state: dict) -> dict:
@@ -584,7 +584,7 @@ def _migrate_to_networks(old_state: dict) -> dict:
                  if k not in ("devices", "port", "env")}
     new_state["networks"] = networks
     new_state["active_network"] = networks[0]["name"] if networks else ""
-    new_state.setdefault("tab", "desktop")
+    new_state.setdefault("tab", "repo")
     print(f"moondeck: migrated {len(devices)} device(s) into {len(networks)} "
           f"network(s): {', '.join(n['name'] for n in networks)}", file=sys.stderr)
     return new_state

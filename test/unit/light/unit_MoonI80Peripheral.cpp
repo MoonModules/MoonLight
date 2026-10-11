@@ -2,6 +2,7 @@
 /// @also I80Peripheral, ParallelLedDriver
 
 #include "doctest.h"
+#include "host_bus.h"
 #include "light/drivers/Correction.h"
 #include "correction_presets.h"
 #include "light/drivers/MoonI80Peripheral.h"
@@ -27,17 +28,9 @@ struct ExpanderMoonI80 : mm::MoonI80Peripheral {
     bool supportsPinExpander() const override { return true; }
 };
 
-// The peripheral is declared BEFORE the driver at every call site (see this helper's parameter order) so it outlives the driver, setPeripheralForTest borrows, it does not own (see unit_ParallelLedDriver_doublebuffer.cpp's wire()).
 void wire(mm::ParallelLedDriver& d, mm::MoonI80Peripheral& peripheral, mm::Buffer& src, mm::Correction& corr,
           mm::nrOfLightsType lights) {
-    d.setPeripheralForTest(&peripheral);
-    if (d.pins[0] == '\0') std::strcpy(d.pins, "1,2,4,5,6,7,8,9");
-    REQUIRE(src.allocate(lights, 3) == (lights > 0));
-    mm::test::rebuildFromPreset(corr, 255, mm::test::PresetOrder::GRB);
-    d.defineControls();
-    d.setSourceBuffer(&src);
-    d.correctionForTest() = corr;
-    d.applyState();
+    mm::test::wireParallel(d, peripheral, src, corr, lights, "1,2,4,5,6,7,8,9");
 }
 
 } // namespace
