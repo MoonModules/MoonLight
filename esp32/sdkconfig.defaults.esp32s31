@@ -73,3 +73,6 @@ CONFIG_ETH_TRANSMIT_MUTEX=y
 # (Same rationale as sdkconfig.defaults.esp32p4-eth.)
 CONFIG_ESP_SYSTEM_MEMPROT_FEATURE=n
 CONFIG_HEAP_HAS_EXEC_HEAP=y
+
+# 16 MB of flash to spare: the SD card backend.
+CONFIG_MM_SD_CARD=y

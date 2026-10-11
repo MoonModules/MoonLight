@@ -43,7 +43,7 @@ DEVICE_MODEL_MAX = 31
 # Capability vocabulary. supported = what a module drives; keep this list in lockstep with the modules that actually exist.
 # planned = peripherals with no module yet (the backlog seed), open-ended by design, so it is NOT whitelisted, only type-checked.
 # Adding a new supported capability means a module backs it.
-SUPPORTED_VOCAB = {"LEDs", "WiFi", "Ethernet", "Audio", "IR", "MQTT", "Hue", "MIDI", "Buttons", "I2C", "Relay"}
+SUPPORTED_VOCAB = {"LEDs", "WiFi", "Ethernet", "Audio", "IR", "MQTT", "Hue", "MIDI", "Buttons", "I2C", "Relay", "SD card"}
 
 # Flash bauds a board may pin via `flashBaud`: the standard esptool rates. The default
 # differs by audience: the CLI / MoonDeck path defaults FAST (921600: DIY bench, modern

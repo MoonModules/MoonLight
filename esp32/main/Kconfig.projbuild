@@ -46,4 +46,13 @@ menu "MoonLight"
             MIDI service with no computer. Set by the S3 images with flash to spare
             (n8r8, n16r8); the 4 MB S3-Zero leaves it off.
 
+    config MM_SD_CARD
+        bool "microSD card support (SDMMC)"
+        default n
+        help
+            Compiles the SDMMC/FatFs SD card backend. Set by the images with flash
+            to spare (every P4 variant, S31, the 16 MB S3); classic ESP32's SD host
+            only works on its fixed pins (2, 4, 12, 13, 14, 15) anyway, so it stays
+            off there too.
+
 endmenu

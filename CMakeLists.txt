@@ -140,6 +140,7 @@ add_library(mm_core STATIC
     src/core/system/HttpServerModule.cpp
     src/core/system/FilesystemModule.cpp
     src/core/system/FileManagerModule.cpp
+    src/core/system/SdCardModule.cpp
     src/core/system/MqttModule.cpp
     src/core/util/sha256.cpp
     src/core/module/Scheduler.cpp

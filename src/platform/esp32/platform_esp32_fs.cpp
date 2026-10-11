@@ -15,6 +15,7 @@
 /// Gating it on the last entry in the array rather than the last one present left a fresh board unformatted, running with persistence disabled.
 
 #include "platform/platform.h"
+#include "platform_esp32_sdmmc.h"   // every /sd path dispatches here instead of LittleFS
 
 #include "esp_littlefs.h"
 #include "esp_partition.h"   // esp_partition_find_first: probing which FS label this table uses
@@ -28,6 +29,13 @@
 #include <unistd.h>
 
 namespace mm::platform {
+
+/// Whether an API path names the SD mount: "/sd" or "/sd/...", never "/sdx...".
+static bool isSdApiPath(const char* path) {
+    if (!path) return false;
+    if (*path == '/') path++;
+    return path[0] == 's' && path[1] == 'd' && (path[2] == '\0' || path[2] == '/');
+}
 
 // LittleFS state
 static constexpr const char* FS_TAG = "mm_fs";
@@ -95,6 +103,7 @@ void fsUnmount() {
 }
 
 bool fsMkdir(const char* path) {
+    if (isSdApiPath(path)) return sdCardMkdir(path);
     if (!fsMounted_) return false;
     char full[128];
     if (!fsTranslate(path, full, sizeof(full))) return false;
@@ -113,6 +122,7 @@ bool fsMkdir(const char* path) {
 }
 
 bool fsExists(const char* path) {
+    if (isSdApiPath(path)) return sdCardExists(path);
     if (!fsMounted_) return false;
     char full[128];
     if (!fsTranslate(path, full, sizeof(full))) return false;
@@ -121,6 +131,7 @@ bool fsExists(const char* path) {
 }
 
 bool fsRemove(const char* path) {
+    if (isSdApiPath(path)) return sdCardRemove(path);
     if (!fsMounted_) return false;
     char full[128];
     if (!fsTranslate(path, full, sizeof(full))) return false;
@@ -131,6 +142,7 @@ bool fsRemove(const char* path) {
 }
 
 int fsRead(const char* path, char* buf, size_t maxLen) {
+    if (isSdApiPath(path)) return sdCardRead(path, buf, maxLen);
     if (!fsMounted_ || !buf || maxLen == 0) return -1;
     char full[128];
     if (!fsTranslate(path, full, sizeof(full))) return -1;
@@ -156,6 +168,7 @@ static void makeParent(const char* path) {
 }
 
 bool fsWriteAtomic(const char* path, const char* data, size_t len) {
+    if (isSdApiPath(path)) return sdCardWriteAtomic(path, data, len);
     if (!fsMounted_) return false;
     // A non-zero length with a null pointer is undefined in the write below, so guard the boundary.
     if (len > 0 && !data) return false;
@@ -187,6 +200,7 @@ bool fsWriteAtomic(const char* path, const char* data, size_t len) {
 }
 
 int fsReadAt(const char* path, long offset, char* buf, size_t len) {
+    if (isSdApiPath(path)) return sdCardReadAt(path, offset, buf, len);
     if (!fsMounted_ || !buf) return -1;
     char full[128];
     if (!fsTranslate(path, full, sizeof(full))) return -1;
@@ -199,6 +213,7 @@ int fsReadAt(const char* path, long offset, char* buf, size_t len) {
 }
 
 long fsSize(const char* path) {
+    if (isSdApiPath(path)) return sdCardSize(path);
     if (!fsMounted_) return -1;
     char full[128];
     if (!fsTranslate(path, full, sizeof(full))) return -1;
@@ -208,6 +223,7 @@ long fsSize(const char* path) {
 }
 
 bool fsWriteStream(const char* path, FsWriteSrc src, void* user) {
+    if (isSdApiPath(path)) return sdCardWriteStreamCb(path, src, user);
     if (!fsMounted_ || !src) return false;
     makeParent(path);
     char full[128];
@@ -236,7 +252,10 @@ bool fsWriteStream(const char* path, FsWriteSrc src, void* user) {
 }
 
 void fsList(const char* dir, FsListCb cb, void* user) {
+    if (isSdApiPath(dir)) { sdCardList(dir, cb, user); return; }
     if (!fsMounted_ || !cb) return;
+    // The card is a second mount, not a real subdirectory, so the root listing advertises it by hand.
+    if (hasSdCard && dir && (dir[0] == '\0' || (dir[0] == '/' && dir[1] == '\0'))) cb("sd", true, 0, user);
     char full[128];
     if (!fsTranslate(dir, full, sizeof(full))) return;
     DIR* d = ::opendir(full);
@@ -253,6 +272,92 @@ void fsList(const char* dir, FsListCb cb, void* user) {
         cb(ent->d_name, isDir, size, user);
     }
     ::closedir(d);
+}
+
+// A LittleFS stream keeps both paths so close() can rename without re-deriving them; an SD one is owned and typed by platform_esp32_sdmmc.cpp, reached only through its own sdCardXxx calls below.
+struct StreamImpl {
+    bool isSd = false;
+    FILE* file = nullptr;
+    void* sdHandle = nullptr;
+    char full[128] = {};   // write side only
+    char tmp[136] = {};
+};
+
+bool fsReadStreamOpen(FsReadStream& h, const char* path) {
+    auto* impl = new StreamImpl();
+    if (isSdApiPath(path)) {
+        impl->isSd = true;
+        if (!sdCardReadStreamOpen(impl->sdHandle, path)) { delete impl; return false; }
+    } else {
+        char full[128];
+        if (!fsMounted_ || !fsTranslate(path, full, sizeof(full))) { delete impl; return false; }
+        impl->file = std::fopen(full, "rb");
+        if (!impl->file) { delete impl; return false; }
+    }
+    h.impl = impl;
+    return true;
+}
+
+int fsReadStreamRead(FsReadStream& h, char* buf, size_t len) {
+    auto* impl = static_cast<StreamImpl*>(h.impl);
+    if (!impl) return -1;
+    if (impl->isSd) return sdCardReadStreamRead(impl->sdHandle, buf, len);
+    const size_t n = std::fread(buf, 1, len, impl->file);
+    if (n == 0 && std::ferror(impl->file)) return -1;
+    return static_cast<int>(n);
+}
+
+void fsReadStreamClose(FsReadStream& h) {
+    auto* impl = static_cast<StreamImpl*>(h.impl);
+    if (!impl) return;
+    if (impl->isSd) sdCardReadStreamClose(impl->sdHandle);
+    else if (impl->file) std::fclose(impl->file);
+    delete impl;
+    h.impl = nullptr;
+}
+
+bool fsWriteStreamOpen(FsWriteStream& h, const char* path) {
+    auto* impl = new StreamImpl();
+    if (isSdApiPath(path)) {
+        impl->isSd = true;
+        if (!sdCardWriteStreamOpen(impl->sdHandle, path)) { delete impl; return false; }
+    } else {
+        makeParent(path);
+        if (!fsMounted_ || !fsTranslate(path, impl->full, sizeof(impl->full))) { delete impl; return false; }
+        const int n = std::snprintf(impl->tmp, sizeof(impl->tmp), "%s.tmp", impl->full);
+        if (n < 0 || static_cast<size_t>(n) >= sizeof(impl->tmp)) { delete impl; return false; }
+        impl->file = std::fopen(impl->tmp, "wb");
+        if (!impl->file) { delete impl; return false; }
+    }
+    h.impl = impl;
+    return true;
+}
+
+bool fsWriteStreamWrite(FsWriteStream& h, const char* buf, size_t len) {
+    auto* impl = static_cast<StreamImpl*>(h.impl);
+    if (!impl) return false;
+    if (impl->isSd) return sdCardWriteStreamWrite(impl->sdHandle, buf, len);
+    return std::fwrite(buf, 1, len, impl->file) == len;
+}
+
+bool fsWriteStreamClose(FsWriteStream& h, bool commit) {
+    auto* impl = static_cast<StreamImpl*>(h.impl);
+    if (!impl) return false;
+    bool ok;
+    if (impl->isSd) {
+        ok = sdCardWriteStreamClose(impl->sdHandle, commit);   // owns its own rename/discard
+    } else {
+        std::fflush(impl->file);
+        const int fd = ::fileno(impl->file);
+        if (fd >= 0) ::fsync(fd);
+        std::fclose(impl->file);
+        ok = true;
+        if (commit) ok = ::rename(impl->tmp, impl->full) == 0;
+        if (!commit || !ok) ::remove(impl->tmp);
+    }
+    delete impl;
+    h.impl = nullptr;
+    return ok;
 }
 
 size_t filesystemUsed() {

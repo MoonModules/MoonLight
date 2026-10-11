@@ -20,6 +20,7 @@ add_executable(mm_tests
     unit/core/unit_crc.cpp
     unit/core/unit_AudioService_codec.cpp
     unit/core/unit_I2cBusModule.cpp
+    unit/core/unit_SdCardModule.cpp
     unit/core/unit_AudioService_sync.cpp
     unit/core/unit_WledAudioSyncPacket.cpp
     unit/core/unit_ThreadSlot.cpp
@@ -51,6 +52,7 @@ add_executable(mm_tests
     unit/core/unit_AllocTracking.cpp
     unit/core/unit_HttpServerModule_apply.cpp
     unit/core/unit_HttpServerModule_connections.cpp
+    unit/core/unit_HttpServerModule_sdcard.cpp
     unit/core/unit_StateDocument.cpp
     unit/core/unit_ImprovFrame.cpp
     unit/core/unit_ImprovOpReassembler.cpp

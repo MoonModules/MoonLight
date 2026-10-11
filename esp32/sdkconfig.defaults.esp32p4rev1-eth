@@ -61,6 +61,10 @@ CONFIG_ETH_DMA_TX_BUFFER_NUM=10
 CONFIG_ESP_SYSTEM_MEMPROT_FEATURE=n
 CONFIG_HEAP_HAS_EXEC_HEAP=y
 
+# 16 MB of flash to spare: the SD card backend. Every P4 image (rev1/rev3,
+# eth/eth-wifi) layers on this file, so this one line covers them all.
+CONFIG_MM_SD_CARD=y
+
 # esp-dsp's OPTIMIZED P4 assembly kernels: the default, and what we ship. The line below forces
 # the portable C kernels instead and is currently OFF.
 #

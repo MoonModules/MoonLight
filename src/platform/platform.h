@@ -28,6 +28,10 @@
 /// ## Internal RAM for what an interrupt reads
 ///
 /// A PSRAM-resident encode source measured about 595 microseconds per slice refill against a 151 microsecond drain budget. So a buffer an interrupt reads per byte comes from `allocInternal` rather than the PSRAM-first `alloc`.
+///
+/// ## Why a second write primitive
+///
+/// `fsWriteStream` pulls a whole upload to completion in one call, which is fine for a config file but not for a card-sized one shared with a render loop. `fsWriteStreamOpen`/`Write`/`Close` let a caller hand over one bounded chunk per tick instead, resuming where the last call left off.
 
 // Format checking, where the compiler offers it: one toolchain parses the attribute as an unknown specifier and fails the whole class downstream.
 #if defined(__GNUC__) || defined(__clang__)
@@ -291,6 +295,51 @@ bool fsWriteStream(const char* path, FsWriteSrc src, void* user);
 using FsListCb = void(*)(const char* name, bool isDir, uint32_t sizeBytes, void* user);
 /// List one level of `dir`, calling `cb` per child.
 void fsList(const char* dir, FsListCb cb, void* user);
+
+/// A read kept open across chunks, so a multi-megabyte download neither reopens nor reseeks per chunk.
+struct FsReadStream { void* impl = nullptr; };
+/// Open `path` for streamed reads; false when it does not exist or is a directory.
+bool fsReadStreamOpen(FsReadStream& h, const char* path);
+/// Pull up to `len` bytes from where the last read left off; 0 at EOF, -1 on error.
+int fsReadStreamRead(FsReadStream& h, char* buf, size_t len);
+/// Close the handle; safe on one that failed to open.
+void fsReadStreamClose(FsReadStream& h);
+
+/// A write kept open across chunks, so a caller can hand it bytes one bounded slice per tick rather than all at once. @xref{why-a-second-write-primitive}
+struct FsWriteStream { void* impl = nullptr; };
+/// Open a temporary file beside `path`, creating its parent folder; false on failure.
+bool fsWriteStreamOpen(FsWriteStream& h, const char* path);
+/// Append one chunk; false on a write failure, which the caller closes without committing.
+bool fsWriteStreamWrite(FsWriteStream& h, const char* buf, size_t len);
+/// `commit`: fsync and rename the temporary onto `path`. Otherwise: discard it. Either way the handle is spent.
+bool fsWriteStreamClose(FsWriteStream& h, bool commit);
+
+// A second, independent mount (microSD, FAT) sharing the fsXxx surface above through its own `/sd` path prefix; inert wherever hasSdCard is false.
+
+/// A board's SDMMC wiring, read at mount time rather than compiled in; -1 leaves a line unused.
+struct SdPinConfig {
+    int8_t clk = -1;   ///< SDMMC clock
+    int8_t cmd = -1;   ///< SDMMC command line
+    int8_t d0  = -1;   ///< SDMMC data line 0, required
+    int8_t d1  = -1;   ///< unset alongside d2/d3 drops the bus to 1-bit mode
+    int8_t d2  = -1;   ///< SDMMC data line 2
+    int8_t d3  = -1;   ///< SDMMC data line 3
+    int8_t pwr = -1;   ///< a slot's card-power switch, or -1 where the slot has none
+};
+/// Mount the card under `/sd`, idempotent; false if no card, no slot, or the pins are unset.
+bool sdMount(const SdPinConfig& pins);
+/// Unmount it; safe when nothing is mounted.
+void sdUnmount();
+/// Format and remount; false while unmounted or on a format failure.
+bool sdFormat();
+/// Card bytes used, 0 when unmounted; wide because a real card routinely exceeds 4 GiB.
+uint64_t sdCardUsed();
+/// Card bytes total, 0 when unmounted.
+uint64_t sdCardTotal();
+#ifndef ESP_PLATFORM   // a host-test seam, which no ESP32 code calls
+/// Shrink the host's fictional card, so a test reaches the "not enough space" path without writing a real gigabyte.
+void setTestSdCardTotal(uint64_t bytes);
+#endif
 
 // Network: ESP32 only, stubs on desktop.
 /// Override the per-chip default pin and PHY map with a board's own, before ethInit.

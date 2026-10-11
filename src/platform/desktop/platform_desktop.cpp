@@ -128,6 +128,11 @@
 /// Stop TERMs the child BEFORE joining, since a writer blocked in write() unblocks reliably only when the read side dies (EPIPE).
 /// The child comes from posix_spawn, since fork in a threaded process can deadlock on the allocator lock. Every fd but stdin is closed, or a leaked HTTP socket outlives a restart.
 /// A restart stops the old writer BEFORE resizing, because the writer reads a slot's data pointer without encMutex_.
+///
+/// ## Why SD is a subfolder, not a second root
+///
+/// A host has no second card to mount, but the mount/remount/format logic under test needs a real path to act on, not a stub that always answers the same way.
+/// A subfolder of the one real root is that path: `sdMounted_` gates it exactly as a missing card would, and format is an ordinary wipe-and-recreate.
 
 #include "platform/platform.h"
 #include "core/util/FirmwareImage.h"  // identify/moonBaseRejection: shared image vetting
@@ -862,11 +867,19 @@ std::filesystem::path defaultRoot() {
 
 std::filesystem::path fsRoot_{defaultRoot()};
 
+// No real card on a host, so "/sd" is a subfolder of the same root, gated by this flag the way a missing card gates the real mount: @xref{why-sd-is-a-subfolder-not-a-second-root}.
+bool sdMounted_ = false;
+
+/// Whether `path` (leading slashes already stripped) names the SD mount: "sd" or "sd/...".
+bool isSdApiPath(const char* path) {
+    return path[0] == 's' && path[1] == 'd' && (path[2] == '\0' || path[2] == '/');
+}
 
 // Map an API path onto the root, normalize it, and reject one that escapes; an empty result reads as failure, which callers already handle.
 std::filesystem::path toFsPath(const char* path) {
     if (!path) return {};
     while (*path == '/') path++;  // strip any number of leading slashes
+    if (!sdMounted_ && isSdApiPath(path)) return {};   // mirrors a real card not inserted
     std::filesystem::path candidate = (fsRoot_ / path).lexically_normal();
     std::filesystem::path rootNormal = fsRoot_.lexically_normal();
     // A prefix check on the normalized string, compared by iterator so a trailing separator cannot change the answer.
@@ -1041,8 +1054,77 @@ bool fsWriteStream(const char* path, FsWriteSrc src, void* user) {
     return true;
 }
 
+bool fsReadStreamOpen(FsReadStream& h, const char* path) {
+    FILE* f = std::fopen(toFsPath(path).string().c_str(), "rb");
+    if (!f) return false;
+    h.impl = f;
+    return true;
+}
+
+int fsReadStreamRead(FsReadStream& h, char* buf, size_t len) {
+    auto* f = static_cast<FILE*>(h.impl);
+    if (!f) return -1;
+    const size_t n = std::fread(buf, 1, len, f);
+    if (n == 0 && std::ferror(f)) return -1;
+    return static_cast<int>(n);
+}
+
+void fsReadStreamClose(FsReadStream& h) {
+    if (h.impl) std::fclose(static_cast<FILE*>(h.impl));
+    h.impl = nullptr;
+}
+
+namespace {
+// Both paths live alongside the FILE*, so close() can rename without re-deriving them.
+struct DesktopWriteHandle { FILE* f = nullptr; std::filesystem::path target, tmp; };
+}
+
+bool fsWriteStreamOpen(FsWriteStream& h, const char* path) {
+    auto target = toFsPath(path);
+    if (target.empty()) return false;
+    makeParent(target);
+    auto* wh = new DesktopWriteHandle();
+    wh->target = target;
+    wh->tmp = target;
+    wh->tmp += ".tmp";
+    wh->f = openOwnerOnly(wh->tmp.string().c_str());
+    if (!wh->f) { delete wh; return false; }
+    h.impl = wh;
+    return true;
+}
+
+bool fsWriteStreamWrite(FsWriteStream& h, const char* buf, size_t len) {
+    auto* wh = static_cast<DesktopWriteHandle*>(h.impl);
+    if (!wh) return false;
+    return std::fwrite(buf, 1, len, wh->f) == len;
+}
+
+bool fsWriteStreamClose(FsWriteStream& h, bool commit) {
+    auto* wh = static_cast<DesktopWriteHandle*>(h.impl);
+    if (!wh) return false;
+    std::fflush(wh->f);
+#ifdef _WIN32
+    int fd = ::_fileno(wh->f);
+    if (fd >= 0) ::_commit(fd);
+#else
+    int fd = ::fileno(wh->f);
+    if (fd >= 0) ::fsync(fd);
+#endif
+    std::fclose(wh->f);
+    std::error_code ec;
+    bool ok = true;
+    if (commit) { std::filesystem::rename(wh->tmp, wh->target, ec); ok = !ec; }
+    if (!commit || !ok) std::filesystem::remove(wh->tmp, ec);
+    delete wh;
+    h.impl = nullptr;
+    return ok;
+}
+
 void fsList(const char* dir, FsListCb cb, void* user) {
     if (!cb) return;
+    // The card is a second mount everywhere except on desktop's own fiction, where sdMount() made it a real subdirectory; the root listing advertises it by hand and skips the real one underneath.
+    const bool isRoot = dir && (dir[0] == '\0' || (dir[0] == '/' && dir[1] == '\0'));
+    if (hasSdCard && isRoot) cb("sd", true, 0, user);
     std::error_code ec;
     auto p = toFsPath(dir);
     if (!std::filesystem::exists(p, ec)) return;
@@ -1050,6 +1132,7 @@ void fsList(const char* dir, FsListCb cb, void* user) {
         if (ec) break;
         // The filename's native character type differs per platform, so round-trip through a string for a portable view.
         std::string name = entry.path().filename().string();
+        if (isRoot && hasSdCard && name == "sd") continue;   // already emitted above; this is its real backing folder
         const bool isDir = entry.is_directory(ec);
         std::error_code sizeEc;
         const auto sz = isDir ? 0u : static_cast<uint32_t>(std::filesystem::file_size(entry.path(), sizeEc));
@@ -1076,6 +1159,51 @@ size_t filesystemTotal() {
     // Desktop has no fixed quota; report a notional 384 KB to match the 4MB ESP32 partition.
     return 384 * 1024;
 }
+
+namespace {
+// A fictional card size for the host; a test can shrink it to reach the 507 "card full" path.
+uint64_t sdCardTotalForTest_ = 1024ULL * 1024 * 1024;
+}
+
+bool sdMount(const SdPinConfig& pins) {
+    if (sdMounted_) return true;
+    if (pins.clk < 0 || pins.cmd < 0 || pins.d0 < 0) return false;
+    std::error_code ec;
+    std::filesystem::create_directories(fsRoot_ / "sd", ec);
+    if (ec) return false;
+    sdMounted_ = true;
+    return true;
+}
+
+void sdUnmount() { sdMounted_ = false; }
+
+bool sdFormat() {
+    if (!sdMounted_) return false;
+    std::error_code ec;
+    std::filesystem::remove_all(fsRoot_ / "sd", ec);
+    std::filesystem::create_directories(fsRoot_ / "sd", ec);
+    return !ec;
+}
+
+uint64_t sdCardUsed() {
+    if (!sdMounted_) return 0;
+    std::error_code ec;
+    const auto root = fsRoot_ / "sd";
+    if (!std::filesystem::exists(root, ec)) return 0;
+    uint64_t total = 0;
+    for (auto& entry : std::filesystem::recursive_directory_iterator(root, ec)) {
+        if (ec) break;
+        if (entry.is_regular_file(ec)) total += entry.file_size(ec);
+    }
+    return total;
+}
+
+uint64_t sdCardTotal() { return sdMounted_ ? sdCardTotalForTest_ : 0; }
+
+#ifndef ESP_PLATFORM
+/// Shrink the fictional card, so a test can reach the "not enough space" path without writing a real gigabyte.
+void setTestSdCardTotal(uint64_t bytes) { sdCardTotalForTest_ = bytes; }
+#endif
 
 // Network stubs (desktop has no WiFi/Ethernet hardware)
 

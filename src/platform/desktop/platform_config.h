@@ -130,6 +130,9 @@ constexpr bool hasOta = false;
 /// False: no UART and no WiFi stack, so the provisioning listener is never installed.
 constexpr bool hasImprov = false;
 
+/// True: unlike every other board gate here, the mount/remount/format logic under test needs a real host path, not a stub.
+constexpr bool hasSdCard = true;
+
 /// @}
 
 } // namespace mm::platform

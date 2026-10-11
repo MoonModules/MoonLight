@@ -1181,13 +1181,13 @@
     "supported": [
       "LEDs",
       "Ethernet",
-      "Audio"
+      "Audio",
+      "SD card"
     ],
     "planned": [
       "Speaker",
       "Camera",
-      "Display",
-      "SD card"
+      "Display"
     ],
     "state": {
       "System": {
@@ -1224,6 +1224,16 @@
           "mclkPin": 13,
           "codec": "ES8311",
           "codecAddr": "0x18"
+        },
+        "SdCard": {
+          "type": "SdCardModule",
+          "clkPin": 43,
+          "cmdPin": 44,
+          "d0Pin": 39,
+          "d1Pin": 40,
+          "d2Pin": 41,
+          "d3Pin": 42,
+          "pwrPin": 45
         }
       }
     }

@@ -25,3 +25,6 @@ CONFIG_HEAP_HAS_EXEC_HEAP=y
 
 # A MIDI desk on the board's own USB port: the MIDI service's USB source.
 CONFIG_MM_USB_MIDI_HOST=y
+
+# 16 MB of flash to spare: the SD card backend.
+CONFIG_MM_SD_CARD=y
