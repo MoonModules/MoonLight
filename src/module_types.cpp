@@ -423,6 +423,8 @@ mm::MoonModule* mm::createTopLevel(const char* typeName) {
     if (!top) return nullptr;
     for (const BootModule& b : kBootModules) {
         if (!b.built) continue;
+        // One extra veto: the table's own flag matches hasSdCard, but booting by default is a separate call desktop opts out of.
+        if (std::strcmp(b.type, "SdCardModule") == 0 && !mm::platform::sdCardBootsByDefault()) continue;
         if (!b.parentType) {
             if (std::strcmp(b.type, typeName) == 0) top->setName(b.name);
             continue;

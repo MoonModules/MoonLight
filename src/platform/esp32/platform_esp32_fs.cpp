@@ -254,8 +254,10 @@ bool fsWriteStream(const char* path, FsWriteSrc src, void* user) {
 void fsList(const char* dir, FsListCb cb, void* user) {
     if constexpr (hasSdCard) { if (isSdApiPath(dir)) { sdCardList(dir, cb, user); return; } }
     if (!fsMounted_ || !cb) return;
-    // The card is a second mount, not a real subdirectory, so the root listing advertises it by hand.
-    if (hasSdCard && dir && (dir[0] == '\0' || (dir[0] == '/' && dir[1] == '\0'))) cb("sd", true, 0, user);
+    // A second mount, not a real subdirectory; advertised by hand here, gated on sdCardMounted() rather than the chip-capability hasSdCard.
+    if constexpr (hasSdCard) {
+        if (sdCardMounted() && dir && (dir[0] == '\0' || (dir[0] == '/' && dir[1] == '\0'))) cb("sd", true, 0, user);
+    }
     char full[128];
     if (!fsTranslate(dir, full, sizeof(full))) return;
     DIR* d = ::opendir(full);

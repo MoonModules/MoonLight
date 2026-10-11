@@ -103,6 +103,37 @@ TEST_CASE("the root listing advertises /sd as a folder, so the tree can reach it
     CHECK(std::count(seen.names.begin(), seen.names.end(), "sd") == 1);
 }
 
+TEST_CASE("the root listing does not advertise /sd once the card is unmounted") {
+    SdFixture fix;
+    REQUIRE(mm::platform::sdUnmount());   // same slot, pins still wired, just nothing answering now
+
+    std::vector<std::string> names;
+    mm::platform::fsList("/", [](const char* name, bool, uint32_t, void* user) {
+        static_cast<std::vector<std::string>*>(user)->push_back(name);
+    }, &names);
+    CHECK(std::find(names.begin(), names.end(), "sd") == names.end());
+}
+
+TEST_CASE("an upload to /sd without a mounted card answers \"no card mounted\", not a generic failure") {
+    SdFixture fix;
+    REQUIRE(mm::platform::sdUnmount());
+
+    mm::HttpServerModule http;
+    http.port = kTestPort;
+    http.setup();
+    mm::platform::TcpConnection client;
+    REQUIRE(connectAndAccept(http, client));
+
+    const char* req = "POST /api/file?path=/sd/x.bin HTTP/1.1\r\nContent-Length: 2\r\n\r\nhi";
+    REQUIRE(client.write(reinterpret_cast<const uint8_t*>(req), std::strlen(req)));
+    const std::string reply = pumpUntil(http, client, 12);
+    CHECK(std::strncmp(reply.c_str(), "HTTP/1.1 503", 12) == 0);
+    CHECK(reply.find("no card mounted") != std::string::npos);
+
+    client.close();
+    http.release();
+}
+
 TEST_CASE("an SD upload larger than one tick's chunk streams across several ticks and reads back whole") {
     SdFixture fix;
     mm::HttpServerModule http;

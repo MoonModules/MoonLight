@@ -1,9 +1,9 @@
 {
-  "commit": "dc236f19",
+  "commit": "e863bd71",
   "flash": {
     "esp32s3-n16r8": 2336304,
     "esp32": 2226256,
-    "esp32p4rev1-eth": 2328816,
+    "esp32p4rev1-eth": 2328864,
     "esp32p4rev1-eth-wifi": 2358896,
     "esp32s3-n8r8": 2336304,
     "esp32s31": 2595200,
@@ -17,7 +17,7 @@
     "desktop-macos": 2270440,
     "desktop-windows": 1925120,
     "esp32c3": 2335072,
-    "desktop-linux": 2547464
+    "desktop-linux": 2547792
   },
   "measured": {
     "esp32p4rev1-eth": "2026-10-11",
@@ -682,16 +682,16 @@
       }
     },
     "desktop-linux": {
-      "tick_us": 6,
-      "fps": 166666
+      "tick_us": 5,
+      "fps": 200000
     }
   },
   "loc": {
-    "core": 28659,
+    "core": 28663,
     "light": 31027,
-    "platform": 18769,
+    "platform": 18791,
     "ui": 12350,
-    "test": 65084,
+    "test": 65115,
     "moondeck": 30600
   },
   "comments": {
@@ -704,7 +704,7 @@
       "ratio": 0.269
     },
     "platform": {
-      "lines": 3777,
+      "lines": 3782,
       "ratio": 0.225
     },
     "ui": {
@@ -721,20 +721,20 @@
     }
   },
   "tests": {
-    "cases": 2417,
+    "cases": 2419,
     "scenarios": 30
   },
   "docs": {
     "md_files": 150,
-    "md_lines": 32292,
+    "md_lines": 32283,
     "plans_files": 44,
     "backlog_lines": 3319,
     "lessons_lines": 532,
     "claude_md_lines": 283
   },
   "complexity": {
-    "functions": 4475,
-    "over_threshold": 337,
+    "functions": 4480,
+    "over_threshold": 339,
     "worst_ccn": 128
   }
 }

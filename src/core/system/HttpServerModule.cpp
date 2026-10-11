@@ -906,6 +906,10 @@ void HttpServerModule::handleWriteFileSd(platform::TcpConnection& conn, const ch
                                          const char* initialBody, size_t initialLen, size_t contentLen) {
     // Reject up front if it would not fit the card, rather than failing mid-write; free is taken conservatively, with no credit for an overwrite. Without hasSdCard, claimSdTransfer answers 503.
     if constexpr (platform::hasSdCard) {
+        if (!platform::sdCardMounted()) {
+            sendResponse(conn, 503, "application/json", "{\"error\":\"no card mounted\"}");
+            return;
+        }
         const uint64_t total = platform::sdCardTotal();
         const uint64_t used = platform::sdCardUsed();
         const uint64_t freeBytes = total > used ? total - used : 0;

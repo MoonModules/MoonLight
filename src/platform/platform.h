@@ -328,6 +328,8 @@ struct SdPinConfig {
 };
 /// Mount the card under `/sd`, idempotent; false if no card, no slot, or the pins are unset.
 bool sdMount(const SdPinConfig& pins);
+/// True once sdMount succeeds and nothing has unmounted it since. A chip capable of SD is not the same as a card present, so the root listing gates on this, not hasSdCard.
+bool sdCardMounted();
 /// True while a read or write stream is open on the card; sdUnmount/sdFormat refuse while this holds, so a caller checks it first to give the specific reason.
 bool sdCardBusy();
 /// Unmount it; false (refused) while a stream is open, true otherwise, including when nothing was mounted.
@@ -338,9 +340,13 @@ bool sdFormat();
 uint64_t sdCardUsed();
 /// Card bytes total, 0 when unmounted.
 uint64_t sdCardTotal();
+/// Whether SdCardModule boots by default via kBootModules: matches hasSdCard on ESP32, off by default on desktop, so a plain desktop run carries no SD clutter unless a test opts in.
+bool sdCardBootsByDefault();
 #ifndef ESP_PLATFORM   // a host-test seam, which no ESP32 code calls
 /// Shrink the host's fictional card, so a test reaches the "not enough space" path without writing a real gigabyte.
 void setTestSdCardTotal(uint64_t bytes);
+/// Opt SdCardModule's default boot-wiring in or out for one test's scope.
+void setTestSdCardBootsByDefault(bool enabled);
 #endif
 
 // Network: ESP32 only, stubs on desktop.

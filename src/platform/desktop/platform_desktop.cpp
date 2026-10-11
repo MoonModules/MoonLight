@@ -1147,9 +1147,9 @@ bool fsWriteStreamClose(FsWriteStream& h, bool commit) {
 
 void fsList(const char* dir, FsListCb cb, void* user) {
     if (!cb) return;
-    // The card is a second mount everywhere except on desktop's own fiction, where sdMount() made it a real subdirectory; the root listing advertises it by hand and skips the real one underneath.
+    // A second mount except in desktop's own fiction (a real subdirectory); advertised by hand here, gated on sdCardMounted() rather than the chip-capability hasSdCard, and skipped below as the real folder underneath.
     const bool isRoot = dir && (dir[0] == '\0' || (dir[0] == '/' && dir[1] == '\0'));
-    if (hasSdCard && isRoot) cb("sd", true, 0, user);
+    if (sdCardMounted() && isRoot) cb("sd", true, 0, user);
     std::error_code ec;
     auto p = toFsPath(dir);
     if (!std::filesystem::exists(p, ec)) return;
@@ -1200,6 +1200,8 @@ bool sdMount(const SdPinConfig& pins) {
     return true;
 }
 
+bool sdCardMounted() { return sdMounted_; }
+
 bool sdCardBusy() { return sdStreamsOpen_ > 0; }
 
 bool sdUnmount() {
@@ -1233,9 +1235,18 @@ uint64_t sdCardUsed() {
 
 uint64_t sdCardTotal() { return sdMounted_ ? sdCardTotalForTest_ : 0; }
 
+namespace {
+// Off by default: hasSdCard is unconditionally true on desktop for test coverage, but that must not boot SdCardModule into an unrelated session's tree; a test opts it in by name.
+bool sdCardBootsByDefault_ = false;
+}
+
+bool sdCardBootsByDefault() { return sdCardBootsByDefault_; }
+
 #ifndef ESP_PLATFORM
 /// Shrink the fictional card, so a test can reach the "not enough space" path without writing a real gigabyte.
 void setTestSdCardTotal(uint64_t bytes) { sdCardTotalForTest_ = bytes; }
+/// Opt SdCardModule's default boot-wiring in or out for one test's scope.
+void setTestSdCardBootsByDefault(bool enabled) { sdCardBootsByDefault_ = enabled; }
 #endif
 
 // Network stubs (desktop has no WiFi/Ethernet hardware)

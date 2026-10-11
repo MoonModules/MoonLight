@@ -95,6 +95,8 @@ bool sdCardMounted() { return g_mounted; }
 
 bool sdCardBusy() { return g_streamsOpen > 0; }
 
+bool sdCardBootsByDefault() { return hasSdCard; }
+
 /// A pin this build never wires reads as -1; one it does but the chip refuses is a mount-time mistake, not UB.
 static bool validOutputPin(int8_t pin) {
     return pin >= 0 && GPIO_IS_VALID_OUTPUT_GPIO(pin);
@@ -424,6 +426,7 @@ bool sdCardWriteStreamClose(void* handle, bool commit) {
 bool sdCardMounted() { return false; }
 bool sdMount(const SdPinConfig&) { return false; }
 bool sdCardBusy() { return false; }
+bool sdCardBootsByDefault() { return false; }
 bool sdUnmount() { return true; }
 bool sdFormat() { return false; }
 uint64_t sdCardUsed() { return 0; }
