@@ -66,13 +66,13 @@ void mountRig(SdCardModule& sd) {
 
 }  // namespace
 
-TEST_CASE("the SD pins are visible, since desktop always reports hasSdCard") {
+TEST_CASE("the SD pins are never hidden: a board without hasSdCard simply never boots this module") {
     SdCardModule sd;
     sd.defineControls();
     for (const char* name : {"clkPin", "cmdPin", "d0Pin", "d1Pin", "d2Pin", "d3Pin", "pwrPin"}) {
         const auto* c = find(sd, name);
         REQUIRE(c != nullptr);
-        CHECK(c->hidden == !platform::hasSdCard);
+        CHECK_FALSE(c->hidden);
     }
 }
 

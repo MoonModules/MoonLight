@@ -11,21 +11,14 @@
 namespace mm {
 
 void SdCardModule::defineControls() {
-    // Hidden on a chip with no SDMMC hardware, the same gate AudioService uses for its own mic pins; hidden stays bound, so a value survives a board change.
+    // Unhidden: a board without hasSdCard simply never boots this module (module_types.cpp's kBootModules gates on it), so there is no "wrong board" case left for a hidden pin to guard against.
     controls_.addPin("clkPin", clkPin_);
-    controls_.setHidden(controls_.count() - 1, !platform::hasSdCard);
     controls_.addPin("cmdPin", cmdPin_);
-    controls_.setHidden(controls_.count() - 1, !platform::hasSdCard);
     controls_.addPin("d0Pin", d0Pin_);
-    controls_.setHidden(controls_.count() - 1, !platform::hasSdCard);
     controls_.addPin("d1Pin", d1Pin_);
-    controls_.setHidden(controls_.count() - 1, !platform::hasSdCard);
     controls_.addPin("d2Pin", d2Pin_);
-    controls_.setHidden(controls_.count() - 1, !platform::hasSdCard);
     controls_.addPin("d3Pin", d3Pin_);
-    controls_.setHidden(controls_.count() - 1, !platform::hasSdCard);
     controls_.addPin("pwrPin", pwrPin_);
-    controls_.setHidden(controls_.count() - 1, !platform::hasSdCard);
 
     // Neither is hidden: there is no panel of this module's own, so the generic card is the only place either shows. Press-twice confirmed generically, the same contract every other confirm-gated button already has.
     controls_.addButton("format", /*confirm=*/true);
@@ -66,10 +59,9 @@ void SdCardModule::prepare() {
         mounted_ = false;
     }
 
-    if constexpr (!platform::hasSdCard) {
-        setStatus("no SD hardware on this build", Severity::Status);
-    } else if (clkPin_ < 0 || cmdPin_ < 0 || d0Pin_ < 0) {
-        setStatus("set the SD card pins first", Severity::Warning);
+    if (clkPin_ < 0 || cmdPin_ < 0 || d0Pin_ < 0) {
+        // Unset is this module's idle state (nothing is wrong yet, nothing was attempted), not a warning.
+        setStatus("set the SD card pins first", Severity::Status);
     } else {
         mounted_ = platform::sdMount(pins);
         if (mounted_) { mountedPins_ = pins; refreshGauge(); clearStatus(); }

@@ -6,6 +6,7 @@
 #include "core/util/BinaryBroadcaster.h"
 #include "platform/platform.h"
 
+#include <array>
 #include <cstdint>
 
 namespace mm {
@@ -395,9 +396,10 @@ private:
         size_t bufSent = 0;
         uint32_t lastActivityMs = 0;       // a stall guard, not a size or time cap on the transfer itself
     };
-    static constexpr int kSdTransferSlots = 2;
+    // Zero slots, not two, on a board without SD: std::array<T,0> is standard, constructs no SdTransfer at all, and every loop over it already runs zero times.
+    static constexpr int kSdTransferSlots = platform::hasSdCard ? 2 : 0;
     static constexpr uint32_t kSdTransferStallMs = 10000;   // no progress this long: abort, free the slot
-    SdTransfer sdTransfers_[kSdTransferSlots];
+    std::array<SdTransfer, kSdTransferSlots> sdTransfers_{};
     /// A free slot for a new transfer, or null when every slot is busy.
     SdTransfer* claimSdTransfer();
     /// Advance every active slot by one bounded chunk; called once per tick, the drainXxxSend's sibling.

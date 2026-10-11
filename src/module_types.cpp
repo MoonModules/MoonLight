@@ -402,7 +402,7 @@ constexpr BootModule kBootModules[] = {
     {"SystemModule", "I2cBusModule", nullptr, true},
     {"SystemModule", "PinsModule", nullptr, true},
     {"Services", "AudioService", nullptr, true},
-    {"Services", "SdCardModule", nullptr, true},
+    {"Services", "SdCardModule", nullptr, mm::platform::hasSdCard},
     {"NetworkModule", "EthernetModule", nullptr, kEthernetCard},
     {"NetworkModule", "WiFiModule", nullptr, mm::platform::hasWiFi},
     {"NetworkModule", "AccessPointModule", nullptr, mm::platform::hasWiFi},

@@ -144,7 +144,7 @@ void HttpServerModule::tick20ms() MM_NONBLOCKING {
     // Inbound WS frames: the WLED app sets on/off and brightness with an {on,bri} text frame over /ws.
     pollWledStateFromWebSockets();
     serveConnections();
-    driveSdTransfers();
+    if constexpr (platform::hasSdCard) driveSdTransfers();   // sdTransfers_ has zero slots otherwise, so there is nothing to drive
 }
 
 // One entry from the tick, so the connection work, which blocks by nature, is one call on the render path.
