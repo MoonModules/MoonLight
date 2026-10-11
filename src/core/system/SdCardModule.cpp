@@ -11,7 +11,7 @@
 namespace mm {
 
 void SdCardModule::defineControls() {
-    // Unhidden: a board without hasSdCard simply never boots this module (module_types.cpp's kBootModules gates on it), so there is no "wrong board" case left for a hidden pin to guard against.
+    // Unhidden: a board without hasSdCard never boots this module at all (module_types.cpp gates on it), so no board is left for a hidden pin to guard against.
     controls_.addPin("clkPin", clkPin_);
     controls_.addPin("cmdPin", cmdPin_);
     controls_.addPin("d0Pin", d0Pin_);

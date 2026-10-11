@@ -904,16 +904,18 @@ void HttpServerModule::handleApplyState(platform::TcpConnection& conn, const cha
 // The /sd leg of handleWriteFile: claims a transfer slot, opens the stream, writes whatever of the body already landed in the request buffer, then hands the rest to driveSdTransfers a tick at a time.
 void HttpServerModule::handleWriteFileSd(platform::TcpConnection& conn, const char* path,
                                          const char* initialBody, size_t initialLen, size_t contentLen) {
-    // Reject up front if it would not fit the card, rather than failing mid-write; free is taken conservatively, with no credit for an overwrite, and is the only ceiling an SD upload has.
-    const uint64_t total = platform::sdCardTotal();
-    const uint64_t used = platform::sdCardUsed();
-    const uint64_t freeBytes = total > used ? total - used : 0;
-    if (total > 0 && contentLen > freeBytes) {
-        char msg[96];
-        std::snprintf(msg, sizeof(msg), "{\"error\":\"not enough space (%llu free)\"}",
-                      static_cast<unsigned long long>(freeBytes));
-        sendResponse(conn, 507, "application/json", msg);
-        return;
+    // Reject up front if it would not fit the card, rather than failing mid-write; free is taken conservatively, with no credit for an overwrite. Without hasSdCard, claimSdTransfer answers 503.
+    if constexpr (platform::hasSdCard) {
+        const uint64_t total = platform::sdCardTotal();
+        const uint64_t used = platform::sdCardUsed();
+        const uint64_t freeBytes = total > used ? total - used : 0;
+        if (total > 0 && contentLen > freeBytes) {
+            char msg[96];
+            std::snprintf(msg, sizeof(msg), "{\"error\":\"not enough space (%llu free)\"}",
+                          static_cast<unsigned long long>(freeBytes));
+            sendResponse(conn, 507, "application/json", msg);
+            return;
+        }
     }
     SdTransfer* t = claimSdTransfer();
     if (!t) {

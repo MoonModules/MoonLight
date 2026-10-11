@@ -1,9 +1,9 @@
 {
-  "commit": "73bc49a6",
+  "commit": "dc236f19",
   "flash": {
     "esp32s3-n16r8": 2336304,
     "esp32": 2226256,
-    "esp32p4rev1-eth": 2328800,
+    "esp32p4rev1-eth": 2328816,
     "esp32p4rev1-eth-wifi": 2358896,
     "esp32s3-n8r8": 2336304,
     "esp32s31": 2595200,
@@ -12,7 +12,7 @@
     "esp32-wrover": 1843760,
     "qemu": 1383648,
     "esp32p4rev3-eth": 2203712,
-    "esp32s3-zero": 2231616,
+    "esp32s3-zero": 2225360,
     "esp32-pico": 2107168,
     "desktop-macos": 2270440,
     "desktop-windows": 1925120,
@@ -54,12 +54,6 @@
           "p95": 2744,
           "n": 4,
           "last": "2026-10-04"
-        },
-        "desktop-linux": {
-          "p50": 22,
-          "p95": 22,
-          "n": 1,
-          "last": "2026-10-11"
         }
       },
       "Firmware_reports_what_is_running": {
@@ -126,12 +120,6 @@
           "p95": 2800,
           "n": 3,
           "last": "2026-10-04"
-        },
-        "desktop-linux": {
-          "p50": 8,
-          "p95": 8,
-          "n": 1,
-          "last": "2026-10-11"
         }
       },
       "Aurora_fps": {
@@ -520,12 +508,6 @@
           "p95": 218,
           "n": 1,
           "last": "2026-09-30"
-        },
-        "desktop-linux": {
-          "p50": 8,
-          "p95": 8,
-          "n": 1,
-          "last": "2026-10-11"
         }
       },
       "Effects_pipeline_builds_and_renders": {
@@ -534,12 +516,6 @@
           "p95": 10,
           "n": 32,
           "last": "2026-10-10"
-        },
-        "desktop-linux": {
-          "p50": 8,
-          "p95": 8,
-          "n": 1,
-          "last": "2026-10-11"
         },
         "desktop-windows": {
           "p50": 4,
@@ -572,12 +548,6 @@
           "p95": 287,
           "n": 1,
           "last": "2026-09-30"
-        },
-        "desktop-linux": {
-          "p50": 5,
-          "p95": 5,
-          "n": 1,
-          "last": "2026-10-11"
         }
       },
       "Effects_teardown_under_a_running_pipeline": {
@@ -604,12 +574,6 @@
           "p95": 482,
           "n": 1,
           "last": "2026-09-30"
-        },
-        "desktop-linux": {
-          "p50": 17,
-          "p95": 17,
-          "n": 1,
-          "last": "2026-10-11"
         }
       },
       "Layers_stack_and_blend_live": {
@@ -618,12 +582,6 @@
           "p95": 355,
           "n": 32,
           "last": "2026-10-10"
-        },
-        "desktop-linux": {
-          "p50": 967,
-          "p95": 967,
-          "n": 1,
-          "last": "2026-10-11"
         }
       },
       "Layouts_resize_reallocates_live": {
@@ -650,12 +608,6 @@
           "p95": 579,
           "n": 1,
           "last": "2026-09-30"
-        },
-        "desktop-linux": {
-          "p50": 25,
-          "p95": 25,
-          "n": 1,
-          "last": "2026-10-11"
         }
       },
       "Modifiers_reshape_the_mapping": {
@@ -682,12 +634,6 @@
           "p95": 273,
           "n": 1,
           "last": "2026-09-30"
-        },
-        "desktop-linux": {
-          "p50": 14,
-          "p95": 14,
-          "n": 1,
-          "last": "2026-10-11"
         }
       },
       "Palettes_a_script_drives_the_effects": {
@@ -696,12 +642,6 @@
           "p95": 74,
           "n": 32,
           "last": "2026-10-10"
-        },
-        "desktop-linux": {
-          "p50": 12,
-          "p95": 12,
-          "n": 1,
-          "last": "2026-10-11"
         }
       }
     },
@@ -742,28 +682,14 @@
       }
     },
     "desktop-linux": {
-      "tick_us": 12,
-      "fps": 83333,
-      "scenario_p50": {
-        "Effects_pipeline_builds_and_renders": {
-          "p50": 8,
-          "p95": 8,
-          "n": 1,
-          "last": "2026-10-11"
-        },
-        "Layouts_resize_reallocates_live": {
-          "p50": 25,
-          "p95": 25,
-          "n": 1,
-          "last": "2026-10-11"
-        }
-      }
+      "tick_us": 6,
+      "fps": 166666
     }
   },
   "loc": {
-    "core": 28657,
+    "core": 28659,
     "light": 31027,
-    "platform": 18758,
+    "platform": 18769,
     "ui": 12350,
     "test": 65084,
     "moondeck": 30600
