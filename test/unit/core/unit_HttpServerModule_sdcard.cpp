@@ -315,3 +315,24 @@ TEST_CASE("DELETE /api/dir removes a file and a non-empty folder on the card, vi
 
     http.release();
 }
+
+// Point 5 of the review: DELETE /api/dir?path=/sd must not wipe the card - removeTree refuses the mount root itself, before listing or deleting anything inside it.
+TEST_CASE("DELETE /api/dir on /sd itself is refused, leaving the card untouched") {
+    SdFixture fix;
+    REQUIRE(mm::platform::fsWriteAtomic("/sd/keep.bin", "x", 1));
+
+    mm::HttpServerModule http;
+    http.port = kTestPort;
+    http.setup();
+
+    mm::platform::TcpConnection client;
+    REQUIRE(connectAndAccept(http, client));
+    const char* req = "DELETE /api/dir?path=/sd HTTP/1.1\r\n\r\n";
+    REQUIRE(client.write(reinterpret_cast<const uint8_t*>(req), std::strlen(req)));
+    const std::string reply = pumpUntil(http, client, 12);
+    CHECK(std::strncmp(reply.c_str(), "HTTP/1.1 500", 12) == 0);
+    client.close();
+
+    CHECK(mm::platform::fsSize("/sd/keep.bin") >= 0);   // untouched, not even one level in
+    http.release();
+}

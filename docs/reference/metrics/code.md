@@ -171,7 +171,7 @@ The next function worth simplifying is at the top of each file's list.
 | `src/core/moonlive/MoonLiveScriptFile.h` | 4 | `moonlive::compileScriptFile`, complex function 20 |
 | `src/core/services/ButtonService.h` | 4 | `lines 96-118, also in src/core/services/InfraredService.h:113`, duplicated block 23 |
 | `src/core/system/EthernetModule.h` | 4 | `EthernetModule::defineControls`, complex function 24 |
-| `src/core/system/FilesystemModule.cpp` | 4 | `FilesystemModule::moduleIndexForConfigPath`, complex function 13 |
+| `src/core/system/FilesystemModule.cpp` | 4 | `FilesystemModule::removeTree`, complex function 13 |
 | `src/core/system/ImprovProvisioningModule.h` | 4 | `NetworkModule::setTxPowerSetting in tick1s`, blocking call on the render path 1 |
 | `src/core/system/TasksModule.h` | 4 | `TasksModule::TaskListSource::writeListRowDetail`, complex function 11 |
 | `src/light/drivers/ParallelSlots.h` | 4 | `encodeWs2812ShiftData`, complex function 19 |

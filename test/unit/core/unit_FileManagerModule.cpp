@@ -250,6 +250,14 @@ TEST_CASE("removeTree refuses a tree deeper than its bound") {
     CHECK(r.onDisk("/deep"));                         // still there, not partly gone
 }
 
+// DELETE /api/dir?path=/ reaches removeTree("/") unless this refuses it: without the guard, every child is gone before the final fsRemove("/") itself fails on a real mount.
+TEST_CASE("removeTree refuses to wipe the flash root") {
+    Rig r;
+    CHECK_FALSE(mm::FilesystemModule::removeTree("/"));
+    CHECK(r.onDisk("/readme.txt"));              // nothing touched, not even one level in
+    CHECK(r.onDisk("/.config/Drivers.json"));
+}
+
 // A single file, which is the case that returns on the first fsRemove without ever listing.
 TEST_CASE("removeTree deletes a plain file") {
     Rig r;

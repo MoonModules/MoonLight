@@ -39,10 +39,21 @@ void collectEntry(const char* name, bool isDir, uint32_t, void* user) {
     lvl->count++;
 }
 
+// True for a mount's root - "/" or "/sd", trailing slash and all - which removeTree refuses to wipe: a user deletes what is inside a mount, not the mount.
+bool isMountRoot(const char* path) {
+    if (!path || path[0] != '/') return false;
+    if (path[1] == '\0') return true;                     // "/"
+    if constexpr (!platform::hasSdCard) return false;
+    size_t n = std::strlen(path);
+    if (n > 1 && path[n - 1] == '/') n--;                  // a trailing slash names the same root
+    return n == 3 && path[1] == 's' && path[2] == 'd';     // "/sd"
+}
+
 }  // namespace
 
 // Depth-first, because a directory goes only once empty; `depth` bounds the recursion since a user shapes this tree on the render task.
 bool FilesystemModule::removeTree(const char* path, uint8_t depth) {
+    if (depth == 0 && isMountRoot(path)) return false;   // refuse to wipe an entire mount, flash or SD, before touching anything inside it
     if (depth > 8) return false;
     if (platform::fsRemove(path)) return true;   // a file, or an already-empty directory
 
