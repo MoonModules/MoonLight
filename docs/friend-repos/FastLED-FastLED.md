@@ -7,6 +7,7 @@ What landed on [FastLED](https://github.com/FastLED/FastLED)'s main branch, mont
 No release cut this month (3.10.4, 2026-06-16, remains the published release; master's manifest and the unreleased 3.10.5 tag are unchanged in meaning), so the month is not split. The month is dominated by the color pipeline reaching the output path, a family of "slim bridge" driver conversions across many boards, and the Raspberry Pi Pico family being hardened on real hardware.
 
 **New**
+
 - The profiled color pipeline now runs when a strip is shown: a channel bound to a color profile gets datasheet-aware color, gamut mapping for RGB, RGBW and two-white (RGBWW) strips, and an RGBW target-white override.
 - Managed strips get temporal dithering and chipset-aware quantization: APA102 and SK9822 solve their 5-bit brightness field and color together, LPD8806 and LPD6803 quantize once at wire width, and HD108 and the 16-bit encoders now take the full device drive instead of an 8-bit value widened by a gamma table.
 - The power limiter understands the new pipeline: it charges for the drive actually solved, for the extra white diode on RGBW strips, and can report when it lowers brightness.
@@ -24,6 +25,7 @@ No release cut this month (3.10.4, 2026-06-16, remains the published release; ma
 - A `bash release` workflow tags and publishes releases on merge.
 
 **Fixed**
+
 - 1-D Perlin noise now has a gradient in every hash bucket (open since 2018, #1114).
 - Raspberry Pi Pico: strips on independent PIO blocks transmit concurrently, data pins idle low, PIO/DMA/pin contention is reported rather than failing silently, resources are released when a controller is destroyed (open since 2020, #1471), and the UART baud ceiling follows the real peripheral clock.
 - Pico 2 W: the hang in WiFi connect on the 7th peer cycle (#4173) and several steps of the over-the-air update flow (#3956) are fixed.
@@ -36,6 +38,7 @@ No release cut this month (3.10.4, 2026-06-16, remains the published release; ma
 - The ATmega8/8A are put in the tiny-memory tier, and ATtiny85 builds compile out the dither power reserve.
 
 **Watching**
+
 - The proposed MIT to "FastLED Reciprocal License" change (#4046) is still open; the `LICENSE` file on master is still MIT.
 - The color pipeline phases are largely closed out this month (P1, P6, P7, P8, P9 issues #4035, #4040 through #4043 all closed), with a review burndown (#4156) closed too.
 - CI cost is under study: a 20-minute Linux unit job (#4529) and cutting routine Actions usage (#4543) are open, and the full example sweep moved to nightly.
@@ -47,6 +50,7 @@ _Auditability: 375 commits on `origin/master` with author-date 2026-09-01..2026-
 No release cut this month (3.10.4, 2026-06-16, remains the published release, with the 3.10.5 tag on master unreleased), so the month is not split. Three threads dominate: filling in long-standing chipset and board gaps from very old issues, bringing the Raspberry Pi Pico 2 W online with WiFi and Bluetooth, and replacing the MP3 decoder.
 
 **New**
+
 - On-chip flash storage works at last: sketches can read and write files on an ESP32 without an SD card, through a new `fl::getEmbeddedFs()`.
 - Raspberry Pi Pico 2 W gains WiFi (CYW43) and Bluetooth LE, plus a device-to-device over-the-air update flow.
 - ESP32 sketches can now pick which SPI bus (SPI2 or SPI3) each strip uses, so two clocked strips can run on separate buses.
@@ -60,6 +64,7 @@ No release cut this month (3.10.4, 2026-06-16, remains the published release, wi
 - MP3 playback switches to the minimp3 decoder and now decodes in fixed point by default, which is faster on chips without a floating-point unit. The old Helix decoder is gone, along with its license restrictions.
 
 **Fixed**
+
 - `FastLED.clear()` and `clearData()` only cleared the first strip of a parallel controller, which also made power limiting under-count. Open since 2020.
 - `rgb2hsv_approximate()` no longer overflows and returns wrong hues on some colors. Open since 2020.
 - ESP32: software SPI clock toggling no longer stomps on other pins changing at the same time.
@@ -76,6 +81,7 @@ No release cut this month (3.10.4, 2026-06-16, remains the published release, wi
 - Browser/WASM preview: asset loading is bounded and verified, so a stalled download no longer hangs the sketch forever.
 
 **Watching**
+
 - A proposed license change from MIT to a new "FastLED Reciprocal License 1.0" is under discussion (#4046, #4047, #4048). Nothing has changed yet: master is still MIT. Under the proposal, shipping a product with modified FastLED would require publishing those modifications.
 - A large "profiled color pipeline" design is being planned in ten tracked phases (#4032 through #4044), aiming at datasheet-accurate color, gamut mapping, and float-free fixed-point output.
 - The open report that `show()`'s refresh throttle takes an unconditional deep yield (#3762) is still unresolved.
@@ -87,6 +93,7 @@ _Auditability: 195 first-parent commits on `master` with author-date 2026-08-01.
 No release cut this month (3.10.4, 2026-06-16, remains the latest), so the month is not split. Two big threads: finishing the Raspberry Pi Pico driver family, and cutting the ESP32 platform loose from the Arduino core.
 
 **New**
+
 - Raspberry Pi Pico / RP2040: automatic parallel PIO output finally works for real, 2/4/8 strips driven from one PIO program, with a single-lane fallback for mixed layouts.
 - Raspberry Pi Pico gains fixed-function SPI+DMA drivers, a UART DMA driver, and a public hardware-SPI routing API.
 - WS2814 RGBW strips are now a first-class chipset with datasheet timing.
@@ -98,6 +105,7 @@ No release cut this month (3.10.4, 2026-06-16, remains the latest), so the month
 - `fl::printf`/`snprintf` accept a generic `{}` placeholder.
 
 **Fixed**
+
 - ESP8266: `addLeds()` no longer watchdog-resets when GPIO12 (D6) is used with P9813.
 - `rgb2hsv_approximate()` no longer turns orange into green; CHSV values now compare by field instead of by their RGB rendering.
 - TM1829 timing (FLIP + wait time) restored after a refactor dropped it.
@@ -108,6 +116,7 @@ No release cut this month (3.10.4, 2026-06-16, remains the latest), so the month
 - WASM/browser preview: microphone capture recovers after the user cancels access, and the default renderer works again.
 
 **Watching**
+
 - Report that RGBW output has been broken since 3.10.3 (#3622, closed) fed the month's RGBW colorimetry cleanups.
 - An open thread (#3762) blames an unconditional deep yield in `show()`'s refresh throttle for a long-standing frame-timing regression, no fix shipped yet.
 - A port to the WCH CH32V003 (48 MHz, 2 KB RAM) is proposed (#3755).
@@ -119,6 +128,7 @@ _Auditability: 212 first-parent commits on `master` with author-date 2026-07-01.
 Released **3.10.4** (2026-06-16), cut from `master`.
 
 **New**
+
 - STM32: Arduino UNO Q board support.
 - New NXP LPC8xx family drivers land (LPC804 PLU, LPC845 bit-bang + PWM/DMA-to-GPIO, LPC11xx), early bring-up, bench-validated.
 - Unified `fl::Watchdog` API with real hardware implementations across platforms (ESP32, Teensy 4, AVR, Apollo3, RP2040, STM32) plus a non-allocating reset/crash-classification helper.
@@ -127,6 +137,7 @@ Released **3.10.4** (2026-06-16), cut from `master`.
 - FFT now auto-detects ESP-DSP on ESP32 (no opt-in macro needed).
 
 **Fixed**
+
 - RGBW colorimetric path reworked: native LED gamut + D65 as the default source, improved strict/boosted solvers, corrected dual- and 3-channel solving.
 - ESP32: reliable streaming for SPI strips over ~680 LEDs; ESP32-C6 routes Serial to HWCDC with non-blocking writes and rejects USB-serial pins for LED output.
 - Teensy Audio selection fixed on low-memory boards; nRF52 now honors configured SPI data rates.
@@ -135,11 +146,13 @@ Released **3.10.4** (2026-06-16), cut from `master`.
 ## June 2026 (post-3.10.4)
 
 **New**
+
 - Teensy 4.x LED driver bring-up: ObjectFLED and FlexIO parallel output engines plus a new LPUART-based WS2812 driver (inverted-TX + eDMA), and FlexPWM-based RX capture.
 - New WS2812-style RX capture path on classic ESP32 (RMT4) and LPC845 (SCT+DMA).
 - ARM Cortex-M DSP-extension SIMD backend wired up for Teensy 3.x/4.x (faster scale/blend on those chips).
 
 **Fixed**
+
 - SM16824E chipset timing corrected to match the datasheet.
 - RGBW gamut configuration is now kept per strip.
 - Fixed a memory leak in the chunked `fl::deque` container.

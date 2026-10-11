@@ -10,7 +10,7 @@ One rendering layer, an effect writes into its buffer, modifiers transform the c
 
 <img src="../../assets/light/Layer.png" width="300" alt="Layer container with a child effect">
 
-- `blendMode`: how this layer composites onto the ones below (overwrite / alpha / additive).
+- `blendMode`: how this layer combines with the ones below; a multiply layer is a mask over them.
 
 Detail: [technical](moxygen/Layer.md)
 

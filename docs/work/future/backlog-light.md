@@ -388,15 +388,15 @@ fix that made a fixture light, not the finished design.
 ### Blending adds motion channels, which is meaningless for aim (WANTED)
 
 `blendMap` treats a light as `n` opaque bytes, so ADDITIVE blending sums pan and tilt across
-layers. Two layers driving one moving head aim it at neither position, and saturate to hard-over
+layers, and the separable modes (multiply, screen, darken, lighten, difference, exclusion) combine them the same way. Two layers driving one moving head aim it at neither position, and saturate to hard-over
 as soon as both are moderately positioned.
 
-Only additive is wrong. **Opacity blending on motion is a feature and must be kept**: it is an
+Only the combining modes are wrong. **Opacity blending on motion is a feature and must be kept**: it is an
 interpolation, so a layer fading in sweeps the head smoothly from the old aim to the new one,
 which is what a console does and better than a snap. The rule (architecture.md) is that
 interpolating ops are valid on every channel while accumulating ops are valid only on emissive
-ones, so the fix is narrow: in the additive path, ASSIGN motion channels (topmost writer wins)
-instead of summing them, leaving the opacity path alone.
+ones, so the fix is narrow: in the additive and separable paths, ASSIGN motion channels (topmost writer wins)
+instead of combining them, leaving the opacity path alone. Lighting consoles call the same split HTP and LTP: intensity merges highest-takes-precedence, attributes latest-takes-precedence. A discrete attribute such as a gobo slot does not interpolate either, so it snaps rather than fades.
 
 Not yet reachable in a harmful way: it needs two enabled layers on a fixture carrying motion
 channels, and the single-layer path is a memcpy. Worth doing with the motion-writer work, since
@@ -850,11 +850,7 @@ The LED-driver increments **shipped**: increment 1 (RMT/WS2812B single-strand on
 
   **Why it waits.** It is fourteen effects' worth of change across audio-reactive and simulation families, each needing its own judgement about whether to clear, fade, or seed differently — not a mechanical sweep. `unit_Effects_gridsweep.cpp` already measures it (`afterFirst`) and asserts only the settled frame, so the number is visible without blocking.
 
-- **A scripted modifier that animates every frame, dimming included** (Macho_roller on Discord, 2026-10-11: a modifier that grows any effect in from one end of the strip with a soft glowing front). A native modifier already runs every frame through `modifyLive`, as Rotate does; a script gets only `modifyLogical`, which runs once while the mapping builds. Two steps, built together since the reveal needs both:
-  1. `MoonLiveModifier` compiles a `modifyLive()` entry and the layer's live pass calls it, with `t` and `xPos`/`yPos`/`zPos`, so `setXYZ` animates. A light pointed off the grid goes dark, which already gives a hard-edged reveal.
-  2. The live pass copies a light's color unchanged, so dimming needs the hook to reach the color: `getRGB` and `setRGB` on the light being placed, the get/set pair effects already half have, rather than a brightness call. With them come the color operations the textbook names: `addRGB` (a saturating add), `mulRGB` (a multiply, scaling each channel by 0 to 255, which is the dimming) and `blendRGB` (a mix toward a color by an amount). Effects gain the same calls, since trails, blur and glow need to read what is already there; ewowi/MoonLight's layer had `getRGB`, `addRGB` and `blendColor` for that reason. Open design question: how a modifier names the light it is placing, an implicit current light or an explicit index as effects pass.
-
-  The cost to measure: the script runs per light per frame, so an S3 at its largest grid is the test.
+- **A scripted modifier that animates every frame** (2026-10-11): `MoonLiveModifier` compiles a `modifyLive()` entry, so a script moves lights per frame with `t` (scroll, wobble, sweep) as the compiled Rotate does. Geometry only: dimming is a blend mode or an effect's `mulRGB`, per [the layer compositing plan](../present/Plan-20261011%20-%20Layer%20compositing,%20masks%20and%20transitions.md). Built once a script needs it; the cost to measure is one compiled-script call per light per frame, on an S3 at its largest grid.
 - **A scripted modifier needs a way to drop a light** (2026-08-10). A coordinate slot is a byte, so a script that computes past 255 wraps: `shift.mlv` with a large `amount` lands lights back at the left edge instead of walking them off it. The Layer already drops an out-of-bounds position, but a script has no way to SAY out-of-bounds — every value it can write is a valid coordinate. Needs a sentinel the binding recognizes (or a wider coordinate slot), at which point the "walks off the edge" behavior a scroll modifier wants becomes expressible.
 
 - **A scripted layout loses its control values across a reboot** (2026-08-11). Persistence SAVES them correctly (`/.config/Layouts.json` holds `"0.width":64`), but on boot they are loaded into a control set that does not exist yet: a script's controls are created by `defineControls`, which can only publish what the ENGINE declared, and the engine does not compile until `prepare()` — Scheduler phase 4, after the phase-2b re-bind. So the loaded value has nowhere to land and the script's declared default wins; a saved 64×64 grid comes back 16×16. Verified on the P4 bench.

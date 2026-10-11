@@ -37,6 +37,9 @@ public:
     /// Let a binding attach its own sinks around the script's defineControls(), such as a pool it sizes.
     void setDefineHook(DefineHook fn, void* ctx) { defineHook_ = fn; defineCtx_ = ctx; }
 
+    /// The text the last sync wrote to its owner's status, so the owner can tell its own message from another's.
+    const char* statusText() const { return statusBuf_; }
+
     // True means a new program was installed, which a modifier turns into a Layer rebuild.
     /// Re-read the file and recompile when its content hash moved.
     bool sync(const SysVarTable& sysvars, MoonModule& owner, const BuiltinTable& builtins) {
@@ -81,10 +84,10 @@ public:
                 if (n < 0) n = 0;
                 if (static_cast<size_t>(n) > room) n = static_cast<int>(room);
                 std::snprintf(statusBuf_ + n, sizeof(statusBuf_) - static_cast<size_t>(n), "%s", at);
-                owner.setStatus(statusBuf_, MoonModule::Severity::Error);
             } else {
-                owner.setStatus(err, MoonModule::Severity::Error);
+                std::snprintf(statusBuf_, sizeof(statusBuf_), "%s", err ? err : "compile failed");
             }
+            owner.setStatus(statusBuf_, MoonModule::Severity::Error);
             // Forget what the last script said: its strings are already overwritten in the pool.
             dim_ = Dim::D2;
             tags_ = nullptr;

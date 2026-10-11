@@ -595,6 +595,32 @@ extern "C" inline uint32_t mm_light_fade(const uintptr_t* args, uint32_t, const 
     return 0;
 }
 
+// The color calls are the compiled effects' own draw functions, by the index a script counts lights in.
+/// Read one light's red channel; 0 past the end, one channel per call as paletteR/G/B.
+extern "C" inline uint32_t mm_light_getR(const uintptr_t* args, uint32_t, const uint8_t*) { return draw::get(drawCanvas(), size_t(args[0])).r; }
+/// Read one light's green channel.
+extern "C" inline uint32_t mm_light_getG(const uintptr_t* args, uint32_t, const uint8_t*) { return draw::get(drawCanvas(), size_t(args[0])).g; }
+/// Read one light's blue channel.
+extern "C" inline uint32_t mm_light_getB(const uintptr_t* args, uint32_t, const uint8_t*) { return draw::get(drawCanvas(), size_t(args[0])).b; }
+
+/// Scale one light by `k` out of 255, through draw::scalePixel.
+extern "C" inline uint32_t mm_light_mulRGB(const uintptr_t* args, uint32_t, const uint8_t*) {
+    draw::scalePixel(drawCanvas(), size_t(args[0]), byteArg(args[1]));
+    return 0;
+}
+
+/// Add a color to one light, through draw::addPixel.
+extern "C" inline uint32_t mm_light_addRGB(const uintptr_t* args, uint32_t, const uint8_t*) {
+    draw::addPixel(drawCanvas(), size_t(args[0]), RGB{byteArg(args[1]), byteArg(args[2]), byteArg(args[3])});
+    return 0;
+}
+
+/// Mix one light toward a color by `amount`, through draw::blendPixel.
+extern "C" inline uint32_t mm_light_blendRGB(const uintptr_t* args, uint32_t, const uint8_t*) {
+    draw::blendPixel(drawCanvas(), size_t(args[0]), RGB{byteArg(args[1]), byteArg(args[2]), byteArg(args[3])}, byteArg(args[4]));
+    return 0;
+}
+
 // Full width, since a coordinate on a large wall does not fit in a byte.
 /// Say where this light goes, from a modifier.
 extern "C" inline uint32_t mm_light_setXYZ(const uintptr_t* args, uint32_t, const uint8_t*) {
@@ -857,6 +883,18 @@ extern "C" inline uint32_t mm_light_smin(const uintptr_t* args, uint32_t, const 
                                             static_cast<int32_t>(uint32_t(args[2]))));
 }
 
+/// One light by index: setRGB, and the read-modify-write companions on what earlier effects in the layer drew, a mask dimming with mulRGB.
+inline void addLightColorBuiltins(BuiltinTable& t) {
+    // setRGB writes one bounds-guarded pixel through the StoreElem inline op.
+    t.add({"setRGB", 4, /*returns*/ false, BuiltinKind::Inline, nullptr, InlineOp::StoreElem});
+    t.add({"getR", 1, /*returns*/ true, BuiltinKind::Call, &mm_light_getR, {}});
+    t.add({"getG", 1, /*returns*/ true, BuiltinKind::Call, &mm_light_getG, {}});
+    t.add({"getB", 1, /*returns*/ true, BuiltinKind::Call, &mm_light_getB, {}});
+    t.add({"mulRGB", 2, /*returns*/ false, BuiltinKind::Call, &mm_light_mulRGB, {}});
+    t.add({"addRGB", 4, /*returns*/ false, BuiltinKind::Call, &mm_light_addRGB, {}});
+    t.add({"blendRGB", 5, /*returns*/ false, BuiltinKind::Call, &mm_light_blendRGB, {}});
+}
+
 // setRGB and fill are Inline, lowering to stores, since they are the hot-path writers.
 /// The light-domain builtin table the binding injects into the compiler.
 inline const BuiltinTable& lightBuiltins() {
@@ -867,8 +905,7 @@ inline const BuiltinTable& lightBuiltins() {
     addCommonBuiltins(t);
     // smin stays here, since it wraps a shape helper and is not neutral.
     t.add({"smin", 3, /*returns*/ true, BuiltinKind::Call, &mm_light_smin, {}});
-    // setRGB writes one bounds-guarded pixel through the StoreElem inline op.
-    t.add({"setRGB", 4, /*returns*/ false, BuiltinKind::Inline, nullptr, InlineOp::StoreElem});
+    addLightColorBuiltins(t);
     // setXYZ is its own op, since a modifier is handed one coordinate and has no index to give.
     t.add({"setXYZ", 3, /*returns*/ false, BuiltinKind::Call, &mm_light_setXYZ, {}});
     // fill(r, g, b)           → write every light. Inline op FillElems.

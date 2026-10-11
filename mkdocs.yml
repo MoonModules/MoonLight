@@ -238,6 +238,7 @@ nav:
           - MHC-WLED ESP32-P4 shield: reference/hardware/mhc-wled-esp32-p4-shield.md
           - Waveshare ESP32-P4-ETH: reference/hardware/esp32-p4-eth.md
           - Teensy 4.1: reference/hardware/teensy-4-1.md
+          - Small boards (RP2350, RP2040, Nordic): reference/hardware/small-boards.md
           - Light fixtures and DMX nodes: reference/hardware/light-fixtures.md
           - Control surfaces: reference/hardware/control-surfaces.md
   # The rules bind a contributor rather than serving a reader need, so they sit outside

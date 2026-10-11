@@ -144,6 +144,23 @@ public:
     /// The global active color palette, which every palette-driven effect reads live.
     uint8_t palette = 0;
 
+    /// Run the script `paletteScript_` names, compiling it, whose size or error the card shows.
+    void attachPaletteScript() {
+        MoonLivePalette::setActiveInstance(&paletteScriptModule_);
+        paletteScriptModule_.setScript(paletteScript_);
+        paletteScriptModule_.prepare(*this);
+    }
+
+    // Released rather than only detached, so neither the program nor its status outlives the choice.
+    /// Stop the palette script, or it would keep overwriting the gradient every frame.
+    void detachPaletteScript() {
+        MoonLivePalette::setActiveInstance(nullptr);
+        paletteScriptModule_.release();
+        paletteScript_[0] = 0;
+        // Only the script's own message: the card shares one status with the relay and encode warnings.
+        if (status() == paletteScriptModule_.statusText()) clearStatus();
+    }
+
     // The names live in a member array because the seam holds POINTERS, so a local would dangle.
     /// List every factory palette at its place in the catalog, held or not, then the user's own `.mlp` files, and publish them to the picker.
     void refreshLivePalettes() {
@@ -307,26 +324,23 @@ public:
                 // The script fills the entries every frame, so there is nothing to expand here.
                 mm::formatTo(paletteScript_, sizeof(paletteScript_), "%s",
                               LivePalettes::nameAt(LivePalettes::sourceIndex(palette)));
-                MoonLivePalette::setActiveInstance(&paletteScriptModule_);
-                paletteScriptModule_.setScript(paletteScript_);
-                paletteScriptModule_.prepare(*this);
+                attachPaletteScript();
             } else {
-                // Detach any script, or it would keep overwriting the gradient every frame.
-                MoonLivePalette::setActiveInstance(nullptr);
-                paletteScript_[0] = 0;
+                detachPaletteScript();
                 Palettes::setActive(LivePalettes::sourceIndex(palette));
             }
             rebuildControls();   // the editor and the script's controls appear or disappear with it
             return;
         }
         if (std::strcmp(controlName, "paletteScript") == 0) {
-            // Only while a name is set, so clearing the field detaches the script.
-            MoonLivePalette::setActiveInstance(paletteScript_[0] ? &paletteScriptModule_ : nullptr);
-            paletteScriptModule_.setScript(paletteScript_);
-            paletteScriptModule_.prepare(*this);
+            if (paletteScript_[0]) {
+                attachPaletteScript();
+            } else {
+                // Clearing the name hands the palette back to the built-in select.
+                detachPaletteScript();
+                Palettes::setActive(palette);
+            }
             rebuildControls();              // the compile re-derives the script's own controls
-            // Clearing the name hands the palette back to the built-in select.
-            if (paletteScript_[0] == 0) Palettes::setActive(palette);
             return;
         }
         if (std::strcmp(controlName, "multicore") == 0) {

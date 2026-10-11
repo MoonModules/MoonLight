@@ -112,6 +112,8 @@ public:
 
     /// Test-only: the currently served downsample factor, 1 being full resolution.
     nrOfLightsType downscaleForTest() const { return downscale_; }
+    /// Test-only: how many lights the index cache holds, which equals the table's count while frames take the cached path.
+    nrOfLightsType keptCountForTest() const { return keptCount_; }
 
 
     /// Preview shows the raw logical buffer, no correction.
@@ -135,12 +137,14 @@ public:
         else freePreviewBuffers();            // no broadcaster wired: nothing streams, release the buffers
         // A NEW epoch, so every client's table cache misses and each asks for a fresh one.
         epoch_++;
-        buildCoordTable();
-        // Pre-sized for the FINEST stride, so a later stride change on the tick allocates nothing.
+        // Sized BEFORE the table is built, so the build fills the buffers it keeps; pre-sized for the FINEST stride, so a later stride change on the tick allocates nothing.
         if (layer_ && layer_->layouts()) {
             const nrOfLightsType finest = layer_->layouts()->totalLightCount();
             const nrOfLightsType capPts = maxPreviewPoints();
             const size_t maxPts = finest < capPts ? finest : capPts;
+            // Sized to this geometry, so a layout that shrank returns what a larger one grew.
+            if (stagingCap_ > maxPts * 3u) freeStaging();
+            if (keptIdxCap_ > maxPts || denseGrid()) freeKeptIndex();
             ensureStaging(maxPts * 3u);
             if (!denseGrid() && keptIdxCap_ < maxPts) {
                 auto* grown = static_cast<nrOfLightsType*>(platform::alloc(maxPts * sizeof(nrOfLightsType)));
@@ -151,13 +155,14 @@ public:
                     keptIdx_ = grown;
                     keptPos_ = steps;
                     keptIdxCap_ = static_cast<nrOfLightsType>(maxPts);
-                    publishHeapBytes();
                 } else {
                     if (grown) platform::free(grown);
                     if (steps) platform::free(steps);
                 }
             }
+            publishHeapBytes();
         }
+        buildCoordTable();
         refreshStatus();   // surface an index-cache alloc miss in the tab
     }
 
@@ -498,10 +503,20 @@ private:
     /// Free the preview buffers, cancelling any in-flight send so no drain outlives its buffer.
     void freePreviewBuffers() {
         if (broadcaster_) broadcaster_->cancelBufferedSend();
+        freeKeptIndex();
+        freeStaging();
+        publishHeapBytes();
+    }
+
+    /// Free the non-grid index cache, which the next coordinate table regrows at its own size; the caller publishes the readout.
+    void freeKeptIndex() {
         if (keptIdx_) { platform::free(keptIdx_); keptIdx_ = nullptr; keptIdxCap_ = 0; keptCount_ = 0; }
         if (keptPos_) { platform::free(keptPos_); keptPos_ = nullptr; }
+    }
+
+    /// Free the staging buffer, which the next frame or table regrows at its own size; the caller publishes the readout.
+    void freeStaging() {
         if (staging_) { platform::free(staging_); staging_ = nullptr; stagingCap_ = 0; }
-        publishHeapBytes();
     }
 
     /// Grow the one stable staging buffer the resumable drain reads across transport ticks.

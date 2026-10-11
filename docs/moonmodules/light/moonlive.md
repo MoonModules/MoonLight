@@ -189,6 +189,10 @@ The core owns the grammar and a generic call mechanism, and nothing else.
 | call | does |
 |---|---|
 | `setRGB(index, r, g, b)` | write one light |
+| `getR(index)`, `getG`, `getB` | read one channel of a light, what earlier effects in the layer drew |
+| `mulRGB(index, k)` | scale one light by `k` out of 255, the dimming a mask applies |
+| `addRGB(index, r, g, b)` | add a color to one light, saturating at 255 |
+| `blendRGB(index, r, g, b, amount)` | mix one light toward a color by `amount` out of 255 |
 | `setXYZ(x, y, z)` | write one position, for a modifier |
 | `fill(r, g, b)` | write every light |
 | `addLight(x, y, z)` | place the next light, for a layout |

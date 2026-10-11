@@ -1,8 +1,8 @@
 {
-  "commit": "a2037b62",
+  "commit": "48fe8d4a",
   "flash": {
-    "esp32s3-n16r8": 2335568,
-    "esp32": 2233680,
+    "esp32s3-n16r8": 2341088,
+    "esp32": 2238432,
     "esp32p4rev1-eth": 2177776,
     "esp32p4rev1-eth-wifi": 2358896,
     "esp32s3-n8r8": 2336304,
@@ -11,14 +11,14 @@
     "esp32-eth": 1681040,
     "esp32-wrover": 1843760,
     "qemu": 1383648,
-    "esp32p4rev3-eth": 2228784,
+    "esp32p4rev3-eth": 2236512,
     "esp32s3-zero": 2219120,
     "esp32-pico": 2107168,
-    "desktop-macos": 2274616,
+    "desktop-macos": 2293624,
     "desktop-windows": 1925120,
     "esp32c3": 2335072,
-    "teensy41-w5500": 1184728,
-    "teensy41": 1180668
+    "teensy41-w5500": 1189848,
+    "teensy41": 1185788
   },
   "measured": {
     "esp32p4rev1-eth": "2026-10-07",
@@ -793,24 +793,24 @@
     }
   },
   "loc": {
-    "core": 28291,
-    "light": 31114,
-    "platform": 19812,
+    "core": 28295,
+    "light": 31289,
+    "platform": 19875,
     "ui": 12307,
-    "test": 64911,
+    "test": 65116,
     "moondeck": 31138
   },
   "comments": {
     "core": {
-      "lines": 6166,
+      "lines": 6168,
       "ratio": 0.242
     },
     "light": {
-      "lines": 7468,
+      "lines": 7512,
       "ratio": 0.269
     },
     "platform": {
-      "lines": 3901,
+      "lines": 3908,
       "ratio": 0.22
     },
     "ui": {
@@ -818,8 +818,8 @@
       "ratio": 0.298
     },
     "test": {
-      "lines": 6989,
-      "ratio": 0.125
+      "lines": 7006,
+      "ratio": 0.124
     },
     "moondeck": {
       "lines": 4939,
@@ -827,19 +827,19 @@
     }
   },
   "tests": {
-    "cases": 2416,
+    "cases": 2430,
     "scenarios": 30
   },
   "docs": {
-    "md_files": 152,
-    "md_lines": 32642,
-    "plans_files": 45,
-    "backlog_lines": 3334,
+    "md_files": 156,
+    "md_lines": 32996,
+    "plans_files": 47,
+    "backlog_lines": 3330,
     "lessons_lines": 532,
     "claude_md_lines": 283
   },
   "complexity": {
-    "functions": 4676,
+    "functions": 4717,
     "over_threshold": 330,
     "worst_ccn": 128
   }

@@ -147,6 +147,27 @@ Neither Teensy firmware drives an I2S or I2C peripheral at this point; this wiri
 On the bench board of this example, pin 19 disturbed the W5500 when it toggled, so the example leaves it unused.
 Every other lane pin tested clean.
 
+## The Audio Shield
+
+<img src="../../assets/hardware/boards/teensy-audio-shield.webp" width="160" alt="PJRC Audio Shield for Teensy 4.x">
+
+PJRC's [Audio Shield Rev D](https://www.pjrc.com/store/teensy3_audio.html) stacks on the Teensy: an SGTL5000 codec with line in, line out, headphones and a microphone input, and a microSD slot.
+It is DEV-15845 at [Antratek](https://www.antratek.nl/teensy4-audio-board), €11.86.
+No firmware drives it; audio input on the Teensy is planned work.
+Its pins overlap the W5500 and the LED lanes, so it fits only once the lanes avoid them.
+
+| Signal | Teensy pin | Overlaps |
+|---|---|---|
+| I2S MCLK, BCLK, LRCLK | 23, 21, 20 | LED lanes, and the INMP441 above, which uses the same I2S pins |
+| I2S data in, out | 7, 8 | the INMP441's data on 8 |
+| I2C SDA, SCL | 18, 19 | LED lanes; the bench panel is on 18 |
+| SD card CS, MOSI, MISO, SCK | 10, 11, 12, 13 | the W5500's SPI bus and chip select |
+| volume pot, when fitted | 15 | an LED lane |
+| memory chip CS, when fitted | 6 | nothing here |
+
+On a 4.1-NE with the W5500, the SD card shares the W5500's chip select, so the two cannot run together.
+On a regular 4.1 with its own Ethernet the SPI bus is free, and only the LED lanes move off 15, 18 to 21 and 23.
+
 ## Possible deployments
 
 These boards put a Teensy, LED outputs and Ethernet in one unit.

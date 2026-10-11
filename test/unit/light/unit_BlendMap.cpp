@@ -1,8 +1,10 @@
 /// @module BlendMap
 /// @also MappingLUT
+/// @also Layer
 
 #include "doctest.h"
 #include "light/layers/BlendMap.h"
+#include "light/layers/Layer.h"
 #include "platform/platform.h"
 
 #include <cstring>
@@ -348,4 +350,97 @@ TEST_CASE("a mapping larger than its destination writes only what the buffer hol
         INFO("byte " << i);
         CHECK(dst.data()[i] == 0xAB);
     }
+}
+
+namespace {
+// The specification's formula in real arithmetic, rounded, so the integer kernels are checked against the math rather than against themselves.
+int specBlend(mm::BlendOp op, int s, int d) {
+    const double a = s / 255.0, b = d / 255.0;
+    double r = 0;
+    switch (op) {
+        case mm::BlendOp::Multiply:   r = a * b; break;
+        case mm::BlendOp::Screen:     r = a + b - a * b; break;
+        case mm::BlendOp::Darken:     r = a < b ? a : b; break;
+        case mm::BlendOp::Lighten:    r = a > b ? a : b; break;
+        case mm::BlendOp::Difference: r = a > b ? a - b : b - a; break;
+        case mm::BlendOp::Exclusion:  r = a + b - 2 * a * b; break;
+        default:                      r = a; break;
+    }
+    return static_cast<int>(r * 255 + 0.5);
+}
+
+// One light per pair, blended at `opacity` onto the backdrop with no LUT.
+uint8_t blendOne(mm::BlendOp op, uint8_t s, uint8_t d, uint8_t opacity = 255) {
+    mm::Buffer src, dst;
+    src.allocate(1, 3); dst.allocate(1, 3);
+    for (size_t i = 0; i < 3; i++) { src.data()[i] = s; dst.data()[i] = d; }
+    mm::MappingLUT lut;
+    mm::blendMap(src, dst, lut, 3, op, opacity, /*clearFirst=*/false);
+    return dst.data()[0];
+}
+}  // namespace
+
+// The separable modes of W3C Compositing and Blending, each within one step of its formula over a grid of source and backdrop values, corners included.
+TEST_CASE("each separable blend mode computes its specification formula") {
+    const mm::BlendOp ops[] = {mm::BlendOp::Multiply, mm::BlendOp::Screen, mm::BlendOp::Darken,
+                               mm::BlendOp::Lighten, mm::BlendOp::Difference, mm::BlendOp::Exclusion};
+    for (mm::BlendOp op : ops)
+        for (int s = 0; s <= 255; s += 15)
+            for (int d = 0; d <= 255; d += 15) {
+                const int got = blendOne(op, static_cast<uint8_t>(s), static_cast<uint8_t>(d));
+                const int want = specBlend(op, s, d);
+                CAPTURE(static_cast<int>(op)); CAPTURE(s); CAPTURE(d);
+                CHECK((got >= want - 1 && got <= want + 1));
+            }
+}
+
+// A multiply layer is a luminance mask over what is below it.
+TEST_CASE("a multiply layer keeps the backdrop under white, hides it under black and dims it under grey") {
+    CHECK(blendOne(mm::BlendOp::Multiply, 255, 200) == 200);
+    CHECK(blendOne(mm::BlendOp::Multiply, 0, 200) == 0);
+    CHECK(blendOne(mm::BlendOp::Multiply, 128, 200) == 100);
+}
+
+// Opacity weighs every mode the same way, the blend result mixed with the backdrop, so a half-strength mask darkens half as much.
+TEST_CASE("a separable mode at partial opacity mixes its result with the backdrop") {
+    CHECK(blendOne(mm::BlendOp::Multiply, 0, 200, 0) == 200);     // invisible: the backdrop as it was
+    CHECK(blendOne(mm::BlendOp::Multiply, 0, 200, 128) == 99);    // half the way to black: div255(200 * 127)
+    CHECK(blendOne(mm::BlendOp::Screen, 255, 0, 128) == 128);     // half the way to white
+}
+
+// The mapped path runs the same function: a mode through a one-to-one LUT matches the dense-grid path.
+TEST_CASE("a separable mode through a LUT matches the one without") {
+    mm::Buffer src, dst;
+    src.allocate(1, 3); dst.allocate(1, 3);
+    for (size_t i = 0; i < 3; i++) { src.data()[i] = 128; dst.data()[i] = 200; }
+    mm::MappingLUT lut; buildIdentityLut1(lut);
+    mm::blendMap(src, dst, lut, 3, mm::BlendOp::Multiply, 255, /*clearFirst=*/false);
+    CHECK(dst.data()[0] == blendOne(mm::BlendOp::Multiply, 128, 200));
+}
+
+// The layer's option list and the op it selects are two tables, so each option is checked to reach its own mode.
+TEST_CASE("each layer blendMode option selects its own blend op") {
+    const mm::BlendOp want[] = {mm::BlendOp::Alpha, mm::BlendOp::Additive, mm::BlendOp::Multiply, mm::BlendOp::Screen,
+                                mm::BlendOp::Darken, mm::BlendOp::Lighten, mm::BlendOp::Difference, mm::BlendOp::Exclusion};
+    static_assert(sizeof(want) / sizeof(want[0]) == mm::Layer::kBlendModeCount, "one expectation per mode");
+    mm::Layer layer;
+    for (uint8_t m = 0; m < mm::Layer::kBlendModeCount; m++) {
+        layer.blendMode = m;
+        CAPTURE(static_cast<int>(m));
+        CHECK(layer.blendOp() == want[m]);
+    }
+}
+
+// The rounded product keeps exclusion inside 0 to 255 and within one step of its formula, for every pair, as its comment claims.
+TEST_CASE("exclusion stays in range and within one step of its formula for every input pair") {
+    const mm::blendfn::Exclusion ex;
+    int worst = 0;
+    for (int a = 0; a <= 255; a++)
+        for (int b = 0; b <= 255; b++) {
+            const int got = ex(static_cast<uint8_t>(a), static_cast<uint8_t>(b));
+            const int want = specBlend(mm::BlendOp::Exclusion, a, b);
+            const int off = got > want ? got - want : want - got;
+            if (off > worst) worst = off;
+        }
+    CHECK(worst <= 1);
 }

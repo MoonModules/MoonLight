@@ -348,6 +348,8 @@ keeping that test cheap to run.
 
 ### 4b. Predefined structs: `Coord3D` now, a color type after the 16-bit Layer — *and they make #4 land properly*
 
+Planned: [MoonLive Coord3D and RGB types](../present/Plan-20261011%20-%20MoonLive%20Coord3D%20and%20RGB%20types.md), both types together as fields under one name, since the 16-bit Layer that held the color type back was reversed.
+
 Most of what a script manipulates is a POSITION or a COLOUR, and today both are loose integers: a
 coordinate is three separate values or an index the script computes by hand
 (`mod(bx+dx, width) + mod(by+dy, height) * width`), and a colour is three `uint8_t`s that cannot

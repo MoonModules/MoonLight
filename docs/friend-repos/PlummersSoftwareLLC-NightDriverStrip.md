@@ -47,6 +47,7 @@ _Auditability: 3 commits on `main` author-dated 2026-07-01..2026-07-31 (1 first-
 The big one: **NightDriverStrip 2.0.0** shipped on June 14, a major release cut from `main`.
 
 **New**
+
 - Brand-new Web UI replacing the old one, plus a new browser-based web installer for flashing devices.
 - Runtime-selectable output drivers: settings that used to be compile-time (like strip type) can now be changed on the device without rebuilding.
 - APA102 / SK9822 strips are now a first-class output type alongside WS281x and HUB75.
@@ -57,6 +58,7 @@ The big one: **NightDriverStrip 2.0.0** shipped on June 14, a major release cut 
 - New and revised effects, plus smarter memory handling (targeted mix of internal RAM and PSRAM).
 
 **Fixed**
+
 - Render hiccup/stutter when settings auto-saved: SPIFFS/JSON writes no longer block the render thread.
 - Effect-manager crash shortly after load when the effect set changed.
 - Serpentine-matrix visualization corrected.
@@ -70,6 +72,7 @@ The big one: **NightDriverStrip 2.0.0** shipped on June 14, a major release cut 
 - Fixed 64x32 (wide-and-short) displays that were rotating and doubling their content instead of scaling, effect previews in the Web UI and CLI now match the active output driver's pixel mapping (issue #878).
 
 **Watching**
+
 - Issue #877 ("networking seems broken") drew heavy discussion (38 comments) around the WebUI being unreachable after a recent merge on some setups; closed in June.
 
 Auditability: ~40 first-parent merges/commits on `main` with author-date in 2026-06-01..2026-06-30 (`commits?sha=main&since=…until=…`); two versioned releases published June 14, v2.0.0 (commit ce00eaa) and v2.0.1 (commit 835015b), both ancestors of `main`, so the month is split at v2.0.0. Issues checked via `search/issues` for `created:2026-06-01..2026-06-30` (0 opened in range) and `closed:2026-06-01..2026-06-30` (#877, #878, #825 closed; #878 and #877 user-facing).

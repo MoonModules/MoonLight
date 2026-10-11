@@ -128,9 +128,45 @@ bool spawnPinnedTask(WorkerTask&, const char*, WorkerFn, void*, size_t, uint8_t,
 void notifyTask(WorkerTask&) {}
 bool waitNotify(WorkerTask&, uint32_t) { return false; }
 void stopPinnedTask(WorkerTask&) {}
-void taskWdtSubscribe() {}
-void taskWdtUnsubscribe() {}
-void taskWdtReset() {}
+// --- Watchdog: WDOG1 on the one loop, which feeds it every tick --------------------------------
+
+namespace {
+constexpr uint32_t kWdtTimeoutS = 12;            // as the ESP32's task watchdog
+constexpr uint32_t kWdtResetMark = 0x0BAD0D06;   // in SRC_GPR5 beside the core's fault mark, so the next boot reads WDT
+bool g_wdtOn = false;
+void markBootStableIfDue();   // with the boot record below
+
+// WDOG1 counts and flags its timeout, but its reset does not reach the core on this board, so the warning half a second ahead resets in software.
+void wdtWarning() {
+    SRC_GPR5 = kWdtResetMark;
+    SCB_AIRCR = 0x05FA0004;   // SYSRESETREQ, as reboot() does
+    for (;;) {}
+}
+}  // namespace
+
+// The one loop is the one task, so the first subscription starts WDOG1 for good: its enable bit stays set until the next reset.
+void taskWdtSubscribe() {
+    if (g_wdtOn) return;
+    CCM_CCGR3 |= CCM_CCGR3_WDOG1(CCM_CCGR_ON);
+    WDOG1_WMCR = 0;   // the power-down counter, which would reset the chip 16 s after any reset
+    // Highest priority, so a handler that hangs below it is caught too; only a hang with interrupts off is not.
+    attachInterruptVector(IRQ_WDOG1, wdtWarning);
+    NVIC_SET_PRIORITY(IRQ_WDOG1, 0);
+    NVIC_ENABLE_IRQ(IRQ_WDOG1);
+    WDOG1_WICR = (1u << 15) | 1;   // WIE, one half-second step before the timeout
+    // Half-second steps, so the warning lands at the timeout the ESP32 uses.
+    WDOG1_WCR = WDOG_WCR_WT(kWdtTimeoutS * 2) | WDOG_WCR_WDE | WDOG_WCR_SRS | WDOG_WCR_WDA;
+    g_wdtOn = true;
+    taskWdtReset();
+}
+void taskWdtUnsubscribe() {}   // WDOG1 cannot stop once started, and the loop never exits
+// The service sequence the WDOG1 block defines.
+void taskWdtReset() {
+    if (!g_wdtOn) return;
+    WDOG1_WSR = 0x5555;
+    WDOG1_WSR = 0xAAAA;
+    markBootStableIfDue();   // the loop's heartbeat is where a boot proves it stays up
+}
 
 // --- GPIO and ADC -------------------------------------------------------------------------------
 
@@ -236,7 +272,8 @@ const char* cpuInfo() {
 // The reset status register keeps its bits across a warm reset, so it is read once and cleared for the next boot.
 namespace {
 // The cause the reset status register latched, the most specific first.
-const char* reasonFor(uint32_t srsr, bool faulted) {
+const char* reasonFor(uint32_t srsr, bool faulted, bool watchdog) {
+    if ((srsr & SRC_SRSR_LOCKUP_SYSRESETREQ) && watchdog) return "WDT";
     if ((srsr & SRC_SRSR_LOCKUP_SYSRESETREQ) && faulted) return "PANIC";
     if (srsr & (SRC_SRSR_WDOG_RST_B | SRC_SRSR_WDOG3_RST_B)) return "WDT";
     if (srsr & SRC_SRSR_LOCKUP_SYSRESETREQ) return "SW";
@@ -250,15 +287,41 @@ const char* resetReason() {
     if (reason) return reason;
     const uint32_t srsr = SRC_SRSR;
     const bool faulted = SRC_GPR5 == 0x0BAD00F1;   // the core's mark for its reboot after a fault
+    const bool watchdog = SRC_GPR5 == kWdtResetMark;
     SRC_SRSR = srsr;
     SRC_GPR5 = 0;
-    reason = reasonFor(srsr, faulted);
+    reason = reasonFor(srsr, faulted, watchdog);
     return reason;
 }
 
-// Failed boots are counted once the watchdog arrives in phase 4; until then every boot reads as a first one.
+// SNVS general-purpose register 0 keeps its value across every reset short of a power loss, which is what a crash loop needs: the failed boots in a row.
+namespace {
+constexpr uint32_t kBootTag = 0x4D4C0000;   // "ML", so a value left by another firmware reads as none
+bool g_bootStable = false;
+
+void storeBoot(uint8_t restarts) { SNVS_LPGPR0 = kBootTag | restarts; }
+
+void markBootStableIfDue() {
+    if (g_bootStable || ::millis() < kBootStableMs) return;
+    g_bootStable = true;
+    storeBoot(0);
+}
+}  // namespace
+
+// No switch-on gesture without WiFi, and a power loss clears the register, so this counts the restarts nobody asked for: a watchdog or a fault.
 const BootRecord& bootRecord() {
-    static const BootRecord record{0, 0, true};
+    static BootRecord record;
+    static bool counted = false;
+    if (counted) return record;
+    counted = true;
+    record.booted = true;
+    const uint32_t reg = SNVS_LPGPR0;
+    const bool ours = (reg & 0xFFFF0000) == kBootTag;
+    const uint8_t restarts = ours ? static_cast<uint8_t>(reg & 0xFF) : 0;
+    const char* why = resetReason();
+    const bool failed = std::strcmp(why, "WDT") == 0 || std::strcmp(why, "PANIC") == 0;
+    record.abnormalRestarts = failed ? static_cast<uint8_t>(restarts < 250 ? restarts + 1 : restarts) : 0;
+    storeBoot(record.abnormalRestarts);
     return record;
 }
 

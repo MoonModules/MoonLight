@@ -249,6 +249,38 @@ TEST_CASE("a saved script palette's name resolves when the file is applied, befo
     CHECK(drivers.palette == mm::palettes::kCount);   // the first scripted entry, right after the built-ins
 }
 
+// Regression: clearing the palette script compiled the empty name, so the card said "no script: set the script name" while a built-in palette ran.
+TEST_CASE("clearing the palette script leaves the Drivers card without an error") {
+    mm::Drivers drivers;
+    drivers.defineControls();
+    const int i = mm::test::controlIndex(drivers, "paletteScript");
+    REQUIRE(i >= 0);
+    CHECK(mm::applyControlValue(drivers.controls()[static_cast<uint8_t>(i)], "{\"value\":\"\"}", "value",
+                                mm::ApplyPolicy::Clamp) == mm::ApplyResult::Ok);
+    drivers.onControlChanged("paletteScript");
+    CHECK(drivers.status() == nullptr);
+}
+
+// A built-in palette drops the script palette's message and keeps any other, since the script, the relay and the encode worker share the card's one status.
+TEST_CASE("a built-in palette clears the palette script's status and keeps another's") {
+    mm::Drivers drivers;
+    drivers.defineControls();
+    drivers.palette = static_cast<uint8_t>(mm::palettes::kCount);   // the first scripted palette
+    drivers.onControlChanged("palette");
+    REQUIRE(drivers.status() != nullptr);                          // its compile result, or its error
+    drivers.palette = 0;
+    drivers.onControlChanged("palette");
+    CHECK(drivers.status() == nullptr);
+
+    drivers.palette = static_cast<uint8_t>(mm::palettes::kCount);
+    drivers.onControlChanged("palette");
+    drivers.setStatus("relay pin cannot drive an output", mm::MoonModule::Severity::Warning);
+    drivers.palette = 0;
+    drivers.onControlChanged("palette");
+    REQUIRE(drivers.status() != nullptr);
+    CHECK(std::strcmp(drivers.status(), "relay pin cannot drive an output") == 0);
+}
+
 // A strip at brightness 0 still draws idle current through a closed relay, so the relay opens at brightness 0 and closes when brightness returns.
 TEST_CASE("the relay opens at brightness 0 and closes again when brightness returns") {
     mm::platform::clearTestGpioLevel();

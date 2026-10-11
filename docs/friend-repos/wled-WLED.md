@@ -9,6 +9,7 @@ Months are **not** split at release dates: upstream WLED cuts releases from sepa
 A modest month on `main`: new effect and usermod options, a handful of preset, WiFi and Ethernet fixes, and many maintainer updates on how AI-assisted contributions are handled. No versioned release was published in September (v16.0.1, 2026-07-07, is the latest, cut from a release branch), so the month is not split.
 
 **New**
+
 - Sparse LED maps can now be followed by a trailing strip, a request open since early 2026 (#5529, #5745).
 - A new "Dissolve Plus" user effect extends Dissolve with separate fill speed, a "last one stays lit" mode, and a fade rate.
 - The timers page gets a "remove" button for each timer.
@@ -19,6 +20,7 @@ A modest month on `main`: new effect and usermod options, a handful of preset, W
 - The log warns when more effects are registered than the effect list can hold (#5827).
 
 **Fixed**
+
 - HUB75 matrices of 128x128 are handled correctly and a divide-by-zero in the automatic brightness limiter is gone (#5826).
 - The active preset is no longer cleared by JSON requests that arrive during a brightness transition (#5856).
 - The device now reconnects when the access-point name changes, and no longer restarts the AP when the name is unchanged after saving WiFi settings (#5866).
@@ -27,12 +29,14 @@ A modest month on `main`: new effect and usermod options, a handful of preset, W
 - Audio-reactive documentation now correctly lists the volume value as an integer, not a float.
 
 **Fixed (reported by users)**
+
 - Peek preview no longer shows as 32x32 on a 64x64 matrix (#5852).
 - The MQTT topic length limit is raised (#5854).
 - Uploading `cfg.json` and `presets.json` through PlatformIO's filesystem image upload works (#5839).
 - Several long-running reports were closed: ESP8266 Wemos D1 mini unable to join the router on 14.1 (#3690), the "WLED-AP" network not appearing on NodeMCU (#5100), flicker on the second output (#2268), and Alexa sync problems on 0.15.1 (#4875).
 
 **Watching**
+
 - A maintainer's "Version 17 - key features" issue (#5867) lists the topics proposed for the next major version: a realtime review, a new audio-reactive model, the LED bus, and a new settings UI.
 - The Presets UI sorting and the Time Controlled Presets dropdowns are both reported as confusing or empty on some devices (#5841, #5840, #5836).
 - ESP-NOW toggling freezes the CPU on 16.0 after the peer list is populated (#5871).
@@ -47,11 +51,13 @@ _Auditability: 35 commits on `main` with author-date 2026-09-01..2026-09-30 via 
 A quieter, consolidation month on `main` after July's V5 platform switch: the toolchain moved forward again, drawing and segment bugs got fixed, and a set of long-open field reports were finally closed. No versioned release was published in August, so the month is not split.
 
 **New**
+
 - Trunk builds move to ESP-IDF 5.5.4, and the ESP32-C5 target now builds on the same platform as the rest (its NTP workaround is gone, so time settings behave normally there).
 - The Waveshare ESP32-S3 HUB75 build gains the SHTC3 v2 temperature and humidity sensor usermod.
 - Effects can now load palettes from their own code, so an effect can pick or cycle palettes itself.
 
 **Fixed**
+
 - Circle drawing is more accurate: outlines no longer come out slightly flat, and filled circles are rounder.
 - Renaming a segment while effects are running no longer risks a crash on dual-core ESP32.
 - If the device runs out of memory at startup, it now creates a small default segment instead of showing "no segments" with most controls disabled.
@@ -59,12 +65,14 @@ A quieter, consolidation month on `main` after July's V5 platform switch: the to
 - ESP32 chip revision is reported correctly again on the V5 platform.
 
 **Fixed (reported by users)**
+
 - FW1906 strips no longer light the cool-white and warm-white channels on certain solid colors (#5812).
 - The effects list no longer loads incomplete or broken over a slow connection (#5813).
 - Waveshare ESP32-S3-RGB-Matrix HUB75 boards: boot failures (#5776) and swapped green and blue channels (#5815) both resolved.
 - Long-running strip flicker and strobe reports from the 0.15 line were closed out, including the LEDs-flashing-every-10-30-seconds thread (#4805), DRGB realtime strobing (#5512), and the effect jumping to "Copy Segment" (#5506). Also closed: white flash at full brightness before the boot preset loads (#5468), a permanently locked OTA on QuinLED Dig-Uno (#5158), and Gledopto Ethernet dropouts (#5431).
 
 **Watching**
+
 - Adding a second LED output crashes on 17.0.0-dev; confirmed and marked major (#5770).
 - Two proposals are gauging community interest: PPP-over-serial as a network transport, turning the USB cable into a full network link (#5811), and a DDP compression extension for low-bandwidth links (#5810), the busiest thread of the month.
 - An RFC proposes rewriting the settings web UI to be schema-driven, generated from the code rather than hand-written HTML (#5792).
@@ -78,6 +86,7 @@ _Auditability: 52 commits on `main` with author-date 2026-08-01..2026-08-31 (ran
 The month `main` switched to the **V5** platform: WLED's trunk moved from the ESP-IDF 4.4 / arduino-esp32 v2 build to ESP-IDF 5.3 / arduino-esp32 v3, and the long-running `V5` branch became the development trunk (merged July 19). Maintainers warned publicly that `main` would be unstable for a while, and the web UI now shows a "development build" banner. v16.0.1 shipped July 7 from a release branch, so the month is not split.
 
 **New**
+
 - Trunk builds move to ESP-IDF 5.3 / arduino-esp32 v3, opening the door to the newer chips (ESP32-C5, C6 and P4 build targets ride along).
 - ESP-NOW now uses WLED's own code instead of the QuickESPNow library, faster, and roughly 10 KB more free memory on ESP32 (1.5 KB on ESP8266).
 - New `esp32_eth_V4` build for Ethernet boards; ESP32-C6 boards get 4 MB and 8 MB builds.
@@ -85,12 +94,14 @@ The month `main` switched to the **V5** platform: WLED's trunk moved from the ES
 - Audio-reactive now compiles on all the newer chips.
 
 **Fixed**
+
 - ESP32-C3 and S3 no longer boot-loop on the new platform (device-ID and audio-reactive builds rescued).
 - Usermod settings: non-pin dropdowns no longer reserve GPIO pins, which was blocking pin choices elsewhere.
 - Several DMX-input crashes and a robustness fix in its configuration; a possible array overrun in the Improv response.
 - ESP8266 minimum build shrank by 1.5 KB; the unmaintained `WLED_SAVE_RAM` build option was removed.
 
 **Watching**
+
 - The loudest thread of the month is #5746, asking the project to do unstable work on a `dev` branch rather than breaking `main`.
 - Ethernet users want the WiFi access point to switch off entirely once the wired link is up (#5762).
 - Open v16 field reports: Animated Staircase segments switching instead of fading (#5731), APA102 on GPIO19 misbehaving (#5728), HUB75 colour-order options hidden and mostly unimplemented (#5723), and a request for current-limited LED support in the brightness limiter (#5715).
@@ -102,11 +113,13 @@ _Auditability: 40 first-parent commits on `main` with author-date 2026-07-01..20
 Post-16.0 stabilisation month: no new version tag (v16.0.0 shipped 2026-05-03 off a release branch, so the month is not split), just a steady stream of bugfixes and small additions landing on `main`.
 
 **New**
+
 - HUB75 matrix panels: added a "Seengreat" pinout, plus fixes for 4-scan and chained-panel setups.
 - Renamed the "CW" LED type to "CCT" for clarity when configuring CCT white strips.
 - V5-C6 boards are now covered by the V5 build.
 
 **Fixed**
+
 - "Rainbow" and other color-wheel effects no longer mis-drive the white channel on RGBW strips.
 - Restored the pre-16.0 look of several effects that had changed appearance after the 16.0 upgrade (also fixes the DJ Light intensity regression).
 - HUB75: restored missing pixel trails on some 2D effects (Black Hole, Lissajous, Spaceships).
@@ -119,6 +132,7 @@ Post-16.0 stabilisation month: no new version tag (v16.0.0 shipped 2026-05-03 of
 - Better brownout detection and extended error codes aligned with WLED-MM.
 
 **Watching**
+
 - Discussion opened on switching from plain gamma to an sRGB transfer function for better low-brightness accuracy (#5707), and on improving the Nodes/Instances page (#5711), no shipped outcome yet.
 - Several v16.0 field reports still open: multi-controller sync losing color (#5705), UDP sync failing in AP mode (#5709), and OTA-update trouble on some boards (#5682, #5702).
 

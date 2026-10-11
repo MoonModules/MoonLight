@@ -1308,7 +1308,9 @@ tick: 1234us (FPS: 800)  free: 0  ...
 
 ## Teensy Tab
 
-One firmware for the Teensy 4.1, and its port found by PJRC's USB vendor id, so the tab has no dropdowns: Setup once, then Build, Flash and Monitor.
+Two firmwares for the Teensy 4.1: `teensy41` for the board's own Ethernet and `teensy41-w5500` for a W5500 module.
+The W5500 checkbox on the Build and Flash cards picks the second, and the port is found by PJRC's USB vendor id, so the tab has no dropdowns.
+Setup once, then Build, Flash and Monitor.
 
 ### setup_teensy
 

@@ -33,10 +33,12 @@ Near-dormant month, a single small change and a build-number bump.
 *Summarised from 38 commits on `mdev`, 2026-06-01 … 2026-06-25 (no versioned release cut this month, so the month is not split; the `nightly` prerelease is not a release).*
 
 **New**
+
 - Waveshare ESP32-S3 Matrix Driver board profile added.
 - Audio-reactive is now an out-of-tree usermod (pulled in as a dependency) rather than baked into the tree, no user-facing change to how it works, but a cleaner build.
 
 **Fixed**
+
 - Output settings no longer revert to defaults after a reboot (regression in 14.7.2 nightly, reported on ESP32-D0WDQ5 and ESP32-S3; issue #367).
 - LEDs no longer flicker on startup and during GIF playback.
 - Custom palettes reload immediately after you upload a palette file (previously needed a manual refresh; relates to long-standing issue #105).

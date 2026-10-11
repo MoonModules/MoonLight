@@ -215,6 +215,34 @@ TEST_CASE("PreviewDriver small grid sends all lights exactly") {
     CHECK(rig.cap.coordStride() == 1);
 }
 
+// Regression: the staging buffer only grew, so a layout that shrank kept the memory a larger one had taken (48 KB after 128x128 went back to 64x64).
+TEST_CASE("PreviewDriver returns the memory a larger layout took when the layout shrinks") {
+    mm::GridLayout g;
+    g.width = 64; g.height = 64; g.depth = 1;
+    PreviewRig rig(&g);
+    rig.produce();
+    CHECK(rig.preview->dynamicBytes() == 64u * 64u * 3u);
+
+    g.width = 32; g.height = 32;
+    rig.group.applyState();
+    rig.layer.applyState();
+    rig.drivers.applyState();
+    rig.produce();
+    CHECK(rig.preview->dynamicBytes() == 32u * 32u * 3u);
+}
+
+// Regression: prepare freed the oversized index cache AFTER the table filled it, so a sparse layout that shrank sent its frames by the slow per-light walk until the next table.
+TEST_CASE("PreviewDriver keeps its index cache filled when a sparse layout shrinks") {
+    mm::SphereLayout s;
+    s.radius = 8;
+    PreviewRig rig(&s);
+    s.radius = 4;
+    rig.group.applyState();
+    rig.layer.applyState();
+    rig.drivers.applyState();
+    CHECK(rig.preview->keptCountForTest() == 210);   // the 210 shell lights of radius 4, cached
+}
+
 // A large layout is SPATIALLY downsampled on a regular per-axis lattice, and the COLOR frame carries that stride while the coordinate table stays whole, so the browser maps each color onto its block.
 TEST_CASE("PreviewDriver downsamples on a regular spatial lattice when a client asks coarser") {
     // There is NO display cap: a host build (unlimited memory) serves any layout at full detail, and coarseness exists only as a client REQUEST. Ask for 1/2 and pin the lattice geometry. The extent (199) is ≤255/axis, so positions are sent at EXACT integer grid coordinates (no byte-scaling rounding), letting the regularity check below compare true lattice positions.

@@ -787,3 +787,31 @@ TEST_CASE("a zero-length thick line draws a dot rather than nothing") {
 
     CHECK(at(buf, dims, 4, 4, 0).r > 0);
 }
+
+// A light by coordinate and by its index in buffer order are the same bytes, so a script's index and an effect's coordinate share one operation.
+TEST_CASE("a light reached by index is the light reached by its coordinate") {
+    Buffer buf;
+    buf.allocate(4 * 3, 3);
+    const draw::Canvas cv = draw::Canvas::of(buf, 4, 3, 1);
+    draw::pixel(cv, Coord3D{1, 2, 0}, RGB{200, 100, 50});
+    const RGB byIndex = draw::get(cv, size_t{2 * 4 + 1});
+    CHECK(byIndex.r == 200); CHECK(byIndex.g == 100); CHECK(byIndex.b == 50);
+    CHECK(draw::get(cv, size_t{12}).r == 0);   // past the end reads black
+    draw::pixel(cv, size_t{12}, RGB{9, 9, 9});  // and writes nothing
+    CHECK(buf.bytes() == 36);
+}
+
+// The per-light read-modify-write operations, by coordinate: scale dims, add saturates, blend mixes.
+TEST_CASE("a pixel is scaled, added to and blended in place") {
+    Buffer buf;
+    buf.allocate(3, 3);
+    const draw::Canvas cv = draw::Canvas::of(buf, 3, 1, 1);
+    draw::fill(cv, RGB{200, 100, 50});
+    draw::scalePixel(cv, Coord3D{0, 0, 0}, 128);
+    draw::addPixel(cv, Coord3D{1, 0, 0}, RGB{100, 200, 0});
+    draw::blendPixel(cv, Coord3D{2, 0, 0}, RGB{0, 0, 250}, 255);
+    const RGB a = draw::get(cv, Coord3D{0, 0, 0}), b = draw::get(cv, Coord3D{1, 0, 0}), c = draw::get(cv, Coord3D{2, 0, 0});
+    CHECK(a.r == 100); CHECK(a.g == 50); CHECK(a.b == 25);
+    CHECK(b.r == 255); CHECK(b.g == 255); CHECK(b.b == 50);
+    CHECK(c.r == 0); CHECK(c.g == 0); CHECK(c.b == 250);
+}

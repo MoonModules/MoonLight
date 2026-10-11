@@ -108,4 +108,26 @@ TEST_CASE("a scripted line reaches both of its endpoints") {
     CHECK(at(13, 13) > 0);
 }
 
+// The read-modify-write calls act on what is already in the light, which is what lets a script placed after another effect mask, glow or tint it.
+TEST_CASE("a script dims, adds to and mixes a light that is already lit") {
+    Scene s;
+    s.run("class T { void tick() { fill(200, 100, 50); mulRGB(0, 128); addRGB(1, 100, 200, 0); blendRGB(2, 0, 0, 250, 255); mulRGB(9999, 0); } }");
+    s.layer.tick();
+    const auto* px = s.layer.buffer().data();
+    CHECK(px[0] == 100); CHECK(px[1] == 50); CHECK(px[2] == 25);       // mulRGB: half of each channel
+    CHECK(px[3] == 255); CHECK(px[4] == 255); CHECK(px[5] == 50);      // addRGB: saturates at 255
+    CHECK(px[6] == 0); CHECK(px[7] == 0); CHECK(px[8] == 250);         // blendRGB at 255: the color itself
+    CHECK(px[9] == 200);                                               // an index past the end touches nothing
+}
+
+// Reading back what is there is what lets a script build on another effect rather than paint over it.
+TEST_CASE("a script reads back the channels of a light") {
+    Scene s;
+    s.run("class T { void tick() { fill(0, 0, 0); setRGB(0, 10, 20, 30); setRGB(1, getB(0), getG(0), getR(0)); setRGB(2, getR(9999), 0, 0); } }");
+    s.layer.tick();
+    const auto* px = s.layer.buffer().data();
+    CHECK(px[3] == 30); CHECK(px[4] == 20); CHECK(px[5] == 10);   // light 0's channels, read back and swapped
+    CHECK(px[6] == 0);                                            // past the end reads as 0
+}
+
 #endif  // MM_MOONLIVE_HAS_HOST_JIT
