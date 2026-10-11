@@ -1135,7 +1135,7 @@ uv run moondeck/moonlive/check_encodings.py --isa xtensa
 
 MoonLive hand-encodes machine instructions, which is the right call for a JIT (an assembler cannot ship to a device) but means a wrong offset field, a truncated displacement or a misplaced register nibble is a bug nothing else notices: the golden-bytes tests compare our emission to our *previous* emission, and the structural checks compare it to a model we also wrote. Both agree with a consistent mistake.
 
-This compares it to something nobody here wrote: `xtensa-esp32-elf-as` and `riscv32-esp-elf-as`, which *are* the definition of a valid encoding for these ISAs. For each instruction we emit, it assembles the same mnemonic and requires identical bytes. It caught a hand-computed `add.n` whose register nibbles were transposed, before that instruction ever ran.
+This compares it to something nobody here wrote: `xtensa-esp32-elf-as`, `riscv32-esp-elf-as` and `arm-none-eabi-as`, which *are* the definition of a valid encoding for these ISAs. For each instruction we emit, it assembles the same mnemonic and requires identical bytes. It caught a hand-computed `add.n` whose register nibbles were transposed, before that instruction ever ran.
 
 What it covers, and what it does not: it proves each instruction is **encoded** correctly. It cannot prove the **sequence** is right, since a correctly encoded instruction can still save the wrong register. Execution-level checks ([run_qemu](#run_qemu), the bench) are what cover that.
 
@@ -1331,13 +1331,15 @@ The macOS loader looks only for the Teensy bootloader, so flashing needs no Inpu
 
 ### build_teensy
 
-Build the Teensy 4.1 firmware.
+Build a Teensy 4.1 firmware.
 
 ```bash
 uv run moondeck/build/build_teensy.py
+uv run moondeck/build/build_teensy.py --firmware teensy41-w5500
 ```
 
-Builds into `build/teensy41/`: `MoonLight.elf`, and `MoonLight.hex` for the loader, printing the section sizes.
+`teensy41` drives the board's own Ethernet PHY, and `teensy41-w5500` a W5500 module for the 4.1-NE; the card's W5500 checkbox picks the second.
+Builds into `build/<firmware>/`: `MoonLight.elf`, and `MoonLight.hex` for the loader, printing the section sizes.
 Configures CMake with `teensy/teensy41.cmake` on first use, passing the SDK paths from `setup_teensy`.
 
 ### flash_teensy
@@ -1349,6 +1351,7 @@ uv run moondeck/build/flash_teensy.py
 ```
 
 A running MoonLight is asked into its bootloader through its USB serial port, so no button press is needed; a board without a running firmware waits for its program button.
+`--firmware` picks the image as `build_teensy` does, and so does the card's W5500 checkbox.
 `--port` names the port when more than one Teensy is attached.
 Gives up after 60 seconds with what to check.
 
@@ -1362,4 +1365,4 @@ uv run moondeck/run/monitor_teensy.py --seconds 10
 ```
 
 Waits for the port to appear, so it catches the boot lines straight after a flash: the firmware waits up to two seconds for a monitor before it starts.
-Opening a Teensy's port does not reset it. Output is saved to `build/teensy41/monitor.log`.
+Opening a Teensy's port does not reset it. Output is saved to `build/monitor_teensy.log`.

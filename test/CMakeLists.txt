@@ -67,6 +67,7 @@ add_executable(mm_tests
     unit/core/unit_moonlive_spill.cpp
     unit/core/unit_moonlive_codegen_xtensa.cpp
     unit/core/unit_moonlive_codegen_riscv.cpp
+    unit/core/unit_moonlive_codegen_thumb2.cpp
     unit/core/unit_moonlive_codegen_x86_64.cpp
     unit/core/unit_moonlive_codegen_arm64.cpp
     unit/core/unit_MoonModule.cpp

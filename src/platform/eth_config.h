@@ -12,6 +12,7 @@ enum EthPhyType {
     ethW5500   = 3,  ///< SPI, an external W5500 module
     ethYt8531  = 4,  ///< RGMII, the S31's 1 Gb PHY
     ethOpeneth = 5,  ///< the emulator's MAC, which is what gives an emulated device a real IP stack
+    ethDp83825 = 6,  ///< RMII, the Teensy 4.1's on-board PHY
 };
 
 /// How a board wires its Ethernet, set at runtime from the catalog; -1 leaves a field unused.

@@ -362,10 +362,12 @@ TEST_CASE("ethBoard seeds from the pins after a restore, not once before it") {
 // Asked per chip rather than per build, since a host test runs as the desktop, which previews every board: a classic Olimex once offered the P4 and S31 boards.
 TEST_CASE("each chip offers only the Ethernet boards it can wire") {
     using E = mm::EthernetModule;
-    constexpr E::EthChip classic{true, false, false, false}, p4{true, false, true, false}, s31{true, false, false, true},
-                         s3{true, true, false, false}, desktop{false, false, false, false};
+    constexpr E::EthChip classic{true, false, false, false, false}, p4{true, false, true, false, false},
+                         s31{true, false, false, true, false}, s3{true, true, false, false, false},
+                         desktop{false, false, false, false, false},
+                         teensy{true, false, false, false, true};
     constexpr int8_t custom = 0, lan8720 = 1, ip101 = 2, w5500 = 3, yt8531 = 4;
-    for (const auto& chip : {classic, p4, s31, s3, desktop}) CHECK(E::presetFits(custom, chip));
+    for (const auto& chip : {classic, p4, s31, s3, desktop, teensy}) CHECK(E::presetFits(custom, chip));
     CHECK(E::presetFits(lan8720, classic));
     CHECK_FALSE(E::presetFits(ip101, classic));
     CHECK_FALSE(E::presetFits(yt8531, classic));
@@ -378,6 +380,8 @@ TEST_CASE("each chip offers only the Ethernet boards it can wire") {
     CHECK(E::presetFits(w5500, s3));
     CHECK_FALSE(E::presetFits(lan8720, s3));
     for (int8_t t : {lan8720, ip101, w5500, yt8531}) CHECK(E::presetFits(t, desktop));
+    // A build that fixed its interface offers no board: a classic ESP32's RMII map would read as the Teensy's wiring.
+    for (int8_t t : {lan8720, ip101, w5500, yt8531}) CHECK_FALSE(E::presetFits(t, teensy));
 }
 
 // A chip whose filter leaves exactly ONE real preset opens on it, not on Custom: on a P4-NANO that is a configured interface versus none.

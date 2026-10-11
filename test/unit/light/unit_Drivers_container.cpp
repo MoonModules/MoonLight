@@ -219,18 +219,34 @@ TEST_CASE("FixtureProfiles library is a non-deletable singleton") {
     CHECK_FALSE(lib.userEditable());
 }
 
-// The LivePalettes seam is published by prepare(), which only a scheduler-mounted module runs, so a throwaway probe Drivers leaves it as found.
-TEST_CASE("a probe Drivers (controls read, never prepared) leaves the scripted-palette seam alone") {
-    static const char* names[] = {"running.mlp"};
-    static const char* tags[]  = {""};
-    mm::LivePalettes::set(names, tags, 1);            // the running Drivers' publication
+// The scripted-palette list is device-wide storage, so a throwaway probe Drivers reads it without rescanning, and leaves nothing dangling when it goes.
+TEST_CASE("a probe Drivers reads the scripted-palette list without rescanning it") {
+    { mm::Drivers running; running.defineControls(); }   // the list scanned, as the running instance does at boot
+    const uint8_t before = mm::LivePalettes::count();
+    mm::platform::fsMkdir(mm::moonlive::kScriptDir);
+    REQUIRE(mm::platform::fsWriteAtomic("/moonlive/unit-probe.mlp", "void setup() {}\n", 16));
     {
         mm::Drivers probe;                            // what serveModules builds…
         probe.defineControls();                       // …to read the control list…
     }                                                 // …and immediately destroys
-    CHECK(mm::LivePalettes::count() == 1);
-    CHECK(std::strcmp(mm::LivePalettes::nameAt(0), "running.mlp") == 0);
+    CHECK(mm::LivePalettes::count() == before);       // the new file waits for a scan, which a probe never runs
+    REQUIRE(mm::LivePalettes::count() >= mm::moonlive::kPaletteCatalogCount);
+    CHECK(std::strcmp(mm::LivePalettes::nameAt(0), mm::moonlive::kPaletteCatalog[0]) == 0);
+    mm::platform::fsRemove("/moonlive/unit-probe.mlp");
+}
+
+// Regression: a saved script palette fell back to the first built-in at every boot, since the name was applied before the list it names was published.
+TEST_CASE("a saved script palette's name resolves when the file is applied, before setup") {
     mm::LivePalettes::clear();
+    mm::Drivers drivers;
+    drivers.defineControls();
+    const int i = mm::test::controlIndex(drivers, "palette");
+    REQUIRE(i >= 0);
+    char json[96];
+    std::snprintf(json, sizeof(json), "{\"value\":\"%s\"}", mm::moonlive::kPaletteCatalog[0]);
+    CHECK(mm::applyControlValue(drivers.controls()[static_cast<uint8_t>(i)], json, "value", mm::ApplyPolicy::Clamp)
+          == mm::ApplyResult::Ok);
+    CHECK(drivers.palette == mm::palettes::kCount);   // the first scripted entry, right after the built-ins
 }
 
 // A strip at brightness 0 still draws idle current through a closed relay, so the relay opens at brightness 0 and closes when brightness returns.

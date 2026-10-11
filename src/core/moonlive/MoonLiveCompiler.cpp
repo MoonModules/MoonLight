@@ -1477,6 +1477,7 @@ CompileResult compileSource(const char* source, const BuiltinTable& table,
             case LowerRefusal::NullCall:    r.error = "codegen failed: a builtin has no function on this target"; break;
             case LowerRefusal::AsmOverflow: r.error = "codegen failed: assembler overflow (branch range, slot, or immediate)"; break;
             case LowerRefusal::OverCap:     r.error = "codegen failed: code larger than its buffer"; break;
+            case LowerRefusal::NoMemory:    r.error = "codegen failed: out of memory for the assembler"; break;
             default:                        r.error = kCodegenFailed; break;
         }
         return r;

@@ -2,7 +2,7 @@
 # /// script
 # dependencies = ["pyserial"]
 # ///
-"""Monitor a Teensy 4.1's USB serial output, saved to build/teensy41/monitor.log.
+"""Monitor a Teensy 4.1's USB serial output, saved to build/monitor_teensy.log whichever firmware runs.
 
 Waits for the port to appear, so it runs straight after flash_teensy.py and catches the boot lines:
 the firmware waits up to two seconds for a monitor before it starts.
@@ -20,7 +20,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "build"))
 from flash_teensy import teensy_port  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent.parent
-LOG = ROOT / "build" / "teensy41" / "monitor.log"
+LOG = ROOT / "build" / "monitor_teensy.log"
 
 
 def main():

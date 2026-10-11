@@ -64,6 +64,7 @@ The MoonLive assemblers live here too, one per instruction set, because emitting
 |---|---|
 | [moonlive_asm_xtensa](moxygen/moonlive_asm_xtensa.md) | classic ESP32 and S3 |
 | [moonlive_asm_riscv](moxygen/moonlive_asm_riscv.md) | ESP32-P4 |
+| [moonlive_asm_thumb2](moxygen/moonlive_asm_thumb2.md) | Teensy 4.1 |
 | [moonlive_asm_host](moxygen/moonlive_asm_host.md) | desktop arm64 and x86-64 |
 
 Each satisfies the assembler contract [the lowering](../light/moonlive.md) names, so adding an instruction set is a new file behind an unchanged IR. Per-target build settings are in each target's own `platform_config`: [desktop](moxygen/desktop_platform_config.md), [ESP32](moxygen/esp32_platform_config.md), which carries the per-chip capability table, and [Teensy 4.1](moxygen/teensy_platform_config.md).

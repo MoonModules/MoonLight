@@ -505,7 +505,15 @@
       "label": "Build",
       "speed": "slow",
       "help": "build_teensy",
-      "script": "build/build_teensy.py"
+      "script": "build/build_teensy.py",
+      "flags": [
+        {
+          "id": "w5500",
+          "label": "W5500",
+          "arg": "--firmware=teensy41-w5500",
+          "default": false
+        }
+      ]
     },
     {
       "id": "flash_teensy",
@@ -514,7 +522,15 @@
       "label": "Flash",
       "speed": "medium",
       "help": "flash_teensy",
-      "script": "build/flash_teensy.py"
+      "script": "build/flash_teensy.py",
+      "flags": [
+        {
+          "id": "w5500",
+          "label": "W5500",
+          "arg": "--firmware=teensy41-w5500",
+          "default": false
+        }
+      ]
     },
     {
       "id": "monitor_teensy",

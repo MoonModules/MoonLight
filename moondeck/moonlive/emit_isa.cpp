@@ -4,12 +4,10 @@
 #include <cstdio>
 
 /// Compile a MoonLive script through ONE REAL BACKEND on the development machine, and print the bytes it emits.
-/// Each backend is guarded by its target macro (`__XTENSA__`, `__riscv`, `__aarch64__`) so on this host it normally compiles to nothing.
-/// Defining the macro and including the sources is what lets the host run a device emitter.
+/// Each backend is guarded by its target macro (`__XTENSA__`, `__riscv`, `__ARM_ARCH_7EM__`, `__aarch64__`) so on this host it normally compiles to nothing. Defining the macro and including the sources is what lets the host run a device emitter.
 /// The firmware build never sees this file, so there is still exactly one definition of each backend in the shipped binary.
 ///
-/// Which backend is selected by -DMM_EMIT_<ISA> from disasm.py.
-/// One file rather than one per ISA: the whole body below is identical for every backend, and only the includes differ.
+/// Which backend is selected by -DMM_EMIT_<ISA> from disasm.py. One file rather than one per ISA: the whole body below is identical for every backend, and only the includes differ.
 
 #if defined(MM_EMIT_XTENSA)
 #define __XTENSA__ 1
@@ -20,6 +18,10 @@
 #define __riscv 1
 #include "platform/esp32/moonlive_asm_riscv.h"
 #include "platform/esp32/moonlive_asm_riscv.cpp"
+#elif defined(MM_EMIT_THUMB2)
+#define __ARM_ARCH_7EM__ 1
+#include "platform/teensy/moonlive_asm_thumb2.h"
+#include "platform/teensy/moonlive_asm_thumb2.cpp"
 #elif defined(MM_EMIT_ARM64)
 #define __aarch64__ 1
 #include "platform/desktop/moonlive_asm_host.h"
@@ -32,7 +34,7 @@
 #include "platform/desktop/moonlive_asm_host.h"
 #include "platform/desktop/moonlive_asm_x86_64.cpp"
 #else
-#error "define MM_EMIT_XTENSA, MM_EMIT_RISCV, MM_EMIT_ARM64 or MM_EMIT_X86_64"
+#error "define MM_EMIT_XTENSA, MM_EMIT_RISCV, MM_EMIT_THUMB2, MM_EMIT_ARM64 or MM_EMIT_X86_64"
 #endif
 
 // The lowerer body, with the emit seam it expects.
@@ -46,6 +48,8 @@
 #undef __XTENSA__
 #elif defined(MM_EMIT_RISCV)
 #undef __riscv
+#elif defined(MM_EMIT_THUMB2)
+#undef __ARM_ARCH_7EM__
 #elif defined(MM_EMIT_ARM64)
 #undef __aarch64__
 #endif

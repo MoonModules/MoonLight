@@ -540,15 +540,17 @@ jobs:
           echo "version=$V" >> "$GITHUB_OUTPUT"
       - name: Install the Teensy SDK
         run: uv run moondeck/build/setup_teensy.py --no-loader
-      - name: Build the Teensy 4.1 firmware
+      - name: Build the Teensy 4.1 firmwares
         env:
           TAG: ${{ steps.tag.outputs.tag }}
           V: ${{ steps.ver.outputs.version }}
         run: |
           set -euo pipefail
-          uv run moondeck/build/build_teensy.py --release "$TAG" --version "$V"
           mkdir -p dist
-          cp build/teensy41/MoonLight.hex "dist/firmware-teensy41-v$V.hex"
+          for fw in teensy41 teensy41-w5500; do
+            uv run moondeck/build/build_teensy.py --firmware "$fw" --release "$TAG" --version "$V"
+            cp "build/$fw/MoonLight.hex" "dist/firmware-$fw-v$V.hex"
+          done
       - uses: actions/upload-artifact@v4
         with:
           name: firmware-teensy41

@@ -23,11 +23,19 @@ target_include_directories(teensy_libs SYSTEM PUBLIC "${TEENSY_SDK}/LittleFS/src
 target_link_libraries(teensy_libs PUBLIC teensy_core)
 target_compile_options(teensy_libs PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-std=gnu++17>)
 
-# The network stack: lwIP with QNEthernet's W5500 driver, which the hardware SPI port and chip select 10 reach.
+# Which binary this is: `teensy41` drives the on-board PHY, `teensy41-w5500` a W5500 on the SPI port, for a 4.1-NE.
+set(MM_FIRMWARE "teensy41" CACHE STRING "the Teensy firmware variant: teensy41 or teensy41-w5500")
+if(NOT MM_FIRMWARE MATCHES "^teensy41(-w5500)?$")
+    message(FATAL_ERROR "MM_FIRMWARE=${MM_FIRMWARE}: expected teensy41 or teensy41-w5500")
+endif()
+
+# The network stack: lwIP with QNEthernet, whose driver follows the firmware; the W5500 sits on the hardware SPI port and chip select 10.
 file(GLOB_RECURSE QNETHERNET_SOURCES "${TEENSY_SDK}/QNEthernet/src/*.c" "${TEENSY_SDK}/QNEthernet/src/*.cpp")
 add_library(qnethernet STATIC ${QNETHERNET_SOURCES})
 target_include_directories(qnethernet SYSTEM PUBLIC "${TEENSY_SDK}/QNEthernet/src")
-target_compile_definitions(qnethernet PUBLIC QNETHERNET_DRIVER_W5500)
+if(MM_FIRMWARE STREQUAL "teensy41-w5500")
+    target_compile_definitions(qnethernet PUBLIC QNETHERNET_DRIVER_W5500)
+endif()
 # The preview drains one send buffer per 20 ms tick, so the buffer bounds its rate: 16 segments, with the segment pool and lwIP's heap to match.
 target_compile_definitions(qnethernet PUBLIC TCP_SND_BUF=23360 MEMP_NUM_TCP_SEG=64 MEM_SIZE=48000)
 target_link_libraries(qnethernet PUBLIC teensy_libs)
@@ -95,14 +103,14 @@ add_executable(MoonLight.elf
     ${REPO}/src/core/moonlive/MoonLiveCompiler.cpp
     ${REPO}/src/core/moonlive/MoonLiveSpill.cpp
     ${REPO}/src/platform/desktop/moonlive_emit_noarch.cpp
-    ${REPO}/src/platform/desktop/moonlive_asm_noarch.cpp
+    ${REPO}/src/platform/teensy/moonlive_asm_thumb2.cpp
     ${REPO}/src/platform/teensy/platform_teensy.cpp
     ${REPO}/src/platform/teensy/platform_teensy_gpio_dma.cpp
 )
 add_dependencies(MoonLight.elf build_info_gen ui_embed moonlive_catalog)
 target_include_directories(MoonLight.elf PRIVATE ${REPO}/src ${REPO}/src/platform/teensy)
 target_compile_options(MoonLight.elf PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-std=gnu++20> -Wall -Wextra -Werror)
-target_compile_definitions(MoonLight.elf PRIVATE MM_FIRMWARE_NAME="teensy41")
+target_compile_definitions(MoonLight.elf PRIVATE MM_FIRMWARE_NAME="${MM_FIRMWARE}")
 # A release passes its channel and version; empty leaves build_info.h's defaults, as on the ESP32.
 if(MM_RELEASE)
     target_compile_definitions(MoonLight.elf PRIVATE MM_RELEASE="${MM_RELEASE}")

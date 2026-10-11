@@ -40,7 +40,7 @@ size_t emitAnimatedFill(uint8_t* out, size_t cap);
 struct IrProgram;   // src/core/moonlive/MoonLiveIr.h
 
 // Why the last lowering returned 0, since four distinct refusals once shared one return value.
-enum class LowerRefusal : uint8_t { None, Spill, NullCall, AsmOverflow, OverCap };
+enum class LowerRefusal : uint8_t { None, Spill, NullCall, AsmOverflow, OverCap, NoMemory };
 inline LowerRefusal& lowerRefusal() { MM_THREAD_LOCAL LowerRefusal r = LowerRefusal::None; return r; }
 // Which allocator guard fired and the budget it saw, so a device names the cause.
 struct SpillDetail { uint8_t guard = 0, avail = 0, temps = 0, vregs = 0, slots = 0, spilled = 0; };

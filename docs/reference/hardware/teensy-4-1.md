@@ -1,11 +1,12 @@
 # Teensy 4.1 hardware reference
 
 Pins, power and wiring for running MoonLight on a PJRC **Teensy 4.1**.
-A WIZnet W5500 module gives it Ethernet, and the board's GPIO drives WS2812B LEDs by DMA.
-The firmware is `teensy41`, built and flashed from MoonDeck's [Teensy tab](../../../moondeck/MoonDeck.md#teensy-tab).
+Its Ethernet is the board's own PHY or a WIZnet W5500 module. The board's GPIO drives WS2812B LEDs by DMA.
+The firmware is `teensy41` for the board's own Ethernet and `teensy41-w5500` for the W5500, built and flashed from MoonDeck's [Teensy tab](../../../moondeck/MoonDeck.md#teensy-tab).
 
 **Sources**
 - Board: <https://www.pjrc.com/store/teensy41.html>
+- Ethernet kit (the jack for the on-board PHY): <https://www.pjrc.com/store/ethernet_kit.html>
 - W5500 module pin map (WIZ850io layout): <https://docs.wiznet.io/Product/ioModule/WIZ850io>
 - Network library: QNEthernet, <https://github.com/ssilverman/QNEthernet>
 - Prior art for the LED output: OctoWS2811, <https://github.com/PaulStoffregen/OctoWS2811>, and ObjectFLED, <https://github.com/KurtMF/ObjectFLED>
@@ -17,10 +18,12 @@ The firmware is `teensy41`, built and flashed from MoonDeck's [Teensy tab](../..
 - 8 MB flash, with 1 MB of it holding MoonLight's settings (LittleFS), kept across power cycles and USB uploads.
 - Pads for 8 or 16 MB PSRAM, empty on the boards MoonLight runs on so far.
 - A microSD slot (pins 42 to 47) and USB host pins.
-- The **Teensy 4.1-NE** has no Ethernet chip, so the W5500 below gives it a network.
-  A regular Teensy 4.1 has one behind PJRC's Ethernet kit; `teensy41` selects the W5500 at build time.
+- A regular Teensy 4.1 carries a DP83825I Ethernet PHY, wired to the jack of PJRC's Ethernet kit; the `teensy41` firmware drives it, with no pins to set.
+- The **Teensy 4.1-NE** has no Ethernet chip, so the W5500 below gives it a network, in the `teensy41-w5500` firmware.
 
 ## Ethernet: a W5500 on SPI
+
+The `teensy41-w5500` firmware drives this module.
 
 The W5500 runs on the SPI port at 30 MHz, at about 1.6 MB/s.
 The module below is the WIZ850io layout: two rows of six pins, one on each side of the RJ45 jack.
@@ -118,7 +121,7 @@ Columns 37 to 48 hold the sensors, which keeps the SPI wires near 7 cm.
 The free columns take a microphone, an IMU and a PIR.
 Here that is an INMP441, an MPU6050 on a GY-521 breakout, and a mini PIR such as the AM312, which runs on 3.3 V.
 Two wires carry the bottom rail's 3.3 V and GND to the top rail, which the MB102 leaves unfed with its top jumper off.
-The `teensy41` firmware drives no I2S or I2C peripheral at this point; this wiring is ready for them.
+Neither Teensy firmware drives an I2S or I2C peripheral at this point; this wiring is ready for them.
 
 | Part | Where |
 |---|---|

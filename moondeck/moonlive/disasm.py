@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Disassemble the machine code MoonLive emits for a script, on any backend, without a device.
 
-Why this exists: an emitted-code bug on a device shows up as "the script did nothing" — it
+Why this exists: an emitted-code bug on a device shows up as "the script did nothing": it
 compiles, reports no error, and places no lights. Reasoning about hand-written encoders from that
 symptom is guesswork; five hypotheses in a row were wrong before this tool read the instructions and
 answered it in one run. The bug was `Mov` lowering to add-immediate-zero, which Xtensa cannot encode
@@ -12,10 +12,11 @@ this compiles a script through a REAL backend and pipes the bytes to that ISA's 
 
     uv run moondeck/moonlive/disasm.py "for (i = 0; i < 3; i = i + 1) { addLight(i, 0, 0); }"
     uv run moondeck/moonlive/disasm.py --isa riscv moonlive/effects/plasma.mle effect
+    uv run moondeck/moonlive/disasm.py --isa thumb2 moonlive/layouts/grid.mll layout
     uv run moondeck/moonlive/disasm.py --isa all moonlive/layouts/grid.mll layout
 
 `--isa x86_64` reads the desktop backend's other half. It is selected by the HOST's architecture
-rather than by a define, so it only runs ON an x86-64 machine — see emit_isa.cpp for why the trick
+rather than by a define, so it only runs ON an x86-64 machine; see emit_isa.cpp for why the trick
 the device ISAs use does not apply to it.
 
 POSIX HOSTS ONLY, every ISA: this shells out to `c++` and `objdump`, and a Windows machine with
@@ -30,13 +31,17 @@ import os
 import subprocess
 import sys
 import tempfile
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "build"))
+from setup_teensy import gcc_bin  # noqa: E402  the one home of the Arm toolchain's path
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 TOOL_SRC = os.path.join(ROOT, "moondeck", "moonlive", "emit_isa.cpp")
 
-# Per ISA: the emitter's -D flag, the objdump to disassemble with, and objdump's -m architecture.
-# `toolchain` is a glob because the ESP-IDF toolchains are installed per version; `None` means the
-# host's own objdump already understands this ISA (arm64 on an Apple Silicon machine).
+# Per ISA: the emitter's -D flag, the objdump to disassemble with, objdump's -m architecture, and any
+# -M disassembler options. `toolchain` is a glob because the ESP-IDF toolchains are installed per
+# version; `None` means the host's own objdump already understands this ISA (arm64 on Apple Silicon).
 ISAS = {
     "xtensa": {
         "define": "MM_EMIT_XTENSA",
@@ -47,6 +52,13 @@ ISAS = {
         "define": "MM_EMIT_RISCV",
         "toolchain": "~/.espressif/tools/riscv32-esp-elf/*/riscv32-esp-elf/bin/riscv32-esp-elf-objdump",
         "machine": "riscv:rv32",
+    },
+    "thumb2": {
+        "define": "MM_EMIT_THUMB2",
+        "toolchain": str(gcc_bin() / "arm-none-eabi-objdump"),
+        "machine": "arm",
+        # A raw blob carries no mapping symbols, so objdump has to be told the bytes are Thumb.
+        "options": ["-M", "force-thumb"],
     },
     "arm64": {
         "define": "MM_EMIT_ARM64",
@@ -82,7 +94,7 @@ def objdump(isa: str) -> str:
         sys.exit(f"llvm-objdump not found, needed to disassemble {isa}")
     hits = glob.glob(os.path.expanduser(pattern))
     if not hits:
-        sys.exit(f"objdump for {isa} not found — install the matching ESP-IDF toolchain")
+        sys.exit(f"objdump for {isa} not found, install the matching toolchain")
     return sorted(hits)[-1]
 
 
@@ -96,10 +108,10 @@ def disassemble(isa: str, script: str, binding: str) -> int:
              "-D", ISAS[isa]["define"],
              TOOL_SRC, os.path.join(ROOT, "src", "core", "moonlive", "MoonLiveCompiler.cpp"),
              # Every backend runs the register allocator before lowering, so the pass comes along
-             # too — without it the tool fails to link on spillToBudget.
+             # too, since without it the tool fails to link on spillToBudget.
              os.path.join(ROOT, "src", "core", "moonlive", "MoonLiveSpill.cpp"),
              # The IR sizes its op array with platform::alloc, so the platform implementation has
-             # to come along — the compiler is no longer self-contained.
+             # to come along: the compiler depends on it.
              os.path.join(ROOT, "src", "platform", "desktop", "platform_desktop.cpp"),
              "-o", emitter],
             capture_output=True, text=True)
@@ -130,7 +142,7 @@ def disassemble(isa: str, script: str, binding: str) -> int:
         tool = objdump(isa)
         if os.path.basename(tool).startswith("llvm-"):
             # llvm-objdump has NO raw-binary mode (no `-b binary`), so the bytes are assembled into
-            # a real object file first — `.incbin` is the one-line way to put a blob in a .text
+            # a real object file first, and `.incbin` is the one-line way to put a blob in a .text
             # section the disassembler will then walk.
             asm = os.path.join(tmp, "blob.s")
             with open(asm, "w") as f:
@@ -142,7 +154,8 @@ def disassemble(isa: str, script: str, binding: str) -> int:
                 return 1
             argv = [tool, "-d", obj]
         else:
-            argv = [tool, "-D", "-b", "binary", "-m", ISAS[isa]["machine"], binpath]
+            argv = [tool, "-D", "-b", "binary", "-m", ISAS[isa]["machine"],
+                    *ISAS[isa].get("options", []), binpath]
         dis = subprocess.run(argv, capture_output=True, text=True)
         if dis.returncode != 0:
             print(dis.stderr.strip()[:600])
@@ -163,7 +176,7 @@ def main() -> int:
                     default="for (i = 0; i < 3; i = i + 1) { addLight(i, 0, 0); }",
                     help="script text, or a path to a .mlv file")
     # Which binding's system variables to compile against: layout (default), effect or modifier.
-    # They are different vocabularies, not nested ones — a layout may use `x`/`y` as loop counters
+    # They are different vocabularies, not nested ones: a layout may use `x`/`y` as loop counters
     # precisely because it is NOT handed them, so the binding has to be stated.
     ap.add_argument("binding", nargs="?", default="layout",
                     choices=["layout", "effect", "modifier"],

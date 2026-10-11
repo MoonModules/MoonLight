@@ -57,7 +57,7 @@ constexpr uint8_t i2sLanes = 0;
 /// GPIO-DMA lanes the host reports, on the same reasoning as lcdLanes.
 constexpr uint8_t gpioDmaLanes = 16;
 /// The Teensy's chain capacity, so the host sizes the same frames the board refuses.
-constexpr size_t gpioDmaMaxSlots = 8 * 32767;
+constexpr uint32_t gpioDmaMaxSlots = 8 * 32767;
 
 /// No pin-wired microphone on a host; live audio arrives through capture devices instead.
 constexpr bool hasI2sMic = false;
@@ -115,6 +115,9 @@ constexpr bool hasOta = false;
 
 /// False: no UART and no WiFi stack, so the provisioning listener is never installed.
 constexpr bool hasImprov = false;
+
+/// The bits a call to emitted code adds to its address. None: a host call takes the code address as it is.
+constexpr uintptr_t codeAddressBits = 0;
 
 /// @}
 

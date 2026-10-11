@@ -43,7 +43,7 @@ sys.path.insert(0, str(ROOT / "moondeck" / "build"))
 from build_esp32 import APP_BIN, FIRMWARES, table_from_fragments, find_idf, idf_env  # noqa: E402
 import flash_split  # noqa: E402 (beside this file; the commit's flash change by kind)
 from build_desktop import desktop_binary  # noqa: E402 (one definition of where it lands)
-from build_teensy import HEX as TEENSY_HEX, PROGRAM_FLASH_BYTES as TEENSY_PROGRAM_BYTES, hex_image_bytes  # noqa: E402
+from build_teensy import FIRMWARES as TEENSY_FIRMWARES, PROGRAM_FLASH_BYTES as TEENSY_PROGRAM_BYTES, hex_image_bytes, hex_path  # noqa: E402
 HEALTH_FILE = ROOT / "docs" / "reference" / "metrics" / "repo-health.json"
 # The same snapshot as a table a human reads: units applied, ratios as percentages, areas
 # grouped. The JSON stays the source the delta is computed from; this is the view. Both
@@ -240,11 +240,13 @@ def measure_flash():
             parts = flash_split.measure(d, elf, st.st_size, _head(), env)
             if parts:
                 FLASH_SPLIT[firmware] = parts
-    # The Teensy image, under the same freshness rule: the bytes its HEX file writes to flash.
-    if TEENSY_HEX.exists() and (_time.time() - TEENSY_HEX.stat().st_mtime) <= MEASURED_WITHIN_HOURS * 3600:
-        flash["teensy41"] = hex_image_bytes(TEENSY_HEX)
-        MEASURED_THIS_RUN.add("teensy41")
-        MEASURED_DATES["teensy41"] = _dt.date.today().isoformat()
+    # The Teensy images, under the same freshness rule: the bytes each HEX file writes to flash.
+    for firmware in TEENSY_FIRMWARES:
+        image = hex_path(firmware)
+        if image.exists() and (_time.time() - image.stat().st_mtime) <= MEASURED_WITHIN_HOURS * 3600:
+            flash[firmware] = hex_image_bytes(image)
+            MEASURED_THIS_RUN.add(firmware)
+            MEASURED_DATES[firmware] = _dt.date.today().isoformat()
     # The desktop binary, located by build_desktop.desktop_binary() so this and collect_kpi.py
     # cannot name different files in the same run. A bare build/MoonLight matched nothing off
     # macOS, so this metric silently carried a foreign machine's number forward while reading as
@@ -538,7 +540,7 @@ def _arrow(new, old, key, fmt=str, lower_is_better=True):
 # happens to carry: a new target should be a deliberate addition, and "unknown" (a scenario run
 # before targets were named) is a data defect, not a device.
 MATRIX_TARGETS = ("desktop-macos", "desktop-windows", "esp32", "esp32s3-n16r8",
-                  "esp32p4rev1-eth", "esp32s31", "esp32-eth", "esp32-eth-wifi", "teensy41")
+                  "esp32p4rev1-eth", "esp32s31", "esp32-eth", "esp32-eth-wifi", *TEENSY_FIRMWARES)
 
 
 def reference_tag():
@@ -657,7 +659,7 @@ def render_markdown(new, old):
         L += ["## Firmware size", "",
               "| Target | Flash | Capacity | Used | Built |", "|---|---:|---:|---:|:--:|"]
         for k, v in sorted(new["flash"].items()):
-            cap = app_partition_bytes(k) if k.startswith("esp32") else TEENSY_PROGRAM_BYTES if k == "teensy41" else 0
+            cap = app_partition_bytes(k) if k.startswith("esp32") else TEENSY_PROGRAM_BYTES if k in TEENSY_FIRMWARES else 0
             cap_s = _kb(cap) if cap else "-"
             used = f"{(100.0 * v / cap):.0f}%" if cap else "-"
             built = _built_label(k, new.get("measured", {}).get(k))

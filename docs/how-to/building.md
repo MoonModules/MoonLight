@@ -334,18 +334,19 @@ older layout adopts a new one only through a full serial flash (see the note und
 
 ## Teensy
 
-The `teensy41` firmware runs on a Teensy 4.1, with a W5500 module for Ethernet; pins, wiring and power are on [the Teensy 4.1 page](../reference/hardware/teensy-4-1.md).
+Two firmwares run on a Teensy 4.1: `teensy41` uses the board's own Ethernet, and `teensy41-w5500` a W5500 module, for the 4.1-NE, which has none.
+Pins, wiring and power are on [the Teensy 4.1 page](../reference/hardware/teensy-4-1.md).
 It builds with CMake over an SDK at pinned versions, and MoonDeck's [Teensy tab](../../moondeck/MoonDeck.md#teensy-tab) wraps every step:
 
 ```bash
 uv run moondeck/build/setup_teensy.py    # once: the SDK into ~/teensy
-uv run moondeck/build/build_teensy.py    # build/teensy41/MoonLight.hex
-uv run moondeck/build/flash_teensy.py    # over USB, no button press
+uv run moondeck/build/build_teensy.py    # build/teensy41/MoonLight.hex; --firmware teensy41-w5500 for the W5500
+uv run moondeck/build/flash_teensy.py    # over USB, no button press; the same --firmware
 uv run moondeck/run/monitor_teensy.py    # USB serial
 ```
 
 Settings live in 1 MB of the program flash and survive a flash. Firmware updates go over USB.
-Each release also carries the image as `firmware-teensy41-v<version>.hex`, for `teensy_loader_cli` or PJRC's Teensy app.
+Each release also carries both images, `firmware-teensy41-v<version>.hex` and `firmware-teensy41-w5500-v<version>.hex`, for `teensy_loader_cli` or PJRC's Teensy app.
 
 ## Pre-compilation steps
 

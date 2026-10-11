@@ -10,6 +10,7 @@
 #include "unit/core/conditional_controls.h"  // shared conditional-control helpers
 
 #include <cstring>
+#include <string>
 
 // The host-side half of the GPIO-DMA driver; the timer-paced DMA, the widening and the edge-timing loopback are verified on the Teensy.
 

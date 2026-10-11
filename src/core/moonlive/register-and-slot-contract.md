@@ -1,6 +1,6 @@
 # The MoonLive register and frame-slot contract
 
-One machine, three roles. This governs the compiler and the three backends, not a binding: a scripted
+One machine, three roles. This governs the compiler and the four backends, not a binding: a scripted
 layout, effect and modifier all compile through the same front end and the same lowering, so the
 ownership rules below hold identically whichever role a script plays. ("Layout" in this file means
 the memory layout of the register file and the frame — never the light-placement role.)
@@ -14,11 +14,11 @@ silently miscompiles on one target while the others stay green.
 ## Registers: one ascending layout, three owners
 
 A vreg is an index. Each backend maps it to a machine register through its own table (`kXtReg`,
-`kRvReg`, `kArm64Reg`). The index space is carved as follows, **in this order, no gaps**:
+`kRvReg`, `kArm64Reg`, `kThReg`). The index space is carved as follows, **in this order, no gaps**:
 
 | range | owner | meaning |
 |---|---|---|
-| `0 .. kFirstTemp-1` | **core, fixed** | the host arguments: buf, nLights, cpl, t, ctrls. They arrive in registers at entry and every backend indexes them directly. |
+| `0 .. kFirstTemp-1` | **core, fixed** | the host arguments: buf, nLights, cpl, t, ctrls. They arrive in registers at entry, except the fifth on Thumb-2, which the prologue loads from the caller's stack; every backend then indexes them directly. |
 | `kFirstTemp .. vregsUsed-1` | **core (parser, then spill pass)** | the program's values. The parser hands them out; the spill pass renumbers them down to what fits. |
 | `vregsUsed .. vregsUsed+scratch-1` | **the backend** | the inline ops' scratch, computed per lowerer from `vregsUsed`. |
 
@@ -56,9 +56,10 @@ script that needs one spill.
 
 ## What `prologue(slots)` must reserve
 
-`slotsUsed` — the total from both owners, which `spillToBudget` returns. The backend turns a slot
-index into a frame offset its own way (Xtensa counts 4-byte words from `kFrameBase`; RISC-V and arm64
-build a frame in their prologue). Slot indices are the shared currency; offsets are private.
+`slotsUsed`: the total from both owners, which `spillToBudget` returns.
+The backend turns a slot index into a frame offset its own way.
+Xtensa counts 4-byte words from `kFrameBase`; RISC-V, arm64 and Thumb-2 build a frame in their prologue.
+Slot indices are the shared currency; offsets are private.
 
 ## Where a proposed change has to be checked
 

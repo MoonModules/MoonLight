@@ -52,7 +52,7 @@ The wired interface, a child of Network: which board's wiring it uses and how it
 
 <img src="../../assets/core/EthernetModule.png" width="300" alt="Ethernet module controls">
 
-- `ethBoard`: the board's Ethernet wiring by name; `Custom` exposes every pin.
+- `ethBoard`: the Ethernet wiring by name; `Custom` shows every pin, a fixed interface none.
 - `ipSettings`: DHCP or Static; Static reveals `ip`, `gateway`, `subnet` and `dns`.
 
 Gateway and DNS are optional. A Static setting that cannot work, such as a gateway outside the subnet, is not used: the interface keeps DHCP and the card says why. Changing the addressing of the interface the page reaches the device through asks first, naming where the device will be.

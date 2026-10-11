@@ -249,6 +249,9 @@ constexpr bool hasOta = true;
 /// True on every ESP32: the serial RPC channel is always there, so the listener always runs.
 constexpr bool hasImprov = true;
 
+/// The bits a call to emitted code adds to its address. None: Xtensa and RISC-V take the code address as it is.
+constexpr uintptr_t codeAddressBits = 0;
+
 /// @}
 
 } // namespace mm::platform

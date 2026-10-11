@@ -7,8 +7,8 @@ register nibble is a bug nothing else notices: the golden-bytes tests compare ou
 PREVIOUS emission, and the structural checks compare it to a model we also wrote. Both agree with a
 consistent mistake.
 
-This compares it to something nobody here wrote: `xtensa-esp32-elf-as` / `riscv32-esp-elf-as`, which
-ARE the definition of a valid encoding for these ISAs. For each instruction we emit, assemble the
+This compares it to something nobody here wrote: `xtensa-esp32-elf-as`, `riscv32-esp-elf-as` and
+`arm-none-eabi-as`, which ARE the definition of a valid encoding for these ISAs. For each instruction we emit, assemble the
 same mnemonic and require identical bytes.
 
 What it covers, and what it does not: it proves each instruction is ENCODED correctly. It cannot
@@ -25,6 +25,10 @@ import os
 import subprocess
 import sys
 import tempfile
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "build"))
+from setup_teensy import gcc_bin  # noqa: E402  the one home of the Arm toolchain's path
 
 # Per ISA: where its assembler lives, and the instructions our emitter produces. Each case is
 # (mnemonic-as-the-toolchain-spells-it, the bytes our assembler emits for it, why it is here).
@@ -91,20 +95,81 @@ ISAS = {
             ("ret",                  "67800000", "epilogue"),
         ],
     },
+    "thumb2": {
+        "as": str(gcc_bin() / "arm-none-eabi-as"),
+        "objcopy": str(gcc_bin() / "arm-none-eabi-objcopy"),
+        "asflags": ["-mthumb", "-mcpu=cortex-m7"],
+        # Unified syntax is what spells the .w suffix and the three-operand forms our comments use.
+        "prelude": ".syntax unified\n.thumb\n",
+        # The bytes as they sit in memory: each halfword little-endian, the first halfword first.
+        "cases": [
+            # The frame. The fifth argument is read at the caller's sp, 36 saved bytes above the slots.
+            ("push.w {r4-r11, lr}",          "2de9f04f", "prologue: save the AAPCS callee-saved set"),
+            ("subw sp, sp, #148",            "adf2940d", "prologue: open the slots"),
+            ("mov r7, sp",                   "6f46",     "prologue: the frame pointer"),
+            ("ldr.w r4, [r7, #184]",         "d7f8b840", "prologue: the stack-passed fifth argument"),
+            ("mov sp, r7",                   "bd46",     "epilogue: drop anything a call left"),
+            ("addw sp, sp, #148",            "0df2940d", "epilogue: close the slots"),
+            ("pop.w {r4-r11, pc}",           "bde8f08f", "epilogue: restore and return in one"),
+            # Frame slots, a positive 12-bit offset from r7.
+            ("str.w r5, [r7, #40]",          "c7f82850", "spillStore"),
+            ("ldr.w lr, [r7, #132]",         "d7f884e0", "spillLoad: lr is a vreg"),
+            ("addw r8, r7, #60",             "07f23c08", "slotAddr"),
+            # Constants: imm16 is imm4:i:imm3:imm8, and 0xffff sets every field including i.
+            ("movw r9, #0xa2b5",             "4af2b529", "movImm / movPtr: the low half"),
+            ("movt r9, #0x6001",             "c6f20109", "movPtr: the high half"),
+            ("movw r12, #0xffff",            "4ff6ff7c", "movImm: every imm16 field set"),
+            ("mov r0, lr",                   "7046",     "retValue: into the return register"),
+            ("addw r5, r6, #255",            "06f2ff05", "addImm"),
+            ("subw r5, r6, #1",              "a6f20105", "addImm: a negative immediate"),
+            ("add.w r8, r9, r12",            "09eb0c08", "addReg, and addImm past 12 bits"),
+            ("mul r5, r6, lr",               "06fb0ef5", "mulReg"),
+            ("smmul r0, r1, r2",             "51fb02f0", "mulhi: the signed high word"),
+            ("lsl.w r5, r6, #16",            "4fea0645", "shlImm"),
+            ("lsr.w r0, r1, #16",            "4fea1140", "shrImm"),
+            ("asr.w r0, r1, #3",             "4feae100", "sarImm: imm5's low bits sit in the second halfword"),
+            # Memory: the 12-bit offset form and the register-offset form.
+            ("ldrb.w r5, [r4, #8]",          "94f80850", "load8: a control byte"),
+            ("str.w r6, [r4, #16]",          "c4f81060", "store32"),
+            ("strb.w r6, [r0, r8]",          "00f80860", "store8: one channel"),
+            ("ldrb.w r5, [r4, r6]",          "14f80650", "load8Idx"),
+            ("ldr.w r5, [r4, r6]",           "54f80650", "load32Idx"),
+            ("str.w r5, [r4, r6]",           "44f80650", "store32Idx"),
+            # Control flow: a compare, then a wide conditional branch, which reaches 1 MB either way.
+            ("cmp.w r5, r6",                 "b5eb060f", "the fused branches' compare"),
+            ("cmp.w r5, #0",                 "b5f1000f", "branchIfZero's compare"),
+            ("bge.w . + 104",                "80f23280", "branchGeS forward"),
+            ("bne.w . - 100",                "7ff4ccaf", "branchNe backward: the loop edge"),
+            # Calls: the pool push, the host call through r12, and BL inside the block.
+            ("push.w {r0-r6, r8-r11, lr}",   "2de97f4f", "call: save the vreg pool"),
+            ("pop.w {r0-r6, r8-r11, lr}",    "bde87f4f", "call: restore it"),
+            ("blx r12",                      "e047",     "call: a host function, out of BL's reach"),
+            ("mov r12, r0",                  "8446",     "call: stash the result past the restore"),
+            ("str.w r4, [sp, #-8]!",         "4df8084d", "callLabel: the fifth argument, 8-byte aligned"),
+            ("addw sp, sp, #8",              "0df2080d", "callLabel: drop it after the call"),
+            ("bl . + 104",                   "00f032f8", "callLabel forward"),
+            ("bl . - 100",                   "fff7ccff", "callLabel backward"),
+            ("nop",                          "00bf",     "alignForEntry"),
+        ],
+    },
 }
 
 
-def tool(pattern: str, isa: str, what: str) -> str:
+def tool(pattern: str) -> str | None:
+    """The newest installed match for a toolchain binary, or None when that toolchain is absent."""
     hits = glob.glob(os.path.expanduser(pattern))
-    if not hits:
-        sys.exit(f"{what} for {isa} not found, install the matching ESP-IDF toolchain")
-    return sorted(hits)[-1]
+    return sorted(hits)[-1] if hits else None
 
 
-def check(isa: str) -> int:
+def check(isa: str, required: bool) -> int:
+    """Count the encodings `isa`'s toolchain disagrees with; an absent toolchain fails only when this ISA was asked for by name."""
     spec = ISAS[isa]
-    as_bin = tool(spec["as"], isa, "assembler")
-    objcopy = tool(spec["objcopy"], isa, "objcopy")
+    as_bin, objcopy = tool(spec["as"]), tool(spec["objcopy"])
+    if not as_bin or not objcopy:
+        if required:
+            sys.exit(f"the {isa} toolchain is not installed")
+        print(f"\n== {isa} == skipped: its toolchain is not installed")
+        return 0
     failures = 0
 
     print(f"\n== {isa} ==")
@@ -112,7 +177,7 @@ def check(isa: str) -> int:
         for mnemonic, ours, why in spec["cases"]:
             src = os.path.join(tmp, "one.S")
             with open(src, "w") as f:
-                f.write(f"    {mnemonic}\n")
+                f.write(f"{spec.get('prelude', '')}    {mnemonic}\n")
             obj = os.path.join(tmp, "one.o")
             r = subprocess.run([as_bin, *spec.get("asflags", []), "-o", obj, src],
                                capture_output=True, text=True)
@@ -143,7 +208,7 @@ def main() -> int:
     args = ap.parse_args()
 
     isas = list(ISAS) if args.isa == "all" else [args.isa]
-    total = sum(check(i) for i in isas)
+    total = sum(check(i, args.isa != "all") for i in isas)
     print()
     if total:
         print(f"{total} encoding(s) disagree with the toolchain assembler")

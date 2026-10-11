@@ -1,6 +1,6 @@
 /// @defgroup platform_teensy The Teensy 4.1 platform layer
 /// @{
-/// The platform seam on PJRC's Teensy 4 core: one core, no RTOS, settings in LittleFS on program flash, Ethernet through a W5500.
+/// The platform seam on PJRC's Teensy 4 core: one core, no RTOS, settings in LittleFS on program flash, Ethernet through the on-board PHY or a W5500.
 
 #include "platform/platform.h"
 
@@ -87,11 +87,37 @@ size_t maxInternalAllocBlock() { return maxAllocBlock(); }
 size_t totalHeap() { return reinterpret_cast<size_t>(&_heap_end) - reinterpret_cast<size_t>(&_heap_start); }
 size_t totalInternalHeap() { return totalHeap(); }
 
-// No Thumb-2 backend yet, so nothing asks for executable memory.
-void* allocExec(size_t) { return nullptr; }
-void freeExec(void*, size_t) {}
-void writeExec(void*, const void*, size_t) {}
-size_t maxExecAllocBlock() { return 0; }
+namespace {
+// PJRC marks the OCRAM heap execute-never and the highest matching MPU region decides, so the last one re-maps it executable when MoonLive first asks.
+void allowExecInOcram() {
+    static bool done = false;
+    if (done) return;
+    done = true;
+    const uint32_t last = ((SCB_MPU_TYPE >> 8) & 0xFF) - 1;   // DREGION, 16 regions on this core
+    asm volatile("dsb" ::: "memory");
+    SCB_MPU_RBAR = 0x20200000 | SCB_MPU_RBAR_REGION(last) | SCB_MPU_RBAR_VALID;
+    // Normal write-back write-allocate memory and read-write, as PJRC's own region over it, with no XN bit.
+    SCB_MPU_RASR = SCB_MPU_RASR_TEX(1) | SCB_MPU_RASR_C | SCB_MPU_RASR_B | SCB_MPU_RASR_AP(3)
+                 | SCB_MPU_RASR_SIZE(18) | SCB_MPU_RASR_ENABLE;
+    asm volatile("dsb\n isb" ::: "memory");
+}
+}  // namespace
+
+// MoonLive's code runs from the heap; the 32-byte alignment keeps a block on cache lines of its own.
+void* allocExec(size_t bytes) {
+    if (bytes == 0) return nullptr;
+    allowExecInOcram();
+    return aligned_alloc(32, (bytes + 31) & ~size_t{31});
+}
+void freeExec(void* ptr, size_t) { std::free(ptr); }
+void writeExec(void* dst, const void* src, size_t len) {
+    if (!dst || !src || !len) return;
+    std::memcpy(dst, src, len);
+    arm_dcache_flush(dst, len);   // to memory, which instruction fetch reads
+    SCB_CACHE_ICIALLU = 0;        // and no stale line from the block's previous code
+    asm volatile("dsb\n isb" ::: "memory");
+}
+size_t maxExecAllocBlock() { return maxAllocBlock(); }
 
 // --- Tasks: none without an RTOS, so callers keep their work on the one loop -------------------
 
@@ -427,7 +453,7 @@ size_t firmwareSize() { return reinterpret_cast<size_t>(&_flashimagelen); }
 size_t firmwarePartition() { return kFlashBytes - kReservedBytes - kFsBytes; }
 size_t flashChipSize() { return kFlashBytes; }
 
-// --- Ethernet: a W5500 through QNEthernet, whose lwIP runs from yield() ----------------------------
+// --- Ethernet: the on-board PHY or a W5500 through QNEthernet, whose lwIP runs from yield() ----------
 
 namespace {
 using qindesign::network::Ethernet;
@@ -448,11 +474,11 @@ bool ethOwnsPin(uint8_t gpio) {
 
 void setEthConfig(const EthPinConfig& cfg) { g_ethConfig = cfg; }
 
-// Starts DHCP and returns at once; false when no W5500 answers on the SPI port.
+// Starts DHCP and returns at once; false when the build's interface does not answer.
 bool ethInit() {
-    if (g_ethConfig.phyType != ethW5500) return false;
     g_ethStarted = Ethernet.begin();
-    std::printf("Ethernet: W5500 %s\n", g_ethStarted ? "found, DHCP started" : "not found, check the wiring");
+    std::printf("Ethernet: %s %s\n", hasEthW5500 ? "W5500" : "PHY",
+                g_ethStarted ? "found, DHCP started" : "not found, check the wiring");
     return g_ethStarted;
 }
 
