@@ -28,6 +28,8 @@ file(GLOB_RECURSE QNETHERNET_SOURCES "${TEENSY_SDK}/QNEthernet/src/*.c" "${TEENS
 add_library(qnethernet STATIC ${QNETHERNET_SOURCES})
 target_include_directories(qnethernet SYSTEM PUBLIC "${TEENSY_SDK}/QNEthernet/src")
 target_compile_definitions(qnethernet PUBLIC QNETHERNET_DRIVER_W5500)
+# The preview drains one send buffer per 20 ms tick, so the buffer bounds its rate: 16 segments, with the segment pool and lwIP's heap to match.
+target_compile_definitions(qnethernet PUBLIC TCP_SND_BUF=23360 MEMP_NUM_TCP_SEG=64 MEM_SIZE=48000)
 target_link_libraries(qnethernet PUBLIC teensy_libs)
 target_compile_options(qnethernet PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-std=gnu++17>)
 
@@ -101,6 +103,13 @@ add_dependencies(MoonLight.elf build_info_gen ui_embed moonlive_catalog)
 target_include_directories(MoonLight.elf PRIVATE ${REPO}/src ${REPO}/src/platform/teensy)
 target_compile_options(MoonLight.elf PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-std=gnu++20> -Wall -Wextra -Werror)
 target_compile_definitions(MoonLight.elf PRIVATE MM_FIRMWARE_NAME="teensy41")
+# A release passes its channel and version; empty leaves build_info.h's defaults, as on the ESP32.
+if(MM_RELEASE)
+    target_compile_definitions(MoonLight.elf PRIVATE MM_RELEASE="${MM_RELEASE}")
+endif()
+if(MM_VERSION)
+    target_compile_definitions(MoonLight.elf PRIVATE MM_VERSION="${MM_VERSION}")
+endif()
 target_link_libraries(MoonLight.elf PRIVATE qnethernet teensy_libs teensy_core m stdc++)
 target_link_options(MoonLight.elf PRIVATE "-T${CMAKE_BINARY_DIR}/imxrt1062_t41.ld")
 

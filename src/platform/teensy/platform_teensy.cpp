@@ -249,7 +249,61 @@ namespace {
 constexpr uint32_t kFlashBytes = 8 * 1024 * 1024;
 constexpr uint32_t kReservedBytes = 256 * 1024;   // EEPROM emulation and the restore program, at the top of flash
 constexpr uint32_t kFsBytes = 1024 * 1024;
-LittleFS_Program g_fs;
+// PJRC's LittleFS_Program uses 64 KB blocks on the 4.1, which eight settings files fill; the chip's 4 KB sectors are the block size, erased as the core's EEPROM emulation does.
+extern "C" void eepromemu_flash_write(void* addr, const void* data, uint32_t len);
+extern "C" void eepromemu_flash_erase_sector(void* addr);
+
+class ProgramFlashFs : public LittleFS {
+public:
+    // `bytes` at the top of the program flash, below the EEPROM emulation; formats media that does not mount.
+    bool begin(uint32_t bytes) {
+        constexpr uint32_t kProgramFlashEnd = kFlashBytes - kReservedBytes;
+        if (bytes == 0 || bytes % kSectorBytes || reinterpret_cast<uint32_t>(&_flashimagelen) > kProgramFlashEnd - bytes)
+            return false;
+        base_ = 0x60000000u + kProgramFlashEnd - bytes;
+        config = {};
+        config.read = &read;
+        config.prog = &prog;
+        config.erase = &erase;
+        config.sync = &sync;
+        config.read_size = 128;
+        config.prog_size = 128;
+        config.block_size = kSectorBytes;
+        config.block_count = bytes / kSectorBytes;
+        config.block_cycles = 800;
+        config.cache_size = 128;
+        config.lookahead_size = 128;
+        config.name_max = LFS_NAME_MAX;
+        configured = true;
+        lfs = {};
+        if (lfs_mount(&lfs, &config) < 0 && (lfs_format(&lfs, &config) < 0 || lfs_mount(&lfs, &config) < 0)) return false;
+        mounted = true;
+        return true;
+    }
+
+private:
+    static constexpr uint32_t kSectorBytes = 4096;
+    static inline uint32_t base_ = 0;
+
+    static uint8_t* at(lfs_block_t block, lfs_off_t offset) {
+        return reinterpret_cast<uint8_t*>(base_ + block * kSectorBytes + offset);
+    }
+    static int read(const lfs_config*, lfs_block_t block, lfs_off_t offset, void* buffer, lfs_size_t size) {
+        std::memcpy(buffer, at(block, offset), size);
+        return 0;
+    }
+    static int prog(const lfs_config*, lfs_block_t block, lfs_off_t offset, const void* buffer, lfs_size_t size) {
+        eepromemu_flash_write(at(block, offset), buffer, size);
+        return 0;
+    }
+    static int erase(const lfs_config*, lfs_block_t block) {
+        eepromemu_flash_erase_sector(at(block, 0));
+        return 0;
+    }
+    static int sync(const lfs_config*) { return 0; }
+};
+
+ProgramFlashFs g_fs;
 bool g_mounted = false;
 
 // Create every folder along the first `len` characters of `path`.
@@ -733,6 +787,8 @@ TcpConnection TcpServer::accept() {
     if (fd_ < 0) return TcpConnection();
     EthernetClient c = g_servers[fd_].accept();
     if (!c) return TcpConnection();
+    // Nagle off, as on the ESP32: a header write then a body write, and the second would wait on a delayed ACK.
+    c.setNoDelay(true);
     return TcpConnection(claimTcp(c));
 }
 

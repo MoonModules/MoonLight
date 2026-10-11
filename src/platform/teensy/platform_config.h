@@ -46,6 +46,8 @@ constexpr uint8_t parlioLanes = 0;
 constexpr uint8_t i2sLanes = 0;
 /// One DMA channel writes all sixteen lanes, any pins of GPIO1/GPIO6.
 constexpr uint8_t gpioDmaLanes = 16;
+/// The slots one frame's chain of DMA descriptors carries: 8 descriptors of 32767, over 3,600 RGB lights per lane.
+constexpr size_t gpioDmaMaxSlots = 8 * 32767;
 
 /// No microphone seam yet.
 constexpr bool hasI2sMic = false;

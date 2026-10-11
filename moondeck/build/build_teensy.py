@@ -29,14 +29,19 @@ def hex_image_bytes(path: Path) -> int:
 
 
 def main():
-    argparse.ArgumentParser(description=__doc__).parse_args()
-    left = missing()
+    parser = argparse.ArgumentParser(description=__doc__)
+    # A release burns its channel and computed version in, as build_esp32.py does; a local build leaves both empty.
+    parser.add_argument("--release", default="", help="the release channel tag, e.g. latest or v1.0.0")
+    parser.add_argument("--version", default="", help="the computed semver (compute_version.py)")
+    args = parser.parse_args()
+    left = missing(loader=False)   # building needs no loader
     if left:
         sys.exit(f"Teensy SDK incomplete ({', '.join(left)}): run uv run moondeck/build/setup_teensy.py")
     r = subprocess.run(["cmake", "-S", str(ROOT / "teensy"), "-B", str(BUILD_DIR), "-G", "Ninja",
                         f"-DCMAKE_TOOLCHAIN_FILE={ROOT / 'teensy' / 'teensy41.cmake'}",
                         f"-DTEENSY_SDK={sdk_root()}", f"-DTEENSY_GCC_BIN={gcc_bin()}",
-                        f"-DTEENSYDUINO={teensyduino_define()}"], cwd=ROOT)
+                        f"-DTEENSYDUINO={teensyduino_define()}",
+                        f"-DMM_RELEASE={args.release}", f"-DMM_VERSION={args.version}"], cwd=ROOT)
     if r.returncode != 0:
         sys.exit(r.returncode)
     sys.exit(subprocess.run(["cmake", "--build", str(BUILD_DIR)], cwd=ROOT).returncode)

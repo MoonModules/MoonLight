@@ -47,7 +47,9 @@ Up to 16 WS2812B lanes, on any of the pins of GPIO port 6: **0, 1, 14 to 27 and 
 The [Parallel LED](../../moonmodules/light/drivers.md#parallel-led-details) driver's `GPIO-DMA` peripheral drives them.
 One DMA channel, paced by a timer, writes each 373 ns slot into the port, so the CPU is free while a frame clocks out.
 A frame of 256 lights on a lane takes 7.2 ms (a 138 fps ceiling).
-The data runs at 3.3 V, which a short wire to the first LED tolerates.
+The data leaves the pins at 3.3 V, below the 3.5 V a WS2812B powered at 5 V reads as a high.
+So an installation puts a 3.3 V to 5 V level shifter, a 74AHCT125 or 74HCT245, between the pin and the first LED.
+Wired directly, a short data wire usually works on the bench, without a guarantee: a flickering first LED is the typical sign.
 
 ## Loopback self-test
 
@@ -61,10 +63,12 @@ A jumper from a lane-capable pin (`loopbackTxPin`) to any input pin (`loopbackRx
   So while USB powers the board, VIN carries the USB 5 V out, and an external supply on VIN must never meet a plugged-in USB cable.
   Cutting that trace (a solder blob restores it) separates the two: USB then carries only data and VIN always powers the board.
 - **3.3V** supplies 250 mA at most; the W5500 takes about 130 mA of it.
-- **LEDs**: a small panel can take its 5 V from VIN while USB powers the board.
-  USB gives 500 mA in all, and the Teensy with the W5500 takes about 230 mA.
-  The remaining 270 mA covers an 8×8 WS2812B panel at brightness 20 or less.
-  The 3.3 V pin is no supply for LEDs, below the WS2812B's 3.5 V minimum. A larger installation gets its own 5 V supply, its GND joined to the board's.
+- **LEDs** get their own 5 V supply, rated for the strip, its GND joined to the board's.
+  On the bench a few LEDs can take their 5 V from VIN while USB powers the board, within what the USB budget leaves.
+  A port gives 500 mA, and the Teensy with the W5500 takes about 230 mA.
+  A WS2812B draws about 1 mA idle and up to about 60 mA at full white.
+  So even 64 LEDs at brightness 20 can pass the remaining 270 mA on a white frame.
+  The 3.3 V pin is no supply for LEDs, below the WS2812B's 3.5 V minimum.
 
 ## An example setup on a breadboard
 

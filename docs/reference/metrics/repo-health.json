@@ -1,8 +1,8 @@
 {
-  "commit": "17dae99d",
+  "commit": "5699c11d",
   "flash": {
-    "esp32s3-n16r8": 2336688,
-    "esp32": 2234704,
+    "esp32s3-n16r8": 2336672,
+    "esp32": 2234688,
     "esp32p4rev1-eth": 2177776,
     "esp32p4rev1-eth-wifi": 2358896,
     "esp32s3-n8r8": 2336304,
@@ -11,13 +11,13 @@
     "esp32-eth": 1681040,
     "esp32-wrover": 1843760,
     "qemu": 1383648,
-    "esp32p4rev3-eth": 2229440,
+    "esp32p4rev3-eth": 2229408,
     "esp32s3-zero": 2219120,
     "esp32-pico": 2107168,
-    "desktop-macos": 2273704,
+    "desktop-macos": 2273768,
     "desktop-windows": 1925120,
     "esp32c3": 2335072,
-    "teensy41": 1172440
+    "teensy41": 1173464
   },
   "measured": {
     "esp32p4rev1-eth": "2026-10-07",
@@ -140,9 +140,9 @@
           "last": "2026-10-04"
         },
         "teensy41": {
-          "p50": 8301,
+          "p50": 2478,
           "p95": 8301,
-          "n": 1,
+          "n": 3,
           "last": "2026-10-11"
         }
       },
@@ -576,9 +576,9 @@
           "last": "2026-09-30"
         },
         "teensy41": {
-          "p50": 2173,
+          "p50": 2144,
           "p95": 2173,
-          "n": 1,
+          "n": 2,
           "last": "2026-10-11"
         }
       },
@@ -622,9 +622,9 @@
           "last": "2026-09-30"
         },
         "teensy41": {
-          "p50": 2236,
-          "p95": 2236,
-          "n": 1,
+          "p50": 2167,
+          "p95": 2482,
+          "n": 4,
           "last": "2026-10-11"
         }
       },
@@ -654,9 +654,9 @@
           "last": "2026-09-30"
         },
         "teensy41": {
-          "p50": 2160,
+          "p50": 2159,
           "p95": 2160,
-          "n": 1,
+          "n": 3,
           "last": "2026-10-11"
         }
       },
@@ -732,9 +732,9 @@
           "last": "2026-09-30"
         },
         "teensy41": {
-          "p50": 131,
-          "p95": 131,
-          "n": 1,
+          "p50": 2165,
+          "p95": 2175,
+          "n": 3,
           "last": "2026-10-11"
         }
       },
@@ -746,9 +746,9 @@
           "last": "2026-10-10"
         },
         "teensy41": {
-          "p50": 7763,
-          "p95": 7763,
-          "n": 1,
+          "p50": 2143,
+          "p95": 7558,
+          "n": 2,
           "last": "2026-10-11"
         }
       }
@@ -792,11 +792,11 @@
   },
   "loc": {
     "core": 28270,
-    "light": 31098,
-    "platform": 19268,
+    "light": 31109,
+    "platform": 19329,
     "ui": 12307,
-    "test": 64718,
-    "moondeck": 30980
+    "test": 64763,
+    "moondeck": 31034
   },
   "comments": {
     "core": {
@@ -804,11 +804,11 @@
       "ratio": 0.242
     },
     "light": {
-      "lines": 7462,
+      "lines": 7464,
       "ratio": 0.269
     },
     "platform": {
-      "lines": 3790,
+      "lines": 3796,
       "ratio": 0.22
     },
     "ui": {
@@ -816,28 +816,28 @@
       "ratio": 0.298
     },
     "test": {
-      "lines": 6966,
+      "lines": 6969,
       "ratio": 0.125
     },
     "moondeck": {
       "lines": 4931,
-      "ratio": 0.182
+      "ratio": 0.181
     }
   },
   "tests": {
-    "cases": 2409,
+    "cases": 2411,
     "scenarios": 30
   },
   "docs": {
     "md_files": 152,
-    "md_lines": 32560,
+    "md_lines": 32581,
     "plans_files": 45,
-    "backlog_lines": 3326,
+    "backlog_lines": 3329,
     "lessons_lines": 532,
     "claude_md_lines": 283
   },
   "complexity": {
-    "functions": 4602,
+    "functions": 4609,
     "over_threshold": 330,
     "worst_ccn": 128
   }

@@ -216,3 +216,24 @@ def test_an_error_response_that_is_not_json_still_reads_as_a_failure():
         assert runner._error_body(he) == {}
     he = urllib.error.HTTPError("http://x/api/state", 400, "Bad Request", {}, io.BytesIO(b'{"error":"no such control","at":"A.b"}'))
     assert runner._error_body(he) == {"error": "no such control", "at": "A.b"}
+
+
+def test_the_fixture_becomes_one_replacing_document_per_container():
+    # A bench carrying another effect or grid then runs the scenario as a fresh device would.
+    fixture = [
+        {"op": "apply_state", "document": {"Layouts": {"Grid": {"type": "GridLayout", "width": 16, "height": 16}}}},
+        {"op": "apply_state", "document": {"Effects": {"Layer": {"type": "Layer"}}}},
+        {"op": "apply_state", "document": {"Effects": {"Layer": {"Pulse": {"type": "PulseEffect"}}}}},
+    ]
+    assert runner._fixture_canvas(fixture) == [
+        {"Layouts": {"$patch": "replace", "Grid": {"type": "GridLayout", "width": 16, "height": 16}}},
+        {"Effects": {"$patch": "replace", "Layer": {"type": "Layer", "Pulse": {"type": "PulseEffect"}}}},
+    ]
+    assert runner._fixture_canvas([]) == []
+
+
+def test_a_fixture_naming_a_container_the_run_does_not_restore_is_refused():
+    import pytest
+    with pytest.raises(ValueError, match="System"):
+        runner._fixture_canvas([{"op": "apply_state", "document": {"System": {"deviceName": "x"}}}])
+

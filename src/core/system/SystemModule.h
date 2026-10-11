@@ -211,11 +211,11 @@ public:
     /// Delete every setting and preset, so the next boot starts as freshly installed; scripts and other files stay.
     static bool factoryReset() { return FilesystemModule::removeTree(FilesystemModule::CONFIG_DIR); }
 
-    /// Accept printable ASCII within the buffer, which every write path checks.
+    /// Accept printable ASCII within the buffer, which every write path checks; empty is the unset model a board starts with.
     static bool validateDeviceModel(const char* value) {
         if (!value) return false;
         size_t n = std::strlen(value);
-        if (n == 0 || n >= 32) return false;   // 1..31 (32-byte buffer, NUL-terminated)
+        if (n >= 32) return false;   // 0..31 (32-byte buffer, NUL-terminated)
         for (size_t i = 0; i < n; i++) {
             unsigned char b = static_cast<unsigned char>(value[i]);
             if (b < 0x20 || b > 0x7E) return false;

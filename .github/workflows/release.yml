@@ -28,6 +28,7 @@ on:
       # C4701 fixes each shipped unverified because they touched only test/.
       - 'test/**'
       - 'esp32/**'
+      - 'teensy/**'
       - 'moondeck/build/**'
       # package_desktop.py builds and packages the three desktop jobs; without this line a
       # packaging fix cannot trigger the jobs that run it (the NSIS-escape fix needed a
@@ -501,12 +502,64 @@ jobs:
           name: desktop-linux-arm64
           path: dist/
 
+  # The Teensy 4.1 firmware, a HEX for teensy_loader_cli or PJRC's Teensy app; test.yml builds it on every PR as well.
+  build-teensy:
+    needs: verify-version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v3
+      - uses: actions/cache@v4
+        with:
+          path: ~/teensy/arm-gnu-toolchain-*
+          key: teensy-gcc-${{ runner.os }}-${{ hashFiles('moondeck/build/setup_teensy.py') }}
+      # Same tag and version resolution as build-esp32, so the HEX reports the version and channel its asset name carries.
+      - name: Resolve release tag
+        id: tag
+        shell: bash
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+          REF_NAME: ${{ github.ref_name }}
+          IS_MAIN: ${{ github.ref == 'refs/heads/main' }}
+        run: |
+          set -euo pipefail
+          if [ -n "$INPUT_TAG" ]; then echo "tag=$INPUT_TAG" >> "$GITHUB_OUTPUT"
+          elif [ "$IS_MAIN" = "true" ]; then echo "tag=latest" >> "$GITHUB_OUTPUT"
+          else echo "tag=$REF_NAME" >> "$GITHUB_OUTPUT"; fi
+      - name: Compute version
+        id: ver
+        shell: bash
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          set -euo pipefail
+          V=$(uv run python moondeck/build/compute_version.py --tag "$TAG")
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+      - name: Install the Teensy SDK
+        run: uv run moondeck/build/setup_teensy.py --no-loader
+      - name: Build the Teensy 4.1 firmware
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+          V: ${{ steps.ver.outputs.version }}
+        run: |
+          set -euo pipefail
+          uv run moondeck/build/build_teensy.py --release "$TAG" --version "$V"
+          mkdir -p dist
+          cp build/teensy41/MoonLight.hex "dist/firmware-teensy41-v$V.hex"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: firmware-teensy41
+          path: dist/
+
   release:
     # Publish a release on: version tag push, main branch push, or workflow_dispatch.
     # Plain branch push without matching paths is filtered by the top-level `paths:`
     # so the build jobs already won't run; this condition is the belt to their braces.
     if: startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
-    needs: [build-esp32, build-macos-arm64, build-windows-x64, build-linux-x64, build-linux-arm64]
+    needs: [build-esp32, build-teensy, build-macos-arm64, build-windows-x64, build-linux-x64, build-linux-arm64]
     runs-on: ubuntu-latest
     permissions:
       contents: write     # softprops/action-gh-release needs this
@@ -675,6 +728,7 @@ jobs:
           # is a glob pattern, the action does NOT strip `#` as comment syntax.
           files: |
             dist/firmware-*.bin
+            dist/firmware-*.hex
             dist/shared-*.bin
             dist/partition-table-*.bin
             dist/manifest-*.json

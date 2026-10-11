@@ -345,6 +345,7 @@ uv run moondeck/run/monitor_teensy.py    # USB serial
 ```
 
 Settings live in 1 MB of the program flash and survive a flash. Firmware updates go over USB.
+Each release also carries the image as `firmware-teensy41-v<version>.hex`, for `teensy_loader_cli` or PJRC's Teensy app.
 
 ## Pre-compilation steps
 

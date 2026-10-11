@@ -55,6 +55,7 @@ def main():
                     sys.stdout.write(text)
                     sys.stdout.flush()
                     log.write(text)
+                    log.flush()   # what MoonDeck showed survives a stop before the buffer fills
         except (KeyboardInterrupt, serial.SerialException):
             pass
 

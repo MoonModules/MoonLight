@@ -21,9 +21,20 @@ public:
     /// The peripheral block this backend claims, for the sibling guard.
     LedHwBlock hwBlock() const override { return LedHwBlock::GpioDma; }
     /// What the status says when the bus will not come up.
-    const char* initFailMsg() const override { return "GPIO DMA init failed: lanes need pins of one port (Teensy 4.1: 0, 1, 14-27, 38-41)"; }
+    const char* initFailMsg() const override { return "GPIO DMA init failed: lanes need pins of one port (Teensy 4.1: 0, 1, 14-27, 38-41), or memory ran out"; }
     /// One buffer: the widened copy already lets encode and output overlap.
     bool supportsDoubleBuffer() const override { return false; }
+    /// The largest frame the bus carries: the descriptor chain's slots, and the heap for the frame with its port words.
+    size_t dmaBudgetBytes() const override {
+        const size_t slotBytes = owner_ ? owner_->slotBytes() : 1;
+        constexpr size_t kReserve = 16 * 1024;   // headroom for what allocates after this query
+        const size_t block = platform::maxAllocBlock();   // 0 is a heap without a reported bound
+        const size_t chain = platform::gpioDmaMaxSlots * slotBytes;
+        if (block == 0) return chain;
+        // Each slot costs its encoded bytes plus a 4-byte port word, both from the one heap.
+        const size_t memory = block > kReserve ? (block - kReserve) * slotBytes / (slotBytes + 4) : 1;
+        return chain < memory ? chain : memory;
+    }
     /// No '595 expander on this bus yet.
     bool supportsPinExpander() const override { return false; }
 

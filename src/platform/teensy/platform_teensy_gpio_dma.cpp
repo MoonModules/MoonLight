@@ -25,7 +25,7 @@ constexpr uint16_t kSlotTicks = 56;
 constexpr uint32_t kSlotHz = kBusHz / kSlotTicks;
 // eDMA's major loop count is 15 bits, so a longer frame runs as a chain of descriptors.
 constexpr size_t kSlotsPerTcd = 32767;
-constexpr uint8_t kMaxTcds = 8;   // 262k slots, over 3,600 RGB lights per lane
+constexpr size_t kMaxTcds = (gpioDmaMaxSlots + kSlotsPerTcd - 1) / kSlotsPerTcd;
 
 // One bus at a time: the timer channel and the crossbar DMA request it uses are single.
 struct GpioDmaBus {

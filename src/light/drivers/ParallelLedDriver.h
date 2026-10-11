@@ -411,7 +411,7 @@ public:
                                              slotBytes(), opp) > cap) fits--;
         }
         std::snprintf(statusBuf_, sizeof(statusBuf_),
-                      "too many lights per pin: %u exceeds this peripheral's %u — lower ledsPerPin",
+                      "too many lights per pin: %u exceeds this peripheral's %u, lower ledsPerPin",
                       static_cast<unsigned>(maxLaneLights_), fits);
         setStatus(statusBuf_, Severity::Error);
     }

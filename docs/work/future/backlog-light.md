@@ -161,6 +161,9 @@ Suggested on Discord after the Teensy port: a Pi runs MoonLight today as the Lin
 Driving a strip from the Pi's own header needs the platform backend that does not exist yet (`src/platform/rpi/`, the same prerequisite as the sensor item below), and a `LedPeripheral` behind it.
 The routes differ by model: on a Pi 4 and earlier, DMA through the PWM, PCM or SPI peripheral, the way rpi_ws281x does; on a Pi 5 the header sits behind the RP1 chip, whose PIO blocks are the route.
 SPI is the one path every model shares, one lane per SPI bus with each WS2812 bit encoded in SPI bits, and the place to start.
+Portable GPIO libraries (WiringPi, libgpiod) are too slow for LED timing, so they serve buttons and relays, not this.
+On a Pi 5, own PIO programs reach the hardware through the kernel's PIO driver, which piolib shows; Adafruit's PioMatter proves HUB75 that way, and HUB75 on a Pi is a second backend once this one exists.
+The research, with sources: [the LED-driver analysis](leddriver-analysis-bottom-up.md#raspberry-pi).
 
 ### Logarithmic brightness, and a power budget the device knows about (2026-09-02)
 

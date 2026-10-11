@@ -7,6 +7,7 @@ and collects per-step performance measurements.
 
 import argparse
 import atexit
+import copy
 import signal
 import json
 import os
@@ -560,6 +561,30 @@ def _snapshot_documents(client) -> list:
     return docs
 
 
+def _merge(into: dict, doc: dict):
+    """Deep-merge a state document into another, the later value winning."""
+    for k, v in doc.items():
+        if isinstance(v, dict) and isinstance(into.get(k), dict):
+            _merge(into[k], v)
+        else:
+            into[k] = v
+
+
+def _fixture_canvas(fixture: list) -> list:
+    """The fixture as one document per container it names, each replacing the container's children with exactly the fixture's.
+
+    Only a container the snapshot restores may be replaced, so a fixture naming another raises rather than leaving the bench changed.
+    """
+    merged: dict = {}
+    for step in fixture:
+        if step.get("op") == "apply_state":
+            _merge(merged, copy.deepcopy(step.get("document", {})))
+    outside = sorted(set(merged) - set(_SNAPSHOT_CONTAINERS))
+    if outside:
+        raise ValueError(f"the fixture names {', '.join(outside)}, which the run does not restore")
+    return [{name: {"$patch": "replace", **body}} for name, body in merged.items() if isinstance(body, dict)]
+
+
 def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
                  update_contract: bool = False,
                  update_reason: str | None = None, named: bool = True,
@@ -570,11 +595,12 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
       construct : scenario builds the pipeline from scratch. Live device's
                    main.cpp owns the top-level shape, so construct scenarios
                    only run in-process. Skip here with a clear note.
-      mutate    : scenario assumes a wired pipeline. Skip the fixture array
-                   (the device IS the fixture) and run only the steps. Steps
-                   that touch ids not present on the device hard-fail (instead
-                   of the old WARN-and-continue which silently produced
-                   meaningless passes).
+      mutate    : scenario assumes a wired pipeline. The fixture is its canvas:
+                   each container the fixture names is replaced with exactly
+                   the fixture's children before the steps, whatever the bench
+                   carried, and the snapshot restore puts the device back.
+                   Steps that touch ids neither on the device nor added before
+                   them hard-fail.
     """
     # encoding="utf-8" EXPLICITLY, and it is not cosmetic here: _observed.py writes this file back
     # with the observation block appended, so reading it as cp1252 on Windows and writing it as
@@ -691,6 +717,27 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
     prior_controls: dict = {}   # (module, control) -> the value it held before this scenario wrote it
     snapshot_docs = _snapshot_documents(client)
 
+    # The fixture is the canvas the steps expect, on a bench that may carry another effect or grid.
+    try:
+        canvas = _fixture_canvas(scenario.get("fixture", []))
+    except ValueError as e:
+        print(f"\n  FAIL: {e}")
+        results["passed"] = False
+        return results
+    for doc in canvas:
+        try:
+            client.patch("/api/state", doc)
+            print(f"  CANVAS {next(iter(doc))}: replaced with the fixture")
+        except Exception as e:
+            print(f"\n  FAIL: couldn't lay the fixture's canvas on {next(iter(doc))}: {e}")
+            results["passed"] = False
+            for snap in snapshot_docs:
+                try:
+                    client.patch("/api/state", snap)
+                except Exception:
+                    pass
+            return results
+
     # Reset block: scenarios that mutate shared controls (Mirror toggles, grid
     # size, Preview detail, …) declare a `reset` array of set_control steps that
     # restores those controls to production defaults BEFORE the scenario runs.
@@ -732,8 +779,6 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
     # than failing the run. (perf_full's add/measure/remove driver triples are all optional.)
     skipped_ids = set()
 
-    # Live runs `steps` only: `fixture` is the in-process equivalent of what
-    # main.cpp already wired on the device.
     for step_index, step in enumerate(scenario.get("steps", [])):
         step_name = step.get("name", "?")
         op = step.get("op", "")

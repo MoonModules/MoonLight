@@ -85,13 +85,13 @@ def head(repo: Path) -> str:
     return r.stdout.strip() if r.returncode == 0 else ""
 
 
-def missing() -> list:
-    """The parts not installed at their pin, empty when the SDK is ready to build and flash."""
+def missing(loader: bool = True) -> list:
+    """The parts not installed at their pin, empty when the SDK is ready to build, and to flash when `loader` is set."""
     out = [name for name, (_, pin) in REPOS.items() if head(sdk_root() / name) != pin]
     out += [p.name for name in REPOS for p in patches_for(name) if not patch_applied(sdk_root() / name, p)]
     if not (gcc_bin() / "arm-none-eabi-g++").exists() and not (gcc_bin() / "arm-none-eabi-g++.exe").exists():
         out.append(f"arm-gnu-toolchain {GCC_VERSION}")
-    if platform.system() in LOADER_BUILD and not loader_path().exists():
+    if loader and platform.system() in LOADER_BUILD and not loader_path().exists():
         out.append("teensy_loader_cli")
     return out
 
@@ -177,14 +177,17 @@ def install_loader():
 
 
 def main():
-    argparse.ArgumentParser(description=__doc__).parse_args()
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--no-loader", action="store_true", help="skip teensy_loader_cli, for a machine that builds but never flashes (CI)")
+    args = parser.parse_args()
     sdk_root().mkdir(parents=True, exist_ok=True)
     for name, (url, pin) in REPOS.items():
         git_at(url, pin, sdk_root() / name)
         apply_patches(name, sdk_root() / name)
     install_gcc()
-    install_loader()
-    left = missing()
+    if not args.no_loader:
+        install_loader()
+    left = missing(loader=not args.no_loader)
     if left:
         sys.exit(f"Still missing: {', '.join(left)}")
     print(f"Teensy SDK ready in {sdk_root()}: Teensyduino {TEENSYDUINO} sources, Arm GCC {GCC_VERSION}, teensy_loader_cli {LOADER_VERSION}")

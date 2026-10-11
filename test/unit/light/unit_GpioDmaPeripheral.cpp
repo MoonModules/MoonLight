@@ -149,3 +149,18 @@ TEST_CASE("GpioDmaPeripheral loopback refuses a receive pin the platform reserve
     CHECK(std::strstr(d.status(), "pick another loopbackRxPin") != nullptr);
     mm::platform::clearTestGpioCapability();
 }
+
+// A frame past what the heap holds, with its port words, is refused before init with the lights that fit, rather than a blamed pin.
+TEST_CASE("GpioDmaPeripheral refuses a frame the heap cannot hold with the lights that fit") {
+    mm::GpioDmaPeripheral peripheral;
+    mm::ParallelLedDriver d;
+    mm::Buffer src;
+    mm::Correction corr;
+    std::strcpy(d.pins, "18");
+    struct CapGuard { ~CapGuard() { mm::platform::setTestMaxAllocBlock(0); } } guard;   // cleared even if a REQUIRE stops the case
+    mm::platform::setTestMaxAllocBlock(64 * 1024);   // holds about 124 lights' frame and port words
+    wire(d, peripheral, src, corr, 256);
+    REQUIRE(d.status() != nullptr);
+    INFO(std::string(d.status()));
+    CHECK(std::strstr(d.status(), "too many lights per pin: 256") != nullptr);
+}
