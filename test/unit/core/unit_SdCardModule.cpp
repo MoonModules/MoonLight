@@ -57,6 +57,13 @@ struct Rig {
     }
 };
 
+// Wires the required pins and mounts, for a test whose point starts after that.
+void mountRig(SdCardModule& sd) {
+    wireRequiredPins(sd);
+    sd.prepare();
+    REQUIRE(find(sd, "card (KiB)") != nullptr);
+}
+
 }  // namespace
 
 TEST_CASE("the SD pins are visible, since desktop always reports hasSdCard") {
@@ -140,6 +147,45 @@ TEST_CASE("format refuses while unmounted, and wipes the card while mounted") {
     CHECK(r.sd.status() == nullptr);
     CHECK_FALSE(std::filesystem::exists(std::string(r.root) + "/sd/leftover"));   // wiped
     CHECK(std::filesystem::exists(std::string(r.root) + "/sd"));                  // recreated, still mounted
+}
+
+TEST_CASE("an unrelated prepare does not remount when the pins have not changed") {
+    Rig r;
+    mountRig(r.sd);
+
+    platform::FsWriteStream w{};
+    REQUIRE(platform::fsWriteStreamOpen(w, "/sd/clip.bin"));
+
+    r.sd.prepare();   // same pins: prepare() runs tree-wide on any affectsPrepare change, so this must be a no-op
+    CHECK(r.sd.status() == nullptr);               // never tried to unmount, so no "busy" status either
+    CHECK(find(r.sd, "card (KiB)") != nullptr);     // mount state undisturbed
+
+    REQUIRE(platform::fsWriteStreamWrite(w, "hello", 5));   // the stream the no-op prepare() did not touch
+    REQUIRE(platform::fsWriteStreamClose(w, true));
+    CHECK(std::filesystem::exists(std::string(r.root) + "/sd/clip.bin"));
+}
+
+TEST_CASE("format refuses while a download stream is open, and succeeds once it closes") {
+    Rig r;
+    mountRig(r.sd);
+
+    platform::FsWriteStream w{};
+    REQUIRE(platform::fsWriteStreamOpen(w, "/sd/clip.bin"));
+    REQUIRE(platform::fsWriteStreamWrite(w, "hello", 5));
+    REQUIRE(platform::fsWriteStreamClose(w, true));
+
+    platform::FsReadStream rs{};
+    REQUIRE(platform::fsReadStreamOpen(rs, "/sd/clip.bin"));
+
+    r.sd.onControlChanged("format");   // a download is in flight
+    REQUIRE(r.sd.status() != nullptr);
+    CHECK(std::string(r.sd.status()) == "busy: transfer in progress");
+    CHECK(std::filesystem::exists(std::string(r.root) + "/sd/clip.bin"));   // not wiped
+
+    platform::fsReadStreamClose(rs);
+    r.sd.onControlChanged("format");   // the stream is gone: format now runs
+    CHECK(r.sd.status() == nullptr);
+    CHECK_FALSE(std::filesystem::exists(std::string(r.root) + "/sd/clip.bin"));
 }
 
 TEST_CASE("tick1s is a no-op while unmounted, and refreshes the gauge once mounted") {

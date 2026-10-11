@@ -161,6 +161,8 @@ TEST_CASE("an SD download larger than one tick's chunk streams across several ti
     CHECK(body.size() == payload.size());
     CHECK(body == payload);
 
+    // The last byte lands this tick, but driveSdDownload only notices bufSent caught up to bufLen and closes the read stream on the NEXT one; give it a few before the fixture unmounts underneath it.
+    for (int i = 0; i < 5; i++) http.tick20ms();
     client.close();
     http.release();
 }

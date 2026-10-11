@@ -71,6 +71,7 @@ static constexpr const char* SD_DRIVE = "0:";
 
 static sdmmc_card_t* g_card = nullptr;
 static bool g_mounted = false;
+static int g_streamsOpen = 0;         // every open read/write stream, counted so unmount/format can refuse under one
 static int8_t g_pwrGpio = -1;         // so unmount powers back down what mount powered up
 #if SOC_SDMMC_IO_POWER_EXTERNAL
 static sd_pwr_ctrl_handle_t g_pwrCtrl = nullptr;
@@ -89,6 +90,8 @@ static bool sdTranslate(const char* apiPath, char* out, size_t outLen) {
 }
 
 bool sdCardMounted() { return g_mounted; }
+
+bool sdCardBusy() { return g_streamsOpen > 0; }
 
 /// A pin this build never wires reads as -1; one it does but the chip refuses is a mount-time mistake, not UB.
 static bool validOutputPin(int8_t pin) {
@@ -163,8 +166,9 @@ bool sdMount(const SdPinConfig& pins) {
     return true;
 }
 
-void sdUnmount() {
-    if (!g_mounted) return;
+bool sdUnmount() {
+    if (!g_mounted) return true;
+    if (g_streamsOpen > 0) return false;   // a transfer holds a FIL into the context this would free
     esp_vfs_fat_sdcard_unmount(SD_MOUNT_POINT, g_card);
 #if SOC_SDMMC_IO_POWER_EXTERNAL
     if (g_pwrCtrl) { sd_pwr_ctrl_del_on_chip_ldo(g_pwrCtrl); g_pwrCtrl = nullptr; }
@@ -172,10 +176,12 @@ void sdUnmount() {
     if (g_pwrGpio >= 0) gpio_set_level(static_cast<gpio_num_t>(g_pwrGpio), 1);
     g_card = nullptr;
     g_mounted = false;
+    return true;
 }
 
 bool sdFormat() {
     if (!g_mounted || !g_card) return false;
+    if (g_streamsOpen > 0) return false;   // same conflict as an unmount under an open stream
     // Formats and remounts in one call; the mount stays live either way.
     return esp_vfs_fat_sdcard_format(SD_MOUNT_POINT, g_card) == ESP_OK;
 }
@@ -357,6 +363,7 @@ bool sdCardReadStreamOpen(void*& handle, const char* apiPath) {
     auto* f = new FIL();
     if (f_open(f, full, FA_READ) != FR_OK) { delete f; return false; }
     handle = f;
+    ++g_streamsOpen;
     return true;
 }
 
@@ -373,6 +380,7 @@ void sdCardReadStreamClose(void* handle) {
     if (!f) return;
     f_close(f);
     delete f;
+    --g_streamsOpen;
 }
 
 // Carries both paths, not just the FIL, so close() can rename or discard without re-deriving them.
@@ -391,6 +399,7 @@ bool sdCardWriteStreamOpen(void*& handle, const char* apiPath) {
     if (n < 0 || static_cast<size_t>(n) >= sizeof(h->tmp)) { delete h; return false; }
     if (f_open(&h->f, h->tmp, FA_WRITE | FA_CREATE_ALWAYS) != FR_OK) { delete h; return false; }
     handle = h;
+    ++g_streamsOpen;
     return true;
 }
 
@@ -408,6 +417,7 @@ bool sdCardWriteStreamClose(void* handle, bool commit) {
     const bool ok = commit ? sdCommitTmp(h->tmp, h->full) : true;
     if (!commit) f_unlink(h->tmp);
     delete h;
+    --g_streamsOpen;
     return ok;
 }
 
@@ -415,7 +425,8 @@ bool sdCardWriteStreamClose(void* handle, bool commit) {
 
 bool sdCardMounted() { return false; }
 bool sdMount(const SdPinConfig&) { return false; }
-void sdUnmount() {}
+bool sdCardBusy() { return false; }
+bool sdUnmount() { return true; }
 bool sdFormat() { return false; }
 uint64_t sdCardUsed() { return 0; }
 uint64_t sdCardTotal() { return 0; }

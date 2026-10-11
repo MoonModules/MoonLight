@@ -1,9 +1,9 @@
 {
-  "commit": "17dae99d",
+  "commit": "745339aa",
   "flash": {
     "esp32s3-n16r8": 2336304,
     "esp32": 2226256,
-    "esp32p4rev1-eth": 2328416,
+    "esp32p4rev1-eth": 2328752,
     "esp32p4rev1-eth-wifi": 2358896,
     "esp32s3-n8r8": 2336304,
     "esp32s31": 2595200,
@@ -17,7 +17,7 @@
     "desktop-macos": 2270440,
     "desktop-windows": 1925120,
     "esp32c3": 2335072,
-    "desktop-linux": 2547336
+    "desktop-linux": 2547464
   },
   "measured": {
     "esp32p4rev1-eth": "2026-10-11",
@@ -54,12 +54,6 @@
           "p95": 2744,
           "n": 4,
           "last": "2026-10-04"
-        },
-        "desktop-linux": {
-          "p50": 18,
-          "p95": 18,
-          "n": 1,
-          "last": "2026-10-11"
         }
       },
       "Firmware_reports_what_is_running": {
@@ -126,12 +120,6 @@
           "p95": 2800,
           "n": 3,
           "last": "2026-10-04"
-        },
-        "desktop-linux": {
-          "p50": 7,
-          "p95": 7,
-          "n": 1,
-          "last": "2026-10-11"
         }
       },
       "Aurora_fps": {
@@ -520,12 +508,6 @@
           "p95": 218,
           "n": 1,
           "last": "2026-09-30"
-        },
-        "desktop-linux": {
-          "p50": 7,
-          "p95": 7,
-          "n": 1,
-          "last": "2026-10-11"
         }
       },
       "Effects_pipeline_builds_and_renders": {
@@ -534,12 +516,6 @@
           "p95": 10,
           "n": 32,
           "last": "2026-10-10"
-        },
-        "desktop-linux": {
-          "p50": 8,
-          "p95": 8,
-          "n": 1,
-          "last": "2026-10-11"
         },
         "desktop-windows": {
           "p50": 4,
@@ -572,12 +548,6 @@
           "p95": 287,
           "n": 1,
           "last": "2026-09-30"
-        },
-        "desktop-linux": {
-          "p50": 5,
-          "p95": 5,
-          "n": 1,
-          "last": "2026-10-11"
         }
       },
       "Effects_teardown_under_a_running_pipeline": {
@@ -604,12 +574,6 @@
           "p95": 482,
           "n": 1,
           "last": "2026-09-30"
-        },
-        "desktop-linux": {
-          "p50": 10,
-          "p95": 10,
-          "n": 1,
-          "last": "2026-10-11"
         }
       },
       "Layers_stack_and_blend_live": {
@@ -618,12 +582,6 @@
           "p95": 355,
           "n": 32,
           "last": "2026-10-10"
-        },
-        "desktop-linux": {
-          "p50": 519,
-          "p95": 519,
-          "n": 1,
-          "last": "2026-10-11"
         }
       },
       "Layouts_resize_reallocates_live": {
@@ -650,12 +608,6 @@
           "p95": 579,
           "n": 1,
           "last": "2026-09-30"
-        },
-        "desktop-linux": {
-          "p50": 22,
-          "p95": 22,
-          "n": 1,
-          "last": "2026-10-11"
         }
       },
       "Modifiers_reshape_the_mapping": {
@@ -682,12 +634,6 @@
           "p95": 273,
           "n": 1,
           "last": "2026-09-30"
-        },
-        "desktop-linux": {
-          "p50": 11,
-          "p95": 11,
-          "n": 1,
-          "last": "2026-10-11"
         }
       },
       "Palettes_a_script_drives_the_effects": {
@@ -696,12 +642,6 @@
           "p95": 74,
           "n": 32,
           "last": "2026-10-10"
-        },
-        "desktop-linux": {
-          "p50": 9,
-          "p95": 9,
-          "n": 1,
-          "last": "2026-10-11"
         }
       }
     },
@@ -742,52 +682,38 @@
       }
     },
     "desktop-linux": {
-      "tick_us": 8,
-      "fps": 125000,
-      "scenario_p50": {
-        "Effects_pipeline_builds_and_renders": {
-          "p50": 8,
-          "p95": 8,
-          "n": 1,
-          "last": "2026-10-11"
-        },
-        "Layouts_resize_reallocates_live": {
-          "p50": 22,
-          "p95": 22,
-          "n": 1,
-          "last": "2026-10-11"
-        }
-      }
+      "tick_us": 7,
+      "fps": 142857
     }
   },
   "loc": {
-    "core": 28472,
+    "core": 28663,
     "light": 31027,
-    "platform": 18227,
+    "platform": 18760,
     "ui": 12350,
-    "test": 64597,
+    "test": 65084,
     "moondeck": 30600
   },
   "comments": {
     "core": {
-      "lines": 6190,
-      "ratio": 0.241
+      "lines": 6241,
+      "ratio": 0.242
     },
     "light": {
       "lines": 7439,
       "ratio": 0.269
     },
     "platform": {
-      "lines": 3700,
-      "ratio": 0.227
+      "lines": 3776,
+      "ratio": 0.225
     },
     "ui": {
       "lines": 3472,
       "ratio": 0.298
     },
     "test": {
-      "lines": 6968,
-      "ratio": 0.125
+      "lines": 6997,
+      "ratio": 0.124
     },
     "moondeck": {
       "lines": 4906,
@@ -795,20 +721,20 @@
     }
   },
   "tests": {
-    "cases": 2398,
+    "cases": 2417,
     "scenarios": 30
   },
   "docs": {
     "md_files": 150,
-    "md_lines": 32281,
+    "md_lines": 32283,
     "plans_files": 44,
     "backlog_lines": 3319,
     "lessons_lines": 532,
     "claude_md_lines": 283
   },
   "complexity": {
-    "functions": 4470,
-    "over_threshold": 337,
+    "functions": 4475,
+    "over_threshold": 338,
     "worst_ccn": 128
   }
 }

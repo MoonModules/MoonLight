@@ -328,9 +328,11 @@ struct SdPinConfig {
 };
 /// Mount the card under `/sd`, idempotent; false if no card, no slot, or the pins are unset.
 bool sdMount(const SdPinConfig& pins);
-/// Unmount it; safe when nothing is mounted.
-void sdUnmount();
-/// Format and remount; false while unmounted or on a format failure.
+/// True while a read or write stream is open on the card; sdUnmount/sdFormat refuse while this holds, so a caller checks it first to give the specific reason.
+bool sdCardBusy();
+/// Unmount it; false (refused) while a stream is open, true otherwise, including when nothing was mounted.
+bool sdUnmount();
+/// Format and remount; false while unmounted, while a stream is open, or on a format failure.
 bool sdFormat();
 /// Card bytes used, 0 when unmounted; wide because a real card routinely exceeds 4 GiB.
 uint64_t sdCardUsed();

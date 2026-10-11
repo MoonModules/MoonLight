@@ -869,10 +869,18 @@ std::filesystem::path fsRoot_{defaultRoot()};
 
 // No real card on a host, so "/sd" is a subfolder of the same root, gated by this flag the way a missing card gates the real mount: @xref{why-sd-is-a-subfolder-not-a-second-root}.
 bool sdMounted_ = false;
+// Every open /sd read/write stream, counted so sdUnmount/sdFormat can refuse under one; a flash stream through the same fsReadStreamOpen/fsWriteStreamOpen does not count, since unmounting the card has nothing to do with it.
+int sdStreamsOpen_ = 0;
 
 /// Whether `path` (leading slashes already stripped) names the SD mount: "sd" or "sd/...".
 bool isSdApiPath(const char* path) {
     return path[0] == 's' && path[1] == 'd' && (path[2] == '\0' || path[2] == '/');
+}
+
+/// isSdApiPath for a raw API path, leading slashes and all.
+bool pathIsSd(const char* path) {
+    while (*path == '/') path++;
+    return isSdApiPath(path);
 }
 
 // Map an API path onto the root, normalize it, and reject one that escapes; an empty result reads as failure, which callers already handle.
@@ -1054,29 +1062,43 @@ bool fsWriteStream(const char* path, FsWriteSrc src, void* user) {
     return true;
 }
 
+namespace {
+// Tags whether this handle counts toward sdStreamsOpen_, so close() decrements exactly what open() counted.
+struct DesktopReadHandle { FILE* f = nullptr; bool isSd = false; };
+}
+
 bool fsReadStreamOpen(FsReadStream& h, const char* path) {
     FILE* f = std::fopen(toFsPath(path).string().c_str(), "rb");
     if (!f) return false;
-    h.impl = f;
+    auto* rh = new DesktopReadHandle();
+    rh->f = f;
+    rh->isSd = pathIsSd(path);
+    if (rh->isSd) ++sdStreamsOpen_;
+    h.impl = rh;
     return true;
 }
 
 int fsReadStreamRead(FsReadStream& h, char* buf, size_t len) {
-    auto* f = static_cast<FILE*>(h.impl);
-    if (!f) return -1;
-    const size_t n = std::fread(buf, 1, len, f);
-    if (n == 0 && std::ferror(f)) return -1;
+    auto* rh = static_cast<DesktopReadHandle*>(h.impl);
+    if (!rh) return -1;
+    const size_t n = std::fread(buf, 1, len, rh->f);
+    if (n == 0 && std::ferror(rh->f)) return -1;
     return static_cast<int>(n);
 }
 
 void fsReadStreamClose(FsReadStream& h) {
-    if (h.impl) std::fclose(static_cast<FILE*>(h.impl));
+    auto* rh = static_cast<DesktopReadHandle*>(h.impl);
+    if (rh) {
+        std::fclose(rh->f);
+        if (rh->isSd) --sdStreamsOpen_;
+        delete rh;
+    }
     h.impl = nullptr;
 }
 
 namespace {
-// Both paths live alongside the FILE*, so close() can rename without re-deriving them.
-struct DesktopWriteHandle { FILE* f = nullptr; std::filesystem::path target, tmp; };
+// Both paths live alongside the FILE*, so close() can rename without re-deriving them; isSd mirrors DesktopReadHandle's.
+struct DesktopWriteHandle { FILE* f = nullptr; std::filesystem::path target, tmp; bool isSd = false; };
 }
 
 bool fsWriteStreamOpen(FsWriteStream& h, const char* path) {
@@ -1089,6 +1111,8 @@ bool fsWriteStreamOpen(FsWriteStream& h, const char* path) {
     wh->tmp += ".tmp";
     wh->f = openOwnerOnly(wh->tmp.string().c_str());
     if (!wh->f) { delete wh; return false; }
+    wh->isSd = pathIsSd(path);
+    if (wh->isSd) ++sdStreamsOpen_;
     h.impl = wh;
     return true;
 }
@@ -1115,6 +1139,7 @@ bool fsWriteStreamClose(FsWriteStream& h, bool commit) {
     bool ok = true;
     if (commit) { std::filesystem::rename(wh->tmp, wh->target, ec); ok = !ec; }
     if (!commit || !ok) std::filesystem::remove(wh->tmp, ec);
+    if (wh->isSd) --sdStreamsOpen_;
     delete wh;
     h.impl = nullptr;
     return ok;
@@ -1175,10 +1200,18 @@ bool sdMount(const SdPinConfig& pins) {
     return true;
 }
 
-void sdUnmount() { sdMounted_ = false; }
+bool sdCardBusy() { return sdStreamsOpen_ > 0; }
+
+bool sdUnmount() {
+    if (!sdMounted_) return true;
+    if (sdStreamsOpen_ > 0) return false;   // the ESP32 conflict this fiction still models: a stream mid-transfer
+    sdMounted_ = false;
+    return true;
+}
 
 bool sdFormat() {
     if (!sdMounted_) return false;
+    if (sdStreamsOpen_ > 0) return false;
     std::error_code ec;
     std::filesystem::remove_all(fsRoot_ / "sd", ec);
     std::filesystem::create_directories(fsRoot_ / "sd", ec);

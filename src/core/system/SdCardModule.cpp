@@ -41,26 +41,38 @@ bool SdCardModule::affectsPrepare(const char* name) const {
            std::strcmp(name, "pwrPin") == 0;
 }
 
+namespace {
+bool samePins(const platform::SdPinConfig& a, const platform::SdPinConfig& b) {
+    return a.clk == b.clk && a.cmd == b.cmd && a.d0 == b.d0 &&
+           a.d1 == b.d1 && a.d2 == b.d2 && a.d3 == b.d3 && a.pwr == b.pwr;
+}
+}  // namespace
+
 void SdCardModule::prepare() {
+    platform::SdPinConfig pins{};
+    pins.clk = clkPin_;
+    pins.cmd = cmdPin_;
+    pins.d0 = d0Pin_;
+    pins.d1 = d1Pin_;
+    pins.d2 = d2Pin_;
+    pins.d3 = d3Pin_;
+    pins.pwr = pwrPin_;
+    // prepare() runs on any affectsPrepare change anywhere in the tree, so most calls are about some other module entirely; skip the unmount/remount round trip when this instance's own wiring has not actually changed, rather than tearing down a mount (and any stream open on it) for nothing.
+    if (mounted_ && samePins(pins, mountedPins_)) return;
+
     const bool wasMounted = mounted_;
-    // A pin edit lands here too: unmount what an earlier wiring opened before trying the new one.
-    if (mounted_) { platform::sdUnmount(); mounted_ = false; }
+    if (mounted_) {
+        if (!platform::sdUnmount()) { setStatus("busy: transfer in progress", Severity::Warning); return; }
+        mounted_ = false;
+    }
 
     if constexpr (!platform::hasSdCard) {
         setStatus("no SD hardware on this build", Severity::Status);
     } else if (clkPin_ < 0 || cmdPin_ < 0 || d0Pin_ < 0) {
         setStatus("set the SD card pins first", Severity::Warning);
     } else {
-        platform::SdPinConfig pins{};
-        pins.clk = clkPin_;
-        pins.cmd = cmdPin_;
-        pins.d0 = d0Pin_;
-        pins.d1 = d1Pin_;
-        pins.d2 = d2Pin_;
-        pins.d3 = d3Pin_;
-        pins.pwr = pwrPin_;
         mounted_ = platform::sdMount(pins);
-        if (mounted_) { refreshGauge(); clearStatus(); }
+        if (mounted_) { mountedPins_ = pins; refreshGauge(); clearStatus(); }
         else setStatus("mount failed: check the card is inserted and formatted FAT32", Severity::Error);
     }
     // defineControls() ran with the OLD mounted_, so its "mounted_ && totalKiB_ > 0" gate above saw a stale value either way the state just moved; one rebuild picks up or drops the gauge.
@@ -68,13 +80,14 @@ void SdCardModule::prepare() {
 }
 
 void SdCardModule::release() {
-    if (mounted_) { platform::sdUnmount(); mounted_ = false; }
+    if (mounted_ && platform::sdUnmount()) mounted_ = false;
     MoonModule::release();
 }
 
 void SdCardModule::onControlChanged(const char* controlName) {
     if (std::strcmp(controlName, "format") != 0) return;
     if (!mounted_) { setStatus("mount a card before formatting", Severity::Warning); markDirty(); return; }
+    if (platform::sdCardBusy()) { setStatus("busy: transfer in progress", Severity::Warning); markDirty(); return; }
     if (!platform::sdFormat()) { setStatus("format failed", Severity::Error); markDirty(); return; }
     refreshGauge();
     clearStatus();

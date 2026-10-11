@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core/module/MoonModule.h"
+#include "platform/platform.h"   // SdPinConfig
 
 #include <cstdint>
 
@@ -22,7 +23,9 @@ namespace mm {
 /// ## The mount re-attempts on every pin change, like the bus it rides
 ///
 /// `prepare()`, not `setup()`: a pin edit unmounts and remounts on the new wiring, the same live-reconfiguration contract I2cBusModule's sda/scl have.
+/// `prepare()` runs tree-wide on any `affectsPrepare` change, so a stored copy of the mounted pins lets an unrelated one return without touching the card at all.
 /// A missing or unreadable card shows as its own status rather than retried every tick; reinsert and touch a pin field (or reboot) to retry.
+/// An unmount or a format while a stream is open is refused rather than run underneath it: the status reads "busy: transfer in progress" instead.
 ///
 /// ## No panel, no view toggle
 ///
@@ -53,6 +56,7 @@ public:
 
 private:
     bool mounted_ = false;            ///< true once platform::sdMount() has succeeded
+    platform::SdPinConfig mountedPins_{};   ///< the pins mounted_ was last mounted with, so an unrelated prepare() is a no-op
     uint32_t usedKiB_ = 0;             ///< card usage, in KiB: @xref{why-kib-not-the-shared-progress-controls-bytes}
     uint32_t totalKiB_ = 0;            ///< the card's capacity, in KiB, read once on mount
     uint8_t  secondsSinceScan_ = 0;    ///< paces the usage scan
