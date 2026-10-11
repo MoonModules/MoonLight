@@ -93,6 +93,16 @@ static bool sdTranslate(const char* apiPath, char* out, size_t outLen) {
 
 bool sdCardMounted() { return g_mounted; }
 
+// A static scratch sector, not a stack buffer: keeps sdCardPresent's own frame off the 512-byte stack-frame rule, and this runs on one thread only.
+static uint8_t g_presenceProbe[512];
+
+// A 1-sector read, not SEND_STATUS (CMD13): CMD13 panics this chip's SDMMC host on this ESP-IDF build; a block read is the primitive real file access already proves safe.
+bool sdCardPresent() {
+    if (!g_mounted || !g_card) return false;
+    if (g_card->csd.sector_size > sizeof(g_presenceProbe)) return false;   // never true for a real SD/SDHC/SDXC card; refuses rather than overflowing the scratch sector
+    return sdmmc_read_sectors(g_card, g_presenceProbe, 0, 1) == ESP_OK;
+}
+
 bool sdCardBusy() { return g_streamsOpen > 0; }
 
 bool sdCardBootsByDefault() { return hasSdCard; }
@@ -424,6 +434,7 @@ bool sdCardWriteStreamClose(void* handle, bool commit) {
 #else  // !MM_HAS_SDMMC: every symbol below is inert so a board with no SDMMC host still links.
 
 bool sdCardMounted() { return false; }
+bool sdCardPresent() { return false; }
 bool sdMount(const SdPinConfig&) { return false; }
 bool sdCardBusy() { return false; }
 bool sdCardBootsByDefault() { return false; }

@@ -52,6 +52,7 @@ struct Rig {
     ~Rig() noexcept {
         sd.release();
         platform::fsSetRoot("");
+        platform::setTestSdCardPresent(true);
         std::error_code ec;
         std::filesystem::remove_all(root, ec);
     }
@@ -62,6 +63,17 @@ void mountRig(SdCardModule& sd) {
     wireRequiredPins(sd);
     sd.prepare();
     REQUIRE(find(sd, "card (KiB)") != nullptr);
+}
+
+// Writes "hello" to /sd/clip.bin and reopens it for reading, so a test can hold the busy guard open without repeating the round trip.
+platform::FsReadStream openClipForReading() {
+    platform::FsWriteStream w{};
+    REQUIRE(platform::fsWriteStreamOpen(w, "/sd/clip.bin"));
+    REQUIRE(platform::fsWriteStreamWrite(w, "hello", 5));
+    REQUIRE(platform::fsWriteStreamClose(w, true));
+    platform::FsReadStream rs{};
+    REQUIRE(platform::fsReadStreamOpen(rs, "/sd/clip.bin"));
+    return rs;
 }
 
 }  // namespace
@@ -169,13 +181,7 @@ TEST_CASE("format refuses while a download stream is open, and succeeds once it 
     Rig r;
     mountRig(r.sd);
 
-    platform::FsWriteStream w{};
-    REQUIRE(platform::fsWriteStreamOpen(w, "/sd/clip.bin"));
-    REQUIRE(platform::fsWriteStreamWrite(w, "hello", 5));
-    REQUIRE(platform::fsWriteStreamClose(w, true));
-
-    platform::FsReadStream rs{};
-    REQUIRE(platform::fsReadStreamOpen(rs, "/sd/clip.bin"));
+    platform::FsReadStream rs = openClipForReading();
 
     r.sd.onControlChanged("format");   // a download is in flight
     REQUIRE(r.sd.status() != nullptr);
@@ -198,4 +204,51 @@ TEST_CASE("tick1s is a no-op while unmounted, and refreshes the gauge once mount
     REQUIRE(find(r.sd, "card (KiB)") != nullptr);
     for (int i = 0; i < 60; i++) r.sd.tick1s();   // the minute-paced scan fires once
     CHECK(find(r.sd, "card (KiB)") != nullptr);
+}
+
+TEST_CASE("a pulled card is noticed within a second: tick1s auto-unmounts with no pin touch") {
+    Rig r;
+    mountRig(r.sd);
+
+    platform::setTestSdCardPresent(false);   // simulate the card being pulled
+    r.sd.tick1s();
+    CHECK(find(r.sd, "card (KiB)") == nullptr);
+    REQUIRE(r.sd.status() != nullptr);
+    CHECK(std::string(r.sd.status()) == "card removed");
+}
+
+TEST_CASE("a pull mid-transfer waits for the busy guard, same as a manual unmount would") {
+    Rig r;
+    mountRig(r.sd);
+
+    platform::FsReadStream rs = openClipForReading();   // an open stream holds the busy guard
+
+    platform::setTestSdCardPresent(false);
+    r.sd.tick1s();
+    // Refused underneath the open stream: still mounted, no "card removed" status yet.
+    CHECK(find(r.sd, "card (KiB)") != nullptr);
+    CHECK(r.sd.status() == nullptr);
+
+    platform::fsReadStreamClose(rs);
+    r.sd.tick1s();   // the next poll succeeds now that nothing holds the guard
+    CHECK(find(r.sd, "card (KiB)") == nullptr);
+    REQUIRE(r.sd.status() != nullptr);
+    CHECK(std::string(r.sd.status()) == "card removed");
+}
+
+TEST_CASE("a reinserted card is noticed within a few seconds: tick1s auto-remounts with no pin touch") {
+    Rig r;
+    mountRig(r.sd);
+    platform::setTestSdCardPresent(false);
+    r.sd.tick1s();
+    REQUIRE(find(r.sd, "card (KiB)") == nullptr);   // auto-unmounted, as above
+
+    platform::setTestSdCardPresent(true);   // simulate reinsertion
+    for (int i = 0; i < 4; i++) {
+        r.sd.tick1s();
+        CHECK(find(r.sd, "card (KiB)") == nullptr);   // the retry is paced slower than every tick
+    }
+    r.sd.tick1s();   // the 5th tick since going unmounted: the retry interval elapses
+    CHECK(find(r.sd, "card (KiB)") != nullptr);
+    CHECK(r.sd.status() == nullptr);
 }

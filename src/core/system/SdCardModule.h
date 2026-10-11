@@ -24,8 +24,8 @@ namespace mm {
 ///
 /// `prepare()`, not `setup()`: a pin edit unmounts and remounts on the new wiring, the same live-reconfiguration contract I2cBusModule's sda/scl have.
 /// `prepare()` runs tree-wide on any `affectsPrepare` change, so a stored copy of the mounted pins lets an unrelated one return without touching the card at all.
-/// A missing or unreadable card shows as its own status rather than retried every tick; reinsert and touch a pin field (or reboot) to retry.
-/// An unmount or a format while a stream is open is refused rather than run underneath it: the status reads "busy: transfer in progress" instead.
+/// A pull or a reinsert needs no pin touch or reboot. `tick1s()` polls `platform::sdCardPresent()` every second while mounted, and retries `platform::sdMount()` every few seconds while not; either direction is noticed on its own.
+/// An unmount or a format while a stream is open is refused rather than run underneath it: the status reads "busy: transfer in progress" instead. A removal mid-transfer waits for the existing stall timeout to close that stream first, before its own unmount can succeed.
 ///
 /// ## No panel, no view toggle
 ///
@@ -51,7 +51,7 @@ public:
     void release() override;
     /// Run a format when the button is pressed.
     void onControlChanged(const char* controlName) override;
-    /// Refresh the usage gauge, which walks the card on a slow cadence.
+    /// Poll for a pull or a reinsert, and refresh the usage gauge, all on a slow cadence.
     void tick1s() MM_NONBLOCKING override;
 
 private:
@@ -60,6 +60,8 @@ private:
     uint32_t usedKiB_ = 0;             ///< card usage, in KiB: @xref{why-kib-not-the-shared-progress-controls-bytes}
     uint32_t totalKiB_ = 0;            ///< the card's capacity, in KiB, read once on mount
     uint8_t  secondsSinceScan_ = 0;    ///< paces the usage scan
+    uint8_t  secondsSinceRetry_ = 0;   ///< paces the unmounted retry-mount attempt below
+    static constexpr uint8_t kMountRetrySeconds = 5;   ///< slower than the 1s presence poll: a retry drives real GPIO/power sequencing, a probe does not
 
     // Unused by default, so a chip with no card wired claims no GPIO; a board's catalog entry sets the ones it wires.
     int8_t clkPin_ = -1;   ///< SDMMC clock
@@ -72,6 +74,10 @@ private:
 
     /// Refresh the gauge fields from the mounted card's real usage.
     void refreshGauge();
+    /// The pin fields as platform::sdMount expects them; shared by prepare() and pollCard()'s retry path.
+    platform::SdPinConfig pinConfig() const;
+    /// tick1s()'s actual body, named so its one blocking boundary reads as a single, well-understood site, the same shape refreshGauge() already gave the usage scan.
+    void pollCard();
 };
 
 } // namespace mm

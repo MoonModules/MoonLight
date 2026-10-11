@@ -1,9 +1,9 @@
 {
-  "commit": "e863bd71",
+  "commit": "f251d9ad",
   "flash": {
     "esp32s3-n16r8": 2336304,
     "esp32": 2226256,
-    "esp32p4rev1-eth": 2328864,
+    "esp32p4rev1-eth": 2329632,
     "esp32p4rev1-eth-wifi": 2358896,
     "esp32s3-n8r8": 2336304,
     "esp32s31": 2595200,
@@ -17,16 +17,16 @@
     "desktop-macos": 2270440,
     "desktop-windows": 1925120,
     "esp32c3": 2335072,
-    "desktop-linux": 2547792
+    "desktop-linux": 2548104
   },
   "measured": {
-    "esp32p4rev1-eth": "2026-10-11",
+    "esp32p4rev1-eth": "2026-10-12",
     "esp32s31": "2026-10-10",
     "esp32": "2026-10-09",
     "esp32-pico": "2026-09-09",
     "esp32s3-n16r8": "2026-10-10",
     "esp32s3-n8r8": "2026-10-10",
-    "esp32s3-zero": "2026-10-11",
+    "esp32s3-zero": "2026-10-12",
     "esp32-16mb": "2026-09-09",
     "esp32p4rev1-eth-wifi": "2026-09-30",
     "esp32-eth": "2026-09-11",
@@ -34,12 +34,13 @@
     "desktop-macos": "2026-10-10",
     "desktop-windows": "2026-09-30",
     "esp32c3": "2026-10-10",
-    "desktop-linux": "2026-10-11"
+    "desktop-linux": "2026-10-12"
   },
   "perf": {
     "esp32": {
-      "tick_us": 8354,
-      "fps": 119
+      "tick_us": 1720,
+      "fps": 581,
+      "heap_free": 33826899
     },
     "scenario_matrix": {
       "Control_a_palette_preset_changes_only_the_palette": {
@@ -682,21 +683,21 @@
       }
     },
     "desktop-linux": {
-      "tick_us": 5,
-      "fps": 200000
+      "tick_us": 6,
+      "fps": 166666
     }
   },
   "loc": {
-    "core": 28663,
+    "core": 28700,
     "light": 31027,
-    "platform": 18791,
+    "platform": 18812,
     "ui": 12350,
-    "test": 65115,
+    "test": 65168,
     "moondeck": 30600
   },
   "comments": {
     "core": {
-      "lines": 6243,
+      "lines": 6247,
       "ratio": 0.242
     },
     "light": {
@@ -704,7 +705,7 @@
       "ratio": 0.269
     },
     "platform": {
-      "lines": 3782,
+      "lines": 3787,
       "ratio": 0.225
     },
     "ui": {
@@ -712,7 +713,7 @@
       "ratio": 0.298
     },
     "test": {
-      "lines": 6997,
+      "lines": 6999,
       "ratio": 0.124
     },
     "moondeck": {
@@ -721,7 +722,7 @@
     }
   },
   "tests": {
-    "cases": 2419,
+    "cases": 2422,
     "scenarios": 30
   },
   "docs": {
@@ -733,7 +734,7 @@
     "claude_md_lines": 283
   },
   "complexity": {
-    "functions": 4480,
+    "functions": 4486,
     "over_threshold": 339,
     "worst_ccn": 128
   }

@@ -330,6 +330,8 @@ struct SdPinConfig {
 bool sdMount(const SdPinConfig& pins);
 /// True once sdMount succeeds and nothing has unmounted it since. A chip capable of SD is not the same as a card present, so the root listing gates on this, not hasSdCard.
 bool sdCardMounted();
+/// True while the mounted card still answers a status probe; false once it has been pulled, even though sdCardMounted() has not noticed yet. SdCardModule polls this to detect a live removal.
+bool sdCardPresent();
 /// True while a read or write stream is open on the card; sdUnmount/sdFormat refuse while this holds, so a caller checks it first to give the specific reason.
 bool sdCardBusy();
 /// Unmount it; false (refused) while a stream is open, true otherwise, including when nothing was mounted.
@@ -347,6 +349,8 @@ bool sdCardBootsByDefault();
 void setTestSdCardTotal(uint64_t bytes);
 /// Opt SdCardModule's default boot-wiring in or out for one test's scope.
 void setTestSdCardBootsByDefault(bool enabled);
+/// Simulate the card being pulled (false) or reinserted (true); also gates sdMount's own success, the way a real absent card would fail to answer.
+void setTestSdCardPresent(bool present);
 #endif
 
 // Network: ESP32 only, stubs on desktop.

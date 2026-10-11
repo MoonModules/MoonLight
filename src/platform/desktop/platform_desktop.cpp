@@ -871,6 +871,8 @@ std::filesystem::path fsRoot_{defaultRoot()};
 bool sdMounted_ = false;
 // Every open /sd read/write stream, counted so sdUnmount/sdFormat can refuse under one; a flash stream through the same fsReadStreamOpen/fsWriteStreamOpen does not count, since unmounting the card has nothing to do with it.
 int sdStreamsOpen_ = 0;
+// True by default: a host has no real slot to pull a card from, so a test flips this to model one going missing or coming back.
+bool sdCardPresentForTest_ = true;
 
 /// Whether `path` (leading slashes already stripped) names the SD mount: "sd" or "sd/...".
 bool isSdApiPath(const char* path) {
@@ -1193,6 +1195,7 @@ uint64_t sdCardTotalForTest_ = 1024ULL * 1024 * 1024;
 bool sdMount(const SdPinConfig& pins) {
     if (sdMounted_) return true;
     if (pins.clk < 0 || pins.cmd < 0 || pins.d0 < 0) return false;
+    if (!sdCardPresentForTest_) return false;   // the same way a real empty slot fails to answer
     std::error_code ec;
     std::filesystem::create_directories(fsRoot_ / "sd", ec);
     if (ec) return false;
@@ -1201,6 +1204,8 @@ bool sdMount(const SdPinConfig& pins) {
 }
 
 bool sdCardMounted() { return sdMounted_; }
+
+bool sdCardPresent() { return sdMounted_ && sdCardPresentForTest_; }
 
 bool sdCardBusy() { return sdStreamsOpen_ > 0; }
 
@@ -1247,6 +1252,7 @@ bool sdCardBootsByDefault() { return sdCardBootsByDefault_; }
 void setTestSdCardTotal(uint64_t bytes) { sdCardTotalForTest_ = bytes; }
 /// Opt SdCardModule's default boot-wiring in or out for one test's scope.
 void setTestSdCardBootsByDefault(bool enabled) { sdCardBootsByDefault_ = enabled; }
+void setTestSdCardPresent(bool present) { sdCardPresentForTest_ = present; }
 #endif
 
 // Network stubs (desktop has no WiFi/Ethernet hardware)

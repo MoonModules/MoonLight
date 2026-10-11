@@ -59,7 +59,7 @@ The next function worth simplifying is at the top of each file's list.
 
 | File | Findings | Worst |
 |---|---:|---|
-| `src/platform/desktop/platform_desktop.cpp` | 46 | `platform::getMacAddress, line 1423`, large stack frame 5240 |
+| `src/platform/desktop/platform_desktop.cpp` | 46 | `platform::getMacAddress, line 1429`, large stack frame 5240 |
 | `src/core/system/HttpServerModule.cpp` | 45 | `HttpServerModule::handleConnection`, complex function 123 |
 | `src/ui/migrate.js` | 43 | `line 29: 'I2cBusModule'`, module type in the UI 1 |
 | `src/core/system/MqttModule.cpp` | 31 | `MqttModule::routePublish`, complex function 29 |
@@ -307,7 +307,7 @@ The next function worth simplifying is at the top of each file's list.
 | `src/core/system/FileManagerModule.cpp` | 1 | `platform::filesystemUsed in tick1s`, blocking call on the render path 1 |
 | `src/core/system/FilesystemModule.h` | 1 | `FilesystemModule in 25 files`, name spread 25 |
 | `src/core/system/I2cBusModule.h` | 1 | `I2cBusModule::scan`, complex function 18 |
-| `src/core/system/SdCardModule.cpp` | 1 | `SdCardModule::refreshGauge in tick1s`, blocking call on the render path 1 |
+| `src/core/system/SdCardModule.cpp` | 1 | `SdCardModule::pollCard in tick1s`, blocking call on the render path 1 |
 | `src/core/util/Addressing.h` | 1 | `sendAddressed`, complex function 11 |
 | `src/core/util/CaptivePortal.h` | 1 | `captive::dnsReply`, complex function 21 |
 | `src/core/util/ImprovFrame.h` | 1 | `ImprovFrameParser::feed`, complex function 22 |
@@ -349,7 +349,7 @@ The next function worth simplifying is at the top of each file's list.
 | `src/platform/esp32/platform_config.h` | 1 | `lines 241-255, also in src/platform/desktop/platform_config.h:71`, duplicated block 15 |
 | `src/platform/esp32/platform_esp32_i2s.cpp` | 1 | `platform::audioMicInit`, complex function 11 |
 | `src/platform/esp32/platform_esp32_tasks.cpp` | 1 | `platform::taskSnapshot`, complex function 12 |
-| `src/platform/platform.h` | 1 | `platform.h`, large file 1358 |
+| `src/platform/platform.h` | 1 | `platform.h`, large file 1362 |
 | `src/ui/install-picker.js` | 1 | `install-picker.js`, large file 1048 |
 | `src/ui/preview3d.js` | 1 | `preview3d.js`, large file 1431 |
 | `test/js/installer-eth-only.test.mjs` | 1 | `lines 13-23, also in test/js/ui-mooncloud.test.mjs:6`, duplicated block 11 |

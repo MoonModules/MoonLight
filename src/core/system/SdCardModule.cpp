@@ -42,14 +42,7 @@ bool samePins(const platform::SdPinConfig& a, const platform::SdPinConfig& b) {
 }  // namespace
 
 void SdCardModule::prepare() {
-    platform::SdPinConfig pins{};
-    pins.clk = clkPin_;
-    pins.cmd = cmdPin_;
-    pins.d0 = d0Pin_;
-    pins.d1 = d1Pin_;
-    pins.d2 = d2Pin_;
-    pins.d3 = d3Pin_;
-    pins.pwr = pwrPin_;
+    platform::SdPinConfig pins = pinConfig();
     // prepare() runs on any affectsPrepare change anywhere in the tree, so most calls are about some other module entirely; skip the unmount/remount round trip when this instance's own wiring has not actually changed, rather than tearing down a mount (and any stream open on it) for nothing.
     if (mounted_ && samePins(pins, mountedPins_)) return;
 
@@ -87,16 +80,54 @@ void SdCardModule::onControlChanged(const char* controlName) {
 }
 
 void SdCardModule::tick1s() MM_NONBLOCKING {
-    // Once a minute, not once a second: the same reasoning as FileManagerModule's own scan.
-    if (!mounted_) return;
-    if (++secondsSinceScan_ < 60) return;
-    secondsSinceScan_ = 0;
+    pollCard();
+}
+
+void SdCardModule::pollCard() {
+    if (mounted_) {
+        // A cheap status probe, once a second: cheap enough to poll, unlike a full mount. A card pulled mid-transfer leaves its stream to the existing stall-timeout/I/O-failure cleanup, so sdUnmount's busy guard is retried here rather than bypassed.
+        if (!platform::sdCardPresent()) {
+            if (!platform::sdUnmount()) return;
+            mounted_ = false;
+            setStatus("card removed", Severity::Warning);
+            rebuildControls();
+            return;
+        }
+        // Once a minute, not once a second: the same reasoning as FileManagerModule's own scan.
+        if (++secondsSinceScan_ < 60) return;
+        secondsSinceScan_ = 0;
+        refreshGauge();
+        return;
+    }
+
+    // Unmounted with pins set: retry periodically, so a reinsert is noticed without a pin touch or reboot. Slower than the presence poll above, since a retry drives real GPIO/power sequencing rather than a status probe.
+    if (clkPin_ < 0 || cmdPin_ < 0 || d0Pin_ < 0) return;
+    if (++secondsSinceRetry_ < kMountRetrySeconds) return;
+    secondsSinceRetry_ = 0;
+    platform::SdPinConfig pins = pinConfig();
+    if (!platform::sdMount(pins)) return;
+    mounted_ = true;
+    mountedPins_ = pins;
     refreshGauge();
+    clearStatus();
+    rebuildControls();
 }
 
 void SdCardModule::refreshGauge() {
     totalKiB_ = static_cast<uint32_t>(platform::sdCardTotal() / 1024);
     usedKiB_ = static_cast<uint32_t>(platform::sdCardUsed() / 1024);
+}
+
+platform::SdPinConfig SdCardModule::pinConfig() const {
+    platform::SdPinConfig pins{};
+    pins.clk = clkPin_;
+    pins.cmd = cmdPin_;
+    pins.d0 = d0Pin_;
+    pins.d1 = d1Pin_;
+    pins.d2 = d2Pin_;
+    pins.d3 = d3Pin_;
+    pins.pwr = pwrPin_;
+    return pins;
 }
 
 // mkdir/delete/read/write are the File Manager's existing HTTP endpoints, against paths under /sd; this module holds no op state and persists nothing itself.
