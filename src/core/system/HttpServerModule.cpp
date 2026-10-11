@@ -197,7 +197,7 @@ void HttpServerModule::finishSdTransfer(SdTransfer& t, bool closeConn) {
 }
 
 // An upload slot's bounded chunk: socket to card, then the stall guard.
-// Reads into t.buf, the struct's own scratch buffer: a stack-local here ran every 20ms for the whole transfer, and on a multi-minute upload that stacked deeply enough to panic the board.
+// Reads into t.buf, not a stack-local: that put a 4 KB frame on this task's stack every tick, until one coincided with other deep stack use and panicked the board.
 void HttpServerModule::driveSdUpload(SdTransfer& t, uint32_t now) {
     if (t.remaining > 0) {
         const size_t want = t.remaining < sizeof(t.buf) ? t.remaining : sizeof(t.buf);

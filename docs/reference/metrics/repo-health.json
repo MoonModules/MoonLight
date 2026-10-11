@@ -1,9 +1,9 @@
 {
-  "commit": "745339aa",
+  "commit": "b9c3f6b3",
   "flash": {
     "esp32s3-n16r8": 2336304,
     "esp32": 2226256,
-    "esp32p4rev1-eth": 2328752,
+    "esp32p4rev1-eth": 2328800,
     "esp32p4rev1-eth-wifi": 2358896,
     "esp32s3-n8r8": 2336304,
     "esp32s31": 2595200,
@@ -54,6 +54,12 @@
           "p95": 2744,
           "n": 4,
           "last": "2026-10-04"
+        },
+        "desktop-linux": {
+          "p50": 18,
+          "p95": 18,
+          "n": 1,
+          "last": "2026-10-11"
         }
       },
       "Firmware_reports_what_is_running": {
@@ -120,6 +126,12 @@
           "p95": 2800,
           "n": 3,
           "last": "2026-10-04"
+        },
+        "desktop-linux": {
+          "p50": 6,
+          "p95": 6,
+          "n": 1,
+          "last": "2026-10-11"
         }
       },
       "Aurora_fps": {
@@ -508,6 +520,12 @@
           "p95": 218,
           "n": 1,
           "last": "2026-09-30"
+        },
+        "desktop-linux": {
+          "p50": 6,
+          "p95": 6,
+          "n": 1,
+          "last": "2026-10-11"
         }
       },
       "Effects_pipeline_builds_and_renders": {
@@ -516,6 +534,12 @@
           "p95": 10,
           "n": 32,
           "last": "2026-10-10"
+        },
+        "desktop-linux": {
+          "p50": 7,
+          "p95": 7,
+          "n": 1,
+          "last": "2026-10-11"
         },
         "desktop-windows": {
           "p50": 4,
@@ -548,6 +572,12 @@
           "p95": 287,
           "n": 1,
           "last": "2026-09-30"
+        },
+        "desktop-linux": {
+          "p50": 4,
+          "p95": 4,
+          "n": 1,
+          "last": "2026-10-11"
         }
       },
       "Effects_teardown_under_a_running_pipeline": {
@@ -574,6 +604,12 @@
           "p95": 482,
           "n": 1,
           "last": "2026-09-30"
+        },
+        "desktop-linux": {
+          "p50": 12,
+          "p95": 12,
+          "n": 1,
+          "last": "2026-10-11"
         }
       },
       "Layers_stack_and_blend_live": {
@@ -582,6 +618,12 @@
           "p95": 355,
           "n": 32,
           "last": "2026-10-10"
+        },
+        "desktop-linux": {
+          "p50": 623,
+          "p95": 623,
+          "n": 1,
+          "last": "2026-10-11"
         }
       },
       "Layouts_resize_reallocates_live": {
@@ -608,6 +650,12 @@
           "p95": 579,
           "n": 1,
           "last": "2026-09-30"
+        },
+        "desktop-linux": {
+          "p50": 19,
+          "p95": 19,
+          "n": 1,
+          "last": "2026-10-11"
         }
       },
       "Modifiers_reshape_the_mapping": {
@@ -634,6 +682,12 @@
           "p95": 273,
           "n": 1,
           "last": "2026-09-30"
+        },
+        "desktop-linux": {
+          "p50": 10,
+          "p95": 10,
+          "n": 1,
+          "last": "2026-10-11"
         }
       },
       "Palettes_a_script_drives_the_effects": {
@@ -642,6 +696,12 @@
           "p95": 74,
           "n": 32,
           "last": "2026-10-10"
+        },
+        "desktop-linux": {
+          "p50": 8,
+          "p95": 8,
+          "n": 1,
+          "last": "2026-10-11"
         }
       }
     },
@@ -682,14 +742,28 @@
       }
     },
     "desktop-linux": {
-      "tick_us": 7,
-      "fps": 142857
+      "tick_us": 9,
+      "fps": 111111,
+      "scenario_p50": {
+        "Effects_pipeline_builds_and_renders": {
+          "p50": 7,
+          "p95": 7,
+          "n": 1,
+          "last": "2026-10-11"
+        },
+        "Layouts_resize_reallocates_live": {
+          "p50": 19,
+          "p95": 19,
+          "n": 1,
+          "last": "2026-10-11"
+        }
+      }
     }
   },
   "loc": {
     "core": 28663,
     "light": 31027,
-    "platform": 18760,
+    "platform": 18758,
     "ui": 12350,
     "test": 65084,
     "moondeck": 30600
@@ -704,7 +778,7 @@
       "ratio": 0.269
     },
     "platform": {
-      "lines": 3776,
+      "lines": 3777,
       "ratio": 0.225
     },
     "ui": {

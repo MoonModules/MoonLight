@@ -73,6 +73,8 @@ static sdmmc_card_t* g_card = nullptr;
 static bool g_mounted = false;
 static int g_streamsOpen = 0;         // every open read/write stream, counted so unmount/format can refuse under one
 static int8_t g_pwrGpio = -1;         // so unmount powers back down what mount powered up
+// Every call below runs to completion before the next starts, so one shared FIL off the stack serves them all; the kept-open streams further down heap-allocate their own.
+static FIL g_fil;
 #if SOC_SDMMC_IO_POWER_EXTERNAL
 static sd_pwr_ctrl_handle_t g_pwrCtrl = nullptr;
 #endif
@@ -241,11 +243,10 @@ int sdCardRead(const char* apiPath, char* buf, size_t maxLen) {
     if (!g_mounted || !buf || maxLen == 0) return -1;
     char full[128];
     if (!sdTranslate(apiPath, full, sizeof(full))) return -1;
-    FIL f;
-    if (f_open(&f, full, FA_READ) != FR_OK) return -1;
+    if (f_open(&g_fil, full, FA_READ) != FR_OK) return -1;
     UINT br = 0;
-    const FRESULT r = f_read(&f, buf, static_cast<UINT>(maxLen - 1), &br);
-    f_close(&f);
+    const FRESULT r = f_read(&g_fil, buf, static_cast<UINT>(maxLen - 1), &br);
+    f_close(&g_fil);
     if (r != FR_OK) return -1;
     buf[br] = 0;
     return static_cast<int>(br);
@@ -264,12 +265,11 @@ int sdCardReadAt(const char* apiPath, long offset, char* buf, size_t len) {
     if (!g_mounted || !buf) return -1;
     char full[128];
     if (!sdTranslate(apiPath, full, sizeof(full))) return -1;
-    FIL f;
-    if (f_open(&f, full, FA_READ) != FR_OK) return -1;
-    if (f_lseek(&f, static_cast<FSIZE_t>(offset)) != FR_OK) { f_close(&f); return -1; }
+    if (f_open(&g_fil, full, FA_READ) != FR_OK) return -1;
+    if (f_lseek(&g_fil, static_cast<FSIZE_t>(offset)) != FR_OK) { f_close(&g_fil); return -1; }
     UINT br = 0;
-    const FRESULT r = f_read(&f, buf, static_cast<UINT>(len), &br);
-    f_close(&f);
+    const FRESULT r = f_read(&g_fil, buf, static_cast<UINT>(len), &br);
+    f_close(&g_fil);
     if (r != FR_OK) return -1;
     return static_cast<int>(br);
 }
@@ -287,7 +287,7 @@ static void sdMakeParent(const char* apiPath) {
     sdCardMkdir(dir);
 }
 
-// f_rename refuses when the destination already exists (no FatFs equivalent of POSIX's atomic replace), so the old file is unlinked first; the brief gap between that and the rename is the cost of FAT having no better primitive.
+// f_rename refuses an existing destination, unlike POSIX rename; the old file is unlinked first, with the brief gap as FAT's cost for having no atomic replace.
 static bool sdCommitTmp(const char* tmp, const char* full) {
     f_unlink(full);
     if (f_rename(tmp, full) == FR_OK) return true;
@@ -305,11 +305,10 @@ bool sdCardWriteAtomic(const char* apiPath, const char* data, size_t len) {
     int n = std::snprintf(tmp, sizeof(tmp), "%s.tmp", full);
     if (n < 0 || static_cast<size_t>(n) >= sizeof(tmp)) return false;
 
-    FIL f;
-    if (f_open(&f, tmp, FA_WRITE | FA_CREATE_ALWAYS) != FR_OK) return false;
+    if (f_open(&g_fil, tmp, FA_WRITE | FA_CREATE_ALWAYS) != FR_OK) return false;
     UINT bw = 0;
-    const FRESULT wr = f_write(&f, data, static_cast<UINT>(len), &bw);
-    f_close(&f);
+    const FRESULT wr = f_write(&g_fil, data, static_cast<UINT>(len), &bw);
+    f_close(&g_fil);
     if (wr != FR_OK || bw != len) { f_unlink(tmp); return false; }
     return sdCommitTmp(tmp, full);
 }
@@ -323,8 +322,7 @@ bool sdCardWriteStreamCb(const char* apiPath, FsWriteSrc src, void* user) {
     int n = std::snprintf(tmp, sizeof(tmp), "%s.tmp", full);
     if (n < 0 || static_cast<size_t>(n) >= sizeof(tmp)) return false;
 
-    FIL f;
-    if (f_open(&f, tmp, FA_WRITE | FA_CREATE_ALWAYS) != FR_OK) return false;
+    if (f_open(&g_fil, tmp, FA_WRITE | FA_CREATE_ALWAYS) != FR_OK) return false;
     char chunk[1024];
     bool ok = true, abort = false;
     for (;;) {
@@ -332,9 +330,9 @@ bool sdCardWriteStreamCb(const char* apiPath, FsWriteSrc src, void* user) {
         if (abort) { ok = false; break; }
         if (got == 0) break;
         UINT bw = 0;
-        if (f_write(&f, chunk, static_cast<UINT>(got), &bw) != FR_OK || bw != got) { ok = false; break; }
+        if (f_write(&g_fil, chunk, static_cast<UINT>(got), &bw) != FR_OK || bw != got) { ok = false; break; }
     }
-    f_close(&f);
+    f_close(&g_fil);
     if (!ok) { f_unlink(tmp); return false; }
     return sdCommitTmp(tmp, full);
 }
