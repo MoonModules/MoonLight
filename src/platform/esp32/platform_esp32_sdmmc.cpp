@@ -138,7 +138,7 @@ bool sdMount(const SdPinConfig& pins) {
 
 #if SOC_SDMMC_IO_POWER_EXTERNAL
     sd_pwr_ctrl_ldo_config_t ldoCfg = {};
-    ldoCfg.ldo_chan_id = 4;
+    ldoCfg.ldo_chan_id = 4;   // VO4: the P4 TRM's own reference design wires this LDO channel to VDD_IO_5, the SD card's switchable supply.
     const esp_err_t ldoErr = sd_pwr_ctrl_new_on_chip_ldo(&ldoCfg, &g_pwrCtrl);
     if (ldoErr != ESP_OK) {
         ESP_LOGE(SD_TAG, "SD LDO power control failed: %s", esp_err_to_name(ldoErr));
