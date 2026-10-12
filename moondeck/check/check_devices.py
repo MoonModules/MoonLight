@@ -32,6 +32,7 @@ CATALOG = ROOT / "mooninstaller" / "deviceModels.json"
 MODULE_TYPES_CPP = ROOT / "src" / "module_types.cpp"
 MAIN_CPP = ROOT / "src" / "main.cpp"
 ETHERNET_MODULE = ROOT / "src" / "core" / "system" / "EthernetModule.h"
+SD_CARD_MODULE = ROOT / "src" / "core" / "services" / "SdCardService.h"
 PLATFORM_CONFIG = ROOT / "src" / "platform" / "esp32" / "platform_config.h"
 DOCS = ROOT / "docs"
 
@@ -43,7 +44,7 @@ DEVICE_MODEL_MAX = 31
 # Capability vocabulary. supported = what a module drives; keep this list in lockstep with the modules that actually exist.
 # planned = peripherals with no module yet (the backlog seed), open-ended by design, so it is NOT whitelisted, only type-checked.
 # Adding a new supported capability means a module backs it.
-SUPPORTED_VOCAB = {"LEDs", "WiFi", "Ethernet", "Audio", "IR", "MQTT", "Hue", "MIDI", "Buttons", "I2C", "Relay"}
+SUPPORTED_VOCAB = {"LEDs", "WiFi", "Ethernet", "Audio", "IR", "MQTT", "Hue", "MIDI", "Buttons", "I2C", "Relay", "SD card"}
 
 # Flash bauds a board may pin via `flashBaud`: the standard esptool rates. The default
 # differs by audience: the CLI / MoonDeck path defaults FAST (921600: DIY bench, modern
@@ -54,17 +55,17 @@ SUPPORTED_VOCAB = {"LEDs", "WiFi", "Ethernet", "Audio", "IR", "MQTT", "Hue", "MI
 FLASH_BAUDS = {115200, 230400, 460800, 921600}
 
 
-def eth_preset_labels():
-    """The Ethernet preset labels from EthernetModule.h's kEthPresets table.
+def preset_labels(header, table):
+    """The preset labels of a module header's board-preset table, such as EthernetModule.h's kEthPresets.
 
     Read from the firmware rather than restated here, so a preset renamed in one place and not the
     other fails this check instead of silently leaving a catalog entry pointing at nothing.
     """
-    text = ETHERNET_MODULE.read_text(encoding="utf-8")
-    table = re.search(r"kEthPresets\[\]\s*=\s*\{(.*?)\n    \};", text, re.S)
-    if not table:
+    text = header.read_text(encoding="utf-8")
+    block = re.search(table + r"\[\]\s*=\s*\{(.*?)\n    \};", text, re.S)
+    if not block:
         return set()
-    return set(re.findall(r'^\s*\{"([^"]+)"', table.group(1), re.M))
+    return set(re.findall(r'^\s*\{"([^"]+)"', block.group(1), re.M))
 
 
 def eth_preset_drift():
@@ -137,13 +138,16 @@ def top_level_names():
 
 def main():
     errors = []
-    eth_presets = eth_preset_labels()
+    eth_presets = preset_labels(ETHERNET_MODULE, "kEthPresets")
+    sd_presets = preset_labels(SD_CARD_MODULE, "kSdPresets")
     for label, field, was, now in eth_preset_drift():
         errors.append(f"EthernetModule.h kEthPresets {label!r}: {field} is {now}, but "
                       f"platform_config.h's ethConfigDefault says {was}: the preset restates the "
                       f"chip default, so the two must agree or a provisioned board reseeds to Custom")
     if not eth_presets:
         errors.append("EthernetModule.h: could not read the kEthPresets table, so the ethBoard check cannot run")
+    if not sd_presets:
+        errors.append("SdCardService.h: could not read the kSdPresets table, so the SD board check cannot run")
 
     try:
         catalog = json.loads(CATALOG.read_text(encoding="utf-8"))
@@ -343,6 +347,13 @@ def main():
             # inheriting the default would drive an LED pin as an Ethernet reset.) Only the pins that
             # are genuine BOARD WIRING are required: MDC/MDIO may stay at the IDF default (omit or
             # -1) on RMII, since that's a real standard, not a board-specific value.
+            # The same rule for the SD slot's wiring, whose map lives in SdCardService.h.
+            if mtype == "SdCardService" and "board" in controls:
+                board = controls["board"]
+                if not isinstance(board, str):
+                    errors.append(f"{where}: SdCardService board must be the preset LABEL as a string, got {board!r}")
+                elif board not in sd_presets:
+                    errors.append(f"{where}: SdCardService board {board!r} is not a preset in SdCardService.h (known: {sorted(sd_presets)})")
             if mtype == "EthernetModule":
                 # PRESENCE, not truthiness: a JSON `null` reads as None like a missing key, and the
                 # installer treats a present-but-null value as a named preset (null !== "Custom").

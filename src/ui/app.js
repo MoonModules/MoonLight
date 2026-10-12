@@ -7596,9 +7596,11 @@ function fmMakeDropTarget(el, destDir, hidden, rerender, st) {
         if (destDir !== "/") st.expanded.add(destDir);   // reveal where they landed
         rerender();
         if (skipped.length) {
-            // Report what wasn't uploaded (over the size cap or a write error) rather than dropping
-            // it silently. The limit is derived from FM_UPLOAD_CAP so the text never drifts from it.
-            alert(`Not uploaded (over ${fmSize(FM_UPLOAD_CAP)} or failed):\n` + skipped.join("\n"));
+            // Report what wasn't uploaded rather than dropping it silently; the card has no size cap
+            // of its own (only its free space, which a failed upload's own message already names), so
+            // naming FM_UPLOAD_CAP here would be wrong for an /sd drop and right for everything else.
+            const capNote = fmIsSdPath(destDir) ? "" : ` (over ${fmSize(FM_UPLOAD_CAP)} or failed)`;
+            alert(`Not uploaded${capNote}:\n` + skipped.join("\n"));
         }
     });
 }
@@ -7754,21 +7756,62 @@ function fmShowRestoreReport(entries, refresh, offerRestart) {
 }
 
 
+// True for destDir "/sd" or anything under it: the card has no upload cap of its own (only its free
+// space, which the server's 507 already enforces), so the flash-sized FM_UPLOAD_CAP below skips it.
+function fmIsSdPath(destDir) {
+    return destDir === "/sd" || destDir.startsWith("/sd/");
+}
+
+// A small floating panel, not a modal: a multi-minute /sd upload must not trap the rest of the UI
+// behind a backdrop the way showUpdateOverlay's firmware-flash overlay does. One row per file in
+// flight; a row closes when that file finishes, and the panel removes itself once every row has.
+function fmUploadPanel() {
+    let panel = document.getElementById("fm-upload-panel");
+    if (!panel) {
+        panel = document.createElement("div");
+        panel.id = "fm-upload-panel";
+        panel.className = "fm-upload-panel";
+        document.body.appendChild(panel);
+    }
+    return panel;
+}
+
+// One row in the panel: a label plus the same <progress> element uploadWithProgress already drives.
+function fmUploadPanelRow(panel, name) {
+    const row = document.createElement("div");
+    row.className = "fm-upload-panel-row";
+    const label = document.createElement("span");
+    label.className = "fm-upload-panel-label";
+    label.textContent = name;
+    const bar = document.createElement("progress");
+    row.append(label, bar);
+    panel.appendChild(row);
+    return {
+        bar,
+        done() { row.remove(); if (!panel.children.length) panel.remove(); },
+    };
+}
+
 // Upload each dropped file into destDir via /api/file. Returns the names skipped (too big / failed)
-// so the caller can report them. The File blob is sent as the body directly: the browser streams
-// its raw bytes (binary-safe), matching the device's streamed, byte-exact write.
+// so the caller can report them. XMLHttpRequest (uploadWithProgress), not fetch: only xhr.upload's
+// progress event reports how far a multi-minute /sd transfer has got, and its own error event names
+// a dropped connection instead of the generic "NetworkError" fetch throws for the same failure.
 async function fmDropUpload(destDir, files) {
     const skipped = [];
+    const onSd = fmIsSdPath(destDir);
     for (const file of files) {
-        if (file.size > FM_UPLOAD_CAP) { skipped.push(file.name + " (" + fmSize(file.size) + ")"); continue; }
+        if (!onSd && file.size > FM_UPLOAD_CAP) { skipped.push(file.name + " (" + fmSize(file.size) + ")"); continue; }
+        // Per file: the previous file's last row removed an emptied panel.
+        const row = fmUploadPanelRow(fmUploadPanel(), file.name);
+        const route = "/api/file?path=" + encodeURIComponent(joinFsPath(destDir, file.name));
         try {
-            const res = await fetch("/api/file?path=" + encodeURIComponent(joinFsPath(destDir, file.name)), {
-                method: "POST", headers: { "Content-Type": "application/octet-stream" }, body: file,
+            await uploadWithProgress(route, file, {
+                progress(read, total) { if (total > 0) { row.bar.max = total; row.bar.value = read; } },
             });
-            if (!res.ok) throw new Error(await errorMessage(res));   // surfaces "not enough space (N free)" etc.
         } catch (err) {
             skipped.push(file.name + " (" + err.message + ")");
         }
+        row.done();
     }
     return skipped;
 }

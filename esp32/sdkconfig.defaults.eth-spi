@@ -16,3 +16,6 @@
 # pulled in esp32/main/idf_component.yml and gated to the S3). Setting the removed
 # CONFIG_ETH_SPI_ETHERNET_W5500 here only produced an "unknown kconfig symbol" warning.
 CONFIG_ETH_USE_SPI_ETHERNET=y
+
+# The W5500 keeps the SPI master's interrupt in IRAM, as it shipped.
+CONFIG_SPI_MASTER_ISR_IN_IRAM=y

@@ -1,51 +1,54 @@
 {
-  "commit": "48ab0058",
+  "commit": "ef125474",
   "flash": {
-    "esp32s3-n16r8": 2336304,
-    "esp32": 2226256,
-    "esp32p4rev1-eth": 2177776,
-    "esp32p4rev1-eth-wifi": 2358896,
+    "esp32s3-n16r8": 2431936,
+    "esp32": 2353056,
+    "esp32p4rev1-eth": 2364160,
+    "esp32p4rev1-eth-wifi": 2523840,
     "esp32s3-n8r8": 2336304,
-    "esp32s31": 2595200,
-    "esp32-16mb": 2060368,
+    "esp32s31": 2694736,
+    "esp32-16mb": 2353248,
     "esp32-eth": 1681040,
     "esp32-wrover": 1843760,
     "qemu": 1383648,
-    "esp32p4rev3-eth": 2203712,
-    "esp32s3-zero": 2219120,
+    "esp32p4rev3-eth": 2231792,
+    "esp32s3-zero": 2225360,
     "esp32-pico": 2107168,
-    "desktop-macos": 2270440,
+    "desktop-macos": 2293080,
     "desktop-windows": 1925120,
-    "esp32c3": 2335072
+    "esp32c3": 2335072,
+    "desktop-linux": 2548000
   },
   "measured": {
-    "esp32p4rev1-eth": "2026-10-07",
-    "esp32s31": "2026-10-10",
-    "esp32": "2026-10-09",
+    "esp32p4rev1-eth": "2026-10-13",
+    "esp32s31": "2026-10-13",
+    "esp32": "2026-10-13",
     "esp32-pico": "2026-09-09",
-    "esp32s3-n16r8": "2026-10-10",
+    "esp32s3-n16r8": "2026-10-13",
     "esp32s3-n8r8": "2026-10-10",
-    "esp32s3-zero": "2026-10-10",
-    "esp32-16mb": "2026-09-09",
-    "esp32p4rev1-eth-wifi": "2026-09-30",
+    "esp32s3-zero": "2026-10-12",
+    "esp32-16mb": "2026-10-13",
+    "esp32p4rev1-eth-wifi": "2026-10-13",
     "esp32-eth": "2026-09-11",
-    "esp32p4rev3-eth": "2026-10-08",
-    "desktop-macos": "2026-10-10",
+    "esp32p4rev3-eth": "2026-10-13",
+    "desktop-macos": "2026-10-13",
     "desktop-windows": "2026-09-30",
-    "esp32c3": "2026-10-10"
+    "esp32c3": "2026-10-10",
+    "desktop-linux": "2026-10-12"
   },
   "perf": {
     "esp32": {
-      "tick_us": 8354,
-      "fps": 119
+      "tick_us": 1716,
+      "fps": 582,
+      "heap_free": 33826927
     },
     "scenario_matrix": {
       "Control_a_palette_preset_changes_only_the_palette": {
         "desktop-macos": {
-          "p50": 7,
+          "p50": 8,
           "p95": 324,
-          "n": 30,
-          "last": "2026-10-10"
+          "n": 31,
+          "last": "2026-10-12"
         },
         "esp32s3-n16r8": {
           "p50": 2073,
@@ -110,8 +113,8 @@
         "desktop-macos": {
           "p50": 4,
           "p95": 387,
-          "n": 29,
-          "last": "2026-10-10"
+          "n": 30,
+          "last": "2026-10-12"
         },
         "esp32s3-n16r8": {
           "p50": 2505,
@@ -487,7 +490,7 @@
           "p50": 7,
           "p95": 15,
           "n": 32,
-          "last": "2026-10-10"
+          "last": "2026-10-12"
         },
         "desktop-windows": {
           "p50": 4,
@@ -513,7 +516,7 @@
           "p50": 7,
           "p95": 10,
           "n": 32,
-          "last": "2026-10-10"
+          "last": "2026-10-12"
         },
         "desktop-windows": {
           "p50": 4,
@@ -527,7 +530,7 @@
           "p50": 1,
           "p95": 2,
           "n": 32,
-          "last": "2026-10-10"
+          "last": "2026-10-12"
         },
         "desktop-windows": {
           "p50": 4,
@@ -553,7 +556,7 @@
           "p50": 7,
           "p95": 18,
           "n": 32,
-          "last": "2026-10-10"
+          "last": "2026-10-12"
         },
         "esp32s3-n16r8": {
           "p50": 9080,
@@ -579,7 +582,7 @@
           "p50": 267,
           "p95": 355,
           "n": 32,
-          "last": "2026-10-10"
+          "last": "2026-10-12"
         }
       },
       "Layouts_resize_reallocates_live": {
@@ -587,7 +590,7 @@
           "p50": 10,
           "p95": 19,
           "n": 32,
-          "last": "2026-10-10"
+          "last": "2026-10-13"
         },
         "desktop-windows": {
           "p50": 93,
@@ -613,7 +616,7 @@
           "p50": 7,
           "p95": 11,
           "n": 32,
-          "last": "2026-10-10"
+          "last": "2026-10-13"
         },
         "esp32s3-n16r8": {
           "p50": 10350,
@@ -639,7 +642,7 @@
           "p50": 7,
           "p95": 74,
           "n": 32,
-          "last": "2026-10-10"
+          "last": "2026-10-13"
         }
       }
     },
@@ -651,13 +654,13 @@
           "p50": 7,
           "p95": 10,
           "n": 32,
-          "last": "2026-10-10"
+          "last": "2026-10-12"
         },
         "Layouts_resize_reallocates_live": {
           "p50": 10,
           "p95": 19,
           "n": 32,
-          "last": "2026-10-10"
+          "last": "2026-10-13"
         }
       }
     },
@@ -678,57 +681,61 @@
           "last": "2026-09-30"
         }
       }
+    },
+    "desktop-linux": {
+      "tick_us": 5,
+      "fps": 200000
     }
   },
   "loc": {
-    "core": 28271,
+    "core": 28880,
     "light": 31027,
-    "platform": 17930,
-    "ui": 12307,
-    "test": 64597,
-    "moondeck": 30600
+    "platform": 18938,
+    "ui": 12350,
+    "test": 65504,
+    "moondeck": 30611
   },
   "comments": {
     "core": {
-      "lines": 6165,
-      "ratio": 0.242
+      "lines": 6273,
+      "ratio": 0.241
     },
     "light": {
       "lines": 7439,
       "ratio": 0.269
     },
     "platform": {
-      "lines": 3659,
-      "ratio": 0.228
+      "lines": 3819,
+      "ratio": 0.225
     },
     "ui": {
-      "lines": 3464,
+      "lines": 3472,
       "ratio": 0.298
     },
     "test": {
-      "lines": 6968,
-      "ratio": 0.125
+      "lines": 7020,
+      "ratio": 0.124
     },
     "moondeck": {
-      "lines": 4906,
+      "lines": 4907,
       "ratio": 0.183
     }
   },
   "tests": {
-    "cases": 2398,
+    "cases": 2438,
     "scenarios": 30
   },
   "docs": {
     "md_files": 150,
-    "md_lines": 32271,
+    "md_lines": 32355,
     "plans_files": 44,
-    "backlog_lines": 3319,
+    "backlog_lines": 3344,
     "lessons_lines": 532,
     "claude_md_lines": 283
   },
   "complexity": {
-    "functions": 4389,
-    "over_threshold": 331,
+    "functions": 4515,
+    "over_threshold": 340,
     "worst_ccn": 128
   }
 }

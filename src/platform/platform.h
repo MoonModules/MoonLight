@@ -28,6 +28,10 @@
 /// ## Internal RAM for what an interrupt reads
 ///
 /// A PSRAM-resident encode source measured about 595 microseconds per slice refill against a 151 microsecond drain budget. So a buffer an interrupt reads per byte comes from `allocInternal` rather than the PSRAM-first `alloc`.
+///
+/// ## Why a second write primitive
+///
+/// `fsWriteStream` pulls a whole upload to completion in one call, which is fine for a config file but not for a card-sized one shared with a render loop. `fsWriteStreamOpen`/`Write`/`Close` let a caller hand over one bounded chunk per tick instead, resuming where the last call left off.
 
 // Format checking, where the compiler offers it: one toolchain parses the attribute as an unknown specifier and fails the whole class downstream.
 #if defined(__GNUC__) || defined(__clang__)
@@ -277,20 +281,116 @@ bool fsExists(const char* path);
 bool fsRemove(const char* path);                             // file or empty dir
 /// Read a whole file; bytes read, or -1 on error, null-terminated on success.
 int  fsRead(const char* path, char* buf, size_t maxLen);
-/// A file's size in bytes, or -1 when it is missing or not a file.
-long fsSize(const char* path);
-/// Read up to `len` bytes at `offset`; bytes read, 0 at the end, -1 on error.
-int  fsReadAt(const char* path, long offset, char* buf, size_t len);
+/// A file's size in bytes, or -1 when missing; wide since a real card file can pass 2 GiB, more than a 32-bit long holds signed.
+int64_t fsSize(const char* path);
 /// Write a whole file atomically, through a temporary and a rename, creating its parent folder.
 bool fsWriteAtomic(const char* path, const char* data, size_t len);
 /// Fill up to `cap` bytes and answer the count; 0 ends the stream.
 using FsWriteSrc = size_t(*)(char* buf, size_t cap, void* user, bool* abort);
-/// Write a file atomically from `src`, pulling it in chunks and creating its parent folder; false on abort or a write failure.
-bool fsWriteStream(const char* path, FsWriteSrc src, void* user);
 /// Called once per child of a listed directory; a directory reports size 0.
 using FsListCb = void(*)(const char* name, bool isDir, uint32_t sizeBytes, void* user);
 /// List one level of `dir`, calling `cb` per child.
 void fsList(const char* dir, FsListCb cb, void* user);
+
+/// A read kept open across chunks, so a multi-megabyte download neither reopens nor reseeks per chunk.
+struct FsReadStream { void* impl = nullptr; };
+/// Open `path` for streamed reads; false when it does not exist or is a directory.
+bool fsReadStreamOpen(FsReadStream& h, const char* path);
+/// Pull up to `len` bytes from where the last read left off; 0 at EOF, -1 on error.
+int fsReadStreamRead(FsReadStream& h, char* buf, size_t len);
+/// Close the handle; safe on one that failed to open.
+void fsReadStreamClose(FsReadStream& h);
+
+/// A write kept open across chunks, so a caller can hand it bytes one bounded slice per tick rather than all at once. @xref{why-a-second-write-primitive}
+struct FsWriteStream { void* impl = nullptr; };
+/// Open a temporary file beside `path`, creating its parent folder; false on failure.
+bool fsWriteStreamOpen(FsWriteStream& h, const char* path);
+/// Append one chunk; false on a write failure, which the caller closes without committing.
+bool fsWriteStreamWrite(FsWriteStream& h, const char* buf, size_t len);
+/// `commit`: fsync and rename the temporary onto `path`. Otherwise: discard it. Either way the handle is spent.
+bool fsWriteStreamClose(FsWriteStream& h, bool commit);
+
+/// Write a file atomically from `src`, pulling it in chunks and creating its parent folder; false on abort or a write failure. One core loop over the resumable primitives above, so platform code implements only those, not this pull shape too.
+inline bool fsWriteStream(const char* path, FsWriteSrc src, void* user) {
+    if (!src) return false;
+    FsWriteStream h{};
+    if (!fsWriteStreamOpen(h, path)) return false;
+    char chunk[1024];
+    bool ok = true, abort = false;
+    for (;;) {
+        const size_t got = src(chunk, sizeof(chunk), user, &abort);
+        if (abort) { ok = false; break; }
+        if (got == 0) break;                                    // clean end of stream
+        if (!fsWriteStreamWrite(h, chunk, got)) { ok = false; break; }
+    }
+    const bool committed = fsWriteStreamClose(h, ok);
+    return ok && committed;
+}
+
+// A second, independent mount (microSD, FAT) sharing the fsXxx surface above through its own `/sd` path prefix; inert wherever hasSdCard is false.
+
+// Never where hasSdCard is false, so a flash folder named `sd` stays an ordinary folder there.
+/// Whether `path` is rooted at the SD mount: "sd", "/sd", "sd/foo" or "/sd/foo" (a leading slash is optional).
+inline bool isSdPath(const char* path) {
+    if constexpr (!hasSdCard) return false;
+    if (!path) return false;
+    if (*path == '/') path++;
+    return path[0] == 's' && path[1] == 'd' && (path[2] == '\0' || path[2] == '/');
+}
+
+/// The bus a slot is wired for: the native SD bus, or the SD spec's SPI mode.
+enum class SdBus : uint8_t { Sdmmc, Spi };
+/// A board's slot wiring, read at mount time rather than compiled in; -1 leaves a line unused. SPI mode reuses the SD spec's own pin mapping: CLK is SCK, CMD is MOSI, D0 is MISO and D3 is CS.
+struct SdPinConfig {
+    int8_t clk = -1;   ///< clock
+    int8_t cmd = -1;   ///< command line, MOSI in SPI mode
+    int8_t d0  = -1;   ///< data line 0, required, MISO in SPI mode
+    int8_t d1  = -1;   ///< unset alongside d2/d3 drops the SD bus to 1-bit mode
+    int8_t d2  = -1;   ///< data line 2
+    int8_t d3  = -1;   ///< data line 3, CS in SPI mode
+    int8_t pwr = -1;   ///< a slot's card-power switch, or -1 where the slot has none
+    SdBus bus = SdBus::Sdmmc;   ///< which bus the lines above form
+};
+/// Mount the card under `/sd`, idempotent; false if no card, no slot, or the pins are unset, with the reason in sdMountError().
+bool sdMount(const SdPinConfig& pins);
+/// Why a mount fails: a pin that cannot drive the slot, no card answering, a card whose sectors do not read, or a card without a FAT filesystem.
+enum class SdMountError : uint8_t { None, Pins, NoCard, Unreadable, NoFilesystem };
+/// The reason the last sdMount() failed, None after a success.
+SdMountError sdMountError();
+/// True once sdMount succeeds and nothing has unmounted it since. A chip capable of SD is not the same as a card present, so the root listing gates on this, not hasSdCard.
+bool sdCardMounted();
+/// True while the mounted card still answers a status probe; false once it has been pulled, even though sdCardMounted() has not noticed yet. SdCardService polls this to detect a live removal.
+bool sdCardPresent();
+/// True while a stream is open on the card or a format runs; sdUnmount and sdFormat refuse meanwhile, so a caller checks it first for the specific reason.
+bool sdCardBusy();
+/// Unmount it; false (refused) while a stream is open or a format runs, true otherwise, including when nothing was mounted.
+bool sdUnmount();
+/// Start formatting the mounted card, or one the last mount found without a FAT filesystem, in the background; false when there is nothing to format or the card is busy.
+bool sdFormat();
+/// Where the last sdFormat() stands; the card is unmounted while it runs and mounted again once it succeeds.
+enum class SdFormatState : uint8_t { Idle, Running, Succeeded, Failed };
+/// The state of the last sdFormat(), Idle before the first.
+SdFormatState sdFormatState();
+/// Card bytes used, 0 when unmounted; wide because a real card routinely exceeds 4 GiB.
+uint64_t sdCardUsed();
+/// Card bytes total, 0 when unmounted.
+uint64_t sdCardTotal();
+/// Whether SdCardService boots by default via kBootModules: matches hasSdCard on ESP32, off by default on desktop, so a plain desktop run carries no SD clutter unless a test opts in.
+bool sdCardBootsByDefault();
+#ifndef ESP_PLATFORM   // a host-test seam, which no ESP32 code calls
+/// Shrink the host's fictional card, so a test reaches the "not enough space" path without writing a real gigabyte.
+void setTestSdCardTotal(uint64_t bytes);
+/// Opt SdCardService's default boot-wiring in or out for one test's scope.
+void setTestSdCardBootsByDefault(bool enabled);
+/// Simulate the card being pulled (false) or reinserted (true); also gates sdMount's own success, the way a real absent card would fail to answer.
+void setTestSdCardPresent(bool present);
+/// Simulate a card that answers but holds no FAT filesystem (false), which only a format makes mountable.
+void setTestSdCardHasFilesystem(bool hasFilesystem);
+/// Simulate a card that answers but whose sectors do not read (false), which no format helps.
+void setTestSdCardReadable(bool readable);
+/// Hold a started format Running (true), the way a large card's format outlasts many ticks; false completes it.
+void setTestSdFormatHeld(bool held);
+#endif
 
 // Network: ESP32 only, stubs on desktop.
 /// Override the per-chip default pin and PHY map with a board's own, before ethInit.

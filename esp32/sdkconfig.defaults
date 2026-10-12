@@ -110,3 +110,6 @@ CONFIG_PARLIO_RX_ISR_CACHE_SAFE=y
 # MALLOC_CAP_DEFAULT and stay PSRAM-eligible, which the same ISR dereferences the moment our
 # callback returns. An IRAM handler reading a PSRAM queue is the same fault one frame later.
 CONFIG_PARLIO_OBJ_CACHE_SAFE=y
+
+# The SPI master's interrupt in flash, not IRAM: no SPI user here needs it while the flash cache is off, and IRAM is the classic's scarcest memory.
+CONFIG_SPI_MASTER_ISR_IN_IRAM=n

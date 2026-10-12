@@ -79,6 +79,20 @@ TEST_CASE("A file written into a folder that does not exist yet creates the fold
     CHECK(platform::fsExists("/fresh/b/two.txt"));
 }
 
+// Point 9 of the review: a 32-bit signed long overflows past 2 GiB-1, so a large real file used to report a negative fsSize and read as missing.
+TEST_CASE("fsSize reports a file past 2 GiB correctly, not as negative") {
+    Rig r;
+    const std::string path = std::string(r.root) + "/big.bin";
+    FILE* f = std::fopen(path.c_str(), "w");
+    REQUIRE(f != nullptr);
+    std::fclose(f);
+    constexpr int64_t kPast2GiB = 3000000000LL;   // > INT32_MAX, well under FAT32's 4 GiB-1 ceiling
+    std::error_code ec;
+    std::filesystem::resize_file(path, static_cast<std::uintmax_t>(kPast2GiB), ec);   // sparse: instant, no real write
+    REQUIRE_FALSE(ec);
+    CHECK(platform::fsSize("/big.bin") == kPast2GiB);
+}
+
 TEST_CASE("FileManager: mkdir creates a dir at the target path; delete removes it") {
     Rig r;
     CHECK(mkdirOp("/newdir"));
@@ -145,7 +159,7 @@ TEST_CASE("HttpServer::parseFilePath rejects traversal, empty, missing, and over
     CHECK_FALSE(HttpServerModule::parseFilePath("path=/this/is/way/too/long", small, sizeof(small)));
 }
 
-// The /api/file upload streams to fsWriteStream (any size, binary-safe) and downloads via fsReadAt (positional, chunked); these pin those seam primitives.
+// The /api/file upload streams to fsWriteStream (any size, binary-safe) and downloads via FsReadStream (kept open across chunks); these pin those seam primitives.
 
 // A multi-chunk source (larger than the src callback's cap) with a NUL writes in full and reads back byte-for-byte, the streamed-upload contract.
 namespace {
@@ -169,14 +183,19 @@ TEST_CASE("FileManager: fsWriteStream writes a multi-chunk NUL-containing payloa
     payload[2999] = 'Z';
     SpanSrc src{payload.data(), payload.size()};
     REQUIRE(platform::fsWriteStream("/blob.bin", &spanPull, &src));
-    CHECK(platform::fsSize("/blob.bin") == static_cast<long>(payload.size()));
+    CHECK(platform::fsSize("/blob.bin") == static_cast<int64_t>(payload.size()));
 
-    // Read it back positionally across a chunk boundary, the streamed-download contract.
+    // Read it back across a chunk boundary via the kept-open stream, the streamed-download contract.
+    platform::FsReadStream rs{};
+    REQUIRE(platform::fsReadStreamOpen(rs, "/blob.bin"));
+    char skip[1480] = {};
+    REQUIRE(platform::fsReadStreamRead(rs, skip, sizeof(skip)) == static_cast<int>(sizeof(skip)));
     char win[64] = {};
-    const int got = platform::fsReadAt("/blob.bin", 1480, win, 40);   // straddles the NUL at 1500
+    const int got = platform::fsReadStreamRead(rs, win, 40);   // straddles the NUL at 1500
     CHECK(got == 40);
     CHECK(win[20] == '\0');                                           // the planted NUL, offset 1500
     CHECK(std::memcmp(win, payload.data() + 1480, 40) == 0);
+    platform::fsReadStreamClose(rs);
 }
 
 // A source that reports a short read (mid-stream failure) still commits atomically, here a clean end just yields the bytes delivered; there's no partial/torn file (temp → rename).
@@ -248,6 +267,14 @@ TEST_CASE("removeTree refuses a tree deeper than its bound") {
 
     CHECK_FALSE(mm::FilesystemModule::removeTree("/deep"));
     CHECK(r.onDisk("/deep"));                         // still there, not partly gone
+}
+
+// DELETE /api/dir?path=/ reaches removeTree("/") unless this refuses it: without the guard, every child is gone before the final fsRemove("/") itself fails on a real mount.
+TEST_CASE("removeTree refuses to wipe the flash root") {
+    Rig r;
+    CHECK_FALSE(mm::FilesystemModule::removeTree("/"));
+    CHECK(r.onDisk("/readme.txt"));              // nothing touched, not even one level in
+    CHECK(r.onDisk("/.config/Drivers.json"));
 }
 
 // A single file, which is the case that returns on the first fsRemove without ever listing.

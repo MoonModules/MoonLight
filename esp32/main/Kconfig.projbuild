@@ -46,4 +46,11 @@ menu "MoonLight"
             MIDI service with no computer. Set by the S3 images with flash to spare
             (n8r8, n16r8); the 4 MB S3-Zero leaves it off.
 
+    config MM_SD_CARD
+        bool "microSD card support (SDMMC or SPI)"
+        default y
+        help
+            Compiles the FatFs SD card backend, on every chip with an SD host and
+            more than 4 MB of flash: the 4 MB layout's fragment sets it off.
+
 endmenu
