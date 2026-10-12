@@ -1,5 +1,5 @@
 {
-  "commit": "137dc3ad",
+  "commit": "577d09d2",
   "flash": {
     "esp32s3-n16r8": 2336304,
     "esp32": 2226256,
@@ -683,14 +683,14 @@
       }
     },
     "desktop-linux": {
-      "tick_us": 5,
-      "fps": 200000
+      "tick_us": 6,
+      "fps": 166666
     }
   },
   "loc": {
     "core": 28727,
     "light": 31027,
-    "platform": 18684,
+    "platform": 18685,
     "ui": 12350,
     "test": 65274,
     "moondeck": 30600
@@ -705,7 +705,7 @@
       "ratio": 0.269
     },
     "platform": {
-      "lines": 3780,
+      "lines": 3781,
       "ratio": 0.226
     },
     "ui": {

@@ -204,6 +204,7 @@ uint64_t sdCardUsed() {
     if (!g_mounted) return 0;
     FATFS* fs = nullptr;
     DWORD freeClusters = 0;
+    // Fast with a valid FSINFO sector, a full FAT scan otherwise; both callers run on the render thread, a deliberate tradeoff.
     if (f_getfree(SD_DRIVE, &freeClusters, &fs) != FR_OK || !fs) return 0;
     const uint64_t totalSectors = (static_cast<uint64_t>(fs->n_fatent) - 2) * fs->csize;
     const uint64_t freeSectors = static_cast<uint64_t>(freeClusters) * fs->csize;
