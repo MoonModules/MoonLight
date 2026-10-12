@@ -154,15 +154,17 @@ TEST_CASE("an SD upload larger than one tick's chunk streams across several tick
 
     CHECK(mm::platform::fsSize("/sd/big.bin") == static_cast<long>(payload.size()));
     std::vector<char> back(payload.size());
+    mm::platform::FsReadStream rs{};
+    REQUIRE(mm::platform::fsReadStreamOpen(rs, "/sd/big.bin"));
     char chunk[2048];
     size_t got = 0;
     while (got < back.size()) {
-        const int n = mm::platform::fsReadAt("/sd/big.bin", static_cast<long>(got), chunk,
-                                             std::min(sizeof(chunk), back.size() - got));
+        const int n = mm::platform::fsReadStreamRead(rs, chunk, std::min(sizeof(chunk), back.size() - got));
         REQUIRE(n > 0);
         std::memcpy(back.data() + got, chunk, static_cast<size_t>(n));
         got += static_cast<size_t>(n);
     }
+    mm::platform::fsReadStreamClose(rs);
     CHECK(std::memcmp(back.data(), payload.data(), payload.size()) == 0);
 
     client.close();

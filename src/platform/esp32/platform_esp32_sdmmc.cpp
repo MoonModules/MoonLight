@@ -273,19 +273,6 @@ long sdCardSize(const char* apiPath) {
     return static_cast<long>(fno.fsize);
 }
 
-int sdCardReadAt(const char* apiPath, long offset, char* buf, size_t len) {
-    if (!g_mounted || !buf) return -1;
-    char full[128];
-    if (!sdTranslate(apiPath, full, sizeof(full))) return -1;
-    if (f_open(&g_fil, full, FA_READ) != FR_OK) return -1;
-    if (f_lseek(&g_fil, static_cast<FSIZE_t>(offset)) != FR_OK) { f_close(&g_fil); return -1; }
-    UINT br = 0;
-    const FRESULT r = f_read(&g_fil, buf, static_cast<UINT>(len), &br);
-    f_close(&g_fil);
-    if (r != FR_OK) return -1;
-    return static_cast<int>(br);
-}
-
 /// The folder a write lands in, made first, as the write's contract promises.
 static void sdMakeParent(const char* apiPath) {
     if (!apiPath) return;
@@ -322,30 +309,6 @@ bool sdCardWriteAtomic(const char* apiPath, const char* data, size_t len) {
     const FRESULT wr = f_write(&g_fil, data, static_cast<UINT>(len), &bw);
     f_close(&g_fil);
     if (wr != FR_OK || bw != len) { f_unlink(tmp); return false; }
-    return sdCommitTmp(tmp, full);
-}
-
-bool sdCardWriteStreamCb(const char* apiPath, FsWriteSrc src, void* user) {
-    if (!g_mounted || !src) return false;
-    sdMakeParent(apiPath);
-    char full[128];
-    char tmp[136];
-    if (!sdTranslate(apiPath, full, sizeof(full))) return false;
-    int n = std::snprintf(tmp, sizeof(tmp), "%s.tmp", full);
-    if (n < 0 || static_cast<size_t>(n) >= sizeof(tmp)) return false;
-
-    if (f_open(&g_fil, tmp, FA_WRITE | FA_CREATE_ALWAYS) != FR_OK) return false;
-    char chunk[1024];
-    bool ok = true, abort = false;
-    for (;;) {
-        const size_t got = src(chunk, sizeof(chunk), user, &abort);
-        if (abort) { ok = false; break; }
-        if (got == 0) break;
-        UINT bw = 0;
-        if (f_write(&g_fil, chunk, static_cast<UINT>(got), &bw) != FR_OK || bw != got) { ok = false; break; }
-    }
-    f_close(&g_fil);
-    if (!ok) { f_unlink(tmp); return false; }
     return sdCommitTmp(tmp, full);
 }
 
@@ -447,9 +410,7 @@ bool sdCardExists(const char*) { return false; }
 bool sdCardRemove(const char*) { return false; }
 int  sdCardRead(const char*, char*, size_t) { return -1; }
 long sdCardSize(const char*) { return -1; }
-int  sdCardReadAt(const char*, long, char*, size_t) { return -1; }
 bool sdCardWriteAtomic(const char*, const char*, size_t) { return false; }
-bool sdCardWriteStreamCb(const char*, FsWriteSrc, void*) { return false; }
 void sdCardList(const char*, FsListCb, void*) {}
 bool sdCardReadStreamOpen(void*&, const char*) { return false; }
 int  sdCardReadStreamRead(void*, char*, size_t) { return -1; }

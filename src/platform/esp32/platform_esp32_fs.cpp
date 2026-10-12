@@ -199,19 +199,6 @@ bool fsWriteAtomic(const char* path, const char* data, size_t len) {
     return true;
 }
 
-int fsReadAt(const char* path, long offset, char* buf, size_t len) {
-    if constexpr (hasSdCard) { if (isSdApiPath(path)) return sdCardReadAt(path, offset, buf, len); }
-    if (!fsMounted_ || !buf) return -1;
-    char full[128];
-    if (!fsTranslate(path, full, sizeof(full))) return -1;
-    FILE* f = std::fopen(full, "rb");
-    if (!f) return -1;
-    if (std::fseek(f, offset, SEEK_SET) != 0) { std::fclose(f); return -1; }
-    const size_t n = std::fread(buf, 1, len, f);
-    std::fclose(f);
-    return static_cast<int>(n);   // 0 at EOF
-}
-
 long fsSize(const char* path) {
     if constexpr (hasSdCard) { if (isSdApiPath(path)) return sdCardSize(path); }
     if (!fsMounted_) return -1;
@@ -220,35 +207,6 @@ long fsSize(const char* path) {
     struct stat st;
     if (::stat(full, &st) != 0 || S_ISDIR(st.st_mode)) return -1;
     return static_cast<long>(st.st_size);
-}
-
-bool fsWriteStream(const char* path, FsWriteSrc src, void* user) {
-    if constexpr (hasSdCard) { if (isSdApiPath(path)) return sdCardWriteStreamCb(path, src, user); }
-    if (!fsMounted_ || !src) return false;
-    makeParent(path);
-    char full[128];
-    char tmp[136];
-    if (!fsTranslate(path, full, sizeof(full))) return false;
-    int n = std::snprintf(tmp, sizeof(tmp), "%s.tmp", full);
-    if (n < 0 || static_cast<size_t>(n) >= sizeof(tmp)) return false;
-
-    FILE* f = std::fopen(tmp, "wb");
-    if (!f) return false;
-    // Chunks straight through, so any file size fits a fixed buffer; an aborted source discards.
-    char chunk[1024];
-    bool ok = true, abort = false;
-    for (;;) {
-        const size_t got = src(chunk, sizeof(chunk), user, &abort);
-        if (abort) { ok = false; break; }
-        if (got == 0) break;                                    // clean end of stream
-        if (std::fwrite(chunk, 1, got, f) != got) { ok = false; break; }
-    }
-    std::fflush(f);
-    int fd = ::fileno(f);
-    if (fd >= 0) ::fsync(fd);
-    std::fclose(f);
-    if (!ok || ::rename(tmp, full) != 0) { ::remove(tmp); return false; }
-    return true;
 }
 
 void fsList(const char* dir, FsListCb cb, void* user) {

@@ -1019,51 +1019,6 @@ long fsSize(const char* path) {
     return ec ? -1 : static_cast<long>(sz);
 }
 
-int fsReadAt(const char* path, long offset, char* buf, size_t len) {
-    if (!buf) return -1;
-    FILE* f = std::fopen(toFsPath(path).string().c_str(), "rb");
-    if (!f) return -1;
-    if (std::fseek(f, offset, SEEK_SET) != 0) { std::fclose(f); return -1; }
-    const size_t n = std::fread(buf, 1, len, f);
-    std::fclose(f);
-    return static_cast<int>(n);   // 0 at EOF
-}
-
-bool fsWriteStream(const char* path, FsWriteSrc src, void* user) {
-    if (!src) return false;
-    auto target = toFsPath(path);
-    makeParent(target);
-    auto tmp = target;
-    tmp += ".tmp";
-
-    FILE* f = openOwnerOnly(tmp.string().c_str());
-    if (!f) return false;
-    // Pull chunks from the source and write each straight through, fixed buffer, any file size. `abort` set by the source (a short/timed-out upload) means the data is incomplete → discard.
-    char chunk[1024];
-    bool ok = true, abort = false;
-    for (;;) {
-        const size_t got = src(chunk, sizeof(chunk), user, &abort);
-        if (abort) { ok = false; break; }
-        if (got == 0) break;                                    // clean end of stream
-        if (std::fwrite(chunk, 1, got, f) != got) { ok = false; break; }
-    }
-    std::fflush(f);
-#ifdef _WIN32
-    int fd = ::_fileno(f);
-    if (fd >= 0) ::_commit(fd);
-#else
-    int fd = ::fileno(f);
-    if (fd >= 0) ::fsync(fd);
-#endif
-    std::fclose(f);
-
-    std::error_code ec;
-    if (!ok) { std::filesystem::remove(tmp, ec); return false; }
-    std::filesystem::rename(tmp, target, ec);
-    if (ec) { std::filesystem::remove(tmp, ec); return false; }
-    return true;
-}
-
 namespace {
 // Tags whether this handle counts toward sdStreamsOpen_, so close() decrements exactly what open() counted.
 struct DesktopReadHandle { FILE* f = nullptr; bool isSd = false; };

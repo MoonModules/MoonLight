@@ -145,7 +145,7 @@ TEST_CASE("HttpServer::parseFilePath rejects traversal, empty, missing, and over
     CHECK_FALSE(HttpServerModule::parseFilePath("path=/this/is/way/too/long", small, sizeof(small)));
 }
 
-// The /api/file upload streams to fsWriteStream (any size, binary-safe) and downloads via fsReadAt (positional, chunked); these pin those seam primitives.
+// The /api/file upload streams to fsWriteStream (any size, binary-safe) and downloads via FsReadStream (kept open across chunks); these pin those seam primitives.
 
 // A multi-chunk source (larger than the src callback's cap) with a NUL writes in full and reads back byte-for-byte, the streamed-upload contract.
 namespace {
@@ -171,12 +171,17 @@ TEST_CASE("FileManager: fsWriteStream writes a multi-chunk NUL-containing payloa
     REQUIRE(platform::fsWriteStream("/blob.bin", &spanPull, &src));
     CHECK(platform::fsSize("/blob.bin") == static_cast<long>(payload.size()));
 
-    // Read it back positionally across a chunk boundary, the streamed-download contract.
+    // Read it back across a chunk boundary via the kept-open stream, the streamed-download contract.
+    platform::FsReadStream rs{};
+    REQUIRE(platform::fsReadStreamOpen(rs, "/blob.bin"));
+    char skip[1480] = {};
+    REQUIRE(platform::fsReadStreamRead(rs, skip, sizeof(skip)) == static_cast<int>(sizeof(skip)));
     char win[64] = {};
-    const int got = platform::fsReadAt("/blob.bin", 1480, win, 40);   // straddles the NUL at 1500
+    const int got = platform::fsReadStreamRead(rs, win, 40);   // straddles the NUL at 1500
     CHECK(got == 40);
     CHECK(win[20] == '\0');                                           // the planted NUL, offset 1500
     CHECK(std::memcmp(win, payload.data() + 1480, 40) == 0);
+    platform::fsReadStreamClose(rs);
 }
 
 // A source that reports a short read (mid-stream failure) still commits atomically, here a clean end just yields the bytes delivered; there's no partial/torn file (temp → rename).

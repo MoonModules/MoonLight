@@ -19,12 +19,8 @@ bool sdCardRemove(const char* apiPath);
 int  sdCardRead(const char* apiPath, char* buf, size_t maxLen);
 /// A card file's size in bytes, or -1 when it is missing or not a file.
 long sdCardSize(const char* apiPath);
-/// Read up to `len` bytes at `offset` on the card; bytes read, 0 at the end, -1 on error.
-int  sdCardReadAt(const char* apiPath, long offset, char* buf, size_t len);
 /// Write a whole file atomically onto the card, through a temporary and a rename.
 bool sdCardWriteAtomic(const char* apiPath, const char* data, size_t len);
-/// Write a card file atomically, pulling `src` in chunks until it signals done or abort.
-bool sdCardWriteStreamCb(const char* apiPath, FsWriteSrc src, void* user);
 /// List one level of a card directory, calling `cb` per child.
 void sdCardList(const char* apiDir, FsListCb cb, void* user);
 

@@ -283,14 +283,10 @@ bool fsRemove(const char* path);                             // file or empty di
 int  fsRead(const char* path, char* buf, size_t maxLen);
 /// A file's size in bytes, or -1 when it is missing or not a file.
 long fsSize(const char* path);
-/// Read up to `len` bytes at `offset`; bytes read, 0 at the end, -1 on error.
-int  fsReadAt(const char* path, long offset, char* buf, size_t len);
 /// Write a whole file atomically, through a temporary and a rename, creating its parent folder.
 bool fsWriteAtomic(const char* path, const char* data, size_t len);
 /// Fill up to `cap` bytes and answer the count; 0 ends the stream.
 using FsWriteSrc = size_t(*)(char* buf, size_t cap, void* user, bool* abort);
-/// Write a file atomically from `src`, pulling it in chunks and creating its parent folder; false on abort or a write failure.
-bool fsWriteStream(const char* path, FsWriteSrc src, void* user);
 /// Called once per child of a listed directory; a directory reports size 0.
 using FsListCb = void(*)(const char* name, bool isDir, uint32_t sizeBytes, void* user);
 /// List one level of `dir`, calling `cb` per child.
@@ -313,6 +309,23 @@ bool fsWriteStreamOpen(FsWriteStream& h, const char* path);
 bool fsWriteStreamWrite(FsWriteStream& h, const char* buf, size_t len);
 /// `commit`: fsync and rename the temporary onto `path`. Otherwise: discard it. Either way the handle is spent.
 bool fsWriteStreamClose(FsWriteStream& h, bool commit);
+
+/// Write a file atomically from `src`, pulling it in chunks and creating its parent folder; false on abort or a write failure. One core loop over the resumable primitives above, so platform code implements only those, not this pull shape too.
+inline bool fsWriteStream(const char* path, FsWriteSrc src, void* user) {
+    if (!src) return false;
+    FsWriteStream h{};
+    if (!fsWriteStreamOpen(h, path)) return false;
+    char chunk[1024];
+    bool ok = true, abort = false;
+    for (;;) {
+        const size_t got = src(chunk, sizeof(chunk), user, &abort);
+        if (abort) { ok = false; break; }
+        if (got == 0) break;                                    // clean end of stream
+        if (!fsWriteStreamWrite(h, chunk, got)) { ok = false; break; }
+    }
+    const bool committed = fsWriteStreamClose(h, ok);
+    return ok && committed;
+}
 
 // A second, independent mount (microSD, FAT) sharing the fsXxx surface above through its own `/sd` path prefix; inert wherever hasSdCard is false.
 
