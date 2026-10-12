@@ -19,6 +19,12 @@
 
 #include <cstring>
 #include <cstdio>
+#include <filesystem>
+#include <fstream>
+#include <set>
+#include <sstream>
+#include <string>
+#include <utility>
 #include <vector>
 #include <thread>
 
@@ -43,6 +49,48 @@ std::vector<Coord3D> place(const char* script) {
         },
         nullptr, &out};
     l.placeLights(sink);
+    return out;
+}
+
+/// The library script at `name`, read from the repo rather than a copy, so a change to the shipped file is a change to this test.
+std::string librarySource(const char* name) {
+    std::filesystem::path p = std::filesystem::path(__FILE__).parent_path();   // test/unit/light
+    p = p.parent_path().parent_path().parent_path() / "moonlive" / "layouts" / name;
+    std::ifstream f(p);
+    std::ostringstream ss;
+    ss << f.rdbuf();
+    return ss.str();
+}
+
+// The wiring arrives as the JSON a device would apply, since the script declares its own controls and a test cannot name them as C++ fields.
+/// The shipped backlight layout run at one wiring, collecting what it places.
+std::vector<Coord3D> placeBacklight(const char* wiring) {
+    const std::string src = librarySource("backlight.mll");
+    REQUIRE_FALSE(src.empty());
+
+    MoonLiveLayout l;
+    l.defineControls();
+    l.setScript(mmWriteScript(src.c_str()));
+    l.prepare();
+    auto& cs = l.controls();
+    for (uint8_t i = 0; i < cs.count(); i++)
+        if (cs[i].name) applyControlValue(cs[i], wiring, cs[i].name, ApplyPolicy::Clamp);
+    l.prepare();   // the controls size the walk, so the layout is rebuilt against them
+
+    std::vector<Coord3D> out;
+    CoordSink sink{
+        [](void* ctx, nrOfLightsType, lengthType x, lengthType y, lengthType z) {
+            static_cast<std::vector<Coord3D>*>(ctx)->push_back({x, y, z});
+        },
+        nullptr, &out};
+    l.placeLights(sink);
+    return out;
+}
+
+/// The distinct cells a walk visits, for the shape-is-invariant checks below.
+std::set<std::pair<int, int>> cellsOf(const std::vector<Coord3D>& p) {
+    std::set<std::pair<int, int>> out;
+    for (const auto& c : p) out.insert({c.x, c.y});
     return out;
 }
 }  // namespace
@@ -930,6 +978,77 @@ TEST_CASE("the loader accepts any role extension, and nothing else") {
     l.setScript("notascript.txt");
     l.prepare();
     CHECK(std::string(l.status()).find("must end in") != std::string::npos);
+}
+
+
+// --- The shipped backlight layout ------------------------------------------------------------
+// The one script whose controls choose an ORDER rather than a shape, so the coordinates stay identical however the strand is wired. Checked against the shipped file.
+
+TEST_CASE("backlight.mll: the perimeter is 2(across-1) + 2(down-1), each corner once") {
+    const auto p = placeBacklight("{\"wallCols\":60,\"wallRows\":34,\"across\":60,\"down\":34}");
+    CHECK(p.size() == 184);   // 2*59 + 2*33, what a 60x34 strip with shared corners carries
+
+    const auto cells = cellsOf(p);
+    CHECK(cells.size() == p.size());   // no cell twice, so no corner counted by both its sides
+    // On the edges and filling the box: a light off the perimeter would light the wall's middle.
+    for (const auto& c : p) {
+        CHECK(c.z == 0);
+        CHECK((c.x == 0 || c.x == 59 || c.y == 0 || c.y == 33));
+    }
+    CHECK(cells.count({0, 0}) == 1);
+    CHECK(cells.count({59, 0}) == 1);
+    CHECK(cells.count({59, 33}) == 1);
+    CHECK(cells.count({0, 33}) == 1);
+}
+
+TEST_CASE("backlight.mll: the eight wirings emit one set of coordinates in different orders") {
+    const auto reference = placeBacklight("{\"wallCols\":60,\"wallRows\":34,\"across\":60,\"down\":34}");
+    const auto want = cellsOf(reference);
+
+    int reordered = 0;
+    for (int corner = 0; corner < 4; corner++) {
+        for (int cw = 0; cw < 2; cw++) {
+            char wiring[160];
+            std::snprintf(wiring, sizeof(wiring),
+                          "{\"wallCols\":60,\"wallRows\":34,\"across\":60,\"down\":34,"
+                          "\"startCorner\":%d,\"clockwise\":%d}", corner, cw);
+            const auto p = placeBacklight(wiring);
+            REQUIRE(p.size() == reference.size());
+            CHECK(cellsOf(p) == want);          // the shape never moves
+            if (p != reference) reordered++;    // only the order does
+        }
+    }
+    // Seven, not eight: the reference is itself one of the wirings, so it matches itself.
+    CHECK(reordered == 7);
+}
+
+TEST_CASE("backlight.mll: offset slides the strand around the perimeter without reshaping it") {
+    const auto at0 = placeBacklight("{\"wallCols\":60,\"wallRows\":34,\"across\":60,\"down\":34}");
+    const auto at2 = placeBacklight("{\"wallCols\":60,\"wallRows\":34,\"across\":60,\"down\":34,\"offset\":2}");
+    REQUIRE(at0.size() == at2.size());
+    CHECK(cellsOf(at0) == cellsOf(at2));
+
+    // A ROTATION by two: light i of the offset walk is light i+2 of the plain one.
+    for (size_t i = 0; i < at0.size(); i++) {
+        const auto& expect = at0[(i + 2) % at0.size()];
+        CHECK(at2[i].x == expect.x);
+        CHECK(at2[i].y == expect.y);
+    }
+}
+
+// A strand with fewer lights than the edge has pixels gets them spread along it, so one script serves a 30-light strip on a 128-pixel wall. The corners still land on the box.
+TEST_CASE("backlight.mll: a strand coarser than the wall still spans its edges") {
+    const auto p = placeBacklight("{\"wallCols\":128,\"wallRows\":128,\"across\":30,\"down\":20}");
+    CHECK(p.size() == 2 * 29 + 2 * 19);
+
+    int maxX = 0, maxY = 0;
+    for (const auto& c : p) {
+        maxX = c.x > maxX ? c.x : maxX;
+        maxY = c.y > maxY ? c.y : maxY;
+    }
+    // The bounding box stays the wall's, so the strip sits on its edge pixels rather than inside them.
+    CHECK(maxX == 127);
+    CHECK(maxY == 127);
 }
 
 #endif  // MM_MOONLIVE_HAS_HOST_JIT: the script must COMPILE for the count to mean anything.
