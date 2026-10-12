@@ -264,13 +264,13 @@ int sdCardRead(const char* apiPath, char* buf, size_t maxLen) {
     return static_cast<int>(br);
 }
 
-long sdCardSize(const char* apiPath) {
+int64_t sdCardSize(const char* apiPath) {
     if (!g_mounted) return -1;
     char full[128];
     if (!sdTranslate(apiPath, full, sizeof(full))) return -1;
     FILINFO fno;
     if (f_stat(full, &fno) != FR_OK || (fno.fattrib & AM_DIR)) return -1;
-    return static_cast<long>(fno.fsize);
+    return static_cast<int64_t>(fno.fsize);
 }
 
 /// The folder a write lands in, made first, as the write's contract promises.
@@ -409,7 +409,7 @@ bool sdCardMkdir(const char*) { return false; }
 bool sdCardExists(const char*) { return false; }
 bool sdCardRemove(const char*) { return false; }
 int  sdCardRead(const char*, char*, size_t) { return -1; }
-long sdCardSize(const char*) { return -1; }
+int64_t sdCardSize(const char*) { return -1; }
 bool sdCardWriteAtomic(const char*, const char*, size_t) { return false; }
 void sdCardList(const char*, FsListCb, void*) {}
 bool sdCardReadStreamOpen(void*&, const char*) { return false; }

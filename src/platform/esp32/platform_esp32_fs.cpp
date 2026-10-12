@@ -199,14 +199,14 @@ bool fsWriteAtomic(const char* path, const char* data, size_t len) {
     return true;
 }
 
-long fsSize(const char* path) {
+int64_t fsSize(const char* path) {
     if constexpr (hasSdCard) { if (isSdApiPath(path)) return sdCardSize(path); }
     if (!fsMounted_) return -1;
     char full[128];
     if (!fsTranslate(path, full, sizeof(full))) return -1;
     struct stat st;
     if (::stat(full, &st) != 0 || S_ISDIR(st.st_mode)) return -1;
-    return static_cast<long>(st.st_size);
+    return static_cast<int64_t>(st.st_size);
 }
 
 void fsList(const char* dir, FsListCb cb, void* user) {

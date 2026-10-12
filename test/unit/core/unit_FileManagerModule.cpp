@@ -79,6 +79,20 @@ TEST_CASE("A file written into a folder that does not exist yet creates the fold
     CHECK(platform::fsExists("/fresh/b/two.txt"));
 }
 
+// Point 9 of the review: a 32-bit signed long overflows past 2 GiB-1, so a large real file used to report a negative fsSize and read as missing.
+TEST_CASE("fsSize reports a file past 2 GiB correctly, not as negative") {
+    Rig r;
+    const std::string path = std::string(r.root) + "/big.bin";
+    FILE* f = std::fopen(path.c_str(), "w");
+    REQUIRE(f != nullptr);
+    std::fclose(f);
+    constexpr int64_t kPast2GiB = 3000000000LL;   // > INT32_MAX, well under FAT32's 4 GiB-1 ceiling
+    std::error_code ec;
+    std::filesystem::resize_file(path, static_cast<std::uintmax_t>(kPast2GiB), ec);   // sparse: instant, no real write
+    REQUIRE_FALSE(ec);
+    CHECK(platform::fsSize("/big.bin") == kPast2GiB);
+}
+
 TEST_CASE("FileManager: mkdir creates a dir at the target path; delete removes it") {
     Rig r;
     CHECK(mkdirOp("/newdir"));
@@ -169,7 +183,7 @@ TEST_CASE("FileManager: fsWriteStream writes a multi-chunk NUL-containing payloa
     payload[2999] = 'Z';
     SpanSrc src{payload.data(), payload.size()};
     REQUIRE(platform::fsWriteStream("/blob.bin", &spanPull, &src));
-    CHECK(platform::fsSize("/blob.bin") == static_cast<long>(payload.size()));
+    CHECK(platform::fsSize("/blob.bin") == static_cast<int64_t>(payload.size()));
 
     // Read it back across a chunk boundary via the kept-open stream, the streamed-download contract.
     platform::FsReadStream rs{};

@@ -281,8 +281,8 @@ bool fsExists(const char* path);
 bool fsRemove(const char* path);                             // file or empty dir
 /// Read a whole file; bytes read, or -1 on error, null-terminated on success.
 int  fsRead(const char* path, char* buf, size_t maxLen);
-/// A file's size in bytes, or -1 when it is missing or not a file.
-long fsSize(const char* path);
+/// A file's size in bytes, or -1 when missing; wide since a real card file can pass 2 GiB, more than a 32-bit long holds signed.
+int64_t fsSize(const char* path);
 /// Write a whole file atomically, through a temporary and a rename, creating its parent folder.
 bool fsWriteAtomic(const char* path, const char* data, size_t len);
 /// Fill up to `cap` bytes and answer the count; 0 ends the stream.

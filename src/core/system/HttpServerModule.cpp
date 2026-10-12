@@ -767,12 +767,12 @@ void HttpServerModule::streamFsFile(platform::TcpConnection& conn, const char* p
         sendResponse(conn, 403, "application/json", "{\"error\":\"config files are not served through the access point\"}");
         return;
     }
-    const long size = platform::fsSize(path);
+    const int64_t size = platform::fsSize(path);
     if (size < 0) { sendResponse(conn, 404, "application/json", "{\"error\":\"not found\"}"); return; }
     char header[224];
     const int hn = std::snprintf(header, sizeof(header),
-        "HTTP/1.1 200 OK\r\nContent-Type: %s\r\nContent-Length: %ld\r\n%s"
-        "Connection: close\r\nAccess-Control-Allow-Origin: *\r\n\r\n", mime, size, extraHeaders);
+        "HTTP/1.1 200 OK\r\nContent-Type: %s\r\nContent-Length: %lld\r\n%s"
+        "Connection: close\r\nAccess-Control-Allow-Origin: *\r\n\r\n", mime, static_cast<long long>(size), extraHeaders);
 
     // An /sd download hands off to the chunked driver, one bounded slice per tick. Claimed and opened before the header, so a busy slot or a failed open answers 503/500, not a 200 with no body.
     if (isSdPath(path)) {

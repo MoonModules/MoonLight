@@ -1,9 +1,9 @@
 {
-  "commit": "0f1e9e90",
+  "commit": "66569ad5",
   "flash": {
     "esp32s3-n16r8": 2336304,
     "esp32": 2226256,
-    "esp32p4rev1-eth": 2329296,
+    "esp32p4rev1-eth": 2329424,
     "esp32p4rev1-eth-wifi": 2358896,
     "esp32s3-n8r8": 2336304,
     "esp32s31": 2595200,
@@ -38,9 +38,9 @@
   },
   "perf": {
     "esp32": {
-      "tick_us": 1716,
-      "fps": 582,
-      "heap_free": 33827003
+      "tick_us": 1714,
+      "fps": 583,
+      "heap_free": 33826947
     },
     "scenario_matrix": {
       "Control_a_palette_preset_changes_only_the_palette": {
@@ -683,8 +683,8 @@
       }
     },
     "desktop-linux": {
-      "tick_us": 5,
-      "fps": 200000
+      "tick_us": 6,
+      "fps": 166666
     }
   },
   "loc": {
@@ -692,7 +692,7 @@
     "light": 31027,
     "platform": 18695,
     "ui": 12350,
-    "test": 65260,
+    "test": 65274,
     "moondeck": 30600
   },
   "comments": {
@@ -713,7 +713,7 @@
       "ratio": 0.298
     },
     "test": {
-      "lines": 7005,
+      "lines": 7006,
       "ratio": 0.124
     },
     "moondeck": {
@@ -722,7 +722,7 @@
     }
   },
   "tests": {
-    "cases": 2426,
+    "cases": 2427,
     "scenarios": 30
   },
   "docs": {

@@ -199,10 +199,10 @@ void FilesystemModule::loadAll(Scheduler* s) {
 
 // No fixed ceiling, so a large saved config loads in full, mirroring the streaming save (saveSubtree).
 char* FilesystemModule::readWholeFile(const char* path) {
-    const long size = platform::fsSize(path);
+    const int64_t size = platform::fsSize(path);
     if (size <= 0) return nullptr;
     char* buf = static_cast<char*>(platform::alloc(static_cast<size_t>(size) + 1));
-    if (!buf) { std::printf("FilesystemModule: out of memory loading %s (%ld bytes)\n", path, size); return nullptr; }
+    if (!buf) { std::printf("FilesystemModule: out of memory loading %s (%lld bytes)\n", path, static_cast<long long>(size)); return nullptr; }
     const int n = platform::fsRead(path, buf, static_cast<size_t>(size) + 1);
     if (n <= 0) { platform::free(buf); return nullptr; }
     buf[n] = '\0';                       // parsed as a C-string

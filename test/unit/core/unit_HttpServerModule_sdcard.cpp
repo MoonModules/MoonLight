@@ -174,7 +174,7 @@ TEST_CASE("an SD upload larger than one tick's chunk streams across several tick
     const std::string reply = pumpUntil(http, client, 12);
     CHECK(std::strncmp(reply.c_str(), "HTTP/1.1 200", 12) == 0);
 
-    CHECK(mm::platform::fsSize("/sd/big.bin") == static_cast<long>(payload.size()));
+    CHECK(mm::platform::fsSize("/sd/big.bin") == static_cast<int64_t>(payload.size()));
     std::vector<char> back(payload.size());
     mm::platform::FsReadStream rs{};
     REQUIRE(mm::platform::fsReadStreamOpen(rs, "/sd/big.bin"));

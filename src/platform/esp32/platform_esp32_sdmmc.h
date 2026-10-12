@@ -17,8 +17,8 @@ bool sdCardExists(const char* apiPath);
 bool sdCardRemove(const char* apiPath);
 /// Read a whole file from the card; bytes read, or -1 on error, null-terminated on success.
 int  sdCardRead(const char* apiPath, char* buf, size_t maxLen);
-/// A card file's size in bytes, or -1 when it is missing or not a file.
-long sdCardSize(const char* apiPath);
+/// A card file's size in bytes, or -1 when missing; wide for a file past 2 GiB, which FAT32 (to 4 GiB-1) allows.
+int64_t sdCardSize(const char* apiPath);
 /// Write a whole file atomically onto the card, through a temporary and a rename.
 bool sdCardWriteAtomic(const char* apiPath, const char* data, size_t len);
 /// List one level of a card directory, calling `cb` per child.

@@ -1011,12 +1011,12 @@ bool fsWriteAtomic(const char* path, const char* data, size_t len) {
     return true;
 }
 
-long fsSize(const char* path) {
+int64_t fsSize(const char* path) {
     std::error_code ec;
     auto p = toFsPath(path);
     if (!std::filesystem::is_regular_file(p, ec)) return -1;
     const auto sz = std::filesystem::file_size(p, ec);
-    return ec ? -1 : static_cast<long>(sz);
+    return ec ? -1 : static_cast<int64_t>(sz);
 }
 
 namespace {
