@@ -125,22 +125,22 @@ bool spillToBudget(IrProgram& ir, const RegBudget& budget, uint8_t& slotsUsed) {
 
     // --- 1. Find the loops, innermost first ----------------------------------------------------
 
-    // Bounded by kIrLabels, since a loop needs a label.
-    Loop loops[kIrLabels];
+    // Half of kIrLabels, since a loop takes two labels, its head and its exit.
+    Loop loops[kIrLabels / 2];
     uint8_t loopCount = 0;
     {
-        int32_t labelAt[kIrLabels];
+        int16_t labelAt[kIrLabels];   // an op index, below kMaxIrOps
         for (auto& p : labelAt) p = -1;
         for (uint16_t i = 0; i < ir.count; i++)
             if (ir.ops[i].op == IrOp::Label && ir.ops[i].imm >= 0 && ir.ops[i].imm < kIrLabels)
-                labelAt[ir.ops[i].imm] = i;
+                labelAt[ir.ops[i].imm] = static_cast<int16_t>(i);
         for (uint16_t i = 0; i < ir.count; i++) {
             const IrInst& in = ir.ops[i];
             if (in.op != IrOp::BranchNe) continue;
             if (in.imm < 0 || in.imm >= kIrLabels) { spillDetail().guard = 5; return false; };      // an unbindable label: refuse
             const int32_t tgt = labelAt[in.imm];
             if (tgt < 0 || static_cast<uint16_t>(tgt) > i) continue;  // a forward branch, not a loop
-            if (loopCount >= kIrLabels) { spillDetail().guard = 6; return false; };
+            if (loopCount >= kIrLabels / 2) { spillDetail().guard = 6; return false; };
             loops[loopCount++] = {static_cast<uint16_t>(tgt), i};
         }
         // Proper nesting is what makes innermost-first meaningful, so anything else is refused.

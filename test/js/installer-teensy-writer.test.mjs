@@ -15,6 +15,8 @@ import {
     halfkayReports,
     imageProblem,
     isTeensySerial,
+    otherTeensyPorts,
+    rebootedSerialPort,
 } from "../../mooninstaller/teensy-writer.js";
 
 // A flat image as the build writes it: the "FCFB" configuration block first, then code, with erased gaps.
@@ -79,5 +81,24 @@ test("an erase zeroes the settings' superblock pair, 8 KB at the bottom of the 1
         assert.deepEqual([...report.subarray(0, 3)], [offset & 0xFF, (offset >> 8) & 0xFF, offset >> 16]);
         assert.ok(report.subarray(64).every(b => b === 0));
         assert.ok(offset + 1024 <= TEENSY41_CODE_BYTES, "inside what the bootloader writes");
+    }
+});
+
+// Every Teensy reports the same USB ids, and the installed board's port vanishes while it reboots, so a second granted Teensy would be the only match: it must never be the one read or sent defaults.
+test("after the reboot the installer finds the installed board, never another granted Teensy", async () => {
+    const teensy = () => ({ getInfo: () => ({ usbVendorId: 0x16C0, usbProductId: 0x0483 }) });
+    const installing = teensy(), other = teensy(), esp = { getInfo: () => ({ usbVendorId: 0x10C4, usbProductId: 0xEA60 }) };
+    const saved = globalThis.navigator;
+    try {
+        let granted = [installing, other, esp];
+        Object.defineProperty(globalThis, "navigator", { value: { serial: { getPorts: async () => granted } }, configurable: true });
+        const others = await otherTeensyPorts(installing);
+        assert.deepEqual(others, [other]);
+        granted = [other, esp];                                         // rebooting: only the other board answers
+        assert.equal(await rebootedSerialPort(0, others), null);        // so nothing is taken
+        granted = [other, esp, installing];                             // back on the bus
+        assert.equal(await rebootedSerialPort(0, others), installing);
+    } finally {
+        Object.defineProperty(globalThis, "navigator", { value: saved, configurable: true });
     }
 });

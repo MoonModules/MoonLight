@@ -1633,9 +1633,14 @@ function watchInstall(kind) {
 // here), so this is the one place an XMLHttpRequest earns its keep: xhr.upload.onprogress is the
 // only way to know how far a browser-pushed install has got. The device-fetched installs report
 // through the byte counts in their status line instead, so every install has a bar.
-function uploadWithProgress(route, file, ui) {
+function uploadWithProgress(route, file, ui, signal) {
     return new Promise((resolve, reject) => {
         const xhr = new XMLHttpRequest();
+        // The overlay's cancel aborts through `signal`, which an XMLHttpRequest takes as a listener rather than an option.
+        if (signal) {
+            if (signal.aborted) { reject(new Error("canceled")); return; }
+            signal.addEventListener("abort", () => xhr.abort(), { once: true });
+        }
         ui.watchStalls();
         xhr.open("POST", route);
         xhr.setRequestHeader("Content-Type", "application/octet-stream");
@@ -2331,10 +2336,12 @@ function createCard(mod, depth) {
         // Upload an image the browser holds, behind the overlay every install shows. The device
         // cannot report this transfer's progress (the request stays open for it), so the bar
         // follows the upload itself.
-        const installBlob = async (blob, ui = showUpdateOverlay()) => {
+        const installBlob = async (blob, ui = showUpdateOverlay(), ctl = new AbortController()) => {
+            ui.setUpload(ctl);
+            if (ctl.signal.aborted) { ui.fail("Install canceled."); return; }
             ui.status(`Installing ${fmSize(blob.size)}…`);
             try {
-                await uploadWithProgress(k.uploadRoute, blob, ui);
+                await uploadWithProgress(k.uploadRoute, blob, ui, ctl.signal);
                 if (k.reboots) {
                     ui.busy("Rebooting…");
                     if (!await waitForReboot()) { ui.fail("The device did not come back within two minutes: check it, then reload."); return; }
@@ -2349,23 +2356,31 @@ function createCard(mod, depth) {
         };
 
         // For a device that cannot fetch a URL (no TLS): the browser downloads the image and uploads it.
-        // GitHub's release assets refuse a cross-origin read, so a release asset comes from its
-        // copy on the installer's Pages site, which allows one.
+        // GitHub's release assets refuse a cross-origin read, so one of our release assets comes from
+        // its copy on the installer's Pages site, which allows one; any other URL is fetched as given.
         const installViaBrowser = async (url) => {
-            const m = /\/releases\/download\/([^/]+)\/([^/]+)$/.exec(url);
-            const source = m ? `https://moonmodules.org/MoonLight/install/releases/${m[1]}/${m[2]}` : url;
+            let source = url;
+            try {
+                const u = new URL(url);
+                const m = /^\/MoonModules\/MoonLight\/releases\/download\/([^/]+)\/([^/]+)$/.exec(u.pathname);
+                if (u.protocol === "https:" && u.hostname === "github.com" && m)
+                    source = `https://moonmodules.org/MoonLight/install/releases/${m[1]}/${m[2]}`;
+            } catch (_) { /* not a URL the page can parse: fetched as given, and its own error says so */ }
             const ui = showUpdateOverlay();
+            // One controller for both transfers, so cancel stops the download and the upload that follows it.
+            const ctl = new AbortController();
+            ui.setUpload(ctl);
             ui.status("Downloading the image…");
             let blob;
             try {
-                const res = await fetch(source);
+                const res = await fetch(source, { signal: ctl.signal });
                 if (!res.ok) throw new Error(`HTTP ${res.status} from ${source}`);
                 blob = await res.blob();
             } catch (err) {
-                ui.fail("Download failed: " + err.message);
+                ui.fail(ctl.signal.aborted ? "Install canceled." : "Download failed: " + err.message);
                 return;
             }
-            await installBlob(blob, ui);
+            await installBlob(blob, ui, ctl);
         };
 
         // Hand a URL to the device. Every install route answers 202 and works on its own task, so
@@ -6455,8 +6470,8 @@ function consented(mod) {
 
 const kMoonCloudUrl = "https://mooncloud-stats.moonmodules.workers.dev";
 
-// A board without HTTPS leaves its MoonCloud request in the hidden `outbox` control; the device page, which has HTTPS, posts it and presses `outbox sent` to empty it.
-// One request at a time, and after a failed post a pause, so an unreachable server is not asked once a second.
+// A board without HTTPS leaves its MoonCloud request in the hidden `outbox` control; the device page, which has HTTPS, posts it and writes its id to `outbox sent` to empty it.
+// One request at a time, and after a failed post or acknowledgement a pause, so the server is not asked once a second, nor sent the same request again at once.
 let moonCloudRelayBusy = false;
 let moonCloudRelayRetryAt = 0;
 async function relayMoonCloudOutbox() {
@@ -6466,7 +6481,7 @@ async function relayMoonCloudOutbox() {
     if (!raw) return;
     let req;
     try { req = JSON.parse(raw); } catch (_) { return; }
-    if (typeof req.path !== "string" || !req.path.startsWith("/api/")) return;
+    if (typeof req.path !== "string" || !req.path.startsWith("/api/") || !Number.isInteger(req.id)) return;
     moonCloudRelayBusy = true;
     try {
         const res = await fetch(kMoonCloudUrl + req.path, {
@@ -6475,7 +6490,7 @@ async function relayMoonCloudOutbox() {
             body: JSON.stringify(req.body),
         });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        await sendControl(cloud.name, "outbox sent", 1);
+        if (!await sendControl(cloud.name, "outbox sent", req.id)) throw new Error("acknowledgement refused");
     } catch (_) {
         moonCloudRelayRetryAt = Date.now() + 30000;
     } finally {

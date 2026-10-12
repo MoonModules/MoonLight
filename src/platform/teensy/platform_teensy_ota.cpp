@@ -51,7 +51,7 @@ constexpr uint32_t kMarkPrefixLen = sizeof("MoonLight image for ") - 1;
 alignas(4) uint8_t g_sector[kSectorBytes];   // one sector in RAM, for the upload and for the copy
 uint32_t g_stagedBytes = 0;                   // nonzero once a checked image waits for the reboot
 
-// Block-aligned, so erasing a block of the program never touches a staged block not yet copied.
+// Block-aligned, so erasing a block of the program never touches an uncopied staged block.
 uint32_t stagingBase() { return (kFlashBase + static_cast<uint32_t>(firmwareSize()) + kBlockBytes - 1) & ~(kBlockBytes - 1); }
 uint32_t programEnd() { return kFlashBase + static_cast<uint32_t>(firmwarePartition()); }
 

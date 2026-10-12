@@ -128,7 +128,7 @@ curl -X POST "http://<device>/api/file?path=/moonlive/hello.mle" --data-binary '
 class HelloEffect {
   byte hue = 0;
   void defineControls() { addControl("hue", hue, 0, 255); }
-  void tick() { fill(paletteR(hue, 255), paletteG(hue, 255), paletteB(hue, 255)); }
+  void tick() { fill(paletteRGB(hue, 255)); }
 }'
 
 # Read it back.

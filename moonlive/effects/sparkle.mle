@@ -19,9 +19,8 @@ class SparkleEffect {
     fade(fadeAmt);
     int n = width * height * depth;
     for (int i = 0; i < density; i = i + 1) {
-      int p = random16(256);
-      if (p > hueSpread) { p = hueSpread; }
-      setRGB(random16(n), paletteR(p, 255), paletteG(p, 255), paletteB(p, 255));
+      int p = min(random16(256), hueSpread);
+      setRGB(random16(n), paletteRGB(p, 255));
     }
   }
 }

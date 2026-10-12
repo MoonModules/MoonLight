@@ -25,7 +25,7 @@ inline constexpr const char* kSpillRefused  = "codegen failed: too many live val
 
 // A symbol table: a binding asks for an entry by name, so a script's role follows from what it defined.
 /// What a function hands back, where `void` is the default an acting entry point declares.
-enum class RetType : uint8_t { Void, Int, Str };
+enum class RetType : uint8_t { Void, Int, Str, Struct };
 
 struct EntryPoint {
     const char* name = nullptr;    ///< into the source, or the engine's own copy after compile

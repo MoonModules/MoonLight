@@ -903,8 +903,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // A Teensy with no serial port (a crashed program, another USB type) is not in the port list: after a canceled pick, the status line offers its bootloader instead, which WebHID reaches once the program button is pressed.
+    // Every canceled pick offers it, an earlier port included, since a cancel means the board the user looks for is missing from the list.
     function offerTeensyBootloader() {
-      if (!("hid" in navigator) || pickedPort || teensyBootMode) return;
+      if (!("hid" in navigator) || teensyBootMode) return;
       const status = document.getElementById("detect-status");
       const link = document.createElement("a");
       link.href = "#";

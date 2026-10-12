@@ -23,7 +23,7 @@ namespace mm {
 /// ## The browser relay, on a board without HTTPS
 ///
 /// A board with no TLS cannot post, so its one outbound call goes into a one-slot outbox instead, a hidden control the open page reads.
-/// The page posts it to the server, which accepts a cross-origin request, and presses the hidden `outbox sent` button to empty it. A report then goes out whenever someone has the page open, enough for a usage count.
+/// The page posts it to the server, which accepts a cross-origin request, and writes the request's `id` to the hidden `outbox sent` to empty it. A report then goes out whenever someone has the page open, enough for a usage count.
 /// Two pages open at once can both post the waiting request before either empties it, a rare double the count tolerates. Neither control exists on a board with HTTPS, so the relay costs it nothing but the check.
 class MoonCloudModule : public MoonModule {
 public:
@@ -47,15 +47,23 @@ public:
             controls_.addText("outbox", outbox_, kOutboxBytes);
             controls_.setReadOnly(controls_.count() - 1, true);
             controls_.setHidden(controls_.count() - 1, true);
-            controls_.addButton("outbox sent");
+            controls_.addControl("outbox sent", acked_, 0, INT32_MAX);
             controls_.setHidden(controls_.count() - 1, true);
         }
         MoonModule::defineControls();
     }
 
-    /// Empty the outbox once the page has delivered it.
+    // A restored settings file carries the last acknowledged id, which a new request must never match.
+    /// Number the next request after the last one acknowledged, which the settings restored.
+    void setup() override {
+        lastId_ = acked_;
+        MoonModule::setup();
+    }
+
+    // Only for the waiting request's id, so a late acknowledgement of an earlier one leaves a newer one waiting.
+    /// Empty the outbox once the page has delivered the request waiting in it.
     void onControlChanged(const char* name) override {
-        if (outbox_ && name && std::strcmp(name, "outbox sent") == 0) {
+        if (outbox_ && outbox_[0] && name && std::strcmp(name, "outbox sent") == 0 && acked_ == pendingId_) {
             outbox_[0] = 0;
             notifyValuesChanged();
         }
@@ -73,7 +81,10 @@ public:
     bool post(const char* path, const char* body) {
         if (outbox_) {
             if (outbox_[0]) return false;
-            const int n = std::snprintf(outbox_, kOutboxBytes, "{\"path\":\"%s\",\"body\":%s}", path, body);
+            pendingId_ = lastId_ < INT32_MAX ? lastId_ + 1 : 1;
+            lastId_ = pendingId_;
+            const int n = std::snprintf(outbox_, kOutboxBytes, "{\"id\":%ld,\"path\":\"%s\",\"body\":%s}",
+                                        static_cast<long>(pendingId_), path, body);
             if (n < 0 || static_cast<size_t>(n) >= kOutboxBytes) { outbox_[0] = 0; return false; }
             notifyValuesChanged();   // to the page on the next transport tick
             return true;
@@ -89,6 +100,9 @@ private:
     // One request: a usage report is well under this, and a talk message is capped at 280 characters.
     static constexpr uint16_t kOutboxBytes = 2048;
     char* outbox_ = nullptr;   ///< the request waiting for the page, on a board without HTTPS only
+    int32_t acked_ = 0;        ///< the id the page last delivered, which it writes to `outbox sent`
+    int32_t pendingId_ = 0;    ///< the id of the request waiting in the outbox
+    int32_t lastId_ = 0;       ///< the id given last
 };
 
 

@@ -22,21 +22,15 @@ class SpectrumEffect {
     if (width < 2) { bars = height; }
     for (int x = 0; x < bars; x = x + 1) {
       int b = div(x * 16, bars);
-      int mag = div(audioBand(b) * gain, 100);
-      if (mag > 255) { mag = 255; }
-      if (width < 2) {
-        setRGB(x, div(paletteR(b * 16, 255) * mag, 255), div(paletteG(b * 16, 255) * mag, 255),
-               div(paletteB(b * 16, 255) * mag, 255));
-      }
+      int mag = min(div(audioBand(b) * gain, 100), 255);
+      RGB c = paletteRGB(b * 16, 255);
+      if (width < 2) { setRGB(x, div(c.r * mag, 255), div(c.g * mag, 255), div(c.b * mag, 255)); }
       int top = div(mag * height, 256);
       if (width < 2) { top = 0; }
       for (int y = 0; y < top; y = y + 1) {
-        setRGB((height - 1 - y) * width + x, paletteR(b * 16, 255), paletteG(b * 16, 255),
-               paletteB(b * 16, 255));
+        setRGB((height - 1 - y) * width + x, c);
       }
-      if (peakHold > 0) {
-        if (top > 0) { setRGB((height - top) * width + x, 255, 255, 255); }
-      }
+      if (peakHold && top > 0) { setRGB((height - top) * width + x, 255, 255, 255); }
     }
   }
 }

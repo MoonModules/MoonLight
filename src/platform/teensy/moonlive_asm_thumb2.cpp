@@ -65,8 +65,8 @@ Label Thumb2Assembler::newLabel() {
 void Thumb2Assembler::bind(Label l) { if (len_ >= kUnbound) overflow_ = true; else if (l < kMaxLabels) labelPos_[l] = static_cast<CodePos>(len_); }
 
 void Thumb2Assembler::addFixup(size_t at, Label label, FixKind kind) {
-    if (fixupCount_ >= kMaxFixups) { overflow_ = true; return; }
-    fixups_[fixupCount_++] = {at, label, kind};
+    if (fixupCount_ >= kMaxFixups || at >= kUnbound) { overflow_ = true; return; }
+    fixups_[fixupCount_++] = {static_cast<CodePos>(at), label, kind};
 }
 
 // --- encoders over machine register numbers ---

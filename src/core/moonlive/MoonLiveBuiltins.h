@@ -69,6 +69,26 @@ struct Builtin {
     uint8_t      fixedArgs = 0;
     /// Whether the result is fixed-point.
     bool         fixedReturn = false;
+    /// The struct this builtin answers with, by name, written into its first argument slots; null for a scalar or no result.
+    const char*  retStruct = nullptr;
+    /// Whether the arguments may be all whole or all fixed, with the result following them, as `min` and `abs` are.
+    bool         sameTypeArgs = false;
+};
+
+/// Most fields a struct type carries: three for a color or a coordinate, four for a color with white.
+static constexpr uint8_t kMaxStructFields = 4;
+
+// Host-registered like the builtins, so the core compiler names no domain's types.
+/// A struct type a script can declare: a fixed number of fields of one scalar type.
+struct StructDef {
+    /// The type name a script writes, such as `RGB`.
+    const char* name = nullptr;
+    /// The scalar type every field has.
+    CtrlType    type = CtrlType::Int;
+    /// How many fields it has.
+    uint8_t     fieldCount = 0;
+    /// The field names, in storage order.
+    const char* fields[kMaxStructFields] = {};
 };
 
 // An overflow otherwise surfaces as "unknown function" for a builtin that plainly exists.
@@ -93,6 +113,32 @@ struct BuiltinTable {
     uint8_t count = 0;
     /// Set when an `add` was dropped for lack of room.
     bool overflowed = false;
+    /// How many struct types one table defines.
+    static constexpr uint8_t kMaxStructs = 4;
+    /// The struct types a script may declare.
+    StructDef structs[kMaxStructs];
+    /// How many struct types are registered.
+    uint8_t structCount = 0;
+
+    /// Register a struct type, returning false when the table is full or the type is malformed.
+    bool addStruct(const StructDef& s) {
+        if (!s.name || s.fieldCount == 0 || s.fieldCount > kMaxStructFields) return false;
+        for (uint8_t f = 0; f < s.fieldCount; f++) if (!s.fields[f]) return false;   // a field lookup reads every name
+        if (structCount >= kMaxStructs) { overflowed = true; return false; }
+        structs[structCount++] = s;
+        return true;
+    }
+
+    /// The struct type registered under `name`, or null when there is none.
+    const StructDef* findStruct(const char* name, size_t len) const {
+        for (uint8_t i = 0; i < structCount; i++) {
+            const char* n = structs[i].name;
+            size_t j = 0;
+            for (; j < len && n[j]; j++) if (n[j] != name[j]) break;
+            if (j == len && n[j] == 0) return &structs[i];
+        }
+        return nullptr;
+    }
 
     /// Register one builtin, returning false when the table is full.
     bool add(const Builtin& b) {
@@ -150,7 +196,7 @@ static constexpr uint8_t kMaxCallDepth = 32;
 
 // The arena rather than the frame, since a callee copies its arguments out as its first act.
 /// Where a script call's arguments are passed.
-static constexpr uint8_t kMaxScriptArgs  = 4;     // per call; a helper wanting more wants an array
+static constexpr uint8_t kMaxScriptArgs  = 8;     // words per call, a struct taking one per field
 static constexpr uint8_t kScriptArgBytes = 4;     // one machine word, as a frame slot is
 /// Where the argument block starts, aligned to four bytes because these are 32-bit slots.
 static constexpr uint8_t kScriptArgBase  = static_cast<uint8_t>((kDepthSlot + 1 + 3) & ~3);

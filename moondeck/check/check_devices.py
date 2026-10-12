@@ -212,7 +212,8 @@ def main():
         # --- chip: the family the installer detects and the manifests name, and the one every firmware installs onto ---
         chip = e.get("chip")
         families = set(TARGET_TO_FAMILY.values())
-        if "chip" in e and chip not in families:
+        # A string first: a list or an object is unhashable, and the set membership test would raise rather than report.
+        if "chip" in e and (not isinstance(chip, str) or chip not in families):
             errors.append(f"{where}: chip {chip!r} is not a known family {sorted(families)}")
         elif isinstance(fws, list):
             for fw in fws:

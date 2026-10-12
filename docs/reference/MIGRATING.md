@@ -30,6 +30,17 @@ For a device still on old firmware (no Backup button yet), the [installer page](
 
 ## Unreleased
 
+### MoonLive scripts: colors read as one RGB, and struct, arithmetic and builtin names are reserved
+
+**Action: *update a file*, only for a user script that uses one of these names or calls.**
+
+`getR`, `getG` and `getB` are gone: `getRGB(i)` answers the whole color, and `getRGB(i).r` one channel.
+`paletteR`, `paletteG` and `paletteB` are gone the same way: `paletteRGB(i, bri)`, and `paletteRGB(i, bri).r` for one channel.
+The shipped effects use the new calls.
+
+`RGB` and `Coord3D` are types, and `abs`, `min`, `max`, `clamp`, `getRGB` and `paletteRGB` are builtins, so a script variable, member or function of one of those names stops compiling, with the reason as its error.
+A script function named after any builtin is refused too: the builtin was found first, so the function never ran. Rename it.
+
 ### The access point carries the first known network's password, under an anonymous name
 
 **Action: *nothing*, unless someone joins the access point with a password of its own: they use the home WiFi's password instead.**

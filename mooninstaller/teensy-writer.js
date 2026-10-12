@@ -153,12 +153,19 @@ export async function requestTeensySerial() {
     return await navigator.serial.requestPort({ filters: [{ usbVendorId: PJRC_VID, usbProductId: TEENSY_SERIAL_PID }] });
 }
 
-// The board's serial port after the reboot, which re-enumerates; null when none of this browser's granted ports appears in `waitMs`.
-export async function rebootedSerialPort(waitMs) {
+// The granted Teensy serial ports of every board but the one being installed, noted before the install.
+export async function otherTeensyPorts(installing) {
+    const ports = await navigator.serial.getPorts();
+    return ports.filter(p => p !== installing && isTeensySerial(p.getInfo()));
+}
+
+// The installed board's serial port after the reboot, which re-enumerates; null when none appears in `waitMs`.
+// A port reports only its USB ids, which every Teensy shares, so the board is the Teensy port that is none of `others`: another granted board is never read or sent defaults.
+export async function rebootedSerialPort(waitMs, others = []) {
     const deadline = Date.now() + waitMs;
     for (;;) {
         const ports = await navigator.serial.getPorts();
-        const port = ports.find(p => isTeensySerial(p.getInfo()));
+        const port = ports.find(p => isTeensySerial(p.getInfo()) && !others.includes(p));
         if (port) return port;
         if (Date.now() >= deadline) return null;
         await sleep(500);

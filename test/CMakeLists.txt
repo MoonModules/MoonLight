@@ -203,6 +203,8 @@ add_executable(mm_tests
     unit/light/unit_MoonLiveParticles.cpp
     unit/light/unit_MoonLiveLayout.cpp
     unit/light/unit_MoonLiveScripts.cpp
+    unit/light/unit_MoonLiveScripts_ir_golden.cpp
+    unit/light/unit_MoonLiveStructs.cpp
     unit/light/unit_MoonLiveScriptResolve.cpp
     unit/light/unit_MoonLiveMotion.cpp
     unit/light/unit_Layouts_container.cpp

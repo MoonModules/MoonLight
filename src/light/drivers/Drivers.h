@@ -164,6 +164,7 @@ public:
     // The names live in a member array because the seam holds POINTERS, so a local would dangle.
     /// List every factory palette at its place in the catalog, held or not, then the user's own `.mlp` files, and publish them to the picker.
     void refreshLivePalettes() {
+        livePalettesScanned_ = true;   // every scan counts, whichever caller ran it
         liveCount_ = 0;
         // The catalog first, in its own order, so a palette's number is the same on every device of one firmware and a slot or a desk can pick it.
         for (size_t c = 0; c < moonlive::kPaletteCatalogCount && liveCount_ < LivePalettes::kMax; c++) {
@@ -499,7 +500,6 @@ public:
     void setup() override {
         // The filesystem module mounts first, so this scan is the one that sees every script; from here a file change rescans.
         refreshLivePalettes();
-        livePalettesScanned_ = true;
         LivePalettes::set(livePtrs_, liveTags_, liveCount_, livePresent_);
         // The saved choice starts as picking it does, a script palette compiled, since at boot nothing reacts to the value.
         onControlChanged("palette");

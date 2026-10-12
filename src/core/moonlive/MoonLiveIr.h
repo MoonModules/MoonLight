@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <cstring>
 #include <cstddef>
 #include "core/moonlive/MoonLiveBuiltins.h"   // InlineOp (a neutral opcode tag)
 #include "platform/platform.h"                // alloc/free, since the op array is script-sized
@@ -35,7 +36,7 @@ static constexpr uint8_t kMaxVRegs = 32;
 // A sanity bound rather than the working limit, so a runaway source fails with a diagnostic.
 static constexpr uint16_t kMaxIrOps = 4096;
 
-// Measured at 0.75 ops per token and never above 0.85, so 1 keeps a real margin.
+// The shipped scripts measure up to 0.91 ops per token; structs and `&&` reach 1.6, and grow the array rather than raise every script's reservation.
 static constexpr uint16_t kIrOpsPerToken = 1;
 
 // The op set, in three-address form: a destination plus up to three source operands.
@@ -137,12 +138,12 @@ constexpr uint8_t idxCount(int32_t p) { return uint8_t((p >> 16) & 0xff); }
 
 // Two per `for`, counted program-wide, so this bounds total loops rather than nesting depth.
 /// Branch targets one IR program may use.
-static constexpr uint8_t kIrLabels = 40;
+static constexpr uint8_t kIrLabels = 96;
 
-// THE COST IS STACK: a label is a two-byte code position, since no program passes the 16 KB code cap, so 96 of them take what 48 four-byte ones did.
-/// Labels and fixups an assembler's tables hold.
-static constexpr uint8_t kAsmLabels = 96;
-static constexpr uint8_t kAsmFixups = 96;
+// On the heap for one compile; a label is a two-byte code position and a fixup four bytes, under the 16 KB code cap.
+/// Labels and fixups an assembler's tables hold, the most an eight-bit index addresses.
+static constexpr uint8_t kAsmLabels = 255;
+static constexpr uint8_t kAsmFixups = 255;
 /// Where a label is bound in the code, or kUnbound before it is.
 using CodePos = uint16_t;
 static constexpr CodePos kUnbound = 0xFFFF;
@@ -212,9 +213,24 @@ struct IrProgram {
         return ops != nullptr;
     }
 
-    /// Append one op, returning false when it names a register outside the budget.
+    // By half, as a dynamic array grows, so the reservation can be the typical script's size and a dense one still fits.
+    /// Enlarge the op array, keeping its contents, up to kMaxIrOps; false at the bound or out of memory.
+    bool grow() {
+        if (!ops || cap >= kMaxIrOps) return false;
+        const uint32_t want = uint32_t(cap) + cap / 2 + 8;
+        const uint16_t n = static_cast<uint16_t>(want > kMaxIrOps ? kMaxIrOps : want);
+        auto* bigger = static_cast<IrInst*>(platform::alloc(sizeof(IrInst) * n));
+        if (!bigger) return false;
+        std::memcpy(bigger, ops, sizeof(IrInst) * count);
+        platform::free(ops);
+        ops = bigger;
+        cap = n;
+        return true;
+    }
+
+    /// Append one op, returning false when it names a register outside the budget or the array cannot grow.
     bool push(const IrInst& i) {
-        if (!ops || count >= cap) return false;
+        if (!ops || (count >= cap && !grow())) return false;
         // Opcode-specific, since not every operand field holds a vreg: a Call's `b` is a count.
         if (i.dst >= kMaxVRegs) return false;
         if (i.op == IrOp::Call) {

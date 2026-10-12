@@ -98,10 +98,13 @@ size_t lowerWith(IrProgram& ir, uint8_t* out, size_t cap, const RegBudget* squee
     // Function number plus one while a guard is owed, since it is emitted after the parking.
     int guardPending = 0;
 
+    // The all-ones index marks an unmade IR label, since an assembler hands out at most kAsmLabels below it.
+    static_assert(kAsmLabels <= LabelId(~LabelId(0)), "the all-ones label index must stay free as the unmade mark");
+    constexpr LabelId kUnmade = LabelId(~LabelId(0));
     LabelId labels[kIrLabels];
-    bool  labelMade[kIrLabels] = {};
+    for (auto& l : labels) l = kUnmade;
     auto  labelFor = [&](int32_t id) -> LabelId {
-        if (!labelMade[id]) { labels[id] = a.newLabel(); labelMade[id] = true; }
+        if (labels[id] == kUnmade) labels[id] = a.newLabel();
         return labels[id];
     };
 

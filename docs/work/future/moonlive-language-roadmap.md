@@ -34,7 +34,7 @@ Five hard limits, all found by hitting them:
 |---|---|---|
 | script state | **64 bytes** shared by all members | `kCtrlBytes`, `MoonLiveBuiltins.h` |
 | distinct members | **16** ✅ | `kMaxCtrls`, same file |
-| branch labels | **40** in the IR, **48** labels and **96** fixups in the assembler, counted across the whole script (an `if` or `for` takes up to 2) | `kIrLabels`, `kAsmLabels`, `kAsmFixups`, `MoonLiveIr.h` |
+| branch labels | **96** in the IR, **255** labels and **255** fixups in the assembler, counted across the whole script (an `if` or `for` takes up to 2, and each `||`, `!` and `!=` one more) | `kIrLabels`, `kAsmLabels`, `kAsmFixups`, `MoonLiveIr.h` |
 | frame slots | **32**, shared by live variables, loop counters and staged call arguments ✅ | `kMaxLocals`, `MoonLiveIr.h` |
 | ~~numeric types~~ | ~~`uint8_t`, `uint16_t`, `int16_t`~~ → **`int`, `byte`, `bool`, `fixed`, `string`** ✅ | still no float: `fixed` is Q16.16 |
 | ~~builtin table~~ | ~~16, and 16 used~~ → **96** ✅ | `BuiltinTable::kMax`, raised, with an overflow assert |
@@ -75,7 +75,7 @@ than "add a language feature":
 1. **A builtin table of ≥ 64 entries.** ✅ *shipped*. `BuiltinTable::kMax` was **16, and the light
    domain registered exactly 16**: the table was FULL, `add()` returned false past the limit, and
    nothing checked the result, so the seventeenth builtin was dropped silently and the script
-   failed later with "unknown function". `kMax` is now 64, and an overflow is loud rather than
+   failed later with "unknown function". `kMax` is now 96, and an overflow is loud rather than
    silent (`MM_ASSERT_NO_BUILTIN_OVERFLOW`).
 2. **A larger branch budget (`kIrLabels`, today 16).** Every `if` costs up to two labels and every
    `for` costs two, counted across the WHOLE script including its helper functions, and labels are
@@ -272,7 +272,7 @@ A script now writes one call where it used to write three:
 setPaletteColor(x, y, index, brightness);
 ```
 
-`paletteR/G/B(i, bri)` shipped first and worked, but the shape was wrong: three host calls per
+Three per-channel palette calls shipped first and worked, but the shape was wrong: three host calls per
 pixel, and, because the compiler evaluates each argument independently, three evaluations of
 whatever expression produced the brightness. A per-pixel radial falloff made that visible.
 
@@ -282,11 +282,7 @@ index, so the buffer layout (`mod(x, width) + mod(y, height) * width`) stops bei
 every script.
 
 No engine change was needed: `line()` already proved a Call builtin can write pixels through the
-per-run draw canvas, so this rode the existing seam. `paletteR/G/B` stay for a script that needs
-the components rather than a pixel.
-
-What is still missing is the general form: a builtin RETURNING a color, so a script can hold one
-in a variable and pass it on. That is #2's multi-value ABI, and #4b is what makes it worth having.
+per-run draw canvas, so this rode the existing seam. `paletteRGB(i, bri)` answers the color as an `RGB` for a script that wants the value rather than a pixel (#4b).
 
 ### 4c. Insights from porting a per-pixel effect: *the cost is CALLS, not math*
 
@@ -346,51 +342,13 @@ variables, so a new builtin should take a name a script would not: `polarA`/`pol
 the obvious ones. The compile-every-script test caught it immediately, which is the argument for
 keeping that test cheap to run.
 
-### 4b. Predefined structs: `Coord3D` and `RGB`, together: *and they make #4 land properly*
+### 4b. Predefined structs: `Coord3D` and `RGB`, together: ✅ *shipped*
 
-Planned: [MoonLive Coord3D and RGB types](../present/Plan-20261011%20-%20MoonLive%20Coord3D%20and%20RGB%20types.md), both types together as fields under one name, since the 16-bit Layer that held the color type back was reversed.
+A struct is a named fixed-size array the compiler expands into scalar operations: a member, a local, a parameter and a return value, with field access, whole-struct assignment and a constructor. A struct argument fills one position per field, so every three-channel builtin takes an `RGB`. `getRGB` and `paletteRGB` answer one. The language reference holds the rest: [RGB and Coord3D](../../moonmodules/light/moonlive.md#rgb-and-coord3d).
 
-Most of what a script manipulates is a POSITION or a COLOR, and today both are loose integers: a
-coordinate is three separate values or an index the script computes by hand
-(`mod(bx+dx, width) + mod(by+dy, height) * width`), and a color is three `uint8_t`s that cannot
-travel together. Two predefined types would carry them:
+**No `HSV` struct.** A hue wheel is how an effect picks color while ignoring the user's palette, so `HSV` stays in `setPalEntryHSV`, which authors a palette rather than bypassing one.
 
-- **`Coord3D`**: `{x, y, z}`, the shape `setXYZ`, `addLight` and every layout already think in.
-- **A color struct**: `{r, g, b}`, matching `RGB` in `core/color.h`.
-
-**No `HSV` struct.** The builtins already record the decision and the reason
-(`MoonLiveBuiltins_light.h`): a hue wheel is how an effect picks color while IGNORING the user's
-palette, and 47 of 52 compiled effects were moved off that habit. A predefined `HSV` would put it
-back as the easy default. HSV stays where it earns its place, in `setPalEntryHSV`, which is
-authoring a palette rather than bypassing one.
-
-**The color struct is `RGB`, our own name rather than FastLED's `CRGB`, and it lands with `Coord3D`.** It once waited for the 16-bit Layer the [generative-fields plan](generative-fields-analysis-top-down.md) proposed, since a script-visible color fixed at three `uint8_t` would have been the one place the channel width stopped being runtime data. That plan reversed the 16-bit Layer on the measurement (its § 11), so nothing holds the color type back, and the plan linked above builds both types in one step.
-
-Predefined rather than user-declarable structs (#10): these two are what the ENGINE already passes
-around, so they need no general struct machinery, just two known layouts the compiler understands
-and the builtins can take and return.
-
-The payoff is that #4 becomes the natural signature rather than a special case:
-
-```c
-setColorFromPalette(pos, index, brightness);     // pos is a Coord3D
-```
-
-**Scope: a predefined struct is a type, not a calling convention.** One that appeared only in
-builtin signatures would be a special case the language does not need. `Coord3D` is a class member,
-a local, a function argument and a return value, exactly as `int`, `byte`, `bool` and `fixed` are,
-which makes § 6 (arguments and returns) a prerequisite rather than a nicety. Two costs to settle
-when it is added: whether a member is one member record or three of the eight, and hence 6 of the 64
-arena bytes; and that a local occupies one frame slot per field under today's flat allocator, so a
-script holding a few coordinates reaches the 32-slot ceiling sooner (§ 8b).
-
-One call, one brightness evaluation, and the index arithmetic stops being open-coded at every call
-site. It also removes the `mod(...) + mod(...) * width` flattening a script writes today, which is
-the buffer layout leaking into every effect.
-
-Worth noting the ordering: this only pays off with the multi-value call ABI from #2, and it is what
-makes that ABI worth having beyond color: a `Coord3D` in and an `RGB` out is the shape most of
-the power-functions surface wants.
+What remains: `setColorFromPalette(pos, index, brightness)` taking a `Coord3D`, and arrays of structs (§ 10).
 
 ### 5. Fractional arithmetic: *superseded by `fixed` in the type-system design above*
 
@@ -421,11 +379,10 @@ with different state silently does the wrong thing. It is also what makes helper
 Script functions DO exist and ship: `balls.mle` calls `drawBall()`, `crosshair.mle` calls three
 helpers, and every layout and modifier is one. Recursion works. Three limits sit on top of them, and
 `aurora.mle` hit all three at once writing a `bright(v)` helper to apply one contrast window to two
-layers (2026-09-04). **The return value shipped the same day**, so two remain:
+layers (2026-09-04). **The return value shipped the same day, and eight parameter words with structs on 2026-10-12**, so one remains:
 
 | limit | what the compiler says |
 |---|---|
-| more than four parameters | `a function takes at most 4 parameters` |
 | no forward calls: a helper must be declared ABOVE its caller | `unknown function`, with the column but not the name |
 
 A function may now RETURN a value: `int f() { return ...; }` and the call is an expression. Each
@@ -469,9 +426,9 @@ So what shipped is smaller than "make the language signed" and removes more than
 `escape()` stays a builtin regardless: its Q13 squaring needs 64-bit intermediates, which a 32-bit
 script value cannot express however signed it is.
 
-### 8. More branch labels: *probably a constant, worth measuring first*
+### 8. More branch labels: ✅ *raised to 96 IR labels and 255 assembler labels and fixups, the tables on the compile-time heap*
 
-16 is tight enough that a straightforward nested draw does not fit. The limits are now 40 IR labels and 48 assembler labels with 96 fixups, and two scripts still hit them on 2026-10-07: the StadBeest legs with a bass envelope, and the StadBeest eye with darts, blinks and a ripple, each at roughly 20 to 25 `if`s across all its functions. Both fit only after branches were rewritten as arithmetic (§ 11). Raising `kIrLabels` costs
+16 was tight enough that a straightforward nested draw did not fit. At 40 IR labels and 48 assembler labels with 96 fixups two scripts still hit them on 2026-10-07: the StadBeest legs with a bass envelope, and the StadBeest eye with darts, blinks and a ripple, each at roughly 20 to 25 `if`s across all its functions. Both fit only after branches were rewritten as arithmetic (§ 11). Raising `kIrLabels` costs
 compile-time table space and nothing at run time. Measure what a realistic effect needs before
 picking a number: the balls port wanted ~12 and had to be folded down.
 
@@ -558,8 +515,6 @@ Two effects written in one session on real hardware: `stadbeest-walk.mle` (a wal
 
 | limit | what it cost | wants |
 |---|---|---|
-| no `\|\|`, `&&` or `!` | every compound condition is nested `if`s, which spends labels twice; the eye writes `pulse * music == 1` and `(r2 - lo) * (hi - r2) > 0` instead, and the Glow effect (2026-10-08) wrote `kick && !kicking` as `kick > kicking` | the three logical operators, short-circuit |
-| no `abs`, `min`, `max`, `clamp` | every clamp is an `if`; the eye takes `abs` as `polarR(x, 0)` and `max(v, 0)` as `(v + polarR(v, 0)) / 2` | those four builtins, which also give back labels |
 | "codegen failed: assembler overflow (branch range, slot, or immediate)" | names neither the limit nor the line; finding it took a desktop bisect with `disasm.py` | the message names the table that ran out and the function it was filling |
 | "too many arguments to hold" | fires when the eye's `tick()` held too many live locals, so the wording sends the author to the calls | a message about live variables when that is the cause |
 | a failed recompile leaves the effect dark | on a live installation every edit that does not compile switches the light off until a fixed one arrives; it happened three times in the session | keep running the last program that compiled, and show the error beside it |

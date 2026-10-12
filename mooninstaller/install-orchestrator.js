@@ -77,6 +77,7 @@ import {
     isTeensySerial,
     rebootToBootloader,
     rebootedSerialPort,
+    otherTeensyPorts,
     requestHalfKay,
     writeImage,
 } from "./teensy-writer.js";
@@ -479,6 +480,8 @@ async function installTeensy({ manifest, port, device, applyDefaults, eraseBefor
 
     // A board held in its bootloader has no serial port: the bootloader is the target from the start.
     let halfkay = port ? null : await bootloader(true);
+    // Before the reboot, while the installed board still answers on `port` (or on none), so its port after the reboot is the one not here.
+    const others = await otherTeensyPorts(port);
 
     trackProgress("fetch-firmware");
     log(`downloading ${manifest.parts[0].url}`);
@@ -502,7 +505,7 @@ async function installTeensy({ manifest, port, device, applyDefaults, eraseBefor
 
     trackProgress("reboot");
     let ip = "", mdns = "", defaultsApplied = false;
-    let serial = await rebootedSerialPort(15000);
+    let serial = await rebootedSerialPort(15000, others);
     if (!serial && uiFindBoard) {
         // The board was installed from its bootloader, so the installer may not read its serial port yet: one click grants it.
         log("no granted serial port for the board: asking for one");

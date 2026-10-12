@@ -9,14 +9,14 @@ This number is the debt behind that gate, and it RATCHETS: a rise fails the chec
 docgen.md does. A comment is prose wherever it lives, so a `//` in the web interface and a
 `#` in a script are counted beside a `///` in a header.
 
-**2922 finding(s)** across 368 file(s).
+**2912 finding(s)** across 367 file(s).
 
 | rule | findings |
 |---|---|
-| `MoonLight.EmDash` | 1507 |
-| `MoonLight.Weasel` | 687 |
-| `MoonLight.SentenceLength` | 428 |
-| `MoonLight.Temporal` | 215 |
+| `MoonLight.EmDash` | 1500 |
+| `MoonLight.Weasel` | 686 |
+| `MoonLight.SentenceLength` | 427 |
+| `MoonLight.Temporal` | 214 |
 | `MoonLight.Spelling` | 42 |
 | `MoonLight.SelfReference` | 30 |
 | `MoonLight.NegatedHeading` | 13 |
@@ -31,7 +31,7 @@ docgen.md does. A comment is prose wherever it lives, so a `//` in the web inter
 | `mooninstaller/install-orchestrator.js` | 93 |
 | `docs/tutorials/build-your-own-moonmodules.md` | 92 |
 | `moondeck/moondeck_ui/app.js` | 92 |
-| `docs/how-to/building.md` | 85 |
+| `docs/how-to/building.md` | 78 |
 | `moondeck/check/check_clang_query.py` | 73 |
 | `src/ui/app.js` | 71 |
 | `mooninstaller/install.js` | 69 |

@@ -4,7 +4,7 @@ How to get the system running on a desktop, an ESP32, a Teensy, or a Raspberry P
 
 ## MoonDeck — the dev console
 
-Everything that builds, flashes, runs, tests, monitors, or checks the project — for every target — lives as a script under `moondeck/`. The full per-script reference is [moondeck/MoonDeck.md](../moondeck/MoonDeck.md).
+Everything that builds, flashes, runs, tests, monitors, or checks the project, for every target, lives as a script under `moondeck/`. The full per-script reference is [moondeck/MoonDeck.md](../../moondeck/MoonDeck.md).
 
 <video src="../assets/moontube/11-moondeck.webm" controls playsinline width="720" title="A tour of MoonDeck: why it exists, and what the three tabs hold."></video>
 
@@ -57,9 +57,10 @@ The distinction matters because a shipped binary is launched from a download fol
 
 ### Editor setup (clangd)
 
-Diagnostics appear **as you type**, from the same [`.clang-tidy`](../.clang-tidy) config CI uses, so a finding shows up while the code is still in your head, not ten minutes later in a pipeline.
+Diagnostics appear **as you type**, from the same [`.clang-tidy`](../../.clang-tidy) config CI uses.
+A finding shows up while the code is fresh in your head, not ten minutes later in a pipeline.
 
-Once per machine: install the **clangd** extension (`llvm-vs-code-extensions.vscode-clangd`) and **disable Microsoft's C/C++ IntelliSense**, running both produces duplicated and contradictory diagnostics. Nothing else to configure: [`.clangd`](../.clangd) at the repo root points at the compilation database, and `CMAKE_EXPORT_COMPILE_COMMANDS` (set in `CMakeLists.txt`) means any normal build refreshes it.
+Once per machine: install the **clangd** extension (`llvm-vs-code-extensions.vscode-clangd`) and **disable Microsoft's C/C++ IntelliSense**, running both produces duplicated and contradictory diagnostics. Nothing else to configure: [`.clangd`](../../.clangd) at the repo root points at the compilation database, and `CMAKE_EXPORT_COMPILE_COMMANDS` (set in `CMakeLists.txt`) means any normal build refreshes it.
 
 Two things worth knowing:
 
@@ -255,7 +256,7 @@ Moving to a different release is never automatic: bump `PINNED_IDF_COMMIT` / `PI
 
 #### Adopting the v6.x ecosystem changes
 
-v6.0 introduced ecosystem-level changes beyond the API surface. The stance, under [§ Principles → Industry standards](../CLAUDE.md#principles), is to **embrace these as the ESP32 standard**. If the IDF makes something the recognized way to build, install, provision, or ship, that is the path we want rather than a bespoke one we maintain alone. We adopt them **step by step**, each its own commit and hardware re-test, rather than all at once, and only after they clear the **v6.0-floor rule** above. The default is *yes, adopt*, with the burden of argument on *why not*.
+v6.0 introduced ecosystem-level changes beyond the API surface. The stance, under [§ Principles → Industry standards](../../CLAUDE.md#principles), is to **embrace these as the ESP32 standard**. If the IDF makes something the recognized way to build, install, provision, or ship, that is the path we want rather than a bespoke one we maintain alone. We adopt them **step by step**, each its own commit and hardware re-test, rather than all at once, and only after they clear the **v6.0-floor rule** above. The default is *yes, adopt*, with the burden of argument on *why not*.
 
 Two guardrails bound the "embrace everything" stance:
 
@@ -267,10 +268,10 @@ Where we are on each. The adoption plan and per-item triggers are filed in [back
 | Change | Where we are now |
 |---|---|
 | **EIM** (ESP-IDF Installation Manager) — the new default, cross-platform installer; Espressif says `install.sh` / `idf_tools.py` are "no longer needed" | `setup_esp_idf.py` drives the legacy `install.sh` / `install.bat`. Works, but is the *old* documented path. |
-| **PSA Crypto** — legacy mbedTLS crypto APIs deprecated in favour of the PSA API | No direct exposure: we never call mbedTLS ourselves; OTA uses `esp_https_ota` + `esp_crt_bundle_attach` ([platform_esp32_ota.cpp](../src/platform/esp32/platform_esp32_ota.cpp)), which wrap crypto internally. |
-| **`network_provisioning`** — Espressif's Unified Provisioning subsystem, renamed from `wifi_provisioning` in v6.0. Transports: **BLE (GATT)** + **Wi-Fi SoftAP**. Clients: official iOS/Android apps for both, plus `esp_prov` (a Python CLI on Linux/macOS/Windows). Transport-agnostic but ships no web/serial client. | We provision over [Improv](../src/core/system/ImprovProvisioningModule.h) — serial (USB) + BLE, driven from the **browser** (ESP Web Tools) or a serial CLI, which covers mooninstaller / no-app onboarding. The IDF-native **phone-app + SoftAP** flow is a coverage gap rather than a duplicate: the two standards meet only on BLE and own different front-ends. |
+| **PSA Crypto**: legacy mbedTLS crypto APIs deprecated in favor of the PSA API | No direct exposure: we never call mbedTLS ourselves; OTA uses `esp_https_ota` + `esp_crt_bundle_attach` ([platform_esp32_ota.cpp](../../src/platform/esp32/platform_esp32_ota.cpp)), which wrap crypto internally. |
+| **`network_provisioning`**: Espressif's Unified Provisioning subsystem, renamed from `wifi_provisioning` in v6.0. Transports: **BLE (GATT)** + **Wi-Fi SoftAP**. Clients: official iOS/Android apps for both, plus `esp_prov` (a Python CLI on Linux/macOS/Windows). Transport-agnostic but ships no web/serial client. | We provision over [Improv](../../src/core/system/ImprovProvisioningModule.h): serial (USB) + BLE, driven from the **browser** (ESP Web Tools) or a serial CLI, which covers mooninstaller / no-app onboarding. The IDF-native **phone-app + SoftAP** flow is a coverage gap rather than a duplicate: the two standards meet only on BLE and own different front-ends. |
 | **CMake Build System v2** — the named successor to the current build system; technical preview in v6.0/6.1, has its own migration guide | Standard `idf.py` build (v1). Our component is a thin `idf_component_register()` wrapper, so the migration surface is small. |
-| **Built-in MCP server** (`idf.py mcp-server`) — lets an AI assistant drive build/flash/monitor/debug directly | Not used. Agents and humans both go through the `moondeck/<group>/*.py` layer (the uniform interface in [moondeck/MoonDeck.md](../moondeck/MoonDeck.md)), which wraps pin-drift checks, per-firmware build dirs, and KPI collection. |
+| **Built-in MCP server** (`idf.py mcp-server`): lets an AI assistant drive build/flash/monitor/debug directly | Not used. Agents and humans both go through the `moondeck/<group>/*.py` layer (the uniform interface in [moondeck/MoonDeck.md](../../moondeck/MoonDeck.md)), which wraps pin-drift checks, per-firmware build dirs, and KPI collection. |
 
 The general rule: **anything already in v6.0 we adopt proactively** (it clears the floor), while **preview / not-yet-in-v6.0 features wait** until they are stable *and* in our floor. Each adoption is its own commit with its own hardware re-test, and none may regress the Teensy / desktop paths.
 
@@ -278,7 +279,7 @@ The general rule: **anything already in v6.0 we adopt proactively** (it clears t
 
 `build_esp32.py --firmware` selects one of the shipping variants. The key combines chip name + feature flags + (for SKU-sensitive chips) module. ("Firmware" here is the compiled binary; the physical product (deviceModel) is a separate concept: see [MoonInstaller, firmware vs deviceModel vs board](../explanation/architecture/mooninstaller.md#the-three-words).) `build_esp32.py --help` lists the full set.
 
-The canonical list is the **firmware registry**, [`moondeck/build/firmwares.py`](../moondeck/build/firmwares.py). It joins the `FIRMWARES` dicts in [`build_esp32.py`](../moondeck/build/build_esp32.py) and [`build_teensy.py`](../moondeck/build/build_teensy.py) and tags every row with its `platform`. Each slice keeps its own build details: sdkconfig `fragments` on an ESP32, the Ethernet driver on a Teensy. Its machine-readable projection is [`mooninstaller/firmwares.json`](../mooninstaller/firmwares.json), generated by `generate_firmwares.py` and drift-guarded by `check_firmwares.py`. The CI release matrix, the manifest loops, the Teensy builds and MoonDeck all read it, so the list lives in exactly one place. `esp32p4rev1-eth-wifi` has `ships: false` (its C6-slave Kconfig isn't reproducible in CI yet), so it builds from the CLI but stays out of the release matrix.
+The canonical list is the **firmware registry**, [`moondeck/build/firmwares.py`](../../moondeck/build/firmwares.py). It joins the `FIRMWARES` dicts in [`build_esp32.py`](../../moondeck/build/build_esp32.py) and [`build_teensy.py`](../../moondeck/build/build_teensy.py) and tags every row with its `platform`. Each slice keeps its own build details: sdkconfig `fragments` on an ESP32, the Ethernet driver on a Teensy. Its machine-readable projection is [`mooninstaller/firmwares.json`](../../mooninstaller/firmwares.json), generated by `generate_firmwares.py` and drift-guarded by `check_firmwares.py`. The CI release matrix, the manifest loops, the Teensy builds and MoonDeck all read it, so the list lives in exactly one place. A row with `ships: false` builds from the CLI but stays out of the release matrix.
 
 ESP-IDF v6.x has no `CONFIG_ESP_WIFI_ENABLED` switch (the symbol is forced on for WiFi-capable SoCs), so dropping WiFi at compile time happens via `EXCLUDE_COMPONENTS` plus `MM_NO_WIFI` (set when `MM_ETH_ONLY=1`, applied in `esp32/main/CMakeLists.txt`). The `esp32-eth` variant takes this path; the default `esp32` keeps both stacks compiled in and uses the runtime cascade in `NetworkModule` (Ethernet first, WiFi fallback when no PHY responds).
 
@@ -308,7 +309,7 @@ curl --http1.1 -H "Expect:" --data-binary @build/esp32-<firmware>/<app>.bin \
      http://<device>/api/firmware/upload
 ```
 
-`<app>.bin` is the app image in that build directory; [flash_esp32](../moondeck/MoonDeck.md#flash_esp32) names it.
+`<app>.bin` is the app image in that build directory; [flash_esp32](../../moondeck/MoonDeck.md#flash_esp32) names it.
 
 The second request ends with **no HTTP status** (curl reports 000): the device reboots into the new image as the write completes, so the socket closes before a response arrives. That is success, not failure. Confirm by reading the build back:
 
@@ -363,4 +364,4 @@ Both are defined in the root `CMakeLists.txt` (desktop) and `esp32/main/CMakeLis
 
 The system serves the web UI from its embedded HTTP server. Open `http://<device-ip>/` in a browser; on desktop that's typically `http://localhost:8080/`. From the UI you can change effects and modifiers, configure controls, see the 3D preview. The settings persist across reboot.
 
-To run the test suite or any of the checks (platform boundary, specs, KPI), see the MoonDeck reference linked above. The release-readiness gates that wrap these into a checklist live in [CLAUDE.md § The Process](../CLAUDE.md#the-process).
+To run the test suite or any of the checks (platform boundary, specs, KPI), see the MoonDeck reference linked above. The release-readiness gates that wrap these into a checklist live in [CLAUDE.md § The Process](../../CLAUDE.md#the-process).

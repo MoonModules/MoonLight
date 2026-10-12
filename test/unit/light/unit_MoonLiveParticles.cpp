@@ -1,18 +1,11 @@
 /// @module MoonLiveParticles
 /// @also MoonLiveEffect, MoonLive, particles
 
-/// A scripted particle pool: the particles live in ScratchBuffers the binding owns, OUTSIDE the script's 64-byte arena, because a Pool is eight parallel arrays and an arena-resident pool would hold about five particles. The script never names a particle; it calls whole-pool operations and the binding supplies the buffers and the frame clock.
-///
-/// These pin the seam rather than the physics (unit_Particles.cpp owns the kernel's own contract): that a script can size its pool, that sizing happens ONLY on the cold path, that a failure degrades visibly, and that one script's particles cannot reach another's.
+/// A scripted particle pool: its buffers live in ScratchBuffers the binding owns, outside the 64-byte arena, and a script calls whole-pool operations.
 
 #include "doctest.h"
-#include "MoonLiveScriptFixture.h"
+#include "MoonLiveEffectScene.h"
 #include "../core/moonlive_script_wrap.h"
-#include "light/moonlive/MoonLiveEffect.h"
-#include "core/moonlive/moonlive_emit.h"   // MM_MOONLIVE_HAS_HOST_JIT
-#include "light/layouts/GridLayout.h"
-#include "light/layouts/Layouts.h"
-#include "light/layers/Layer.h"
 #include "platform/platform.h"   // setTestNowMs: particle physics runs on elapsed time
 #include <filesystem>
 #include <fstream>
@@ -25,25 +18,9 @@ using namespace mm;
 #if MM_MOONLIVE_HAS_HOST_JIT
 
 namespace {
-/// A wired effect on a real layer, the way the module tree builds one.
-struct Scene {
-    Layouts layouts;
-    GridLayout grid;
-    Layer layer;
-    MoonLiveEffect effect;
-    Scene(int w = 8, int h = 8) {
-        grid.width = w; grid.height = h; grid.depth = 1;
-        layouts.addChild(&grid);
-        layer.setLayouts(&layouts);
-        layer.setChannelsPerLight(3);
-        layer.addChild(&effect);
-        effect.defineControls();
-    }
-    void run(const char* script) {
-        effect.setScript(mmWriteScript(script));
-        layouts.applyState();
-        layer.applyState();
-    }
+// The shared fixture on the 8x8 grid these particle tests are sized for.
+struct Scene : ScriptScene {
+    Scene(int w = 8, int h = 8) : ScriptScene(w, h) {}
 };
 }  // namespace
 
@@ -90,6 +67,32 @@ TEST_CASE("disabling a scripted effect frees its particles") {
     REQUIRE(s.effect.dynamicBytes() > 0);
     s.effect.release();
     CHECK(s.effect.dynamicBytes() == 0);
+}
+
+// Trying effects one after another switches one module's script; on a classic ESP32 the carried buffers left too little heap to compile a large one.
+TEST_CASE("switching to a script that asks for no pool or trail frees the last script's") {
+    const char* bare = "class T { void tick() { fill(1, 2, 3); } }";
+    const char* bareWithControls = "class T { byte n = 0; void defineControls() { addControl(\"n\", n, 0, 9); } void tick() { fill(1, 2, 3); } }";
+    const char* sizing = "class T { void defineControls() { pool(64); trail(1); } void tick() { } }";
+    for (const char* next : {bare, bareWithControls}) {   // without a defineControls() and with one
+        CAPTURE(next);
+        Scene s;
+        s.run(next);
+        const size_t alone = s.effect.dynamicBytes();
+        s.run(sizing);
+        REQUIRE(s.effect.dynamicBytes() > alone + 1000);
+        s.run(next);
+        CHECK(s.effect.dynamicBytes() < alone + 256);   // the same program again, with nothing carried over
+    }
+}
+
+// Freed as the compile starts rather than after a successful one, so a large script's compile has that memory, and a script that fails to compile holds nothing.
+TEST_CASE("a script that fails to compile holds none of the last script's pool and trail") {
+    Scene s;
+    s.run("class T { void defineControls() { pool(64); trail(1); } void tick() { } }");
+    REQUIRE(s.effect.dynamicBytes() > 1000);
+    s.run("class T { void tick() { nosuchcall(); } }");
+    CHECK(s.effect.dynamicBytes() < 256);
 }
 
 // A script reaching the particle vocabulary from a layout or a modifier finds no pool installed, so the calls do nothing rather than writing through another module's buffers.
@@ -176,7 +179,7 @@ TEST_CASE("two scripted effects each get their own particles") {
     CHECK(litB == 0);           // the other stayed empty
 }
 
-// The shipped example, driven through the real binding: a fountain reaches a steady state where sparks are emitted, fly, and die at the same rate, rather than filling the pool once and stopping.
+// Through the real binding, a fountain reaches a steady state where sparks are emitted, fly and die at one rate, rather than filling the pool once.
 TEST_CASE("the fountain example keeps emitting once its pool has cycled") {
     // The SHIPPED file, staged into the test filesystem: this drives the real example rather than a copy that could drift from it.
     const std::filesystem::path src = std::filesystem::path(__FILE__).parent_path()
@@ -201,7 +204,7 @@ TEST_CASE("the fountain example keeps emitting once its pool has cycled") {
     CHECK(litLate > 5);                           // still drawing 120 frames in
 }
 
-// A spray has to look like a spray. angleEmit hashes (index, seed) into an angle and a speed, so a seed that does not move makes every frame throw the IDENTICAL set of sparks: they stack into a few fixed streams and the plume pulses instead of flowing. Emitting the same arguments twice must therefore produce different trajectories.
+// angleEmit hashes (index, seed) into an angle and a speed, so a seed that stood still threw identical sparks every frame, stacked into a few fixed streams.
 TEST_CASE("emitting twice from the same point does not repeat the same trajectories") {
     Scene s(24, 24);
     s.run("class T {"
@@ -224,7 +227,7 @@ TEST_CASE("emitting twice from the same point does not repeat the same trajector
     CHECK(firstCols != secondCols);       // a frozen seed would make these identical
 }
 
-// collide() makes particles notice each other. Dropped down the SAME column, balls without it fall straight through one another and stay in that one column; with it they shove sideways and spread. That difference is the whole feature, and it is what turns a shower into a pit.
+// Dropped down one column, balls without collide() fall through one another and stay in it; with it they shove sideways and spread, which turns a shower into a pit.
 TEST_CASE("colliding balls spread sideways instead of falling through each other") {
     auto pileHeight = [](const char* collideCall) {
         Scene s(16, 16);

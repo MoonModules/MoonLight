@@ -54,6 +54,8 @@ public:
             return false;
 
         resetPrintBudget();
+        // What the last program sized goes before this compile needs memory, which a small board does not have for both.
+        if (defineHook_) defineHook_(defineCtx_, DefinePhase::Compiling);
         const char* err = nullptr;
         uint32_t hash = 0;
         if (compileScriptFile(engine_, name_, builtins, sysvars, err, &hash)) {

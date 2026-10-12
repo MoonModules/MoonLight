@@ -747,7 +747,7 @@ to audio) rather than one general struct.
 
 **MoonLive is in scope for this sensor, through a power function.** A script cannot upload the blob
 and never should, but it does not need to: the compiled module owns the blob, the bus and the frame,
-and the script reads a zone through a builtin the way it already calls `beat()` or `paletteR()`
+and the script reads a zone through a builtin the way it already calls `beat()` or `paletteRGB()`
 without implementing either. So this step ships a builtin alongside the module:
 
 ```c

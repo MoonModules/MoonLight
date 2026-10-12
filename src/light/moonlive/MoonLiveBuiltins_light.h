@@ -47,16 +47,6 @@ inline uint8_t byteArg(uintptr_t a) {
     return v < 0 ? 0 : (v > 255 ? 255 : static_cast<uint8_t>(v));
 }
 
-// The active palette, with no hsv() beside it: a hue wheel ignores the user's choice.
-extern "C" inline uint32_t mm_light_paletteR(const uintptr_t* args, uint32_t, const uint8_t*) {
-    return colorFromPalette(*Palettes::active(), byteArg(args[0]), byteArg(args[1])).r;
-}
-extern "C" inline uint32_t mm_light_paletteG(const uintptr_t* args, uint32_t, const uint8_t*) {
-    return colorFromPalette(*Palettes::active(), byteArg(args[0]), byteArg(args[1])).g;
-}
-extern "C" inline uint32_t mm_light_paletteB(const uintptr_t* args, uint32_t, const uint8_t*) {
-    return colorFromPalette(*Palettes::active(), byteArg(args[0]), byteArg(args[1])).b;
-}
 
 
 
@@ -474,7 +464,7 @@ extern "C" inline uint32_t mm_light_setPaletteColorZ(const uintptr_t* args, uint
     return 0;
 }
 
-// One call rather than the three `paletteR/G/B` cost: 1451 us against 1940 us on an S3.
+// One call writing the pixel, rather than a palette read and a setRGB.
 /// Color one light from the active palette at a brightness, dropping out-of-range coordinates.
 extern "C" inline uint32_t mm_light_setPaletteColor(const uintptr_t* args, uint32_t, const uint8_t*) {
     const draw::Canvas& cv = drawCanvas();
@@ -595,13 +585,23 @@ extern "C" inline uint32_t mm_light_fade(const uintptr_t* args, uint32_t, const 
     return 0;
 }
 
-// The color calls are the compiled effects' own draw functions, by the index a script counts lights in.
-/// Read one light's red channel; 0 past the end, one channel per call as paletteR/G/B.
-extern "C" inline uint32_t mm_light_getR(const uintptr_t* args, uint32_t, const uint8_t*) { return draw::get(drawCanvas(), size_t(args[0])).r; }
-/// Read one light's green channel.
-extern "C" inline uint32_t mm_light_getG(const uintptr_t* args, uint32_t, const uint8_t*) { return draw::get(drawCanvas(), size_t(args[0])).g; }
-/// Read one light's blue channel.
-extern "C" inline uint32_t mm_light_getB(const uintptr_t* args, uint32_t, const uint8_t*) { return draw::get(drawCanvas(), size_t(args[0])).b; }
+// A struct answer goes back through the call's own argument slots, where the compiler reads it after the call.
+/// Read one light's color as an RGB through the compiled effects' own draw::get, black past the end.
+extern "C" inline uint32_t mm_light_getRGB(const uintptr_t* args, uint32_t, const uint8_t*) {
+    const RGB c = draw::get(drawCanvas(), size_t(args[0]));
+    uintptr_t* out = const_cast<uintptr_t*>(args);
+    out[0] = c.r; out[1] = c.g; out[2] = c.b;
+    return 0;
+}
+
+// The active palette, with no hsv() beside it: a hue wheel ignores the user's choice.
+/// A color from the active palette at a brightness, as an RGB.
+extern "C" inline uint32_t mm_light_paletteRGB(const uintptr_t* args, uint32_t, const uint8_t*) {
+    const RGB c = colorFromPalette(*Palettes::active(), byteArg(args[0]), byteArg(args[1]));
+    uintptr_t* out = const_cast<uintptr_t*>(args);
+    out[0] = c.r; out[1] = c.g; out[2] = c.b;
+    return 0;
+}
 
 /// Scale one light by `k` out of 255, through draw::scalePixel.
 extern "C" inline uint32_t mm_light_mulRGB(const uintptr_t* args, uint32_t, const uint8_t*) {
@@ -887,9 +887,10 @@ extern "C" inline uint32_t mm_light_smin(const uintptr_t* args, uint32_t, const 
 inline void addLightColorBuiltins(BuiltinTable& t) {
     // setRGB writes one bounds-guarded pixel through the StoreElem inline op.
     t.add({"setRGB", 4, /*returns*/ false, BuiltinKind::Inline, nullptr, InlineOp::StoreElem});
-    t.add({"getR", 1, /*returns*/ true, BuiltinKind::Call, &mm_light_getR, {}});
-    t.add({"getG", 1, /*returns*/ true, BuiltinKind::Call, &mm_light_getG, {}});
-    t.add({"getB", 1, /*returns*/ true, BuiltinKind::Call, &mm_light_getB, {}});
+    // A struct answer: the light's color, one call.
+    Builtin getRGB{"getRGB", 1, /*returns*/ false, BuiltinKind::Call, &mm_light_getRGB, {}};
+    getRGB.retStruct = "RGB";
+    t.add(getRGB);
     t.add({"mulRGB", 2, /*returns*/ false, BuiltinKind::Call, &mm_light_mulRGB, {}});
     t.add({"addRGB", 4, /*returns*/ false, BuiltinKind::Call, &mm_light_addRGB, {}});
     t.add({"blendRGB", 5, /*returns*/ false, BuiltinKind::Call, &mm_light_blendRGB, {}});
@@ -901,6 +902,9 @@ inline const BuiltinTable& lightBuiltins() {
     // Built once, since it is 2 KB by value and constant after registration.
     static const BuiltinTable table = [] {
         BuiltinTable t;
+    // The types the light vocabulary speaks in, which the compiled effects use as RGB and Coord3D.
+    t.addStruct({"RGB", CtrlType::Byte, 3, {"r", "g", "b"}});
+    t.addStruct({"Coord3D", CtrlType::Int, 3, {"x", "y", "z"}});
     // The neutral half first, so a name means the same thing here as in a service.
     addCommonBuiltins(t);
     // smin stays here, since it wraps a shape helper and is not neutral.
@@ -978,10 +982,10 @@ inline const BuiltinTable& lightBuiltins() {
     // A palette script's only output, and a no-op in every other role, where no sink is installed.
     t.add({"setPalEntry", 4, /*returns*/ false, BuiltinKind::Call, &mm_light_setPalEntry, {}});
     t.add({"setPalEntryHSV", 4, /*returns*/ false, BuiltinKind::Call, &mm_light_setPalEntryHSV, {}});
-    // One channel each, for a script that wants the value rather than a written pixel.
-    t.add({"paletteR", 2, /*returns*/ true, BuiltinKind::Call, &mm_light_paletteR, {}});
-    t.add({"paletteG", 2, /*returns*/ true, BuiltinKind::Call, &mm_light_paletteG, {}});
-    t.add({"paletteB", 2, /*returns*/ true, BuiltinKind::Call, &mm_light_paletteB, {}});
+    // The color as a value rather than a written pixel, a struct answer.
+    Builtin paletteRGB{"paletteRGB", 2, /*returns*/ false, BuiltinKind::Call, &mm_light_paletteRGB, {}};
+    paletteRGB.retStruct = "RGB";
+    t.add(paletteRGB);
     // Caught here, since a dropped registration surfaces much later as an unknown function.
     MM_ASSERT_NO_BUILTIN_OVERFLOW(t);
         return t;

@@ -148,7 +148,7 @@ private:
 
     CodePos  labelPos_[kMaxLabels];
     uint8_t  labelCount_ = 0;
-    struct Fixup { size_t at; Label label; FixKind kind; };
+    struct Fixup { CodePos at; Label label; FixKind kind; };
     Fixup    fixups_[kMaxFixups];
     uint8_t  fixupCount_ = 0;
 

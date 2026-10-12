@@ -293,6 +293,26 @@ TEST_CASE("Xtensa shlImm encodes 32-n where sarImm encodes n") {
     CHECK(r.bytes()[2] == 0x31);
 }
 
+// A byte narrows by a shift up 24 and back, and the wide shifts had no encoding, so `byte b = x + 1;` failed on ESP32.
+TEST_CASE("Xtensa shrImm reaches every shift from 16 to 31 through extui") {
+    using Asm = mm_xtensa_backend::mm::moonlive::XtensaAssembler;
+    using mm_xtensa_backend::mm::moonlive::R0;
+    using mm_xtensa_backend::mm::moonlive::R1;
+    // The bytes xtensa-esp32-elf-as emits for extui a2, a3, n, 32-n.
+    const struct { uint8_t n; uint8_t b[3]; } kCases[] = {
+        {16, {0x30, 0x20, 0xf5}}, {24, {0x30, 0x28, 0x75}}, {17, {0x30, 0x21, 0xe5}}, {31, {0x30, 0x2f, 0x05}}};
+    for (const auto& c : kCases) {
+        CAPTURE(int(c.n));
+        Asm a(64); a.shrImm(R0, R1, c.n);
+        REQUIRE(a.size() == 3);
+        CHECK(a.bytes()[0] == c.b[0]);
+        CHECK(a.bytes()[1] == c.b[1]);
+        CHECK(a.bytes()[2] == c.b[2]);
+    }
+    Asm none(64); none.shrImm(R0, R1, 32);
+    CHECK(none.overflowed());
+}
+
 // The 4-byte slot access, in the NARROW forms: l32i.n/s32i.n are 2 bytes where the halfword forms are 3, so every scalar access got SMALLER as well as wider. The offset field holds offset/4, which is the encoding that would silently address four times too far if read as a byte offset, pinned against the ESP-IDF assembler's own bytes.
 TEST_CASE("Xtensa load32 emits the two-byte l32i.n with a scaled offset") {
     using Asm = mm_xtensa_backend::mm::moonlive::XtensaAssembler;

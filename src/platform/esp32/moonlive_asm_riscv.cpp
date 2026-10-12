@@ -74,8 +74,8 @@ void RiscvAssembler::callLabel(Label l, Reg d, bool take) {
 
 // Record a pending branch fixup, guarding the fixed table (overflow_ rather than an OOB write).
 void RiscvAssembler::addFixup(size_t at, Label label, FixKind kind) {
-    if (fixupCount_ >= kMaxFixups) { overflow_ = true; return; }
-    fixups_[fixupCount_++] = {at, label, kind};
+    if (fixupCount_ >= kMaxFixups || at >= kUnbound) { overflow_ = true; return; }
+    fixups_[fixupCount_++] = {static_cast<CodePos>(at), label, kind};
 }
 
 // --- I/R/S-type encoders (rd/rs1/rs2 are real x-register numbers) ---
