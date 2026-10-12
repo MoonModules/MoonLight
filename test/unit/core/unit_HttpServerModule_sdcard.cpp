@@ -54,6 +54,18 @@ std::string pattern(size_t n) {
     return s;
 }
 
+// Connects, declares a 10000-byte upload to `path` but sends only 100, then ticks once so the slot claims it: in flight, never finished.
+void claimStuckUpload(mm::HttpServerModule& http, mm::platform::TcpConnection& client, const char* path) {
+    REQUIRE(connectAndAccept(http, client));
+    char req[256];
+    const int reqLen = std::snprintf(req, sizeof(req),
+        "POST /api/file?path=%s HTTP/1.1\r\nContent-Length: 10000\r\n\r\n", path);
+    REQUIRE(client.write(reinterpret_cast<const uint8_t*>(req), static_cast<size_t>(reqLen)));
+    const std::string partial = pattern(100);
+    REQUIRE(client.write(reinterpret_cast<const uint8_t*>(partial.data()), partial.size()));
+    http.tick20ms();
+}
+
 // Mounts a real card under a fresh temp dir for one test, and tears it down after.
 struct SdFixture {
     char root[256];
@@ -208,20 +220,12 @@ TEST_CASE("an SD upload that stalls mid-transfer is closed and its slot frees fo
     http.port = kTestPort;
     http.setup();
     mm::platform::TcpConnection client;
-    REQUIRE(connectAndAccept(http, client));
-
-    // Declares 10000 bytes, sends only 100, then goes silent: a stuck upload, never completed.
-    char req[256];
-    const int reqLen = std::snprintf(req, sizeof(req),
-        "POST /api/file?path=/sd/stuck.bin HTTP/1.1\r\nContent-Length: 10000\r\n\r\n");
-    REQUIRE(client.write(reinterpret_cast<const uint8_t*>(req), static_cast<size_t>(reqLen)));
-    const std::string partial = pattern(100);
-    REQUIRE(client.write(reinterpret_cast<const uint8_t*>(partial.data()), partial.size()));
-    http.tick20ms();   // claims the slot, writes the 100 bytes already buffered
+    claimStuckUpload(http, client, "/sd/stuck.bin");   // goes silent after this: a stuck upload, never completed
 
     // Comfortably past the stall guard (the real bound is a private implementation detail).
     mm::platform::setTestNowMs(1000 + 60000);
     for (int i = 0; i < 10; i++) http.tick20ms();
+    char req[32];
     CHECK(client.read(reinterpret_cast<uint8_t*>(req), sizeof(req)) == 0);   // closed, no response
 
     // The slot is free again: a fresh, small upload still completes normally.
@@ -234,6 +238,25 @@ TEST_CASE("an SD upload that stalls mid-transfer is closed and its slot frees fo
 
     client2.close();
     http.release();
+}
+
+// Point 7 of the review: release() left an active slot's stream and socket open, leaking a FIL (or its desktop equivalent) and a connection.
+TEST_CASE("release mid-transfer closes the slot's stream and socket, leaking neither") {
+    SdFixture fix;
+    mm::HttpServerModule http;
+    http.port = kTestPort;
+    http.setup();
+    mm::platform::TcpConnection client;
+    claimStuckUpload(http, client, "/sd/leak.bin");
+    REQUIRE(mm::platform::sdCardBusy());   // the open stream holds the busy guard
+
+    http.release();
+    CHECK_FALSE(mm::platform::sdCardBusy());   // the stream closed, not just abandoned to a dangling handle
+    char req[32];
+    CHECK(client.read(reinterpret_cast<uint8_t*>(req), sizeof(req)) == 0);   // the socket closed too
+    CHECK_FALSE(std::filesystem::exists(std::string(fix.root) + "/sd/leak.bin.tmp"));   // no leftover temp
+
+    client.close();
 }
 
 TEST_CASE("an SD upload past the card's free space is refused with 507, immediately") {

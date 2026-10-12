@@ -115,6 +115,7 @@ void HttpServerModule::release() {
     }
     for (auto& ws : wsClients_) ws.close();
     for (auto& c : parked_) c.close();
+    releaseSdTransfers();
     // Every close site notifies the producer (see cancelBufferedSend), else ghost standing requests keep the driver gathering frames for nobody.
     for (int i = 0; i < MAX_PREVIEW_CLIENTS; i++) {
         if (previewClients_[i].valid() && clientSink_) clientSink_->onClientGone(i);
@@ -194,6 +195,18 @@ void HttpServerModule::finishSdTransfer(SdTransfer& t, bool closeConn) {
     t.active = false;
     t.wstream = platform::FsWriteStream{};
     t.rstream = platform::FsReadStream{};
+}
+
+// release()'s own cleanup: an active slot holds a FIL (or its desktop equivalent) and a socket, neither freed by going out of scope.
+void HttpServerModule::releaseSdTransfers() {
+    if constexpr (platform::hasSdCard) {
+        for (auto& t : sdTransfers_) {
+            if (!t.active) continue;
+            if (t.isUpload) platform::fsWriteStreamClose(t.wstream, false);
+            else platform::fsReadStreamClose(t.rstream);
+            finishSdTransfer(t, true);
+        }
+    }
 }
 
 // An upload slot's bounded chunk: socket to card, then the stall guard.

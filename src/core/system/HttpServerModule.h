@@ -42,8 +42,7 @@ class Scheduler;
 /// A mutation is `POST /api/control` with a module, control and value; `POST /api/modules` to create; `POST /api/modules/{name}/move` to reorder and `.../replace` to swap; `POST /api/reboot`; or `DELETE /api/modules/{name}`.
 ///
 /// The File Manager reads and writes through `GET|POST /api/file?path=`, and lists, creates and removes through `/api/dir?path=`. The path rides the query, so a filesystem operation carries its target in the request rather than in a stored control.
-/// A board with an SD slot (`SdCardModule`) mounts it at `/sd`, so these same two routes reach the card too.
-/// The tree shows it as a folder next to the internal flash.
+/// A board with an SD slot (`SdCardModule`) mounts it at `/sd`, so these same two routes reach the card too, shown as a folder next to the internal flash.
 ///
 /// Every JSON response streams through a `JsonSink`, so there is no fixed-buffer ceiling and a tree of any size serializes correctly.
 ///
@@ -410,6 +409,8 @@ private:
     void driveSdDownload(SdTransfer& t, uint32_t now);
     /// Close the stream (already done by the caller) and the connection, and free the slot.
     void finishSdTransfer(SdTransfer& t, bool closeConn);
+    /// Close every active slot's stream and socket; release()'s own cleanup, since going out of scope frees neither.
+    void releaseSdTransfers();
 
     ClientMessageSink* clientSink_ = nullptr;   // the producer's inbound-message sink (PreviewDriver) @xref{crossing-the-domain-boundary}
 
