@@ -1,5 +1,5 @@
 {
-  "commit": "ac6ab2b9",
+  "commit": "ab9024f0",
   "flash": {
     "esp32s3-n16r8": 2336304,
     "esp32": 2226256,
@@ -683,12 +683,12 @@
       }
     },
     "desktop-linux": {
-      "tick_us": 6,
-      "fps": 166666
+      "tick_us": 5,
+      "fps": 200000
     }
   },
   "loc": {
-    "core": 28740,
+    "core": 28736,
     "light": 31027,
     "platform": 18685,
     "ui": 12350,
@@ -697,7 +697,7 @@
   },
   "comments": {
     "core": {
-      "lines": 6250,
+      "lines": 6246,
       "ratio": 0.241
     },
     "light": {
@@ -727,7 +727,7 @@
   },
   "docs": {
     "md_files": 150,
-    "md_lines": 32283,
+    "md_lines": 32281,
     "plans_files": 44,
     "backlog_lines": 3319,
     "lessons_lines": 532,

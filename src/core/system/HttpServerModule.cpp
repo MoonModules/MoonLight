@@ -209,8 +209,7 @@ void HttpServerModule::releaseSdTransfers() {
     }
 }
 
-// An upload slot's bounded chunk: socket to card, then the stall guard.
-// Reads into t.buf, not a stack-local: that put a 4 KB frame on this task's stack every tick, until one coincided with other deep stack use and panicked the board.
+// An upload slot's bounded chunk, socket to card then the stall guard; uses t.buf, not a stack-local, since a 4 KB frame here once panicked the board.
 bool HttpServerModule::driveSdUpload(SdTransfer& t, uint32_t now) {
     if (t.remaining > 0) {
         const size_t want = t.remaining < sizeof(t.buf) ? t.remaining : sizeof(t.buf);
@@ -277,8 +276,7 @@ bool HttpServerModule::driveSdDownload(SdTransfer& t, uint32_t now) {
     return false;
 }
 
-// Several bounded chunks per slot per tick, not one, while storage and the peer keep up; a slow side yields within budget, dispatched to the upload or download leg.
-// Mirrors drainPreviewSend/drainStateSend's shape, non-blocking reads/writes throughout.
+// Several bounded chunks per slot per tick, not one, dispatched to the upload or download leg while storage and the peer keep up; mirrors drainPreviewSend/drainStateSend's non-blocking shape.
 void HttpServerModule::driveSdTransfers() {
     const uint32_t budgetStart = platform::millis();
     for (auto& t : sdTransfers_) {
@@ -357,9 +355,7 @@ bool HttpServerModule::handleConnection(platform::TcpConnection& conn, int patie
         auto* clh = findHeaderCI(req, "Content-Length:");
         if (clh) {
             hasContentLen = true;
-            // An /sd upload rides FAT32's own ceiling (4 GiB-1, which is UINT32_MAX exactly) rather than the 8 MiB one below.
-            // strtoull, not strtoul: `unsigned long` is only 32-bit on a 32-bit target (the P4 is RV32), the same width as the SD ceiling itself, so a truly-oversized value would overflow the parse (ERANGE) before ever reaching the ceiling compare below; `unsigned long long` is guaranteed at least 64-bit everywhere, so the two cases stay distinguishable on every platform.
-            // requestNamesSdPath is a cheap scan of the request line alone, a sizing heuristic only; parseFilePath is the real path guard, downstream, on the decoded value.
+            // An /sd upload rides FAT32's own ceiling, 4 GiB-1 (UINT32_MAX), via strtoull not strtoul: `unsigned long` is only 32-bit on this RV32 target, the same width as that ceiling itself.
             const bool sdUpload = std::strncmp(req, "POST /api/file", 14) == 0 && requestNamesSdPath(req);
             const unsigned long long kContentLenMax = sdUpload ? 0xFFFFFFFFULL : 8ULL * 1024 * 1024;
             const char* valStart = clh + 15;

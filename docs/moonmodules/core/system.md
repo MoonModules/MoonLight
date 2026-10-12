@@ -249,15 +249,13 @@ Detail: [technical](moxygen/FileManagerModule.md)
 
 ### SD Card
 
-A board's microSD slot, where one is wired: pins, a usage gauge and a format button. No panel of its own; mounted, its files appear under `/sd` in the one File Manager tree above. Behavior: ⌄ details.
+A board's microSD slot, where one is wired: pins, a usage gauge and a format button. Mounted, its files appear under `/sd`, within the one File Manager tree above. Behavior: ⌄ details.
 
 <img src="../../assets/core/SdCardModule.png" width="300" alt="SD Card module controls">
 
-- `clkPin` / `cmdPin` / `d0Pin`-`d3Pin` / `pwrPin`: the SDMMC pins, −1 for unused.
-- `d1Pin`-`d3Pin` left unset drop the bus to 1-bit mode.
+- `clkPin` / `cmdPin` / `d0Pin`-`d3Pin` / `pwrPin`: SDMMC pins, −1 unused; `d1`-`d3` unset is 1-bit.
 - `format`: a button, press twice; erases and reformats the card as FAT32 in place.
-- `card (KiB)`: read-only usage bar, used / total KiB.
-- KiB rather than bytes, so a card past 4 GiB still reports correctly.
+- `card (KiB)`: read-only usage bar, used / total KiB, so a card past 4 GiB still reports correctly.
 
 Detail: [technical](moxygen/SdCardModule.md)
 

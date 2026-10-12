@@ -7,7 +7,7 @@
 
 namespace mm {
 
-/// A board's microSD slot: pins, a usage gauge and a format button. Its files appear under `/sd` in the one File Manager tree, not a panel of their own.
+/// A board's microSD slot: pins, a usage gauge and a format button. Its files appear under `/sd`, within the existing File Manager tree.
 ///
 /// A Services child, added only to a board's catalog entry, the way AudioService's mic pins are.
 /// @card SdCardModule.png
@@ -27,7 +27,7 @@ namespace mm {
 /// A pull or a reinsert needs no pin touch or reboot. `tick1s()` polls `platform::sdCardPresent()` every second while mounted, and retries `platform::sdMount()` every few seconds while not; either direction is noticed on its own.
 /// An unmount or a format while a stream is open is refused rather than run underneath it: the status reads "busy: transfer in progress" instead. A removal mid-transfer waits for the existing stall timeout to close that stream first, before its own unmount can succeed.
 ///
-/// ## No panel, no view toggle
+/// ## Pins, gauge and format are this module's whole surface
 ///
 /// The card mounts at `/sd`, so the existing File Manager tree already shows it; this module owns only pins, the gauge and format.
 ///
