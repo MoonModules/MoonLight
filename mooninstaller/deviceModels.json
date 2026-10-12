@@ -13,11 +13,10 @@
       "LEDs",
       "WiFi",
       "Ethernet",
-      "Buttons"
-    ],
-    "planned": [
+      "Buttons",
       "SD card"
     ],
+    "planned": [],
     "state": {
       "System": {
         "deviceModel": "Olimex ESP32-Gateway Rev G"
@@ -47,6 +46,10 @@
               "kind": "toggle"
             }
           ]
+        },
+        "SdCard": {
+          "type": "SdCardService",
+          "board": "Classic SDMMC (1-bit)"
         }
       }
     }
@@ -473,11 +476,11 @@
       "WiFi",
       "Ethernet",
       "Buttons",
-      "Relay"
+      "Relay",
+      "SD card"
     ],
     "planned": [
-      "Temperature",
-      "SD card"
+      "Temperature"
     ],
     "state": {
       "System": {
@@ -514,6 +517,10 @@
               "activeLow": true
             }
           ]
+        },
+        "SdCard": {
+          "type": "SdCardService",
+          "board": "Classic SPI"
         }
       }
     },
@@ -887,7 +894,8 @@
     "supported": [
       "LEDs",
       "Ethernet",
-      "Audio"
+      "Audio",
+      "SD card"
     ],
     "planned": [
       "Audio codec",
@@ -908,6 +916,10 @@
           "sdPin": 33,
           "mclkPin": 36,
           "gain": 100
+        },
+        "SdCard": {
+          "type": "SdCardService",
+          "board": "P4 SDMMC"
         }
       },
       "Drivers": {
@@ -954,11 +966,11 @@
     "supported": [
       "LEDs",
       "WiFi",
-      "Ethernet"
+      "Ethernet",
+      "SD card"
     ],
     "planned": [
-      "Button",
-      "SD card"
+      "Button"
     ],
     "state": {
       "System": {
@@ -992,6 +1004,12 @@
         "$patch": "replace",
         "Layer": {
           "type": "Layer"
+        }
+      },
+      "Services": {
+        "SdCard": {
+          "type": "SdCardService",
+          "board": "Classic SDMMC (1-bit)"
         }
       }
     },
@@ -1125,7 +1143,8 @@
       "LEDs",
       "WiFi",
       "Ethernet",
-      "Audio"
+      "Audio",
+      "SD card"
     ],
     "planned": [
       "Speaker",
@@ -1166,6 +1185,10 @@
           "mclkPin": 13,
           "codec": "ES8311",
           "codecAddr": "0x18"
+        },
+        "SdCard": {
+          "type": "SdCardService",
+          "board": "P4 SDMMC"
         }
       }
     }
@@ -1226,14 +1249,8 @@
           "codecAddr": "0x18"
         },
         "SdCard": {
-          "type": "SdCardModule",
-          "clkPin": 43,
-          "cmdPin": 44,
-          "d0Pin": 39,
-          "d1Pin": 40,
-          "d2Pin": 41,
-          "d3Pin": 42,
-          "pwrPin": 45
+          "type": "SdCardService",
+          "board": "P4 SDMMC"
         }
       }
     }
@@ -1249,7 +1266,8 @@
     "supported": [
       "LEDs",
       "Ethernet",
-      "Audio"
+      "Audio",
+      "SD card"
     ],
     "planned": [
       "Speaker",
@@ -1282,6 +1300,10 @@
           "mclkPin": 13,
           "codec": "ES8311",
           "codecAddr": "0x18"
+        },
+        "SdCard": {
+          "type": "SdCardService",
+          "board": "P4 SDMMC"
         }
       }
     }
@@ -1298,7 +1320,8 @@
     "supported": [
       "LEDs",
       "Ethernet",
-      "Audio"
+      "Audio",
+      "SD card"
     ],
     "planned": [
       "WiFi",
@@ -1325,6 +1348,10 @@
           "sdPin": 33,
           "mclkPin": 36,
           "gain": 100
+        },
+        "SdCard": {
+          "type": "SdCardService",
+          "board": "P4 SDMMC"
         }
       },
       "Drivers": {

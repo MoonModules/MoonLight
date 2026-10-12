@@ -12,7 +12,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { fnSource } from "./app-source.mjs";
 
-// A minimal fake DOM: just enough of createElement/appendChild/remove/getElementById for
+// A minimal fake DOM: enough of createElement/appendChild/remove/getElementById for
 // fmUploadPanel and fmUploadPanelRow, which this codebase has no existing mock for (its DOM-heavy
 // code is exercised by the Playwright --ui scenarios instead, not this node:test harness).
 function fakeElement(tag) {

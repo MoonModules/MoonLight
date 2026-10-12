@@ -245,20 +245,6 @@ Known renames from [MIGRATING.md](../../reference/MIGRATING.md) apply before upl
 
 Detail: [technical](moxygen/FileManagerModule.md)
 
-<a id="sd-card"></a>
-
-### SD Card
-
-A board's microSD slot, where one is wired: pins, a usage gauge and a format button. Mounted, its files appear under `/sd`, within the one File Manager tree above. Behavior: ⌄ details.
-
-<img src="../../assets/core/SdCardModule.png" width="300" alt="SD Card module controls">
-
-- `clkPin` / `cmdPin` / `d0Pin`-`d3Pin` / `pwrPin`: SDMMC pins, −1 unused; `d1`-`d3` unset is 1-bit.
-- `format`: a button, press twice; erases and reformats the card as FAT32 in place.
-- `card (KiB)`: read-only usage bar, used / total KiB, so a card past 4 GiB still reports correctly.
-
-Detail: [technical](moxygen/SdCardModule.md)
-
 <a id="i2c-bus"></a>
 
 ### I2C bus
@@ -497,9 +483,3 @@ The panel is a lazy folder **tree** (each folder loads its children on first exp
 - Create / delete are HTTP calls (`POST` / `DELETE /api/dir?path=`), not controls, the path rides the request, so nothing is stored on the device per op.
 
 Last-modified dates (needs an NTP time source + LittleFS mtime), binary/large + folder upload, folder-as-zip download, and `.ml` syntax highlighting are backlogged ([backlog-core § File Manager follow-ups](../../work/future/backlog-core.md#file-manager-follow-ups)).
-
-## SD Card, details
-
-Mounts live, in `prepare()` rather than `setup()`: editing a pin unmounts and remounts on the new wiring, no reboot needed, the same contract I2C bus's `sda`/`scl` have below. A missing or unreadable card shows its own status instead of retrying every tick; reinsert it and touch a pin field (or reboot) to try again.
-
-The card is FAT32 only (ESP-IDF's FatFs ships with exFAT compiled out); `format` reformats one to FAT32 in place rather than requiring a second device. Once mounted, its content is reached through the File Manager above exactly like the internal flash, under an `sd` folder; this module never duplicates that tree.

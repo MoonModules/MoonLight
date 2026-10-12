@@ -132,6 +132,8 @@ constexpr bool hasImprov = false;
 
 /// True: unlike every other board gate here, the mount/remount/format logic under test needs a real host path, not a stub.
 constexpr bool hasSdCard = true;
+/// True: no slot is wired, so SdCardService offers every board preset, for the tests to exercise them.
+constexpr bool previewsSdPresets = true;
 
 /// @}
 

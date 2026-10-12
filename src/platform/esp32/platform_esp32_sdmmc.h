@@ -2,8 +2,7 @@
 
 #include "platform/platform.h"
 
-/// The SD card backend behind every `/sd`-prefixed `fsXxx` call, split out of platform_esp32_fs.cpp, which dispatches here.
-/// Every path below is the full API path (such as `/sd/foo.txt`), translated internally onto the real FatFs mount point.
+/// The SD card backend behind every `/sd`-prefixed `fsXxx` call, split out of platform_esp32_fs.cpp, which dispatches here. Every path below is the full API path (such as `/sd/foo.txt`), translated internally onto the real FatFs mount point.
 
 namespace mm::platform {
 

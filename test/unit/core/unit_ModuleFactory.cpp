@@ -115,6 +115,8 @@ class HeapCountedStub : public mm::MoonModule {
 public:
     static inline int heapBuilt = 0;
     void* operator new(size_t size) noexcept { heapBuilt++; return mm::MoonModule::operator new(size); }
+    // Paired with the new above, which GCC requires of a class-specific allocator.
+    void operator delete(void* ptr) noexcept { mm::MoonModule::operator delete(ptr); }
     uint8_t big[8192] = {};   ///< larger than a classic ESP32's boot-task stack can spare
 };
 }  // namespace

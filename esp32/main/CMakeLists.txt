@@ -12,7 +12,7 @@ idf_component_register(
         "../../src/core/system/HttpServerModule.cpp"
         "../../src/core/system/FilesystemModule.cpp"
         "../../src/core/system/FileManagerModule.cpp"
-        "../../src/core/system/SdCardModule.cpp"
+        "../../src/core/services/SdCardService.cpp"
         "../../src/core/system/MqttModule.cpp"
         "../../src/core/module/Scheduler.cpp"
         "../../src/core/module/StateDocument.cpp"

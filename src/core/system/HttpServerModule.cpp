@@ -307,7 +307,7 @@ bool HttpServerModule::anyWsClientOnAccessPoint() const MM_NONBLOCKING {
     return false;
 }
 
-// A cheap scan of the request line's query for a "/sd" path, used only to size the Content-Length ceiling before the real path is decoded; parseFilePath is the actual guard, downstream.
+// A cheap scan of the query for a "/sd" path, which only sizes the Content-Length ceiling; parseFilePath is the real guard, downstream.
 static bool requestNamesSdPath(const char* req) {
     const char* lineEnd = std::strstr(req, "\r\n");
     const size_t lineLen = lineEnd ? static_cast<size_t>(lineEnd - req) : std::strlen(req);
@@ -924,7 +924,7 @@ void HttpServerModule::handleApplyState(platform::TcpConnection& conn, const cha
     sendResponse(conn, r.ok ? 200 : 400, "application/json", sink.overflowed() ? "{\"error\":\"out of memory\"}" : sink.data());
 }
 
-// The /sd leg of handleWriteFile: claims a transfer slot, opens the stream, writes whatever of the body already landed in the request buffer, then hands the rest to driveSdTransfers a tick at a time.
+// The /sd leg of handleWriteFile: claims a slot, opens the stream, writes the body already buffered, and leaves the rest to driveSdTransfers.
 void HttpServerModule::handleWriteFileSd(platform::TcpConnection& conn, const char* path,
                                          const char* initialBody, size_t initialLen, size_t contentLen) {
     // Reject up front if it would not fit the card, rather than failing mid-write; free is taken conservatively, with no credit for an overwrite. Without hasSdCard, claimSdTransfer answers 503.

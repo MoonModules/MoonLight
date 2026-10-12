@@ -1,18 +1,19 @@
 /// @module HttpServerModule
-/// @also SdCardModule
+/// @also SdCardService
 ///
-/// `/api/file` and `/api/dir` reach the card through the same path-prefix dispatch every other `fsXxx` call uses.
-/// A large transfer resumes a bounded slice per tick (driveSdTransfers) instead of blocking one.
-/// Driven over loopback against the real server, as unit_HttpServerModule_connections.cpp does for parking.
+/// `/api/file` and `/api/dir` reach the card through the `fsXxx` path-prefix dispatch, a large transfer moving a bounded slice per tick, driven over loopback against the real server.
 
 #include "doctest.h"
 #include "core/system/HttpServerModule.h"
 #include "platform/platform.h"
 
 #include <algorithm>
+#include <chrono>
+#include <cstdlib>
 #include <cstring>
 #include <filesystem>
 #include <string>
+#include <thread>
 #include <vector>
 
 namespace {
@@ -33,6 +34,15 @@ bool connectAndAccept(mm::HttpServerModule& http, mm::platform::TcpConnection& c
     return true;
 }
 
+// Sends a POST of `payload` to `path`: the header, then the whole body.
+void postFile(mm::platform::TcpConnection& client, const char* path, const std::string& payload) {
+    char req[256];
+    const int reqLen = std::snprintf(req, sizeof(req),
+        "POST /api/file?path=%s HTTP/1.1\r\nContent-Length: %zu\r\n\r\n", path, payload.size());
+    REQUIRE(client.write(reinterpret_cast<const uint8_t*>(req), static_cast<size_t>(reqLen)));
+    REQUIRE(client.write(reinterpret_cast<const uint8_t*>(payload.data()), payload.size()));
+}
+
 // Ticks the server, accumulating whatever the client reads, until `out` holds at least `wantAtLeast` bytes or `maxTicks` is spent; returns what was accumulated.
 std::string pumpUntil(mm::HttpServerModule& http, mm::platform::TcpConnection& client,
                       size_t wantAtLeast, int maxTicks = 3000) {
@@ -47,6 +57,23 @@ std::string pumpUntil(mm::HttpServerModule& http, mm::platform::TcpConnection& c
     return out;
 }
 
+// Whether a reply holds a whole response: its headers and the Content-Length bytes of body after them.
+bool wholeResponse(const std::string& reply) {
+    const size_t end = reply.find("\r\n\r\n");
+    if (end == std::string::npos) return false;
+    const size_t at = reply.find("Content-Length: ");
+    const size_t length = at < end ? std::strtoul(reply.c_str() + at + 16, nullptr, 10) : 0;
+    return reply.size() >= end + 4 + length;
+}
+
+// Sends a whole request and returns the whole response, since macOS loopback can deliver the body a moment after the status line.
+std::string request(mm::HttpServerModule& http, mm::platform::TcpConnection& client, const char* req) {
+    REQUIRE(client.write(reinterpret_cast<const uint8_t*>(req), std::strlen(req)));
+    std::string reply = pumpUntil(http, client, 12);
+    for (int i = 0; i < 3000 && !wholeResponse(reply); i++) reply += pumpUntil(http, client, 1, 1);
+    return reply;
+}
+
 // A deterministic byte pattern, long enough (> the 4096-byte per-tick chunk) to force several ticks of driveSdTransfers regardless of how fast loopback delivers the bytes.
 std::string pattern(size_t n) {
     std::string s(n, '\0');
@@ -54,7 +81,26 @@ std::string pattern(size_t n) {
     return s;
 }
 
-// Connects, declares a 10000-byte upload to `path` but sends only 100, then ticks once so the slot claims it: in flight, never finished.
+// Ticks with a millisecond between them, since Linux loopback delivers a write at once and macOS a moment later; a tick with nothing new is harmless.
+void tickWhileDelivering(mm::HttpServerModule& http, int ticks = 5) {
+    for (int i = 0; i < ticks; i++) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        http.tick20ms();
+    }
+}
+
+// What a read answers after the server closes the socket: -1 while the close is in flight, then 0.
+int readAfterClose(mm::platform::TcpConnection& client) {
+    char buf[32];
+    int got = -1;
+    for (int ms = 0; ms < 200 && got == -1; ms++) {
+        got = client.read(reinterpret_cast<uint8_t*>(buf), sizeof(buf));
+        if (got == -1) std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    return got;
+}
+
+// Connects, declares a 10000-byte upload to `path` but sends only 100, then ticks so the slot claims it: in flight, never finished.
 void claimStuckUpload(mm::HttpServerModule& http, mm::platform::TcpConnection& client, const char* path) {
     REQUIRE(connectAndAccept(http, client));
     char req[256];
@@ -63,7 +109,7 @@ void claimStuckUpload(mm::HttpServerModule& http, mm::platform::TcpConnection& c
     REQUIRE(client.write(reinterpret_cast<const uint8_t*>(req), static_cast<size_t>(reqLen)));
     const std::string partial = pattern(100);
     REQUIRE(client.write(reinterpret_cast<const uint8_t*>(partial.data()), partial.size()));
-    http.tick20ms();
+    tickWhileDelivering(http);
 }
 
 // Connects and GETs `path`, returning the response once at least `wantAtLeast` bytes have arrived.
@@ -110,7 +156,7 @@ TEST_CASE("a path traversal through /sd is rejected, the same shared guard flash
     CHECK(std::strcmp(out, "/sd/ok.bin") == 0);
 }
 
-// The card is a second mount, not a real subdirectory, so the File Manager tree would never offer it without this: a regression guard for exactly the gap found live on the bench, where /sd listed fine once you knew to ask, but the root never advertised it as a child to expand.
+// The card is a second mount, not a subdirectory: on the bench /sd listed when asked for, but the root never advertised it to the File Manager tree.
 TEST_CASE("the root listing advertises /sd as a folder, so the tree can reach it") {
     SdFixture fix;
     struct Seen { std::vector<std::string> names; bool sdIsDir = false; } seen;
@@ -127,7 +173,7 @@ TEST_CASE("the root listing advertises /sd as a folder, so the tree can reach it
 
 TEST_CASE("the root listing does not advertise /sd once the card is unmounted") {
     SdFixture fix;
-    REQUIRE(mm::platform::sdUnmount());   // same slot, pins still wired, just nothing answering now
+    REQUIRE(mm::platform::sdUnmount());   // same slot, pins still wired, nothing answering now
 
     std::vector<std::string> names;
     mm::platform::fsList("/", [](const char* name, bool, uint32_t, void* user) {
@@ -147,8 +193,7 @@ TEST_CASE("an upload to /sd without a mounted card answers \"no card mounted\", 
     REQUIRE(connectAndAccept(http, client));
 
     const char* req = "POST /api/file?path=/sd/x.bin HTTP/1.1\r\nContent-Length: 2\r\n\r\nhi";
-    REQUIRE(client.write(reinterpret_cast<const uint8_t*>(req), std::strlen(req)));
-    const std::string reply = pumpUntil(http, client, 12);
+    const std::string reply = request(http, client, req);
     CHECK(std::strncmp(reply.c_str(), "HTTP/1.1 503", 12) == 0);
     CHECK(reply.find("no card mounted") != std::string::npos);
 
@@ -165,11 +210,7 @@ TEST_CASE("an SD upload larger than one tick's chunk streams across several tick
     REQUIRE(connectAndAccept(http, client));
 
     const std::string payload = pattern(10000);
-    char req[256];
-    const int reqLen = std::snprintf(req, sizeof(req),
-        "POST /api/file?path=/sd/big.bin HTTP/1.1\r\nContent-Length: %zu\r\n\r\n", payload.size());
-    REQUIRE(client.write(reinterpret_cast<const uint8_t*>(req), static_cast<size_t>(reqLen)));
-    REQUIRE(client.write(reinterpret_cast<const uint8_t*>(payload.data()), payload.size()));
+    postFile(client, "/sd/big.bin", payload);
 
     const std::string reply = pumpUntil(http, client, 12);
     CHECK(std::strncmp(reply.c_str(), "HTTP/1.1 200", 12) == 0);
@@ -203,14 +244,10 @@ TEST_CASE("an SD upload spanning several chunks drains in far fewer ticks than c
     REQUIRE(connectAndAccept(http, client));
 
     const std::string payload = pattern(20000);   // 5 chunks' worth, at the old one-chunk-per-tick rate
-    char req[256];
-    const int reqLen = std::snprintf(req, sizeof(req),
-        "POST /api/file?path=/sd/multi.bin HTTP/1.1\r\nContent-Length: %zu\r\n\r\n", payload.size());
-    REQUIRE(client.write(reinterpret_cast<const uint8_t*>(req), static_cast<size_t>(reqLen)));
-    REQUIRE(client.write(reinterpret_cast<const uint8_t*>(payload.data()), payload.size()));
+    postFile(client, "/sd/multi.bin", payload);
 
-    // The old design needed 5 ticks for the body alone; this proves the whole upload commits in far fewer.
-    for (int i = 0; i < 2; i++) http.tick20ms();
+    // The old design needed 5 ticks for the body alone, so committing within 4 proves the drain.
+    tickWhileDelivering(http, 4);
     CHECK(mm::platform::fsSize("/sd/multi.bin") == static_cast<int64_t>(payload.size()));
 
     const std::string reply = pumpUntil(http, client, 12);
@@ -243,7 +280,7 @@ TEST_CASE("an SD download larger than one tick's chunk streams across several ti
     CHECK(body.size() == payload.size());
     CHECK(body == payload);
 
-    // The last byte lands this tick, but driveSdDownload only notices bufSent caught up to bufLen and closes the read stream on the NEXT one; give it a few before the fixture unmounts underneath it.
+    // driveSdDownload closes the read stream the tick after the last byte lands, so a few more ticks pass before the fixture unmounts underneath it.
     for (int i = 0; i < 5; i++) http.tick20ms();
     client.close();
     http.release();
@@ -285,8 +322,7 @@ TEST_CASE("an SD upload that stalls mid-transfer is closed and its slot frees fo
     // Comfortably past the stall guard (the real bound is a private implementation detail).
     mm::platform::setTestNowMs(1000 + 60000);
     for (int i = 0; i < 10; i++) http.tick20ms();
-    char req[32];
-    CHECK(client.read(reinterpret_cast<uint8_t*>(req), sizeof(req)) == 0);   // closed, no response
+    CHECK(readAfterClose(client) == 0);   // closed, no response
 
     // The slot is free again: a fresh, small upload still completes normally.
     mm::platform::TcpConnection client2;
@@ -311,9 +347,8 @@ TEST_CASE("release mid-transfer closes the slot's stream and socket, leaking nei
     REQUIRE(mm::platform::sdCardBusy());   // the open stream holds the busy guard
 
     http.release();
-    CHECK_FALSE(mm::platform::sdCardBusy());   // the stream closed, not just abandoned to a dangling handle
-    char req[32];
-    CHECK(client.read(reinterpret_cast<uint8_t*>(req), sizeof(req)) == 0);   // the socket closed too
+    CHECK_FALSE(mm::platform::sdCardBusy());   // the stream closed, not abandoned to a dangling handle
+    CHECK(readAfterClose(client) == 0);   // the socket closed too
     CHECK_FALSE(std::filesystem::exists(std::string(fix.root) + "/sd/leak.bin.tmp"));   // no leftover temp
 
     client.close();
@@ -329,11 +364,7 @@ TEST_CASE("an SD upload past the card's free space is refused with 507, immediat
     REQUIRE(connectAndAccept(http, client));
 
     const std::string payload = pattern(2000);   // bigger than the fictional card
-    char req[256];
-    const int reqLen = std::snprintf(req, sizeof(req),
-        "POST /api/file?path=/sd/toobig.bin HTTP/1.1\r\nContent-Length: %zu\r\n\r\n", payload.size());
-    REQUIRE(client.write(reinterpret_cast<const uint8_t*>(req), static_cast<size_t>(reqLen)));
-    REQUIRE(client.write(reinterpret_cast<const uint8_t*>(payload.data()), payload.size()));
+    postFile(client, "/sd/toobig.bin", payload);
 
     const std::string reply = pumpUntil(http, client, 12);
     CHECK(std::strncmp(reply.c_str(), "HTTP/1.1 507", 12) == 0);
@@ -343,7 +374,7 @@ TEST_CASE("an SD upload past the card's free space is refused with 507, immediat
     http.release();
 }
 
-// A declared length past FAT32's own ceiling (4 GiB-1) is well-formed, just too big: 413, not the generic 400 a malformed header gets; no body is sent, since the ceiling rejects on the header alone.
+// A declared length past FAT32's 4 GiB-1 ceiling is well-formed but too big: 413, not a malformed header's 400, decided on the header alone.
 TEST_CASE("an SD upload declaring more than FAT32's 4 GiB-1 ceiling is refused with 413") {
     SdFixture fix;
     mm::HttpServerModule http;
@@ -353,17 +384,14 @@ TEST_CASE("an SD upload declaring more than FAT32's 4 GiB-1 ceiling is refused w
     REQUIRE(connectAndAccept(http, client));
 
     const char* req = "POST /api/file?path=/sd/huge.bin HTTP/1.1\r\nContent-Length: 5000000000\r\n\r\n";
-    REQUIRE(client.write(reinterpret_cast<const uint8_t*>(req), std::strlen(req)));
-
-    const std::string reply = pumpUntil(http, client, 12);
+    const std::string reply = request(http, client, req);
     CHECK(std::strncmp(reply.c_str(), "HTTP/1.1 413", 12) == 0);
 
     client.close();
     http.release();
 }
 
-// Point 1 of the review moved removeRecursiveSd's job onto FilesystemModule::removeTree, which already dispatches through platform::fsList/fsRemove.
-// This pins that DELETE /api/dir on /sd actually reaches it, recursing through a non-empty folder exactly as it does for flash.
+// Review point 1 moved removeRecursiveSd onto FilesystemModule::removeTree; DELETE /api/dir on /sd reaches it, recursing through a non-empty folder as it does on flash.
 TEST_CASE("DELETE /api/dir removes a file and a non-empty folder on the card, via removeTree") {
     SdFixture fix;
     REQUIRE(mm::platform::fsWriteAtomic("/sd/lone.bin", "x", 1));
@@ -379,8 +407,7 @@ TEST_CASE("DELETE /api/dir removes a file and a non-empty folder on the card, vi
         mm::platform::TcpConnection client;
         REQUIRE(connectAndAccept(http, client));
         const char* req = "DELETE /api/dir?path=/sd/lone.bin HTTP/1.1\r\n\r\n";
-        REQUIRE(client.write(reinterpret_cast<const uint8_t*>(req), std::strlen(req)));
-        const std::string reply = pumpUntil(http, client, 12);
+        const std::string reply = request(http, client, req);
         CHECK(std::strncmp(reply.c_str(), "HTTP/1.1 200", 12) == 0);
         client.close();
     }
@@ -390,8 +417,7 @@ TEST_CASE("DELETE /api/dir removes a file and a non-empty folder on the card, vi
         mm::platform::TcpConnection client;
         REQUIRE(connectAndAccept(http, client));
         const char* req = "DELETE /api/dir?path=/sd/tree HTTP/1.1\r\n\r\n";
-        REQUIRE(client.write(reinterpret_cast<const uint8_t*>(req), std::strlen(req)));
-        const std::string reply = pumpUntil(http, client, 12);
+        const std::string reply = request(http, client, req);
         CHECK(std::strncmp(reply.c_str(), "HTTP/1.1 200", 12) == 0);
         client.close();
     }
@@ -413,8 +439,7 @@ TEST_CASE("DELETE /api/dir on /sd itself is refused, leaving the card untouched"
     mm::platform::TcpConnection client;
     REQUIRE(connectAndAccept(http, client));
     const char* req = "DELETE /api/dir?path=/sd HTTP/1.1\r\n\r\n";
-    REQUIRE(client.write(reinterpret_cast<const uint8_t*>(req), std::strlen(req)));
-    const std::string reply = pumpUntil(http, client, 12);
+    const std::string reply = request(http, client, req);
     CHECK(std::strncmp(reply.c_str(), "HTTP/1.1 500", 12) == 0);
     client.close();
 

@@ -43,10 +43,8 @@ void collectEntry(const char* name, bool isDir, uint32_t, void* user) {
 bool isMountRoot(const char* path) {
     if (!path || path[0] != '/') return false;
     if (path[1] == '\0') return true;                     // "/"
-    if constexpr (!platform::hasSdCard) return false;
-    size_t n = std::strlen(path);
-    if (n > 1 && path[n - 1] == '/') n--;                  // a trailing slash names the same root
-    return n == 3 && path[1] == 's' && path[2] == 'd';     // "/sd"
+    // "/sd" or "/sd/", through the one home of the SD prefix
+    return platform::isSdPath(path) && (path[3] == '\0' || (path[3] == '/' && path[4] == '\0'));
 }
 
 }  // namespace

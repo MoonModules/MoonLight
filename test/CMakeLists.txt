@@ -20,7 +20,7 @@ add_executable(mm_tests
     unit/core/unit_crc.cpp
     unit/core/unit_AudioService_codec.cpp
     unit/core/unit_I2cBusModule.cpp
-    unit/core/unit_SdCardModule.cpp
+    unit/core/unit_SdCardService.cpp
     unit/core/unit_AudioService_sync.cpp
     unit/core/unit_WledAudioSyncPacket.cpp
     unit/core/unit_ThreadSlot.cpp

@@ -329,48 +329,67 @@ inline bool fsWriteStream(const char* path, FsWriteSrc src, void* user) {
 
 // A second, independent mount (microSD, FAT) sharing the fsXxx surface above through its own `/sd` path prefix; inert wherever hasSdCard is false.
 
+// Never where hasSdCard is false, so a flash folder named `sd` stays an ordinary folder there.
 /// Whether `path` is rooted at the SD mount: "sd", "/sd", "sd/foo" or "/sd/foo" (a leading slash is optional).
 inline bool isSdPath(const char* path) {
+    if constexpr (!hasSdCard) return false;
     if (!path) return false;
     if (*path == '/') path++;
     return path[0] == 's' && path[1] == 'd' && (path[2] == '\0' || path[2] == '/');
 }
 
-/// A board's SDMMC wiring, read at mount time rather than compiled in; -1 leaves a line unused.
+/// The bus a slot is wired for: the native SD bus, or the SD spec's SPI mode.
+enum class SdBus : uint8_t { Sdmmc, Spi };
+/// A board's slot wiring, read at mount time rather than compiled in; -1 leaves a line unused. SPI mode reuses the SD spec's own pin mapping: CLK is SCK, CMD is MOSI, D0 is MISO and D3 is CS.
 struct SdPinConfig {
-    int8_t clk = -1;   ///< SDMMC clock
-    int8_t cmd = -1;   ///< SDMMC command line
-    int8_t d0  = -1;   ///< SDMMC data line 0, required
-    int8_t d1  = -1;   ///< unset alongside d2/d3 drops the bus to 1-bit mode
-    int8_t d2  = -1;   ///< SDMMC data line 2
-    int8_t d3  = -1;   ///< SDMMC data line 3
+    int8_t clk = -1;   ///< clock
+    int8_t cmd = -1;   ///< command line, MOSI in SPI mode
+    int8_t d0  = -1;   ///< data line 0, required, MISO in SPI mode
+    int8_t d1  = -1;   ///< unset alongside d2/d3 drops the SD bus to 1-bit mode
+    int8_t d2  = -1;   ///< data line 2
+    int8_t d3  = -1;   ///< data line 3, CS in SPI mode
     int8_t pwr = -1;   ///< a slot's card-power switch, or -1 where the slot has none
+    SdBus bus = SdBus::Sdmmc;   ///< which bus the lines above form
 };
-/// Mount the card under `/sd`, idempotent; false if no card, no slot, or the pins are unset.
+/// Mount the card under `/sd`, idempotent; false if no card, no slot, or the pins are unset, with the reason in sdMountError().
 bool sdMount(const SdPinConfig& pins);
+/// Why a mount fails: a pin that cannot drive the slot, no card answering, a card whose sectors do not read, or a card without a FAT filesystem.
+enum class SdMountError : uint8_t { None, Pins, NoCard, Unreadable, NoFilesystem };
+/// The reason the last sdMount() failed, None after a success.
+SdMountError sdMountError();
 /// True once sdMount succeeds and nothing has unmounted it since. A chip capable of SD is not the same as a card present, so the root listing gates on this, not hasSdCard.
 bool sdCardMounted();
-/// True while the mounted card still answers a status probe; false once it has been pulled, even though sdCardMounted() has not noticed yet. SdCardModule polls this to detect a live removal.
+/// True while the mounted card still answers a status probe; false once it has been pulled, even though sdCardMounted() has not noticed yet. SdCardService polls this to detect a live removal.
 bool sdCardPresent();
-/// True while a read or write stream is open on the card; sdUnmount/sdFormat refuse while this holds, so a caller checks it first to give the specific reason.
+/// True while a stream is open on the card or a format runs; sdUnmount and sdFormat refuse meanwhile, so a caller checks it first for the specific reason.
 bool sdCardBusy();
-/// Unmount it; false (refused) while a stream is open, true otherwise, including when nothing was mounted.
+/// Unmount it; false (refused) while a stream is open or a format runs, true otherwise, including when nothing was mounted.
 bool sdUnmount();
-/// Format and remount; false while unmounted, while a stream is open, or on a format failure.
+/// Start formatting the mounted card, or one the last mount found without a FAT filesystem, in the background; false when there is nothing to format or the card is busy.
 bool sdFormat();
+/// Where the last sdFormat() stands; the card is unmounted while it runs and mounted again once it succeeds.
+enum class SdFormatState : uint8_t { Idle, Running, Succeeded, Failed };
+/// The state of the last sdFormat(), Idle before the first.
+SdFormatState sdFormatState();
 /// Card bytes used, 0 when unmounted; wide because a real card routinely exceeds 4 GiB.
 uint64_t sdCardUsed();
 /// Card bytes total, 0 when unmounted.
 uint64_t sdCardTotal();
-/// Whether SdCardModule boots by default via kBootModules: matches hasSdCard on ESP32, off by default on desktop, so a plain desktop run carries no SD clutter unless a test opts in.
+/// Whether SdCardService boots by default via kBootModules: matches hasSdCard on ESP32, off by default on desktop, so a plain desktop run carries no SD clutter unless a test opts in.
 bool sdCardBootsByDefault();
 #ifndef ESP_PLATFORM   // a host-test seam, which no ESP32 code calls
 /// Shrink the host's fictional card, so a test reaches the "not enough space" path without writing a real gigabyte.
 void setTestSdCardTotal(uint64_t bytes);
-/// Opt SdCardModule's default boot-wiring in or out for one test's scope.
+/// Opt SdCardService's default boot-wiring in or out for one test's scope.
 void setTestSdCardBootsByDefault(bool enabled);
 /// Simulate the card being pulled (false) or reinserted (true); also gates sdMount's own success, the way a real absent card would fail to answer.
 void setTestSdCardPresent(bool present);
+/// Simulate a card that answers but holds no FAT filesystem (false), which only a format makes mountable.
+void setTestSdCardHasFilesystem(bool hasFilesystem);
+/// Simulate a card that answers but whose sectors do not read (false), which no format helps.
+void setTestSdCardReadable(bool readable);
+/// Hold a started format Running (true), the way a large card's format outlasts many ticks; false completes it.
+void setTestSdFormatHeld(bool held);
 #endif
 
 // Network: ESP32 only, stubs on desktop.

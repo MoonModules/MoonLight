@@ -42,7 +42,7 @@ The board uses the `P4 RMII` preset, shared with the Waveshare P4-NANO: MDC 31, 
 
 ## microSD slot
 
-Wired on the board and mounted by [SdCardModule](../../moonmodules/core/system.md#sd-card):
+Wired on the board and mounted by [SdCardService](../../moonmodules/core/services.md#sd-card):
 
 | Signal | GPIO |
 |---|---|

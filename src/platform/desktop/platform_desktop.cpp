@@ -873,6 +873,11 @@ bool sdMounted_ = false;
 int sdStreamsOpen_ = 0;
 // True by default: a host has no real slot to pull a card from, so a test flips this to model one going missing or coming back.
 bool sdCardPresentForTest_ = true;
+bool sdCardHasFilesystemForTest_ = true;
+bool sdCardReadableForTest_ = true;
+bool sdFormatHeldForTest_ = false;
+SdMountError sdMountError_ = SdMountError::None;
+SdFormatState sdFormatState_ = SdFormatState::Idle;
 
 // Map an API path onto the root, normalize it, and reject one that escapes; an empty result reads as failure, which callers already handle.
 std::filesystem::path toFsPath(const char* path) {
@@ -1137,37 +1142,61 @@ uint64_t sdCardTotalForTest_ = 1024ULL * 1024 * 1024;
 }
 
 bool sdMount(const SdPinConfig& pins) {
+    if (sdFormatState_ == SdFormatState::Running) return false;
     if (sdMounted_) return true;
-    if (pins.clk < 0 || pins.cmd < 0 || pins.d0 < 0) return false;
-    if (!sdCardPresentForTest_) return false;   // the same way a real empty slot fails to answer
+    if (pins.clk < 0 || pins.cmd < 0 || pins.d0 < 0 || (pins.bus == SdBus::Spi && pins.d3 < 0)) { sdMountError_ = SdMountError::Pins; return false; }
+    if (!sdCardPresentForTest_) { sdMountError_ = SdMountError::NoCard; return false; }   // a real empty slot fails to answer
+    if (!sdCardReadableForTest_) { sdMountError_ = SdMountError::Unreadable; return false; }
+    if (!sdCardHasFilesystemForTest_) { sdMountError_ = SdMountError::NoFilesystem; return false; }
+    sdMountError_ = SdMountError::None;
     std::error_code ec;
     std::filesystem::create_directories(fsRoot_ / "sd", ec);
     if (ec) return false;
+    std::filesystem::remove_all(fsRoot_ / "sd" / ".tmp", ec);   // the ESP32's staging folder, which a mount empties
     sdMounted_ = true;
     return true;
 }
 
 bool sdCardMounted() { return sdMounted_; }
 
+SdMountError sdMountError() { return sdMountError_; }
+
 bool sdCardPresent() { return sdMounted_ && sdCardPresentForTest_; }
 
-bool sdCardBusy() { return sdStreamsOpen_ > 0; }
+bool sdCardBusy() { return sdStreamsOpen_ > 0 || sdFormatState_ == SdFormatState::Running; }
 
 bool sdUnmount() {
+    if (sdFormatState_ == SdFormatState::Running) return false;
     if (!sdMounted_) return true;
     if (sdStreamsOpen_ > 0) return false;   // the ESP32 conflict this fiction still models: a stream mid-transfer
     sdMounted_ = false;
     return true;
 }
 
-bool sdFormat() {
-    if (!sdMounted_) return false;
-    if (sdStreamsOpen_ > 0) return false;
+namespace {
+// The work the ESP32 does on its format task, run here in the call unless a test holds it.
+void completeSdFormat() {
+    // A card without a filesystem is formatted and mounted in one step, as the ESP32's formatting mount does.
+    if (sdMountError_ == SdMountError::NoFilesystem) { sdCardHasFilesystemForTest_ = true; sdMountError_ = SdMountError::None; }
     std::error_code ec;
     std::filesystem::remove_all(fsRoot_ / "sd", ec);
     std::filesystem::create_directories(fsRoot_ / "sd", ec);
-    return !ec;
+    sdMounted_ = !ec;
+    sdFormatState_ = ec ? SdFormatState::Failed : SdFormatState::Succeeded;
 }
+}  // namespace
+
+bool sdFormat() {
+    if (sdCardBusy()) return false;
+    const bool unformatted = !sdMounted_ && sdMountError_ == SdMountError::NoFilesystem && sdCardPresentForTest_;
+    if (!sdMounted_ && !unformatted) return false;
+    sdMounted_ = false;
+    sdFormatState_ = SdFormatState::Running;
+    if (!sdFormatHeldForTest_) completeSdFormat();
+    return true;
+}
+
+SdFormatState sdFormatState() { return sdFormatState_; }
 
 uint64_t sdCardUsed() {
     if (!sdMounted_) return 0;
@@ -1185,7 +1214,7 @@ uint64_t sdCardUsed() {
 uint64_t sdCardTotal() { return sdMounted_ ? sdCardTotalForTest_ : 0; }
 
 namespace {
-// Off by default: hasSdCard is unconditionally true on desktop for test coverage, but that must not boot SdCardModule into an unrelated session's tree; a test opts it in by name.
+// Off by default: hasSdCard is unconditionally true on desktop for test coverage, but that must not boot SdCardService into an unrelated session's tree; a test opts it in by name.
 bool sdCardBootsByDefault_ = false;
 }
 
@@ -1194,9 +1223,15 @@ bool sdCardBootsByDefault() { return sdCardBootsByDefault_; }
 #ifndef ESP_PLATFORM
 /// Shrink the fictional card, so a test can reach the "not enough space" path without writing a real gigabyte.
 void setTestSdCardTotal(uint64_t bytes) { sdCardTotalForTest_ = bytes; }
-/// Opt SdCardModule's default boot-wiring in or out for one test's scope.
+/// Opt SdCardService's default boot-wiring in or out for one test's scope.
 void setTestSdCardBootsByDefault(bool enabled) { sdCardBootsByDefault_ = enabled; }
 void setTestSdCardPresent(bool present) { sdCardPresentForTest_ = present; }
+void setTestSdCardHasFilesystem(bool hasFilesystem) { sdCardHasFilesystemForTest_ = hasFilesystem; }
+void setTestSdCardReadable(bool readable) { sdCardReadableForTest_ = readable; }
+void setTestSdFormatHeld(bool held) {
+    sdFormatHeldForTest_ = held;
+    if (!held && sdFormatState_ == SdFormatState::Running) completeSdFormat();
+}
 #endif
 
 // Network stubs (desktop has no WiFi/Ethernet hardware)

@@ -482,6 +482,31 @@ Both surfaced while bringing up MoonBase Ethernet on the migrated Olimex; neithe
 
 ## ESP32 performance and memory
 
+### One board-preset helper for Ethernet and the SD card (2026-10-12)
+
+EthernetModule and SdCardService each carry the same board-preset machinery: the per-chip filtered option list, selection by label, the applied tracker, applying a preset when the selection moves, and reading the preset back off the pins.
+A `core/module/BoardPresets.h` helper would own the options, index, count, selection and applied state, with the module supplying its table and two functions: write a preset into the pins, and match the pins against one.
+Do it before a third preset table appears (a display's or a microphone's wiring), so that one becomes a table rather than a third copy.
+
+### SD card writes over SPI stop the card on the Dig-Octa (2026-10-12)
+
+On the QuinLED Dig-Octa's SPI slot (SCK 14, MOSI 15, MISO 36, CS 16), a write past about 50 to 200 KB fails mid-transfer, and the card then answers no command until its power is cut.
+Reads hold: a 5 MB file reads back byte-exact at 184 KB/s.
+The same no-brand 32 GB card writes 5 MB cleanly on the native SD bus of the P4 and of the Olimex ESP32-Gateway.
+Ruled out: the clock (20, 10 and 4 MHz fail alike), 30 ms between writes, and the wiring, which Quindor's schematic shows with 10 kOhm pull-ups, its own LDO and decoupling. Turning the LED driver off moved the limit a little without removing it.
+Next: the same 5 MB test with an A-brand card, since SPI mode is the part of the spec newer cards treat as secondary. ESPixelStick, the one other firmware driving this slot, throttles its writes into 7 KB blocks with a 30 ms gap and pauses LED output during an upload (forkineye/ESPixelStick issue 802 and `src/FileMgr.cpp`).
+Until it is solved, a card mounted over SPI shows a warning status.
+
+### A classic ESP32 on WiFi stalls while the state document builds (2026-10-12)
+
+A full state fetch serializes the whole tree into one buffer, 49 KB on the Olimex ESP32-Gateway with an SD card, LEDs and both network interfaces.
+On WiFi a classic has about 80 KB free at rest, so a browser's fetch or resync drops the largest free block to 4 to 14 KB, and new connections stall until it is freed: the page stops answering and the LEDs pause.
+On Ethernet the same board keeps 121 KB free and a 108 KB block, and never stalls.
+The fix is to stream the document: write each module's JSON straight to the socket as it is produced, so the peak is one module rather than the tree.
+The same applies to the websocket resync, which sends the same document.
+Measured with this PR's SD card against `main`: 1.4 KB more static DRAM, 4 to 7 KB more heap while a card is mounted, so the stall exists on `main` too.
+Watch IRAM on the classic as well: the SD and SPI drivers' interrupt handlers raised it from 98 KB to 107 KB of about 128 KB.
+
 ### Size estimates for unbuilt features (reference)
 
 Estimates, not measurements, so they live here rather than in [performance.md](../../reference/performance.md) which carries measured numbers only. (The 4 MB flash-budget investigation these once fed is resolved: MoonBase's single-app-slot layout grew the classic app slot to 2496 KB, see architecture.md § MoonBase.)

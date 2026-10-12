@@ -8,35 +8,28 @@
 /// ## The pins are a runtime argument, not a board constant
 ///
 /// `sdMount()` takes an `SdPinConfig`, so no board gets its own `#ifdef`; `platform::hasSdCard` gates only on whether this chip has the hardware at all.
-/// The bus width follows from which data lines are set: `d1`/`d2`/`d3` unset drops it to 1-bit mode, all three set is 4-bit.
 ///
 /// ## Built field by field
 ///
-/// `SDMMC_SLOT_CONFIG_DEFAULT()` hardwires `d4` to a fixed GPIO, an 8-bit-mode line this driver never uses in 1- or 4-bit mode.
-/// On the Waveshare P4-ETH that pin is the card's own power switch, so the macro is skipped and the slot config is built field by field instead.
+/// `SDMMC_SLOT_CONFIG_DEFAULT()` hardwires `d4`, an unused 8-bit line, to the GPIO that powers the card on the Waveshare P4-ETH. So the slot config is built field by field, and sets the macro's `SDMMC_SLOT_NO_CD`/`NO_WP` itself, since zero would read GPIO0 as write-protect.
 ///
 /// ## The power switch is driven before the mount
 ///
 /// `pwr`, where a board wires one, is a plain GPIO output set low (P-channel high-side-switch convention) before `esp_vfs_fat_sdmmc_mount`, and high again on unmount or a failed mount.
 ///
-/// ## Internal pullups on CMD/D0-D3
+/// ## A format runs on its own task
 ///
-/// `SDMMC_SLOT_FLAG_INTERNAL_PULLUP` is set unconditionally, matching the reference wiring; harmless where the lines already have external pull-ups.
+/// Writing a large card's FAT tables outlasts the render loop's task watchdog, whose panic leaves a half-written volume. So the format runs on a one-shot unwatched task, with the card unmounted until it publishes its result.
 ///
-/// ## The chip's own IO power domain, where one exists
+/// ## A write lands in a staging folder first
 ///
-/// A `SOC_SDMMC_IO_POWER_EXTERNAL` chip's SDMMC IO lines are powered by an on-chip LDO the driver must turn on itself; this is a chip fact, not a board wiring choice.
-///
-/// ## CD and WP read as GPIO0 unless told otherwise
-///
-/// A zero-initialized slot config leaves `.cd`/`.wp` at GPIO0, which the driver then reads as a real write-protect signal and rejects every write.
-/// Building the config field by field means the macro's own `SDMMC_SLOT_NO_CD`/`NO_WP` defaults are skipped too, so both are set explicitly here.
+/// Every write goes to `/sd/.tmp` and is renamed into place once whole, so a failed upload never leaves a partial file under its real name. A card that stops answering mid-write cannot delete its temporary file either, so a mount empties that one folder rather than walking the whole card.
 ///
 /// ## Drive 0 is assumed, not queried
 ///
 /// File access below is raw FatFs (`f_open`/`f_read`/`f_write`), not stdio through the VFS mount, to drop stdio's share of the flash cost.
-/// `esp_vfs_fat_sdmmc_mount` assigns the FatFs drive number dynamically and never returns it, so there is no public call to ask which one this mount got.
-/// Drive 0 is assumed because nothing else in this firmware registers a FatFs volume (LittleFS is a separate component); if that ever changes, this assumption needs revisiting.
+///
+/// `esp_vfs_fat_sdmmc_mount` assigns the FatFs drive number and never returns it, so drive 0 is assumed: nothing else in this firmware registers a FatFs volume, LittleFS being a separate component.
 /// @{
 
 #include "platform_esp32_sdmmc.h"
@@ -45,16 +38,25 @@
 #include "esp_log.h"
 #include "driver/gpio.h"
 
+#include <atomic>
+#include <new>
 #include <cstdio>    // snprintf only; file I/O below is raw FatFs, not stdio
 #include <cstring>
 
 #if defined(CONFIG_SOC_SDMMC_HOST_SUPPORTED) && defined(CONFIG_MM_SD_CARD)
 #define MM_HAS_SDMMC 1
 #include "driver/sdmmc_host.h"
+#include "driver/sdspi_host.h"
+#include "driver/spi_master.h"
 #include "sdmmc_cmd.h"
 #include "esp_vfs_fat.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 #include "ff.h"
+#include "diskio_impl.h"
+#include "diskio_sdmmc.h"
 #include "soc/soc_caps.h"
+#include "soc/sdmmc_pins.h"
 #if SOC_SDMMC_IO_POWER_EXTERNAL
 #include "sd_pwr_ctrl_by_on_chip_ldo.h"
 #endif
@@ -70,9 +72,16 @@ static constexpr const char* SD_MOUNT_POINT = "/sdcard";   // the VFS registrati
 static constexpr const char* SD_DRIVE = "0:";
 
 static sdmmc_card_t* g_card = nullptr;
-static bool g_mounted = false;
+static std::atomic<bool> g_mounted{false};   // atomic, since the format task publishes it
 static int g_streamsOpen = 0;         // every open read/write stream, counted so unmount/format can refuse under one
+static SdMountError g_mountError = SdMountError::None;   // why the last mount failed
+static std::atomic<SdFormatState> g_formatState{SdFormatState::Idle};
+static bool g_formatUnmounted = false;   // whether the running format mounts a card that had no filesystem; set before the task starts
+static SdPinConfig g_lastPins{};   // what a format of a filesystem-less card mounts on
 static int8_t g_pwrGpio = -1;         // so unmount powers back down what mount powered up
+static bool g_spiBus = false;         // whether the mount brought up the SPI bus, which unmount frees
+// SPI3 where the chip has it: the S3's W5500 Ethernet holds SPI2.
+static constexpr spi_host_device_t kSdSpiHost = SOC_SPI_PERIPH_NUM > 2 ? SPI3_HOST : SPI2_HOST;
 // Every call below runs to completion before the next starts, so one shared FIL off the stack serves them all; the kept-open streams further down heap-allocate their own.
 static FIL g_fil;
 #if SOC_SDMMC_IO_POWER_EXTERNAL
@@ -94,7 +103,7 @@ static bool sdTranslate(const char* apiPath, char* out, size_t outLen) {
 bool sdCardMounted() { return g_mounted; }
 
 // A static scratch sector, not a stack buffer: keeps sdCardPresent's own frame off the 512-byte stack-frame rule, and this runs on one thread only.
-static uint8_t g_presenceProbe[512];
+alignas(4) static uint8_t g_presenceProbe[512];   // word-aligned, or sdmmc_read_sectors bounces every probe through a heap buffer
 
 // A 1-sector read, not SEND_STATUS (CMD13): CMD13 panics this chip's SDMMC host on this ESP-IDF build; a block read is the primitive real file access already proves safe.
 bool sdCardPresent() {
@@ -103,7 +112,7 @@ bool sdCardPresent() {
     return sdmmc_read_sectors(g_card, g_presenceProbe, 0, 1) == ESP_OK;
 }
 
-bool sdCardBusy() { return g_streamsOpen > 0; }
+bool sdCardBusy() { return g_streamsOpen > 0 || g_formatState == SdFormatState::Running; }
 
 bool sdCardBootsByDefault() { return hasSdCard; }
 
@@ -111,94 +120,251 @@ bool sdCardBootsByDefault() { return hasSdCard; }
 static bool validOutputPin(int8_t pin) {
     return pin >= 0 && GPIO_IS_VALID_OUTPUT_GPIO(pin);
 }
+/// SPI's MISO only reads, so an input-only pin such as the classic's GPIO36 serves.
+static bool validInputPin(int8_t pin) {
+    return pin >= 0 && GPIO_IS_VALID_GPIO(pin);
+}
 
-bool sdMount(const SdPinConfig& pins) {
-    if (g_mounted) return true;
-    if (!validOutputPin(pins.clk) || !validOutputPin(pins.cmd) || !validOutputPin(pins.d0)) return false;
-    const bool fourBit = pins.d1 >= 0 && pins.d2 >= 0 && pins.d3 >= 0;
-    if (fourBit && (!validOutputPin(pins.d1) || !validOutputPin(pins.d2) || !validOutputPin(pins.d3))) return false;
+namespace {
+// The data lines for 4-bit mode, all three set; otherwise the bus runs 1-bit.
+bool fourBitPins(const SdPinConfig& pins) { return pins.d1 >= 0 && pins.d2 >= 0 && pins.d3 >= 0; }
+
+// The SD bus drives D0, and D1-D3 too in 4-bit mode.
+bool usableSdBusPins(const SdPinConfig& pins) {
+    if (!validOutputPin(pins.d0)) return false;
+    return !fourBitPins(pins) || (validOutputPin(pins.d1) && validOutputPin(pins.d2) && validOutputPin(pins.d3));
+}
+
+// Every pin the mount drives is an output-capable GPIO, and SPI's MISO one it can read; an unset power switch passes.
+bool usablePins(const SdPinConfig& pins) {
+    if (!validOutputPin(pins.clk) || !validOutputPin(pins.cmd)) return false;
     if (pins.pwr >= 0 && !validOutputPin(pins.pwr)) return false;
+    if (pins.bus == SdBus::Spi) return validInputPin(pins.d0) && validOutputPin(pins.d3);
+    return usableSdBusPins(pins);
+}
 
-    // Powered before anything talks to the slot, where this board wires a switch: @xref{the-power-switch-is-driven-before-the-mount}.
-    if (pins.pwr >= 0) {
-        gpio_config_t pwrCfg = {};
-        pwrCfg.pin_bit_mask = 1ULL << pins.pwr;
-        pwrCfg.mode = GPIO_MODE_OUTPUT;
-        gpio_config(&pwrCfg);
-        gpio_set_level(static_cast<gpio_num_t>(pins.pwr), 0);   // LOW = enabled
-    }
-    g_pwrGpio = pins.pwr;
-
-    esp_vfs_fat_sdmmc_mount_config_t mountCfg = {};
-    mountCfg.format_if_mount_failed = false;   // a blank/foreign card stays untouched
-    mountCfg.max_files = 5;
-    mountCfg.allocation_unit_size = 16 * 1024;
-
-    sdmmc_host_t host = SDMMC_HOST_DEFAULT();
-
-#if SOC_SDMMC_IO_POWER_EXTERNAL
-    sd_pwr_ctrl_ldo_config_t ldoCfg = {};
-    ldoCfg.ldo_chan_id = 4;   // VO4: the P4 TRM's own reference design wires this LDO channel to VDD_IO_5, the SD card's switchable supply.
-    const esp_err_t ldoErr = sd_pwr_ctrl_new_on_chip_ldo(&ldoCfg, &g_pwrCtrl);
-    if (ldoErr != ESP_OK) {
-        ESP_LOGE(SD_TAG, "SD LDO power control failed: %s", esp_err_to_name(ldoErr));
-        if (g_pwrGpio >= 0) gpio_set_level(static_cast<gpio_num_t>(g_pwrGpio), 1);
-        return false;
-    }
-    host.pwr_ctrl_handle = g_pwrCtrl;
+#ifdef SDMMC_SLOT0_IOMUX_PIN_NUM_CLK
+// Slot 0's own IOMUX pins, which the P4's slot 0 alone reaches: its default slot 1 routes them through the GPIO matrix instead.
+bool onSlot0Iomux(const SdPinConfig& pins) {
+    if (pins.clk != SDMMC_SLOT0_IOMUX_PIN_NUM_CLK || pins.cmd != SDMMC_SLOT0_IOMUX_PIN_NUM_CMD || pins.d0 != SDMMC_SLOT0_IOMUX_PIN_NUM_D0) return false;
+    return !fourBitPins(pins) || (pins.d1 == SDMMC_SLOT0_IOMUX_PIN_NUM_D1 && pins.d2 == SDMMC_SLOT0_IOMUX_PIN_NUM_D2 && pins.d3 == SDMMC_SLOT0_IOMUX_PIN_NUM_D3);
+}
 #endif
 
-    // Field by field, not SDMMC_SLOT_CONFIG_DEFAULT(): @xref{built-field-by-field}.
+// Powered before anything talks to the slot, where this board wires a switch: @xref{the-power-switch-is-driven-before-the-mount}.
+void powerSlot(int8_t pwr) {
+    g_pwrGpio = pwr;
+    if (pwr < 0) return;
+    gpio_config_t pwrCfg = {};
+    pwrCfg.pin_bit_mask = 1ULL << pwr;
+    pwrCfg.mode = GPIO_MODE_OUTPUT;
+    gpio_config(&pwrCfg);
+    gpio_set_level(static_cast<gpio_num_t>(pwr), 0);   // LOW = enabled
+}
+
+// Field by field, not SDMMC_SLOT_CONFIG_DEFAULT(): @xref{built-field-by-field}.
+sdmmc_slot_config_t slotConfig(const SdPinConfig& pins) {
     sdmmc_slot_config_t slotCfg = {};
     slotCfg.clk = static_cast<gpio_num_t>(pins.clk);
     slotCfg.cmd = static_cast<gpio_num_t>(pins.cmd);
     slotCfg.d0  = static_cast<gpio_num_t>(pins.d0);
+    const bool fourBit = fourBitPins(pins);
     if (fourBit) {
         slotCfg.d1 = static_cast<gpio_num_t>(pins.d1);
         slotCfg.d2 = static_cast<gpio_num_t>(pins.d2);
         slotCfg.d3 = static_cast<gpio_num_t>(pins.d3);
     }
     slotCfg.width = fourBit ? 4 : 1;
-    slotCfg.cd = SDMMC_SLOT_NO_CD;              // @xref{cd-and-wp-read-as-gpio0-unless-told-otherwise}
+    slotCfg.cd = SDMMC_SLOT_NO_CD;              // @xref{built-field-by-field}
     slotCfg.wp = SDMMC_SLOT_NO_WP;
-    slotCfg.flags |= SDMMC_SLOT_FLAG_INTERNAL_PULLUP;
+    slotCfg.flags |= SDMMC_SLOT_FLAG_INTERNAL_PULLUP;   // the reference wiring's, harmless over external pull-ups
+    return slotCfg;
+}
 
-    const esp_err_t err = esp_vfs_fat_sdmmc_mount(SD_MOUNT_POINT, &host, &slotCfg, &mountCfg, &g_card);
+// The card on the SPI bus, its CS on D3 per the SD spec's SPI pin mapping.
+sdspi_device_config_t spiDevice(const SdPinConfig& pins) {
+    sdspi_device_config_t dev = SDSPI_DEVICE_CONFIG_DEFAULT();
+    dev.host_id = kSdSpiHost;
+    dev.gpio_cs = static_cast<gpio_num_t>(pins.d3);
+    return dev;
+}
+
+// The host the wiring's bus calls for, on slot 0 where the pins are that slot's own.
+sdmmc_host_t hostFor(const SdPinConfig& pins) {
+    sdmmc_host_t host = SDMMC_HOST_DEFAULT();
+    if (pins.bus == SdBus::Spi) {
+        host = SDSPI_HOST_DEFAULT();
+        host.slot = kSdSpiHost;
+    }
+#ifdef SDMMC_SLOT0_IOMUX_PIN_NUM_CLK
+    else if (onSlot0Iomux(pins)) host.slot = SDMMC_HOST_SLOT_0;
+#endif
+    return host;
+}
+
+// Bring up the SPI bus the card sits on, or nothing on the SD bus; false when the bus will not start.
+bool startBus(const SdPinConfig& pins) {
+    if (pins.bus != SdBus::Spi) return true;
+    spi_bus_config_t bus = {};
+    bus.mosi_io_num = pins.cmd;
+    bus.miso_io_num = pins.d0;
+    bus.sclk_io_num = pins.clk;
+    bus.quadwp_io_num = -1;
+    bus.quadhd_io_num = -1;
+    bus.max_transfer_sz = 4000;   // the IDF SD SPI example's own figure
+    g_spiBus = spi_bus_initialize(kSdSpiHost, &bus, SDSPI_DEFAULT_DMA) == ESP_OK;
+    return g_spiBus;
+}
+
+void stopBus() {
+    if (g_spiBus) spi_bus_free(kSdSpiHost);
+    g_spiBus = false;
+}
+
+// Initialize the card a failed SD-bus mount left, for fatVerdict; false when it does not answer.
+bool initCard(sdmmc_host_t& host, const SdPinConfig& pins, sdmmc_card_t& card) {
+    const sdmmc_slot_config_t slotCfg = slotConfig(pins);
+    return host.init() == ESP_OK && sdmmc_host_init_slot(host.slot, &slotCfg) == ESP_OK && sdmmc_card_init(&host, &card) == ESP_OK;
+}
+}  // namespace
+
+// Release what a mount took, the chip's LDO, the power switch and the SPI bus, on every exit that ends unmounted.
+static void powerDown() {
+#if SOC_SDMMC_IO_POWER_EXTERNAL
+    if (g_pwrCtrl) { sd_pwr_ctrl_del_on_chip_ldo(g_pwrCtrl); g_pwrCtrl = nullptr; }
+#endif
+    if (g_pwrGpio >= 0) gpio_set_level(static_cast<gpio_num_t>(g_pwrGpio), 1);
+    stopBus();
+}
+
+// FatFs's own verdict on a card whose mount failed with ESP_FAIL, which IDF returns for an unreadable card and for one without a filesystem alike.
+static FRESULT fatVerdict(sdmmc_host_t host, const SdPinConfig& pins) {
+    FRESULT res = FR_NOT_READY;
+    FATFS* fs = new (std::nothrow) FATFS;
+    if (!fs) return res;
+    sdmmc_card_t card = {};
+    BYTE pdrv = FF_DRV_NOT_USED;
+    if (initCard(host, pins, card) && ff_diskio_get_drive(&pdrv) == ESP_OK && pdrv != FF_DRV_NOT_USED) {
+        ff_diskio_register_sdmmc(pdrv, &card);
+        const char drv[3] = {static_cast<char>('0' + pdrv), ':', 0};
+        res = f_mount(fs, drv, 1);
+        f_mount(nullptr, drv, 0);
+        ff_diskio_unregister(pdrv);
+    }
+    if (host.flags & SDMMC_HOST_FLAG_DEINIT_ARG) host.deinit_p(host.slot);
+    else host.deinit();
+    delete fs;
+    return res;
+}
+
+static void clearStaging();
+
+// `format` writes a FAT filesystem when the card has none, which only the user's format asks for.
+static bool mountCard(const SdPinConfig& pins, bool format) {
+    if (g_mounted) return true;
+    g_lastPins = pins;
+    if (!usablePins(pins)) { g_mountError = SdMountError::Pins; return false; }
+    powerSlot(pins.pwr);
+
+    esp_vfs_fat_sdmmc_mount_config_t mountCfg = {};
+    mountCfg.format_if_mount_failed = format;   // true only on the format task's mount: a blank or foreign card stays untouched otherwise
+    mountCfg.max_files = 5;
+    mountCfg.allocation_unit_size = 32 * 1024;   // the SD Association's FAT32 cluster for 1 to 32 GB cards
+
+    sdmmc_host_t host = hostFor(pins);
+    if (!startBus(pins)) { powerDown(); g_mountError = SdMountError::Pins; return false; }
+
+#if SOC_SDMMC_IO_POWER_EXTERNAL
+    // This chip powers its SDMMC IO lines from an on-chip LDO the driver turns on itself, a chip fact rather than board wiring.
+    sd_pwr_ctrl_ldo_config_t ldoCfg = {};
+    ldoCfg.ldo_chan_id = 4;   // VO4: the P4 TRM's own reference design wires this LDO channel to VDD_IO_5, the SD card's switchable supply.
+    const esp_err_t ldoErr = sd_pwr_ctrl_new_on_chip_ldo(&ldoCfg, &g_pwrCtrl);
+    if (ldoErr != ESP_OK) {
+        ESP_LOGE(SD_TAG, "SD LDO power control failed: %s", esp_err_to_name(ldoErr));
+        powerDown();
+        g_mountError = SdMountError::NoCard;   // no reason names a chip supply that would not start, and without it no card can answer
+        return false;
+    }
+    host.pwr_ctrl_handle = g_pwrCtrl;
+#endif
+
+    esp_err_t err;
+    if (pins.bus == SdBus::Spi) {
+        const sdspi_device_config_t dev = spiDevice(pins);
+        err = esp_vfs_fat_sdspi_mount(SD_MOUNT_POINT, &host, &dev, &mountCfg, &g_card);
+    } else {
+        const sdmmc_slot_config_t slotCfg = slotConfig(pins);
+        err = esp_vfs_fat_sdmmc_mount(SD_MOUNT_POINT, &host, &slotCfg, &mountCfg, &g_card);
+    }
     if (err != ESP_OK) {
         ESP_LOGE(SD_TAG, "SD mount failed: %s", esp_err_to_name(err));
-#if SOC_SDMMC_IO_POWER_EXTERNAL
-        sd_pwr_ctrl_del_on_chip_ldo(g_pwrCtrl);
-        g_pwrCtrl = nullptr;
-#endif
-        if (g_pwrGpio >= 0) gpio_set_level(static_cast<gpio_num_t>(g_pwrGpio), 1);
+        // ESP_FAIL is a card that answers; it is formattable on exactly the FatFs results IDF's own formatting mount formats on, every other error being the card not answering.
+        if (err != ESP_FAIL) g_mountError = SdMountError::NoCard;
+        else {
+            // SPI reads as no filesystem: a second SPI init after IDF's failed-mount cleanup asserts in the SPI bus lock.
+            const FRESULT res = pins.bus == SdBus::Spi ? FR_NO_FILESYSTEM : fatVerdict(host, pins);
+            g_mountError = res == FR_NO_FILESYSTEM || res == FR_INT_ERR ? SdMountError::NoFilesystem : SdMountError::Unreadable;
+        }
+        powerDown();
         g_card = nullptr;
         return false;
     }
 
     g_mounted = true;
+    g_mountError = SdMountError::None;
+    clearStaging();
     ESP_LOGI(SD_TAG, "SD card mounted at %s", SD_MOUNT_POINT);
     return true;
 }
 
-bool sdUnmount() {
-    if (!g_mounted) return true;
-    if (g_streamsOpen > 0) return false;   // a transfer holds a FIL into the context this would free
+bool sdMount(const SdPinConfig& pins) {
+    if (g_formatState == SdFormatState::Running) return false;
+    return mountCard(pins, false);
+}
+
+SdMountError sdMountError() { return g_mountError; }
+
+// Unmount and power the slot down, for a caller that has already ruled out an open stream.
+static void unmountCard() {
     esp_vfs_fat_sdcard_unmount(SD_MOUNT_POINT, g_card);
-#if SOC_SDMMC_IO_POWER_EXTERNAL
-    if (g_pwrCtrl) { sd_pwr_ctrl_del_on_chip_ldo(g_pwrCtrl); g_pwrCtrl = nullptr; }
-#endif
-    if (g_pwrGpio >= 0) gpio_set_level(static_cast<gpio_num_t>(g_pwrGpio), 1);
+    powerDown();
     g_card = nullptr;
     g_mounted = false;
+}
+
+bool sdUnmount() {
+    if (g_formatState == SdFormatState::Running) return false;
+    if (!g_mounted) return true;
+    if (g_streamsOpen > 0) return false;   // a transfer holds a FIL into the context this would free
+    unmountCard();
     return true;
 }
 
-bool sdFormat() {
-    if (!g_mounted || !g_card) return false;
-    if (g_streamsOpen > 0) return false;   // same conflict as an unmount under an open stream
-    // Formats and remounts in one call; the mount stays live either way.
-    return esp_vfs_fat_sdcard_format(SD_MOUNT_POINT, g_card) == ESP_OK;
+// The format itself, on its own task: @xref{a-format-runs-on-its-own-task}.
+static void formatTask(void*) {
+    bool ok = false;
+    // A card the last mount found without a filesystem is formatted by a mount that may format, the one path that writes a new FAT.
+    if (g_formatUnmounted) ok = mountCard(g_lastPins, true);
+    else if (esp_vfs_fat_sdcard_format(SD_MOUNT_POINT, g_card) == ESP_OK) ok = g_mounted = true;
+    else unmountCard();
+    g_formatState = ok ? SdFormatState::Succeeded : SdFormatState::Failed;
+    vTaskDelete(nullptr);
 }
+
+bool sdFormat() {
+    if (sdCardBusy()) return false;
+    g_formatUnmounted = !g_mounted && g_mountError == SdMountError::NoFilesystem;
+    if (!g_formatUnmounted && (!g_mounted || !g_card)) return false;
+    g_mounted = false;   // every file call refuses until the task publishes its result
+    g_formatState = SdFormatState::Running;
+    // One above the render loop, the textbook favoring of an I/O-bound task: it takes the CPU only between transfers it waits on.
+    if (xTaskCreate(&formatTask, "sdFormat", 4096, nullptr, 2, nullptr) == pdPASS) return true;
+    g_mounted = !g_formatUnmounted;
+    g_formatState = SdFormatState::Failed;
+    return false;
+}
+
+SdFormatState sdFormatState() { return g_formatState; }
 
 uint64_t sdCardUsed() {
     if (!g_mounted) return 0;
@@ -287,6 +453,30 @@ static void sdMakeParent(const char* apiPath) {
     sdCardMkdir(dir);
 }
 
+// The staging folder every write lands in first: @xref{a-write-lands-in-a-staging-folder-first}.
+static constexpr const char* SD_STAGING = "0:/.tmp";
+
+// A staging name unique among the writes in flight; false on truncation.
+static bool stagingPath(char* out, size_t outLen) {
+    static uint32_t seq = 0;
+    f_mkdir(SD_STAGING);   // FR_EXIST once it is there
+    const int n = std::snprintf(out, outLen, "%s/w%lu.tmp", SD_STAGING, static_cast<unsigned long>(seq++));
+    return n > 0 && static_cast<size_t>(n) < outLen;
+}
+
+// Delete what writes cut short by a failed card left behind.
+static void clearStaging() {
+    FF_DIR dir;
+    if (f_opendir(&dir, SD_STAGING) != FR_OK) return;
+    FILINFO info;
+    char path[40];
+    while (f_readdir(&dir, &info) == FR_OK && info.fname[0]) {
+        const int n = std::snprintf(path, sizeof(path), "%s/%s", SD_STAGING, info.fname);
+        if (n > 0 && static_cast<size_t>(n) < sizeof(path)) f_unlink(path);
+    }
+    f_closedir(&dir);
+}
+
 // f_rename refuses an existing destination, unlike POSIX rename; the old file is unlinked first, with the brief gap as FAT's cost for having no atomic replace.
 static bool sdCommitTmp(const char* tmp, const char* full) {
     f_unlink(full);
@@ -300,10 +490,8 @@ bool sdCardWriteAtomic(const char* apiPath, const char* data, size_t len) {
     if (len > 0 && !data) return false;
     sdMakeParent(apiPath);
     char full[128];
-    char tmp[136];
-    if (!sdTranslate(apiPath, full, sizeof(full))) return false;
-    int n = std::snprintf(tmp, sizeof(tmp), "%s.tmp", full);
-    if (n < 0 || static_cast<size_t>(n) >= sizeof(tmp)) return false;
+    char tmp[32];
+    if (!sdTranslate(apiPath, full, sizeof(full)) || !stagingPath(tmp, sizeof(tmp))) return false;
 
     if (f_open(&g_fil, tmp, FA_WRITE | FA_CREATE_ALWAYS) != FR_OK) return false;
     UINT bw = 0;
@@ -357,11 +545,11 @@ void sdCardReadStreamClose(void* handle) {
     --g_streamsOpen;
 }
 
-// Carries both paths, not just the FIL, so close() can rename or discard without re-deriving them.
+// Carries both paths beside the FIL, so close() can rename or discard without re-deriving them.
 struct SdWriteHandle {
     FIL f;
     char full[128] = {};
-    char tmp[136] = {};
+    char tmp[32] = {};
 };
 
 bool sdCardWriteStreamOpen(void*& handle, const char* apiPath) {
@@ -369,8 +557,7 @@ bool sdCardWriteStreamOpen(void*& handle, const char* apiPath) {
     sdMakeParent(apiPath);
     auto* h = new SdWriteHandle();
     if (!sdTranslate(apiPath, h->full, sizeof(h->full))) { delete h; return false; }
-    const int n = std::snprintf(h->tmp, sizeof(h->tmp), "%s.tmp", h->full);
-    if (n < 0 || static_cast<size_t>(n) >= sizeof(h->tmp)) { delete h; return false; }
+    if (!stagingPath(h->tmp, sizeof(h->tmp))) { delete h; return false; }
     if (f_open(&h->f, h->tmp, FA_WRITE | FA_CREATE_ALWAYS) != FR_OK) { delete h; return false; }
     handle = h;
     ++g_streamsOpen;
@@ -400,10 +587,12 @@ bool sdCardWriteStreamClose(void* handle, bool commit) {
 bool sdCardMounted() { return false; }
 bool sdCardPresent() { return false; }
 bool sdMount(const SdPinConfig&) { return false; }
+SdMountError sdMountError() { return SdMountError::NoCard; }
 bool sdCardBusy() { return false; }
 bool sdCardBootsByDefault() { return false; }
 bool sdUnmount() { return true; }
 bool sdFormat() { return false; }
+SdFormatState sdFormatState() { return SdFormatState::Idle; }
 uint64_t sdCardUsed() { return 0; }
 uint64_t sdCardTotal() { return 0; }
 bool sdCardMkdir(const char*) { return false; }

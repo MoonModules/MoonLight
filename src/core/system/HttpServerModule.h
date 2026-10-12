@@ -42,7 +42,7 @@ class Scheduler;
 /// A mutation is `POST /api/control` with a module, control and value; `POST /api/modules` to create; `POST /api/modules/{name}/move` to reorder and `.../replace` to swap; `POST /api/reboot`; or `DELETE /api/modules/{name}`.
 ///
 /// The File Manager reads and writes through `GET|POST /api/file?path=`, and lists, creates and removes through `/api/dir?path=`. The path rides the query, so a filesystem operation carries its target in the request rather than in a stored control.
-/// A board with an SD slot (`SdCardModule`) mounts it at `/sd`, so these same two routes reach the card too, shown as a folder next to the internal flash.
+/// A board with an SD slot (`SdCardService`) mounts it at `/sd`, so these same two routes reach the card too, shown as a folder next to the internal flash.
 ///
 /// Every JSON response streams through a `JsonSink`, so there is no fixed-buffer ceiling and a tree of any size serializes correctly.
 ///
