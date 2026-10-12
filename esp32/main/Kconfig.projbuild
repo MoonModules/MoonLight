@@ -50,8 +50,7 @@ menu "MoonLight"
         bool "microSD card support (SDMMC or SPI)"
         default y
         help
-            Compiles the FatFs SD card backend, on every chip with an SD host. An
-            image whose boards have no slot and whose flash is tight sets it off,
-            as the S3-Zero does.
+            Compiles the FatFs SD card backend, on every chip with an SD host and
+            more than 4 MB of flash: the 4 MB layout's fragment sets it off.
 
 endmenu

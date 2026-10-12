@@ -309,13 +309,17 @@ bool HttpServerModule::anyWsClientOnAccessPoint() const MM_NONBLOCKING {
 
 // A cheap scan of the query for a "/sd" path, which only sizes the Content-Length ceiling; parseFilePath is the real guard, downstream.
 static bool requestNamesSdPath(const char* req) {
+    const char* query = std::strchr(req, '?');
     const char* lineEnd = std::strstr(req, "\r\n");
-    const size_t lineLen = lineEnd ? static_cast<size_t>(lineEnd - req) : std::strlen(req);
-    for (const char* needle : {"path=/sd", "path=%2Fsd", "path=%2fsd"}) {
-        const char* hit = std::strstr(req, needle);
-        if (hit && static_cast<size_t>(hit - req) < lineLen) return true;
-    }
-    return false;
+    if (!query || (lineEnd && query > lineEnd)) return false;
+    const char* queryEnd = std::strchr(query, ' ');
+    char line[160];
+    const size_t len = static_cast<size_t>((queryEnd ? queryEnd : query + std::strlen(query)) - query - 1);
+    if (len >= sizeof(line)) return false;
+    std::memcpy(line, query + 1, len);
+    line[len] = '\0';
+    char path[160];
+    return HttpServerModule::parseFilePath(line, path, sizeof(path)) && platform::isSdPath(path);
 }
 
 bool HttpServerModule::handleConnection(platform::TcpConnection& conn, int patienceMs) {

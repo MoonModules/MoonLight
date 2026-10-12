@@ -23,7 +23,7 @@
 ///
 /// ## An image without the room turns it off
 ///
-/// `CONFIG_SOC_SDMMC_HOST_SUPPORTED` names every chip with the SD host, and `CONFIG_MM_SD_CARD` is the second, project-level gate, the same two-gate shape `CONFIG_MM_USB_MIDI_HOST` uses. It is on by default and off on an image whose boards have no slot and whose flash is tight, such as the S3-Zero.
+/// `CONFIG_SOC_SDMMC_HOST_SUPPORTED` names every chip with the SD host, and `CONFIG_MM_SD_CARD` is the second, project-level gate, the same two-gate shape `CONFIG_MM_USB_MIDI_HOST` uses. It is on by default and off on every 4 MB image, through the 4 MB layout's fragment.
 
 #include "sdkconfig.h"
 

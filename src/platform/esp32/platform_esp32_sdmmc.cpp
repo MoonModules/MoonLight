@@ -36,6 +36,7 @@
 
 #include "sdkconfig.h"
 #include "esp_log.h"
+#include "esp_heap_caps.h"
 #include "driver/gpio.h"
 
 #include <atomic>
@@ -82,8 +83,12 @@ static int8_t g_pwrGpio = -1;         // so unmount powers back down what mount 
 static bool g_spiBus = false;         // whether the mount brought up the SPI bus, which unmount frees
 // SPI3 where the chip has it: the S3's W5500 Ethernet holds SPI2.
 static constexpr spi_host_device_t kSdSpiHost = SOC_SPI_PERIPH_NUM > 2 ? SPI3_HOST : SPI2_HOST;
-// Every call below runs to completion before the next starts, so one shared FIL off the stack serves them all; the kept-open streams further down heap-allocate their own.
-static FIL g_fil;
+// What only a mounted card needs, allocated at mount and freed at unmount, so a board without a card holds none of it.
+struct SdScratch {
+    FIL fil;                          // every call below runs to completion before the next, so one FIL serves them all; kept-open streams allocate their own
+    alignas(4) uint8_t probe[512];    // sdCardPresent's sector, word-aligned or sdmmc_read_sectors bounces it through another buffer
+};
+static SdScratch* g_scratch = nullptr;
 #if SOC_SDMMC_IO_POWER_EXTERNAL
 static sd_pwr_ctrl_handle_t g_pwrCtrl = nullptr;
 #endif
@@ -102,14 +107,11 @@ static bool sdTranslate(const char* apiPath, char* out, size_t outLen) {
 
 bool sdCardMounted() { return g_mounted; }
 
-// A static scratch sector, not a stack buffer: keeps sdCardPresent's own frame off the 512-byte stack-frame rule, and this runs on one thread only.
-alignas(4) static uint8_t g_presenceProbe[512];   // word-aligned, or sdmmc_read_sectors bounces every probe through a heap buffer
-
 // A 1-sector read, not SEND_STATUS (CMD13): CMD13 panics this chip's SDMMC host on this ESP-IDF build; a block read is the primitive real file access already proves safe.
 bool sdCardPresent() {
     if (!g_mounted || !g_card) return false;
-    if (g_card->csd.sector_size > sizeof(g_presenceProbe)) return false;   // never true for a real SD/SDHC/SDXC card; refuses rather than overflowing the scratch sector
-    return sdmmc_read_sectors(g_card, g_presenceProbe, 0, 1) == ESP_OK;
+    if (g_card->csd.sector_size > static_cast<int>(sizeof(g_scratch->probe))) return false;   // never true for a real SD/SDHC/SDXC card; refuses rather than overflowing the scratch sector
+    return sdmmc_read_sectors(g_card, g_scratch->probe, 0, 1) == ESP_OK;
 }
 
 bool sdCardBusy() { return g_streamsOpen > 0 || g_formatState == SdFormatState::Running; }
@@ -310,6 +312,16 @@ static bool mountCard(const SdPinConfig& pins, bool format) {
         return false;
     }
 
+    // DMA-capable, so the probe sector is read straight into it on every chip.
+    g_scratch = static_cast<SdScratch*>(heap_caps_calloc(1, sizeof(SdScratch), MALLOC_CAP_DMA));
+    if (!g_scratch) {
+        ESP_LOGE(SD_TAG, "SD scratch allocation failed");
+        esp_vfs_fat_sdcard_unmount(SD_MOUNT_POINT, g_card);
+        powerDown();
+        g_card = nullptr;
+        g_mountError = SdMountError::NoCard;
+        return false;
+    }
     g_mounted = true;
     g_mountError = SdMountError::None;
     clearStaging();
@@ -328,6 +340,8 @@ SdMountError sdMountError() { return g_mountError; }
 static void unmountCard() {
     esp_vfs_fat_sdcard_unmount(SD_MOUNT_POINT, g_card);
     powerDown();
+    heap_caps_free(g_scratch);
+    g_scratch = nullptr;
     g_card = nullptr;
     g_mounted = false;
 }
@@ -422,10 +436,10 @@ int sdCardRead(const char* apiPath, char* buf, size_t maxLen) {
     if (!g_mounted || !buf || maxLen == 0) return -1;
     char full[128];
     if (!sdTranslate(apiPath, full, sizeof(full))) return -1;
-    if (f_open(&g_fil, full, FA_READ) != FR_OK) return -1;
+    if (f_open(&g_scratch->fil, full, FA_READ) != FR_OK) return -1;
     UINT br = 0;
-    const FRESULT r = f_read(&g_fil, buf, static_cast<UINT>(maxLen - 1), &br);
-    f_close(&g_fil);
+    const FRESULT r = f_read(&g_scratch->fil, buf, static_cast<UINT>(maxLen - 1), &br);
+    f_close(&g_scratch->fil);
     if (r != FR_OK) return -1;
     buf[br] = 0;
     return static_cast<int>(br);
@@ -477,10 +491,15 @@ static void clearStaging() {
     f_closedir(&dir);
 }
 
-// f_rename refuses an existing destination, unlike POSIX rename; the old file is unlinked first, with the brief gap as FAT's cost for having no atomic replace.
+// FAT has no atomic replace and f_rename refuses an existing destination, so the old file steps aside into staging and returns if the new one cannot take its name.
 static bool sdCommitTmp(const char* tmp, const char* full) {
-    f_unlink(full);
-    if (f_rename(tmp, full) == FR_OK) return true;
+    char old[32];
+    const bool movedOld = stagingPath(old, sizeof(old)) && f_rename(full, old) == FR_OK;
+    if (f_rename(tmp, full) == FR_OK) {
+        if (movedOld) f_unlink(old);
+        return true;
+    }
+    if (movedOld) f_rename(old, full);
     f_unlink(tmp);
     return false;
 }
@@ -493,11 +512,11 @@ bool sdCardWriteAtomic(const char* apiPath, const char* data, size_t len) {
     char tmp[32];
     if (!sdTranslate(apiPath, full, sizeof(full)) || !stagingPath(tmp, sizeof(tmp))) return false;
 
-    if (f_open(&g_fil, tmp, FA_WRITE | FA_CREATE_ALWAYS) != FR_OK) return false;
+    if (f_open(&g_scratch->fil, tmp, FA_WRITE | FA_CREATE_ALWAYS) != FR_OK) return false;
     UINT bw = 0;
-    const FRESULT wr = f_write(&g_fil, data, static_cast<UINT>(len), &bw);
-    f_close(&g_fil);
-    if (wr != FR_OK || bw != len) { f_unlink(tmp); return false; }
+    const FRESULT wr = f_write(&g_scratch->fil, data, static_cast<UINT>(len), &bw);
+    const FRESULT closed = f_close(&g_scratch->fil);   // the final flush: a file that did not close whole never replaces the old one
+    if (wr != FR_OK || bw != len || closed != FR_OK) { f_unlink(tmp); return false; }
     return sdCommitTmp(tmp, full);
 }
 
@@ -574,9 +593,9 @@ bool sdCardWriteStreamWrite(void* handle, const char* buf, size_t len) {
 bool sdCardWriteStreamClose(void* handle, bool commit) {
     auto* h = static_cast<SdWriteHandle*>(handle);
     if (!h) return false;
-    f_close(&h->f);
-    const bool ok = commit ? sdCommitTmp(h->tmp, h->full) : true;
-    if (!commit) f_unlink(h->tmp);
+    const bool closed = f_close(&h->f) == FR_OK;   // the final flush, as in sdCardWriteAtomic
+    const bool ok = commit && closed ? sdCommitTmp(h->tmp, h->full) : !commit;
+    if (!commit || !closed) f_unlink(h->tmp);
     delete h;
     --g_streamsOpen;
     return ok;

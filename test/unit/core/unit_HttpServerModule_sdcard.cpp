@@ -236,6 +236,8 @@ TEST_CASE("an SD upload larger than one tick's chunk streams across several tick
 
 // Point 13 of the review: one chunk per tick capped a transfer around 200 KB/s. A payload spanning several 4 KB chunks now commits within a couple of ticks, not one chunk per tick.
 TEST_CASE("an SD upload spanning several chunks drains in far fewer ticks than chunks") {
+    struct Clock { ~Clock() { mm::platform::setTestNowMs(0); } } clock;
+    mm::platform::setTestNowMs(1000);   // frozen, so the per-tick budget cannot run out on a slow machine
     SdFixture fix;
     mm::HttpServerModule http;
     http.port = kTestPort;
@@ -444,5 +446,39 @@ TEST_CASE("DELETE /api/dir on /sd itself is refused, leaving the card untouched"
     client.close();
 
     CHECK(mm::platform::fsSize("/sd/keep.bin") >= 0);   // untouched, not even one level in
+    http.release();
+}
+
+// The filesystems skip repeated slashes, so "/sd//" names the card's root as surely as "/sd" does, and is refused the same way.
+TEST_CASE("DELETE /api/dir on the card root spelled with extra slashes is refused too") {
+    SdFixture fix;
+    REQUIRE(mm::platform::fsWriteAtomic("/sd/keep.bin", "x", 1));
+    mm::HttpServerModule http;
+    http.port = kTestPort;
+    http.setup();
+    for (const char* req : {"DELETE /api/dir?path=/sd// HTTP/1.1\r\n\r\n", "DELETE /api/dir?path=//sd HTTP/1.1\r\n\r\n"}) {
+        mm::platform::TcpConnection client;
+        REQUIRE(connectAndAccept(http, client));
+        const std::string reply = request(http, client, req);
+        CHECK(std::strncmp(reply.c_str(), "HTTP/1.1 200", 12) != 0);
+        client.close();
+    }
+    CHECK(mm::platform::fsSize("/sd/keep.bin") >= 0);
+    http.release();
+}
+
+// A relative path reaches the card as "/sd/...", so its upload gets the card's size limit, not flash's 8 MB: past the card's free space is 507, not 413.
+TEST_CASE("an upload to a relative sd/ path gets the card's size limit") {
+    SdFixture fix;
+    mm::platform::setTestSdCardTotal(500);
+    mm::HttpServerModule http;
+    http.port = kTestPort;
+    http.setup();
+    mm::platform::TcpConnection client;
+    REQUIRE(connectAndAccept(http, client));
+    const char* req = "POST /api/file?path=sd/rel.bin HTTP/1.1\r\nContent-Length: 9000000\r\n\r\n";
+    const std::string reply = request(http, client, req);
+    CHECK(std::strncmp(reply.c_str(), "HTTP/1.1 507", 12) == 0);
+    client.close();
     http.release();
 }

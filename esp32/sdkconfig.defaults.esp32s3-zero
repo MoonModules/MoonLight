@@ -29,6 +29,3 @@ CONFIG_SPIRAM_MODE_QUAD=y
 # hardware W^X wall.
 CONFIG_ESP_SYSTEM_MEMPROT_FEATURE=n
 CONFIG_HEAP_HAS_EXEC_HEAP=y
-
-# No SD card backend: none of the S3-Zero boards has a slot, and 4 MB of flash is nearly full.
-CONFIG_MM_SD_CARD=n

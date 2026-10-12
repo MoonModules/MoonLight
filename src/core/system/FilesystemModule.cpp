@@ -39,12 +39,20 @@ void collectEntry(const char* name, bool isDir, uint32_t, void* user) {
     lvl->count++;
 }
 
-// True for a mount's root - "/" or "/sd", trailing slash and all - which removeTree refuses to wipe: a user deletes what is inside a mount, not the mount.
+// True for a mount's root, which removeTree refuses to wipe: a user deletes what is inside a mount, not the mount. Counted in significant segments, since the filesystems skip repeated slashes and "." alike, so "//" is the flash root and "/sd//" the card's.
 bool isMountRoot(const char* path) {
     if (!path || path[0] != '/') return false;
-    if (path[1] == '\0') return true;                     // "/"
-    // "/sd" or "/sd/", through the one home of the SD prefix
-    return platform::isSdPath(path) && (path[3] == '\0' || (path[3] == '/' && path[4] == '\0'));
+    uint8_t segments = 0;
+    bool firstIsSd = false;
+    for (const char* p = path; *p;) {
+        while (*p == '/') p++;
+        const char* start = p;
+        while (*p && *p != '/') p++;
+        const size_t len = static_cast<size_t>(p - start);
+        if (len == 0 || (len == 1 && *start == '.')) continue;
+        if (++segments == 1) firstIsSd = len == 2 && start[0] == 's' && start[1] == 'd';
+    }
+    return segments == 0 || (segments == 1 && firstIsSd && platform::isSdPath("/sd"));   // the card's root only where "/sd" is the card
 }
 
 }  // namespace

@@ -7799,10 +7799,10 @@ function fmUploadPanelRow(panel, name) {
 async function fmDropUpload(destDir, files) {
     const skipped = [];
     const onSd = fmIsSdPath(destDir);
-    const panel = files.length ? fmUploadPanel() : null;
     for (const file of files) {
         if (!onSd && file.size > FM_UPLOAD_CAP) { skipped.push(file.name + " (" + fmSize(file.size) + ")"); continue; }
-        const row = fmUploadPanelRow(panel, file.name);
+        // Per file: the previous file's last row removed an emptied panel.
+        const row = fmUploadPanelRow(fmUploadPanel(), file.name);
         const route = "/api/file?path=" + encodeURIComponent(joinFsPath(destDir, file.name));
         try {
             await uploadWithProgress(route, file, {

@@ -107,7 +107,7 @@ private:
     static constexpr SdPreset kSdPresets[] = {
         // The P4's slot 0 IOMUX pins, which every P4 board with a slot wires; GPIO45 drives the card's power switch where the board fits its gate resistor.
         {"P4 SDMMC", SdPresetChip::P4, platform::SdBus::Sdmmc, 43, 44, 39, 40, 41, 42, 45, false},
-        // The classic's slot 1 IOMUX pins in 1-bit mode, as the Olimex ESP32-Gateway wires them.
+        // The classic's slot 1 IOMUX pins in 1-bit mode, the only pins its SD host reaches, as the Olimex ESP32-Gateway wires them.
         {"Classic SDMMC (1-bit)", SdPresetChip::Classic, platform::SdBus::Sdmmc, 14, 15, 2, -1, -1, -1, -1, false},
         // SPI mode as the QuinLED Dig-Octa wires it: SCK 14, MOSI 15, MISO 36, CS 16.
         {"Classic SPI", SdPresetChip::Classic, platform::SdBus::Spi, 14, 15, 36, -1, -1, 16, -1, false},

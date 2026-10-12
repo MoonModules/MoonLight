@@ -13,10 +13,11 @@
       "LEDs",
       "WiFi",
       "Ethernet",
-      "Buttons",
+      "Buttons"
+    ],
+    "planned": [
       "SD card"
     ],
-    "planned": [],
     "state": {
       "System": {
         "deviceModel": "Olimex ESP32-Gateway Rev G"
@@ -46,10 +47,6 @@
               "kind": "toggle"
             }
           ]
-        },
-        "SdCard": {
-          "type": "SdCardService",
-          "board": "Classic SDMMC (1-bit)"
         }
       }
     }
@@ -966,11 +963,11 @@
     "supported": [
       "LEDs",
       "WiFi",
-      "Ethernet",
-      "SD card"
+      "Ethernet"
     ],
     "planned": [
-      "Button"
+      "Button",
+      "SD card"
     ],
     "state": {
       "System": {
@@ -1004,12 +1001,6 @@
         "$patch": "replace",
         "Layer": {
           "type": "Layer"
-        }
-      },
-      "Services": {
-        "SdCard": {
-          "type": "SdCardService",
-          "board": "Classic SDMMC (1-bit)"
         }
       }
     },
