@@ -308,12 +308,6 @@ static bool requestNamesSdPath(const char* req) {
     return false;
 }
 
-// Whether a decoded API path is rooted at the SD mount: "/sd" or "/sd/...", never "/sdx...".
-static bool isSdPath(const char* path) {
-    return path && path[0] == '/' && path[1] == 's' && path[2] == 'd' &&
-           (path[3] == '\0' || path[3] == '/');
-}
-
 bool HttpServerModule::handleConnection(platform::TcpConnection& conn, int patienceMs) {
     // A client on the device's own access point has not shown it knows the network's password, so it sees no stored one.
     const SecretsHidden hide(onAccessPoint(conn));
@@ -775,7 +769,7 @@ void HttpServerModule::streamFsFile(platform::TcpConnection& conn, const char* p
         "Connection: close\r\nAccess-Control-Allow-Origin: *\r\n\r\n", mime, static_cast<long long>(size), extraHeaders);
 
     // An /sd download hands off to the chunked driver, one bounded slice per tick. Claimed and opened before the header, so a busy slot or a failed open answers 503/500, not a 200 with no body.
-    if (isSdPath(path)) {
+    if (platform::isSdPath(path)) {
         SdTransfer* t = claimSdTransfer();
         if (!t) { sendResponse(conn, 503, "application/json", "{\"error\":\"another SD transfer is in progress\"}"); return; }
         if (!platform::fsReadStreamOpen(t->rstream, path)) {
@@ -972,7 +966,7 @@ void HttpServerModule::handleWriteFile(platform::TcpConnection& conn, const char
         sendResponse(conn, 400, "application/json", "{\"error\":\"bad path\"}");
         return;
     }
-    if (isSdPath(path)) {
+    if (platform::isSdPath(path)) {
         handleWriteFileSd(conn, path, initialBody, initialLen, contentLen);
         return;
     }

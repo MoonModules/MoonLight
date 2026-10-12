@@ -329,6 +329,13 @@ inline bool fsWriteStream(const char* path, FsWriteSrc src, void* user) {
 
 // A second, independent mount (microSD, FAT) sharing the fsXxx surface above through its own `/sd` path prefix; inert wherever hasSdCard is false.
 
+/// Whether `path` is rooted at the SD mount: "sd", "/sd", "sd/foo" or "/sd/foo" (a leading slash is optional).
+inline bool isSdPath(const char* path) {
+    if (!path) return false;
+    if (*path == '/') path++;
+    return path[0] == 's' && path[1] == 'd' && (path[2] == '\0' || path[2] == '/');
+}
+
 /// A board's SDMMC wiring, read at mount time rather than compiled in; -1 leaves a line unused.
 struct SdPinConfig {
     int8_t clk = -1;   ///< SDMMC clock

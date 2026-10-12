@@ -874,22 +874,11 @@ int sdStreamsOpen_ = 0;
 // True by default: a host has no real slot to pull a card from, so a test flips this to model one going missing or coming back.
 bool sdCardPresentForTest_ = true;
 
-/// Whether `path` (leading slashes already stripped) names the SD mount: "sd" or "sd/...".
-bool isSdApiPath(const char* path) {
-    return path[0] == 's' && path[1] == 'd' && (path[2] == '\0' || path[2] == '/');
-}
-
-/// isSdApiPath for a raw API path, leading slashes and all.
-bool pathIsSd(const char* path) {
-    while (*path == '/') path++;
-    return isSdApiPath(path);
-}
-
 // Map an API path onto the root, normalize it, and reject one that escapes; an empty result reads as failure, which callers already handle.
 std::filesystem::path toFsPath(const char* path) {
     if (!path) return {};
     while (*path == '/') path++;  // strip any number of leading slashes
-    if (!sdMounted_ && isSdApiPath(path)) return {};   // mirrors a real card not inserted
+    if (!sdMounted_ && isSdPath(path)) return {};   // mirrors a real card not inserted
     std::filesystem::path candidate = (fsRoot_ / path).lexically_normal();
     std::filesystem::path rootNormal = fsRoot_.lexically_normal();
     // A prefix check on the normalized string, compared by iterator so a trailing separator cannot change the answer.
@@ -1029,7 +1018,7 @@ bool fsReadStreamOpen(FsReadStream& h, const char* path) {
     if (!f) return false;
     auto* rh = new DesktopReadHandle();
     rh->f = f;
-    rh->isSd = pathIsSd(path);
+    rh->isSd = isSdPath(path);
     if (rh->isSd) ++sdStreamsOpen_;
     h.impl = rh;
     return true;
@@ -1068,7 +1057,7 @@ bool fsWriteStreamOpen(FsWriteStream& h, const char* path) {
     wh->tmp += ".tmp";
     wh->f = openOwnerOnly(wh->tmp.string().c_str());
     if (!wh->f) { delete wh; return false; }
-    wh->isSd = pathIsSd(path);
+    wh->isSd = isSdPath(path);
     if (wh->isSd) ++sdStreamsOpen_;
     h.impl = wh;
     return true;

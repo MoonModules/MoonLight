@@ -30,13 +30,6 @@
 
 namespace mm::platform {
 
-/// Whether an API path names the SD mount: "/sd" or "/sd/...", never "/sdx...".
-static bool isSdApiPath(const char* path) {
-    if (!path) return false;
-    if (*path == '/') path++;
-    return path[0] == 's' && path[1] == 'd' && (path[2] == '\0' || path[2] == '/');
-}
-
 // LittleFS state
 static constexpr const char* FS_TAG = "mm_fs";
 // Both labels, in order: @xref{two-partition-labels-tried-in-order|why two}.
@@ -103,7 +96,7 @@ void fsUnmount() {
 }
 
 bool fsMkdir(const char* path) {
-    if constexpr (hasSdCard) { if (isSdApiPath(path)) return sdCardMkdir(path); }
+    if constexpr (hasSdCard) { if (isSdPath(path)) return sdCardMkdir(path); }
     if (!fsMounted_) return false;
     char full[128];
     if (!fsTranslate(path, full, sizeof(full))) return false;
@@ -122,7 +115,7 @@ bool fsMkdir(const char* path) {
 }
 
 bool fsExists(const char* path) {
-    if constexpr (hasSdCard) { if (isSdApiPath(path)) return sdCardExists(path); }
+    if constexpr (hasSdCard) { if (isSdPath(path)) return sdCardExists(path); }
     if (!fsMounted_) return false;
     char full[128];
     if (!fsTranslate(path, full, sizeof(full))) return false;
@@ -131,7 +124,7 @@ bool fsExists(const char* path) {
 }
 
 bool fsRemove(const char* path) {
-    if constexpr (hasSdCard) { if (isSdApiPath(path)) return sdCardRemove(path); }
+    if constexpr (hasSdCard) { if (isSdPath(path)) return sdCardRemove(path); }
     if (!fsMounted_) return false;
     char full[128];
     if (!fsTranslate(path, full, sizeof(full))) return false;
@@ -142,7 +135,7 @@ bool fsRemove(const char* path) {
 }
 
 int fsRead(const char* path, char* buf, size_t maxLen) {
-    if constexpr (hasSdCard) { if (isSdApiPath(path)) return sdCardRead(path, buf, maxLen); }
+    if constexpr (hasSdCard) { if (isSdPath(path)) return sdCardRead(path, buf, maxLen); }
     if (!fsMounted_ || !buf || maxLen == 0) return -1;
     char full[128];
     if (!fsTranslate(path, full, sizeof(full))) return -1;
@@ -168,7 +161,7 @@ static void makeParent(const char* path) {
 }
 
 bool fsWriteAtomic(const char* path, const char* data, size_t len) {
-    if constexpr (hasSdCard) { if (isSdApiPath(path)) return sdCardWriteAtomic(path, data, len); }
+    if constexpr (hasSdCard) { if (isSdPath(path)) return sdCardWriteAtomic(path, data, len); }
     if (!fsMounted_) return false;
     // A non-zero length with a null pointer is undefined in the write below, so guard the boundary.
     if (len > 0 && !data) return false;
@@ -200,7 +193,7 @@ bool fsWriteAtomic(const char* path, const char* data, size_t len) {
 }
 
 int64_t fsSize(const char* path) {
-    if constexpr (hasSdCard) { if (isSdApiPath(path)) return sdCardSize(path); }
+    if constexpr (hasSdCard) { if (isSdPath(path)) return sdCardSize(path); }
     if (!fsMounted_) return -1;
     char full[128];
     if (!fsTranslate(path, full, sizeof(full))) return -1;
@@ -210,7 +203,7 @@ int64_t fsSize(const char* path) {
 }
 
 void fsList(const char* dir, FsListCb cb, void* user) {
-    if constexpr (hasSdCard) { if (isSdApiPath(dir)) { sdCardList(dir, cb, user); return; } }
+    if constexpr (hasSdCard) { if (isSdPath(dir)) { sdCardList(dir, cb, user); return; } }
     if (!fsMounted_ || !cb) return;
     // A second mount, not a real subdirectory; advertised by hand here, gated on sdCardMounted() rather than the chip-capability hasSdCard.
     if constexpr (hasSdCard) {
@@ -246,7 +239,7 @@ struct StreamImpl {
 bool fsReadStreamOpen(FsReadStream& h, const char* path) {
     auto* impl = new StreamImpl();
     if constexpr (hasSdCard) {
-        if (isSdApiPath(path)) {
+        if (isSdPath(path)) {
             impl->isSd = true;
             if (!sdCardReadStreamOpen(impl->sdHandle, path)) { delete impl; return false; }
             h.impl = impl;
@@ -284,7 +277,7 @@ void fsReadStreamClose(FsReadStream& h) {
 bool fsWriteStreamOpen(FsWriteStream& h, const char* path) {
     auto* impl = new StreamImpl();
     if constexpr (hasSdCard) {
-        if (isSdApiPath(path)) {
+        if (isSdPath(path)) {
             impl->isSd = true;
             if (!sdCardWriteStreamOpen(impl->sdHandle, path)) { delete impl; return false; }
             h.impl = impl;

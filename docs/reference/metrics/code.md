@@ -60,7 +60,7 @@ The next function worth simplifying is at the top of each file's list.
 | File | Findings | Worst |
 |---|---:|---|
 | `src/core/system/HttpServerModule.cpp` | 45 | `HttpServerModule::handleConnection`, complex function 123 |
-| `src/platform/desktop/platform_desktop.cpp` | 44 | `platform::getMacAddress, line 1384`, large stack frame 5240 |
+| `src/platform/desktop/platform_desktop.cpp` | 44 | `platform::getMacAddress, line 1373`, large stack frame 5240 |
 | `src/ui/migrate.js` | 43 | `line 29: 'I2cBusModule'`, module type in the UI 1 |
 | `src/core/system/MqttModule.cpp` | 31 | `MqttModule::routePublish`, complex function 29 |
 | `src/ui/app.js` | 29 | `app.js`, large file 9076 |
@@ -349,7 +349,7 @@ The next function worth simplifying is at the top of each file's list.
 | `src/platform/esp32/platform_esp32_i2s.cpp` | 1 | `platform::audioMicInit`, complex function 11 |
 | `src/platform/esp32/platform_esp32_sdmmc.cpp` | 1 | `platform::sdMount`, complex function 22 |
 | `src/platform/esp32/platform_esp32_tasks.cpp` | 1 | `platform::taskSnapshot`, complex function 12 |
-| `src/platform/platform.h` | 1 | `platform.h`, large file 1375 |
+| `src/platform/platform.h` | 1 | `platform.h`, large file 1382 |
 | `src/ui/install-picker.js` | 1 | `install-picker.js`, large file 1048 |
 | `src/ui/preview3d.js` | 1 | `preview3d.js`, large file 1431 |
 | `test/js/installer-eth-only.test.mjs` | 1 | `lines 13-23, also in test/js/ui-mooncloud.test.mjs:6`, duplicated block 11 |
