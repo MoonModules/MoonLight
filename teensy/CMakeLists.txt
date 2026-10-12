@@ -23,19 +23,18 @@ target_include_directories(teensy_libs SYSTEM PUBLIC "${TEENSY_SDK}/LittleFS/src
 target_link_libraries(teensy_libs PUBLIC teensy_core)
 target_compile_options(teensy_libs PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-std=gnu++17>)
 
-# Which binary this is: `teensy41` drives the on-board PHY, `teensy41-w5500` a W5500 on the SPI port, for a 4.1-NE.
-set(MM_FIRMWARE "teensy41" CACHE STRING "the Teensy firmware variant: teensy41 or teensy41-w5500")
-if(NOT MM_FIRMWARE MATCHES "^teensy41(-w5500)?$")
-    message(FATAL_ERROR "MM_FIRMWARE=${MM_FIRMWARE}: expected teensy41 or teensy41-w5500")
-endif()
+# Which binary this is and which Ethernet driver it carries, both set by build_teensy.py from the firmware registry, which names and checks the variants.
+set(MM_FIRMWARE "teensy41" CACHE STRING "the firmware name the binary reports")
 
-# The network stack: lwIP with QNEthernet, whose driver follows the firmware; the W5500 sits on the hardware SPI port and chip select 10.
+# The network stack: lwIP with QNEthernet, carrying both its drivers, the board's own PHY and a W5500 on the hardware SPI port and chip select 10.
+# QNEthernet builds one driver, so each is compiled with its `driver` namespace renamed, and our external driver (its hook) picks the chip the board has at boot.
 file(GLOB_RECURSE QNETHERNET_SOURCES "${TEENSY_SDK}/QNEthernet/src/*.c" "${TEENSY_SDK}/QNEthernet/src/*.cpp")
-add_library(qnethernet STATIC ${QNETHERNET_SOURCES})
-target_include_directories(qnethernet SYSTEM PUBLIC "${TEENSY_SDK}/QNEthernet/src")
-if(MM_FIRMWARE STREQUAL "teensy41-w5500")
-    target_compile_definitions(qnethernet PUBLIC QNETHERNET_DRIVER_W5500)
-endif()
+add_library(qnethernet STATIC ${QNETHERNET_SOURCES} ${REPO}/src/platform/teensy/qnethernet/qnethernet_dual_driver.cpp)
+target_include_directories(qnethernet SYSTEM PUBLIC "${TEENSY_SDK}/QNEthernet/src" "${REPO}/src/platform/teensy/qnethernet")
+set_source_files_properties("${TEENSY_SDK}/QNEthernet/src/qnethernet/drivers/driver_teensy41.cpp"
+    PROPERTIES COMPILE_DEFINITIONS "QNETHERNET_INTERNAL_DRIVER_TEENSY41;driver=driver_t41")
+set_source_files_properties("${TEENSY_SDK}/QNEthernet/src/qnethernet/drivers/driver_w5500.cpp"
+    PROPERTIES COMPILE_DEFINITIONS "QNETHERNET_INTERNAL_DRIVER_W5500;driver=driver_w5500")
 # The preview drains one send buffer per 20 ms tick, so the buffer bounds its rate: 16 segments, with the segment pool and lwIP's heap to match.
 target_compile_definitions(qnethernet PUBLIC TCP_SND_BUF=23360 MEMP_NUM_TCP_SEG=64 MEM_SIZE=48000)
 target_link_libraries(qnethernet PUBLIC teensy_libs)
@@ -106,6 +105,8 @@ add_executable(MoonLight.elf
     ${REPO}/src/platform/teensy/moonlive_asm_thumb2.cpp
     ${REPO}/src/platform/teensy/platform_teensy.cpp
     ${REPO}/src/platform/teensy/platform_teensy_gpio_dma.cpp
+    ${REPO}/src/platform/teensy/platform_teensy_ota.cpp
+    ${REPO}/src/platform/teensy/platform_teensy_improv.cpp
 )
 add_dependencies(MoonLight.elf build_info_gen ui_embed moonlive_catalog)
 target_include_directories(MoonLight.elf PRIVATE ${REPO}/src ${REPO}/src/platform/teensy)
@@ -121,8 +122,9 @@ endif()
 target_link_libraries(MoonLight.elf PRIVATE qnethernet teensy_libs teensy_core m stdc++)
 target_link_options(MoonLight.elf PRIVATE "-T${CMAKE_BINARY_DIR}/imxrt1062_t41.ld")
 
-# The image Teensy Loader writes.
+# The HEX Teensy Loader writes, and the same image flat for the writers that take raw bytes at an offset: from the HEX, which holds only the flash records at 0x60000000, and gap-filled with 0xFF, what erased flash reads.
 add_custom_command(TARGET MoonLight.elf POST_BUILD
     COMMAND ${CMAKE_OBJCOPY} -O ihex -R .eeprom MoonLight.elf MoonLight.hex
+    COMMAND ${CMAKE_OBJCOPY} -I ihex -O binary --gap-fill 0xff MoonLight.hex MoonLight.bin
     COMMAND ${CMAKE_SIZE} -A MoonLight.elf
-    COMMENT "MoonLight.hex")
+    COMMENT "MoonLight.hex, MoonLight.bin")

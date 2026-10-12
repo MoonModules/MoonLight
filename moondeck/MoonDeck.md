@@ -134,7 +134,7 @@ uv run moondeck/run/preview_installer.py
 Long-running — MoonDeck shows **Stop** while the server is up. Two modes, picked automatically:
 
 - **Render-only.** With no app image under `build/esp32-*/`, the picker populates against the real GitHub Releases API and the dropdowns work. Clicking **Install** fails, because the local server has no `releases/` tree. Useful for iterating on HTML / CSS / JS without burning a build. Equivalent to "Recipe A" in [mooninstaller/README.md](../mooninstaller/README.md).
-- **Flash-ready.** When at least one ESP32 build exists, the script also stages every app image it finds under `build/esp32-*/` into `releases/local-dev/`. It generates matching Pages-relative manifests with the same `generate_manifest.py` the release workflow uses. The picker shows `local-dev` as the newest tag. Clicking **Install** flashes a USB-connected ESP32 and hands off to the repository's own orchestrator UI in `install-orchestrator.js`. That does the Improv-Serial provisioning and the APPLY_OP push of the device model's modules and controls, in place of ESP Web Tools. End-to-end, same code paths as the public installer. This is the developer's test ground for the install flow before deploying to GitHub Pages: Web Serial works on `http://localhost` without the secure-origin requirement that gates the public site.
+- **Flash-ready.** When at least one ESP32 or Teensy build exists, the script also stages every app image it finds under `build/esp32-*/`, and every built Teensy `build/teensy41*/MoonLight.bin`, into `releases/local-dev/`. It generates matching Pages-relative manifests with the same `generate_manifest.py` the release workflow uses. The picker shows `local-dev` as the newest tag. Clicking **Install** flashes a USB-connected ESP32 or Teensy and hands off to the repository's own orchestrator UI in `install-orchestrator.js`. That does the Improv-Serial provisioning and the APPLY_OP push of the device model's modules and controls, in place of ESP Web Tools. End-to-end, same code paths as the public installer. This is the developer's test ground for the install flow before deploying to GitHub Pages: Web Serial works on `http://localhost` without the secure-origin requirement that gates the public site.
 
 Add `?nocache=1` to the URL to bypass the picker's 5-minute sessionStorage cache while editing.
 
@@ -223,7 +223,7 @@ Verify the firmware projection (`mooninstaller/firmwares.json`) matches the `FIR
 uv run moondeck/check/check_firmwares.py
 ```
 
-Regenerates the firmware list from `build_esp32.py`'s `FIRMWARES` dict and fails on drift from the committed `firmwares.json` — so a `FIRMWARES` edit without regenerating is caught.
+Regenerates the firmware list from the firmware registry (`firmwares.py`, joining `build_esp32.py`'s and `build_teensy.py`'s `FIRMWARES` slices) and fails on drift from the committed `firmwares.json`, so a `FIRMWARES` edit without regenerating is caught.
 
 ### collect_kpi
 
@@ -1308,8 +1308,8 @@ tick: 1234us (FPS: 800)  free: 0  ...
 
 ## Teensy Tab
 
-Two firmwares for the Teensy 4.1: `teensy41` for the board's own Ethernet and `teensy41-w5500` for a W5500 module.
-The W5500 checkbox on the Build and Flash cards picks the second, and the port is found by PJRC's USB vendor id, so the tab has no dropdowns.
+One firmware for the Teensy 4.1, `teensy41`, which finds at boot whether the board has its own Ethernet or a W5500 module.
+The port is found by PJRC's USB vendor id, so the tab has no dropdowns.
 Setup once, then Build, Flash and Monitor.
 
 ### setup_teensy
@@ -1337,11 +1337,10 @@ Build a Teensy 4.1 firmware.
 
 ```bash
 uv run moondeck/build/build_teensy.py
-uv run moondeck/build/build_teensy.py --firmware teensy41-w5500
 ```
 
-`teensy41` drives the board's own Ethernet PHY, and `teensy41-w5500` a W5500 module for the 4.1-NE; the card's W5500 checkbox picks the second.
-Builds into `build/<firmware>/`: `MoonLight.elf`, and `MoonLight.hex` for the loader, printing the section sizes.
+`teensy41` carries both Ethernet drivers, the board's own PHY and a W5500 module for the 4.1-NE, and uses the one the board has.
+Builds into `build/<firmware>/`: `MoonLight.elf`, `MoonLight.hex` for the loader, and `MoonLight.bin`, the same image flat from 0x60000000 for the writers that take raw bytes, printing the section sizes.
 Configures CMake with `teensy/teensy41.cmake` on first use, passing the SDK paths from `setup_teensy`.
 
 ### flash_teensy
@@ -1353,7 +1352,6 @@ uv run moondeck/build/flash_teensy.py
 ```
 
 A running MoonLight is asked into its bootloader through its USB serial port, so no button press is needed; a board without a running firmware waits for its program button.
-`--firmware` picks the image as `build_teensy` does, and so does the card's W5500 checkbox.
 `--port` names the port when more than one Teensy is attached.
 Gives up after 60 seconds with what to check.
 

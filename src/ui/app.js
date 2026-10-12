@@ -209,6 +209,7 @@ function connectWs() {
                 if (state && Array.isArray(state.modules)) {
                     applyStatePatch(data.patch);
                     updateValues();
+                    relayMoonCloudOutbox();
                     // A targetFps slider move arrives as a PATCH, and the preview controller aims
                     // at whatever it last heard: without this, the advertised detail/smoothness
                     // chooser only takes effect on the next reconnect.
@@ -221,6 +222,7 @@ function connectWs() {
             // without a `modules` array, or it would clobber `state` and blank the module view.
             if (!Array.isArray(data.modules)) return;
             state = data;
+            relayMoonCloudOutbox();
             // Defer the DOM rebuild while the user is mid-interaction: a full state arrives on every
             // (re)connect, and rebuilding under an open dropdown makes it unselectable. The state is
             // already stored above, so updateValues() below still shows fresh values; the structural
@@ -1531,6 +1533,36 @@ function installProgress(text) {
 //
 // Not to be confused with moonbaseUpdateFlow, which carries an install across TWO reboots (into
 // MoonBase and back) and has its own retry and handoff handling.
+// The device's own Firmware status, or null when it is not answering.
+async function probeFirmwareStatus() {
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), 2500);
+    try {
+        const r = await fetch("/api/modules/Firmware", { cache: "no-store", signal: ctl.signal });
+        if (!r.ok) return null;
+        const mod = await r.json();
+        return (mod && mod.status) || "";
+    } catch (_) {
+        return null;
+    } finally {
+        clearTimeout(timer);
+    }
+}
+
+// Wait for a device that reboots after an install: gone at least once and answering again, or answering throughout past a grace period, false at the deadline.
+// A fixed wait reloaded a Teensy still copying its image onto the browser's connection-refused page.
+async function waitForReboot(timeoutMs = 120000) {
+    const start = Date.now();
+    let wentDown = false;
+    while (Date.now() - start < timeoutMs) {
+        const up = (await probeFirmwareStatus()) !== null;
+        if (!up) wentDown = true;
+        else if (wentDown || Date.now() - start > 15000) return true;
+        await fwSleep(1000);
+    }
+    return false;
+}
+
 function watchInstall(kind) {
     const ui = showUpdateOverlay();
     ui.status(`Installing ${kind.label.toLowerCase()}\u2026`);
@@ -1539,22 +1571,7 @@ function watchInstall(kind) {
     // the install task has written anything, and rest or silence then means "not started yet".
     let sawWork = false;
     let silent = 0;
-
-    // The device's own Firmware status, or null when it is not answering.
-    const probe = async () => {
-        const ctl = new AbortController();
-        const timer = setTimeout(() => ctl.abort(), 2500);
-        try {
-            const r = await fetch("/api/modules/Firmware", { cache: "no-store", signal: ctl.signal });
-            if (!r.ok) return null;
-            const mod = await r.json();
-            return (mod && mod.status) || "";
-        } catch (_) {
-            return null;
-        } finally {
-            clearTimeout(timer);
-        }
-    };
+    const probe = probeFirmwareStatus;
 
     const tick = async () => {
         if (Date.now() > deadline) { ui.fail("Install timed out."); return; }
@@ -1564,7 +1581,7 @@ function watchInstall(kind) {
             // Not answering. During a rebooting install that is the reboot itself.
             silent++;
             if (kind.reboots && sawWork) {
-                ui.status("Rebooting\u2026");
+                ui.busy("Rebooting\u2026");
                 if (silent > 90) { ui.fail(MOONBASE_SILENT_MSG); return; }
             } else if (silent >= 4) {
                 ui.status("The device is not answering\u2026");
@@ -1619,6 +1636,7 @@ function watchInstall(kind) {
 function uploadWithProgress(route, file, ui) {
     return new Promise((resolve, reject) => {
         const xhr = new XMLHttpRequest();
+        ui.watchStalls();
         xhr.open("POST", route);
         xhr.setRequestHeader("Content-Type", "application/octet-stream");
         xhr.upload.addEventListener("progress", (e) => {
@@ -1648,10 +1666,19 @@ function showUpdateOverlay() {
     const msg = document.createElement("p");
     msg.className = "fw-overlay-msg";
     const bar = document.createElement("progress");   // no value = indeterminate sweep
+    // A browser upload pauses while the device erases flash, which on a Teensy stops it reading the network for seconds at a time.
+    // After a moment without progress the overlay says so, so a pause reads as work rather than a hang.
+    // Armed by the upload only: a device-reported install moves once per status poll, which would read as a stall between polls.
+    let base = "", read = 0, total = 0, lastMove = 0, stalled = false, watch = 0;
+    const show = (on) => {
+        stalled = on;
+        msg.textContent = on ? "Writing to flash\u2026" : base;
+        bar.classList.toggle("fw-stalled", on);
+    };
     const dismiss = document.createElement("button");
     dismiss.textContent = "close";
     dismiss.style.display = "none";
-    dismiss.addEventListener("click", () => ov.remove());
+    dismiss.addEventListener("click", () => { clearInterval(watch); ov.remove(); });
     const cancel = document.createElement("button");
     cancel.textContent = "cancel install";
     let uploadCtl = null;   // the in-flight file upload's AbortController, set by the flow
@@ -1665,9 +1692,22 @@ function showUpdateOverlay() {
     ov.appendChild(box);
     document.body.appendChild(ov);
     return {
-        status(text) { msg.textContent = text; },
-        progress(read, total) { if (total > 0) { bar.max = total; bar.value = read; } },
-        fail(text) { msg.textContent = text; bar.remove(); cancel.remove(); dismiss.style.display = ""; },
+        status(text) { base = text; show(false); },
+        // A wait with nothing to measure, such as the reboot: the text, and the bar pulsing as it does through a flash write.
+        busy(text) { clearInterval(watch); base = text; show(false); bar.classList.add("fw-stalled"); },
+        progress(r, t) {
+            if (t <= 0) return;
+            bar.max = t;
+            bar.value = r;
+            if (r !== read) { read = r; total = t; lastMove = Date.now(); if (stalled) show(false); }
+        },
+        fail(text) { clearInterval(watch); base = text; show(false); bar.remove(); cancel.remove(); dismiss.style.display = ""; },
+        watchStalls() {
+            watch = setInterval(() => {
+                const on = read > 0 && read < total && Date.now() - lastMove > 1500;
+                if (on !== stalled) show(on);
+            }, 500);
+        },
         setUpload(ctl) { uploadCtl = ctl; },
     };
 }
@@ -2186,7 +2226,9 @@ function createCard(mod, depth) {
     // card-build. The picker reads SystemModule.firmware (already in
     // /api/state) to filter to OTA-compatible releases. On install, the
     // device fetches the binary via /api/firmware/url: no browser CORS in
-    // the data path. See docs/explanation/architecture/mooninstaller.md § The three words.
+    // the data path. A device without TLS answers that route 501, and the
+    // browser fetches the image from the release's Pages mirror and uploads it.
+    // See docs/explanation/architecture/mooninstaller.md § The three words.
     if (mod.type === "FirmwareUpdateModule") {
         // A nudge where someone has just thought about versions, which is the moment the aggregate
         // is worth something to them. Shown only while Stats consent is off, so it disappears the
@@ -2286,6 +2328,46 @@ function createCard(mod, depth) {
         status.className = "fw-upload-status";
         const say = (t) => { status.textContent = t; };
 
+        // Upload an image the browser holds, behind the overlay every install shows. The device
+        // cannot report this transfer's progress (the request stays open for it), so the bar
+        // follows the upload itself.
+        const installBlob = async (blob, ui = showUpdateOverlay()) => {
+            ui.status(`Installing ${fmSize(blob.size)}…`);
+            try {
+                await uploadWithProgress(k.uploadRoute, blob, ui);
+                if (k.reboots) {
+                    ui.busy("Rebooting…");
+                    if (!await waitForReboot()) { ui.fail("The device did not come back within two minutes: check it, then reload."); return; }
+                } else {
+                    ui.status(`${k.label} installed`);
+                    await fwSleep(1200);
+                }
+                location.reload();
+            } catch (err) {
+                ui.fail("Install failed: " + err.message);
+            }
+        };
+
+        // For a device that cannot fetch a URL (no TLS): the browser downloads the image and uploads it.
+        // GitHub's release assets refuse a cross-origin read, so a release asset comes from its
+        // copy on the installer's Pages site, which allows one.
+        const installViaBrowser = async (url) => {
+            const m = /\/releases\/download\/([^/]+)\/([^/]+)$/.exec(url);
+            const source = m ? `https://moonmodules.org/MoonLight/install/releases/${m[1]}/${m[2]}` : url;
+            const ui = showUpdateOverlay();
+            ui.status("Downloading the image…");
+            let blob;
+            try {
+                const res = await fetch(source);
+                if (!res.ok) throw new Error(`HTTP ${res.status} from ${source}`);
+                blob = await res.blob();
+            } catch (err) {
+                ui.fail("Download failed: " + err.message);
+                return;
+            }
+            await installBlob(blob, ui);
+        };
+
         // Hand a URL to the device. Every install route answers 202 and works on its own task, so
         // the overlay reports progress rather than this response.
         const installUrl = async (url) => {
@@ -2300,6 +2382,7 @@ function createCard(mod, depth) {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ url }),
             });
+            if (res.status === 501 && kind === "app") { await installViaBrowser(url); return; }
             if (!res.ok) throw new Error(await errorMessage(res));
             watchInstall(k);
         };
@@ -2361,24 +2444,8 @@ function createCard(mod, depth) {
                 return;
             }
             upBtn.disabled = true;
-            // The overlay, like every other install. This is the one whose progress the DEVICE
-            // cannot report (the request stays open for the transfer), so the bar is driven from
-            // the upload itself, but a user should not have to know which install they picked to
-            // know where the progress appears.
-            const ui = showUpdateOverlay();
-            ui.status(`Installing ${fmSize(file.size)}…`);
             try {
-                await uploadWithProgress(k.uploadRoute, file, ui);
-                if (k.reboots) {
-                    ui.status("Rebooting…");
-                    await fwSleep(4000);
-                } else {
-                    ui.status(`${k.label} installed`);
-                    await fwSleep(1200);
-                }
-                location.reload();
-            } catch (err) {
-                ui.fail("Install failed: " + err.message);
+                await installBlob(file);
             } finally {
                 upBtn.disabled = false;
             }
@@ -6387,6 +6454,34 @@ function consented(mod) {
 }
 
 const kMoonCloudUrl = "https://mooncloud-stats.moonmodules.workers.dev";
+
+// A board without HTTPS leaves its MoonCloud request in the hidden `outbox` control; the device page, which has HTTPS, posts it and presses `outbox sent` to empty it.
+// One request at a time, and after a failed post a pause, so an unreachable server is not asked once a second.
+let moonCloudRelayBusy = false;
+let moonCloudRelayRetryAt = 0;
+async function relayMoonCloudOutbox() {
+    if (moonCloudRelayBusy || Date.now() < moonCloudRelayRetryAt) return;
+    const cloud = allModules().find(m => m.type === "MoonCloudModule");
+    const raw = cloud?.controls?.find(c => c.name === "outbox")?.value;
+    if (!raw) return;
+    let req;
+    try { req = JSON.parse(raw); } catch (_) { return; }
+    if (typeof req.path !== "string" || !req.path.startsWith("/api/")) return;
+    moonCloudRelayBusy = true;
+    try {
+        const res = await fetch(kMoonCloudUrl + req.path, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(req.body),
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        await sendControl(cloud.name, "outbox sent", 1);
+    } catch (_) {
+        moonCloudRelayRetryAt = Date.now() + 30000;
+    } finally {
+        moonCloudRelayBusy = false;
+    }
+}
 
 let moonCloudStatsCache = new Map();   // filter query -> stats, so switching back is free
 let moonCloudFilter = {};              // dimension -> value the reader chose

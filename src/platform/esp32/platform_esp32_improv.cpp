@@ -260,51 +260,21 @@ static void improvHandleSetTxPower(const uint8_t* payload, uint8_t len) {
 // The apply operation, carrying one request as a document in the same shape the network interface takes: @xref{the-two-vendor-operations|why over serial}.
 // The payload is a chunk index, a last flag and a slice.
 // The first index resets the buffer and the last one marks it ready for the main loop to apply.
-static constexpr uint8_t IMPROV_CMD_APPLY_OP = 0xFC;
-static constexpr uint8_t IMPROV_ERROR_INVALID_OP = 0x82;
-
 static void improvHandleApplyOp(const uint8_t* payload, uint8_t len) {
     if (!g_improv.opOut || !g_improv.opReady) {
         improvSendError(improv::ERROR_UNKNOWN_RPC);
         return;
     }
-    // Single-buffered: refuse a new op while the module hasn't consumed the previous one (opReady still set), so a fast installer can't overwrite an unapplied op. The installer treats this error as "retry shortly" and re-sends. Acquire-load pairs with the module's release-store when it clears the flag after applying.
-    if (g_improv.opReady->load(std::memory_order_acquire)) {
-        improvSendError(static_cast<improv::Error>(IMPROV_ERROR_INVALID_OP));
-        return;
-    }
-    // [0xFC][seq][last] header = 3 bytes; chunk is the rest.
-    if (len < 3) {
-        improvSendError(static_cast<improv::Error>(IMPROV_ERROR_INVALID_OP));
-        return;
-    }
-    uint8_t seq = payload[1];
-    uint8_t last = payload[2];
-    const uint8_t* chunk = payload + 3;
-    size_t chunkLen = static_cast<size_t>(len) - 3;
-
-    // `last` is a boolean flag on the wire; anything but 0/1 is a malformed frame (a desync the parser's checksum didn't catch, or a non-conforming sender). Reject before reassembly rather than coerce a stray value to "more chunks".
-    if (last > 1) {
-        improvSendError(static_cast<improv::Error>(IMPROV_ERROR_INVALID_OP));
-        return;
-    }
-
-    // Reassembly and the duplicate guard live in a core helper tested without hardware, leaving only the serial handling here. Bound once at the first call, the buffer being set before the task starts and one task living for the device's lifetime, so it never sees a stale one.
+    // The handling lives in core, shared with every transport and tested without hardware; this owns only the replies. Bound once at the first call, the buffer being set before the task starts and one task living for the device's lifetime.
     static mm::ImprovOpReassembler reasm(g_improv.opOut, g_improv.opOutLen);
-    switch (reasm.feed(seq, last, chunk, chunkLen)) {
-        case mm::ImprovOpReassembler::Result::Error:
-            improvSendError(static_cast<improv::Error>(IMPROV_ERROR_INVALID_OP));
-            return;
-        case mm::ImprovOpReassembler::Result::Continue:
-            break;
-        case mm::ImprovOpReassembler::Result::Ready:
-            // release-store pairs with the module's acquire-load before it applies.
-            g_improv.opReady->store(true, std::memory_order_release);
-            break;
+    if (mm::improvApplyOp(reasm, payload, len, *g_improv.opReady) == mm::ImprovApplyOpReply::Refused) {
+        // The installer treats this as "retry shortly", which a busy buffer needs.
+        improvSendError(static_cast<improv::Error>(mm::kImprovErrorInvalidOp));
+        return;
     }
     // Ack every chunk (empty RpcResponse for 0xFC) so the installer awaits each.
     auto rpc = improv::build_rpc_response(
-        static_cast<improv::Command>(IMPROV_CMD_APPLY_OP),
+        static_cast<improv::Command>(mm::kImprovCmdApplyOp),
         std::vector<std::string>{}, false);
     improvSend(ImprovFrameType::RpcResponse, rpc);
 }
@@ -319,7 +289,7 @@ static void improvDispatchFrame(const ImprovFrameParser& parser) {
         improvHandleSetTxPower(raw, rawLen);
         return;
     }
-    if (rawLen >= 1 && raw[0] == IMPROV_CMD_APPLY_OP) {
+    if (rawLen >= 1 && raw[0] == mm::kImprovCmdApplyOp) {
         improvHandleApplyOp(raw, rawLen);
         return;
     }
@@ -510,5 +480,8 @@ bool improvProvisioningInit(const ImprovDeviceInfo& info,
     }
     return true;
 }
+
+// The task drains the transports, so the tick has nothing to add.
+void improvPoll() MM_NONBLOCKING {}
 
 } // namespace mm::platform

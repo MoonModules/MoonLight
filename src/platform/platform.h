@@ -709,6 +709,8 @@ bool improvProvisioningInit(const ImprovDeviceInfo& info,
                             std::atomic<bool>* txPowerReady = nullptr,
                             char* opOut = nullptr, size_t opOutLen = 0,
                             std::atomic<bool>* opReady = nullptr);
+/// Drain the serial listener, called every tick: the work itself where the listener has no task of its own, a no-op where a task runs it.
+void improvPoll() MM_NONBLOCKING;
 
 /// One UDP socket: the wire every light protocol sends and receives on.
 class UdpSocket {

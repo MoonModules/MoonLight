@@ -1556,7 +1556,7 @@ Related: WLED is smooth on the same stream because it receives via `AsyncUDP` â€
 
 ## MIDI as a control surface, and the OpenLamp convention (2026-09-22)
 
-[ControlSurface](../../../src/core/util/ControlSurface.h) was written for MIDI hardware and has no MIDI transport. Its own documentation cites the APC40 mk2's ring-style CCs at 0x18/0x38, the X-Touch MINI's CC 1-8, and per-vendor SysEx for RGB pads, and its four verbs (`sendValue`, `sendRing`, `sendColor`, `sendLabel`) exist because MIDI hardware needs exactly those. OSC is the only transport that implements it. A MIDI transport is therefore a gap the architecture already anticipated rather than a new concept, and it is the obvious second implementation that proves the abstraction holds.
+[ControlSurface](../../../src/core/util/ControlSurface.h) was written for MIDI hardware, and [MidiService](../../../src/core/services/MidiService.h) is its MIDI transport beside OSC: it drives the surface from Mackie Control desks and the APC40 mkII, over the browser's Web MIDI, a board's USB port or RTP-MIDI, and sends the way back through the surface's verbs. What stays open is a controller with no profile: what its notes and CCs mean, which the OpenLamp convention below proposes, and MIDI learn, the item after it.
 
 **What OpenLamp offers.** [openlamp-spec-midi](https://github.com/openlamp/openlamp-spec-midi) is an MIT-licensed convention for driving WLED over MIDI: notes 59-68 for hues plus black and white, notes 48-56 for off, on, toggle and blackout, CC 1 for brightness, CC 3-4 for hue and saturation, CC 5-8 for effect, speed, intensity and palette, Program Change for presets, MIDI channel for targeting, and MIDI clock for beat sync. The [organization](https://github.com/openlamp) also has an Ableton Link and MIDI-clock tempo library, and a CC0 asset set of 72 palette illustrations and 216 effect previews in eight languages.
 
@@ -1567,6 +1567,12 @@ Related: WLED is smooth on the same stream because it receives via `AsyncUDP` â€
 **What it is not.** Not a replacement for OSC, which carries labels and arbitrary addresses that MIDI cannot. Not a lighting-control protocol in the DMX or Art-Net sense. This is about a musician's controller driving the show.
 
 Build trigger: someone with a MIDI controller who wants it to drive a device, or the DMX work reaching a point where a tempo source is the missing piece.
+
+### MIDI learn: any note or CC onto any control (robwomp, 2026-10-12)
+
+The MIDI service decodes two known layouts, Mackie Control and an Akai APC40 mkII profile, so a controller sending plain notes or CCs outside them drives nothing: a user with a generic controller on Linux got no note or CC data in. The infrared and gamepad services already map an arbitrary input onto any control with `learn` rows, and MIDI gets the same rows: each one's `learn` arm captures the next note or CC with its channel, a target names the control, and the value scales into the target's range (a CC's 0 to 127, a note's velocity, or a note as a toggle). That is MIDI learn as consoles and DAWs offer it, through the same primitive, so one mechanism maps every input. The two profiles stay for the desks whose layout they describe, since they carry the way back (motor faders, knob rings, lit pads); a learned row has none unless the controller echoes its CCs.
+
+Build trigger: met, a generic controller that cannot reach MoonLight today.
 
 ### Notes as an effect input, which is the other half
 

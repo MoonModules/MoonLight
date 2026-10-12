@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -13,15 +14,13 @@ namespace mm {
 /// ## Where it sits
 ///
 /// This is the pure logic behind the device's 0xFC handler, which treats Improv as REST over serial.
-/// The platform layer in `platform_esp32_improv.cpp` owns the serial I/O, reading frames, sending acks and errors, and holding the single-buffer `opReady` atomic; it hands each chunk's `[seq][last][bytes]` here.
+/// Each platform's listener owns its transport and hands each APPLY_OP payload to @ref improvApplyOp, which feeds the chunks here and holds the `opReady` handshake.
 /// That is the same core-against-platform line `ImprovFrame.h` draws, so the reassembly and its sequence guard are proven on the desktop without hardware.
 ///
 /// ## Why the sequence guard is real
 ///
-/// A chunk carries `[seq][last][chunk bytes]`.
-/// Sequence 0 starts a fresh op and resets the buffer, and every later chunk must be the next sequence in order.
-/// A duplicate, which an installer retry on a misread timeout produces, or an out-of-order chunk would splice garbage into the buffer.
-/// Both are rejected and the buffer is reset.
+/// A chunk carries `[seq][last][chunk bytes]`. Sequence 0 starts a fresh op and resets the buffer, and every later chunk must be the next sequence in order.
+/// A duplicate, which an installer retry on a misread timeout produces, or an out-of-order chunk would splice garbage into the buffer. Both are rejected and the buffer is reset.
 /// USB serial delivers in order, but the installer's send is open-loop and can re-emit a chunk, so the guard guards something that happens.
 ///
 /// Joins the chunks of one op into a NUL-terminated buffer the caller owns.
@@ -39,7 +38,7 @@ public:
 
     /// Feed one chunk, `seq` being its 0-based index and `last` true on the final one.
     Result feed(uint8_t seq, bool last, const uint8_t* chunk, size_t chunkLen) {
-        // seq 0 always starts fresh, so a new op recovers after one that errored mid-stream.
+        // seq 0 always starts fresh, so a new op recovers after one that errored mid-stream: @xref{why-the-sequence-guard-is-real}.
         if (seq == 0) {
             len_ = 0;
             nextSeq_ = 1;
@@ -85,6 +84,27 @@ private:
     size_t len_ = 0;       // bytes reassembled so far
     uint8_t nextSeq_ = 0;  // next chunk index expected (0 = awaiting a fresh op)
 };
+
+/// The vendor command carrying one state document over serial, and the error a refused chunk replies with.
+inline constexpr uint8_t kImprovCmdApplyOp = 0xFC;
+inline constexpr uint8_t kImprovErrorInvalidOp = 0x82;
+
+/// What a transport replies to one APPLY_OP frame: an empty response for a taken chunk, the invalid-op error otherwise.
+enum class ImprovApplyOpReply : uint8_t { Ack, Refused };
+
+/// Handle one APPLY_OP payload, `[0xFC][seq][last][chunk…]`, for every transport (@xref{where-it-sits}): refused while a document waits or when malformed, and a last chunk sets `opReady`.
+inline ImprovApplyOpReply improvApplyOp(ImprovOpReassembler& reasm, const uint8_t* payload, size_t len, std::atomic<bool>& opReady) {
+    // Single-buffered: the acquire pairs with the consumer's release when it clears the flag after applying.
+    if (opReady.load(std::memory_order_acquire)) return ImprovApplyOpReply::Refused;
+    // `last` is a flag on the wire, so anything but 0 or 1 is a malformed frame rather than "more chunks".
+    if (len < 3 || payload[2] > 1) return ImprovApplyOpReply::Refused;
+    switch (reasm.feed(payload[1], payload[2] != 0, payload + 3, len - 3)) {
+        case ImprovOpReassembler::Result::Error: return ImprovApplyOpReply::Refused;
+        case ImprovOpReassembler::Result::Ready: opReady.store(true, std::memory_order_release); break;
+        case ImprovOpReassembler::Result::Continue: break;
+    }
+    return ImprovApplyOpReply::Ack;
+}
 
 }  // namespace mm
 

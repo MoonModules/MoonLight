@@ -94,6 +94,7 @@ add_executable(mm_tests
     unit/core/unit_MoonStatsModule.cpp
     unit/core/unit_MoonTalkModule.cpp
     unit/core/unit_InstallationId.cpp
+    unit/core/unit_MoonCloudModule.cpp
     unit/core/unit_sha256.cpp
     unit/core/unit_MoonStatsReport.cpp
     unit/core/unit_SystemModule.cpp

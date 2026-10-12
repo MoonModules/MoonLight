@@ -1,6 +1,6 @@
-# MoonLive — language roadmap
+# MoonLive language roadmap
 
-> **Forward-looking backlog document — exception to the CLAUDE.md present-tense rule.** Third in a
+> **Forward-looking backlog document, an exception to the CLAUDE.md present-tense rule.** Third in a
 > family: [livescripts-analysis-top-down.md](livescripts-analysis-top-down.md) designs the ENGINE
 > (grammar, IR, codegen), [power-functions-analysis-top-down.md](power-functions-analysis-top-down.md)
 > designs the BUILTIN SURFACE the engine calls into. This one is the ordered plan for closing the
@@ -9,19 +9,19 @@
 
 ## What this is for
 
-MoonLive compiles a C-subset to native code on the device. The subset is deliberately small — it
-started at "fill a buffer with a colour" and grew a feature at a time. This document is the ordered
+MoonLive compiles a C-subset to native code on the device. The subset is deliberately small: it
+started at "fill a buffer with a color" and grew a feature at a time. This document is the ordered
 list of what to grow next, and why that order.
 
 **The bar is a corpus, not one effect.** The predecessor MoonLight publishes a body of live scripts at
 [ewowi/MoonLight/livescripts](https://github.com/ewowi/MoonLight/tree/main/livescripts),
-and the goal is that MoonLive can **run them** — not that we migrate them into this repo. They are
+and the goal is that MoonLive can **run them**, not that we migrate them into this repo. They are
 written against a language with floats, structs and a wide builtin surface, so they are an honest
 external measure of how far the subset still has to grow: each one that compiles unchanged is a
 feature below that landed, and each one that does not names the next gap.
 
-The measure throughout is **what a real effect needs**. A simulation effect — particles, physics,
-anything where this frame depends on the last — is the honest test, because it exercises state,
+The measure throughout is **what a real effect needs**. A simulation effect (particles, physics,
+anything where this frame depends on the last) is the honest test, because it exercises state,
 arithmetic and control flow together rather than one at a time. `moonlive/effects/balls.mle` is the
 worked example: bouncing balls, written against the language as it stands today, and every
 compromise it had to make is a line item below.
@@ -37,10 +37,10 @@ Five hard limits, all found by hitting them:
 | branch labels | **40** in the IR, **48** labels and **96** fixups in the assembler, counted across the whole script (an `if` or `for` takes up to 2) | `kIrLabels`, `kAsmLabels`, `kAsmFixups`, `MoonLiveIr.h` |
 | frame slots | **32**, shared by live variables, loop counters and staged call arguments ✅ | `kMaxLocals`, `MoonLiveIr.h` |
 | ~~numeric types~~ | ~~`uint8_t`, `uint16_t`, `int16_t`~~ → **`int`, `byte`, `bool`, `fixed`, `string`** ✅ | still no float: `fixed` is Q16.16 |
-| ~~builtin table~~ | ~~16, and 16 used~~ → **96** ✅ | `BuiltinTable::kMax` — raised, with an overflow assert |
+| ~~builtin table~~ | ~~16, and 16 used~~ → **96** ✅ | `BuiltinTable::kMax`, raised, with an overflow assert |
 
 The branch budget was binary-searched with generated scripts: **6 `if`/`else` + 2 `for` compiles,
-7 does not.** The state budget is what caps the balls effect at 4 balls rather than 25 — six fields
+7 does not.** The state budget is what caps the balls effect at 4 balls rather than 25: six fields
 per ball needs ~150 bytes and six members.
 
 The frame-slot budget was hit writing `aurora.mle` (2026-09-04), the first two-layer shader: it
@@ -56,24 +56,24 @@ Each row is a compromise the balls effect makes, and the language feature that w
 |---|---|---|
 | 4 objects, not 25 | 64-byte arena | a bigger arena, or a pool handle (shipped for particles) |
 | whole-pixel motion | no fractional type | fixed-point or float |
-| one flat colour | no `hsv()` builtin | `hsv()` |
+| one flat color | no `hsv()` builtin | `hsv()` |
 | one array per field | no structs | structs |
 | the helper reads a member for its index | functions take no arguments | arguments |
 | guards folded into `mod()` | 16 branch labels | a bigger label budget |
 
-## The library is already built — the engine is what is missing
+## The library is already built; the engine is what is missing
 
 This is the part worth stating plainly: **the power-functions library exists and is largely
 shipped** (particle kernels, the typed math surface, twelve showcase effects). It was built to make
 MoonLive rich, and today almost none of it is reachable from a script.
 
 Its top-down spec already records what it needs from the engine, in
-[§ 4 MoonLive requirements](power-functions-analysis-top-down.md) — deferred at the time so the
+[§ 4 MoonLive requirements](power-functions-analysis-top-down.md), deferred at the time so the
 library could finish compiled-side first. That list is the real roadmap, and it is more specific
 than "add a language feature":
 
 1. **A builtin table of ≥ 64 entries.** ✅ *shipped*. `BuiltinTable::kMax` was **16, and the light
-   domain registered exactly 16** — the table was FULL, `add()` returned false past the limit, and
+   domain registered exactly 16**: the table was FULL, `add()` returned false past the limit, and
    nothing checked the result, so the seventeenth builtin was dropped silently and the script
    failed later with "unknown function". `kMax` is now 64, and an overflow is loud rather than
    silent (`MM_ASSERT_NO_BUILTIN_OVERFLOW`).
@@ -81,7 +81,7 @@ than "add a language feature":
    `for` costs two, counted across the WHOLE script including its helper functions, and labels are
    never reused once a scope closes. A script hits "too many branches in one script" well before it
    feels complex. **Concrete case (2026-08-20):** giving `balls.mle` the wall bounces its own name
-   promises — four `if`s, one per wall — exceeded the budget and would not compile, even reduced to
+   promises (four `if`s, one per wall) exceeded the budget and would not compile, even reduced to
    one branch per wall by writing the direction bit arithmetically instead of toggling it. The
    effect is 4 balls on a 64-byte arena. It ships bouncing only because the motion was rewritten as
    a `beatsin()` per axis, where the reversal is inherent in the sine and costs no branch at all.
@@ -97,10 +97,10 @@ than "add a language feature":
 3. **Typed multi-argument host calls** (≤ 6 args, optional return). Today a builtin takes one
    `uint32_t` and returns one, which is why `line()` had to be given a bespoke seven-argument
    staging path and why most of the library is inexpressible.
-4. ✅ **Script symbols** — SHIPPED as `t`, `width`, `height`, `depth`, `xPos`, `yPos`, `zPos`.
+4. ✅ **Script symbols**: SHIPPED as `t`, `width`, `height`, `depth`, `xPos`, `yPos`, `zPos`.
 5. **Two entry shapes:** `frame()` for composing kernels (the scalable path) and `pixel(x,y,z)`
    for per-pixel ergonomics (honest ceiling around 32×32).
-6. **Stateful handles** — a `Pool`, a `BeatPhase` — script-declared, arena-allocated at compile
+6. **Stateful handles** (a `Pool`, a `BeatPhase`): script-declared, arena-allocated at compile
    time, passed as an opaque first argument. No script-side memory management.
 
 Item 5 is worth noting against the arena work below: a particle pool as a HANDLE means the script
@@ -113,10 +113,10 @@ Shipped as designed, with three things worth carrying forward that the design di
 
 - **`fixed` needed three new assembler primitives**, not the one the design implied. A Q16.16
   multiply is `mulhi` + `mul` + two shifts, and the JIT had no shift instruction and no
-  multiply-high at all — `mulReg` is a plain 32-bit multiply. `shlImm`, `sarImm`, `shrImm` and
+  multiply-high at all: `mulReg` is a plain 32-bit multiply. `shlImm`, `sarImm`, `shrImm` and
   `mulhi` went into all four backends, every encoding checked byte-for-byte against the real
   assembler. Worth it: the alternative made every fixed multiply a host call inside a per-pixel
-  loop, and made `int`↔`fixed` conversion — one shift — a function call.
+  loop, and made `int`↔`fixed` conversion (one shift) a function call.
 - **An integer literal ADOPTS fixed at a meet point.** The design said any mix is an error; that
   made `v * 2` and `if (v < 0)` unwritable. A bare literal now converts at compile time by
   patching its own `Const` (free at run time), while a *variable* still names its conversion,
@@ -127,7 +127,7 @@ Shipped as designed, with three things worth carrying forward that the design di
   backends now materialize the full 32 bits.
 
 `bool` truncates rather than normalizing (`flag = 256` reads false), because normalizing needs a
-compare-and-select the IR has no op for — there is no `Sub` and no bitwise op. Waiting for a script
+compare-and-select the IR has no op for: there is no `Sub` and no bitwise op. Waiting for a script
 that writes a non-boolean expression into a bool.
 
 The design as agreed follows, unchanged.
@@ -210,9 +210,9 @@ That timing is a large part of why the decision was taken when it was.
 
 Ordered by **what removing it buys**, not by implementation cost.
 
-### 1. A bigger builtin table — ✅ *shipped*
+### 1. A bigger builtin table: ✅ *shipped*
 
-`BuiltinTable::kMax` was 16 and the light domain registered exactly 16 — **the table was full**,
+`BuiltinTable::kMax` was 16 and the light domain registered exactly 16: **the table was full**,
 and it failed SILENTLY: `add()` returned false, no caller checked it, and the next builtin would
 have surfaced as "unknown function" in a script with nothing pointing at the cause.
 
@@ -220,7 +220,7 @@ Now 96 (what the power-functions spec asks for), with `MM_ASSERT_NO_BUILTIN_OVER
 registration is loud at startup rather than silent. This gated every other builtin; the palette
 work below went in immediately behind it.
 
-### 2. Typed multi-argument host calls — ✅ SHIPPED
+### 2. Typed multi-argument host calls: ✅ SHIPPED
 
 SHIPPED: a builtin takes `const uintptr_t* args` with arities up to seven, plus typed flags
 (`fixedArgs`, `fixedReturn`, `byRef`, `byStr`), and `emit` uses all seven. The paragraph below is the
@@ -247,8 +247,8 @@ meets the same wall. If only one of the two moves, the count is the one worth mo
 tables it sizes were `DeclaredControl[8]` at 24 B each; the raise to 16 measured +280 B per
 scripted module on the S3.
 
-**But check the handle route first.** The power-functions spec's item 5 — a particle pool as an
-arena-allocated HANDLE — means a simulation effect stops storing its own particle state entirely,
+**But check the handle route first.** The power-functions spec's item 5, a particle pool as an
+arena-allocated HANDLE, means a simulation effect stops storing its own particle state entirely,
 which removes the pressure without touching these constants. Widen the arena for the scripts that
 genuinely hold their own state; do not widen it as a substitute for handles.
 
@@ -257,14 +257,14 @@ Not purely a constants bump, and the blockers are known:
 - `kCtrlBytes` / `kMaxCtrls` are both `uint8_t`, so the arena caps at 255 bytes before any type
   change. 150 bytes of particle state fits under that; much more does not.
 - `static_assert(kCtrlBytes <= 64, "seeded_ is a 64-bit mask, one bit per script arena byte")`
-  (`MoonLive.h:355`) is the real gate. Past 64 bytes the seeded-member mask needs re-indexing —
+  (`MoonLive.h:355`) is the real gate. Past 64 bytes the seeded-member mask needs re-indexing,
   and there is a worked example, because it was widened 16 → 64 once already. The assert exists
   because the earlier `uint32_t` version silently aliased members mod 32.
 - Watch `sizeof(MoonLive)`. It is held BY VALUE in every scripted module. `registerType`'s probe
   builds one on the heap, since a probe on the boot stack is what boot-looped the P4 at 1440 bytes.
   Growing the arena grows every scripted module.
 
-### 4. `setPaletteColor()` — ✅ *shipped*
+### 4. `setPaletteColor()`: ✅ *shipped*
 
 A script now writes one call where it used to write three:
 
@@ -273,7 +273,7 @@ setPaletteColor(x, y, index, brightness);
 ```
 
 `paletteR/G/B(i, bri)` shipped first and worked, but the shape was wrong: three host calls per
-pixel, and — because the compiler evaluates each argument independently — three evaluations of
+pixel, and, because the compiler evaluates each argument independently, three evaluations of
 whatever expression produced the brightness. A per-pixel radial falloff made that visible.
 
 **Measured on an S3, 64x64 grid: 2331 us → 1838 us, 21% off the effect's own cost**, and the call
@@ -285,10 +285,10 @@ No engine change was needed: `line()` already proved a Call builtin can write pi
 per-run draw canvas, so this rode the existing seam. `paletteR/G/B` stay for a script that needs
 the components rather than a pixel.
 
-What is still missing is the general form — a builtin RETURNING a colour, so a script can hold one
+What is still missing is the general form: a builtin RETURNING a color, so a script can hold one
 in a variable and pass it on. That is #2's multi-value ABI, and #4b is what makes it worth having.
 
-### 4c. Insights from porting a per-pixel effect — *the cost is CALLS, not maths*
+### 4c. Insights from porting a per-pixel effect: *the cost is CALLS, not math*
 
 A second port (`moonlive/effects/octopus.mle`, a polar spiral) measured very differently from the
 first, and the difference is the useful part.
@@ -318,7 +318,7 @@ Also measured and **disproved**: hoisting the four loop-invariant `beatsin` call
 loop into members moved 59600 to 58459 us. Call overhead per se is NOT the cost here: the square
 roots are. Worth recording because it contradicts the natural first guess.
 
-That is ~5.3 us per pixel, and it is not the arithmetic — it is **~32,000 host calls per frame**.
+That is ~5.3 us per pixel, and it is not the arithmetic; it is **~32,000 host calls per frame**.
 Each `polarA`/`polarR`/`sin`/`scale`/`beat` is a real call through the builtin ABI, and a
 whole-canvas effect makes eight or so per pixel.
 
@@ -326,37 +326,37 @@ Three things follow, and they sharpen the priorities above:
 
 1. **No common-subexpression elimination.** `polarR(x - cx, y - cy)` appears twice in one
    expression and is CALLED twice. The compiler has no way to name an intermediate, so a script
-   cannot hoist it either — the same limitation that made a palette pixel cost three brightness
+   cannot hoist it either, the same limitation that made a palette pixel cost three brightness
    evaluations before #4. A single-assignment local (part of #4b/#6's territory) would remove a
    third of this effect's calls on its own.
 2. **Per-pixel builtins want to be inline ops, not calls.** `setPaletteColor` is a Call and that is
    fine at ~500 pixels; at 4096 the call overhead dominates. The `Inline` kind already exists
-   (`setRGB` uses it) — the polar pair and the palette write are the candidates.
-3. **A `frame()` entry shape would sidestep it entirely.** The power-functions spec's item 4 —
-   compose kernels over a whole frame rather than script per pixel — is exactly the answer for
+   (`setRGB` uses it); the polar pair and the palette write are the candidates.
+3. **A `frame()` entry shape would sidestep it entirely.** The power-functions spec's item 4,
+   compose kernels over a whole frame rather than script per pixel, is exactly the answer for
    this class of effect, and octopus is the concrete case that argues for it.
 
 Worth stating plainly: 35 fps for a full-canvas 64x64 effect is usable, and the port needed no
 new language features beyond two builtins. The ceiling here is call overhead, not expressiveness.
 
 **A naming lesson, learned by breaking two scripts:** the polar builtins were first called
-`angle`/`radius`, which silently broke `ring.mll` and `rose.mll` — both declare a `radius` member,
+`angle`/`radius`, which silently broke `ring.mll` and `rose.mll`: both declare a `radius` member,
 and a builtin shadows a member name. Builtins share one namespace with every script's own
 variables, so a new builtin should take a name a script would not: `polarA`/`polarR` rather than
 the obvious ones. The compile-every-script test caught it immediately, which is the argument for
 keeping that test cheap to run.
 
-### 4b. Predefined structs: `Coord3D` now, a color type after the 16-bit Layer — *and they make #4 land properly*
+### 4b. Predefined structs: `Coord3D` and `RGB`, together: *and they make #4 land properly*
 
 Planned: [MoonLive Coord3D and RGB types](../present/Plan-20261011%20-%20MoonLive%20Coord3D%20and%20RGB%20types.md), both types together as fields under one name, since the 16-bit Layer that held the color type back was reversed.
 
-Most of what a script manipulates is a POSITION or a COLOUR, and today both are loose integers: a
+Most of what a script manipulates is a POSITION or a COLOR, and today both are loose integers: a
 coordinate is three separate values or an index the script computes by hand
-(`mod(bx+dx, width) + mod(by+dy, height) * width`), and a colour is three `uint8_t`s that cannot
+(`mod(bx+dx, width) + mod(by+dy, height) * width`), and a color is three `uint8_t`s that cannot
 travel together. Two predefined types would carry them:
 
-- **`Coord3D`** — `{x, y, z}`, the shape `setXYZ`, `addLight` and every layout already think in.
-- **A color struct** — `{r, g, b}`, matching `RGB` in `core/color.h`.
+- **`Coord3D`**: `{x, y, z}`, the shape `setXYZ`, `addLight` and every layout already think in.
+- **A color struct**: `{r, g, b}`, matching `RGB` in `core/color.h`.
 
 **No `HSV` struct.** The builtins already record the decision and the reason
 (`MoonLiveBuiltins_light.h`): a hue wheel is how an effect picks color while IGNORING the user's
@@ -364,17 +364,10 @@ palette, and 47 of 52 compiled effects were moved off that habit. A predefined `
 back as the easy default. HSV stays where it earns its place, in `setPalEntryHSV`, which is
 authoring a palette rather than bypassing one.
 
-**The color one waits, and does not take FastLED's `CRGB` name.** The
-[generative-fields plan](generative-fields-analysis-top-down.md) PROPOSED making the Layer 16-bit
-with the channel width decided at run time and `draw.h` templated over both widths, then reversed it
-on the measurement (that plan's § 11), so this reason is void and the color struct is its own
-question. As written: a script-visible color
-fixed at three `uint8_t` would be the one place the width stops being runtime data. Specify it after
-that phase lands, under our own name (CLAUDE.md: our own code, our own names). `Coord3D` has no such
-dependency and goes first.
+**The color struct is `RGB`, our own name rather than FastLED's `CRGB`, and it lands with `Coord3D`.** It once waited for the 16-bit Layer the [generative-fields plan](generative-fields-analysis-top-down.md) proposed, since a script-visible color fixed at three `uint8_t` would have been the one place the channel width stopped being runtime data. That plan reversed the 16-bit Layer on the measurement (its § 11), so nothing holds the color type back, and the plan linked above builds both types in one step.
 
 Predefined rather than user-declarable structs (#10): these two are what the ENGINE already passes
-around, so they need no general struct machinery — just two known layouts the compiler understands
+around, so they need no general struct machinery, just two known layouts the compiler understands
 and the builtins can take and return.
 
 The payoff is that #4 becomes the natural signature rather than a special case:
@@ -396,7 +389,7 @@ site. It also removes the `mod(...) + mod(...) * width` flattening a script writ
 the buffer layout leaking into every effect.
 
 Worth noting the ordering: this only pays off with the multi-value call ABI from #2, and it is what
-makes that ABI worth having beyond colour — a `Coord3D` in and a `CRGB` out is the shape most of
+makes that ABI worth having beyond color: a `Coord3D` in and an `RGB` out is the shape most of
 the power-functions surface wants.
 
 ### 5. Fractional arithmetic: *superseded by `fixed` in the type-system design above*
@@ -407,7 +400,7 @@ it each is a separate workaround.
 
 Two routes, and the choice matters more than the schedule:
 
-- **Fixed-point** (a `q8_8` over the existing `uint16_t`): no new backend work — it lowers to the
+- **Fixed-point** (a `q8_8` over the existing `uint16_t`): no new backend work: it lowers to the
   integer ops all three ISAs already have. Enough for positions, velocities and most ramps.
 - **True `float`**: closer to a precompiled effect's source, which is the near-verbatim porting
   goal the top-down analysis sets. Costs an FPU path per backend; the P4 and S3 have one, the
@@ -419,7 +412,7 @@ does not foreclose float.
 **Settled** by the type-system design above: `fixed` is Q16.16 on a uniform int slot, float
 stays out, and the range analysis lives there.
 
-### 6. Function arguments and return values — *moderate, removes a real footgun*
+### 6. Function arguments and return values: *moderate, removes a real footgun*
 
 `draw(i)` instead of setting a member the helper reads. The current shape is not just verbose:
 caller and callee agree by convention and nothing checks it, so a helper called from two places
@@ -476,13 +469,13 @@ So what shipped is smaller than "make the language signed" and removes more than
 `escape()` stays a builtin regardless: its Q13 squaring needs 64-bit intermediates, which a 32-bit
 script value cannot express however signed it is.
 
-### 8. More branch labels — *probably a constant, worth measuring first*
+### 8. More branch labels: *probably a constant, worth measuring first*
 
 16 is tight enough that a straightforward nested draw does not fit. The limits are now 40 IR labels and 48 assembler labels with 96 fixups, and two scripts still hit them on 2026-10-07: the StadBeest legs with a bass envelope, and the StadBeest eye with darts, blinks and a ripple, each at roughly 20 to 25 `if`s across all its functions. Both fit only after branches were rewritten as arithmetic (§ 11). Raising `kIrLabels` costs
 compile-time table space and nothing at run time. Measure what a realistic effect needs before
-picking a number — the balls port wanted ~12 and had to be folded down.
+picking a number: the balls port wanted ~12 and had to be folded down.
 
-### 8b. More frame slots — *the encoding is NOT the limit; measure the stack*
+### 8b. More frame slots: *the encoding is NOT the limit; measure the stack*
 
 **32 live variables**, shared by a script's named variables, its loop counters, and the arguments it
 stages for a call. The budget is what is live AT ONCE rather than a total: a call hands its staging
@@ -496,8 +489,8 @@ Sixteen is enough for the shipped corpus and was not enough for the first two-la
 sample per layer, all live in the same scope inside two nested loops, with the loop counters and
 each call's staged arguments drawn from the same 16.
 
-`kMaxLocals`'s own comment says raising it "means widening the frame on all three backends together
-— the slot index is an instruction field". **Measured on the shipped assemblers, that is not so:**
+`kMaxLocals`'s own comment says raising it "means widening the frame on all three backends together,
+the slot index is an instruction field". **Measured on the shipped assemblers, that is not so:**
 
 | backend | how a slot is addressed | slots the encoding allows |
 |---|---|---|
@@ -539,14 +532,14 @@ OBJECTS rather than with the grid.
 
 **Structs were NOT needed, and that is a finding rather than a deferral.** Every pool operation is
 whole-pool or takes plain scalars, so a script never names a particle field. #10 below is about
-`ball[i].x` INSTEAD of parallel arrays, which a pool removes the need for; #4b is `Coord3D`/`CRGB`
+`ball[i].x` INSTEAD of parallel arrays, which a pool removes the need for; #4b is `Coord3D`/`RGB`
 for per-pixel shader signatures, whose real prerequisite is #2.
 
 Not exposed, each with a reason: `spray`
 (`emit` with a wide cone is one), `spawn` (per-particle in a whole-pool API), `force`/`forceSmall`
 (needs the `acc` buffer for wind nothing needs yet), `attract`, `wrap`, `liveCount`, `clear`.
 
-### 10. User structs, and arrays of them — *readability, once the arena is bigger*
+### 10. User structs, and arrays of them: *readability, once the arena is bigger*
 
 `ball[i].x` instead of parallel arrays. Genuinely nicer and closer to how a precompiled effect
 reads, but parallel arrays work the moment the arena is big enough. Last because #1 removes most
@@ -579,8 +572,8 @@ Two effects written in one session on real hardware: `stadbeest-walk.mle` (a wal
 Two measures, one local and one external.
 
 **Local:** re-port a simulation effect after each step and delete the row it removes from the
-compromise table above. A port with no rows left — dozens of shaded, coloured objects with
-fractional velocities on a full-size grid, at a frame rate the bench can measure — means the
+compromise table above. A port with no rows left (dozens of shaded, colored objects with
+fractional velocities on a full-size grid, at a frame rate the bench can measure) means the
 language carries a real simulation.
 
 **External, and the harder bar:** take the

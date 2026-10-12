@@ -18,6 +18,7 @@
 import { installPicker } from "./install-picker.js";
 import { myDevices }    from "./devices.js";
 import { installer, ESPTOOL_JS_VERSION } from "./install-orchestrator.js";
+import { TEENSY_FAMILY, requestHalfKay, requestTeensySerial } from "./teensy-writer.js";
 // Device catalog + chip detection: mooninstaller only, kept out of the
 // firmware-embedded install-picker.js and injected here via deviceSupport.
 import * as deviceSupport from "./install-picker-devices.js";
@@ -104,6 +105,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const sections = {
       connecting:   document.getElementById("section-connecting"),
       wrongPort:    document.getElementById("section-wrong-port"),
+      grantBootloader: document.getElementById("section-grant-bootloader"),
+      findBoard:    document.getElementById("section-find-board"),
       flashing:     document.getElementById("section-flashing"),
       wifiForm:     document.getElementById("section-wifi-form"),
       provisioning: document.getElementById("section-provisioning"),
@@ -265,6 +268,27 @@ document.addEventListener('DOMContentLoaded', () => {
           bar.style.width = `${pct}%`;
           break;
         }
+        case "reboot-bootloader":
+          showSection("connecting");
+          document.getElementById("connecting-detail").textContent =
+            "Asking the Teensy into its bootloader…";
+          break;
+        case "grant-bootloader":
+          showSection("grantBootloader");
+          document.getElementById("grant-bootloader-text").textContent = detail && detail.pressButton
+            ? "Press the program button on the Teensy now, then click below and pick \"Unknown device (16C0:0478)\", the bootloader, in the browser's list."
+            : "The Teensy is in its bootloader. Click below and pick \"Unknown device (16C0:0478)\", the bootloader, in the browser's list.";
+          document.getElementById("grant-bootloader-hint").hidden = true;
+          break;
+        case "find-board":
+          showSection("findBoard");
+          document.getElementById("find-board-hint").hidden = true;
+          break;
+        case "read-address":
+          showSection("connecting");
+          document.getElementById("connecting-detail").textContent =
+            "Waiting for the board's network address…";
+          break;
         case "reboot":
           showSection("connecting");
           document.getElementById("connecting-detail").textContent =
@@ -426,6 +450,52 @@ document.addEventListener('DOMContentLoaded', () => {
           resolve();
         };
         btn.addEventListener("click", onClick);
+      });
+    }
+
+    // Resolves with the Teensy bootloader device the user picks in the browser's list.
+    // requestDevice needs a user gesture, so it runs inside the button's click; a cancel or an empty list keeps the step open with a hint.
+    function uiGrantBootloader() {
+      return new Promise((resolve) => {
+        const btn = document.getElementById("grant-bootloader");
+        const hint = document.getElementById("grant-bootloader-hint");
+        const onClick = async () => {
+          let dev = null;
+          try { dev = await requestHalfKay(); } catch (_) { /* canceled */ }
+          if (!dev) {
+            hint.textContent = "No bootloader chosen. Is the Teensy plugged in, and was its program button pressed? Then click again.";
+            hint.hidden = false;
+            return;
+          }
+          btn.removeEventListener("click", onClick);
+          resolve(dev);
+        };
+        btn.addEventListener("click", onClick);
+      });
+    }
+
+    // Resolves with the rebooted Teensy's serial port, picked in the browser's list, or null on Skip.
+    // requestPort needs a user gesture, so it runs inside the button's click; a cancel keeps the step open.
+    function uiFindBoard() {
+      return new Promise((resolve) => {
+        const btn = document.getElementById("find-board");
+        const skip = document.getElementById("find-board-skip");
+        const hint = document.getElementById("find-board-hint");
+        const done = (port) => {
+          btn.removeEventListener("click", onClick);
+          skip.removeEventListener("click", onSkip);
+          resolve(port);
+        };
+        const onClick = async () => {
+          let port = null;
+          try { port = await requestTeensySerial(); } catch (_) { /* canceled */ }
+          if (port) { done(port); return; }
+          hint.textContent = "No port chosen. Pick the Teensy's serial port in the list, or skip.";
+          hint.hidden = false;
+        };
+        const onSkip = () => done(null);
+        btn.addEventListener("click", onClick);
+        skip.addEventListener("click", onSkip);
       });
     }
 
@@ -605,6 +675,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // vocabulary build_esp32's TARGET_TO_FAMILY uses. Used as the chip fallback when no
     // device is picked (OTA / generic flash). "" for an unrecognized key.
     function firmwareToChip(firmware) {
+      if (/^teensy41/.test(String(firmware || ""))) return TEENSY_FAMILY;
       const m = String(firmware || "").match(/^esp32(s31|s3|s2|p4|c\d+|h\d+)/);
       return m ? (m[1] === "s31" ? "ESP32-S31" : "ESP32-" + m[1].toUpperCase()) : (firmware ? "ESP32" : "");
     }
@@ -667,9 +738,13 @@ document.addEventListener('DOMContentLoaded', () => {
     // differs. Kept beside pickedPort because the two are mutually exclusive states of the
     // one "what am I installing onto" question the Port row asks.
     let desktopMode = false;   // this page is for flashing an ESP32; the desktop download is the alternative
+    // A Teensy held in its bootloader by its program button: no serial port, the bootloader itself is the target.
+    // Not a dropdown choice: the port picker offers it when no Teensy is listed, the one case that needs it.
+    let teensyBootMode = false;
     const portSelect = document.getElementById("port-select");
     const PICK_NEW = "__pick_new__"; // sentinel value for the "pick another" option
     const DESKTOP = "__desktop__";   // sentinel value for the "this computer" option
+    const TEENSY_BOOT = "__teensy_boot__";   // sentinel value naming the bootloader mode while it is active
     const IDLE = "__idle__";         // neutral placeholder: nothing chosen yet
 
     // Name this computer the way the picker names its archive, or null on an OS we do not
@@ -697,12 +772,20 @@ document.addEventListener('DOMContentLoaded', () => {
       // have to grant a serial port to discover it exists.
       const desktopLabel = thisComputerLabel();
       const addDesktopOpt = () => {
+        // Shown only while active, so the row names the target the hint below the port picker chose.
+        if (teensyBootMode) {
+          const teensyOpt = document.createElement("option");
+          teensyOpt.value = TEENSY_BOOT;
+          teensyOpt.textContent = "A Teensy in its bootloader";
+          portSelect.appendChild(teensyOpt);
+        }
         if (!desktopLabel) return;
         const opt = document.createElement("option");
         opt.value = DESKTOP;
         opt.textContent = `This computer (${desktopLabel})`;
         portSelect.appendChild(opt);
       };
+      const modeValue = () => desktopMode ? DESKTOP : teensyBootMode ? TEENSY_BOOT : null;
       if (!pickedPort) {
         // A neutral placeholder sits first and stays selected until the user chooses. It is
         // what makes every pick a real `change` event, including re-picking the same option
@@ -716,11 +799,11 @@ document.addEventListener('DOMContentLoaded', () => {
         if ("serial" in navigator) {
           const pickOpt = document.createElement("option");
           pickOpt.value = PICK_NEW;
-          pickOpt.textContent = "An ESP32 on a USB port…";
+          pickOpt.textContent = "A board on a USB port…";
           portSelect.appendChild(pickOpt);
         }
         addDesktopOpt();
-        portSelect.value = desktopMode ? DESKTOP : IDLE;
+        portSelect.value = modeValue() || IDLE;
         return;
       }
       // Picked state: name the selected port by the chip Detect read from it
@@ -737,7 +820,7 @@ document.addEventListener('DOMContentLoaded', () => {
       pickOpt.textContent = "Pick another USB port…";
       portSelect.appendChild(pickOpt);
       addDesktopOpt();
-      portSelect.value = desktopMode ? DESKTOP : "current";
+      portSelect.value = modeValue() || "current";
     }
 
     // Reflect the port state in the picker's Install gate after every rebuild
@@ -755,6 +838,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!ports.length || pickedPort) return;
         pickedPort = ports[0];
         desktopMode = false;
+        teensyBootMode = false;
         syncPortState();
       } catch {
         // No grant, no port, or no permission: the picker stays as it was.
@@ -775,8 +859,8 @@ document.addEventListener('DOMContentLoaded', () => {
       const eraseRow = document.getElementById("erase-row");
       // The button's own control-row, so hiding it doesn't leave an empty row behind.
       const monitorRow = document.getElementById("monitor-btn")?.closest(".control-row");
-      if (eraseRow) eraseRow.hidden = desktopMode;
-      if (monitorRow) monitorRow.hidden = desktopMode;
+      if (eraseRow) eraseRow.hidden = desktopMode || teensyBootMode;
+      if (monitorRow) monitorRow.hidden = desktopMode || teensyBootMode;
     }
 
     syncPortState();
@@ -802,6 +886,7 @@ document.addEventListener('DOMContentLoaded', () => {
         portPromptOpen = false;
       }
       syncPortState();
+      if (!granted) offerTeensyBootloader();
       // Auto-detect right after a fresh grant — the ESP Web Tools / ESPHome
       // model where picking the device detects it immediately, so the device
       // list narrows without a second click. Only on a genuine new grant (not
@@ -817,12 +902,31 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }
 
+    // A Teensy with no serial port (a crashed program, another USB type) is not in the port list: after a canceled pick, the status line offers its bootloader instead, which WebHID reaches once the program button is pressed.
+    function offerTeensyBootloader() {
+      if (!("hid" in navigator) || pickedPort || teensyBootMode) return;
+      const status = document.getElementById("detect-status");
+      const link = document.createElement("a");
+      link.href = "#";
+      link.textContent = "Teensy not listed? Press its program button, then click here.";
+      link.addEventListener("click", (e) => {
+        e.preventDefault();
+        teensyBootMode = true;
+        desktopMode = false;
+        syncPortState();
+        // Narrow the device list to the Teensy, as a detected port would.
+        installPicker.runDetect((text) => { status.textContent = text; });
+      });
+      status.replaceChildren(link);
+    }
+
     function applyPortChoice(value) {
-      if (value === IDLE) return;   // the placeholder is not a choice
-      if (value === DESKTOP) { desktopMode = true; syncPortState(); return; }
+      if (value === IDLE || value === TEENSY_BOOT) return;   // the placeholder, and the active bootloader mode, are not choices
+      if (value === DESKTOP) { desktopMode = true; teensyBootMode = false; syncPortState(); return; }
       // Any other choice is about a device again. openPortPicker ends in its own
       // syncPortState, so only sync here when nothing else will.
       desktopMode = false;
+      teensyBootMode = false;
       if (value === PICK_NEW) openPortPicker();
       else syncPortState();
     }
@@ -986,8 +1090,9 @@ document.addEventListener('DOMContentLoaded', () => {
       // below re-evaluates the button whenever pickedPort changes.)
       // Desktop mode has nothing to open, so the port gate does not apply: the button is a
       // download and is enabled as soon as an archive for this OS exists.
-      hasPort: () => desktopMode || !!pickedPort,
+      hasPort: () => desktopMode || teensyBootMode || !!pickedPort,
       onDetect: async () => {
+        if (teensyBootMode) return TEENSY_FAMILY;
         // The monitor (if open) holds the port — release it before esptool
         // claims it, same as the install path. detect() keeps the port open
         // afterwards so the following Install reuses it.
@@ -1034,8 +1139,8 @@ document.addEventListener('DOMContentLoaded', () => {
         // (the build has no WIFI_SETTINGS RPC) and tell the user to connect Ethernet instead.
         const ethOnly = /-eth$/.test(firmware);
         await installer.start({
-          // pickedPort may be null — orchestrator falls back to requestPort.
-          port: pickedPort,
+          // pickedPort may be null, and the orchestrator falls back to requestPort. In Teensy bootloader mode there is no port.
+          port: teensyBootMode ? null : pickedPort,
           manifestUrl: localUrl,
           device,         // names the install title + identifies the catalog entry
           applyDefaults, // gates the APPLY_OP config push (not txPower, sent earlier)
@@ -1047,6 +1152,8 @@ document.addEventListener('DOMContentLoaded', () => {
           uiWaitForIp,
           uiShowNeedsIpRetrying: showNeedsIpRetrying,
           uiWaitForPortRetry,
+          uiGrantBootloader,
+          uiFindBoard,
           onSuccess: handleSuccess,
           onError: handleError,
           onLog: appendLog,

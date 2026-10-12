@@ -1743,5 +1743,65 @@
         }
       }
     }
+  },
+  {
+    "name": "Teensy 4.1",
+    "chip": "Teensy 4.1",
+    "firmwares": [
+      "teensy41"
+    ],
+    "url": "https://www.pjrc.com/store/teensy41.html",
+    "description": "PJRC's Teensy 4.1 with its own Ethernet PHY, on the jack from PJRC's Ethernet kit. Up to 16 WS2812B lanes on GPIO port 6.",
+    "supported": [
+      "LEDs",
+      "Ethernet"
+    ],
+    "planned": [
+      "Audio",
+      "I2C"
+    ],
+    "state": {
+      "System": {
+        "deviceModel": "Teensy 4.1"
+      },
+      "Drivers": {
+        "$patch": "replace",
+        "ParallelLed": {
+          "type": "ParallelLedDriver",
+          "peripheral": "GPIO-DMA",
+          "pins": "18"
+        }
+      }
+    }
+  },
+  {
+    "name": "Teensy 4.1-NE + W5500",
+    "chip": "Teensy 4.1",
+    "firmwares": [
+      "teensy41"
+    ],
+    "url": "https://www.pjrc.com/store/teensy41.html",
+    "description": "The Teensy 4.1-NE, which has no Ethernet PHY, with a WIZnet W5500 module on its SPI port. Up to 16 WS2812B lanes on GPIO port 6.",
+    "supported": [
+      "LEDs",
+      "Ethernet"
+    ],
+    "planned": [
+      "Audio",
+      "I2C"
+    ],
+    "state": {
+      "System": {
+        "deviceModel": "Teensy 4.1-NE + W5500"
+      },
+      "Drivers": {
+        "$patch": "replace",
+        "ParallelLed": {
+          "type": "ParallelLedDriver",
+          "peripheral": "GPIO-DMA",
+          "pins": "18"
+        }
+      }
+    }
   }
 ]

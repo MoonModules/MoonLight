@@ -8,6 +8,7 @@
 #include <CrashReport.h>
 #include <LittleFS.h>
 #include <QNEthernet.h>
+#include "qnethernet/qnethernet_dual_driver.h"
 #include <qnethernet/QNDNSClient.h>
 #include <lwip/opt.h>
 
@@ -327,7 +328,10 @@ const BootRecord& bootRecord() {
 
 void setLogLevel(LogLevel) {}   // stdout goes straight to USB serial
 
+void applyStagedFirmware();   // platform_teensy_ota.cpp: a checked upload replaces the program here
+
 [[noreturn]] void reboot() {
+    applyStagedFirmware();    // returns only when no update waits
     SCB_AIRCR = 0x05FA0004;   // SYSRESETREQ with the write key
     for (;;) {}
 }
@@ -529,7 +533,7 @@ void copyIp(const IPAddress& from, uint8_t out[4]) {
 
 // Reconfiguring an SPI pin takes it from the bus, and the network with it until a reboot.
 bool ethOwnsPin(uint8_t gpio) {
-    if (!g_ethStarted) return false;
+    if (!g_ethStarted || !mmEthernetIsW5500()) return false;   // the on-board PHY's lines reach no header pin
     const EthPinConfig& c = g_ethConfig;
     return gpio == c.spiMiso || gpio == c.spiMosi || gpio == c.spiSck || gpio == c.spiCs;
 }
@@ -540,7 +544,7 @@ void setEthConfig(const EthPinConfig& cfg) { g_ethConfig = cfg; }
 // Starts DHCP and returns at once; false when the build's interface does not answer.
 bool ethInit() {
     g_ethStarted = Ethernet.begin();
-    std::printf("Ethernet: %s %s\n", hasEthW5500 ? "W5500" : "PHY",
+    std::printf("Ethernet: %s %s\n", mmEthernetIsW5500() ? "W5500" : "PHY",
                 g_ethStarted ? "found, DHCP started" : "not found, check the wiring");
     return g_ethStarted;
 }
@@ -887,22 +891,6 @@ void TcpServer::close() {
     g_serverUsed[fd_] = false;
     fd_ = -1;
 }
-
-// --- Updates: over USB until FlasherX -----------------------------------------------------------
-
-bool http_fetch_to_ota(const char*, char* statusBuf, size_t statusBufLen, uint32_t* bytesReadOut, uint32_t* bytesTotalOut, const char*) {
-    if (statusBuf && statusBufLen) std::snprintf(statusBuf, statusBufLen, "updates go over USB");
-    if (bytesReadOut) *bytesReadOut = 0;
-    if (bytesTotalOut) *bytesTotalOut = 0;
-    return false;
-}
-bool otaHasMoonBase() { return false; }
-bool otaBootMoonBase() { return false; }
-bool otaRunningMoonBase() { return false; }
-bool otaMoonBaseVersion(char*, size_t) { return false; }
-bool otaMoonBaseBuild(char*, size_t) { return false; }
-bool otaMoonBaseSize(uint32_t*, uint32_t*) { return false; }
-void moonbaseClearStagedUrl() {}
 
 // --- Peripherals that arrive in phase 4 ---------------------------------------------------------
 

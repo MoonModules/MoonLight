@@ -72,6 +72,9 @@ std::vector<std::pair<std::filesystem::path, std::string>> builtImages() {
     if (!std::filesystem::exists(build)) return out;
     for (const auto& e : std::filesystem::directory_iterator(build)) {
         if (!e.is_directory()) continue;
+        // The ESP32 builds' directories: a Teensy build writes a MoonLight.bin too, an image of another format.
+        const std::string dir = e.path().filename().string();
+        if (dir.rfind("esp32-", 0) != 0 && dir.rfind("moonbase-", 0) != 0) continue;
         for (const auto& [file, project] :
              {std::pair<const char*, const char*>{"MoonLight-moonbase.bin", "MoonLight-moonbase"},
               std::pair<const char*, const char*>{"MoonLight.bin", "MoonLight"}}) {

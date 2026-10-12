@@ -2,7 +2,7 @@
 
 Pins, power and wiring for running MoonLight on a PJRC **Teensy 4.1**.
 Its Ethernet is the board's own PHY or a WIZnet W5500 module. The board's GPIO drives WS2812B LEDs by DMA.
-The firmware is `teensy41` for the board's own Ethernet and `teensy41-w5500` for the W5500, built and flashed from MoonDeck's [Teensy tab](../../../moondeck/MoonDeck.md#teensy-tab).
+The one firmware, `teensy41`, finds at boot which of the two the board has; it is built and flashed from MoonDeck's [Teensy tab](../../../moondeck/MoonDeck.md#teensy-tab).
 
 **Sources**
 - Board: <https://www.pjrc.com/store/teensy41.html>
@@ -18,12 +18,55 @@ The firmware is `teensy41` for the board's own Ethernet and `teensy41-w5500` for
 - 8 MB flash, with 1 MB of it holding MoonLight's settings (LittleFS), kept across power cycles and USB uploads.
 - Pads for 8 or 16 MB PSRAM, empty on the boards MoonLight runs on so far.
 - A microSD slot (pins 42 to 47) and USB host pins.
-- A regular Teensy 4.1 carries a DP83825I Ethernet PHY, wired to the jack of PJRC's Ethernet kit; the `teensy41` firmware drives it, with no pins to set.
-- The **Teensy 4.1-NE** has no Ethernet chip, so the W5500 below gives it a network, in the `teensy41-w5500` firmware.
+- A regular Teensy 4.1 carries a DP83825I Ethernet PHY, wired to the jack of PJRC's Ethernet kit; the firmware drives it, with no pins to set.
+- The **Teensy 4.1-NE** has no Ethernet chip, so the W5500 below gives it a network; the firmware finds the PHY missing at boot and uses the W5500.
+
+## What a Teensy usually runs
+
+The Teensy is a maker's board, programmed in Arduino with PJRC's loader, and these are its common uses:
+
+- **Audio:** PJRC's Audio Library and Audio Shield, in synthesizers, effect pedals, Eurorack modules and audio installations.
+- **MIDI controllers:** it appears to a computer as a USB MIDI device with no driver, for custom controllers, drum pads and instrument conversions.
+- **LED art and video walls:** PJRC's OctoWS2811 drives thousands of LEDs from eight pins, the ground MoonLight works on too.
+- **Keyboards:** the Teensy 2.0 powers many custom keyboards, such as the ErgoDox.
+- **Machine control:** grblHAL runs CNC machines and laser cutters on a Teensy 4.1, over its Ethernet.
+- **Measurement and robotics:** fast data capture, motor control and retro-computer emulation.
+
+MoonLight differs in being a ready firmware: it is configured from a browser, with no sketch to write.
+
+## Why MoonLight runs on it
+
+**Compute per core.** The Cortex-M7 at 600 MHz scores about 2300 on CoreMark (PJRC's figure), where one ESP32-S3 core at 240 MHz scores about 600.
+It also has a double-precision FPU, which the S3 lacks.
+That pays in effects doing trigonometry or noise per light on large grids, the effects that drop the frame rate on an ESP32 first.
+Stefan Petrick used Teensy boards for his compute-heavy effects for that reason.
+MoonLive scripts compile to native Thumb-2 code, so a script gets the same speed.
+
+**Wired and deterministic.** Ethernet, the board's own or a W5500, with no WiFi stack competing for the core, and LED output by DMA from many pins.
+
+**A community.** Teensy users build audio, MIDI and LED art, and MoonLight gives them a ready firmware for the LED side.
+
+**The costs.** One core shares rendering and networking, 1 MB RAM without PSRAM, no WiFi, and a board costing several ESP32s.
+There is no GPU: the chip's PXP is a fixed-function 2D engine for displays, whose setup cost outweighs its gain on LED-sized frames.
+
+## Installing and updating
+
+The [web installer](https://moonmodules.org/MoonLight/install/) installs a Teensy from Chrome or Edge on a desktop computer, with no tools to install.
+Choose **A board on a USB port**: a running board, MoonLight or PJRC's factory blink, is found by its USB ids and asked into its bootloader.
+A board with no running program shows no port: cancel the port list, press the board's program button, and click **Teensy not listed?** below the port row.
+Every install asks for one click on the bootloader, which the browser lists as `Unknown device (16C0:0478)`, since it reports no product name.
+After the install the installer reads the board's address from its serial log.
+With **Apply device defaults** it also sends the device model's settings over the same USB serial port.
+**Erase chip first** wipes every setting along with the install, for a board whose saved state went bad; the program is replaced either way.
+
+A running board updates over the network from its Firmware card: the browser downloads the release's `.bin` and uploads it, since the board has no TLS to fetch it.
+A `.bin` file uploads the same way, and the settings survive both.
+MoonCloud's usage report and Talk messages also go out through the open page, for the same reason.
+Power lost in the few seconds after **Rebooting…**, while the new image replaces the old, leaves the board dark: the program-button install above brings it back, settings included.
 
 ## Ethernet: a W5500 on SPI
 
-The `teensy41-w5500` firmware drives this module.
+The firmware drives this module on a board without its own PHY, on fixed pins, so the wiring is not a setting.
 
 The W5500 runs on the SPI port at 30 MHz, at about 1.6 MB/s.
 The module below is the WIZ850io layout: two rows of six pins, one on each side of the RJ45 jack.

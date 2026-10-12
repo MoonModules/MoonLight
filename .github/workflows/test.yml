@@ -105,13 +105,13 @@ jobs:
       - name: build the Teensy 4.1 firmwares
         run: |
           set -euo pipefail
-          for fw in teensy41 teensy41-w5500; do uv run moondeck/build/build_teensy.py --firmware "$fw"; done
+          for fw in $(jq -r '.firmwares[] | select(.ships and .platform == "teensy") | .name' mooninstaller/firmwares.json); do uv run moondeck/build/build_teensy.py --firmware "$fw"; done
       - uses: actions/upload-artifact@v4
         with:
           name: firmware-teensy41
           path: |
             build/teensy41/MoonLight.hex
-            build/teensy41-w5500/MoonLight.hex
+            build/teensy41/MoonLight.bin
 
   # Sanitizers — the safety net for the multicore render/encode split. A second thread now sits
   # beside code that was single-threaded for its whole life: a shared output buffer handed between

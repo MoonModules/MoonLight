@@ -92,9 +92,8 @@ jobs:
           TAG: ${{ inputs.tag || github.ref_name }}
         run: uv run moondeck/ci/verify_version.py --tag "$TAG"
 
-  # The shipping firmware list, read from the generated mooninstaller/firmwares.json
-  # (projected from build_esp32.py's FIRMWARES dict, drift-guarded by
-  # check_firmwares.py). Emitted as a JSON array of {firmware, chip} so build-esp32's matrix can
+  # The shipping ESP32 firmware list, read from the generated mooninstaller/firmwares.json
+  # (projected from the firmwares.py registry, drift-guarded by check_firmwares.py). Emitted as a JSON array of {firmware, chip} so build-esp32's matrix can
   # fromJSON() it: GitHub matrices can't read a file at parse time, so a job output is the
   # standard bridge. This is the ONLY firmware list in CI, and the chip is the IDF target.
   firmwares:
@@ -109,7 +108,7 @@ jobs:
       - id: gen
         run: |
           set -euo pipefail
-          echo "list=$(jq -c '[.firmwares[] | select(.ships) | {firmware: .name, chip}]' mooninstaller/firmwares.json)" >> "$GITHUB_OUTPUT"
+          echo "list=$(jq -c '[.firmwares[] | select(.ships and .platform == "esp32") | {firmware: .name, chip}]' mooninstaller/firmwares.json)" >> "$GITHUB_OUTPUT"
 
   build-esp32:
     needs: [verify-version, firmwares]
@@ -547,9 +546,10 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p dist
-          for fw in teensy41 teensy41-w5500; do
+          for fw in $(jq -r '.firmwares[] | select(.ships and .platform == "teensy") | .name' mooninstaller/firmwares.json); do
             uv run moondeck/build/build_teensy.py --firmware "$fw" --release "$TAG" --version "$V"
             cp "build/$fw/MoonLight.hex" "dist/firmware-$fw-v$V.hex"
+            cp "build/$fw/MoonLight.bin" "dist/firmware-$fw-v$V.bin"
           done
       - uses: actions/upload-artifact@v4
         with:
@@ -643,7 +643,7 @@ jobs:
           V=$(uv run python moondeck/build/compute_version.py --tag "$TAG")
           echo "version=$V" >> "$GITHUB_OUTPUT"
 
-      - name: Generate ESP Web Tools manifests (release-asset URLs)
+      - name: Generate the installer manifests (release-asset URLs)
         env:
           TAG: ${{ steps.tag.outputs.tag }}
           REPO: ${{ github.repository }}
@@ -658,11 +658,14 @@ jobs:
           # The shipping firmware list — the same mooninstaller/firmwares.json the
           # build matrix reads, so manifests and builds can't drift.
           for F in $(jq -r '.firmwares[] | select(.ships) | .name' mooninstaller/firmwares.json); do
+            # An ESP32 manifest takes its offsets from IDF's flasher args; a Teensy one is the flat image at 0.
+            ARGS=()
+            [ -f "dist/flasher-$F.json" ] && ARGS=(--flasher-args "dist/flasher-$F.json")
             uv run python moondeck/build/generate_manifest.py \
               --firmware "$F" \
               --version "$V" \
               --release-url "$BASE" \
-              --flasher-args "dist/flasher-$F.json" \
+              "${ARGS[@]}" \
               --out "dist/manifest-$F.json"
           done
 

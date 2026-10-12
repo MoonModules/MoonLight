@@ -2,6 +2,7 @@
   "firmwares": [
     {
       "name": "esp32",
+      "platform": "esp32",
       "chip": "esp32",
       "eth_only": false,
       "ships": true,
@@ -9,6 +10,7 @@
     },
     {
       "name": "esp32-16mb",
+      "platform": "esp32",
       "chip": "esp32",
       "eth_only": false,
       "ships": true,
@@ -16,6 +18,7 @@
     },
     {
       "name": "esp32-wrover",
+      "platform": "esp32",
       "chip": "esp32",
       "eth_only": false,
       "ships": true,
@@ -23,6 +26,7 @@
     },
     {
       "name": "esp32-pico",
+      "platform": "esp32",
       "chip": "esp32",
       "eth_only": false,
       "ships": true,
@@ -30,6 +34,7 @@
     },
     {
       "name": "esp32-eth",
+      "platform": "esp32",
       "chip": "esp32",
       "eth_only": true,
       "ships": true,
@@ -37,6 +42,7 @@
     },
     {
       "name": "esp32s3-n16r8",
+      "platform": "esp32",
       "chip": "esp32s3",
       "eth_only": false,
       "ships": true,
@@ -44,6 +50,7 @@
     },
     {
       "name": "esp32s3-n8r8",
+      "platform": "esp32",
       "chip": "esp32s3",
       "eth_only": false,
       "ships": true,
@@ -51,6 +58,7 @@
     },
     {
       "name": "esp32s3-zero",
+      "platform": "esp32",
       "chip": "esp32s3",
       "eth_only": false,
       "ships": true,
@@ -58,6 +66,7 @@
     },
     {
       "name": "esp32c3",
+      "platform": "esp32",
       "chip": "esp32c3",
       "eth_only": false,
       "ships": true,
@@ -65,6 +74,7 @@
     },
     {
       "name": "esp32p4rev1-eth",
+      "platform": "esp32",
       "chip": "esp32p4",
       "eth_only": true,
       "ships": true,
@@ -72,6 +82,7 @@
     },
     {
       "name": "esp32p4rev1-eth-wifi",
+      "platform": "esp32",
       "chip": "esp32p4",
       "eth_only": false,
       "ships": true,
@@ -79,6 +90,7 @@
     },
     {
       "name": "esp32p4rev3-eth",
+      "platform": "esp32",
       "chip": "esp32p4",
       "eth_only": true,
       "ships": true,
@@ -86,6 +98,7 @@
     },
     {
       "name": "esp32p4rev3-eth-wifi",
+      "platform": "esp32",
       "chip": "esp32p4",
       "eth_only": false,
       "ships": true,
@@ -93,10 +106,19 @@
     },
     {
       "name": "esp32s31",
+      "platform": "esp32",
       "chip": "esp32s31",
       "eth_only": false,
       "ships": true,
       "description": "Espressif ESP32-S31 Function-CoreBoard-1 — WiFi 6 + 1 Gbps Ethernet LED control (RISC-V, 16 MB flash, PSRAM). The on-chip EMAC drives the board's YT8531 RGMII PHY; Ethernet is preferred when a cable is present, WiFi otherwise. esp32s31 is a preview target on the v6.1 IDF line."
+    },
+    {
+      "name": "teensy41",
+      "platform": "teensy",
+      "chip": "teensy41",
+      "eth_only": true,
+      "ships": true,
+      "description": "Teensy 4.1: its own Ethernet PHY, or on the 4.1-NE a W5500 module on its SPI port, found at boot."
     }
   ]
 }

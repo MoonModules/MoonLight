@@ -15,9 +15,9 @@ depending on what's been built locally:
     `releases/` tree. Equivalent to "Recipe A" in mooninstaller/README.md.
     Useful for iterating on HTML/CSS/JS without tagging a release.
 
-  - **flash-ready** (at least one local ESP32 build exists): the
-    script additionally stages every `build/esp32-*/` app image it
-    finds into `releases/local-dev/` and generates matching Pages-
+  - **flash-ready** (at least one local ESP32 or Teensy build exists): the
+    script additionally stages every `build/esp32-*/` app image and every
+    built Teensy `MoonLight.bin` it finds into `releases/local-dev/` and generates matching Pages-
     relative manifests via generate_manifest.py — the same code path
     .github/workflows/release.yml uses. The picker shows `local-dev`
     as the newest release; clicking Install flashes the chip + opens
@@ -48,6 +48,7 @@ ROOT = Path(__file__).resolve().parent.parent.parent
 # generate_manifest.py and collect_kpi.py use).
 sys.path.insert(0, str(ROOT / "moondeck" / "build"))
 from build_esp32 import APP_BIN, FIRMWARES, MOONBASE_BIN  # noqa: E402
+import build_teensy  # noqa: E402
 INSTALL_DIR = ROOT / "mooninstaller"
 ASSETS_BOARDS_DIR = ROOT / "docs" / "assets" / "boards"
 PICKER_JS = ROOT / "src" / "ui" / "install-picker.js"
@@ -256,6 +257,34 @@ def stage_local_builds(builds: list[Path]) -> list[str]:
     return staged
 
 
+def stage_teensy_builds() -> list[str]:
+    """Stage every built Teensy firmware's flat image with its manifest, as release.yml does.
+
+    A Teensy manifest is the `.bin` at offset 0, so the image is the one input. Returns the staged firmware keys.
+    """
+    releases_dir = STAGE_INSTALL / "releases" / LOCAL_TAG
+    staged: list[str] = []
+    for firmware in build_teensy.FIRMWARES:
+        image = build_teensy.hex_path(firmware).with_suffix(".bin")
+        if not image.exists():
+            continue
+        releases_dir.mkdir(parents=True, exist_ok=True)
+        shutil.copy(image, releases_dir / f"firmware-{firmware}-v{LOCAL_VERSION}.bin")
+        result = subprocess.run(
+            ["uv", "run", "python", str(GENERATE_MANIFEST),
+             "--firmware", firmware,
+             "--version", LOCAL_VERSION,
+             "--release-url", ".",
+             "--out", str(releases_dir / f"manifest-{firmware}.json")],
+            capture_output=True, text=True,
+        )
+        if result.returncode != 0:
+            print(f"==> skip {firmware}: manifest generation failed:\n{result.stderr}", file=sys.stderr)
+            continue
+        staged.append(firmware)
+    return staged
+
+
 def write_local_firmwares_json(staged: list[str]):
     """Write local-firmwares.json so the picker offers locally-staged firmwares.
 
@@ -310,17 +339,18 @@ def main() -> int:
     # mode (picker works against the real GitHub API, Install fails for
     # lack of bins).
     local_builds = find_local_builds()
-    if local_builds:
-        firmwares = stage_local_builds(local_builds)
+    teensy = stage_teensy_builds()
+    if local_builds or teensy:
+        firmwares = (stage_local_builds(local_builds) if local_builds else []) + teensy
         if firmwares:
             write_local_firmwares_json(firmwares)
             print(f"==> staged `{LOCAL_TAG}` release with firmwares: {', '.join(firmwares)}")
-            print(f"    pick the `{LOCAL_TAG}` tag in the picker to flash a USB-connected ESP32")
+            print(f"    pick the `{LOCAL_TAG}` tag in the picker to flash a USB-connected board")
         else:
             print("==> no firmwares could be staged (all skipped — see warnings above)")
             print("    falling back to render-only mode")
     else:
-        print(f"==> no local ESP32 builds found under {BUILD_ROOT.relative_to(ROOT)}")
+        print(f"==> no local ESP32 or Teensy builds found under {BUILD_ROOT.relative_to(ROOT)}")
         print("    render-only mode — `Install` will fail")
         print("    run `uv run moondeck/build/build_esp32.py --firmware <variant>` first to enable end-to-end flash")
 

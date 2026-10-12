@@ -57,7 +57,7 @@ constexpr bool hasAudioCapture = false;
 /// No WiFi on a Teensy.
 constexpr bool hasWiFi = false;
 
-/// The on-board PHY, or a W5500 on the SPI port in the `teensy41-w5500` firmware.
+/// The on-board PHY, or on a board without one a W5500 on the SPI port, found at boot.
 constexpr bool hasEthernet = true;
 /// False: no Ethernet controls without an interface.
 constexpr bool previewsEthernetControls = false;
@@ -79,7 +79,7 @@ constexpr bool hasFsSegments = false;
 /// Whether any IP stack is present, which is what UDP interop gates on.
 constexpr bool hasNetwork = hasWiFi || hasEthernet;
 
-/// True: each firmware drives one interface, chosen at build time, so the wiring is not a setting.
+/// True: the firmware finds the interface at boot, the board's own PHY or else a W5500, so the wiring is not a setting.
 constexpr bool ethPhyIsFixed = true;
 
 /// A 600 MHz core with a double-precision FPU has room for a per-pixel float algorithm.
@@ -87,27 +87,19 @@ constexpr bool hasHeavyCompute = true;
 
 // A whole effect can be compiled out only by `#if`, which a constexpr cannot drive; keep the two in step.
 #define MM_HEAVY_COMPUTE 1
-// QNEthernet's own driver switch, which the build sets for the `teensy41-w5500` firmware and leaves unset for the on-board PHY.
-#ifdef QNETHERNET_DRIVER_W5500
-/// The W5500 driver is compiled in.
+/// True: the W5500 driver is compiled in beside the on-board PHY's, and used on a board that has no PHY of its own.
 constexpr bool hasEthW5500 = true;
-/// The SPI port's pins (MISO 12, MOSI 11, SCK 13) and the driver's chip select 10; reset and interrupt unwired.
+/// The W5500's wiring, used only on a board without its own PHY: MISO 12, MOSI 11, SCK 13 and chip select 10, reset and interrupt unwired.
 constexpr EthPinConfig ethConfigDefault{ ethW5500, 0, -1, -1, -1, -1, false, 12, 11, 13, 10, -1 };
-#else
-/// False: the on-board PHY, through the chip's own Ethernet MAC.
-constexpr bool hasEthW5500 = false;
-/// The on-board PHY, whose RMII lines reach no header pin.
-constexpr EthPinConfig ethConfigDefault{ ethDp83825, 0, -1, -1, -1, -1, false, -1, -1, -1, -1, -1 };
-#endif
 
 /// False: no WiFi co-processor.
 constexpr bool hasWifiCoprocessor = false;
 
-/// False: updates go over USB until FlasherX.
-constexpr bool hasOta = false;
+/// True: an uploaded image is staged above the program and copied over it at the reboot.
+constexpr bool hasOta = true;
 
-/// False: no serial provisioning; the Teensy has no WiFi to provision.
-constexpr bool hasImprov = false;
+/// True: the USB serial port takes the installer's state documents (APPLY_OP); there is no WiFi to provision.
+constexpr bool hasImprov = true;
 
 /// The bits a call to emitted code adds to its address. Thumb state: a Cortex-M7 runs only Thumb code, and a call address carries it in bit 0.
 constexpr uintptr_t codeAddressBits = 1;

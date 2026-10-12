@@ -88,15 +88,15 @@ FIRMWARES_FILE = ROOT / "mooninstaller" / "firmwares.json"
 
 
 def _load_firmwares():
-    """Shipping firmware-variant names from mooninstaller/firmwares.json — the
-    generated projection of build_esp32's FIRMWARES dict (the single source of
-    truth, shared with the CI release matrix). Returns [] on missing/malformed
+    """Shipping ESP32 firmware-variant names from mooninstaller/firmwares.json, the
+    generated projection of the firmware registry (firmwares.py, shared with the
+    CI release matrix); the Teensy firmware has the Teensy tab. Returns [] on missing/malformed
     file, so the MoonDeck UI just shows no firmware entries. Filtering on
     `ships` keeps held-out variants out of the picker.
     """
     try:
         doc = json.loads(FIRMWARES_FILE.read_text(encoding="utf-8"))
-        return [f["name"] for f in doc["firmwares"] if f.get("ships")]
+        return [f["name"] for f in doc["firmwares"] if f.get("ships") and f.get("platform") == "esp32"]
     except (OSError, json.JSONDecodeError, KeyError):
         return []
 

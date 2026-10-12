@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Build a Teensy 4.1 firmware into build/<firmware>/: MoonLight.elf, and MoonLight.hex for the loader.
+"""Build a Teensy 4.1 firmware into build/<firmware>/: MoonLight.elf, MoonLight.hex for the loader, and MoonLight.bin, the same image flat.
 
-`teensy41` drives the board's own Ethernet PHY, and `teensy41-w5500` a W5500 module for the 4.1-NE, which has no PHY.
+`teensy41` carries both Ethernet drivers and finds at boot which the board has: its own PHY, or on the 4.1-NE, which has none, a W5500 module.
 Configures CMake on first use with the SDK setup_teensy.py installed, at the versions pinned there.
 """
 
@@ -14,7 +14,17 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from setup_teensy import gcc_bin, missing, sdk_root, teensyduino_define  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent.parent
-FIRMWARES = ("teensy41", "teensy41-w5500")
+# The Teensy slice of the firmware registry (firmwares.py joins it with the ESP32 one), with the installer's fields as build_esp32.FIRMWARES carries them.
+FIRMWARES: dict[str, dict] = {
+    "teensy41": {
+        "chip": "teensy41",
+        "eth_only": True,
+        "description": "Teensy 4.1: its own Ethernet PHY, or on the 4.1-NE a W5500 module on its SPI port, found at boot.",
+        "ships": True,
+    },
+}
+# The chip family the installer names a Teensy by: the manifest's `chipFamily`, a catalog `chip`, and what detection by USB id reports.
+TARGET_TO_FAMILY = {"teensy41": "Teensy 4.1"}
 # What platform_teensy.cpp leaves the program of the 8 MB flash: LittleFS takes 1 MB and the reserved top 256 KB.
 PROGRAM_FLASH_BYTES = (8192 - 1024 - 256) * 1024
 
@@ -26,8 +36,8 @@ def hex_path(firmware: str) -> Path:
 
 def add_firmware_arg(parser: argparse.ArgumentParser):
     """The one --firmware flag the build, flash and repo-health scripts share."""
-    parser.add_argument("--firmware", choices=FIRMWARES, default=FIRMWARES[0],
-                        help="teensy41: the board's Ethernet PHY; teensy41-w5500: a W5500 module (default: teensy41)")
+    parser.add_argument("--firmware", choices=list(FIRMWARES), default=next(iter(FIRMWARES)),
+                        help="the firmware to build (default: teensy41)")
 
 
 def hex_image_bytes(path: Path) -> int:

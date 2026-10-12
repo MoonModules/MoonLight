@@ -207,7 +207,13 @@ public:
 
     /// Say what this setting exchanges, on the status slot rather than in a control of its own.
     void refreshStatus() {
-        if (consent_) clearStatus();
+        // Where the report cannot leave at once, consent says how it does, or that it cannot, rather than letting the charts stay silent.
+        if (consent_ && cloudRelays())
+            setStatus("This board has no HTTPS client, so its open page sends the report for it.", Severity::Status);
+        else if (consent_ && !canSend())
+            setStatus("This board has no HTTPS client, so it cannot send its report: nothing from it reaches the charts.",
+                      Severity::Warning);
+        else if (consent_) clearStatus();
         else setStatus("Off. Switch on to share what hardware you run, once per install or upgrade "
                        "and whenever you press send update: "
                        "the empty charts below are exactly what it contributes to, and what you get "
@@ -224,7 +230,7 @@ public:
         // Every outcome says something, and consent is re-read since a write can arrive from the API.
         if (!consent_) { setOwnStatus("Switch consent on first: nothing is sent while it is off.",
                                       Severity::Warning); return; }
-        if (!platform::httpsAvailable()) {
+        if (!canSend()) {
             setOwnStatus("This build cannot send: it was compiled without an HTTPS client.",
                          Severity::Error);
             return;
@@ -240,7 +246,8 @@ public:
             return;
         }
         if (sendReport(MoonStatsEvent::Refresh)) {
-            setOwnStatus("Sent. The charts below now describe this device as it is now.",
+            setOwnStatus(cloudRelays() ? "Handed to this page, which sends it within a second."
+                                       : "Sent. The charts below now describe this device as it is now.",
                          Severity::Status);
         } else {
             setOwnStatus("Could not reach the server. Nothing was sent; press send update to try again.",
@@ -310,9 +317,18 @@ public:
     /// Send the automatic report once every guard below passes.
     void tick1s() MM_NONBLOCKING override {
         MoonModule::tick1s();
+        // A report handed to the page is marked once the outbox empties, and nothing else goes until then.
+        if (relayPending_) {
+            const auto* cloud = static_cast<const MoonCloudModule*>(parent());
+            if (!cloud || !cloud->outboxWaiting()) {
+                markReported();
+                relayPending_ = false;
+            }
+            return;
+        }
         if (!reportDue()) return;
         // Never sends, so there is nothing to hand off and nothing to mark.
-        if (!platform::httpsAvailable()) return;
+        if (!canSend()) return;
         if (!platform::networkReady()) return;   // try again next second
         // Our own AP means no route out, so a send would fail and mark itself reported.
         if (inApMode()) return;
@@ -320,6 +336,14 @@ public:
         auto* sched = Scheduler::instance();
         if (!sched || sched->fps() == 0) return;
         sendReport(dueEvent());
+    }
+
+    /// Whether a report can leave: over HTTPS, or through the page where the container relays.
+    bool canSend() const { return platform::httpsAvailable() || cloudRelays(); }
+    /// Whether the container hands the report to the open page rather than sending it.
+    bool cloudRelays() const {
+        const auto* cloud = static_cast<const MoonCloudModule*>(parent());
+        return cloud && cloud->relaysThroughBrowser();
     }
 
     /// Whether we serve our own access point, asked of the platform so no copy goes stale.
@@ -353,8 +377,13 @@ private:
 
         // Through the container, which owns the address. Whether it was accepted is reported.
         bool sent = false;
-        if (auto* cloud = static_cast<const MoonCloudModule*>(parent())) {
+        if (auto* cloud = static_cast<MoonCloudModule*>(parent())) {
             sent = cloud->post("/api/report", body.data());
+        }
+        // Through the page, the report counts once the page has delivered it, so a reboot before then sends it again.
+        if (cloudRelays()) {
+            relayPending_ = sent;
+            return sent;
         }
         // The automatic report marks itself either way; a failed press must not.
         if (kind != MoonStatsEvent::Refresh || sent) markReported();
@@ -383,6 +412,7 @@ protected:
 
 private:
     bool consent_ = false;             ///< whether the user has agreed to report
+    bool relayPending_ = false;        ///< a report waits in the container's outbox for the page
     char reportedVersion_[32] = {};    ///< the version that last reported
     char runningVersion_[32] = {};     ///< the version running now
 };

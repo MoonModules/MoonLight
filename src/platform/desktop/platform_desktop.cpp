@@ -1907,6 +1907,7 @@ bool improvProvisioningInit(const ImprovDeviceInfo& /*info*/,
     }
     return false;
 }
+void improvPoll() MM_NONBLOCKING {}
 
 void reboot() {
     // The device is the host process, so exit cleanly and let the supervisor restart it, which matches what the browser's reconnect expects.

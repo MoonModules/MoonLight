@@ -2222,6 +2222,12 @@ void HttpServerModule::handleFirmwareUrl(platform::TcpConnection& conn, const ch
                      "{\"error\":\"url must start with http:// or https://\"}");
         return;
     }
+    // A device without TLS has no firmware fetcher at all, so it says so before starting: the UI then fetches the image itself and uploads it.
+    if (!platform::httpsAvailable()) {
+        sendResponse(conn, 501, "application/json",
+                     "{\"error\":\"this device cannot fetch a URL: upload the image\"}");
+        return;
+    }
 
     // A MoonBase device runs from its one app slot, so stage the URL in NVS and reboot into MoonBase to install; 202 with {"moonbase":true} marks this flow.
     if (platform::otaHasMoonBase() && !platform::otaRunningMoonBase()) {
