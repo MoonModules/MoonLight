@@ -759,7 +759,7 @@ void HttpServerModule::handleRemoveEntry(platform::TcpConnection& conn, const ch
     }
 }
 
-// Stream a file to the socket in 1 KB chunks with a Content-Length: no whole-file buffer, and NUL-safe where sendResponse's strlen is not; `extraHeaders` carries caller lines.
+// Stream a file in 1 KB chunks, NUL-safe; an /sd download claims its slot before any response, as an upload already does.
 void HttpServerModule::streamFsFile(platform::TcpConnection& conn, const char* path,
                                     const char* mime, const char* extraHeaders) {
     // The saved config holds the WiFi passwords in plain text, which a client on the access point does not see.
@@ -773,12 +773,19 @@ void HttpServerModule::streamFsFile(platform::TcpConnection& conn, const char* p
     const int hn = std::snprintf(header, sizeof(header),
         "HTTP/1.1 200 OK\r\nContent-Type: %s\r\nContent-Length: %ld\r\n%s"
         "Connection: close\r\nAccess-Control-Allow-Origin: *\r\n\r\n", mime, size, extraHeaders);
-    if (!conn.write(reinterpret_cast<const uint8_t*>(header), static_cast<size_t>(hn))) return;
 
-    // An /sd download hands off to the chunked driver, which pulls one bounded slice per tick instead of looping here to completion; the header above already committed to this Content-Length.
+    // An /sd download hands off to the chunked driver, one bounded slice per tick. Claimed and opened before the header, so a busy slot or a failed open answers 503/500, not a 200 with no body.
     if (isSdPath(path)) {
         SdTransfer* t = claimSdTransfer();
-        if (!t || !platform::fsReadStreamOpen(t->rstream, path)) { conn.close(); return; }
+        if (!t) { sendResponse(conn, 503, "application/json", "{\"error\":\"another SD transfer is in progress\"}"); return; }
+        if (!platform::fsReadStreamOpen(t->rstream, path)) {
+            sendResponse(conn, 500, "application/json", "{\"error\":\"read failed\"}");
+            return;
+        }
+        if (!conn.write(reinterpret_cast<const uint8_t*>(header), static_cast<size_t>(hn))) {
+            platform::fsReadStreamClose(t->rstream);
+            return;
+        }
         t->isUpload = false;
         t->remaining = static_cast<size_t>(size);
         t->bufLen = t->bufSent = 0;
@@ -788,6 +795,7 @@ void HttpServerModule::streamFsFile(platform::TcpConnection& conn, const char* p
         return;
     }
 
+    if (!conn.write(reinterpret_cast<const uint8_t*>(header), static_cast<size_t>(hn))) return;
     platform::FsReadStream rs{};
     if (!platform::fsReadStreamOpen(rs, path)) return;   // the header already promised a body; best effort stops here
     char chunk[1024];

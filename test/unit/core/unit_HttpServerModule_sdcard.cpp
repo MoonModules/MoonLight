@@ -66,6 +66,16 @@ void claimStuckUpload(mm::HttpServerModule& http, mm::platform::TcpConnection& c
     http.tick20ms();
 }
 
+// Connects and GETs `path`, returning the response once at least `wantAtLeast` bytes have arrived.
+std::string getAndWait(mm::HttpServerModule& http, mm::platform::TcpConnection& client, const char* path,
+                       size_t wantAtLeast = 12) {
+    REQUIRE(connectAndAccept(http, client));
+    char req[160];
+    const int n = std::snprintf(req, sizeof(req), "GET /api/file?path=%s HTTP/1.1\r\n\r\n", path);
+    REQUIRE(client.write(reinterpret_cast<const uint8_t*>(req), static_cast<size_t>(n)));
+    return pumpUntil(http, client, wantAtLeast);
+}
+
 // Mounts a real card under a fresh temp dir for one test, and tears it down after.
 struct SdFixture {
     char root[256];
@@ -209,6 +219,29 @@ TEST_CASE("an SD download larger than one tick's chunk streams across several ti
     // The last byte lands this tick, but driveSdDownload only notices bufSent caught up to bufLen and closes the read stream on the NEXT one; give it a few before the fixture unmounts underneath it.
     for (int i = 0; i < 5; i++) http.tick20ms();
     client.close();
+    http.release();
+}
+
+// Point 8 of the review: streamFsFile sent the 200 header before claiming a slot, so a busy slot answered with a body a dead connection never delivered.
+TEST_CASE("an SD download with no free transfer slot answers 503, not a broken 200") {
+    SdFixture fix;
+    REQUIRE(mm::platform::fsWriteAtomic("/sd/noslot.bin", "x", 1));
+    mm::HttpServerModule http;
+    http.port = kTestPort;
+    http.setup();
+
+    // Both slots held by stuck uploads: none free for the download below.
+    mm::platform::TcpConnection busy1, busy2;
+    claimStuckUpload(http, busy1, "/sd/busy1.bin");
+    claimStuckUpload(http, busy2, "/sd/busy2.bin");
+
+    mm::platform::TcpConnection client;
+    const std::string reply = getAndWait(http, client, "/sd/noslot.bin");
+    CHECK(std::strncmp(reply.c_str(), "HTTP/1.1 503", 12) == 0);
+
+    client.close();
+    busy1.close();
+    busy2.close();
     http.release();
 }
 
