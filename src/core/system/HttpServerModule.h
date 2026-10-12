@@ -6,6 +6,7 @@
 #include "core/util/BinaryBroadcaster.h"
 #include "platform/platform.h"
 
+#include <array>
 #include <cstdint>
 
 namespace mm {
@@ -41,6 +42,7 @@ class Scheduler;
 /// A mutation is `POST /api/control` with a module, control and value; `POST /api/modules` to create; `POST /api/modules/{name}/move` to reorder and `.../replace` to swap; `POST /api/reboot`; or `DELETE /api/modules/{name}`.
 ///
 /// The File Manager reads and writes through `GET|POST /api/file?path=`, and lists, creates and removes through `/api/dir?path=`. The path rides the query, so a filesystem operation carries its target in the request rather than in a stored control.
+/// A board with an SD slot (`SdCardService`) mounts it at `/sd`, so these same two routes reach the card too, shown as a folder next to the internal flash.
 ///
 /// Every JSON response streams through a `JsonSink`, so there is no fixed-buffer ceiling and a tree of any size serializes correctly.
 ///
@@ -380,6 +382,37 @@ private:
     platform::TcpConnection parked_[kParkedSlots];
     uint32_t parkedAt_[kParkedSlots] = {};
 
+    // A large /sd transfer resumes here across ticks, a bounded slice at a time, drainPreviewSend's shape; flash stays on the synchronous path below, small enough for one tick.
+    struct SdTransfer {
+        bool active = false;
+        bool isUpload = false;
+        platform::TcpConnection conn;
+        platform::FsWriteStream wstream;   // valid while isUpload
+        platform::FsReadStream  rstream;   // valid while !isUpload
+        size_t remaining = 0;              // upload: body bytes still expected; download: bytes left to send
+        char buf[4096] = {};               // download only: one read chunk, drained across ticks by writeSome
+        size_t bufLen = 0;
+        size_t bufSent = 0;
+        uint32_t lastActivityMs = 0;       // a stall guard, not a size or time cap on the transfer itself
+    };
+    // Zero slots, not two, on a board without SD: std::array<T,0> is standard, constructs no SdTransfer at all, and every loop over it already runs zero times.
+    static constexpr int kSdTransferSlots = platform::hasSdCard ? 2 : 0;
+    static constexpr uint32_t kSdTransferStallMs = 10000;   // no progress this long: abort, free the slot
+    static constexpr uint32_t kSdTransferTickBudgetMs = 3;  // several chunks while storage/peer keep up, not one
+    std::array<SdTransfer, kSdTransferSlots> sdTransfers_{};
+    /// A free slot for a new transfer, or null when every slot is busy.
+    SdTransfer* claimSdTransfer();
+    /// Advance every active slot by one bounded chunk; called once per tick, the drainXxxSend's sibling.
+    void driveSdTransfers();
+    /// One upload slot's bounded chunk: socket to card, then the stall guard. Returns whether real bytes moved.
+    bool driveSdUpload(SdTransfer& t, uint32_t now);
+    /// One download slot's bounded chunk: card to socket, then the stall guard. Returns whether real bytes moved.
+    bool driveSdDownload(SdTransfer& t, uint32_t now);
+    /// Close the stream (already done by the caller) and the connection, and free the slot.
+    void finishSdTransfer(SdTransfer& t, bool closeConn);
+    /// Close every active slot's stream and socket; release()'s own cleanup, since going out of scope frees neither.
+    void releaseSdTransfers();
+
     ClientMessageSink* clientSink_ = nullptr;   // the producer's inbound-message sink (PreviewDriver) @xref{crossing-the-domain-boundary}
 
     // One resumable frame: a copied header plus a pointer into the caller's stable body buffer. @xref{why-the-preview-has-its-own-connections}
@@ -486,6 +519,9 @@ private:
     // Streams the remainder off the socket, so an upload of any size never needs one buffer.
     void handleWriteFile(platform::TcpConnection& conn, const char* query,
                          const char* initialBody, size_t initialLen, size_t contentLen);
+    // The /sd leg of handleWriteFile: claims a transfer slot and hands the rest to driveSdTransfers.
+    void handleWriteFileSd(platform::TcpConnection& conn, const char* path,
+                           const char* initialBody, size_t initialLen, size_t contentLen);
     // One directory's children, single-level, which is what the lazy tree loads a node from.
     void serveDirListing(platform::TcpConnection& conn, const char* query);
     void handleMakeDir(platform::TcpConnection& conn, const char* query);      // POST /api/dir?path=

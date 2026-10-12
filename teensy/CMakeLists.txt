@@ -94,6 +94,7 @@ add_executable(MoonLight.elf
     ${REPO}/src/core/system/HttpServerModule.cpp
     ${REPO}/src/core/system/FilesystemModule.cpp
     ${REPO}/src/core/system/FileManagerModule.cpp
+    ${REPO}/src/core/services/SdCardService.cpp
     ${REPO}/src/core/system/MqttModule.cpp
     ${REPO}/src/core/module/Scheduler.cpp
     ${REPO}/src/core/module/StateDocument.cpp

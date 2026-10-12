@@ -18,6 +18,10 @@
 ///
 /// The EMAC's data pads are silicon's choice, so one list serves both the driver init and the pin map.
 /// A pad nobody declares reads as free while the MAC drives it: an LED lane on GPIO 10 corrupted every frame sent, with the link still reporting 1 Gb.
+///
+/// ## An image without the room turns it off
+///
+/// `CONFIG_SOC_SDMMC_HOST_SUPPORTED` names every chip with the SD host, and `CONFIG_MM_SD_CARD` is the second, project-level gate, the same two-gate shape `CONFIG_MM_USB_MIDI_HOST` uses. It is on by default and off on every 4 MB image, through the 4 MB layout's fragment.
 
 #include "sdkconfig.h"
 
@@ -251,6 +255,15 @@ constexpr bool hasImprov = true;
 
 /// The bits a call to emitted code adds to its address. None: Xtensa and RISC-V take the code address as it is.
 constexpr uintptr_t codeAddressBits = 0;
+
+/// Chip capability AND room in the image: @xref{an-image-without-the-room-turns-it-off|why the second gate}.
+#if defined(CONFIG_SOC_SDMMC_HOST_SUPPORTED) && defined(CONFIG_MM_SD_CARD)
+constexpr bool hasSdCard = true;
+#else
+constexpr bool hasSdCard = false;
+#endif
+/// False: SdCardService offers only the board presets this chip can wire.
+constexpr bool previewsSdPresets = false;
 
 /// @}
 

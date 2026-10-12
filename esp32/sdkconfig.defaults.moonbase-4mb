@@ -1,1 +1,4 @@
 CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions/4mb_moonbase.csv"
+
+# No SD card backend on a 4 MB image: its flash is better spent on everything else, so SD ships only where there is more.
+CONFIG_MM_SD_CARD=n

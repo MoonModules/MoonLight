@@ -846,7 +846,7 @@ TEST_CASE("ControlModule persists the look a preset applied") {
     d.fs->flush();
     char path[160];
     std::snprintf(path, sizeof(path), "/.config/%s.json", d.layers->typeName());
-    const long size = mm::platform::fsSize(path);
+    const int64_t size = mm::platform::fsSize(path);
     REQUIRE(size > 0);
     std::string body(static_cast<size_t>(size) + 1, '\0');
     REQUIRE(mm::platform::fsRead(path, body.data(), body.size()) > 0);

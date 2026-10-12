@@ -183,6 +183,7 @@
 #include "core/services/InfraredService.h"
 #include "core/services/MoonLiveService.h"
 #include "core/system/FileManagerModule.h"
+#include "core/services/SdCardService.h"
 #include "core/system/FirmwareUpdateModule.h"
 #include "core/system/MoonCloudModule.h"
 #include "core/system/MoonStatsModule.h"
@@ -362,6 +363,8 @@ void mm::registerModuleTypes() {
     mm::ModuleFactory::registerType<mm::InfraredService>("InfraredService", "core/services.md#infrared");
     mm::ModuleFactory::registerType<mm::MoonLiveService>("MoonLiveService", "core/services.md#moonliveservice");
     mm::ModuleFactory::registerType<mm::FileManagerModule>("FileManagerModule", "core/system.md#file-manager");
+    // Unlike WiFi/Ethernet, a board without hasSdCard can never gain the capability without a rebuild, so the type is not left addable for nothing.
+    if constexpr (mm::platform::hasSdCard) mm::ModuleFactory::registerType<mm::SdCardService>("SdCardService", "core/services.md#sd-card");
     mm::ModuleFactory::registerType<mm::FirmwareUpdateModule>("FirmwareUpdateModule", "core/system.md#firmware-update");
     mm::ModuleFactory::registerType<mm::MoonCloudModule>("MoonCloudModule", "core/system.md#mooncloud");
     mm::ModuleFactory::registerType<mm::MoonStatsModule>("MoonStatsModule", "core/system.md#stats");
@@ -396,6 +399,7 @@ constexpr BootModule kBootModules[] = {
     {"SystemModule", "I2cBusModule", nullptr, true},
     {"SystemModule", "PinsModule", nullptr, true},
     {"Services", "AudioService", nullptr, true},
+    {"Services", "SdCardService", nullptr, mm::platform::hasSdCard},
     {"NetworkModule", "EthernetModule", nullptr, kEthernetCard},
     {"NetworkModule", "WiFiModule", nullptr, mm::platform::hasWiFi},
     {"NetworkModule", "AccessPointModule", nullptr, mm::platform::hasWiFi},
@@ -415,6 +419,8 @@ mm::MoonModule* mm::createTopLevel(const char* typeName) {
     if (!top) return nullptr;
     for (const BootModule& b : kBootModules) {
         if (!b.built) continue;
+        // One extra veto: the table's own flag matches hasSdCard, but booting by default is a separate call desktop opts out of.
+        if (std::strcmp(b.type, "SdCardService") == 0 && !mm::platform::sdCardBootsByDefault()) continue;
         if (!b.parentType) {
             if (std::strcmp(b.type, typeName) == 0) top->setName(b.name);
             continue;

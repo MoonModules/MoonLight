@@ -39,10 +39,27 @@ void collectEntry(const char* name, bool isDir, uint32_t, void* user) {
     lvl->count++;
 }
 
+// True for a mount's root, which removeTree refuses to wipe: a user deletes what is inside a mount, not the mount. Counted in significant segments, since the filesystems skip repeated slashes and "." alike, so "//" is the flash root and "/sd//" the card's.
+bool isMountRoot(const char* path) {
+    if (!path || path[0] != '/') return false;
+    uint8_t segments = 0;
+    bool firstIsSd = false;
+    for (const char* p = path; *p;) {
+        while (*p == '/') p++;
+        const char* start = p;
+        while (*p && *p != '/') p++;
+        const size_t len = static_cast<size_t>(p - start);
+        if (len == 0 || (len == 1 && *start == '.')) continue;
+        if (++segments == 1) firstIsSd = len == 2 && start[0] == 's' && start[1] == 'd';
+    }
+    return segments == 0 || (segments == 1 && firstIsSd && platform::isSdPath("/sd"));   // the card's root only where "/sd" is the card
+}
+
 }  // namespace
 
 // Depth-first, because a directory goes only once empty; `depth` bounds the recursion since a user shapes this tree on the render task.
 bool FilesystemModule::removeTree(const char* path, uint8_t depth) {
+    if (depth == 0 && isMountRoot(path)) return false;   // refuse to wipe an entire mount, flash or SD, before touching anything inside it
     if (depth > 8) return false;
     if (platform::fsRemove(path)) return true;   // a file, or an already-empty directory
 
@@ -188,10 +205,10 @@ void FilesystemModule::loadAll(Scheduler* s) {
 
 // No fixed ceiling, so a large saved config loads in full, mirroring the streaming save (saveSubtree).
 char* FilesystemModule::readWholeFile(const char* path) {
-    const long size = platform::fsSize(path);
+    const int64_t size = platform::fsSize(path);
     if (size <= 0) return nullptr;
     char* buf = static_cast<char*>(platform::alloc(static_cast<size_t>(size) + 1));
-    if (!buf) { std::printf("FilesystemModule: out of memory loading %s (%ld bytes)\n", path, size); return nullptr; }
+    if (!buf) { std::printf("FilesystemModule: out of memory loading %s (%lld bytes)\n", path, static_cast<long long>(size)); return nullptr; }
     const int n = platform::fsRead(path, buf, static_cast<size_t>(size) + 1);
     if (n <= 0) { platform::free(buf); return nullptr; }
     buf[n] = '\0';                       // parsed as a C-string

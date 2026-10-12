@@ -101,6 +101,11 @@ constexpr bool hasOta = true;
 /// True: the USB serial port takes the installer's state documents (APPLY_OP); there is no WiFi to provision.
 constexpr bool hasImprov = true;
 
+/// False: no Teensy board here wires a microSD slot, so the SD seam is its inert set.
+constexpr bool hasSdCard = false;
+/// False: with no SD service, there are no board presets to preview.
+constexpr bool previewsSdPresets = false;
+
 /// The bits a call to emitted code adds to its address. Thumb state: a Cortex-M7 runs only Thumb code, and a call address carries it in bit 0.
 constexpr uintptr_t codeAddressBits = 1;
 

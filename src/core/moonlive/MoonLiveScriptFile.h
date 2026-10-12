@@ -149,7 +149,7 @@ inline void noteForkedFrom(const char* path) {
 
     char factory[96];
     std::snprintf(factory, sizeof(factory), "%s/%s", kFactoryScriptDir, name);
-    const long size = platform::fsSize(factory);
+    const int64_t size = platform::fsSize(factory);
     if (size <= 0 || size > kScriptFileMax) return;                     // nothing shipped: not a fork
     char* text = static_cast<char*>(platform::alloc(static_cast<size_t>(size) + 1));
     if (!text) return;
@@ -165,7 +165,7 @@ inline bool scriptFactoryMovedOn(const char* name) {
     if (!scriptLineage(name, from)) return false;
     char path[96];
     std::snprintf(path, sizeof(path), "%s/%s", kFactoryScriptDir, name);
-    const long size = platform::fsSize(path);
+    const int64_t size = platform::fsSize(path);
     if (size <= 0 || size > kScriptFileMax) return false;
     char* text = static_cast<char*>(platform::alloc(static_cast<size_t>(size) + 1));
     if (!text) return false;
@@ -189,7 +189,7 @@ inline bool scriptFileHash(const char* name, uint32_t& out) {
     if (!name || !name[0]) return false;
     char path[96];
     if (!resolveScript(name, path, sizeof(path))) return false;
-    const long size = platform::fsSize(path);
+    const int64_t size = platform::fsSize(path);
     if (size <= 0 || size > kScriptFileMax) return false;
 
     // One read: a chunked walk opens and closes per call, which boot-looped a P4.
@@ -233,7 +233,7 @@ inline bool compileScriptFile(MoonLive& engine, const char* name,
     char path[96];
     resolveScript(name, path, sizeof(path));
 
-    const long size = platform::fsSize(path);
+    const int64_t size = platform::fsSize(path);
     if (size < 0)               { err = "script not found"; return false; }
     if (size == 0)              { err = "script is empty";  return false; }
     if (size > kScriptFileMax)  { err = "script too large"; return false; }

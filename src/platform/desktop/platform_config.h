@@ -119,6 +119,11 @@ constexpr bool hasImprov = false;
 /// The bits a call to emitted code adds to its address. None: a host call takes the code address as it is.
 constexpr uintptr_t codeAddressBits = 0;
 
+/// True: unlike every other board gate here, the mount/remount/format logic under test needs a real host path, not a stub.
+constexpr bool hasSdCard = true;
+/// True: no slot is wired, so SdCardService offers every board preset, for the tests to exercise them.
+constexpr bool previewsSdPresets = true;
+
 /// @}
 
 } // namespace mm::platform

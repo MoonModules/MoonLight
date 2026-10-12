@@ -465,42 +465,88 @@ int fsRead(const char* path, char* buf, size_t maxLen) {
     return static_cast<int>(n);
 }
 
-long fsSize(const char* path) {
+int64_t fsSize(const char* path) {
     if (!g_mounted) return -1;
     File f = g_fs.open(path, FILE_READ);
     if (!f || f.isDirectory()) return -1;
-    const long size = static_cast<long>(f.size());
+    const int64_t size = static_cast<int64_t>(f.size());
     f.close();
     return size;
 }
 
-int fsReadAt(const char* path, long offset, char* buf, size_t len) {
-    if (!g_mounted || !buf) return -1;
+bool fsReadStreamOpen(FsReadStream& h, const char* path) {
+    if (!g_mounted || !path) return false;
     File f = g_fs.open(path, FILE_READ);
-    if (!f || f.isDirectory()) return -1;
-    if (!f.seek(static_cast<uint64_t>(offset))) { f.close(); return -1; }
-    const size_t n = f.read(buf, len);
-    f.close();
-    return static_cast<int>(n);
+    if (!f || f.isDirectory()) return false;
+    h.impl = new File(f);
+    return true;
+}
+
+int fsReadStreamRead(FsReadStream& h, char* buf, size_t len) {
+    auto* f = static_cast<File*>(h.impl);
+    if (!f || !buf) return -1;
+    return static_cast<int>(f->read(buf, len));
+}
+
+void fsReadStreamClose(FsReadStream& h) {
+    auto* f = static_cast<File*>(h.impl);
+    if (!f) return;
+    f->close();
+    delete f;
+    h.impl = nullptr;
 }
 
 bool fsWriteAtomic(const char* path, const char* data, size_t len) {
     return writeAtomic(path, [&](File& f) { return f.write(data, len) == len; });
 }
 
-bool fsWriteStream(const char* path, FsWriteSrc src, void* user) {
-    if (!src) return false;
-    return writeAtomic(path, [&](File& f) {
-        char chunk[512];
-        bool abort = false;
-        for (;;) {
-            const size_t got = src(chunk, sizeof(chunk), user, &abort);
-            if (abort) return false;
-            if (got == 0) return true;
-            if (f.write(chunk, got) != got) return false;
-        }
-    });
+namespace {
+// The open file and both paths, so close() renames or discards without re-deriving them.
+struct WriteHandle { File f; char path[160]; char tmp[168]; };
+}  // namespace
+
+// The same temp-then-rename as writeAtomic, held open across the caller's chunks.
+bool fsWriteStreamOpen(FsWriteStream& h, const char* path) {
+    if (!g_mounted || !path || std::strlen(path) >= sizeof(WriteHandle::path)) return false;
+    makeParent(path);
+    auto* w = new WriteHandle();
+    std::snprintf(w->path, sizeof(w->path), "%s", path);
+    std::snprintf(w->tmp, sizeof(w->tmp), "%s.tmp", path);
+    g_fs.remove(w->tmp);
+    w->f = g_fs.open(w->tmp, FILE_WRITE_BEGIN);
+    if (!w->f) { delete w; return false; }
+    h.impl = w;
+    return true;
 }
+
+bool fsWriteStreamWrite(FsWriteStream& h, const char* buf, size_t len) {
+    auto* w = static_cast<WriteHandle*>(h.impl);
+    return w && buf && w->f.write(buf, len) == len;
+}
+
+bool fsWriteStreamClose(FsWriteStream& h, bool commit) {
+    auto* w = static_cast<WriteHandle*>(h.impl);
+    if (!w) return false;
+    w->f.close();
+    const bool renamed = commit && g_fs.rename(w->tmp, w->path);
+    if (!renamed) g_fs.remove(w->tmp);
+    delete w;
+    h.impl = nullptr;
+    return commit ? renamed : true;
+}
+
+// No microSD slot on this platform: the SD seam's inert set, as an ESP32 image without SD has.
+bool sdMount(const SdPinConfig&) { return false; }
+SdMountError sdMountError() { return SdMountError::NoCard; }
+bool sdCardMounted() { return false; }
+bool sdCardPresent() { return false; }
+bool sdCardBusy() { return false; }
+bool sdUnmount() { return true; }
+bool sdFormat() { return false; }
+SdFormatState sdFormatState() { return SdFormatState::Idle; }
+uint64_t sdCardUsed() { return 0; }
+uint64_t sdCardTotal() { return 0; }
+bool sdCardBootsByDefault() { return false; }
 
 void fsList(const char* dir, FsListCb cb, void* user) {
     if (!g_mounted || !cb) return;

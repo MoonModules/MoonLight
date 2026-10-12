@@ -162,6 +162,23 @@ A script runs on the 50 Hz poll rather than the render tick, so a heavy one cost
 
 Detail: [technical](moxygen/MoonLiveService.md)
 
+<a id="sd-card"></a>
+
+### SD Card
+
+A board's microSD slot, where one is wired: its wiring, a usage gauge and a format button. Mounted, its files appear under `/sd`, within the one [File Manager](system.md#file-manager) tree. Behavior: ⌄ details.
+
+<img src="../../assets/core/SdCardService.png" width="300" alt="SD Card module controls">
+<img src="../../assets/core/SdCardService-files.png" width="300" alt="The card's files in the File Manager, under sd">
+
+- `board`: the slot's wiring, from the presets this chip can wire; `Custom` sets bus and pins.
+- `bus`: under `Custom`, the SD bus or the SD spec's SPI mode.
+- `clkPin` … `pwrPin`: the pins under `Custom`; −1 unused, `d1`-`d3` unset is 1-bit.
+- `format`: a button, press twice; erases and reformats the card as FAT32 in place.
+- `card (KiB)`: read-only usage bar, used / total KiB, so a card past 4 GiB still reports correctly.
+
+Detail: [technical](moxygen/SdCardService.md)
+
 ## Analog, details
 The travel maps into the control's own range: a Select with five options takes 0..4, a bool takes on and off. A row pointed at a pad does nothing, since there is no sensible reading of a pedal held at 40% of a preset. Live `raw` and `value` readouts let a pedal be calibrated by watching it move, and reversed bounds mean inverted rather than being an error, since calibrating by moving to each end sets whichever was reached first. Without a `deadband` a resting pedal rewrites its target fifty times a second forever. Scripts reach the same hardware with `adcRead(pin)` and `adcMax()`, which is the path for a sensor whose mapping is a condition rather than a range.
 
@@ -324,3 +341,11 @@ One key binds to one row. Learning a key that another row already holds moves th
 
 The status line reports setup state ("set pin to receive" / "ready"), the learn prompt, a binding ("learned 0x..."), what a press did or why it did not, and an unbound code ("received 0x...
 (unassigned)").
+
+## SD Card, details
+
+The presets: `P4 SDMMC` is the slot every P4 board with one wires, and a P4 opens on it. `Classic SDMMC (1-bit)` is the classic's own SD host pins, which the Olimex ESP32-Gateway wires, and `Classic SPI` the QuinLED Dig-Octa's. A 4 MB image carries no SD at all, so the 4 MB Olimex has none. SPI mode maps `clkPin` to SCK, `cmdPin` to MOSI, `d0Pin` to MISO and `d3Pin` to CS. Over SPI, reads hold but a write over about 50 KB can stop the card until a power cycle, so a card mounted that way says so on its status.
+
+Mounts live, in `prepare()` rather than `setup()`: editing a pin unmounts and remounts on the new wiring, no reboot needed, the same contract the [I2C bus](system.md#i2c-bus)'s `sda`/`scl` have. A pulled card is noticed within a second. A missing or unreadable card shows its own status instead of retrying, since a mount attempt on an empty slot stalls the render thread: insert the card, then switch the module off and on, edit a pin, or reboot.
+
+The card is FAT32 only (ESP-IDF's FatFs ships with exFAT compiled out), with the SD Association's 32 KB clusters. A card without a FAT filesystem, fresh or exFAT, says so, and `format` makes one in place rather than requiring a second device. A format takes seconds on a large card, so it runs in the background: the status reads "formatting" and the card refuses transfers until it finishes. Once mounted, its content is reached through the [File Manager](system.md#file-manager) exactly like the internal flash, under an `sd` folder; this module never duplicates that tree.

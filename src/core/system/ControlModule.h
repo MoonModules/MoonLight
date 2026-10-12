@@ -971,7 +971,7 @@ private:
 
     /// A preset file whole, on the heap (caller frees), or null when absent, empty or past the cap.
     static char* readFile(const char* path) {
-        const long size = platform::fsSize(path);
+        const int64_t size = platform::fsSize(path);
         if (size <= 0 || static_cast<size_t>(size) > kStateDocumentMax) return nullptr;
         char* body = static_cast<char*>(platform::alloc(static_cast<size_t>(size) + 1));
         if (!body) return nullptr;
@@ -1134,7 +1134,7 @@ private:
             setStatusf(Severity::Warning, "%s already exists", to);
             return false;
         }
-        const long size = platform::fsSize(src);
+        const int64_t size = platform::fsSize(src);
         if (size <= 0) return false;
         char* buf = static_cast<char*>(platform::alloc(static_cast<size_t>(size) + 1));
         if (!buf) return false;
