@@ -1641,7 +1641,8 @@ function uploadWithProgress(route, file, ui, signal) {
             if (signal.aborted) { reject(new Error("canceled")); return; }
             signal.addEventListener("abort", () => xhr.abort(), { once: true });
         }
-        ui.watchStalls();
+        // The install overlay watches for stalls; the File Manager's drop upload shows only progress.
+        if (ui.watchStalls) ui.watchStalls();
         xhr.open("POST", route);
         xhr.setRequestHeader("Content-Type", "application/octet-stream");
         xhr.upload.addEventListener("progress", (e) => {
