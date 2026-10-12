@@ -398,15 +398,16 @@ private:
     // Zero slots, not two, on a board without SD: std::array<T,0> is standard, constructs no SdTransfer at all, and every loop over it already runs zero times.
     static constexpr int kSdTransferSlots = platform::hasSdCard ? 2 : 0;
     static constexpr uint32_t kSdTransferStallMs = 10000;   // no progress this long: abort, free the slot
+    static constexpr uint32_t kSdTransferTickBudgetMs = 3;  // several chunks while storage/peer keep up, not one
     std::array<SdTransfer, kSdTransferSlots> sdTransfers_{};
     /// A free slot for a new transfer, or null when every slot is busy.
     SdTransfer* claimSdTransfer();
     /// Advance every active slot by one bounded chunk; called once per tick, the drainXxxSend's sibling.
     void driveSdTransfers();
-    /// One upload slot's bounded chunk: socket to card, then the stall guard.
-    void driveSdUpload(SdTransfer& t, uint32_t now);
-    /// One download slot's bounded chunk: card to socket, then the stall guard.
-    void driveSdDownload(SdTransfer& t, uint32_t now);
+    /// One upload slot's bounded chunk: socket to card, then the stall guard. Returns whether real bytes moved.
+    bool driveSdUpload(SdTransfer& t, uint32_t now);
+    /// One download slot's bounded chunk: card to socket, then the stall guard. Returns whether real bytes moved.
+    bool driveSdDownload(SdTransfer& t, uint32_t now);
     /// Close the stream (already done by the caller) and the connection, and free the slot.
     void finishSdTransfer(SdTransfer& t, bool closeConn);
     /// Close every active slot's stream and socket; release()'s own cleanup, since going out of scope frees neither.

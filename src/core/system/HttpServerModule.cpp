@@ -211,7 +211,7 @@ void HttpServerModule::releaseSdTransfers() {
 
 // An upload slot's bounded chunk: socket to card, then the stall guard.
 // Reads into t.buf, not a stack-local: that put a 4 KB frame on this task's stack every tick, until one coincided with other deep stack use and panicked the board.
-void HttpServerModule::driveSdUpload(SdTransfer& t, uint32_t now) {
+bool HttpServerModule::driveSdUpload(SdTransfer& t, uint32_t now) {
     if (t.remaining > 0) {
         const size_t want = t.remaining < sizeof(t.buf) ? t.remaining : sizeof(t.buf);
         const int n = t.conn.read(reinterpret_cast<uint8_t*>(t.buf), want);
@@ -220,14 +220,16 @@ void HttpServerModule::driveSdUpload(SdTransfer& t, uint32_t now) {
                 platform::fsWriteStreamClose(t.wstream, false);
                 sendResponse(t.conn, 500, "application/json", "{\"error\":\"write failed\"}");
                 finishSdTransfer(t, true);
-                return;
+                return false;
             }
             t.remaining -= static_cast<size_t>(n);
             t.lastActivityMs = now;
-        } else if (n == 0) {   // peer closed with body remaining
+            return true;
+        }
+        if (n == 0) {   // peer closed with body remaining
             platform::fsWriteStreamClose(t.wstream, false);
             finishSdTransfer(t, true);   // the peer is already gone: no response to send
-            return;
+            return false;
         }
     }
     if (t.active && t.remaining == 0) {
@@ -235,49 +237,59 @@ void HttpServerModule::driveSdUpload(SdTransfer& t, uint32_t now) {
         sendResponse(t.conn, ok ? 200 : 500, "application/json",
                     ok ? "{\"ok\":true}" : "{\"error\":\"write failed\"}");
         finishSdTransfer(t, true);
-        return;
+        return false;
     }
     // A liveness guard, not a size or time cap on the transfer itself: only a stalled peer trips it.
     if (t.active && now - t.lastActivityMs > kSdTransferStallMs) {
         platform::fsWriteStreamClose(t.wstream, false);
         finishSdTransfer(t, true);
     }
+    return false;
 }
 
 // A download slot's bounded chunk: card to socket, resuming where last tick's writeSome left off.
-void HttpServerModule::driveSdDownload(SdTransfer& t, uint32_t now) {
+bool HttpServerModule::driveSdDownload(SdTransfer& t, uint32_t now) {
     if (t.bufSent < t.bufLen) {
         const int n = t.conn.writeSome(reinterpret_cast<const uint8_t*>(t.buf + t.bufSent),
                                        t.bufLen - t.bufSent);
-        if (n < 0) { platform::fsReadStreamClose(t.rstream); finishSdTransfer(t, true); return; }
-        if (n > 0) { t.bufSent += static_cast<size_t>(n); t.lastActivityMs = now; }
+        if (n < 0) { platform::fsReadStreamClose(t.rstream); finishSdTransfer(t, true); return false; }
+        if (n > 0) { t.bufSent += static_cast<size_t>(n); t.lastActivityMs = now; return true; }
+        // n == 0: socket buffer full, nothing sent; falls through to the stall guard below.
     } else if (t.remaining > 0) {
         const size_t want = t.remaining < sizeof(t.buf) ? t.remaining : sizeof(t.buf);
         const int got = platform::fsReadStreamRead(t.rstream, t.buf, want);
-        if (got <= 0) { platform::fsReadStreamClose(t.rstream); finishSdTransfer(t, true); return; }
+        if (got <= 0) { platform::fsReadStreamClose(t.rstream); finishSdTransfer(t, true); return false; }
         t.bufLen = static_cast<size_t>(got);
         t.bufSent = 0;
         t.remaining -= static_cast<size_t>(got);
         t.lastActivityMs = now;
+        return true;
     } else {
         platform::fsReadStreamClose(t.rstream);
         finishSdTransfer(t, true);
-        return;
+        return false;
     }
+    // A liveness guard, not a size or time cap on the transfer itself: only a stalled peer trips it.
     if (t.active && now - t.lastActivityMs > kSdTransferStallMs) {
         platform::fsReadStreamClose(t.rstream);
         finishSdTransfer(t, true);
     }
+    return false;
 }
 
-// One bounded chunk per slot per tick, dispatched to the upload or download leg.
+// Several bounded chunks per slot per tick, not one, while storage and the peer keep up; a slow side yields within budget, dispatched to the upload or download leg.
 // Mirrors drainPreviewSend/drainStateSend's shape, non-blocking reads/writes throughout.
 void HttpServerModule::driveSdTransfers() {
-    const uint32_t now = platform::millis();
+    const uint32_t budgetStart = platform::millis();
     for (auto& t : sdTransfers_) {
         if (!t.active) continue;
-        if (t.isUpload) driveSdUpload(t, now);
-        else driveSdDownload(t, now);
+        for (;;) {
+            const uint32_t now = platform::millis();
+            const bool progressed = t.isUpload ? driveSdUpload(t, now) : driveSdDownload(t, now);
+            if (!t.active) break;           // finished or failed this chunk
+            if (!progressed) break;         // no data moved: nothing more to do until next tick
+            if (now - budgetStart >= kSdTransferTickBudgetMs) break;
+        }
     }
 }
 

@@ -193,6 +193,33 @@ TEST_CASE("an SD upload larger than one tick's chunk streams across several tick
     http.release();
 }
 
+// Point 13 of the review: one chunk per tick capped a transfer around 200 KB/s. A payload spanning several 4 KB chunks now commits within a couple of ticks, not one chunk per tick.
+TEST_CASE("an SD upload spanning several chunks drains in far fewer ticks than chunks") {
+    SdFixture fix;
+    mm::HttpServerModule http;
+    http.port = kTestPort;
+    http.setup();
+    mm::platform::TcpConnection client;
+    REQUIRE(connectAndAccept(http, client));
+
+    const std::string payload = pattern(20000);   // 5 chunks' worth, at the old one-chunk-per-tick rate
+    char req[256];
+    const int reqLen = std::snprintf(req, sizeof(req),
+        "POST /api/file?path=/sd/multi.bin HTTP/1.1\r\nContent-Length: %zu\r\n\r\n", payload.size());
+    REQUIRE(client.write(reinterpret_cast<const uint8_t*>(req), static_cast<size_t>(reqLen)));
+    REQUIRE(client.write(reinterpret_cast<const uint8_t*>(payload.data()), payload.size()));
+
+    // The old design needed 5 ticks for the body alone; this proves the whole upload commits in far fewer.
+    for (int i = 0; i < 2; i++) http.tick20ms();
+    CHECK(mm::platform::fsSize("/sd/multi.bin") == static_cast<int64_t>(payload.size()));
+
+    const std::string reply = pumpUntil(http, client, 12);
+    CHECK(std::strncmp(reply.c_str(), "HTTP/1.1 200", 12) == 0);
+
+    client.close();
+    http.release();
+}
+
 TEST_CASE("an SD download larger than one tick's chunk streams across several ticks and arrives whole") {
     SdFixture fix;
     const std::string payload = pattern(10000);
