@@ -10,6 +10,7 @@
 #include <atomic>
 #include <cstdint>
 #include <cstdio>
+#include <initializer_list>   // the same-type builtins register from a braced list
 
 /// @defgroup moonlive_builtins_common MoonLive neutral builtins
 /// @{
