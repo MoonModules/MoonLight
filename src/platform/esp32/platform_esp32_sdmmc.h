@@ -35,7 +35,7 @@ void sdCardReadStreamClose(void* handle);
 bool sdCardWriteStreamOpen(void*& handle, const char* apiPath);
 /// Append one chunk to a card write handle; false on a write failure.
 bool sdCardWriteStreamWrite(void* handle, const char* buf, size_t len);
-/// Flush and close a card write handle; the rename-or-discard on `commit` is the caller's, in platform_esp32_fs.cpp.
+/// Flush and close a card write handle, renaming the temporary onto its real name on `commit`, discarding it otherwise.
 bool sdCardWriteStreamClose(void* handle, bool commit);
 
 } // namespace mm::platform

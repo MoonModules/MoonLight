@@ -1,5 +1,5 @@
 {
-  "commit": "66569ad5",
+  "commit": "d732957d",
   "flash": {
     "esp32s3-n16r8": 2336304,
     "esp32": 2226256,
@@ -683,8 +683,8 @@
       }
     },
     "desktop-linux": {
-      "tick_us": 6,
-      "fps": 166666
+      "tick_us": 7,
+      "fps": 142857
     }
   },
   "loc": {
