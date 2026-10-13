@@ -5,6 +5,7 @@
 
 #include "doctest.h"
 #include "core/system/HttpServerModule.h"
+#include "http_test_client.h"
 #include "platform/platform.h"
 
 #include <cstring>
@@ -12,21 +13,6 @@
 namespace {
 
 constexpr uint16_t kTestPort = 18090;
-using CR = mm::platform::TcpConnection::ConnectResult;
-
-// Connect a client and let the server accept it before any request is sent.
-bool connectAndAccept(mm::HttpServerModule& http, mm::platform::TcpConnection& client) {
-    if (!client.connectStart("127.0.0.1", kTestPort)) return false;
-    CR r = CR::Pending;
-    for (int i = 0; i < 500 && r == CR::Pending; i++) {
-        r = client.connectPoll();
-        if (r == CR::Pending) mm::platform::delayMs(1);
-    }
-    if (r != CR::Connected) return false;
-    mm::platform::delayMs(5);
-    http.tick20ms();   // accepts the connection: nothing to read yet
-    return true;
-}
 
 // Tick the server until the client reads a reply or sees the connection closed; the bytes read, 0 when closed.
 int readReply(mm::HttpServerModule& http, mm::platform::TcpConnection& client, char* out, size_t len) {
@@ -46,7 +32,7 @@ TEST_CASE("HttpServer: a request that arrives after the connection was accepted 
     http.port = kTestPort;
     http.setup();
     mm::platform::TcpConnection client;
-    REQUIRE(connectAndAccept(http, client));
+    REQUIRE(connectAndAccept(http, client, kTestPort));
 
     mm::platform::delayMs(50);   // the request arrives a resend later
     const char* req = "OPTIONS / HTTP/1.1\r\nHost: test\r\n\r\n";
@@ -66,7 +52,7 @@ TEST_CASE("HttpServer: a connection that never sends a request is closed once it
     http.port = kTestPort;
     http.setup();
     mm::platform::TcpConnection client;
-    REQUIRE(connectAndAccept(http, client));
+    REQUIRE(connectAndAccept(http, client, kTestPort));
 
     http.tick20ms();
     char reply[64];

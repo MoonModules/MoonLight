@@ -78,9 +78,13 @@ public:
 
     /// Append a string, growing or flushing as the mode requires.
     void append(const char* s) {
+        if (s) append(s, std::strlen(s));
+    }
+    /// Append `len` bytes, a slice of a larger document that carries no terminator of its own.
+    void append(const char* s, size_t len) {
         if (!s) return;
-        if (conn_ && !stage_) { conn_->write(reinterpret_cast<const uint8_t*>(s), std::strlen(s)); return; }
-        while (*s) {
+        if (conn_ && !stage_) { conn_->write(reinterpret_cast<const uint8_t*>(s), len); return; }
+        for (const char* end = s + len; s < end; ) {
             if (conn_) {
                 if (pos_ == STAGE_SIZE) flushStage();
                 stage_[pos_++] = *s++;

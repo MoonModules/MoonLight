@@ -25,6 +25,8 @@ constexpr bool isEsp32P4 = false;
 constexpr bool isEsp32S3 = false;
 /// Not an S31, so its RGMII PHY compiles out.
 constexpr bool isEsp32S31 = false;
+/// The Teensy 4.1: its built-in microSD socket is a board preset the SDK flags cannot name.
+constexpr bool isTeensy41 = true;
 
 /// No RMT peripheral on the i.MX RT1062.
 constexpr uint8_t rmtTxChannels = 0;
@@ -101,9 +103,9 @@ constexpr bool hasOta = true;
 /// True: the USB serial port takes the installer's state documents (APPLY_OP); there is no WiFi to provision.
 constexpr bool hasImprov = true;
 
-/// False: no Teensy board here wires a microSD slot, so the SD seam is its inert set.
-constexpr bool hasSdCard = false;
-/// False: with no SD service, there are no board presets to preview.
+/// True: the 4.1's built-in microSD socket, on the chip's own SDIO host.
+constexpr bool hasSdCard = true;
+/// False: SdCardService offers only the socket this board wires.
 constexpr bool previewsSdPresets = false;
 
 /// The bits a call to emitted code adds to its address. Thumb state: a Cortex-M7 runs only Thumb code, and a call address carries it in bit 0.

@@ -175,7 +175,7 @@ A board's microSD slot, where one is wired: its wiring, a usage gauge and a form
 - `bus`: under `Custom`, the SD bus or the SD spec's SPI mode.
 - `clkPin` … `pwrPin`: the pins under `Custom`; −1 unused, `d1`-`d3` unset is 1-bit.
 - `format`: a button, press twice; erases and reformats the card as FAT32 in place.
-- `card (KiB)`: read-only usage bar, used / total KiB, so a card past 4 GiB still reports correctly.
+- `card`: read-only usage bar, counted in KiB so a card past 4 GiB still reports correctly.
 
 Detail: [technical](moxygen/SdCardService.md)
 
@@ -344,7 +344,7 @@ The status line reports setup state ("set pin to receive" / "ready"), the learn 
 
 ## SD Card, details
 
-The presets: `P4 SDMMC` is the slot every P4 board with one wires, and a P4 opens on it. `Classic SDMMC (1-bit)` is the classic's own SD host pins, which the Olimex ESP32-Gateway wires, and `Classic SPI` the QuinLED Dig-Octa's. A 4 MB image carries no SD at all, so the 4 MB Olimex has none. SPI mode maps `clkPin` to SCK, `cmdPin` to MOSI, `d0Pin` to MISO and `d3Pin` to CS. Over SPI, reads hold but a write over about 50 KB can stop the card until a power cycle, so a card mounted that way says so on its status.
+The presets: `P4 SDMMC` is the slot every P4 board with one wires, and a P4 opens on it. `Classic SDMMC (1-bit)` is the classic's own SD host pins, which the Olimex ESP32-Gateway wires, and `Classic SPI` the QuinLED Dig-Octa's. A 4 MB image carries no SD at all, so the 4 MB Olimex has none. `Teensy 4.1 SD socket` is the Teensy 4.1's built-in slot on its own SDIO host, and a Teensy opens on it; it mounts FAT and exFAT, and its format runs in the call, pausing the render for its few seconds, since the Teensy has no task to hand it to. SPI mode maps `clkPin` to SCK, `cmdPin` to MOSI, `d0Pin` to MISO and `d3Pin` to CS. Over SPI, reads hold but a write over about 50 KB can stop the card until a power cycle, so a card mounted that way says so on its status.
 
 Mounts live, in `prepare()` rather than `setup()`: editing a pin unmounts and remounts on the new wiring, no reboot needed, the same contract the [I2C bus](system.md#i2c-bus)'s `sda`/`scl` have. A pulled card is noticed within a second. A missing or unreadable card shows its own status instead of retrying, since a mount attempt on an empty slot stalls the render thread: insert the card, then switch the module off and on, edit a pin, or reboot.
 

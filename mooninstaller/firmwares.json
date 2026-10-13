@@ -6,7 +6,7 @@
       "chip": "esp32",
       "eth_only": false,
       "ships": true,
-      "description": "ESP32 classic — WiFi + Ethernet (RMII; per-board pins/PHY from deviceModels.json, default LAN8720 pins)."
+      "description": "ESP32 classic: WiFi + Ethernet (RMII; per-board pins/PHY from deviceModels.json, default LAN8720 pins)."
     },
     {
       "name": "esp32-16mb",
@@ -14,7 +14,7 @@
       "chip": "esp32",
       "eth_only": false,
       "ships": true,
-      "description": "ESP32 classic with 16 MB flash — WiFi + Ethernet. Same silicon as `esp32`; this variant uses the extra flash for a big app slot + an 11 MB filesystem (Serg boards, QuinLED Dig-Octa)."
+      "description": "ESP32 classic with 16 MB flash: WiFi + Ethernet. Same silicon as `esp32`; this variant uses the extra flash for a big app slot + an 11 MB filesystem (Serg boards, QuinLED Dig-Octa)."
     },
     {
       "name": "esp32-wrover",
@@ -22,7 +22,7 @@
       "chip": "esp32",
       "eth_only": false,
       "ships": true,
-      "description": "ESP32-WROVER (classic ESP32, 4 MB flash + 4 MB quad PSRAM) — WiFi + Ethernet. Same silicon as `esp32`; this variant enables PSRAM for the larger buffers (big grids, preview) the WROVER's extra RAM allows."
+      "description": "ESP32-WROVER (classic ESP32, 4 MB flash + 4 MB quad PSRAM): WiFi + Ethernet. Same silicon as `esp32`; this variant enables PSRAM for the larger buffers (big grids, preview) the WROVER's extra RAM allows."
     },
     {
       "name": "esp32-pico",
@@ -38,7 +38,7 @@
       "chip": "esp32",
       "eth_only": true,
       "ships": true,
-      "description": "ESP32 classic — Ethernet only (WiFi compiled out; smaller image, more RAM). Per-board pins/PHY from deviceModels.json. The default `esp32` does WiFi+Ethernet — use this only to drop WiFi."
+      "description": "ESP32 classic: Ethernet only (WiFi compiled out; smaller image, more RAM). Per-board pins/PHY from deviceModels.json. The default `esp32` does WiFi+Ethernet: use this only to drop WiFi."
     },
     {
       "name": "esp32s3-n16r8",
@@ -46,7 +46,15 @@
       "chip": "esp32s3",
       "eth_only": false,
       "ships": true,
-      "description": "ESP32-S3 DevKitC-1 (N16R8: 16 MB flash, 8 MB octal PSRAM) — WiFi + W5500 SPI Ethernet (external module, pins per board in deviceModels.json)"
+      "description": "ESP32-S3 DevKitC-1 (N16R8: 16 MB flash, 8 MB octal PSRAM): WiFi + W5500 SPI Ethernet (external module, pins per board in deviceModels.json)"
+    },
+    {
+      "name": "esp32s3-n32r16",
+      "platform": "esp32",
+      "chip": "esp32s3",
+      "eth_only": false,
+      "ships": true,
+      "description": "ESP32-S3 WROOM-2 (N32R16V: 32 MB octal flash, 16 MB octal PSRAM, 1.8 V): WiFi + W5500 SPI Ethernet. Octal flash needs its own build: an N16R8 image only auto-detects the read mode and uses half the flash."
     },
     {
       "name": "esp32s3-n8r8",
@@ -54,7 +62,7 @@
       "chip": "esp32s3",
       "eth_only": false,
       "ships": true,
-      "description": "ESP32-S3 (N8R8: 8 MB flash, 8 MB octal PSRAM) — WiFi + W5500 SPI Ethernet. Half the flash of N16R8; the N16R8 binary overruns an 8 MB board, so N8R8 boards (LightCrafter etc.) need this variant."
+      "description": "ESP32-S3 (N8R8: 8 MB flash, 8 MB octal PSRAM): WiFi + W5500 SPI Ethernet. Half the flash of N16R8; the N16R8 binary overruns an 8 MB board, so N8R8 boards (LightCrafter etc.) need this variant."
     },
     {
       "name": "esp32s3-zero",
@@ -78,7 +86,7 @@
       "chip": "esp32p4",
       "eth_only": true,
       "ships": true,
-      "description": "Waveshare ESP32-P4-NANO — Ethernet only (IP101 PHY), for P4 revisions 0.x/1.x ONLY. The WiFi-less fallback; esp32p4rev1-eth-wifi adds the C6 radio."
+      "description": "Waveshare ESP32-P4-NANO: Ethernet only (IP101 PHY), for P4 revisions 0.x/1.x ONLY. The WiFi-less fallback; esp32p4rev1-eth-wifi adds the C6 radio."
     },
     {
       "name": "esp32p4rev1-eth-wifi",
@@ -86,7 +94,7 @@
       "chip": "esp32p4",
       "eth_only": false,
       "ships": true,
-      "description": "Waveshare ESP32-P4-NANO — Ethernet + WiFi via the on-board ESP32-C6 over SDIO (esp_hosted), for P4 revisions 0.x/1.x ONLY. Boots and associates as of IDF v6.1-rc1 with CONFIG_PM_SLEEP_CLK_ICG_ENABLE=n, which sidesteps esp-idf #18759 (sleep_clock_icg_startup_init failing ESP_ERR_NO_MEM and aborting cpu_start)."
+      "description": "Waveshare ESP32-P4-NANO: Ethernet + WiFi via the on-board ESP32-C6 over SDIO (esp_hosted), for P4 revisions 0.x/1.x ONLY. Boots and associates as of IDF v6.1-rc1 with CONFIG_PM_SLEEP_CLK_ICG_ENABLE=n, which sidesteps esp-idf #18759 (sleep_clock_icg_startup_init failing ESP_ERR_NO_MEM and aborting cpu_start)."
     },
     {
       "name": "esp32p4rev3-eth",
@@ -94,7 +102,7 @@
       "chip": "esp32p4",
       "eth_only": true,
       "ships": true,
-      "description": "⚠️ UNTESTED — Waveshare ESP32-P4-NANO, Ethernet only (IP101 PHY), for P4 revisions 3.x (the CURRENT silicon). Identical to esp32p4rev1-eth apart from the chip revision, which the two generations cannot share. Published so someone with a v3 board can test it: both bench boards are v1.3, so this image has never been booted."
+      "description": "⚠️ UNTESTED, Waveshare ESP32-P4-NANO, Ethernet only (IP101 PHY), for P4 revisions 3.x (the CURRENT silicon). Identical to esp32p4rev1-eth apart from the chip revision, which the two generations cannot share. Published so someone with a v3 board can test it: both bench boards are v1.3, so this image has never been booted."
     },
     {
       "name": "esp32p4rev3-eth-wifi",
@@ -102,7 +110,7 @@
       "chip": "esp32p4",
       "eth_only": false,
       "ships": true,
-      "description": "⚠️ UNTESTED — Waveshare ESP32-P4-NANO, Ethernet + WiFi via the on-board ESP32-C6 (esp_hosted), for P4 revisions 3.x (the CURRENT silicon). The rev1 build of this image is bench-verified; this one differs only in the chip revision and has never been booted."
+      "description": "⚠️ UNTESTED, Waveshare ESP32-P4-NANO, Ethernet + WiFi via the on-board ESP32-C6 (esp_hosted), for P4 revisions 3.x (the CURRENT silicon). The rev1 build of this image is bench-verified; this one differs only in the chip revision and has never been booted."
     },
     {
       "name": "esp32s31",
@@ -110,7 +118,7 @@
       "chip": "esp32s31",
       "eth_only": false,
       "ships": true,
-      "description": "Espressif ESP32-S31 Function-CoreBoard-1 — WiFi 6 + 1 Gbps Ethernet LED control (RISC-V, 16 MB flash, PSRAM). The on-chip EMAC drives the board's YT8531 RGMII PHY; Ethernet is preferred when a cable is present, WiFi otherwise. esp32s31 is a preview target on the v6.1 IDF line."
+      "description": "Espressif ESP32-S31 Function-CoreBoard-1: WiFi 6 + 1 Gbps Ethernet LED control (RISC-V, 16 MB flash, PSRAM). The on-chip EMAC drives the board's YT8531 RGMII PHY; Ethernet is preferred when a cable is present, WiFi otherwise. esp32s31 is a preview target on the v6.1 IDF line."
     },
     {
       "name": "teensy41",

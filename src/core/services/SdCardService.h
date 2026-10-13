@@ -38,9 +38,9 @@ namespace mm {
 ///
 /// The card mounts at `/sd`, so the existing File Manager tree already shows it; this module owns only pins, the gauge and format.
 ///
-/// ## Why KiB, not the shared Progress control's bytes
+/// ## Why the gauge counts KiB
 ///
-/// A card's byte count overruns the `uint32_t` the shared Progress control carries, so `platform::sdCardUsed`/`Total` are `uint64_t` and this module narrows to KiB before handing the gauge its numbers.
+/// A card's byte count overruns the `uint32_t` a Progress control carries, so `platform::sdCardUsed`/`Total` are `uint64_t` and this module narrows to KiB, which the gauge declares as its unit.
 ///
 /// Prior art: I2cBusModule's live pin reconfiguration; FileManagerModule's usage gauge.
 class SdCardService : public MoonModule {
@@ -61,13 +61,16 @@ public:
     void tick1s() MM_NONBLOCKING override;
 
     /// The chip a board preset is wired for; Custom is Any, which fits every chip.
-    enum class SdPresetChip : uint8_t { Any, Classic, P4 };
+    enum class SdPresetChip : uint8_t { Any, Classic, P4, Teensy };
     /// What a build can wire, so the filter answers for any chip; a classic is the chip that is none of the others.
-    struct SdChip { bool previews, classic, p4; };
-    static constexpr SdChip kThisChip{platform::previewsSdPresets, !platform::isEsp32P4 && !platform::isEsp32S3 && !platform::isEsp32S31, platform::isEsp32P4};
+    struct SdChip { bool previews, classic, p4, teensy; };
+    static constexpr SdChip kThisChip{platform::previewsSdPresets,
+                                      !platform::isEsp32P4 && !platform::isEsp32S3 && !platform::isEsp32S31 && !platform::isTeensy41,
+                                      platform::isEsp32P4, platform::isTeensy41};
     /// Whether a preset for `chip` belongs on `on`: Custom everywhere, and every preset where the platform previews them.
     static constexpr bool presetFits(SdPresetChip chip, SdChip on = kThisChip) {
-        return chip == SdPresetChip::Any || on.previews || (chip == SdPresetChip::Classic && on.classic) || (chip == SdPresetChip::P4 && on.p4);
+        return chip == SdPresetChip::Any || on.previews || (chip == SdPresetChip::Classic && on.classic) ||
+               (chip == SdPresetChip::P4 && on.p4) || (chip == SdPresetChip::Teensy && on.teensy);
     }
     /// Whether `on` opens on its one fitting preset rather than Custom: @xref{a-board-preset-names-a-soldered-wiring-as-ethernets-does}.
     static constexpr bool opensOnSolePreset(SdChip on = kThisChip) {
@@ -81,7 +84,7 @@ private:
     bool formatting_ = false;         ///< a format runs in the background, which tick1s() waits out
     bool tried_ = false;              ///< whether prepare() has tried triedPins_ since the last release()
     platform::SdPinConfig triedPins_{};   ///< the pins prepare() last tried, mounted or not, so an unrelated prepare() is a no-op
-    uint32_t usedKiB_ = 0;             ///< card usage, in KiB: @xref{why-kib-not-the-shared-progress-controls-bytes}
+    uint32_t usedKiB_ = 0;             ///< card usage, in KiB: @xref{why-the-gauge-counts-kib}
     uint32_t totalKiB_ = 0;            ///< the card's capacity, in KiB, read once on mount
     uint8_t  secondsSinceScan_ = 0;    ///< paces the usage scan
 
@@ -111,6 +114,8 @@ private:
         {"Classic SDMMC (1-bit)", SdPresetChip::Classic, platform::SdBus::Sdmmc, 14, 15, 2, -1, -1, -1, -1, false},
         // SPI mode as the QuinLED Dig-Octa wires it: SCK 14, MOSI 15, MISO 36, CS 16.
         {"Classic SPI", SdPresetChip::Classic, platform::SdBus::Spi, 14, 15, 36, -1, -1, 16, -1, false},
+        // The Teensy 4.1's built-in socket on its SDIO pins, which no other wiring reaches; the platform's isSocketWiring refuses any other set, so the two change together.
+        {"Teensy 4.1 SD socket", SdPresetChip::Teensy, platform::SdBus::Sdmmc, 44, 45, 43, 42, 47, 46, -1, false},
         {"Custom", SdPresetChip::Any, platform::SdBus::Sdmmc, -1, -1, -1, -1, -1, -1, -1, true},
     };
     static constexpr uint8_t kSdPresetCount = sizeof(kSdPresets) / sizeof(kSdPresets[0]);

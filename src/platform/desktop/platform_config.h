@@ -9,6 +9,7 @@
 /// ## The lane counts are not zero
 ///
 /// A zero makes every parallel backend report "not my silicon", so the driver idles and its body never runs off-device: not runnable, not unit-testable, invisible to every check.
+///
 /// Sixteen is the widest real rig, so the host exercises the same lane-splitting arithmetic the hardware does. The bus behind them is a heap buffer, holding real WS2812 patterns in real memory, with only the DMA hand-off absent.
 ///
 /// ## Types exist even where the feature does not
@@ -33,6 +34,8 @@ constexpr bool isEsp32P4 = false;
 constexpr bool isEsp32S3 = false;
 /// Not an S31, so its RGMII PHY compiles out.
 constexpr bool isEsp32S31 = false;
+/// Not a Teensy, so its SD socket preset only shows as a preview.
+constexpr bool isTeensy41 = false;
 
 /// RMT channels the host reports, matching the S3 and P4 count rather than the classic chip's eight.
 constexpr uint8_t rmtTxChannels = 4;

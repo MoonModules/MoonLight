@@ -2,6 +2,10 @@
 
 Forward-looking to-build items for the **core / infrastructure** domain (`src/core/`, `src/platform/`, build, CI, network, persistence, UI). The light-domain counterpart is [backlog-light.md](backlog-light.md); items that genuinely span both are in [backlog-mixed.md](backlog-mixed.md). Index + overview: [README.md](index.md). Completed items are removed.
 
+### An SD card inserted after boot mounts only when its module restarts (2026-10-12)
+
+A mount attempt on an empty slot runs the SDMMC card-init sequence to its timeouts, so `SdCardModule` never retries one on the render thread: a card inserted later mounts when the module is switched off and on, on a pin edit, or at boot. A pull is still noticed within a second through a cheap presence probe. Detecting an insertion without that stall needs a card-detect pin where the slot has one, or a mount attempt off the render thread. The timed retry PR #136 carried was dropped for this reason before its merge.
+
 ### A config written for next boot is overwritten by the next save (2026-10-04)
 
 Network and Ethernet return false from `appliesConfigLive`, so a file written through `POST /api/file` waits on disk for the next boot.
@@ -487,6 +491,26 @@ Both surfaced while bringing up MoonBase Ethernet on the migrated Olimex; neithe
   the control's apply/build-state sweep.
 
 ## ESP32 performance and memory
+
+### Uploads to a Teensy run at about 20 KB/s (2026-10-13)
+
+An upload to the Teensy 4.1 moves about 20 KB/s whether it lands on internal flash or the SD card, against 300 KB/s to a classic ESP32 over Ethernet, and a 100 KB upload to internal flash once failed after 19 s.
+Downloads run at 354 KB/s, so the receive side is the bottleneck: most likely lwIP's TCP receive window in QNEthernet's configuration, which caps the bytes in flight per round trip.
+Measure the window first, then raise it within the Teensy's RAM, which the Layer buffers also need.
+
+### LEDs on the Teensy flash white, then the board resets (2026-10-13)
+
+Five times in one session, the 64-light strip on the Teensy 4.1 bench board went full white, and the board restarted with reset reason `UNKNOWN`, no fault mark and no watchdog: a supply dip, which a full-white strip on USB power explains.
+Each white flash came while the device built a large state document: switching SdCard's board with the old 46 KB full state, and subscribing to Drivers or the whole tree with the new one; none came with the LEDs disconnected.
+A WS2812 strip reads a data line held high as all ones, so suspect the GPIO-DMA output stalling high, or its buffer moving under the DMA when the Layer reduces its buffer under memory pressure ("buffer reduced" was showing).
+Reproduce with a logic analyser on the data pin while subscribing to Drivers, before changing code.
+
+### A Teensy sometimes drops a message the page sends (2026-10-13)
+
+Choosing Custom on SdCardService's board select reached the Teensy once in three tries in one session, and every time in later ones; the same clicks always reach the Dig-Octa.
+A lost write leaves the page showing a choice the device never made, and nothing tells the user.
+Suspects, in order: the `/wsp` preview stream filling the send side while a frame from the page waits, a long render tick delaying the poll that reads the socket, and power dips while the LEDs show full white.
+Reproduce with the preview open and closed and the LEDs dark and lit, logging each frame the device receives, before changing any code.
 
 ### One board-preset helper for Ethernet and the SD card (2026-10-12)
 

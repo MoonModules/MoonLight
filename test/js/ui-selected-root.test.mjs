@@ -1,13 +1,11 @@
 // The root a user was last on survives a refresh, whichever state arrives first.
 //
-// Two payloads race on load: the WebSocket full state and the /api/state fetch. Both set `state` and
-// both trigger the first render, so either can be the one that decides what is on screen. Only the
-// fetch used to consult the saved selection, so when the socket won, the selection stayed null and
-// renderCards fell back to the first root: a refresh with a Layer or the File Manager open landed on
-// Control instead. Intermittent exactly as a race is, and it healed after any nav click, which sets
-// the selection in memory and hides the bug for the rest of the session.
+// The WebSocket full state is what the first render draws, so it is where the saved selection must be consulted:
+// when it was not, renderCards fell back to the first root, and a refresh with a Layer or the File Manager open
+// landed on Control instead. It healed after any nav click, which sets the selection in memory and hides the bug
+// for the rest of the session.
 //
-// So this pins the rule at its source: both arrival paths restore before the render that reads it.
+// So this pins the rule at its source: the arrival path restores before the render that reads it.
 //
 // Run: `node --test test/js`.
 
@@ -70,23 +68,19 @@ test("an empty or absent tree leaves the selection alone rather than guessing", 
     assert.equal(restore({ modules: [], saved: "File Manager" }), null);
 });
 
-test("both state arrivals restore the selection before the render that reads it", () => {
-    // The actual bug: the WebSocket handler set `state` and rendered without consulting the saved
-    // root, so whichever payload won the race decided whether the user's tab survived. Checking the
-    // call sites, because a correct restoreSelectedRoot that only one path calls is the bug itself.
+test("the state arrival restores the selection before the render that reads it", () => {
+    // The actual bug: the WebSocket handler set `state` and rendered without consulting the saved root.
+    // Checking the call site, because a correct restoreSelectedRoot nobody calls is the bug itself.
     const wsAt = src.indexOf("if (!Array.isArray(data.modules)) return;");
     assert.notEqual(wsAt, -1, "the websocket full-state handler moved");
     // To the RENDER, not to the first setTargetFps: the mid-edit early-return above it mentions the
     // same call, and slicing there cut the block off before the lines under test.
-    const wsBlock = src.slice(wsAt, src.indexOf("renderNav()", wsAt));
-    const restoreAt = wsBlock.indexOf("restoreSelectedRoot()");
-    const renderAt = wsBlock.indexOf("renderCards()");
+    const wsBlock = src.slice(wsAt, wsAt + 1200);
+    assert.ok(wsBlock.includes("renderStructure()"), "the websocket path renders through renderStructure()");
+    const fnAt = src.indexOf("function renderStructure");
+    const fn = src.slice(fnAt, src.indexOf("renderNav()", fnAt));
+    const restoreAt = fn.indexOf("restoreSelectedRoot()");
+    const renderAt = fn.indexOf("renderCards()");
     assert.notEqual(restoreAt, -1, "the websocket path must restore the saved root");
     assert.ok(restoreAt < renderAt, "restore must run BEFORE the render that reads the selection");
-
-    // And the fetch path, which is the one that always had it.
-    const httpAt = src.indexOf("const snap = await resp.json();");
-    assert.notEqual(httpAt, -1, "the /api/state fetch moved");
-    const httpBlock = src.slice(httpAt, src.indexOf("renderCards()", httpAt));
-    assert.ok(httpBlock.includes("restoreSelectedRoot()"), "the fetch path must restore too");
 });

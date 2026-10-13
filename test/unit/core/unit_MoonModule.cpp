@@ -2,8 +2,9 @@
 
 #include "doctest.h"
 #include "core/module/MoonModule.h"
+#include "core/util/JsonSink.h"
 
-#include <cstring>   // std::strcpy — the in-place option-rename schemaSignature tests
+#include <cstring>   // std::strcpy, for the in-place option-rename schemaSignature tests
 
 namespace {
 
@@ -218,6 +219,17 @@ TEST_CASE("Progress control binding") {
     // Update value
     used = 2048;
     CHECK(*static_cast<uint32_t*>(ctrl.ptr) == 2048);
+}
+
+// The UI sizes a gauge's label from the unit it declares, so a KiB gauge must say KiB or a 32 GB card reads as 32 MB.
+TEST_CASE("a progress control declares its unit to the UI, bytes unless told otherwise") {
+    mm::MoonModule mod;
+    uint32_t used = 1, usedKiB = 1;
+    mod.controls().addProgress("flash", used, 4096);
+    mod.controls().addProgress("card", usedKiB, 31166976, mm::ProgressUnit::KiB);
+    const auto meta = [&](uint8_t i) { mm::JsonSink sink; mm::writeControlMetadata(sink, mod.controls()[i]); return std::string(sink.data(), sink.size()); };
+    CHECK(meta(0) == ",\"total\":4096,\"unit\":\"B\"");
+    CHECK(meta(1) == ",\"total\":31166976,\"unit\":\"KiB\"");
 }
 
 // enabled defaults to true; setEnabled flips the universal enable gate (Scheduler and parent containers respect it).

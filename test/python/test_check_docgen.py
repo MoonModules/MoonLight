@@ -60,14 +60,29 @@ def test_two_sentences_that_fit_one_line_are_a_split_paragraph():
     assert len([w for _, w in _header_rules("probe.h", split) if "split paragraph" in w]) == 1
 
 
-def test_sentences_too_long_to_share_a_line_keep_their_own():
-    # Joined they would pass the line cap, so each stays on its own line.
+def test_a_paragraph_too_long_for_one_line_is_cut_not_split():
+    # One topic is one paragraph and one line: sentence lines read as separate topics, so past the cap the paragraph is cut, never split.
     long = "word " * 40
     header = ("#pragma once\nnamespace mm {\n"
               f"/// {long.strip()} one.\n"
               f"/// {long.strip()} two.\n"
               "class Probe {\npublic:\n    /// Fine.\n    int a = 0;\n};\n}\n")
-    assert not [w for _, w in _header_rules("probe.h", header) if "split paragraph" in w]
+    splits = [w for _, w in _header_rules("probe.h", header) if "split paragraph" in w]
+    assert len(splits) == 1
+    assert "cut it to fit one line" in splits[0]
+
+
+def test_a_paragraph_over_several_lines_is_one_finding_at_its_start():
+    # Joining pair by pair packed a long paragraph into line-sized chunks; one finding per paragraph names the whole of it.
+    header = ("#pragma once\nnamespace mm {\n"
+              "/// First sentence.\n"
+              "/// Second sentence.\n"
+              "/// Third sentence.\n"
+              "/// Fourth sentence.\n"
+              "class Probe {\npublic:\n    /// Fine.\n    int a = 0;\n};\n}\n")
+    splits = [w for _, w in _header_rules("probe.h", header) if "split paragraph" in w]
+    assert len(splits) == 1
+    assert "lines 3-6" in splits[0] and "join it into one line" in splits[0]
 
 
 def test_a_continuation_that_does_not_start_lowercase_is_still_a_wrap():
@@ -838,6 +853,15 @@ def test_the_headers_are_actually_scanned():
     tree. The count is pinned so an empty scan fails here instead of going quiet."""
     import check_docgen
     assert len(list(check_docgen._headers())) > 10
+
+
+def test_a_header_a_build_generates_is_not_counted():
+    """build_info.h is written by every build and never committed, so counting it moved the
+    ratchet with whatever was built last."""
+    import check_docgen
+    scanned = {p.as_posix() for p in check_docgen._headers()}
+    assert "src/core/util/build_info.h" not in scanned
+    assert "src/core/system/HttpServerModule.h" in scanned
 
 
 def test_the_scan_covers_cpp_as_well_as_headers():

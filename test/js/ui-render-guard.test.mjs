@@ -38,9 +38,25 @@ test("the WebSocket full state does not rebuild the DOM while the user is intera
     assert.ok(i > 0, "WS full-state handler not found, this test needs updating");
     const handler = app.slice(i, i + 1200);
     const guardAt = handler.indexOf("userIsEditing()");
-    const renderAt = handler.indexOf("renderCards()");
+    const renderAt = handler.indexOf("renderStructure()");
     assert.ok(guardAt > 0, "the WS full state must check userIsEditing() before rebuilding");
-    assert.ok(guardAt < renderAt, "the guard must precede renderCards(), or the DOM is already gone");
+    assert.ok(renderAt > 0, "the WS full state renders through renderStructure()");
+    assert.ok(guardAt < renderAt, "the guard must precede the render, or the DOM is already gone");
+    const fn = app.slice(app.indexOf("function renderStructure"));
+    assert.ok(fn.slice(0, fn.indexOf("\n}\n")).includes("renderCards()"), "renderStructure must rebuild the cards");
+});
+
+// A full state deferred mid-edit renders when the edit ends, not on the next full state, which comes only on a schema change or a reconnect:
+// without that, a board preset switched elsewhere shows its pins only after a page refresh.
+test("a full state deferred while editing renders as soon as the edit ends", () => {
+    const i = app.indexOf("if (!Array.isArray(data.modules)) return;");
+    const handler = app.slice(i, i + 1200);
+    assert.ok(handler.includes("structuralRenderPending = true"), "the deferral must remember the render it skipped");
+    const deferred = app.slice(app.indexOf("function renderIfDeferred"));
+    const body = deferred.slice(0, deferred.indexOf("\n}\n"));
+    assert.ok(body.includes("structuralRenderPending") && body.includes("renderStructure()"), "the deferred render checks for one pending");
+    assert.ok(app.includes('addEventListener("focusout", renderIfDeferred)'), "focus leaving a field ends an edit");
+    assert.ok(app.includes('addEventListener("selectionchange"'), "a cleared text selection ends an edit too, and moves no focus");
 });
 
 test("the /api/types arrival keeps its guard too", () => {

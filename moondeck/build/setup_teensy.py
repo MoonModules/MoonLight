@@ -5,7 +5,7 @@
 """Install the Teensy 4.1 SDK at its pinned versions into ~/teensy (TEENSY_SDK overrides).
 
 Four parts, each from its publisher at a pinned version:
-PJRC's Teensy 4 core, LittleFS and SPI, and QNEthernet, from GitHub,
+PJRC's Teensy 4 core, LittleFS, SPI, SD and SdFat, and QNEthernet, from GitHub,
 Arm's GNU toolchain for bare-metal Arm (checksum-verified),
 and teensy_loader_cli, compiled from its tagged source on macOS and Linux.
 
@@ -31,6 +31,9 @@ REPOS = {
     "cores":    ("https://github.com/PaulStoffregen/cores.git", "a664effb008d1ac8d8f00f3f19b47c0d1ea46e3b"),
     "LittleFS": ("https://github.com/PaulStoffregen/LittleFS.git", "8c2badab74a01795931ea14adc85ec6da3db235f"),
     "SPI":      ("https://github.com/PaulStoffregen/SPI.git", "7c83d0726746b652af37319e70cd3932c253ecae"),
+    # The built-in microSD socket: the SD library over PJRC's SdFat, whose SDIO driver runs the 4.1's own slot.
+    "SD":       ("https://github.com/PaulStoffregen/SD.git", "27a6aabceed533ea7169137e625ff35a8de91803"),
+    "SdFat":    ("https://github.com/PaulStoffregen/SdFat.git", "1e8c3320c293e34865dcdae1a9e6eb0b406c6193"),
     # lwIP and the W5500 driver (AGPL-3.0-or-later), at release v0.37.0.
     "QNEthernet": ("https://github.com/ssilverman/QNEthernet.git", "9b6018d81d91a86c6f04fa7814fb8884ed8ef128"),
 }

@@ -9,9 +9,10 @@ CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions/ota_16mb.csv"
 # Flash size override (default is 2MB on ESP32-S3)
 CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
 
-# PSRAM
+# PSRAM, at the 80 MHz the module is rated for rather than IDF's 40 MHz default; the perf scenarios' tick did not move with it on the testbench S3 (2026-10-13), the render path running from internal RAM.
 CONFIG_SPIRAM=y
 CONFIG_SPIRAM_MODE_OCT=y
+CONFIG_SPIRAM_SPEED_80M=y
 
 # MoonLive native codegen needs an executable heap (allocExec → MALLOC_CAP_EXEC IRAM).
 # MALLOC_CAP_EXEC is gated behind CONFIG_HEAP_HAS_EXEC_HEAP, which IDF disables whenever
@@ -26,3 +27,5 @@ CONFIG_HEAP_HAS_EXEC_HEAP=y
 # A MIDI desk on the board's own USB port: the MIDI service's USB source.
 CONFIG_MM_USB_MIDI_HOST=y
 
+# Quad I/O flash reads: the module's flash takes four data lines, and code fetched from flash over two (DIO, the IDF default) cost the S3 16% of its tick, measured on the testbench S3 (2026-10-13).
+CONFIG_ESPTOOLPY_FLASHMODE_QIO=y

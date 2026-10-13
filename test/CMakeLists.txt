@@ -53,6 +53,7 @@ add_executable(mm_tests
     unit/core/unit_HttpServerModule_apply.cpp
     unit/core/unit_HttpServerModule_connections.cpp
     unit/core/unit_HttpServerModule_sdcard.cpp
+    unit/core/unit_HttpServerModule_subscribe.cpp
     unit/core/unit_StateDocument.cpp
     unit/core/unit_ImprovFrame.cpp
     unit/core/unit_ImprovOpReassembler.cpp

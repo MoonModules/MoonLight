@@ -61,6 +61,7 @@
 #include "platform/platform.h"
 #include "ui/ui_embedded.h"
 
+#include <algorithm>   // std::min: a stream's span within its budget
 #include <climits>
 #include <cstdarg>
 #include <cstdio>
@@ -106,13 +107,9 @@ void HttpServerModule::onValuesChanged(MoonModule* mod) {
 }
 
 void HttpServerModule::release() {
-    // Drop the in-flight sends before the clients go: the preview frame borrows its buffer, the state frame owns its JSON body.
+    // Drop the in-flight sends before the clients go: the preview frame borrows its buffer, a state stream owns its fragment.
     cancelBufferedSend();
-    if (stateSend_.active) {
-        platform::free(const_cast<uint8_t*>(stateSend_.body));
-        stateSend_.body = nullptr;
-        stateSend_.active = false;
-    }
+    for (auto& st : streams_) endStream(st);
     for (auto& ws : wsClients_) ws.close();
     for (auto& c : parked_) c.close();
     releaseSdTransfers();
@@ -135,15 +132,15 @@ void HttpServerModule::tick20ms() MM_NONBLOCKING {
     // Drain the in-flight preview frame on the 20 ms transport cadence, before accept so a connection burst cannot starve it; sockets stay off the render tick (architecture.md § Parallelism).
     drainPreviewSend();
     drainStateSend();
+    // Inbound WS frames before the push, so the subscription a page sends on open shapes its first document: control writes, subscriptions, and the WLED app's {on,bri}.
+    pollUplinks();
     // A pending full resync is served here, not on the 1 s tick, so a connect reaches its first preview within tens of ms; the flag gates the expensive serialize.
-    if (fullResyncPending_ || soonCount_) {
-        const SecretsHidden hide(anyWsClientOnAccessPoint());   // one push serves every client
-        if (fullResyncPending_) pushStateToWebSockets();
+    if (fullResyncPending_ || anyClientResync() || soonCount_) {
+        const SecretsHidden hide(anyWsClientOnAccessPoint());   // one patch serves every client; a stream hides per client
+        if (fullResyncPending_ || anyClientResync()) pushStateToWebSockets();
         // A module that asked goes out now rather than on the next second.
         if (soonCount_) pushSoonPatch();
     }
-    // Inbound WS frames: the WLED app sets on/off and brightness with an {on,bri} text frame over /ws.
-    pollWledStateFromWebSockets();
     serveConnections();
     if constexpr (platform::hasSdCard) driveSdTransfers();   // sdTransfers_ has zero slots otherwise, so there is nothing to drive
 }
@@ -1230,42 +1227,82 @@ void HttpServerModule::serveState(platform::TcpConnection& conn) {
 }
 
 void HttpServerModule::buildStateJson(JsonSink& sink) {
-    sink.append("{\"modules\":[");
-
-    if (scheduler_) {
-        bool first = true;
-        for (uint8_t m = 0; m < scheduler_->moduleCount(); m++) {
-            auto* mod = scheduler_->module(m);
-            // Skip modules whose appearsInUi() is false (HttpServerModule, FilesystemModule): the one mechanism for "not a card in /api/state".
-            if (!mod || !mod->appearsInUi()) continue;
-            if (!first) sink.append(",");
-            first = false;
-            writeModuleJson(sink, mod);
-        }
-    }
-
-    sink.append("]}");
+    TreeCursor c;
+    writeTreeFragment(sink, c, 0);
 }
 
 // The diff-on-the-wire cache keeps an 8-byte FNV-1a {path,value} hash per leaf, not the value; a collision skips one update at worst.
 
-// The diff-on-the-wire core: visit every UI leaf the periodic push sends, in buildStateJson order, as fn(pathHash, valueHash, path, valueSink); names are unique tree-wide, so "<module>/<name>" is stable.
+bool HttpServerModule::Subscription::names_(const char* s) const {
+    if (!s || !s[0]) return false;
+    const uint32_t h = fnv1a(s, std::strlen(s));
+    for (uint8_t i = 0; i < count; i++)
+        if (names[i] == h) return true;
+    return false;
+}
+
+bool HttpServerModule::Subscription::covers(const MoonModule* mod) const {
+    if (all) return true;
+    for (const MoonModule* m = mod; m && count; m = m->parent())
+        if (names_(m->name()) || names_(m->typeName())) return true;
+    return false;
+}
+
+bool HttpServerModule::Subscription::parse(const char* body) {
+    json::JsonDoc* doc = nullptr;
+    const json::JsonNode* arr = json::parseListArray(body, "subscribe", doc);
+    if (!arr) return false;
+    *this = Subscription{};
+    received = true;
+    const int n = json::arraySize(*doc, arr);
+    for (int i = 0; i < n; i++) {
+        const json::JsonNode* el = json::element(*doc, arr, i);
+        if (!el || el->type != json::JsonType::String || !el->str || !el->str[0]) continue;
+        if (std::strcmp(el->str, "*") == 0) all = true;
+        else if (count < kMaxModules) names[count++] = fnv1a(el->str, std::strlen(el->str));
+    }
+    return true;
+}
+
+bool HttpServerModule::Subscription::operator==(const Subscription& o) const {
+    if (received != o.received || all != o.all || count != o.count) return false;
+    for (uint8_t i = 0; i < count; i++)
+        if (names[i] != o.names[i]) return false;
+    return true;
+}
+
+bool HttpServerModule::anyClientCovers(const MoonModule* mod) const {
+    // Every slot's subscription, live or not: the uplink poll clears a slot's subscription once its client is gone.
+    for (const auto& sub : subs_)
+        if (sub.covers(mod)) return true;
+    return false;
+}
+
+// The diff-on-the-wire core: visit every UI leaf a client subscribes to, in buildStateJson order, as fn(module, pathHash, valueHash, path, valueSink); names are unique tree-wide, so "<module>/<name>" is stable.
 template <class Fn>
-void HttpServerModule::forEachStateLeaf(Fn&& fn) {
+void HttpServerModule::forEachStateLeaf(Fn&& fn, bool everything) {
     if (!scheduler_) return;
     // `fn`, not std::forward: forwarding inside a loop moves the callable on the first module, leaving later modules a moved-from object.
     for (uint8_t m = 0; m < scheduler_->moduleCount(); m++)
         if (auto* mod = scheduler_->module(m))
-            if (mod->appearsInUi()) visitModuleLeaves(mod, fn);
+            if (mod->appearsInUi()) visitModuleLeaves(mod, fn, everything);
 }
 
 template <class Fn>
-void HttpServerModule::visitModuleLeaves(MoonModule* mod, Fn&& fn) {
+void HttpServerModule::visitModuleLeaves(MoonModule* mod, Fn&& fn, bool everything) {
+    if (everything || anyClientCovers(mod)) visitOwnLeaves(mod, fn);
+    // A module nobody views can still hold one somebody does, the preview inside Drivers.
+    for (uint8_t i = 0; i < mod->childCount(); i++)
+        if (auto* ch = mod->child(i)) visitModuleLeaves(ch, fn, everything);
+}
+
+template <class Fn>
+void HttpServerModule::visitOwnLeaves(MoonModule* mod, Fn&& fn) {
     char path[80];
     // Header telemetry the UI shows per card, `@`-prefixed so it cannot collide with a control name; only fields that change per tick (timing, memory) ride the patch.
     auto leaf = [&](const char* fieldPath, const char* valueJson) {
         JsonSink vs; vs.append(valueJson);
-        fn(fnv1a(fieldPath, std::strlen(fieldPath)), fnv1a(vs.data(), vs.size()), fieldPath, vs);
+        fn(mod, fnv1a(fieldPath, std::strlen(fieldPath)), fnv1a(vs.data(), vs.size()), fieldPath, vs);
     };
     char num[24];
     std::snprintf(path, sizeof(path), "%s/@tickTimeUs", mod->name());
@@ -1295,11 +1332,8 @@ void HttpServerModule::visitModuleLeaves(MoonModule* mod, Fn&& fn) {
         JsonSink vs;
         if (c.type == ControlType::Password) writeObfuscatedPassword(vs, static_cast<const char*>(c.ptr));   // as the full state shows it
         else writeControlValue(vs, c);
-        fn(fnv1a(path, std::strlen(path)), fnv1a(vs.data(), vs.size()), path, vs);
+        fn(mod, fnv1a(path, std::strlen(path)), fnv1a(vs.data(), vs.size()), path, vs);
     }
-    // `fn`, not std::forward, for the same reason as the caller: forwarding in a loop moves the callable into the first child.
-    for (uint8_t i = 0; i < mod->childCount(); i++)
-        if (auto* ch = mod->child(i)) visitModuleLeaves(ch, fn);
 }
 
 // Look up a leaf's cached value-hash by path-hash, or nullptr; a linear scan over the flat cache is a handful of int compares for ~92 leaves.
@@ -1309,71 +1343,118 @@ HttpServerModule::LeafHash* HttpServerModule::findLeaf(uint32_t pathHash) {
     return nullptr;
 }
 
-void HttpServerModule::baselineLeafHashes() {
-    // Count the leaves, size the buffer exactly, then fill from scratch (resize does not preserve); off the hot path, on a full-state resync only.
-    uint16_t n = 0;
-    forEachStateLeaf([&](uint32_t, uint32_t, const char*, JsonSink&) { n++; });
+void HttpServerModule::baselineLeafHashes(bool everything) {
+    // Count the leaves and the modules, size the hashes and the patch slices exactly, then fill from scratch, since resize does not preserve; this runs on a resync, not each second.
+    uint16_t n = 0, modules = 0;
+    const MoonModule* last = nullptr;
+    forEachStateLeaf([&](const MoonModule* mod, uint32_t, uint32_t, const char*, JsonSink&) {
+        n++;
+        if (mod != last) { modules++; last = mod; }
+    }, everything);
     leafHashes_.resize(n);
     leafHashCount_ = 0;
-    forEachStateLeaf([&](uint32_t ph, uint32_t vh, const char*, JsonSink&) {
+    forEachStateLeaf([&](const MoonModule*, uint32_t ph, uint32_t vh, const char*, JsonSink&) {
         if (leafHashCount_ < leafHashes_.count()) leafHashes_[leafHashCount_++] = {ph, vh};
-    });
+    }, everything);
+    if (patchSlices_.count() < modules) patchSlices_.resize(modules);
 }
 
 uint16_t HttpServerModule::buildStatePatch(JsonSink& sink) {
-    return buildPatch(sink, [&](auto&& fn) { forEachStateLeaf(fn); });
+    JsonSink entries;
+    uint16_t slices = 0;
+    collectPatch(entries, slices, [&](auto&& fn) { forEachStateLeaf(fn, true); });
+    return writeClientPatch(sink, entries, slices, nullptr);
+}
+
+void HttpServerModule::buildClientPatchesForTest(JsonSink* outs, int count) {
+    JsonSink entries;
+    uint16_t slices = 0;
+    collectPatch(entries, slices, [&](auto&& fn) { forEachStateLeaf(fn); });
+    for (int i = 0; i < count && i < MAX_WS_CLIENTS; i++) writeClientPatch(outs[i], entries, slices, &subs_[i]);
+}
+
+template <class Fn>
+void HttpServerModule::forEachSoonLeaf(Fn&& fn, bool everything) {
+    for (uint8_t i = 0; i < soonCount_; i++)
+        // No appearsInUi test: the interface drops a patch for a module it never saw.
+        if (MoonModule* mod = scheduler_ ? scheduler_->firstByName(soon_[i]) : nullptr) visitModuleLeaves(mod, fn, everything);
+    soonCount_ = 0;
 }
 
 uint16_t HttpServerModule::buildSoonPatch(JsonSink& sink) {
-    const uint16_t changed = buildPatch(sink, [&](auto&& fn) {
-        for (uint8_t i = 0; i < soonCount_; i++)
-            // No appearsInUi test: the interface drops a patch for a module it never saw.
-            if (MoonModule* mod = scheduler_ ? scheduler_->firstByName(soon_[i]) : nullptr) visitModuleLeaves(mod, fn);
-    });
-    soonCount_ = 0;
-    return changed;
+    JsonSink entries;
+    uint16_t slices = 0;
+    collectPatch(entries, slices, [&](auto&& fn) { forEachSoonLeaf(fn, true); });
+    return writeClientPatch(sink, entries, slices, nullptr);
 }
 
 void HttpServerModule::pushSoonPatch() {
-    // A small frame written into a full state mid-drain would land inside that message, so it waits.
-    if (fullResyncPending_ || stateSend_.active) return;
+    // A small frame written into a full state mid-stream would land inside that message, so it waits.
+    if (fullResyncPending_ || anyClientResync() || anyStreamActive()) return;
     const uint32_t now = platform::millis();
     if (now - soonSentMs_ < kSoonMs) return;
     soonSentMs_ = now;
-    JsonSink sink;
     // The leaves' hashes update as they go, so the second's patch does not send them again.
-    if (buildSoonPatch(sink) > 0) sendPatch(sink);
-}
-
-void HttpServerModule::sendPatch(const JsonSink& sink) {
-    for (auto& ws : wsClients_) {
-        if (!ws.valid()) continue;
-        if (!sendWsTextFrame(ws, sink.data(), static_cast<int>(sink.size()))) ws.close();
-    }
+    sendPatches([&](auto&& fn) { forEachSoonLeaf(fn); });
 }
 
 template <class Walk>
-uint16_t HttpServerModule::buildPatch(JsonSink& sink, Walk&& walk) {
-    sink.append("{\"patch\":[");
+uint16_t HttpServerModule::collectPatch(JsonSink& entries, uint16_t& sliceCount, Walk&& walk) {
+    sliceCount = 0;
     uint16_t changed = 0;
-    walk([&](uint32_t ph, uint32_t vh, const char* path, JsonSink& vs) {
+    walk([&](const MoonModule* mod, uint32_t ph, uint32_t vh, const char* path, JsonSink& vs) {
         LeafHash* h = findLeaf(ph);
         if (h && h->value == vh) return;              // unchanged: the common case, emit nothing
+        const bool opens = !sliceCount || patchSlices_[sliceCount - 1].mod != mod;
+        // No room for the module's slice leaves the hash as it was, so the change goes out once there is.
+        if (opens && sliceCount >= patchSlices_.count()) return;
         if (h) h->value = vh;                          // known leaf, value changed → update cache
         // A leaf missing from the baseline cannot happen, since every structural mutation re-baselines first; emit it without growing the cache, because ScratchBuffer::resize is non-preserving and would discard every hash.
-        if (changed++) sink.append(",");
-        sink.append("{\"path\":\"");
-        sink.append(path);
-        sink.append("\",\"value\":");
-        sink.append(vs.data());                        // the already-serialized value
-        sink.append("}");
+        if (opens) patchSlices_[sliceCount++] = {mod, static_cast<uint32_t>(entries.size()), 0, 0};
+        entries.append(",{\"path\":\"");
+        entries.append(path);
+        entries.append("\",\"value\":");
+        entries.append(vs.data(), vs.size());          // the already-serialized value
+        entries.append("}");
+        PatchSlice& s = patchSlices_[sliceCount - 1];
+        s.end = static_cast<uint32_t>(entries.size());
+        s.count++;
+        changed++;
     });
-    sink.append("]}");
     return changed;
 }
 
-void HttpServerModule::writeModuleJson(JsonSink& sink, MoonModule* mod) {
-    // Per-module header: name, role, enabled, tickTimeUs (fps/ms display), classSize (static C++ object bytes) + dynamicBytes (heap), controls
+uint16_t HttpServerModule::writeClientPatch(JsonSink& out, const JsonSink& entries, uint16_t sliceCount, const Subscription* sub) {
+    out.append("{\"patch\":[");
+    uint16_t n = 0;
+    for (uint16_t i = 0; i < sliceCount; i++) {
+        const PatchSlice& s = patchSlices_[i];
+        if (sub && !sub->covers(s.mod)) continue;
+        // Every entry leads with its comma, which the first one of the frame drops.
+        const size_t skip = n == 0 ? 1 : 0;
+        out.append(entries.data() + s.begin + skip, s.end - s.begin - skip);
+        n += s.count;
+    }
+    out.append("]}");
+    return n;
+}
+
+template <class Walk>
+void HttpServerModule::sendPatches(Walk&& walk, bool skipResyncing) {
+    JsonSink entries;
+    uint16_t slices = 0;
+    if (collectPatch(entries, slices, walk) == 0) return;
+    for (int i = 0; i < MAX_WS_CLIENTS; i++) {
+        auto& ws = wsClients_[i];
+        if (!ws.valid() || (skipResyncing && resyncClient_[i])) continue;
+        JsonSink out;
+        if (writeClientPatch(out, entries, slices, &subs_[i]) == 0) continue;
+        if (!sendWsTextFrame(ws, out.data(), static_cast<int>(out.size()))) ws.close();
+    }
+}
+
+void HttpServerModule::writeModuleHeader(JsonSink& sink, MoonModule* mod) {
+    // Per-module header: name, role, enabled, tickTimeUs (fps/ms display), classSize (static C++ object bytes) + dynamicBytes (heap)
     const char* roleStr = roleName(mod->role());
     const char* type = mod->typeName();
     if (!type) type = "";
@@ -1400,22 +1481,93 @@ void HttpServerModule::writeModuleJson(JsonSink& sink, MoonModule* mod) {
     writeStatus(sink, mod);
     // userEditable is omitted when true (the UI treats absent as editable); modules that opt out, like PreviewDriver, hide their delete/replace affordance.
     if (!mod->userEditable()) sink.append(",\"userEditable\":false");
-    sink.append(",\"controls\":[");
-    writeControls(sink, mod);
-    sink.append("]");
+}
 
-    // Children
-    uint8_t cc = mod->childCount();
-    if (cc > 0) {
-        sink.append(",\"children\":[");
-        for (uint8_t i = 0; i < cc; i++) {
-            if (i > 0) sink.append(",");
-            writeModuleJson(sink, mod->child(i));
+void HttpServerModule::writeModuleJson(JsonSink& sink, MoonModule* mod) {
+    TreeCursor c;
+    c.single = mod;
+    writeTreeFragment(sink, c, 0);
+}
+
+MoonModule* HttpServerModule::moduleAt(const TreeCursor& c) const {
+    MoonModule* mod = c.single ? (c.idx[0] == 0 ? c.single : nullptr)
+                               : (scheduler_ ? scheduler_->module(c.idx[0]) : nullptr);
+    for (uint8_t l = 1; mod && l < c.depth; l++)
+        mod = c.idx[l] < mod->childCount() ? mod->child(c.idx[l]) : nullptr;
+    return mod;
+}
+
+bool HttpServerModule::writeTreeFragment(JsonSink& sink, TreeCursor& c, size_t target) {
+    if (c.done) return true;
+    if (c.depth == 0) {
+        if (!c.single) sink.append("{\"modules\":[");
+        c.depth = 1;
+        c.idx[0] = 0;
+        c.phase = TreeCursor::kHeader;
+    }
+    // The path is resolved again at every step rather than held as pointers, so a tree changed between fragments still ends in valid JSON.
+    while (target == 0 || sink.size() < target) {
+        if (MoonModule* mod = moduleAt(c)) stepInto(sink, c, mod);
+        else if (stepPast(sink, c)) return true;
+    }
+    return false;
+}
+
+bool HttpServerModule::stepPast(JsonSink& sink, TreeCursor& c) {
+    const uint8_t level = c.depth - 1;
+    if (c.phase != TreeCursor::kHeader) {
+        // The module this level was writing went mid-object: close what it opened, as if it ended there, and go on with its next sibling.
+        sink.append(c.phase == TreeCursor::kControls ? "]}" : "}");
+        c.idx[level]++;
+        c.phase = TreeCursor::kHeader;
+        return false;
+    }
+    if (level > 0) {
+        sink.append("]}");   // the parent's children and the parent itself
+        c.depth--;
+        c.idx[c.depth - 1]++;
+        return false;
+    }
+    if (!c.single) {
+        sink.append("]");
+        // The id of the request the streamed state answers, so the page knows its view arrived rather than an earlier one.
+        if (c.answers) sink.appendf(",\"resync\":%lu", static_cast<unsigned long>(c.answers));
+        sink.append("}");
+    }
+    c.done = true;
+    return true;
+}
+
+void HttpServerModule::stepInto(JsonSink& sink, TreeCursor& c, MoonModule* mod) {
+    const uint8_t level = c.depth - 1;
+    if (c.phase == TreeCursor::kHeader) {
+        // HttpServerModule and FilesystemModule are no cards: appearsInUi is the one mechanism for that.
+        if (level == 0 && !c.single && !mod->appearsInUi()) { c.idx[0]++; return; }
+        if (level == 0 ? c.wroteRoot : c.idx[level] > 0) sink.append(",");
+        if (level == 0) c.wroteRoot = true;
+        writeModuleHeader(sink, mod);
+        // An outline leaves the controls out: the module's name and shape are what a client viewing elsewhere reads.
+        const bool full = !c.sub || c.sub->covers(mod);
+        if (full) sink.append(",\"controls\":[");
+        c.ctrl = 0;
+        c.phase = full ? TreeCursor::kControls : TreeCursor::kChildren;
+    } else if (c.phase == TreeCursor::kControls) {
+        if (c.ctrl < mod->controls().count()) {
+            if (c.ctrl > 0) sink.append(",");
+            writeControl(sink, mod->controls()[c.ctrl++]);
+            return;
         }
         sink.append("]");
+        c.phase = TreeCursor::kChildren;
+    } else if (mod->childCount() > 0 && c.depth < TreeCursor::kMaxDepth) {
+        sink.append(",\"children\":[");
+        c.idx[c.depth++] = 0;
+        c.phase = TreeCursor::kHeader;
+    } else {
+        sink.append("}");
+        c.idx[level]++;
+        c.phase = TreeCursor::kHeader;
     }
-
-    sink.append("}");
 }
 
 void HttpServerModule::writeStatus(JsonSink& sink, MoonModule* mod) {
@@ -1429,48 +1581,43 @@ void HttpServerModule::writeStatus(JsonSink& sink, MoonModule* mod) {
     sink.appendf(",\"severity\":\"%s\"", sevStr[static_cast<int>(mod->severity())]);
 }
 
-void HttpServerModule::writeControls(JsonSink& sink, MoonModule* mod) {
-    auto& ctrls = mod->controls();
-    for (uint8_t i = 0; i < ctrls.count(); i++) {
-        if (i > 0) sink.append(",");
-        auto& c = ctrls[i];
-        // Common wrapper for every control; per-type VALUE + EXTRAS live in Control.cpp, but Password is handled here since its API form is XOR-obfuscated + base64 and writeControlValue stays sink-neutral.
-        sink.appendf("{\"name\":\"%s\",\"type\":\"%s\",\"value\":",
-                     c.name, controlTypeName(c.type));
-        if (c.type == ControlType::Password) {
-            // Not readable at a glance in `curl /api/state`, and the UI's hold-to-peek reverses it.
-            writeObfuscatedPassword(sink, static_cast<char*>(c.ptr));
-        } else {
-            writeControlValue(sink, c);
-        }
-        writeControlMetadata(sink, c);
-        // Emit optional flags only when set (common case is false; omit to save bytes).
-        if (c.readonly) sink.append(",\"readonly\":true");
-        if (c.minMode) sink.appendf(",\"minMode\":%u", static_cast<unsigned>(c.minMode));   // the mode the UI needs before it shows this
-        if (c.numberField) sink.append(",\"numberField\":true");   // render a plain number input, not a slider
-        if (c.hex) sink.append(",\"hex\":true");   // that number input reads and writes hexadecimal
-        if (c.switchRow) sink.append(",\"switchRow\":true");
-        if (c.displayStrip) sink.append(",\"displayStrip\":true");
-        // The target rides with all three surface kinds, since a switch drives something too (switch1 is the global on/off) and its popup should say so.
-        if (c.fader || c.encoder || c.switchRow) {
-            if (c.fader)        sink.append(",\"fader\":true");
-            else if (c.encoder) sink.append(",\"encoder\":true");
-            if (c.surfaceTarget) { sink.append(",\"target\":"); sink.writeJsonString(c.surfaceTarget); }
-        }
-        // An editable List shows add/delete/reorder and inline row editors; its rows carry a stable id and field descriptors.
-        if (c.type == ControlType::List) {
-            const auto* ls = static_cast<const ListSource*>(c.ptr);
-            if (ls && ls->isEditableList()) sink.append(",\"editable\":true");
-            if (ls && ls->listRowsFixed()) sink.append(",\"fixedRows\":true");
-            if (ls && ls->listAsPads()) {
-                sink.append(",\"pads\":true");
-                const uint8_t gc = ls->listGridCols(), gr = ls->listGridRows();
-                if (gc && gr) sink.appendf(",\"gridCols\":%u,\"gridRows\":%u",
-                                           static_cast<unsigned>(gc), static_cast<unsigned>(gr));
-            }
-        }
-        sink.append(c.hidden ? ",\"hidden\":true}" : "}");
+void HttpServerModule::writeControl(JsonSink& sink, const ControlDescriptor& c) {
+    // Common wrapper for every control; per-type VALUE + EXTRAS live in Control.cpp, but Password is handled here since its API form is XOR-obfuscated + base64 and writeControlValue stays sink-neutral.
+    sink.appendf("{\"name\":\"%s\",\"type\":\"%s\",\"value\":",
+                 c.name, controlTypeName(c.type));
+    if (c.type == ControlType::Password) {
+        // Not readable at a glance in `curl /api/state`, and the UI's hold-to-peek reverses it.
+        writeObfuscatedPassword(sink, static_cast<char*>(c.ptr));
+    } else {
+        writeControlValue(sink, c);
     }
+    writeControlMetadata(sink, c);
+    // Emit optional flags only when set (common case is false; omit to save bytes).
+    if (c.readonly) sink.append(",\"readonly\":true");
+    if (c.minMode) sink.appendf(",\"minMode\":%u", static_cast<unsigned>(c.minMode));   // the mode the UI needs before it shows this
+    if (c.numberField) sink.append(",\"numberField\":true");   // render a plain number input, not a slider
+    if (c.hex) sink.append(",\"hex\":true");   // that number input reads and writes hexadecimal
+    if (c.switchRow) sink.append(",\"switchRow\":true");
+    if (c.displayStrip) sink.append(",\"displayStrip\":true");
+    // The target rides with all three surface kinds, since a switch drives something too (switch1 is the global on/off) and its popup should say so.
+    if (c.fader || c.encoder || c.switchRow) {
+        if (c.fader)        sink.append(",\"fader\":true");
+        else if (c.encoder) sink.append(",\"encoder\":true");
+        if (c.surfaceTarget) { sink.append(",\"target\":"); sink.writeJsonString(c.surfaceTarget); }
+    }
+    // An editable List shows add/delete/reorder and inline row editors; its rows carry a stable id and field descriptors.
+    if (c.type == ControlType::List) {
+        const auto* ls = static_cast<const ListSource*>(c.ptr);
+        if (ls && ls->isEditableList()) sink.append(",\"editable\":true");
+        if (ls && ls->listRowsFixed()) sink.append(",\"fixedRows\":true");
+        if (ls && ls->listAsPads()) {
+            sink.append(",\"pads\":true");
+            const uint8_t gc = ls->listGridCols(), gr = ls->listGridRows();
+            if (gc && gr) sink.appendf(",\"gridCols\":%u,\"gridRows\":%u",
+                                       static_cast<unsigned>(gc), static_cast<unsigned>(gr));
+        }
+    }
+    sink.append(c.hidden ? ",\"hidden\":true}" : "}");
 }
 
 // Apply-core: set one control's value from the same `{"value":8}` body the HTTP handler gets; transport-free, returning an OpResult the caller maps to its own reporting.
@@ -2526,10 +2673,11 @@ void HttpServerModule::handleWebSocketUpgrade(platform::TcpConnection& conn, con
         if (!wsClients_[i].valid()) {
             wsOnAccessPoint_[i] = onAccessPoint(conn);   // read once: a socket's peer does not change
             wsClients_[i] = std::move(conn);
-            // A full state mid-drain is what this newcomer needs too: its cursor starts at 0, so it receives the whole in-flight message with no splice or cancel.
-            stateSend_.sent[i] = 0;
-            // A new client needs the full state, not a patch against a baseline it never received; the global cache resyncs everyone, which is cheap since connects are rare.
-            requestFullResync();
+            // A fresh slot: no stream, and no state until the client subscribes, which requests the resync its first document answers.
+            endStream(streams_[i]);
+            subs_[i] = Subscription{};
+            resyncClient_[i] = false;
+            resyncId_[i] = 0;
             return;
         }
     }
@@ -2544,39 +2692,45 @@ void HttpServerModule::pushStateToWebSockets() {
     }
     if (!hasClients) return;
 
-    if (fullResyncPending_) {
-        // Full state (~30 KB) drains in chunks on tick20ms, not a blocking write; a prior one finishes first, and fullResyncPending_ stays true until a start is accepted.
-        if (stateSend_.active) return;
-        JsonSink sink;
-        buildStateJson(sink);
-        // A sink out of heap holds a truncated document; send it anyway and clear the resync flag, since returning early freezes the whole UI where a partial tree keeps updating.
-        if (sink.overflowed()) {
-            setStatus("state too large for free memory: some modules may not show", Severity::Warning);
-        }
-        const size_t len = sink.size();
-        char* owned = sink.detach();   // move ownership to the sender (frees on drain-complete)
-        if (owned && startBufferedTextSend(owned, len)) {
-            baselineLeafHashes();       // the full state IS the new baseline: next tick patches from here
-            fullResyncPending_ = false;   // cleared only on a confirmed accept; a failed start retries
-        }
-    } else {
-        // PATCH, the steady state: only changed leaves (~1-2 KB) go out inline; it waits while a full state drains, since a small frame would interleave inside that WS message.
-        if (stateSend_.active) return;
-        JsonSink sink;
-        if (buildStatePatch(sink) > 0) sendPatch(sink);
-        // changed == 0 → nothing to send this second (an idle device); the common quiet case.
+    // Nothing may land inside a streamed document, so every push waits while one is open; a resync requested meanwhile starts once they end.
+    if (anyStreamActive()) return;
+    if (fullResyncPending_ || anyClientResync()) {
+        // A resync of some clients first patches the rest up to now, since the baseline taken next forgets what they have not been sent.
+        if (!fullResyncPending_) sendPatches([&](auto&& fn) { forEachStateLeaf(fn); }, /*skipResyncing=*/true);
+        baselineLeafHashes();       // the full state IS the new baseline: next tick patches from here
+        startStreams();
+        return;   // the WLED frame waits for the streams too
     }
+    // PATCH, the steady state: only changed leaves go out inline, each client its share; an idle device sends nothing.
+    sendPatches([&](auto&& fn) { forEachStateLeaf(fn); });
 
     // Push a WLED-shaped {state, info} frame for the WLED app on this /ws; each consumer ignores the other's frame (the UI keys on `modules`, the app on `state`/`info`).
     pushWledStateToWebSockets();
 }
 
+// Each client due a document gets a cursor that streams it on tick20ms, a fragment at a time, so no board needs the whole tree in one block.
+void HttpServerModule::startStreams() {
+    for (int i = 0; i < MAX_WS_CLIENTS; i++) {
+        const bool wanted = fullResyncPending_ || resyncClient_[i];
+        resyncClient_[i] = false;
+        if (!wanted || !wsClients_[i].valid() || !subs_[i].received) continue;   // the WLED app never subscribes, and reads its own frame
+        StateStream& s = streams_[i];
+        endStream(s);
+        s.sub = subs_[i];
+        s.cursor.sub = &s.sub;
+        s.cursor.answers = resyncId_[i];
+        resyncId_[i] = 0;
+        s.active = true;
+    }
+    fullResyncPending_ = false;
+}
+
 // Build and push the WLED {state, info} object to every WS client. Shares the same body writers as /json/si.
 void HttpServerModule::pushWledStateToWebSockets() {
-    if (stateSend_.active) return;   // never interleave with the chunked full-state drain
+    if (anyStreamActive()) return;   // never interleave with a streamed full state
     bool hasClients = false;
-    for (auto& ws : wsClients_) if (ws.valid()) { hasClients = true; break; }
-    if (!hasClients) return;
+    for (int i = 0; i < MAX_WS_CLIENTS; i++) if (wsClients_[i].valid() && !subs_[i].received) { hasClients = true; break; }
+    if (!hasClients) return;   // only the web interface is connected: the frame is built for nobody
 
     const char* name; uint8_t mac[6]; uint8_t ip[4];
     resolveWledIdentity(name, mac, ip);
@@ -2589,67 +2743,113 @@ void HttpServerModule::pushWledStateToWebSockets() {
     writeWledInfoBody(sink, name, mac);
     sink.appendf("}");
 
-    for (auto& ws : wsClients_) {
-        if (!ws.valid()) continue;
+    for (int i = 0; i < MAX_WS_CLIENTS; i++) {
+        auto& ws = wsClients_[i];
+        // A client that subscribed is the web interface, which reads module state rather than this frame.
+        if (!ws.valid() || subs_[i].received) continue;
         if (!sendWsTextFrame(ws, sink.data(), static_cast<int>(sink.size()))) ws.close();
     }
 }
 
 // Read one frame per client and apply a WLED state-set ({on}/{bri}) to Drivers; client frames are masked (RFC 6455 §5.3), so unmask in place and skip non-text frames.
-void HttpServerModule::pollWledStateFromWebSockets() {
-    // Reap cleanly closed preview clients, whose slot otherwise counts against the cap until a send fails: read() == 0 is a peer FIN; no lease is needed on this core.
-    for (int i = 0; i < MAX_PREVIEW_CLIENTS; i++) {
-        auto& pc = previewClients_[i];
-        if (!pc.valid()) continue;
-        uint8_t buf[64];
-        const int n = pc.read(buf, sizeof(buf));
-        if (n == 0) {                                  // clean close (peer FIN): free the slot NOW
-            pc.close();
-            if (clientSink_) clientSink_->onClientGone(i);
-            continue;
-        }
-        if (n > 0 && clientSink_) {
-            // Walk the read, since TCP coalesces several small requests into one buffer; each complete frame's unmasked payload goes to the sink in order.
-            for (int off = 0; off < n; ) {
-                uint8_t payload[8];
-                int used = 0;
-                const int len = parsePreviewUplink(buf + off, n - off, payload, &used);
-                if (used <= 0) break;                  // nothing parseable left (or a partial tail)
-                if (len > 0) clientSink_->onClientMessage(i, payload, len);
-                off += used;
-            }
-        }
-    }
+void HttpServerModule::pollUplinks() {
+    for (int i = 0; i < MAX_PREVIEW_CLIENTS; i++)
+        if (previewClients_[i].valid()) pollPreviewClient(i);
+    for (int c = 0; c < MAX_WS_CLIENTS; c++) pollControlClient(c);
+}
 
-    for (int c = 0; c < MAX_WS_CLIENTS; c++) {
-        auto& ws = wsClients_[c];
-        if (!ws.valid()) { if (carryClient_ == c) carryLen_ = 0; continue; }
-        uint8_t f[768];
-        size_t have = 0;
-        // A frame the last read cut in half starts this one, so the stream never loses its framing.
-        if (carryClient_ == c && carryLen_) { std::memcpy(f, carry_, carryLen_); have = carryLen_; carryLen_ = 0; }
-        const int n = ws.read(f + have, sizeof(f) - have);   // non-blocking: -1 when nothing is pending
-        // A clean peer close (FIN) frees the slot now, so a reconnect burst finds it free.
-        if (n == 0) { ws.close(); continue; }
-        const size_t total = have + static_cast<size_t>(n > 0 ? n : 0);
-        if (total == 0) continue;
-        const size_t used = walkWsTextFrames(f, total, [&](const char* body) {
-            // A control write from the interface's input bridges, which keeps them off a TCP connection per write.
-            if (mm::json::hasKey(body, "module") && mm::json::hasKey(body, "control")) {
-                char moduleName[32] = {}, controlName[32] = {};
-                mm::json::parseString(body, "module", moduleName, sizeof(moduleName));
-                mm::json::parseString(body, "control", controlName, sizeof(controlName));
-                applySetControl(moduleName, controlName, body);
-            } else if (mm::json::hasKey(body, "on") || mm::json::hasKey(body, "bri") || mm::json::hasKey(body, "ps")) {
-                applyWledState(body);   // the WLED app's {on, bri, ps}
-            }
-        });
-        if (used < total && total - used <= sizeof(carry_)) {
-            std::memcpy(carry_, f + used, total - used);
-            carryLen_ = total - used;
-            carryClient_ = c;
-        }
+void HttpServerModule::pollPreviewClient(int i) {
+    auto& pc = previewClients_[i];
+    uint8_t buf[64];
+    const int n = pc.read(buf, sizeof(buf));
+    // A clean close frees the slot now, which otherwise counts against the cap until a send fails; no lease is needed on this core.
+    if (n == 0) {
+        pc.close();
+        if (clientSink_) clientSink_->onClientGone(i);
+        return;
     }
+    if (n <= 0 || !clientSink_) return;
+    // TCP coalesces small requests into one read, so each complete frame's payload goes to the sink in order.
+    for (int off = 0; off < n; ) {
+        uint8_t payload[8];
+        int used = 0;
+        const int len = parsePreviewUplink(buf + off, n - off, payload, &used);
+        if (used <= 0) break;                  // nothing parseable left (or a partial tail)
+        if (len > 0) clientSink_->onClientMessage(i, payload, len);
+        off += used;
+    }
+}
+
+void HttpServerModule::pollControlClient(int c) {
+    auto& ws = wsClients_[c];
+    if (!ws.valid()) {
+        if (carryClient_ == c) carryLen_ = 0;
+        if (subs_[c].received) subs_[c] = Subscription{};   // a gone client stops widening what the patch walks
+        return;
+    }
+    // Mid-fragment the client's frames wait in the socket, so whatever they answer, a Pong or a Close, goes out between frames.
+    if (!atFrameBoundary(c)) return;
+    uint8_t f[768];
+    size_t have = 0;
+    // A frame the last read cut in half starts this one, so the stream never loses its framing.
+    if (carryClient_ == c && carryLen_) { std::memcpy(f, carry_, carryLen_); have = carryLen_; carryLen_ = 0; }
+    const int n = ws.read(f + have, sizeof(f) - have);   // non-blocking: -1 when nothing is pending
+    if (n == 0) { ws.close(); return; }                   // a clean close frees the slot for a reconnect burst
+    const size_t total = have + static_cast<size_t>(n > 0 ? n : 0);
+    if (total == 0) return;
+    const size_t used = walkWsFrames(f, total, [&](const char* body) { onTextFrame(c, body); },
+        [&](uint8_t opcode, const uint8_t* payload, size_t len) { onControlFrame(c, opcode, payload, len); });
+    if (used < total && total - used <= sizeof(carry_)) {
+        std::memcpy(carry_, f + used, total - used);
+        carryLen_ = total - used;
+        carryClient_ = c;
+    }
+}
+
+void HttpServerModule::onTextFrame(int c, const char* body) {
+    using mm::json::hasKey;
+    if (hasKey(body, "module") && hasKey(body, "control")) {
+        // A control write from the interface's input bridges, which keeps them off a TCP connection per write.
+        char moduleName[32] = {}, controlName[32] = {};
+        mm::json::parseString(body, "module", moduleName, sizeof(moduleName));
+        mm::json::parseString(body, "control", controlName, sizeof(controlName));
+        applySetControl(moduleName, controlName, body);
+    } else if (hasKey(body, "subscribe")) {
+        applySubscription(c, body);   // what this client views
+    } else if (hasKey(body, "resync")) {
+        // The page asks for its view again after an add, delete or move, and the document echoes the id.
+        if (!subs_[c].received) return;
+        resyncClient_[c] = true;
+        resyncId_[c] = static_cast<uint32_t>(mm::json::parseInt(body, "resync"));
+    } else if (hasKey(body, "on") || hasKey(body, "bri") || hasKey(body, "ps")) {
+        applyWledState(body);   // the WLED app's {on, bri, ps}
+    }
+}
+
+bool HttpServerModule::atFrameBoundary(int client) const {
+    const StateStream& s = streams_[client];
+    return !s.frame || s.sent == 0;
+}
+
+void HttpServerModule::onControlFrame(int client, uint8_t opcode, const uint8_t* payload, size_t len) {
+    // Read only at a frame boundary, so the answer goes out between frames, where a control frame may.
+    auto& ws = wsClients_[client];
+    if (opcode == 0x9) {
+        if (!sendWsControlFrame(ws, 0xA, payload, len)) ws.close();
+        return;
+    }
+    // A Close is echoed with its status code and the connection ends; a one-byte body carries no code (§5.5.1), so it is answered empty.
+    sendWsControlFrame(ws, 0x8, payload, len >= 2 ? 2 : 0);
+    ws.close();
+    endStream(streams_[client]);
+}
+
+bool HttpServerModule::sendWsControlFrame(platform::TcpConnection& conn, uint8_t opcode, const uint8_t* payload, size_t len) {
+    uint8_t frame[2 + kWsControlMax];
+    frame[0] = static_cast<uint8_t>(0x80 | opcode);
+    frame[1] = static_cast<uint8_t>(len);
+    if (len) std::memcpy(frame + 2, payload, len);
+    return conn.write(frame, 2 + len);
 }
 
 bool HttpServerModule::sendWsTextFrame(platform::TcpConnection& conn, const char* data, int len) {
@@ -2724,20 +2924,6 @@ bool HttpServerModule::sendBufferedFrame(const uint8_t* header, size_t headerLen
     return true;
 }
 
-// Queue a text frame whose body this module owns through the same resumable slot, so the state JSON drains in chunks on tick20ms, not a blocking write.
-bool HttpServerModule::startBufferedTextSend(char* ownedBody, size_t bodyLen) {
-    // A send already in flight: drop this one and free its buffer: the next second's state is fresher.
-    if (stateSend_.active) { platform::free(ownedBody); return false; }
-    // No app header for the state frame (the JSON is the whole payload), just the WS text header.
-    const size_t wsLen = writeWsFrameHeader(stateSend_.hdr, 0x81, bodyLen);
-    stateSend_.hdrLen = wsLen;
-    stateSend_.body = reinterpret_cast<const uint8_t*>(ownedBody);
-    stateSend_.bodyLen = bodyLen;
-    for (auto& c : stateSend_.sent) c = 0;
-    stateSend_.active = true;
-    return true;   // drained on tick20ms, never a blocking write on the render tick
-}
-
 // Per-client cursor over [hdr ++ body]: write what the socket takes (one chunk), advance, resume next tick; an error closes that client, the send ends when every client is done.
 void HttpServerModule::drainPreviewSend() {
     // Core-0 side of the sender lease core 1 holds while arming a frame; try_lock, not a wait, since tick20ms must not block, so we drain next tick.
@@ -2777,38 +2963,89 @@ void HttpServerModule::drainPreviewSend() {
     if (!anyLiveClient || allDone) previewSend_.active = false;
 }
 
-// The same cursor drain for the full-state frame over the control clients; core-0 only, so unlike the preview slot it needs no sender lease.
+void HttpServerModule::applySubscription(int client, const char* body) {
+    if (client < 0 || client >= MAX_WS_CLIENTS) return;
+    Subscription next;
+    if (!next.parse(body) || next == subs_[client]) return;
+    subs_[client] = next;
+    resyncClient_[client] = true;   // this client alone: the push brings the others up to date before it re-baselines
+}
+
+bool HttpServerModule::anyClientResync() const {
+    for (bool r : resyncClient_)
+        if (r) return true;
+    return false;
+}
+
+bool HttpServerModule::anyStreamActive() const {
+    for (const auto& st : streams_)
+        if (st.active) return true;
+    return false;
+}
+
+void HttpServerModule::endStream(StateStream& s) {
+    if (s.frame) platform::free(s.frame);
+    s = StateStream{};
+}
+
+bool HttpServerModule::nextStreamFrame(int client) {
+    StateStream& s = streams_[client];
+    JsonSink sink;
+    bool done;
+    {
+        // Per client: one on the device's own access point gets its passwords empty, the others as stored.
+        const SecretsHidden hide(wsOnAccessPoint_[client]);
+        done = writeTreeFragment(sink, s.cursor, kStreamFragmentBytes);
+    }
+    if (sink.overflowed()) return false;   // a truncated fragment would end the message in invalid JSON
+    s.frameLen = sink.size();
+    s.frame = sink.detach();
+    if (!s.frame) return false;
+    // RFC 6455 §5.4: the first frame carries the text opcode, the rest continue it, and the last one sets FIN.
+    const uint8_t opcode = static_cast<uint8_t>((s.first ? 0x01 : 0x00) | (done ? 0x80 : 0x00));
+    s.hdrLen = writeWsFrameHeader(s.hdr, opcode, s.frameLen);
+    s.sent = 0;
+    s.first = false;
+    s.last = done;
+    return true;
+}
+
+// Per client, the fragment in flight goes out a chunk at a time and the next is generated once it has left; core-0 only, so unlike the preview slot it needs no sender lease.
 void HttpServerModule::drainStateSend() {
-    if (!stateSend_.active) return;
-    const size_t total = stateSend_.hdrLen + stateSend_.bodyLen;
     const size_t chunk = drainChunkBytes();
-    bool anyLiveClient = false;
-    bool allDone = true;
-    for (int i = 0; i < MAX_WS_CLIENTS; i++) {
-        auto& ws = wsClients_[i];
-        if (!ws.valid()) continue;
-        anyLiveClient = true;
-        size_t& cur = stateSend_.sent[i];
-        size_t budget = chunk;
-        while (cur < total && budget > 0) {
-            const uint8_t* src;
-            size_t span;
-            if (cur < stateSend_.hdrLen) { src = stateSend_.hdr + cur; span = stateSend_.hdrLen - cur; }
-            else { src = stateSend_.body + (cur - stateSend_.hdrLen); span = total - cur; }
-            if (span > budget) span = budget;
-            int n = ws.writeSome(src, span);
-            if (n < 0) { ws.close(); break; }    // real error, drop this client
-            if (n == 0) break;                   // WouldBlock, resume next tick
-            cur += static_cast<size_t>(n);
-            budget -= static_cast<size_t>(n);
+    for (int i = 0; i < MAX_WS_CLIENTS; i++)
+        if (streams_[i].active) drainStream(i, chunk);
+}
+
+void HttpServerModule::drainStream(int client, size_t budget) {
+    StateStream& s = streams_[client];
+    auto& ws = wsClients_[client];
+    if (!ws.valid()) { endStream(s); return; }
+    while (budget > 0) {
+        if (!s.frame) {
+            if (s.last) { endStream(s); return; }
+            if (!nextStreamFrame(client)) { refuseFragment(client); return; }
+            fragmentRefused_ = false;
         }
-        if (ws.valid() && cur < total) allDone = false;
+        const size_t total = s.hdrLen + s.frameLen;
+        const bool inHeader = s.sent < s.hdrLen;
+        const uint8_t* src = inHeader ? s.hdr + s.sent : reinterpret_cast<const uint8_t*>(s.frame) + (s.sent - s.hdrLen);
+        const size_t span = std::min(budget, (inHeader ? s.hdrLen : total) - s.sent);
+        const int n = ws.writeSome(src, span);
+        if (n < 0) { ws.close(); endStream(s); return; }   // real error, drop this client
+        if (n == 0) return;                                // WouldBlock, resume next tick
+        s.sent += static_cast<size_t>(n);
+        budget -= static_cast<size_t>(n);
+        if (s.sent == total) { platform::free(s.frame); s.frame = nullptr; }
     }
-    if (!anyLiveClient || allDone) {
-        platform::free(const_cast<uint8_t*>(stateSend_.body));   // the frame owns its JSON body
-        stateSend_.body = nullptr;
-        stateSend_.active = false;
-    }
+}
+
+void HttpServerModule::refuseFragment(int client) {
+    // Out of memory for one fragment: the client reconnects and is sent its document again, and the serial log says why, once per run of refusals.
+    if (!fragmentRefused_) std::printf("state stream: no memory for a %u-byte fragment (largest block %u), client closed\n", static_cast<unsigned>(kStreamFragmentBytes), static_cast<unsigned>(platform::maxAllocBlock()));
+    fragmentRefused_ = true;
+    wsClients_[client].close();
+    endStream(streams_[client]);
 }
 
 // Per-client chunk cap per tick from free contiguous memory, between a floor (progress) and a ceiling (tick occupancy), so a tight board takes small bites.

@@ -67,6 +67,12 @@ enum class ControlType : uint8_t {
     Palette     ///< a palette dropdown, whose options carry their own swatch colors
 };
 
+/// The unit a progress control's value and total count in; the UI sizes the label from it.
+enum class ProgressUnit : uint8_t {
+    Bytes,      ///< a byte count, which fits a uint32_t up to 4 GiB
+    KiB         ///< kibibytes, for a store whose byte count overruns a uint32_t
+};
+
 class JsonSink;   // forward-declared so the descriptor can hold a pointer
 
 /// Emits a palette control's options, which the light domain owns and core calls.
@@ -321,10 +327,10 @@ public:
         controls_[count_++] = {&var, name, reinterpret_cast<uintptr_t>(options), ControlType::Select, 0, optionCount};
     }
 
-    /// Bind a value as a progress bar against a total, labeled either as bytes or as a count.
-    void addProgress(const char* name, uint32_t& var, uint32_t total, bool bytes = true) {
+    /// Bind a value as a progress bar against a total, both counted in `unit`.
+    void addProgress(const char* name, uint32_t& var, uint32_t total, ProgressUnit unit = ProgressUnit::Bytes) {
         grow();
-        controls_[count_++] = {&var, name, total, ControlType::Progress, bytes ? 1 : 0, 0};
+        controls_[count_++] = {&var, name, total, ControlType::Progress, static_cast<int32_t>(unit), 0};
     }
 
     /// Bind four octets as an address, which serializes as its dotted-quad string.

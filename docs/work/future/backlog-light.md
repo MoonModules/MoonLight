@@ -155,6 +155,13 @@ Record before and after in performance.md per target.
 
 ## Drivers
 
+### Drivers' palette and fixture-profile lists, sent once rather than in every view (2026-10-13)
+
+Drivers is the largest root in the state, 35 KB of the Teensy's view where Services is 10 KB, and two lists are 25 KB of it, mostly repetition.
+The `palette` options carry 66 palettes with 16 hex colors each for the dropdown's swatches, which change only with the firmware or a palette script: the state carries the names, and the page fetches the colors from a route the browser caches across reloads.
+FixtureProfiles' `profiles` summary is 1.9 KB, and its `detail`, 14.5 KB, repeats each expanded row's editor fields, their name, type and bounds, for every profile: the row schema is sent once, as `optionSets` already sends the role names, and each row carries its values.
+Together Drivers falls to about 12 KB, and the largest single control, the block a streamed state still needs whole, from 15 KB to a few.
+
 ### LED output from a Raspberry Pi's own pins (robwomp, 2026-10-11)
 
 Suggested on Discord after the Teensy port: a Pi runs MoonLight today as the Linux desktop build, so its LEDs are reached only through the network drivers.

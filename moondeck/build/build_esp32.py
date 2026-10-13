@@ -2,7 +2,7 @@
 """Build the ESP32 target for a specific firmware variant.
 
 "Firmware" here is the compiled binary variant (chip + radios/peripherals +
-sdkconfig fragments) — separate from "board" (physical hardware: PCB, PHY,
+sdkconfig fragments); separate from "board" (physical hardware: PCB, PHY,
 USB-serial, PSRAM). See docs/explanation/architecture/index.md § Firmware vs board.
 """
 
@@ -32,9 +32,9 @@ IDF_SEARCH_PATHS = [
 ]
 
 # The ESP-IDF commit every target (classic ESP32, S3, P4, S31) has been
-# validated against — the `v6.1-rc1` tag, on the earliest IDF line that
+# validated against; the `v6.1-rc1` tag, on the earliest IDF line that
 # carries the esp32s31 preview target. Kept here (not in setup_esp_idf.py) so
-# the pre-build drift check below can share the constant — a stale local IDF is
+# the pre-build drift check below can share the constant; a stale local IDF is
 # the single most common source of an "it built for me last week" ESP32 build
 # failure, so the check runs on every build_esp32 invocation, not just when the
 # user remembers to re-run setup_esp_idf.py. setup_esp_idf.py imports these
@@ -61,7 +61,7 @@ def check_idf_pin(idf_path: Path) -> None:
     are actually Espressif renaming an API between snapshots. Failing fast with
     the exact fix command turns 30-minute debugging into a 30-second
     re-checkout. Skip if HEAD can't be determined (not a git checkout, missing
-    git, etc.) — no false positives.
+    git, etc.); no false positives.
 
     Deliberate escape hatch: a dev testing an upcoming IDF release (beta1 → RC,
     RC → GA) needs to build against a drifted IDF on purpose. Symmetric with
@@ -91,10 +91,10 @@ def check_idf_pin(idf_path: Path) -> None:
 # CONFIG_ESP_WIFI_ENABLED switch (the symbol is non-settable, forced y on
 # WiFi-capable SoCs), so WiFi is removed via EXCLUDE_COMPONENTS instead.
 # All consumers of these use *optional* requires, so excluding them links
-# cleanly as long as our own code never references esp_wifi (it doesn't —
+# cleanly as long as our own code never references esp_wifi (it doesn't;
 # the WiFi platform functions are #ifdef-stubbed in the eth-only build).
 #
-# NOTE: esp_phy is NOT excluded — it provides RF/clock init the ESP32 EMAC
+# NOTE: esp_phy is NOT excluded; it provides RF/clock init the ESP32 EMAC
 # (Ethernet RMII) depends on. Excluding it leaves Ethernet stuck "started"
 # with no link. Only the genuinely WiFi-side components are dropped.
 #
@@ -105,18 +105,18 @@ def check_idf_pin(idf_path: Path) -> None:
 # manager resolves the managed dependency before the exclude applies). It's a
 # *build-time* cost only: the linker dead-strips the unused code, so they add ~0
 # bytes of flash to esp32p4rev1-eth (our coprocessorWifi() is the empty stub there, so
-# no esp_hosted symbol is referenced — confirmed: their .text size is 0x0 in the
+# no esp_hosted symbol is referenced; confirmed: their .text size is 0x0 in the
 # .map). Left as-is rather than fought; see docs/work/future/.
 ETH_ONLY_EXCLUDE = ["esp_wifi", "wpa_supplicant", "esp_coex"]
 
 # Firmware catalogue. Each entry describes one shipping firmware variant.
 # Keys combine chip name + feature flags + (for SKU-sensitive chips) module:
-#   esp32           — ESP32 classic, WiFi + Ethernet (RMII; eth comes up only
+#   esp32:          ESP32 classic, WiFi + Ethernet (RMII; eth comes up only
 #                     when a PHY is present, pins per board from deviceModels.json)
-#   esp32-eth       — ESP32 classic, Ethernet only (WiFi compiled out — smaller)
-#   esp32s3-n16r8   — ESP32-S3 DevKitC-1 with the N16R8 module
+#   esp32-eth:      ESP32 classic, Ethernet only (WiFi compiled out; smaller)
+#   esp32s3-n16r8:  ESP32-S3 DevKitC-1 with the N16R8 module
 #                     (16 MB flash, 8 MB octal PSRAM). Other S3 SKUs (N8R2,
-#                     N8R8, …) get their own key — the sdkconfig fragment
+#                     N8R8, …) get their own key; the sdkconfig fragment
 #                     encodes flash size + partition table + PSRAM mode,
 #                     which differ per SKU.
 # The Ethernet driver is compiled into each chip's firmware (RMII EMAC for
@@ -130,14 +130,14 @@ ETH_ONLY_EXCLUDE = ["esp_wifi", "wpa_supplicant", "esp_coex"]
 #
 # `ships`: True for variants the release matrix builds + publishes. A variant can
 # exist here (buildable from the CLI) yet be held out of CI with ships=False.
-# This dict is the SINGLE source of truth — generate_firmwares.py projects it to
+# This dict is the SINGLE source of truth; generate_firmwares.py projects it to
 # mooninstaller/firmwares.json, which the CI matrix, the ESP Web Tools manifest
 # loops, and MoonDeck all read (check_firmwares.py guards the projection).
 FIRMWARES: dict[str, dict] = {
     # Default classic ESP32: WiFi AND Ethernet in one binary. The RMII Ethernet
     # driver compiles in (the .eth fragment); whether Eth comes up, and on which
     # pins/PHY, is runtime config (deviceModels.json → NetworkModule → ethInit). A
-    # WiFi-only board flashing this just gets WiFi — ethInit() no-ops when no PHY
+    # WiFi-only board flashing this just gets WiFi; ethInit() no-ops when no PHY
     # responds, then the WiFi cascade takes over (no GPIO grab, no hang). This
     # replaces the old separate `esp32` (WiFi-only) + `esp32-eth-wifi` keys.
     "esp32": {
@@ -145,7 +145,7 @@ FIRMWARES: dict[str, dict] = {
         "fragments": ["sdkconfig.defaults", "sdkconfig.defaults.eth", "sdkconfig.defaults.moonbase-4mb"],
         "moonbase": True,   # 4 MB: factory MoonBase + one big app slot (see moonbase/)
         "eth_only": False,
-        "description": "ESP32 classic — WiFi + Ethernet (RMII; per-board pins/PHY "
+        "description": "ESP32 classic: WiFi + Ethernet (RMII; per-board pins/PHY "
                        "from deviceModels.json, default LAN8720 pins).",
         "ships": True,
     },
@@ -175,7 +175,7 @@ FIRMWARES: dict[str, dict] = {
                       "sdkconfig.defaults.eth", "sdkconfig.defaults.moonbase-16mb"],
         "moonbase": True,   # MoonBase + ONE app slot; the freed 4 MB goes to the filesystem
         "eth_only": False,
-        "description": "ESP32 classic with 16 MB flash — WiFi + Ethernet. Same silicon "
+        "description": "ESP32 classic with 16 MB flash: WiFi + Ethernet. Same silicon "
                        "as `esp32`; this variant uses the extra flash for a big app slot "
                        "+ an 11 MB filesystem (Serg boards, QuinLED Dig-Octa).",
         "ships": True,
@@ -186,7 +186,7 @@ FIRMWARES: dict[str, dict] = {
                       "sdkconfig.defaults.wrover", "sdkconfig.defaults.moonbase-4mb"],
         "moonbase": True,   # 4 MB: factory MoonBase + one big app slot (see moonbase/)
         "eth_only": False,
-        "description": "ESP32-WROVER (classic ESP32, 4 MB flash + 4 MB quad PSRAM) — WiFi + "
+        "description": "ESP32-WROVER (classic ESP32, 4 MB flash + 4 MB quad PSRAM): WiFi + "
                        "Ethernet. Same silicon as `esp32`; this variant enables PSRAM for "
                        "the larger buffers (big grids, preview) the WROVER's extra RAM allows.",
         "ships": True,
@@ -208,9 +208,9 @@ FIRMWARES: dict[str, dict] = {
         "fragments": ["sdkconfig.defaults", "sdkconfig.defaults.eth", "sdkconfig.defaults.moonbase-4mb"],
         "moonbase": True,   # 4 MB: factory MoonBase + one big app slot (see moonbase/)
         "eth_only": True,
-        "description": "ESP32 classic — Ethernet only (WiFi compiled out; smaller "
+        "description": "ESP32 classic: Ethernet only (WiFi compiled out; smaller "
                        "image, more RAM). Per-board pins/PHY from deviceModels.json. The "
-                       "default `esp32` does WiFi+Ethernet — use this only to drop WiFi.",
+                       "default `esp32` does WiFi+Ethernet: use this only to drop WiFi.",
         "ships": True,
     },
     "esp32s3-n16r8": {
@@ -218,7 +218,7 @@ FIRMWARES: dict[str, dict] = {
         "fragments": ["sdkconfig.defaults", "sdkconfig.defaults.esp32s3-n16r8",
                       "sdkconfig.defaults.eth-spi"],
         "eth_only": False,
-        "description": "ESP32-S3 DevKitC-1 (N16R8: 16 MB flash, 8 MB octal PSRAM) — WiFi + "
+        "description": "ESP32-S3 DevKitC-1 (N16R8: 16 MB flash, 8 MB octal PSRAM): WiFi + "
                        "W5500 SPI Ethernet (external module, pins per board in deviceModels.json)",
         "ships": True,
         # W5500 over SPI is 100 Mbit, well under the gigabit these cards want, so a wall of
@@ -227,12 +227,23 @@ FIRMWARES: dict[str, dict] = {
         # real way to try this before buying an S31.
         "panel_cards": True,
     },
+    "esp32s3-n32r16": {
+        "chip": "esp32s3",
+        "fragments": ["sdkconfig.defaults", "sdkconfig.defaults.esp32s3-n32r16",
+                      "sdkconfig.defaults.eth-spi"],
+        "eth_only": False,
+        "description": "ESP32-S3 WROOM-2 (N32R16V: 32 MB octal flash, 16 MB octal PSRAM, 1.8 V): WiFi + "
+                       "W5500 SPI Ethernet. Octal flash needs its own build: an N16R8 image only "
+                       "auto-detects the read mode and uses half the flash.",
+        "ships": True,
+        "panel_cards": True,
+    },
     "esp32s3-n8r8": {
         "chip": "esp32s3",
         "fragments": ["sdkconfig.defaults", "sdkconfig.defaults.esp32s3-n8r8",
                       "sdkconfig.defaults.eth-spi"],
         "eth_only": False,
-        "description": "ESP32-S3 (N8R8: 8 MB flash, 8 MB octal PSRAM) — WiFi + W5500 SPI "
+        "description": "ESP32-S3 (N8R8: 8 MB flash, 8 MB octal PSRAM): WiFi + W5500 SPI "
                        "Ethernet. Half the flash of N16R8; the N16R8 binary overruns an "
                        "8 MB board, so N8R8 boards (LightCrafter etc.) need this variant.",
         "ships": True,
@@ -275,7 +286,7 @@ FIRMWARES: dict[str, dict] = {
         "chip": "esp32p4",
         "fragments": ["sdkconfig.defaults", "sdkconfig.defaults.esp32p4rev1-eth"],
         "eth_only": True,
-        "description": "Waveshare ESP32-P4-NANO — Ethernet only (IP101 PHY), for P4 "
+        "description": "Waveshare ESP32-P4-NANO: Ethernet only (IP101 PHY), for P4 "
                        "revisions 0.x/1.x ONLY. The WiFi-less fallback; "
                        "esp32p4rev1-eth-wifi adds the C6 radio.",
         "ships": True,
@@ -286,7 +297,7 @@ FIRMWARES: dict[str, dict] = {
         "fragments": ["sdkconfig.defaults", "sdkconfig.defaults.esp32p4rev1-eth",
                       "sdkconfig.defaults.esp32p4rev1-eth-wifi"],
         "eth_only": False,
-        "description": "Waveshare ESP32-P4-NANO — Ethernet + WiFi via the on-board "
+        "description": "Waveshare ESP32-P4-NANO: Ethernet + WiFi via the on-board "
                        "ESP32-C6 over SDIO (esp_hosted), for P4 revisions 0.x/1.x "
                        "ONLY. Boots and associates as of IDF v6.1-rc1 with "
                        "CONFIG_PM_SLEEP_CLK_ICG_ENABLE=n, which sidesteps esp-idf "
@@ -294,7 +305,7 @@ FIRMWARES: dict[str, dict] = {
                        "and aborting cpu_start).",
         # Was a crash-repro build for esp-idf #18759 and is now a working firmware:
         # bench-verified on a v1.3 P4 (associates, RSSI -52, serves the UI). #18759 is
-        # NOT fixed upstream — CONFIG_PM_SLEEP_CLK_ICG_ENABLE=n (an option v6.1-rc1
+        # NOT fixed upstream; CONFIG_PM_SLEEP_CLK_ICG_ENABLE=n (an option v6.1-rc1
         # added) skips the allocation that failed, at the cost of peripheral clock
         # gating during light sleep, which this device never enters.
         "ships": True,
@@ -305,7 +316,7 @@ FIRMWARES: dict[str, dict] = {
         "fragments": ["sdkconfig.defaults", "sdkconfig.defaults.esp32p4rev1-eth",
                       "sdkconfig.defaults.esp32p4rev3"],
         "eth_only": True,
-        "description": "⚠️ UNTESTED — Waveshare ESP32-P4-NANO, Ethernet only (IP101 "
+        "description": "⚠️ UNTESTED, Waveshare ESP32-P4-NANO, Ethernet only (IP101 "
                        "PHY), for P4 revisions 3.x (the CURRENT silicon). Identical to "
                        "esp32p4rev1-eth apart from the chip revision, which the two "
                        "generations cannot share. Published so someone with a v3 board "
@@ -324,7 +335,7 @@ FIRMWARES: dict[str, dict] = {
                       "sdkconfig.defaults.esp32p4rev1-eth-wifi",
                       "sdkconfig.defaults.esp32p4rev3"],
         "eth_only": False,
-        "description": "⚠️ UNTESTED — Waveshare ESP32-P4-NANO, Ethernet + WiFi via the "
+        "description": "⚠️ UNTESTED, Waveshare ESP32-P4-NANO, Ethernet + WiFi via the "
                        "on-board ESP32-C6 (esp_hosted), for P4 revisions 3.x (the "
                        "CURRENT silicon). The rev1 build of this image is bench-verified; "
                        "this one differs only in the chip revision and has never been "
@@ -336,7 +347,7 @@ FIRMWARES: dict[str, dict] = {
         "chip": "esp32s31",
         "fragments": ["sdkconfig.defaults", "sdkconfig.defaults.esp32s31"],
         "eth_only": False,
-        "description": "Espressif ESP32-S31 Function-CoreBoard-1 — WiFi 6 + 1 Gbps "
+        "description": "Espressif ESP32-S31 Function-CoreBoard-1: WiFi 6 + 1 Gbps "
                        "Ethernet LED control (RISC-V, 16 MB flash, PSRAM). The on-chip "
                        "EMAC drives the board's YT8531 RGMII PHY; Ethernet is preferred "
                        "when a cable is present, WiFi otherwise. esp32s31 is a preview "
@@ -350,7 +361,7 @@ FIRMWARES: dict[str, dict] = {
 #   * the ESP Web Tools manifest (`chipFamily`, generate_manifest.py),
 #   * the installer's detect-vs-board comparison (deviceModels.json `chip` uses these
 #     same strings; install-orchestrator.js normalizes detected silicon to them).
-# (firmwares.json does NOT store a per-variant family — it's derivable from `chip`;
+# (firmwares.json does NOT store a per-variant family; it's derivable from `chip`;
 # see generate_firmwares.py.)
 # MoonLight aims to support every ESP32-family chip, so new SoCs are added HERE
 # once (S2 / C3 / C6 / C5 / H2 / P4 variants) and every consumer follows.
@@ -362,7 +373,7 @@ TARGET_TO_FAMILY = {
     "esp32c3":  "ESP32-C3",
 }
 
-# Chips IDF still marks "preview" — `idf.py set-target <chip>` refuses without an
+# Chips IDF still marks "preview"; `idf.py set-target <chip>` refuses without an
 # explicit `--preview` flag ("you have to append '--preview' to use any preview
 # feature"). Drop a chip from this set once it graduates to a stable target.
 PREVIEW_TARGETS = {"esp32s31"}
@@ -389,7 +400,7 @@ def find_idf() -> Path | None:
     return None
 
 
-# Python venv layout differs between platforms — POSIX puts the interpreter in
+# Python venv layout differs between platforms; POSIX puts the interpreter in
 # `<venv>/bin/python`; Windows in `<venv>/Scripts/python.exe`. Same for the
 # toolchain `bin` dirs ESP-IDF unpacks under ~/.espressif/tools (POSIX) vs
 # %USERPROFILE%\.espressif\tools\…\Scripts (Windows for some tools, `bin` for
@@ -402,7 +413,7 @@ def find_idf_python(idf_path: Path | None = None) -> Path | None:
     """Find the ESP-IDF Python venv for the target IDF version.
 
     ESP-IDF names each venv `idf<major.minor>_py<X.Y>_env` (e.g.
-    `idf6.1_py3.12_env`) — one per IDF version × Python version — exactly as
+    `idf6.1_py3.12_env`), one per IDF version × Python version, exactly as
     `idf_tools.py` computes it. We select by matching the *target* IDF version,
     NOT by mtime: with two IDFs installed (e.g. a 5.5 alongside 6.1 for a
     version fallback), the most-recently-activated venv is the newest by mtime
@@ -413,7 +424,7 @@ def find_idf_python(idf_path: Path | None = None) -> Path | None:
 
     Among venvs for the right IDF version (there can be several Python-minor
     variants) the newest wins. Falls back to newest-overall only when the IDF
-    version can't be determined or no versioned venv matches — preserving the
+    version can't be determined or no versioned venv matches; preserving the
     single-IDF behaviour where mtime is unambiguous anyway.
     """
     venv_dir = Path.home() / ".espressif" / "python_env"
@@ -484,7 +495,7 @@ def idf_env(idf_path: Path) -> dict:
 
     extra_paths.append(str(idf_path / "tools"))
 
-    # Add toolchain paths from ~/.espressif/tools. Tool layout varies — POSIX
+    # Add toolchain paths from ~/.espressif/tools. Tool layout varies; POSIX
     # tools have `bin/` subdirs (xtensa-esp-elf, cmake), Windows tools often
     # don't (ninja, ccache, idf-exe ship the .exe at the version-dir root, or
     # inside a single product-named subdir). Add both: the version dir itself
@@ -509,7 +520,7 @@ def idf_cmd(idf_path: Path) -> list[str]:
     """Return the command to invoke idf.py via the venv Python.
 
     On Windows the entry point is `_idf_win_shim.py` instead of idf.py
-    directly — the shim calls `locale.setlocale(LC_ALL, "en_US.UTF-8")`
+    directly; the shim calls `locale.setlocale(LC_ALL, "en_US.UTF-8")`
     BEFORE idf.py runs, which is the only way to make IDF's locale check
     (`locale.getlocale()`) pass on Windows installs whose system locale
     is non-UTF-8 (e.g. Dutch / German / French). See the shim's docstring.
@@ -528,12 +539,12 @@ def firmware_cmake_args(firmware: str, release: str = "", version: str = "",
     """Extra -D cache args for the requested firmware.
 
     `release` is the release-channel tag (e.g. "latest", "v1.0.0") to burn
-    into the binary as MM_RELEASE. Empty for local builds — SystemModule
+    into the binary as MM_RELEASE. Empty for local builds; SystemModule
     then shows the bare semver with no channel suffix.
 
     `version` overrides MM_VERSION with the pipeline-computed semver
     (compute_version.py): the core for a stable tag, `<next>-dev.<N>` for a
-    moving `latest` build. Empty for local builds — build_info.h's #ifndef
+    moving `latest` build. Empty for local builds; build_info.h's #ifndef
     default (library.json) applies.
     """
     spec = FIRMWARES[firmware]
@@ -541,7 +552,7 @@ def firmware_cmake_args(firmware: str, release: str = "", version: str = "",
     if task_cpu_stats:
         # Opt-in per-task CPU% in TasksModule: append the run-time-stats fragment (enables the
         # FreeRTOS counter, ~5% tick) and set the compile def that fills + shows the column. Off
-        # unless --task-cpu-stats is passed — a profiling build, never the default.
+        # unless --task-cpu-stats is passed; a profiling build, never the default.
         frags.append("sdkconfig.defaults.task-cpu-stats")
     fragments = ";".join(frags)
     args = [f"-DSDKCONFIG_DEFAULTS={fragments}"]
@@ -549,14 +560,14 @@ def firmware_cmake_args(firmware: str, release: str = "", version: str = "",
         args.append("-DMM_TASK_CPU_STATS=1")
     # Burn the firmware key into the binary so SystemModule can report it and
     # the OTA path can pick the matching release asset (every release ships
-    # one .bin per firmware key — see release.yml).
+    # one .bin per firmware key; see release.yml).
     args.append(f'-DMM_FIRMWARE_NAME="{firmware}"')
     # Burn the release-channel tag too, when the build pipeline supplies one.
     # Same -D mechanism; empty default left to build_info.h's #ifndef so a
     # local build needs no flag.
     if release:
         args.append(f'-DMM_RELEASE="{release}"')
-    # Same for the computed version — empty leaves build_info.h's library.json default.
+    # Same for the computed version; empty leaves build_info.h's library.json default.
     if version:
         args.append(f'-DMM_VERSION="{version}"')
     # And into the IMAGE's app descriptor, the struct IDF puts in every binary. Without it the
@@ -572,9 +583,9 @@ def firmware_cmake_args(firmware: str, release: str = "", version: str = "",
         args.append("-DMM_ETH_ONLY=1")
     # Firmwares that have no Ethernet driver at all (no EMAC sdkconfig and no
     # SPI-PHY sdkconfig) lack the headers platform_esp32.cpp's ethInit() needs,
-    # so it won't compile — set MM_NO_ETH and the source provides stubs instead.
+    # so it won't compile; set MM_NO_ETH and the source provides stubs instead.
     # A variant "has Ethernet" when any of its sdkconfig fragments enables a PHY
-    # driver — the RMII EMAC (CONFIG_ETH_USE_ESP32_EMAC, classic/P4/S31) or the
+    # driver; the RMII EMAC (CONFIG_ETH_USE_ESP32_EMAC, classic/P4/S31) or the
     # W5500 SPI PHY (CONFIG_ETH_USE_SPI_ETHERNET, S3). We read the fragment *files*
     # and check for the actual enabling line rather than pattern-matching the
     # filename: the S31 enables EMAC in `sdkconfig.defaults.esp32s31` (no ".eth" in
@@ -634,7 +645,7 @@ def stale_feature_cache(build_dir: Path, extra: list[str], chip: str) -> str | N
     later configure does NOT clear it. So if a firmware key's Ethernet-ness
     (MM_NO_ETH / MM_ETH_ONLY) changes while its build dir already exists, the
     stale cache value wins and the binary silently builds for the old feature
-    set — e.g. the collapsed `esp32` (WiFi+Eth) reusing a pre-collapse
+    set; e.g. the collapsed `esp32` (WiFi+Eth) reusing a pre-collapse
     WiFi-only dir kept MM_NO_ETH=1 and stubbed Ethernet out (no link, no LED).
     Erasing flash doesn't help: it's a compile-time define, not device state.
 
@@ -643,7 +654,7 @@ def stale_feature_cache(build_dir: Path, extra: list[str], chip: str) -> str | N
     RISC-V toolchain was missing and only got as far as writing sdkconfig for
     the default `esp32` target), leaving the build dir with the wrong chip.
     The wrapper's "dir exists → skip set-target" fast-path then trusts that
-    stale state and silently builds for the wrong chip — the P4 case that
+    stale state and silently builds for the wrong chip; the P4 case that
     bit us in the beta1 bring-up. `chip` is the firmware's expected target
     (per FIRMWARES[firmware]["chip"]).
 
@@ -654,7 +665,7 @@ def stale_feature_cache(build_dir: Path, extra: list[str], chip: str) -> str | N
     if not cache.exists():
         return None
     text = cache.read_text(encoding="utf-8", errors="replace")
-    # Chip / target mismatch — cheap check, do it first (a mismatch here means
+    # Chip / target mismatch; cheap check, do it first (a mismatch here means
     # every other cached flag is also for the wrong target, so no point
     # checking those). CMake writes `IDF_TARGET:STRING=esp32p4`; a fresh
     # cache without an IDF_TARGET line (partial set-target failure before
@@ -702,7 +713,7 @@ def stale_feature_cache(build_dir: Path, extra: list[str], chip: str) -> str | N
     # For each, "wanted" = does this firmware pass the -D, "cached" = is it set
     # in the existing cache. A disagreement means a stale dir.
     # MM_TASK_CPU_STATS is here too: toggling --task-cpu-stats on an existing dir must wipe, or the
-    # sdkconfig fragment (GENERATE_RUN_TIME_STATS) never re-seeds — CPU% would read all-0 with the flag
+    # sdkconfig fragment (GENERATE_RUN_TIME_STATS) never re-seeds; CPU% would read all-0 with the flag
     # on, or leave a hidden ~5% tick tax with it off. Same stale-cache trap as MM_NO_ETH.
     for flag in ("MM_NO_ETH", "MM_ETH_ONLY", "MM_NO_WIFI", "MM_TASK_CPU_STATS", "MM_PANEL_CARDS"):
         wanted = any(a.startswith(f"-D{flag}") for a in extra)
@@ -730,7 +741,7 @@ def build_dir_for(firmware: str) -> Path:
     """Return the per-firmware build directory.
 
     Each firmware variant gets its own subdir of ``<ROOT>/build/`` so multiple
-    variants can coexist on disk — switching firmwares no longer forces a
+    variants can coexist on disk; switching firmwares no longer forces a
     clean rebuild. The ``esp32-`` prefix namespaces ESP32 firmware keys away
     from desktop targets (``build/macos/``, ``build/linux/``,
     ``build/windows/``) that share the same root. Common-patterns rationale:
@@ -758,7 +769,7 @@ def main():
                              "(library.json applies).")
     parser.add_argument("--task-cpu-stats", action="store_true",
                         help="Enable per-task CPU%% in TasksModule (FreeRTOS run-time stats). "
-                             "A profiling build only — costs ~5%% tick; off by default.")
+                             "A profiling build only: costs ~5%% tick; off by default.")
     parser.add_argument("--migrate-pause", type=int, default=0, metavar="SECONDS",
                         help="Also build a rehearsal migration image that pauses this long after each step, "
                              "into build/migrate-<chip>-pause, so a power cut can be tested at each point.")
@@ -802,7 +813,7 @@ def main():
 
     build_dir = build_dir_for(firmware)
     # -B points idf.py at the per-firmware build dir. -DSDKCONFIG keeps each
-    # firmware's sdkconfig inside its own build dir too — without this idf.py
+    # firmware's sdkconfig inside its own build dir too; without this idf.py
     # writes `esp32/sdkconfig` at the project root, and switching firmwares
     # poisons it ("project sdkconfig was generated for target X, but
     # CMakeCache contains Y"). Per-build-dir sdkconfig is the IDF-supported
@@ -818,7 +829,7 @@ def main():
     # First-time build for this firmware: idf.py needs `set-target` before
     # `build` so sdkconfig gets seeded from SDKCONFIG_DEFAULTS. On subsequent
     # builds the per-build-dir sdkconfig already has the chip pinned, so
-    # set-target is skipped — switching to another firmware uses a different
+    # set-target is skipped; switching to another firmware uses a different
     # build_dir entirely, so its sdkconfig is untouched.
     #
     # esp32p4rev1-eth-wifi needs no special handling: on IDF v6.1-rc1 a clean build and an

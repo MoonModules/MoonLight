@@ -37,6 +37,8 @@ let state = null;
 let selectedModule = null;
 let availableTypes = [];        // populated from GET /api/types after first connection
 let ws = null;
+let structuralRenderPending = false;   // a full state arrived mid-edit; its render waits for the edit to end
+let subscribedRoot;              // the root this socket's subscription names; undefined until one is sent
 const WS_RETRY_MIN_MS = 200;     // first reconnect is quick so a dropped initial connect (common on Safari,
                                  // whose first attempt can lose a contended socket) comes back near-instantly
 let wsRetryMs = WS_RETRY_MIN_MS; // exponential backoff: 200 → 400 → 800 → … → 5000 ceiling
@@ -180,6 +182,9 @@ function connectWs() {
         if (sock !== ws) return;   // a newer socket already took over: ignore this stale open
         wsRetryMs = WS_RETRY_MIN_MS;                        // reset backoff
         setWsDot(true);
+        // The device sends state only in answer to a subscription: the root left open last time, else none until the first render picks one.
+        subscribedRoot = undefined;
+        subscribe(selectedModule || lsRead(LS_SELECTED, null));
         // Keepalive ping every 25s: Safari kills idle WebSockets otherwise
         clearInterval(wsHeartbeat);
         wsHeartbeat = setInterval(() => {
@@ -223,19 +228,15 @@ function connectWs() {
             if (!Array.isArray(data.modules)) return;
             state = data;
             relayMoonCloudOutbox();
-            // Defer the DOM rebuild while the user is mid-interaction: a full state arrives on every
-            // (re)connect, and rebuilding under an open dropdown makes it unselectable. The state is
-            // already stored above, so updateValues() below still shows fresh values; the structural
-            // render happens on the next full state once the interaction ends.
-            if (userIsEditing()) { updateValues(); preview.setTargetFps(previewTargetFps(state)); return; }
-            restoreSelectedRoot();   // before the render that reads it: this may be the FIRST state
-            renderCards();     // a full state may add/remove/reshape cards (structural resync): full render
-            // The nav is built from the same tree, so a structural change (a module added or removed)
-            // must rebuild it too, or the sidebar keeps entries the state no longer has. AFTER
-            // renderCards, because its fallback may reassign selectedModule and the nav highlights it.
-            renderNav();
-            updateValues();
-            preview.setTargetFps(previewTargetFps(state));
+            // Defer the DOM rebuild while the user is mid-interaction: rebuilding under an open dropdown makes it unselectable. The state is stored above, so updateValues() still shows fresh values, and renderIfDeferred draws the structure once the edit ends.
+            if (userIsEditing()) {
+                structuralRenderPending = true;
+                updateValues();
+                preview.setTargetFps(previewTargetFps(state));
+            } else {
+                renderStructure();
+            }
+            if (data.resync) answerStateWaiters(data.resync);
         } catch {
             // ignore malformed messages
         }
@@ -260,6 +261,18 @@ function connectWs() {
     };
 
     ws.onerror = () => { /* onclose will fire next */ };
+}
+
+// The modules the page reads outside the root it shows, by type: the status bar and mode, the update badge, the cloud relay, the preview's frame rate and the MIDI bridge.
+const ALWAYS_SUBSCRIBED = ["SystemModule", "FirmwareUpdateModule", "MoonCloudModule", "PreviewDriver", "MidiService"];
+
+/// Tell the device which root the interface shows, so it sends that root in full and an outline of the rest.
+///
+/// Sent on every change of root: the answer is a full state, which renderStructure draws.
+function subscribe(root) {
+    if (!ws || ws.readyState !== WebSocket.OPEN || root === subscribedRoot) return;
+    subscribedRoot = root;
+    ws.send(JSON.stringify({ subscribe: root ? [root, ...ALWAYS_SUBSCRIBED] : ALWAYS_SUBSCRIBED }));
 }
 
 function setWsDot(connected) {
@@ -324,14 +337,8 @@ async function init() {
     setupStatusBarButtons();
     setupUpdateBadge();
     setupCardsResize();
-    // Open the WebSocket FIRST, before any HTTP fetch. The device pushes a full {modules} state on connect
-    // (handleWebSocketUpgrade → requestFullResync), so the WS is the primary state source: the /api/state
-    // fetch below is only a first-paint shortcut. Connecting first matters most on Safari: it opens more
-    // parallel connections up front and is quicker to give up on a contended one, so if the WS is opened
-    // LAST (after several awaited fetches + the page's file loads) it lands in the most-saturated moment of
-    // the device's small socket pool and Safari abandons it: the "basic UI shows but the WS never goes
-    // live" symptom. Opening it first lets it grab an uncontended slot; Chrome tolerated the old order, so
-    // this fixes Safari without regressing Chrome.
+    // Open the WebSocket FIRST, before any HTTP fetch: the device answers the subscription it sends on open with the state the page shows, so the socket is the one state source.
+    // Safari opens more parallel connections up front and gives up on a contended one sooner, so a socket opened after the page's other loads lands in the busiest moment of the device's small socket pool and is abandoned: the interface shows but never goes live. Opened first, it takes an uncontended slot.
     connectWs();
     preview.init();
     preview.setupLayout();
@@ -348,30 +355,8 @@ async function init() {
         if (wanted) { wspRetryMs = WSP_RETRY_MIN_MS; connectPreview(); }
         else disconnectPreview();
     });
-    // First-paint shortcut: render from a one-shot /api/state so the cards appear immediately instead of
-    // waiting for the WS's first full-state push. The WS then keeps everything live. If this fetch fails
-    // (a contended slot), it's non-fatal: the WS full state fills in the moment it lands. Since the WS is
-    // opened FIRST, its full-state push can beat this await; when it has (state already set), DON'T let the
-    // REST snapshot overwrite the newer, live WS state: just skip the commit.
-    try {
-        const resp = await fetch("/api/state");
-        if (resp.status === 404 && await moonbaseHandoff()) return;
-        if (resp.ok && (!state || !Array.isArray(state.modules))) {
-            const snap = await resp.json();
-            if (snap && Array.isArray(snap.modules)) {
-                state = snap;
-                restoreSelectedRoot();
-                // Default to the first root AS LISTED, not as scheduled: otherwise a device with no
-                // saved selection opens on a card that is not the one the nav highlights at the top.
-                if (!selectedModule && state.modules.length > 0) {
-                    selectedModule = navRoots(state.modules)[0].name;
-                }
-                renderNav();
-                renderCards();
-                updateStatusBar();
-            }
-        }
-    } catch { /* non-fatal: the WS full state renders the UI when it arrives */ }
+    // A tab left open over a device that switched to MoonBase finds MoonBase answering here, and hands over to its page.
+    if (await moonbaseHandoff()) return;
     // /api/types arrived in plan-11; fetch in parallel. When it arrives, the reset-to-default buttons (whose
     // defaults come from this payload) need to appear: but a full renderCards() rebuilds the DOM, which
     // would blow away a control the user is mid-edit (this fires ~1 s after first paint, so that's rare but
@@ -577,6 +562,25 @@ function previewTargetFps(st) {
     return v;
 }
 
+// A full state's render: cards, nav and values, in the order each reads the one before.
+function renderStructure() {
+    structuralRenderPending = false;
+    restoreSelectedRoot();   // before the render that reads it: this may be the FIRST state
+    renderCards();     // a full state may add/remove/reshape cards (structural resync): full render
+    // The nav is built from the same tree, so a structural change (a module added or removed) must rebuild it too, or the sidebar lists modules the state does not hold. AFTER renderCards, because its fallback may reassign selectedModule and the nav highlights it.
+    renderNav();
+    updateValues();
+    preview.setTargetFps(previewTargetFps(state));
+}
+
+// The render a full state deferred mid-edit, once the edit has ended and the browser has settled it.
+function renderIfDeferred() {
+    setTimeout(() => { if (structuralRenderPending && state && !userIsEditing()) renderStructure(); }, 0);
+}
+// An edit ends one of two ways: focus leaves a field or a select, or a text selection clears, which moves no focus.
+document.addEventListener("focusout", renderIfDeferred);
+document.addEventListener("selectionchange", () => { if (structuralRenderPending) renderIfDeferred(); });
+
 // Is the user mid-interaction with the page? A full renderCards() rebuilds the DOM, so it destroys
 // an open native select, a field being typed into, or TEXT THE USER HAS SELECTED, the control or
 // the selection vanishes from under the cursor.
@@ -701,21 +705,37 @@ async function sendControl(moduleName, controlName, value) {
     }
 }
 
-async function refetchState() {
-    try {
-        const r = await fetch("/api/state");
-        state = await r.json();
-        renderNav();
-        renderCards();
-    } catch {}
+// Callers waiting for the view refetchState asked for, each with the request id the document will echo.
+let stateWaiters = [];
+let resyncId = 0;
+
+/// Ask the device for the interface's view again and resolve once it has arrived.
+///
+/// After an add, delete or move the socket's answer is the new tree, the view alone rather than the whole of /api/state.
+/// The request carries an id the document echoes, so a document already on its way does not pass for the answer, and a lost answer never hangs a caller.
+function refetchState() {
+    return new Promise(resolve => {
+        if (!ws || ws.readyState !== WebSocket.OPEN) { resolve(); return; }   // the reconnect's subscription brings the view
+        const id = ++resyncId;
+        stateWaiters.push({ id, resolve });
+        ws.send(JSON.stringify({ resync: id }));
+        setTimeout(() => { stateWaiters = stateWaiters.filter(w => w.id !== id); resolve(); }, 5000);
+    });
+}
+
+// Release the callers a full state answers: those whose request id it echoes, or any earlier one.
+function answerStateWaiters(answered) {
+    stateWaiters = stateWaiters.filter(w => {
+        if (w.id > answered) return true;
+        w.resolve();
+        return false;
+    });
 }
 
 // --- Editable-list row ops (the client half of the editable List primitive) ---
-// Same best-effort fetch style as sendControl: non-ok + network errors are logged,
-// not retried. After a successful mutation the server persists + re-runs prepare and
-// pushes fresh state over the WS; we also refetchState() to match the module add/
-// delete/move ops (which don't wait for the WS push either). The row `id` is a number;
-// it goes into the URL path as-is. `c` (control name) may contain any chars, so encode.
+// Same best-effort fetch style as sendControl: non-ok and network errors are logged, not retried.
+// After a successful mutation the server persists and re-runs prepare, and refetchState() asks the socket for the new view, as the module add, delete and move ops do.
+// The row `id` is a number and goes into the URL path as-is; a control name may contain any character, so it is encoded.
 async function listAddRow(moduleName, ctrlName) {
     try {
         const res = await fetch(`/api/list/${encodeURIComponent(moduleName)}/${encodeURIComponent(ctrlName)}`, {
@@ -1051,17 +1071,9 @@ function selectModule(name) {
     closeNavDrawer();
 }
 
-/// The module holding `name` as a child, or null at the top level.
-///
-/// Used after a replace to resolve a slot whose name was disambiguated: the parent bounds the
-/// search to the siblings the swap happened among.
 /// Restore the root the user was last on, once the tree is known.
 ///
-/// Called from BOTH state arrivals, because either can be first: the WebSocket full state and the
-/// /api/state fetch race on load, and only the fetch used to consult this. When the socket won, the
-/// selection stayed null and renderCards fell back to the first root, so a refresh landed on Control
-/// instead of the Layer or File Manager the user left open. Intermittent exactly as a race is, and
-/// self-correcting after any nav click, which sets the selection in memory.
+/// Called where the full state arrives, before the render that reads the selection: without it renderCards falls back to the first root, and a refresh lands on Control instead of the Layer or File Manager the user left open.
 ///
 /// A saved name that is no longer in the tree is ignored, leaving the fallback to pick.
 function restoreSelectedRoot() {
@@ -1084,6 +1096,9 @@ function restoreSelectedRoot() {
     if (saved && state.modules.some(m => m.name === saved)) selectedModule = saved;
 }
 
+/// The module holding `name` as a child, or null at the top level.
+///
+/// Used after a replace to resolve a slot whose name was disambiguated: the parent bounds the search to the siblings the swap happened among.
 function findParentOf(name, modules) {
     if (!modules) modules = state.modules;
     for (const m of modules) {
@@ -1122,7 +1137,6 @@ function renderCards() {
     const main = document.getElementById("main");
     if (!main || !state) return;
     renderedMode_ = uiMode();   // what these cards are being built for
-    main.innerHTML = "";
 
     // One root visible at a time: render only the selected root's subtree.
     // Falls back to the first root if the selection is missing or stale.
@@ -1131,6 +1145,10 @@ function renderCards() {
         root = navRoots(state.modules)[0];   // the first NAV entry, matching what is highlighted
         selectedModule = root.name;
     }
+    if (root) subscribe(root.name);
+    // An outline carries no controls: the previous cards stay until the full state the subscription answers with, rather than drawing empty.
+    if (root && !Array.isArray(root.controls)) return;
+    main.innerHTML = "";
     if (root) renderModuleTree(root, main, 0);
     // Surface demo sweep (REMOVABLE): delete this line and the block above it to remove the feature.
     // `main` is the root of the rendered subtree, so it holds the encoder strips, the pad grid and
@@ -1746,7 +1764,7 @@ async function moonbaseHandoff() {
     document.body.innerHTML = "";
     const note = document.createElement("p");
     note.style.cssText = "font:16px system-ui;margin:3rem auto;max-width:30rem;text-align:center";
-    note.textContent = "This device is in MoonBase (maintenance mode) \u2014 opening its page\u2026";
+    note.textContent = "This device is in MoonBase (maintenance mode), opening its page\u2026";
     document.body.appendChild(note);
     setTimeout(() => location.replace("/?" + Date.now()), 1200);
     return true;
@@ -1797,7 +1815,7 @@ async function moonbaseUpdateFlow(opts) {
                 if (err instanceof Error && err.name === "AbortError") {
                     // The user's cancel, not a failure: the dropped connection aborts the
                     // write on the device, which stays waiting in MoonBase.
-                    ui.fail("Install canceled \u2014 the device is waiting in MoonBase.");
+                    ui.fail("Install canceled: the device is waiting in MoonBase.");
                     return;
                 }
                 if (err instanceof Error && err.message.startsWith("error")) throw err;
@@ -1828,7 +1846,7 @@ async function moonbaseUpdateFlow(opts) {
                 // A reboot is a few silent probes; many in a row is a device that lost power or
                 // the network. Say so instead of freezing on the last byte count.
                 if (++silentStreak >= 4) {
-                    ui.status("The device is not answering \u2014 waiting for it to come back\u2026");
+                    ui.status("The device is not answering, waiting for it to come back\u2026");
                 }
             } else if (probe.state === "up" && probe.text === "idle" && sawAway) {
                 // MoonBase is up with NOTHING running after the cycle already started: the
@@ -1838,7 +1856,7 @@ async function moonbaseUpdateFlow(opts) {
                 if (retries >= 2) throw new Error("the install keeps getting interrupted");
                 retries++;
                 deadline += 180000;   // a retry restarts the ~40 s install; extend the watch
-                ui.status("The install was interrupted \u2014 retrying\u2026");
+                ui.status("The install was interrupted, retrying\u2026");
                 try {
                     if (opts.url) {
                         await fetch("/api/firmware/url", { method: "POST", body: opts.url });
@@ -1853,7 +1871,7 @@ async function moonbaseUpdateFlow(opts) {
             } else if (probe.state === "up") {
                 sawAway = true;   // MoonBase answering means the old app is gone
                 if (probe.text === "canceled") {
-                    ui.fail("Install canceled \u2014 the device is waiting in MoonBase.");
+                    ui.fail("Install canceled: the device is waiting in MoonBase.");
                     return;
                 }
                 if (probe.text.startsWith("error")) throw new Error(probe.text);
@@ -1870,7 +1888,7 @@ async function moonbaseUpdateFlow(opts) {
                               ? "Preparing the install\u2026" : probe.text);
                 }
             } else if (probe.state === "app" && (sawAway || Date.now() - watchStart > 20000)) {
-                ui.status("Done \u2014 reloading\u2026");
+                ui.status("Done, reloading\u2026");
                 await fwSleep(1000);
                 location.reload();
                 return;
@@ -2614,11 +2632,13 @@ function armPressTwice(btn, onConfirm, opts = {}) {
     btn.addEventListener("mouseleave", disarm);
 }
 
-// Compact byte formatter: "B" under 1 KB, "KB" otherwise (one decimal under 10 KB).
+// Compact byte formatter: the largest of B, KB, MB and GB that keeps the number at 1 or more, with one decimal under 10.
 function fmtBytes(n) {
     if (n < 1024) return n + "B";
-    const k = n / 1024;
-    return (k < 10 ? k.toFixed(1) : Math.round(k)) + "KB";
+    const units = ["KB", "MB", "GB"];
+    let k = n / 1024, u = 0;
+    while (k >= 1024 && u < units.length - 1) { k /= 1024; u++; }
+    return (k < 10 ? k.toFixed(1) : Math.round(k)) + units[u];
 }
 
 // Stats line: timing (🕒, fps or µs/ms per the global toggle) + memory
@@ -2835,7 +2855,7 @@ function renderEmojiTags(el, list) {
 
 // Whether a control appears in the generic control list: false for controls the module marked
 // `hidden`. A module that renders a control in its own panel instead (e.g. the File Manager's
-// `filesystem` usage bar + `lastSaved` readout, drawn by renderFileManager) sets the hidden flag on
+// `flash` usage bar + `lastSaved` readout, drawn by renderFileManager) sets the hidden flag on
 // the C++ side, so the generic list skips it and the value never shows twice. Used by BOTH render
 // paths (renderCards's initial build + updateModuleControls's WS live-patch) so they agree.
 function controlRendersGenerically(mod, ctrl) {
@@ -3744,7 +3764,7 @@ function assignableTargets() {
             walk(m.children);
         }
     };
-    walk(state && state.modules);
+    walk((assignTree || state || {}).modules);
     return out;
 }
 
@@ -3752,8 +3772,12 @@ function assignableTargets() {
 // moving it. One flag rather than per-control state, because the mode is a property of the whole
 // surface: a desk is either being played or being wired.
 let assignMode = false;
+// The whole tree, fetched as assign mode turns on: the picker offers every module's controls, and the socket carries only the root on screen.
+let assignTree = null;
 function setAssignMode(on) {
     assignMode = on;
+    assignTree = null;
+    if (on) fetch("/api/state").then(r => r.json()).then(d => { if (assignMode) assignTree = d; }).catch(() => {});
     document.body.classList.toggle("assign-mode", on);
     document.querySelectorAll(".assign-toggle").forEach(b => {
         b.classList.toggle("active", on);
@@ -4672,13 +4696,10 @@ function fmtTime(sec) {
     return parts.join(" ");
 }
 
+// "used / total", each sized by fmtBytes from the unit the device declares.
 function fmtProgressLabel(ctrl) {
-    const v = Number(ctrl.value) || 0;
-    const t = Number(ctrl.total) || 0;
-    // bytes === false → a plain count (e.g. a scan position "37 / 254"); otherwise
-    // KB (the heap / flash / filesystem gauges, the original use).
-    if (ctrl.bytes === false) return v + " / " + t;
-    return Math.round(v / 1024) + "KB / " + Math.round(t / 1024) + "KB";
+    const scale = ctrl.unit === "KiB" ? 1024 : 1;
+    return fmtBytes((Number(ctrl.value) || 0) * scale) + " / " + fmtBytes((Number(ctrl.total) || 0) * scale);
 }
 
 // "<value> <unit>": treats null / undefined / 0 as "unavailable" so the
@@ -7617,7 +7638,7 @@ function renderFileManager(mod, host) {
 
     renderChildren("/", tree, 0);
 
-    // Filesystem usage bar below the tree: the File Manager's own `filesystem` control (used /
+    // Filesystem usage bar below the tree: the File Manager's own `flash` control (used /
     // total bytes from the platform). Absent (e.g. desktop fs total 0) → nothing shown.
     const fsCtrl = fmFilesystemUsage(mod);
     if (fsCtrl) {
@@ -7625,7 +7646,7 @@ function renderFileManager(mod, host) {
         usage.className = "fm-usage";
         const name = document.createElement("span");
         name.className = "fm-usage-name";
-        name.textContent = "Used";      // the bar/value is used space out of total (see the trailing label)
+        name.textContent = fsCtrl.name;
         const bar = document.createElement("progress");
         bar.value = Number(fsCtrl.value) || 0;
         bar.max = Number(fsCtrl.total) || 1;
@@ -7650,11 +7671,11 @@ function renderFileManager(mod, host) {
     }
 }
 
-// The File Manager's own `filesystem` usage progress control (used/total bytes), or null if the
+// The File Manager's own `flash` usage progress control (used/total bytes), or null if the
 // platform reports no partition. Rendered as the bar below the tree; skipped in the generic control
 // loop so it appears only here.
 function fmFilesystemUsage(mod) {
-    return (mod?.controls || []).find(c => c.name === "filesystem") || null;
+    return (mod?.controls || []).find(c => c.name === "flash") || null;
 }
 
 // Format a file's text for the editor, by extension. JSON is re-indented (2 spaces) so the persisted
@@ -7731,19 +7752,16 @@ async function fmBackupConfig() {
         return new TextDecoder("utf-8", { ignoreBOM: true }).decode(await res.arrayBuffer());
     };
     const { files, skipped } = await collectFiles(fetchDir, fetchFile);
-    // Device identity for the filename + header, straight off the live state.
+    // Device identity for the filename + header, straight off the held state: System and Firmware are always subscribed.
     let device = location.hostname || "device", firmware = "", build = "";
-    try {
-        const st = await (await fetch("/api/state")).json();
-        (function walk(mods) { for (const m of mods || []) {
-            for (const c of m.controls || []) {
-                if (c.name === "deviceName" && c.value) device = c.value;
-                if (c.name === "firmware") firmware = c.value || "";
-                if (c.name === "build") build = c.value || "";
-            }
-            walk(m.children);
-        }})(st.modules);
-    } catch (_) {}
+    (function walk(mods) { for (const m of mods || []) {
+        for (const c of m.controls || []) {
+            if (c.name === "deviceName" && c.value) device = c.value;
+            if (c.name === "firmware") firmware = c.value || "";
+            if (c.name === "build") build = c.value || "";
+        }
+        walk(m.children);
+    }})(state && state.modules);
     const bundle = {
         format: "MoonLight-config-backup", version: 1,
         capturedAt: new Date().toISOString(), origin: location.origin,

@@ -30,6 +30,16 @@ For a device still on old firmware (no Backup button yet), the [installer page](
 
 ## Unreleased
 
+### A `/ws` client subscribes to the state it reads
+
+**Action: *nothing* for the web interface and the WLED app; a script reading `/ws` sends one message.**
+
+The control socket sends no module state until the client sends `{"subscribe":["<module>", …]}`, naming modules by name or type; `{"subscribe":["*"]}` receives the whole tree as before.
+A module outside the subscription arrives as an outline, without its controls, and its values are not patched.
+The WLED `{state,info}` frame goes only to a client that has not subscribed.
+`{"resync":n}` asks for the subscribed view again, and the answering document ends with `"resync":n`.
+`/api/state` keeps its shape, with three read-only gauges changed: a Progress control carries `"unit":"B"` or `"KiB"` where it carried `"bytes":true` or `false`, the File Manager's `filesystem` gauge is `flash`, and SdCard's `card (KiB)` is `card`.
+
 ### MoonLive scripts: colors read as one RGB, and struct, arithmetic and builtin names are reserved
 
 **Action: *update a file*, only for a user script that uses one of these names or calls.**

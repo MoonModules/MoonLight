@@ -230,8 +230,11 @@ const char* sdkVersion();
 /// CPU frequency and core count, read from the running hardware so a downclock is visible in the UI.
 const char* cpuInfo();
 
-/// PSRAM interface type, "quad" or "octal", and empty where this build has no PSRAM.
+/// PSRAM interface type and clock, such as "octal, 80 MHz", and empty where this build has no PSRAM.
 const char* psramType();
+
+/// How the chip reads its program flash now, "QIO", "DIO" or "octal" and the like, read from the running hardware; empty where the host has none to report.
+const char* flashMode();
 
 /// WiFi co-processor status for a board whose radio lives on a separate chip, empty on a native radio.
 const char* coprocessorWifi();
@@ -333,6 +336,11 @@ inline bool fsWriteStream(const char* path, FsWriteSrc src, void* user) {
 }
 
 // A second, independent mount (microSD, FAT) sharing the fsXxx surface above through its own `/sd` path prefix; inert wherever hasSdCard is false.
+
+/// Whether `path` names the filesystem's root: "" or "/", the two forms a listing of the root arrives as.
+inline bool isFsRoot(const char* path) {
+    return path && (path[0] == '\0' || (path[0] == '/' && path[1] == '\0'));
+}
 
 // Never where hasSdCard is false, so a flash folder named `sd` stays an ordinary folder there.
 /// Whether `path` is rooted at the SD mount: "sd", "/sd", "sd/foo" or "/sd/foo" (a leading slash is optional).

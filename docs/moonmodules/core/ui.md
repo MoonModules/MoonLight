@@ -48,7 +48,7 @@ Fixed top, 44 px, left-to-right:
 5. **System stats**, `uptime · NN K free` (uptime `Xd Yh Zm Ws`, free heap KB), read from the
    SystemModule controls in the WS state push; no separate polling endpoint.
 6. **WebSocket dot**, green = connected, gray = disconnected. The socket auto-reconnects with
-   exponential backoff (500 ms → 5 s) on close, and a page reload covers the rare half-dead socket.
+   exponential backoff from 200 ms to a 5 s ceiling on close, and a page reload covers the rare half-dead socket.
 7. **Reboot button (⏻)**, red border via `data-crashed="true"` when `SystemModule.bootReason` is
    PANIC / INT_WDT / TASK_WDT / BROWNOUT. Press-twice to confirm: the first click arms it (solid red), a second sends `POST /api/reboot`. Disarms after 3 s or on pointer-leave, no `confirm()` popup.
 8. **Theme toggle (☀/🌙)**, flips `[data-theme]` on `<body>`; preference in `localStorage['mm_theme']`.
@@ -67,7 +67,7 @@ A left column listing the root modules, one entry per top-level MoonModule.
 - **Footer** pinned to the bottom of the nav: social links (GitHub, Discord, Reddit, YouTube, inline
   SVG) and a `© <year> MoonLight` line.
 
-The WS state push carries the whole module tree; only the selected root is rendered, and `updateValues()` patches just the visible cards (non-rendered roots have no DOM nodes, so their data is silently ignored). Filtering per root server-side buys little: the full tree arrives once on connect and each second after that carries only what changed, built through a streaming sink, so tree size is not a buffer-limit concern.
+The page subscribes to what it shows: the selected root, plus by type the modules it reads outside that root (`ALWAYS_SUBSCRIBED`: System for the status bar and mode, FirmwareUpdate for the update badge, MoonCloud for the relay, PreviewDriver for the frame rate, MidiService for the MIDI bridge). The device answers with those modules in full and an outline of the rest, names and shape without controls, which is all the nav reads. Opening another root sends a new subscription, and its cards appear when the answer arrives; until then the previous cards stay. The control-surface target picker offers every module's controls, so assign mode fetches the whole tree from `/api/state`.
 
 ## Module card
 
@@ -120,7 +120,7 @@ Auto-rendered by `controls[].type`, adding a MoonModule with these types needs n
 | `display` (read-only) | static text | WS push updates in place | n/a |
 | `display-int` (read-only int + unit) | formatted text (`-58 dBm`) | unit suffix set device-side at `addReadOnlyInt` time, carried in the descriptor's `aux` slot | n/a |
 | `time` (read-only seconds) | formatted text (`1d 4h 27m 13s`) | WS push updates | n/a |
-| `progress` | bar + numeric `X / max` | WS push updates | n/a |
+| `progress` | bar + `used / total`, sized B, KB, MB or GB | WS push updates | n/a |
 | `ipv4` | text input (dotted-quad) | server validates (`parseDottedQuad`), 400 on malformed; stored as 4 octets device-side | n/a |
 | `button` | clickable button | sends value = 1 on click | none |
 
@@ -177,7 +177,7 @@ The light-domain renderer (WebGL point cloud, the `0x03`/`0x02` frame format, or
 
 ## State updates, the no-rebuild contract
 
-When a WS state message arrives, the full tree on connect or a patch after it, for each module in the payload:
+When a WS state message arrives, a full state answering a subscription or a patch after it, for each module in the payload:
 - If `controls.deviceName` exists, update the status-bar device name and `document.title`.
 - For each `controls[key]`: look up the matching `<input>`/`<span>`/`<progress>`/`<select>` by
   `[data-mid][data-key]`; **skip** if `Date.now() - dragTs[mid:key] < 1000` (user interacting); otherwise patch the value in place (sliders update input + `value-display`; toggles set `checked`; selects set `value`). Then update the reset-to-default "at default?" state and the timing display.
@@ -192,7 +192,8 @@ card-render closure holding a `mod` reference goes stale within ~1 s. Any "which
 The endpoints, the `/ws` frame shape, and the streaming state sink are owned by [HttpServerModule](moxygen/HttpServerModule.md); `/api/control` is `{module, control, value}`. The
 **browser-side** socket behavior the server doesn't dictate:
 
-- URL `ws://<host>/ws` (same port as HTTP); the server sends the full state on connect, then a patch of what changed each second.
+- URL `ws://<host>/ws` (same port as HTTP). On open the page sends `{"subscribe":[…]}`; the server answers with a full state, then a patch of what changed in the subscribed modules each second.
+- After an add, delete, move or replace, `refetchState()` sends `{"resync":n}` and resolves when the document ending in `"resync":n` has rendered: the view alone, never the whole tree. Only the diagnostics download, the control-surface target picker and a config restore read `/api/state`, since each needs every module.
 - Client sends `"ping"` every 25 s as keepalive (Safari kills idle sockets otherwise).
 - Auto-reconnect on close with exponential backoff (500 ms → 5 s ceiling).
 - Pause on `document.visibilityState === 'hidden'`, resume on `pageshow` (Safari bfcache survival).

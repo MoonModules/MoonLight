@@ -23,6 +23,13 @@ target_include_directories(teensy_libs SYSTEM PUBLIC "${TEENSY_SDK}/LittleFS/src
 target_link_libraries(teensy_libs PUBLIC teensy_core)
 target_compile_options(teensy_libs PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-std=gnu++17>)
 
+# SD over PJRC's SdFat for the built-in microSD socket, a library of its own so it runs from flash like the application: it never writes program flash, and in RAM it takes the heap's room.
+file(GLOB_RECURSE SDFAT_SOURCES "${TEENSY_SDK}/SdFat/src/*.cpp")
+add_library(teensy_sd STATIC ${SDFAT_SOURCES} "${TEENSY_SDK}/SD/src/SD.cpp")
+target_include_directories(teensy_sd SYSTEM PUBLIC "${TEENSY_SDK}/SD/src" "${TEENSY_SDK}/SdFat/src")
+target_link_libraries(teensy_sd PUBLIC teensy_libs)
+target_compile_options(teensy_sd PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-std=gnu++17>)
+
 # Which binary this is and which Ethernet driver it carries, both set by build_teensy.py from the firmware registry, which names and checks the variants.
 set(MM_FIRMWARE "teensy41" CACHE STRING "the firmware name the binary reports")
 
@@ -120,7 +127,7 @@ endif()
 if(MM_VERSION)
     target_compile_definitions(MoonLight.elf PRIVATE MM_VERSION="${MM_VERSION}")
 endif()
-target_link_libraries(MoonLight.elf PRIVATE qnethernet teensy_libs teensy_core m stdc++)
+target_link_libraries(MoonLight.elf PRIVATE qnethernet teensy_sd teensy_libs teensy_core m stdc++)
 target_link_options(MoonLight.elf PRIVATE "-T${CMAKE_BINARY_DIR}/imxrt1062_t41.ld")
 
 # The HEX Teensy Loader writes, and the same image flat for the writers that take raw bytes at an offset: from the HEX, which holds only the flash records at 0x60000000, and gap-filled with 0xFF, what erased flash reads.

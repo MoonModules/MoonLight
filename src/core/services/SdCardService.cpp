@@ -43,8 +43,8 @@ void SdCardService::defineControls() {
 
     // Neither is hidden: there is no panel of this module's own, so the generic card is the only place either shows. Press-twice confirmed generically, the same contract every other confirm-gated button already has.
     controls_.addButton("format", /*confirm=*/true);
-    // Usage gauge, bound only once mounted: an absent/unreadable card has nothing to show; KiB is in the name since the shared Progress control's own label assumes bytes.
-    if (mounted_ && totalKiB_ > 0) controls_.addProgress("card (KiB)", usedKiB_, totalKiB_, /*bytes=*/false);
+    // Usage gauge, bound only once mounted: an absent/unreadable card has nothing to show.
+    if (mounted_ && totalKiB_ > 0) controls_.addProgress("card", usedKiB_, totalKiB_, ProgressUnit::KiB);
     MoonModule::defineControls();
 }
 

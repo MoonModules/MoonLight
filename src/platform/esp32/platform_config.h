@@ -66,6 +66,8 @@ constexpr bool isEsp32S31 = true;
 #else
 constexpr bool isEsp32S31 = false;
 #endif
+/// Not a Teensy, so its SD socket preset stays out of the list.
+constexpr bool isTeensy41 = false;
 
 /// One pad the EMAC's data interface owns: the signal it carries, and the GPIO silicon fixed it to.
 ///
