@@ -64,6 +64,25 @@ public:
         return 0;   // a dangling id renders at the first profile; rebuildCorrection falls back to it too
     }
 
+    // Narrower than profileHasSynthChannel on purpose, since the white trim reaches the white dies alone. A profile with amber but no white would otherwise show a slider that changes nothing.
+    /// Whether the profile carries a white die, cold or warm, at either precision.
+    bool profileHasWhiteDie(uint32_t id) const {
+        const Profile* p = find(id);
+        if (!p) return false;
+        const uint8_t* r = roleAt(*p);
+        for (uint8_t c = 0; c < p->channelCount; c++) {
+            switch (static_cast<ChannelRole>(r[c])) {
+                case ChannelRole::White:
+                case ChannelRole::WarmWhite:
+                case ChannelRole::WhiteFine:
+                case ChannelRole::WarmWhiteFine:
+                    return true;
+                default: break;
+            }
+        }
+        return false;
+    }
+
     // Any channel apply() synthesizes from RGB counts, since one control governs them all.
     /// Whether the profile carries a channel the white mode would synthesize.
     bool profileHasSynthChannel(uint32_t id) const {

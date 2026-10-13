@@ -106,6 +106,9 @@ MODULES = [
     ("RainbowEffect",       "Layer",    {}, True),
     ("NoiseEffect",         "Layer",    {}, True),
     # The generative-fields showcases: each is Dim::D3, so the preview shows a volume.
+    # Paints the live video frame, so with no source it photographs black. The capture points it
+    # at the test pattern, whose four coloured bands and sweeping block are what the effect is for.
+    ("AmbilightEffect",     "Layer",    {}, True),
     ("AuroraEffect",        "Layer",    {}, True),
     ("ColorTrailsEffect",   "Layer",    {}, True),
     ("TrailsEffect",        "Layer",    {}, True),
@@ -178,6 +181,7 @@ CORE_MODULES = [
     # (not in state); capture these against a board when needed.
     "ImprovProvisioningModule",
     "AudioService",
+    "VideoService",
     "AnalogService",
     "I2cBusModule",
     "InfraredService",
@@ -209,6 +213,7 @@ CORE_NAV_ROOT = {
     # the desktop tree — so they're captured against an ESP32, where these entries route the
     # shot to the right nav root.
     "AudioService": "Services",
+    "VideoService": "Services",
     "AnalogService": "Services",
     "InfraredService": "Services",
     "ButtonService": "Services",

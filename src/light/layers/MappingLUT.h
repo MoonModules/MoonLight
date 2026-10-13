@@ -149,6 +149,13 @@ public:
              + static_cast<size_t>(maxDest) * sizeof(nrOfLightsType);
     }
 
+    /// Hot path: does this logical index reach any physical light? Empty run = no destination.
+    bool hasDestination(nrOfLightsType logicalIdx) const MM_NONBLOCKING {
+        if (identity_) return true;
+        if (!offsets_ || logicalIdx >= logicalCount_) return false;
+        return offsets_[logicalIdx + 1] > offsets_[logicalIdx];
+    }
+
     /// Walk the physical destinations of one logical light, on the hot path.
     template<typename F>
     void forEachDestination(nrOfLightsType logicalIdx, F&& callback) const {

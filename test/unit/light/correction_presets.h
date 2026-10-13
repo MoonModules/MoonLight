@@ -32,5 +32,13 @@ inline void rebuildFromPreset(mm::Correction& c, uint8_t brightness, PresetOrder
     }
 }
 
+/// The same, leaving `curve` as the caller set it, for a test about how the curve composes with a trim.
+inline void rebuildFromPresetKeepingCurve(mm::Correction& c, uint8_t brightness, PresetOrder order) {
+    const auto keep = c.curve;
+    rebuildFromPreset(c, brightness, order);
+    c.curve = keep;
+    c.rebuildBrightness(brightness);
+}
+
 /// @}
 }  // namespace mm::test

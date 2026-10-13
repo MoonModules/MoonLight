@@ -42,6 +42,28 @@ Detail: [technical](moxygen/AudioService.md) · [the sync packet](moxygen/WLEDAu
 
 [Tests](../../reference/tests/unit-tests.md#audioservice)
 
+<a id="video"></a>
+
+### Video
+
+<img src="../../assets/core/VideoService.png" width="300" alt="Video service card">
+
+A user-added Service: the video source a screen-follow effect reads. The counterpart of [Audio](#audio) for a picture, decoded once per tick however many effects want it. `source` decides which controls show. Sources, HDR and staleness: ⌄ details.
+
+- `source`: `test pattern` needs no hardware, `file` reads a PPM, `usb` captures from an HDMI grabber.
+- `patternSpeed`: (test pattern) sweep rate of the white block, in pixels per second. 0 parks it.
+- `file`: (file) path to a binary PPM (P6, maxval 255), uploaded through the File Manager.
+- `reload`: (file) re-read the file in place, without rebuilding the pipeline.
+- `offered`: (usb) the resolution and frame rate to request, from what the device advertises.
+- `staleMs`: (usb) how long a gap in frames is tolerated before the lights go dark.
+- `hdr`: (usb) the source's transfer curve: `off`, `HDR10 (PQ)` or `HLG`. Declared, not detected.
+- `hdrNits`: (usb, PQ only) the reference white PQ's absolute luminance is scaled to.
+- status: the live frame's dimensions (`640x480`), or the reason there is no frame.
+
+Detail: [technical](moxygen/VideoService.md)
+
+[Tests](../../reference/tests/unit-tests.md#videoservice)
+
 <a id="osc"></a>
 
 ### OSC
@@ -265,6 +287,32 @@ The factor is exact rather than a fudge: it is the divisor WLED's effects apply,
 A received magnitude is clamped to 255, since a real WLED source reaches ~9500 and an unclamped value would drive effects harder than locally analyzed audio ever could.
 
 Prior art: the WLED-MM audio-reactive usermod by **Frank ([@softhack007](https://github.com/softhack007))**, the most-used open-source audio-reactive LED implementation, whose adaptive noise-gate concept the analysis here descends from (analyzed with his permission); and **[@troyhacks](https://github.com/troyhacks/WLED)**, who reworked that DSP onto Espressif's [esp-dsp](https://github.com/espressif/esp-dsp) FFT, the same choice this service makes. The line-in path exists because **wladi ([myhome-control](https://shop.myhome-control.de))** supplied the hardware and pinout for the [MHC-WLED ESP32-P4 shield](../../reference/hardware/mhc-wled-esp32-p4-shield.md): its onboard PCM1808 I2S ADC is what `mclkPin` is for.
+
+## Video, details
+
+**What reads it.** The service publishes one decoded RGB frame per tick through a static accessor, and any number of effects read that same frame: it is decoded once here however many want it. A consumer holds the frame for one tick and never across frames, and before any frame exists the pointer is non-null but its pixels are, which every reader has to tolerate. That contract is what lets a source be added and removed under a running pipeline.
+
+**The test pattern is a diagnostic, not decoration.** Four colored border bands (red top, green right, blue bottom, yellow left) and a white block sweeping along the top edge. On a border-mounted strip that makes orientation self-evident: a strip mapped the wrong way round shows as the wrong physical edge lighting, rather than a subtly wrong picture. The sweeping block shows liveness and which way "forward" runs. Parking it with `patternSpeed` 0 turns the pattern into a still reference, so one light can be compared against a known color without the block passing through its zone mid-read.
+
+**Why PPM for the file source.** There is no software JPEG decoder in this codebase, and adding one so the desktop build could open a `.jpg` would buy a dependency for a development convenience. PPM is a raw RGB dump behind a three-line ASCII header, so it needs no decoder and is one command from any source material:
+
+```sh
+ffmpeg -i clip.mp4 -frames:v 1 -vf scale=64:36 -pix_fmt rgb24 frame.ppm
+```
+
+The header is parsed strictly, because the file is whatever a user uploaded: comments and whitespace runs are skipped per Netpbm, a 16-bit maxval is refused rather than misread as 8-bit, and exactly one whitespace byte is consumed before the pixels. Accepting a non-whitespace separator there would eat a pixel and shift every channel one place, which tints the whole image instead of failing.
+
+**The USB source needs an ESP32-P4.** It wants two things at once and only that chip has both: a High-Speed USB PHY (the S3 has USB, but too slow to carry video) and a hardware JPEG decoder. Elsewhere the option is not offered and the two software sources still work. Choosing a format:
+
+- **MJPEG only.** It is what the JPEG hardware decodes, so other encodings the device advertises are filtered out of `offered` rather than listed and then refused.
+- **Pick 16:9.** A 4:3 capture makes a 16:9 source letterbox into it, putting black bars where the top and bottom lights look. For bars that are in the source itself, see [Ambilight](../light/effects.md#ambilight)'s `detectBlackBars`.
+- **Then prefer frame rate over resolution.** A border light averages a few hundred pixels whatever the capture size, so resolution buys nothing and bandwidth is the scarce thing.
+
+**HDR is declared, not detected.** MJPEG carries no HDR metadata and a grabber strips what the console sends, so the curve is a control. With an HDR source left at `off` the lights read washed out and hue-shifted, green lifted against red being the usual sign, because the bytes are averaged on the HDR curve rather than the display's. `hdrNits` sets the reference white PQ's absolute luminance is scaled to: too low and bright channels clamp, dragging saturated hues toward their neighbors; too high and the picture reads dim. HLG is relative and does not use it.
+
+**Staleness is why `staleMs` exists.** The decoder runs at its own rate, so a gap of one tick is normal and the last frame stays up. A long gap means the source stopped, a console asleep or a cable out, and holding the picture would leave the room lit by a frozen frame. Past `staleMs` the frame is dropped and every effect falls back to black. Floored above a frame interval rather than 0, since the render loop outruns the capture and ordinary gaps would otherwise read as loss and strobe the room.
+
+**Every frame carries its tone curve.** A published frame names the curve from its own encoding to linear light, and a consumer reads pixels through it. SDR is sRGB, a curve like any other, so the frame always carries one rather than leaving the reader to assume. This matters because averaging is what a screen-follow effect does, and the mean of encoded bytes is not the mean of the light: half black and half white averages to 128 as bytes where the light is 188. The table is 12-bit rather than 8, since linear has no headroom at the dark end, which is what encodings exist for.
 
 ## OSC, details
 **Feedback: the device answers.** With `feedback` on, a control that changes anywhere (the web UI, a preset recall, an audio-reactive effect) is mirrored back to the surface, which is what keeps a client honest and what moves a motorized fader. `addressing` picks where it goes: `unicast` to each of `hosts`, addresses or names, or to whoever last wrote when `hosts` is empty; `multicast` to `group`, which every listening device with the same `group` joins; the default, `239.255.77.78`, sits beside discovery's own group, so multicast works with nothing to fill in, and a second rig on the same network picks another. `feedbackPort` is where that client LISTENS, which is not the port we listen on (Open Stage Control calls its own `osc-port`).

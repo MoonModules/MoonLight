@@ -22,7 +22,7 @@ TEST_CASE("Correction brightness LUT: full brightness is identity") {
     Correction c;
     c.curve = Correction::Curve::Linear;   // these pin roles and white math, not the curve
     mm::test::rebuildFromPreset(c, 255, mm::test::PresetOrder::RGB);
-    for (int v = 0; v < 256; v++) CHECK(c.briLut[v] == v);
+    for (int v = 0; v < 256; v++) CHECK(c.briLut[0][v] == v);
 }
 
 // At brightness=128, every entry is roughly halved using scale8 (255→128, 128→64, 2→1).
@@ -30,10 +30,10 @@ TEST_CASE("Correction brightness LUT: half brightness halves each value (scale8)
     Correction c;
     c.curve = Correction::Curve::Linear;   // these pin roles and white math, not the curve
     mm::test::rebuildFromPreset(c, 128, mm::test::PresetOrder::RGB);
-    CHECK(c.briLut[0] == 0);
-    CHECK(c.briLut[255] == 128);   // (255*128)/255 = 128
-    CHECK(c.briLut[128] == 64);    // (128*128)/255 = 64
-    CHECK(c.briLut[2] == 1);       // (2*128)/255 = 1
+    CHECK(c.briLut[0][0] == 0);
+    CHECK(c.briLut[0][255] == 128);   // (255*128)/255 = 128
+    CHECK(c.briLut[0][128] == 64);    // (128*128)/255 = 64
+    CHECK(c.briLut[0][2] == 1);       // (2*128)/255 = 1
 }
 
 // RGB preset at full brightness passes the source RGB through unchanged (3 output channels, no white).
@@ -186,7 +186,7 @@ TEST_CASE("Correction roles array: arbitrary Custom wiring derives correct offse
     CHECK(c.offGreen == 2);
     CHECK(c.offRed == 3);
     CHECK(c.outChannels == 4);
-    CHECK(c.briLut[255] == 128);   // LUT refreshed (brightness applied)
+    CHECK(c.briLut[0][255] == 128);   // LUT refreshed (brightness applied)
     const uint8_t src[3] = {200, 100, 60};  // scaled: 100, 50, 30 → min = 30
     uint8_t out[4] = {};
     c.apply(src, out, 3);
@@ -459,13 +459,13 @@ TEST_CASE("The CIE curve keeps the endpoints and bends the middle down") {
     c.curve = Correction::Curve::Cie;
     c.rebuildBrightness(255);
 
-    CHECK(c.briLut[0] == 0);       // black stays black
-    CHECK(c.briLut[255] == 255);   // and full stays full: the curve redistributes, it does not dim
+    CHECK(c.briLut[0][0] == 0);       // black stays black
+    CHECK(c.briLut[0][255] == 255);   // and full stays full: the curve redistributes, it does not dim
     // A mid control position is well under half output, which is the whole point: half the PERCEIVED brightness is a small fraction of the luminance.
-    CHECK(c.briLut[128] < 80);
-    CHECK(c.briLut[128] > 30);
+    CHECK(c.briLut[0][128] < 80);
+    CHECK(c.briLut[0][128] > 30);
     // Monotonic, or a gradient would band or reverse.
-    for (int v = 1; v < 256; v++) CHECK(c.briLut[v] >= c.briLut[v - 1]);
+    for (int v = 1; v < 256; v++) CHECK(c.briLut[0][v] >= c.briLut[0][v - 1]);
 }
 
 // The guard that stops a fade-out snapping to black. Every curve here crushes the low end at 8 bits, so without it the dimmest usable values are simply missing.
@@ -475,7 +475,7 @@ TEST_CASE("A non-zero value never curves down to black") {
         mm::test::rebuildFromPreset(c, 255, mm::test::PresetOrder::RGB);
         c.curve = curve;
         c.rebuildBrightness(255);
-        for (int v = 1; v < 256; v++) CHECK(c.briLut[v] >= 1);
+        for (int v = 1; v < 256; v++) CHECK(c.briLut[0][v] >= 1);
     }
 }
 
@@ -485,7 +485,7 @@ TEST_CASE("Linear is an exact identity at full brightness, for a device that cor
     mm::test::rebuildFromPreset(c, 255, mm::test::PresetOrder::RGB);
     c.curve = Correction::Curve::Linear;
     c.rebuildBrightness(255);
-    for (int v = 0; v < 256; v++) CHECK(c.briLut[v] == v);
+    for (int v = 0; v < 256; v++) CHECK(c.briLut[0][v] == v);
 }
 
 // Brightness is a LINEAR pre-scale and the curve is applied last. Turning the slider down must not change the shape of the curve, only how far up it reaches.
@@ -495,11 +495,11 @@ TEST_CASE("Brightness scales before the curve, so black stays black and the top 
     c.curve = Correction::Curve::Cie;
 
     c.rebuildBrightness(255);
-    const uint8_t fullTop = c.briLut[255];
+    const uint8_t fullTop = c.briLut[0][255];
     c.rebuildBrightness(128);
-    const uint8_t halfTop = c.briLut[255];
+    const uint8_t halfTop = c.briLut[0][255];
 
-    CHECK(c.briLut[0] == 0);          // zero is zero at any brightness
+    CHECK(c.briLut[0][0] == 0);          // zero is zero at any brightness
     CHECK(halfTop < fullTop);         // the slider still reaches the output
     // Half the SLIDER is well under half the light, because the curve applies after the scale.
     CHECK(halfTop < fullTop / 2);
@@ -522,11 +522,11 @@ TEST_CASE("RGBW white is derived in linear light, then curved once") {
     mm::test::rebuildFromPreset(ref, 255, mm::test::PresetOrder::RGB);
     ref.curve = Correction::Curve::Cie;
     ref.rebuildBrightness(255);
-    CHECK(out[3] == ref.briLut[100]);
+    CHECK(out[3] == ref.briLut[Correction::kWhite][100]);
     // and RGB carry the remainder (200-100, 150-100, 0), each curved.
-    CHECK(out[0] == ref.briLut[100]);
-    CHECK(out[1] == ref.briLut[50]);
-    CHECK(out[2] == ref.briLut[0]);
+    CHECK(out[0] == ref.briLut[0][100]);
+    CHECK(out[1] == ref.briLut[0][50]);
+    CHECK(out[2] == ref.briLut[0][0]);
 }
 
 namespace {
@@ -564,7 +564,7 @@ TEST_CASE("At low brightness a 16-bit channel keeps every level the 8-bit table 
         const uint8_t src[3] = {static_cast<uint8_t>(v), 0, 0};
         uint8_t out[6] = {};
         c.apply(src, out, 3);
-        narrow.insert(c.briLut[v]);
+        narrow.insert(c.briLut[0][v]);
         wide.insert(out[0] * 256 + out[1]);
     }
     CHECK(narrow.size() <= 4);
@@ -624,4 +624,84 @@ TEST_CASE("Dimmer fine is driven wide open with its coarse byte") {
     uint8_t out[5] = {};
     c.apply(src, out, 3);
     CHECK((out[0] == 255 && out[1] == 255));
+}
+
+// --- White balance --------------------------------------------------------------------------
+// An LED's three dies are not equally efficient, and on an SK6812 the green runs hot, so a neutral triple renders green-cast. One trim per channel, folded into the table the hot path already reads.
+
+TEST_CASE("Correction white balance: trimming one channel leaves the others untouched") {
+    Correction c;
+    c.balGreen = 128;
+    mm::test::rebuildFromPreset(c, 255, mm::test::PresetOrder::RGB);
+    CHECK(c.briLut[0][255] == 255);   // red untrimmed
+    CHECK(c.briLut[1][255] == 128);   // green at half
+    CHECK(c.briLut[2][255] == 255);   // blue untrimmed
+
+    const uint8_t src[3] = {200, 200, 200};   // the triple a green-cast strip renders wrong
+    uint8_t out[3] = {};
+    c.apply(src, out, 3);
+    CHECK(out[0] == 200);
+    CHECK(out[1] == 100);             // pulled down to match the weaker channels
+    CHECK(out[2] == 200);
+}
+
+// The trim corrects the RGB dies, so it must not reach the separate white phosphor.
+TEST_CASE("Correction white balance: an RGB trim does not reach the white die") {
+    Correction c;
+    c.balBlue = 128;
+    mm::test::rebuildFromPreset(c, 255, mm::test::PresetOrder::RGBW);
+    const uint8_t src[3] = {200, 200, 200};
+    uint8_t out[4] = {};
+    c.apply(src, out, 3);
+    CHECK(out[0] == 200);   // R
+    CHECK(out[1] == 200);   // G
+    CHECK(out[2] == 100);   // B trimmed
+    CHECK(out[3] == 200);   // W from the RAW minimum, untrimmed
+}
+
+// Two inputs to one fill rather than two stages, so the hot path stays a single lookup.
+TEST_CASE("Correction: the curve and white balance compose into the one table") {
+    Correction c;
+    c.curve = Correction::Curve::Gamma22;
+    c.balBlue = 128;
+    mm::test::rebuildFromPresetKeepingCurve(c, 255, mm::test::PresetOrder::RGB);
+    CHECK(c.briLut[0][200] == 149);                      // red: curve only, (200/255)^2.2 * 255
+    // Blue takes the trim as a PRE-scale, so the curve still lands last.
+    CHECK(c.briLut[2][200] < c.briLut[0][200]);
+    CHECK(c.briLut[2][200] > 0);
+}
+
+// The white die is separate hardware the RGB trims say nothing about, so it carries its own.
+TEST_CASE("Correction whiteLevel: trims the white die without touching RGB") {
+    const uint8_t src[3] = {200, 160, 120};   // white component = min = 120
+
+    Correction full;
+    mm::test::rebuildFromPreset(full, 255, mm::test::PresetOrder::RGBW);
+    uint8_t a[4] = {};
+    full.apply(src, a, 3);
+
+    Correction half;
+    half.whiteLevel = 128;
+    mm::test::rebuildFromPreset(half, 255, mm::test::PresetOrder::RGBW);
+    uint8_t b[4] = {};
+    half.apply(src, b, 3);
+
+    CHECK(b[3] < a[3]);                                    // white trimmed
+    CHECK(b[3] == half.briLut[Correction::kWhite][120]);   // through its own row, curve last
+    CHECK(b[0] == a[0]);                                   // and RGB untouched
+    CHECK(b[1] == a[1]);
+    CHECK(b[2] == a[2]);
+}
+
+// Zero has to mean dark. The never-black nudge is gated on the SCALE rather than the input, or a fully trimmed die would still emit its floor.
+TEST_CASE("Correction whiteLevel: zero puts the white die out, not at its floor") {
+    Correction c;
+    c.whiteLevel = 0;
+    mm::test::rebuildFromPreset(c, 255, mm::test::PresetOrder::RGBW);
+    for (int v = 0; v < 256; v++) CHECK(c.briLut[Correction::kWhite][v] == 0);
+    const uint8_t src[3] = {200, 160, 120};
+    uint8_t out[4] = {};
+    c.apply(src, out, 3);
+    CHECK(out[3] == 0);
+    CHECK(out[0] > 0);   // the colors are untouched by it
 }

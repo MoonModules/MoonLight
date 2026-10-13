@@ -61,6 +61,9 @@ constexpr bool hasI2sMic = false;
 /// OS capture devices, reaching the same audioMicRead seam a wired microphone would.
 constexpr bool hasAudioCapture = true;
 
+/// No USB host on a desktop, so VideoService keeps its test-pattern and file sources.
+constexpr bool hasUsbVideo = false;
+
 /// True, so the host compiles the WiFi path even though it ships stubs behind it.
 constexpr bool hasWiFi = true;
 
