@@ -42,6 +42,12 @@ public:
     /// Compile the animated routine, whose color derives from the per-frame `t`.
     bool compileAnimated();
 
+    /// Emitted code at `code` as a function of type Fn, its address carrying what the target's call needs.
+    template <class Fn>
+    static Fn asFunction(const void* code) {
+        return code ? reinterpret_cast<Fn>(reinterpret_cast<uintptr_t>(code) | platform::codeAddressBits) : nullptr;
+    }
+
     /// Whether a program is compiled and callable.
     bool ok() const { return fn_ != nullptr || anim_ != nullptr || ctrl_ != nullptr; }
 
@@ -49,7 +55,7 @@ public:
     /// The compiled function named `name`, or null when the script defined none.
     CtrlFn entry(const char* name) const {
         const uint8_t* p = entryCode(name);
-        return p ? reinterpret_cast<CtrlFn>(reinterpret_cast<uintptr_t>(p)) : nullptr;
+        return asFunction<CtrlFn>(p);
     }
 
     /// What a named entry point declared it returns, or Void when the script has no such function.
@@ -114,7 +120,7 @@ public:
         // Through the code address, since casting between return types is what the warning catches.
         const uint8_t* code = entryCode(name);
         if (!code) return fallback;
-        ValueFn f = reinterpret_cast<ValueFn>(reinterpret_cast<uintptr_t>(code));
+        ValueFn f = asFunction<ValueFn>(code);
         ctrlArena_[kDepthSlot] = 0;      // same fresh-depth contract as run()
         return f(buf, nLights, cpl, t, ctrlArena_);
     }

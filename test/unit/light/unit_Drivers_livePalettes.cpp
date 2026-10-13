@@ -61,11 +61,11 @@ TEST_CASE("a palette downloaded to the factory directory is offered by the picke
     // The UI downloads a `.mlp` to the FACTORY directory (`/.moonlive`) so a later edit can shadow it, so the scan reads that directory as well as the USER one (`/moonlive`).
     IsolatedFs fs("factory");
     Drivers drv;
-    drv.defineControls();
+    drv.onFileChanged(mm::moonlive::kScriptDir);   // this test's empty folders, rescanned as a changed folder is
     const int32_t before = paletteMax(drv);
 
     writePalette(mm::moonlive::kFactoryScriptDir, "unit-factory.mlp");
-    drv.rebuildControls();      // CLEARS then re-defines, which is what a schema change does
+    drv.onFileChanged(mm::moonlive::kFactoryScriptDir);   // what the download's write announces
 
     CHECK(paletteMax(drv) == before + 1);
 }
@@ -74,12 +74,12 @@ TEST_CASE("editing a factory palette leaves one entry, not two") {
     // Editing a factory script saves a same-named file to the user directory, which shadows the factory copy; both are scanned, so a dedupe keeps the picker to one row.
     IsolatedFs fs("both");
     Drivers drv;
-    drv.defineControls();
+    drv.onFileChanged(mm::moonlive::kScriptDir);   // this test's empty folders, rescanned as a changed folder is
     const int32_t before = paletteMax(drv);
 
     writePalette(mm::moonlive::kFactoryScriptDir, "unit-both.mlp");
     writePalette(mm::moonlive::kScriptDir, "unit-both.mlp");
-    drv.rebuildControls();      // CLEARS then re-defines, which is what a schema change does
+    drv.onFileChanged(mm::moonlive::kScriptDir);   // what the edit's save announces
 
     CHECK(paletteMax(drv) == before + 1);   // ONE entry, from two files
 }
@@ -107,7 +107,7 @@ TEST_CASE("a palette added while running becomes selectable without a reboot") {
     // The `palette` ceiling is baked when the control is defined while prepare() discovers files, so prepare() rebuilds the controls when the count moves.
     IsolatedFs fs("late");
     Drivers drv;
-    drv.defineControls();
+    drv.onFileChanged(mm::moonlive::kScriptDir);   // this test's empty folders, rescanned as a changed folder is
     const int32_t before = paletteMax(drv);
 
     // The file arrives after the control was defined, as a download onto a running device.

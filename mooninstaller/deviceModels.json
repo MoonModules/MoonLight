@@ -751,6 +751,113 @@
     }
   },
   {
+    "name": "ESP32-S3 N32R16V Dev",
+    "chip": "ESP32-S3",
+    "firmwares": [
+      "esp32s3-n32r16"
+    ],
+    "image": "assets/deviceModels/esp32-s3-n16r8-dev.png",
+    "url": "https://docs.espressif.com/projects/esp-dev-kits/en/latest/esp32s3/esp32-s3-devkitc-1/user_guide_v1.1.html",
+    "supported": [
+      "LEDs",
+      "WiFi"
+    ],
+    "planned": [
+      "RGB LED"
+    ],
+    "state": {
+      "System": {
+        "deviceModel": "ESP32-S3 N32R16V Dev"
+      },
+      "Drivers": {
+        "$patch": "replace",
+        "RmtLed": {
+          "type": "RmtLedDriver",
+          "pins": "18"
+        }
+      }
+    }
+  },
+  {
+    "name": "Waveshare ESP32-S3-RGB-Matrix",
+    "chip": "ESP32-S3",
+    "firmwares": [
+      "esp32s3-n32r16"
+    ],
+    "image": "assets/deviceModels/esp32-s3-n32r16-waveshare-rgb-matrix.png",
+    "url": "https://www.waveshare.com/esp32-s3-rgb-matrix.htm",
+    "description": "HUB75 driver board (SKU 34422) on an ESP32-S3-WROOM-2 N32R16V, with level shifters on the panel header, a microSD socket on SPI (CS 14), two microphones through an ES7210 ADC, an ES8311 codec and amplifier on the speaker header, a QMI8658 accelerometer, an SHTC3 temperature sensor and a PCF85063 clock on I2C 47/48, and GPIO45 and 46 on the expansion header.",
+    "supported": [
+      "LEDs",
+      "WiFi",
+      "I2C",
+      "Buttons",
+      "SD card"
+    ],
+    "planned": [
+      "Microphone",
+      "Speaker",
+      "Accelerometer",
+      "Temperature",
+      "RTC"
+    ],
+    "state": {
+      "System": {
+        "deviceModel": "Waveshare ESP32-S3-RGB-Matrix",
+        "I2cBus": {
+          "type": "I2cBusModule",
+          "sda": 47,
+          "scl": 48
+        }
+      },
+      "Layouts": {
+        "$patch": "replace",
+        "Grid": {
+          "type": "GridLayout",
+          "width": 64,
+          "height": 64
+        }
+      },
+      "Effects": {
+        "$patch": "replace",
+        "Layer": {
+          "type": "Layer"
+        }
+      },
+      "Drivers": {
+        "$patch": "replace",
+        "Hub75": {
+          "type": "Hub75Driver",
+          "board": "Waveshare RGB Matrix",
+          "scanRate": "1/32"
+        }
+      },
+      "Services": {
+        "$patch": "replace",
+        "Buttons": {
+          "type": "ButtonService",
+          "buttons": [
+            {
+              "pin": 0,
+              "activeLow": true,
+              "target": "Control.switch1",
+              "kind": "toggle"
+            }
+          ]
+        },
+        "SdCard": {
+          "type": "SdCardService",
+          "board": "Custom",
+          "bus": 1,
+          "clkPin": 1,
+          "cmdPin": 44,
+          "d0Pin": 17,
+          "d3Pin": 14
+        }
+      }
+    }
+  },
+  {
     "name": "MIDI bridge",
     "chip": "ESP32-S3",
     "firmwares": [
@@ -1648,6 +1755,7 @@
         "$patch": "replace",
         "Audio": {
           "type": "AudioService",
+          "mode": 2,
           "sckPin": 11,
           "wsPin": 12,
           "sdPin": 10
@@ -1768,6 +1876,68 @@
           "type": "GridLayout",
           "width": 1,
           "height": 1
+        }
+      }
+    }
+  },
+  {
+    "name": "Teensy 4.1",
+    "chip": "Teensy 4.1",
+    "firmwares": [
+      "teensy41"
+    ],
+    "url": "https://www.pjrc.com/store/teensy41.html",
+    "description": "PJRC's Teensy 4.1 with its own Ethernet PHY, on the jack from PJRC's Ethernet kit. Up to 16 WS2812B lanes on GPIO port 6.",
+    "supported": [
+      "LEDs",
+      "Ethernet",
+      "SD card"
+    ],
+    "planned": [
+      "Audio",
+      "I2C"
+    ],
+    "state": {
+      "System": {
+        "deviceModel": "Teensy 4.1"
+      },
+      "Drivers": {
+        "$patch": "replace",
+        "ParallelLed": {
+          "type": "ParallelLedDriver",
+          "peripheral": "GPIO-DMA",
+          "pins": "18"
+        }
+      }
+    }
+  },
+  {
+    "name": "Teensy 4.1-NE + W5500",
+    "chip": "Teensy 4.1",
+    "firmwares": [
+      "teensy41"
+    ],
+    "url": "https://www.pjrc.com/store/teensy41.html",
+    "description": "The Teensy 4.1-NE, which has no Ethernet PHY, with a WIZnet W5500 module on its SPI port. Up to 16 WS2812B lanes on GPIO port 6.",
+    "supported": [
+      "LEDs",
+      "Ethernet",
+      "SD card"
+    ],
+    "planned": [
+      "Audio",
+      "I2C"
+    ],
+    "state": {
+      "System": {
+        "deviceModel": "Teensy 4.1-NE + W5500"
+      },
+      "Drivers": {
+        "$patch": "replace",
+        "ParallelLed": {
+          "type": "ParallelLedDriver",
+          "peripheral": "GPIO-DMA",
+          "pins": "18"
         }
       }
     }

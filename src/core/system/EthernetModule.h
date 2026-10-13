@@ -62,8 +62,9 @@ public:
             controls_.addSelect("ethBoard", ethPresetSel_, ethPresetOptions_, ethPresetCount_);
             // By label: the list is filtered per build, so an index would name a different board.
             controls_.setPersistLabel(controls_.count() - 1);
-            // Hidden on a known board, and hidden stays BOUND: the values still drive the interface.
-            const bool editable = ethPinsEditable();
+            controls_.setHidden(controls_.count() - 1, platform::ethPhyIsFixed);
+            // Hidden on a known board or a fixed interface, and hidden stays BOUND: the values still drive the interface.
+            const bool editable = !platform::ethPhyIsFixed && ethPinsEditable();
             controls_.addSelect("ethType", ethType_, ethTypeOptions_, 5);
             controls_.setHidden(controls_.count() - 1, !editable);
             const bool isRmii  = (ethType_ == platform::ethLan8720 || ethType_ == platform::ethIp101);
@@ -129,9 +130,7 @@ public:
     void syncConfig() {
         if constexpr (platform::hasEthernet) {
             platform::EthPinConfig cfg{};
-            // Where the platform fixes the interface, its own type wins.
-            cfg.phyType        = platform::ethPhyIsFixed
-                               ? static_cast<uint8_t>(platform::ethConfigDefault.phyType) : ethType_;
+            cfg.phyType        = phyType();
             cfg.phyAddr        = ethPhyAddr_;
             cfg.mdcGpio        = ethMdcGpio_;
             cfg.mdioGpio       = ethMdioGpio_;
@@ -206,20 +205,21 @@ public:
     /// Whether a wired interface is set up, which is what lets the access point stay closed.
     bool configured() const MM_NONBLOCKING {
         if constexpr (!platform::hasEthernet) return false;
-        const uint8_t type = platform::ethPhyIsFixed ? static_cast<uint8_t>(platform::ethConfigDefault.phyType) : ethType_;
-        return type != static_cast<uint8_t>(platform::ethNone);
+        return phyType() != static_cast<uint8_t>(platform::ethNone);
     }
     /// Pin the configured address onto the wired interface, or do nothing where a client runs.
     void applyStatic() const { ip_.applyStatic(platform::NetIface::Eth); }
 
     /// What a chip can wire, so the board filter answers for any chip rather than only the one built for.
-    struct EthChip { bool drivesEthernet, w5500, p4, s31; };
-    static constexpr EthChip kThisChip{platform::hasEthernet, platform::hasEthW5500, platform::isEsp32P4, platform::isEsp32S31};
+    struct EthChip { bool drivesEthernet, w5500, p4, s31, fixed; };
+    static constexpr EthChip kThisChip{platform::hasEthernet, platform::hasEthW5500, platform::isEsp32P4, platform::isEsp32S31,
+                                       platform::ethPhyIsFixed};
 
     // A preset carries a pin map as well as a PHY, so one the chip cannot wire persists pins reaching nothing.
     /// Whether a board preset with PHY `type` belongs on `chip`: Custom everywhere, and every board on the desktop, which drives none and previews them all.
     static constexpr bool presetFits(int8_t type, EthChip chip = kThisChip) {
         if (type == 0 || !chip.drivesEthernet) return true;
+        if (chip.fixed) return false;        // the build chose the interface, so no board wiring applies
         if (type == 3) return chip.w5500;    // SPI, a separate driver
         if (chip.w5500) return false;
         if (type == 2) return chip.p4;       // IP101: the P4's
@@ -333,6 +333,11 @@ private:
     bool ethPresetIsUnset() const {
         if (ethPresetSel_ >= ethPresetCount_) return true;
         return kEthPresets[ethPresetIndex_[ethPresetSel_]].editable;
+    }
+
+    /// The interface this device drives: where the platform fixes it, the platform's own type wins over the control.
+    uint8_t phyType() const MM_NONBLOCKING {
+        return platform::ethPhyIsFixed ? static_cast<uint8_t>(platform::ethConfigDefault.phyType) : ethType_;
     }
 
     /// Are the pin controls the user's to edit, for the preset currently selected?

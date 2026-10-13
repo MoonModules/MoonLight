@@ -83,14 +83,14 @@ void selectBoard(SdCardService& sd, const char* label) {
 
 // Whether a pull was noticed: the gauge gone and the status naming the removal.
 bool unmountedAfterPull(const SdCardService& sd) {
-    return find(sd, "card (KiB)") == nullptr && sd.status() && std::string(sd.status()).rfind("card removed", 0) == 0;
+    return find(sd, "card") == nullptr && sd.status() && std::string(sd.status()).rfind("card removed", 0) == 0;
 }
 
 // Wires the required pins and mounts, for a test whose point starts after that.
 void mountRig(SdCardService& sd) {
     wireRequiredPins(sd);
     sd.prepare();
-    REQUIRE(find(sd, "card (KiB)") != nullptr);
+    REQUIRE(find(sd, "card") != nullptr);
 }
 
 // Writes "hello" to /sd/clip.bin and reopens it for reading, so a test can hold the busy guard open without repeating the round trip.
@@ -124,7 +124,7 @@ TEST_CASE("a board preset writes its wiring and the mount follows; Custom keeps 
     CHECK(*static_cast<int8_t*>(find(r.sd, "pwrPin")->ptr) == 45);
     CHECK(r.sd.affectsPrepare("board"));
     r.sd.prepare();
-    CHECK(find(r.sd, "card (KiB)") != nullptr);
+    CHECK(find(r.sd, "card") != nullptr);
 
     selectBoard(r.sd, "Custom");
     CHECK_FALSE(find(r.sd, "clkPin")->hidden);
@@ -146,7 +146,8 @@ TEST_CASE("pins that match a board preset open on its name rather than on Custom
 // Asked per chip rather than per build, since a host test runs as the desktop, which previews every preset.
 namespace {
 using Chip = SdCardService::SdPresetChip;
-constexpr SdCardService::SdChip kClassic{false, true, false}, kP4{false, false, true}, kS3{false, false, false}, kDesktop{true, true, false};
+constexpr SdCardService::SdChip kClassic{false, true, false, false}, kP4{false, false, true, false}, kS3{false, false, false, false},
+                               kTeensy{false, false, false, true}, kDesktop{true, true, false, false};
 }  // namespace
 
 TEST_CASE("each chip offers only the SD board presets it can wire") {
@@ -157,12 +158,16 @@ TEST_CASE("each chip offers only the SD board presets it can wire") {
     CHECK(SdCardService::presetFits(Chip::Classic, kClassic));
     CHECK_FALSE(SdCardService::presetFits(Chip::Classic, kP4));
     CHECK_FALSE(SdCardService::presetFits(Chip::Classic, kS3));
-    for (Chip c : {Chip::Classic, Chip::P4}) CHECK(SdCardService::presetFits(c, kDesktop));   // the desktop previews them all
+    CHECK(SdCardService::presetFits(Chip::Teensy, kTeensy));
+    for (Chip c : {Chip::Classic, Chip::P4}) CHECK_FALSE(SdCardService::presetFits(c, kTeensy));
+    CHECK_FALSE(SdCardService::presetFits(Chip::Teensy, kClassic));
+    for (Chip c : {Chip::Classic, Chip::P4, Chip::Teensy}) CHECK(SdCardService::presetFits(c, kDesktop));   // the desktop previews them all
 }
 
 // Every P4 board with a slot wires the same pins, so a P4 opens on that preset; a classic has two to choose from, an S3 none, and the desktop previews them all.
 TEST_CASE("a P4 opens on its one SD board preset, every other build on Custom") {
     CHECK(SdCardService::opensOnSolePreset(kP4));
+    CHECK(SdCardService::opensOnSolePreset(kTeensy));   // the 4.1's own socket
     CHECK_FALSE(SdCardService::opensOnSolePreset(kClassic));
     CHECK_FALSE(SdCardService::opensOnSolePreset(kS3));
     CHECK_FALSE(SdCardService::opensOnSolePreset(kDesktop));
@@ -175,7 +180,7 @@ TEST_CASE("an SPI preset sets the bus, warns about long writes once mounted, and
     CHECK(*static_cast<int8_t*>(find(r.sd, "d0Pin")->ptr) == 36);   // MISO
     CHECK(*static_cast<int8_t*>(find(r.sd, "d3Pin")->ptr) == 16);   // CS
     r.sd.prepare();
-    CHECK(find(r.sd, "card (KiB)") != nullptr);
+    CHECK(find(r.sd, "card") != nullptr);
     REQUIRE(r.sd.status() != nullptr);
     CHECK(std::string(r.sd.status()).rfind("SPI: writes over 50 KB", 0) == 0);
 
@@ -187,7 +192,7 @@ TEST_CASE("an SPI preset sets the bus, warns about long writes once mounted, and
 
     setPin(r.sd, "d3Pin", -1);   // SPI with no CS cannot select the card
     r.sd.prepare();
-    CHECK(find(r.sd, "card (KiB)") == nullptr);
+    CHECK(find(r.sd, "card") == nullptr);
 }
 
 TEST_CASE("SdCardService is a Service") {
@@ -207,7 +212,7 @@ TEST_CASE("prepare refuses to mount with no pins set") {
     r.sd.prepare();
     REQUIRE(r.sd.status() != nullptr);
     CHECK(std::string(r.sd.status()) == "set the SD card pins first");
-    CHECK(find(r.sd, "card (KiB)") == nullptr);
+    CHECK(find(r.sd, "card") == nullptr);
 }
 
 TEST_CASE("prepare mounts once the required pins are set, and the gauge appears") {
@@ -216,19 +221,19 @@ TEST_CASE("prepare mounts once the required pins are set, and the gauge appears"
     r.sd.prepare();
     CHECK(r.sd.status() == nullptr);
     CHECK(std::filesystem::exists(std::string(r.root) + "/sd"));
-    CHECK(find(r.sd, "card (KiB)") != nullptr);
+    CHECK(find(r.sd, "card") != nullptr);
 }
 
 TEST_CASE("a pin edit remounts the card live, the same contract I2cBusModule's sda/scl have") {
     Rig r;
     wireRequiredPins(r.sd);
     r.sd.prepare();
-    REQUIRE(find(r.sd, "card (KiB)") != nullptr);
+    REQUIRE(find(r.sd, "card") != nullptr);
 
     // Unset a required pin: prepare() must unmount on the next pass, same as the live-reconfig contract promises.
     setPin(r.sd, "d0Pin", -1);
     r.sd.prepare();
-    CHECK(find(r.sd, "card (KiB)") == nullptr);
+    CHECK(find(r.sd, "card") == nullptr);
     REQUIRE(r.sd.status() != nullptr);
     CHECK(std::string(r.sd.status()) == "set the SD card pins first");
 }
@@ -236,11 +241,11 @@ TEST_CASE("a pin edit remounts the card live, the same contract I2cBusModule's s
 TEST_CASE("release unmounts; it is harmless when nothing was mounted") {
     Rig r;
     r.sd.release();   // nothing mounted yet: must not crash or misbehave
-    CHECK(find(r.sd, "card (KiB)") == nullptr);
+    CHECK(find(r.sd, "card") == nullptr);
 
     wireRequiredPins(r.sd);
     r.sd.prepare();
-    REQUIRE(find(r.sd, "card (KiB)") != nullptr);
+    REQUIRE(find(r.sd, "card") != nullptr);
     r.sd.release();
     // The card still exists on disk; this instance only let go of it.
     CHECK(std::filesystem::exists(std::string(r.root) + "/sd"));
@@ -272,7 +277,7 @@ TEST_CASE("an unrelated prepare does not remount when the pins have not changed"
 
     r.sd.prepare();   // same pins: prepare() runs tree-wide on any affectsPrepare change, so this must be a no-op
     CHECK(r.sd.status() == nullptr);               // never tried to unmount, so no "busy" status either
-    CHECK(find(r.sd, "card (KiB)") != nullptr);     // mount state undisturbed
+    CHECK(find(r.sd, "card") != nullptr);     // mount state undisturbed
 
     REQUIRE(platform::fsWriteStreamWrite(w, "hello", 5));   // the stream the no-op prepare() did not touch
     REQUIRE(platform::fsWriteStreamClose(w, true));
@@ -299,13 +304,13 @@ TEST_CASE("format refuses while a download stream is open, and succeeds once it 
 TEST_CASE("tick1s is a no-op while unmounted, and refreshes the gauge once mounted") {
     Rig r;
     for (int i = 0; i < 120; i++) r.sd.tick1s();   // two minutes' worth, nothing to show
-    CHECK(find(r.sd, "card (KiB)") == nullptr);
+    CHECK(find(r.sd, "card") == nullptr);
 
     wireRequiredPins(r.sd);
     r.sd.prepare();
-    REQUIRE(find(r.sd, "card (KiB)") != nullptr);
+    REQUIRE(find(r.sd, "card") != nullptr);
     for (int i = 0; i < 60; i++) r.sd.tick1s();   // the minute-paced scan fires once
-    CHECK(find(r.sd, "card (KiB)") != nullptr);
+    CHECK(find(r.sd, "card") != nullptr);
 }
 
 TEST_CASE("a pulled card is noticed within a second: tick1s auto-unmounts with no pin touch") {
@@ -326,7 +331,7 @@ TEST_CASE("a pull mid-transfer waits for the busy guard, same as a manual unmoun
     platform::setTestSdCardPresent(false);
     r.sd.tick1s();
     // Refused underneath the open stream: still mounted, no "card removed" status yet.
-    CHECK(find(r.sd, "card (KiB)") != nullptr);
+    CHECK(find(r.sd, "card") != nullptr);
     CHECK(r.sd.status() == nullptr);
 
     platform::fsReadStreamClose(rs);
@@ -340,18 +345,18 @@ TEST_CASE("a card inserted after a failed mount mounts when the module is switch
     platform::setTestSdCardPresent(false);   // an empty slot
     wireRequiredPins(r.sd);
     r.sd.prepare();
-    REQUIRE(find(r.sd, "card (KiB)") == nullptr);
+    REQUIRE(find(r.sd, "card") == nullptr);
     REQUIRE(r.sd.status() != nullptr);
     CHECK(std::string(r.sd.status()).rfind("no card answered", 0) == 0);
 
     platform::setTestSdCardPresent(true);    // inserted later
     r.sd.prepare();                          // an unrelated prepare, same pins: the slot is not tried again
     for (int i = 0; i < 120; i++) r.sd.tick1s();   // nor on a timer
-    CHECK(find(r.sd, "card (KiB)") == nullptr);
+    CHECK(find(r.sd, "card") == nullptr);
 
     r.sd.release();                          // switched off
     r.sd.prepare();                          // and on
-    CHECK(find(r.sd, "card (KiB)") != nullptr);
+    CHECK(find(r.sd, "card") != nullptr);
     CHECK(r.sd.status() == nullptr);
 }
 
@@ -361,12 +366,12 @@ TEST_CASE("a card without a FAT filesystem says so, and format makes one and mou
     platform::setTestSdCardHasFilesystem(false);
     wireRequiredPins(r.sd);
     r.sd.prepare();
-    REQUIRE(find(r.sd, "card (KiB)") == nullptr);
+    REQUIRE(find(r.sd, "card") == nullptr);
     REQUIRE(r.sd.status() != nullptr);
     CHECK(std::string(r.sd.status()).rfind("the card has no FAT filesystem", 0) == 0);
 
     r.sd.onControlChanged("format");
-    CHECK(find(r.sd, "card (KiB)") != nullptr);   // formatted and mounted in one press
+    CHECK(find(r.sd, "card") != nullptr);   // formatted and mounted in one press
     CHECK(r.sd.status() == nullptr);
 }
 
@@ -378,7 +383,7 @@ TEST_CASE("format refuses on an empty slot: only a card without a filesystem is 
     r.sd.onControlChanged("format");
     REQUIRE(r.sd.status() != nullptr);
     CHECK(std::string(r.sd.status()) == "mount a card before formatting");
-    CHECK(find(r.sd, "card (KiB)") == nullptr);
+    CHECK(find(r.sd, "card") == nullptr);
 }
 
 TEST_CASE("a card that answers but does not read says so, and format does not offer to fix it") {
@@ -403,7 +408,7 @@ TEST_CASE("a format runs in the background: the card is busy and the module says
     r.sd.onControlChanged("format");
     REQUIRE(r.sd.status() != nullptr);
     CHECK(std::string(r.sd.status()).rfind("formatting", 0) == 0);
-    CHECK(find(r.sd, "card (KiB)") == nullptr);   // unmounted while it formats
+    CHECK(find(r.sd, "card") == nullptr);   // unmounted while it formats
     CHECK(platform::sdCardBusy());
     CHECK_FALSE(platform::sdUnmount());
 
@@ -416,7 +421,7 @@ TEST_CASE("a format runs in the background: the card is busy and the module says
     platform::setTestSdFormatHeld(false);   // the format finishes
     r.sd.tick1s();
     CHECK(r.sd.status() == nullptr);
-    CHECK(find(r.sd, "card (KiB)") != nullptr);
+    CHECK(find(r.sd, "card") != nullptr);
     CHECK_FALSE(platform::sdCardBusy());
 }
 

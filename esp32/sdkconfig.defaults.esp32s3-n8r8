@@ -9,9 +9,13 @@ CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions/esp32s3_n8r8.csv"
 # Flash size override (default is 2MB on ESP32-S3)
 CONFIG_ESPTOOLPY_FLASHSIZE_8MB=y
 
-# PSRAM: same 8 MB octal as N16R8
+# Quad I/O flash reads, as on the N16R8, where reading code over two lines (DIO, the IDF default) cost 16% of the tick.
+CONFIG_ESPTOOLPY_FLASHMODE_QIO=y
+
+# PSRAM: same 8 MB octal as N16R8, at the 80 MHz it is rated for rather than IDF's 40 MHz default.
 CONFIG_SPIRAM=y
 CONFIG_SPIRAM_MODE_OCT=y
+CONFIG_SPIRAM_SPEED_80M=y
 
 # MoonLive native codegen needs an executable heap (allocExec → MALLOC_CAP_EXEC IRAM).
 # MALLOC_CAP_EXEC is gated behind CONFIG_HEAP_HAS_EXEC_HEAP, which IDF disables whenever

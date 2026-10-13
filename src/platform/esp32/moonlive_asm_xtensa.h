@@ -156,7 +156,7 @@ private:
     void emit3(uint32_t w);
     // A pending label reference; the kind matters, a call's displacement being scaled and a jump's not.
     enum class FixKind : uint8_t { Jump, Call };
-    struct Fixup { size_t at; Label label; FixKind kind = FixKind::Jump; };
+    struct Fixup { CodePos at; Label label; FixKind kind = FixKind::Jump; };
     /// Enqueue a fixup (bounds-checked).
     void addFixup(size_t at, Label label, FixKind kind = FixKind::Jump);
 

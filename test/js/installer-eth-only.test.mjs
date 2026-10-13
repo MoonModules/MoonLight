@@ -28,9 +28,11 @@ const firmwares = JSON.parse(
 // Ethernet-only; `-eth-wifi` (the P4 co-processor WiFi build) is NOT, since it doesn't end in `-eth`.
 const isEthOnlyByName = (name) => /-eth$/.test(name);
 
-test("the installer's /-eth$/ rule matches firmwares.json eth_only for every firmware", () => {
-    assert.ok(firmwares.length > 0, "firmwares.json has no firmwares");
-    for (const f of firmwares) {
+// The rule belongs to the ESP32 flashing path; a Teensy is Ethernet-only by nature and gets its own writer.
+test("the installer's /-eth$/ rule matches firmwares.json eth_only for every ESP32 firmware", () => {
+    const esp32 = firmwares.filter((f) => f.platform === "esp32");
+    assert.ok(esp32.length > 0, "firmwares.json has no ESP32 firmwares");
+    for (const f of esp32) {
         assert.equal(
             isEthOnlyByName(f.name),
             !!f.eth_only,

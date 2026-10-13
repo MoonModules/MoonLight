@@ -6,6 +6,7 @@
 #include "doctest.h"
 #include "core/util/ImprovOpReassembler.h"
 
+#include <atomic>
 #include <cstring>
 #include <string>
 
@@ -109,4 +110,38 @@ TEST_CASE("reset() drops a partial op") {
     // After reset, a chunk with seq 1 is out of order (we're back to awaiting seq 0).
     CHECK(feedStr(r, 1, true, "x") == R::Error);
     CHECK(feedStr(r, 0, true, "ok") == R::Ready);
+}
+
+// One APPLY_OP payload as the wire carries it: [0xFC][seq][last][chunk bytes].
+static ImprovApplyOpReply applyStr(ImprovOpReassembler& r, std::atomic<bool>& ready, uint8_t seq, uint8_t last, const std::string& s) {
+    std::string p;
+    p += static_cast<char>(kImprovCmdApplyOp);
+    p += static_cast<char>(seq);
+    p += static_cast<char>(last);
+    p += s;
+    return improvApplyOp(r, reinterpret_cast<const uint8_t*>(p.data()), p.size(), ready);
+}
+
+TEST_CASE("an APPLY_OP document is acknowledged chunk by chunk and marked ready on its last chunk, on every transport alike") {
+    char buf[128];
+    ImprovOpReassembler r(buf, sizeof(buf));
+    std::atomic<bool> ready{false};
+    CHECK(applyStr(r, ready, 0, 0, "{\"System\":") == ImprovApplyOpReply::Ack);
+    CHECK_FALSE(ready.load());
+    CHECK(applyStr(r, ready, 1, 1, "{}}") == ImprovApplyOpReply::Ack);
+    CHECK(ready.load());
+    CHECK(std::string(r.out()) == "{\"System\":{}}");
+}
+
+TEST_CASE("an APPLY_OP chunk is refused while the previous document waits, or when malformed, so nothing overwrites an unapplied document") {
+    char buf[128];
+    ImprovOpReassembler r(buf, sizeof(buf));
+    std::atomic<bool> ready{true};
+    CHECK(applyStr(r, ready, 0, 1, "{}") == ImprovApplyOpReply::Refused);   // busy
+    ready = false;
+    CHECK(applyStr(r, ready, 0, 2, "{}") == ImprovApplyOpReply::Refused);   // `last` is 0 or 1
+    const uint8_t shortFrame[] = {kImprovCmdApplyOp, 0};
+    CHECK(improvApplyOp(r, shortFrame, sizeof(shortFrame), ready) == ImprovApplyOpReply::Refused);
+    CHECK(applyStr(r, ready, 3, 1, "{}") == ImprovApplyOpReply::Refused);   // out of order
+    CHECK_FALSE(ready.load());
 }

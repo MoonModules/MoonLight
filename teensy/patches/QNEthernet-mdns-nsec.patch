@@ -1,0 +1,84 @@
+Answer an AAAA question for this host with an NSEC record listing only A (RFC 6762 section 6.1),
+so a querier on a build without IPv6 resolves the .local name at once instead of after its timeout.
+
+diff --git a/src/lwip/apps/mdns/mdns.c b/src/lwip/apps/mdns/mdns.c
+index b3ca2f3..371ca2f 100644
+--- a/src/lwip/apps/mdns/mdns.c
++++ b/src/lwip/apps/mdns/mdns.c
+@@ -297,6 +297,12 @@ check_host(struct netif *netif, struct mdns_rr_info *rr, u8_t *reverse_v6_reply)
+     if (rr->type == DNS_RRTYPE_AAAA || rr->type == DNS_RRTYPE_ANY) {
+       replies |= REPLY_HOST_AAAA;
+     }
++#endif
++#if !LWIP_IPV6
++    /* A querier asking for AAAA waits out its timeout unless told there is none */
++    if (rr->type == DNS_RRTYPE_AAAA) {
++      replies |= REPLY_HOST_NSEC;
++    }
+ #endif
+   }
+ 
+diff --git a/src/lwip/apps/mdns/mdns_out.c b/src/lwip/apps/mdns/mdns_out.c
+index 5c6d26b..6074e06 100644
+--- a/src/lwip/apps/mdns/mdns_out.c
++++ b/src/lwip/apps/mdns/mdns_out.c
+@@ -281,6 +281,27 @@ mdns_add_a_answer(struct mdns_outpacket *reply, struct mdns_outmsg *msg,
+                          sizeof(ip4_addr_t), NULL);
+ }
+ 
++#if !LWIP_IPV6
++/** Write an NSEC RR asserting the host has an A record and no other (RFC 6762 section 6.1) */
++static err_t
++mdns_add_host_nsec_answer(struct mdns_outpacket *reply, struct mdns_outmsg *msg,
++                          struct netif *netif)
++{
++  /* Window 0, one bitmap byte, bit 1 set: type A only */
++  static const u8_t bitmap[] = { 0x00, 0x01, 0x40 };
++  u8_t rdata[MDNS_DOMAIN_MAXLEN + sizeof(bitmap)];
++  struct mdns_domain host;
++  mdns_build_host_domain(&host, netif_mdns_data(netif));
++  /* The next domain name is the record's own name, never compressed (RFC 4034 section 4.1.1) */
++  MEMCPY(rdata, host.name, host.length);
++  MEMCPY(rdata + host.length, bitmap, sizeof(bitmap));
++  LWIP_DEBUGF(MDNS_DEBUG, ("MDNS: Responding with NSEC record\n"));
++  return mdns_add_answer(reply, &host, DNS_RRTYPE_NSEC, DNS_RRCLASS_IN, msg->cache_flush,
++                         msg->legacy_query ? MDNS_TTL_10 : MDNS_TTL_120,
++                         rdata, host.length + sizeof(bitmap), NULL);
++}
++#endif
++
+ /** Write a 4.3.2.1.in-addr.arpa -> hostname.local PTR RR to outpacket */
+ static err_t
+ mdns_add_hostv4_ptr_answer(struct mdns_outpacket *reply, struct mdns_outmsg *msg,
+@@ -613,6 +634,15 @@ mdns_create_outpacket(struct netif *netif, struct mdns_outmsg *msg,
+     answers++;
+   }
+ #endif
++#if !LWIP_IPV6
++  if (msg->host_replies & REPLY_HOST_NSEC) {
++    res = mdns_add_host_nsec_answer(outpkt, msg, netif);
++    if (res != ERR_OK) {
++      return res;
++    }
++    answers++;
++  }
++#endif
+ #if LWIP_IPV6
+   if (msg->host_replies & REPLY_HOST_AAAA) {
+     int addrindex;
+diff --git a/src/lwip/apps/mdns_out.h b/src/lwip/apps/mdns_out.h
+index e6a7e38..35bb18b 100644
+--- a/src/lwip/apps/mdns_out.h
++++ b/src/lwip/apps/mdns_out.h
+@@ -64,6 +64,11 @@ extern "C" {
+ #define REPLY_HOST_AAAA         0x04
+ /* Lookup from hostname -> IPv6 */
+ #define REPLY_HOST_PTR_V6       0x08
++/* No IPv6: assert that the hostname has no AAAA record (RFC 6762 section 6.1) */
++#define REPLY_HOST_NSEC         0x10
++#ifndef DNS_RRTYPE_NSEC
++#define DNS_RRTYPE_NSEC         47
++#endif
+ 
+ /* Lookup for service types */
+ #define REPLY_SERVICE_TYPE_PTR  0x10

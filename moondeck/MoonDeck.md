@@ -2,7 +2,9 @@
 
 MoonDeck is MoonLight's browser-based developer console: one page that builds, flashes, runs, tests, monitors, and checks the project across every target, and discovers and drives devices on the network. Every action it offers is a thin wrapper around a script under `moondeck/`, so the CLI (`uv run moondeck/<group>/<name>.py`) and MoonDeck run exactly the same code: agents typically use the CLI, humans use MoonDeck. For what MoonDeck *is* and where it sits in the workflow see [docs/how-to/building.md § MoonDeck](../docs/how-to/building.md#moondeck--the-dev-console). What follows is the per-script reference.
 
-Launch it with `uv run moondeck/moondeck.py` and open <http://localhost:8420>. The console has three tabs — **Desktop** (build build / run / test), **ESP32** (chip + port, build / flash / monitor), and **Live** (discovery and live runs against networked devices) — above a network bar and per-device deviceModel pickers. Script definitions live in `moondeck/moondeck_config.json` (committed); runtime state (selected network, devices, ports) persists in `moondeck/moondeck.json` (gitignored).
+Launch it with `uv run moondeck/moondeck.py` and open <http://localhost:8420>. The console has five tabs. **Repo**, where MoonDeck opens, holds the tests, checks, tools and docs.
+**Desktop**, **ESP32** and **Teensy** build, run or flash, and monitor a target, and **Live** discovers networked devices and runs against them.
+A network bar and per-device deviceModel pickers sit above them. Script definitions live in `moondeck/moondeck_config.json` (committed); runtime state (selected network, devices, ports) persists in `moondeck/moondeck.json` (gitignored).
 
 Below: the UI behaviors common to every card, described once, then one section per script grouped by the tab it appears on. Each section gives the equivalent CLI invocation, so the page doubles as the command reference for running anything without the browser.
 
@@ -33,6 +35,46 @@ uv run moondeck/build/build_desktop.py
 ```
 
 Runs `cmake -B build/<host> -DCMAKE_BUILD_TYPE=Release` then `cmake --build build/<host> --target MoonLight`, where `<host>` is `macos`, `linux`, or `windows` depending on the OS this script runs on. It builds ONLY the firmware binary — not the ~130-file test suite — so the "just give me the binary to run" path stays fast; compile the tests separately (see `compile_tests`). The per-host directory keeps an experimental Linux build from clobbering a macOS one on the same machine, and mirrors the ESP32 side's `build/esp32-<board>/` shape.
+
+### run_desktop
+
+Launch the desktop executable as a detached background process and exit. The app keeps running across other MoonDeck scripts and outlives MoonDeck itself, the way a flashed ESP32 runs independently of this console.
+
+```bash
+uv run moondeck/run/run_desktop.py
+```
+
+Re-running is idempotent: any existing `MoonLight` instance is stopped first, then a fresh one is launched. Output goes to `build/<host>/MoonLight.log`. Build first.
+
+While the app is running, MoonDeck shows the button as **Stop** (a 5-second poll on `/api/running` detects the live process via `process_name`). Pressing Stop terminates the app; pressing Run again restarts it. From the CLI: `pkill -f build/<host>/MoonLight` (or `pkill MoonLight` if you don't have multiple host builds active).
+
+### run_open_stage_control
+
+Launch [Open Stage Control](https://openstagecontrol.ammd.net/) as a control surface for the running
+device: eight faders, eight encoders and eight switches, wired to the
+[OSC module](../docs/moonmodules/core/services.md) in both directions.
+
+```bash
+uv run moondeck/run/run_open_stage_control.py                   # device on this machine
+uv run moondeck/run/run_open_stage_control.py --host 192.168.1.42
+```
+
+Then open **http://127.0.0.1:8088**. Nothing needs typing into Open Stage Control's settings panel:
+the session, the send address and the listen port are all command-line arguments, and the session's
+own `autosync` widget asks the device for its current state on every page load, so the widgets are
+correct immediately rather than showing the layout file's defaults.
+
+On the device, the OSC module needs `listen` and `feedback` on.
+
+It runs headless (a web server, no desktop window), which is what makes the surface reachable from a
+phone or another laptop on the same network. Options: `--host` / `--port` for the device,
+`--listen` for where feedback arrives (the device's `feedbackPort`), `--ui-port` for the surface
+itself, and `--app` when the binary is not on PATH or in the usual place. Install Open Stage Control
+first; it is a free download.
+
+## Repo Tab
+
+The work on the source tree, whatever the target: tests, the checks and tools, the repo-health record, and the docs.
 
 ### compile_tests
 
@@ -76,42 +118,6 @@ It drives a real browser against a running MoonLight with [pytest-playwright](ht
 The run files are the same ones `moondeck/moontube/mtvideo.py` records the videos from, so a failure means the UI does not do what the video shows.
 It skips rather than fails when nothing answers on `localhost:8080` (override with `MOONLIGHT_HOST`), for the same reason the JS lane skips without node.
 
-### run_desktop
-
-Launch the desktop executable as a detached background process and exit. The app keeps running across other MoonDeck scripts and outlives MoonDeck itself — the same model as flashing an ESP32, where the device runs independently of this console.
-
-```bash
-uv run moondeck/run/run_desktop.py
-```
-
-Re-running is idempotent: any existing `MoonLight` instance is stopped first, then a fresh one is launched. Output goes to `build/<host>/MoonLight.log`. Build first.
-
-While the app is running, MoonDeck shows the button as **Stop** (a 5-second poll on `/api/running` detects the live process via `process_name`). Pressing Stop terminates the app; pressing Run again restarts it. From the CLI: `pkill -f build/<host>/MoonLight` (or `pkill MoonLight` if you don't have multiple host builds active).
-
-### run_open_stage_control
-
-Launch [Open Stage Control](https://openstagecontrol.ammd.net/) as a control surface for the running
-device: eight faders, eight encoders and eight switches, wired to the
-[OSC module](../docs/moonmodules/core/services.md) in both directions.
-
-```bash
-uv run moondeck/run/run_open_stage_control.py                   # device on this machine
-uv run moondeck/run/run_open_stage_control.py --host 192.168.1.42
-```
-
-Then open **http://127.0.0.1:8088**. Nothing needs typing into Open Stage Control's settings panel:
-the session, the send address and the listen port are all command-line arguments, and the session's
-own `autosync` widget asks the device for its current state on every page load, so the widgets are
-correct immediately rather than showing the layout file's defaults.
-
-On the device, the OSC module needs `listen` and `feedback` on.
-
-It runs headless (a web server, no desktop window), which is what makes the surface reachable from a
-phone or another laptop on the same network. Options: `--host` / `--port` for the device,
-`--listen` for where feedback arrives (the device's `feedbackPort`), `--ui-port` for the surface
-itself, and `--app` when the binary is not on PATH or in the usual place. Install Open Stage Control
-first; it is a free download.
-
 ### preview_installer
 
 ![Installer](../docs/assets/ui/installer.png)
@@ -128,7 +134,7 @@ uv run moondeck/run/preview_installer.py
 Long-running — MoonDeck shows **Stop** while the server is up. Two modes, picked automatically:
 
 - **Render-only.** With no app image under `build/esp32-*/`, the picker populates against the real GitHub Releases API and the dropdowns work. Clicking **Install** fails, because the local server has no `releases/` tree. Useful for iterating on HTML / CSS / JS without burning a build. Equivalent to "Recipe A" in [mooninstaller/README.md](../mooninstaller/README.md).
-- **Flash-ready.** When at least one ESP32 build exists, the script also stages every app image it finds under `build/esp32-*/` into `releases/local-dev/`. It generates matching Pages-relative manifests with the same `generate_manifest.py` the release workflow uses. The picker shows `local-dev` as the newest tag. Clicking **Install** flashes a USB-connected ESP32 and hands off to the repository's own orchestrator UI in `install-orchestrator.js`. That does the Improv-Serial provisioning and the APPLY_OP push of the device model's modules and controls, in place of ESP Web Tools. End-to-end, same code paths as the public installer. This is the developer's test ground for the install flow before deploying to GitHub Pages: Web Serial works on `http://localhost` without the secure-origin requirement that gates the public site.
+- **Flash-ready.** When at least one ESP32 or Teensy build exists, the script also stages every app image it finds under `build/esp32-*/`, and every built Teensy `build/teensy41*/MoonLight.bin`, into `releases/local-dev/`. It generates matching Pages-relative manifests with the same `generate_manifest.py` the release workflow uses. The picker shows `local-dev` as the newest tag. Clicking **Install** flashes a USB-connected ESP32 or Teensy and hands off to the repository's own orchestrator UI in `install-orchestrator.js`. That does the Improv-Serial provisioning and the APPLY_OP push of the device model's modules and controls, in place of ESP Web Tools. End-to-end, same code paths as the public installer. This is the developer's test ground for the install flow before deploying to GitHub Pages: Web Serial works on `http://localhost` without the secure-origin requirement that gates the public site.
 
 Add `?nocache=1` to the URL to bypass the picker's 5-minute sessionStorage cache while editing.
 
@@ -217,7 +223,7 @@ Verify the firmware projection (`mooninstaller/firmwares.json`) matches the `FIR
 uv run moondeck/check/check_firmwares.py
 ```
 
-Regenerates the firmware list from `build_esp32.py`'s `FIRMWARES` dict and fails on drift from the committed `firmwares.json` — so a `FIRMWARES` edit without regenerating is caught.
+Regenerates the firmware list from the firmware registry (`firmwares.py`, joining `build_esp32.py`'s and `build_teensy.py`'s `FIRMWARES` slices) and fails on drift from the committed `firmwares.json`, so a `FIRMWARES` edit without regenerating is caught.
 
 ### collect_kpi
 
@@ -1129,7 +1135,7 @@ uv run moondeck/moonlive/check_encodings.py --isa xtensa
 
 MoonLive hand-encodes machine instructions, which is the right call for a JIT (an assembler cannot ship to a device) but means a wrong offset field, a truncated displacement or a misplaced register nibble is a bug nothing else notices: the golden-bytes tests compare our emission to our *previous* emission, and the structural checks compare it to a model we also wrote. Both agree with a consistent mistake.
 
-This compares it to something nobody here wrote: `xtensa-esp32-elf-as` and `riscv32-esp-elf-as`, which *are* the definition of a valid encoding for these ISAs. For each instruction we emit, it assembles the same mnemonic and requires identical bytes. It caught a hand-computed `add.n` whose register nibbles were transposed, before that instruction ever ran.
+This compares it to something nobody here wrote: `xtensa-esp32-elf-as`, `riscv32-esp-elf-as` and `arm-none-eabi-as`, which *are* the definition of a valid encoding for these ISAs. For each instruction we emit, it assembles the same mnemonic and requires identical bytes. It caught a hand-computed `add.n` whose register nibbles were transposed, before that instruction ever ran.
 
 What it covers, and what it does not: it proves each instruction is **encoded** correctly. It cannot prove the **sequence** is right, since a correctly encoded instruction can still save the wrong register. Execution-level checks ([run_qemu](#run_qemu), the bench) are what cover that.
 
@@ -1299,3 +1305,64 @@ No MoonLight crash reports found in DiagnosticReports.
 === Last 40 lines of MoonLight.log ===
 tick: 1234us (FPS: 800)  free: 0  ...
 ```
+
+## Teensy Tab
+
+One firmware for the Teensy 4.1, `teensy41`, which finds at boot whether the board has its own Ethernet or a W5500 module.
+The port is found by PJRC's USB vendor id, so the tab has no dropdowns.
+Setup once, then Build, Flash and Monitor.
+
+### setup_teensy
+
+Install the Teensy SDK at its pinned versions.
+
+```bash
+uv run moondeck/build/setup_teensy.py
+```
+
+Installs into `~/teensy` (`TEENSY_SDK` overrides), each part from its publisher.
+PJRC's Teensy 4 core comes at Teensyduino's tag, with LittleFS, SPI, SD and SdFat at that release's commits. QNEthernet comes at its pinned commit with our patches, and Arm's GNU toolchain is checked against Arm's published sums.
+teensy_loader_cli is compiled from its tagged source on macOS and Linux.
+`--no-loader` skips it, for a machine that builds but never flashes, such as CI.
+Every version is pinned in this script, which `build_teensy` and `flash_teensy` read.
+A part already at its pin is left alone, so a re-run after a pin bump fetches only what changed.
+Our changes to those parts live as patch files in `teensy/patches/`, applied after each checkout.
+lwIP's mDNS answers an IPv6 address question with "none", so `.local` resolves at once.
+The W5500 driver bounds its waits on the chip, so a misbehaving chip costs packets rather than the device.
+The macOS loader looks only for the Teensy bootloader, so flashing needs no Input Monitoring permission.
+
+### build_teensy
+
+Build a Teensy 4.1 firmware.
+
+```bash
+uv run moondeck/build/build_teensy.py
+```
+
+`teensy41` carries both Ethernet drivers, the board's own PHY and a W5500 module for the 4.1-NE, and uses the one the board has.
+Builds into `build/<firmware>/`: `MoonLight.elf`, `MoonLight.hex` for the loader, and `MoonLight.bin`, the same image flat from 0x60000000 for the writers that take raw bytes, printing the section sizes.
+Configures CMake with `teensy/teensy41.cmake` on first use, passing the SDK paths from `setup_teensy`.
+
+### flash_teensy
+
+Flash the built firmware over USB.
+
+```bash
+uv run moondeck/build/flash_teensy.py
+```
+
+A running MoonLight is asked into its bootloader through its USB serial port, so no button press is needed; a board without a running firmware waits for its program button.
+`--port` names the port when more than one Teensy is attached.
+Gives up after 60 seconds with what to check.
+
+### monitor_teensy
+
+Monitor the Teensy's USB serial output. Long-running, shows a Stop button.
+
+```bash
+uv run moondeck/run/monitor_teensy.py
+uv run moondeck/run/monitor_teensy.py --seconds 10
+```
+
+Waits for the port to appear, so it catches the boot lines straight after a flash: the firmware waits up to two seconds for a monitor before it starts.
+Opening a Teensy's port does not reset it. Output is saved to `build/monitor_teensy.log`.

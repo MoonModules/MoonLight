@@ -12,6 +12,7 @@ Selected by `build_esp32.py --firmware <key>`, reported by `SystemModule.firmwar
 | `esp32-eth` | classic | Ethernet only, WiFi excluded |
 | `esp32-16mb` | classic, 16 MB flash | WiFi and Ethernet |
 | `esp32s3-n16r8`, `esp32s3-n8r8` | S3 | WiFi and W5500 SPI Ethernet |
+| `esp32s3-n32r16` | S3 WROOM-2 N32R16V: 32 MB octal flash, 16 MB octal PSRAM | WiFi and W5500 SPI Ethernet; GPIO35 to 37 belong to the octal flash and PSRAM |
 | `esp32p4rev1-eth` | P4 rev 1 (Waveshare ESP32-P4-NANO, Waveshare ESP32-P4-ETH) | Ethernet only |
 | `esp32p4rev1-eth-wifi` | P4 rev 1 | Ethernet, plus WiFi via the on-board ESP32-C6 over esp_hosted |
 | `esp32p4rev3-eth`, `esp32p4rev3-eth-wifi` | P4 rev 3 silicon | As rev 1. Rev 3 is not binary-compatible with rev 1; untested, no v3 board on the bench |

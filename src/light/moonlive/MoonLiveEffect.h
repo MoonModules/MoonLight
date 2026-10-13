@@ -167,10 +167,17 @@ private:
         moonlive::writeSysVarSlot(script_.engine().controlSlot(offset), value);
     }
 
-    // Two 16-bit planes are 96 KB on a 20-cube, so only a script that advects pays for them.
-    /// Attach pool(n) and trail(1) to this effect for one defineControls run, or detach them.
-    static void attachSizers(void* ctx, bool attach) {
-        if (!attach) {
+    // A compile frees the last script's pool and trail first, so its compile has their memory; two 16-bit planes are 96 KB on a 20-cube.
+    /// Free the pool and trail before a compile, and attach pool(n) and trail(1) for its defineControls run, or detach them.
+    static void attachSizers(void* ctx, moonlive::DefinePhase phase) {
+        auto* self = static_cast<MoonLiveEffect*>(ctx);
+        if (phase == moonlive::DefinePhase::Compiling) {
+            self->particles_.release();
+            self->trailWanted_ = false;
+            self->releaseTrail();
+            return;
+        }
+        if (phase == moonlive::DefinePhase::Detach) {
             moonlive::setPoolSizeSink(nullptr, nullptr);
             moonlive::setTrailSizeSink(nullptr, nullptr);
             return;

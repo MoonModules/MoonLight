@@ -77,8 +77,7 @@ Pin map, **bench-verified** (link + DHCP confirmed on the CoreBoard). The RGMII 
 
 - **Addressable RGB LED**: WS2812 (D7) on **GPIO60**. *(Driven today: the catalog's S31
   `RmtLedDriver` uses `pins: "60"`, with `loopbackTxPin: 48` / `loopbackRxPin: 47` for the self-test, see [§ Free GPIO](#free-gpio-for-user-peripherals-led-strips-loopback).)*
-- **SD card slot**: SD_D0–D3 / SD_CLK / SD_CMD on the module's SDIO pins (GPIO20–25 per the user
-  guide). Note: `SOC_SDMMC_SUPPORTED` is **absent** in the S31 soc-caps, so the slot is likely SPI-mode (GPSPI) rather than the SDMMC peripheral, confirm before relying on it.
+- **No SD card slot**: the SDMMC slot-0 pins reach header J2 only. D0–D3 are on GPIO20–23, CLK on 24 and CMD on 25. A microSD breakout wired there runs on the [SD Card](../../moonmodules/core/services.md#sd-card) service's `Custom` board, SDMMC bus.
 - **USB-A host**: USB 2.0 high-speed host port (5 V, 0.5 A limit).
 - **USB-C ×2**: one is USB Serial/JTAG (native), one is a USB-to-UART bridge (CP2102N default, or
   CH9102X with the alternate BOM). Auto-download via DTR/RTS → EN/BOOT.
@@ -95,7 +94,7 @@ The board's own peripherals claim a large, contiguous low-GPIO block; the **J2 h
 |---|---|
 | Ethernet RGMII | 2, 5–19 |
 | ES8311 audio (I²S + I²C) | 50–57 |
-| SD card (SDIO/SPI) | 20–25 |
+| SDMMC slot-0 lines, on J2 for a breakout (no slot) | 20–25 |
 | Onboard WS2812 RGB LED | 60 |
 | BOOT button | 61 |
 

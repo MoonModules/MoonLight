@@ -199,3 +199,12 @@ TEST_CASE("the factory reset button asks for a second press, and safe mode says 
     REQUIRE(safe.status() != nullptr);
     CHECK(std::string(safe.status()).find("Safe mode after 2 failed boots") != std::string::npos);
 }
+
+// A board tooling never named reports an empty deviceModel, and a state document read from it must apply back.
+TEST_CASE("SystemModule accepts back the unset deviceModel a fresh board reports") {
+    CHECK(mm::SystemModule::validateDeviceModel(""));
+    CHECK(mm::SystemModule::validateDeviceModel("LOLIN D32"));
+    CHECK_FALSE(mm::SystemModule::validateDeviceModel("bad\x01"));
+    CHECK_FALSE(mm::SystemModule::validateDeviceModel("12345678901234567890123456789012"));   // 32 chars
+}
+

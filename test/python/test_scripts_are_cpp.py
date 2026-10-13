@@ -52,7 +52,8 @@ def builtins():
     found = []
     for path in BUILTINS:
         text = path.read_text(encoding="utf-8")
-        found += re.findall(r't\.add\(\{"([A-Za-z0-9_]+)",\s*(\d+)', text)
+        # Both registration shapes: `t.add({"name", n, ...})`, and a `Builtin` built first so a field past the aggregate's order can be set.
+        found += re.findall(r'(?:t\.add\(\{|Builtin\s*\w*\s*\{)"([A-Za-z0-9_]+)",\s*(\d+)', text)
     assert found, "no builtins parsed: the registration shape changed"
     # A name can register twice (an overload by arity); keep the widest, since a call with fewer
     # arguments still matches a declaration with more only if defaults exist, which these lack.
@@ -60,6 +61,28 @@ def builtins():
     for name, argc in found:
         widest[name] = max(widest.get(name, 0), int(argc))
     return sorted(widest.items())
+
+
+def structs():
+    """Every struct type the tables register: (name, field type, field names), from `addStruct`."""
+    found = []
+    for path in BUILTINS:
+        text = path.read_text(encoding="utf-8")
+        for name, ctype, fields in re.findall(r'addStruct\(\{"(\w+)",\s*CtrlType::(\w+),\s*\d+,\s*\{([^}]*)\}', text):
+            found.append((name, "byte" if ctype == "Byte" else "int", re.findall(r'"(\w+)"', fields)))
+    return found
+
+
+def struct_returns():
+    """Builtins answering a struct, by name: a `Builtin x{"name", ...}` whose `x.retStruct` is set."""
+    found = {}
+    for path in BUILTINS:
+        text = path.read_text(encoding="utf-8")
+        var_to_name = dict(re.findall(r'Builtin\s+(\w+)\s*\{"(\w+)"', text))
+        for var, st in re.findall(r'(\w+)\.retStruct\s*=\s*"(\w+)"', text):
+            if var in var_to_name:
+                found[var_to_name[var]] = st
+    return found
 
 
 def prelude() -> str:
@@ -71,6 +94,12 @@ def prelude() -> str:
     ]
     for v in SYSVARS:
         lines.append(f"inline int {v} = 0;")
+    # An aggregate, so `RGB(1, 2, 3)` is C++20's parenthesized initialization and `RGB c;` a declaration.
+    types = structs()
+    assert types, "no struct types parsed: the addStruct shape changed"
+    for name, ftype, fields in types:
+        lines.append(f"struct {name} {{ {ftype} {', '.join(fields)}; }};")
+    answers = struct_returns()
     # Builtins whose first argument is a NAME IN QUOTES are declared by hand below: the generated
     # int-only form cannot express a string, and emitting both makes the call ambiguous rather than
     # resolving it.
@@ -79,7 +108,12 @@ def prelude() -> str:
         if name in byString:
             continue
         args = ", ".join(["int"] * argc)
-        lines.append(f"int {name}({args});")
+        lines.append(f"{answers.get(name, 'int')} {name}({args});")
+        # A struct argument fills as many positions as it has fields, so each run of positions a struct can fill gets its overload.
+        for st, _, fields in types:
+            for k in range(argc - len(fields) + 1):
+                parts = ["int"] * k + [st] + ["int"] * (argc - k - len(fields))
+                lines.append(f"{answers.get(name, 'int')} {name}({', '.join(parts)});")
     # toFixed/toInt are KEYWORDS, not builtins: the compiler recognizes them inline so each costs
     # one shift instruction rather than a host call (MoonLiveCompiler.cpp), so the registration
     # table above does not carry them.

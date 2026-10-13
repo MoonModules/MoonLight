@@ -2159,6 +2159,9 @@ button.fileedit-pick:disabled { opacity: 0.6; cursor: default; }
     gap: 1rem;
 }
 .fw-overlay-box progress { width: 100%; }
+/* A wait the bar cannot measure (a flash write, the reboot): a pulse, so the pause reads as work. */
+.fw-overlay-box progress.fw-stalled { animation: fw-pulse 0.8s ease-in-out infinite alternate; }
+@keyframes fw-pulse { to { opacity: 0.45; } }
 .fw-overlay-msg { color: var(--fg-muted); margin: 0; overflow-wrap: anywhere; }
 
 /* File Manager upload progress: a floating panel, not a modal, so a long /sd transfer never blocks

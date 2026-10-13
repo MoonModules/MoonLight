@@ -2,6 +2,10 @@
 
 Forward-looking to-build items for the **core / infrastructure** domain (`src/core/`, `src/platform/`, build, CI, network, persistence, UI). The light-domain counterpart is [backlog-light.md](backlog-light.md); items that genuinely span both are in [backlog-mixed.md](backlog-mixed.md). Index + overview: [README.md](index.md). Completed items are removed.
 
+### An SD card inserted after boot mounts only when its module restarts (2026-10-12)
+
+A mount attempt on an empty slot runs the SDMMC card-init sequence to its timeouts, so `SdCardModule` never retries one on the render thread: a card inserted later mounts when the module is switched off and on, on a pin edit, or at boot. A pull is still noticed within a second through a cheap presence probe. Detecting an insertion without that stall needs a card-detect pin where the slot has one, or a mount attempt off the render thread. The timed retry PR #136 carried was dropped for this reason before its merge.
+
 ### A config written for next boot is overwritten by the next save (2026-10-04)
 
 Network and Ethernet return false from `appliesConfigLive`, so a file written through `POST /api/file` waits on disk for the next boot.
@@ -282,10 +286,9 @@ declared rather than for a buffer to fill, and to time out on stall rather than 
 
 1.0 ships ESP32 firmware (4 variants) + macOS arm64 + Windows x64. Still to add:
 
-- **ESP32-P4** firmware variant — **`esp32p4rev1-eth` (Ethernet-only) shipped**: in `build_esp32.py`'s `FIRMWARES`, the `deviceModels.json` catalog (Waveshare P4-NANO), and CI builds + publishes it to the web installer + releases. **`esp32p4rev1-eth-wifi` now ships too** (2026-08-19): it boots and associates on IDF v6.1-rc1, so it is out of the experimental set in the installer and carries a normal description. Its open defect is throughput, not shipping — see § ESP32-P4 round 3, open issue 0.
+- **ESP32-P4** firmware variant: **`esp32p4rev1-eth` (Ethernet-only) shipped**: in `build_esp32.py`'s `FIRMWARES`, the `deviceModels.json` catalog (Waveshare P4-NANO), and CI builds + publishes it to the web installer + releases. **`esp32p4rev1-eth-wifi` now ships too** (2026-08-19): it booted and associated on IDF v6.1-rc1, so it is out of the experimental set in the installer and carries a normal description. On IDF v6.1 it no longer associates (2026-10-12): see § ESP32-P4 round 3.
 - **ESP32-P4 v3.x silicon variant (backlog)** — `esp32p4rev1-eth` is built for pre-v3 P4 (`CONFIG_ESP32P4_SELECTS_REV_LESS_V3` + `REV_MIN_0`), because the v6.1 IDF default (v3.1) refused to boot on the bench/field v1.x P4 and rev <3.0 vs >=3.0 are "huge hardware difference" (one binary can't cover both). **DONE (2026-08-19): `esp32p4rev3-eth` and `esp32p4rev3-eth-wifi` ship** (`REV_MIN_300`, which covers v3.0-v3.99), reusing the rev1 board fragment so the partition table and EMAC config stay in one place. **Still open: neither has ever been booted** — both bench boards are v1.3 engineering samples, so the rev3 images are flagged experimental in the installer and need a v3 board to verify. Espressif does not recommend v0.x/v1.x for new designs, so a board bought today is v3.x and needs these.
 - **Retire the OTA fallback repository, once a device has another recovery route.** `FirmwareUpdateModule.h` names two: `kReleaseRepo` is tried first and `kFallbackRepo` catches a device whose firmware predates the move. It is tempting to call the second dead code after the rename, and it is not: `platform_esp32_ota.cpp:195` retries the alternate address whenever `esp_https_ota_begin` FAILS, which covers DNS, TLS, an outage and a variant whose asset is missing, rather than only a repository that has moved. So a v6.0.0 device on the happy path never reaches it and a v6.0.0 device whose first request fails still does. Removing it deletes that second chance for every board, which wants a replacement rather than a deletion: a configurable update URL, or a retry against the same address, would give a device somewhere to go. The one cost of keeping it is a wasted request on the failure path, which is already the slow path.
-- **Teensy 4.1** — toolchain-file build, `.hex` for Teensy Loader.
 - **Raspberry Pi** — ARM64, cross-built or native.
 - **macOS code-signing (Developer ID)** — the release `.dmg` is now ad-hoc signed, which turns Gatekeeper's outright refusal into the "unidentified developer" prompt a user can accept via right-click Open. A paid Developer ID certificate plus notarization would drop that prompt too.
 - **Windows code-signing** — drops the SmartScreen warning on first run of `MoonLight.exe`. Same shape as macOS signing; needs an EV / OV code-signing certificate (Microsoft Trusted Signing is the cheapest current option). Until then, the README notes the SmartScreen prompt.
@@ -382,6 +385,13 @@ declared rather than for a buffer to fill, and to time out on stall rather than 
   by member rather than by arena byte took it to 784 bytes and the board boots clean.
 
 - **ESP32-P4 DHCP hostname not shown by the router (recheck later)** — the device sets its DHCP hostname (option 12 = `deviceName`, default `MM-XXXX`) in the `ETHERNET_EVENT_CONNECTED` handler, verified working on two boards: the S3 over WiFi (router shows `MM-70BC`) and the Olimex over RMII Ethernet (`MM-BD3C`) — the *same* `ethEventHandler` code path the P4 uses. Yet the bench P4 (Waveshare P4-NANO, RMII) still shows as blank/"Unknown" in the GL.iNet client list, while serial confirms `set_hostname` succeeds with no error. Two unconfirmed suspects, neither our logic: (1) the router holds a **sticky lease** for the P4's MAC and won't relearn the hostname until it fully expires (the per-client "forget" isn't exposed in this GL.iNet UI, and a plain reboot didn't clear it); (2) a P4-specific IDF netif quirk serializing option 12 differently on the newer P4 Ethernet path. Since the shared code path is proven on two other boards, this is not treated as a code bug. Recheck after the P4's lease naturally expires, or on a different router, before spending more on it.
+
+### A Service that calls another device's API (robwomp, 2026-10-11)
+
+Suggested on Discord: panels driven by another stack take their pixels from MoonLight over DDP or Art-Net, but their settings stay out of reach.
+A user-added Service holds a list of HTTP requests, each a method, a URL and a body, and fires one when a control it watches changes, so a button, a MIDI knob or an OSC message drives any device that answers `curl`.
+Inbound control already exists (`/api/control`, MQTT, OSC, MIDI); this is its outbound twin, and the generic complement to the typed command half of DevicesModule below, which knows each ecosystem's API.
+Requests leave the render thread, since a slow peer must never stall a frame.
 
 ### DevicesModule — interop plugins + the command half (discovery shipped)
 
@@ -481,6 +491,32 @@ Both surfaced while bringing up MoonBase Ethernet on the migrated Olimex; neithe
   the control's apply/build-state sweep.
 
 ## ESP32 performance and memory
+
+### Uploads to a Teensy run at about 20 KB/s (2026-10-13)
+
+An upload to the Teensy 4.1 moves about 20 KB/s whether it lands on internal flash or the SD card, against 300 KB/s to a classic ESP32 over Ethernet, and a 100 KB upload to internal flash once failed after 19 s.
+Downloads run at 354 KB/s, so the receive side is the bottleneck: most likely lwIP's TCP receive window in QNEthernet's configuration, which caps the bytes in flight per round trip.
+Measure the window first, then raise it within the Teensy's RAM, which the Layer buffers also need.
+
+### Host names on the Teensy (2026-10-13)
+
+HostResolver looks names up on a task of its own, and the Teensy has none: `spawnPinnedTask` refuses, so a host given by name in NetworkSend, OSC, Audio or MIDI waits forever, and its `resolveHost` blocks for its whole timeout.
+On a board with one loop the textbook shape is a query that does not block: QNEthernet's `DNSClient::getHostByName` takes a callback, so a new platform seam starts a lookup and a tick collects the answer.
+Until then an address works, and a name should say it cannot resolve rather than wait.
+
+### LEDs on the Teensy flash white, then the board resets (2026-10-13)
+
+Five times in one session, the 64-light strip on the Teensy 4.1 bench board went full white, and the board restarted with reset reason `UNKNOWN`, no fault mark and no watchdog: a supply dip, which a full-white strip on USB power explains.
+Each white flash came while the device built a large state document: switching SdCard's board with the old 46 KB full state, and subscribing to Drivers or the whole tree with the new one; none came with the LEDs disconnected.
+A WS2812 strip reads a data line held high as all ones, so suspect the GPIO-DMA output stalling high, or its buffer moving under the DMA when the Layer reduces its buffer under memory pressure ("buffer reduced" was showing).
+Reproduce with a logic analyser on the data pin while subscribing to Drivers, before changing code.
+
+### A Teensy sometimes drops a message the page sends (2026-10-13)
+
+Choosing Custom on SdCardService's board select reached the Teensy once in three tries in one session, and every time in later ones; the same clicks always reach the Dig-Octa.
+A lost write leaves the page showing a choice the device never made, and nothing tells the user.
+Suspects, in order: the `/wsp` preview stream filling the send side while a frame from the page waits, a long render tick delaying the poll that reads the socket, and power dips while the LEDs show full white.
+Reproduce with the preview open and closed and the LEDs dark and lit, logging each frame the device receives, before changing any code.
 
 ### One board-preset helper for Ethernet and the SD card (2026-10-12)
 
@@ -1210,6 +1246,7 @@ This is hardening, not a known bug — the shipped fix is correct for the cases 
 ### ESP32-P4 support — rounds 3-4 (in progress)
 
 Rounds 1 (board + Ethernet-only) and 2 (Parlio LED driver) have landed. Remaining rounds, each its own plan + commit:
+- **Round 3 regression: WiFi no longer associates on IDF v6.1 (2026-10-12).** It associated and served traffic on IDF v6.1-rc1 (below). The bench P4-NANO (v1.3, port `usbmodem5ABA0767291`, registry .139) flashed with `esp32p4rev1-eth-wifi` on the v6.1 pin, Ethernet unplugged: Improv delivered the bench SSID over USB serial, the board answered "unable to connect", and it never appeared on the network. Its log does not reach `monitor_esp32` on that USB-JTAG port, so the cause is unread. First step: read the P4's console (UART pins with an adapter) for the esp_hosted / C6 lines, then compare against the rc1 build that worked: the IDF move from rc1 to v6.1 and the esp_hosted version it pulls are the two candidates.
 - **Round 3 — WiFi via the C6 co-processor. WORKING, BUT THE LINK IS SLOW (2026-08-19).** Boots and associates on IDF v6.1-rc1 (see round 4); the remaining defect is throughput, bench-bisected below. The P4 has no native radio (`SOC_WIFI_SUPPORTED` absent); WiFi comes from the on-board ESP32-C6 over SDIO via `esp_wifi_remote` / esp_hosted. Landed as the `esp32p4rev1-eth-wifi` firmware variant: components pulled P4-only (`rules:` gate in `idf_component.yml`), and `ensureWifiInit()` needs no hosted bring-up of its own: esp_hosted self-initialises at boot via a constructor (`ESP_SYSTEM_INIT_FN`), which sets up the SDIO transport, RPC and wifi-remote channels before `app_main`. Calling `esp_hosted_init`/`connect_to_slave` there would be worse than redundant — `connect_to_slave` is a transport *reconfigure* that resets the slave and re-inits SDIO, which fails on a live link. The rest of the WiFi seam is unchanged because `esp_wifi_remote` is API-compatible. A deliberate, documented [v6.0-floor exception](../../how-to/building.md#esp-idf-version); C6 config via `CONFIG_SLAVE_IDF_TARGET_ESP32C6` + `CONFIG_ESP_HOSTED_CP_TARGET_ESP32C6` + the `CONFIG_ESP_HOSTED_P4_DEV_BOARD_FUNC_BOARD` SDIO-pin preset.
 
   **Hardware results (bench, P4-NANO, 2026-06-12):**
@@ -1575,7 +1612,7 @@ Related: WLED is smooth on the same stream because it receives via `AsyncUDP` �
 
 ## MIDI as a control surface, and the OpenLamp convention (2026-09-22)
 
-[ControlSurface](../../../src/core/util/ControlSurface.h) was written for MIDI hardware and has no MIDI transport. Its own documentation cites the APC40 mk2's ring-style CCs at 0x18/0x38, the X-Touch MINI's CC 1-8, and per-vendor SysEx for RGB pads, and its four verbs (`sendValue`, `sendRing`, `sendColor`, `sendLabel`) exist because MIDI hardware needs exactly those. OSC is the only transport that implements it. A MIDI transport is therefore a gap the architecture already anticipated rather than a new concept, and it is the obvious second implementation that proves the abstraction holds.
+[ControlSurface](../../../src/core/util/ControlSurface.h) was written for MIDI hardware, and [MidiService](../../../src/core/services/MidiService.h) is its MIDI transport beside OSC: it drives the surface from Mackie Control desks and the APC40 mkII, over the browser's Web MIDI, a board's USB port or RTP-MIDI, and sends the way back through the surface's verbs. What stays open is a controller with no profile: what its notes and CCs mean, which the OpenLamp convention below proposes, and MIDI learn, the item after it.
 
 **What OpenLamp offers.** [openlamp-spec-midi](https://github.com/openlamp/openlamp-spec-midi) is an MIT-licensed convention for driving WLED over MIDI: notes 59-68 for hues plus black and white, notes 48-56 for off, on, toggle and blackout, CC 1 for brightness, CC 3-4 for hue and saturation, CC 5-8 for effect, speed, intensity and palette, Program Change for presets, MIDI channel for targeting, and MIDI clock for beat sync. The [organization](https://github.com/openlamp) also has an Ableton Link and MIDI-clock tempo library, and a CC0 asset set of 72 palette illustrations and 216 effect previews in eight languages.
 
@@ -1586,6 +1623,12 @@ Related: WLED is smooth on the same stream because it receives via `AsyncUDP` �
 **What it is not.** Not a replacement for OSC, which carries labels and arbitrary addresses that MIDI cannot. Not a lighting-control protocol in the DMX or Art-Net sense. This is about a musician's controller driving the show.
 
 Build trigger: someone with a MIDI controller who wants it to drive a device, or the DMX work reaching a point where a tempo source is the missing piece.
+
+### MIDI learn: any note or CC onto any control (robwomp, 2026-10-12)
+
+The MIDI service decodes two known layouts, Mackie Control and an Akai APC40 mkII profile, so a controller sending plain notes or CCs outside them drives nothing: a user with a generic controller on Linux got no note or CC data in. The infrared and gamepad services already map an arbitrary input onto any control with `learn` rows, and MIDI gets the same rows: each one's `learn` arm captures the next note or CC with its channel, a target names the control, and the value scales into the target's range (a CC's 0 to 127, a note's velocity, or a note as a toggle). That is MIDI learn as consoles and DAWs offer it, through the same primitive, so one mechanism maps every input. The two profiles stay for the desks whose layout they describe, since they carry the way back (motor faders, knob rings, lit pads); a learned row has none unless the controller echoes its CCs.
+
+Build trigger: met, a generic controller that cannot reach MoonLight today.
 
 ### Notes as an effect input, which is the other half
 

@@ -55,7 +55,8 @@ public:
 
     // Index order is fixed by kBlendModeOptions, so a persisted preset keeps its meaning.
     /// The blend modes, in option order.
-    enum BlendMode : uint8_t { kBlendAlpha, kBlendAdditive, kBlendModeCount };
+    enum BlendMode : uint8_t { kBlendAlpha, kBlendAdditive, kBlendMultiply, kBlendScreen, kBlendDarken, kBlendLighten,
+                               kBlendDifference, kBlendExclusion, kBlendModeCount };
     /// How this layer composites onto those below it, as an index into `kBlendModeOptions`.
     uint8_t blendMode = kBlendAdditive;
     /// How strongly this layer composites, from 0 for invisible to 255 for full.
@@ -63,18 +64,22 @@ public:
 
     /// Publish the two composition controls the `Drivers` container reads.
     void defineControls() override {
-        static constexpr const char* kBlendModeOptions[] = {"alpha", "additive"};
+        static constexpr const char* kBlendModeOptions[] = {"alpha", "additive", "multiply", "screen", "darken", "lighten",
+                                                            "difference", "exclusion"};
+        static_assert(sizeof(kBlendModeOptions) / sizeof(kBlendModeOptions[0]) == kBlendModeCount, "one option per mode");
         controls_.addSelect("blendMode", blendMode, kBlendModeOptions, kBlendModeCount);
         controls_.addControl("opacity", opacity, 0, 255);
         // Cascade to the children, preserving the base behavior this overrode.
         MoonModule::defineControls();
     }
 
-    // Index order must match kBlendModeOptions.
+    // In BlendMode order, so an index and its op cannot drift apart; at class scope, as a function-local static would keep the render path from proving itself nonblocking.
+    /// The `BlendMap` op each `blendMode` selects.
+    static constexpr BlendOp kBlendOps[kBlendModeCount] = {BlendOp::Alpha, BlendOp::Additive, BlendOp::Multiply, BlendOp::Screen,
+                                                           BlendOp::Darken, BlendOp::Lighten, BlendOp::Difference,
+                                                           BlendOp::Exclusion};
     /// The `BlendMap` op this layer's `blendMode` selects, read by `Drivers`.
-    BlendOp blendOp() const {
-        return blendMode == kBlendAdditive ? BlendOp::Additive : BlendOp::Alpha;
-    }
+    BlendOp blendOp() const { return blendMode < kBlendModeCount ? kBlendOps[blendMode] : BlendOp::Alpha; }
 
     /// Point this layer at the shared `Layouts` describing the physical topology.
     void setLayouts(Layouts* lg) { layouts_ = lg; }

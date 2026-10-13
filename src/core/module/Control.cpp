@@ -218,9 +218,9 @@ void writeControlMetadata(JsonSink& sink, const ControlDescriptor& c) {
             return;
         }
         case ControlType::Progress:
-            // `bytes` (in min, see addProgress): 1 → KB label, 0 → plain count.
-            sink.appendf(",\"total\":%lu,\"bytes\":%s", static_cast<unsigned long>(c.aux),
-                         c.min ? "true" : "false");
+            // The unit rides in min (see addProgress); the UI scales by it and picks KB, MB or GB itself.
+            sink.appendf(",\"total\":%lu,\"unit\":\"%s\"", static_cast<unsigned long>(c.aux),
+                         static_cast<ProgressUnit>(c.min) == ProgressUnit::KiB ? "KiB" : "B");
             return;
         case ControlType::List: {
             // The detail an expanded row shows, as an array parallel to the summary `value`, which stays small for the collapsed list.

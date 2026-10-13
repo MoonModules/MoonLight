@@ -180,11 +180,11 @@ private:
 #endif
     // A pending label reference; the kind matters, a call and a branch using different fields.
     enum class FixKind : uint8_t { Branch, Call };
-    struct Fixup { size_t at; Label label; FixKind kind = FixKind::Branch; };
+    struct Fixup { CodePos at; Label label; FixKind kind = FixKind::Branch; };
     /// Bounds-checked.
     void addFixup(size_t at, Label label, FixKind kind = FixKind::Branch) {
-        if (fixupCount_ >= kMaxFixups) { overflow_ = true; return; }
-        fixups_[fixupCount_++] = {at, label, kind};
+        if (fixupCount_ >= kMaxFixups || at >= kUnbound) { overflow_ = true; return; }
+        fixups_[fixupCount_++] = {static_cast<CodePos>(at), label, kind};
     }
 
     // Heap rather than a member array, which put 2 KB on the stack and overflowed a classic ESP32.

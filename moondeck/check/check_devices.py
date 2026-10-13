@@ -11,6 +11,7 @@ gate that pins the invariants the clients assume.
 Invariants checked per entry:
   - required fields present (name, chip, firmwares, state)
   - firmwares is a non-empty list of non-empty strings (entry[0] is the default)
+  - chip is a family of the firmware registry, and every firmware is a registry firmware for that family
   - image (if set) is a local assets/deviceModels/ path that resolves on disk
   - url (if set) is an absolute http(s) link
   - every state root is a top-level module the device boots with
@@ -28,6 +29,8 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent.parent
+sys.path.insert(0, str(ROOT / "moondeck" / "build"))
+from firmwares import FIRMWARES, TARGET_TO_FAMILY, chip_family  # noqa: E402
 CATALOG = ROOT / "mooninstaller" / "deviceModels.json"
 MODULE_TYPES_CPP = ROOT / "src" / "module_types.cpp"
 MAIN_CPP = ROOT / "src" / "main.cpp"
@@ -209,6 +212,19 @@ def main():
                 # exact firmware-key match downstream (picker, dedup, manifest names).
                 errors.append(f"{where}: firmwares entries must not be whitespace-only "
                               f"or have leading/trailing whitespace")
+
+        # --- chip: the family the installer detects and the manifests name, and the one every firmware installs onto ---
+        chip = e.get("chip")
+        families = set(TARGET_TO_FAMILY.values())
+        # A string first: a list or an object is unhashable, and the set membership test would raise rather than report.
+        if "chip" in e and (not isinstance(chip, str) or chip not in families):
+            errors.append(f"{where}: chip {chip!r} is not a known family {sorted(families)}")
+        elif isinstance(fws, list):
+            for fw in fws:
+                if isinstance(fw, str) and fw not in FIRMWARES:
+                    errors.append(f"{where}: firmware {fw!r} is not in the firmware registry (moondeck/build/firmwares.py)")
+                elif isinstance(fw, str) and chip_family(fw) != chip:
+                    errors.append(f"{where}: firmware {fw!r} installs onto {chip_family(fw)}, not {chip}")
 
         # --- flashBaud (optional): a board opts into a faster flash baud only when
         #     its USB bridge is verified to sustain it (flash_esp32.py reads this). ---

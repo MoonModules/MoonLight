@@ -179,6 +179,8 @@ On "run pre-commit": run the checks whose trigger the diff matches, report one l
 
 **A failure is something to report, not to fix and re-run.** A second run needs the words again, as much after a failure or a fix as at any other time.
 
+**The gates run once per commit.** A run costs minutes, so scope freezes at "run pre-commit": a request made during a run goes to the next commit. A change made after a run re-checks only itself, on the product owner's go. A fixed failure reruns that one check; any other change runs the checks its own diff triggers. A full rerun needs the word "restart". A cosmetic change can ride on the run it followed, since the next commit's gates check it again.
+
 ```mermaid
 flowchart LR
     pc{"<b>🧑 run pre-commit</b><br/><i>PO says the words,<br/>once per request</i>"}

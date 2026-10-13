@@ -28,6 +28,7 @@ on:
       # C4701 fixes each shipped unverified because they touched only test/.
       - 'test/**'
       - 'esp32/**'
+      - 'teensy/**'
       - 'moondeck/build/**'
       # package_desktop.py builds and packages the three desktop jobs; without this line a
       # packaging fix cannot trigger the jobs that run it (the NSIS-escape fix needed a
@@ -91,9 +92,8 @@ jobs:
           TAG: ${{ inputs.tag || github.ref_name }}
         run: uv run moondeck/ci/verify_version.py --tag "$TAG"
 
-  # The shipping firmware list, read from the generated mooninstaller/firmwares.json
-  # (projected from build_esp32.py's FIRMWARES dict, drift-guarded by
-  # check_firmwares.py). Emitted as a JSON array of {firmware, chip} so build-esp32's matrix can
+  # The shipping ESP32 firmware list, read from the generated mooninstaller/firmwares.json
+  # (projected from the firmwares.py registry, drift-guarded by check_firmwares.py). Emitted as a JSON array of {firmware, chip} so build-esp32's matrix can
   # fromJSON() it: GitHub matrices can't read a file at parse time, so a job output is the
   # standard bridge. This is the ONLY firmware list in CI, and the chip is the IDF target.
   firmwares:
@@ -108,7 +108,7 @@ jobs:
       - id: gen
         run: |
           set -euo pipefail
-          echo "list=$(jq -c '[.firmwares[] | select(.ships) | {firmware: .name, chip}]' mooninstaller/firmwares.json)" >> "$GITHUB_OUTPUT"
+          echo "list=$(jq -c '[.firmwares[] | select(.ships and .platform == "esp32") | {firmware: .name, chip}]' mooninstaller/firmwares.json)" >> "$GITHUB_OUTPUT"
 
   build-esp32:
     needs: [verify-version, firmwares]
@@ -501,12 +501,70 @@ jobs:
           name: desktop-linux-arm64
           path: dist/
 
+  # The Teensy 4.1 firmware, a HEX for teensy_loader_cli or PJRC's Teensy app; test.yml builds it on every PR as well.
+  build-teensy:
+    needs: verify-version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v3
+      - name: the Arm toolchain's version, which keys its cache
+        id: gcc
+        run: echo "version=$(sed -n 's/^GCC_VERSION = "\(.*\)"/\1/p' moondeck/build/setup_teensy.py)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        with:
+          path: ~/teensy/arm-gnu-toolchain-*
+          key: teensy-gcc-${{ runner.os }}-${{ steps.gcc.outputs.version }}
+      # Same tag and version resolution as build-esp32, so the HEX reports the version and channel its asset name carries.
+      - name: Resolve release tag
+        id: tag
+        shell: bash
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+          REF_NAME: ${{ github.ref_name }}
+          IS_MAIN: ${{ github.ref == 'refs/heads/main' }}
+        run: |
+          set -euo pipefail
+          if [ -n "$INPUT_TAG" ]; then echo "tag=$INPUT_TAG" >> "$GITHUB_OUTPUT"
+          elif [ "$IS_MAIN" = "true" ]; then echo "tag=latest" >> "$GITHUB_OUTPUT"
+          else echo "tag=$REF_NAME" >> "$GITHUB_OUTPUT"; fi
+      - name: Compute version
+        id: ver
+        shell: bash
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          set -euo pipefail
+          V=$(uv run python moondeck/build/compute_version.py --tag "$TAG")
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+      - name: Install the Teensy SDK
+        run: uv run moondeck/build/setup_teensy.py --no-loader
+      - name: Build the Teensy 4.1 firmwares
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+          V: ${{ steps.ver.outputs.version }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          for fw in $(jq -r '.firmwares[] | select(.ships and .platform == "teensy") | .name' mooninstaller/firmwares.json); do
+            uv run moondeck/build/build_teensy.py --firmware "$fw" --release "$TAG" --version "$V"
+            cp "build/$fw/MoonLight.hex" "dist/firmware-$fw-v$V.hex"
+            cp "build/$fw/MoonLight.bin" "dist/firmware-$fw-v$V.bin"
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: firmware-teensy41
+          path: dist/
+
   release:
     # Publish a release on: version tag push, main branch push, or workflow_dispatch.
     # Plain branch push without matching paths is filtered by the top-level `paths:`
     # so the build jobs already won't run; this condition is the belt to their braces.
     if: startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
-    needs: [build-esp32, build-macos-arm64, build-windows-x64, build-linux-x64, build-linux-arm64]
+    needs: [build-esp32, build-teensy, build-macos-arm64, build-windows-x64, build-linux-x64, build-linux-arm64]
     runs-on: ubuntu-latest
     permissions:
       contents: write     # softprops/action-gh-release needs this
@@ -588,7 +646,7 @@ jobs:
           V=$(uv run python moondeck/build/compute_version.py --tag "$TAG")
           echo "version=$V" >> "$GITHUB_OUTPUT"
 
-      - name: Generate ESP Web Tools manifests (release-asset URLs)
+      - name: Generate the installer manifests (release-asset URLs)
         env:
           TAG: ${{ steps.tag.outputs.tag }}
           REPO: ${{ github.repository }}
@@ -603,11 +661,14 @@ jobs:
           # The shipping firmware list — the same mooninstaller/firmwares.json the
           # build matrix reads, so manifests and builds can't drift.
           for F in $(jq -r '.firmwares[] | select(.ships) | .name' mooninstaller/firmwares.json); do
+            # An ESP32 manifest takes its offsets from IDF's flasher args; a Teensy one is the flat image at 0.
+            ARGS=()
+            [ -f "dist/flasher-$F.json" ] && ARGS=(--flasher-args "dist/flasher-$F.json")
             uv run python moondeck/build/generate_manifest.py \
               --firmware "$F" \
               --version "$V" \
               --release-url "$BASE" \
-              --flasher-args "dist/flasher-$F.json" \
+              "${ARGS[@]}" \
               --out "dist/manifest-$F.json"
           done
 
@@ -675,6 +736,7 @@ jobs:
           # is a glob pattern, the action does NOT strip `#` as comment syntax.
           files: |
             dist/firmware-*.bin
+            dist/firmware-*.hex
             dist/shared-*.bin
             dist/partition-table-*.bin
             dist/manifest-*.json

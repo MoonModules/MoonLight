@@ -278,7 +278,9 @@ Every scenario carries a top-level `mode` field that says what shape the scenari
 - **`"mode": "construct"`**: the scenario builds the pipeline from its empty containers, one `apply_state` document at a time, and measures as it goes. **Runs in-process only.** A live device's tree is never empty, so the live runner skips construct scenarios with a clear note.
 - **`"mode": "mutate"`**: the scenario assumes a wired pipeline and tweaks it (`set_control` heavy), and runs in both tiers.
   The in-process runner creates the scenario's **`top`** containers as the device boots them, with the apparatus main.cpp wires into each, replays its **`fixture`** array of `apply_state` documents, then runs the steps.
-  The live runner skips the fixture (device is its own fixture) and pre-flights every id the steps touch: a missing id is a hard fail, not a silent skip.
+  The live runner lays the fixture as the canvas: each container the fixture names is replaced with exactly the fixture's children.
+  A bench that carries another effect or grid then runs the scenario as a fresh device would, and the snapshot restore puts the bench back afterwards.
+  It pre-flights every id the steps touch: a missing id is a hard fail, not a silent skip.
 
 Picking the right mode:
 - If your scenario starts with empty Layouts/Layer/Drivers wiring, it's **construct**. It will not run live.

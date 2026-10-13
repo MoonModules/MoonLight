@@ -56,17 +56,9 @@
 /// So it re-arms until a run long enough arrives, meaning one that happened to land at or before a frame start.
 /// The pipeline transmits continuously, so a full frame is caught within a few arms, and the budget is bounded so a dead wire still times out rather than looping forever.
 /// That budget must fit INSIDE the outer ceiling, or the caller frees the capture buffer while this task is still writing into it.
-///
-/// ## The first pulse of a frame is short behind an expander
-///
-/// The register's outputs are still settling as the first latch fires, so the very first bit comes back as a zero when the strand sent a one.
-/// Measured on one strand: exactly one mismatch in over two thousand bits, always that bit, always short-clipped, while every other bit and both pulse-width classes are textbook.
-/// It costs the first light's most significant color bit and nothing else, which is invisible, so a lone short-clipped first bit is the expander's frame-start settling rather than bad output.
-/// Any second mismatch, or a first-bit miss that is not short-clipped, still fails.
-/// Direct mode drives the pin straight with no latch, so its first bit is clean.
-/// And the exception is gated on the expander mode so a real fault on a direct path can never be excused through it.
 
 #include "platform/platform.h"
+#include "platform/loopback_verify.h"   // the bit-verify every loopback shares
 
 #include "driver/rmt_tx.h"
 #include "driver/rmt_rx.h"
@@ -559,40 +551,15 @@ void captureAndVerifyFrame(uint16_t rxGpio, size_t frameBytes, size_t dataBytes,
 
     if (cap->done && cap->got >= kBits) {
         // Verify EVERY bit of the frame against the per-row pattern (r.sent[], zero-padded for RGBW rows), not just the first light.
-        size_t mismatch = SIZE_MAX;
-        uint16_t minH[2] = {0x7FFF, 0x7FFF}, maxH[2] = {0, 0};
-        size_t mismatchCount = 0;
-        for (size_t b = 0; b < kBits; b++) {
-            const uint16_t high = static_cast<uint16_t>(rxSymbols[b] & 0x7FFF);
-            const uint8_t bit = (high >= threshTicks) ? 1 : 0;
-            if (high < minH[bit]) minH[bit] = high;
-            if (high > maxH[bit]) maxH[bit] = high;
-            const uint8_t rowPos = static_cast<uint8_t>(b % rowBits);
-            const uint8_t expByte = (rowPos / 8u) < 3 ? r.sent[rowPos / 8u] : 0x00;
-            const uint8_t exp = (expByte >> (7 - (rowPos & 7))) & 1u;
-            if (bit != exp) { if (mismatch == SIZE_MAX) mismatch = b; mismatchCount++; }
-        }
-        // r.got[] reports the row holding the first mismatch (row 0 when clean).
-        const size_t rowStart = (mismatch == SIZE_MAX)
-                                    ? 0 : mismatch - (mismatch % rowBits);
-        for (size_t b = rowStart; b < rowStart + 24 && b < cap->got; b++) {
-            const uint8_t bit = ((rxSymbols[b] & 0x7FFF) >= threshTicks) ? 1 : 0;
-            r.got[(b - rowStart) / 8] =
-                static_cast<uint8_t>((r.got[(b - rowStart) / 8] << 1) | bit);
-        }
-        // The frame's first pulse is one slot short behind an expander: @xref{the-first-pulse-of-a-frame-is-short-behind-an-expander|the measurement, and what still fails}.
-        const bool onlyBit0Clip = pinExpanderMode && mismatchCount == 1 && mismatch == 0
-                                && (static_cast<uint16_t>(rxSymbols[0] & 0x7FFF) < threshTicks);
-        r.pass = (mismatch == SIZE_MAX) || onlyBit0Clip;
-        r.bitsChecked = static_cast<uint32_t>(kBits);
-        r.firstBadBit = r.pass ? static_cast<uint32_t>(kBits) : static_cast<uint32_t>(mismatch);
+        const LoopbackBitStats st = verifyLoopbackBits(rxSymbols, kBits, cap->got, rowBits, threshTicks,
+                                                       pinExpanderMode, r);
         ESP_LOGI(tag, "loopback: high ticks — 0-bits %u..%u, 1-bits %u..%u (25ns/tick, threshold %u)",
-                 (unsigned)minH[0], (unsigned)maxH[0], (unsigned)minH[1], (unsigned)maxH[1],
+                 (unsigned)st.minHigh[0], (unsigned)st.maxHigh[0], (unsigned)st.minHigh[1], (unsigned)st.maxHigh[1],
                  (unsigned)threshTicks);
         if (!r.pass) {
             ESP_LOGE(tag, "loopback: first bad bit %u (light %u, bit-in-row %u), %u/%u bits bad; row0 got %02x%02x%02x exp %02x%02x%02x",
-                     (unsigned)mismatch, (unsigned)(mismatch / rowBits),
-                     (unsigned)(mismatch % rowBits), (unsigned)mismatchCount, (unsigned)kBits,
+                     (unsigned)st.mismatch, (unsigned)(st.mismatch / rowBits),
+                     (unsigned)(st.mismatch % rowBits), (unsigned)st.mismatchCount, (unsigned)kBits,
                      r.got[0], r.got[1], r.got[2], r.sent[0], r.sent[1], r.sent[2]);
         }
     }
@@ -631,8 +598,7 @@ RmtLoopbackResult ws2812LoopbackRide(uint16_t rxGpio, const uint8_t* sent, uint8
 }
 
 RmtLoopbackResult rmtWs2812Loopback(uint8_t txGpio, uint8_t rxGpio) {
-    RmtLoopbackResult r;
-    r.sent[0] = 0xA5; r.sent[1] = 0x00; r.sent[2] = 0xFF;  // recognizable pattern
+    RmtLoopbackResult r = detail::loopbackResult();
 
     r.jumperDetected = detail::loopbackJumperOk(txGpio, rxGpio);
     if (!r.jumperDetected) return r;   // no point running RMT through a dead wire
@@ -691,8 +657,7 @@ RmtLoopbackResult rmtWs2812Loopback(uint8_t txGpio, uint8_t rxGpio) {
 // So it catches the frame-rate corruption and interference the short test is blind to.
 RmtLoopbackResult rmtWs2812LoopbackFrame(uint8_t txGpio, uint8_t rxGpio,
                                          uint16_t lights, uint8_t channels) {
-    RmtLoopbackResult r;
-    r.sent[0] = 0xA5; r.sent[1] = 0x00; r.sent[2] = 0xFF;
+    RmtLoopbackResult r = detail::loopbackResult();
     if (lights == 0 || channels < 3 || channels > 4) return r;
 
     r.jumperDetected = detail::loopbackJumperOk(txGpio, rxGpio);

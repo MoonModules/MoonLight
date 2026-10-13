@@ -1,0 +1,20 @@
+# ESP32-S3-WROOM-2 N32R16V (32 MB octal flash, 16 MB octal PSRAM, both at 1.8 V)
+# Append to sdkconfig.defaults or copy as sdkconfig.defaults
+
+# Octal flash, named rather than left to IDF's auto-detect: the detection only switches the read mode, and the flash timing tuning keys on this option.
+CONFIG_ESPTOOLPY_OCT_FLASH=y
+CONFIG_ESPTOOLPY_FLASHSIZE_32MB=y
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions/ota_32mb.csv"
+
+# PSRAM, at the 80 MHz the module is rated for rather than IDF's 40 MHz default.
+CONFIG_SPIRAM=y
+CONFIG_SPIRAM_MODE_OCT=y
+CONFIG_SPIRAM_SPEED_80M=y
+
+# MoonLive native codegen needs an executable heap, as on every S3: see sdkconfig.defaults.esp32s3-n16r8.
+CONFIG_ESP_SYSTEM_MEMPROT_FEATURE=n
+CONFIG_HEAP_HAS_EXEC_HEAP=y
+
+# A MIDI desk on the board's own USB port: the MIDI service's USB source.
+CONFIG_MM_USB_MIDI_HOST=y

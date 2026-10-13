@@ -19,26 +19,9 @@
 
 namespace {
 
-// The peripheral is declared BEFORE the driver at every call site (see this helper's parameter order) so it outlives the driver, setPeripheralForTest borrows, it does not own (see unit_ParallelLedDriver_doublebuffer.cpp's wire()).
 void wire(mm::ParallelLedDriver& d, mm::ParlioPeripheral& peripheral, mm::Buffer& src, mm::Correction& corr,
           mm::nrOfLightsType lights) {
-    d.setPeripheralForTest(&peripheral);
-    // Pins default to UNSET now (the "default only when it cannot do harm" rule, the user solders the strand to its own GPIOs), so a fresh driver idles until configured. These slicing/frame tests exercise the lane logic, not the default value, so the helper supplies the bench 8-pin set unless a case set its own pins first.
-    if (d.pins[0] == '\0') std::strcpy(d.pins, "20,21,22,23,24,25,26,27");
-    // allocate succeeds exactly when lights > 0 (zero-grid wires an empty buffer on purpose); a masked alloc failure would fail cases downstream.
-    REQUIRE(src.allocate(lights, 3) == (lights > 0));
-    mm::test::rebuildFromPreset(corr, 255, mm::test::PresetOrder::GRB);   // 3 out-channels
-    d.defineControls();
-    d.setSourceBuffer(&src);
-    d.correctionForTest() = corr;
-    d.applyState();
-}
-
-// frameBytes = (maxLaneLights × outCh × 24 + 864 latch pad) × slotBytes, rounded up to 64. slotBytes = 1 for the 8-bit bus (≤8 lanes), 2 for the 16-bit bus (9..16).
-size_t expectFrame(mm::nrOfLightsType maxLights, uint8_t outCh, uint8_t slotBytes = 1) {
-    if (maxLights == 0) return 0;
-    const size_t raw = (static_cast<size_t>(maxLights) * outCh * 24 + 800 + 64) * slotBytes;
-    return (raw + 63) & ~static_cast<size_t>(63);
+    mm::test::wireParallel(d, peripheral, src, corr, lights, "20,21,22,23,24,25,26,27");
 }
 
 } // namespace
@@ -61,7 +44,7 @@ TEST_CASE("ParlioPeripheral slices lanes and sizes the frame by the longest") {
     CHECK(d.laneStart(1) == 50);
     CHECK(d.laneStart(2) == 70);
     CHECK(d.maxLaneLights() == 50);
-    CHECK(d.frameBytes() == expectFrame(50, 3));
+    CHECK(d.frameBytes() == mm::test::expectParallelFrame(50, 3));
 }
 
 // Empty ledsPerPin (the default) splits evenly over the 8 lanes, shared PinList semantics, same as the RMT/LCD drivers.
@@ -76,7 +59,7 @@ TEST_CASE("ParlioPeripheral even split over 8 lanes") {
     CHECK(d.laneLightCount(0) == 32);
     CHECK(d.laneLightCount(7) == 32);
     CHECK(d.maxLaneLights() == 32);
-    CHECK(d.frameBytes() == expectFrame(32, 3));
+    CHECK(d.frameBytes() == mm::test::expectParallelFrame(32, 3));
 }
 
 // The Parlio-vs-LCD difference: 1..8 pins are ALL valid (no exactly-8 rule).
@@ -134,7 +117,7 @@ TEST_CASE("ParlioPeripheral 16-lane frame doubles the byte size (16-bit bus)") {
         wire(d, peripheral, src, corr, 400);
         REQUIRE(d.laneCount() == 8);
         CHECK(d.maxLaneLights() == 50);
-        CHECK(d.frameBytes() == expectFrame(50, 3, 1));
+        CHECK(d.frameBytes() == mm::test::expectParallelFrame(50, 3, 1));
     }
     {   // 16 lanes × 50 lights → 16-bit bus (slotBytes = 2), same per-lane lights, DOUBLE bytes
         mm::ParlioPeripheral peripheral;
@@ -144,9 +127,9 @@ TEST_CASE("ParlioPeripheral 16-lane frame doubles the byte size (16-bit bus)") {
         wire(d, peripheral, src, corr, 800);
         REQUIRE(d.laneCount() == 16);
         CHECK(d.maxLaneLights() == 50);
-        CHECK(d.frameBytes() == expectFrame(50, 3, 2));   // 16-bit slots → 2 bytes/slot
+        CHECK(d.frameBytes() == mm::test::expectParallelFrame(50, 3, 2));   // 16-bit slots → 2 bytes/slot
         // Sanity: the 16-bit frame is ~double the 8-bit one (modulo the 64-byte rounding).
-        CHECK(d.frameBytes() > expectFrame(50, 3, 1));
+        CHECK(d.frameBytes() > mm::test::expectParallelFrame(50, 3, 1));
     }
 }
 
@@ -158,12 +141,12 @@ TEST_CASE("ParlioPeripheral frame grows on RGBW preset") {
     mm::Correction corr;
     std::strcpy(d.ledsPerPin, "50,50");
     wire(d, peripheral, src, corr, 100);
-    CHECK(d.frameBytes() == expectFrame(50, 3));
+    CHECK(d.frameBytes() == mm::test::expectParallelFrame(50, 3));
 
     // The driver owns its Correction, so mutate that copy (not the external one).
     mm::test::rebuildFromPreset(d.correctionForTest(), 255, mm::test::PresetOrder::GRBW);
     d.onCorrectionChanged();
-    CHECK(d.frameBytes() == expectFrame(50, 4));
+    CHECK(d.frameBytes() == mm::test::expectParallelFrame(50, 4));
 }
 
 // Parlio single-transfer hardware ceiling (PARLIO_LL_TX_MAX_BITS_PER_FRAME = 0x7FFFF bits = 65535 bytes on P4/S3/most targets): the peripheral clocks the WHOLE frame out in one transaction, so a per-lane strand whose frameBytes exceeds this is rejected by parlioWs2812Init (fixed, was a silent tx failure). The ceiling is a **byte** limit (65535 bytes/lane), so the equivalent LIGHT count depends on channels-per-light: WS2812 encodes 24 slot-bytes per channel, plus a ~864-byte per-lane latch pad. So the max lights/lane is ~ (65535 − 864) / (channels × 24): **897 for RGB (3ch)**, ~673 for RGBW (4ch), ~538 for RGBCCT (5ch), wider fixtures fit fewer lights per one-shot transfer. This pins the boundary in host-visible frameBytes terms for the RGB and RGBW cases. The reject itself is hardware-only (the host bus allocates but enforces no Parlio transfer ceiling), verified on the P4 (LEDs burn at 8×896 RGB/lane; the driver reports a status error above the ceiling). Catches the ceiling shifting if the encoding changes. Mirrors the platform constant.
@@ -178,14 +161,14 @@ TEST_CASE("ParlioPeripheral frame at the Parlio single-transfer ceiling (byte li
     std::strcpy(d.ledsPerPin, "896,896,896,896,896,896,896,896");
     wire(d, peripheral, src, corr, 896 * 8);
     CHECK(d.maxLaneLights() == 896);
-    CHECK(d.frameBytes() == expectFrame(896, 3));
+    CHECK(d.frameBytes() == mm::test::expectParallelFrame(896, 3));
     CHECK(d.frameBytes() <= kParlioMaxTransferBytes);          // fits one Parlio transfer
     // The exact RGB (3ch) boundary: 897 fits, 898 overflows.
-    CHECK(expectFrame(897, 3) <= kParlioMaxTransferBytes);
-    CHECK(expectFrame(898, 3) > kParlioMaxTransferBytes);
+    CHECK(mm::test::expectParallelFrame(897, 3) <= kParlioMaxTransferBytes);
+    CHECK(mm::test::expectParallelFrame(898, 3) > kParlioMaxTransferBytes);
     // RGBW (4ch) fits FEWER lights per one-shot transfer, the ceiling is bytes, not lights: ~673.
-    CHECK(expectFrame(673, 4) <= kParlioMaxTransferBytes);
-    CHECK(expectFrame(674, 4) > kParlioMaxTransferBytes);
+    CHECK(mm::test::expectParallelFrame(673, 4) <= kParlioMaxTransferBytes);
+    CHECK(mm::test::expectParallelFrame(674, 4) > kParlioMaxTransferBytes);
 }
 
 // A bad pin list idles the driver with the parse literal in the status; fixing it recovers.
@@ -277,24 +260,7 @@ TEST_CASE("ParlioPeripheral tick is crash-safe for every pin configuration") {
 
 // setup/release cycles leave no residue (status clean, ASAN-checked heap).
 TEST_CASE("ParlioPeripheral setup/release is repeatable") {
-    mm::ParlioPeripheral peripheral;
-    mm::ParallelLedDriver d;
-    mm::Buffer src;
-    mm::Correction corr;
-    d.setPeripheralForTest(&peripheral);
-    src.allocate(64, 3);
-    mm::test::rebuildFromPreset(corr, 255, mm::test::PresetOrder::GRB);
-    std::strcpy(d.pins, "20,21,22,23,24,25,26,27");   // pins now default UNSET
-    d.defineControls();
-    for (int cycle = 0; cycle < 4; cycle++) {
-        d.setup();
-        d.setSourceBuffer(&src);
-        d.correctionForTest() = corr;
-        d.applyState();
-        REQUIRE(d.laneCount() == 8);   // the 8 pins set above
-        d.release();
-        CHECK(d.status() == nullptr);
-    }
+    mm::test::checkSetupReleaseRepeatable<mm::ParlioPeripheral>("20,21,22,23,24,25,26,27", 8);
 }
 
 // loopbackRxPin is bound always, visible only while loopbackTest is on.
@@ -315,14 +281,7 @@ TEST_CASE("ParlioPeripheral loopbackRxPin tracks the loopbackTest toggle") {
 
 // loopbackTxPin (optional lane-0 TX override) is bound always, hidden until the test is on, same conditional-control contract as loopbackRxPin. The override's lane-0 substitution is hardware-only (parlioLanes==0 on desktop); the visibility contract is host-testable here via the shared helper (toggles loopbackTest both ways and asserts the control stays bound while flipping visibility).
 TEST_CASE("ParlioPeripheral loopbackTxPin tracks the loopbackTest toggle") {
-    mm::ParlioPeripheral peripheral;
-    mm::ParallelLedDriver d;
-    d.setPeripheralForTest(&peripheral);
-    d.defineControls();
-    auto setTest = [&](bool on) {
-        mm::test::setControlValue<bool>(d, "loopbackTest", on);
-    };
-    mm::test::checkConditionalControl(d, "loopbackTxPin", setTest, /*visibleWhenTrue=*/true);
+    mm::test::checkLoopbackTxPinTracksTest<mm::ParlioPeripheral>();
 }
 
 // The host bus is REAL MEMORY, not a refusal: `busInit` used to return false on desktop, so every bus assertion was unreachable off-device and the driver's encode path only ever ran on hardware. The contract is identical for all three peripherals, so it lives in one place.

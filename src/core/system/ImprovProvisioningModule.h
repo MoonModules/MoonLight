@@ -26,7 +26,7 @@ namespace mm {
 ///
 /// ## Transports
 ///
-/// The listener serves an external USB-to-UART bridge and a native USB port alike.
+/// The listener serves an external USB-to-UART bridge and a native USB port alike; on a Teensy it is the USB serial port, polled from this module's tick.
 /// Without either, the access-point flow remains, the device serving its own network.
 ///
 /// ## The commands
@@ -105,6 +105,7 @@ public:
 
     /// Apply any pending operation, polled every tick so a burst of them installs briskly.
     void tick() MM_NONBLOCKING override {
+        if constexpr (platform::hasImprov) platform::improvPoll();
         if (pendingOpReady_.load(std::memory_order_acquire) && scheduler_) {
             // The frame was acknowledged on receipt, so a failure must surface here instead.
             const StateDocumentResult r = applyStateDocument(*scheduler_, pendingOp_);

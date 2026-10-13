@@ -335,6 +335,25 @@
         </div>
       </div>
 
+      <!-- A Teensy's bootloader is a HID device the browser shows only after a click, and does not remember: every install asks for it. -->
+      <div class="install-section" id="section-grant-bootloader">
+        <div class="install-status" id="grant-bootloader-text"></div>
+        <div class="install-status" id="grant-bootloader-hint" hidden></div>
+        <div class="install-actions">
+          <button type="button" class="primary" id="grant-bootloader">Choose the bootloader</button>
+        </div>
+      </div>
+
+      <!-- After an install from the bootloader this page holds no serial port for the board, and its address is in the serial log: one click grants it. -->
+      <div class="install-section" id="section-find-board">
+        <div class="install-status">Flashed. The board prints its network address for its first minute: click below and pick the Teensy's serial port to show it.</div>
+        <div class="install-status" id="find-board-hint" hidden></div>
+        <div class="install-actions">
+          <button type="button" id="find-board-skip">Skip</button>
+          <button type="button" class="primary" id="find-board">Show the board's address</button>
+        </div>
+      </div>
+
       <div class="install-section" id="section-flashing">
         <div class="install-status" id="flashing-status">Preparing to flash…</div>
         <div class="install-progress"><div class="install-progress-bar" id="flash-bar"></div></div>

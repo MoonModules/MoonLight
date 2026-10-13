@@ -729,7 +729,7 @@ TEST_CASE("control writes over /ws: frames sharing a read all apply, and a cut f
     const std::vector<uint8_t> second = clientTextFrame(b);
     buf.insert(buf.end(), second.begin(), second.end());
     std::vector<std::string> seen;
-    const size_t whole = mm::HttpServerModule::walkWsTextFrames(buf.data(), buf.size(), [&](const char* t) { seen.emplace_back(t); });
+    const size_t whole = mm::HttpServerModule::walkWsFrames(buf.data(), buf.size(), [&](const char* t) { seen.emplace_back(t); }, [](uint8_t, const uint8_t*, size_t) {});
     CHECK(whole == buf.size());
     REQUIRE(seen.size() == 2);
     CHECK(seen[0] == a);
@@ -738,7 +738,27 @@ TEST_CASE("control writes over /ws: frames sharing a read all apply, and a cut f
     // Cut the second frame short: the first applies, the cut one is left for the next read.
     seen.clear();
     const size_t cut = buf.size() - 10;
-    const size_t used = mm::HttpServerModule::walkWsTextFrames(buf.data(), cut, [&](const char* t) { seen.emplace_back(t); });
+    const size_t used = mm::HttpServerModule::walkWsFrames(buf.data(), cut, [&](const char* t) { seen.emplace_back(t); }, [](uint8_t, const uint8_t*, size_t) {});
     CHECK(seen.size() == 1);
     CHECK(used == buf.size() - second.size());
+}
+
+// A Ping and a Close reach the control callback with their payload unmasked, between the text frames around them.
+TEST_CASE("the frame walker hands a Ping and a Close to the control callback, in order with the text") {
+    std::vector<uint8_t> buf = clientTextFrame("{\"a\":1}");
+    std::vector<uint8_t> ping = clientTextFrame("hi");
+    ping[0] = 0x89;
+    buf.insert(buf.end(), ping.begin(), ping.end());
+    std::vector<uint8_t> close = clientTextFrame("\x03\xe8");
+    close[0] = 0x88;
+    buf.insert(buf.end(), close.begin(), close.end());
+    std::vector<std::string> seen;
+    const size_t used = mm::HttpServerModule::walkWsFrames(buf.data(), buf.size(),
+        [&](const char* t) { seen.emplace_back(std::string("text:") + t); },
+        [&](uint8_t op, const uint8_t* p, size_t n) { seen.emplace_back(std::to_string(op) + ":" + std::string(reinterpret_cast<const char*>(p), n)); });
+    CHECK(used == buf.size());
+    REQUIRE(seen.size() == 3);
+    CHECK(seen[0] == "text:{\"a\":1}");
+    CHECK(seen[1] == "9:hi");
+    CHECK(seen[2] == "8:\x03\xe8");
 }

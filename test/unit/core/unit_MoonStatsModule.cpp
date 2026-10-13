@@ -2,6 +2,7 @@
 
 #include "doctest.h"
 #include "core/system/FilesystemModule.h"
+#include "core/system/MoonCloudModule.h"
 #include "core/system/MoonStatsModule.h"
 #include "core/module/Scheduler.h"
 
@@ -311,8 +312,40 @@ TEST_CASE("the consent explanation is a status that follows the answer") {
     CHECK(std::string(stats.status()).find("Switch on") != std::string::npos);
 
     stats.setConsent(true);
-    CHECK(stats.status() == nullptr);      // answered: nothing left to explain
+    // Answered: nothing left to explain, unless this build has no HTTPS client (a sanitizer build), which says it cannot send.
+    if (stats.canSend()) CHECK(stats.status() == nullptr);
+    else CHECK(std::string(stats.status() ? stats.status() : "").find("cannot send") != std::string::npos);
 
     stats.setConsent(false);
     REQUIRE(stats.status() != nullptr);    // and it comes back if they change their mind
+}
+
+/// On a board without HTTPS the report waits in MoonCloud's outbox for the open page, and counts as sent only once the page has delivered it.
+/// So a reboot before any page opens sends it again rather than losing it.
+TEST_CASE("a report handed to the page counts as sent only once the page delivers it") {
+    mm::Scheduler scheduler;
+    auto* cloud = new mm::MoonCloudModule(true);   // the relay a board without HTTPS gets
+    cloud->setName("MoonCloud");
+    auto* stats = new mm::MoonStatsModule();
+    stats->setName("Stats");
+    cloud->addChild(stats);
+    scheduler.addModule(cloud);
+    scheduler.setup();
+    cloud->defineControls();
+
+    stats->setConsent(true);
+    CHECK(stats->reportDue());
+    stats->onControlChanged("send update");
+    REQUIRE(cloud->outboxWaiting());
+
+    stats->tick1s();               // handed over but not delivered: still due, nothing else queued
+    CHECK(stats->reportDue());
+    CHECK(cloud->outboxWaiting());
+
+    // The page delivered it, and wrote the request's id back: the first request this boot is 1.
+    for (uint8_t i = 0; i < cloud->controls().count(); i++)
+        if (std::string(cloud->controls()[i].name) == "outbox sent") *static_cast<int32_t*>(const_cast<void*>(cloud->controls()[i].ptr)) = 1;
+    cloud->onControlChanged("outbox sent");
+    stats->tick1s();
+    CHECK_FALSE(stats->reportDue());
 }

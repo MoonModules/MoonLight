@@ -1,0 +1,109 @@
+Bound every wait on the W5500 (socket command, send complete, transmit space) to 20 ms:
+a chip that stops answering then drops a frame, which TCP resends, instead of hanging the device.
+
+diff --git a/src/qnethernet/drivers/driver_w5500.cpp b/src/qnethernet/drivers/driver_w5500.cpp
+index c5b47c5..632ac94 100644
+--- a/src/qnethernet/drivers/driver_w5500.cpp
++++ b/src/qnethernet/drivers/driver_w5500.cpp
+@@ -27,6 +27,7 @@
+ 
+ // C++ includes
+ #include <atomic>
++#include <cstdio>
+ #include <cstring>
+ #include <type_traits>
+ 
+@@ -418,11 +419,30 @@ static void recv_isr() {
+   }
+ }
+ 
+-// Sends a socket command and ensures it completes.
++// A chip that stops answering costs a frame, never the device: every wait on
++// it ends after this long, counted and reported.
++static constexpr uint32_t kChipWaitUs = 20000;
++static uint32_t s_chipTimeouts = 0;
++
++static void chipTimedOut(const char* what) {
++  static uint32_t lastReport = 0;
++  ++s_chipTimeouts;
++  if (millis() - lastReport >= 1000) {
++    lastReport = millis();
++    printf("W5500: %s timed out (%lu so far)\n", what,
++           static_cast<unsigned long>(s_chipTimeouts));
++  }
++}
++
++// Sends a socket command and waits, bounded, for it to complete.
+ static void set_socket_command(const uint8_t v) {
+   kSn_CR = v;
++  const uint32_t start = micros();
+   while (*kSn_CR != 0) {
+-    // Wait for Sn_CR to be zero
++    if (micros() - start >= kChipWaitUs) {
++      chipTimedOut("command");
++      return;
++    }
+   }
+ }
+ 
+@@ -578,15 +598,20 @@ static void restartSocket() {
+ // less SPI traffic; the chip is more likely to have completed any internal SEND
+ // tasks. Checking after might require more "checks until send complete" and
+ // thus block for a little longer.
+-static void waitForSendDoneNoInterrupts() {
++static bool waitForSendDoneNoInterrupts() {
+   if (s_lastSendTxWr < 0) {
+-    return;
++    return true;
+   }
+ 
+-  // TODO: See if there's a way to make this non-blocking
++  const uint32_t start = micros();
+   while (*kSn_TX_RD != static_cast<uint16_t>(s_lastSendTxWr)) {
+-    // Wait for SEND complete
++    if (micros() - start >= kChipWaitUs) {
++      chipTimedOut("send");
++      s_lastSendTxWr = -1;  // stop waiting on a send the chip never finished
++      return false;
++    }
+   }
++  return true;
+ }
+ 
+ // Sends a frame. This uses data already in s_frameBuf.
+@@ -603,25 +628,26 @@ static err_t send_frame(const size_t len) {
+   // Doing this check here rather than after a send should result in
+   // less SPI traffic
+   IF_CONSTEXPR (kInterruptPin < 0) {
+-    waitForSendDoneNoInterrupts();
++    if (!waitForSendDoneNoInterrupts()) {
++      return ERR_IF;
++    }
+   } else {
+     while (s_sendNotDone.test_and_set()) {
+       // Wait for SEND complete
+     }
+   }
+ 
+-  // Wait for space in the transmit buffer
++  // Wait, bounded, for space in the transmit buffer
++  const uint32_t start = micros();
+   while (true) {
+-    // TODO: Limit count?
+     uint16_t txSize;
+-    while (!read_reg_word(kSn_TX_FSR, txSize)) {
+-      // Wait for valid read
+-      // TODO: Limit count?
+-    }
+-
+-    if (len <= txSize) {
++    if (read_reg_word(kSn_TX_FSR, txSize) && len <= txSize) {
+       break;
+     }
++    if (micros() - start >= kChipWaitUs) {
++      chipTimedOut("transmit space");
++      return ERR_IF;
++    }
+   }
+ 
+   // Write and then send the data

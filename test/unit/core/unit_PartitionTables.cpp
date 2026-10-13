@@ -35,6 +35,7 @@ uint32_t declaredFlashBytes(const std::string& file) {
         {"esp32s3_n8r8.csv",      8u * 1024 * 1024},
         {"ota_16mb.csv",         16u * 1024 * 1024},
         {"ota_16mb_moonbase.csv", 16u * 1024 * 1024},
+        {"ota_32mb.csv",         32u * 1024 * 1024},
     };
     for (const auto& [name, bytes] : kCapacity)
         if (file == name) return bytes;

@@ -1,23 +1,25 @@
 {
-  "commit": "ef125474",
+  "commit": "ce37ca46",
   "flash": {
-    "esp32s3-n16r8": 2431936,
+    "esp32s3-n16r8": 2438784,
     "esp32": 2353056,
     "esp32p4rev1-eth": 2364160,
     "esp32p4rev1-eth-wifi": 2523840,
-    "esp32s3-n8r8": 2336304,
+    "esp32s3-n8r8": 2438784,
     "esp32s31": 2694736,
     "esp32-16mb": 2353248,
     "esp32-eth": 1681040,
     "esp32-wrover": 1843760,
     "qemu": 1383648,
     "esp32p4rev3-eth": 2231792,
-    "esp32s3-zero": 2225360,
+    "esp32s3-zero": 2225840,
     "esp32-pico": 2107168,
-    "desktop-macos": 2293080,
+    "desktop-macos": 2356920,
     "desktop-windows": 1925120,
     "esp32c3": 2335072,
-    "desktop-linux": 2548000
+    "desktop-linux": 2548000,
+    "esp32s3-n32r16": 2438000,
+    "teensy41": 1266668
   },
   "measured": {
     "esp32p4rev1-eth": "2026-10-13",
@@ -25,8 +27,8 @@
     "esp32": "2026-10-13",
     "esp32-pico": "2026-09-09",
     "esp32s3-n16r8": "2026-10-13",
-    "esp32s3-n8r8": "2026-10-10",
-    "esp32s3-zero": "2026-10-12",
+    "esp32s3-n8r8": "2026-10-13",
+    "esp32s3-zero": "2026-10-13",
     "esp32-16mb": "2026-10-13",
     "esp32p4rev1-eth-wifi": "2026-10-13",
     "esp32-eth": "2026-09-11",
@@ -34,7 +36,9 @@
     "desktop-macos": "2026-10-13",
     "desktop-windows": "2026-09-30",
     "esp32c3": "2026-10-10",
-    "desktop-linux": "2026-10-12"
+    "desktop-linux": "2026-10-12",
+    "esp32s3-n32r16": "2026-10-13",
+    "teensy41": "2026-10-13"
   },
   "perf": {
     "esp32": {
@@ -81,6 +85,12 @@
           "p95": 215,
           "n": 1,
           "last": "2026-09-30"
+        },
+        "teensy41": {
+          "p50": 2142,
+          "p95": 2142,
+          "n": 1,
+          "last": "2026-10-11"
         }
       },
       "Network_hardware_reconfigures_live": {
@@ -107,6 +117,12 @@
           "p95": 21,
           "n": 1,
           "last": "2026-09-30"
+        },
+        "teensy41": {
+          "p50": 2147,
+          "p95": 2147,
+          "n": 1,
+          "last": "2026-10-11"
         }
       },
       "State_one_document_adds_an_effect_with_its_controls": {
@@ -171,6 +187,12 @@
           "p95": 7532,
           "n": 1,
           "last": "2026-09-30"
+        },
+        "teensy41": {
+          "p50": 33192,
+          "p95": 33192,
+          "n": 1,
+          "last": "2026-10-11"
         }
       },
       "Fluid_solver": {
@@ -221,6 +243,12 @@
           "p95": 3371,
           "n": 1,
           "last": "2026-09-30"
+        },
+        "teensy41": {
+          "p50": 14853,
+          "p95": 14853,
+          "n": 1,
+          "last": "2026-10-11"
         }
       },
       "GridLayout_resize": {
@@ -283,6 +311,12 @@
           "p95": 2005,
           "n": 1,
           "last": "2026-09-30"
+        },
+        "teensy41": {
+          "p50": 1521,
+          "p95": 1521,
+          "n": 1,
+          "last": "2026-10-11"
         }
       },
       "perf_full": {
@@ -333,6 +367,12 @@
           "p95": 2438,
           "n": 1,
           "last": "2026-09-30"
+        },
+        "teensy41": {
+          "p50": 6797,
+          "p95": 6797,
+          "n": 1,
+          "last": "2026-10-11"
         }
       },
       "perf_light": {
@@ -383,6 +423,12 @@
           "p95": 780,
           "n": 1,
           "last": "2026-09-30"
+        },
+        "teensy41": {
+          "p50": 662,
+          "p95": 662,
+          "n": 1,
+          "last": "2026-10-11"
         }
       },
       "peripheral_grid_sweep": {
@@ -433,6 +479,12 @@
           "p95": 2577,
           "n": 1,
           "last": "2026-09-30"
+        },
+        "teensy41": {
+          "p50": 6618,
+          "p95": 6618,
+          "n": 1,
+          "last": "2026-10-11"
         }
       },
       "peripheral_switch": {
@@ -483,6 +535,12 @@
           "p95": 341,
           "n": 1,
           "last": "2026-09-30"
+        },
+        "teensy41": {
+          "p50": 111,
+          "p95": 111,
+          "n": 1,
+          "last": "2026-10-11"
         }
       },
       "Drivers_output_and_brightness": {
@@ -509,6 +567,12 @@
           "p95": 218,
           "n": 1,
           "last": "2026-09-30"
+        },
+        "teensy41": {
+          "p50": 2144,
+          "p95": 2173,
+          "n": 2,
+          "last": "2026-10-11"
         }
       },
       "Effects_pipeline_builds_and_renders": {
@@ -549,6 +613,12 @@
           "p95": 287,
           "n": 1,
           "last": "2026-09-30"
+        },
+        "teensy41": {
+          "p50": 2167,
+          "p95": 2482,
+          "n": 4,
+          "last": "2026-10-11"
         }
       },
       "Effects_teardown_under_a_running_pipeline": {
@@ -575,6 +645,12 @@
           "p95": 482,
           "n": 1,
           "last": "2026-09-30"
+        },
+        "teensy41": {
+          "p50": 2159,
+          "p95": 2160,
+          "n": 3,
+          "last": "2026-10-11"
         }
       },
       "Layers_stack_and_blend_live": {
@@ -609,6 +685,12 @@
           "p95": 579,
           "n": 1,
           "last": "2026-09-30"
+        },
+        "teensy41": {
+          "p50": 7788,
+          "p95": 7788,
+          "n": 1,
+          "last": "2026-10-11"
         }
       },
       "Modifiers_reshape_the_mapping": {
@@ -635,6 +717,12 @@
           "p95": 273,
           "n": 1,
           "last": "2026-09-30"
+        },
+        "teensy41": {
+          "p50": 2165,
+          "p95": 2175,
+          "n": 3,
+          "last": "2026-10-11"
         }
       },
       "Palettes_a_script_drives_the_effects": {
@@ -688,54 +776,54 @@
     }
   },
   "loc": {
-    "core": 28880,
-    "light": 31027,
-    "platform": 18938,
-    "ui": 12350,
-    "test": 65504,
-    "moondeck": 30611
+    "core": 30056,
+    "light": 31265,
+    "platform": 21118,
+    "ui": 12470,
+    "test": 67258,
+    "moondeck": 31290
   },
   "comments": {
     "core": {
-      "lines": 6273,
-      "ratio": 0.241
+      "lines": 6425,
+      "ratio": 0.237
     },
     "light": {
-      "lines": 7439,
-      "ratio": 0.269
+      "lines": 7512,
+      "ratio": 0.27
     },
     "platform": {
-      "lines": 3819,
-      "ratio": 0.225
+      "lines": 4133,
+      "ratio": 0.219
     },
     "ui": {
-      "lines": 3472,
-      "ratio": 0.298
+      "lines": 3470,
+      "ratio": 0.295
     },
     "test": {
-      "lines": 7020,
-      "ratio": 0.124
+      "lines": 7114,
+      "ratio": 0.122
     },
     "moondeck": {
-      "lines": 4907,
-      "ratio": 0.183
+      "lines": 4933,
+      "ratio": 0.18
     }
   },
   "tests": {
-    "cases": 2438,
+    "cases": 2515,
     "scenarios": 30
   },
   "docs": {
-    "md_files": 150,
-    "md_lines": 32355,
-    "plans_files": 44,
-    "backlog_lines": 3344,
+    "md_files": 156,
+    "md_lines": 33332,
+    "plans_files": 48,
+    "backlog_lines": 3399,
     "lessons_lines": 532,
-    "claude_md_lines": 283
+    "claude_md_lines": 285
   },
   "complexity": {
-    "functions": 4515,
-    "over_threshold": 340,
+    "functions": 4989,
+    "over_threshold": 354,
     "worst_ccn": 128
   }
 }

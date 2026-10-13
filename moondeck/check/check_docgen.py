@@ -101,7 +101,7 @@ PREVIEWLESS_PAGES = _hooks.PREVIEWLESS_PAGES
 # `test` is in scope even though nothing generates a page from it: these rules are about how the
 # code READS, which is why a test's comments are held to them like any other source we own. Only
 # the page rules key off a generated page, and they run from `_orphan_pages` over src/{core,light}.
-HEADER_ROOTS = ("src", "test", "esp32/main", "moonbase/main", "moondeck/moonlive")
+HEADER_ROOTS = ("src", "test", "esp32/main", "moonbase/main", "moondeck/moonlive", "teensy")
 # `.cpp` too: a rule that stopped at the header was a tolerance the file extension decided, and
 # the same `///` and `//` comments live on both sides of a split. A `.cpp` gets no generated page,
 # so only the comment-shape rules reach it; the page rules key off the header that names it.
@@ -153,7 +153,7 @@ _UNREFERENCED_RULE = "unreferenced appendix section"
 # zero, so nothing is held hostage, and a split sentence reflows every line it spans on the next
 # word change, which costs a reviewer the same in a `.cpp` as in a header.
 _HARD_WRAP_RULE = "hard wrap"
-# A paragraph split over lines it fits on together: each line ends a sentence, so no sentence is wrapped, but markdown joins the two into one paragraph anyway and the split only spends a line. Staged as the line cap is, a new rule over comments written before it.
+# A paragraph spread over several lines: one topic is one paragraph and one line, cut to fit the cap rather than split. Staged as the line cap is, a new rule over comments written before it.
 _SPLIT_PARAGRAPH_RULE = "split paragraph"
 # One line, in every file. Depth is not forbidden, it is HOMED: a header carries it in an
 # `@moreinfo` appendix (212 do) and an implementation file carries it in the same appendix on its
@@ -472,14 +472,25 @@ def _headers():
     a clean run over an empty set, which is the failure this check exists to prevent.
     """
     seen = set()
+    tracked = _tracked_files()
     for root in HEADER_ROOTS:
         for suffix in HEADER_SUFFIXES:
             for p in sorted((ROOT / root).rglob(suffix)):
                 rel = p.relative_to(ROOT)
                 if rel.as_posix().startswith(HEADER_EXEMPT) or rel in seen:
                     continue
+                # Tracked files only, as repo_health measures: a header a build generates (build_info.h, ui_embedded.h) moved the counts with whatever was built last.
+                if tracked is not None and rel.as_posix() not in tracked:
+                    continue
                 seen.add(rel)
                 yield rel
+
+
+def _tracked_files():
+    """The repo's tracked paths, or None outside a git checkout, where every file on disk counts."""
+    import subprocess
+    r = subprocess.run(["git", "ls-files"], cwd=ROOT, capture_output=True, text=True)
+    return set(r.stdout.split("\n")) if r.returncode == 0 else None
 
 
 def _appendix_lines(text: str) -> int:
@@ -531,66 +542,81 @@ def _sentences(text: str):
     return [p for p in (x.strip() for x in parts) if p]
 
 
-def _wrap_rule(rel: str, lines: list, k: int, end: int, start: int = 0):
-    """A sentence carried onto the next `///` line, which the editor should have soft-wrapped.
+def _prose_pair(lines: list, k: int, end: int, start: int):
+    """The stripped bodies of lines `k` and `k + 1` when both are prose of one comment block, or None.
 
-    A function rather than a loop body, because two callers need it: a member or class run,
-    and a `@defgroup` file lead. The `@defgroup` branch returns early on its own budget, and
-    when this test lived inline there it simply never ran on a file-level block.
-
-    Every file, header or implementation. The reason is the DIFF, not the page: a sentence
-    split across lines reflows every one of them when a word changes, so a one-word edit reads
-    as a rewritten paragraph in review. That cost is the same in a `.cpp`, and one sentence per
-    line is as available there as anywhere: the line simply runs long, which is what the editor
-    soft-wraps.
+    A list item, a heading, a table row, a fence or an indented block is structure rather than
+    prose, so a pair touching one is no continuation.
     """
-    # A list item, a heading, a table row or a fence is structure rather than prose being
-    # wrapped, so each is skipped rather than read as a continuation.
     if k + 1 >= end:
-        return []
-    # INSIDE a fenced block nothing is prose, so nothing is a wrapped sentence. Skipping the
-    # ``` lines alone was not enough: a fence's whole point is that the lines BETWEEN the
-    # delimiters are verbatim, and a wire table read as prose is flagged on every row. The
-    # same exemption the section cap already makes, and the one the standards state.
+        return None
+    # INSIDE a fenced block nothing is prose: a fence's lines are verbatim, and a wire table read
+    # as prose is flagged on every row.
     fenced = False
     for j in range(start, k):
         if re.sub(r"^\s*//+\s*", "", lines[j]).strip().startswith("```"):
             fenced = not fenced
     if fenced:
-        return []
-    # `//+` rather than `///`: the rule binds on both markers, and stripping only the Doxygen one
-    # left every `//` line with its slashes attached, so no continuation ever matched.
+        return None
+    # `//+` rather than `///`: the rule binds on both markers.
     body = re.sub(r"^\s*//+\s*", "", lines[k]).strip()
     nbody = re.sub(r"^\s*//+\s*", "", lines[k + 1]).strip()
     if not body or not nbody:
-        return []
+        return None
     if (body.startswith(_WRAP_SKIP) or nbody.startswith(_WRAP_SKIP)
             or _LIST_ITEM_RE.match(body) or _LIST_ITEM_RE.match(nbody)):
-        return []
-    # Either side indented means a block: leave its layout alone.
+        return None
     raw = re.sub(r"^\s*//+", "", lines[k])
     nraw = re.sub(r"^\s*//+", "", lines[k + 1])
     if (len(raw) - len(raw.lstrip()) >= _WRAP_INDENT
             or len(nraw) - len(nraw.lstrip()) >= _WRAP_INDENT):
+        return None
+    return body, nbody
+
+
+def _ends_sentence(body: str) -> bool:
+    # `.`, `!`, `?` only: a colon introduces what follows and a semicolon joins two clauses, as
+    # Unicode's sentence-boundary rules, Vale and the standards all read them.
+    return body[-1] in ".!?"
+
+
+def _wrap_rule(rel: str, lines: list, k: int, end: int, start: int = 0):
+    """A sentence carried onto the next comment line, or a paragraph spread over several lines.
+
+    A function rather than a loop body, because two callers need it: a member or class run,
+    and a `@defgroup` file lead. Every file, header or implementation: the reason is the DIFF,
+    since a sentence split across lines reflows every one of them when a word changes.
+
+    One topic is one paragraph, and a paragraph is one line, which markdown joins anyway and a
+    reader takes as one thought. It is reported once, at its first line, with the fix its length
+    allows: joined, or cut to fit the line cap, since splitting it into sentence lines reads as
+    separate topics and packing it into line-sized chunks breaks it at arbitrary points.
+    """
+    pair = _prose_pair(lines, k, end, start)
+    if not pair:
         return []
-    # The test is the PREVIOUS line: a sentence that has not ended is carried over, whatever
-    # the continuation happens to start with. Requiring a lowercase opener missed every
-    # continuation beginning with a digit, a backtick or an identifier ("8-16 lanes...",
-    # "`ParallelSlots.h`..."), which is most of a technical comment.
-    # `.`, `!`, `?` only. A colon INTRODUCES what follows and a semicolon joins two clauses,
-    # so neither ends a thought: Unicode's sentence-boundary rules, Vale's own detector and
-    # the standards line all agree ("joined by a comma or a colon that a full stop should
-    # have been"). Treating them as terminators passed every `Prior art: ...` block that
-    # wrapped mid-sentence.
-    if body[-1] not in ".!?":
+    body, nbody = pair
+    # The test is the PREVIOUS line: a sentence that has not ended is carried over, whatever the
+    # continuation starts with (a digit, a backtick or an identifier as often as a lowercase word).
+    if not _ends_sentence(body):
         return [(f"{rel}::line {k + 1}",
                  "hard wrap: one line per sentence, let the editor soft-wrap")]
-    # Two whole sentences of one paragraph, which share a line while together they stay inside the line cap.
-    joined = len(lines[k].rstrip()) + 1 + len(nbody)
-    if joined <= MAX_COMMENT_LINE_CHARS:
-        return [(f"{rel}::line {k + 1}",
-                 f"split paragraph: lines {k + 1} and {k + 2} fit one line ({joined} chars <= {MAX_COMMENT_LINE_CHARS}), join them")]
-    return []
+    # Reported where the paragraph starts, so a paragraph of five lines is one finding, not four.
+    if k > start:
+        prev = _prose_pair(lines, k - 1, end, start)
+        if prev and _ends_sentence(prev[0]):
+            return []
+    last, total = k + 1, len(lines[k].rstrip()) + 1 + len(nbody)
+    while True:
+        nxt = _prose_pair(lines, last, end, start)
+        if not nxt or not _ends_sentence(nxt[0]):
+            break
+        last += 1
+        total += 1 + len(nxt[1])
+    fix = ("join it into one line" if total <= MAX_COMMENT_LINE_CHARS
+           else f"cut it to fit one line of {MAX_COMMENT_LINE_CHARS} chars")
+    return [(f"{rel}::line {k + 1}",
+             f"split paragraph: lines {k + 1}-{last + 1} are one paragraph of {total} chars: {fix}")]
 
 
 def _doc_runs(lines):

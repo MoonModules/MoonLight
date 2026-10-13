@@ -36,6 +36,8 @@ on:
       - 'src/**'
       - 'test/unit/**'
       - 'CMakeLists.txt'
+      # The Teensy job below builds the firmware from these.
+      - 'teensy/**'
       - '.github/workflows/test.yml'
   push:
     branches:
@@ -83,6 +85,40 @@ jobs:
       # form is required: a bare directory arg is treated as a module to execute.
       - name: node --test
         run: node --test "test/js/**/*.test.mjs"
+
+  # The Teensy 4.1 firmwares, built on every PR: a change to a platform seam the Teensy must implement fails here, not on the bench.
+  # The HEX images are kept as an artifact, so a PR's build can be flashed and tried before it merges.
+  teensy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v3
+      # Only the Arm toolchain is cached, the large download, keyed on its version alone: an edit elsewhere in setup_teensy.py forced a fresh download, and the small source clones fetch fresh anyway.
+      - name: the Arm toolchain's version, which keys its cache
+        id: gcc
+        run: echo "version=$(sed -n 's/^GCC_VERSION = "\(.*\)"/\1/p' moondeck/build/setup_teensy.py)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        with:
+          path: ~/teensy/arm-gnu-toolchain-*
+          key: teensy-gcc-${{ runner.os }}-${{ steps.gcc.outputs.version }}
+      - name: install the Teensy SDK
+        run: uv run moondeck/build/setup_teensy.py --no-loader
+      - name: build the Teensy 4.1 firmwares
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          # Every shipping Teensy firmware builds and is collected, so a second one reaches the artifact too.
+          for fw in $(jq -r '.firmwares[] | select(.ships and .platform == "teensy") | .name' mooninstaller/firmwares.json); do
+            uv run moondeck/build/build_teensy.py --firmware "$fw"
+            cp "build/$fw/MoonLight.hex" "dist/$fw.hex"
+            cp "build/$fw/MoonLight.bin" "dist/$fw.bin"
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: firmware-teensy
+          path: dist/
 
   # Sanitizers — the safety net for the multicore render/encode split. A second thread now sits
   # beside code that was single-threaded for its whole life: a shared output buffer handed between

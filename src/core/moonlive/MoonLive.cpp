@@ -74,7 +74,7 @@ bool MoonLive::compile(uint8_t r, uint8_t g, uint8_t b) {
     size_t len = emitFill(staging.p, staging.n, r, g, b);
     void* block = place(staging.p, len);
     if (!block) return false;
-    fn_ = reinterpret_cast<FillFn>(block);
+    fn_ = asFunction<FillFn>(block);
     return true;
 }
 
@@ -118,7 +118,7 @@ bool MoonLive::compile(const char* source, const BuiltinTable& table, const SysV
         entries_[i] = {entryNames_[i], n, cr.entries[i].offset, cr.entries[i].ret};
     }
     stringLen_ = cr.stringLen;
-    ctrl_ = reinterpret_cast<CtrlFn>(block);
+    ctrl_ = asFunction<CtrlFn>(block);
     return true;
 }
 
@@ -183,7 +183,7 @@ bool MoonLive::compileAnimated() {
     size_t len = emitAnimatedFill(staging.p, staging.n);
     void* block = place(staging.p, len);
     if (!block) return false;
-    anim_ = reinterpret_cast<AnimFn>(block);
+    anim_ = asFunction<AnimFn>(block);
     return true;
 }
 

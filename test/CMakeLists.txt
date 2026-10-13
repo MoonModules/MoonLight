@@ -48,11 +48,13 @@ add_executable(mm_tests
     unit/core/unit_FilesystemModule_subtree.cpp
     unit/core/unit_FirmwareUpdateModule.cpp
     unit/core/unit_FirmwareImage.cpp
+    unit/core/unit_TeensyImage.cpp
     unit/core/unit_H264Bitstream.cpp
     unit/core/unit_AllocTracking.cpp
     unit/core/unit_HttpServerModule_apply.cpp
     unit/core/unit_HttpServerModule_connections.cpp
     unit/core/unit_HttpServerModule_sdcard.cpp
+    unit/core/unit_HttpServerModule_subscribe.cpp
     unit/core/unit_StateDocument.cpp
     unit/core/unit_ImprovFrame.cpp
     unit/core/unit_ImprovOpReassembler.cpp
@@ -69,6 +71,7 @@ add_executable(mm_tests
     unit/core/unit_moonlive_spill.cpp
     unit/core/unit_moonlive_codegen_xtensa.cpp
     unit/core/unit_moonlive_codegen_riscv.cpp
+    unit/core/unit_moonlive_codegen_thumb2.cpp
     unit/core/unit_moonlive_codegen_x86_64.cpp
     unit/core/unit_moonlive_codegen_arm64.cpp
     unit/core/unit_MoonModule.cpp
@@ -95,6 +98,7 @@ add_executable(mm_tests
     unit/core/unit_MoonStatsModule.cpp
     unit/core/unit_MoonTalkModule.cpp
     unit/core/unit_InstallationId.cpp
+    unit/core/unit_MoonCloudModule.cpp
     unit/core/unit_sha256.cpp
     unit/core/unit_MoonStatsReport.cpp
     unit/core/unit_SystemModule.cpp
@@ -203,6 +207,8 @@ add_executable(mm_tests
     unit/light/unit_MoonLiveParticles.cpp
     unit/light/unit_MoonLiveLayout.cpp
     unit/light/unit_MoonLiveScripts.cpp
+    unit/light/unit_MoonLiveScripts_ir_golden.cpp
+    unit/light/unit_MoonLiveStructs.cpp
     unit/light/unit_MoonLiveScriptResolve.cpp
     unit/light/unit_MoonLiveMotion.cpp
     unit/light/unit_Layouts_container.cpp
@@ -227,6 +233,7 @@ add_executable(mm_tests
     unit/light/unit_Hub75Slots.cpp
     unit/light/unit_ParallelSlots.cpp
     unit/light/unit_ParlioPeripheral.cpp
+    unit/light/unit_GpioDmaPeripheral.cpp
     unit/light/unit_ParallelLedDriver_doublebuffer.cpp
     unit/light/unit_ParallelLedDriver_pinexpander.cpp
     unit/light/unit_ParallelLedDriver_ring.cpp

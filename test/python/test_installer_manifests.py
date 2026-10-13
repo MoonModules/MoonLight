@@ -15,8 +15,9 @@ v2.0.0 installer; this test pins the contract so it can't recur:
   1. every `ships: true` firmware in mooninstaller/firmwares.json generates a valid manifest, and
   2. every part path in every manifest matches one of the staged-file globs above.
 
-Self-contained: it feeds generate_manifest.py a synthetic flasher_args.json (the real one only
-exists after an ESP-IDF build), so it runs in plain CI with no firmware build.
+Self-contained: it feeds generate_manifest.py a synthetic flasher_args.json for an ESP32 firmware
+(the real one only exists after an ESP-IDF build), so it runs in plain CI with no firmware build.
+A Teensy firmware's manifest needs no build input: it is the flat image at offset 0.
 """
 
 import fnmatch
@@ -54,27 +55,37 @@ FLASHER_ARGS = {
 VERSION = "9.9.9"  # arbitrary; the test asserts the version flows into the filenames
 
 
+def _rows():
+    return json.loads(FIRMWARES_JSON.read_text(encoding="utf-8"))["firmwares"]
+
+
 def _shipping_firmwares():
     # encoding='utf-8' — the JSON carries a fs/documentation-note character
     # (byte 0x8f is part of a UTF-8 multi-byte sequence for a non-ASCII glyph
     # in one of the comment fields) and Windows Python 3.14 defaults read_text
     # to cp1252, which fails with UnicodeDecodeError. Same class of Windows-
     # only encoding bug as verify_version's stdout crash.
-    data = json.loads(FIRMWARES_JSON.read_text(encoding="utf-8"))
-    return [f["name"] for f in data["firmwares"] if f.get("ships")]
+    return [f["name"] for f in _rows() if f.get("ships")]
+
+
+def _platform(firmware):
+    return next(f["platform"] for f in _rows() if f["name"] == firmware)
 
 
 def _generate(firmware, tmp_path):
     """Run generate_manifest.py for one firmware with a synthetic flasher_args; return the manifest."""
-    flasher = tmp_path / f"flasher-{firmware}.json"
-    flasher.write_text(json.dumps(FLASHER_ARGS))
+    args = []
+    if _platform(firmware) == "esp32":
+        flasher = tmp_path / f"flasher-{firmware}.json"
+        flasher.write_text(json.dumps(FLASHER_ARGS))
+        args = ["--flasher-args", str(flasher)]
     out = tmp_path / f"manifest-{firmware}.json"
     res = subprocess.run(
         [sys.executable, str(GENERATE),
          "--firmware", firmware,
          "--version", VERSION,
          "--release-url", ".",          # relative paths, as the Pages installer needs
-         "--flasher-args", str(flasher),
+         *args,
          "--out", str(out)],
         capture_output=True, text=True,
     )
@@ -112,8 +123,18 @@ def test_app_and_bootloader_carry_the_version(tmp_path):
     """The per-firmware app + bootloader filenames must embed the firmware key and version, so a
     release dir's files line up with the manifest the same dir serves (the v<ver> stamp is what
     differs per release)."""
-    fw = _shipping_firmwares()[0]
+    fw = next(f for f in _shipping_firmwares() if _platform(f) == "esp32")
     manifest = _generate(fw, tmp_path)
     names = [p["path"].rsplit("/", 1)[-1] for p in manifest["builds"][0]["parts"]]
     assert f"firmware-{fw}-v{VERSION}.bin" in names, f"{fw}: app part not named for firmware+version: {names}"
     assert f"firmware-{fw}-v{VERSION}-bootloader.bin" in names, f"{fw}: bootloader part misnamed: {names}"
+
+
+def test_a_teensy_manifest_is_its_flat_image_at_offset_zero(tmp_path):
+    """The installer's Teensy writer takes one image starting at the flash base, so the manifest names the release's `.bin` at 0 under the Teensy family."""
+    teensy = [f for f in _shipping_firmwares() if _platform(f) == "teensy"]
+    assert teensy, "no shipping Teensy firmware"
+    for fw in teensy:
+        build = _generate(fw, tmp_path)["builds"][0]
+        assert build["chipFamily"] == "Teensy 4.1"
+        assert [(p["path"].rsplit("/", 1)[-1], p["offset"]) for p in build["parts"]] == [(f"firmware-{fw}-v{VERSION}.bin", 0)]

@@ -10,6 +10,7 @@
 #include <atomic>
 #include <cstdint>
 #include <cstdio>
+#include <initializer_list>   // the same-type builtins register from a braced list
 
 /// @defgroup moonlive_builtins_common MoonLive neutral builtins
 /// @{
@@ -203,6 +204,28 @@ extern "C" inline uint32_t mm_ml_addSelect(const uintptr_t* args, uint32_t, cons
     return 0;
 }
 
+// Signed, and each works on fixed values too, since Q16.16 keeps the order and the sign of a whole number.
+/// The magnitude of a value, widened so the most negative int does not overflow.
+extern "C" inline uint32_t mm_ml_abs(const uintptr_t* args, uint32_t, const uint8_t*) {
+    const int64_t v = signedArg(args[0]);
+    return static_cast<uint32_t>(v < 0 ? -v : v);
+}
+/// The smaller of two values.
+extern "C" inline uint32_t mm_ml_min(const uintptr_t* args, uint32_t, const uint8_t*) {
+    const int32_t a = signedArg(args[0]), b = signedArg(args[1]);
+    return static_cast<uint32_t>(a < b ? a : b);
+}
+/// The larger of two values.
+extern "C" inline uint32_t mm_ml_max(const uintptr_t* args, uint32_t, const uint8_t*) {
+    const int32_t a = signedArg(args[0]), b = signedArg(args[1]);
+    return static_cast<uint32_t>(a > b ? a : b);
+}
+/// A value held between a low and a high bound.
+extern "C" inline uint32_t mm_ml_clamp(const uintptr_t* args, uint32_t, const uint8_t*) {
+    const int32_t v = signedArg(args[0]), lo = signedArg(args[1]), hi = signedArg(args[2]);
+    return static_cast<uint32_t>(v < lo ? lo : (v > hi ? hi : v));
+}
+
 // Both vocabularies call this first and then add their own, so a name means one thing everywhere.
 /// Register the neutral builtins into whatever table asks.
 inline void addCommonBuiltins(BuiltinTable& t) {
@@ -230,14 +253,27 @@ inline void addCommonBuiltins(BuiltinTable& t) {
     // addSelect declares a dropdown: a name, the member, and its option names in one quoted "a|b|c".
     t.add({"addSelect", 3, /*returns*/ false, BuiltinKind::Call, &mm_ml_addSelect, {},
            /*byRef*/ 0x2, /*byStr*/ 0x5});
+    // The arithmetic a shape needs, whole or fixed: the arguments agree and the result follows them.
+    for (const Builtin& b : {Builtin{"abs", 1, true, BuiltinKind::Call, &mm_ml_abs, {}},
+                             Builtin{"min", 2, true, BuiltinKind::Call, &mm_ml_min, {}},
+                             Builtin{"max", 2, true, BuiltinKind::Call, &mm_ml_max, {}},
+                             Builtin{"clamp", 3, true, BuiltinKind::Call, &mm_ml_clamp, {}}}) {
+        Builtin same = b;
+        same.sameTypeArgs = true;
+        t.add(same);
+    }
 }
 
 // Run once after a successful compile, where a compiled module's defineControls() sits.
 /// The entry a binding runs so the controls a script declares exist.
 inline constexpr const char* kEntryDefineControls = "defineControls";
 
-/// What a binding attaches around a defineControls run, for the sizing its own builtins ask for.
-using DefineHook = void (*)(void* ctx, bool attach);
+// Before the compile, so the last program's buffers are gone before the next one needs memory.
+/// The moments a binding is told about: a compile starting, and the defineControls run that sizes the new program's buffers.
+enum class DefinePhase : uint8_t { Compiling, Attach, Detach };
+
+/// What a binding does at each of those moments, for the sizing its own builtins ask for.
+using DefineHook = void (*)(void* ctx, DefinePhase phase);
 
 // Re-runnable like its compiled counterpart, since the declared list is cleared first.
 /// Run a script's defineControls, so the controls it declares exist.
@@ -248,12 +284,12 @@ inline void runDefineControls(MoonLive& engine, DefineHook hook = nullptr, void*
                               int32_t lo, int32_t hi, CtrlType type, const char* options) {
             static_cast<MoonLive*>(ctx)->addDeclaredControl(n, off, lo, hi, type, options);
         }, &engine)) return;
-    if (hook) hook(hookCtx, true);
+    if (hook) hook(hookCtx, DefinePhase::Attach);
     engine.clearDeclaredControls();      // re-runnable: rebuild rather than append
     // This entry point writes no pixels, but `run` refuses a null or undersized buffer.
     uint8_t scratch[3] = {};
     engine.run(scratch, 1, 3, 0, kEntryDefineControls);
-    if (hook) hook(hookCtx, false);
+    if (hook) hook(hookCtx, DefinePhase::Detach);
     setAddControlSink(nullptr, nullptr);
 }
 

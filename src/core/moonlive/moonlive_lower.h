@@ -5,6 +5,7 @@
 #include "core/moonlive/MoonLiveSpill.h"   // the register allocator, run before lowering
 
 #include <cstring>
+#include <new>       // placement new: the assembler lives on the heap
 
 /// @defgroup moonlive_lower MoonLive lowering
 /// @{
@@ -59,8 +60,17 @@ size_t lowerWith(IrProgram& ir, uint8_t* out, size_t cap, const RegBudget* squee
     const RegId sAddr = static_cast<RegId>(ir.vregsUsed);       // per-channel address (both ops)
     const RegId sCtr  = static_cast<RegId>(ir.vregsUsed + 1);   // FillElems loop counter
 
+    // On the heap, since its label and fixup tables would put about 1 KB on the stack of every task that compiles.
+    struct HeapAsm {
+        A* p;   ///< the assembler, built in place in its heap block
+        /// Destroy it and return its block, on every exit from the lowering.
+        ~HeapAsm() { if (p) { p->~A(); platform::free(p); } }
+    };
+    void* mem = platform::alloc(sizeof(A));
+    if (!mem) { lowerRefusal() = LowerRefusal::NoMemory; return 0; }
     // Into the caller's buffer, so the assembler and the caller cannot disagree about capacity.
-    A a(out, cap);
+    const HeapAsm owned{new (mem) A(out, cap)};
+    A& a = *owned.p;
     using LabelId = decltype(a.newLabel());
     // Derived from scratchTotal rather than fixed, so the reservation and the use cannot drift.
     const RegId sHost = static_cast<RegId>(ir.vregsUsed + scratchTotal - 1);
@@ -88,10 +98,13 @@ size_t lowerWith(IrProgram& ir, uint8_t* out, size_t cap, const RegBudget* squee
     // Function number plus one while a guard is owed, since it is emitted after the parking.
     int guardPending = 0;
 
+    // The all-ones index marks an unmade IR label, since an assembler hands out at most kAsmLabels below it.
+    static_assert(kAsmLabels <= LabelId(~LabelId(0)), "the all-ones label index must stay free as the unmade mark");
+    constexpr LabelId kUnmade = LabelId(~LabelId(0));
     LabelId labels[kIrLabels];
-    bool  labelMade[kIrLabels] = {};
+    for (auto& l : labels) l = kUnmade;
     auto  labelFor = [&](int32_t id) -> LabelId {
-        if (!labelMade[id]) { labels[id] = a.newLabel(); labelMade[id] = true; }
+        if (labels[id] == kUnmade) labels[id] = a.newLabel();
         return labels[id];
     };
 

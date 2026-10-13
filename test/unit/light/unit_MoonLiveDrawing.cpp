@@ -4,51 +4,17 @@
 /// The scripted drawing vocabulary: `circle` and `line` as a script calls them, pinning the seam where unsigned ABI words become the light domain's signed lengths.
 
 #include "doctest.h"
-#include "MoonLiveScriptFixture.h"
+#include "MoonLiveEffectScene.h"
 #include "../core/moonlive_script_wrap.h"
-#include "light/moonlive/MoonLiveEffect.h"
-#include "core/moonlive/moonlive_emit.h"   // MM_MOONLIVE_HAS_HOST_JIT
-#include "light/layouts/GridLayout.h"
-#include "light/layouts/Layouts.h"
-#include "light/layers/Layer.h"
 
 using namespace mm;
 
 #if MM_MOONLIVE_HAS_HOST_JIT
 
 namespace {
-/// A wired effect on a real layer, the way the module tree builds one.
-struct Scene {
-    Layouts layouts;
-    GridLayout grid;
-    Layer layer;
-    MoonLiveEffect effect;
-    Scene(int w = 16, int h = 16) {
-        grid.width = w; grid.height = h; grid.depth = 1;
-        layouts.addChild(&grid);
-        layer.setLayouts(&layouts);
-        layer.setChannelsPerLight(3);
-        layer.addChild(&effect);
-        effect.defineControls();
-    }
-    void run(const char* script) {
-        effect.setScript(mmWriteScript(script));
-        layouts.applyState();
-        layer.applyState();
-    }
-    /// How many lights carry any color, which is the coverage a stroke width decides.
-    int lit() {
-        int n = 0;
-        const auto* px = layer.buffer().data();
-        for (nrOfLightsType i = 0; i < layer.buffer().count(); i++)
-            if (px[i * 3] || px[i * 3 + 1] || px[i * 3 + 2]) n++;
-        return n;
-    }
-};
-
 /// One frame of a tick() body on a 16x16 grid.
 int litAfter(const char* body) {
-    Scene s;
+    ScriptScene s;
     std::string src = std::string("class T { void tick() { fill(0, 0, 0); ") + body + " } }";
     s.run(src.c_str());
     s.layer.tick();
@@ -57,7 +23,7 @@ int litAfter(const char* body) {
 }  // namespace
 
 TEST_CASE("a scripted circle draws its rim and leaves the middle dark") {
-    Scene s;
+    ScriptScene s;
     s.run("class T { void tick() { fill(0, 0, 0); circle(8, 8, 5, 1, 255, 0, 0); } }");
     s.layer.tick();
     const auto* px = s.layer.buffer().data();
@@ -99,13 +65,35 @@ TEST_CASE("a scripted circle outside the grid lights nothing") {
 }
 
 TEST_CASE("a scripted line reaches both of its endpoints") {
-    Scene s;
+    ScriptScene s;
     s.run("class T { void tick() { fill(0, 0, 0); line(2, 2, 13, 13, 0, 255, 0); } }");
     s.layer.tick();
     const auto* px = s.layer.buffer().data();
     const auto at = [&](int x, int y) { return px[(y * 16 + x) * 3 + 1]; };
     CHECK(at(2, 2) > 0);
     CHECK(at(13, 13) > 0);
+}
+
+// The read-modify-write calls act on what is already in the light, which is what lets a script placed after another effect mask, glow or tint it.
+TEST_CASE("a script dims, adds to and mixes a light that is already lit") {
+    ScriptScene s;
+    s.run("class T { void tick() { fill(200, 100, 50); mulRGB(0, 128); addRGB(1, 100, 200, 0); blendRGB(2, 0, 0, 250, 255); mulRGB(9999, 0); } }");
+    s.layer.tick();
+    const auto* px = s.layer.buffer().data();
+    CHECK(px[0] == 100); CHECK(px[1] == 50); CHECK(px[2] == 25);       // mulRGB: half of each channel
+    CHECK(px[3] == 255); CHECK(px[4] == 255); CHECK(px[5] == 50);      // addRGB: saturates at 255
+    CHECK(px[6] == 0); CHECK(px[7] == 0); CHECK(px[8] == 250);         // blendRGB at 255: the color itself
+    CHECK(px[9] == 200);                                               // an index past the end touches nothing
+}
+
+// Reading back what is there is what lets a script build on another effect rather than paint over it.
+TEST_CASE("a script reads back the color of a light") {
+    ScriptScene s;
+    s.run("class T { void tick() { fill(0, 0, 0); setRGB(0, 10, 20, 30); RGB c = getRGB(0); setRGB(1, c.b, c.g, c.r); setRGB(2, getRGB(9999).r, 0, 0); } }");
+    s.layer.tick();
+    const auto* px = s.layer.buffer().data();
+    CHECK(px[3] == 30); CHECK(px[4] == 20); CHECK(px[5] == 10);   // light 0's channels, read back and swapped
+    CHECK(px[6] == 0);                                            // past the end reads as 0
 }
 
 #endif  // MM_MOONLIVE_HAS_HOST_JIT

@@ -127,14 +127,21 @@ public:
         if (totalHeapVal_ > totalInternalVal_) {
             controls_.addProgress("psram", psramUsedVal_, totalHeapVal_ - totalInternalVal_);
             // A compile-time string, so it binds read-only and adds nothing on a board without it.
-            if (const char* pt = platform::psramType(); pt && pt[0])
+            if (const char* pt = platform::psramType(); pt && pt[0]) {
                 controls_.addReadOnly("psramType", const_cast<char*>(pt));
+                controls_.setAdvanced(controls_.count() - 1);   // for whoever asks why a board is slow, not for running a show
+            }
         }
         controls_.addReadOnly("maxBlock", maxBlockStr_, sizeof(maxBlockStr_));
 
         // Firmware identity lives on the firmware card, and filesystem usage on the file manager.
         if (chipFlashVal_ > 0) {
             controls_.addReadOnly("flash", flashStr_, sizeof(flashStr_));
+            // Read once from the hardware: a board updated over the network keeps its bootloader's mode, and DIO fetches code over two lines where QIO uses four.
+            if (const char* fm = platform::flashMode(); fm && fm[0]) {
+                controls_.addReadOnly("flashMode", const_cast<char*>(fm));
+                controls_.setAdvanced(controls_.count() - 1);   // expert, as psramType
+            }
         }
 
         // These never change at runtime, so each binds straight to the platform's own buffer.
@@ -211,11 +218,11 @@ public:
     /// Delete every setting and preset, so the next boot starts as freshly installed; scripts and other files stay.
     static bool factoryReset() { return FilesystemModule::removeTree(FilesystemModule::CONFIG_DIR); }
 
-    /// Accept printable ASCII within the buffer, which every write path checks.
+    /// Accept printable ASCII within the buffer, which every write path checks; empty is the unset model a board starts with.
     static bool validateDeviceModel(const char* value) {
         if (!value) return false;
         size_t n = std::strlen(value);
-        if (n == 0 || n >= 32) return false;   // 1..31 (32-byte buffer, NUL-terminated)
+        if (n >= 32) return false;   // 0..31 (32-byte buffer, NUL-terminated)
         for (size_t i = 0; i < n; i++) {
             unsigned char b = static_cast<unsigned char>(value[i]);
             if (b < 0x20 || b > 0x7E) return false;

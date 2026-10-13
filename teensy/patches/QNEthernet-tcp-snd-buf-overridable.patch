@@ -1,0 +1,17 @@
+Let a build set TCP_SND_BUF, as it already can MEM_SIZE and TCP_WND:
+a device streaming large frames over TCP needs more than four segments in flight.
+
+diff --git a/src/lwipopts.h b/src/lwipopts.h
+index f35fa18..f4ad2b3 100644
+--- a/src/lwipopts.h
++++ b/src/lwipopts.h
+@@ -233,7 +233,9 @@ void qnethernet_hal_check_core_locking(const char* file, int line,
+ #define TCP_MSS                    ((MTU) - 40)  /* 536 */
+ // #define TCP_CALCULATE_EFF_SEND_MSS 1
+ // #define LWIP_TCP_RTO_TIME          3000
++#ifndef TCP_SND_BUF
+ #define TCP_SND_BUF                (4 * (TCP_MSS))  /* (2 * TCP_MSS) */
++#endif  // !TCP_SND_BUF
+ // #define TCP_SND_QUEUELEN           ((4 * (TCP_SND_BUF) + (TCP_MSS - 1))/(TCP_MSS))
+ /* #define TCP_SNDLOWAT \
+    LWIP_MIN(LWIP_MAX(((TCP_SND_BUF)/2), (2 * TCP_MSS) + 1), (TCP_SND_BUF) - 1)*/

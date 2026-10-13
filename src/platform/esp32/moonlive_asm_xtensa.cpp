@@ -188,8 +188,8 @@ void XtensaAssembler::bind(Label l) { if (len_ >= kUnbound) overflow_ = true; el
 
 // Record a pending branch fixup, guarding the fixed table (overflow_ rather than an OOB write).
 void XtensaAssembler::addFixup(size_t at, Label label, FixKind kind) {
-    if (fixupCount_ >= kMaxFixups) { overflow_ = true; return; }
-    fixups_[fixupCount_++] = {at, label, kind};
+    if (fixupCount_ >= kMaxFixups || at >= kUnbound) { overflow_ = true; return; }
+    fixups_[fixupCount_++] = {static_cast<CodePos>(at), label, kind};
 }
 
 // A call to a function in this block, the script-to-script call.
@@ -339,15 +339,17 @@ void XtensaAssembler::sarImm(Reg d, Reg a, uint8_t n) {
     emit3(((0x2u | (uint32_t(n) >> 4)) << 20) | 0x010000u | (uint32_t(ar(d)) << 12) |
           ((uint32_t(n) & 0x0fu) << 8) | (uint32_t(ar(a)) << 4));
 }
-// The LOGICAL right shift. srli only encodes 1..15; a shift of 16 is spelled extui aD, aA, 16, 16, which extracts the top 16 bits, between them they cover every shift the front end emits.
+// The LOGICAL right shift. srli encodes 1..15; a shift of 16..31 is extui aD, aA, n, 32-n, which extracts the top 32-n bits, a width extui's four-bit field holds.
 void XtensaAssembler::shrImm(Reg d, Reg a, uint8_t n) {
     if (n >= 1 && n <= 15) {
         emit3(0x410000u | (uint32_t(ar(d)) << 12) | (uint32_t(n) << 8) | (uint32_t(ar(a)) << 4));
         return;
     }
-    // extui's width field caps at 16, so 16 is the only wide shift it can express. Anything else has NO encoding here, and falling through to a shift-by-16 would emit a silently wrong constant, the failure mode movImm above was just fixed for. Fail the compile instead.
-    if (n != 16) { overflow_ = true; return; }
-    emit3(0xf50000u | (uint32_t(ar(d)) << 12) | (uint32_t(ar(a)) << 4));   // extui aD, aA, 16, 16
+    // Zero and 32 up have no encoding, and falling through to another amount would emit a silently wrong value.
+    if (n < 16 || n >= 32) { overflow_ = true; return; }
+    // op2 = width - 1, op1 = 4 plus the shift's fifth bit, s = the shift's low nibble.
+    emit3((uint32_t(31 - n) << 20) | ((0x4u | (uint32_t(n) >> 4)) << 16) | (uint32_t(ar(d)) << 12) |
+          ((uint32_t(n) & 0x0fu) << 8) | (uint32_t(ar(a)) << 4));
 }
 // a12: the dedicated address scratch, OUTSIDE the R0..R9 -> a2..a11 vreg map, so computing an address into it can never clobber a live virtual register. Shared by every indexed access.
 static constexpr uint8_t kAddrScratch = 12;   // a12

@@ -58,6 +58,9 @@ idf_component_register(
 
 target_compile_options(${COMPONENT_LIB} PRIVATE -Wall -Wextra -Werror)
 
+# The script compiler runs once per script load, never per frame, so it is built for size: the code it emits is the same either way.
+set_source_files_properties("../../src/core/moonlive/MoonLiveCompiler.cpp" PROPERTIES COMPILE_OPTIONS "-Os")
+
 # Xtensa: interleave literal pools into the text section (-mauto-litpools). Required by MM_RAMFUNC
 # (IRAM_ATTR) on TEMPLATE functions: a comdat instantiation's code lands in `.iram1.*` but its literal
 # pool in `.literal._Z…`, which the IDF linker script keeps in flash — out of l32r's backward reach

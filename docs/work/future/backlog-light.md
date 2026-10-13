@@ -155,6 +155,23 @@ Record before and after in performance.md per target.
 
 ## Drivers
 
+### Drivers' palette and fixture-profile lists, sent once rather than in every view (2026-10-13)
+
+Drivers is the largest root in the state, 35 KB of the Teensy's view where Services is 10 KB, and two lists are 25 KB of it, mostly repetition.
+The `palette` options carry 66 palettes with 16 hex colors each for the dropdown's swatches, which change only with the firmware or a palette script: the state carries the names, and the page fetches the colors from a route the browser caches across reloads.
+FixtureProfiles' `profiles` summary is 1.9 KB, and its `detail`, 14.5 KB, repeats each expanded row's editor fields, their name, type and bounds, for every profile: the row schema is sent once, as `optionSets` already sends the role names, and each row carries its values.
+Together Drivers falls to about 12 KB, and the largest single control, the block a streamed state still needs whole, from 15 KB to a few.
+
+### LED output from a Raspberry Pi's own pins (robwomp, 2026-10-11)
+
+Suggested on Discord after the Teensy port: a Pi runs MoonLight today as the Linux desktop build, so its LEDs are reached only through the network drivers.
+Driving a strip from the Pi's own header needs the platform backend that does not exist yet (`src/platform/rpi/`, the same prerequisite as the sensor item below), and a `LedPeripheral` behind it.
+The routes differ by model: on a Pi 4 and earlier, DMA through the PWM, PCM or SPI peripheral, the way rpi_ws281x does; on a Pi 5 the header sits behind the RP1 chip, whose PIO blocks are the route.
+SPI is the one path every model shares, one lane per SPI bus with each WS2812 bit encoded in SPI bits, and the place to start.
+Portable GPIO libraries (WiringPi, libgpiod) are too slow for LED timing, so they serve buttons and relays, not this.
+On a Pi 5, own PIO programs reach the hardware through the kernel's PIO driver, which piolib shows; Adafruit's PioMatter proves HUB75 that way, and HUB75 on a Pi is a second backend once this one exists.
+The research, with sources: [the LED-driver analysis](leddriver-analysis-bottom-up.md#raspberry-pi).
+
 ### Logarithmic brightness, and a power budget the device knows about (2026-09-02)
 
 `Drivers.brightness` scales the output linearly, and perceived lightness is not linear: the eye is
@@ -340,10 +357,6 @@ ESP32-PICO-V3-02.
 **Prerequisite / sequencing:** tier 2 wants the **ISR-refill + `MM_HOT`** work done first (same as the classic ring above), since a high-rate Parlio refill benefits from the ISR-grade determinism. Confirm the CURRENT P4 Parlio tested ceiling first (re-measure on the P4 bench) before claiming a head-to-head — the ~21K figure is troyhacks' *buffer-fit* limit, not a verified-on-wire number, and his code steps the clock down at 256/512 LEDs per lane (signal integrity at long strands), which our own measurement must account for. Reference: the parlio source is `src/MoonLight/Nodes/Drivers/parlio.cpp` in the predecessor; our Parlio backend is `platform_esp32_parlio.cpp` + `ParlioLedDriver.h`.
 
 
-### Extract shared lane-driver scaffolding when the 3rd parallel backend lands (deferred)
-
-The `I80LedDriver` (classic-ESP32 I2S + S3/P4 LCD_CAM, both via the i80 bus) and `ParlioLedDriver` (P4 Parlio) share ~245 of 362 lines, and their platform-side loopback capture+verify is ~100 lines byte-for-byte identical (`platform_esp32_parlio.cpp` even notes "The RX capture half is byte-for-byte identical" to the i80 one). The status-string lifecycle (`failBuf_` / `configErr_` / `clearFailBuf` / `clearConfigErr`) is triplicated across all three LED drivers (RMT/i80/Parlio), ~60 lines. The branch deliberately extracted the *encoders* (`ParallelSlots.h` shared by i80+Parlio, `RmtSymbol.h`, `PinList.h`) on the "extract when the second user lands" rule, but stopped at the lifecycle/loopback scaffolding. **Accepted for this merge** (the reviewer agreed driver-level extraction can wait): the duplication is in mechanical lifecycle/test scaffolding, not domain logic, and a DriverBase-level refactor touching three drivers is riskier than the duplication it removes. **Do it when the third parallel backend arrives** (16-lane widening, or Teensy FlexIO), at which point the pattern is proven three ways: (a) a `detail::` platform helper for capture+verify (the only per-peripheral difference is the transmit call, pass a callback, beside the already-shared `loopbackJumperOk`), and (b) a small owned-status helper or DriverBase members for the fail/config strings. Until then the cost is line count, not correctness.
-
 ### Multicore Step 2b — ping-pong second output buffer (deferred, workload-gated)
 
 The shipped render↔encode split (Step 2a, `multicore` control) uses one `Drivers::outputBuffer_`, so the composite is serialized at the boundary. A **second** output buffer would overlap even that (core 0 composites into B while core 1 encodes A), at the cost of one full frame buffer (~48 KB at 16K lights). The read-only `stall` KPI was built as the trigger metric, and it splits cleanly: a **heavy effect** (render-bound) shows `stall` ~1 µs (S3) / ~15 µs (classic) — 2b recovers *nothing*, core 0 already fills the encode window; a **light effect on many lights** (output-bound — a solid color or slow gradient across 16K lights) shows `stall` 6–11 ms — 2b recovers that whole wait. So it's a real but narrow win: **gated on the product owner naming that light-effect/many-lights workload as worth the 48 KB**, not on a generic fps gain. (Design context in the shipped Plan-20260713 - Multicore Step 2.)
@@ -382,15 +395,15 @@ fix that made a fixture light, not the finished design.
 ### Blending adds motion channels, which is meaningless for aim (WANTED)
 
 `blendMap` treats a light as `n` opaque bytes, so ADDITIVE blending sums pan and tilt across
-layers. Two layers driving one moving head aim it at neither position, and saturate to hard-over
+layers, and the separable modes (multiply, screen, darken, lighten, difference, exclusion) combine them the same way. Two layers driving one moving head aim it at neither position, and saturate to hard-over
 as soon as both are moderately positioned.
 
-Only additive is wrong. **Opacity blending on motion is a feature and must be kept**: it is an
+Only the combining modes are wrong. **Opacity blending on motion is a feature and must be kept**: it is an
 interpolation, so a layer fading in sweeps the head smoothly from the old aim to the new one,
 which is what a console does and better than a snap. The rule (architecture.md) is that
 interpolating ops are valid on every channel while accumulating ops are valid only on emissive
-ones, so the fix is narrow: in the additive path, ASSIGN motion channels (topmost writer wins)
-instead of summing them, leaving the opacity path alone.
+ones, so the fix is narrow: in the additive and separable paths, ASSIGN motion channels (topmost writer wins)
+instead of combining them, leaving the opacity path alone. Lighting consoles call the same split HTP and LTP: intensity merges highest-takes-precedence, attributes latest-takes-precedence. A discrete attribute such as a gobo slot does not interpolate either, so it snaps rather than fades.
 
 Not yet reachable in a harmful way: it needs two enabled layers on a fixture carrying motion
 channels, and the single-layer path is a memcpy. Worth doing with the motion-writer work, since
@@ -844,6 +857,7 @@ The LED-driver increments **shipped**: increment 1 (RMT/WS2812B single-strand on
 
   **Why it waits.** It is fourteen effects' worth of change across audio-reactive and simulation families, each needing its own judgement about whether to clear, fade, or seed differently — not a mechanical sweep. `unit_Effects_gridsweep.cpp` already measures it (`afterFirst`) and asserts only the settled frame, so the number is visible without blocking.
 
+- **A scripted modifier that animates every frame** (2026-10-11): `MoonLiveModifier` compiles a `modifyLive()` entry, so a script moves lights per frame with `t` (scroll, wobble, sweep) as the compiled Rotate does. Geometry only: dimming is a blend mode or an effect's `mulRGB`, per [the layer compositing plan](../present/Plan-20261011%20-%20Layer%20compositing,%20masks%20and%20transitions.md). Built once a script needs it; the cost to measure is one compiled-script call per light per frame, on an S3 at its largest grid.
 - **A scripted modifier needs a way to drop a light** (2026-08-10). A coordinate slot is a byte, so a script that computes past 255 wraps: `shift.mlv` with a large `amount` lands lights back at the left edge instead of walking them off it. The Layer already drops an out-of-bounds position, but a script has no way to SAY out-of-bounds — every value it can write is a valid coordinate. Needs a sentinel the binding recognizes (or a wider coordinate slot), at which point the "walks off the edge" behavior a scroll modifier wants becomes expressible.
 
 - **A scripted layout loses its control values across a reboot** (2026-08-11). Persistence SAVES them correctly (`/.config/Layouts.json` holds `"0.width":64`), but on boot they are loaded into a control set that does not exist yet: a script's controls are created by `defineControls`, which can only publish what the ENGINE declared, and the engine does not compile until `prepare()` — Scheduler phase 4, after the phase-2b re-bind. So the loaded value has nowhere to land and the script's declared default wins; a saved 64×64 grid comes back 16×16. Verified on the P4 bench.
@@ -961,8 +975,6 @@ The LED-driver increments **shipped**: increment 1 (RMT/WS2812B single-strand on
   hpwit's driver runs) is what lets the two coexist, on top of lifting the 2048-light cap. A
   standard I2S microphone (INMP441) is content on I2S1 and coexists today when the LED bus claims
   I2S0 first.
-
-(The shared lane-driver scaffolding extraction — when a 3rd parallel backend lands — is tracked separately under [§ Extract shared lane-driver scaffolding](#extract-shared-lane-driver-scaffolding-when-the-3rd-parallel-backend-lands-deferred) above.)
 
 ## FixedPoint fades outside the Layer's aggregation (2026-09-07)
 

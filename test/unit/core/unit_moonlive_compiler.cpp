@@ -195,19 +195,19 @@ TEST_CASE("a byte parameter wraps at 255, the way a byte local does") {
 }
 
 TEST_CASE("a function declaring more parameters than the block holds is refused") {
-    // The arena block carries kMaxScriptArgs values, and the CALL site clamps to it. The prologue did not: it emitted one LoadCtrl32 per DECLARED parameter, so a fifth read past the end of the arena allocation and a later one wrote there. Script text is user-supplied on a network-reachable device, so the declaration has to be refused where it is written.
-    moonlive::MoonLive five;
-    CHECK_FALSE(five.compile("class T {\n"
-                             "  void helper(int a, int b, int c, int d, int e) { setRGB(a, 1, 0, 0); }\n"
-                             "  void tick() { helper(0, 0, 0, 0, 0); }\n"
+    // The prologue copies one arena word per declared parameter, so a ninth would read and write past the arena: user-supplied text, refused where it is written.
+    moonlive::MoonLive nine;
+    CHECK_FALSE(nine.compile("class T {\n"
+                             "  void helper(int a, int b, int c, int d, int e, int f, int g, int h, int i) { setRGB(a, 1, 0, 0); }\n"
+                             "  void tick() { helper(0, 0, 0, 0, 0, 0, 0, 0, 0); }\n"
                              "}\n", kTable, kSys));
 
     // Exactly the maximum still compiles: the bound is the block's size, not one below it.
-    moonlive::MoonLive four;
-    CHECK(four.compile("class T {\n"
-                       "  void helper(int a, int b, int c, int d) { setRGB(a, b, c, d); }\n"
-                       "  void tick() { helper(0, 1, 2, 3); }\n"
-                       "}\n", kTable, kSys));
+    moonlive::MoonLive eight;
+    CHECK(eight.compile("class T {\n"
+                        "  void helper(int a, int b, int c, int d, int e, int f, int g, int h) { setRGB(a, b, c, d + e + f + g + h); }\n"
+                        "  void tick() { helper(0, 1, 2, 3, 0, 0, 0, 0); }\n"
+                        "}\n", kTable, kSys));
 }
 
 TEST_CASE("a parameter name is checked the way a local is") {
@@ -1862,4 +1862,67 @@ TEST_CASE("compileSource: a register refusal returns a literal, and spillDetail 
     // By CONTENT, not address: clang merges identical literals so the pointers happened to coincide, GCC gives the inline constexpr a distinct address per translation unit and the pointer compare failed on CI while the strings were identical. The contract is the text.
     CHECK(std::strcmp(r.error, moonlive::kSpillRefused) == 0);
     CHECK(moonlive::spillDetail().guard != 0);            // and the guard that fired is recorded
+}
+
+// Each refusal names what to write instead, since a struct expands into forms the script never shows and a bare "expected ';'" would point at nothing the user wrote.
+TEST_CASE("a struct or a condition used where it does not fit is refused with what to write instead") {
+    uint8_t out[2048];
+    struct Case { const char* src; const char* err; const char* what; };
+    const Case refused[] = {
+        {mmScript("int RGB = 3;"), "that name is a type", "a variable named after a type"},
+        {mmScript("setRGB(0, 1 + getRGB(0), 0, 0);"), "a struct is read one field at a time: write name.field", "a struct answer used as one number"},
+        {"class T {\n  int step() { return 1; }\n  void tick() { }\n}\n", "that name shadows a built-in function", "a function named after a builtin, which would never be called"},
+        {mmScript("RGB c = RGB(1, 2, 3); setRGB(0, c.w, 0, 0);"), "this struct has no field of that name", "a field the type does not have"},
+        {mmScript("RGB c = RGB(1, 2, 3, 4);"), "too many fields for this struct", "a constructor with a fourth field"},
+        {mmScript("RGB c = RGB(1, 2, 300);"), "this number is out of range for that field", "a byte field given 300"},
+        {mmScript("RGB c = RGB(1, 2, 3); setRGB(0, 1, c);"), "too many arguments: this struct fills more positions than remain", "a struct past the last position"},
+        {"class T {\n  void f(Coord3D a, Coord3D b, Coord3D c) { }\n  void tick() { }\n}\n",
+         "parameters fill at most 8 words, a struct taking one per field", "three Coord3D parameters, nine words"},
+        {"class T {\n  RGB c = RGB(1, 2, 3);\n  void tick() { }\n}\n",
+         "a struct member starts at zero: set its fields in a function", "a member struct with an initializer"},
+        {mmScript("int both = 0; both = 1 && 2;"), "&&, || and ! join the conditions of an if, not values", "&& as a value"},
+        {mmScript("setRGB(0, !1, 0, 0);"), "&&, || and ! join the conditions of an if, not values", "! as a value"},
+        // C reads `!a < b` as `(!a) < b`, so a comparison after a negated value is refused rather than read the other way.
+        {mmScript("int a = 0; if (!a < 1) { setRGB(0, 1, 0, 0); }"), "! negates what follows it: write !(a < b) to negate a comparison", "! before a comparison"},
+        {"class T {\n  RGB c;\n  void tick() { c[1] = 5; }\n}\n", "a struct is read one field at a time: write name.field", "a struct member written by index"},
+        {mmScript("fixed f = 1.5; int y = 0; y = max(f, max(10, 20));"), "mixes whole and fixed: write toFixed(x) or toInt(x)", "a nested same-type call hiding a mixed argument"},
+        // A function's arguments are checked one by one against its parameters, not counted as words: both of these filled the right number of words.
+        {"class T {\n  void paint(int i, RGB c, int boost) { }\n  void tick() { paint(0, 1, 2, 3, 1); }\n}\n",
+         "expected a struct value: a constructor, a struct variable or a call answering one", "three numbers where an RGB parameter is"},
+        {"class T {\n  void paint(int i, RGB c, int boost) { }\n  void tick() { paint(0, Coord3D(1, 2, 300), 1); }\n}\n",
+         "this is a different struct type", "a Coord3D where an RGB parameter is"},
+        {"class T {\n  void paint(int a, int b, int c) { }\n  void tick() { paint(RGB(1, 2, 3)); }\n}\n",
+         "a struct is read one field at a time: write name.field", "an RGB where three int parameters are"},
+    };
+    for (const Case& c : refused) {
+        INFO(c.what);
+        auto r = moonlive::compileSource(c.src, kTable, kSys, out, sizeof(out));
+        CHECK_FALSE(r.ok);
+        CHECK(std::string(r.error) == std::string(c.err));
+    }
+}
+
+// A struct use expands to one operation per field, so struct copies are the densest IR: about 1.6 ops per token against a reservation of one.
+TEST_CASE("a script dense in struct copies compiles, its IR growing past the reservation") {
+    std::string src = "class T {\n  Coord3D a;\n  Coord3D b;\n  RGB c;\n  RGB d;\n  void tick() {\n";
+    for (int i = 0; i < 20; i++) src += "    a = b; b = a; c = d; d = c; setRGB(0, c);\n";   // about the largest shipped script's length
+    src += "  }\n}\n";
+    std::vector<uint8_t> out(moonlive::codeCapFor(moonlive::countTokens(src.c_str())));
+    auto r = moonlive::compileSource(src.c_str(), kTable, kSys, out.data(), out.size());
+    INFO(std::string(r.error));
+#if MM_MOONLIVE_HAS_HOST_JIT
+    CHECK(r.ok);
+#else
+    CHECK((r.ok || std::string(r.error) == moonlive::kCodegenFailed));
+#endif
+}
+
+// A lexer error does not move past its character, so a lookahead skipping a call's parentheses stops at it; before, one typo here looped the compile forever.
+TEST_CASE("an unexpected character inside a call's arguments is refused, not looped on") {
+    uint8_t out[2048];
+    for (const char* body : {"setRGB(0, max(1, 2 @ 3), 0, 0);", "fill(abs(1 $), 0, 0);", "setRGB(0, getRGB(1 # 2).r, 0, 0);"}) {
+        CAPTURE(body);
+        auto r = moonlive::compileSource(mmScript(body), kTable, kSys, out, sizeof(out));
+        CHECK_FALSE(r.ok);
+    }
 }

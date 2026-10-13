@@ -131,8 +131,7 @@
 ///
 /// ## Why SD is a subfolder, not a second root
 ///
-/// A host has no second card to mount, but the mount/remount/format logic under test needs a real path to act on, not a stub that always answers the same way.
-/// A subfolder of the one real root is that path: `sdMounted_` gates it exactly as a missing card would, and format is an ordinary wipe-and-recreate.
+/// A host has no second card, so a subfolder of the one real root stands in. `sdMounted_` gates it as a missing card would, and format is a wipe-and-recreate.
 
 #include "platform/platform.h"
 #include "core/util/FirmwareImage.h"  // identify/moonBaseRejection: shared image vetting
@@ -813,6 +812,10 @@ const char* psramType() {
     return "";   // desktop has no PSRAM
 }
 
+const char* flashMode() {
+    return "";   // a host runs from its own storage, which has no read mode to show
+}
+
 const char* resetReason() {
     // Desktop has no reset-reason concept; report a benign value the UI treats as "not crashed".
     return "OK";
@@ -869,7 +872,7 @@ std::filesystem::path fsRoot_{defaultRoot()};
 
 // No real card on a host, so "/sd" is a subfolder of the same root, gated by this flag the way a missing card gates the real mount: @xref{why-sd-is-a-subfolder-not-a-second-root}.
 bool sdMounted_ = false;
-// Every open /sd read/write stream, counted so sdUnmount/sdFormat can refuse under one; a flash stream through the same fsReadStreamOpen/fsWriteStreamOpen does not count, since unmounting the card has nothing to do with it.
+// Every open /sd stream, counted so sdUnmount and sdFormat can refuse under one; a flash stream does not count, since unmounting the card does not touch it.
 int sdStreamsOpen_ = 0;
 // True by default: a host has no real slot to pull a card from, so a test flips this to model one going missing or coming back.
 bool sdCardPresentForTest_ = true;
@@ -1096,23 +1099,28 @@ bool fsWriteStreamClose(FsWriteStream& h, bool commit) {
     return ok;
 }
 
+namespace {
+// One directory entry to the callback, with its size; the filename round-trips through a string, since its native character type differs per platform.
+void listEntry(const std::filesystem::directory_entry& entry, const std::string& name, FsListCb cb, void* user) {
+    std::error_code ec;
+    const bool isDir = entry.is_directory(ec);
+    const auto sz = isDir ? 0u : static_cast<uint32_t>(std::filesystem::file_size(entry.path(), ec));
+    cb(name.c_str(), isDir, ec ? 0u : sz, user);
+}
+}  // namespace
+
 void fsList(const char* dir, FsListCb cb, void* user) {
     if (!cb) return;
-    // A second mount except in desktop's own fiction (a real subdirectory); advertised by hand here, gated on sdCardMounted() rather than the chip-capability hasSdCard, and skipped below as the real folder underneath.
-    const bool isRoot = dir && (dir[0] == '\0' || (dir[0] == '/' && dir[1] == '\0'));
-    if (sdCardMounted() && isRoot) cb("sd", true, 0, user);
+    // On the desktop the card is a real subdirectory, listed by hand while mounted and skipped below as its backing folder.
+    const bool sdHere = isFsRoot(dir) && hasSdCard;
+    if (sdHere && sdCardMounted()) cb("sd", true, 0, user);
     std::error_code ec;
     auto p = toFsPath(dir);
     if (!std::filesystem::exists(p, ec)) return;
     for (auto& entry : std::filesystem::directory_iterator(p, ec)) {
         if (ec) break;
-        // The filename's native character type differs per platform, so round-trip through a string for a portable view.
-        std::string name = entry.path().filename().string();
-        if (isRoot && hasSdCard && name == "sd") continue;   // already emitted above; this is its real backing folder
-        const bool isDir = entry.is_directory(ec);
-        std::error_code sizeEc;
-        const auto sz = isDir ? 0u : static_cast<uint32_t>(std::filesystem::file_size(entry.path(), sizeEc));
-        cb(name.c_str(), isDir, sizeEc ? 0u : sz, user);
+        const std::string name = entry.path().filename().string();
+        if (!(sdHere && name == "sd")) listEntry(entry, name, cb, user);
     }
 }
 
@@ -2064,6 +2072,7 @@ bool improvProvisioningInit(const ImprovDeviceInfo& /*info*/,
     }
     return false;
 }
+void improvPoll() MM_NONBLOCKING {}
 
 void reboot() {
     // The device is the host process, so exit cleanly and let the supervisor restart it, which matches what the browser's reconnect expects.
@@ -2600,6 +2609,31 @@ bool parlioWs2812Transmit(ParlioWs2812Handle& h, uint8_t buffer, size_t bytes) {
 bool parlioWs2812Wait(ParlioWs2812Handle& /*h*/, uint8_t /*buffer*/, uint32_t /*timeoutMs*/) { return true; }
 uint32_t parlioWs2812LastTransmitUs(const ParlioWs2812Handle& /*h*/) { return 0; }
 void parlioWs2812Deinit(ParlioWs2812Handle& h) { freeHostBus(h.impl); }
+
+// The GPIO-DMA bus on the same memory-backed bus: one buffer, as the Teensy's.
+bool gpioDmaWs2812Init(GpioDmaWs2812Handle& h, const uint16_t* /*dataPins*/, uint8_t /*laneCount*/,
+                       size_t bufferBytes) {
+    if (bufferBytes == 0) return false;
+    return hostBus(h.impl)->init(bufferBytes, false);
+}
+uint8_t* gpioDmaWs2812Buffer(const GpioDmaWs2812Handle& h) {
+    return h.impl ? static_cast<HostBus*>(h.impl)->buffer(0) : nullptr;
+}
+size_t gpioDmaWs2812BufferCapacity(const GpioDmaWs2812Handle& h) {
+    return h.impl ? static_cast<HostBus*>(h.impl)->capacity : 0;
+}
+size_t gpioDmaWs2812HeapBytes(const GpioDmaWs2812Handle& h) { return gpioDmaWs2812BufferCapacity(h); }
+bool gpioDmaWs2812Transmit(GpioDmaWs2812Handle& h, size_t bytes, uint32_t /*waitMs*/) {
+    return h.impl && static_cast<HostBus*>(h.impl)->transmit(0, bytes);
+}
+uint32_t gpioDmaWs2812LastTransmitUs(const GpioDmaWs2812Handle& /*h*/) { return 0; }
+void gpioDmaWs2812Deinit(GpioDmaWs2812Handle& h) { freeHostBus(h.impl); }
+RmtLoopbackResult gpioDmaWs2812Loopback(const uint16_t* /*dataPins*/, uint8_t /*laneCount*/,
+                                        uint16_t /*rxGpio*/, const uint8_t* /*frame*/,
+                                        size_t /*frameBytes*/, size_t /*dataBytes*/,
+                                        uint8_t /*rowBits*/) {
+    return {};   // no wire on a host
+}
 
 // No panel on a desktop, and inert rather than emulated: this port has no analogue worth faking, and its encoder is already tested on plain buffers. So the init refuses with a cause and the driver reports it as it would on a chip without the silicon.
 const char* hub75LastError() { return "HUB75 needs an ESP32-S3, P4 or S31"; }

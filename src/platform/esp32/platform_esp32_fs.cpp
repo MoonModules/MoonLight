@@ -202,15 +202,9 @@ int64_t fsSize(const char* path) {
     return static_cast<int64_t>(st.st_size);
 }
 
-void fsList(const char* dir, FsListCb cb, void* user) {
-    if constexpr (hasSdCard) { if (isSdPath(dir)) { sdCardList(dir, cb, user); return; } }
-    if (!fsMounted_ || !cb) return;
-    // A second mount, not a real subdirectory; advertised by hand here, gated on sdCardMounted() rather than the chip-capability hasSdCard.
-    if constexpr (hasSdCard) {
-        if (sdCardMounted() && dir && (dir[0] == '\0' || (dir[0] == '/' && dir[1] == '\0'))) cb("sd", true, 0, user);
-    }
-    char full[128];
-    if (!fsTranslate(dir, full, sizeof(full))) return;
+namespace {
+// Every entry of one translated LittleFS directory, with its size.
+void listDir(const char* full, FsListCb cb, void* user) {
     DIR* d = ::opendir(full);
     if (!d) return;
     struct dirent* ent;
@@ -225,6 +219,16 @@ void fsList(const char* dir, FsListCb cb, void* user) {
         cb(ent->d_name, isDir, size, user);
     }
     ::closedir(d);
+}
+}  // namespace
+
+void fsList(const char* dir, FsListCb cb, void* user) {
+    if constexpr (hasSdCard) { if (isSdPath(dir)) { sdCardList(dir, cb, user); return; } }
+    if (!fsMounted_ || !cb) return;
+    // A second mount, not a real subdirectory, so the root lists it by hand while a card is mounted.
+    if constexpr (hasSdCard) { if (isFsRoot(dir) && sdCardMounted()) cb("sd", true, 0, user); }
+    char full[128];
+    if (fsTranslate(dir, full, sizeof(full))) listDir(full, cb, user);
 }
 
 // A LittleFS stream keeps both paths so close() can rename without re-deriving them; an SD one is owned and typed by platform_esp32_sdmmc.cpp, reached only through its own sdCardXxx calls below.

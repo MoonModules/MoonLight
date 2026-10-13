@@ -66,8 +66,6 @@ public:
         renderSplitActive_ = false;
         seat_.vacate();
         outputSeat_.vacate();
-        // The palette seam references this object's name arrays rather than copying them.
-        LivePalettes::clear(livePtrs_);
         // Effects::tick runs this every frame, so a dead Drivers would keep executing its script.
         MoonLivePalette::clearActiveInstance(&paletteScriptModule_);
         paletteScriptModule_.release();
@@ -78,7 +76,6 @@ public:
     /// Stop the worker and free the palette script, for a tree torn down without release().
     ~Drivers() override {
         stopEncodeTask();
-        LivePalettes::clear(livePtrs_);
         MoonLivePalette::clearActiveInstance(&paletteScriptModule_);
         // Free the script rather than detach: release() may never run, and the engine holds a block.
         paletteScriptModule_.release();
@@ -147,9 +144,27 @@ public:
     /// The global active color palette, which every palette-driven effect reads live.
     uint8_t palette = 0;
 
+    /// Run the script `paletteScript_` names, compiling it, whose size or error the card shows.
+    void attachPaletteScript() {
+        MoonLivePalette::setActiveInstance(&paletteScriptModule_);
+        paletteScriptModule_.setScript(paletteScript_);
+        paletteScriptModule_.prepare(*this);
+    }
+
+    // Released rather than only detached, so neither the program nor its status outlives the choice.
+    /// Stop the palette script, or it would keep overwriting the gradient every frame.
+    void detachPaletteScript() {
+        MoonLivePalette::setActiveInstance(nullptr);
+        paletteScriptModule_.release();
+        paletteScript_[0] = 0;
+        // Only the script's own message: the card shares one status with the relay and encode warnings.
+        if (status() == paletteScriptModule_.statusText()) clearStatus();
+    }
+
     // The names live in a member array because the seam holds POINTERS, so a local would dangle.
     /// List every factory palette at its place in the catalog, held or not, then the user's own `.mlp` files, and publish them to the picker.
     void refreshLivePalettes() {
+        livePalettesScanned_ = true;   // every scan counts, whichever caller ran it
         liveCount_ = 0;
         // The catalog first, in its own order, so a palette's number is the same on every device of one firmware and a slot or a desk can pick it.
         for (size_t c = 0; c < moonlive::kPaletteCatalogCount && liveCount_ < LivePalettes::kMax; c++) {
@@ -208,13 +223,15 @@ public:
         return std::strncmp(dir, path, p) == 0 && (dir[p] == '/' || path[p - 1] == '/');
     }
 
-    char        liveNames_[LivePalettes::kMax][moonlive::kMaxScriptName + 1] = {};
-    const char* livePtrs_[LivePalettes::kMax] = {};
-    const char* liveTags_[LivePalettes::kMax] = {};
-    bool        livePresent_[LivePalettes::kMax] = {};   ///< whether the device holds the file, which the UI downloads on a pick when it does not
+    // One device, one picker: static, so the published list outlives any instance, a probe's included.
+    static inline char        liveNames_[LivePalettes::kMax][moonlive::kMaxScriptName + 1] = {};
+    static inline const char* livePtrs_[LivePalettes::kMax] = {};
+    static inline const char* liveTags_[LivePalettes::kMax] = {};
+    static inline bool        livePresent_[LivePalettes::kMax] = {};   ///< whether the device holds the file, which the UI downloads on a pick when it does not
     /// How many scripted palettes the last scan found.
-    uint8_t     liveCount_ = 0;
-    bool        livePalettesScanned_ = false;   ///< whether setup listed the folders, after which only a file change does
+    static inline uint8_t     liveCount_ = 0;
+    /// Whether the list was scanned, device-wide as the list is, so a probe reads it rather than rescanning it.
+    static inline bool livePalettesScanned_ = false;
     bool        softStarting_ = false;          ///< the lights are still rising after this boot
     bool        dark_ = false;                  ///< safe mode: every driver sends black, so no LED holds a bright frame
     bool        softStartBegun_ = false;        ///< the first lit frame has started the rise
@@ -263,6 +280,9 @@ public:
     /// Whether any enabled driver was aimable last check, so the list rebuilds on the transition.
     bool     movableNow_ = false;
 
+    /// A palette script's own controls appear once it compiles, so their saved values wait for that.
+    bool declaresControlsAtPrepare() const override { return true; }
+
     /// Bind the global controls: power, brightness, relays, palette and the multicore split.
     void defineControls() override {
         controls_.addControl("on", on);   // master power: first so it renders at the top of the card
@@ -272,6 +292,8 @@ public:
         controls_.addControl("brightness", brightness, 0, 255);
         // ONE picker for both kinds, so a `.mlp` is chosen exactly like a built-in; setup scans the folders and a file change rescans, never a brightness change.
         if (!livePalettesScanned_) refreshLivePalettes();
+        // Published here too, so a saved palette name resolves when the file is applied, before setup.
+        LivePalettes::set(livePtrs_, liveTags_, liveCount_, livePresent_);
         // Sized from THIS instance's scan: defineControls also runs before prepare has published.
         controls_.addPalette("palette", palette, mm::paletteOptions,
                              static_cast<uint8_t>(liveCount_ + mm::palettes::kCount));
@@ -303,26 +325,23 @@ public:
                 // The script fills the entries every frame, so there is nothing to expand here.
                 mm::formatTo(paletteScript_, sizeof(paletteScript_), "%s",
                               LivePalettes::nameAt(LivePalettes::sourceIndex(palette)));
-                MoonLivePalette::setActiveInstance(&paletteScriptModule_);
-                paletteScriptModule_.setScript(paletteScript_);
-                paletteScriptModule_.prepare(*this);
+                attachPaletteScript();
             } else {
-                // Detach any script, or it would keep overwriting the gradient every frame.
-                MoonLivePalette::setActiveInstance(nullptr);
-                paletteScript_[0] = 0;
+                detachPaletteScript();
                 Palettes::setActive(LivePalettes::sourceIndex(palette));
             }
             rebuildControls();   // the editor and the script's controls appear or disappear with it
             return;
         }
         if (std::strcmp(controlName, "paletteScript") == 0) {
-            // Only while a name is set, so clearing the field detaches the script.
-            MoonLivePalette::setActiveInstance(paletteScript_[0] ? &paletteScriptModule_ : nullptr);
-            paletteScriptModule_.setScript(paletteScript_);
-            paletteScriptModule_.prepare(*this);
+            if (paletteScript_[0]) {
+                attachPaletteScript();
+            } else {
+                // Clearing the name hands the palette back to the built-in select.
+                detachPaletteScript();
+                Palettes::setActive(palette);
+            }
             rebuildControls();              // the compile re-derives the script's own controls
-            // Clearing the name hands the palette back to the built-in select.
-            if (paletteScript_[0] == 0) Palettes::setActive(palette);
             return;
         }
         if (std::strcmp(controlName, "multicore") == 0) {
@@ -481,9 +500,9 @@ public:
     void setup() override {
         // The filesystem module mounts first, so this scan is the one that sees every script; from here a file change rescans.
         refreshLivePalettes();
-        livePalettesScanned_ = true;
-        rebuildControls();
-        Palettes::setActive(palette);   // seed the global active palette from the persisted index
+        LivePalettes::set(livePtrs_, liveTags_, liveCount_, livePresent_);
+        // The saved choice starts as picking it does, a script palette compiled, since at boot nothing reacts to the value.
+        onControlChanged("palette");
         dark_ = MoonModule::safeMode();
         // Every lit device boot, and never a host process or a test, which start at the set level.
         softStarting_ = platform::bootRecord().booted && !dark_;
@@ -498,7 +517,7 @@ public:
 
     /// Size the composition buffer, engage or drop the core-1 split, publish the summary.
     void prepare() override {
-        // Published HERE because prepare runs only on a mounted module, and a probe would empty it.
+        // A rescan here picks up a script written since the last one.
         const uint8_t hadLive = liveCount_;
         refreshLivePalettes();
         LivePalettes::set(livePtrs_, liveTags_, liveCount_, livePresent_);

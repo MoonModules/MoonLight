@@ -8,6 +8,7 @@ By default runs every TEST_CASE. Optional filters narrow the run:
 """
 
 import argparse
+import os
 import platform
 import subprocess
 import sys
@@ -85,8 +86,10 @@ def main():
     # Stream output line-by-line so the MoonDeck log updates as the test runs
     # instead of dumping everything at the end. Without bufsize=1 + iter(), the
     # full ~11k-line output buffers internally and only appears at exit.
+    # The data folder ctest pins too: from the build tree the default would be the developer's own settings, which a test must neither read nor write.
+    env = dict(os.environ, MM_DATA_DIR=str(build_dir / "test" / "fs-root"))
     proc = subprocess.Popen(
-        cmd, cwd=build_dir,
+        cmd, cwd=build_dir, env=env,
         stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
         bufsize=1, text=True, encoding="utf-8", errors="replace",
     )

@@ -20,6 +20,6 @@ class BreatheEffect {
   void tick() {
     int bri = floorBri + div(beatsin(bpm, t, 255) * (255 - floorBri), 255);
     int p = hue + scale(beat(div(bpm, 2) + 1, t), drift + 1);
-    fill(paletteR(p, bri), paletteG(p, bri), paletteB(p, bri));
+    fill(paletteRGB(p, bri));
   }
 }

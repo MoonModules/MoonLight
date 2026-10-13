@@ -26,6 +26,8 @@ class CrosshairEffect {
 ```
 
 These are real calls, not pasted-in text: the callee gets its own frame when it runs, which is what lets one helper call another and lets a function recurse. Arguments are passed BY VALUE, so a function that writes a parameter changes its own copy and the caller's variable is untouched.
+A function takes up to eight words of parameters, an `RGB` or `Coord3D` taking one per field.
+A function's name may not be a builtin's, since the builtin is found first and the function would never run.
 `effects/crosshair.mle` is the worked example; `layouts/sixteen-rings.mll` is the one where the arguments earn their place, calling one helper sixteen times with different coordinates.
 
 ### A script is C++
@@ -41,7 +43,7 @@ Anything else a compiler rejects is a divergence, and the test is where it surfa
 ### Every function declares what it returns
 
 A script does this the way the compiled module it stands in for does.
-`void` acts and answers nothing, `int` hands back a number, and `string` hands back one of the script's own literals.
+`void` acts and answers nothing, `int` hands back a number, `string` hands back one of the script's own literals, and `RGB` or `Coord3D` hands back a whole [struct](#rgb-and-coord3d).
 
 `return` leaves a function, with a value or without one. Inside `tick()` a bare `return;` is an early exit, which is what a guard wants:
 
@@ -75,6 +77,10 @@ A control CAN be assigned, and the effect is visible rather than surprising: the
 if (heat[i] > 40) { setRGB(i, 255, 90, 0); }
 else { setRGB(i, 0, 0, 0); }
 ```
+
+Conditions join with `&&` and `||` and negate with `!`, as in C++: `&&` binds tighter than `||`, parentheses group, and evaluation stops at the first side that decides the answer, so `if (i > 0 && heat[i - 1] > 40)` never reads before the array.
+A bare value is true when it is not zero, so `if (audioBeat())` reads as it says.
+A condition decides a branch rather than being a value, so `int both = a && b;` is refused.
 
 ### Wider members, and arrays
 
@@ -141,6 +147,32 @@ That is where width still earns its keep: a `byte[]` heat map costs a quarter of
 An initializer is range-checked against its type, so `byte n = 300;` is a compile error naming the member rather than a silent 44.
 A `string` array is refused, since there is no runtime string to fill one with.
 
+## RGB and Coord3D
+
+A color and a position travel as one value, under the names the compiled modules use for them.
+`RGB` is three `byte` fields, `r`, `g` and `b`, and `Coord3D` is three `int` fields, `x`, `y` and `z`.
+
+```c
+class Warm {
+  RGB last;                                       // a member starts at zero
+
+  RGB toward(RGB c, int k) { return RGB(c.r, c.g / k, 0); }
+
+  void tick() {
+    RGB c = paletteRGB(mod(t / 16, 256), 255);    // one call for the whole color
+    last = toward(c, 2);
+    for (int i = 0; i < width; i = i + 1) { setRGB(i, last); }
+    setRGB(0, 255, getRGB(1).g, 0);               // one field of a struct a call answers
+  }
+}
+```
+
+A struct is a member, a local, a parameter and a return value, read and written by field or as a whole.
+`RGB(r, g, b)` builds one, and a local declared without a value starts at zero.
+Passed to a call, a struct fills one position per field, so `setRGB(i, c)` is `setRGB(i, c.r, c.g, c.b)` and every builtin taking three channels takes an `RGB`.
+The compiler expands every use into the operations a script would write field by field, so a struct costs nothing a script written without one does not.
+A member `RGB` takes 3 bytes of the class's member budget and a `Coord3D` 12; a local takes one frame slot per field.
+
 ## Fractional arithmetic with `fixed`
 
 `fixed` is Q16.16: the number is stored scaled by 65,536, which is how every coordinate in the engine works.
@@ -189,6 +221,10 @@ The core owns the grammar and a generic call mechanism, and nothing else.
 | call | does |
 |---|---|
 | `setRGB(index, r, g, b)` | write one light |
+| `getRGB(index)` | read a light's color as an `RGB`, what earlier effects in the layer drew |
+| `mulRGB(index, k)` | scale one light by `k` out of 255, the dimming a mask applies |
+| `addRGB(index, r, g, b)` | add a color to one light, saturating at 255 |
+| `blendRGB(index, r, g, b, amount)` | mix one light toward a color by `amount` out of 255 |
 | `setXYZ(x, y, z)` | write one position, for a modifier |
 | `fill(r, g, b)` | write every light |
 | `addLight(x, y, z)` | place the next light, for a layout |
@@ -196,6 +232,7 @@ The core owns the grammar and a generic call mechanism, and nothing else.
 | `circle(cx, cy, radius, thickness, r, g, b)` | a circle outline of a given stroke width, via the shared `draw::ring` |
 | `random16(n)` | a value in `[0, n)` |
 | `mod(a, b)` | the wrap a cyclic animation needs |
+| `abs(v)`, `min(a, b)`, `max(a, b)`, `clamp(v, lo, hi)` | magnitude, the smaller, the larger, and a value held between bounds; on whole or `fixed` values, the result following them |
 | `beat(bpm, t)` | a `0..65535` sawtooth at `bpm` |
 | `beatsin(bpm, t, high)` | a sine `0..high` at `bpm` |
 | `noise(x, y, z)` | `0..255` gradient noise, the field behind fire, clouds and plasma |
@@ -217,7 +254,7 @@ The core owns the grammar and a generic call mechanism, and nothing else.
 | `escape(cx, cy, jx, jy, iters)` | the Mandelbrot escape count, `0..255`, `0` inside the set |
 | `setPaletteColor(x, y, index, bri)` | one light from the active palette, in one call |
 | `setPaletteColorZ(x, y, z, index, bri)` | the same, addressing a light in a volume |
-| `paletteR(i, bri)`, `paletteG`, `paletteB` | one palette channel, for a value rather than a pixel |
+| `paletteRGB(i, bri)` | a palette color at a brightness, as an `RGB`, for a value rather than a pixel |
 | `trail(1)` | ask for a trail plane, from `defineControls()`. Returns whether it got one |
 | `flowNoise(zoom, strength)`, `flowCurl(zoom, strength)` | carry the trail plane one frame along a flow |
 | `trailDecay(halfLifeMs)` | fade the trail by a half-life, so a tail holds its length at any framerate |

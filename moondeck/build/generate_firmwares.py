@@ -2,22 +2,22 @@
 """Generate mooninstaller/firmwares.json from the FIRMWARES dict.
 
 The firmware-variant list was hand-copied across the CI matrix, the two ESP Web
-Tools manifest loops, MoonDeck, and the docs — six copies that drifted (MoonDeck's
-even dropped the P4 variants). This script projects the single source of truth —
-the `FIRMWARES` dict in build_esp32.py — into one machine-readable file every
+Tools manifest loops, MoonDeck, and the docs: six copies that drifted (MoonDeck's
+even dropped the P4 variants). This script projects the single source of truth,
+the `FIRMWARES` registry in firmwares.py, into one machine-readable file every
 consumer reads instead:
 
-  * release.yml — the build matrix + both manifest loops select `.ships`,
-  * MoonDeck — its firmware picker,
-  * docs/how-to/building.md — points here instead of restating the list.
+  * release.yml: the build matrix + both manifest loops select `.ships`,
+  * MoonDeck: its firmware picker,
+  * docs/how-to/building.md: points here instead of restating the list.
 
 check_firmwares.py guards the committed file against drift from FIRMWARES.
 
-"Firmware" here is the compiled binary variant — separate from "board" (the
+"Firmware" here is the compiled binary variant, separate from "board" (the
 physical hardware). See docs/explanation/architecture/index.md § Firmware vs board.
 
 Inputs:
-  --out <path>   — firmwares.json destination (mooninstaller/firmwares.json).
+  --out <path>   firmwares.json destination (mooninstaller/firmwares.json).
 """
 
 import argparse
@@ -25,19 +25,17 @@ import json
 import sys
 from pathlib import Path
 
-# build_esp32.py is the single source of truth for the firmware variants; import
-# it so this script never holds a second hand-maintained list (same cross-script
-# import generate_manifest.py and collect_kpi.py already use).
+# firmwares.py joins each platform's slice into the one registry; import it so this script never holds a second hand-maintained list.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from build_esp32 import FIRMWARES  # noqa: E402
+from firmwares import FIRMWARES  # noqa: E402
 
 
 def build_doc() -> dict:
     """Project FIRMWARES into the firmwares.json document.
 
-    `chip` is the IDF build target ("esp32s3"). The chip-FAMILY label ("ESP32-S3")
-    is deliberately NOT stored here: it's derivable from `chip` via build_esp32's
-    TARGET_TO_FAMILY, and no firmwares.json consumer needs it — the ESP Web Tools
+    `chip` is the platform's build target: the IDF target on an ESP32 ("esp32s3"), the board on a Teensy ("teensy41"). The chip-FAMILY label ("ESP32-S3")
+    is deliberately NOT stored here: it's derivable from `chip` via firmwares.py's
+    TARGET_TO_FAMILY, and no firmwares.json consumer needs it: the ESP Web Tools
     manifest gets `chipFamily` from that map at generation time, and the installer's
     runtime family check uses deviceModels.json + esptool detection, not this file. Adding
     it would be redundant data ahead of a consumer. `fragments` is build-internal
@@ -48,6 +46,7 @@ def build_doc() -> dict:
         "firmwares": [
             {
                 "name": name,
+                "platform": spec["platform"],
                 "chip": spec["chip"],
                 "eth_only": spec["eth_only"],
                 "ships": spec["ships"],

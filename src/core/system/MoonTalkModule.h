@@ -120,7 +120,7 @@ private:
         body.flush();
 
         // Through the container, which owns the address.
-        auto* cloud = static_cast<const MoonCloudModule*>(parent());
+        auto* cloud = static_cast<MoonCloudModule*>(parent());
         return cloud && cloud->post("/api/talk", body.data());
     }
 

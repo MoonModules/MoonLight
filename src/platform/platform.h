@@ -33,6 +33,11 @@
 ///
 /// `fsWriteStream` pulls a whole upload to completion in one call, which is fine for a config file but not for a card-sized one shared with a render loop. `fsWriteStreamOpen`/`Write`/`Close` let a caller hand over one bounded chunk per tick instead, resuming where the last call left off.
 
+// Per-thread state; a target with one thread and no TLS support in its linker script defines it `static`.
+#ifndef MM_THREAD_LOCAL
+  #define MM_THREAD_LOCAL thread_local
+#endif
+
 // Format checking, where the compiler offers it: one toolchain parses the attribute as an unknown specifier and fails the whole class downstream.
 #if defined(__GNUC__) || defined(__clang__)
   #define MM_PRINTF_FORMAT(fmt_arg, va_arg) __attribute__((format(printf, fmt_arg, va_arg)))
@@ -225,8 +230,11 @@ const char* sdkVersion();
 /// CPU frequency and core count, read from the running hardware so a downclock is visible in the UI.
 const char* cpuInfo();
 
-/// PSRAM interface type, "quad" or "octal", and empty where this build has no PSRAM.
+/// PSRAM interface type and clock, such as "octal, 80 MHz", and empty where this build has no PSRAM.
 const char* psramType();
+
+/// How the chip reads its program flash now, "QIO", "DIO" or "octal" and the like, read from the running hardware; empty where the host has none to report.
+const char* flashMode();
 
 /// WiFi co-processor status for a board whose radio lives on a separate chip, empty on a native radio.
 const char* coprocessorWifi();
@@ -328,6 +336,11 @@ inline bool fsWriteStream(const char* path, FsWriteSrc src, void* user) {
 }
 
 // A second, independent mount (microSD, FAT) sharing the fsXxx surface above through its own `/sd` path prefix; inert wherever hasSdCard is false.
+
+/// Whether `path` names the filesystem's root: "" or "/", the two forms a listing of the root arrives as.
+inline bool isFsRoot(const char* path) {
+    return path && (path[0] == '\0' || (path[0] == '/' && path[1] == '\0'));
+}
 
 // Never where hasSdCard is false, so a flash folder named `sd` stays an ordinary folder there.
 /// Whether `path` is rooted at the SD mount: "sd", "/sd", "sd/foo" or "/sd/foo" (a leading slash is optional).
@@ -804,6 +817,8 @@ bool improvProvisioningInit(const ImprovDeviceInfo& info,
                             std::atomic<bool>* txPowerReady = nullptr,
                             char* opOut = nullptr, size_t opOutLen = 0,
                             std::atomic<bool>* opReady = nullptr);
+/// Drain the serial listener, called every tick: the work itself where the listener has no task of its own, a no-op where a task runs it.
+void improvPoll() MM_NONBLOCKING;
 
 /// One UDP socket: the wire every light protocol sends and receives on.
 class UdpSocket {
@@ -1208,6 +1223,31 @@ RmtLoopbackResult parlioWs2812Loopback(const uint16_t* dataPins, uint8_t laneCou
                                        uint16_t rxGpio, const uint8_t* frame,
                                        size_t frameBytes, size_t dataBytes,
                                        uint8_t rowBits);
+
+// GPIO-DMA WS2812 output: one DMA channel writes each slot into a GPIO port's data register, paced by a timer, so any pins of that port are lanes.
+
+/// One configured GPIO-DMA bus with its frame buffer.
+struct GpioDmaWs2812Handle { void* impl = nullptr; };
+
+/// Claim `dataPins` as lanes, in order, and size the frame buffer the driver encodes 8-bit slots into (16-bit above 8 lanes).
+bool gpioDmaWs2812Init(GpioDmaWs2812Handle& h, const uint16_t* dataPins, uint8_t laneCount,
+                       size_t bufferBytes);
+/// The frame buffer the driver encodes into; null before init.
+uint8_t* gpioDmaWs2812Buffer(const GpioDmaWs2812Handle& h);
+/// The frame buffer's capacity; 0 before init.
+size_t gpioDmaWs2812BufferCapacity(const GpioDmaWs2812Handle& h);
+/// Every byte the bus holds, the frame buffer and any copy the transfer reads; 0 before init.
+size_t gpioDmaWs2812HeapBytes(const GpioDmaWs2812Handle& h);
+/// Wait up to `waitMs` for the previous frame to leave the wire, then start sending the first `bytes` of the frame buffer.
+bool gpioDmaWs2812Transmit(GpioDmaWs2812Handle& h, size_t bytes, uint32_t waitMs);
+/// How long the last completed transfer took, the pure wire time; 0 before the first.
+uint32_t gpioDmaWs2812LastTransmitUs(const GpioDmaWs2812Handle& h);
+/// Release the bus, returning its pins to plain GPIO.
+void gpioDmaWs2812Deinit(GpioDmaWs2812Handle& h);
+/// Verify a real frame of 8-bit slots on a private bus, on i80Ws2812Loopback's contract.
+RmtLoopbackResult gpioDmaWs2812Loopback(const uint16_t* dataPins, uint8_t laneCount,
+                                        uint16_t rxGpio, const uint8_t* frame,
+                                        size_t frameBytes, size_t dataBytes, uint8_t rowBits);
 
 // HUB75 panel output: a panel is scanned rather than addressed, one bit plane at a time.
 

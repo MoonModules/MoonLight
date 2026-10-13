@@ -65,6 +65,9 @@ public:
     /// Publish the script's controls, so a scripted palette is configurable without editing it.
     void publishControls(ControlList& controls) { script_.publishDeclaredControls(controls); }
 
+    /// The status text the script last wrote, which Drivers compares against its own card.
+    const char* statusText() const { return script_.statusText(); }
+
     /// Whether a script is compiled and ready to run.
     bool ok() const { return script_.ok(); }
 

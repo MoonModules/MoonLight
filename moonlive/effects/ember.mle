@@ -18,7 +18,7 @@ class EmberEffect {
 
   void tick() {
     for (int i = 0; i < 16; i = i + 1) {
-      if (heat[i] > cool) { heat[i] = heat[i] - cool; } else { heat[i] = 0; }
+      heat[i] = max(heat[i] - cool, 0);
     }
 
     for (int j = 0; j < 16; j = j + 1) {
@@ -26,8 +26,7 @@ class EmberEffect {
     }
 
     for (int k = 0; k < 16; k = k + 1) {
-      setRGB(k, paletteR(heat[k], heat[k]), paletteG(heat[k], heat[k]),
-                paletteB(heat[k], heat[k]));
+      setRGB(k, paletteRGB(heat[k], heat[k]));
     }
   }
 }

@@ -203,7 +203,7 @@ have. A Dig-2-Go never carries it; a P4 installation does.
 
 **MoonLive can still USE it, and that is the distinction to keep.** A script cannot upload 84 KB and
 should never try, but it does not need to: the compiled module owns the blob and the bus, and the
-script calls a builtin (`tofZone(x, y)`) exactly as it calls `beat()` or `paletteR()` without
+script calls a builtin (`tofZone(x, y)`) exactly as it calls `beat()` or `paletteRGB()` without
 implementing a beat or a palette. The power-function pattern is what makes a heavyweight sensor
 scriptable. What a script cannot do is *be* the driver for such a sensor, which is the honest
 boundary of the scripted-sensor claim: a script suits a sensor whose init is a handful of register

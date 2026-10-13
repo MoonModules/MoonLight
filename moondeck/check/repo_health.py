@@ -43,6 +43,7 @@ sys.path.insert(0, str(ROOT / "moondeck" / "build"))
 from build_esp32 import APP_BIN, FIRMWARES, table_from_fragments, find_idf, idf_env  # noqa: E402
 import flash_split  # noqa: E402 (beside this file; the commit's flash change by kind)
 from build_desktop import desktop_binary  # noqa: E402 (one definition of where it lands)
+from build_teensy import FIRMWARES as TEENSY_FIRMWARES, UPDATE_IMAGE_BYTES as TEENSY_UPDATE_BYTES, hex_image_bytes, hex_path  # noqa: E402
 HEALTH_FILE = ROOT / "docs" / "reference" / "metrics" / "repo-health.json"
 # The same snapshot as a table a human reads: units applied, ratios as percentages, areas
 # grouped. The JSON stays the source the delta is computed from; this is the view. Both
@@ -239,6 +240,13 @@ def measure_flash():
             parts = flash_split.measure(d, elf, st.st_size, _head(), env)
             if parts:
                 FLASH_SPLIT[firmware] = parts
+    # The Teensy images, under the same freshness rule: the bytes each HEX file writes to flash.
+    for firmware in TEENSY_FIRMWARES:
+        image = hex_path(firmware)
+        if image.exists() and (_time.time() - image.stat().st_mtime) <= MEASURED_WITHIN_HOURS * 3600:
+            flash[firmware] = hex_image_bytes(image)
+            MEASURED_THIS_RUN.add(firmware)
+            MEASURED_DATES[firmware] = _dt.date.today().isoformat()
     # The desktop binary, located by build_desktop.desktop_binary() so this and collect_kpi.py
     # cannot name different files in the same run. A bare build/MoonLight matched nothing off
     # macOS, so this metric silently carried a foreign machine's number forward while reading as
@@ -532,7 +540,7 @@ def _arrow(new, old, key, fmt=str, lower_is_better=True):
 # happens to carry: a new target should be a deliberate addition, and "unknown" (a scenario run
 # before targets were named) is a data defect, not a device.
 MATRIX_TARGETS = ("desktop-macos", "desktop-windows", "esp32", "esp32s3-n16r8",
-                  "esp32p4rev1-eth", "esp32s31", "esp32-eth", "esp32-eth-wifi")
+                  "esp32p4rev1-eth", "esp32s31", "esp32-eth", "esp32-eth-wifi", *TEENSY_FIRMWARES)
 
 
 def reference_tag():
@@ -558,16 +566,18 @@ def load_reference(tag):
 
 
 def gains(new, ref, since="", code=(None, None)):
-    """The numbers a user feels, as (metric, unit, reference, now), for each one both snapshots hold.
+    """The numbers a user feels, as (metric, unit, reference, now), for each one both snapshots hold; a firmware the release lacks comes with reference None.
 
     A target's flash counts only when it was rebuilt after `since`, the release date: a number carried forward unchanged would read as no growth. `code` is the code report's total at the release and now.
     """
     rows = []
     measured = new.get("measured", {})
-    for k in sorted(set(new.get("flash", {})) & set(ref.get("flash", {}))):
-        if since and str(measured.get(k, "")) <= since:
+    # Without a release flash table every target would read as new, so then only the shared ones count.
+    released = ref.get("flash", {})
+    for k in sorted(new.get("flash", {})):
+        if (since and str(measured.get(k, "")) <= since) or (not released and k not in released):
             continue
-        rows.append((f"flash {k}", "KB", ref["flash"][k], new["flash"][k]))
+        rows.append((f"flash {k}", "KB", released.get(k), new["flash"][k]))
     heap_ref = (ref.get("perf", {}).get("esp32") or {}).get("heap_free")
     heap_now = (new.get("perf", {}).get("esp32") or {}).get("heap_free")
     if heap_ref and heap_now:
@@ -614,6 +624,9 @@ def render_gains(new, ref, tag):
         return []
     L = [f"## Since {tag}", "", f"| Metric | {tag} | Now | Change |", "|---|---:|---:|---:|"]
     for metric, unit, was, now in rows:
+        if was is None:   # a target the release did not ship
+            L.append(f"| {metric} | - | {_gain_cell(unit, now)} | new |")
+            continue
         diff = now - was
         pct = f" ({100.0 * diff / was:+.1f}%)" if was else ""
         change = (f"{diff / 1024:+.1f} KB" if unit == "KB" else f"{diff:+,}") + pct
@@ -646,7 +659,7 @@ def render_markdown(new, old):
         L += ["## Firmware size", "",
               "| Target | Flash | Capacity | Used | Built |", "|---|---:|---:|---:|:--:|"]
         for k, v in sorted(new["flash"].items()):
-            cap = app_partition_bytes(k) if k.startswith("esp32") else 0
+            cap = app_partition_bytes(k) if k.startswith("esp32") else TEENSY_UPDATE_BYTES if k in TEENSY_FIRMWARES else 0
             cap_s = _kb(cap) if cap else "-"
             used = f"{(100.0 * v / cap):.0f}%" if cap else "-"
             built = _built_label(k, new.get("measured", {}).get(k))

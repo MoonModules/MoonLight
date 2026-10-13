@@ -169,46 +169,60 @@ TEST_CASE("the " MM_ISA_NAME " machine code for the shipped scripts is what it w
 }
 
 // Degrade, never miscompile: a script the backend cannot encode must fail cleanly. The emitters
-// signal that by returning zero bytes, which compileSource turns into a diagnostic — the device
+// signal that by returning zero bytes, which compileSource turns into a diagnostic: the device
 // then shows the error and keeps rendering, instead of executing whatever the truncation produced.
 TEST_CASE("an unencodable script is refused, not truncated, on " MM_ISA_NAME) {
     bool ok = true;
     // A loop nest far past what any label/fixup table holds.
     std::string deep;
-    for (int i = 0; i < 40; i++) deep += "for (i" + std::to_string(i) + " = 0; i" +
+    for (int i = 0; i < 60; i++) deep += "for (i" + std::to_string(i) + " = 0; i" +
                                         std::to_string(i) + " < 2; i" + std::to_string(i) +
                                         " = i" + std::to_string(i) + " + 1) {";
     deep += "addLight(0, 0, 0);";
-    for (int i = 0; i < 40; i++) deep += "}";
+    for (int i = 0; i < 60; i++) deep += "}";
     const size_t n = emitLen(deep.c_str(), mm::moonlive::layoutSysVars(), ok);
     CHECK(n == 0);      // refused
     CHECK_FALSE(ok);    // and said so
 }
 
-// The assembler is a LOCAL in lowerWith, and lowerWith runs on the render task, so its size is
-// stack a 12 KB task has to have spare while a script compiles. Its two fixed tables dominate it:
-// 2 bytes per label (a code position, under the 16 KB code cap) and 8 per fixup, so raising
-// kAsmLabels/kAsmFixups is a stack decision wearing a capacity costume. 48 four-byte labels and 96
-// fixups put lowerWith at 1120 bytes on the classic ESP32, the largest frame on the compile chain
-// (2128 bytes nested); 96 two-byte labels take the same table bytes.
-//
-// This bound is a TRIPWIRE, not a target: it exists so that raising the tables is a deliberate act
-// with a number attached, rather than something noticed when a board bootloops. A P4 has already
-// been lost to an oversized frame on this path. If this fails, either the growth is wrong, or the
-// tables belong on the heap next to the code buffer, which was moved off the stack for this reason.
-TEST_CASE("the " MM_ISA_NAME " assembler stays small enough to build on a render task") {
-    // Asserted in the tables' DEVICE bytes rather than sizeof(), because sizeof() here is the host's:
-    // these backends are compiled on a 64-bit machine to run their real emitter, a Fixup holds a
-    // size_t, and the host object overstates the device one. A label is a CodePos everywhere and a
-    // device Fixup is 8 bytes, so the device bytes follow from the entry counts.
-    //
-    // The device figure, measured on the classic ESP32 image rather than derived: lowerWith's frame
-    // is 1120 bytes with these tables at 960 bytes. Re-measure with `xtensa-esp-elf-objdump -d` and
-    // grep the `entry a1, N` of lowerWith after changing either.
-    constexpr size_t kDeviceFixupBytes = 8;
-    const size_t tableBytes = mm::moonlive::kAsmLabels * sizeof(mm::moonlive::CodePos) + mm::moonlive::kAsmFixups * kDeviceFixupBytes;
-    INFO(MM_ISA_NAME " assembler = " << sizeof(MM_ISA_ASM) << " bytes on this 64-bit host, tables " << tableBytes << " on a device");
-    CHECK(tableBytes <= 1280);   // 64 four-byte labels and 128 fixups, the allowance before labels shrank
+// The language additions expand into the scalar operations every backend already emits, so each compiles here with nothing new in the backend.
+TEST_CASE("structs, joined conditions and the arithmetic builtins compile for " MM_ISA_NAME) {
+    const char* src =
+        "class T {\n"
+        "  RGB keep;\n"
+        "  Coord3D at;\n"
+        "  RGB warm(int k) { return RGB(k, k / 2, 10); }\n"
+        "  Coord3D move(Coord3D p, Coord3D d) { return Coord3D(p.x + d.x, p.y + d.y, p.z + d.z); }\n"
+        "  void tick() {\n"
+        "    int k = 5;\n"
+        "    RGB c = paletteRGB(k, 255);\n"
+        "    at = move(at, Coord3D(1, -1, 0));\n"
+        "    for (int i = 0; i < 8; i = i + 1) {\n"
+        "      if (i > 2 && !(i == 5) || abs(at.x) > 100) { setRGB(i, c); } else { setRGB(i, warm(clamp(k, 0, 255))); }\n"
+        "      k = min(k + 1, max(k, 9));\n"
+        "    }\n"
+        "    keep = getRGB(0);\n"
+        "    setRGB(8, keep.r, getRGB(1).g, k);\n"
+        "    byte b = k + 1;\n"                       // a byte narrows by a shift of 24, which Xtensa once could not encode
+        "    setRGB(9, b, 0, 0);\n"
+        "  }\n"
+        "}\n";
+    std::vector<uint8_t> out(mm::moonlive::codeCapFor(mm::moonlive::countTokens(src)));
+    static char strings[mm::moonlive::CompileResult::kStringPool];
+    const auto r = mm::moonlive::compileSource(src, mm::moonlive::lightBuiltins(), mm::moonlive::effectSysVars(),
+                                               out.data(), out.size(), nullptr, MM_ISA_LOWER, strings, sizeof(strings));
+    INFO(std::string(r.error));
+    CHECK(r.ok);
+    CHECK(r.len > 0);
+}
+
+// lowerWith builds the assembler in a heap block for the length of one compile, so its tables cost heap on the board that compiles, never a task's stack.
+// A label is a two-byte code position and a fixup four bytes (position, label, kind), the same on the host as on a device, so sizeof() measures what a board allocates.
+TEST_CASE("the " MM_ISA_NAME " assembler's tables fit a small heap block") {
+    const size_t tableBytes = mm::moonlive::kAsmLabels * sizeof(mm::moonlive::CodePos) + mm::moonlive::kAsmFixups * 4;
+    INFO(MM_ISA_NAME " assembler = " << sizeof(MM_ISA_ASM) << " bytes, tables " << tableBytes);
+    CHECK(tableBytes <= 1536);
+    CHECK(sizeof(MM_ISA_ASM) <= tableBytes + 128);   // the tables are the assembler: a wider fixup shows here first
 }
 
 // A class whose functions call each other has to place each function where a call can REACH it.

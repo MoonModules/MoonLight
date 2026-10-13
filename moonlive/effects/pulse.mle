@@ -19,14 +19,11 @@ class PulseEffect {
   }
 
   void tick() {
-    if (audioBeat() > 0) {
+    if (audioBeat()) {
       lit = 255;
       hue = hue + hueStep;
     }
-    if (lit > decay) { lit = lit - decay; }
-    else { lit = 0; }
-
-    if (lit < floorBri) { lit = floorBri; }
-    fill(paletteR(hue, lit), paletteG(hue, lit), paletteB(hue, lit));
+    lit = max(lit - decay, floorBri);
+    fill(paletteRGB(hue, lit));
   }
 }

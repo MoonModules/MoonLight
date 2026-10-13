@@ -74,25 +74,37 @@ struct Canvas {
         return (static_cast<size_t>(p.z) * dims.y * dims.x
                 + static_cast<size_t>(p.y) * dims.x + p.x) * cpl;
     }
+    /// Byte offset of the light at `index` in buffer order, at or past `bytes` past the end, which the readers and writers clip; no divide per light.
+    size_t offsetOf(size_t index) const { return cpl && index < bytes ? index * cpl : bytes; }
 };
 
-/// One pixel, clipped to the grid: the Canvas form.
-inline void pixel(const Canvas& cv, Coord3D p, RGB c) {
-    const size_t off = cv.offsetOf(p);
+// Every per-light operation exists by coordinate and by index, the order a buffer and a script count lights in; both reach the same byte offset.
+namespace detail {
+/// Write one light at a byte offset, nothing when the offset is past the end.
+inline void writeAt(const Canvas& cv, size_t off, RGB c) {
     if (off + (cv.cpl < 3 ? cv.cpl : 3) > cv.bytes) return;
     if (cv.cpl >= 1) cv.data[off + 0] = c.r;
     if (cv.cpl >= 2) cv.data[off + 1] = c.g;
     if (cv.cpl >= 3) cv.data[off + 2] = c.b;
 }
-
-/// Read one pixel; black when outside the grid. The Canvas form of `get`.
-inline RGB get(const Canvas& cv, Coord3D p) {
-    const size_t off = cv.offsetOf(p);
+/// Read one light at a byte offset, black past the end.
+inline RGB readAt(const Canvas& cv, size_t off) {
     if (off + (cv.cpl < 3 ? cv.cpl : 3) > cv.bytes) return RGB{0, 0, 0};
     return RGB{cv.cpl >= 1 ? cv.data[off + 0] : uint8_t{0},
                cv.cpl >= 2 ? cv.data[off + 1] : uint8_t{0},
                cv.cpl >= 3 ? cv.data[off + 2] : uint8_t{0}};
 }
+}  // namespace detail
+
+/// One pixel, clipped to the grid: the Canvas form.
+inline void pixel(const Canvas& cv, Coord3D p, RGB c) { detail::writeAt(cv, cv.offsetOf(p), c); }
+/// One light by its index in buffer order, clipped to the buffer.
+inline void pixel(const Canvas& cv, size_t index, RGB c) { detail::writeAt(cv, cv.offsetOf(index), c); }
+
+/// Read one pixel; black when outside the grid. The Canvas form of `get`.
+inline RGB get(const Canvas& cv, Coord3D p) { return detail::readAt(cv, cv.offsetOf(p)); }
+/// Read one light by its index in buffer order; black past the end.
+inline RGB get(const Canvas& cv, size_t index) { return detail::readAt(cv, cv.offsetOf(index)); }
 
 namespace detail {
 /// Walk the pixels of a 3D Bresenham line from a to b, calling `plot` for each.
@@ -334,17 +346,35 @@ inline void fill(const Canvas& cv, RGB c) {
     }
 }
 
-/// Read-modify-write lerp of one pixel toward `c` by `amt`.
-inline void blendPixel(const Canvas& cv, Coord3D p, RGB c, uint8_t amt) {
-    const RGB cur = get(cv, p);
-    pixel(cv, p, blend(cur, c, amt));
+namespace detail {
+/// Lerp one light toward `c` by `amt`, at a byte offset.
+inline void blendAt(const Canvas& cv, size_t off, RGB c, uint8_t amt) { writeAt(cv, off, blend(readAt(cv, off), c, amt)); }
+/// Add `c` to one light with saturation, at a byte offset.
+inline void addAt(const Canvas& cv, size_t off, RGB c) {
+    const RGB cur = readAt(cv, off);
+    writeAt(cv, off, RGB{qadd8(cur.r, c.r), qadd8(cur.g, c.g), qadd8(cur.b, c.b)});
 }
+/// Scale one light by `k` out of 255, at a byte offset.
+inline void scaleAt(const Canvas& cv, size_t off, uint8_t k) {
+    const RGB cur = readAt(cv, off);
+    writeAt(cv, off, RGB{scale8(cur.r, k), scale8(cur.g, k), scale8(cur.b, k)});
+}
+}  // namespace detail
+
+/// Read-modify-write lerp of one pixel toward `c` by `amt`.
+inline void blendPixel(const Canvas& cv, Coord3D p, RGB c, uint8_t amt) { detail::blendAt(cv, cv.offsetOf(p), c, amt); }
+/// The same, by index in buffer order.
+inline void blendPixel(const Canvas& cv, size_t index, RGB c, uint8_t amt) { detail::blendAt(cv, cv.offsetOf(index), c, amt); }
 
 /// Saturating additive pixel: light adds, so this never wraps to black.
-inline void addPixel(const Canvas& cv, Coord3D p, RGB c) {
-    const RGB cur = get(cv, p);
-    pixel(cv, p, RGB{qadd8(cur.r, c.r), qadd8(cur.g, c.g), qadd8(cur.b, c.b)});
-}
+inline void addPixel(const Canvas& cv, Coord3D p, RGB c) { detail::addAt(cv, cv.offsetOf(p), c); }
+/// The same, by index in buffer order.
+inline void addPixel(const Canvas& cv, size_t index, RGB c) { detail::addAt(cv, cv.offsetOf(index), c); }
+
+/// Scale one pixel by `k` out of 255, the per-light dimming a mask applies, as `fade` does for every light.
+inline void scalePixel(const Canvas& cv, Coord3D p, uint8_t k) { detail::scaleAt(cv, cv.offsetOf(p), k); }
+/// The same, by index in buffer order.
+inline void scalePixel(const Canvas& cv, size_t index, uint8_t k) { detail::scaleAt(cv, cv.offsetOf(index), k); }
 
 /// Separable box blur over every axis with extent above 1, so one call covers 1D through 3D.
 inline void blur(const Canvas& cv, uint8_t amt) {

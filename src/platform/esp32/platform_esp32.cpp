@@ -89,6 +89,11 @@
 #include "esp_ota_ops.h"     // for esp_ota_get_running_partition (sysInfo)
 #include "esp_image_format.h"
 #include "esp_flash.h"
+// The flash read mode the cache runs in. IDF's header pulls in a HAL initializer our -Werror rejects in C++, so that one warning is off for this include alone.
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmissing-field-initializers"
+#include "bootloader_flash.h"
+#pragma GCC diagnostic pop
 #include "esp_event.h"
 #include "esp_netif.h"
 #include "esp_eth.h"
@@ -367,15 +372,37 @@ const char* sdkVersion() {
     return esp_get_idf_version();
 }
 
+#define MM_STR_(x) #x
+#define MM_STR(x) MM_STR_(x)
+// The clock beside the mode, since a PSRAM left at IDF's 40 MHz default reads at half its rated rate.
+#if defined(CONFIG_SPIRAM_SPEED)
+    #define MM_PSRAM_CLOCK ", " MM_STR(CONFIG_SPIRAM_SPEED) " MHz"
+#else
+    #define MM_PSRAM_CLOCK ""
+#endif
+
 const char* psramType() {
-    // The PSRAM interface mode is compile-time (IDF has no runtime getter): CONFIG_SPIRAM_MODE_OCT is set only for octal parts (S3/S2 -R8), not classic quad WROVER. Empty when PSRAM is not compiled in.
+    // The PSRAM interface mode and clock are compile-time (IDF has no runtime getter): CONFIG_SPIRAM_MODE_OCT is set only for octal parts (S3/S2 -R8), not classic quad WROVER. Empty when PSRAM is not compiled in.
 #if !defined(CONFIG_SPIRAM)
     return "";
 #elif defined(CONFIG_SPIRAM_MODE_OCT)
-    return "octal";
+    return "octal" MM_PSRAM_CLOCK;
 #else
-    return "quad";
+    return "quad" MM_PSRAM_CLOCK;
 #endif
+}
+
+const char* flashMode() {
+    // Read from the cache's flash controller, so it reports what the bootloader set up rather than what this image was built for: a network update replaces the app and keeps the bootloader, and with it the mode.
+    if (bootloader_flash_is_octal_mode_enabled()) return "octal";
+    switch (bootloader_flash_get_spi_mode()) {
+        case ESP_ROM_SPIFLASH_QIO_MODE:    return "QIO";
+        case ESP_ROM_SPIFLASH_QOUT_MODE:   return "QOUT";
+        case ESP_ROM_SPIFLASH_DIO_MODE:    return "DIO";
+        case ESP_ROM_SPIFLASH_DOUT_MODE:   return "DOUT";
+        case ESP_ROM_SPIFLASH_FASTRD_MODE: return "fast read";
+        default:                           return "slow read";
+    }
 }
 
 const char* coprocessorWifi() {

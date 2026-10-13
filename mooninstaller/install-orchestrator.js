@@ -71,6 +71,16 @@ import {
     encodeApplyOpFrames,
     stateFrames,
 } from "./improv-frame.js";
+import {
+    TEENSY_FAMILY,
+    imageProblem,
+    isTeensySerial,
+    rebootToBootloader,
+    rebootedSerialPort,
+    otherTeensyPorts,
+    requestHalfKay,
+    writeImage,
+} from "./teensy-writer.js";
 
 // ---------------------------------------------------------------------------
 // Manifest parser
@@ -445,6 +455,84 @@ export function flashPercent(sizes, idx, written, total) {
     return pct < 0 ? 0 : pct > 100 ? 100 : pct;
 }
 
+// Installs a Teensy 4.1 through its HalfKay bootloader (teensy-writer.js), from a running board's serial port or, with no port, from a board held in its bootloader by the program button.
+// The outcome is the address its boot log prints, and the catalog defaults go over the same serial port as the ESP32's do (APPLY_OP); there is no WiFi to provision.
+async function installTeensy({ manifest, port, device, applyDefaults, eraseBefore, trackProgress, onProgress, onLog, uiGrantBootloader, uiFindBoard, onSuccess }) {
+    if (!navigator.hid) throw new Error("WebHID is not available: install a Teensy from Chrome or Edge on a desktop computer");
+    if (!uiGrantBootloader) throw new Error("the installer cannot ask for the Teensy bootloader");
+    const log = (line) => { if (onLog) onLog(`[teensy] ${line}`); };
+
+    // The bootloader, picked in the browser's chooser.
+    // The chooser needs a recent click and does not remember the grant, so it opens straight from the Install click while that still counts (a few seconds), listing the bootloader as it appears.
+    // When the click has expired, or the user cancels, the page says what to do and a click of its own opens the chooser.
+    const bootloader = async (pressButton) => {
+        try {
+            const dev = await requestHalfKay();
+            if (dev) return dev;
+            log("no bootloader picked in the browser's list");
+        } catch (e) {
+            log(`the browser's list needs a fresh click (${e && e.message || e})`);
+        }
+        trackProgress("grant-bootloader", { pressButton });
+        log("waiting for the bootloader to be chosen");
+        return await uiGrantBootloader();
+    };
+
+    // A board held in its bootloader has no serial port: the bootloader is the target from the start.
+    let halfkay = port ? null : await bootloader(true);
+    // Before the reboot, while the installed board still answers on `port` (or on none), so its port after the reboot is the one not here.
+    const others = await otherTeensyPorts(port);
+
+    trackProgress("fetch-firmware");
+    log(`downloading ${manifest.parts[0].url}`);
+    const url = manifest.parts[0].url;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`firmware fetch HTTP ${res.status}: ${url}`);
+    const image = new Uint8Array(await res.arrayBuffer());
+    const problem = imageProblem(image);
+    if (problem) throw new Error(problem);
+
+    log(`image ${image.length} bytes`);
+    if (!halfkay) {
+        trackProgress("reboot-bootloader");
+        log("asking the running board into its bootloader (134 baud)");
+        await rebootToBootloader(port);
+        halfkay = await bootloader(false);
+    }
+
+    trackProgress("flash", { pct: 0 });
+    await writeImage(halfkay, image, { onLog, eraseSettings: eraseBefore, onProgress: (pct) => onProgress("flash", { pct }) });
+
+    trackProgress("reboot");
+    let ip = "", mdns = "", defaultsApplied = false;
+    let serial = await rebootedSerialPort(15000, others);
+    if (!serial && uiFindBoard) {
+        // The board was installed from its bootloader, so the installer may not read its serial port yet: one click grants it.
+        log("no granted serial port for the board: asking for one");
+        trackProgress("find-board");
+        serial = await uiFindBoard();
+    }
+    log(serial ? "reading the board's address from its serial log" : "no serial port for the board: no address to show");
+    if (serial) {
+        trackProgress("read-address");
+        try {
+            await serial.open({ baudRate: 115200 });
+            ({ ip, mdns } = await readBootIp(serial, 20000));
+            defaultsApplied = await pushDefaultsOverSerial(serial, device, applyDefaults, trackProgress, onLog);
+        } catch (e) {
+            if (onLog) onLog(`[teensy] could not read the boot log (${e && e.message || e})`);
+        } finally {
+            try { await serial.close(); } catch (_) { /* ignore */ }
+        }
+    }
+    trackProgress("done");
+    if (ip) {
+        onSuccess({ url: `http://${ip}/`, mdns, device: device || "", applyDefaults, defaultsApplied, viaHttp: true, alreadyOnline: true });
+    } else {
+        onSuccess({ url: "", device: device || "", applyDefaults, defaultsApplied, ethOnlyNoLink: true });
+    }
+}
+
 export const installer = {
     /**
      * Drive the full install flow: request port, flash via esptool-js,
@@ -532,13 +620,20 @@ export const installer = {
      *   When provided the orchestrator skips its own requestPort() prompt
      *   and uses this handle directly. Falls back to requestPort() when
      *   omitted/null OR when opening this handle fails (stale grant after
-     *   the device was unplugged and replugged).
+     *   the device was unplugged and replugged). A Teensy manifest with no
+     *   port means a board held in its bootloader by its program button.
+     * @param {() => Promise<HIDDevice>} [opts.uiGrantBootloader]
+     *   Teensy only: host shows a button whose click calls requestHalfKay(),
+     *   and resolves once the user has picked the bootloader in the browser's list.
+     * @param {() => Promise<SerialPort|null>} [opts.uiFindBoard]
+     *   Teensy only: host shows a button whose click calls requestTeensySerial(),
+     *   resolving with the board's port, or null when the user skips.
      */
     async start({ manifestUrl, device, applyDefaults = true, txPower = null, eraseBefore = false,
                    ethOnly = false,
                    port: prePickedPort,
                    onProgress, uiWaitForCreds, uiWaitForIp, uiShowNeedsIpRetrying,
-                   uiWaitForPortRetry,
+                   uiWaitForPortRetry, uiGrantBootloader, uiFindBoard,
                    onSuccess, onError, onLog }) {
         if (!navigator.serial) {
             onError("setup", new Error("Web Serial API not available — use Chrome, Edge, or Opera"));
@@ -595,6 +690,14 @@ export const installer = {
         });
 
         try {
+            // The manifest's chip family picks the writer, before anything touches the device.
+            const manifest = await fetchManifest(manifestUrl);
+            if (manifest.chipFamily === TEENSY_FAMILY) {
+                if (_detected) await releaseDetected();
+                await installTeensy({ manifest, port: prePickedPort, device, applyDefaults, eraseBefore, trackProgress,
+                                      onProgress, onLog, uiGrantBootloader, uiFindBoard, onSuccess });
+                return;
+            }
             trackProgress("request-port");
             // Use the pre-picked port when the host page provided one (the
             // "USB Port" dropdown on the install page). Otherwise surface
@@ -715,7 +818,6 @@ export const installer = {
             // Failing here (CDN issue, bad manifest) leaves the device
             // intact — better than mid-flash failure with an erased chip.
             trackProgress("fetch-firmware");
-            const manifest = await fetchManifest(manifestUrl);
             const fileArray = [];
             for (const part of manifest.parts) {
                 const res = await fetch(part.url);
@@ -1144,6 +1246,8 @@ export const installer = {
         await releaseDetected();
 
         const port = prePickedPort || await navigator.serial.requestPort({});
+        // A Teensy names itself by its USB ids, and an ESP32 handshake would only confuse it.
+        if (isTeensySerial(port.getInfo())) return TEENSY_FAMILY;
         // Trimmed espTerminal (same shape as start()'s) so chip-info lines reach
         // the log panel; the single-char filter drops esptool's "." / "_" noise.
         const espTerminal = onLog ? {

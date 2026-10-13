@@ -17,7 +17,7 @@ The device's identity and vitals: name (behind mDNS `<name>.local`, the SoftAP S
 - `mode`: how much of the UI is shown, `user`, `expert` (🎚️) or `developer` (🔧), cumulative.
 - `logLevel`: serial verbosity, defaulting to Warn. The first 60 s always logs at Info.
 - read-only rate: `uptime`, `fps`, `tickTimeUs`.
-- read-only memory: `heap`, `psram`, `maxBlock`, `flash`.
+- read-only memory: `heap`, `psram`, `maxBlock`, `flash`; `psramType` and `flashMode` in expert mode.
 - read-only identity: `mac`, `chip`, `cpu`, `sdk`, `bootReason`.
 - `factory reset`, pressed twice: back to freshly installed, scripts kept.
 
@@ -52,7 +52,7 @@ The wired interface, a child of Network: which board's wiring it uses and how it
 
 <img src="../../assets/core/EthernetModule.png" width="300" alt="Ethernet module controls">
 
-- `ethBoard`: the board's Ethernet wiring by name; `Custom` exposes every pin.
+- `ethBoard`: the Ethernet wiring by name; `Custom` shows every pin, a fixed interface none.
 - `ipSettings`: DHCP or Static; Static reveals `ip`, `gateway`, `subnet` and `dns`.
 
 Gateway and DNS are optional. A Static setting that cannot work, such as a gateway outside the subnet, is not used: the interface keeps DHCP and the card says why. Changing the addressing of the interface the page reaches the device through asks first, naming where the device will be.
@@ -240,7 +240,7 @@ Browse and manage the device filesystem: a folder tree with an inline text edito
 
 Known renames from [MIGRATING.md](../../reference/MIGRATING.md) apply before upload, then a report lists what needs an eye. Every file applies as it lands, bar network settings and the web server's `port`, which the dialog names.
 - `show hidden`: reveal dot-prefixed files and folders, such as `.config`.
-- `filesystem`: read-only usage bar (used / total bytes, from the platform).
+- `flash`: read-only usage bar (used / total bytes, from the platform).
 - `lastSaved`: read-only; how long ago config was persisted (read from the Filesystem engine).
 
 Detail: [technical](moxygen/FileManagerModule.md)

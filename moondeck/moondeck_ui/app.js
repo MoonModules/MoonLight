@@ -325,7 +325,9 @@ function renderScripts() {
     const containers = {
         desktop: document.getElementById("scripts-desktop"),
         esp32: document.getElementById("scripts-esp32"),
+        teensy: document.getElementById("scripts-teensy"),
         live: document.getElementById("scripts-live"),
+        repo: document.getElementById("scripts-repo"),
     };
     // The esp32 tab splits its scripts across three containers so the
     // dropdowns (Firmware, Port) can sit *between* the script groups they
