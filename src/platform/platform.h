@@ -748,6 +748,10 @@ void mdnsStop();
 void mdnsShutdown();
 /// Resolve a host name to its IPv4 address, `.local` by mDNS and any other by DNS; it blocks, so only a background task calls it.
 bool resolveHost(const char* name, uint8_t ip[4]);
+/// How far a non-blocking lookup has come.
+enum class LookupStep : uint8_t { Pending, Resolved, Failed };
+/// Start or continue resolving `name` without blocking, for a board with no worker task. One name at a time: a new name abandons the one in flight, and a start may allocate once.
+LookupStep resolveHostStep(const char* name, uint8_t ip[4]);
 
 /// Store the DHCP hostname the next bring-up advertises; call it before ethInit or wifiStaInit.
 void setHostname(const char* name);

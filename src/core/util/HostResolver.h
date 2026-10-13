@@ -13,9 +13,9 @@ namespace mm {
 
 /// A cache that answers a host name's last known address at once, while one low-priority task looks names up.
 ///
-/// The asking side runs on the render thread, so it only ever reads the cache: a lookup there would stall a frame for the resolver's timeout.
-/// A new name answers `Waiting` until it first resolves; a name that stops resolving answers `Stale` with its last address.
-/// Names are looked up again about once a minute, and the cache costs nothing until an owner with a name starts it.
+/// The asking side runs on the render thread and only reads the cache, since a lookup there stalls a frame; a new name answers `Waiting`, a failing one `Stale`.
+///
+/// A board with no worker task looks names up from the asking side instead, one non-blocking step per ask.
 class HostResolver {
 public:
     /// What the cache knows about a name.
@@ -32,7 +32,7 @@ public:
         Self& s = self();
         if (s.slots) return;
         s.slots = new (std::nothrow) Slot[kSlots];
-        if (s.slots && !s.testMode) platform::spawnPinnedTask(s.task, "hosts", &run, &s, 5120, 1, -1);
+        if (s.slots && !s.testMode) s.inlineSteps = !platform::spawnPinnedTask(s.task, "hosts", &run, &s, 5120, 1, -1);
     }
 
     /// The name's address into `ip` when it is Resolved or Stale; the first ask queues a lookup, and nothing here allocates.
@@ -42,6 +42,7 @@ public:
         LockGuard guard(s.lock);
         if (!guard) return State::Busy;
         const uint32_t now = platform::millis();
+        if (s.inlineSteps) step(s, now);
         Slot* free = nullptr;
         for (uint8_t i = 0; i < kSlots; i++) {
             Slot& slot = s.slots[i];
@@ -61,16 +62,20 @@ public:
         return State::Waiting;
     }
 
-    // For a test's scope, replace the platform lookup with an empty cache and no task, so the test drives the passes itself.
+    // For a test's scope, an empty cache and no task: a blocking resolve driven by passes, or a non-blocking step each lookup drives.
     struct LookupForTest {
-        explicit LookupForTest(bool (*resolve)(const char*, uint8_t*)) { use(resolve); }
-        ~LookupForTest() { use(&platform::resolveHost); }   // so no later test inherits the fake
+        explicit LookupForTest(bool (*resolve)(const char*, uint8_t*)) { use(resolve, &platform::resolveHostStep, false); }
+        explicit LookupForTest(platform::LookupStep (*step)(const char*, uint8_t*)) { use(&platform::resolveHost, step, true); }
+        ~LookupForTest() { use(&platform::resolveHost, &platform::resolveHostStep, false); }   // so no later test inherits the fake
         LookupForTest(const LookupForTest&) = delete;
         LookupForTest& operator=(const LookupForTest&) = delete;
     private:
-        static void use(bool (*resolve)(const char*, uint8_t*)) {
+        static void use(bool (*resolve)(const char*, uint8_t*), platform::LookupStep (*step)(const char*, uint8_t*), bool inlineSteps) {
             Self& s = self();
             s.resolve = resolve;
+            s.resolveStep = step;
+            s.inlineSteps = inlineSteps;
+            s.inFlight = -1;
             s.testMode = true;
             ensureStarted();
             for (uint8_t i = 0; i < kSlots; i++) s.slots[i] = Slot{};
@@ -101,6 +106,9 @@ private:
         TryLock lock;
         platform::WorkerTask task;
         bool (*resolve)(const char*, uint8_t*) = &platform::resolveHost;
+        platform::LookupStep (*resolveStep)(const char*, uint8_t*) = &platform::resolveHostStep;
+        bool inlineSteps = false;   ///< no worker task: lookup() drives the lookups
+        int8_t inFlight = -1;       ///< the slot the inline lookup in flight belongs to
         bool testMode = false;
     };
 
@@ -123,26 +131,47 @@ private:
                 while (!s.lock.tryAcquire()) platform::yield();   // the asking side holds it for microseconds
                 Slot& slot = s.slots[i];
                 const uint32_t now = platform::millis();
-                // A name nobody asked for in ten minutes is freed rather than looked up forever.
-                if (slot.name[0] && now - slot.askedMs > kForgetMs) slot = Slot{};
-                const bool due = slot.name[0]
-                    && (!slot.looked || now - slot.lookedMs >= (slot.known ? kRefreshMs : kRetryMs));
+                const bool lookUp = due(slot, now);
                 std::memcpy(name, slot.name, sizeof(name));
                 s.lock.release();
-                if (!due) continue;
+                if (!lookUp) continue;
             }
             uint8_t ip[4] = {};
             const bool ok = s.resolve(name, ip);   // blocking, with the cache free
             while (!s.lock.tryAcquire()) platform::yield();
             Slot& slot = s.slots[i];
-            if (std::strcmp(slot.name, name) == 0) {   // the slot may have been reused meanwhile
-                slot.looked = true;
-                slot.lookedMs = platform::millis();
-                if (ok) { std::memcpy(slot.ip, ip, 4); slot.known = true; slot.stale = false; }
-                else if (slot.known) slot.stale = true;
-            }
+            if (std::strcmp(slot.name, name) == 0) settle(slot, ok, ip, platform::millis());   // the slot may have been reused meanwhile
             s.lock.release();
         }
+    }
+
+    /// One non-blocking step on the asking side, with the cache held: continue the lookup in flight, else start the next name due.
+    static void step(Self& s, uint32_t now) {
+        if (s.inFlight < 0) {
+            for (uint8_t i = 0; i < kSlots && s.inFlight < 0; i++)
+                if (due(s.slots[i], now)) s.inFlight = static_cast<int8_t>(i);
+            if (s.inFlight < 0) return;
+        }
+        Slot& slot = s.slots[s.inFlight];
+        uint8_t ip[4] = {};
+        const platform::LookupStep r = slot.name[0] ? s.resolveStep(slot.name, ip) : platform::LookupStep::Failed;
+        if (r == platform::LookupStep::Pending) return;
+        if (slot.name[0]) settle(slot, r == platform::LookupStep::Resolved, ip, now);
+        s.inFlight = -1;
+    }
+
+    /// Whether a slot's name is due a lookup, freeing first a name nobody asked for in ten minutes rather than looking it up forever.
+    static bool due(Slot& slot, uint32_t now) {
+        if (slot.name[0] && now - slot.askedMs > kForgetMs) slot = Slot{};
+        return slot.name[0] && (!slot.looked || now - slot.lookedMs >= (slot.known ? kRefreshMs : kRetryMs));
+    }
+
+    /// Record a lookup's answer: the address when it resolved, else the last known one marked stale.
+    static void settle(Slot& slot, bool ok, const uint8_t ip[4], uint32_t now) {
+        slot.looked = true;
+        slot.lookedMs = now;
+        if (ok) { std::memcpy(slot.ip, ip, 4); slot.known = true; slot.stale = false; }
+        else if (slot.known) slot.stale = true;
     }
 };
 

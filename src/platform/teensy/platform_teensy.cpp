@@ -9,6 +9,7 @@
 #include <QNEthernet.h>
 #include "qnethernet/qnethernet_dual_driver.h"
 #include <qnethernet/QNDNSClient.h>
+#include <qnethernet/util/ip_tools.h>
 #include <lwip/opt.h>
 
 #include <cerrno>
@@ -481,6 +482,42 @@ bool resolveHost(const char* name, uint8_t ip[4]) {
     if (!name || !ethConnected() || !DNSClient::getHostByName(name, addr, kResolveTimeoutMs)) return false;
     copyIp(addr, ip);
     return true;
+}
+
+namespace {
+enum class DnsState : uint8_t { Idle, InFlight, Found, Failed };
+// The one lookup in flight; lwIP answers it through the callback while Ethernet.loop runs in yield.
+struct DnsStep {
+    char name[64] = {};
+    DnsState state = DnsState::Idle;
+    uint8_t ip[4] = {};
+    uint32_t startMs = 0;
+    uint32_t generation = 0;   // tells an abandoned lookup's late answer from the current one
+};
+DnsStep g_dns;
+}  // namespace
+
+LookupStep resolveHostStep(const char* name, uint8_t ip[4]) {
+    if (!name || !ethConnected() || std::strlen(name) >= sizeof(g_dns.name)) return LookupStep::Failed;
+    if (g_dns.state == DnsState::Idle || std::strcmp(g_dns.name, name) != 0) {
+        std::strcpy(g_dns.name, name);
+        const uint32_t generation = ++g_dns.generation;
+        g_dns.state = DnsState::InFlight;
+        g_dns.startMs = ::millis();
+        const bool started = DNSClient::getHostByName(g_dns.name, [generation](const ip_addr_t* found) {
+            if (generation != g_dns.generation) return;
+            if (found) copyIp(IPAddress(qindesign::network::util::ip_addr_get_ip4_uint32(found)), g_dns.ip);
+            g_dns.state = found ? DnsState::Found : DnsState::Failed;
+        }, kResolveTimeoutMs);
+        if (!started) g_dns.state = DnsState::Failed;
+    }
+    // QNEthernet drops an answer that arrives after the timeout without calling back, so the timeout is read here.
+    if (g_dns.state == DnsState::InFlight && ::millis() - g_dns.startMs >= kResolveTimeoutMs) g_dns.state = DnsState::Failed;
+    if (g_dns.state == DnsState::InFlight) return LookupStep::Pending;
+    const bool found = g_dns.state == DnsState::Found;
+    if (found) std::memcpy(ip, g_dns.ip, 4);
+    g_dns.state = DnsState::Idle;
+    return found ? LookupStep::Resolved : LookupStep::Failed;
 }
 
 // --- WiFi: none on a Teensy ---------------------------------------------------------------------

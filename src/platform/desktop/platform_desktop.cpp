@@ -1895,6 +1895,9 @@ bool resolveHost(const char* name, uint8_t ip[4]) {
     ::freeaddrinfo(res);
     return true;
 }
+
+// resolveHost runs on the resolver's worker task here, so this step answers Failed: it is reached only when that task could not be created.
+LookupStep resolveHostStep(const char*, uint8_t*) { return LookupStep::Failed; }
 // Advertising is a device concern, so these are stubs; discovery itself is datagram presence and runs here too, testable over real loopback.
 
 // No update partition here, and the route guards on the capability, so this stub exists for compile coverage only.

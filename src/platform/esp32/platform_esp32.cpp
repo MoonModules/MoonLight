@@ -1847,6 +1847,9 @@ bool resolveHost(const char* name, uint8_t ip[4]) {
     return true;
 }
 
+// resolveHost runs on the resolver's worker task here, so this step answers Failed: it is reached only when that task could not be created.
+LookupStep resolveHostStep(const char*, uint8_t*) { return LookupStep::Failed; }
+
 // Advertise-only: discovery is datagram presence, each device broadcasting and listening on its own port. Keeping it off this protocol keeps the advertisement stable, since a query for a service this device hosts destabilizes its own.
 
 // Outbound HTTP request (plain HTTP, LAN, no TLS), see platform.h. A bounded blocking lwIP call, which the caller (HueDriver) runs off the render path on tick1s. Mirrors the desktop impl.

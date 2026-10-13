@@ -5,13 +5,13 @@
 ///
 /// @moreinfo
 ///
-/// ## Why an upload needs two timeouts
+/// ## Why a drained body needs two timeouts
 ///
-/// The upload drain blocks rendering on `tick20ms()` until the transfer ends or a bound trips, which is accepted for a user-initiated transient upload.
+/// A file upload moves through a transfer slot a bounded slice per tick and blocks nothing. A state document and a firmware image drain whole, blocking `tick20ms()` until the body ends or a bound trips.
 ///
-/// `kUploadIdleMs` resets on every read so a steady upload never trips it, and `kUploadHardMs` caps the whole request so a slowloris trickle cannot hold the freeze open.
+/// `kUploadIdleMs` resets on every read so a steady body never trips it, and `kUploadHardMs` caps the whole request so a slowloris trickle cannot hold the freeze open.
 ///
-/// The hard cap sits above a legitimate worst case of 256 KB at ~50 KB/s, about 5 s.
+/// The idle bound sits under the 12 s watchdog, and the hard cap far above a legitimate worst case: a 32 KB state document arrives in well under a second.
 ///
 /// ## Why firmware gets a larger ceiling
 ///
@@ -112,7 +112,7 @@ void HttpServerModule::release() {
     for (auto& st : streams_) endStream(st);
     for (auto& ws : wsClients_) ws.close();
     for (auto& c : parked_) c.close();
-    releaseSdTransfers();
+    releaseTransfers();
     // Every close site notifies the producer (see cancelBufferedSend), else ghost standing requests keep the driver gathering frames for nobody.
     for (int i = 0; i < MAX_PREVIEW_CLIENTS; i++) {
         if (previewClients_[i].valid() && clientSink_) clientSink_->onClientGone(i);
@@ -142,7 +142,7 @@ void HttpServerModule::tick20ms() MM_NONBLOCKING {
         if (soonCount_) pushSoonPatch();
     }
     serveConnections();
-    if constexpr (platform::hasSdCard) driveSdTransfers();   // sdTransfers_ has zero slots otherwise, so there is nothing to drive
+    driveTransfers();
 }
 
 // One entry from the tick, so the connection work, which blocks by nature, is one call on the render path.
@@ -182,40 +182,48 @@ void HttpServerModule::serveParked() {
     }
 }
 
-HttpServerModule::SdTransfer* HttpServerModule::claimSdTransfer() {
-    for (auto& t : sdTransfers_) if (!t.active) return &t;
-    return nullptr;   // both slots busy: the caller answers 503/closes rather than blocking for one to free
+// The buffer lives from claim to finishTransfer, so idle slots cost nothing; internal RAM, since the SD host bounces a PSRAM buffer per sector.
+HttpServerModule::FileTransfer* HttpServerModule::claimTransfer(platform::TcpConnection& conn) {
+    for (auto& t : transfers_) {
+        if (t.active) continue;
+        t.buf = static_cast<char*>(platform::allocInternal(kTransferBufBytes));
+        if (t.buf) return &t;
+        sendResponse(conn, 507, "application/json", "{\"error\":\"out of memory\"}");
+        return nullptr;
+    }
+    // Both slots busy: answered rather than blocking for one to free.
+    sendResponse(conn, 503, "application/json", "{\"error\":\"another transfer is in progress\"}");
+    return nullptr;
 }
 
-void HttpServerModule::finishSdTransfer(SdTransfer& t, bool closeConn) {
+void HttpServerModule::finishTransfer(FileTransfer& t, bool closeConn) {
     if (closeConn) t.conn.close();
     t.active = false;
     t.wstream = platform::FsWriteStream{};
     t.rstream = platform::FsReadStream{};
+    if (t.buf) { platform::free(t.buf); t.buf = nullptr; }
 }
 
-// release()'s own cleanup: an active slot holds a FIL (or its desktop equivalent) and a socket, neither freed by going out of scope.
-void HttpServerModule::releaseSdTransfers() {
-    if constexpr (platform::hasSdCard) {
-        for (auto& t : sdTransfers_) {
-            if (!t.active) continue;
-            if (t.isUpload) platform::fsWriteStreamClose(t.wstream, false);
-            else platform::fsReadStreamClose(t.rstream);
-            finishSdTransfer(t, true);
-        }
+// release()'s own cleanup: an active slot holds a file handle, a socket and a buffer, none freed by going out of scope.
+void HttpServerModule::releaseTransfers() {
+    for (auto& t : transfers_) {
+        if (!t.active) continue;
+        if (t.isUpload) platform::fsWriteStreamClose(t.wstream, false);
+        else platform::fsReadStreamClose(t.rstream);
+        finishTransfer(t, true);
     }
 }
 
-// An upload slot's bounded chunk, socket to card then the stall guard; uses t.buf, not a stack-local, since a 4 KB frame here once panicked the board.
-bool HttpServerModule::driveSdUpload(SdTransfer& t, uint32_t now) {
+// An upload slot's bounded chunk, socket to storage then the stall guard; uses t.buf, not a stack-local, since a 4 KB frame here once panicked the board.
+bool HttpServerModule::driveUpload(FileTransfer& t, uint32_t now) {
     if (t.remaining > 0) {
-        const size_t want = t.remaining < sizeof(t.buf) ? t.remaining : sizeof(t.buf);
+        const size_t want = t.remaining < kTransferBufBytes ? t.remaining : kTransferBufBytes;
         const int n = t.conn.read(reinterpret_cast<uint8_t*>(t.buf), want);
         if (n > 0) {
             if (!platform::fsWriteStreamWrite(t.wstream, t.buf, static_cast<size_t>(n))) {
                 platform::fsWriteStreamClose(t.wstream, false);
                 sendResponse(t.conn, 500, "application/json", "{\"error\":\"write failed\"}");
-                finishSdTransfer(t, true);
+                finishTransfer(t, true);
                 return false;
             }
             t.remaining -= static_cast<size_t>(n);
@@ -224,37 +232,38 @@ bool HttpServerModule::driveSdUpload(SdTransfer& t, uint32_t now) {
         }
         if (n == 0) {   // peer closed with body remaining
             platform::fsWriteStreamClose(t.wstream, false);
-            finishSdTransfer(t, true);   // the peer is already gone: no response to send
+            finishTransfer(t, true);   // the peer is already gone: no response to send
             return false;
         }
     }
     if (t.active && t.remaining == 0) {
         const bool ok = platform::fsWriteStreamClose(t.wstream, true);
+        if (ok) applyFileChanged(t.path);   // the write succeeded, so what was built from it may be stale
         sendResponse(t.conn, ok ? 200 : 500, "application/json",
                     ok ? "{\"ok\":true}" : "{\"error\":\"write failed\"}");
-        finishSdTransfer(t, true);
+        finishTransfer(t, true);
         return false;
     }
     // A liveness guard, not a size or time cap on the transfer itself: only a stalled peer trips it.
-    if (t.active && now - t.lastActivityMs > kSdTransferStallMs) {
+    if (t.active && now - t.lastActivityMs > kTransferStallMs) {
         platform::fsWriteStreamClose(t.wstream, false);
-        finishSdTransfer(t, true);
+        finishTransfer(t, true);
     }
     return false;
 }
 
-// A download slot's bounded chunk: card to socket, resuming where last tick's writeSome left off.
-bool HttpServerModule::driveSdDownload(SdTransfer& t, uint32_t now) {
+// A download slot's bounded chunk: storage to socket, resuming where last tick's writeSome left off.
+bool HttpServerModule::driveDownload(FileTransfer& t, uint32_t now) {
     if (t.bufSent < t.bufLen) {
         const int n = t.conn.writeSome(reinterpret_cast<const uint8_t*>(t.buf + t.bufSent),
                                        t.bufLen - t.bufSent);
-        if (n < 0) { platform::fsReadStreamClose(t.rstream); finishSdTransfer(t, true); return false; }
+        if (n < 0) { platform::fsReadStreamClose(t.rstream); finishTransfer(t, true); return false; }
         if (n > 0) { t.bufSent += static_cast<size_t>(n); t.lastActivityMs = now; return true; }
         // n == 0: socket buffer full, nothing sent; falls through to the stall guard below.
     } else if (t.remaining > 0) {
-        const size_t want = t.remaining < sizeof(t.buf) ? t.remaining : sizeof(t.buf);
+        const size_t want = t.remaining < kTransferBufBytes ? t.remaining : kTransferBufBytes;
         const int got = platform::fsReadStreamRead(t.rstream, t.buf, want);
-        if (got <= 0) { platform::fsReadStreamClose(t.rstream); finishSdTransfer(t, true); return false; }
+        if (got <= 0) { platform::fsReadStreamClose(t.rstream); finishTransfer(t, true); return false; }
         t.bufLen = static_cast<size_t>(got);
         t.bufSent = 0;
         t.remaining -= static_cast<size_t>(got);
@@ -262,28 +271,28 @@ bool HttpServerModule::driveSdDownload(SdTransfer& t, uint32_t now) {
         return true;
     } else {
         platform::fsReadStreamClose(t.rstream);
-        finishSdTransfer(t, true);
+        finishTransfer(t, true);
         return false;
     }
     // A liveness guard, not a size or time cap on the transfer itself: only a stalled peer trips it.
-    if (t.active && now - t.lastActivityMs > kSdTransferStallMs) {
+    if (t.active && now - t.lastActivityMs > kTransferStallMs) {
         platform::fsReadStreamClose(t.rstream);
-        finishSdTransfer(t, true);
+        finishTransfer(t, true);
     }
     return false;
 }
 
 // Several bounded chunks per slot per tick, not one, dispatched to the upload or download leg while storage and the peer keep up; mirrors drainPreviewSend/drainStateSend's non-blocking shape.
-void HttpServerModule::driveSdTransfers() {
+void HttpServerModule::driveTransfers() {
     const uint32_t budgetStart = platform::millis();
-    for (auto& t : sdTransfers_) {
+    for (auto& t : transfers_) {
         if (!t.active) continue;
         for (;;) {
             const uint32_t now = platform::millis();
-            const bool progressed = t.isUpload ? driveSdUpload(t, now) : driveSdDownload(t, now);
+            const bool progressed = t.isUpload ? driveUpload(t, now) : driveDownload(t, now);
             if (!t.active) break;           // finished or failed this chunk
             if (!progressed) break;         // no data moved: nothing more to do until next tick
-            if (now - budgetStart >= kSdTransferTickBudgetMs) break;
+            if (now - budgetStart >= kTransferTickBudgetMs) break;
         }
     }
 }
@@ -357,7 +366,8 @@ bool HttpServerModule::handleConnection(platform::TcpConnection& conn, int patie
         if (clh) {
             hasContentLen = true;
             // An /sd upload rides FAT32's own ceiling, 4 GiB-1 (UINT32_MAX), via strtoull not strtoul: `unsigned long` is only 32-bit on this RV32 target, the same width as that ceiling itself.
-            const bool sdUpload = std::strncmp(req, "POST /api/file", 14) == 0 && requestNamesSdPath(req);
+            const bool fileUpload = std::strncmp(req, "POST /api/file", 14) == 0;
+            const bool sdUpload = fileUpload && requestNamesSdPath(req);
             const unsigned long long kContentLenMax = sdUpload ? 0xFFFFFFFFULL : 8ULL * 1024 * 1024;
             const char* valStart = clh + 15;
             while (*valStart == ' ' || *valStart == '\t') valStart++;   // skip OWS after the colon
@@ -379,14 +389,13 @@ bool HttpServerModule::handleConnection(platform::TcpConnection& conn, int patie
                 return true;
             }
             contentLen = static_cast<size_t>(parsed);
-            if (sdUpload) {
-                // Hand off early: the chunked SD-transfer driver pulls the rest off this same connection, a bounded slice per tick, rather than looping here for the whole body.
+            if (fileUpload) {
+                // Hand off early: a transfer slot pulls the rest off this same connection, a bounded slice per tick, rather than looping here for the whole body.
             } else {
                 const size_t headerSize = static_cast<size_t>(headerEnd + 4 - req);
                 size_t bodyNeeded = headerSize + contentLen;
                 // Only streaming routes pull a body larger than buf off the socket; every other route parses it whole, so an oversized body gets 413, never a truncated read.
                 const bool isStreamingRoute =
-                    std::strncmp(req, "POST /api/file", 14) == 0 ||
                     std::strncmp(req, "POST /api/firmware/upload", 25) == 0 ||
                     // A MoonBase image (~750 KB) streams too; the trailing space keeps `moonbase-update-url`, a small JSON body read whole, out of the match.
                     std::strncmp(req, "POST /api/firmware/moonbase-update ", 35) == 0 ||
@@ -502,7 +511,7 @@ bool HttpServerModule::handleConnection(platform::TcpConnection& conn, int patie
             handleApplyState(conn, body, static_cast<size_t>(totalRead) - static_cast<size_t>(body - req),
                              static_cast<size_t>(contentLen));
         } else if (std::strcmp(path, "/api/file") == 0 && body) {
-            // File Manager: POST /api/file?path=<rel> streams the body to an atomic write; `body` holds the buffered bytes and handleWriteFile pulls the rest off the socket.
+            // File Manager: POST /api/file?path=<rel> streams the body to an atomic write; `body` holds the bytes that came with the headers, and a transfer slot pulls the rest off the socket.
             const size_t initialLen = static_cast<size_t>(totalRead) - static_cast<size_t>(body - req);
             // No Content-Length (chunked) is 411, since acting on it would commit an empty file; keyed on header absence, so an explicit `Content-Length: 0` stays a valid empty write.
             if (!hasContentLen) {
@@ -777,16 +786,18 @@ void HttpServerModule::streamFsFile(platform::TcpConnection& conn, const char* p
         "HTTP/1.1 200 OK\r\nContent-Type: %s\r\nContent-Length: %lld\r\n%s"
         "Connection: close\r\nAccess-Control-Allow-Origin: *\r\n\r\n", mime, static_cast<long long>(size), extraHeaders);
 
-    // An /sd download hands off to the chunked driver, one bounded slice per tick. Claimed and opened before the header, so a busy slot or a failed open answers 503/500, not a 200 with no body.
+    // An /sd download hands off to the chunked driver, one bounded slice per tick. Claimed and opened before the header, so a busy slot, a missing buffer or a failed open answers 503/507/500, not a 200 with no body.
     if (platform::isSdPath(path)) {
-        SdTransfer* t = claimSdTransfer();
-        if (!t) { sendResponse(conn, 503, "application/json", "{\"error\":\"another SD transfer is in progress\"}"); return; }
+        FileTransfer* t = claimTransfer(conn);
+        if (!t) return;
         if (!platform::fsReadStreamOpen(t->rstream, path)) {
+            finishTransfer(*t, false);
             sendResponse(conn, 500, "application/json", "{\"error\":\"read failed\"}");
             return;
         }
         if (!conn.write(reinterpret_cast<const uint8_t*>(header), static_cast<size_t>(hn))) {
             platform::fsReadStreamClose(t->rstream);
+            finishTransfer(*t, false);
             return;
         }
         t->isUpload = false;
@@ -856,7 +867,7 @@ void HttpServerModule::serveHlsFile(platform::TcpConnection& conn, const char* n
 
 // Source for the streamed upload: the body bytes already in the request buffer, then the rest straight off the socket, so the device never holds the whole upload in RAM.
 namespace {
-// The drain blocks rendering, and the two bounds cap for how long: idle scales with a steady transfer, hard caps the total against a slowloris. @xref{why-an-upload-needs-two-timeouts}
+// The drain blocks rendering, and the two bounds cap for how long: idle scales with a steady transfer, hard caps the total against a slowloris. @xref{why-a-drained-body-needs-two-timeouts}
 constexpr uint32_t kUploadIdleMs = 5000;    // max gap between successful reads before abort
 constexpr uint32_t kUploadHardMs = 60000;   // absolute whole-request ceiling (anti-slowloris)
 // A firmware push is MB-scale and bounds a SLOW transfer where kUploadIdleMs bounds a stalled one, kept tight because it caps the render freeze. @xref{why-firmware-gets-a-larger-ceiling}
@@ -925,47 +936,30 @@ void HttpServerModule::handleApplyState(platform::TcpConnection& conn, const cha
     sendResponse(conn, r.ok ? 200 : 400, "application/json", sink.overflowed() ? "{\"error\":\"out of memory\"}" : sink.data());
 }
 
-// The /sd leg of handleWriteFile: claims a slot, opens the stream, writes the body already buffered, and leaves the rest to driveSdTransfers.
-void HttpServerModule::handleWriteFileSd(platform::TcpConnection& conn, const char* path,
-                                         const char* initialBody, size_t initialLen, size_t contentLen) {
-    // Reject up front if it would not fit the card, rather than failing mid-write; free is taken conservatively, with no credit for an overwrite. Without hasSdCard, claimSdTransfer answers 503.
-    if constexpr (platform::hasSdCard) {
-        if (!platform::sdCardMounted()) {
-            sendResponse(conn, 503, "application/json", "{\"error\":\"no card mounted\"}");
-            return;
-        }
-        const uint64_t total = platform::sdCardTotal();
-        const uint64_t used = platform::sdCardUsed();
-        const uint64_t freeBytes = total > used ? total - used : 0;
-        if (total > 0 && contentLen > freeBytes) {
-            char msg[96];
-            std::snprintf(msg, sizeof(msg), "{\"error\":\"not enough space (%llu free)\"}",
-                          static_cast<unsigned long long>(freeBytes));
-            sendResponse(conn, 507, "application/json", msg);
-            return;
-        }
-    }
-    SdTransfer* t = claimSdTransfer();
-    if (!t) {
-        sendResponse(conn, 503, "application/json", "{\"error\":\"another SD transfer is in progress\"}");
-        return;
-    }
+// Claims a slot, opens the stream, writes the body already buffered, and leaves the rest to driveTransfers; the response goes out once the file commits.
+void HttpServerModule::startUpload(platform::TcpConnection& conn, const char* path,
+                                   const char* initialBody, size_t initialLen, size_t contentLen) {
+    FileTransfer* t = claimTransfer(conn);
+    if (!t) return;
     if (!platform::fsWriteStreamOpen(t->wstream, path)) {
+        finishTransfer(*t, false);
         sendResponse(conn, 500, "application/json", "{\"error\":\"write failed\"}");
         return;
     }
-    // Whatever of the body already arrived in the request buffer lands now; the rest is pulled off the socket a bounded slice per tick, by driveSdTransfers.
+    // Hand the stream at most Content-Length of the buffered bytes, since a pipelined next request may follow the body and must not land in the file.
     const size_t initial = initialLen < contentLen ? initialLen : contentLen;
     if (initial > 0 && !platform::fsWriteStreamWrite(t->wstream, initialBody, initial)) {
         platform::fsWriteStreamClose(t->wstream, false);
+        finishTransfer(*t, false);
         sendResponse(conn, 500, "application/json", "{\"error\":\"write failed\"}");
         return;
     }
+    std::snprintf(t->path, sizeof(t->path), "%s", path);
     t->isUpload = true;
     t->remaining = contentLen - initial;
     t->lastActivityMs = platform::millis();
     t->active = true;
-    t->conn = std::move(conn);   // the response lands once driveSdTransfers sees remaining reach 0
+    t->conn = std::move(conn);
 }
 
 void HttpServerModule::handleWriteFile(platform::TcpConnection& conn, const char* query,
@@ -975,35 +969,32 @@ void HttpServerModule::handleWriteFile(platform::TcpConnection& conn, const char
         sendResponse(conn, 400, "application/json", "{\"error\":\"bad path\"}");
         return;
     }
+    // Reject up front if it would not fit, rather than failing mid-write; free is taken conservatively, with no credit for an overwrite.
+    uint64_t total = 0, used = 0;
     if (platform::isSdPath(path)) {
-        handleWriteFileSd(conn, path, initialBody, initialLen, contentLen);
-        return;
+        if (!platform::sdCardMounted()) {
+            sendResponse(conn, 503, "application/json", "{\"error\":\"no card mounted\"}");
+            return;
+        }
+        total = platform::sdCardTotal();
+        used = platform::sdCardUsed();
+    } else {
+        if (contentLen > kUploadMax) {
+            sendResponse(conn, 413, "application/json", "{\"error\":\"file too large\"}");
+            return;
+        }
+        total = platform::filesystemTotal();
+        used = platform::filesystemUsed();
     }
-    if (contentLen > kUploadMax) {
-        sendResponse(conn, 413, "application/json", "{\"error\":\"file too large\"}");
-        return;
-    }
-    // Reject up front if it would not fit the free space, rather than failing mid-write; free is taken conservatively, with no credit for an overwrite.
-    const size_t total = platform::filesystemTotal();
-    const size_t used = platform::filesystemUsed();
-    const size_t freeBytes = total > used ? total - used : 0;
+    const uint64_t freeBytes = total > used ? total - used : 0;
     if (total > 0 && contentLen > freeBytes) {
         char msg[96];
-        std::snprintf(msg, sizeof(msg), "{\"error\":\"not enough space (%lu free)\"}",
-                      static_cast<unsigned long>(freeBytes));
+        std::snprintf(msg, sizeof(msg), "{\"error\":\"not enough space (%llu free)\"}",
+                      static_cast<unsigned long long>(freeBytes));
         sendResponse(conn, 507, "application/json", msg);   // 507 Insufficient Storage
         return;
     }
-    // Hand the source at most Content-Length of the buffered bytes, since a pipelined next request may follow the body and must not land in the file.
-    const size_t initial = initialLen < contentLen ? initialLen : contentLen;
-    UploadSource src{&conn, initialBody, initial, contentLen,
-                     platform::millis() + kUploadHardMs};
-    if (platform::fsWriteStream(path, &uploadPull, &src)) {
-        applyFileChanged(path);   // the write succeeded, so what was built from it may be stale
-        sendResponse(conn, 200, "application/json", "{\"ok\":true}");
-    } else {
-        sendResponse(conn, 500, "application/json", "{\"error\":\"write failed\"}");
-    }
+    startUpload(conn, path, initialBody, initialLen, contentLen);
 }
 
 // See the header for WHY this exists and why it is whole-tree. Here is only the how.
@@ -1344,7 +1335,7 @@ HttpServerModule::LeafHash* HttpServerModule::findLeaf(uint32_t pathHash) {
 }
 
 void HttpServerModule::baselineLeafHashes(bool everything) {
-    // Count the leaves and the modules, size the hashes and the patch slices exactly, then fill from scratch, since resize does not preserve; this runs on a resync, not each second.
+    // Count leaves and modules, size the hashes and patch slices exactly, then fill from scratch, since resize does not preserve; a resync, not each second.
     uint16_t n = 0, modules = 0;
     const MoonModule* last = nullptr;
     forEachStateLeaf([&](const MoonModule* mod, uint32_t, uint32_t, const char*, JsonSink&) {
@@ -3010,7 +3001,7 @@ bool HttpServerModule::nextStreamFrame(int client) {
     return true;
 }
 
-// Per client, the fragment in flight goes out a chunk at a time and the next is generated once it has left; core-0 only, so unlike the preview slot it needs no sender lease.
+// Per client, the fragment in flight leaves a chunk at a time and the next is generated after it; core-0 only, so it needs no sender lease.
 void HttpServerModule::drainStateSend() {
     const size_t chunk = drainChunkBytes();
     for (int i = 0; i < MAX_WS_CLIENTS; i++)

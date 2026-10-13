@@ -1,0 +1,38 @@
+Open the TCP receive window as the application reads, not as the stack copies:
+acknowledging on copy let the peer send into a full buffer, which refused the
+segment, dropped the ones behind it and cost a retransmit each.
+
+diff --git a/src/qnethernet/QNEthernetClient.cpp b/src/qnethernet/QNEthernetClient.cpp
+index 080c35e..33780a4 100644
+--- a/src/qnethernet/QNEthernetClient.cpp
++++ b/src/qnethernet/QNEthernetClient.cpp
+@@ -573,6 +573,7 @@ int EthernetClient::read() {
+   if (!isAvailable(*state)) {
+     return -1;
+   }
++  altcp_recved((*state)->pcb, 1);  // Reopen the window by what was consumed
+   return (*state)->buf[(*state)->bufPos++];
+ }
+ 
+@@ -617,6 +618,7 @@ int EthernetClient::read(uint8_t* const buf, const size_t size) {
+     (void)std::copy_n(&(*state)->buf.data()[(*state)->bufPos], actualSize, buf);
+   }
+   (*state)->bufPos += actualSize;
++  altcp_recved((*state)->pcb, static_cast<uint16_t>(actualSize));  // Reopen the window by what was consumed
+   return actualSize;
+ }
+ 
+diff --git a/src/qnethernet/internal/ConnectionManager.cpp b/src/qnethernet/internal/ConnectionManager.cpp
+index 5befd32..011da4a 100644
+--- a/src/qnethernet/internal/ConnectionManager.cpp
++++ b/src/qnethernet/internal/ConnectionManager.cpp
+@@ -212,7 +212,8 @@ err_t ConnectionManager::recvFunc(void* const arg, struct altcp_pcb* const tpcb,
+     }
+   }
+ 
+-  altcp_recved(tpcb, p->tot_len);
++  // The window reopens as the application reads, in EthernetClient::read, so
++  // the peer never sends more than this buffer has room for.
+   (void)pbuf_free(p);
+ 
+   return ERR_OK;

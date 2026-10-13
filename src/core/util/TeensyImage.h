@@ -4,16 +4,9 @@
 /// @{
 /// The checks an uploaded image passes before it may overwrite a Teensy's only program: a Teensy 4 image, a MoonLight one, and for the firmware the board runs.
 ///
-/// @moreinfo
+/// A wrong image leaves the board offline until a USB flash, so the checks are pure byte reads, which a host test drives with synthetic and real images.
 ///
-/// ## Pure, so a host test pins them
-///
-/// A Teensy holds one program, so a wrong image copied over it leaves the board off the network until a USB flash: these checks are all that stands between an upload and that.
-/// They read bytes alone, so they live here rather than in the platform file, and a host test drives them with synthetic and real images alike.
-///
-/// ## The caller passes the mark
-///
-/// The search takes its prefix from the caller's own mark, so the prefix occurs once in a firmware image and a literal here cannot be found in its place.
+/// The mark's prefix comes from the caller's own mark, so it occurs once in a firmware image and a literal here cannot be found in its place.
 
 #include <cstddef>
 #include <cstdint>

@@ -389,36 +389,37 @@ private:
     platform::TcpConnection parked_[kParkedSlots];
     uint32_t parkedAt_[kParkedSlots] = {};
 
-    // A large /sd transfer resumes here across ticks, a bounded slice at a time, drainPreviewSend's shape; flash stays on the synchronous path below, small enough for one tick.
-    struct SdTransfer {
+    // Every upload, and every /sd download, resumes here across ticks, a bounded slice at a time, drainPreviewSend's shape: neither a large file nor a slow client holds the render loop.
+    struct FileTransfer {
         bool active = false;
         bool isUpload = false;
         platform::TcpConnection conn;
         platform::FsWriteStream wstream;   // valid while isUpload
         platform::FsReadStream  rstream;   // valid while !isUpload
         size_t remaining = 0;              // upload: body bytes still expected; download: bytes left to send
-        char buf[4096] = {};               // download only: one read chunk, drained across ticks by writeSome
-        size_t bufLen = 0;
+        char* buf = nullptr;               // kTransferBufBytes from the claim to the finish, so an idle server holds none
+        size_t bufLen = 0;                 // download only: the read chunk, drained across ticks by writeSome
         size_t bufSent = 0;
         uint32_t lastActivityMs = 0;       // a stall guard, not a size or time cap on the transfer itself
+        char path[160] = {};               // upload only: the file applyFileChanged announces once it commits
     };
-    // Zero slots, not two, on a board without SD: std::array<T,0> is standard, constructs no SdTransfer at all, and every loop over it already runs zero times.
-    static constexpr int kSdTransferSlots = platform::hasSdCard ? 2 : 0;
-    static constexpr uint32_t kSdTransferStallMs = 10000;   // no progress this long: abort, free the slot
-    static constexpr uint32_t kSdTransferTickBudgetMs = 3;  // several chunks while storage/peer keep up, not one
-    std::array<SdTransfer, kSdTransferSlots> sdTransfers_{};
-    /// A free slot for a new transfer, or null when every slot is busy.
-    SdTransfer* claimSdTransfer();
+    static constexpr int kTransferSlots = 2;
+    static constexpr size_t kTransferBufBytes = 4096;
+    static constexpr uint32_t kTransferStallMs = 10000;   // no progress this long: abort, free the slot
+    static constexpr uint32_t kTransferTickBudgetMs = 3;  // several chunks while storage/peer keep up, not one
+    std::array<FileTransfer, kTransferSlots> transfers_{};
+    /// A free slot with its buffer, or null once it has answered: 503 when both slots are busy, 507 when the buffer does not fit.
+    FileTransfer* claimTransfer(platform::TcpConnection& conn);
     /// Advance every active slot by one bounded chunk; called once per tick, the drainXxxSend's sibling.
-    void driveSdTransfers();
-    /// One upload slot's bounded chunk: socket to card, then the stall guard. Returns whether real bytes moved.
-    bool driveSdUpload(SdTransfer& t, uint32_t now);
-    /// One download slot's bounded chunk: card to socket, then the stall guard. Returns whether real bytes moved.
-    bool driveSdDownload(SdTransfer& t, uint32_t now);
-    /// Close the stream (already done by the caller) and the connection, and free the slot.
-    void finishSdTransfer(SdTransfer& t, bool closeConn);
+    void driveTransfers();
+    /// One upload slot's bounded chunk: socket to storage, then the stall guard. Returns whether real bytes moved.
+    bool driveUpload(FileTransfer& t, uint32_t now);
+    /// One download slot's bounded chunk: storage to socket, then the stall guard. Returns whether real bytes moved.
+    bool driveDownload(FileTransfer& t, uint32_t now);
+    /// Close the connection when asked, free the buffer and the slot; the caller closed the stream.
+    void finishTransfer(FileTransfer& t, bool closeConn);
     /// Close every active slot's stream and socket; release()'s own cleanup, since going out of scope frees neither.
-    void releaseSdTransfers();
+    void releaseTransfers();
 
     ClientMessageSink* clientSink_ = nullptr;   // the producer's inbound-message sink (PreviewDriver) @xref{crossing-the-domain-boundary}
 
@@ -615,12 +616,12 @@ private:
                       const char* extraHeaders);
     /// One HLS artifact (playlist / segment) from /.hls/, video MIME + no-cache; flat names only.
     void serveHlsFile(platform::TcpConnection& conn, const char* name);
-    // Streams the remainder off the socket, so an upload of any size never needs one buffer.
+    // Checks an upload against its storage's limits, then streams it through a transfer slot, so an upload of any size never needs one buffer.
     void handleWriteFile(platform::TcpConnection& conn, const char* query,
                          const char* initialBody, size_t initialLen, size_t contentLen);
-    // The /sd leg of handleWriteFile: claims a transfer slot and hands the rest to driveSdTransfers.
-    void handleWriteFileSd(platform::TcpConnection& conn, const char* path,
-                           const char* initialBody, size_t initialLen, size_t contentLen);
+    // Claims a transfer slot for a checked upload, writes the bytes already buffered and hands the rest to driveTransfers.
+    void startUpload(platform::TcpConnection& conn, const char* path,
+                     const char* initialBody, size_t initialLen, size_t contentLen);
     // One directory's children, single-level, which is what the lazy tree loads a node from.
     void serveDirListing(platform::TcpConnection& conn, const char* query);
     void handleMakeDir(platform::TcpConnection& conn, const char* query);      // POST /api/dir?path=
