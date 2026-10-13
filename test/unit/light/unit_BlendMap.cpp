@@ -395,7 +395,7 @@ TEST_CASE("each separable blend mode computes its specification formula") {
 }
 
 // A multiply layer is a luminance mask over what is below it.
-TEST_CASE("a multiply layer keeps the backdrop under white, hides it under black and dims it under grey") {
+TEST_CASE("a multiply layer keeps the backdrop under white, hides it under black and dims it under gray") {
     CHECK(blendOne(mm::BlendOp::Multiply, 255, 200) == 200);
     CHECK(blendOne(mm::BlendOp::Multiply, 0, 200) == 0);
     CHECK(blendOne(mm::BlendOp::Multiply, 128, 200) == 100);

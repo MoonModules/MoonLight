@@ -128,6 +128,26 @@ inline void blendMapped(const Buffer& src, Buffer& dst, const MappingLUT& lut, u
         });
     }
 }
+/// Overwrite: the source replaces the destination.
+struct CopyMix {
+    uint8_t operator()(uint8_t s, uint8_t) const { return s; }
+};
+
+/// Additive: the source, scaled by opacity, adds onto the destination and saturates.
+struct AddMix {
+    uint8_t opacity;   ///< how much of the source adds, 255 for all of it
+    uint8_t operator()(uint8_t s, uint8_t d) const {
+        const uint16_t sum = static_cast<uint16_t>(d) + (opacity == 255 ? s : div255(static_cast<uint16_t>(s) * opacity));
+        return sum > 255 ? 255 : static_cast<uint8_t>(sum);
+    }
+};
+
+/// Through the LUT when there is one, else byte for byte: the one walk every mode's mix runs in.
+template <class Mix>
+inline void blendThrough(const Buffer& src, Buffer& dst, const MappingLUT& lut, uint8_t channelsPerLight, Mix mix) {
+    if (lut.hasLUT()) blendMapped(src, dst, lut, channelsPerLight, mix);
+    else blendDense(src, dst, mix);
+}
 }  // namespace detail
 
 // One instance per function, so each mode gets its own tight loop and none checks the mode per light.
@@ -135,9 +155,7 @@ inline void blendMapped(const Buffer& src, Buffer& dst, const MappingLUT& lut, u
 template <class B>
 inline void blendSeparable(const Buffer& src, Buffer& dst, const MappingLUT& lut, uint8_t channelsPerLight,
                            uint8_t opacity, B blend) {
-    const detail::SeparableMix<B> mix{blend, opacity};
-    if (lut.hasLUT()) detail::blendMapped(src, dst, lut, channelsPerLight, mix);
-    else detail::blendDense(src, dst, mix);
+    detail::blendThrough(src, dst, lut, channelsPerLight, detail::SeparableMix<B>{blend, opacity});
 }
 
 /// Dispatch a separable mode once per layer, so the per-light loop is the mode's own.
@@ -159,74 +177,21 @@ inline void blendMap(const Buffer& src, Buffer& dst, const MappingLUT& lut,
                      uint8_t channelsPerLight,
                      BlendOp op = BlendOp::Overwrite, uint8_t opacity = 255,
                      bool clearFirst = true) {
-    // No LUT is an identity map, the dense-grid case: blend one to one with no lookup.
-    if (!lut.hasLUT()) {
-        const size_t n = src.bytes() < dst.bytes() ? src.bytes() : dst.bytes();
-        const uint8_t* s = src.data();
-        uint8_t* d = dst.data();
-        if (op == BlendOp::Overwrite && opacity == 255) {
-            std::memcpy(d, s, n);
-            return;
-        }
-        const bool full = (opacity == 255);
-        if (op == BlendOp::Additive) {
-            for (size_t i = 0; i < n; i++) {
-                uint16_t sv = full ? s[i] : div255(static_cast<uint16_t>(s[i]) * opacity);
-                uint16_t sum = static_cast<uint16_t>(d[i]) + sv;
-                d[i] = sum > 255 ? 255 : static_cast<uint8_t>(sum);
-            }
-            return;
-        }
-        blendSeparable(op, src, dst, lut, channelsPerLight, opacity);   // alpha and the separable modes
+    const bool mapped = lut.hasLUT();
+    // No LUT is an identity map: a full overwrite is one copy.
+    if (!mapped && op == BlendOp::Overwrite && opacity == 255) {
+        std::memcpy(dst.data(), src.data(), src.bytes() < dst.bytes() ? src.bytes() : dst.bytes());
         return;
     }
-
-    if (clearFirst) dst.clear();   // bottom layer: cells with no source stay black
-    const nrOfLightsType logCount = lut.logicalCount();
-    const bool full = (opacity == 255);
-
-    // Every mapped access below is bounded by these: a LUT entry is valid only against its own buffer.
-    const size_t dstLights = channelsPerLight ? dst.bytes() / channelsPerLight : 0;
-    const size_t srcLights = channelsPerLight ? src.bytes() / channelsPerLight : 0;
-
+    if (mapped && clearFirst) dst.clear();   // bottom layer: cells with no source stay black
     // Overwrite defers to the LUT's own overwrites() flag, so a folding mapping accumulates.
-    const bool effectiveAdditive = (op == BlendOp::Additive) ||
-                                   (op == BlendOp::Overwrite && !lut.overwrites());
-
-    // --- Plain overwrite (replace) — single-write LUT; copy, no read-back. ---
-    if (op == BlendOp::Overwrite && full && lut.overwrites()) {
-        for (nrOfLightsType li = 0; li < logCount; li++) {
-            if (li >= srcLights) break;
-            const uint8_t* srcLight = src.data() + static_cast<size_t>(li) * channelsPerLight;
-            lut.forEachDestination(li, [&](nrOfLightsType physIdx) {
-                if (physIdx >= dstLights) return;
-                uint8_t* dstLight = dst.data() + static_cast<size_t>(physIdx) * channelsPerLight;
-                for (uint8_t c = 0; c < channelsPerLight; c++) dstLight[c] = srcLight[c];
-            });
-        }
-        return;
+    if (op == BlendOp::Additive || (mapped && op == BlendOp::Overwrite && !lut.overwrites())) {
+        detail::blendThrough(src, dst, lut, channelsPerLight, detail::AddMix{opacity});
+    } else if (op == BlendOp::Overwrite && opacity == 255) {
+        detail::blendThrough(src, dst, lut, channelsPerLight, detail::CopyMix{});   // a single-write LUT: copy, no read-back
+    } else {
+        blendSeparable(op, src, dst, lut, channelsPerLight, opacity);   // alpha and the separable modes, each mixed with the backdrop by opacity
     }
-
-    // --- Additive with clamp; opacity scales the source. full-opacity skips the scale. ---
-    if (effectiveAdditive) {
-        for (nrOfLightsType li = 0; li < logCount; li++) {
-            if (li >= srcLights) break;
-            const uint8_t* srcLight = src.data() + static_cast<size_t>(li) * channelsPerLight;
-            lut.forEachDestination(li, [&](nrOfLightsType physIdx) {
-                if (physIdx >= dstLights) return;
-                uint8_t* dstLight = dst.data() + static_cast<size_t>(physIdx) * channelsPerLight;
-                for (uint8_t c = 0; c < channelsPerLight; c++) {
-                    uint16_t s = full ? srcLight[c] : div255(static_cast<uint16_t>(srcLight[c]) * opacity);
-                    uint16_t sum = static_cast<uint16_t>(dstLight[c]) + s;
-                    dstLight[c] = sum > 255 ? 255 : static_cast<uint8_t>(sum);
-                }
-            });
-        }
-        return;
-    }
-
-    // --- Alpha (over) and the separable modes, each mixed with the backdrop by opacity. ---
-    blendSeparable(op, src, dst, lut, channelsPerLight, opacity);
 }
 
 /// @}

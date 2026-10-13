@@ -51,7 +51,7 @@ constexpr uint8_t gpioDmaLanes = 16;
 /// The slots one frame's chain of DMA descriptors carries: 8 descriptors of 32767, over 3,600 RGB lights per lane.
 constexpr uint32_t gpioDmaMaxSlots = 8 * 32767;
 
-/// No microphone seam yet.
+/// No microphone input.
 constexpr bool hasI2sMic = false;
 /// No capture device.
 constexpr bool hasAudioCapture = false;
@@ -72,7 +72,7 @@ constexpr bool hasNdi = false;
 constexpr bool hasHls = false;
 /// No RTSP server.
 constexpr bool hasRtsp = false;
-/// No USB MIDI host yet.
+/// No USB MIDI host.
 constexpr bool hasUsbMidiHost = false;
 /// One encoder at most.
 constexpr bool hasEncoderChoice = false;
@@ -120,3 +120,6 @@ constexpr uintptr_t codeAddressBits = 1;
 
 // 0: only the drivers this target can drive are linked.
 #define MM_LINKS_ALL_LED_DRIVERS 0
+
+// The timer-paced GPIO DMA LED output, this chip's parallel output, a capability the driver registry gates on as an ESP32's CONFIG_SOC_* does.
+#define MM_GPIO_DMA_LEDS 1

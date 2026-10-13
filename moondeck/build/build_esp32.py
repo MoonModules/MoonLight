@@ -137,7 +137,7 @@ FIRMWARES: dict[str, dict] = {
     # Default classic ESP32: WiFi AND Ethernet in one binary. The RMII Ethernet
     # driver compiles in (the .eth fragment); whether Eth comes up, and on which
     # pins/PHY, is runtime config (deviceModels.json → NetworkModule → ethInit). A
-    # WiFi-only board flashing this just gets WiFi; ethInit() no-ops when no PHY
+    # WiFi-only board flashing this gets WiFi alone; ethInit() no-ops when no PHY
     # responds, then the WiFi cascade takes over (no GPIO grab, no hang). This
     # replaces the old separate `esp32` (WiFi-only) + `esp32-eth-wifi` keys.
     "esp32": {

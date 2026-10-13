@@ -1,6 +1,6 @@
 """The Teensy 4.1's flash map has three readers that must agree: the platform, which places the program and the settings; the web installer's writer, which erases the settings by offset; and the build, which reports the program's room.
 
-The platform is the one home (platform_teensy.cpp); the other two restate it in their own language, so this test reads all three and fails on drift.
+The platform is the one home (platform_teensy_fs.cpp); the other two restate it in their own language, so this test reads all three and fails on drift.
 An installer erase aimed at the wrong offset would silently leave the settings in place, or zero part of the program.
 """
 
@@ -14,9 +14,9 @@ import build_teensy  # noqa: E402
 
 
 def _cpp_constant(name):
-    text = (ROOT / "src" / "platform" / "teensy" / "platform_teensy.cpp").read_text(encoding="utf-8")
+    text = (ROOT / "src" / "platform" / "teensy" / "platform_teensy_fs.cpp").read_text(encoding="utf-8")
     m = re.search(rf"constexpr uint32_t {name} = ([0-9 *]+);", text)
-    assert m, f"{name} not found in platform_teensy.cpp"
+    assert m, f"{name} not found in platform_teensy_fs.cpp"
     return eval(m.group(1))   # a product of integer literals only, matched above
 
 

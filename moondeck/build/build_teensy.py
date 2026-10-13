@@ -27,6 +27,8 @@ FIRMWARES: dict[str, dict] = {
 TARGET_TO_FAMILY = {"teensy41": "Teensy 4.1"}
 # What platform_teensy.cpp leaves the program of the 8 MB flash: LittleFS takes 1 MB and the reserved top 256 KB.
 PROGRAM_FLASH_BYTES = (8192 - 1024 - 256) * 1024
+# The largest image a network update can take: it is staged above the running one, so the two share the program flash.
+UPDATE_IMAGE_BYTES = PROGRAM_FLASH_BYTES // 2
 
 
 def hex_path(firmware: str) -> Path:

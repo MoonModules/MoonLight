@@ -859,7 +859,8 @@ document.addEventListener('DOMContentLoaded', () => {
       const eraseRow = document.getElementById("erase-row");
       // The button's own control-row, so hiding it doesn't leave an empty row behind.
       const monitorRow = document.getElementById("monitor-btn")?.closest(".control-row");
-      if (eraseRow) eraseRow.hidden = desktopMode || teensyBootMode;
+      // A Teensy in its bootloader keeps the erase choice: a board whose settings went bad is the one that lands there.
+      if (eraseRow) eraseRow.hidden = desktopMode;
       if (monitorRow) monitorRow.hidden = desktopMode || teensyBootMode;
     }
 

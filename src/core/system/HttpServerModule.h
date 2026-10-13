@@ -517,7 +517,7 @@ private:
     void drainStream(int client, size_t budget);
     // A fragment found no memory: close the client, which reconnects and is sent its document again.
     void refuseFragment(int client);
-    // Give each client due a document its stream, from the baseline just taken.
+    // Give each client due a document its stream, from the baseline taken this pass.
     void startStreams();
     // Generate a stream's next fragment and its frame header, false when even one fragment does not fit in memory.
     bool nextStreamFrame(int client);

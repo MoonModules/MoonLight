@@ -7,6 +7,7 @@
 #include "core/moonlive/MoonLiveBuiltins_service.h"
 #include "core/moonlive/MoonLiveScriptFile.h"
 #include "light/moonlive/MoonLiveBuiltins_light.h"
+#include "moonlive_script_files.h"   // scriptRoot, readText: the shipped scripts as files
 
 #include <cstdint>
 #include <cstdio>
@@ -70,16 +71,6 @@ size_t hashIr(IrProgram& ir, uint8_t*, size_t, const RegBudget*) {
     return 1;
 }
 
-std::filesystem::path scriptRoot() {
-    return std::filesystem::path(__FILE__).parent_path().parent_path().parent_path().parent_path() / "moonlive";
-}
-
-std::string read(const std::filesystem::path& p) {
-    std::ifstream f(p);
-    std::ostringstream ss;
-    ss << f.rdbuf();
-    return ss.str();
-}
 }  // namespace
 
 TEST_CASE("every shipped script compiles to the IR it had before the compiler changed") {
@@ -94,7 +85,7 @@ TEST_CASE("every shipped script compiles to the IR it had before the compiler ch
             if (e.is_regular_file() && isScriptExt(e.path().extension().string().c_str())) files[e.path().filename().string()] = e.path();
         for (const auto& [name, path] : files) {
             const std::string label = std::string(sub) + "/" + name;
-            const std::string src = read(path);
+            const std::string src = readText(path);
             const bool isService = std::string(sub) == "services";
             const SysVarTable sys = isService ? serviceSysVars()
                                   : std::string(sub) == "layouts" ? layoutSysVars()

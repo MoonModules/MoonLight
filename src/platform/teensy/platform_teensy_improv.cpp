@@ -29,9 +29,6 @@ char* g_opOut = nullptr;
 size_t g_opOutLen = 0;
 std::atomic<bool>* g_opReady = nullptr;
 ImprovFrameParser g_parser;
-// The protocol's own error codes: a frame failing its checksum, and a command this listener does not take.
-constexpr uint8_t kImprovErrorInvalidRpc = 0x01;
-constexpr uint8_t kImprovErrorUnknownRpc = 0x02;
 
 // A reply goes out only when it fits the USB buffer at once, so a host that stopped reading cannot stall the tick; the installer does not wait for one.
 void send(ImprovFrameType type, const uint8_t* payload, size_t len) MM_NONBLOCKING {

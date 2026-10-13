@@ -977,7 +977,8 @@ function buildNavFooter() {
     const links = document.createElement("div");
     links.className = "nav-social";
     const SOCIAL = [
-        ["GitHub",  "https://github.com/MoonModules/MoonLight",
+        // The source offer every user of the device sees: GPL-3.0, and AGPL-3.0 section 13 for the Teensy's QNEthernet.
+        ["Source code on GitHub",  "https://github.com/MoonModules/MoonLight",
          "M12 .5C5.65.5.5 5.65.5 12a11.5 11.5 0 0 0 7.86 10.92c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.54-3.88-1.54-.53-1.34-1.3-1.7-1.3-1.7-1.06-.72.08-.71.08-.71 1.17.08 1.79 1.2 1.79 1.2 1.04 1.79 2.73 1.27 3.4.97.1-.76.41-1.27.74-1.56-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.18 1.18a11 11 0 0 1 5.8 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.84 1.19 3.1 0 4.42-2.69 5.39-5.25 5.68.42.36.8 1.08.8 2.18v3.23c0 .31.21.67.8.56A11.5 11.5 0 0 0 23.5 12C23.5 5.65 18.35.5 12 .5Z"],
         ["Discord", "https://discord.gg/TC8NSUSCdV",
          "M20.32 4.37A19.8 19.8 0 0 0 15.45 2.9a13.6 13.6 0 0 0-.62 1.27 18.3 18.3 0 0 0-5.67 0A13 13 0 0 0 8.54 2.9 19.7 19.7 0 0 0 3.67 4.37C.57 8.96-.27 13.44.15 17.85a19.9 19.9 0 0 0 6 3.03c.49-.66.92-1.36 1.29-2.1-.71-.27-1.39-.6-2.03-.99.17-.12.34-.25.5-.38a14.2 14.2 0 0 0 12.18 0c.16.13.33.26.5.38-.64.39-1.32.72-2.03.99.37.74.8 1.44 1.29 2.1a19.8 19.8 0 0 0 6-3.03c.5-5.1-.85-9.55-3.58-13.48ZM8.02 15.13c-1.18 0-2.15-1.08-2.15-2.41 0-1.33.95-2.42 2.15-2.42 1.2 0 2.17 1.1 2.15 2.42 0 1.33-.95 2.41-2.15 2.41Zm7.96 0c-1.18 0-2.15-1.08-2.15-2.41 0-1.33.95-2.42 2.15-2.42 1.2 0 2.17 1.1 2.15 2.42 0 1.33-.95 2.41-2.15 2.41Z"],
@@ -2246,13 +2247,8 @@ function createCard(mod, depth) {
         renderMoonTalk(controlsHost, mod);
     }
 
-    // FirmwareUpdate card hosts the shared install picker. Mount once per
-    // card-build. The picker reads SystemModule.firmware (already in
-    // /api/state) to filter to OTA-compatible releases. On install, the
-    // device fetches the binary via /api/firmware/url: no browser CORS in
-    // the data path. A device without TLS answers that route 501, and the
-    // browser fetches the image from the release's Pages mirror and uploads it.
-    // See docs/explanation/architecture/mooninstaller.md § The three words.
+    // The Firmware card hosts the shared install picker, mounted once per card build, which offers the releases that fit SystemModule.firmware.
+    // The device fetches the image through /api/firmware/url, so no CORS sits in the path; one without TLS answers 501, and the browser fetches the image from the release's Pages mirror and uploads it.
     if (mod.type === "FirmwareUpdateModule") {
         // A nudge where someone has just thought about versions, which is the moment the aggregate
         // is worth something to them. Shown only while Stats consent is off, so it disappears the
@@ -2352,9 +2348,7 @@ function createCard(mod, depth) {
         status.className = "fw-upload-status";
         const say = (t) => { status.textContent = t; };
 
-        // Upload an image the browser holds, behind the overlay every install shows. The device
-        // cannot report this transfer's progress (the request stays open for it), so the bar
-        // follows the upload itself.
+        // Upload an image the browser holds, behind the overlay every install shows; the request stays open while it writes, so the bar follows the upload itself.
         const installBlob = async (blob, ui = showUpdateOverlay(), ctl = new AbortController()) => {
             ui.setUpload(ctl);
             if (ctl.signal.aborted) { ui.fail("Install canceled."); return; }
@@ -2374,9 +2368,7 @@ function createCard(mod, depth) {
             }
         };
 
-        // For a device that cannot fetch a URL (no TLS): the browser downloads the image and uploads it.
-        // GitHub's release assets refuse a cross-origin read, so one of our release assets comes from
-        // its copy on the installer's Pages site, which allows one; any other URL is fetched as given.
+        // For a device without TLS the browser downloads the image and uploads it; a release asset comes from its Pages copy, since GitHub's refuses a cross-origin read.
         const installViaBrowser = async (url) => {
             let source = url;
             try {

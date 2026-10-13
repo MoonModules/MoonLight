@@ -75,10 +75,12 @@ RUNNER = _resolve_runner()
 # test/ made every unit-test edit report the runner stale, and rebuilding did not clear it
 # because CMake correctly relinks nothing: a false alarm that trains people to ignore the guard.
 _RUNNER_SOURCE_DIRS = ("src",)
-# src/platform/esp32 is in the tree but NOT in this target: the desktop runner links mm_platform's
-# desktop half, so an ESP32 edit relinks nothing and rebuilding can never clear the warning. Left in
-# scope it wedges the gate permanently, which is the same false alarm the note above is about.
-_RUNNER_SKIP_DIRS = ("src/platform/esp32",)
+# Every platform but the desktop is in the tree but NOT in this target: the runner links mm_platform's desktop half,
+# so an edit to another platform relinks nothing and rebuilding can never clear the warning. Left in scope it wedges
+# the gate permanently, which is the same false alarm the note above is about.
+def _other_platform(rel: str) -> bool:
+    """Whether a repo-relative path sits in a platform's own directory other than the desktop's."""
+    return rel.startswith("src/platform/") and rel.count("/") > 2 and not rel.startswith("src/platform/desktop/")
 _RUNNER_SOURCE_FILES = ("test/scenario_runner.cpp",)
 _RUNNER_SOURCE_SUFFIXES = {".c", ".cpp", ".h", ".hpp"}
 _RUNNER_SKIP_PARTS = {"build", "__pycache__", ".git"}
@@ -123,7 +125,7 @@ def _stale_runner_reason() -> str:
         candidates.extend(f for f in (ROOT / d).rglob("*")
                           if f.is_file() and f.suffix in _RUNNER_SOURCE_SUFFIXES
                           and not (_RUNNER_SKIP_PARTS & set(f.relative_to(ROOT).parts))
-                          and not f.relative_to(ROOT).as_posix().startswith(_RUNNER_SKIP_DIRS)
+                          and not _other_platform(f.relative_to(ROOT).as_posix())
                           and f.relative_to(ROOT).as_posix() not in _RUNNER_GENERATED)
     candidates.extend(ROOT / f for f in _RUNNER_SOURCE_FILES if (ROOT / f).is_file())
     for f in candidates:

@@ -1,9 +1,6 @@
 // The root a user was last on survives a refresh, whichever state arrives first.
 //
-// The WebSocket full state is what the first render draws, so it is where the saved selection must be consulted:
-// when it was not, renderCards fell back to the first root, and a refresh with a Layer or the File Manager open
-// landed on Control instead. It healed after any nav click, which sets the selection in memory and hides the bug
-// for the rest of the session.
+// The WebSocket full state is what the first render draws, so it consults the saved selection; without it a refresh lands on Control, not the root left open.
 //
 // So this pins the rule at its source: the arrival path restores before the render that reads it.
 //

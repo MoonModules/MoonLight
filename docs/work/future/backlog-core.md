@@ -498,6 +498,12 @@ An upload to the Teensy 4.1 moves about 20 KB/s whether it lands on internal fla
 Downloads run at 354 KB/s, so the receive side is the bottleneck: most likely lwIP's TCP receive window in QNEthernet's configuration, which caps the bytes in flight per round trip.
 Measure the window first, then raise it within the Teensy's RAM, which the Layer buffers also need.
 
+### Host names on the Teensy (2026-10-13)
+
+HostResolver looks names up on a task of its own, and the Teensy has none: `spawnPinnedTask` refuses, so a host given by name in NetworkSend, OSC, Audio or MIDI waits forever, and its `resolveHost` blocks for its whole timeout.
+On a board with one loop the textbook shape is a query that does not block: QNEthernet's `DNSClient::getHostByName` takes a callback, so a new platform seam starts a lookup and a tick collects the answer.
+Until then an address works, and a name should say it cannot resolve rather than wait.
+
 ### LEDs on the Teensy flash white, then the board resets (2026-10-13)
 
 Five times in one session, the 64-light strip on the Teensy 4.1 bench board went full white, and the board restarted with reset reason `UNKNOWN`, no fault mark and no watchdog: a supply dip, which a full-white strip on USB power explains.

@@ -193,8 +193,8 @@ def large_files() -> list:
 
 
 # A vendor SDK header, or a preprocessor branch on the target, which only src/platform may hold.
-_PLATFORM_RE = re.compile(r'#include\s*[<"](?:esp_|freertos/|driver/|hal/|soc/|SDL|wiringPi|pigpio)'
-                          r'|#(?:if|elif)(?:n?def\s+|\s+defined\s*\(\s*)(?:ESP_PLATFORM|CONFIG_IDF|__APPLE__|__linux__|_WIN32)')
+_PLATFORM_RE = re.compile(r'#include\s*[<"](?:esp_|freertos/|driver/|hal/|soc/|SDL|wiringPi|pigpio|Arduino\.h|QNEthernet|LittleFS|SdFat|SD\.h|DMAChannel|CrashReport|imxrt)'
+                          r'|#(?:if|elif)(?:n?def\s+|\s+defined\s*\(\s*)(?:ESP_PLATFORM|CONFIG_IDF|__APPLE__|__linux__|_WIN32|__IMXRT1062__|TEENSYDUINO|ARDUINO_TEENSY41)')
 _LIGHT_INCLUDE_RE = re.compile(r'#include\s*[<"]light/')
 
 

@@ -27,6 +27,8 @@
 
 #include <Arduino.h>
 
+#include "core/util/TeensyImage.h"   // teensyHeaderProblem, teensyImageRefused: the checks before an image may overwrite the program
+
 #include <cstdio>
 #include <cstring>
 
@@ -42,7 +44,6 @@ constexpr uint32_t kFlashBase = 0x60000000;
 constexpr uint32_t kSectorBytes = 4096;
 constexpr uint32_t kBlockBytes = 65536;   // the erase unit: one block erase costs about what one sector erase does, so 16x fewer of them
 constexpr uint32_t kPageBytes = 256;   // the most one program command writes
-constexpr uint32_t kIvtOffset = 0x1000;   // the image vector table the boot ROM reads, its first byte 0xD1
 
 // The firmware name an upload must carry: @xref{the-image-mark}.
 constexpr char kImageMark[] = "MoonLight image for " MM_FIRMWARE_NAME ";";
@@ -67,19 +68,6 @@ void stageSector(uint32_t addr) {
         eepromemu_flash_erase_64K_block(reinterpret_cast<void*>(addr));
     for (uint32_t p = 0; p < kSectorBytes; p += kPageBytes)
         if (!allErased(g_sector + p, kPageBytes)) eepromemu_flash_write(reinterpret_cast<void*>(addr + p), g_sector + p, kPageBytes);
-}
-
-// The variant named in an image's mark, or null when the image carries none.
-const char* markedVariant(const uint8_t* image, uint32_t bytes, char* out, size_t cap) {
-    const uint32_t n = kMarkPrefixLen;
-    for (uint32_t i = 0; i + n < bytes; i++) {
-        if (image[i] != static_cast<uint8_t>(kImageMark[0]) || std::memcmp(image + i, kImageMark, n) != 0) continue;
-        size_t k = 0;
-        for (uint32_t j = i + n; j < bytes && image[j] != ';' && k + 1 < cap; j++) out[k++] = static_cast<char>(image[j]);
-        out[k] = 0;
-        return out;
-    }
-    return nullptr;
 }
 
 // Copies the staged image over the program and resets, from ITCM with interrupts off; never inlined, since its caller runs from the flash it erases.
@@ -137,30 +125,6 @@ bool readSector(FsWriteSrc src, void* user, uint32_t& fill, bool& eof) {
     return true;
 }
 
-// Why the first sector of an upload is no Teensy 4 image, or null.
-const char* headerProblem() {
-    if (g_sector[0] == ':') return "error: that is a HEX file, upload the .bin";
-    if (std::memcmp(g_sector, "FCFB", 4) != 0) return "error: not a Teensy 4 image";
-    return nullptr;
-}
-
-// Whether a whole staged image is refused, the reason written to `status`.
-bool imageRefused(const uint8_t* staged, uint32_t bytes, char* status, size_t statusLen) {
-    if (bytes <= kIvtOffset || staged[kIvtOffset] != 0xD1) {
-        std::snprintf(status, statusLen, "error: not a Teensy 4 image");
-        return true;
-    }
-    char name[32];
-    if (!markedVariant(staged, bytes, name, sizeof(name))) {
-        std::snprintf(status, statusLen, "error: that image is not MoonLight");
-        return true;
-    }
-    if (std::strcmp(name, MM_FIRMWARE_NAME) != 0) {
-        std::snprintf(status, statusLen, "error: image is %.20s, board runs " MM_FIRMWARE_NAME, name);
-        return true;
-    }
-    return false;
-}
 }  // namespace
 
 bool otaWriteStream(FsWriteSrc src, void* user, size_t contentLen,
@@ -182,7 +146,7 @@ bool otaWriteStream(FsWriteSrc src, void* user, size_t contentLen,
         bool eof = false;
         if (!readSector(src, user, fill, eof)) { setStatus("error: upload aborted"); return false; }
         if (fill == 0) break;
-        const char* why = (written == 0) ? headerProblem() : nullptr;
+        const char* why = (written == 0) ? firmware::teensyHeaderProblem(g_sector, kSectorBytes) : nullptr;
         if (why) { setStatus("%s", why); return false; }
         if (written + fill > room) { setStatus("error: image too large for the free flash"); return false; }
         stageSector(base + written);
@@ -195,7 +159,8 @@ bool otaWriteStream(FsWriteSrc src, void* user, size_t contentLen,
         setStatus("error: incomplete upload (%u/%u)", static_cast<unsigned>(written), static_cast<unsigned>(contentLen));
         return false;
     }
-    if (imageRefused(reinterpret_cast<const uint8_t*>(base), written, statusBuf, statusBufLen)) return false;
+    if (firmware::teensyImageRefused(reinterpret_cast<const uint8_t*>(base), written, kImageMark, kMarkPrefixLen,
+                                     MM_FIRMWARE_NAME, statusBuf, statusBufLen)) return false;
     g_stagedBytes = written;
     setStatus("rebooting");
     return true;

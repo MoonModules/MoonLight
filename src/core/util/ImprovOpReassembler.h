@@ -88,6 +88,9 @@ private:
 /// The vendor command carrying one state document over serial, and the error a refused chunk replies with.
 inline constexpr uint8_t kImprovCmdApplyOp = 0xFC;
 inline constexpr uint8_t kImprovErrorInvalidOp = 0x82;
+/// The protocol's own errors: a frame failing its checksum, and a command the listener does not take.
+inline constexpr uint8_t kImprovErrorInvalidRpc = 0x01;
+inline constexpr uint8_t kImprovErrorUnknownRpc = 0x02;
 
 /// What a transport replies to one APPLY_OP frame: an empty response for a taken chunk, the invalid-op error otherwise.
 enum class ImprovApplyOpReply : uint8_t { Ack, Refused };

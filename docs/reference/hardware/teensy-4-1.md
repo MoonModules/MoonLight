@@ -8,7 +8,7 @@ The one firmware, `teensy41`, finds at boot which of the two the board has; it i
 - Board: <https://www.pjrc.com/store/teensy41.html>
 - Ethernet kit (the jack for the on-board PHY): <https://www.pjrc.com/store/ethernet_kit.html>
 - W5500 module pin map (WIZ850io layout): <https://docs.wiznet.io/Product/ioModule/WIZ850io>
-- Network library: QNEthernet, <https://github.com/ssilverman/QNEthernet>
+- Network library: QNEthernet, <https://github.com/ssilverman/QNEthernet>, licensed AGPL-3.0-or-later. Its section 13 gives everyone who uses the device over the network a right to its source, offered by the UI's "Source code on GitHub" link
 - Prior art for the LED output: OctoWS2811, <https://github.com/PaulStoffregen/OctoWS2811>, and ObjectFLED, <https://github.com/KurtMF/ObjectFLED>
 
 ## The board
@@ -164,7 +164,7 @@ Columns 37 to 48 hold the sensors, which keeps the SPI wires near 7 cm.
 The free columns take a microphone, an IMU and a PIR.
 Here that is an INMP441, an MPU6050 on a GY-521 breakout, and a mini PIR such as the AM312, which runs on 3.3 V.
 Two wires carry the bottom rail's 3.3 V and GND to the top rail, which the MB102 leaves unfed with its top jumper off.
-Neither Teensy firmware drives an I2S or I2C peripheral at this point; this wiring is ready for them.
+The Teensy firmware drives no I2S or I2C peripheral; this wiring is ready for one that does.
 
 | Part | Where |
 |---|---|
@@ -196,7 +196,7 @@ Every other lane pin tested clean.
 
 PJRC's [Audio Shield Rev D](https://www.pjrc.com/store/teensy3_audio.html) stacks on the Teensy: an SGTL5000 codec with line in, line out, headphones and a microphone input, and a microSD slot.
 It is DEV-15845 at [Antratek](https://www.antratek.nl/teensy4-audio-board), €11.86.
-No firmware drives it; audio input on the Teensy is planned work.
+No firmware drives it.
 Its pins overlap the W5500 and the LED lanes, so it fits only once the lanes avoid them.
 
 | Signal | Teensy pin | Overlaps |
@@ -215,7 +215,7 @@ On a regular 4.1 with its own Ethernet the SPI bus is free, and only the LED lan
 
 These boards put a Teensy, LED outputs and Ethernet in one unit.
 Each routes its LED outputs to OctoWS2811's pin set, which reaches beyond port 6.
-So MoonLight drives them once its GPIO-DMA backend writes to any pin, as OctoWS2811 does.
+MoonLight's GPIO-DMA backend writes to port 6 alone, so these boards need a backend that writes to any pin, as OctoWS2811 does.
 
 - **OctoWS2811 adaptor** (PJRC, <https://www.pjrc.com/store/octo28_adaptor.html>; SparkFun PRT-28372): eight buffered 5 V outputs over two RJ45 jacks, sized for a CableGuard CG-500 outdoor enclosure.
 - **TeensyLED** (open hardware, <https://oshwlab.com/bapenner818/teensyled-hw1_copy>): a 32-output Teensy 4.1 pixel controller with on-board Ethernet and optional RS-485.

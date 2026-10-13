@@ -1886,6 +1886,13 @@ TEST_CASE("a struct or a condition used where it does not fit is refused with wh
         {mmScript("int a = 0; if (!a < 1) { setRGB(0, 1, 0, 0); }"), "! negates what follows it: write !(a < b) to negate a comparison", "! before a comparison"},
         {"class T {\n  RGB c;\n  void tick() { c[1] = 5; }\n}\n", "a struct is read one field at a time: write name.field", "a struct member written by index"},
         {mmScript("fixed f = 1.5; int y = 0; y = max(f, max(10, 20));"), "mixes whole and fixed: write toFixed(x) or toInt(x)", "a nested same-type call hiding a mixed argument"},
+        // A function's arguments are checked one by one against its parameters, not counted as words: both of these filled the right number of words.
+        {"class T {\n  void paint(int i, RGB c, int boost) { }\n  void tick() { paint(0, 1, 2, 3, 1); }\n}\n",
+         "expected a struct value: a constructor, a struct variable or a call answering one", "three numbers where an RGB parameter is"},
+        {"class T {\n  void paint(int i, RGB c, int boost) { }\n  void tick() { paint(0, Coord3D(1, 2, 300), 1); }\n}\n",
+         "this is a different struct type", "a Coord3D where an RGB parameter is"},
+        {"class T {\n  void paint(int a, int b, int c) { }\n  void tick() { paint(RGB(1, 2, 3)); }\n}\n",
+         "a struct is read one field at a time: write name.field", "an RGB where three int parameters are"},
     };
     for (const Case& c : refused) {
         INFO(c.what);

@@ -43,7 +43,7 @@ sys.path.insert(0, str(ROOT / "moondeck" / "build"))
 from build_esp32 import APP_BIN, FIRMWARES, table_from_fragments, find_idf, idf_env  # noqa: E402
 import flash_split  # noqa: E402 (beside this file; the commit's flash change by kind)
 from build_desktop import desktop_binary  # noqa: E402 (one definition of where it lands)
-from build_teensy import FIRMWARES as TEENSY_FIRMWARES, PROGRAM_FLASH_BYTES as TEENSY_PROGRAM_BYTES, hex_image_bytes, hex_path  # noqa: E402
+from build_teensy import FIRMWARES as TEENSY_FIRMWARES, UPDATE_IMAGE_BYTES as TEENSY_UPDATE_BYTES, hex_image_bytes, hex_path  # noqa: E402
 HEALTH_FILE = ROOT / "docs" / "reference" / "metrics" / "repo-health.json"
 # The same snapshot as a table a human reads: units applied, ratios as percentages, areas
 # grouped. The JSON stays the source the delta is computed from; this is the view. Both
@@ -659,7 +659,7 @@ def render_markdown(new, old):
         L += ["## Firmware size", "",
               "| Target | Flash | Capacity | Used | Built |", "|---|---:|---:|---:|:--:|"]
         for k, v in sorted(new["flash"].items()):
-            cap = app_partition_bytes(k) if k.startswith("esp32") else TEENSY_PROGRAM_BYTES if k in TEENSY_FIRMWARES else 0
+            cap = app_partition_bytes(k) if k.startswith("esp32") else TEENSY_UPDATE_BYTES if k in TEENSY_FIRMWARES else 0
             cap_s = _kb(cap) if cap else "-"
             used = f"{(100.0 * v / cap):.0f}%" if cap else "-"
             built = _built_label(k, new.get("measured", {}).get(k))

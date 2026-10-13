@@ -74,8 +74,8 @@ struct Canvas {
         return (static_cast<size_t>(p.z) * dims.y * dims.x
                 + static_cast<size_t>(p.y) * dims.x + p.x) * cpl;
     }
-    /// Byte offset of the light at `index` in buffer order, or `bytes` past the end.
-    size_t offsetOf(size_t index) const { return cpl && index < bytes / cpl ? index * cpl : bytes; }
+    /// Byte offset of the light at `index` in buffer order, at or past `bytes` past the end, which the readers and writers clip; no divide per light.
+    size_t offsetOf(size_t index) const { return cpl && index < bytes ? index * cpl : bytes; }
 };
 
 // Every per-light operation exists by coordinate and by index, the order a buffer and a script count lights in; both reach the same byte offset.

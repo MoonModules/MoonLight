@@ -1321,7 +1321,7 @@ uv run moondeck/build/setup_teensy.py
 ```
 
 Installs into `~/teensy` (`TEENSY_SDK` overrides), each part from its publisher.
-PJRC's Teensy 4 core comes at Teensyduino's tag, LittleFS and SPI at that release's commits, and Arm's GNU toolchain checked against Arm's published sums.
+PJRC's Teensy 4 core comes at Teensyduino's tag, with LittleFS, SPI, SD and SdFat at that release's commits. QNEthernet comes at its pinned commit with our patches, and Arm's GNU toolchain is checked against Arm's published sums.
 teensy_loader_cli is compiled from its tagged source on macOS and Linux.
 `--no-loader` skips it, for a machine that builds but never flashes, such as CI.
 Every version is pinned in this script, which `build_teensy` and `flash_teensy` read.

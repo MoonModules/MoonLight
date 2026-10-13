@@ -158,7 +158,7 @@
 #if defined(CONFIG_SOC_PARLIO_SUPPORTED) || MM_LINKS_ALL_LED_DRIVERS
 #include "light/drivers/ParlioPeripheral.h"        // Parlio backend (ParlioPeripheral)
 #endif
-#if defined(__IMXRT1062__) || MM_LINKS_ALL_LED_DRIVERS
+#if defined(MM_GPIO_DMA_LEDS) || MM_LINKS_ALL_LED_DRIVERS
 #include "light/drivers/GpioDmaPeripheral.h"       // timer-paced GPIO DMA backend (GpioDmaPeripheral)
 #endif
 // Panel receiver cards are opt-in per firmware rather than per chip: @xref{why-panel-cards-are-per-firmware-and-hub75-is-per-chip}.
@@ -347,7 +347,7 @@ void mm::registerModuleTypes() {
 #endif
     // One driver for the parallel output whatever the DMA peripheral: each backend self-registers when its header is included, so the control offers exactly the ones this chip links.
 #if defined(CONFIG_SOC_LCD_I80_SUPPORTED) || defined(CONFIG_SOC_LCDCAM_I80_LCD_SUPPORTED) || defined(CONFIG_SOC_PARLIO_SUPPORTED) || \
-    defined(__IMXRT1062__) || MM_LINKS_ALL_LED_DRIVERS
+    defined(MM_GPIO_DMA_LEDS) || MM_LINKS_ALL_LED_DRIVERS
     mm::ModuleFactory::registerType<mm::ParallelLedDriver>("ParallelLedDriver", "light/drivers.md#parallelled");
 #endif
     mm::ModuleFactory::registerType<mm::HttpServerModule>("HttpServerModule", "core/system.md");

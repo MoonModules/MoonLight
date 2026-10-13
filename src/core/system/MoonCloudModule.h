@@ -29,9 +29,13 @@ class MoonCloudModule : public MoonModule {
 public:
     /// A board without HTTPS gets its outbox at construction, so the relay's controls are declared with the rest.
     explicit MoonCloudModule(bool relay = !platform::httpsAvailable())
-        : outbox_(relay ? static_cast<char*>(std::calloc(kOutboxBytes, 1)) : nullptr) {}
+        : outbox_(relay ? static_cast<char*>(platform::alloc(kOutboxBytes)) : nullptr) {
+        if (!outbox_) return;
+        outbox_[0] = '\0';
+        setDynamicBytes(kOutboxBytes);   // the card's memory readout counts it
+    }
     /// Free the outbox, where there is one.
-    ~MoonCloudModule() override { std::free(outbox_); }
+    ~MoonCloudModule() override { platform::free(outbox_); }
 
     /// Always runs: the children carry the real consent, so disabling the container is ambiguous.
     bool respectsEnabled() const MM_NONBLOCKING override { return false; }

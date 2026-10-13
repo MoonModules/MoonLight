@@ -30,7 +30,7 @@ target_include_directories(teensy_sd SYSTEM PUBLIC "${TEENSY_SDK}/SD/src" "${TEE
 target_link_libraries(teensy_sd PUBLIC teensy_libs)
 target_compile_options(teensy_sd PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-std=gnu++17>)
 
-# Which binary this is and which Ethernet driver it carries, both set by build_teensy.py from the firmware registry, which names and checks the variants.
+# Which binary this is, set by build_teensy.py from the firmware registry, which names and checks the variants.
 set(MM_FIRMWARE "teensy41" CACHE STRING "the firmware name the binary reports")
 
 # The network stack: lwIP with QNEthernet, carrying both its drivers, the board's own PHY and a W5500 on the hardware SPI port and chip select 10.
@@ -112,6 +112,7 @@ add_executable(MoonLight.elf
     ${REPO}/src/platform/desktop/moonlive_emit_noarch.cpp
     ${REPO}/src/platform/teensy/moonlive_asm_thumb2.cpp
     ${REPO}/src/platform/teensy/platform_teensy.cpp
+    ${REPO}/src/platform/teensy/platform_teensy_fs.cpp
     ${REPO}/src/platform/teensy/platform_teensy_gpio_dma.cpp
     ${REPO}/src/platform/teensy/platform_teensy_ota.cpp
     ${REPO}/src/platform/teensy/platform_teensy_improv.cpp

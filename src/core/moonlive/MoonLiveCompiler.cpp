@@ -168,7 +168,9 @@ struct Parser {
                     uint16_t irStart;    ///< the IR index its body starts at
                     RetType ret;         ///< what it declares it returns
                     uint8_t params;      ///< how many argument words it declares
-                    uint8_t retStruct; };   ///< the struct it returns, as its table index plus one, or 0
+                    uint8_t retStruct;   ///< the struct it returns, as its table index plus one, or 0
+                    uint8_t argCount;    ///< how many parameters it declares, a struct counting once
+                    uint8_t argStruct[moonlive::kMaxScriptArgs]; };   ///< each parameter's struct, its table index plus one, or 0 for a scalar
     FnMark             fns[kMaxEntryPoints] = {};   ///< the functions parsed so far
     uint8_t            fnCount = 0;                 ///< how many of them there are
     /// What the function being parsed returns, so a `return` is checked where it is written.
@@ -324,12 +326,15 @@ struct Parser {
         if (li >= 0) return structAt(locals[li].st);
         const int mi = findMember(lex.identBeg, lex.identLen);
         if (mi >= 0) return structAt(memberStruct[mi]);
-        if (const Builtin* b = table.find(lex.identBeg, lex.identLen))
-            return b->retStruct ? table.findStruct(b->retStruct, std::strlen(b->retStruct)) : nullptr;
-        for (uint8_t i = 0; i < fnCount; i++)
-            if (fns[i].nameLen == lex.identLen && std::strncmp(fns[i].name, lex.identBeg, lex.identLen) == 0)
-                return structAt(fns[i].retStruct);
-        return nullptr;
+        return structCallAt();   // a builtin or a script function answering one
+    }
+
+    /// Keep a struct answer's slots, the first `st.fieldCount` from `argBase`, which the builtin writes past its arguments; false when they do not fit.
+    bool reserveStructAnswer(uint8_t argBase, const StructDef& st) {
+        if (argBase + st.fieldCount > kMaxLocals) { fail("too many arguments to hold"); return false; }
+        if (slotHighWater < argBase + st.fieldCount) slotHighWater = static_cast<uint8_t>(argBase + st.fieldCount);
+        if (slotHighWater > slotsUsed) slotsUsed = slotHighWater;
+        return true;
     }
 
     /// The struct a call or constructor at the cursor answers, read through a following `.field`.
@@ -390,9 +395,7 @@ struct Parser {
             const uint8_t argBase = slotHighWater;
             uint8_t n = 0;
             if (!parseBuiltinArgs(b, n)) return false;
-            if (argBase + st.fieldCount > kMaxLocals) { fail("too many arguments to hold"); return false; }
-            if (slotHighWater < argBase + st.fieldCount) slotHighWater = static_cast<uint8_t>(argBase + st.fieldCount);
-            if (slotHighWater > slotsUsed) slotsUsed = slotHighWater;
+            if (!reserveStructAnswer(argBase, st)) return false;
             VReg r = alloc();
             emit({IrOp::Call, r, 0, n, 0, 0, argBase, b->fn, {}});
             freeTemp(r);
@@ -430,10 +433,14 @@ struct Parser {
             if (args > 0 && !expect(Tok::Comma, "expected ',' between arguments")) return false;
             VReg vals[kMaxStructFields] = {};
             uint8_t count = 1;
-            if (const StructDef* st = structValueAt()) {
-                if (!parseStructValue(*st, vals)) return false;
-                count = st->fieldCount;
+            // Each argument against its own parameter, as C++ checks a call, so a scalar or another struct cannot pass for the one declared.
+            const bool declared = args < fns[i].argCount;
+            const StructDef* param = declared ? structAt(fns[i].argStruct[args]) : structValueAt();
+            if (param) {
+                if (!parseStructValue(*param, vals)) return false;
+                count = param->fieldCount;
             } else {
+                if (structValueAt()) { fail("a struct is read one field at a time: write name.field"); return false; }
                 vals[0] = parseExpr();
                 if (failed) return false;
             }
@@ -820,9 +827,7 @@ struct Parser {
         // A builtin answering a struct writes it into its first argument slots, so they stay reserved.
         if (fn->retStruct) {
             const StructDef* st = table.findStruct(fn->retStruct, std::strlen(fn->retStruct));
-            if (st && argBase + st->fieldCount > kMaxLocals) { fail("too many arguments to hold"); return; }
-            if (st && slotHighWater < argBase + st->fieldCount) slotHighWater = static_cast<uint8_t>(argBase + st->fieldCount);
-            if (slotHighWater > slotsUsed) slotsUsed = slotHighWater;
+            if (st && !reserveStructAnswer(argBase, *st)) return;
         }
 
         // The arguments live in the frame, so nothing is held in a register across the call.
@@ -1820,7 +1825,7 @@ struct Parser {
 
     // Parsed before anything is emitted, since a later insertion would shift every index.
     /// Parse a function's parameter list, answering how many it declares.
-    bool parseParams(uint8_t* paramsOut) {
+    bool parseParams(uint8_t* paramsOut, uint8_t* argCountOut, uint8_t argStructOut[moonlive::kMaxScriptArgs]) {
         if (!expect(Tok::LParen,  "expected '(' after the function name")) return false;
         // Cleared first, since a leftover would push the parameters up out of their slots.
         localCount = 0; slotHighWater = 0;
@@ -1858,6 +1863,7 @@ struct Parser {
                 return false;
             }
             locals[localCount++] = {lex.identBeg, lex.identLen, slotHighWater, t, structIndex(pst)};
+            argStructOut[(*argCountOut)++] = structIndex(pst);   // a struct fills at least one word, so the count stays within the block
             for (uint8_t w = 0; w < words; w++) paramWordType[params + w] = t;
             slotHighWater = static_cast<uint8_t>(slotHighWater + words);
             if (slotHighWater > slotsUsed) slotsUsed = slotHighWater;
@@ -1933,9 +1939,15 @@ struct Parser {
             if (table.find(fnName, fnNameLen)) { fail("that name shadows a built-in function"); return false; }
             lex.advance();                       // the function name
             uint8_t params = 0;
-            if (!parseParams(&params)) return false;
-            fns[fnCount] = {fnName, fnNameLen, static_cast<uint16_t>(ir.count), ret, params,
-                            structIndex(retSt)};
+            FnMark& mark = fns[fnCount];
+            mark = FnMark{};
+            if (!parseParams(&params, &mark.argCount, mark.argStruct)) return false;
+            mark.name = fnName;
+            mark.nameLen = fnNameLen;
+            mark.irStart = static_cast<uint16_t>(ir.count);
+            mark.ret = ret;
+            mark.params = params;
+            mark.retStruct = structIndex(retSt);
             curRet = ret;                        // every return below is checked against it
             curRetStruct = retSt;
             // The IR carries the start INDEX; the lowering turns it into a byte offset.

@@ -48,6 +48,7 @@ add_executable(mm_tests
     unit/core/unit_FilesystemModule_subtree.cpp
     unit/core/unit_FirmwareUpdateModule.cpp
     unit/core/unit_FirmwareImage.cpp
+    unit/core/unit_TeensyImage.cpp
     unit/core/unit_H264Bitstream.cpp
     unit/core/unit_AllocTracking.cpp
     unit/core/unit_HttpServerModule_apply.cpp

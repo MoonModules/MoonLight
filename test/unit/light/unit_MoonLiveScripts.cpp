@@ -21,6 +21,7 @@
 #include "core/moonlive/MoonLiveScript.h"       // kMaxStatus: the status line a failure reports through
 #include "core/moonlive/script_catalog.h"       // generated: what the device offers
 #include "core/services/MoonLiveService.h"      // kServiceTemplate: what a new service script starts as
+#include "moonlive_script_files.h"               // scriptRoot, readText: the shipped scripts as files
 
 #include <algorithm>
 #include <cstdlib>
@@ -40,11 +41,6 @@ inline bool mmIsScript(const std::filesystem::path& p) {
 using namespace mm;
 
 namespace {
-/// The repo's script folder, found relative to this source file so the test does not depend on the working directory a runner happens to use.
-std::filesystem::path scriptRoot() {
-    std::filesystem::path p = std::filesystem::path(__FILE__).parent_path();   // test/unit/light
-    return p.parent_path().parent_path().parent_path() / "moonlive";           // repo root
-}
 
 std::vector<std::filesystem::path> scriptsIn(const char* sub) {
     std::vector<std::filesystem::path> out;
@@ -55,12 +51,6 @@ std::vector<std::filesystem::path> scriptsIn(const char* sub) {
     return out;
 }
 
-std::string read(const std::filesystem::path& p) {
-    std::ifstream f(p);
-    std::ostringstream ss;
-    ss << f.rdbuf();
-    return ss.str();
-}
 }  // namespace
 
 TEST_CASE("every script in moonlive/ compiles") {
@@ -68,7 +58,7 @@ TEST_CASE("every script in moonlive/ compiles") {
     // services included: it compiles against its own table, which the isService branch below picks.
     for (const char* sub : {"layouts", "effects", "modifiers", "drivers", "palettes", "services"}) {
         for (const auto& file : scriptsIn(sub)) {
-            const std::string src = read(file);
+            const std::string src = readText(file);
             const std::string label = std::string(sub) + "/" + file.filename().string();
 
             // Compile it exactly as it ships, against the system variables ITS OWN binding supplies, a layout gets the clock, an effect the grid, a modifier the grid plus a coordinate. Using one shared list here would let a script read a name its module never writes and still pass, which is the silent-zero this per-binding split exists to prevent.
@@ -436,7 +426,7 @@ TEST_CASE("every script example in the docs compiles") {
     for (const auto& page : pages) {
         INFO("page: ", page.string());
         REQUIRE(std::filesystem::exists(page));
-        const std::string text = read(page);
+        const std::string text = readText(page);
 
         // Every fenced block that declares a class is a script.
         // A fence holding a fragment (a control table, a shell line) has no `class` and is skipped.

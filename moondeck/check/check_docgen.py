@@ -101,7 +101,7 @@ PREVIEWLESS_PAGES = _hooks.PREVIEWLESS_PAGES
 # `test` is in scope even though nothing generates a page from it: these rules are about how the
 # code READS, which is why a test's comments are held to them like any other source we own. Only
 # the page rules key off a generated page, and they run from `_orphan_pages` over src/{core,light}.
-HEADER_ROOTS = ("src", "test", "esp32/main", "moonbase/main", "moondeck/moonlive")
+HEADER_ROOTS = ("src", "test", "esp32/main", "moonbase/main", "moondeck/moonlive", "teensy")
 # `.cpp` too: a rule that stopped at the header was a tolerance the file extension decided, and
 # the same `///` and `//` comments live on both sides of a split. A `.cpp` gets no generated page,
 # so only the comment-shape rules reach it; the page rules key off the header that names it.

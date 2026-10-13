@@ -1,9 +1,6 @@
 # The MoonLive register and frame-slot contract
 
-One machine, three roles. This governs the compiler and the four backends, not a binding: a scripted
-layout, effect and modifier all compile through the same front end and the same lowering, so the
-ownership rules below hold identically whichever role a script plays. ("Layout" in this file means
-the memory layout of the register file and the frame — never the light-placement role.)
+One machine, three roles: a scripted layout, effect and modifier compile through the same front end and lowering. The ownership rules below so hold for the compiler and all four backends, whichever role a script plays. "Layout" here means the memory layout of the register file and the frame, never the light-placement role.
 
 Who owns which register index, who owns which frame slot, and who is allowed to compute what from
 `vregsUsed`. Written down because four places derive numbers from each other — core's compaction,

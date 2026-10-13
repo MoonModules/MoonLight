@@ -1,5 +1,4 @@
-// The installer's Teensy writer speaks PJRC's HalfKay protocol as teensy_loader_cli does: these tests pin the report layout,
-// the blocks it skips, and the images it refuses, so a browser install writes what the loader would.
+// The installer's Teensy writer speaks PJRC's HalfKay protocol as teensy_loader_cli does: the report layout, the blocks it skips and the images it refuses.
 //
 // Run: `node --test test/js`.
 
@@ -101,4 +100,13 @@ test("after the reboot the installer finds the installed board, never another gr
     } finally {
         Object.defineProperty(globalThis, "navigator", { value: saved, configurable: true });
     }
+});
+
+test("a Teensy in its bootloader keeps the erase choice, and its checkbox is what the writer reads", async () => {
+    // Hidden, the checkbox still fed the writer: a stale tick erased settings unseen, and the board that needs an erase could not ask for one.
+    const { readFileSync } = await import("node:fs");
+    const install = readFileSync(new URL("../../mooninstaller/install.js", import.meta.url), "utf8");
+    const line = install.split("\n").find(l => l.includes("eraseRow.hidden ="));
+    assert.ok(line, "the erase row's visibility is set");
+    assert.ok(!line.includes("teensyBootMode"), "bootloader mode does not hide the erase row");
 });

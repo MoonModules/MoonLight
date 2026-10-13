@@ -213,6 +213,7 @@ nav:
       - MoonCloud: explanation/architecture/mooncloud.md
       - MoonDeck: explanation/architecture/moondeck.md
       - Why we write our own code: explanation/why-we-write-our-own.md
+      - Security: explanation/security.md
   - Reference:
       # First in Reference because it answers the question a user arrives with:
       # how do I drive this from my own code rather than from the page.
