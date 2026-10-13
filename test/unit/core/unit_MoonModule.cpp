@@ -5,6 +5,7 @@
 #include "core/util/JsonSink.h"
 
 #include <cstring>   // std::strcpy, for the in-place option-rename schemaSignature tests
+#include <string>    // std::string: named explicitly, GCC does not pull it in transitively
 
 namespace {
 

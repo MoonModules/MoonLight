@@ -118,13 +118,18 @@ def install_gcc():
     # The system's certificate store, as curl and git use, so a network with its own root certificate downloads too.
     import truststore
     truststore.inject_into_ssl()
-    print(f"Downloading {name} ...")
-    with urllib.request.urlopen(GCC_URL + name) as resp, open(archive, "wb") as f:
-        shutil.copyfileobj(resp, f)
-    digest = hashlib.sha256(archive.read_bytes()).hexdigest()
-    if digest != sha:
+    # Three tries: a download cut short checks as a wrong checksum, which a second fetch usually cures.
+    for attempt in range(1, 4):
+        print(f"Downloading {name} ...")
+        with urllib.request.urlopen(GCC_URL + name) as resp, open(archive, "wb") as f:
+            shutil.copyfileobj(resp, f)
+        digest = hashlib.sha256(archive.read_bytes()).hexdigest()
+        if digest == sha:
+            break
         archive.unlink()
-        sys.exit(f"{name}: checksum {digest} does not match Arm's {sha}")
+        if attempt == 3:
+            sys.exit(f"{name}: checksum {digest} does not match Arm's {sha}")
+        print(f"checksum {digest} does not match Arm's, fetching again")
     print("Unpacking ...")
     if ext == "zip":
         with zipfile.ZipFile(archive) as z:

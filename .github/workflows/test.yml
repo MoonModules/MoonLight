@@ -95,11 +95,14 @@ jobs:
         with:
           persist-credentials: false
       - uses: astral-sh/setup-uv@v3
-      # Only the Arm toolchain is cached, the large download; its pin lives in setup_teensy.py, and the small source clones fetch fresh.
+      # Only the Arm toolchain is cached, the large download, keyed on its version alone: an edit elsewhere in setup_teensy.py forced a fresh download, and the small source clones fetch fresh anyway.
+      - name: the Arm toolchain's version, which keys its cache
+        id: gcc
+        run: echo "version=$(sed -n 's/^GCC_VERSION = "\(.*\)"/\1/p' moondeck/build/setup_teensy.py)" >> "$GITHUB_OUTPUT"
       - uses: actions/cache@v4
         with:
           path: ~/teensy/arm-gnu-toolchain-*
-          key: teensy-gcc-${{ runner.os }}-${{ hashFiles('moondeck/build/setup_teensy.py') }}
+          key: teensy-gcc-${{ runner.os }}-${{ steps.gcc.outputs.version }}
       - name: install the Teensy SDK
         run: uv run moondeck/build/setup_teensy.py --no-loader
       - name: build the Teensy 4.1 firmwares

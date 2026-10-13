@@ -511,10 +511,13 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
       - uses: astral-sh/setup-uv@v3
+      - name: the Arm toolchain's version, which keys its cache
+        id: gcc
+        run: echo "version=$(sed -n 's/^GCC_VERSION = "\(.*\)"/\1/p' moondeck/build/setup_teensy.py)" >> "$GITHUB_OUTPUT"
       - uses: actions/cache@v4
         with:
           path: ~/teensy/arm-gnu-toolchain-*
-          key: teensy-gcc-${{ runner.os }}-${{ hashFiles('moondeck/build/setup_teensy.py') }}
+          key: teensy-gcc-${{ runner.os }}-${{ steps.gcc.outputs.version }}
       # Same tag and version resolution as build-esp32, so the HEX reports the version and channel its asset name carries.
       - name: Resolve release tag
         id: tag

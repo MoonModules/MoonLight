@@ -12,6 +12,7 @@
 #include "http_test_client.h"
 #include "platform/platform.h"
 
+#include <cstdio>    // std::snprintf, the wide module's control names
 #include <cstring>
 #include <string>    // std::string: named explicitly, GCC does not pull it in transitively
 #include <vector>
