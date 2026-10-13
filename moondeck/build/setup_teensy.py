@@ -41,12 +41,12 @@ REPOS = {
 GCC_VERSION = "15.3.rel2"
 GCC_URL = ("https://gitlab.arm.com/api/v4/projects/tooling%2Fgnu-toolchains-for-arm/packages/generic/"
            f"gnu-toolchain/{GCC_VERSION}/")
-# Arm publishes these four hosts; the checksums are Arm's own .sha256asc files.
+# Arm publishes these four hosts; the checksums are Arm's own .sha256asc files, as Arm re-published the packages on 2026-10-12.
 GCC_HOSTS = {
-    ("Darwin", "arm64"):   ("darwin-arm64", "tar.xz", "b6ccf805aa4fb8c50406256f99cf802385894b86c0cb6c0185dc0e2b5f8288b9"),
-    ("Linux", "x86_64"):   ("x86_64", "tar.xz", "0662b2f01e0cd8b951fd110911d339c35b05998c68a12b3530bbbb4bf6c7874e"),
-    ("Linux", "aarch64"):  ("aarch64", "tar.xz", "9fc9e6baedf2b6779bd39ce4cc458d3529e200bc92bebe28be18f8942a456ad8"),
-    ("Windows", "AMD64"):  ("mingw-w64-x86_64", "zip", "062888d4f8a213f930e367189804910e5215c4e623e5063e64494c302f94b889"),
+    ("Darwin", "arm64"):   ("darwin-arm64", "tar.xz", "f011e4832046155f06408dda6b252b21b139a8159c8529802227371f06656c60"),
+    ("Linux", "x86_64"):   ("x86_64", "tar.xz", "463df9665c246fa13bab2102115bbf83440661b6eb70b44f3dfd4712ca30037a"),
+    ("Linux", "aarch64"):  ("aarch64", "tar.xz", "a0dc18893171d39dec82fd8d57eeab3da836fd3df4b61978db3eccbf4a6bb948"),
+    ("Windows", "AMD64"):  ("mingw-w64-x86_64", "zip", "0daff4141d4f62ad1e9794ca8bd430ef730f07fd78f6d71d2ffdffc21db8cb9e"),
 }
 
 LOADER_VERSION = "2.3"
@@ -118,18 +118,14 @@ def install_gcc():
     # The system's certificate store, as curl and git use, so a network with its own root certificate downloads too.
     import truststore
     truststore.inject_into_ssl()
-    # Three tries: a download cut short checks as a wrong checksum, which a second fetch usually cures.
-    for attempt in range(1, 4):
-        print(f"Downloading {name} ...")
-        with urllib.request.urlopen(GCC_URL + name) as resp, open(archive, "wb") as f:
-            shutil.copyfileobj(resp, f)
-        digest = hashlib.sha256(archive.read_bytes()).hexdigest()
-        if digest == sha:
-            break
+    print(f"Downloading {name} ...")
+    with urllib.request.urlopen(GCC_URL + name) as resp, open(archive, "wb") as f:
+        shutil.copyfileobj(resp, f)
+    digest = hashlib.sha256(archive.read_bytes()).hexdigest()
+    if digest != sha:
         archive.unlink()
-        if attempt == 3:
-            sys.exit(f"{name}: checksum {digest} does not match Arm's {sha}")
-        print(f"checksum {digest} does not match Arm's, fetching again")
+        # A mismatch that repeats is Arm re-publishing the package: its .sha256asc beside the archive says which checksum to pin.
+        sys.exit(f"{name}: checksum {digest} does not match the pinned {sha}; compare Arm's {GCC_URL}{name}.sha256asc")
     print("Unpacking ...")
     if ext == "zip":
         with zipfile.ZipFile(archive) as z:
