@@ -1,10 +1,10 @@
 {
-  "commit": "925757c3",
+  "commit": "c2cf6a4b",
   "flash": {
-    "esp32s3-n16r8": 2437888,
-    "esp32": 2240864,
-    "esp32p4rev1-eth": 2373392,
-    "esp32p4rev1-eth-wifi": 2523840,
+    "esp32s3-n16r8": 2443600,
+    "esp32": 2249040,
+    "esp32p4rev1-eth": 2380544,
+    "esp32p4rev1-eth-wifi": 2623840,
     "esp32s3-n8r8": 2437792,
     "esp32s31": 2744032,
     "esp32-16mb": 2356048,
@@ -14,31 +14,31 @@
     "esp32p4rev3-eth": 2231792,
     "esp32s3-zero": 2224816,
     "esp32-pico": 2107168,
-    "desktop-macos": 2357000,
+    "desktop-macos": 2358536,
     "desktop-windows": 1925120,
     "esp32c3": 2335072,
     "desktop-linux": 2548000,
     "esp32s3-n32r16": 2438176,
-    "teensy41": 1267692
+    "teensy41": 1271788
   },
   "measured": {
-    "esp32p4rev1-eth": "2026-10-13",
+    "esp32p4rev1-eth": "2026-10-14",
     "esp32s31": "2026-10-13",
-    "esp32": "2026-10-13",
+    "esp32": "2026-10-14",
     "esp32-pico": "2026-09-09",
-    "esp32s3-n16r8": "2026-10-13",
+    "esp32s3-n16r8": "2026-10-14",
     "esp32s3-n8r8": "2026-10-13",
     "esp32s3-zero": "2026-10-13",
     "esp32-16mb": "2026-10-13",
-    "esp32p4rev1-eth-wifi": "2026-10-13",
+    "esp32p4rev1-eth-wifi": "2026-10-14",
     "esp32-eth": "2026-09-11",
     "esp32p4rev3-eth": "2026-10-13",
-    "desktop-macos": "2026-10-13",
+    "desktop-macos": "2026-10-14",
     "desktop-windows": "2026-09-30",
     "esp32c3": "2026-10-10",
     "desktop-linux": "2026-10-12",
     "esp32s3-n32r16": "2026-10-13",
-    "teensy41": "2026-10-13"
+    "teensy41": "2026-10-14"
   },
   "perf": {
     "esp32": {
@@ -317,6 +317,52 @@
           "p95": 1521,
           "n": 1,
           "last": "2026-10-11"
+        }
+      },
+      "NetworkReceive_two_boards": {
+        "host=esp32s3-n16r8 sender=esp32s3-n16r8": {
+          "p50": 30612,
+          "p95": 33261,
+          "n": 2,
+          "last": "2026-10-14"
+        },
+        "host=esp32p4rev1-eth sender=esp32s3-n16r8": {
+          "p50": 11930,
+          "p95": 21562,
+          "n": 2,
+          "last": "2026-10-14"
+        },
+        "host=esp32s3-n16r8 sender=esp32p4rev1-eth": {
+          "p50": 37919,
+          "p95": 38723,
+          "n": 3,
+          "last": "2026-10-14"
+        },
+        "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
+          "p50": 15741,
+          "p95": 22861,
+          "n": 6,
+          "last": "2026-10-14"
+        },
+        "host=teensy41 sender=esp32p4rev1-eth": {
+          "p50": 3402,
+          "p95": 3402,
+          "n": 1,
+          "last": "2026-10-14"
+        },
+        "host=teensy41 sender=esp32s3-n16r8": {
+          "p50": 5022,
+          "p95": 6680,
+          "n": 2,
+          "last": "2026-10-14"
+        }
+      },
+      "NetworkSend_one_sender_many_receivers": {
+        "host=esp32s3-n16r8 sender=esp32s3-n16r8 receiver2=esp32p4rev1-eth": {
+          "p50": 3847,
+          "p95": 3980,
+          "n": 2,
+          "last": "2026-10-14"
         }
       },
       "perf_full": {
@@ -776,53 +822,53 @@
     }
   },
   "loc": {
-    "core": 30147,
-    "light": 31265,
-    "platform": 21509,
+    "core": 30139,
+    "light": 31542,
+    "platform": 21589,
     "ui": 12471,
-    "test": 67552,
-    "moondeck": 31292
+    "test": 67801,
+    "moondeck": 31404
   },
   "comments": {
     "core": {
-      "lines": 6446,
+      "lines": 6438,
       "ratio": 0.237
     },
     "light": {
-      "lines": 7512,
-      "ratio": 0.27
+      "lines": 7542,
+      "ratio": 0.268
     },
     "platform": {
-      "lines": 4159,
-      "ratio": 0.217
+      "lines": 4167,
+      "ratio": 0.216
     },
     "ui": {
       "lines": 3471,
       "ratio": 0.295
     },
     "test": {
-      "lines": 7131,
+      "lines": 7150,
       "ratio": 0.122
     },
     "moondeck": {
-      "lines": 4933,
-      "ratio": 0.18
+      "lines": 4941,
+      "ratio": 0.179
     }
   },
   "tests": {
-    "cases": 2523,
-    "scenarios": 30
+    "cases": 2535,
+    "scenarios": 32
   },
   "docs": {
     "md_files": 160,
-    "md_lines": 33946,
+    "md_lines": 33983,
     "plans_files": 50,
-    "backlog_lines": 3387,
+    "backlog_lines": 3393,
     "lessons_lines": 532,
-    "claude_md_lines": 285
+    "claude_md_lines": 287
   },
   "complexity": {
-    "functions": 4996,
+    "functions": 5009,
     "over_threshold": 353,
     "worst_ccn": 128
   }

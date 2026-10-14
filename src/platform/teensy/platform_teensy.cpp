@@ -127,6 +127,7 @@ const char* renderTaskName() { return ""; }
 bool spawnPinnedTask(WorkerTask&, const char*, WorkerFn, void*, size_t, uint8_t, int) { return false; }
 void notifyTask(WorkerTask&) {}
 bool waitNotify(WorkerTask&, uint32_t) { return false; }
+void sleepUs(WorkerTask&, uint32_t) {}
 void stopPinnedTask(WorkerTask&) {}
 // --- Watchdog: WDOG1 on the one loop, which feeds it every tick --------------------------------
 
@@ -498,7 +499,12 @@ DnsStep g_dns;
 }  // namespace
 
 LookupStep resolveHostStep(const char* name, uint8_t ip[4]) {
-    if (!name || !ethConnected() || std::strlen(name) >= sizeof(g_dns.name)) return LookupStep::Failed;
+    // A lookup the lost connection carried is abandoned, so a reconnect starts afresh and its late answer is ignored.
+    if (!ethConnected()) {
+        if (g_dns.state != DnsState::Idle) { ++g_dns.generation; g_dns.state = DnsState::Idle; }
+        return LookupStep::Failed;
+    }
+    if (!name || std::strlen(name) >= sizeof(g_dns.name)) return LookupStep::Failed;
     if (g_dns.state == DnsState::Idle || std::strcmp(g_dns.name, name) != 0) {
         std::strcpy(g_dns.name, name);
         const uint32_t generation = ++g_dns.generation;
@@ -602,6 +608,9 @@ bool UdpSocket::bind(uint16_t port, const uint8_t[4]) {
     degrade("udp: bind refused");
     return false;
 }
+
+// One loop and no tasks: the receive side polls recvFrom from the render loop, so there is nothing to wait in.
+int UdpSocket::waitReadable(UdpSocket* const*, int, uint32_t) { return -1; }
 
 int UdpSocket::recvFrom(uint8_t* buf, size_t maxLen, uint8_t srcIp[4], uint16_t* srcPort) {
     if (fd_ < 0) return -1;

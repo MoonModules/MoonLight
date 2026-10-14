@@ -175,6 +175,7 @@
 #include <winhttp.h>    // https POST: Windows' own TLS, so the .exe needs no bundled library
 #else
 #include <sys/socket.h>
+#include <sys/select.h>   // select: a receive task's wait over its UDP sockets
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <netdb.h>      // getaddrinfo: hostname resolution for TcpConnection::connect
@@ -509,6 +510,13 @@ bool waitNotify(WorkerTask& t, uint32_t timeoutMs) {
     if (!got) return false;         // timed out with no notify/stop
     w->pending = false;             // consume the single-slot latch
     return true;                    // woken by a notify OR stop; the fn re-checks its stop flag
+}
+
+void sleepUs(WorkerTask& t, uint32_t us) {
+    auto* w = static_cast<DesktopWorker*>(t.impl);
+    if (!w) return;
+    std::unique_lock<std::mutex> lk(w->mtx);
+    w->cv.wait_for(lk, std::chrono::microseconds(us), [w] { return w->stop; });
 }
 
 void stopPinnedTask(WorkerTask& t) {
@@ -2137,6 +2145,24 @@ int UdpSocket::recvFrom(uint8_t* buf, size_t maxLen, uint8_t srcIp[4], uint16_t*
     if (srcIp) std::memcpy(srcIp, &src.sin_addr.s_addr, 4);   // network order = octets
     if (srcPort) *srcPort = ntohs(src.sin_port);
     return static_cast<int>(n);
+}
+
+// select() over the bound sockets, the textbook wait for a receive task; the render loop keeps polling recvFrom instead.
+int UdpSocket::waitReadable(UdpSocket* const* sockets, int count, uint32_t timeoutMs) {
+    fd_set readable;
+    FD_ZERO(&readable);
+    int maxFd = -1;
+    for (int i = 0; i < count; i++) {
+        if (!sockets[i] || sockets[i]->fd_ < 0) continue;
+        FD_SET(sock(sockets[i]->fd_), &readable);
+        if (sockets[i]->fd_ > maxFd) maxFd = sockets[i]->fd_;
+    }
+    if (maxFd < 0) { delayMs(timeoutMs); return 0; }   // nothing open: wait out the period rather than spin
+    timeval tv{};
+    tv.tv_sec = static_cast<decltype(tv.tv_sec)>(timeoutMs / 1000);
+    tv.tv_usec = static_cast<decltype(tv.tv_usec)>((timeoutMs % 1000) * 1000);
+    const int r = ::select(maxFd + 1, &readable, nullptr, nullptr, &tv);
+    return r < 0 ? 0 : r;
 }
 
 // Test override forcing a multicast join to fail, since a test cannot take the host's network away.

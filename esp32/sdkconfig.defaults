@@ -58,6 +58,9 @@ CONFIG_LWIP_AUTOIP_TRIES=4
 # avoiding partial sends that would drop and reconnect the preview connection.
 CONFIG_LWIP_TCP_SND_BUF_DEFAULT=11520
 
+# A received frame is a burst of UDP packets (26 DDP packets for 12,288 lights) arriving faster than any task wakes, and a socket holding 6 drops the rest: measured on the S3 and the P4, mailbox 6 completed 4 to 10 of 40 frames/s at 4,096 lights where 32 completed 22 to 38 (scenario_NetworkReceive_two_boards).
+CONFIG_LWIP_UDP_RECVMBOX_SIZE=32
+
 # A browser page-load opens the HTML + several JS/CSS files + the persistent WebSocket all at once, and
 # every refresh churns that whole set. The default 10-socket ceiling can't hold one burst (6 files + WS +
 # the listen socket + WiFi/mDNS internals) once a few closed sockets sit in TIME_WAIT, so lwIP RSTs the

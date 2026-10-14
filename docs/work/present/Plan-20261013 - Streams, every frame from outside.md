@@ -10,7 +10,7 @@ Every media framework separates the same three questions: GStreamer, FFmpeg, Med
 |---|---|
 | **Transport** | a file on flash or the SD card, the network (UDP, TCP, the browser's WebSocket), USB, a camera port (MIPI-CSI) |
 | **Format** | raw RGB, PPM, GIF, MJPEG, FSEQ, the DDP, Art-Net and E1.31 framings; H.264 on the way out |
-| **Geometry** | a picture (width × height), a light list (N lights in wiring order), a volume (width × height × depth) |
+| **Geometry** | a picture (width × height), a light list (N lights, mapped by the sender), a volume (width × height × depth) |
 
 A source is then a transport plus a decoder, delivering frames with a small descriptor: the geometry, the pixel format and the frame's time. An output is an encoder plus a transport. Everything users ask for is a combination:
 
@@ -35,7 +35,7 @@ The three axes describe any stream, and they do not make every stream one module
 | Live in | Network Receive: Art-Net, sACN (E1.31), DDP | capture: USB, MIPI-CSI, a browser tab |
 | Recorded in | FSEQ playback | GIF, image sequences |
 | Out | Network Send, FSEQ recording | HLS and RTSP, HDMI |
-| Data | values in wiring order | width × height pixels |
+| Data | values mapped by the sender | width × height pixels |
 | Into a layer by | placement through the layout | sampling per light |
 
 **Channel data is a protocol family, not a decoder.** Art-Net, sACN and DDP carry universes and channels, discovery (ArtPoll), sync packets, priorities and merging between senders, and Network Receive and Network Send are the two halves of the family. An FSEQ file is a recording of exactly that data, which is why Falcon Player plays FSEQ and outputs sACN. So FSEQ joins this family as a sibling of Network Receive, not as a decoder in a generic stream source.
@@ -44,7 +44,7 @@ The three axes describe any stream, and they do not make every stream one module
 
 **What the families share, and only that:**
 
-1. **Light-list placement:** writing values in wiring order into the layer through the layout. FSEQ needs it, and so does Network Receive for senders that send in wiring order (below). One helper, two users.
+1. **Light-list placement:** writing values mapped by the sender into the layer through the layout. FSEQ needs it, and so does Network Receive for frames mapped by the sender (below). One helper, two users.
 2. **The timing rule:** live (the newest frame wins) or recorded (the clock picks the frame), below.
 3. **The layer:** both families end as an effect in a layer, so they compose with effects, blend modes and modifiers.
 
@@ -53,22 +53,22 @@ Two rules keep the picture side small enough for a microcontroller, where GStrea
 - **Decoders always deliver RGB888,** so nothing negotiates formats.
 - **The picture descriptor stays a handful of fields:** size, frame time, live or recorded, and the tone curve a picture carries so the sampler averages light rather than bytes.
 
-## Image order and wiring order
+## Mapped by the receiver or by the sender
 
-Network Receive copies channel k into logical cell k of its layer, and the layer's mapping then carries each logical cell to its physical light, so it follows the pipeline like any effect. Whether that is right depends on the order the sender's data is in, and the industry uses two conventions:
+Network Receive copies channel k into logical cell k of its layer, and the layer's mapping then carries each logical cell to its physical light, so it follows the pipeline like any effect. Whether that is right depends on who mapped the frame, and the industry uses two conventions:
 
 | Sender sends | Examples | Copied into the layer by index |
 |---|---|---|
-| **Image order:** row by row, like a picture, expecting the receiver to apply its own wiring | image-based tools that leave the wiring to the controller | correct: the layer's mapping applies this board's serpentine or 3D wiring once |
-| **Wiring order:** arranged in the order the lights are wired, because the sender did the mapping itself | xLights, FSEQ files, Falcon Player, pixel-mapping software with a fixture patch, MoonLight's own Network Send (it sends driver output) | mapped twice: the sender already applied the wiring and the layer applies it again, so a serpentine panel gets every other row reversed |
+| **Mapped by the receiver:** row by row like a picture (raster order), expecting the receiver to apply its own wiring | image-based tools that leave the wiring to the controller | correct: the layer's mapping applies this board's serpentine or 3D wiring once |
+| **Mapped by the sender:** arranged in the order the lights are wired (wiring order), because the sender did the mapping itself | xLights, FSEQ files, Falcon Player, pixel-mapping software with a fixture patch, MoonLight's own Network Send (it sends driver output) | mapped twice: the sender already applied the wiring and the layer applies it again, so a serpentine panel gets every other row reversed |
 
-On a plain grid without modifiers the two orders coincide, which is why the difference stays invisible on simple setups.
+On a plain grid without modifiers the two conventions coincide, which is why the difference stays invisible on simple setups.
 
-**So Network Receive gains a `data order` setting,** image or wiring:
+**So Network Receive gains a `mapped_by` setting,** `receiver` or `sender`, naming who maps the frame onto the wiring, `receiver` being the default:
 
-- **Image order** is today's copy, unchanged, so nothing changes for anyone using it now.
-- **Wiring order** places channel k through the light-list placement, which is the inverse of the layer's mapping: composed, the two cancel, so channel k reaches physical light k while still blending and taking modifiers.
-- **FSEQ is always wiring order,** since xLights writes it that way, so the FSEQ effect uses the placement without a setting.
+- **Mapped by the receiver** is today's copy, unchanged, so nothing changes for anyone using it now.
+- **Mapped by the sender** places channel k through the light-list placement, which is the inverse of the layout's mapping, before the layer's modifiers: composed with the layout, the two cancel, so channel k reaches physical light k, while a mirror or a rotation still transforms the frame and it still blends.
+- **FSEQ is always mapped by the sender,** since xLights writes it that way, so the FSEQ effect uses the placement without a setting, through the channel-data sink it shares with Network Receive.
 
 **The hot path stays as fast as today.** Network Receive is on it: at 16,000 lights and 40 frames a second every per-light step counts. The placement follows the rule the layer's mapping already follows, which keeps no table at all when logical order equals physical order (`hasLUT()` false):
 
@@ -117,11 +117,11 @@ The textbook name is inverse mapping: compose every transform into one coordinat
 
 **The one full frame is the decoded picture,** the texture the shader samples, and it is an input rather than a stage: the P4's JPEG hardware decodes whole frames and a GIF composes onto a canvas, so a decoder produces it anyway. Channel data needs none: an FSEQ or DDP frame is written into the layer buffer through the placement table as it is read.
 
-**What it removes.** Ambilight stops being an effect of its own and becomes the picture effect's area sampler. Network Receive keeps its protocol family and gains wiring order as a second convention, at no cost in the identity case. FSEQ reuses Network Receive's placement instead of growing its own. No stage holds a frame of its own, and no geometry option is duplicated inside an effect.
+**What it removes.** Ambilight stops being an effect of its own and becomes the picture effect's area sampler. Network Receive keeps its protocol family and gains sender mapping as a second convention, at no cost in the identity case. FSEQ reuses Network Receive's placement instead of growing its own. No stage holds a frame of its own, and no geometry option is duplicated inside an effect.
 
 ```mermaid
 flowchart TB
-    subgraph CH["<b>Channel data</b>: wiring order"]
+    subgraph CH["<b>Channel data</b>: mapped by the sender"]
         direction LR
         nr["<b>Network Receive</b><br/>Art-Net, sACN, DDP"]
         fseq["<b>FSEQ playback</b><br/>from /sd<br/><i>TouchMyLight</i>"]
@@ -230,7 +230,7 @@ A live browser source costs bandwidth, lights × 3 bytes × fps: about 60 KB/s f
 
 TouchMyLight's cube is the first user, so 3D works from the start.
 
-- **A light list carries wiring order, not positions.** An FSEQ frame holds values in the order xLights numbers the model's lights, the order the outputs drive them. Copied into the layer by index, wiring-order data is mapped twice wherever the layer's order differs from the wiring, as on a cube (see image order and wiring order above). The light-list placement puts light k at the coordinate the layout gives light k, and the layer's mapping carries it back to that physical light: correct on 1D, 2D and 3D layouts, and still composing with layers and modifiers. The user-side requirement is the one every FSEQ player has: the MoonLight layout and the xLights model number their lights the same way.
+- **A light list is mapped by the sender, and carries no positions.** An FSEQ frame holds values in the order xLights numbers the model's lights, the order the outputs drive them. Copied into the layer by index, it is mapped twice wherever the layer's order differs from the wiring, as on a cube (see mapped by the receiver or by the sender, above). The light-list placement puts light k at the coordinate the layout gives light k, and the layer's mapping carries it back to that physical light: correct on 1D, 2D and 3D layouts, and still composing with layers and modifiers. The user-side requirement is the one every FSEQ player has: the MoonLight layout and the xLights model number their lights the same way.
 - **A picture reaches a 3D layout by projection:** each light samples the picture at its position seen along one axis, the planar projection media servers use.
 - **A volume is the native 3D stream:** a frame per depth slice, copied straight into a 3D layer.
 
@@ -249,8 +249,8 @@ The P4's hardware video codec encodes H.264 but does not decode it; its JPEG cod
 | USB capture (#139, first commit) | a picture source's USB transport and MJPEG decoder, behind the platform seam, in the P4 images with room |
 | Per-die trim (#139, second commit) | a separate idea: output calibration in fixture profiles and correction, judged against a 3×3 correction matrix |
 | Backlight wiring (#140) | a layout: Hyperion's classic layout, xLights' frame models |
-| FSEQ player (TouchMyLight) | its own effect beside Network Receive, sharing the light-list placement and the universe settings |
-| Network Receive (shipped) | kept as the pixel-protocol family, gaining a `data order` setting: image order as today, wiring order through the light-list placement |
+| FSEQ player (TouchMyLight) | its own thin effect beside Network Receive, both on one channel-data sink (staging, hold-last-frame, `mapped_by`, the placement, the counters); a third user later records a live stream to FSEQ |
+| Network Receive (shipped) | kept as the pixel-protocol family, gaining a `mapped_by` setting: `receiver` as today, `sender` through the light-list placement |
 
 ## What we do not do, and what we do differently
 
@@ -287,13 +287,14 @@ What MoonLight builds first, so that every contribution after it is one source i
 
 | # | Piece | Where | What it does |
 |---|---|---|---|
-| G1 | **Light-list placement** | a helper in `src/light/layers/` | at prepare, maps light k to the logical cell it lands in, from the layer's own physical-to-logical fold, with no table when the orders coincide; per frame, writes values in wiring order into the layer buffer |
-| G2 | **Network Receive's `data order`** | `NetworkReceiveEffect` | image order as today, wiring order through G1; the first user of G1 and the path FSEQ copies; gated by the before-and-after measurement |
+| G1 | **Light-list placement** ✅ built | `MappingLUT::gatherFromPhysical` | the mapping's own inverse, needing no table of its own: each logical cell takes the value its first physical light was sent, read from the CSR runs the layer already builds; one copy on the identity path ; it inverts the whole mapping today, modifiers included, so a mirror or a rotation on a sender-mapped stream cancels instead of applying: G5 inverts the layout's mapping alone, accepted on a rotated layer |
+| G2 | **Network Receive's `mapped_by`** ✅ built | `NetworkReceiveEffect` | `receiver` as before (the default), `sender` through G1, the status saying "one copy" or "mapped twice"; tests pin a serpentine grid and a 3D layout, which reversed every other row before; on the S3 at 12,288 lights a serpentine layout costs 4.5 ms per frame against 1.1 ms for receiver mapping, an identity layout the same as receiver mapping |
 | G3 | **The picture source** | a core service, from #138's `VideoService` | the descriptor, publishing in `AudioService`'s pattern, a test pattern as its only source |
 | G4 | **The picture effect** | a light effect, from #138's sampler | point or area sampling in linear light, fit or stretch, a table at prepare and one gather per frame |
-| G5 | **A contributor page** | docs | how to add a channel-data source and how to add a picture source, with the test pattern as the template |
+| G5 | **Sender mapping skips the board's mapping** | `Layer`, `Drivers` | the existing rule, hottest path when possible, extended to layouts that are not the identity: an identity layout is already one copy at any number of layers, since the drivers do not map; a layer whose only writer is mapped by the sender, with no modifiers and no second layer, is read as it is whatever the layout, so the layout still shapes the preview and the board's own effects; blending or a modifier on such a layout falls back to G1's round trip, with G1 inverting the layout's mapping alone so the modifier transforms the frame; the tests add a rotated and a mirrored layer to the serpentine and 3D cases |
+| G6 | **A contributor page** | docs | how to add a channel-data source and how to add a picture source, with the test pattern as the template |
 
-G1 and G2 come first: they add the second convention every wiring-order sender needs, and wait on no naming. G3 and G4 take #138's core part, credited to Gohnnyman. Before code: the double mapping confirmed on the bench (a serpentine grid fed by xLights, expected to show every other row reversed) and the open questions below decided.
+G1 and G2 come first: they add the second convention every mapping sender needs, and wait on no naming. G3 and G4 take #138's core part, credited to Gohnnyman. Before code: the double mapping confirmed on the bench (a serpentine grid fed by xLights, expected to show every other row reversed) and the open questions below decided.
 
 ## How contributions arrive
 
@@ -303,20 +304,56 @@ Each later piece is a small pull request, one topic, based on current main, with
 |---|---|---|
 | Backlight wiring, today's #140 resubmitted on main | Gohnnyman | nothing; it can come now |
 | Color trim, split from #139 | Gohnnyman | nothing; a separate idea |
-| FSEQ playback from SD: uncompressed v2, sparse ranges, the frame index from the clock, verified on a 3D layout | TouchMyLight | G1, G2 |
+| FSEQ playback from SD: uncompressed v2, sparse ranges, the frame index from the clock, verified on a 3D layout. Its first step extracts Network Receive's channel-data core (staging, hold-last-frame, `mapped_by`, the placement, the counters) into one sink that Network Receive and the FSEQ player both use, each a thin effect with its own settings (decided 2026-10-14) | TouchMyLight | G1, G2; G5 makes it cheap on a 3D layout, where a sender-mapped frame is otherwise mapped back and forward again (4 ms against 1.6 ms on the S3 at 12,288 lights) |
 | Border sampling: edge depth, smoothing | Gohnnyman | G4 |
 | GIF decoder, PPM as a test format | open | G3 |
 | USB capture with its MJPEG decoder, P4, with Teensy stubs | Gohnnyman | G3 |
 | Browser pages: converter, baking to FSEQ, a live tab source | open | G1 to G4 |
 | Recording, HDMI out on the ESP32-P4-PC, clock sync | open | FSEQ playback |
 
-#138 and #139 close with thanks once G3 and G4 land, their good parts credited in the groundwork; a stacked pull request from a fork always shows its parents, so it is reviewed only after the one below it merges.
+#138 and #139 close with thanks once G3 and G4 land, their good parts credited in the groundwork; a stacked pull request waits for the one below it, as [CLAUDE.md](../../../CLAUDE.md) says.
+
+## Where it stands (2026-10-14)
+
+Built and uncommitted: G1 and G2 (`mapped_by`), and around them what measuring Network Receive on real boards turned up.
+
+- **Network Receive** drains its sockets in a receive task on core 1, shows its path in the status ("one copy" or "mapped twice"), and counts `packets_per_s` and `frames_per_s`.
+- **TryLock** releases with an exchange: in PSRAM a plain store raced the emulated read-modify-write, left the latch set with no owner, and took the WiFi stack down with the stuck receive task.
+- **The gather** runs in 4.5 ms instead of 7.3 ms at 12,288 lights on the S3.
+- **Defaults:** a UDP mailbox of 32 on every board, and 30 Ethernet receive buffers of 1600 bytes on the P4, transmit kept at 10.
+- **Scenarios:** `scenario_NetworkReceive_two_boards` and `scenario_NetworkSend_one_sender_many_receivers` drive several boards (`--board name=host`), recorded per combination of boards.
+
+Received at 12,288 lights, 40 frames/s sent (1,040 packets/s), mapped by the receiver:
+
+| Sender to receiver | Packets/s | Frames/s | Receiver tick |
+|---|---|---|---|
+| S3 WiFi to S3 WiFi | 600 to 980 | 20 to 23 | 6.8 to 8.2 ms |
+| P4 Ethernet to S3 WiFi | 616 | 23 | 5.8 ms |
+| S3 WiFi to P4 Ethernet | 984 | 32 | 0.3 ms |
+| P4 Ethernet to P4 Ethernet | 790 to 846 | 8 to 19 | 0.8 ms |
+
+P4 to P4 started the day at about 200 packets/s and 0 to 1 frames. What remains is the sender's burst: the access point drops it on WiFi, and on Ethernet the push packet at its end is the one most often lost. Network Send pacing its packets is the next step (a 0.5 ms gap recovered 96% on WiFi), then G5, which removes the double mapping that sender mapping costs on a layout that is not the identity (4 ms against 1.6 ms on the S3). The rest is in the backlog below.
+
+## Backlog, found while measuring
+
+- **A blocking HTTP write freezes the render task under a stream.** `serveState` writes the full `/api/state` (about 35 KB) with a blocking `lwip_write` on the render task; with the S3 receiving 12,288 lights over WiFi the client's acknowledgements slow, the send buffer fills, and the write holds the render task for seconds until the task watchdog reboots the board (backtrace: `handleConnection` → `serveState` → `JsonSink::flushStage` → `lwip_write`, 2026-10-14). The UI no longer reads the full state since state by subscription, so the trigger was the scenario runner's reads at every measure step; only the diagnostic bundle, assign mode and a backup restore still read it, each on a user's explicit action. The textbook fix: write without blocking and resume a partial write on the next tick, as uploads already stream. Check whether the WebSocket state pushes, smaller TCP writes on the same task, can block the same way.
+- **The WiFi connect grace counts from STA init, not from association.** `NetworkModule::kStaGraceMs` (10 s) starts when the station starts; a router taking 7.3 s to lease an address plus one missed scan (reason 201, about 2.4 s) runs it out, and the board falls back to its access point for about 80 s while already joined. The lease wait belongs after association, which `kDhcpWaitMs` already names.
+- **No log on the S3's native USB port.** The S3 builds keep IDF's default console, UART0 primary with USB-Serial-JTAG as the secondary mirror, yet nothing arrives on the native port, so a board connected by that port alone (the testbench, an S3-Zero) shows no log and loses any crash reason. Suspected, not verified: Improv installs its own USB-Serial-JTAG driver for provisioning, which takes the peripheral from the mirror, where [platform_esp32_improv.cpp](../../../src/platform/esp32/platform_esp32_improv.cpp) expects the console to win. With USB-Serial-JTAG as the primary console a pyserial read with DTR and RTS off receives the log, while MoonDeck's `monitor_esp32` still receives nothing. The fix is either the mirror and Improv sharing the port, or USB-Serial-JTAG as the primary console on native-USB S3 boards; check too whether the installer's post-flash address read depends on it.
+- **The UDP mailbox of 32 and the paced send task on boards without PSRAM.** `CONFIG_LWIP_UDP_RECVMBOX_SIZE=32` is in the base defaults for every board. It costs about 128 bytes per socket, and on WiFi the queued packets are WiFi's own receive buffers, capped at 32. On Ethernet without PSRAM they come from the internal heap at about 1.6 KB each, so a full queue holds about 50 KB on a classic board with 100 to 170 KB free, which could starve the HTTP server during a burst. Measure it with `scenario_NetworkReceive_two_boards` on a classic Ethernet board (the Olimex at 192.168.1.210) receiving from a P4, reading free heap and the HTTP answers; if it hurts, the 4 MB classic fragments override it with a smaller value. Measure Network Send's paced task there too, with the classic as the sender: about 5.5 KB of internal RAM per driver (a 4 KB stack, the 1.45 KB packet buffer, a timer), and on a single-core chip such as the C3 the send task outranks the frame loop, so each packet briefly interrupts it.
+- **The two-board scenarios on every platform.** `scenario_NetworkReceive_two_boards` and `scenario_NetworkSend_one_sender_many_receivers` run today on S3 boards over WiFi and P4 boards over Ethernet, in all four pairings. Add the Teensy 4.1 (Ethernet), desktop builds over WiFi, and the NanoPi over Ethernet, as sender and as receiver, so every platform's receive cost and loss sits in the same table. A desktop or NanoPi board joins with `--board name=<ip>:8080`. The Teensy build runs bare-metal with no scheduler, so Network Send and Network Receive work inside their tick (`spawnPinnedTask` returns false); QNEthernet fills its receive buffers in an interrupt, so a late drain loses less there. Its runs show whether threads (TeensyThreads or a FreeRTOS port, with stacks in its tight RAM and shared structures made thread-safe) are worth it.
+- **E1.31 multicast never arrives.** Network Receive binds 5568 but never joins the multicast groups, so both receivers in `scenario_NetworkSend_one_sender_many_receivers` read 0 packets while Network Send multicast; `UdpSocket::membership` exists in the platform layer and goes unused. Join the groups of the universes the layer covers, from `universe_start` on.
+- **The Art-Net broadcast counts do not add up.** In the same scenario at 64x64 (about 1,000 packets/s sent, 40 frames), the S3 counted 1,212 packets/s and 96 frames/s while the P4 counted 488 and 39. Another bench board broadcasting, or duplicates over WiFi; a packet capture on port 6454 settles it.
+- **A sending P4 reboots with 30 Ethernet transmit buffers.** With 30 x 1600 bytes for transmit a P4 rebooted about 15 s into sending; IDF takes every Ethernet DMA buffer from internal RAM, about 96 KB with 30 + 30, so internal-heap exhaustion is the suspect, unverified. troyhacks raised and reverted the same values within 26 minutes ([bdf6c17e](https://github.com/troyhacks/esp32-arduino-libs/commit/bdf6c17e), [c8a43b7e](https://github.com/troyhacks/esp32-arduino-libs/commit/c8a43b7e)). Transmit stays at 10.
+- **The P4's HTTP server answers "incomplete request body" under a stream.** Two `set_control` writes and one `apply_state` failed this way while the P4 received DDP over Ethernet; the same short body window backlog-core already names.
+- **`CONFIG_ETH_IRAM_OPTIMIZATION=y` on the P4.** The one Ethernet change troyhacks kept; measure it with `scenario_NetworkReceive_two_boards`, P4 to P4.
+- **A UDP mailbox of 64 on the P4.** Espressif's own P4 Arduino default; 32 against 64 measured the same on the S3 over WiFi, so measure it P4 to P4 over Ethernet, where bursts arrive at wire speed.
+- **The receive task's priority on Ethernet.** Ours runs at 3 on core 1, below the driver task (`mmEncode`, 5); troyhacks' Art-Net receive runs at 20 on core 0, blocking in `recvfrom()`, above lwIP's own thread (`tcpip`, 18), which a busy drain could starve. On the S3 over WiFi 6 against 3 changed nothing, the loss being at the access point. Measure 6 (above the driver task) and 19 (above lwIP) P4 to P4.
+- **Network Send paces its packets.** Back-to-back bursts are what the access point drops (a 0.5 ms gap recovered 96% on WiFi) and what loses the push packet at the end of an Ethernet burst. Spread a frame's packets over part of the frame period, and back off on a full transmit queue (`ENOMEM`) rather than adding buffers, as Espressif advises ([esp-idf#13602](https://github.com/espressif/esp-idf/issues/13602)) and troyhacks' raw Ethernet driver does.
+- **The live runner restores no board when a board fails mid-run.** A two-board run whose receiver rebooted left the sender's scenario canvas and its Network Send on P4 .139, still streaming to the S3. The restore of every board belongs in a `finally`, so an exception or a dead board still puts the others back.
 
 ## Open questions
 
 - The names: `PictureService` and `PictureEffect`, or names closer to the industry's (media source, pixel map)?
-- FSEQ as its own effect beside Network Receive (proposed), or a second source of one channel-data effect, which would rename Network Receive?
-- Where the light-list placement lives: a helper beside the layer's mapping build, or a method of the layer itself?
 - Does a recording capture the layer's input (before mapping) or the drivers' output (after correction)? xLights expects the output.
 - How far video goes on a board without a hardware decoder: GIF and image sequences, or a software decoder measured in flash first.
 - How HDMI out is wired on the ESP32-P4-PC: its sources name HDMI and MIPI-DSI but no bridge chip; Olimex's separate P4 HDMI adapter uses Lontium's LT8912B (MIPI-DSI to HDMI, up to 1080p60), so check the schematic.

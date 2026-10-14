@@ -1337,10 +1337,13 @@ Detail: [technical](moxygen/DemoReelEffect.md)
 
 <img src="../../assets/light/effects/NetworkReceiveEffect.gif" width="300" alt="NetworkReceive effect preview">
 
-Receives lights over UDP and writes them into the layer: the receive side for Resolume, Madrix, xLights and LedFx.
+Receives lights over UDP into the layer, from Resolume, Madrix, xLights and LedFx. Sender mapping is one copy on a layout listed as wired, else two mappings, as the status shows. Behind a correcting sender, keep the profile in byte order, brightness 255 and the linear curve.
 
 - `universe_start`: the first incoming universe to map, mirroring the sender.
 - `channels_per_universe`: bytes each universe maps to; 510 or 512.
+- `mapped_by`: **receiver** (sent row by row) or **sender** (in wiring order).
+- `packets_per_s`: packets received in the last second, read-only.
+- `frames_per_s`: frames received in the last second, read-only.
 
 Origin: MoonLight original (E1.31 / Art-Net receive)
 

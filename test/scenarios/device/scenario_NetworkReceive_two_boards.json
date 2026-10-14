@@ -1,0 +1,3826 @@
+{
+  "name": "scenario_NetworkReceive_two_boards",
+  "module": "NetworkReceiveEffect",
+  "also": [
+    "NetworkSendDriver",
+    "Layer",
+    "GridLayout"
+  ],
+  "mode": "mutate",
+  "live_only": true,
+  "boards": [
+    "sender"
+  ],
+  "description": "Two boards: the sender board sends with Network Send, this device receives with Network Receive. Sweeps grid size, identity against serpentine layout, mapped by the receiver against the sender, one layer against two, and the three protocols, reading Network Receive's tick and its packets and frames per second against what the sender sent.",
+  "top": [
+    "Layouts",
+    "Effects"
+  ],
+  "steps": [
+    {
+      "name": "sender-clear-layouts",
+      "device": "sender",
+      "op": "apply_state",
+      "document": {
+        "Layouts": {
+          "$patch": "replace"
+        }
+      },
+      "description": "The sender's canvas: one grid, one layer with a changing effect, and a Network Send aimed at the receiver."
+    },
+    {
+      "name": "sender-clear-effects",
+      "device": "sender",
+      "op": "apply_state",
+      "document": {
+        "Effects": {
+          "$patch": "replace"
+        }
+      }
+    },
+    {
+      "name": "sender-grid",
+      "device": "sender",
+      "op": "apply_state",
+      "document": {
+        "Layouts": {
+          "Grid": {
+            "type": "GridLayout",
+            "width": 16,
+            "height": 16
+          }
+        }
+      }
+    },
+    {
+      "name": "sender-layer",
+      "device": "sender",
+      "op": "apply_state",
+      "document": {
+        "Effects": {
+          "Layer": {
+            "type": "Layer",
+            "Rainbow": {
+              "type": "RainbowEffect"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "sender-send",
+      "device": "sender",
+      "op": "apply_state",
+      "document": {
+        "Drivers": {
+          "Send": {
+            "type": "NetworkSendDriver",
+            "hosts": "{host}",
+            "protocol": 2,
+            "fps": 40
+          }
+        }
+      }
+    },
+    {
+      "name": "receiver-clear-layouts",
+      "op": "apply_state",
+      "document": {
+        "Layouts": {
+          "$patch": "replace"
+        }
+      },
+      "description": "The receiver's canvas: one grid and one layer holding Network Receive; its own drivers stay, so the forward mapping is the real one."
+    },
+    {
+      "name": "receiver-clear-effects",
+      "op": "apply_state",
+      "document": {
+        "Effects": {
+          "$patch": "replace"
+        }
+      }
+    },
+    {
+      "name": "receiver-grid",
+      "op": "apply_state",
+      "document": {
+        "Layouts": {
+          "Grid": {
+            "type": "GridLayout",
+            "width": 16,
+            "height": 16
+          }
+        }
+      }
+    },
+    {
+      "name": "receiver-layer",
+      "op": "apply_state",
+      "document": {
+        "Effects": {
+          "Layer": {
+            "type": "Layer",
+            "NetworkReceive": {
+              "type": "NetworkReceiveEffect"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "sender-16x16-width",
+      "device": "sender",
+      "op": "set_control",
+      "id": "Grid",
+      "key": "width",
+      "value": 16
+    },
+    {
+      "name": "sender-16x16-height",
+      "device": "sender",
+      "op": "set_control",
+      "id": "Grid",
+      "key": "height",
+      "value": 16
+    },
+    {
+      "name": "receiver-16x16-width",
+      "op": "set_control",
+      "id": "Grid",
+      "key": "width",
+      "value": 16
+    },
+    {
+      "name": "receiver-16x16-height",
+      "op": "set_control",
+      "id": "Grid",
+      "key": "height",
+      "value": 16
+    },
+    {
+      "name": "16x16-identity",
+      "op": "set_control",
+      "id": "Grid",
+      "key": "serpentine",
+      "value": false
+    },
+    {
+      "name": "16x16-identity-mapped-by-receiver-set",
+      "op": "set_control",
+      "id": "NetworkReceive",
+      "key": "mapped_by",
+      "value": 0
+    },
+    {
+      "name": "16x16-identity-receiver",
+      "description": "256 lights, identity layout, mapped by the receiver, DDP at 40 fps.",
+      "op": "measure",
+      "read": [
+        "sender:fps",
+        "NetworkReceive.tick",
+        "NetworkReceive.packets_per_s",
+        "NetworkReceive.frames_per_s",
+        "Drivers.tick"
+      ],
+      "observed": {
+        "host=esp32s3-n16r8 sender=esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 2853,
+            "p95": 3234,
+            "min": 2853,
+            "max": 3234,
+            "n": 2,
+            "samples": [3234, 2853]
+          },
+          "free_heap": {
+            "p50": 8460931,
+            "p95": 8463743,
+            "min": 8460931,
+            "max": 8463743,
+            "n": 2,
+            "samples": [8460931, 8463743]
+          },
+          "max_alloc_block": {
+            "p50": 32768,
+            "p95": 38912,
+            "min": 32768,
+            "max": 38912,
+            "n": 2,
+            "samples": [38912, 32768]
+          },
+          "last_updated": "2026-10-14"
+        },
+        "host=esp32p4rev1-eth sender=esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 64,
+            "p95": 65,
+            "min": 64,
+            "max": 65,
+            "n": 2,
+            "samples": [64, 65]
+          },
+          "free_heap": {
+            "p50": 33857139,
+            "p95": 33917587,
+            "min": 33857139,
+            "max": 33917587,
+            "n": 2,
+            "samples": [33917587, 33857139]
+          },
+          "max_alloc_block": {
+            "p50": 192512,
+            "p95": 253952,
+            "min": 192512,
+            "max": 253952,
+            "n": 2,
+            "samples": [253952, 192512]
+          },
+          "last_updated": "2026-10-14"
+        },
+        "host=esp32s3-n16r8 sender=esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 2925,
+            "p95": 3229,
+            "min": 2740,
+            "max": 3229,
+            "n": 4,
+            "samples": [2925, 3031, 2740, 3229]
+          },
+          "free_heap": {
+            "p50": 8464491,
+            "p95": 8464907,
+            "min": 8459951,
+            "max": 8464907,
+            "n": 4,
+            "samples": [8464491, 8459951, 8464883, 8464907]
+          },
+          "max_alloc_block": {
+            "p50": 47104,
+            "p95": 49152,
+            "min": 40960,
+            "max": 49152,
+            "n": 4,
+            "samples": [47104, 47104, 40960, 49152]
+          },
+          "last_updated": "2026-10-14"
+        },
+        "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 70,
+            "p95": 83,
+            "min": 64,
+            "max": 83,
+            "n": 6,
+            "samples": [64, 78, 80, 70, 83, 65]
+          },
+          "free_heap": {
+            "p50": 33857083,
+            "p95": 33917559,
+            "min": 33828655,
+            "max": 33917559,
+            "n": 6,
+            "samples": [33917559, 33912323, 33855979, 33828655, 33857083, 33857099]
+          },
+          "max_alloc_block": {
+            "p50": 192512,
+            "p95": 249856,
+            "min": 159744,
+            "max": 249856,
+            "n": 6,
+            "samples": [249856, 249856, 192512, 159744, 192512, 192512]
+          },
+          "last_updated": "2026-10-14"
+        },
+        "host=teensy41 sender=esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 2144,
+            "p95": 2144,
+            "min": 2144,
+            "max": 2144,
+            "n": 1,
+            "samples": [2144]
+          },
+          "free_heap": {
+            "p50": 298520,
+            "p95": 298520,
+            "min": 298520,
+            "max": 298520,
+            "n": 1,
+            "samples": [298520]
+          },
+          "max_alloc_block": {
+            "p50": 236328,
+            "p95": 236328,
+            "min": 236328,
+            "max": 236328,
+            "n": 1,
+            "samples": [236328]
+          },
+          "last_updated": "2026-10-14"
+        },
+        "host=teensy41 sender=esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 2147,
+            "p95": 2163,
+            "min": 2147,
+            "max": 2163,
+            "n": 2,
+            "samples": [2147, 2163]
+          },
+          "free_heap": {
+            "p50": 297928,
+            "p95": 299048,
+            "min": 297928,
+            "max": 299048,
+            "n": 2,
+            "samples": [297928, 299048]
+          },
+          "max_alloc_block": {
+            "p50": 181024,
+            "p95": 274432,
+            "min": 181024,
+            "max": 274432,
+            "n": 2,
+            "samples": [181024, 274432]
+          },
+          "last_updated": "2026-10-14"
+        }
+      }
+    },
+    {
+      "name": "16x16-identity-mapped-by-sender-set",
+      "op": "set_control",
+      "id": "NetworkReceive",
+      "key": "mapped_by",
+      "value": 1
+    },
+    {
+      "name": "16x16-identity-sender",
+      "description": "256 lights, identity layout, mapped by the sender, DDP at 40 fps.",
+      "op": "measure",
+      "read": [
+        "sender:fps",
+        "NetworkReceive.tick",
+        "NetworkReceive.packets_per_s",
+        "NetworkReceive.frames_per_s",
+        "Drivers.tick"
+      ],
+      "observed": {
+        "host=esp32s3-n16r8 sender=esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 2859,
+            "p95": 2908,
+            "min": 2859,
+            "max": 2908,
+            "n": 2,
+            "samples": [2908, 2859]
+          },
+          "free_heap": {
+            "p50": 8457291,
+            "p95": 8459071,
+            "min": 8457291,
+            "max": 8459071,
+            "n": 2,
+            "samples": [8457291, 8459071]
+          },
+          "max_alloc_block": {
+            "p50": 38912,
+            "p95": 43008,
+            "min": 38912,
+            "max": 43008,
+            "n": 2,
+            "samples": [38912, 43008]
+          },
+          "last_updated": "2026-10-14"
+        },
+        "host=esp32p4rev1-eth sender=esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 64,
+            "p95": 68,
+            "min": 64,
+            "max": 68,
+            "n": 2,
+            "samples": [64, 68]
+          },
+          "free_heap": {
+            "p50": 33857139,
+            "p95": 33917599,
+            "min": 33857139,
+            "max": 33917599,
+            "n": 2,
+            "samples": [33917599, 33857139]
+          },
+          "max_alloc_block": {
+            "p50": 192512,
+            "p95": 253952,
+            "min": 192512,
+            "max": 253952,
+            "n": 2,
+            "samples": [253952, 192512]
+          },
+          "last_updated": "2026-10-14"
+        },
+        "host=esp32s3-n16r8 sender=esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 2746,
+            "p95": 2831,
+            "min": 2745,
+            "max": 2831,
+            "n": 4,
+            "samples": [2746, 2831, 2805, 2745]
+          },
+          "free_heap": {
+            "p50": 8464495,
+            "p95": 8464883,
+            "min": 8463579,
+            "max": 8464883,
+            "n": 4,
+            "samples": [8464495, 8463579, 8464883, 8464883]
+          },
+          "max_alloc_block": {
+            "p50": 40960,
+            "p95": 49152,
+            "min": 34816,
+            "max": 49152,
+            "n": 4,
+            "samples": [47104, 34816, 40960, 49152]
+          },
+          "last_updated": "2026-10-14"
+        },
+        "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 64,
+            "p95": 76,
+            "min": 64,
+            "max": 76,
+            "n": 6,
+            "samples": [64, 64, 66, 76, 64, 65]
+          },
+          "free_heap": {
+            "p50": 33856435,
+            "p95": 33917575,
+            "min": 33829071,
+            "max": 33917575,
+            "n": 6,
+            "samples": [33917575, 33912307, 33853199, 33829071, 33856435, 33857119]
+          },
+          "max_alloc_block": {
+            "p50": 192512,
+            "p95": 249856,
+            "min": 163840,
+            "max": 249856,
+            "n": 6,
+            "samples": [249856, 249856, 188416, 163840, 192512, 192512]
+          },
+          "last_updated": "2026-10-14"
+        },
+        "host=teensy41 sender=esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 2154,
+            "p95": 2154,
+            "min": 2154,
+            "max": 2154,
+            "n": 1,
+            "samples": [2154]
+          },
+          "free_heap": {
+            "p50": 298616,
+            "p95": 298616,
+            "min": 298616,
+            "max": 298616,
+            "n": 1,
+            "samples": [298616]
+          },
+          "max_alloc_block": {
+            "p50": 236328,
+            "p95": 236328,
+            "min": 236328,
+            "max": 236328,
+            "n": 1,
+            "samples": [236328]
+          },
+          "last_updated": "2026-10-14"
+        },
+        "host=teensy41 sender=esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 2150,
+            "p95": 2155,
+            "min": 2150,
+            "max": 2155,
+            "n": 2,
+            "samples": [2155, 2150]
+          },
+          "free_heap": {
+            "p50": 298192,
+            "p95": 298872,
+            "min": 298192,
+            "max": 298872,
+            "n": 2,
+            "samples": [298872, 298192]
+          },
+          "max_alloc_block": {
+            "p50": 181024,
+            "p95": 274432,
+            "min": 181024,
+            "max": 274432,
+            "n": 2,
+            "samples": [181024, 274432]
+          },
+          "last_updated": "2026-10-14"
+        }
+      }
+    },
+    {
+      "name": "16x16-serpentine",
+      "op": "set_control",
+      "id": "Grid",
+      "key": "serpentine",
+      "value": true
+    },
+    {
+      "name": "16x16-serpentine-mapped-by-receiver-set",
+      "op": "set_control",
+      "id": "NetworkReceive",
+      "key": "mapped_by",
+      "value": 0
+    },
+    {
+      "name": "16x16-serpentine-receiver",
+      "description": "256 lights, serpentine layout, mapped by the receiver, DDP at 40 fps.",
+      "op": "measure",
+      "read": [
+        "sender:fps",
+        "NetworkReceive.tick",
+        "NetworkReceive.packets_per_s",
+        "NetworkReceive.frames_per_s",
+        "Drivers.tick"
+      ],
+      "observed": {
+        "host=esp32s3-n16r8 sender=esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 3296,
+            "p95": 3391,
+            "min": 3296,
+            "max": 3391,
+            "n": 2,
+            "samples": [3296, 3391]
+          },
+          "free_heap": {
+            "p50": 8450231,
+            "p95": 8455807,
+            "min": 8450231,
+            "max": 8455807,
+            "n": 2,
+            "samples": [8450231, 8455807]
+          },
+          "max_alloc_block": {
+            "p50": 38912,
+            "p95": 43008,
+            "min": 38912,
+            "max": 43008,
+            "n": 2,
+            "samples": [38912, 43008]
+          },
+          "last_updated": "2026-10-14"
+        },
+        "host=esp32p4rev1-eth sender=esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 101,
+            "p95": 107,
+            "min": 101,
+            "max": 107,
+            "n": 2,
+            "samples": [101, 107]
+          },
+          "free_heap": {
+            "p50": 33854539,
+            "p95": 33914091,
+            "min": 33854539,
+            "max": 33914091,
+            "n": 2,
+            "samples": [33914091, 33854539]
+          },
+          "max_alloc_block": {
+            "p50": 192512,
+            "p95": 249856,
+            "min": 192512,
+            "max": 249856,
+            "n": 2,
+            "samples": [249856, 192512]
+          },
+          "last_updated": "2026-10-14"
+        },
+        "host=esp32s3-n16r8 sender=esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 2847,
+            "p95": 3554,
+            "min": 2839,
+            "max": 3554,
+            "n": 4,
+            "samples": [2839, 3554, 2850, 2847]
+          },
+          "free_heap": {
+            "p50": 8457411,
+            "p95": 8461427,
+            "min": 8456627,
+            "max": 8461427,
+            "n": 4,
+            "samples": [8457411, 8456627, 8461427, 8461419]
+          },
+          "max_alloc_block": {
+            "p50": 47104,
+            "p95": 49152,
+            "min": 40960,
+            "max": 49152,
+            "n": 4,
+            "samples": [47104, 47104, 40960, 49152]
+          },
+          "last_updated": "2026-10-14"
+        },
+        "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 110,
+            "p95": 125,
+            "min": 101,
+            "max": 125,
+            "n": 6,
+            "samples": [101, 125, 125, 111, 110, 106]
+          },
+          "free_heap": {
+            "p50": 33853799,
+            "p95": 33914951,
+            "min": 33821775,
+            "max": 33914951,
+            "n": 6,
+            "samples": [33914951, 33909687, 33850159, 33821775, 33853799, 33854519]
+          },
+          "max_alloc_block": {
+            "p50": 192512,
+            "p95": 249856,
+            "min": 159744,
+            "max": 249856,
+            "n": 6,
+            "samples": [249856, 249856, 192512, 159744, 192512, 192512]
+          },
+          "last_updated": "2026-10-14"
+        },
+        "host=teensy41 sender=esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 2165,
+            "p95": 2165,
+            "min": 2165,
+            "max": 2165,
+            "n": 1,
+            "samples": [2165]
+          },
+          "free_heap": {
+            "p50": 296312,
+            "p95": 296312,
+            "min": 296312,
+            "max": 296312,
+            "n": 1,
+            "samples": [296312]
+          },
+          "max_alloc_block": {
+            "p50": 236328,
+            "p95": 236328,
+            "min": 236328,
+            "max": 236328,
+            "n": 1,
+            "samples": [236328]
+          },
+          "last_updated": "2026-10-14"
+        },
+        "host=teensy41 sender=esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 2143,
+            "p95": 2170,
+            "min": 2143,
+            "max": 2170,
+            "n": 2,
+            "samples": [2170, 2143]
+          },
+          "free_heap": {
+            "p50": 294680,
+            "p95": 295880,
+            "min": 294680,
+            "max": 295880,
+            "n": 2,
+            "samples": [294680, 295880]
+          },
+          "max_alloc_block": {
+            "p50": 181024,
+            "p95": 274432,
+            "min": 181024,
+            "max": 274432,
+            "n": 2,
+            "samples": [181024, 274432]
+          },
+          "last_updated": "2026-10-14"
+        }
+      }
+    },
+    {
+      "name": "16x16-serpentine-mapped-by-sender-set",
+      "op": "set_control",
+      "id": "NetworkReceive",
+      "key": "mapped_by",
+      "value": 1
+    },
+    {
+      "name": "16x16-serpentine-sender",
+      "description": "256 lights, serpentine layout, mapped by the sender, DDP at 40 fps.",
+      "op": "measure",
+      "read": [
+        "sender:fps",
+        "NetworkReceive.tick",
+        "NetworkReceive.packets_per_s",
+        "NetworkReceive.frames_per_s",
+        "Drivers.tick"
+      ],
+      "observed": {
+        "host=esp32s3-n16r8 sender=esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 2945,
+            "p95": 3020,
+            "min": 2945,
+            "max": 3020,
+            "n": 2,
+            "samples": [2945, 3020]
+          },
+          "free_heap": {
+            "p50": 8448551,
+            "p95": 8461059,
+            "min": 8448551,
+            "max": 8461059,
+            "n": 2,
+            "samples": [8461059, 8448551]
+          },
+          "max_alloc_block": {
+            "p50": 38912,
+            "p95": 40960,
+            "min": 38912,
+            "max": 40960,
+            "n": 2,
+            "samples": [38912, 40960]
+          },
+          "last_updated": "2026-10-14"
+        },
+        "host=esp32p4rev1-eth sender=esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 111,
+            "p95": 120,
+            "min": 111,
+            "max": 120,
+            "n": 2,
+            "samples": [111, 120]
+          },
+          "free_heap": {
+            "p50": 33854527,
+            "p95": 33914991,
+            "min": 33854527,
+            "max": 33914991,
+            "n": 2,
+            "samples": [33914991, 33854527]
+          },
+          "max_alloc_block": {
+            "p50": 192512,
+            "p95": 253952,
+            "min": 192512,
+            "max": 253952,
+            "n": 2,
+            "samples": [253952, 192512]
+          },
+          "last_updated": "2026-10-14"
+        },
+        "host=esp32s3-n16r8 sender=esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 2927,
+            "p95": 3209,
+            "min": 2846,
+            "max": 3209,
+            "n": 4,
+            "samples": [2846, 2927, 3184, 3209]
+          },
+          "free_heap": {
+            "p50": 8459743,
+            "p95": 8461403,
+            "min": 8457811,
+            "max": 8461403,
+            "n": 4,
+            "samples": [8461059, 8459743, 8461403, 8457811]
+          },
+          "max_alloc_block": {
+            "p50": 47104,
+            "p95": 49152,
+            "min": 40960,
+            "max": 49152,
+            "n": 4,
+            "samples": [47104, 47104, 40960, 49152]
+          },
+          "last_updated": "2026-10-14"
+        },
+        "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 114,
+            "p95": 116,
+            "min": 111,
+            "max": 116,
+            "n": 6,
+            "samples": [115, 111, 114, 114, 111, 116]
+          },
+          "free_heap": {
+            "p50": 33854163,
+            "p95": 33914623,
+            "min": 33817971,
+            "max": 33914623,
+            "n": 6,
+            "samples": [33914623, 33913715, 33850103, 33817971, 33854511, 33854163]
+          },
+          "max_alloc_block": {
+            "p50": 188416,
+            "p95": 249856,
+            "min": 155648,
+            "max": 249856,
+            "n": 6,
+            "samples": [249856, 249856, 188416, 155648, 188416, 192512]
+          },
+          "last_updated": "2026-10-14"
+        },
+        "host=teensy41 sender=esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 2146,
+            "p95": 2146,
+            "min": 2146,
+            "max": 2146,
+            "n": 1,
+            "samples": [2146]
+          },
+          "free_heap": {
+            "p50": 295464,
+            "p95": 295464,
+            "min": 295464,
+            "max": 295464,
+            "n": 1,
+            "samples": [295464]
+          },
+          "max_alloc_block": {
+            "p50": 236328,
+            "p95": 236328,
+            "min": 236328,
+            "max": 236328,
+            "n": 1,
+            "samples": [236328]
+          },
+          "last_updated": "2026-10-14"
+        },
+        "host=teensy41 sender=esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 2142,
+            "p95": 2155,
+            "min": 2142,
+            "max": 2155,
+            "n": 2,
+            "samples": [2142, 2155]
+          },
+          "free_heap": {
+            "p50": 294944,
+            "p95": 295624,
+            "min": 294944,
+            "max": 295624,
+            "n": 2,
+            "samples": [295624, 294944]
+          },
+          "max_alloc_block": {
+            "p50": 181024,
+            "p95": 274432,
+            "min": 181024,
+            "max": 274432,
+            "n": 2,
+            "samples": [181024, 274432]
+          },
+          "last_updated": "2026-10-14"
+        }
+      }
+    },
+    {
+      "name": "sender-64x64-width",
+      "device": "sender",
+      "op": "set_control",
+      "id": "Grid",
+      "key": "width",
+      "value": 64
+    },
+    {
+      "name": "sender-64x64-height",
+      "device": "sender",
+      "op": "set_control",
+      "id": "Grid",
+      "key": "height",
+      "value": 64
+    },
+    {
+      "name": "receiver-64x64-width",
+      "op": "set_control",
+      "id": "Grid",
+      "key": "width",
+      "value": 64
+    },
+    {
+      "name": "receiver-64x64-height",
+      "op": "set_control",
+      "id": "Grid",
+      "key": "height",
+      "value": 64
+    },
+    {
+      "name": "64x64-identity",
+      "op": "set_control",
+      "id": "Grid",
+      "key": "serpentine",
+      "value": false
+    },
+    {
+      "name": "64x64-identity-mapped-by-receiver-set",
+      "op": "set_control",
+      "id": "NetworkReceive",
+      "key": "mapped_by",
+      "value": 0
+    },
+    {
+      "name": "64x64-identity-receiver",
+      "description": "4096 lights, identity layout, mapped by the receiver, DDP at 40 fps.",
+      "op": "measure",
+      "read": [
+        "sender:fps",
+        "NetworkReceive.tick",
+        "NetworkReceive.packets_per_s",
+        "NetworkReceive.frames_per_s",
+        "Drivers.tick"
+      ],
+      "observed": {
+        "host=esp32s3-n16r8 sender=esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 3462,
+            "p95": 4383,
+            "min": 3462,
+            "max": 4383,
+            "n": 2,
+            "samples": [3462, 4383]
+          },
+          "free_heap": {
+            "p50": 8391303,
+            "p95": 8419323,
+            "min": 8391303,
+            "max": 8419323,
+            "n": 2,
+            "samples": [8419323, 8391303]
+          },
+          "max_alloc_block": {
+            "p50": 31744,
+            "p95": 38912,
+            "min": 31744,
+            "max": 38912,
+            "n": 2,
+            "samples": [38912, 31744]
+          },
+          "last_updated": "2026-10-14"
+        },
+        "host=esp32p4rev1-eth sender=esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 107,
+            "p95": 111,
+            "min": 107,
+            "max": 111,
+            "n": 2,
+            "samples": [107, 111]
+          },
+          "free_heap": {
+            "p50": 33810315,
+            "p95": 33872371,
+            "min": 33810315,
+            "max": 33872371,
+            "n": 2,
+            "samples": [33872371, 33810315]
+          },
+          "max_alloc_block": {
+            "p50": 192512,
+            "p95": 253952,
+            "min": 192512,
+            "max": 253952,
+            "n": 2,
+            "samples": [253952, 192512]
+          },
+          "last_updated": "2026-10-14"
+        },
+        "host=esp32s3-n16r8 sender=esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 3316,
+            "p95": 4221,
+            "min": 3227,
+            "max": 4221,
+            "n": 4,
+            "samples": [3316, 4221, 3425, 3227]
+          },
+          "free_heap": {
+            "p50": 8412323,
+            "p95": 8419047,
+            "min": 8398727,
+            "max": 8419047,
+            "n": 4,
+            "samples": [8414843, 8398727, 8412323, 8419047]
+          },
+          "max_alloc_block": {
+            "p50": 40960,
+            "p95": 49152,
+            "min": 31744,
+            "max": 49152,
+            "n": 4,
+            "samples": [47104, 31744, 40960, 49152]
+          },
+          "last_updated": "2026-10-14"
+        },
+        "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 115,
+            "p95": 146,
+            "min": 105,
+            "max": 146,
+            "n": 6,
+            "samples": [105, 146, 141, 117, 115, 108]
+          },
+          "free_heap": {
+            "p50": 33811007,
+            "p95": 33872331,
+            "min": 33775623,
+            "max": 33872331,
+            "n": 6,
+            "samples": [33872331, 33858195, 33796351, 33775623, 33811207, 33811007]
+          },
+          "max_alloc_block": {
+            "p50": 188416,
+            "p95": 249856,
+            "min": 155648,
+            "max": 249856,
+            "n": 6,
+            "samples": [249856, 237568, 180224, 155648, 192512, 188416]
+          },
+          "last_updated": "2026-10-14"
+        },
+        "host=teensy41 sender=esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 2436,
+            "p95": 2436,
+            "min": 2436,
+            "max": 2436,
+            "n": 1,
+            "samples": [2436]
+          },
+          "free_heap": {
+            "p50": 256168,
+            "p95": 256168,
+            "min": 256168,
+            "max": 256168,
+            "n": 1,
+            "samples": [256168]
+          },
+          "max_alloc_block": {
+            "p50": 191208,
+            "p95": 191208,
+            "min": 191208,
+            "max": 191208,
+            "n": 1,
+            "samples": [191208]
+          },
+          "last_updated": "2026-10-14"
+        },
+        "host=teensy41 sender=esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 2513,
+            "p95": 2526,
+            "min": 2513,
+            "max": 2526,
+            "n": 2,
+            "samples": [2526, 2513]
+          },
+          "free_heap": {
+            "p50": 253176,
+            "p95": 257712,
+            "min": 253176,
+            "max": 257712,
+            "n": 2,
+            "samples": [253176, 257712]
+          },
+          "max_alloc_block": {
+            "p50": 181024,
+            "p95": 192336,
+            "min": 181024,
+            "max": 192336,
+            "n": 2,
+            "samples": [181024, 192336]
+          },
+          "last_updated": "2026-10-14"
+        }
+      }
+    },
+    {
+      "name": "64x64-identity-mapped-by-sender-set",
+      "op": "set_control",
+      "id": "NetworkReceive",
+      "key": "mapped_by",
+      "value": 1
+    },
+    {
+      "name": "64x64-identity-sender",
+      "description": "4096 lights, identity layout, mapped by the sender, DDP at 40 fps.",
+      "op": "measure",
+      "read": [
+        "sender:fps",
+        "NetworkReceive.tick",
+        "NetworkReceive.packets_per_s",
+        "NetworkReceive.frames_per_s",
+        "Drivers.tick"
+      ],
+      "observed": {
+        "host=esp32s3-n16r8 sender=esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 3588,
+            "p95": 3994,
+            "min": 3588,
+            "max": 3994,
+            "n": 2,
+            "samples": [3588, 3994]
+          },
+          "free_heap": {
+            "p50": 8405431,
+            "p95": 8411811,
+            "min": 8405431,
+            "max": 8411811,
+            "n": 2,
+            "samples": [8411811, 8405431]
+          },
+          "max_alloc_block": {
+            "p50": 31744,
+            "p95": 38912,
+            "min": 31744,
+            "max": 38912,
+            "n": 2,
+            "samples": [38912, 31744]
+          },
+          "last_updated": "2026-10-14"
+        },
+        "host=esp32p4rev1-eth sender=esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 107,
+            "p95": 113,
+            "min": 107,
+            "max": 113,
+            "n": 2,
+            "samples": [107, 113]
+          },
+          "free_heap": {
+            "p50": 33811887,
+            "p95": 33872367,
+            "min": 33811887,
+            "max": 33872367,
+            "n": 2,
+            "samples": [33872367, 33811887]
+          },
+          "max_alloc_block": {
+            "p50": 192512,
+            "p95": 249856,
+            "min": 192512,
+            "max": 249856,
+            "n": 2,
+            "samples": [249856, 192512]
+          },
+          "last_updated": "2026-10-14"
+        },
+        "host=esp32s3-n16r8 sender=esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 3355,
+            "p95": 3714,
+            "min": 3233,
+            "max": 3714,
+            "n": 4,
+            "samples": [3233, 3714, 3405, 3355]
+          },
+          "free_heap": {
+            "p50": 8415659,
+            "p95": 8419447,
+            "min": 8415307,
+            "max": 8419447,
+            "n": 4,
+            "samples": [8415307, 8417775, 8419447, 8415659]
+          },
+          "max_alloc_block": {
+            "p50": 40960,
+            "p95": 47104,
+            "min": 31744,
+            "max": 47104,
+            "n": 4,
+            "samples": [47104, 43008, 40960, 31744]
+          },
+          "last_updated": "2026-10-14"
+        },
+        "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 109,
+            "p95": 119,
+            "min": 106,
+            "max": 119,
+            "n": 6,
+            "samples": [109, 119, 118, 113, 106, 109]
+          },
+          "free_heap": {
+            "p50": 33808863,
+            "p95": 33869527,
+            "min": 33768571,
+            "max": 33869527,
+            "n": 6,
+            "samples": [33864351, 33869527, 33808863, 33768571, 33811863, 33808403]
+          },
+          "max_alloc_block": {
+            "p50": 188416,
+            "p95": 249856,
+            "min": 147456,
+            "max": 249856,
+            "n": 6,
+            "samples": [241664, 249856, 188416, 147456, 188416, 188416]
+          },
+          "last_updated": "2026-10-14"
+        },
+        "host=teensy41 sender=esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 2433,
+            "p95": 2433,
+            "min": 2433,
+            "max": 2433,
+            "n": 1,
+            "samples": [2433]
+          },
+          "free_heap": {
+            "p50": 265000,
+            "p95": 265000,
+            "min": 265000,
+            "max": 265000,
+            "n": 1,
+            "samples": [265000]
+          },
+          "max_alloc_block": {
+            "p50": 191208,
+            "p95": 191208,
+            "min": 191208,
+            "max": 191208,
+            "n": 1,
+            "samples": [191208]
+          },
+          "last_updated": "2026-10-14"
+        },
+        "host=teensy41 sender=esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 2502,
+            "p95": 2505,
+            "min": 2502,
+            "max": 2505,
+            "n": 2,
+            "samples": [2505, 2502]
+          },
+          "free_heap": {
+            "p50": 256448,
+            "p95": 257384,
+            "min": 256448,
+            "max": 257384,
+            "n": 2,
+            "samples": [257384, 256448]
+          },
+          "max_alloc_block": {
+            "p50": 181024,
+            "p95": 192336,
+            "min": 181024,
+            "max": 192336,
+            "n": 2,
+            "samples": [181024, 192336]
+          },
+          "last_updated": "2026-10-14"
+        }
+      }
+    },
+    {
+      "name": "64x64-serpentine",
+      "op": "set_control",
+      "id": "Grid",
+      "key": "serpentine",
+      "value": true
+    },
+    {
+      "name": "64x64-serpentine-mapped-by-receiver-set",
+      "op": "set_control",
+      "id": "NetworkReceive",
+      "key": "mapped_by",
+      "value": 0
+    },
+    {
+      "name": "64x64-serpentine-receiver",
+      "description": "4096 lights, serpentine layout, mapped by the receiver, DDP at 40 fps.",
+      "op": "measure",
+      "read": [
+        "sender:fps",
+        "NetworkReceive.tick",
+        "NetworkReceive.packets_per_s",
+        "NetworkReceive.frames_per_s",
+        "Drivers.tick"
+      ],
+      "observed": {
+        "host=esp32s3-n16r8 sender=esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 5678,
+            "p95": 5954,
+            "min": 5678,
+            "max": 5954,
+            "n": 2,
+            "samples": [5954, 5678]
+          },
+          "free_heap": {
+            "p50": 8328391,
+            "p95": 8346095,
+            "min": 8328391,
+            "max": 8346095,
+            "n": 2,
+            "samples": [8346095, 8328391]
+          },
+          "max_alloc_block": {
+            "p50": 31744,
+            "p95": 38912,
+            "min": 31744,
+            "max": 38912,
+            "n": 2,
+            "samples": [38912, 31744]
+          },
+          "last_updated": "2026-10-14"
+        },
+        "host=esp32p4rev1-eth sender=esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 857,
+            "p95": 1143,
+            "min": 857,
+            "max": 1143,
+            "n": 2,
+            "samples": [857, 1143]
+          },
+          "free_heap": {
+            "p50": 33750383,
+            "p95": 33810483,
+            "min": 33750383,
+            "max": 33810483,
+            "n": 2,
+            "samples": [33810483, 33750383]
+          },
+          "max_alloc_block": {
+            "p50": 192512,
+            "p95": 245760,
+            "min": 192512,
+            "max": 245760,
+            "n": 2,
+            "samples": [245760, 192512]
+          },
+          "last_updated": "2026-10-14"
+        },
+        "host=esp32s3-n16r8 sender=esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 6268,
+            "p95": 7297,
+            "min": 5767,
+            "max": 7297,
+            "n": 4,
+            "samples": [6268, 5767, 7297, 6484]
+          },
+          "free_heap": {
+            "p50": 8353319,
+            "p95": 8357303,
+            "min": 8324719,
+            "max": 8357303,
+            "n": 4,
+            "samples": [8353319, 8324719, 8353791, 8357303]
+          },
+          "max_alloc_block": {
+            "p50": 31744,
+            "p95": 47104,
+            "min": 31744,
+            "max": 47104,
+            "n": 4,
+            "samples": [47104, 31744, 40960, 31744]
+          },
+          "last_updated": "2026-10-14"
+        },
+        "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 930,
+            "p95": 1034,
+            "min": 821,
+            "max": 1034,
+            "n": 6,
+            "samples": [829, 1034, 985, 968, 821, 930]
+          },
+          "free_heap": {
+            "p50": 33750315,
+            "p95": 33810479,
+            "min": 33708383,
+            "max": 33810479,
+            "n": 6,
+            "samples": [33810479, 33809039, 33734987, 33708383, 33750315, 33750355]
+          },
+          "max_alloc_block": {
+            "p50": 188416,
+            "p95": 249856,
+            "min": 151552,
+            "max": 249856,
+            "n": 6,
+            "samples": [249856, 249856, 180224, 151552, 192512, 188416]
+          },
+          "last_updated": "2026-10-14"
+        },
+        "host=teensy41 sender=esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 2475,
+            "p95": 2475,
+            "min": 2475,
+            "max": 2475,
+            "n": 1,
+            "samples": [2475]
+          },
+          "free_heap": {
+            "p50": 206360,
+            "p95": 206360,
+            "min": 206360,
+            "max": 206360,
+            "n": 1,
+            "samples": [206360]
+          },
+          "max_alloc_block": {
+            "p50": 178904,
+            "p95": 178904,
+            "min": 178904,
+            "max": 178904,
+            "n": 1,
+            "samples": [178904]
+          },
+          "last_updated": "2026-10-14"
+        },
+        "host=teensy41 sender=esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 2512,
+            "p95": 2516,
+            "min": 2512,
+            "max": 2516,
+            "n": 2,
+            "samples": [2512, 2516]
+          },
+          "free_heap": {
+            "p50": 212168,
+            "p95": 215344,
+            "min": 212168,
+            "max": 215344,
+            "n": 2,
+            "samples": [212168, 215344]
+          },
+          "max_alloc_block": {
+            "p50": 168720,
+            "p95": 180032,
+            "min": 168720,
+            "max": 180032,
+            "n": 2,
+            "samples": [168720, 180032]
+          },
+          "last_updated": "2026-10-14"
+        }
+      }
+    },
+    {
+      "name": "64x64-serpentine-mapped-by-sender-set",
+      "op": "set_control",
+      "id": "NetworkReceive",
+      "key": "mapped_by",
+      "value": 1
+    },
+    {
+      "name": "64x64-serpentine-sender",
+      "description": "4096 lights, serpentine layout, mapped by the sender, DDP at 40 fps.",
+      "op": "measure",
+      "read": [
+        "sender:fps",
+        "NetworkReceive.tick",
+        "NetworkReceive.packets_per_s",
+        "NetworkReceive.frames_per_s",
+        "Drivers.tick"
+      ],
+      "observed": {
+        "host=esp32s3-n16r8 sender=esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 5924,
+            "p95": 6309,
+            "min": 5924,
+            "max": 6309,
+            "n": 2,
+            "samples": [5924, 6309]
+          },
+          "free_heap": {
+            "p50": 8323455,
+            "p95": 8356839,
+            "min": 8323455,
+            "max": 8356839,
+            "n": 2,
+            "samples": [8356839, 8323455]
+          },
+          "max_alloc_block": {
+            "p50": 31744,
+            "p95": 38912,
+            "min": 31744,
+            "max": 38912,
+            "n": 2,
+            "samples": [38912, 31744]
+          },
+          "last_updated": "2026-10-14"
+        },
+        "host=esp32p4rev1-eth sender=esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 1103,
+            "p95": 1292,
+            "min": 1103,
+            "max": 1292,
+            "n": 2,
+            "samples": [1103, 1292]
+          },
+          "free_heap": {
+            "p50": 33748791,
+            "p95": 33810827,
+            "min": 33748791,
+            "max": 33810827,
+            "n": 2,
+            "samples": [33810827, 33748791]
+          },
+          "max_alloc_block": {
+            "p50": 192512,
+            "p95": 253952,
+            "min": 192512,
+            "max": 253952,
+            "n": 2,
+            "samples": [253952, 192512]
+          },
+          "last_updated": "2026-10-14"
+        },
+        "host=esp32s3-n16r8 sender=esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 5816,
+            "p95": 6237,
+            "min": 5683,
+            "max": 6237,
+            "n": 4,
+            "samples": [5683, 6237, 5816, 6035]
+          },
+          "free_heap": {
+            "p50": 8357267,
+            "p95": 8357715,
+            "min": 8355167,
+            "max": 8357715,
+            "n": 4,
+            "samples": [8355167, 8357715, 8357267, 8357315]
+          },
+          "max_alloc_block": {
+            "p50": 40960,
+            "p95": 49152,
+            "min": 31744,
+            "max": 49152,
+            "n": 4,
+            "samples": [47104, 31744, 40960, 49152]
+          },
+          "last_updated": "2026-10-14"
+        },
+        "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 1057,
+            "p95": 1276,
+            "min": 799,
+            "max": 1276,
+            "n": 6,
+            "samples": [1063, 1276, 1057, 799, 1019, 1214]
+          },
+          "free_heap": {
+            "p50": 33750327,
+            "p95": 33810803,
+            "min": 33718011,
+            "max": 33810803,
+            "n": 6,
+            "samples": [33810803, 33807955, 33749715, 33718011, 33750327, 33750351]
+          },
+          "max_alloc_block": {
+            "p50": 188416,
+            "p95": 253952,
+            "min": 159744,
+            "max": 253952,
+            "n": 6,
+            "samples": [253952, 249856, 192512, 159744, 188416, 188416]
+          },
+          "last_updated": "2026-10-14"
+        },
+        "host=teensy41 sender=esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 2544,
+            "p95": 2544,
+            "min": 2544,
+            "max": 2544,
+            "n": 1,
+            "samples": [2544]
+          },
+          "free_heap": {
+            "p50": 209944,
+            "p95": 209944,
+            "min": 209944,
+            "max": 209944,
+            "n": 1,
+            "samples": [209944]
+          },
+          "max_alloc_block": {
+            "p50": 178904,
+            "p95": 178904,
+            "min": 178904,
+            "max": 178904,
+            "n": 1,
+            "samples": [178904]
+          },
+          "last_updated": "2026-10-14"
+        },
+        "host=teensy41 sender=esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 2502,
+            "p95": 2600,
+            "min": 2502,
+            "max": 2600,
+            "n": 2,
+            "samples": [2600, 2502]
+          },
+          "free_heap": {
+            "p50": 212432,
+            "p95": 214984,
+            "min": 212432,
+            "max": 214984,
+            "n": 2,
+            "samples": [214984, 212432]
+          },
+          "max_alloc_block": {
+            "p50": 168720,
+            "p95": 180032,
+            "min": 168720,
+            "max": 180032,
+            "n": 2,
+            "samples": [168720, 180032]
+          },
+          "last_updated": "2026-10-14"
+        }
+      }
+    },
+    {
+      "name": "sender-128x96-width",
+      "device": "sender",
+      "op": "set_control",
+      "id": "Grid",
+      "key": "width",
+      "value": 128
+    },
+    {
+      "name": "sender-128x96-height",
+      "device": "sender",
+      "op": "set_control",
+      "id": "Grid",
+      "key": "height",
+      "value": 96
+    },
+    {
+      "name": "receiver-128x96-width",
+      "op": "set_control",
+      "id": "Grid",
+      "key": "width",
+      "value": 128
+    },
+    {
+      "name": "receiver-128x96-height",
+      "op": "set_control",
+      "id": "Grid",
+      "key": "height",
+      "value": 96
+    },
+    {
+      "name": "128x96-identity",
+      "op": "set_control",
+      "id": "Grid",
+      "key": "serpentine",
+      "value": false
+    },
+    {
+      "name": "128x96-identity-mapped-by-receiver-set",
+      "op": "set_control",
+      "id": "NetworkReceive",
+      "key": "mapped_by",
+      "value": 0
+    },
+    {
+      "name": "128x96-identity-receiver",
+      "description": "12288 lights, identity layout, mapped by the receiver, DDP at 40 fps.",
+      "op": "measure",
+      "read": [
+        "sender:fps",
+        "NetworkReceive.tick",
+        "NetworkReceive.packets_per_s",
+        "NetworkReceive.frames_per_s",
+        "Drivers.tick"
+      ],
+      "observed": {
+        "host=esp32s3-n16r8 sender=esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 5855,
+            "p95": 8160,
+            "min": 5855,
+            "max": 8160,
+            "n": 2,
+            "samples": [8160, 5855]
+          },
+          "free_heap": {
+            "p50": 8283407,
+            "p95": 8315687,
+            "min": 8283407,
+            "max": 8315687,
+            "n": 2,
+            "samples": [8315687, 8283407]
+          },
+          "max_alloc_block": {
+            "p50": 31744,
+            "p95": 38912,
+            "min": 31744,
+            "max": 38912,
+            "n": 2,
+            "samples": [38912, 31744]
+          },
+          "last_updated": "2026-10-14"
+        },
+        "host=esp32p4rev1-eth sender=esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 305,
+            "p95": 1579,
+            "min": 305,
+            "max": 1579,
+            "n": 2,
+            "samples": [305, 1579]
+          },
+          "free_heap": {
+            "p50": 33713591,
+            "p95": 33814627,
+            "min": 33713591,
+            "max": 33814627,
+            "n": 2,
+            "samples": [33814627, 33713591]
+          },
+          "max_alloc_block": {
+            "p50": 192512,
+            "p95": 245760,
+            "min": 192512,
+            "max": 245760,
+            "n": 2,
+            "samples": [245760, 192512]
+          },
+          "last_updated": "2026-10-14"
+        },
+        "host=esp32s3-n16r8 sender=esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 6464,
+            "p95": 6632,
+            "min": 5826,
+            "max": 6632,
+            "n": 3,
+            "samples": [5826, 6464, 6632]
+          },
+          "free_heap": {
+            "p50": 8320995,
+            "p95": 8321399,
+            "min": 8313403,
+            "max": 8321399,
+            "n": 3,
+            "samples": [8320995, 8313403, 8321399]
+          },
+          "max_alloc_block": {
+            "p50": 43008,
+            "p95": 49152,
+            "min": 40960,
+            "max": 49152,
+            "n": 3,
+            "samples": [43008, 40960, 49152]
+          },
+          "last_updated": "2026-10-14"
+        },
+        "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 642,
+            "p95": 1803,
+            "min": 441,
+            "max": 1803,
+            "n": 6,
+            "samples": [441, 1167, 642, 618, 756, 1803]
+          },
+          "free_heap": {
+            "p50": 33712011,
+            "p95": 33773723,
+            "min": 33678311,
+            "max": 33773723,
+            "n": 6,
+            "samples": [33773723, 33767207, 33687611, 33678311, 33713543, 33712011]
+          },
+          "max_alloc_block": {
+            "p50": 188416,
+            "p95": 249856,
+            "min": 151552,
+            "max": 249856,
+            "n": 6,
+            "samples": [249856, 237568, 151552, 159744, 192512, 188416]
+          },
+          "last_updated": "2026-10-14"
+        },
+        "host=teensy41 sender=esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 2789,
+            "p95": 2789,
+            "min": 2789,
+            "max": 2789,
+            "n": 1,
+            "samples": [2789]
+          },
+          "free_heap": {
+            "p50": 173712,
+            "p95": 173712,
+            "min": 173712,
+            "max": 173712,
+            "n": 1,
+            "samples": [173712]
+          },
+          "max_alloc_block": {
+            "p50": 110640,
+            "p95": 110640,
+            "min": 110640,
+            "max": 110640,
+            "n": 1,
+            "samples": [110640]
+          },
+          "last_updated": "2026-10-14"
+        },
+        "host=teensy41 sender=esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 5022,
+            "p95": 6680,
+            "min": 5022,
+            "max": 6680,
+            "n": 2,
+            "samples": [5022, 6680]
+          },
+          "free_heap": {
+            "p50": 181312,
+            "p95": 187736,
+            "min": 181312,
+            "max": 187736,
+            "n": 2,
+            "samples": [181312, 187736]
+          },
+          "max_alloc_block": {
+            "p50": 139176,
+            "p95": 144144,
+            "min": 139176,
+            "max": 144144,
+            "n": 2,
+            "samples": [144144, 139176]
+          },
+          "last_updated": "2026-10-14"
+        }
+      }
+    },
+    {
+      "name": "128x96-identity-mapped-by-sender-set",
+      "op": "set_control",
+      "id": "NetworkReceive",
+      "key": "mapped_by",
+      "value": 1
+    },
+    {
+      "name": "128x96-identity-sender",
+      "description": "12288 lights, identity layout, mapped by the sender, DDP at 40 fps.",
+      "op": "measure",
+      "read": [
+        "sender:fps",
+        "NetworkReceive.tick",
+        "NetworkReceive.packets_per_s",
+        "NetworkReceive.frames_per_s",
+        "Drivers.tick"
+      ],
+      "observed": {
+        "host=esp32s3-n16r8 sender=esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 5713,
+            "p95": 5931,
+            "min": 5713,
+            "max": 5931,
+            "n": 2,
+            "samples": [5931, 5713]
+          },
+          "free_heap": {
+            "p50": 8293355,
+            "p95": 8313563,
+            "min": 8293355,
+            "max": 8313563,
+            "n": 2,
+            "samples": [8313563, 8293355]
+          },
+          "max_alloc_block": {
+            "p50": 31744,
+            "p95": 38912,
+            "min": 31744,
+            "max": 38912,
+            "n": 2,
+            "samples": [38912, 31744]
+          },
+          "last_updated": "2026-10-14"
+        },
+        "host=esp32p4rev1-eth sender=esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 238,
+            "p95": 1361,
+            "min": 238,
+            "max": 1361,
+            "n": 2,
+            "samples": [238, 1361]
+          },
+          "free_heap": {
+            "p50": 33713819,
+            "p95": 33823831,
+            "min": 33713819,
+            "max": 33823831,
+            "n": 2,
+            "samples": [33823831, 33713819]
+          },
+          "max_alloc_block": {
+            "p50": 192512,
+            "p95": 249856,
+            "min": 192512,
+            "max": 249856,
+            "n": 2,
+            "samples": [249856, 192512]
+          },
+          "last_updated": "2026-10-14"
+        },
+        "host=esp32s3-n16r8 sender=esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 6798,
+            "p95": 6800,
+            "min": 5390,
+            "max": 6800,
+            "n": 3,
+            "samples": [5390, 6798, 6800]
+          },
+          "free_heap": {
+            "p50": 8319699,
+            "p95": 8320811,
+            "min": 8302479,
+            "max": 8320811,
+            "n": 3,
+            "samples": [8320811, 8302479, 8319699]
+          },
+          "max_alloc_block": {
+            "p50": 47104,
+            "p95": 49152,
+            "min": 31744,
+            "max": 49152,
+            "n": 3,
+            "samples": [47104, 31744, 49152]
+          },
+          "last_updated": "2026-10-14"
+        },
+        "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 692,
+            "p95": 1855,
+            "min": 573,
+            "max": 1855,
+            "n": 6,
+            "samples": [573, 692, 849, 619, 773, 1855]
+          },
+          "free_heap": {
+            "p50": 33699547,
+            "p95": 33775951,
+            "min": 33673223,
+            "max": 33775951,
+            "n": 6,
+            "samples": [33775951, 33772723, 33673223, 33678627, 33699547, 33710431]
+          },
+          "max_alloc_block": {
+            "p50": 159744,
+            "p95": 253952,
+            "min": 151552,
+            "max": 253952,
+            "n": 6,
+            "samples": [253952, 249856, 151552, 159744, 159744, 188416]
+          },
+          "last_updated": "2026-10-14"
+        },
+        "host=teensy41 sender=esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 2714,
+            "p95": 2714,
+            "min": 2714,
+            "max": 2714,
+            "n": 1,
+            "samples": [2714]
+          },
+          "free_heap": {
+            "p50": 177504,
+            "p95": 177504,
+            "min": 177504,
+            "max": 177504,
+            "n": 1,
+            "samples": [177504]
+          },
+          "max_alloc_block": {
+            "p50": 110640,
+            "p95": 110640,
+            "min": 110640,
+            "max": 110640,
+            "n": 1,
+            "samples": [110640]
+          },
+          "last_updated": "2026-10-14"
+        },
+        "host=teensy41 sender=esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 2667,
+            "p95": 9569,
+            "min": 2667,
+            "max": 9569,
+            "n": 2,
+            "samples": [9569, 2667]
+          },
+          "free_heap": {
+            "p50": 179856,
+            "p95": 180160,
+            "min": 179856,
+            "max": 180160,
+            "n": 2,
+            "samples": [180160, 179856]
+          },
+          "max_alloc_block": {
+            "p50": 144144,
+            "p95": 146352,
+            "min": 144144,
+            "max": 146352,
+            "n": 2,
+            "samples": [144144, 146352]
+          },
+          "last_updated": "2026-10-14"
+        }
+      }
+    },
+    {
+      "name": "128x96-serpentine",
+      "op": "set_control",
+      "id": "Grid",
+      "key": "serpentine",
+      "value": true
+    },
+    {
+      "name": "128x96-serpentine-mapped-by-receiver-set",
+      "op": "set_control",
+      "id": "NetworkReceive",
+      "key": "mapped_by",
+      "value": 0
+    },
+    {
+      "name": "128x96-serpentine-receiver",
+      "description": "12288 lights, serpentine layout, mapped by the receiver, DDP at 40 fps.",
+      "op": "measure",
+      "read": [
+        "sender:fps",
+        "NetworkReceive.tick",
+        "NetworkReceive.packets_per_s",
+        "NetworkReceive.frames_per_s",
+        "Drivers.tick"
+      ],
+      "observed": {
+        "host=esp32s3-n16r8 sender=esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 15141,
+            "p95": 19005,
+            "min": 15141,
+            "max": 19005,
+            "n": 2,
+            "samples": [15141, 19005]
+          },
+          "free_heap": {
+            "p50": 8118775,
+            "p95": 8131755,
+            "min": 8118775,
+            "max": 8131755,
+            "n": 2,
+            "samples": [8131755, 8118775]
+          },
+          "max_alloc_block": {
+            "p50": 31744,
+            "p95": 38912,
+            "min": 31744,
+            "max": 38912,
+            "n": 2,
+            "samples": [38912, 31744]
+          },
+          "last_updated": "2026-10-14"
+        },
+        "host=esp32p4rev1-eth sender=esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 220,
+            "p95": 10027,
+            "min": 220,
+            "max": 10027,
+            "n": 2,
+            "samples": [220, 10027]
+          },
+          "free_heap": {
+            "p50": 33528679,
+            "p95": 33823835,
+            "min": 33528679,
+            "max": 33823835,
+            "n": 2,
+            "samples": [33823835, 33528679]
+          },
+          "max_alloc_block": {
+            "p50": 192512,
+            "p95": 253952,
+            "min": 192512,
+            "max": 253952,
+            "n": 2,
+            "samples": [253952, 192512]
+          },
+          "last_updated": "2026-10-14"
+        },
+        "host=esp32s3-n16r8 sender=esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 17380,
+            "p95": 17707,
+            "min": 11817,
+            "max": 17707,
+            "n": 3,
+            "samples": [11817, 17380, 17707]
+          },
+          "free_heap": {
+            "p50": 8128427,
+            "p95": 8133703,
+            "min": 8128283,
+            "max": 8133703,
+            "n": 3,
+            "samples": [8128283, 8133703, 8128427]
+          },
+          "max_alloc_block": {
+            "p50": 43008,
+            "p95": 47104,
+            "min": 40960,
+            "max": 47104,
+            "n": 3,
+            "samples": [47104, 40960, 43008]
+          },
+          "last_updated": "2026-10-14"
+        },
+        "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 7118,
+            "p95": 9483,
+            "min": 6352,
+            "max": 9483,
+            "n": 6,
+            "samples": [7118, 6496, 8005, 7296, 6352, 9483]
+          },
+          "free_heap": {
+            "p50": 33525467,
+            "p95": 33589531,
+            "min": 33481595,
+            "max": 33589531,
+            "n": 6,
+            "samples": [33589531, 33574931, 33524287, 33481595, 33527943, 33525467]
+          },
+          "max_alloc_block": {
+            "p50": 188416,
+            "p95": 249856,
+            "min": 147456,
+            "max": 249856,
+            "n": 6,
+            "samples": [249856, 237568, 192512, 147456, 188416, 188416]
+          },
+          "last_updated": "2026-10-14"
+        },
+        "host=teensy41 sender=esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 2806,
+            "p95": 2806,
+            "min": 2806,
+            "max": 2806,
+            "n": 1,
+            "samples": [2806]
+          },
+          "free_heap": {
+            "p50": 130232,
+            "p95": 130232,
+            "min": 130232,
+            "max": 130232,
+            "n": 1,
+            "samples": [130232]
+          },
+          "max_alloc_block": {
+            "p50": 37160,
+            "p95": 37160,
+            "min": 37160,
+            "max": 37160,
+            "n": 1,
+            "samples": [37160]
+          },
+          "last_updated": "2026-10-14"
+        },
+        "host=teensy41 sender=esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 2695,
+            "p95": 2888,
+            "min": 2695,
+            "max": 2888,
+            "n": 2,
+            "samples": [2888, 2695]
+          },
+          "free_heap": {
+            "p50": 157368,
+            "p95": 182608,
+            "min": 157368,
+            "max": 182608,
+            "n": 2,
+            "samples": [157368, 182608]
+          },
+          "max_alloc_block": {
+            "p50": 107264,
+            "p95": 131024,
+            "min": 107264,
+            "max": 131024,
+            "n": 2,
+            "samples": [107264, 131024]
+          },
+          "last_updated": "2026-10-14"
+        }
+      }
+    },
+    {
+      "name": "128x96-serpentine-mapped-by-sender-set",
+      "op": "set_control",
+      "id": "NetworkReceive",
+      "key": "mapped_by",
+      "value": 1
+    },
+    {
+      "name": "128x96-serpentine-sender",
+      "description": "12288 lights, serpentine layout, mapped by the sender, DDP at 40 fps.",
+      "op": "measure",
+      "read": [
+        "sender:fps",
+        "NetworkReceive.tick",
+        "NetworkReceive.packets_per_s",
+        "NetworkReceive.frames_per_s",
+        "Drivers.tick"
+      ],
+      "observed": {
+        "host=esp32s3-n16r8 sender=esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 14975,
+            "p95": 17066,
+            "min": 14975,
+            "max": 17066,
+            "n": 2,
+            "samples": [17066, 14975]
+          },
+          "free_heap": {
+            "p50": 8104315,
+            "p95": 8131827,
+            "min": 8104315,
+            "max": 8131827,
+            "n": 2,
+            "samples": [8131827, 8104315]
+          },
+          "max_alloc_block": {
+            "p50": 31744,
+            "p95": 38912,
+            "min": 31744,
+            "max": 38912,
+            "n": 2,
+            "samples": [38912, 31744]
+          },
+          "last_updated": "2026-10-14"
+        },
+        "host=esp32p4rev1-eth sender=esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 240,
+            "p95": 11754,
+            "min": 240,
+            "max": 11754,
+            "n": 2,
+            "samples": [240, 11754]
+          },
+          "free_heap": {
+            "p50": 33526107,
+            "p95": 33811451,
+            "min": 33526107,
+            "max": 33811451,
+            "n": 2,
+            "samples": [33811451, 33526107]
+          },
+          "max_alloc_block": {
+            "p50": 192512,
+            "p95": 241664,
+            "min": 192512,
+            "max": 241664,
+            "n": 2,
+            "samples": [241664, 192512]
+          },
+          "last_updated": "2026-10-14"
+        },
+        "host=esp32s3-n16r8 sender=esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 17814,
+            "p95": 18405,
+            "min": 13366,
+            "max": 18405,
+            "n": 3,
+            "samples": [13366, 18405, 17814]
+          },
+          "free_heap": {
+            "p50": 8131899,
+            "p95": 8134983,
+            "min": 8127959,
+            "max": 8134983,
+            "n": 3,
+            "samples": [8134983, 8131899, 8127959]
+          },
+          "max_alloc_block": {
+            "p50": 45056,
+            "p95": 47104,
+            "min": 40960,
+            "max": 47104,
+            "n": 3,
+            "samples": [47104, 40960, 45056]
+          },
+          "last_updated": "2026-10-14"
+        },
+        "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 9044,
+            "p95": 13022,
+            "min": 8119,
+            "max": 13022,
+            "n": 6,
+            "samples": [8119, 9745, 9737, 9044, 8159, 13022]
+          },
+          "free_heap": {
+            "p50": 33516363,
+            "p95": 33588763,
+            "min": 33493455,
+            "max": 33588763,
+            "n": 6,
+            "samples": [33588763, 33587655, 33516363, 33493455, 33513107, 33527975]
+          },
+          "max_alloc_block": {
+            "p50": 180224,
+            "p95": 249856,
+            "min": 159744,
+            "max": 249856,
+            "n": 6,
+            "samples": [249856, 249856, 180224, 159744, 176128, 188416]
+          },
+          "last_updated": "2026-10-14"
+        },
+        "host=teensy41 sender=esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 2573,
+            "p95": 2573,
+            "min": 2573,
+            "max": 2573,
+            "n": 1,
+            "samples": [2573]
+          },
+          "free_heap": {
+            "p50": 170224,
+            "p95": 170224,
+            "min": 170224,
+            "max": 170224,
+            "n": 1,
+            "samples": [170224]
+          },
+          "max_alloc_block": {
+            "p50": 104792,
+            "p95": 104792,
+            "min": 104792,
+            "max": 104792,
+            "n": 1,
+            "samples": [104792]
+          },
+          "last_updated": "2026-10-14"
+        },
+        "host=teensy41 sender=esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 2340,
+            "p95": 2489,
+            "min": 2340,
+            "max": 2489,
+            "n": 2,
+            "samples": [2489, 2340]
+          },
+          "free_heap": {
+            "p50": 152456,
+            "p95": 160616,
+            "min": 152456,
+            "max": 160616,
+            "n": 2,
+            "samples": [160616, 152456]
+          },
+          "max_alloc_block": {
+            "p50": 32656,
+            "p95": 33488,
+            "min": 32656,
+            "max": 33488,
+            "n": 2,
+            "samples": [33488, 32656]
+          },
+          "last_updated": "2026-10-14"
+        }
+      }
+    },
+    {
+      "name": "second-layer",
+      "op": "apply_state",
+      "document": {
+        "Effects": {
+          "Layer2": {
+            "type": "Layer",
+            "Solid": {
+              "type": "SolidEffect"
+            }
+          }
+        }
+      },
+      "description": "A second layer on top, at the largest size, so the drivers blend."
+    },
+    {
+      "name": "two-layers-identity",
+      "op": "set_control",
+      "id": "Grid",
+      "key": "serpentine",
+      "value": false
+    },
+    {
+      "name": "two-layers-identity-mapped-by-receiver-set",
+      "op": "set_control",
+      "id": "NetworkReceive",
+      "key": "mapped_by",
+      "value": 0
+    },
+    {
+      "name": "two-layers-identity-receiver",
+      "description": "12288 lights on two layers, identity layout, mapped by the receiver.",
+      "op": "measure",
+      "read": [
+        "sender:fps",
+        "NetworkReceive.tick",
+        "NetworkReceive.packets_per_s",
+        "NetworkReceive.frames_per_s",
+        "Drivers.tick"
+      ],
+      "observed": {
+        "host=esp32s3-n16r8 sender=esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 15955,
+            "p95": 17511,
+            "min": 15955,
+            "max": 17511,
+            "n": 2,
+            "samples": [15955, 17511]
+          },
+          "free_heap": {
+            "p50": 8255203,
+            "p95": 8278235,
+            "min": 8255203,
+            "max": 8278235,
+            "n": 2,
+            "samples": [8278235, 8255203]
+          },
+          "max_alloc_block": {
+            "p50": 31744,
+            "p95": 32768,
+            "min": 31744,
+            "max": 32768,
+            "n": 2,
+            "samples": [32768, 31744]
+          },
+          "last_updated": "2026-10-14"
+        },
+        "host=esp32p4rev1-eth sender=esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 2925,
+            "p95": 7845,
+            "min": 2925,
+            "max": 7845,
+            "n": 2,
+            "samples": [2925, 7845]
+          },
+          "free_heap": {
+            "p50": 33674863,
+            "p95": 33792107,
+            "min": 33674863,
+            "max": 33792107,
+            "n": 2,
+            "samples": [33792107, 33674863]
+          },
+          "max_alloc_block": {
+            "p50": 188416,
+            "p95": 245760,
+            "min": 188416,
+            "max": 245760,
+            "n": 2,
+            "samples": [245760, 188416]
+          },
+          "last_updated": "2026-10-14"
+        },
+        "host=esp32s3-n16r8 sender=esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 13197,
+            "p95": 17495,
+            "min": 13185,
+            "max": 17495,
+            "n": 3,
+            "samples": [13185, 13197, 17495]
+          },
+          "free_heap": {
+            "p50": 8275107,
+            "p95": 8282175,
+            "min": 8260723,
+            "max": 8282175,
+            "n": 3,
+            "samples": [8260723, 8282175, 8275107]
+          },
+          "max_alloc_block": {
+            "p50": 31744,
+            "p95": 40960,
+            "min": 31744,
+            "max": 40960,
+            "n": 3,
+            "samples": [31744, 31744, 40960]
+          },
+          "last_updated": "2026-10-14"
+        },
+        "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 5880,
+            "p95": 8906,
+            "min": 5506,
+            "max": 8906,
+            "n": 6,
+            "samples": [5506, 7261, 7776, 5880, 5739, 8906]
+          },
+          "free_heap": {
+            "p50": 33672403,
+            "p95": 33734995,
+            "min": 33629295,
+            "max": 33734995,
+            "n": 6,
+            "samples": [33734995, 33733939, 33667219, 33629295, 33674591, 33672403]
+          },
+          "max_alloc_block": {
+            "p50": 188416,
+            "p95": 249856,
+            "min": 147456,
+            "max": 249856,
+            "n": 6,
+            "samples": [249856, 249856, 192512, 147456, 163840, 188416]
+          },
+          "last_updated": "2026-10-14"
+        },
+        "host=teensy41 sender=esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 2621,
+            "p95": 2621,
+            "min": 2621,
+            "max": 2621,
+            "n": 1,
+            "samples": [2621]
+          },
+          "free_heap": {
+            "p50": 153744,
+            "p95": 153744,
+            "min": 153744,
+            "max": 153744,
+            "n": 1,
+            "samples": [153744]
+          },
+          "max_alloc_block": {
+            "p50": 56232,
+            "p95": 56232,
+            "min": 56232,
+            "max": 56232,
+            "n": 1,
+            "samples": [56232]
+          },
+          "last_updated": "2026-10-14"
+        },
+        "host=teensy41 sender=esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 2956,
+            "p95": 3086,
+            "min": 2956,
+            "max": 3086,
+            "n": 2,
+            "samples": [2956, 3086]
+          },
+          "free_heap": {
+            "p50": 108384,
+            "p95": 112544,
+            "min": 108384,
+            "max": 112544,
+            "n": 2,
+            "samples": [112544, 108384]
+          },
+          "max_alloc_block": {
+            "p50": 70384,
+            "p95": 72592,
+            "min": 70384,
+            "max": 72592,
+            "n": 2,
+            "samples": [70384, 72592]
+          },
+          "last_updated": "2026-10-14"
+        }
+      }
+    },
+    {
+      "name": "two-layers-identity-mapped-by-sender-set",
+      "op": "set_control",
+      "id": "NetworkReceive",
+      "key": "mapped_by",
+      "value": 1
+    },
+    {
+      "name": "two-layers-identity-sender",
+      "description": "12288 lights on two layers, identity layout, mapped by the sender.",
+      "op": "measure",
+      "read": [
+        "sender:fps",
+        "NetworkReceive.tick",
+        "NetworkReceive.packets_per_s",
+        "NetworkReceive.frames_per_s",
+        "Drivers.tick"
+      ],
+      "observed": {
+        "host=esp32s3-n16r8 sender=esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 12343,
+            "p95": 12684,
+            "min": 12343,
+            "max": 12684,
+            "n": 2,
+            "samples": [12343, 12684]
+          },
+          "free_heap": {
+            "p50": 8254203,
+            "p95": 8282035,
+            "min": 8254203,
+            "max": 8282035,
+            "n": 2,
+            "samples": [8282035, 8254203]
+          },
+          "max_alloc_block": {
+            "p50": 31744,
+            "p95": 32768,
+            "min": 31744,
+            "max": 32768,
+            "n": 2,
+            "samples": [32768, 31744]
+          },
+          "last_updated": "2026-10-14"
+        },
+        "host=esp32p4rev1-eth sender=esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 2926,
+            "p95": 9864,
+            "min": 2926,
+            "max": 9864,
+            "n": 2,
+            "samples": [2926, 9864]
+          },
+          "free_heap": {
+            "p50": 33674851,
+            "p95": 33794311,
+            "min": 33674851,
+            "max": 33794311,
+            "n": 2,
+            "samples": [33794311, 33674851]
+          },
+          "max_alloc_block": {
+            "p50": 188416,
+            "p95": 245760,
+            "min": 188416,
+            "max": 245760,
+            "n": 2,
+            "samples": [245760, 188416]
+          },
+          "last_updated": "2026-10-14"
+        },
+        "host=esp32s3-n16r8 sender=esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 11963,
+            "p95": 14760,
+            "min": 11702,
+            "max": 14760,
+            "n": 3,
+            "samples": [11963, 11702, 14760]
+          },
+          "free_heap": {
+            "p50": 8280143,
+            "p95": 8284487,
+            "min": 8274991,
+            "max": 8284487,
+            "n": 3,
+            "samples": [8280143, 8284487, 8274991]
+          },
+          "max_alloc_block": {
+            "p50": 34816,
+            "p95": 40960,
+            "min": 31744,
+            "max": 40960,
+            "n": 3,
+            "samples": [34816, 31744, 40960]
+          },
+          "last_updated": "2026-10-14"
+        },
+        "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 5908,
+            "p95": 11332,
+            "min": 5431,
+            "max": 11332,
+            "n": 6,
+            "samples": [5464, 5431, 8511, 5920, 5908, 11332]
+          },
+          "free_heap": {
+            "p50": 33673615,
+            "p95": 33735275,
+            "min": 33643619,
+            "max": 33735275,
+            "n": 6,
+            "samples": [33735275, 33727675, 33673615, 33643619, 33674575, 33673059]
+          },
+          "max_alloc_block": {
+            "p50": 163840,
+            "p95": 249856,
+            "min": 151552,
+            "max": 249856,
+            "n": 6,
+            "samples": [249856, 237568, 163840, 151552, 163840, 188416]
+          },
+          "last_updated": "2026-10-14"
+        },
+        "host=teensy41 sender=esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 3402,
+            "p95": 3402,
+            "min": 3402,
+            "max": 3402,
+            "n": 1,
+            "samples": [3402]
+          },
+          "free_heap": {
+            "p50": 125376,
+            "p95": 125376,
+            "min": 125376,
+            "max": 125376,
+            "n": 1,
+            "samples": [125376]
+          },
+          "max_alloc_block": {
+            "p50": 56232,
+            "p95": 56232,
+            "min": 56232,
+            "max": 56232,
+            "n": 1,
+            "samples": [56232]
+          },
+          "last_updated": "2026-10-14"
+        },
+        "host=teensy41 sender=esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 3086,
+            "p95": 3187,
+            "min": 3086,
+            "max": 3187,
+            "n": 2,
+            "samples": [3187, 3086]
+          },
+          "free_heap": {
+            "p50": 108384,
+            "p95": 114000,
+            "min": 108384,
+            "max": 114000,
+            "n": 2,
+            "samples": [114000, 108384]
+          },
+          "max_alloc_block": {
+            "p50": 70384,
+            "p95": 72592,
+            "min": 70384,
+            "max": 72592,
+            "n": 2,
+            "samples": [70384, 72592]
+          },
+          "last_updated": "2026-10-14"
+        }
+      }
+    },
+    {
+      "name": "two-layers-serpentine",
+      "op": "set_control",
+      "id": "Grid",
+      "key": "serpentine",
+      "value": true
+    },
+    {
+      "name": "two-layers-serpentine-mapped-by-receiver-set",
+      "op": "set_control",
+      "id": "NetworkReceive",
+      "key": "mapped_by",
+      "value": 0
+    },
+    {
+      "name": "two-layers-serpentine-receiver",
+      "description": "12288 lights on two layers, serpentine layout, mapped by the receiver.",
+      "op": "measure",
+      "read": [
+        "sender:fps",
+        "NetworkReceive.tick",
+        "NetworkReceive.packets_per_s",
+        "NetworkReceive.frames_per_s",
+        "Drivers.tick"
+      ],
+      "observed": {
+        "host=esp32s3-n16r8 sender=esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 27983,
+            "p95": 29558,
+            "min": 27983,
+            "max": 29558,
+            "n": 2,
+            "samples": [29558, 27983]
+          },
+          "free_heap": {
+            "p50": 7986755,
+            "p95": 7990423,
+            "min": 7986755,
+            "max": 7990423,
+            "n": 2,
+            "samples": [7990423, 7986755]
+          },
+          "max_alloc_block": {
+            "p50": 31744,
+            "p95": 32768,
+            "min": 31744,
+            "max": 32768,
+            "n": 2,
+            "samples": [32768, 31744]
+          },
+          "last_updated": "2026-10-14"
+        },
+        "host=esp32p4rev1-eth sender=esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 10036,
+            "p95": 18778,
+            "min": 10036,
+            "max": 18778,
+            "n": 2,
+            "samples": [10036, 18778]
+          },
+          "free_heap": {
+            "p50": 33389439,
+            "p95": 33607119,
+            "min": 33389439,
+            "max": 33607119,
+            "n": 2,
+            "samples": [33607119, 33389439]
+          },
+          "max_alloc_block": {
+            "p50": 184320,
+            "p95": 245760,
+            "min": 184320,
+            "max": 245760,
+            "n": 2,
+            "samples": [245760, 184320]
+          },
+          "last_updated": "2026-10-14"
+        },
+        "host=esp32s3-n16r8 sender=esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 26122,
+            "p95": 29137,
+            "min": 24020,
+            "max": 29137,
+            "n": 3,
+            "samples": [24020, 29137, 26122]
+          },
+          "free_heap": {
+            "p50": 7987047,
+            "p95": 7995311,
+            "min": 7985827,
+            "max": 7995311,
+            "n": 3,
+            "samples": [7987047, 7995311, 7985827]
+          },
+          "max_alloc_block": {
+            "p50": 34816,
+            "p95": 38912,
+            "min": 31744,
+            "max": 38912,
+            "n": 3,
+            "samples": [34816, 31744, 38912]
+          },
+          "last_updated": "2026-10-14"
+        },
+        "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 13954,
+            "p95": 18171,
+            "min": 13117,
+            "max": 18171,
+            "n": 6,
+            "samples": [13117, 15544, 16165, 13897, 13954, 18171]
+          },
+          "free_heap": {
+            "p50": 33378951,
+            "p95": 33451463,
+            "min": 33354651,
+            "max": 33451463,
+            "n": 6,
+            "samples": [33451463, 33443755, 33378951, 33354651, 33360111, 33389347]
+          },
+          "max_alloc_block": {
+            "p50": 155648,
+            "p95": 249856,
+            "min": 151552,
+            "max": 249856,
+            "n": 6,
+            "samples": [249856, 237568, 151552, 151552, 155648, 188416]
+          },
+          "last_updated": "2026-10-14"
+        },
+        "host=teensy41 sender=esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 2623,
+            "p95": 2623,
+            "min": 2623,
+            "max": 2623,
+            "n": 1,
+            "samples": [2623]
+          },
+          "free_heap": {
+            "p50": 121456,
+            "p95": 121456,
+            "min": 121456,
+            "max": 121456,
+            "n": 1,
+            "samples": [121456]
+          },
+          "max_alloc_block": {
+            "p50": 56232,
+            "p95": 56232,
+            "min": 56232,
+            "max": 56232,
+            "n": 1,
+            "samples": [56232]
+          },
+          "last_updated": "2026-10-14"
+        },
+        "host=teensy41 sender=esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 3268,
+            "p95": 6608,
+            "min": 3268,
+            "max": 6608,
+            "n": 2,
+            "samples": [6608, 3268]
+          },
+          "free_heap": {
+            "p50": 101400,
+            "p95": 105696,
+            "min": 101400,
+            "max": 105696,
+            "n": 2,
+            "samples": [101400, 105696]
+          },
+          "max_alloc_block": {
+            "p50": 70384,
+            "p95": 72592,
+            "min": 70384,
+            "max": 72592,
+            "n": 2,
+            "samples": [70384, 72592]
+          },
+          "last_updated": "2026-10-14"
+        }
+      }
+    },
+    {
+      "name": "two-layers-serpentine-mapped-by-sender-set",
+      "op": "set_control",
+      "id": "NetworkReceive",
+      "key": "mapped_by",
+      "value": 1
+    },
+    {
+      "name": "two-layers-serpentine-sender",
+      "description": "12288 lights on two layers, serpentine layout, mapped by the sender.",
+      "op": "measure",
+      "read": [
+        "sender:fps",
+        "NetworkReceive.tick",
+        "NetworkReceive.packets_per_s",
+        "NetworkReceive.frames_per_s",
+        "Drivers.tick"
+      ],
+      "observed": {
+        "host=esp32s3-n16r8 sender=esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 30612,
+            "p95": 33261,
+            "min": 30612,
+            "max": 33261,
+            "n": 2,
+            "samples": [30612, 33261]
+          },
+          "free_heap": {
+            "p50": 7985299,
+            "p95": 7995931,
+            "min": 7985299,
+            "max": 7995931,
+            "n": 2,
+            "samples": [7995931, 7985299]
+          },
+          "max_alloc_block": {
+            "p50": 31744,
+            "p95": 32768,
+            "min": 31744,
+            "max": 32768,
+            "n": 2,
+            "samples": [32768, 31744]
+          },
+          "last_updated": "2026-10-14"
+        },
+        "host=esp32p4rev1-eth sender=esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 11930,
+            "p95": 21562,
+            "min": 11930,
+            "max": 21562,
+            "n": 2,
+            "samples": [11930, 21562]
+          },
+          "free_heap": {
+            "p50": 33388063,
+            "p95": 33607139,
+            "min": 33388063,
+            "max": 33607139,
+            "n": 2,
+            "samples": [33607139, 33388063]
+          },
+          "max_alloc_block": {
+            "p50": 188416,
+            "p95": 245760,
+            "min": 188416,
+            "max": 245760,
+            "n": 2,
+            "samples": [245760, 188416]
+          },
+          "last_updated": "2026-10-14"
+        },
+        "host=esp32s3-n16r8 sender=esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 37919,
+            "p95": 38723,
+            "min": 31174,
+            "max": 38723,
+            "n": 3,
+            "samples": [31174, 38723, 37919]
+          },
+          "free_heap": {
+            "p50": 7996311,
+            "p95": 7999035,
+            "min": 7993927,
+            "max": 7999035,
+            "n": 3,
+            "samples": [7993927, 7996311, 7999035]
+          },
+          "max_alloc_block": {
+            "p50": 34816,
+            "p95": 36864,
+            "min": 31744,
+            "max": 36864,
+            "n": 3,
+            "samples": [34816, 31744, 36864]
+          },
+          "last_updated": "2026-10-14"
+        },
+        "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 15741,
+            "p95": 22861,
+            "min": 15496,
+            "max": 22861,
+            "n": 6,
+            "samples": [15720, 18273, 17333, 15741, 15496, 22861]
+          },
+          "free_heap": {
+            "p50": 33383299,
+            "p95": 33451479,
+            "min": 33360551,
+            "max": 33451479,
+            "n": 6,
+            "samples": [33451479, 33447359, 33383299, 33360551, 33379587, 33389399]
+          },
+          "max_alloc_block": {
+            "p50": 184320,
+            "p95": 249856,
+            "min": 151552,
+            "max": 249856,
+            "n": 6,
+            "samples": [249856, 229376, 184320, 151552, 163840, 188416]
+          },
+          "last_updated": "2026-10-14"
+        },
+        "host=teensy41 sender=esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 3346,
+            "p95": 3346,
+            "min": 3346,
+            "max": 3346,
+            "n": 1,
+            "samples": [3346]
+          },
+          "free_heap": {
+            "p50": 114512,
+            "p95": 114512,
+            "min": 114512,
+            "max": 114512,
+            "n": 1,
+            "samples": [114512]
+          },
+          "max_alloc_block": {
+            "p50": 56232,
+            "p95": 56232,
+            "min": 56232,
+            "max": 56232,
+            "n": 1,
+            "samples": [56232]
+          },
+          "last_updated": "2026-10-14"
+        },
+        "host=teensy41 sender=esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 3137,
+            "p95": 3255,
+            "min": 3137,
+            "max": 3255,
+            "n": 2,
+            "samples": [3137, 3255]
+          },
+          "free_heap": {
+            "p50": 99488,
+            "p95": 104312,
+            "min": 99488,
+            "max": 104312,
+            "n": 2,
+            "samples": [104312, 99488]
+          },
+          "max_alloc_block": {
+            "p50": 70384,
+            "p95": 72592,
+            "min": 70384,
+            "max": 72592,
+            "n": 2,
+            "samples": [70384, 72592]
+          },
+          "last_updated": "2026-10-14"
+        }
+      }
+    },
+    {
+      "name": "one-layer-again",
+      "op": "apply_state",
+      "document": {
+        "Effects": {
+          "Layer2": null
+        }
+      }
+    },
+    {
+      "name": "sender-64x64-width",
+      "device": "sender",
+      "op": "set_control",
+      "id": "Grid",
+      "key": "width",
+      "value": 64
+    },
+    {
+      "name": "sender-64x64-height",
+      "device": "sender",
+      "op": "set_control",
+      "id": "Grid",
+      "key": "height",
+      "value": 64
+    },
+    {
+      "name": "receiver-64x64-width",
+      "op": "set_control",
+      "id": "Grid",
+      "key": "width",
+      "value": 64
+    },
+    {
+      "name": "receiver-64x64-height",
+      "op": "set_control",
+      "id": "Grid",
+      "key": "height",
+      "value": 64
+    },
+    {
+      "name": "protocols-identity",
+      "op": "set_control",
+      "id": "Grid",
+      "key": "serpentine",
+      "value": false
+    },
+    {
+      "name": "protocols-mapped-by-receiver",
+      "op": "set_control",
+      "id": "NetworkReceive",
+      "key": "mapped_by",
+      "value": 0
+    },
+    {
+      "name": "protocol-artnet-set",
+      "device": "sender",
+      "op": "set_control",
+      "id": "Send",
+      "key": "protocol",
+      "value": 0
+    },
+    {
+      "name": "64x64-artnet",
+      "description": "4096 lights over artnet, identity layout, mapped by the receiver.",
+      "op": "measure",
+      "read": [
+        "sender:fps",
+        "NetworkReceive.tick",
+        "NetworkReceive.packets_per_s",
+        "NetworkReceive.frames_per_s",
+        "Drivers.tick"
+      ],
+      "observed": {
+        "host=esp32s3-n16r8 sender=esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 3426,
+            "p95": 3692,
+            "min": 3426,
+            "max": 3692,
+            "n": 2,
+            "samples": [3426, 3692]
+          },
+          "free_heap": {
+            "p50": 8397855,
+            "p95": 8411803,
+            "min": 8397855,
+            "max": 8411803,
+            "n": 2,
+            "samples": [8411803, 8397855]
+          },
+          "max_alloc_block": {
+            "p50": 31744,
+            "p95": 45056,
+            "min": 31744,
+            "max": 45056,
+            "n": 2,
+            "samples": [45056, 31744]
+          },
+          "last_updated": "2026-10-14"
+        },
+        "host=esp32p4rev1-eth sender=esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 109,
+            "p95": 116,
+            "min": 109,
+            "max": 116,
+            "n": 2,
+            "samples": [116, 109]
+          },
+          "free_heap": {
+            "p50": 33811879,
+            "p95": 33872987,
+            "min": 33811879,
+            "max": 33872987,
+            "n": 2,
+            "samples": [33872987, 33811879]
+          },
+          "max_alloc_block": {
+            "p50": 188416,
+            "p95": 245760,
+            "min": 188416,
+            "max": 245760,
+            "n": 2,
+            "samples": [245760, 188416]
+          },
+          "last_updated": "2026-10-14"
+        },
+        "host=esp32s3-n16r8 sender=esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 3350,
+            "p95": 3472,
+            "min": 3256,
+            "max": 3472,
+            "n": 3,
+            "samples": [3256, 3472, 3350]
+          },
+          "free_heap": {
+            "p50": 8419087,
+            "p95": 8419459,
+            "min": 8412399,
+            "max": 8419459,
+            "n": 3,
+            "samples": [8419087, 8412399, 8419459]
+          },
+          "max_alloc_block": {
+            "p50": 36864,
+            "p95": 45056,
+            "min": 34816,
+            "max": 45056,
+            "n": 3,
+            "samples": [45056, 36864, 34816]
+          },
+          "last_updated": "2026-10-14"
+        },
+        "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 113,
+            "p95": 831,
+            "min": 104,
+            "max": 831,
+            "n": 6,
+            "samples": [831, 117, 120, 104, 106, 113]
+          },
+          "free_heap": {
+            "p50": 33812175,
+            "p95": 33858791,
+            "min": 33783283,
+            "max": 33858791,
+            "n": 6,
+            "samples": [33858791, 33858359, 33800783, 33783283, 33812507, 33812175]
+          },
+          "max_alloc_block": {
+            "p50": 188416,
+            "p95": 253952,
+            "min": 159744,
+            "max": 253952,
+            "n": 6,
+            "samples": [253952, 241664, 180224, 159744, 192512, 188416]
+          },
+          "last_updated": "2026-10-14"
+        },
+        "host=teensy41 sender=esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 2139,
+            "p95": 2139,
+            "min": 2139,
+            "max": 2139,
+            "n": 1,
+            "samples": [2139]
+          },
+          "free_heap": {
+            "p50": 270784,
+            "p95": 270784,
+            "min": 270784,
+            "max": 270784,
+            "n": 1,
+            "samples": [270784]
+          },
+          "max_alloc_block": {
+            "p50": 167488,
+            "p95": 167488,
+            "min": 167488,
+            "max": 167488,
+            "n": 1,
+            "samples": [167488]
+          },
+          "last_updated": "2026-10-14"
+        },
+        "host=teensy41 sender=esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 2417,
+            "p95": 2440,
+            "min": 2417,
+            "max": 2440,
+            "n": 2,
+            "samples": [2440, 2417]
+          },
+          "free_heap": {
+            "p50": 263680,
+            "p95": 264320,
+            "min": 263680,
+            "max": 264320,
+            "n": 2,
+            "samples": [264320, 263680]
+          },
+          "max_alloc_block": {
+            "p50": 149640,
+            "p95": 210536,
+            "min": 149640,
+            "max": 210536,
+            "n": 2,
+            "samples": [210536, 149640]
+          },
+          "last_updated": "2026-10-14"
+        }
+      }
+    },
+    {
+      "name": "protocol-e131-set",
+      "device": "sender",
+      "op": "set_control",
+      "id": "Send",
+      "key": "protocol",
+      "value": 1
+    },
+    {
+      "name": "64x64-e131",
+      "description": "4096 lights over e131, identity layout, mapped by the receiver.",
+      "op": "measure",
+      "read": [
+        "sender:fps",
+        "NetworkReceive.tick",
+        "NetworkReceive.packets_per_s",
+        "NetworkReceive.frames_per_s",
+        "Drivers.tick"
+      ],
+      "observed": {
+        "host=esp32s3-n16r8 sender=esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 3357,
+            "p95": 3490,
+            "min": 3357,
+            "max": 3490,
+            "n": 2,
+            "samples": [3357, 3490]
+          },
+          "free_heap": {
+            "p50": 8414015,
+            "p95": 8417851,
+            "min": 8414015,
+            "max": 8417851,
+            "n": 2,
+            "samples": [8414015, 8417851]
+          },
+          "max_alloc_block": {
+            "p50": 38912,
+            "p95": 47104,
+            "min": 38912,
+            "max": 47104,
+            "n": 2,
+            "samples": [47104, 38912]
+          },
+          "last_updated": "2026-10-14"
+        },
+        "host=esp32p4rev1-eth sender=esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 109,
+            "p95": 110,
+            "min": 109,
+            "max": 110,
+            "n": 2,
+            "samples": [109, 110]
+          },
+          "free_heap": {
+            "p50": 33812367,
+            "p95": 33872439,
+            "min": 33812367,
+            "max": 33872439,
+            "n": 2,
+            "samples": [33872439, 33812367]
+          },
+          "max_alloc_block": {
+            "p50": 188416,
+            "p95": 245760,
+            "min": 188416,
+            "max": 245760,
+            "n": 2,
+            "samples": [245760, 188416]
+          },
+          "last_updated": "2026-10-14"
+        },
+        "host=esp32s3-n16r8 sender=esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 3461,
+            "p95": 3495,
+            "min": 3334,
+            "max": 3495,
+            "n": 3,
+            "samples": [3334, 3495, 3461]
+          },
+          "free_heap": {
+            "p50": 8419667,
+            "p95": 8419679,
+            "min": 8405079,
+            "max": 8419679,
+            "n": 3,
+            "samples": [8405079, 8419679, 8419667]
+          },
+          "max_alloc_block": {
+            "p50": 36864,
+            "p95": 40960,
+            "min": 34816,
+            "max": 40960,
+            "n": 3,
+            "samples": [40960, 36864, 34816]
+          },
+          "last_updated": "2026-10-14"
+        },
+        "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 116,
+            "p95": 819,
+            "min": 108,
+            "max": 819,
+            "n": 6,
+            "samples": [819, 116, 121, 112, 108, 116]
+          },
+          "free_heap": {
+            "p50": 33812079,
+            "p95": 33860755,
+            "min": 33781963,
+            "max": 33860755,
+            "n": 6,
+            "samples": [33860755, 33857391, 33815699, 33781963, 33812079, 33811995]
+          },
+          "max_alloc_block": {
+            "p50": 188416,
+            "p95": 253952,
+            "min": 159744,
+            "max": 253952,
+            "n": 6,
+            "samples": [253952, 241664, 180224, 159744, 192512, 188416]
+          },
+          "last_updated": "2026-10-14"
+        },
+        "host=teensy41 sender=esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 2490,
+            "p95": 2490,
+            "min": 2490,
+            "max": 2490,
+            "n": 1,
+            "samples": [2490]
+          },
+          "free_heap": {
+            "p50": 263976,
+            "p95": 263976,
+            "min": 263976,
+            "max": 263976,
+            "n": 1,
+            "samples": [263976]
+          },
+          "max_alloc_block": {
+            "p50": 167488,
+            "p95": 167488,
+            "min": 167488,
+            "max": 167488,
+            "n": 1,
+            "samples": [167488]
+          },
+          "last_updated": "2026-10-14"
+        },
+        "host=teensy41 sender=esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 2440,
+            "p95": 2450,
+            "min": 2440,
+            "max": 2450,
+            "n": 2,
+            "samples": [2440, 2450]
+          },
+          "free_heap": {
+            "p50": 253320,
+            "p95": 263552,
+            "min": 253320,
+            "max": 263552,
+            "n": 2,
+            "samples": [263552, 253320]
+          },
+          "max_alloc_block": {
+            "p50": 149640,
+            "p95": 210536,
+            "min": 149640,
+            "max": 210536,
+            "n": 2,
+            "samples": [210536, 149640]
+          },
+          "last_updated": "2026-10-14"
+        }
+      }
+    },
+    {
+      "name": "protocol-ddp-set",
+      "device": "sender",
+      "op": "set_control",
+      "id": "Send",
+      "key": "protocol",
+      "value": 2
+    },
+    {
+      "name": "64x64-ddp",
+      "description": "4096 lights over ddp, identity layout, mapped by the receiver.",
+      "op": "measure",
+      "read": [
+        "sender:fps",
+        "NetworkReceive.tick",
+        "NetworkReceive.packets_per_s",
+        "NetworkReceive.frames_per_s",
+        "Drivers.tick"
+      ],
+      "observed": {
+        "host=esp32s3-n16r8 sender=esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 3261,
+            "p95": 3393,
+            "min": 3261,
+            "max": 3393,
+            "n": 2,
+            "samples": [3261, 3393]
+          },
+          "free_heap": {
+            "p50": 8415903,
+            "p95": 8419455,
+            "min": 8415903,
+            "max": 8419455,
+            "n": 2,
+            "samples": [8419455, 8415903]
+          },
+          "max_alloc_block": {
+            "p50": 38912,
+            "p95": 49152,
+            "min": 38912,
+            "max": 49152,
+            "n": 2,
+            "samples": [49152, 38912]
+          },
+          "last_updated": "2026-10-14"
+        },
+        "host=esp32p4rev1-eth sender=esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 106,
+            "p95": 106,
+            "min": 106,
+            "max": 106,
+            "n": 2,
+            "samples": [106, 106]
+          },
+          "free_heap": {
+            "p50": 33812315,
+            "p95": 33873411,
+            "min": 33812315,
+            "max": 33873411,
+            "n": 2,
+            "samples": [33873411, 33812315]
+          },
+          "max_alloc_block": {
+            "p50": 188416,
+            "p95": 245760,
+            "min": 188416,
+            "max": 245760,
+            "n": 2,
+            "samples": [245760, 188416]
+          },
+          "last_updated": "2026-10-14"
+        },
+        "host=esp32s3-n16r8 sender=esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 3174,
+            "p95": 3273,
+            "min": 3137,
+            "max": 3273,
+            "n": 3,
+            "samples": [3174, 3273, 3137]
+          },
+          "free_heap": {
+            "p50": 8419511,
+            "p95": 8419911,
+            "min": 8412755,
+            "max": 8419911,
+            "n": 3,
+            "samples": [8419511, 8419911, 8412755]
+          },
+          "max_alloc_block": {
+            "p50": 36864,
+            "p95": 45056,
+            "min": 34816,
+            "max": 45056,
+            "n": 3,
+            "samples": [45056, 36864, 34816]
+          },
+          "last_updated": "2026-10-14"
+        },
+        "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 112,
+            "p95": 819,
+            "min": 103,
+            "max": 819,
+            "n": 6,
+            "samples": [819, 115, 115, 112, 103, 105]
+          },
+          "free_heap": {
+            "p50": 33812611,
+            "p95": 33870303,
+            "min": 33783927,
+            "max": 33870303,
+            "n": 6,
+            "samples": [33859443, 33870303, 33801111, 33783927, 33812611, 33812975]
+          },
+          "max_alloc_block": {
+            "p50": 188416,
+            "p95": 253952,
+            "min": 159744,
+            "max": 253952,
+            "n": 6,
+            "samples": [253952, 249856, 180224, 159744, 192512, 188416]
+          },
+          "last_updated": "2026-10-14"
+        },
+        "host=teensy41 sender=esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 2394,
+            "p95": 2394,
+            "min": 2394,
+            "max": 2394,
+            "n": 1,
+            "samples": [2394]
+          },
+          "free_heap": {
+            "p50": 264296,
+            "p95": 264296,
+            "min": 264296,
+            "max": 264296,
+            "n": 1,
+            "samples": [264296]
+          },
+          "max_alloc_block": {
+            "p50": 167488,
+            "p95": 167488,
+            "min": 167488,
+            "max": 167488,
+            "n": 1,
+            "samples": [167488]
+          },
+          "last_updated": "2026-10-14"
+        },
+        "host=teensy41 sender=esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 2481,
+            "p95": 2493,
+            "min": 2481,
+            "max": 2493,
+            "n": 2,
+            "samples": [2481, 2493]
+          },
+          "free_heap": {
+            "p50": 259528,
+            "p95": 263312,
+            "min": 259528,
+            "max": 263312,
+            "n": 2,
+            "samples": [263312, 259528]
+          },
+          "max_alloc_block": {
+            "p50": 149640,
+            "p95": 210536,
+            "min": 149640,
+            "max": 210536,
+            "n": 2,
+            "samples": [210536, 149640]
+          },
+          "last_updated": "2026-10-14"
+        }
+      }
+    }
+  ]
+}

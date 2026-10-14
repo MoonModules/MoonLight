@@ -1,6 +1,6 @@
 #pragma once
 
-// Loopback helpers the HTTP server tests share: connect a client and let the server accept it, tick until a reply arrives, read a close, make a payload.
+/// Loopback helpers the HTTP server tests share: connect a client and let the server accept it, tick until a reply arrives, read a close, make a payload.
 
 #include "core/system/HttpServerModule.h"
 #include "platform/platform.h"

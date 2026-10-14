@@ -271,6 +271,16 @@ The runner puts the computer back on that network whatever happens.
 uv run moondeck/scenario/run_live_scenario.py --host MM-Bench.local --network Home --name scenario_AccessPoint_first_setup_from_its_own_network
 ```
 
+#### Several boards
+
+A scenario naming `"boards": ["sender", ...]` drives those boards too, each mapped to a device by `--board NAME=HOST`; it is skipped while one is missing. A step with `"device": "<name>"` runs on that board, as an `apply_state`, a `set_control` or a `measure`. Every step's strings fill `{host}` and `{<name>}` with the boards' addresses, so a sender's `hosts` points at its receivers. Each board is restored from its own snapshot, before the device under test. The observations are keyed by the whole combination, such as `host=esp32s3-n16r8 sender=esp32p4rev1-eth`, so a WiFi pair and an Ethernet pair keep apart.
+
+A `measure` step's `read` list names extra values to report: `"Module.control"` from the state, `"Module.tick"` for a module's tick time, or `"fps"`; `"<name>:"` in front reads another board, such as `"sender:fps"`. The run ends with one row per such step, which is what a sweep is read from.
+
+```bash
+uv run moondeck/scenario/run_live_scenario.py --host 192.168.1.158 --board sender=192.168.1.156 --name scenario_NetworkReceive_two_boards
+```
+
 ### Scenario modes (construct vs mutate)
 
 Every scenario carries a top-level `mode` field that says what shape the scenario expects the world to be in. Two values:

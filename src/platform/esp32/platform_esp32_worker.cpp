@@ -37,6 +37,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_task_wdt.h"   // the render loop and the encode worker each subscribe themselves so a wedge self-heals (reboot) not hangs
+#include "esp_timer.h"       // sleepUs: a one-shot timer wakes the task, finer than the scheduler tick
 
 #include <atomic>
 #include <new>
@@ -56,12 +57,19 @@ struct EspWorker {
     std::atomic<bool> finished{false};
     // Ownership handshake for the timeout path: normally stopPinnedTask waits for `finished` and frees `w`. If it TIMES OUT (the worker couldn't be scheduled, a same-core teardown), it hands ownership to the trampoline by setting `detached`, and whichever of the two runs last frees `w`. The atomic-exchange below makes exactly one side win, so `w` is freed once and never used-after-free.
     std::atomic<bool> detached{false};
+    /// The one-shot timer sleepUs arms, created on the task's first sleep and deleted as the task ends.
+    esp_timer_handle_t sleepTimer = nullptr;
 };
 
 // The trampoline: run the caller's function, which owns its own loop and returns once it sees the stop flag, then delete the task. The function manages its own watchdog membership, subscribing at loop start and unsubscribing before returning; one that never subscribes leaves the feed a no-op, so this stays generic.
 void workerTrampoline(void* arg) {
     auto* w = static_cast<EspWorker*>(arg);
     w->fn(w->user);                     // runs until stopPinnedTask flips w->stop and wakes it
+    if (w->sleepTimer) {
+        esp_timer_stop(w->sleepTimer);
+        esp_timer_delete(w->sleepTimer);
+        w->sleepTimer = nullptr;
+    }
     w->finished.store(true, std::memory_order_release);
     // If stopPinnedTask already timed out and detached, IT is gone and won't free `w`, we own it now. The exchange makes exactly one side observe `detached==true` first: whoever sees it frees `w`.
     if (w->detached.exchange(true, std::memory_order_acq_rel)) delete w;
@@ -96,6 +104,21 @@ bool waitNotify(WorkerTask& t, uint32_t timeoutMs) {
     if (!w) return false;
     // ulTaskNotifyTake(pdTRUE, …) clears the notification count on return (the binary-semaphore form). Non-zero return = a notify (or stop-wake) landed; 0 = timed out.
     return ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(timeoutMs)) != 0;
+}
+
+// A one-shot esp_timer notifies the task, so a gap below the 10 ms scheduler tick costs no busy-wait; a stop's notification ends it early, as it should.
+void sleepUs(WorkerTask& t, uint32_t us) {
+    auto* w = static_cast<EspWorker*>(t.impl);
+    if (!w || w->stop.load(std::memory_order_acquire)) return;
+    if (!w->sleepTimer) {
+        const esp_timer_create_args_t args = {
+            .callback = [](void* arg) { xTaskNotifyGive(static_cast<EspWorker*>(arg)->handle); },
+            .arg = w, .dispatch_method = ESP_TIMER_TASK, .name = "sleepUs", .skip_unhandled_events = true};
+        if (esp_timer_create(&args, &w->sleepTimer) != ESP_OK) { w->sleepTimer = nullptr; vTaskDelay(1); return; }
+    }
+    if (esp_timer_start_once(w->sleepTimer, us) != ESP_OK) { vTaskDelay(1); return; }
+    ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(us / 1000 + 20));   // bounded, so a lost wake costs one gap and no hang
+    esp_timer_stop(w->sleepTimer);   // a stop that woke it early leaves the timer armed
 }
 
 void stopPinnedTask(WorkerTask& t) {

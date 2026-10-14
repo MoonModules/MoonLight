@@ -32,7 +32,7 @@ An **Akai MPK261**: 61 semi-weighted keys, 16 RGB-backlit pads, 8 knobs, 8 fader
 **The `MidiFrame`,** published by `MidiService` from any transport, in the `AudioFrame`'s publish-and-read shape:
 
 - per channel, which of the 128 notes are held and how hard (velocity);
-- which notes started and which ended since the last frame, so two hits between frames are never lost and a note shorter than a frame still fires;
+- the note starts and ends since the last frame as ordered events, each with its channel, pitch and velocity, so two hits of the same pitch between frames stay two and a note shorter than a frame still fires;
 - pitch bend, modulation and sustain per channel;
 - the MIDI clock's beat phase when a clock runs.
 
@@ -48,7 +48,7 @@ Each step ends in something verified on the bench.
 
 - `MidiService` publishes the `MidiFrame` from every transport, alongside its desk profiles, which stay as they are.
 - MoonLive gains builtins for it (a note's velocity, whether it is held, whether it started this frame), so a script reacts to notes the way it reacts to `level` and `bands`.
-- Unit tests pin the frame: notes started and ended between two frames, a note shorter than a frame, running status, a note-on with velocity 0 read as a note-off.
+- Unit tests pin the frame: notes started and ended between two frames, two note-on and note-off cycles of one pitch between frames read as four events in order, a note shorter than a frame, running status, a note-on with velocity 0 read as a note-off.
 - Verify with the PO's Akai MPK261 over the board's USB port and over the browser.
 
 ### 2. A keyboard lights per key
@@ -112,7 +112,7 @@ The sensors, from what is listed to what a stage needs:
 
 **On order (2026-10-13): two HLK-LD2450 kit B** from Hi-Link's own store, each with a USB-to-serial adapter, a Bluetooth antenna and a cable. The adapter lets the radar be tried on a computer with Hi-Link's tool before the UART seam exists: targets, range and zone exclusion on day one. Two units answer the stage questions: whether two 24 GHz radars side by side interfere, and how their targets merge where their views overlap.
 
-The order: the radar first, which needs a UART seam the platform does not have yet; PosiStageNet in second, which is UDP and needs no new seam; the ToF zone grid as the indoor alternative once the input-mapping plan's I2C step lands. Verify with a person walking the bench stage and the heads following.
+The order: the radar first, which needs a UART seam the platform does not have yet; PosiStageNet in second, which is UDP and needs no new seam; the ToF zone grid as the indoor alternative once the input-mapping plan's I2C step lands and a VL53L8CX read is measured that does not stall the render task: an 8 × 8 frame over I2C is large, so the candidates are SPI, a lower ranging rate, or reading on a task off the render core. Verify with a person walking the bench stage and the heads following.
 
 ## Open questions
 

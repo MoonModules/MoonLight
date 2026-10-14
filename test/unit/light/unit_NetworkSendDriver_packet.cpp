@@ -2,10 +2,12 @@
 
 #include "doctest.h"
 #include "light/drivers/NetworkSendDriver.h"
+#include "correction_presets.h"
 
 #include <cstring>
 #include <cstdio>
 #include <string>
+#include <vector>
 
 // The built packet contains the exact header layout the Art-Net spec mandates: ID, OpCode, version, sequence, physical, universe, length, data.
 TEST_CASE("ArtNet packet header format") {
@@ -354,4 +356,89 @@ TEST_CASE("NetworkSendDriver: E1.31 multicast on a network that drops it says to
     const std::string status = d.status() ? d.status() : "";
     mm::NetworkPath::multicastDropped = false;
     CHECK(status.find("use unicast") != std::string::npos);
+}
+
+namespace {
+// A sender of `lights` RGB lights aimed at this host over DDP, corrected so the frame is the task's to send.
+struct PaceRig {
+    mm::Buffer source;
+    mm::NetworkSendDriver driver;
+    mm::platform::UdpSocket rx;
+    PaceRig(mm::nrOfLightsType lights, uint16_t gapUs, uint8_t fps) {
+        REQUIRE(source.allocate(lights, 3));
+        REQUIRE(rx.open());
+        REQUIRE(rx.bind(mm::DDP_PORT));   // a running desktop app holds this port: don't run it and the tests at once
+        mm::Correction correction;
+        mm::test::rebuildFromPreset(correction, 255, mm::test::PresetOrder::RGB);
+        driver.correctionForTest() = correction;
+        driver.protocol = mm::NetworkSendDriver::kProtoDdp;
+        std::snprintf(driver.hosts, sizeof(driver.hosts), "%s", "127.0.0.1");
+        driver.packetGap = gapUs;
+        driver.fps = fps;
+        driver.setSourceBuffer(&source);
+        driver.applyState();
+        mm::platform::setTestNowMs(1000);   // past the fps limiter, which a test starting at process launch is not
+    }
+    ~PaceRig() { driver.release(); rx.close(); mm::platform::setTestNowMs(0); }
+    // The arrival time of each of `count` packets, polling up to about half a second.
+    std::vector<uint32_t> arrivals(size_t count) {
+        std::vector<uint32_t> at;
+        uint8_t buf[1500];
+        uint8_t ip[4];
+        for (int i = 0; i < 5000 && at.size() < count; i++) {
+            if (rx.recvFrom(buf, sizeof(buf), ip) > 0) at.push_back(mm::platform::micros());
+            else mm::platform::delayUs(100);
+        }
+        return at;
+    }
+};
+}  // namespace
+
+// A burst is what a receiver loses, so a packet gap spaces a frame's packets, and a task sends them so the render loop never waits.
+TEST_CASE("NetworkSendDriver: a packet gap spaces a frame's packets, sent from a task") {
+    PaceRig r(1000, 3000, 20);   // 3000 bytes: three DDP packets, 3 ms apart
+    REQUIRE(r.driver.sendsInTask());
+    r.driver.tick();
+    const std::vector<uint32_t> at = r.arrivals(3);
+    REQUIRE(at.size() == 3);
+    for (size_t i = 1; i < at.size(); i++) CHECK(at[i] - at[i - 1] >= 2000);   // the gap, less scheduling slack
+}
+
+// A gap of 0 keeps the burst from the tick, with no task: the choice for a board that cannot spare one.
+TEST_CASE("NetworkSendDriver: a packet gap of 0 sends the frame as one burst from the tick") {
+    PaceRig r(1000, 0, 20);
+    CHECK_FALSE(r.driver.sendsInTask());
+    r.driver.tick();
+    CHECK(r.arrivals(3).size() == 3);
+}
+
+// A gap too long for the frame rate is shortened so a frame's packets fit in 80% of its period, leaving the rest for the next.
+TEST_CASE("NetworkSendDriver: a long packet gap is shortened so the frame fits its fps period") {
+    PaceRig r(1000, 5000, 100);   // 10 ms per frame at 100 fps; three packets plus one destination
+    CHECK(r.driver.effectiveGap(3000, 3) == 8000 / 3);
+    r.driver.fps = 10;            // 100 ms per frame: the configured gap fits as it is
+    CHECK(r.driver.effectiveGap(3000, 3) == 5000);
+}
+
+// The send task reads the corrected buffer while it paces a frame, so a correction that grows the buffer waits the task out and restarts it; the next frame goes out whole, four channels a light.
+TEST_CASE("NetworkSendDriver: a correction that grows the buffer under a paced send restarts the task safely") {
+    PaceRig r(400, 1000, 20);   // 1200 bytes of RGB: one DDP packet
+    REQUIRE(r.driver.sendsInTask());
+    r.driver.tick();
+    REQUIRE(r.arrivals(1).size() == 1);
+    mm::test::rebuildFromPreset(r.driver.correctionForTest(), 255, mm::test::PresetOrder::RGBW);
+    r.driver.onCorrectionChanged();   // 400 lights at four channels: the buffer reallocates
+    CHECK(r.driver.sendsInTask());
+    CHECK(r.driver.correctedBuffer().channelsPerLight() == 4);
+    mm::platform::setTestNowMs(2000);  // past the fps limiter again
+    r.driver.tick();
+    uint8_t buf[1500];
+    uint8_t ip[4];
+    size_t bytes = 0;
+    for (int i = 0; i < 5000 && bytes < 1600; i++) {
+        const int n = r.rx.recvFrom(buf, sizeof(buf), ip);
+        if (n > 0) bytes += static_cast<size_t>(n) - mm::DDP_HEADER_SIZE;
+        else mm::platform::delayUs(100);
+    }
+    CHECK(bytes == 1600);   // 400 lights x 4 channels, all of it
 }

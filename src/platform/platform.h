@@ -157,6 +157,8 @@ bool spawnPinnedTask(WorkerTask& t, const char* name, WorkerFn fn, void* user,
 void notifyTask(WorkerTask& t);
 /// Block inside the spawned fn until notifyTask fires or `timeoutMs` elapses; false on timeout.
 bool waitNotify(WorkerTask& t, uint32_t timeoutMs);
+/// Block inside the spawned fn for `us` microseconds, finer than the scheduler tick and leaving the core free; a stop wakes it early.
+void sleepUs(WorkerTask& t, uint32_t us);
 /// Signal stop and wake, then block until the worker fn has returned and the task is torn down.
 void stopPinnedTask(WorkerTask& t);
 /// Subscribe THIS task to the watchdog, so a wedge reboots instead of hanging silently.
@@ -845,6 +847,8 @@ public:
     // A datagram longer than `maxLen` is truncated; `srcIp` and `srcPort` also answer who sent it, which a reply is addressed to.
     /// Receive one datagram without blocking: bytes copied, or -1 when nothing is pending.
     int recvFrom(uint8_t* buf, size_t maxLen, uint8_t srcIp[4] = nullptr, uint16_t* srcPort = nullptr);
+    /// Block until any of `sockets` has a datagram waiting or `timeoutMs` passes: how many are readable, 0 on a timeout, -1 where a platform cannot wait.
+    static int waitReadable(UdpSocket* const* sockets, int count, uint32_t timeoutMs);
     /// Send once to an explicit address.
     bool sendToAddr(const uint8_t ip[4], uint16_t port, const uint8_t* data, size_t len);
     // Without the membership the OS never delivers those datagrams, however correct the port.

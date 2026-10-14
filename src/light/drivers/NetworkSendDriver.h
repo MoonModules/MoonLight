@@ -12,6 +12,8 @@
 #include "light/drivers/PinList.h"  // assignCounts: the same window-split idiom as ledsPerPin
 #include "platform/platform.h"
 
+#include <atomic>
+
 
 namespace mm {
 
@@ -25,13 +27,14 @@ namespace mm {
 ///
 /// ## Why unicast is the default
 ///
-/// Art-Net 4 requires unicast; broadcast survives here as legacy compatibility. A universe number lives in the payload rather than a header, so a receiver parses every packet before discarding the universes it lacks. Broadcast makes each host pay for all of them. The practical ceiling is near fifteen universes, measured on the bench where a large grid starved an ESP32's network stack.
+/// Art-Net 4 requires unicast, broadcast surviving as legacy: a receiver parses every broadcast packet before dropping the universes it lacks, which starved an ESP32 near fifteen universes.
+/// Unicast duplicates nothing when each node owns its own slice, and a failed send drops only that packet, so one dark tube stalls nothing.
 ///
-/// Unicast duplicates nothing when each node owns a different slice, which is the normal case. The sender emits as many packets as a broadcast stream would, each reaching only its owner.
+/// ## Paced packets, sent from a task
 ///
-/// ## Liveness
-///
-/// UDP is fire and forget, so a dead receiver is invisible. The send loop tolerates one rather than pretending to detect it. A failed send drops that packet, so one dark tube stalls nothing.
+/// A burst loses packets at an access point and at a wire-speed receiver, so `packet_gap` spaces them, the textbook traffic shaping. Over WiFi that received 96% where a burst lost a third.
+/// Waiting would stall the driver stage, so the tick hands the frame to a task, as an LED driver hands its frame to DMA, and skips frames meanwhile.
+/// A full transmit queue gets a backoff rather than more buffers. A gap of 0, a board without tasks, or an unwired correction sends the burst from the tick.
 ///
 /// @card NetworkSendDriver.png
 class NetworkSendDriver : public DriverBase {
@@ -82,6 +85,8 @@ public:
     uint16_t universeStart = 0;
     /// Send-rate ceiling (Hz); tick() rate-limits to this so a fast render tick doesn't flood the LAN.
     uint8_t fps = 50;
+    /// Microseconds between a frame's packets, shortened so a frame fits its `fps` period; 0 sends the frame as one burst. @xref{paced-packets-sent-from-a-task}
+    uint16_t packetGap = 500;
 
     /// Bind the protocol, the destinations, the universe offset, the window and the rate cap.
     void defineDriverControls() override {
@@ -99,6 +104,7 @@ public:
         controls_.addControl("universe_start", universeStart);
         addWindowControls();   // start / count: the slice of the shared buffer this sink sends
         controls_.addControl("fps", fps, 1, 120);
+        controls_.addControl("packet_gap", packetGap, 0, 5000);
     }
 
     /// Which controls route through the prepare sweep, so the corrected buffer is re-sized.
@@ -106,6 +112,7 @@ public:
         // Both are PARSED in prepare, so a change must re-run the sweep to re-derive the table.
         return std::strcmp(name, "hosts") == 0 || std::strcmp(name, "lightsPerHost") == 0
                || std::strcmp(name, "protocol") == 0 || std::strcmp(name, "addressing") == 0
+               || std::strcmp(name, "packet_gap") == 0   // starts or stops the send task
                || isWindowControl(name) || isCorrectionControl(name);
     }
 
@@ -128,8 +135,12 @@ public:
         platform::getMacAddress(cid_ + 10);
     }
 
-    /// Close the socket on release, then chain to the base to clear any status this driver set.
+    /// A task still running would read a destroyed object, so the destructor stops it too.
+    ~NetworkSendDriver() override { stopSendTask(); }
+
+    /// Stop the send task and close the socket on release, then chain to the base to clear any status this driver set.
     void release() override {
+        stopSendTask();
         socket_.close();
         nDest_ = 0;   // re-derived by prepare() on the next enable
         DriverBase::release();
@@ -144,6 +155,7 @@ public:
     // All the parsing happens HERE, so tick is a bare walk of two small arrays.
     /// Open the socket, resolve the destinations and their window slices, and size the buffer.
     void prepare() override {
+        stopSendTask();          // the task reads the destinations and the corrected buffer, both rebuilt below
         socket_.open();          // idempotent: no-op if already open
         resizeCorrected();
 
@@ -179,6 +191,7 @@ public:
         nDest_ = n;
         prepareWarn_ = warn;
         refreshHosts();
+        if (packetGap > 0) startSendTask();
     }
 
     /// Re-size the corrected buffer when the fixture profile changes the output channel count.
@@ -192,6 +205,8 @@ public:
 
         // No destination means idle: it never falls back to broadcasting the whole LAN.
         if (nDest_ == 0) return;
+        // The task still sending the last frame owns the corrected buffer, so this frame is skipped.
+        if (sendTask_.impl && frameState_.load(std::memory_order_acquire) != kFrameIdle) return;
 
         // FPS limiting
         if (fps == 0) return;
@@ -227,67 +242,38 @@ public:
             totalBytes = static_cast<size_t>(nLights) * srcCh;
         }
 
-        // Rounded DOWN to whole fixtures: one straddling two universes reads a neighbor's channels.
-        size_t chunk = (protocol == kProtoDdp) ? DDP_MAX_PAYLOAD : MAX_CHANNELS_PER_UNIVERSE;
-        uint8_t packet[DDP_HEADER_SIZE + DDP_MAX_PAYLOAD];  // 1450 B covers all three
-        const uint16_t port = protocolPort(protocol);
         const uint8_t bytesPerLight = (data == corrected_.data() && correction_.outChannels)
                                           ? correction_.outChannels
                                           : sourceBuffer_->channelsPerLight();
-        if (protocol != kProtoDdp && bytesPerLight > 1) {
-            const size_t whole = (chunk / bytesPerLight) * bytesPerLight;
-            // A fixture wider than a universe keeps the full one, so the failure is visible.
-            if (whole > 0) chunk = whole;
+        // Paced from the task when it runs and the frame sits in the corrected buffer, which the task owns until it is done.
+        if (sendTask_.impl && data == corrected_.data()) {
+            frame_ = {data, totalBytes, bytesPerLight};
+            frameState_.exchange(kFrameReady, std::memory_order_acq_rel);
+            platform::notifyTask(sendTask_);
+            return;
         }
-
-        const Addressing sendMode = mode();
-        size_t offset = 0;   // byte cursor into `data`, walking destination by destination
-        for (uint8_t d = 0; d < nDest_ && offset < totalBytes; d++) {
-            // This destination's run: its light count × the wire stride, clipped to what's left.
-            size_t runBytes = static_cast<size_t>(destCounts_[d]) * bytesPerLight;
-            if (offset + runBytes > totalBytes) runBytes = totalBytes - offset;
-            if (runBytes == 0) continue;   // a zero-count destination is configured but idle
-
-            uint16_t universe = universeStart;   // restart per destination
-            size_t sent = 0;
-            while (sent < runBytes) {
-                const size_t n = std::min(runBytes - sent, chunk);
-                const uint8_t* src = data + offset + sent;
-                size_t packetLen;
-                switch (protocol) {
-                    case kProtoE131:
-                        packetLen = buildE131Packet(packet, universe, sequence_, cid_,
-                                                    src, static_cast<uint16_t>(n));
-                        break;
-                    case kProtoDdp:
-                        // Byte-addressed, and relative to this destination's own strip.
-                        packetLen = buildDdpPacket(packet, static_cast<uint32_t>(sent),
-                                                   /*push=*/sent + n >= runBytes,
-                                                   src, static_cast<uint16_t>(n));
-                        break;
-                    default:
-                        packetLen = buildArtDmxPacket(packet, universe, sequence_,
-                                                      src, static_cast<uint16_t>(n));
-                        break;
-                }
-                // A failed send drops that packet and continues: one dark tube stalls no other.
-                uint8_t grp[4];
-                e131MulticastAddr(universe, grp);
-                sendAddressed(sendMode, Traffic::FrameRate, &dest_[d], 1, grp,
-                              [&](const uint8_t ip[4]) { socket_.sendToAddr(ip, port, packet, packetLen); });
-                sent += n;
-                universe++;
-            }
-            offset += runBytes;
-        }
-
-        sequence_++;
+        sendFrame<false>(data, totalBytes, bytesPerLight, 0);
     }
 
     // The packet builds and their inverse parses are shared with the receiver, defined once.
 
     /// Test-only accessor for the corrected buffer, pinning the no-allocation contract.
     const Buffer& correctedBuffer() const { return corrected_; }
+
+    /// The gap, shortened so a frame's packets fit in 80% of its `fps` period, leaving room for the next.
+    uint32_t effectiveGap(size_t totalBytes, uint8_t bytesPerLight) const {
+        // The chunk sendFrame uses: whole fixtures per universe, a full universe when a fixture is wider.
+        const size_t whole = bytesPerLight ? (MAX_CHANNELS_PER_UNIVERSE / bytesPerLight) * bytesPerLight : 0;
+        const size_t chunk = protocol == kProtoDdp ? DDP_MAX_PAYLOAD : (whole ? whole : MAX_CHANNELS_PER_UNIVERSE);
+        // An upper bound: one partial packet per destination on top of the whole ones.
+        const uint32_t packets = static_cast<uint32_t>((totalBytes + chunk - 1) / chunk) + nDest_;
+        const uint32_t budget = fps ? 800000u / fps : 0;
+        const uint32_t fit = packets > 1 ? budget / (packets - 1) : budget;
+        return packetGap < fit ? packetGap : fit;
+    }
+
+    /// Whether a task paces the packets, rather than the tick sending a burst: the test seam for the fallback.
+    bool sendsInTask() const { return sendTask_.impl != nullptr; }
 
     /// How many receivers the parse derived, for a test pinning the fan-out arithmetic.
     uint8_t destinationCount() const { return nDest_; }
@@ -320,6 +306,122 @@ private:
     /// The light-count warning prepare found, restored once the names resolve.
     const char* prepareWarn_ = nullptr;
 
+    // Every write to the frame state is a read-modify-write, since a module lives in PSRAM, as TryLock explains.
+    static constexpr uint8_t kFrameIdle = 0;      ///< the tick may correct the next frame
+    static constexpr uint8_t kFrameReady = 1;     ///< a corrected frame waits for the task
+    static constexpr uint8_t kFrameSending = 2;   ///< the task is sending it
+    static constexpr uint8_t kSendRetries = 3;          ///< tries after a failed send, while the transmit queue drains
+    static constexpr uint32_t kRetryBackoffUs = 500;    ///< the wait before each of them
+    /// The task that paces a frame's packets, running while `packetGap` is above 0.
+    platform::WorkerTask sendTask_;
+    /// Who owns the corrected buffer: the tick while idle, the task while ready or sending.
+    std::atomic<uint8_t> frameState_{kFrameIdle};
+    /// Set to end the send task, read before each paced packet.
+    std::atomic<bool> sendStop_{false};
+    /// One packet being built, a member so the send task's stack stays small; the tick and the task never send at once.
+    uint8_t packet_[DDP_HEADER_SIZE + DDP_MAX_PAYLOAD] = {};   // 1450 B covers all three protocols
+    /// The frame the tick hands over: where its bytes are, how many, and their stride.
+    struct Frame { const uint8_t* data; size_t totalBytes; uint8_t bytesPerLight; } frame_ = {nullptr, 0, 0};
+
+    static void sendTrampoline(void* self) { static_cast<NetworkSendDriver*>(self)->runSendLoop(); }
+
+    /// Wait for a frame from the tick, then send it paced, until release or prepare stops the task.
+    void runSendLoop() {
+        while (!sendStop_.load(std::memory_order_acquire)) {
+            uint8_t ready = kFrameReady;
+            if (!frameState_.compare_exchange_strong(ready, kFrameSending, std::memory_order_acq_rel)) {
+                platform::waitNotify(sendTask_, 100);
+                continue;
+            }
+            sendFrame<true>(frame_.data, frame_.totalBytes, frame_.bytesPerLight, effectiveGap(frame_.totalBytes, frame_.bytesPerLight));
+            frameState_.exchange(kFrameIdle, std::memory_order_acq_rel);
+        }
+    }
+
+    // Core 1, beside the receive task; a board that cannot start it sends from the tick, unpaced.
+    void startSendTask() {
+        if (sendTask_.impl) return;
+        sendStop_.store(false, std::memory_order_release);
+        frameState_.exchange(kFrameIdle, std::memory_order_acq_rel);
+        platform::spawnPinnedTask(sendTask_, "mmSend", &sendTrampoline, this, 4096, 3, 1);
+    }
+
+    void stopSendTask() {
+        if (!sendTask_.impl) return;
+        sendStop_.store(true, std::memory_order_release);
+        platform::stopPinnedTask(sendTask_);
+        frameState_.exchange(kFrameIdle, std::memory_order_acq_rel);
+    }
+
+    /// Chunk a frame into packets and send them, `gapUs` apart from the task (`kPaced`) and back to back from the tick, whose instance holds no wait.
+    template <bool kPaced>
+    void sendFrame(const uint8_t* data, size_t totalBytes, uint8_t bytesPerLight, uint32_t gapUs) {
+        // Rounded DOWN to whole fixtures: one straddling two universes reads a neighbor's channels.
+        size_t chunk = (protocol == kProtoDdp) ? DDP_MAX_PAYLOAD : MAX_CHANNELS_PER_UNIVERSE;
+        uint8_t* packet = packet_;
+        const uint16_t port = protocolPort(protocol);
+        if (protocol != kProtoDdp && bytesPerLight > 1) {
+            const size_t whole = (chunk / bytesPerLight) * bytesPerLight;
+            // A fixture wider than a universe keeps the full one, so the failure is visible.
+            if (whole > 0) chunk = whole;
+        }
+
+        const Addressing sendMode = mode();
+        uint32_t packets = 0;   // sent so far this frame, so the first goes out at once
+        size_t offset = 0;   // byte cursor into `data`, walking destination by destination
+        for (uint8_t d = 0; d < nDest_ && offset < totalBytes; d++) {
+            // This destination's run: its light count × the wire stride, clipped to what's left.
+            size_t runBytes = static_cast<size_t>(destCounts_[d]) * bytesPerLight;
+            if (offset + runBytes > totalBytes) runBytes = totalBytes - offset;
+            if (runBytes == 0) continue;   // a zero-count destination is configured but idle
+
+            uint16_t universe = universeStart;   // restart per destination
+            size_t sent = 0;
+            while (sent < runBytes) {
+                const size_t n = std::min(runBytes - sent, chunk);
+                const uint8_t* src = data + offset + sent;
+                size_t packetLen;
+                switch (protocol) {
+                    case kProtoE131:
+                        packetLen = buildE131Packet(packet, universe, sequence_, cid_,
+                                                    src, static_cast<uint16_t>(n));
+                        break;
+                    case kProtoDdp:
+                        // Byte-addressed, and relative to this destination's own strip.
+                        packetLen = buildDdpPacket(packet, static_cast<uint32_t>(sent),
+                                                   /*push=*/sent + n >= runBytes,
+                                                   src, static_cast<uint16_t>(n));
+                        break;
+                    default:
+                        packetLen = buildArtDmxPacket(packet, universe, sequence_,
+                                                      src, static_cast<uint16_t>(n));
+                        break;
+                }
+                // A pause before every packet but the first, then a failed send retried after a backoff when paced, else dropped: one dark tube stalls no other.
+                if constexpr (kPaced) {
+                    if (gapUs && packets++ > 0) platform::sleepUs(sendTask_, gapUs);
+                    if (sendStop_.load(std::memory_order_acquire)) return;
+                }
+                uint8_t grp[4];
+                e131MulticastAddr(universe, grp);
+                sendAddressed(sendMode, Traffic::FrameRate, &dest_[d], 1, grp, [&](const uint8_t ip[4]) {
+                    bool ok = socket_.sendToAddr(ip, port, packet, packetLen);
+                    if constexpr (kPaced) {
+                        for (uint8_t r = 0; !ok && r < kSendRetries; r++) {
+                            platform::sleepUs(sendTask_, kRetryBackoffUs);
+                            ok = socket_.sendToAddr(ip, port, packet, packetLen);
+                        }
+                    }
+                });
+                sent += n;
+                universe++;
+            }
+            offset += runBytes;
+        }
+
+        sequence_++;
+    }
+
     /// The UDP port for a protocol index: each wire format has its own registered port.
     static uint16_t protocolPort(uint8_t p) {
         return p == kProtoE131 ? E131_PORT : p == kProtoDdp ? DDP_PORT : ARTNET_PORT;
@@ -336,7 +438,9 @@ private:
             uint8_t ip[4];
             const HostResolver::State st = HostResolver::lookup(name, ip);
             if (st == HostResolver::State::Busy) return;   // the lookup task held the cache this instant: keep the status as it is
-            if (st == HostResolver::State::Resolved || st == HostResolver::State::Stale) std::memcpy(dest_[d].ip, ip, 4);
+            // Not while the task sends: an address it reads mid-copy would be half old, half new.
+            const bool sending = sendTask_.impl && frameState_.load(std::memory_order_acquire) != kFrameIdle;
+            if (!sending && (st == HostResolver::State::Resolved || st == HostResolver::State::Stale)) std::memcpy(dest_[d].ip, ip, 4);
             if (st == HostResolver::State::Waiting || st == HostResolver::State::Full) waiting++;
         }
         if (waiting) {
@@ -359,7 +463,11 @@ private:
         const uint8_t ch = correction_.outChannels;
         if (n == 0 || ch == 0) return;
         if (corrected_.count() >= n && corrected_.channelsPerLight() >= ch) return;
+        // The send task reads the buffer while it paces a frame, so a reallocation waits it out and restarts it.
+        const bool wasSending = sendTask_.impl != nullptr;
+        stopSendTask();
         corrected_.allocate(n, ch);
+        if (wasSending) startSendTask();
     }
 };
 
