@@ -5395,6 +5395,8 @@ const EMOJI_LABEL = {
     "\u{1F3B5}": "reacts to volume: how loud the room is",
     "\u{1F3B6}": "reacts to frequency: which notes are playing",
     "\u{1F4E1}": "takes its picture from the network",
+    "\u{1F5BC}\uFE0F": "samples the Picture service's picture",
+    "\u{1F39E}\uFE0F": "plays a recorded show from a file",
     "\u{1F3AF}": "aims moving heads",
     "\u{1F47E}": "pixel art: games and sprites",
     "\u{1F9EC}": "a simulation: cells evolving off their own last frame",

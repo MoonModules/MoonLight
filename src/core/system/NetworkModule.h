@@ -10,6 +10,7 @@
 #include "core/system/WiFiModule.h"
 #include "core/system/AccessPointModule.h"
 #include "core/util/CaptivePortal.h"
+#include "core/util/JoinWindow.h"   // kStaGraceMs, kDhcpWaitMs: the windows the provisioning answer shares
 #include "platform/platform.h"
 
 #include <cstdio>
@@ -28,8 +29,7 @@ inline bool addressCounts(const uint8_t ip[4], bool buildHasWiFi, const uint8_t*
 
 /// All device connectivity, cascading from Ethernet through WiFi to an access point: @xref{the-cascade}.
 ///
-/// Network holds the cascade, its mode and mDNS; each interface's settings are on its own card below it: Ethernet, WiFi and the access point.
-/// A desktop builds the same cards over stubs, so they can be shown and tested, and reports no network of its own.
+/// Network holds the cascade, its mode and mDNS; each interface's settings are on its own card: Ethernet, WiFi and the access point. A desktop builds the same cards over stubs.
 /// @card NetworkModule.png
 ///
 /// @moreinfo
@@ -40,9 +40,9 @@ inline bool addressCounts(const uint8_t ip[4], bool buildHasWiFi, const uint8_t*
 ///
 /// ## A link-local address is a last resort
 ///
-/// With no DHCP server the client gives itself a 169.254.x.y address (RFC 3927), so a laptop on the same cable still reaches the device by name. It counts as connected only on a build without WiFi, where it is the one way in.
-/// Where WiFi exists it never displaces the cascade: a cable on a network without DHCP would otherwise switch off a working WiFi path or the access point.
-/// A 169.254 address the user set as static is a choice, not a fallback, so it counts everywhere, while a self-assigned one beside a static setting still does not.
+/// With no DHCP server the client takes a 169.254.x.y address (RFC 3927), the one way in on a build without WiFi; where WiFi exists it never displaces the cascade.
+///
+/// A 169.254 address the user set as static is a choice rather than a fallback, so it counts everywhere.
 ///
 /// The device name belongs to the system module, and is the one identity behind every name. It registers before the light pipeline, which then sees the real remaining heap.
 class NetworkModule : public MoonModule {
@@ -279,7 +279,7 @@ private:
         // Pinned during bring-up, since a network without a server fires no event.
         if (!staUp()) applyStaStatic();
         if (staUp()) { onStaJoined(now); return; }
-        if (elapsed <= kStaGraceMs) return;
+        if (elapsed <= staWindowMs()) return;
         // A join asked for from the card says why there, and the known networks take over from the top; otherwise the next one is tried, then the fallback.
         const bool asked = wifi_ && wifi_->joinRequest();
         if (asked) {
@@ -369,7 +369,7 @@ private:
             setStatus(statusBuf_, Severity::Warning);
             return;
         }
-        const uint32_t grace = releasing_ ? kDhcpWaitMs : kStaGraceMs;
+        const uint32_t grace = releasing_ ? kDhcpWaitMs : staWindowMs();
         if (now - lostTime_ <= grace) return;
         std::printf("NetworkModule: WiFi STA gone for %us, starting AP\n", static_cast<unsigned>(grace / 1000));
         restartMdns();
@@ -479,10 +479,8 @@ private:
     uint32_t stateChangeTime_ = 0;
     /// When the carrying interface lost its address: a WiFi dropout the radio recovers from itself, or a re-lease.
     uint32_t lostTime_ = 0;
-    /// How long WiFi gets to connect or recover, the question being the same in both cases.
-    static constexpr uint32_t kStaGraceMs = 10000;
-    /// How long a lease may take: a live Ethernet link without an address, or an interface re-leasing after a switch to DHCP.
-    static constexpr uint32_t kDhcpWaitMs = 15000;
+    /// The station's window as it stands now, joined or not.
+    static uint32_t staWindowMs() MM_NONBLOCKING { return mm::staWindowMs(platform::wifiStaAssociated()); }
     /// The interface carrying the device is taking a lease the cascade itself asked for, so the gap is that wait rather than a dropout.
     bool releasing_ = false;
 

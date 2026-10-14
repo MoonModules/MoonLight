@@ -95,6 +95,9 @@ def asset_dir_for(type_name: str) -> Path:
 #                "Layouts" = child of Layouts
 #   capture_gif: True = also record a preview GIF
 # ---------------------------------------------------------------------------
+# The longest module name the device accepts: MoonModule's kNameLen less its terminator.
+MAX_NAME = 15
+
 MODULES = [
     # Layouts
     ("GridLayout",          "Layouts",  {}, True),
@@ -178,6 +181,7 @@ CORE_MODULES = [
     # (not in state); capture these against a board when needed.
     "ImprovProvisioningModule",
     "AudioService",
+    "PictureService",
     "AnalogService",
     "I2cBusModule",
     "InfraredService",
@@ -210,6 +214,7 @@ CORE_NAV_ROOT = {
     # the desktop tree — so they're captured against an ESP32, where these entries route the
     # shot to the right nav root.
     "AudioService": "Services",
+    "PictureService": "Services",
     "AnalogService": "Services",
     "InfraredService": "Services",
     "ButtonService": "Services",
@@ -324,9 +329,9 @@ def _collect_names(modules: list) -> set[str]:
     return names
 
 
-def add_module(host: str, id_: str, type_: str, parent_id: str | None,
+def add_module(host: str, id_: str | None, type_: str, parent_id: str | None,
                props: dict) -> str | None:
-    """Add a module and return the actual name the server assigned.
+    """Add a module and return the actual name the server assigned; with no `id_` the device names it, as the UI's add does.
 
     Snapshots state before and after the POST; the new module is whichever
     name appears after that wasn't there before and has the right type.
@@ -335,7 +340,9 @@ def add_module(host: str, id_: str, type_: str, parent_id: str | None,
     before = _get(f"http://{host}/api/state", timeout=5)
     names_before = _collect_names(before.json().get("modules", [])) if before.ok else set()
 
-    body: dict = {"id": id_, "type": type_}
+    body: dict = {"type": type_}
+    if id_:
+        body["id"] = id_
     if parent_id:
         body["parent_id"] = parent_id
     # `props` is deliberately NOT sent: the create endpoint ignores it (no handler reads it), so a
@@ -343,11 +350,14 @@ def add_module(host: str, id_: str, type_: str, parent_id: str | None,
     r = _post(f"http://{host}/api/modules", json=body, timeout=5)
     if not r.ok:
         return None
+    named = r.json().get("name") if r.headers.get("content-type", "").startswith("application/json") else None
+    if named:
+        return named
 
     time.sleep(0.15)
     sr = _get(f"http://{host}/api/state", timeout=5)
     if not sr.ok:
-        return id_[:16]
+        return id_[:MAX_NAME] if id_ else None
 
     def find_new(modules: list) -> str | None:
         for m in modules:
@@ -359,7 +369,7 @@ def add_module(host: str, id_: str, type_: str, parent_id: str | None,
                 return found
         return None
 
-    return find_new(sr.json().get("modules", [])) or id_[:16]
+    return find_new(sr.json().get("modules", [])) or (id_[:MAX_NAME] if id_ else None)
 
 
 def delete_module(host: str, id_: str) -> bool:
@@ -486,7 +496,7 @@ def displace_default_layout(host: str) -> dict | None:
 def restore_default_layout(host: str, snap: dict) -> None:
     """Put back what displace_default_layout took, controls and all."""
     try:
-        name = add_module(host, (snap.get("name") or snap["type"])[:16], snap["type"],
+        name = add_module(host, (snap.get("name") or snap["type"])[:MAX_NAME], snap["type"],
                           "Layouts", {})
         if not name:
             print(f"  restore-layout: re-adding {snap['type']} failed ", end="", flush=True)
@@ -895,8 +905,8 @@ def main() -> int:
         if args.no_modifier or args.grid:
             prepare_pipeline(args.host, args.no_modifier, args.grid or None)
 
-        # Known name prefixes for orphan sweep (first 16 chars of each type name).
-        known_prefixes = {t[:16] for t, _, _, _ in MODULES}
+        # Known name prefixes for orphan sweep (each type name as the device would cut it).
+        known_prefixes = {t[:MAX_NAME] for t, _, _, _ in MODULES}
 
         # Sweep orphans from a previous aborted run. Per-delete try/except
         # so one failed cleanup doesn't abort the whole recursion; outer
@@ -1068,7 +1078,7 @@ def main() -> int:
 
                 parent_id = parents.get(parent_type)
                 nav_root = nav_roots.get(parent_type, "")
-                req_id = type_name[:16]
+                req_id = None   # the device names it, as the UI's add does
                 print(f"  {type_name} …", end=" ", flush=True)
 
                 # The bed effect, removed again below, so the pipeline holds exactly one effect
@@ -1077,7 +1087,7 @@ def main() -> int:
                 # on its own: both photograph as a dark panel without a lit effect under them.
                 bed_name = None
                 if need_gif and (type_name.endswith("Modifier") or type_name.endswith("Layout")):
-                    bed_name = add_module(args.host, BED_EFFECT[:16], BED_EFFECT,
+                    bed_name = add_module(args.host, BED_EFFECT[:MAX_NAME], BED_EFFECT,
                                           parents.get("Layer"), {})
                     if bed_name:
                         added_ids.append(bed_name)

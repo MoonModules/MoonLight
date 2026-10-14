@@ -952,6 +952,19 @@ uv run moondeck/scenario/run_network_roundtrip.py --host 192.168.1.156 --repeats
 
 Captures and restores each device's grid and removes the temporary NetworkReceive on exit (also on failure). Exit codes match the matrix test: `0` = at least one device measured, `1` = none returned a frame, `2` = environment problem (no checked/reachable devices).
 
+### fseq_play
+
+Play an FSEQ show to the selected device over DDP, the reference sender for FSEQ on MoonLight.
+
+```bash
+uv run moondeck/run/fseq_play.py --host 192.168.1.158                      # the test sweep, written on first use
+uv run moondeck/run/fseq_play.py --host 192.168.1.158 --file show.fseq --loops 3
+uv run moondeck/run/fseq_play.py --write sweep.fseq --width 64 --height 64 --serpentine
+uv run moondeck/run/fseq_play.py --info show.fseq
+```
+
+FSEQ is xLights' and Falcon Player's file of channel data, frame by frame in wiring order. The tool reads and writes uncompressed v2 as FPP documents it. It streams each frame as DDP packets with the push flag on the last, paced as Network Send paces, at the file's step time. Set the device's Network Receive `mapped_by` to sender. The test sweep is a diagonal with a white light at the logical top-left, so a wrong mapping shows as a stepped edge and a moved corner. Compressed files and sparse ranges are refused: export from xLights with compression off.
+
 ### preview_health
 
 Browser-faithful **3D-preview stream health probe** — measures the device's `/ws` preview the way a real browser tab experiences it, so the numbers match what a person watching the [PreviewDriver](../docs/moonmodules/light/drivers.md#preview) preview sees. A plain one-shot WebSocket reader gives up the moment the device closes the socket, so it reports stalls a browser never shows (the browser reconnects) and misses the brief blips a browser does show; this probe replicates the real client in [app.js](../src/ui/app.js)'s `connectWs` — reads the binary frames, sends a `"ping"` text frame every 25 s, and **auto-reconnects on close with 500 ms→5 s backoff** — so a momentary device-side close registers as a short blip, not a frozen preview. Pure WebSocket client: **no device-side changes**, it observes the unmodified stream the device already broadcasts. Reports, per device: color frames + sustained fps, reconnects (each a visible blip), `maxgap` (the longest stretch with no color frame — the real "did it freeze?" number), and a `SMOOTH` / `CHOPPY` / `DEAD` verdict. Diagnostic, not a gate — it always exits `0`; read the verdict. Runs against **every device checked in the Live tab** (or an explicit `--host`); with no host it sweeps every online device on the active network.

@@ -16,6 +16,7 @@ import glob
 import os
 import re
 import serial
+import signal
 import subprocess
 import sys
 import time
@@ -60,7 +61,7 @@ def decode(tool: str, elf: str, addrs: list[str]) -> list[str]:
 
 # Shared moondeck.json + logLevel-toggle helpers (one level up, reachable from check/ and run/).
 sys.path.insert(0, str(ROOT / "moondeck"))
-from _moondeck_config import active_device_ips, raised_log_level, LOG_INFO  # noqa: E402
+from _moondeck_config import device_ips_for_port, open_serial, raised_log_level, LOG_INFO  # noqa: E402
 sys.path.insert(0, str(ROOT / "moondeck" / "build"))
 from build_esp32 import APP_ELF  # noqa: E402
 
@@ -107,12 +108,14 @@ def main():
     # blocking before a single byte is read, and the boot output you were monitoring FOR is already
     # gone. The log level is a nicety; the serial stream is the point.
     try:
-        ser = serial.Serial(args.port, args.baud, timeout=1)
+        ser = open_serial(args.port, args.baud)
     except serial.SerialException as e:
         print(f"Cannot open {args.port}: {e}")
         sys.exit(1)
 
-    with raised_log_level(active_device_ips(), LOG_INFO):
+    # Only the board on this port, and restored however the monitor ends: MoonDeck's Stop sends SIGTERM, whose default skips the restore.
+    signal.signal(signal.SIGTERM, lambda *_: sys.exit(143))
+    with raised_log_level(device_ips_for_port(args.port), LOG_INFO, background=True):
         with open(LOG_FILE, "w") as log:
             try:
                 while True:
@@ -134,7 +137,7 @@ def main():
                         while ser is None:
                             time.sleep(0.3)
                             with suppress(Exception):
-                                ser = serial.Serial(args.port, args.baud, timeout=1)
+                                ser = open_serial(args.port, args.baud)
                         note = "  -- reconnected --"
                         print(note)
                         log.write(note + "\n")

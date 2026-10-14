@@ -620,6 +620,8 @@ uint32_t ethRestartCountForTest();
 bool wifiStaInit(const char* ssid, const char* password);
 /// Whether the station is associated and holds an IP.
 bool wifiStaConnected() MM_NONBLOCKING;
+/// Whether the station has joined its network, with or without an address yet: WiFi's counterpart of ethLinkUp.
+bool wifiStaAssociated() MM_NONBLOCKING;
 /// The station's IP as raw octets, on ethGetIPv4's contract.
 void wifiStaGetIPv4(uint8_t out[4]) MM_NONBLOCKING;
 /// This device's IP from whichever interface is up, Ethernet first, all-zero before either is.
@@ -684,6 +686,8 @@ void netGetIPv4(NetIface iface, uint8_t ip[4], uint8_t gw[4], uint8_t mask[4], u
 #ifndef ESP_PLATFORM   // a host-test seam, which no ESP32 code calls
 /// Make wifiStaInit succeed, so a host test can drive the station cascade a radio-less desktop never enters.
 void setTestWifiStaAvailable(bool available);
+/// Make the station joined to its network while it waits for an address, for a host test.
+void setTestWifiStaAssociated(bool associated);
 #endif
 #ifndef ESP_PLATFORM   // a host-test seam, which no ESP32 code calls
 /// The network the station was last asked to join, so a host test sees the order the cascade tries them in.
@@ -1313,7 +1317,7 @@ void hub75Deinit(Hub75Handle& h);
 // I2S audio input: two seams only, the read and the FFT, with everything between them domain code.
 
 /// Which codec sits in front of the microphone, none for a microphone that speaks I2S itself.
-enum class CodecType : uint8_t { None = 0, Es8311 = 1 };
+enum class CodecType : uint8_t { None = 0, Es8311 = 1, Es7210 = 2 };
 
 // The codec is a device on the board's I2C bus (i2cBusOpen), so only its address is its own; its master clock is the microphone's `mclkPin`.
 /// Configure the audio codec at this 7-bit address, where the board has one; true when there is nothing to do.

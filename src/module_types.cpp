@@ -63,6 +63,8 @@
 #include "light/effects/FixedPointEffect.h"
 #include "light/effects/MovingHeadEffect.h"
 #include "light/effects/PacmanEffect.h"
+#include "light/effects/FseqPlayerEffect.h"
+#include "light/effects/PictureEffect.h"
 #include "light/effects/PlasmaEffect.h"
 #include "light/effects/PulseEffect.h"
 #include "light/effects/MetaballsEffect.h"
@@ -175,6 +177,7 @@
 #include "core/system/ControlModule.h"
 #include "core/services/Services.h"
 #include "core/services/AudioService.h"
+#include "core/services/PictureService.h"
 #include "core/services/OscModule.h"
 #include "core/system/I2cBusModule.h"
 #include "core/system/TasksModule.h"
@@ -261,6 +264,8 @@ void mm::registerModuleTypes() {
     mm::ModuleFactory::registerType<mm::NoiseMeterEffect>("NoiseMeterEffect", "light/effects.md#noisemeter");
     mm::ModuleFactory::registerType<mm::PaintBrushEffect>("PaintBrushEffect", "light/effects.md#paintbrush");
     mm::ModuleFactory::registerType<mm::ParticlesEffect>("ParticlesEffect", "light/effects.md#particles");
+    mm::ModuleFactory::registerType<mm::FseqPlayerEffect>("FseqPlayerEffect", "light/effects.md#fseqplayer");
+    mm::ModuleFactory::registerType<mm::PictureEffect>("PictureEffect", "light/effects.md#picture");
     mm::ModuleFactory::registerType<mm::PlasmaEffect>("PlasmaEffect", "light/effects.md#plasma");
     mm::ModuleFactory::registerType<mm::PraxisEffect>("PraxisEffect", "light/effects.md#praxis");
     mm::ModuleFactory::registerType<mm::PulseEffect>("PulseEffect", "light/effects.md#pulse");
@@ -355,6 +360,7 @@ void mm::registerModuleTypes() {
     mm::ModuleFactory::registerType<mm::ControlModule>("ControlModule", "core/system.md#control");
     mm::ModuleFactory::registerType<mm::Services>("Services", "core/services.md#services");
     mm::ModuleFactory::registerType<mm::AudioService>("AudioService", "core/services.md#audio");
+    mm::ModuleFactory::registerType<mm::PictureService>("PictureService", "core/services.md#picture");
     mm::ModuleFactory::registerType<mm::OscModule>("OscModule", "core/services.md#osc");
     mm::ModuleFactory::registerType<mm::I2cBusModule>("I2cBusModule", "core/system.md#i2c-bus");
     mm::ModuleFactory::registerType<mm::TasksModule>("TasksModule", "core/system.md#tasks");

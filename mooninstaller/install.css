@@ -133,6 +133,7 @@
     .erase-row { margin-top: 12px; font-size: 13px; }
     .erase-row label { cursor: pointer; }
     .erase-row input { vertical-align: middle; margin-right: 6px; }
+    .erase-row button { margin-top: 8px; }
     .erase-note { display: inline; margin-top: 0; }
     a { color: var(--accent); }
     code {
@@ -457,7 +458,7 @@
       justify-content: flex-end;
       margin-top: 16px;
     }
-    .install-actions button {
+    .install-actions button, .erase-row button {
       padding: 8px 16px;
       font: inherit;
       font-weight: 600;
@@ -469,11 +470,12 @@
       background: var(--accent);
       color: #1a1a2e;
     }
-    .install-actions button.secondary {
+    .install-actions button.secondary, .erase-row button.secondary {
       background: transparent;
       color: var(--fg);
       border: 1px solid var(--border);
     }
+    .install-status.error { color: #f8a5a5; }
     .install-error {
       color: #f8a5a5;
       font-size: 13px;

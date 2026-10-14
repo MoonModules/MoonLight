@@ -1,6 +1,6 @@
 # Plan: streams, every frame from outside, one model
 
-Plan, for the product owner's approval; started as an analysis on 2026-10-13, when three pull requests by Gohnnyman (#138 Ambilight and VideoService, #139 USB video capture, #140 backlight wiring) arrived the same week TouchMyLight announced an FSEQ player for a 20 × 20 × 20 cube (on #134). Read one by one they look like unrelated features: a TV backlight, a capture card, a show player. Read from MoonLight's architecture they are the same thing: a stream of frames arriving from outside the device. This plan models that once, by the textbook, so cameras, video, files, the network and the browser become combinations of a few parts rather than a feature each.
+Plan, for the product owner's approval; started as an analysis on 2026-10-13, when three pull requests by Gohnnyman (#138 a backlight effect and VideoService, #139 USB video capture, #140 backlight wiring) arrived the same week TouchMyLight announced an FSEQ player for a 20 × 20 × 20 cube (on #134). Read one by one they look like unrelated features: a TV backlight, a capture card, a show player. Read from MoonLight's architecture they are the same thing: a stream of frames arriving from outside the device. This plan models that once, by the textbook, so cameras, video, files, the network and the browser become combinations of a few parts rather than a feature each.
 
 ## The textbook model: three independent axes
 
@@ -39,6 +39,8 @@ The three axes describe any stream, and they do not make every stream one module
 | Into a layer by | placement through the layout | sampling per light |
 
 **Channel data is a protocol family, not a decoder.** Art-Net, sACN and DDP carry universes and channels, discovery (ArtPoll), sync packets, priorities and merging between senders, and Network Receive and Network Send are the two halves of the family. An FSEQ file is a recording of exactly that data, which is why Falcon Player plays FSEQ and outputs sACN. So FSEQ joins this family as a sibling of Network Receive, not as a decoder in a generic stream source.
+
+**Transports and files carry the same channel data.** Art-Net, E1.31 and DDP are transports, the data cut into packets to send live; FSEQ is a file format, the same data stored frame by frame with a step time to play later. So the family is one channel-data sink (staging, hold-last-frame, `mapped_by`, the placement, the counters) fed by sources: the network transports, and files from the SD card, a USB stick or flash, where the storage is a detail of the file source. Art-Net "from the SD card" is a recorded stream stored as FSEQ, as Falcon Player records it; FSEQ does not travel as a stream, Falcon Player copies the file to its remotes. Recording is the bridge: a live stream in, an FSEQ file out, written from the drivers' output.
 
 **Pictures are their own family:** a picture source publishing frames, and an effect that samples them per light. `VideoService` from #138 is that source, renamed for what it is.
 
@@ -111,13 +113,13 @@ The textbook name is inverse mapping: compose every transform into one coordinat
 - **At prepare** each builds a small table, as the layer builds its mapping: the picture effect maps each logical cell to a source pixel or, for area sampling, a source rectangle; the light-list placement maps light k to the logical cell it lands in, which is the physical-to-logical fold the layer's mapping build already computes.
 - **Per frame** each does one gather into the layer buffer, and the existing mapping does the rest.
 
-**Modifiers stay the one home for geometry transforms** and apply to a stream like any effect, as the architecture already says: the same RotateModifier rotates Fire, Noise or a network-received frame. So the picture effect has no rotate, mirror, scroll or offset of its own. It keeps only what belongs to sampling: fitting or stretching the picture onto the grid, point or area averaging, and the edge depth Ambilight samples at.
+**Modifiers stay the one home for geometry transforms** and apply to a stream like any effect, as the architecture already says: the same RotateModifier rotates Fire, Noise or a network-received frame. So the picture effect has no rotate, mirror, scroll or offset of its own. It keeps only what belongs to sampling: fitting or stretching the picture onto the grid, point or area averaging, and the edge depth a backlight samples at.
 
 **The picture side keeps the same budget:** decoding runs off the render tick, the effect does one gather per frame, and area sampling is capped per zone so a large source never costs a read per source pixel.
 
 **The one full frame is the decoded picture,** the texture the shader samples, and it is an input rather than a stage: the P4's JPEG hardware decodes whole frames and a GIF composes onto a canvas, so a decoder produces it anyway. Channel data needs none: an FSEQ or DDP frame is written into the layer buffer through the placement table as it is read.
 
-**What it removes.** Ambilight stops being an effect of its own and becomes the picture effect's area sampler. Network Receive keeps its protocol family and gains sender mapping as a second convention, at no cost in the identity case. FSEQ reuses Network Receive's placement instead of growing its own. No stage holds a frame of its own, and no geometry option is duplicated inside an effect.
+**What it removes.** The backlight stops being an effect of its own and becomes the picture effect's area sampler. Network Receive keeps its protocol family and gains sender mapping as a second convention, at no cost in the identity case. FSEQ reuses Network Receive's placement instead of growing its own. No stage holds a frame of its own, and no geometry option is duplicated inside an effect.
 
 ```mermaid
 flowchart TB
@@ -133,7 +135,7 @@ flowchart TB
         ps["<b>picture source</b><br/>test pattern<br/><i>#138</i>"]
     end
     place["<b>light-list placement</b><br/>through the layout"]
-    samp["<b>picture effect</b><br/>sampled per light<br/>Ambilight <i>#138</i>"]
+    samp["<b>picture effect</b><br/>sampled per light<br/>backlight <i>#138</i>"]
     mix["<b>Layers</b>: effects, opacity, blend modes, modifiers"]
     map["<b>Layouts</b>: 2D, 3D, backlight.mll <i>#140</i>"]
     subgraph OUT["<b>Out</b>"]
@@ -198,7 +200,7 @@ Checked 2026-10-13 against WLED main and WLED-MM.
 
 - **One picture format, decoded on the device.** The Image effect (Aircoookie, PR #3835, finished by netmindz, shipped in WLED 16.0, May 2026) plays a GIF from the internal file system, up to 320 × 320, with about 24 KB of decoder RAM (bitbank2's AnimatedGIF). It scales by nearest neighbor, decodes one image at a time across all segments, and redraws only changed pixels, which upsets brightness limiting. WLED-MM backported it.
 - **Every conversion in the browser.** DedeHai's PixelForge (PR #4982, WLED 16.0) crops, scales and encodes a GIF in the page and uploads it; Video Lab turns video into GIFs, Pixel Paint draws on the matrix, Font Factory makes scrolling-text fonts.
-- **No capture on the device.** The only video path is a browser page streaming DDP over the WebSocket (DedeHai, PR #4997). Hyperion does all ambilight processing on a computer and drives WLED over DDP.
+- **No capture on the device.** The only video path is a browser page streaming DDP over the WebSocket (DedeHai, PR #4997). Hyperion does all backlight processing on a computer and drives WLED over DDP.
 - **FSEQ: five attempts, none merged** (#2413, #3551, #4570, #5641 open since May 2026). They bolted playback onto the realtime override, which replaces effects rather than composing with them, and each bundled an SD driver, a player, a UI and Falcon Player sync in one pull request. Recording was planned and never built.
 - **SD** is a usermod nothing in core reads.
 
@@ -224,7 +226,7 @@ One rule decides the split, and MoonLight already follows it where the device ca
 | Follows a layout change | no: bake again | yes |
 | Storage | large: 8000 lights at 40 fps is about 1 MB/s, so SD only | small: fits in flash |
 
-A live browser source costs bandwidth, lights × 3 bytes × fps: about 60 KB/s for a 600-light TV frame at 30 fps, too much for 8000 lights over WiFi. USB and CSI capture run with no browser, so they belong on the device.
+A live browser source costs bandwidth, lights × 3 bytes × fps: about 60 KB/s for a 600-light TV frame at 30 fps, too much for 8000 lights over WiFi. USB and CSI capture run with no browser, so they belong on the device. A TV's picture from a set-top box or console never passes through a computer, so a backlight following it needs the grabber on the board (#139).
 
 ## 3D layouts
 
@@ -245,7 +247,7 @@ The P4's hardware video codec encodes H.264 but does not decode it; its JPEG cod
 | Contribution | In the plan |
 |---|---|
 | `VideoService` (#138) | the picture source, renamed for what it is |
-| `AmbilightEffect` (#138) | the picture effect's area sampler, edge depth among its settings |
+| #138's backlight effect | the picture effect's area sampler, edge depth among its settings |
 | USB capture (#139, first commit) | a picture source's USB transport and MJPEG decoder, behind the platform seam, in the P4 images with room |
 | Per-die trim (#139, second commit) | a separate idea: output calibration in fixture profiles and correction, judged against a 3×3 correction matrix |
 | Backlight wiring (#140) | a layout: Hyperion's classic layout, xLights' frame models |
@@ -260,7 +262,7 @@ The work follows the idea, not the pull requests: a contribution lands where it 
 
 | What | From | Why not |
 |---|---|---|
-| Ambilight as an effect of its own | #138 | it is one sampler setting of the picture effect; a card of its own duplicates the picture path |
+| The backlight as an effect of its own | #138 | it is one sampler setting of the picture effect; a card of its own duplicates the picture path |
 | PPM as a user format | #138 | chosen only for want of a software JPEG decoder; GIF covers that need with the tools users already own, and PPM stays a test fixture |
 | HDR tone curves (PQ, HLG) | #114, partly #138 | no planned source delivers HDR; the descriptor carries sRGB or linear until one does |
 | Video decoding beyond MJPEG on the device (H.264, software JPEG) | implied by "video" | the browser bakes video into GIF or FSEQ; the device decodes only what its hardware decodes |
@@ -274,7 +276,7 @@ The work follows the idea, not the pull requests: a contribution lands where it 
 |---|---|---|
 | Who builds the groundwork | the contributor shapes `VideoService` and the descriptor | MoonLight builds the groundwork below, since core owns the hard constructs; contributors add sources on top in small pull requests |
 | USB capture | linked into every P4 image | only into images with room, measured as the SD card was (#136), and after the browser tab source, which serves every board |
-| Smoothing | an Ambilight setting | a picture effect setting, since temporal smoothing applies to any picture, or dropped |
+| Smoothing | a backlight setting | a picture effect setting, since temporal smoothing applies to any picture, or dropped |
 | Letterbox detection | built in | a later sampler option, when a user asks; every setting names the user who needs it |
 | The capture seat, one instance per board | the default for every source | only for transports with exclusive hardware (USB, CSI); files and the network feed several sources at once |
 | Multi-board sync | FPP MultiSync, as WLED's attempts did | MoonLight's own clock sync from the core backlog first; FPP compatibility later, as an adapter, if users mix in Falcon Player |
@@ -289,10 +291,12 @@ What MoonLight builds first, so that every contribution after it is one source i
 |---|---|---|---|
 | G1 | **Light-list placement** ✅ built | `MappingLUT::gatherFromPhysical` | the mapping's own inverse, needing no table of its own: each logical cell takes the value its first physical light was sent, read from the CSR runs the layer already builds; one copy on the identity path ; it inverts the whole mapping today, modifiers included, so a mirror or a rotation on a sender-mapped stream cancels instead of applying: G5 inverts the layout's mapping alone, accepted on a rotated layer |
 | G2 | **Network Receive's `mapped_by`** ✅ built | `NetworkReceiveEffect` | `receiver` as before (the default), `sender` through G1, the status saying "one copy" or "mapped twice"; tests pin a serpentine grid and a 3D layout, which reversed every other row before; on the S3 at 12,288 lights a serpentine layout costs 4.5 ms per frame against 1.1 ms for receiver mapping, an identity layout the same as receiver mapping |
-| G3 | **The picture source** | a core service, from #138's `VideoService` | the descriptor, publishing in `AudioService`'s pattern, a test pattern as its only source |
-| G4 | **The picture effect** | a light effect, from #138's sampler | point or area sampling in linear light, fit or stretch, a table at prepare and one gather per frame |
-| G5 | **Sender mapping skips the board's mapping** | `Layer`, `Drivers` | the existing rule, hottest path when possible, extended to layouts that are not the identity: an identity layout is already one copy at any number of layers, since the drivers do not map; a layer whose only writer is mapped by the sender, with no modifiers and no second layer, is read as it is whatever the layout, so the layout still shapes the preview and the board's own effects; blending or a modifier on such a layout falls back to G1's round trip, with G1 inverting the layout's mapping alone so the modifier transforms the frame; the tests add a rotated and a mirrored layer to the serpentine and 3D cases |
-| G6 | **A contributor page** | docs | how to add a channel-data source and how to add a picture source, with the test pattern as the template |
+| G3 | **The picture source** ✅ built | a core service, from #138's `VideoService` | the descriptor, publishing in `AudioService`'s pattern, a test pattern as its only source |
+| G4 | **The picture effect** ✅ built | a light effect, from #138's sampler | point or area sampling in linear light, fit or stretch, a table at prepare and one gather per frame |
+| G5 | **Sender mapping skips the board's mapping** ✅ built | `Layer`, `Drivers` | the existing rule, hottest path when possible, extended to layouts that are not the identity: an identity layout is already one copy at any number of layers, since the drivers do not map; a layer whose only writer is mapped by the sender, with no modifiers and no second layer, is read as it is whatever the layout, so the layout still shapes the preview and the board's own effects; blending or a modifier on such a layout falls back to G1's round trip, with G1 inverting the layout's mapping alone so the modifier transforms the frame; the tests add a rotated and a mirrored layer to the serpentine and 3D cases |
+| G6 | **The channel-data sink** ✅ built | `ChannelDataSink`, from Network Receive | staging, hold-last-frame, `mapped_by` and the placement, the counters and the status path, extracted from Network Receive so a file source is a thin effect on it; Network Receive's tests pass unchanged |
+| G7 | **A contributor page** ✅ built, [the how-to](../../how-to/adding-a-stream-source.md) | docs | how to add a channel-data source and how to add a picture source, with the test pattern as the template |
+| G8 | **The browser as a picture source** | `PictureService`, a UI page | a second `source`, `browser`: a page draws a video file, a webcam or a shared screen (`getDisplayMedia`) onto a canvas at the picture's size and sends the RGB frames over the existing WebSocket into the service's pixels, as WLED streams a tab (DedeHai, PR #4997); a `<video>` element first, since it plays every file the browser does, and GIF frame by frame after it through `ImageDecoder`; about 7 KB a frame at 64x36, 200 KB/s at 30 fps; it needs no hardware, so every board tests the picture path with it. Follow-ups: live recording of the drivers' output to FSEQ on SD (the Recording row below), and the browser baking a whole video into FSEQ for this layout ahead of time, so nothing runs in real time and the board plays it standalone; an hour is about 1.3 GB at 64x64 and 30 fps and 5.3 GB at 12,288 lights and 40 fps, so a baked movie travels on the card rather than over WiFi |
 
 G1 and G2 come first: they add the second convention every mapping sender needs, and wait on no naming. G3 and G4 take #138's core part, credited to Gohnnyman. Before code: the double mapping confirmed on the bench (a serpentine grid fed by xLights, expected to show every other row reversed) and the open questions below decided.
 
@@ -304,18 +308,83 @@ Each later piece is a small pull request, one topic, based on current main, with
 |---|---|---|
 | Backlight wiring, today's #140 resubmitted on main | Gohnnyman | nothing; it can come now |
 | Color trim, split from #139 | Gohnnyman | nothing; a separate idea |
-| FSEQ playback from SD: uncompressed v2, sparse ranges, the frame index from the clock, verified on a 3D layout. Its first step extracts Network Receive's channel-data core (staging, hold-last-frame, `mapped_by`, the placement, the counters) into one sink that Network Receive and the FSEQ player both use, each a thin effect with its own settings (decided 2026-10-14) | TouchMyLight | G1, G2; G5 makes it cheap on a 3D layout, where a sender-mapped frame is otherwise mapped back and forward again (4 ms against 1.6 ms on the S3 at 12,288 lights) |
+| FSEQ playback from SD: uncompressed v2, sparse ranges, the frame index from the clock, verified on a 3D layout. It builds on the channel-data sink (G6) that Network Receive and the FSEQ player both use, each a thin effect with its own settings (decided 2026-10-14) | TouchMyLight | G1, G2, G6; G5 sends a player alone on its layer to the output in one copy on any layout, a 3D one included |
 | Border sampling: edge depth, smoothing | Gohnnyman | G4 |
 | GIF decoder, PPM as a test format | open | G3 |
 | USB capture with its MJPEG decoder, P4, with Teensy stubs | Gohnnyman | G3 |
-| Browser pages: converter, baking to FSEQ, a live tab source | open | G1 to G4 |
+| Browser pages: converter, baking to FSEQ | open | G1 to G4, G8 |
 | Recording, HDMI out on the ESP32-P4-PC, clock sync | open | FSEQ playback |
 
 #138 and #139 close with thanks once G3 and G4 land, their good parts credited in the groundwork; a stacked pull request waits for the one below it, as [CLAUDE.md](../../../CLAUDE.md) says.
 
+## Skeletons for the contributions
+
+What each pull request builds, settled before code so it arrives small and on design. The names follow the open naming question below. Each passes `check_specs` with a card, and its tests pass on the desktop before a board sees it.
+
+**FSEQ player (TouchMyLight), on G6.** A thin effect on the channel-data sink, the file being its only source; FSEQ is mapped by the sender, so it sets no `mapped_by` of its own. `FseqPlayerEffect` is registered with these settings on the sink and reads no file yet, its status saying so: the contribution is the file reading in `prepare()` and `tick()`.
+
+```cpp
+class FseqPlayerEffect : public EffectBase {   // light/effects/FseqPlayerEffect.h
+    char file[64];      // a path on /sd or flash, picked from the file list
+    bool loop = true;
+    uint8_t speed = 100;   // percent of the file's step time
+    // prepare(): open the file, read the v2 header, size the sink to its channel count, refuse compressed files and sparse ranges with a status
+    // tick(): the frame index from the clock (start time, speed), read that frame into the sink, which places and holds it
+    ChannelDataSink sink_;
+};
+```
+
+Tests: a v2 header read and refused when compressed; the frame index from the clock at 50 and 200 percent; a written serpentine file placed on a serpentine and a 3D layout reaching each light as sent (`moondeck/run/fseq_play.py` writes the reference files); a missing file degrades to a status, never a crash.
+
+**The picture source (G3) and the picture effect (G4), from #138.** A core service publishing frames in `AudioService`'s pattern, and an effect sampling them per light.
+
+```cpp
+struct PictureFrame { const uint8_t* rgb; uint16_t width, height; uint32_t generation; };   // core/util/PictureFrame.h
+class PictureService : public MoonModule {     // core/services/PictureService.h
+    uint8_t source = 0;   // test pattern first; each later source adds an option
+    static const PictureFrame* latestFrame();   // always valid: a blank frame when nothing publishes
+};
+class PictureEffect : public EffectBase {     // light/effects/PictureEffect.h
+    uint8_t fit = 0;       // fit or stretch
+    uint8_t sampling = 0;  // point or area, area in linear light
+    // prepare(): a table from each light's position to its picture rectangle; tick(): one gather per new generation
+};
+```
+
+Tests: the test pattern's frame; point and area sampling against hand-computed values; fit against stretch on a non-square layout; a 3D layout sampling its front face; no new frame, no gather.
+
+**Backlight wiring (#140).** The layout exists as `moonlive/layouts/backlight.mll`, one strand clockwise from the top-left corner; #140's own commit extends that script, the name staying Backlight since its lights sit on the edge pixels of a wall's canvas.
+
+```
+class BacklightLayout {          // moonlive/layouts/backlight.mll
+  byte wallCols, wallRows;       // kept: the wall's size in pixels
+  byte across, down;             // kept: lights along the top and along a side
+  byte startCorner = 0;          // where the strand enters, a select with the corner names
+  byte clockwise = 1;            // which way it runs
+  int offset = 0;                // lights past the corner where it begins, counted along the strand
+  void placeLights();            // one walk around the edge, rotated and reversed; only the indices move
+}
+```
+
+Tests: each start corner and direction pinned as the expected sequence on a small wall; an offset along a counter-clockwise strand; the defaults reproducing today's order; the script's line in the IR golden table. Later, optionally: Hyperion's separate count per edge, which allows a gap for a TV stand.
+
+**Color trim (#139's second commit).** Output calibration, so it lives in the fixture profile and the correction, judged against a 3×3 correction matrix before code.
+
+```cpp
+// light/drivers/FixtureProfilesModule.h: per profile, beside the channel roles
+uint8_t trimRed = 255, trimGreen = 255, trimBlue = 255;   // gain per channel
+// light/drivers/Correction.h: rebuild() folds the trim into each channel's table, so the hot path is unchanged
+```
+
+Tests: a trim scaling one channel and leaving the others; a trim of 255 being the identity; the trim surviving a profile save and load.
+
 ## Where it stands (2026-10-14)
 
-Built and uncommitted: G1 and G2 (`mapped_by`), and around them what measuring Network Receive on real boards turned up.
+Built and uncommitted: G1, G2 (`mapped_by`) and G5, and around them what measuring Network Receive on real boards turned up.
+
+<img src="../../assets/light/effects/NetworkReceiveEffect.png" width="404" alt="Network Receive receiving a sender-mapped stream in one copy">
+
+What the card added: `mapped_by` picks who maps a frame onto the wiring, the status names the sender and the path its frame takes ("one copy" or "mapped twice"), and `packets_per_s` and `frames_per_s` count the last second, so a scenario compares them with what the sender sent. Here the S3 testbench receives `fseq_play`'s 64x64 serpentine sweep: alone on its layer, the frame goes to the output in one copy, and the tick fell from 5.83 ms to 2.96 ms against G1's two mappings.
 
 - **Network Receive** drains its sockets in a receive task on core 1, shows its path in the status ("one copy" or "mapped twice"), and counts `packets_per_s` and `frames_per_s`.
 - **TryLock** releases with an exchange: in PSRAM a plain store raced the emulated read-modify-write, left the latch set with no owner, and took the WiFi stack down with the stuck receive task.
@@ -332,13 +401,11 @@ Received at 12,288 lights, 40 frames/s sent (1,040 packets/s), mapped by the rec
 | S3 WiFi to P4 Ethernet | 984 | 32 | 0.3 ms |
 | P4 Ethernet to P4 Ethernet | 790 to 846 | 8 to 19 | 0.8 ms |
 
-P4 to P4 started the day at about 200 packets/s and 0 to 1 frames. What remains is the sender's burst: the access point drops it on WiFi, and on Ethernet the push packet at its end is the one most often lost. Network Send pacing its packets is the next step (a 0.5 ms gap recovered 96% on WiFi), then G5, which removes the double mapping that sender mapping costs on a layout that is not the identity (4 ms against 1.6 ms on the S3). The rest is in the backlog below.
+P4 to P4 started the day at about 200 packets/s and 0 to 1 frames. What remains is the sender's burst: the access point drops it on WiFi, and on Ethernet the push packet at its end is the one most often lost. Network Send paces its packets, set by `packet_gap` and off at 0 (a 0.5 ms gap recovered 96% on WiFi), which took P4 to P4 to 26 to 36 frames/s. G5 removes the double mapping that sender mapping cost on a layout that is not the identity (4 ms against 1.6 ms on the S3): a stream alone on its layer goes to the output in one copy, and a static modifier on its layer transforms it. G6 is next. The rest is in the backlog below.
 
 ## Backlog, found while measuring
 
 - **A blocking HTTP write freezes the render task under a stream.** `serveState` writes the full `/api/state` (about 35 KB) with a blocking `lwip_write` on the render task; with the S3 receiving 12,288 lights over WiFi the client's acknowledgements slow, the send buffer fills, and the write holds the render task for seconds until the task watchdog reboots the board (backtrace: `handleConnection` → `serveState` → `JsonSink::flushStage` → `lwip_write`, 2026-10-14). The UI no longer reads the full state since state by subscription, so the trigger was the scenario runner's reads at every measure step; only the diagnostic bundle, assign mode and a backup restore still read it, each on a user's explicit action. The textbook fix: write without blocking and resume a partial write on the next tick, as uploads already stream. Check whether the WebSocket state pushes, smaller TCP writes on the same task, can block the same way.
-- **The WiFi connect grace counts from STA init, not from association.** `NetworkModule::kStaGraceMs` (10 s) starts when the station starts; a router taking 7.3 s to lease an address plus one missed scan (reason 201, about 2.4 s) runs it out, and the board falls back to its access point for about 80 s while already joined. The lease wait belongs after association, which `kDhcpWaitMs` already names.
-- **No log on the S3's native USB port.** The S3 builds keep IDF's default console, UART0 primary with USB-Serial-JTAG as the secondary mirror, yet nothing arrives on the native port, so a board connected by that port alone (the testbench, an S3-Zero) shows no log and loses any crash reason. Suspected, not verified: Improv installs its own USB-Serial-JTAG driver for provisioning, which takes the peripheral from the mirror, where [platform_esp32_improv.cpp](../../../src/platform/esp32/platform_esp32_improv.cpp) expects the console to win. With USB-Serial-JTAG as the primary console a pyserial read with DTR and RTS off receives the log, while MoonDeck's `monitor_esp32` still receives nothing. The fix is either the mirror and Improv sharing the port, or USB-Serial-JTAG as the primary console on native-USB S3 boards; check too whether the installer's post-flash address read depends on it.
 - **The UDP mailbox of 32 and the paced send task on boards without PSRAM.** `CONFIG_LWIP_UDP_RECVMBOX_SIZE=32` is in the base defaults for every board. It costs about 128 bytes per socket, and on WiFi the queued packets are WiFi's own receive buffers, capped at 32. On Ethernet without PSRAM they come from the internal heap at about 1.6 KB each, so a full queue holds about 50 KB on a classic board with 100 to 170 KB free, which could starve the HTTP server during a burst. Measure it with `scenario_NetworkReceive_two_boards` on a classic Ethernet board (the Olimex at 192.168.1.210) receiving from a P4, reading free heap and the HTTP answers; if it hurts, the 4 MB classic fragments override it with a smaller value. Measure Network Send's paced task there too, with the classic as the sender: about 5.5 KB of internal RAM per driver (a 4 KB stack, the 1.45 KB packet buffer, a timer), and on a single-core chip such as the C3 the send task outranks the frame loop, so each packet briefly interrupts it.
 - **The two-board scenarios on every platform.** `scenario_NetworkReceive_two_boards` and `scenario_NetworkSend_one_sender_many_receivers` run today on S3 boards over WiFi and P4 boards over Ethernet, in all four pairings. Add the Teensy 4.1 (Ethernet), desktop builds over WiFi, and the NanoPi over Ethernet, as sender and as receiver, so every platform's receive cost and loss sits in the same table. A desktop or NanoPi board joins with `--board name=<ip>:8080`. The Teensy build runs bare-metal with no scheduler, so Network Send and Network Receive work inside their tick (`spawnPinnedTask` returns false); QNEthernet fills its receive buffers in an interrupt, so a late drain loses less there. Its runs show whether threads (TeensyThreads or a FreeRTOS port, with stacks in its tight RAM and shared structures made thread-safe) are worth it.
 - **E1.31 multicast never arrives.** Network Receive binds 5568 but never joins the multicast groups, so both receivers in `scenario_NetworkSend_one_sender_many_receivers` read 0 packets while Network Send multicast; `UdpSocket::membership` exists in the platform layer and goes unused. Join the groups of the universes the layer covers, from `universe_start` on.
@@ -350,11 +417,11 @@ P4 to P4 started the day at about 200 packets/s and 0 to 1 frames. What remains 
 - **The receive task's priority on Ethernet.** Ours runs at 3 on core 1, below the driver task (`mmEncode`, 5); troyhacks' Art-Net receive runs at 20 on core 0, blocking in `recvfrom()`, above lwIP's own thread (`tcpip`, 18), which a busy drain could starve. On the S3 over WiFi 6 against 3 changed nothing, the loss being at the access point. Measure 6 (above the driver task) and 19 (above lwIP) P4 to P4.
 - **Network Send paces its packets.** Back-to-back bursts are what the access point drops (a 0.5 ms gap recovered 96% on WiFi) and what loses the push packet at the end of an Ethernet burst. Spread a frame's packets over part of the frame period, and back off on a full transmit queue (`ENOMEM`) rather than adding buffers, as Espressif advises ([esp-idf#13602](https://github.com/espressif/esp-idf/issues/13602)) and troyhacks' raw Ethernet driver does.
 - **The live runner restores no board when a board fails mid-run.** A two-board run whose receiver rebooted left the sender's scenario canvas and its Network Send on P4 .139, still streaming to the S3. The restore of every board belongs in a `finally`, so an exception or a dead board still puts the others back.
+- **HTTP to an S3 fails under a stream from the same computer.** With a 40 fps DDP stream from the Mac into either S3 over WiFi, 4 to 6 of 20 HTTP probes from that Mac answered, while the render loop stayed healthy (log: 5.5 ms ticks, the HTTP server idle) and the Ethernet P4 took the same stream with every probe answered. A phone opening the S3's page during such a stream tells whether the S3's WiFi suffers or only the sending computer's link carrying both.
 
 ## Open questions
 
 - The names: `PictureService` and `PictureEffect`, or names closer to the industry's (media source, pixel map)?
-- Does a recording capture the layer's input (before mapping) or the drivers' output (after correction)? xLights expects the output.
 - How far video goes on a board without a hardware decoder: GIF and image sequences, or a software decoder measured in flash first.
 - How HDMI out is wired on the ESP32-P4-PC: its sources name HDMI and MIPI-DSI but no bridge chip; Olimex's separate P4 HDMI adapter uses Lontium's LT8912B (MIPI-DSI to HDMI, up to 1080p60), so check the schematic.
 - Whether a layout reads xLights model exports, so a 3D model's node order and positions come from the file that designed the show.

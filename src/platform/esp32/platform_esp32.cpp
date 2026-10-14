@@ -1355,6 +1355,10 @@ bool wifiStaConnected() MM_NONBLOCKING {
     return wifiStaConnected_.load(std::memory_order_relaxed);
 }
 
+bool wifiStaAssociated() MM_NONBLOCKING {
+    return wifiStaAssociated_.load(std::memory_order_relaxed);
+}
+
 void wifiStaGetIPv4(uint8_t out[4]) MM_NONBLOCKING {
     netifIPv4(staNetif_, out);
 }
@@ -1551,6 +1555,7 @@ bool wifiSetTxPower(int8_t quarterDbm) {
 // Stubs so the linker is satisfied: platform.h declares these and NetworkModule's discarded `if constexpr (hasWiFi)` branch still ODR-uses them. With hasWiFi false the calls are not generated, so --gc-sections drops the stubs.
 bool wifiStaInit(const char* /*ssid*/, const char* /*password*/) { return false; }
 bool wifiStaConnected() MM_NONBLOCKING { return false; }
+bool wifiStaAssociated() MM_NONBLOCKING { return false; }
 void wifiStaGetIPv4(uint8_t out[4]) MM_NONBLOCKING { out[0] = out[1] = out[2] = out[3] = 0; }
 void wifiStaStop() {}
 int wifiStaRssi() { return 0; }

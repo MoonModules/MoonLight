@@ -18,3 +18,6 @@ CONFIG_HEAP_HAS_EXEC_HEAP=y
 
 # A MIDI desk on the board's own USB port: the MIDI service's USB source.
 CONFIG_MM_USB_MIDI_HOST=y
+
+# The Waveshare ESP32-S3-RGB-Matrix's microphones sit behind an ES7210.
+CONFIG_MM_AUDIO_CODEC=y

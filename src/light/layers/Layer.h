@@ -310,6 +310,53 @@ public:
     /// The physical box depth.
     lengthType physicalDepth() const { return physicalDepth_; }
 
+    /// The effect whose wiring-order frame goes to the output unmapped, or null: the sole enabled layer, mapped, no enabled modifier, one enabled effect that delivers wiring order.
+    EffectBase* wiringSource() const {
+        if (!lut_.hasLUT()) return nullptr;   // an identity mapping is already one copy
+        EffectBase* source = soleEffect();
+        return source && source->deliversWiringOrder() && soleLayer() ? source : nullptr;
+    }
+
+    /// The one enabled effect, or null when there is none, there are two sharing the buffer, or a modifier transforms the frame.
+    EffectBase* soleEffect() const {
+        EffectBase* source = nullptr;
+        for (uint8_t i = 0; i < childCount(); i++) {
+            MoonModule* c = child(i);
+            if (!c->enabled() || (c->role() != ModuleRole::Modifier && c->role() != ModuleRole::Effect)) continue;
+            if (c->role() == ModuleRole::Modifier || source) return nullptr;
+            source = static_cast<EffectBase*>(c);
+        }
+        return source;
+    }
+
+    /// Whether this is the only enabled layer, since a stack blends logical buffers.
+    bool soleLayer() const {
+        const MoonModule* p = parent();
+        if (!p) return true;
+        uint8_t layers = 0;
+        for (uint8_t i = 0; i < p->childCount(); i++)
+            if (p->child(i)->role() == ModuleRole::Layer && p->child(i)->enabled()) layers++;
+        return layers == 1;
+    }
+
+    /// Whether static modifiers fold the box into the mapping, so its inverse would undo them.
+    bool foldsStatically() const { return staticCount_ > 0; }
+
+    /// Each logical cell's physical light by the layout's own positions, `kNoDriver` where none: a wiring-order frame placed this way lands before the static modifiers, which then transform it.
+    void placeByLayout(nrOfLightsType* out, nrOfLightsType cells) const {
+        for (nrOfLightsType c = 0; c < cells; c++) out[c] = kNoDriver;
+        if (!layouts_) return;
+        struct Ctx { nrOfLightsType* out; nrOfLightsType cells; lengthType w, h, d; };
+        Ctx ctx{out, cells, width_, height_, depth_};
+        // A gap stays dark, so its slot is not placed; a position outside the folded box has no cell.
+        layouts_->placeLights(CoordSink{[](void* c, nrOfLightsType idx, lengthType x, lengthType y, lengthType z) {
+            auto* k = static_cast<Ctx*>(c);
+            if (x >= k->w || y >= k->h || z >= k->d) return;
+            const nrOfLightsType cell = static_cast<nrOfLightsType>(z) * k->w * k->h + static_cast<nrOfLightsType>(y) * k->w + x;
+            if (cell < k->cells && k->out[cell] == kNoDriver) k->out[cell] = idx;
+        }, [](void*, nrOfLightsType, lengthType, lengthType, lengthType) {}, &ctx});
+    }
+
     /// Whether a mapping was wanted but could not be built, so the layer degraded to identity.
     bool lutSkipped() const { return lutSkipped_; }
 
@@ -320,7 +367,7 @@ public:
         clearStatus();  // re-evaluated below if a degrade path is taken
 
         // Each modifier stashes its output size, so the per-light fold reads the box at its stage.
-        uint8_t staticCount = 0;
+        staticCount_ = 0;
         hasLive_ = false;
         Coord3D box{physicalWidth_, physicalHeight_, physicalDepth_};
         for (uint8_t i = 0; i < childCount(); i++) {
@@ -329,7 +376,7 @@ public:
             if (m->hasModifyLive()) { hasLive_ = true; continue; }   // dynamic: per-frame, not baked
             m->modifyLogicalSize(box);
             clampLogical(box);
-            staticCount++;
+            staticCount_++;
         }
 
         // Final logical box = the running box after the last static modifier.
@@ -345,7 +392,7 @@ public:
         const bool anyGap = layouts_ && layouts_->hasBlackPixels();
 
         // The frame-rate floor for the common case: box cell i is driver light i. Keep it first.
-        if (staticCount == 0 && dense && !anyGap && isNaturalOrder()) {
+        if (staticCount_ == 0 && dense && !anyGap && isNaturalOrder()) {
             lut_.setIdentity(boxCount);
             allocateBuffer(boxCount);
             return;
@@ -514,6 +561,7 @@ private:
     uint32_t bufferGen_ = 0;   // bumped by every write to buffer_; see bufferGen()
     char statusBuf_[20] = {};  // "999×999×999" fits; owned (setStatus borrows the pointer)
     bool     hasLive_ = false;          // any enabled modifier animates per frame (gates the live pass)
+    uint8_t  staticCount_ = 0;          // enabled modifiers folded into the mapping at build time
     uint8_t* liveScratch_ = nullptr;    // snapshot for the live pass; allocated only when hasLive_
     size_t   liveScratchBytes_ = 0;
 

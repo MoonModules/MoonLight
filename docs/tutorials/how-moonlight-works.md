@@ -156,6 +156,8 @@ The rest the module declares about itself:
 | 🦅 | a named contributor, credited on the module |
 | 🎵 volume · 🎶 frequency | it listens: one note reacts to how LOUD the room is, two to WHICH notes are playing |
 | 📡 | it takes its picture from the network |
+| 🖼️ | it samples the Picture service's picture |
+| 🎞️ | it plays a recorded show from a file |
 | 🎯 | it aims moving heads |
 | 👾 | pixel art: the games and sprites |
 | 🧬 | a simulation: the picture emerges from cells evolving off their own last frame, rather than being drawn |

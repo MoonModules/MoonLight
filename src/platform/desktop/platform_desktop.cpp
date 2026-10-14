@@ -1793,6 +1793,9 @@ bool wifiStaInit(const char* ssid, const char* /*password*/) {
 static uint8_t testStaIp_[4] = {};
 void setTestWifiStaIPv4(const uint8_t* ip) { for (int i = 0; i < 4; i++) testStaIp_[i] = ip ? ip[i] : 0; }
 bool wifiStaConnected() MM_NONBLOCKING { return testStaIp_[0] || testStaIp_[1] || testStaIp_[2] || testStaIp_[3]; }
+static std::atomic<bool> testStaAssociated_{false};
+void setTestWifiStaAssociated(bool associated) { testStaAssociated_.store(associated, std::memory_order_relaxed); }
+bool wifiStaAssociated() MM_NONBLOCKING { return testStaAssociated_.load(std::memory_order_relaxed) || wifiStaConnected(); }
 void wifiStaGetIPv4(uint8_t out[4]) MM_NONBLOCKING { for (int i = 0; i < 4; i++) out[i] = testStaIp_[i]; }
 // Addressing is managed by the system here, so the setters reach only the test seams: a per-interface counter, and the faked cable's address.
 static std::atomic<uint32_t> testStaticApplies[2] = {};   // indexed by NetIface

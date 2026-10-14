@@ -192,12 +192,18 @@ private:
             if (here == start) continue;   // a cell no light shows keeps its value
             const size_t first = dest(here);
             if (first >= physLights) continue;
-            const uint8_t* s = physical + first * cpl;
-            uint8_t* d = logical + li * cpl;
-            if (cpl == 3) { d[0] = s[0]; d[1] = s[1]; d[2] = s[2]; }
-            else std::memcpy(d, s, cpl);
+            copyLight(logical + li * cpl, physical + first * cpl, cpl);
         }
     }
+
+public:
+    /// One light's channels, the common three unrolled since it runs per light on a gather.
+    static void copyLight(uint8_t* d, const uint8_t* s, size_t cpl) MM_NONBLOCKING {
+        if (cpl == 3) { d[0] = s[0]; d[1] = s[1]; d[2] = s[2]; }
+        else std::memcpy(d, s, cpl);
+    }
+
+private:
 
     // Tier the destinations allocation, false only on tier 3. @xref{paged-destinations}
     bool allocateDestinations(size_t destBytes, nrOfLightsType maxDestinations) {

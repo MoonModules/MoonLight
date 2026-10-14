@@ -7,9 +7,7 @@ namespace mm {
 /// Effect: a wave surface where every detected beat drops a stone, rippling and interfering.
 /// @card BeatRipplesEffect.gif
 ///
-/// The surface is a real wave simulation, the classic two-buffer scheme.
-/// Ripples pass through each other, reflect off the walls, and interfere into standing patterns.
-/// A detected onset drops a stone, and between beats the surface keeps ringing on its own.
+/// The surface is a real wave simulation, the classic two-buffer scheme: ripples pass through each other, reflect off the walls and interfere, and a detected onset drops a stone.
 ///
 /// Prior art: Gomez 2000, the water effect the demoscene settled on.
 ///
@@ -17,13 +15,9 @@ namespace mm {
 ///
 /// ## The wave equation, and rendering by slope
 ///
-/// Each cell's next height is its four neighbors averaged and doubled, minus its previous height, damped.
-/// That discrete wave equation is what a hand-drawn expanding circle cannot give.
-/// The field renders by slope rather than height: a surface is visible because it bends light.
-/// So the difference between neighboring cells lights a pixel, and crests read as bright lines.
+/// Each cell's next height is its four neighbors averaged and doubled, minus its previous height, damped; the field renders by slope, so crests read as bright lines.
 ///
-/// The loudest band picks where a stone lands, bass near the center and treble out at the rim.
-/// `Layer::extrude` fills a cube with the plane, as Particles and Wave do, since the equation is 2D.
+/// The loudest band picks where a stone lands, bass near the center and treble at the rim; a cube takes the plane extruded, as the equation is 2D.
 class BeatRipplesEffect : public EffectBase {
 public:
     /// Catalog tags for the visual catalog.
@@ -114,7 +108,7 @@ public:
         renderSurface(cv, w, h);
     }
 
-    /// One step of the wave equation, which is what makes ripples pass through each other.
+    /// One step of the wave equation, which is what makes ripples pass through each other. @xref{the-wave-equation-and-rendering-by-slope}
     void waveStep() {
         const lengthType w = width(), h = height();
         int16_t* c = cur_.data();
@@ -143,11 +137,13 @@ public:
                 int32_t mag = (gx < 0 ? -gx : gx) + (gy < 0 ? -gy : gy);
                 mag = (mag * shine) / 512;
                 const uint8_t bri = static_cast<uint8_t>(mag > 255 ? 255 : mag);
-                // The index follows height, so a crest and a trough differ in color.
-                const int32_t hgt = static_cast<int32_t>(s[o]);
-                const uint8_t index = static_cast<uint8_t>(128 + (hgt > 4000 ? 127 : (hgt < -4000 ? -128 : (hgt * 127) / 4000)));
-                draw::pixel(cv, {x, y, 0}, colorFromPalette(*Palettes::active(), index, bri));
+                draw::pixel(cv, {x, y, 0}, colorFromPalette(*Palettes::active(), paletteIndex(s[o], seq_), bri));
             }
+    }
+
+    /// The palette index at a height: it wraps with height, so ripples a few hundred high walk the whole palette, and each stone moves the start along it.
+    static uint8_t paletteIndex(int16_t height, uint32_t stones) {
+        return static_cast<uint8_t>(128 + static_cast<int32_t>(stones * 8u) + height / 8);
     }
 
 private:

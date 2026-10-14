@@ -6,6 +6,8 @@
 #include "light/util/ArtNetPacket.h"
 #include "light/effects/NetworkReceiveEffect.h"
 #include "light/layouts/GridLayout.h"
+#include "light/modifiers/MirrorModifier.h"
+#include "light/modifiers/TransposeModifier.h"
 #include "platform/platform.h"
 
 #include <cstring>
@@ -240,7 +242,7 @@ TEST_CASE("NetworkReceiveEffect receives over localhost UDP") {
     r.fx.release();
 }
 
-// The per-second counts are what a scenario compares with what the sender sent: one DDP frame of two packets, the second pushing, reads as two packets and one frame over one second, and the next second starts from zero.
+// A scenario compares these counts with what the sender sent: one DDP frame of two packets reads as two packets and one frame, and the next second starts at zero.
 TEST_CASE("NetworkReceiveEffect counts the packets and frames of the last second") {
     mm::platform::setTestNowMs(1000);   // the rate window starts when the stream does, on the test clock
     Rig r;
@@ -275,10 +277,16 @@ TEST_CASE("NetworkReceiveEffect counts the packets and frames of the last second
 
 namespace {
 
-// Which value each physical light shows once the layer maps its buffer out: index = driver index, value = the red byte that reached it, 0 for none.
+// Which value each physical light shows, by Drivers' rule: a wiring-order source copied as it is, else the layer's buffer mapped out. Index = driver index, value = the red byte that reached it, 0 for none.
 std::vector<uint8_t> redPerDriverLight(const mm::Layer& layer) {
     const mm::nrOfLightsType n = layer.physicalLightCount();
     std::vector<uint8_t> out(n, 0);
+    if (mm::EffectBase* wired = layer.wiringSource()) {
+        std::vector<uint8_t> frame(static_cast<size_t>(n) * 3, 0);
+        wired->copyWiringFrame(frame.data(), frame.size(), /*force=*/true);
+        for (mm::nrOfLightsType k = 0; k < n; k++) out[k] = frame[static_cast<size_t>(k) * 3];
+        return out;
+    }
     const uint8_t* buf = layer.buffer().data();
     const mm::MappingLUT& lut = layer.lut();
     for (mm::nrOfLightsType cell = 0; cell < layer.buffer().count(); cell++) {
@@ -302,7 +310,8 @@ struct OrderRig {
     mm::Layer layer;
     mm::NetworkReceiveEffect fx;
 
-    OrderRig(mm::lengthType w, mm::lengthType h, mm::lengthType d, uint8_t mappedBy, bool serpentine = true) {
+    OrderRig(mm::lengthType w, mm::lengthType h, mm::lengthType d, uint8_t mappedBy, bool serpentine = true,
+             mm::ModifierBase* modifier = nullptr) {
         grid.width = w;
         grid.height = h;
         grid.depth = d;
@@ -312,8 +321,13 @@ struct OrderRig {
         layer.setLayouts(&layouts);
         layer.setChannelsPerLight(3);
         layer.addChild(&fx);
+        if (modifier) layer.addChild(modifier);
         fx.defineControls();
         layer.applyState();
+    }
+    ~OrderRig() {
+        // The modifier is the test's, not the tree's to free.
+        for (uint8_t i = layer.childCount(); i-- > 0;) if (layer.child(i) != &fx) layer.removeChild(layer.child(i));
     }
     // A numbered frame of `lights` lights into staging, then one frame of the layer.
     void sendNumbered(size_t lights) {
@@ -343,9 +357,10 @@ TEST_CASE("NetworkReceiveEffect mapped by the receiver lets the layer apply this
     r.checkCellsAsSent(16);
 }
 
-// A mapping sender (xLights, FSEQ, Network Send) sends in wiring order, so light k shows what was sent for k; copied by index, every other row would reverse.
+// A mapping sender (xLights, FSEQ, Network Send) sends in wiring order, so light k shows what was sent for k; alone on its layer that is one copy.
 TEST_CASE("NetworkReceiveEffect mapped by the sender reaches each light as sent, on a serpentine grid") {
     OrderRig r(4, 4, 1, mm::NetworkReceiveEffect::kMappedBySender);
+    CHECK(r.layer.wiringSource() == &r.fx);
     r.sendNumbered(16);
     r.checkLightsAsSent(16);
 }
@@ -353,8 +368,54 @@ TEST_CASE("NetworkReceiveEffect mapped by the sender reaches each light as sent,
 // The same on a 3D layout, two slices of a serpentine grid, the shape of TouchMyLight's cube in small.
 TEST_CASE("NetworkReceiveEffect mapped by the sender reaches each light as sent, on a 3D layout") {
     OrderRig r(4, 4, 2, mm::NetworkReceiveEffect::kMappedBySender);
+    CHECK(r.layer.wiringSource() == &r.fx);
     r.sendNumbered(32);
     r.checkLightsAsSent(32);
+}
+
+// A layer with a modifier transforms its logical frame, so a sender-mapped stream there is placed in the grid first; a receiver-mapped one never passes through.
+TEST_CASE("a frame goes to the output as it is only when nothing on its layer transforms it") {
+    mm::MirrorModifier mirror;
+    OrderRig mirrored(4, 4, 1, mm::NetworkReceiveEffect::kMappedBySender, true, &mirror);
+    CHECK(mirrored.layer.wiringSource() == nullptr);
+    OrderRig receiver(4, 4, 1, mm::NetworkReceiveEffect::kMappedByReceiver);
+    CHECK(receiver.layer.wiringSource() == nullptr);
+    OrderRig plain(4, 4, 1, mm::NetworkReceiveEffect::kMappedBySender, /*serpentine=*/false);
+    CHECK(plain.layer.wiringSource() == nullptr);   // an identity layout is already one copy through the layer
+}
+
+namespace {
+// The driver index of the light at (x, y, z) on a serpentine w x h grid, each slice wired row by row.
+size_t serpentineIndex(size_t x, size_t y, size_t z, size_t w, size_t h) {
+    return z * w * h + y * w + (y % 2 ? w - 1 - x : x);
+}
+}  // namespace
+
+// A mirror on a sender-mapped stream mirrors the frame: each light shows what was sent for the light its position folds onto, rather than the mirror undoing itself.
+TEST_CASE("a mirror on a sender-mapped serpentine grid mirrors the frame") {
+    mm::MirrorModifier mirror;
+    mirror.mirrorY = false;
+    mirror.mirrorZ = false;
+    OrderRig r(4, 4, 1, mm::NetworkReceiveEffect::kMappedBySender, true, &mirror);
+    r.sendNumbered(16);
+    const std::vector<uint8_t> seen = redPerDriverLight(r.layer);
+    for (size_t y = 0; y < 4; y++)
+        for (size_t x = 0; x < 4; x++) {
+            const size_t folded = x < 2 ? x : 3 - x;
+            CHECK(seen[serpentineIndex(x, y, 0, 4, 4)] == serpentineIndex(folded, y, 0, 4, 4) + 1);
+        }
+}
+
+// A transpose on a sender-mapped 3D layout swaps the frame's axes in every slice.
+TEST_CASE("a transpose on a sender-mapped 3D layout transposes the frame") {
+    mm::TransposeModifier transpose;   // x and y swap by default
+    OrderRig r(4, 4, 2, mm::NetworkReceiveEffect::kMappedBySender, true, &transpose);
+    r.sendNumbered(32);
+    const std::vector<uint8_t> seen = redPerDriverLight(r.layer);
+    for (size_t z = 0; z < 2; z++)
+        for (size_t y = 0; y < 4; y++)
+            for (size_t x = 0; x < 4; x++)
+                CHECK(seen[serpentineIndex(x, y, z, 4, 4)] == serpentineIndex(y, x, z, 4, 4) + 1);
 }
 
 // On a layout already in wiring order, a plain grid with no modifiers, the two coincide and sender mapping is the same single copy.
@@ -365,7 +426,7 @@ TEST_CASE("NetworkReceiveEffect mapped by the sender on an identity layout is th
     r.checkCellsAsSent(16);
 }
 
-// The status tells the user what sender mapping costs: one copy on an identity mapping, mapped back and forward again on any other.
+// The status tells the user what sender mapping costs: one copy on an identity mapping or alone on its layer, mapped back and forward again under a modifier.
 TEST_CASE("NetworkReceiveEffect mapped by the sender says in its status whether a frame is one copy or mapped twice") {
     const uint8_t ip[4] = {10, 0, 0, 7};
     OrderRig plain(4, 4, 1, mm::NetworkReceiveEffect::kMappedBySender, /*serpentine=*/false);
@@ -379,8 +440,16 @@ TEST_CASE("NetworkReceiveEffect mapped by the sender says in its status whether 
     serpentine.fx.recordSender("DDP", ip);
     serpentine.layer.tick();
     REQUIRE(serpentine.fx.status() != nullptr);
-    CHECK(std::string(serpentine.fx.status()) == "receiving DDP from 10.0.0.7, mapped twice");
+    CHECK(std::string(serpentine.fx.status()) == "receiving DDP from 10.0.0.7, one copy");   // straight to the output
     serpentine.fx.release();
+
+    mm::MirrorModifier mirror;
+    OrderRig mirrored(4, 4, 1, mm::NetworkReceiveEffect::kMappedBySender, true, &mirror);
+    mirrored.fx.recordSender("DDP", ip);
+    mirrored.layer.tick();
+    REQUIRE(mirrored.fx.status() != nullptr);
+    CHECK(std::string(mirrored.fx.status()) == "receiving DDP from 10.0.0.7, mapped twice");
+    mirrored.fx.release();
 }
 
 // Receiver mapping maps once, as every layer does, so the status names only the sender.
@@ -408,9 +477,12 @@ TEST_CASE("NetworkReceiveEffect reports its counts per second of elapsed time") 
         uint8_t payload[3] = {static_cast<uint8_t>(10 + k), 0, 0};
         REQUIRE(tx.sendToAddr(loopback, mm::DDP_PORT, pkt, mm::buildDdpPacket(pkt, k * 3u, true, payload, 3)));
     }
-    // A packet is counted before it is written, so the last light landing means all four were counted; bounded at about 100 ms.
-    for (int i = 0; i < 100 && r.fx.stagingData()[9] != 13; i++) mm::platform::delayMs(1);
-    REQUIRE(r.fx.stagingData()[9] == 13);
+    // Counted before written, so the last light landing in the layer means all four were counted; bounded at about 100 ms.
+    for (int i = 0; i < 100 && r.layer.buffer().data()[9] != 13; i++) {
+        r.layer.tick();
+        mm::platform::delayMs(1);
+    }
+    REQUIRE(r.layer.buffer().data()[9] == 13);
     mm::platform::setTestNowMs(3000);   // two seconds into the stream
     r.fx.tick1s();
     CHECK(r.fx.packetsPerS == 2);       // four packets over two seconds

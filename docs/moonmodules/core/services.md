@@ -24,8 +24,8 @@ A user-added Service: the audio source the audio-reactive effects consume. `mode
 - `micMode`: (Local, I²S targets) `I2S` for a three-wire part, `PDM` for a two-wire one.
 - `sckPin` / `wsPin` / `sdPin`: (Local, I²S targets) the bus GPIOs, unset until entered.
 - `mclkPin`: (Local, I²S targets) the master clock an ADC or codec needs; unset for a plain mic.
-- `codec`: (Local, I²S targets) `ES8311` for a mic behind that codec, else `none`.
-- `codecAddr`: (with a codec) its address on the [I2C bus](system.md#i2c-bus), in hex (`0x18`).
+- `codec`: (Local, I²S targets) `ES8311` or `ES7210` in front of the mic, else `none`.
+- `codecAddr`: its [I2C](system.md#i2c-bus) address: `0x18` (ES8311), `0x40` to `0x43` (ES7210).
 - `device`: (Local, desktop) the OS capture input, `default` following the system setting.
 - `sampleRate`: (Local) mic/ADC sample rate.
 - `levels`: (Local) who sets the display window: `manual`'s two sliders, or `automatic`, a learner.
@@ -41,6 +41,21 @@ A user-added Service: the audio source the audio-reactive effects consume. `mode
 Detail: [technical](moxygen/AudioService.md) · [the sync packet](moxygen/WLEDAudioSyncPacket.md) · [the lock-free ring](moxygen/SpscRing.md)
 
 [Tests](../../reference/tests/unit-tests.md#audioservice)
+
+<a id="picture"></a>
+
+### Picture
+
+A user-added Service: the picture the [Picture effect](../light/effects.md#picture) samples onto the lights. One is active at a time, as with Audio.
+
+<img src="../../assets/core/PictureService.png" width="300" alt="Picture module controls">
+
+- `source`: `test pattern`, a test card in the layout of Philips' PM5544, at any size.
+- `width` / `height`: the picture in pixels, up to 512 a side; 64 × 48 by default.
+
+Detail: [technical](moxygen/PictureService.md)
+
+[Tests](../../reference/tests/unit-tests.md#pictureservice)
 
 <a id="osc"></a>
 

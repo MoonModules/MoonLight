@@ -8,7 +8,7 @@
 /// ## The domain code is unchanged
 ///
 /// It calls the codec init, a no-op on a board with a direct microphone, before the microphone init, and reads samples as always.
-/// The driver is the vendor's own managed component, built for the chips whose boards carry one.
+/// The driver is the vendor's own managed component, an ES8311 or an ES7210, built into the images whose boards carry one.
 /// The codec is a device on the board's I2C bus, which platform_esp32_i2c.cpp opens and owns.
 /// Everything else gets an inert stub that reports success, having nothing to bring up, so the one call works everywhere.
 
@@ -17,12 +17,12 @@
 #include "sdkconfig.h"
 #include "soc/soc_caps.h"
 
-// esp_codec_dev is pulled for the S31 and the P4 (idf_component.yml rule), so the implementation is gated on its presence and the file compiles on every other target.
-#if SOC_I2S_SUPPORTED && __has_include("esp_codec_dev.h")
-#define MM_HAS_ES8311 1
+// esp_codec_dev is pulled where MM_AUDIO_CODEC is set (idf_component.yml rule), so the implementation is gated on it and the file compiles in every other image.
+#if SOC_I2S_SUPPORTED && CONFIG_MM_AUDIO_CODEC
+#define MM_HAS_AUDIO_CODEC 1
 #endif
 
-#if MM_HAS_ES8311
+#if MM_HAS_AUDIO_CODEC
 
 #include "driver/i2c_master.h"
 #include "esp_codec_dev.h"
@@ -35,7 +35,7 @@ namespace mm::platform {
 
 namespace {
 
-const char* ES_TAG = "mm_es8311";
+const char* ES_TAG = "mm_codec";
 
 // The codec device and its interfaces, kept alive between init and deinit: once opened it keeps streaming, and the I2S read drains it.
 struct CodecState {
@@ -68,9 +68,30 @@ void deinitState(CodecState* st) {
 
 i2c_master_bus_handle_t i2cBusHandle();   // platform_esp32_i2c.cpp: the board's bus, which the codec attaches to
 
+namespace {
+// The codec's own part, set up for a microphone: MCLK at 256 times the sample rate, the ratio both parts key their tables on.
+const audio_codec_if_t* newCodec(CodecType type, const audio_codec_ctrl_if_t* ctrl) {
+    if (type == CodecType::Es8311) {
+        es8311_codec_cfg_t cfg = {};
+        cfg.ctrl_if = ctrl;
+        cfg.codec_mode = ESP_CODEC_DEV_WORK_MODE_ADC;   // record / mic only
+        cfg.use_mclk = true;                            // the microphone's mclkPin clocks the codec
+        cfg.mclk_div = 256;
+        cfg.pa_pin = -1;                                // mic path needs no power amp
+        return es8311_codec_new(&cfg);
+    }
+    // The first microphone only, in the left slot the mono read takes; a board's second one serves beamforming, which the spectrum does not use.
+    es7210_codec_cfg_t cfg = {};
+    cfg.ctrl_if = ctrl;
+    cfg.mic_selected = ES7210_SEL_MIC1;
+    cfg.mclk_div = 256;
+    return es7210_codec_new(&cfg);
+}
+}  // namespace
+
 bool audioCodecInit(CodecType type, uint8_t i2cAddr, uint32_t sampleRate) {
     if (type == CodecType::None) return true;     // direct-mic board: nothing to do
-    if (type != CodecType::Es8311) return false;  // unknown codec for this build
+    if (type != CodecType::Es8311 && type != CodecType::Es7210) return false;  // unknown codec for this build
     if (!i2cBusHandle()) { ESP_LOGE(ES_TAG, "no I2C bus open for the codec"); return false; }
 
     audioCodecDeinit();   // idempotent: a re-init (pin/rate change) rebuilds cleanly
@@ -86,15 +107,8 @@ bool audioCodecInit(CodecType type, uint8_t i2cAddr, uint32_t sampleRate) {
     st->ctrl = audio_codec_new_i2c_ctrl(&i2cCtrlCfg);
     if (!st->ctrl) { ESP_LOGE(ES_TAG, "codec i2c ctrl failed"); deinitState(st); return false; }
 
-    es8311_codec_cfg_t es8311Cfg = {};
-    es8311Cfg.ctrl_if = st->ctrl;
-    es8311Cfg.codec_mode = ESP_CODEC_DEV_WORK_MODE_ADC;   // record / mic only
-    es8311Cfg.use_mclk = true;                            // the microphone's mclkPin clocks the codec
-    es8311Cfg.mclk_div = 256;                             // MCLK = 256 * sample_rate (the standard
-                                                          // I2S ratio; the codec's coeff table is keyed on it, 0 fails "configure rate").
-    es8311Cfg.pa_pin = -1;                                // mic path needs no power amp
-    st->codec = es8311_codec_new(&es8311Cfg);
-    if (!st->codec) { ESP_LOGE(ES_TAG, "es8311_codec_new failed"); deinitState(st); return false; }
+    st->codec = newCodec(type, st->ctrl);
+    if (!st->codec) { ESP_LOGE(ES_TAG, "codec_new failed"); deinitState(st); return false; }
 
     esp_codec_dev_cfg_t devCfg = {};
     devCfg.codec_if = st->codec;
@@ -124,7 +138,7 @@ void audioCodecDeinit() {
 
 }  // namespace mm::platform
 
-#else  // !MM_HAS_ES8311 — no codec on this target: inert stub.
+#else  // !MM_HAS_AUDIO_CODEC: no codec in this image, an inert stub.
 
 #include <new>
 
@@ -136,4 +150,4 @@ bool audioCodecInit(CodecType type, uint8_t, uint32_t) {
 void audioCodecDeinit() {}
 }  // namespace mm::platform
 
-#endif  // MM_HAS_ES8311
+#endif  // MM_HAS_AUDIO_CODEC

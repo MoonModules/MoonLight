@@ -23,7 +23,7 @@ ESP32_DIR = ROOT / "esp32"
 
 # Shared moondeck.json + logLevel-toggle helpers (one level up, reachable from check/ and run/).
 sys.path.insert(0, str(ROOT / "moondeck"))
-from _moondeck_config import active_device_ips, raised_log_level, LOG_INFO  # noqa: E402
+from _moondeck_config import device_ips_for_port, open_serial, raised_log_level, LOG_INFO  # noqa: E402
 from _host import desktop_target  # noqa: E402
 
 # Same directory; imported by path so this needs no PYTHONPATH tweak (the pattern the
@@ -384,14 +384,14 @@ def _live_capture(log, seconds=15):
         import serial
     except ImportError:
         return False
-    # Raise the device(s) to Info so the KPI tick line prints during the capture (they rest at Warn,
-    # which silences it), and restore each device's ORIGINAL level on exit: covering the serial-open
-    # failure and the normal-cleanup paths alike. A freshly booted device already logs at Info for its
-    # first 60 s, so this is a no-op there but harmless.
+    # The board on this port raised to Info so its tick line prints (it rests at Warn), and restored to its own level on exit, the serial-open failure included.
     print(f"  ESP32 KPI: capturing {seconds}s from {port}...")
-    with raised_log_level(active_device_ips(), LOG_INFO):
+    ips = device_ips_for_port(port)
+    if not ips:
+        print(f"  no device in the registry was last flashed on {port}: its log level is not raised, so the tick lines show only at Info", flush=True)
+    with raised_log_level(ips, LOG_INFO):
         try:
-            ser = serial.Serial(port, 115200, timeout=1)
+            ser = open_serial(port)
         except Exception as e:
             print(f"  ESP32 KPI: cannot open {port}: {e}")
             return False

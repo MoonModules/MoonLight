@@ -51,15 +51,14 @@ dependencies:
     version: "^1.0.0"
     rules:
       - if: "$CONFIG{MM_USB_MIDI_HOST} == True"
-  # esp_codec_dev: Espressif's audio-codec library, whose ES8311 part configures an analog mic
-  # behind an ES8311 I2S codec. Which board has one, and on which pins, is AudioService's runtime
-  # configuration from the device model, so the component is built for every chip a codec board
-  # uses (the S31 CoreBoard, and P4 boards such as the Waveshare ESP32-P4-ETH) and nowhere else.
-  # Referenced only from platform_esp32_es8311.cpp, behind the codec gate.
+  # esp_codec_dev: Espressif's audio-codec library, whose ES8311 and ES7210 parts configure a
+  # microphone behind a codec. Which board has one, and on which pins, is AudioService's runtime
+  # configuration from the device model; the Kconfig gate keeps the component out of every image
+  # that does not set MM_AUDIO_CODEC. Referenced only from platform_esp32_es8311.cpp.
   espressif/esp_codec_dev:
     version: "^1.3.0"
     rules:
-      - if: "target in [esp32s31, esp32p4]"
+      - if: "$CONFIG{MM_AUDIO_CODEC} == True"
   # esp_wifi_remote + esp_hosted: WiFi for the ESP32-P4 via the on-board ESP32-C6
   # co-processor over SDIO. The P4 has no native radio; these present the C6's
   # radio through the standard esp_wifi_* API (API-compatible, so the WiFi seam in

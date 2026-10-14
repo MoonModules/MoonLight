@@ -1,13 +1,12 @@
 #pragma once
 
-#include "core/util/TryLock.h"  // the staging buffer, shared by the receive task and the render copy
 #include "core/util/format.h"   // formatTo: nonblocking formatting into a fixed buffer
+#include "light/effects/ChannelDataSink.h"   // staging, the held frame and its placement
 #include "light/effects/EffectBase.h"
 
 #include "light/util/ArtNetPacket.h"   // shared ArtNet wire formats (build + parse)
 #include "light/util/DdpPacket.h"      // shared DDP wire format
 #include "light/util/E131Packet.h"     // shared E1.31/sACN wire format
-#include "light/layers/Layer.h"   // Layer::bufferGen: is the held frame still ours?
 #include "platform/platform.h"    // platform::UdpSocket: the three receive sockets
 
 #include <atomic>
@@ -32,13 +31,7 @@ namespace mm {
 ///
 /// ## Mapped by the receiver or by the sender
 ///
-/// A receiver-mapped frame arrives row by row, and the layer applies this board's wiring; a sender-mapped one (xLights, FSEQ, Network Send) arrives in wiring order.
-/// On an identity mapping that is one copy, at any number of layers. Any other mapping sends the frame back to the grid and forward again, 4.5 ms against 1.1 ms on an S3 at 12,288 lights.
-///
-/// ## Held frames, drained by a task
-///
-/// A frame is a burst of packets that lwIP holds in a small mailbox, so a task on core 1 drains them into staging as they arrive.
-/// The render tick copies a changed frame into the layer, so the lights hold the last frame rather than strobe black.
+/// A receiver-mapped frame arrives row by row and the layer applies this board's wiring; a sender-mapped one arrives in wiring order, placed by the channel-data sink.
 class NetworkReceiveEffect : public EffectBase {
 public:
     /// Catalog tags: network input, of MoonLight and v1 lineage.
@@ -116,42 +109,24 @@ public:
         } else {
             setStatus(kBindFailMsg, Severity::Error);
         }
-        // One byte per channel byte, zero-filled so a fresh grid starts dark; a sender-mapped frame is indexed by physical light.
-        const auto* layer = static_cast<const Layer*>(parent());
-        const size_t lights = mappedBy == kMappedBySender && layer ? layer->physicalLightCount() : nrOfLights();
-        staging_.resize(lights * channelsPerLight());
-        dirty_.store(true, std::memory_order_release);   // a resize (or a re-enable) must repaint the layer from staging once
+        sink_.prepare(mappedBy == kMappedBySender);
         packets_.exchange(0, std::memory_order_relaxed);   // the rates restart with the stream, not from boot
         frames_.exchange(0, std::memory_order_relaxed);
         rateSinceMs_ = platform::millis();
         startReceiveTask();
     }
 
-    /// Drain all three sockets, then copy staging to the layer when anything changed. @xref{held-frames-drained-by-a-task}
+    /// Drain the sockets where no task does, then let the sink place a changed frame, the status naming the path it took.
     void tick() MM_NONBLOCKING override {
-        if (!staging_) return;
         if (!receiveTask_.impl) drainSockets<false>();   // a board without tasks, the Teensy, drains here as packets wait
-        const auto* layer = static_cast<const Layer*>(parent());
-        // A sender-mapped frame through a mapping that is not the identity is mapped back and forward again, which the status shows.
-        const bool sender = mappedBy == kMappedBySender && layer;
-        publishSender(sender ? (layer->lut().hasLUT() ? kPathTwice : kPathOneCopy) : kPathNone);
-        // An unchanged buffer needs no copy, so the layer's write generation decides.
-        uint8_t* buf = buffer();
-        if (!buf) return;
-        const uint32_t gen = layer ? layer->bufferGen() : 0;
-        if (!dirty_.load(std::memory_order_acquire) && layer && gen == lastGen_) return;
-        LockGuard guard(stagingLock_);
-        if (!guard) return;   // the task is writing a packet: copy on the next tick
-        dirty_.store(false, std::memory_order_release);
-        const size_t bufBytes = static_cast<size_t>(nrOfLights()) * channelsPerLight();
-        if (sender) {
-            layer->lut().gatherFromPhysical(buf, bufBytes, staging_.data(), staging_.bytes(), channelsPerLight());
-        } else {
-            std::memcpy(buf, staging_.data(), staging_.bytes() < bufBytes ? staging_.bytes() : bufBytes);
-        }
-        // The Layer bumps the generation after this tick, so record what our own copy produces.
-        lastGen_ = gen + 1;
+        publishSender(sink_.tick());
     }
+
+    /// A sender-mapped frame is in wiring order.
+    bool deliversWiringOrder() const MM_NONBLOCKING override { return sink_.wiringOrder(); }
+
+    /// The sink hands its held frame to the output.
+    void copyWiringFrame(uint8_t* out, size_t bytes, bool force) override { sink_.copyWiringFrame(out, bytes, force); }
 
     /// Place one universe's payload, clamped to its stride and ignoring universes outside the buffer; `kWait` as for applyBytes.
     template <bool kWait = true>
@@ -161,30 +136,17 @@ public:
         applyBytes<kWait>(static_cast<size_t>(universe - universeStart) * channelsPerUniverse, data, len);
     }
 
-    /// The one clamped write into staging, bound-checked before any addition against an overflow.
+    /// Write a payload into the sink at its byte offset; the task waits out one render copy, the tick drains only where no task runs.
     template <bool kWait = true>
-    void applyBytes(size_t offset, const uint8_t* data, uint16_t len) {
-        if (!staging_ || offset >= staging_.bytes()) return;
-        size_t n = len;
-        if (offset + n > staging_.bytes()) n = staging_.bytes() - offset;
-        // The task waits out the render copy, one frame at most; the tick drains only where no task runs, so it never finds the lock taken.
-        if constexpr (kWait) {
-            while (!stagingLock_.tryAcquire()) platform::yield();
-        } else if (!stagingLock_.tryAcquire()) {
-            return;
-        }
-        std::memcpy(staging_.data() + offset, data, n);
-        stagingLock_.release();
-        dirty_.store(true, std::memory_order_release);   // the one write into staging, which is what tick() copies out
-    }
+    void applyBytes(size_t offset, const uint8_t* data, uint16_t len) { sink_.write<kWait>(offset, data, len); }
 
     /// Whether a receive task drains the sockets, rather than the render tick: the test seam for the fallback.
     bool receivesInTask() const { return receiveTask_.impl != nullptr; }
 
     /// Test seam: the staging bytes, so a test can pin the buffer's lifecycle.
-    const uint8_t* stagingData() const { return staging_.data(); }
+    const uint8_t* stagingData() const { return sink_.data(); }
     /// Test seam: how many staging bytes are allocated.
-    size_t stagingBytes() const { return staging_.bytes(); }
+    size_t stagingBytes() const { return sink_.bytes(); }
 
     /// Note the last sender, per packet from the receive path; a test calls it to stand in for one.
     void recordSender(const char* proto, const uint8_t ip[4]) {
@@ -201,10 +163,7 @@ private:
     char recvStatus_[56] = "";          ///< "receiving <protocol> from <ip>, <path>", sized for the longest form
     const char* lastProto_ = nullptr;   ///< the last protocol literal the status was built from
     uint8_t lastPath_ = 0;              ///< the last path the status was built from
-    /// What a frame costs on its way to the drivers: no note for receiver mapping, which maps once as every layer does.
-    static constexpr uint8_t kPathNone = 0;
-    static constexpr uint8_t kPathOneCopy = 1;   ///< sender mapping through an identity mapping
-    static constexpr uint8_t kPathTwice = 2;     ///< sender mapping mapped back to the grid and forward again
+    /// The status note for each of the sink's paths: none for receiver mapping, which maps once as every layer does.
     static constexpr const char* kPathNotes[3] = {"", ", one copy", ", mapped twice"};
     uint8_t     lastIp_[4] = {};        ///< the last sender IP the status was built from
 
@@ -212,13 +171,10 @@ private:
     platform::UdpSocket e131Socket_;     ///< E1.31, port 5568
     platform::UdpSocket ddpSocket_;      ///< DDP, port 4048
     uint8_t pkt_[1500] = {};             ///< one datagram of any protocol, DDP reaching 1450
-    ScratchBuffer<uint8_t> staging_{*this};   ///< the held frame, sized to the layer
-    /// Staging changed since the last copy, starting true so a fresh buffer paints once.
-    std::atomic<bool> dirty_{true};
+    ChannelDataSink sink_{*this};        ///< where the frames land, held and placed
     std::atomic<uint32_t> packets_{0};   ///< packets since the last tick1s, counted by the receive path
     std::atomic<uint32_t> frames_{0};    ///< frames since the last tick1s, counted by the receive path
     uint32_t rateSinceMs_ = 0;           ///< when the counts last restarted, which the rates divide by
-    TryLock stagingLock_;                     ///< staging, between the receive task's writes and the render copy
     platform::WorkerTask receiveTask_;        ///< drains the sockets as packets arrive, on core 1
     std::atomic<bool> receiveStop_{false};
     std::atomic<const char*> senderProto_{nullptr};   ///< the last sender's protocol, which the render tick publishes
@@ -234,7 +190,7 @@ private:
         }
     }
 
-    // Core 1, away from the render loop; a single-core chip runs it unpinned, and a board without tasks drains in the tick.
+    // lwIP holds a frame's burst in a small mailbox, so a task on core 1 drains it as it arrives; a board without tasks drains in the tick.
     void startReceiveTask() {
         receiveStop_.store(false, std::memory_order_release);
         platform::spawnPinnedTask(receiveTask_, "mmReceive", &receiveTrampoline, this, 4096, 3, 1);
@@ -295,7 +251,7 @@ private:
     static uint16_t saturate16(uint32_t v) { return v > 0xFFFF ? 0xFFFF : static_cast<uint16_t>(v); }
 
     /// Show the last sender in the status, from the render side, which owns the status.
-    void publishSender(uint8_t path) {
+    void publishSender(ChannelDataSink::Path path) {
         const char* proto = senderProto_.load(std::memory_order_acquire);
         if (!proto) return;
         const uint32_t v = senderIp_.load(std::memory_order_relaxed);
@@ -303,8 +259,6 @@ private:
                                static_cast<uint8_t>(v >> 8), static_cast<uint8_t>(v)};
         noteReceiving(proto, ip, path);
     }
-    /// The layer's write generation as of our last copy, which is what makes skipping it safe.
-    uint32_t lastGen_ = 0;
 
     /// Update the receiving diagnostic, short-circuiting the common case since this is the hot path.
     void noteReceiving(const char* proto, const uint8_t ip[4], uint8_t path) {

@@ -50,6 +50,11 @@ public:
     /// Which axes the effect iterates, read at frame time: a hardcoded bound is a buffer overrun.
     virtual Dim dimensions() const { return Dim::D3; }
 
+    /// Whether the frame arrives in the order the lights are wired, so a layer showing it alone hands it to the output unmapped.
+    virtual bool deliversWiringOrder() const MM_NONBLOCKING { return false; }
+    /// Copy that wiring-order frame into the output, all of it when `force` says the output holds something else.
+    virtual void copyWiringFrame(uint8_t* /*out*/, size_t /*bytes*/, bool /*force*/) {}
+
     /// The parent, always a Layer, defined in Layer.h once Layer is complete.
     Layer* layer() const;
 

@@ -169,6 +169,7 @@ nav:
       - Installing on a desktop: how-to/installing-to-desktop.md
       - Running on a Linux machine: how-to/installing-on-linux.md
       - Building, running, flashing: how-to/building.md
+      - Adding a picture or channel-data source: how-to/adding-a-stream-source.md
       - Driving LED panels with a receiving card: how-to/panel-cards.md
       - LED signal integrity: how-to/led-signal-integrity.md
       - Connecting a control surface: how-to/control-surface.md

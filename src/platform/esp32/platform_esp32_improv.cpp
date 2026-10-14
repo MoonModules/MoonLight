@@ -15,7 +15,8 @@
 ///
 /// Several chips have a built-in USB peripheral exposing a serial endpoint with no bridge chip, and many cheap boards wire the socket to it rather than to the hardware port.
 /// So the bytes arrive on one or the other, and both are listened on, which makes one firmware work on either kind of board.
-/// The install is soft-failing: when the secondary console grabbed the peripheral first, that path is skipped and the hardware port carries on alone.
+/// Installing the USB driver takes the peripheral from the console's direct writes, so the console is switched to the driver too, as IDF's own console setup does.
+/// Log text and Improv frames then share the port, each frame carrying its own header; a failed install leaves the hardware port carrying on alone.
 ///
 /// One parser per transport, each keeping its own framing state and buffer.
 /// A shared one would let a partial frame on one side be corrupted by bytes arriving on the other, its state machine not knowing they came from different sources.
@@ -43,6 +44,7 @@
 
 #include "core/util/ImprovFrame.h"
 #include "core/util/ImprovOpReassembler.h"
+#include "core/util/JoinWindow.h"
 
 #include "driver/uart.h"
 #include "esp_log.h"
@@ -57,6 +59,7 @@
 // The built-in USB peripheral, which many boards wire their socket to instead of the hardware port: @xref{two-transports-because-the-port-may-be-either|why both are listened on}.
 #if SOC_USB_SERIAL_JTAG_SUPPORTED
 #include "driver/usb_serial_jtag.h"
+#include "driver/usb_serial_jtag_vfs.h"   // the console's writes through the driver, once it owns the port
 #endif
 
 #include <atomic>
@@ -207,18 +210,20 @@ static void improvHandleProvision(const improv::ImprovCommand& cmd) {
     g_improv.ready->store(true, std::memory_order_release);
     improvSendCurrentState(improv::STATE_PROVISIONING);
 
-    // Wait up to 30 s for a usable IP. Polls existing platform state, no extra wiring. Loop until the lease actually lands (a non-zero address), not merely until association: DHCP completes shortly after WIFI_EVENT_STA_CONNECTED, so breaking on wifiStaConnected() alone could read 0.0.0.0.
+    // Wait for a usable address over the station's own window, so a wrong password or a missing network is answered when the cascade gives up, inside the installer's 30 s. The module starts the join on its next one-second tick and checks once a second, which the 2 s covers.
     uint8_t ip[4] = {};
-    for (int i = 0; i < 300; i++) {  // 30 s @ 100 ms
+    bool associated = false;
+    for (uint32_t waited = 0; waited < mm::staWindowMs(associated) + 2000; waited += 100) {
         vTaskDelay(pdMS_TO_TICKS(100));
+        associated = wifiStaAssociated();
         if (wifiStaConnected()) {
             wifiStaGetIPv4(ip);
-            if (ip[0] || ip[1] || ip[2] || ip[3]) break;   // have a real address
+            if (ip[0] || ip[1] || ip[2] || ip[3]) break;   // the lease landed, not merely the association
         }
     }
-    // No usable lease (never associated, or associated but DHCP never completed) is a failure, same as the timeout, http://0.0.0.0/ would be worse than an honest error.
+    // No usable lease is a failure: http://0.0.0.0/ would be worse than an honest error.
     if (!ip[0] && !ip[1] && !ip[2] && !ip[3]) {
-        improvSetStatus("error: no IP after 30s");
+        improvSetStatus(associated ? "error: joined but no address" : "error: could not join: wrong password or network not found");
         improvSendError(improv::ERROR_UNABLE_TO_CONNECT);
         return;
     }
@@ -371,6 +376,7 @@ static void improvTask(void* /*arg*/) {
         usb_serial_jtag_driver_config_t jtag_cfg = USB_SERIAL_JTAG_DRIVER_CONFIG_DEFAULT();
         esp_err_t jtag_err = usb_serial_jtag_driver_install(&jtag_cfg);
         if (jtag_err == ESP_OK) {
+            usb_serial_jtag_vfs_use_driver();   // or the log's direct FIFO writes collide with the driver and the port goes silent
             g_jtagReady = true;
         } else {
             ESP_LOGW(IMPROV_TAG, "usb_serial_jtag_install failed: %s",
