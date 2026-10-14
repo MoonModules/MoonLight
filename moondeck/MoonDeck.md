@@ -864,6 +864,7 @@ uv run moondeck/scenario/run_live_scenario.py --host 192.168.1.210              
 uv run moondeck/scenario/run_live_scenario.py --name scenario_Network_hardware_reconfigures_live   # one scenario
 uv run moondeck/scenario/run_live_scenario.py --name scenario_perf_light,scenario_Fluid_solver      # several, comma-separated
 uv run moondeck/scenario/run_live_scenario.py --host MM-Bench.local --network Home --name scenario_AccessPoint_first_setup_from_its_own_network   # first setup, this computer as the phone
+uv run moondeck/scenario/run_live_scenario.py --host 192.168.1.158 --board sender=192.168.1.156 --name scenario_NetworkReceive_two_boards   # two boards: the sender board sends
 uv run moondeck/scenario/run_live_scenario.py --update-baseline                  # save baseline
 uv run moondeck/scenario/run_live_scenario.py --compare-baseline                 # detect regressions
 ```
@@ -950,6 +951,19 @@ uv run moondeck/scenario/run_network_roundtrip.py --host 192.168.1.156 --repeats
 ```
 
 Captures and restores each device's grid and removes the temporary NetworkReceive on exit (also on failure). Exit codes match the matrix test: `0` = at least one device measured, `1` = none returned a frame, `2` = environment problem (no checked/reachable devices).
+
+### fseq_play
+
+Play an FSEQ show to the selected device over DDP, the reference sender for FSEQ on MoonLight.
+
+```bash
+uv run moondeck/run/fseq_play.py --host 192.168.1.158                      # the test sweep, written on first use
+uv run moondeck/run/fseq_play.py --host 192.168.1.158 --file show.fseq --loops 3
+uv run moondeck/run/fseq_play.py --write sweep.fseq --width 64 --height 64 --serpentine
+uv run moondeck/run/fseq_play.py --info show.fseq
+```
+
+FSEQ is xLights' and Falcon Player's file of channel data, frame by frame in wiring order. The tool reads and writes uncompressed v2 as FPP documents it. It streams each frame as DDP packets with the push flag on the last, paced as Network Send paces, at the file's step time. Set the device's Network Receive `mapped_by` to sender. The test sweep is a diagonal with a white light at the logical top-left, so a wrong mapping shows as a stepped edge and a moved corner. Compressed files and sparse ranges are refused: export from xLights with compression off.
 
 ### preview_health
 

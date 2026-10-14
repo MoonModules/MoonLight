@@ -29,11 +29,13 @@ namespace mm {
 constexpr uint16_t DDP_PORT = 4048;
 constexpr size_t DDP_HEADER_SIZE = 10;
 constexpr size_t DDP_MAX_PAYLOAD = 1440;  // 480 RGB / 360 RGBW lights; divisible by 3 and 4
+/// The flags bit marking a frame's last packet.
+constexpr uint8_t DDP_FLAG_PUSH = 0x01;
 
 /// Build a data packet; `push` marks a frame's last packet, which a double-buffering receiver shows on.
 inline size_t buildDdpPacket(uint8_t* outBuf, uint32_t offset, bool push,
                              const uint8_t* data, uint16_t dataLen) {
-    outBuf[0] = static_cast<uint8_t>(0x40 | (push ? 0x01 : 0x00));
+    outBuf[0] = static_cast<uint8_t>(0x40 | (push ? DDP_FLAG_PUSH : 0x00));
     outBuf[1] = 0;                       // sequence unused
     outBuf[2] = 0x01;                    // RGB
     outBuf[3] = 0x01;                    // default display
@@ -47,9 +49,9 @@ inline size_t buildDdpPacket(uint8_t* outBuf, uint32_t offset, bool push,
     return DDP_HEADER_SIZE + dataLen;
 }
 
-/// Parse and validate a data packet, zero-copy; everything but the version and length is ignored.
+/// Parse and validate a data packet, zero-copy, reporting its push flag when asked; the version and length are the only checks.
 inline bool parseDdpPacket(const uint8_t* pkt, size_t len, uint32_t& offsetOut,
-                           const uint8_t*& dataOut, uint16_t& dataLenOut) {
+                           const uint8_t*& dataOut, uint16_t& dataLenOut, bool* pushOut = nullptr) {
     if (!pkt || len < DDP_HEADER_SIZE) return false;
     if ((pkt[0] & 0xC0) != 0x40) return false;   // version must be 01
     const uint16_t dataLen = static_cast<uint16_t>((pkt[8] << 8) | pkt[9]);
@@ -58,6 +60,7 @@ inline bool parseDdpPacket(const uint8_t* pkt, size_t len, uint32_t& offsetOut,
               | (static_cast<uint32_t>(pkt[6]) << 8) | pkt[7];
     dataOut = pkt + DDP_HEADER_SIZE;
     dataLenOut = dataLen;
+    if (pushOut) *pushOut = (pkt[0] & DDP_FLAG_PUSH) != 0;
     return true;
 }
 

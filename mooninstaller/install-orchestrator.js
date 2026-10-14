@@ -67,8 +67,10 @@ import { ImprovSerial } from "https://unpkg.com/improv-wifi-serial-sdk@2.5.0/dis
 import {
     IMPROV_CMD_SET_TX_POWER,
     IMPROV_FRAME_TYPE_RPC,
+    applyOpReply,
     buildImprovFrame,
     encodeApplyOpFrames,
+    parseImprovFrames,
     stateFrames,
 } from "./improv-frame.js";
 import {
@@ -128,7 +130,7 @@ async function fetchManifest(manifestUrl) {
 
 // Sends the SET_TX_POWER frame ([0xFD][1][dBm]) on a port we own — called
 // BEFORE ImprovSerial takes the port's locks, so no close/reopen dance is
-// needed. Fire-and-forget like APPLY_OP: the device acks with RpcResponse we don't
+// needed. Fire-and-forget: the device acks with RpcResponse we don't
 // read. This must precede provisioning because the cap has to land before the radio
 // associates; the APPLY_OP config push later also carries WiFi.txPowerSetting, but
 // that arrives too late for the first association on a brown-out-prone device.
@@ -143,31 +145,67 @@ async function sendSetTxPowerFrame(port, dBm) {
     }
 }
 
-// Send ONE state document (a JSON string like {"Drivers":{…}}) to the device over
-// serial as APPLY_OP frames: "Improv = REST over serial". The JSON is chunked
-// into [0xFC][seq][last][chunk] frames (≤ APPLY_OP_CHUNK_MAX bytes each). We own the port here (ImprovSerial closed after provision), so we
-// write directly. Best-effort fire: the device acks each frame with an RpcResponse
-// we don't read back (Web Serial duplex read while we hold the writer is awkward),
-// and the single-buffer busy-guard on the device + a small inter-document delay keep the
-// device from being overrun. Returns nothing; throws only on a write error.
-async function sendApplyOpFrame(port, doc) {
-    const frames = encodeApplyOpFrames(doc);   // [0xFC][seq][last][chunk…] per frame
+// The device's replies to APPLY_OP chunks, read from a port that also carries its log. One reader for a whole push, a read still pending when a wait times out being kept for the next.
+function applyOpReplies(port) {
+    const reader = port.readable.getReader();
+    let bytes = new Uint8Array(0), pending = null;
+    const queue = [];
+    return {
+        // The next reply, or "timeout" when none came in `ms`.
+        async next(ms) {
+            const deadline = Date.now() + ms;
+            while (!queue.length) {
+                const left = deadline - Date.now();
+                if (left <= 0) return "timeout";
+                pending = pending || reader.read();
+                const res = await Promise.race([pending, new Promise(r => setTimeout(() => r(null), left))]);
+                if (!res) return "timeout";
+                pending = null;
+                if (res.done) return "timeout";
+                const all = new Uint8Array(bytes.length + res.value.length);
+                all.set(bytes); all.set(res.value, bytes.length);
+                const { frames, rest } = parseImprovFrames(all);
+                bytes = rest;
+                for (const f of frames) { const r = applyOpReply(f); if (r) queue.push(r); }
+            }
+            return queue.shift();
+        },
+        // Discard every reply until `ms` pass quietly, so a late acknowledgement is not taken for the resent chunk's.
+        async drain(ms) {
+            queue.length = 0;
+            while ((await this.next(ms)) !== "timeout") { /* a reply to a chunk already given up on */ }
+        },
+        async close() {
+            try { await reader.cancel(); } catch (_) { /* ignore */ }
+            try { reader.releaseLock(); } catch (_) { /* ignore */ }
+        },
+    };
+}
+
+// Send ONE state document (a JSON string like {"Drivers":{…}}) as APPLY_OP chunks, stop-and-wait: each chunk waits for its acknowledgement, and a refusal (the device still applies the previous document) or a silence (a board still booting after the port opened) sends the document again from its first chunk. A document is a merge, so a resend is harmless. Returns false when the budget ran out, or the device lacks the operation.
+async function sendApplyOpDocument(port, replies, doc, onLog) {
+    const frames = encodeApplyOpFrames(doc);
+    const giveUp = Date.now() + 10000;   // a large layout's rebuild can hold the device for seconds
     const writer = port.writable.getWriter();
     try {
-        for (const frame of frames) await writer.write(frame);
+        for (;;) {
+            let again = false;
+            for (const frame of frames) {
+                await writer.write(frame);
+                const reply = await replies.next(1000);
+                if (reply === "unsupported") return false;
+                if (reply !== "ack") { again = true; break; }
+            }
+            if (!again) return true;
+            await replies.drain(500);   // a late acknowledgement would pair with the wrong chunk
+            if (Date.now() > giveUp) {
+                if (onLog) onLog(`[orchestrator] no acknowledgement from the device within 10 s`);
+                return false;
+            }
+        }
     } finally {
         writer.releaseLock();
     }
-    // Pace so the device's main loop consumes the document (clears its single buffer) before
-    // the next document's frame arrives, since the device refuses a new document while busy. This is
-    // open-loop (we don't read the ack back: a Web Serial duplex read while we hold the
-    // writer is awkward), so the delay must clear the worst-case consume window. A
-    // loaded tick (large grid, many modules) can run a few hundred µs, but the document is
-    // applied at the START of the next tick() poll, not after a full render — so ~120 ms
-    // comfortably covers it with headroom. (A read-back ack + retry-on-busy is the
-    // closed-loop upgrade; backlogged until a real install drops a document, since each document is
-    // a merge, so a lost one would re-apply cleanly on a re-flash.)
-    await new Promise(r => setTimeout(r, 120));
 }
 
 // Apply a device-model's catalog defaults over serial, as APPLY_OP documents. The caller must
@@ -232,11 +270,19 @@ async function catalogFlashBaud(device, onLog) {
 async function sendConfigOverSerial(port, device, onLog) {
     const entry = await fetchCatalogEntry(device, onLog);
     if (!entry) return false;
-    for (const doc of stateFrames(entry)) {
-        await sendApplyOpFrame(port, doc);
+    const replies = applyOpReplies(port);
+    let all = true;
+    try {
+        for (const doc of stateFrames(entry)) {
+            if (await sendApplyOpDocument(port, replies, doc, onLog)) continue;
+            all = false;
+            if (onLog) onLog(`[orchestrator] the device did not take ${doc.slice(0, 40)}…`);
+        }
+    } finally {
+        await replies.close();
     }
-    if (onLog) onLog(`[orchestrator] applied ${device} defaults over serial`);
-    return true;
+    if (onLog) onLog(`[orchestrator] applied ${device} defaults over serial${all ? "" : ", with documents missing"}`);
+    return all;
 }
 
 // Read the device's boot serial log for the two facts the browser can't get any other
@@ -551,7 +597,7 @@ export const installer = {
      *   null when the device has no cap.
      * @param {boolean} [opts.eraseBefore=false] - when true, eraseFlash()
      *   before writeFlash. Wipes the entire chip including LittleFS (saved
-     *   WiFi credentials, device name). Adds ~12 s. Default false because
+     *   WiFi credentials, device name). Adds about 3 s per MB. Default false because
      *   a normal re-flash overwrites in place and users usually want
      *   persistent state to survive a firmware bump.
      * @param {boolean} [opts.ethOnly=false] - the picked firmware has WiFi compiled
@@ -840,11 +886,12 @@ export const installer = {
             // preserves user state (WiFi credentials, device name on
             // LittleFS), which is what most users want. Tick the box when
             // switching firmware variants whose partition tables differ, or
-            // when wiping the device for a clean install. ~12 s on a 4 MB
-            // chip; status text covers it so the user doesn't think it
-            // hung.
+            // when wiping the device for a clean install. It takes about 3 s per MB, so the
+            // status names the chip's size and the wait, and the user doesn't think it hung.
             if (eraseBefore) {
-                trackProgress("erase");
+                let mb = 0;
+                try { mb = parseInt(await esploader.detectFlashSize(), 10) || 0; } catch (_) { /* unknown size: a generic message */ }
+                trackProgress("erase", { mb });
                 await esploader.eraseFlash();
             }
 
@@ -1140,40 +1187,51 @@ export const installer = {
             }
 
             if (!needsIp && !viaHttp) {
-                trackProgress("wifi-creds-form");
-                const { ssid, password } = await uiWaitForCreds();
+                // A network the board could not join brings the form back with the reason, so a mistyped password is corrected in place rather than by a reinstall.
+                let failedSsid = "";
+                for (;;) {
+                    trackProgress("wifi-creds-form", { failedSsid });
+                    const { ssid, password } = await uiWaitForCreds();
 
-                // Skip path: user clicked Skip in the creds form (or
-                // submitted an empty SSID). Don't call provision() with
-                // empty creds — the device-side handler rejects empty
-                // SSIDs as ErrorState, which would surface as a misleading
-                // "provisioning failed" error. Instead exit cleanly with
-                // no deviceUrl; the host's onSuccess handler treats an
-                // empty url as "user opted into AP fallback, walk them
-                // through joining MM-XXXX manually" (see Step 2 in
-                // mooninstaller/index.html and the closeModal path in
-                // handleSuccess).
-                //
-                // Note on the two "skip" shapes: `uiWaitForIp()` returns
-                // a tagged union ({action: "skip"|"ip"|"retry"}) because
-                // the needs-ip dialog has three distinct outcomes the
-                // orchestrator dispatches on. `onSuccess({url:""})` is a
-                // sentinel because the outbound result has only two
-                // outcomes ("we got a URL" vs "we didn't"). Different
-                // shapes for different cardinalities, not drift.
-                if (!ssid) {
-                    // Empty SSID (Skip in the creds form). Keep device + applyDefaults
-                    // so the success screen guides the user to apply defaults later.
-                    trackProgress("done");
-                    onSuccess({ url: "", device, applyDefaults, alreadyOnline: false });
-                    return;
+                    // Skip path: user clicked Skip in the creds form (or
+                    // submitted an empty SSID). Don't call provision() with
+                    // empty creds: the device-side handler rejects empty
+                    // SSIDs as ErrorState, which would surface as a misleading
+                    // "provisioning failed" error. Instead exit cleanly with
+                    // no deviceUrl; the host's onSuccess handler treats an
+                    // empty url as "user opted into AP fallback, walk them
+                    // through joining MM-XXXX manually" (see Step 2 in
+                    // mooninstaller/index.html and the closeModal path in
+                    // handleSuccess).
+                    //
+                    // Note on the two "skip" shapes: `uiWaitForIp()` returns
+                    // a tagged union ({action: "skip"|"ip"|"retry"}) because
+                    // the needs-ip dialog has three distinct outcomes the
+                    // orchestrator dispatches on. `onSuccess({url:""})` is a
+                    // sentinel because the outbound result has only two
+                    // outcomes ("we got a URL" vs "we didn't"). Different
+                    // shapes for different cardinalities, not drift.
+                    if (!ssid) {
+                        // Empty SSID (Skip in the creds form). Keep device + applyDefaults
+                        // so the success screen guides the user to apply defaults later.
+                        trackProgress("done");
+                        onSuccess({ url: "", device, applyDefaults, alreadyOnline: false });
+                        return;
+                    }
+
+                    trackProgress("provisioning");
+                    // provision() throws on failure (timeout, bad creds). 30s
+                    // timeout matches the device-side wait at
+                    // platform_esp32_improv.cpp::improvHandleProvision.
+                    try {
+                        await improvClient.provision(ssid, password, 30000);
+                        break;
+                    } catch (e) {
+                        if (!/UNABLE_TO_CONNECT/.test(String(e && e.message || e))) throw e;
+                        if (onLog) onLog(`[orchestrator] the board could not join ${ssid}; asking again`);
+                        failedSsid = ssid;
+                    }
                 }
-
-                trackProgress("provisioning");
-                // provision() throws on failure (timeout, bad creds). 30s
-                // timeout matches the device-side wait at
-                // platform_esp32_improv.cpp::improvHandleProvision.
-                await improvClient.provision(ssid, password, 30000);
                 deviceUrl = improvClient.nextUrl;
                 if (!deviceUrl) {
                     throw new Error("provision succeeded but no device URL returned");
@@ -1284,6 +1342,35 @@ export const installer = {
      */
     async clearDetected() {
         await releaseDetected();
+    },
+
+    /**
+     * Defaults-only flow: send a device model's modules and settings to a board that already runs MoonLight, over its USB port, with no flash. For a board whose install skipped the defaults (unticked, or WiFi that failed first).
+     */
+    async applyDefaultsOnly({ port, device, onProgress, onSuccess, onError, onLog }) {
+        if (!navigator.serial) {
+            onError("setup", new Error("Web Serial API not available: use Chrome, Edge, or Opera"));
+            return;
+        }
+        let lastStage = "request-port";
+        const trackProgress = (stage, detail) => { lastStage = stage; onProgress(stage, detail); };
+        let opened = false;
+        try {
+            trackProgress("request-port");
+            if (!port) port = await navigator.serial.requestPort({});
+            await port.open({ baudRate: 115200 });
+            opened = true;
+            // Opening the port can restart the board; the stop-and-wait resends until it listens again.
+            if (!await pushDefaultsOverSerial(port, device, true, trackProgress, onLog)) {
+                throw new Error(`the board did not take the ${device} defaults: see the log`);
+            }
+            trackProgress("done");
+            onSuccess({ url: "", device, applyDefaults: true, defaultsApplied: true, defaultsOnly: true });
+        } catch (e) {
+            onError(lastStage, e);
+        } finally {
+            if (opened) { try { await port.close(); } catch (_) { /* ignore */ } }
+        }
     },
 
     /**

@@ -506,6 +506,39 @@ def _reboot_and_wait(client, target: str, timeout_s: float = 60.0) -> str:
     return f"did not answer within {timeout_s:.0f}s"
 
 
+def _read_values(client, metrics: dict, names: list, boards: dict) -> dict:
+    """The values a measure step names: "fps" and "Module.tick" from /api/system, "Module.control" from /api/state; "board:" in front reads another board."""
+    ticks = {m.get("name"): m.get("us") for m in metrics.get("modules", []) or []}
+    out = {}
+    state = None
+    for name in names:
+        board, _, rest = name.rpartition(":")
+        if board:
+            try:
+                out[name] = _read_values(boards[board], boards[board].get("/api/system"), [rest], {})[rest]
+            except Exception as e:
+                out[name] = f"? ({type(e).__name__})"
+            continue
+        if name == "fps":
+            out[name] = metrics.get("fps", "-")
+            continue
+        mod, _, key = name.partition(".")
+        if key == "tick":
+            out[name] = ticks.get(mod, "-")
+            continue
+        if state is None:
+            state = client.get("/api/state")
+        out[name] = "-"
+        stack = list(state.get("modules", []))
+        while stack:
+            m = stack.pop()
+            if m.get("name") == mod:
+                out[name] = _control_value(m, key)
+                break
+            stack.extend(m.get("children", []) or [])
+    return out
+
+
 def _sum_dynamic_bytes(state: dict) -> int:
     """Sum dynamicBytes across the live module tree. Returned by /api/state per
     module; the sum is the model's prediction for how much heap the tree owns.
@@ -588,7 +621,7 @@ def _fixture_canvas(fixture: list) -> list:
 def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
                  update_contract: bool = False,
                  update_reason: str | None = None, named: bool = True,
-                 network: str | None = None) -> dict:
+                 network: str | None = None, boards: dict | None = None) -> dict:
     """Run a scenario against a live device and return results.
 
     Mode handling (see docs/reference/testing.md § Scenario modes):
@@ -629,6 +662,15 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
         print("\n  SKIP (on_request: runs only when named, since it takes the host off its network)")
         results["skipped"] = True
         return results
+    # A scenario over several boards names them in `boards`; the command line maps each name to a device with --board.
+    boards = boards or {}
+    wanted = scenario.get("boards", [])
+    absent_boards = [b for b in wanted if b not in boards]
+    if absent_boards:
+        print(f"\n  SKIP (boards: runs only with {', '.join(absent_boards)} named by --board NAME=HOST)")
+        results["skipped"] = True
+        return results
+    boards = {b: boards[b] for b in wanted}
     if mode == "construct":
         print("\n  SKIP (mode=construct: runs in-process only; the live device's "
               "main.cpp owns the top-level shape)")
@@ -660,6 +702,8 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
                 reachable.update(_typed_names(step.get("document")))
         missing = []
         for step in scenario.get("steps", []):
+            if step.get("device"):
+                continue   # its ids live on another board, which the pre-flight does not read
             sid = step.get("id")
             opn = step.get("op")
             if opn == "apply_state":
@@ -716,6 +760,25 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
     # Snapshot the containers a scenario may clear or rebuild, as documents, so the board ends the run as found.
     prior_controls: dict = {}   # (module, control) -> the value it held before this scenario wrote it
     snapshot_docs = _snapshot_documents(client)
+    # Every other board is restored the same way, from its own snapshot, controls and created modules.
+    home = (client, prior_controls, created_modules)
+    board_state = {b: (c, {}, []) for b, c in boards.items()}
+    board_snapshots = {b: _snapshot_documents(c) for b, c in boards.items()}
+    obs_target = target
+    if boards:
+        # A step names a board by its address as `{host}` or `{<name>}`, as a sender's `hosts` does.
+        ctx["host"] = urllib.parse.urlsplit(home_base).hostname or ""
+        for b, c in boards.items():
+            ctx[b] = urllib.parse.urlsplit(c.base).hostname or ""
+        # The measurements belong to the combination, so wifi-to-wifi and ethernet-to-wifi keep apart.
+        kinds = [f"host={target}"]
+        for b, c in boards.items():
+            try:
+                kinds.append(f"{b}={_detect_target(c.get('/api/state'), c.local)}")
+            except Exception:
+                kinds.append(f"{b}=unknown")
+        obs_target = " ".join(kinds)
+        print(f"  Boards: {obs_target}")
 
     # The fixture is the canvas the steps expect, on a bench that may carry another effect or grid.
     try:
@@ -784,6 +847,14 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
         op = step.get("op", "")
         fstep = _fill(step, ctx) if ctx else step   # a filled copy, so credentials never reach the file the run writes back
         step_result = {"name": step_name, "op": op}
+
+        # A step naming a board runs there, with that board's restore bookkeeping.
+        dev = step.get("device")
+        if dev and (dev not in board_state or op not in ("apply_state", "set_control", "measure")):
+            print(f"  FAIL  {step_name}: device {dev!r} is not in `boards`, or {op} does not run on another board")
+            results["passed"] = False
+            break
+        client, prior_controls, created_modules = board_state[dev] if dev else home
 
         # An optional measure/control on a module whose optional add was skipped is a
         # no-op: the module isn't there to measure. Skip before any REST call.
@@ -1036,8 +1107,8 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
                     results["passed"] = False
 
             elif op == "set_control":
-                data = {"module": step["id"], "control": step["key"],
-                        "value": step["value"]}
+                data = {"module": fstep["id"], "control": fstep["key"],
+                        "value": fstep["value"]}
                 _remember_control(prior_controls, client, step["id"], step["key"])
                 try:
                     resp = client.post("/api/control", data)
@@ -1257,6 +1328,10 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
                 results["steps"].append(step_result)
                 break  # stop step loop; cleanup runs below
             step_result["metrics"] = metrics
+            # `read` names extra values to report: "Module.control" from the state, or "Module.tick" for a module's tick time.
+            if step.get("read"):
+                step_result["read"] = _read_values(client, metrics, step["read"], {b: s[0] for b, s in board_state.items()})
+                print("  READ     " + "  ".join(f"{k}={v}" for k, v in step_result["read"].items()))
             tick_us = metrics.get("tickTimeUs", 0)
             fps = 1000000 // tick_us if tick_us > 0 else metrics.get("fps", 0)
             heap = metrics.get("freeHeap", 0)
@@ -1270,7 +1345,7 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
             #   "set_by": "YYYY-MM-DD", "reason": "..." } } }
             # Contracts are hand-set promises: see docs/reference/testing.md § Performance
             # contracts. `--update-contract --reason "..."` rewrites them.
-            contract_block = step.get("contract", {}).get(target) if step.get("contract") else None
+            contract_block = step.get("contract", {}).get(obs_target) if step.get("contract") else None
             if contract_block:
                 # Defaults reflect run-to-run variance, not "I don't care":
                 #   pc-*      : multi-process OS jitter, 20% pct + 200us absolute
@@ -1357,14 +1432,14 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
                 "free_heap": int(heap),
                 "max_alloc_block": int(max_block),
             }
-            existing_obs = step.get("observed", {}).get(target)
+            existing_obs = step.get("observed", {}).get(obs_target)
             if update_contract:
                 new_obs = _observed.reset(sample, _today_iso())
                 obs_changed = True
             else:
                 new_obs, obs_changed = _observed.widen(existing_obs, sample, _today_iso())
             if obs_changed:
-                step.setdefault("observed", {})[target] = new_obs
+                step.setdefault("observed", {})[obs_target] = new_obs
                 wrote_observations[0] = True
 
             # --update-contract: rewrite the contract in the scenario JSON for the
@@ -1382,10 +1457,10 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
                 # Key by step INDEX, not the step dict: a dict is unhashable, so
                 # `(step, target)` as a key raised TypeError (this whole path is
                 # only reached with --update-contract, which the gates don't pass).
-                existing = step.get("contract", {}).get(target, {})
-                if (step_index, target) not in pending_contract_originals:
+                existing = step.get("contract", {}).get(obs_target, {})
+                if (step_index, obs_target) not in pending_contract_originals:
                     # Deep enough copy: existing is a flat dict of scalars.
-                    pending_contract_originals[(step_index, target)] = (
+                    pending_contract_originals[(step_index, obs_target)] = (
                         dict(existing) if existing else None
                     )
                 new_block = {
@@ -1403,7 +1478,7 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
                 # path: keep both files in sync if you change one.
                 if "max_alloc_block" in existing:
                     new_block["max_alloc_block"] = int(max_block)
-                step.setdefault("contract", {})[target] = new_block
+                step.setdefault("contract", {})[obs_target] = new_block
 
             # Check bounds
             bounds = step.get("bounds", {})
@@ -1450,7 +1525,25 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
     # The host back on its own network before anything else talks to the device, which is then there.
     if host.home:
         host.restore()
+    client, prior_controls, created_modules = home
     client.base = home_base
+
+    # The other boards first, so a sender stops before this device is put back.
+    for b, (bc, b_prior, b_created) in board_state.items():
+        for module_id in reversed(b_created):
+            try:
+                bc.delete(_mod_path(module_id))
+                print(f"  -     {module_id} ({b} cleanup)")
+            except Exception:
+                pass
+        for doc in board_snapshots[b]:
+            try:
+                bc.patch("/api/state", doc)
+            except Exception as e:
+                print(f"  WARN: couldn't restore {b}'s {next(iter(doc), '?')}: {e}")
+        put_back = _restore_controls(bc, b_prior)
+        if put_back:
+            print(f"  restored {put_back} control(s) on {b}")
 
     # Cleanup: delete modules that were created by this scenario
     for module_id in reversed(created_modules):
@@ -1498,23 +1591,33 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
         # JSON write below (for observed) doesn't leak them to disk.
         for step_index, step in enumerate(scenario.get("steps", [])):
             contract = step.get("contract")
-            if contract and target in contract:
-                if (step_index, target) in pending_contract_originals:
-                    orig = pending_contract_originals[(step_index, target)]
+            if contract and obs_target in contract:
+                if (step_index, obs_target) in pending_contract_originals:
+                    orig = pending_contract_originals[(step_index, obs_target)]
                     if orig is None:
-                        del contract[target]
+                        del contract[obs_target]
                     else:
-                        contract[target] = orig
-        print(f"  contract[{target}] NOT written (run failed; observed still saved)")
+                        contract[obs_target] = orig
+        print(f"  contract[{obs_target}] NOT written (run failed; observed still saved)")
 
     if wrote_observations[0] or contract_safe_to_write:
         _observed.save_scenario(scenario_path, scenario)
         what = []
         if wrote_observations[0]:
-            what.append(f"observed[{target}]")
+            what.append(f"observed[{obs_target}]")
         if contract_safe_to_write:
-            what.append(f"contract[{target}]")
+            what.append(f"contract[{obs_target}]")
         print(f"  WROTE  {scenario_path.name} ({' + '.join(what)})")
+
+    # The values each measure step read, one row per step, for comparing configurations at a glance.
+    rows = [s for s in results["steps"] if s.get("read")]
+    if rows:
+        keys = list(dict.fromkeys(k for s in rows for k in s["read"]))
+        width = max(len(s["name"]) for s in rows)
+        print("\n  " + "step".ljust(width) + "  tick_us  " + "  ".join(keys))
+        for s in rows:
+            tick = (s.get("metrics") or {}).get("tickTimeUs", "?")
+            print("  " + s["name"].ljust(width) + f"  {str(tick):>7}  " + "  ".join(str(s["read"].get(k, "-")).rjust(len(k)) for k in keys))
 
     # Summary
     print("\n---")
@@ -1586,6 +1689,8 @@ def main():
                         help="Filter to scenarios whose top-level module / also matches.")
     parser.add_argument("--network", default=None,
                         help="Registry network (moondeck.json) the host and device share, for a scenario that moves the host's WiFi.")
+    parser.add_argument("--board", action="append", default=[], metavar="NAME=HOST",
+                        help="Another board a scenario names in `boards`, such as sender=192.168.1.156; repeat for each.")
     parser.add_argument("--settle", type=float, default=3.0,
                         help="Settle time in seconds between step and measurement")
     parser.add_argument("--update-baseline", action="store_true",
@@ -1609,6 +1714,12 @@ def main():
                      "(e.g. --reason 'tightened after Layer optimization')")
 
     client = Client(args.host)
+    boards = {}
+    for spec in args.board:
+        bname, sep, bhost = spec.partition("=")
+        if not sep or not bname or not bhost:
+            parser.error(f"--board takes NAME=HOST, got {spec!r}")
+        boards[bname] = Client(bhost)
 
     # Verify connection
     try:
@@ -1653,7 +1764,8 @@ def main():
             continue
         result = run_scenario(client, path, args.settle,
                               update_contract=args.update_contract,
-                              update_reason=args.reason, named=bool(args.name), network=args.network)
+                              update_reason=args.reason, named=bool(args.name), network=args.network,
+                              boards=boards)
         all_results[result["name"]] = result
         if not result["passed"]:
             all_passed = False

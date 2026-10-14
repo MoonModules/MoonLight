@@ -84,18 +84,19 @@ public:
     /// The master clock a converter may need, a self-clocked part leaving it unset.
     int8_t mclkPin = -1;
     /// The codecs `codec` picks from, in its option order.
-    enum Codec : uint8_t { kCodecNone, kCodecEs8311, kCodecCount };
+    enum Codec : uint8_t { kCodecNone, kCodecEs8311, kCodecEs7210, kCodecCount };
     /// Which codec sits in front of the microphone, none for a part that speaks I2S itself; the device model names it.
     uint8_t codec = kCodecNone;
-    /// The codec's 7-bit address on the board's I2C bus (I2cBusModule), the ES8311's own unless the board straps it elsewhere.
+    /// The codec's 7-bit address on the board's I2C bus (I2cBusModule): 0x18 for an ES8311, 0x40 to 0x43 for an ES7210 by its strapping.
     uint8_t codecAddr = 0x18;
 
     /// The codec the settings ask for.
     platform::CodecType codecType() const MM_NONBLOCKING {
-        return codec == kCodecEs8311 ? platform::CodecType::Es8311 : platform::CodecType::None;
+        return codec == kCodecEs8311 ? platform::CodecType::Es8311
+             : codec == kCodecEs7210 ? platform::CodecType::Es7210 : platform::CodecType::None;
     }
     /// The codecs the selector offers, each by the name the bus scan shows it under.
-    static constexpr const char* kCodecOptions[] = {"none", "ES8311"};
+    static constexpr const char* kCodecOptions[] = {"none", "ES8311", "ES7210"};
 
     /// The codec, while the wired microphone uses one, so the bus scan names its address.
     uint8_t i2cDevices(I2cDevice* out, uint8_t max) const override {
@@ -298,10 +299,10 @@ public:
     /// How many times the receive socket joined the group, for the tests.
     uint32_t syncJoinCountForTest() const { return syncSock_.joinCountForTest(); }
 
+    /// What a consumer reads with no source: a class constant, since a function-local static needs a guard on first use.
+    static constexpr AudioFrame kSilence{};
     /// The live frame every consumer reads, or silence where there is no source.
     static const AudioFrame* latestFrame() MM_NONBLOCKING {
-        // Not a function-local static, which would need a guard and a lock on first use.
-        static constexpr AudioFrame kSilence{};
         AudioService* a = ActiveInstance<AudioService>::active();
         return a ? &a->frame_ : &kSilence;
     }

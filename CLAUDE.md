@@ -130,6 +130,8 @@ flowchart TB
 
 Keep each commit under ~100 changed files: CodeRabbit reviews the files a pushed commit changes, and past that the commit silently loses a review layer. A mechanical sweep (em-dashes, a metrics refresh) is a commit of its own, apart from behavioral fixes, so both stay reviewable.
 
+**A contributed pull request is one topic, about 400 changed lines and ten files at most**, tests included. Generated files (metrics, images, scenario observations) are a category of their own, outside the count. Past a few hundred lines a review stops catching defects (the SmartBear and Cisco review study; Google's guide on small changes), and the product owner reviews every line. Every pull request is based on main. The one exception is a step of a larger topic, which lands as its own pull request and may build on the step below it. A stacked pull request from a fork shows its parents, so it is reviewed once the one below it merges.
+
 ### Build and test
 
 Implement against [the architecture](docs/explanation/architecture/index.md) and [coding-standards.md](docs/contributing/coding-standards.md). Everything build, flash, run and monitor: [building.md](docs/how-to/building.md). Per-script reference: [MoonDeck.md](moondeck/MoonDeck.md).
@@ -179,7 +181,7 @@ On "run pre-commit": run the checks whose trigger the diff matches, report one l
 
 **A failure is something to report, not to fix and re-run.** A second run needs the words again, as much after a failure or a fix as at any other time.
 
-**The gates run once per commit.** A run costs minutes, so scope freezes at "run pre-commit": a request made during a run goes to the next commit. A change made after a run re-checks only itself, on the product owner's go. A fixed failure reruns that one check; any other change runs the checks its own diff triggers. A full rerun needs the word "restart". A cosmetic change can ride on the run it followed, since the next commit's gates check it again.
+**Each check runs once per commit.** A run costs minutes, so scope freezes at "run pre-commit": a request made during a run goes to the next commit. A change made after a run re-checks only itself, on the product owner's go. A fixed failure reruns that one check; any other change runs the checks its own diff triggers. A full rerun needs the word "restart". A cosmetic change can ride on the run it followed, since the next commit's gates check it again.
 
 ```mermaid
 flowchart LR

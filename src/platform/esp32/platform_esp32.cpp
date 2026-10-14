@@ -1355,6 +1355,10 @@ bool wifiStaConnected() MM_NONBLOCKING {
     return wifiStaConnected_.load(std::memory_order_relaxed);
 }
 
+bool wifiStaAssociated() MM_NONBLOCKING {
+    return wifiStaAssociated_.load(std::memory_order_relaxed);
+}
+
 void wifiStaGetIPv4(uint8_t out[4]) MM_NONBLOCKING {
     netifIPv4(staNetif_, out);
 }
@@ -1551,6 +1555,7 @@ bool wifiSetTxPower(int8_t quarterDbm) {
 // Stubs so the linker is satisfied: platform.h declares these and NetworkModule's discarded `if constexpr (hasWiFi)` branch still ODR-uses them. With hasWiFi false the calls are not generated, so --gc-sections drops the stubs.
 bool wifiStaInit(const char* /*ssid*/, const char* /*password*/) { return false; }
 bool wifiStaConnected() MM_NONBLOCKING { return false; }
+bool wifiStaAssociated() MM_NONBLOCKING { return false; }
 void wifiStaGetIPv4(uint8_t out[4]) MM_NONBLOCKING { out[0] = out[1] = out[2] = out[3] = 0; }
 void wifiStaStop() {}
 int wifiStaRssi() { return 0; }
@@ -1847,6 +1852,9 @@ bool resolveHost(const char* name, uint8_t ip[4]) {
     return true;
 }
 
+// resolveHost runs on the resolver's worker task here, so this step answers Failed: it is reached only when that task could not be created.
+LookupStep resolveHostStep(const char*, uint8_t*) { return LookupStep::Failed; }
+
 // Advertise-only: discovery is datagram presence, each device broadcasting and listening on its own port. Keeping it off this protocol keeps the advertisement stable, since a query for a service this device hosts destabilizes its own.
 
 // Outbound HTTP request (plain HTTP, LAN, no TLS), see platform.h. A bounded blocking lwIP call, which the caller (HueDriver) runs off the render path on tick1s. Mirrors the desktop impl.
@@ -1982,6 +1990,24 @@ int UdpSocket::recvFrom(uint8_t* buf, size_t maxLen, uint8_t srcIp[4], uint16_t*
     if (srcIp) std::memcpy(srcIp, &src.sin_addr.s_addr, 4);   // network order = octets
     if (srcPort) *srcPort = ntohs(src.sin_port);
     return static_cast<int>(n);
+}
+
+// select() over the bound sockets, the textbook wait for a receive task; the render loop keeps polling recvFrom instead.
+int UdpSocket::waitReadable(UdpSocket* const* sockets, int count, uint32_t timeoutMs) {
+    fd_set readable;
+    FD_ZERO(&readable);
+    int maxFd = -1;
+    for (int i = 0; i < count; i++) {
+        if (!sockets[i] || sockets[i]->fd_ < 0) continue;
+        FD_SET(sockets[i]->fd_, &readable);
+        if (sockets[i]->fd_ > maxFd) maxFd = sockets[i]->fd_;
+    }
+    if (maxFd < 0) { delayMs(timeoutMs); return 0; }   // nothing open: wait out the period rather than spin
+    timeval tv{};
+    tv.tv_sec = static_cast<decltype(tv.tv_sec)>(timeoutMs / 1000);
+    tv.tv_usec = static_cast<decltype(tv.tv_usec)>((timeoutMs % 1000) * 1000);
+    const int r = ::select(maxFd + 1, &readable, nullptr, nullptr, &tv);
+    return r < 0 ? 0 : r;
 }
 
 // Join an IPv4 multicast group so the bound socket receives datagrams sent to it (WLED audio sync multicasts to 239.0.0.1). INADDR_ANY as the interface lets lwip pick the default route's netif.

@@ -175,6 +175,7 @@
 #include <winhttp.h>    // https POST: Windows' own TLS, so the .exe needs no bundled library
 #else
 #include <sys/socket.h>
+#include <sys/select.h>   // select: a receive task's wait over its UDP sockets
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <netdb.h>      // getaddrinfo: hostname resolution for TcpConnection::connect
@@ -509,6 +510,13 @@ bool waitNotify(WorkerTask& t, uint32_t timeoutMs) {
     if (!got) return false;         // timed out with no notify/stop
     w->pending = false;             // consume the single-slot latch
     return true;                    // woken by a notify OR stop; the fn re-checks its stop flag
+}
+
+void sleepUs(WorkerTask& t, uint32_t us) {
+    auto* w = static_cast<DesktopWorker*>(t.impl);
+    if (!w) return;
+    std::unique_lock<std::mutex> lk(w->mtx);
+    w->cv.wait_for(lk, std::chrono::microseconds(us), [w] { return w->stop; });
 }
 
 void stopPinnedTask(WorkerTask& t) {
@@ -1785,6 +1793,9 @@ bool wifiStaInit(const char* ssid, const char* /*password*/) {
 static uint8_t testStaIp_[4] = {};
 void setTestWifiStaIPv4(const uint8_t* ip) { for (int i = 0; i < 4; i++) testStaIp_[i] = ip ? ip[i] : 0; }
 bool wifiStaConnected() MM_NONBLOCKING { return testStaIp_[0] || testStaIp_[1] || testStaIp_[2] || testStaIp_[3]; }
+static std::atomic<bool> testStaAssociated_{false};
+void setTestWifiStaAssociated(bool associated) { testStaAssociated_.store(associated, std::memory_order_relaxed); }
+bool wifiStaAssociated() MM_NONBLOCKING { return testStaAssociated_.load(std::memory_order_relaxed) || wifiStaConnected(); }
 void wifiStaGetIPv4(uint8_t out[4]) MM_NONBLOCKING { for (int i = 0; i < 4; i++) out[i] = testStaIp_[i]; }
 // Addressing is managed by the system here, so the setters reach only the test seams: a per-interface counter, and the faked cable's address.
 static std::atomic<uint32_t> testStaticApplies[2] = {};   // indexed by NetIface
@@ -1895,6 +1906,9 @@ bool resolveHost(const char* name, uint8_t ip[4]) {
     ::freeaddrinfo(res);
     return true;
 }
+
+// resolveHost runs on the resolver's worker task here, so this step answers Failed: it is reached only when that task could not be created.
+LookupStep resolveHostStep(const char*, uint8_t*) { return LookupStep::Failed; }
 // Advertising is a device concern, so these are stubs; discovery itself is datagram presence and runs here too, testable over real loopback.
 
 // No update partition here, and the route guards on the capability, so this stub exists for compile coverage only.
@@ -2134,6 +2148,28 @@ int UdpSocket::recvFrom(uint8_t* buf, size_t maxLen, uint8_t srcIp[4], uint16_t*
     if (srcIp) std::memcpy(srcIp, &src.sin_addr.s_addr, 4);   // network order = octets
     if (srcPort) *srcPort = ntohs(src.sin_port);
     return static_cast<int>(n);
+}
+
+// select() over the bound sockets, the textbook wait for a receive task; the render loop keeps polling recvFrom instead.
+int UdpSocket::waitReadable(UdpSocket* const* sockets, int count, uint32_t timeoutMs) {
+    fd_set readable;
+    FD_ZERO(&readable);
+    int maxFd = -1;
+    for (int i = 0; i < count; i++) {
+        if (!sockets[i] || sockets[i]->fd_ < 0) continue;
+#ifndef _WIN32
+        if (sockets[i]->fd_ >= FD_SETSIZE) continue;   // FD_SET past the set's size is undefined on POSIX
+#endif
+        FD_SET(sock(sockets[i]->fd_), &readable);
+        if (sockets[i]->fd_ > maxFd) maxFd = sockets[i]->fd_;
+    }
+    if (maxFd < 0) { delayMs(timeoutMs); return 0; }   // nothing open: wait out the period rather than spin
+    timeval tv{};
+    tv.tv_sec = static_cast<decltype(tv.tv_sec)>(timeoutMs / 1000);
+    tv.tv_usec = static_cast<decltype(tv.tv_usec)>((timeoutMs % 1000) * 1000);
+    const int r = ::select(maxFd + 1, &readable, nullptr, nullptr, &tv);
+    if (r < 0) { delayMs(timeoutMs); return 0; }   // an error must not spin the receive loop
+    return r;
 }
 
 // Test override forcing a multicast join to fail, since a test cannot take the host's network away.

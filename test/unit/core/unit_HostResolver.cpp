@@ -58,3 +58,45 @@ TEST_CASE("a host name that never resolves stays waiting, and costs no lookup un
     CHECK(mm::HostResolver::lookup("nowhere.lan", ip) == mm::HostResolver::State::Waiting);
     mm::platform::setTestNowMs(0);
 }
+
+namespace {
+/// A non-blocking lookup that answers after `gStepsToAnswer` steps, as a DNS reply arrives some loops later.
+int gSteps = 0;
+int gStepsToAnswer = 3;
+mm::platform::LookupStep fakeStep(const char* name, uint8_t* ip) {
+    if (++gSteps < gStepsToAnswer) return mm::platform::LookupStep::Pending;
+    gSteps = 0;
+    if (std::strcmp(name, "panel.lan") != 0) return mm::platform::LookupStep::Failed;
+    ip[0] = 10; ip[1] = 0; ip[2] = 0; ip[3] = 7;
+    return mm::platform::LookupStep::Resolved;
+}
+}  // namespace
+
+TEST_CASE("on a board with no worker task, the asking side looks a name up one non-blocking step per ask") {
+    const mm::HostResolver::LookupForTest resolver(&fakeStep);
+    gSteps = 0; gStepsToAnswer = 3;
+    mm::platform::setTestNowMs(1000);
+    uint8_t ip[4] = {};
+    CHECK(mm::HostResolver::lookup("panel.lan", ip) == mm::HostResolver::State::Waiting);   // queued
+    CHECK(mm::HostResolver::lookup("panel.lan", ip) == mm::HostResolver::State::Waiting);   // step 1: sent
+    CHECK(mm::HostResolver::lookup("panel.lan", ip) == mm::HostResolver::State::Waiting);   // step 2: no reply yet
+    CHECK(mm::HostResolver::lookup("panel.lan", ip) == mm::HostResolver::State::Resolved);  // step 3: the reply
+    CHECK(ip[3] == 7);
+    mm::platform::setTestNowMs(0);
+}
+
+TEST_CASE("on a board with no worker task, a name that fails is retried only once it is due") {
+    const mm::HostResolver::LookupForTest resolver(&fakeStep);
+    gSteps = 0; gStepsToAnswer = 1;
+    mm::platform::setTestNowMs(1000);
+    uint8_t ip[4] = {};
+    mm::HostResolver::lookup("nowhere.lan", ip);
+    mm::HostResolver::lookup("nowhere.lan", ip);   // looked up, failed
+    gSteps = 0; gStepsToAnswer = 100;              // a step now would count
+    mm::HostResolver::lookup("nowhere.lan", ip);
+    CHECK(gSteps == 0);                            // too soon to retry
+    mm::platform::setTestNowMs(7000);              // past the retry interval
+    mm::HostResolver::lookup("nowhere.lan", ip);
+    CHECK(gSteps == 1);
+    mm::platform::setTestNowMs(0);
+}

@@ -46,6 +46,17 @@ menu "MoonLight"
             MIDI service with no computer. Set by the S3 images with flash to spare
             (n8r8, n16r8); the 4 MB S3-Zero leaves it off.
 
+    config MM_AUDIO_CODEC
+        bool "Audio codecs in front of a microphone (ES8311, ES7210)"
+        default y if IDF_TARGET_ESP32P4 || IDF_TARGET_ESP32S31
+        default n
+        help
+            Pulls the esp_codec_dev managed component and compiles the codec
+            bring-up, for the boards whose microphone sits behind an ES8311 or
+            ES7210. On for the chips whose boards carry one (the S31 CoreBoard,
+            P4 boards) and set by the Waveshare ESP32-S3-RGB-Matrix's image; a
+            board with an I2S microphone such as the INMP441 needs no codec.
+
     config MM_SD_CARD
         bool "microSD card support (SDMMC or SPI)"
         default y

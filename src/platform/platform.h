@@ -157,6 +157,8 @@ bool spawnPinnedTask(WorkerTask& t, const char* name, WorkerFn fn, void* user,
 void notifyTask(WorkerTask& t);
 /// Block inside the spawned fn until notifyTask fires or `timeoutMs` elapses; false on timeout.
 bool waitNotify(WorkerTask& t, uint32_t timeoutMs);
+/// Block inside the spawned fn for `us` microseconds, finer than the scheduler tick and leaving the core free; a stop wakes it early.
+void sleepUs(WorkerTask& t, uint32_t us);
 /// Signal stop and wake, then block until the worker fn has returned and the task is torn down.
 void stopPinnedTask(WorkerTask& t);
 /// Subscribe THIS task to the watchdog, so a wedge reboots instead of hanging silently.
@@ -618,6 +620,8 @@ uint32_t ethRestartCountForTest();
 bool wifiStaInit(const char* ssid, const char* password);
 /// Whether the station is associated and holds an IP.
 bool wifiStaConnected() MM_NONBLOCKING;
+/// Whether the station has joined its network, with or without an address yet: WiFi's counterpart of ethLinkUp.
+bool wifiStaAssociated() MM_NONBLOCKING;
 /// The station's IP as raw octets, on ethGetIPv4's contract.
 void wifiStaGetIPv4(uint8_t out[4]) MM_NONBLOCKING;
 /// This device's IP from whichever interface is up, Ethernet first, all-zero before either is.
@@ -682,6 +686,8 @@ void netGetIPv4(NetIface iface, uint8_t ip[4], uint8_t gw[4], uint8_t mask[4], u
 #ifndef ESP_PLATFORM   // a host-test seam, which no ESP32 code calls
 /// Make wifiStaInit succeed, so a host test can drive the station cascade a radio-less desktop never enters.
 void setTestWifiStaAvailable(bool available);
+/// Make the station joined to its network while it waits for an address, for a host test.
+void setTestWifiStaAssociated(bool associated);
 #endif
 #ifndef ESP_PLATFORM   // a host-test seam, which no ESP32 code calls
 /// The network the station was last asked to join, so a host test sees the order the cascade tries them in.
@@ -748,6 +754,10 @@ void mdnsStop();
 void mdnsShutdown();
 /// Resolve a host name to its IPv4 address, `.local` by mDNS and any other by DNS; it blocks, so only a background task calls it.
 bool resolveHost(const char* name, uint8_t ip[4]);
+/// How far a non-blocking lookup has come.
+enum class LookupStep : uint8_t { Pending, Resolved, Failed };
+/// Start or continue resolving `name` without blocking, for a board with no worker task. One name at a time: a new name abandons the one in flight, and a start may allocate once.
+LookupStep resolveHostStep(const char* name, uint8_t ip[4]);
 
 /// Store the DHCP hostname the next bring-up advertises; call it before ethInit or wifiStaInit.
 void setHostname(const char* name);
@@ -841,6 +851,8 @@ public:
     // A datagram longer than `maxLen` is truncated; `srcIp` and `srcPort` also answer who sent it, which a reply is addressed to.
     /// Receive one datagram without blocking: bytes copied, or -1 when nothing is pending.
     int recvFrom(uint8_t* buf, size_t maxLen, uint8_t srcIp[4] = nullptr, uint16_t* srcPort = nullptr);
+    /// Block until any of `sockets` has a datagram waiting or `timeoutMs` passes: how many are readable, 0 on a timeout, -1 where a platform cannot wait.
+    static int waitReadable(UdpSocket* const* sockets, int count, uint32_t timeoutMs);
     /// Send once to an explicit address.
     bool sendToAddr(const uint8_t ip[4], uint16_t port, const uint8_t* data, size_t len);
     // Without the membership the OS never delivers those datagrams, however correct the port.
@@ -1305,7 +1317,7 @@ void hub75Deinit(Hub75Handle& h);
 // I2S audio input: two seams only, the read and the FFT, with everything between them domain code.
 
 /// Which codec sits in front of the microphone, none for a microphone that speaks I2S itself.
-enum class CodecType : uint8_t { None = 0, Es8311 = 1 };
+enum class CodecType : uint8_t { None = 0, Es8311 = 1, Es7210 = 2 };
 
 // The codec is a device on the board's I2C bus (i2cBusOpen), so only its address is its own; its master clock is the microphone's `mclkPin`.
 /// Configure the audio codec at this 7-bit address, where the board has one; true when there is nothing to do.

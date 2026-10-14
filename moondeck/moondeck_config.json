@@ -327,6 +327,16 @@
       "script": "scenario/run_network_roundtrip.py"
     },
     {
+      "id": "fseq_play",
+      "tab": "live",
+      "group": "scenario",
+      "label": "FSEQ Play",
+      "speed": "medium",
+      "help": "fseq_play",
+      "script": "run/fseq_play.py",
+      "needs_device": true
+    },
+    {
       "id": "preview_health",
       "tab": "live",
       "group": "scenario",

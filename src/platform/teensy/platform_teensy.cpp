@@ -9,6 +9,7 @@
 #include <QNEthernet.h>
 #include "qnethernet/qnethernet_dual_driver.h"
 #include <qnethernet/QNDNSClient.h>
+#include <qnethernet/util/ip_tools.h>
 #include <lwip/opt.h>
 
 #include <cerrno>
@@ -126,6 +127,7 @@ const char* renderTaskName() { return ""; }
 bool spawnPinnedTask(WorkerTask&, const char*, WorkerFn, void*, size_t, uint8_t, int) { return false; }
 void notifyTask(WorkerTask&) {}
 bool waitNotify(WorkerTask&, uint32_t) { return false; }
+void sleepUs(WorkerTask&, uint32_t) {}
 void stopPinnedTask(WorkerTask&) {}
 // --- Watchdog: WDOG1 on the one loop, which feeds it every tick --------------------------------
 
@@ -483,6 +485,47 @@ bool resolveHost(const char* name, uint8_t ip[4]) {
     return true;
 }
 
+namespace {
+enum class DnsState : uint8_t { Idle, InFlight, Found, Failed };
+// The one lookup in flight; lwIP answers it through the callback while Ethernet.loop runs in yield.
+struct DnsStep {
+    char name[64] = {};
+    DnsState state = DnsState::Idle;
+    uint8_t ip[4] = {};
+    uint32_t startMs = 0;
+    uint32_t generation = 0;   // tells an abandoned lookup's late answer from the current one
+};
+DnsStep g_dns;
+}  // namespace
+
+LookupStep resolveHostStep(const char* name, uint8_t ip[4]) {
+    // A lookup the lost connection carried is abandoned, so a reconnect starts afresh and its late answer is ignored.
+    if (!ethConnected()) {
+        if (g_dns.state != DnsState::Idle) { ++g_dns.generation; g_dns.state = DnsState::Idle; }
+        return LookupStep::Failed;
+    }
+    if (!name || std::strlen(name) >= sizeof(g_dns.name)) return LookupStep::Failed;
+    if (g_dns.state == DnsState::Idle || std::strcmp(g_dns.name, name) != 0) {
+        std::strcpy(g_dns.name, name);
+        const uint32_t generation = ++g_dns.generation;
+        g_dns.state = DnsState::InFlight;
+        g_dns.startMs = ::millis();
+        const bool started = DNSClient::getHostByName(g_dns.name, [generation](const ip_addr_t* found) {
+            if (generation != g_dns.generation) return;
+            if (found) copyIp(IPAddress(qindesign::network::util::ip_addr_get_ip4_uint32(found)), g_dns.ip);
+            g_dns.state = found ? DnsState::Found : DnsState::Failed;
+        }, kResolveTimeoutMs);
+        if (!started) g_dns.state = DnsState::Failed;
+    }
+    // QNEthernet drops an answer that arrives after the timeout without calling back, so the timeout is read here.
+    if (g_dns.state == DnsState::InFlight && ::millis() - g_dns.startMs >= kResolveTimeoutMs) g_dns.state = DnsState::Failed;
+    if (g_dns.state == DnsState::InFlight) return LookupStep::Pending;
+    const bool found = g_dns.state == DnsState::Found;
+    if (found) std::memcpy(ip, g_dns.ip, 4);
+    g_dns.state = DnsState::Idle;
+    return found ? LookupStep::Resolved : LookupStep::Failed;
+}
+
 // --- WiFi: none on a Teensy ---------------------------------------------------------------------
 
 void wifiStaGetIPv4(uint8_t out[4]) MM_NONBLOCKING { std::memset(out, 0, 4); }
@@ -565,6 +608,9 @@ bool UdpSocket::bind(uint16_t port, const uint8_t[4]) {
     degrade("udp: bind refused");
     return false;
 }
+
+// One loop and no tasks: the receive side polls recvFrom from the render loop, so there is nothing to wait in.
+int UdpSocket::waitReadable(UdpSocket* const*, int, uint32_t) { return -1; }
 
 int UdpSocket::recvFrom(uint8_t* buf, size_t maxLen, uint8_t srcIp[4], uint16_t* srcPort) {
     if (fd_ < 0) return -1;

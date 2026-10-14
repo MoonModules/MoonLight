@@ -1,17 +1,17 @@
-# Waveshare ESP32-P4-NANO — Ethernet-only build (IP101 PHY).
+# Waveshare ESP32-P4-NANO: Ethernet-only build (IP101 PHY).
 #   Board: https://www.waveshare.com/wiki/ESP32-P4-Nano-StartPage
 #   Schematic / pin map confirmed against the Waveshare wiki + the ESPHome
 #   device page (devices.esphome.io/devices/waveshare-esp32-p4-nano).
 #
 # Layered onto sdkconfig.defaults by moondeck/build/build_esp32.py.
 #
-# The RMII / PHY *pins* are NOT set here — they live in C (the per-target
+# The RMII / PHY *pins* are NOT set here: they live in C (the per-target
 # ethPins struct in src/platform/esp32/platform_config.h, read by ethInit),
 # so the pin map stays in one place. This fragment only enables the EMAC + the
 # RMII interface + flash / PSRAM / partition layout. (IP101 addr 1, MDC 31,
-# MDIO 52, reset 51, external RMII clock IN on GPIO 50 — see the struct.)
+# MDIO 52, reset 51, external RMII clock IN on GPIO 50; see the struct.)
 
-# Custom partition table — shared 16 MB layout (app0/app1 = 4 MB each, spiffs
+# Custom partition table: shared 16 MB layout (app0/app1 = 4 MB each, spiffs
 # ~7.9 MB). Chip-independent flash map; same file for classic-16mb and S3-N16R8.
 CONFIG_PARTITION_TABLE_CUSTOM=y
 CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions/ota_16mb.csv"
@@ -21,7 +21,7 @@ CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
 
 # Target the earlier P4 silicon (rev <3.0). The v6.1 IDF defaults the minimum P4
 # revision to v3.1 (ESP32P4_REV_MIN_301), which refuses to boot on the v0.x/v1.x
-# P4 chips already in the field (e.g. a v1.x P4-NANO) — the bootloader rejects the
+# P4 chips already in the field (e.g. a v1.x P4-NANO): the bootloader rejects the
 # chip at startup. IDF gates the sub-v3 revisions behind SELECTS_REV_LESS_V3
 # (rev <3.0 and >=3.0 are "huge hardware difference", so a binary targets one or
 # the other, not both); enable it, then pin the minimum to v0 to run on any
@@ -34,9 +34,9 @@ CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
 # supports revisions 0.0 through 1.99 and will refuse to boot on a v3.x chip. v3.x is what a
 # board bought today carries (Espressif calls v1.x "engineering samples" and does not recommend
 # it for new designs); this image exists for the v1.x boards already in the field and on our
-# bench, which is the only silicon we can test on. A v3.x board needs its own variant — those now
+# bench, which is the only silicon we can test on. A v3.x board needs its own variant; those now
 # exist as esp32p4rev3-eth and esp32p4rev3-eth-wifi (sdkconfig.defaults.esp32p4rev3 layers
-# the revision over this file) — not a flag flipped here.
+# the revision over this file), not a flag flipped here.
 CONFIG_ESP32P4_SELECTS_REV_LESS_V3=y
 CONFIG_ESP32P4_REV_MIN_0=y
 
@@ -45,17 +45,18 @@ CONFIG_ESP32P4_REV_MIN_0=y
 # later rounds but not relied on at boot.
 CONFIG_SPIRAM=y
 
-# Ethernet — on-chip EMAC + RMII. Pins are runtime config (ethConfig_ in C), not
+# Ethernet: on-chip EMAC + RMII. Pins are runtime config (ethConfig_ in C), not
 # sdkconfig. RMII is the EMAC's only interface and the IDF default, so no
-# CONFIG_ETH_PHY_INTERFACE_RMII (a non-existent symbol in IDF v6 — warned-on).
+# CONFIG_ETH_PHY_INTERFACE_RMII (a non-existent symbol in IDF v6, warned on).
 CONFIG_ETH_USE_ESP32_EMAC=y
-CONFIG_ETH_DMA_BUFFER_SIZE=512
-CONFIG_ETH_DMA_RX_BUFFER_NUM=10
+# A received frame is a burst of packets at wire speed (26 for 12,288 lights), which 10 buffers of 512 bytes, about 3 packets, cannot hold: 30 buffers of 1600 bytes hold a whole burst, measured P4 to P4 at 128x96 as 480 to 610 of 1040 packets/s against about 280 (scenario_NetworkReceive_two_boards). Transmit stays at 10, since 30 rebooted a sending P4 within seconds.
+CONFIG_ETH_DMA_BUFFER_SIZE=1600
+CONFIG_ETH_DMA_RX_BUFFER_NUM=30
 CONFIG_ETH_DMA_TX_BUFFER_NUM=10
 
 # MoonLive native codegen needs an executable heap (allocExec → MALLOC_CAP_EXEC). Like the
 # S3, the P4 has hardware memory protection (PMP) that IDF couples to disabling the exec
-# heap, so disable memprot to make MALLOC_CAP_EXEC available — the standard ESP32-JIT config.
+# heap, so disable memprot to make MALLOC_CAP_EXEC available, the standard ESP32-JIT config.
 # Safety for scripted code is the staged bounds/watchdog checks, not the hardware W^X wall.
 # (Same rationale as sdkconfig.defaults.esp32s3-n16r8.)
 CONFIG_ESP_SYSTEM_MEMPROT_FEATURE=n

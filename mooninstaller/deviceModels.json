@@ -792,10 +792,10 @@
       "WiFi",
       "I2C",
       "Buttons",
-      "SD card"
+      "SD card",
+      "Audio"
     ],
     "planned": [
-      "Microphone",
       "Speaker",
       "Accelerometer",
       "Temperature",
@@ -821,7 +821,13 @@
       "Effects": {
         "$patch": "replace",
         "Layer": {
-          "type": "Layer"
+          "type": "Layer",
+          "$patch": "replace",
+          "BeatRipples": {
+            "type": "BeatRipplesEffect",
+            "rain": 73,
+            "shine": 255
+          }
         }
       },
       "Drivers": {
@@ -834,6 +840,16 @@
       },
       "Services": {
         "$patch": "replace",
+        "Audio": {
+          "type": "AudioService",
+          "mode": 2,
+          "sckPin": 43,
+          "wsPin": 38,
+          "sdPin": 39,
+          "mclkPin": 12,
+          "codec": "ES7210",
+          "codecAddr": "0x40"
+        },
         "Buttons": {
           "type": "ButtonService",
           "buttons": [

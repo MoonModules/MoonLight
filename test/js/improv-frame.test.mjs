@@ -15,6 +15,11 @@ import {
     IMPROV_CMD_APPLY_OP,
     IMPROV_FRAME_TYPE_RPC,
     IMPROV_MAGIC,
+    IMPROV_FRAME_TYPE_ERROR,
+    IMPROV_FRAME_TYPE_RPC_RESULT,
+    IMPROV_ERROR_OP_REFUSED,
+    applyOpReply,
+    parseImprovFrames,
 } from "../../mooninstaller/improv-frame.js";
 
 const hex = (u8) => Array.from(u8).map((b) => b.toString(16).padStart(2, "0")).join(" ");
@@ -124,4 +129,46 @@ test("no catalog entry has a container document the device cannot reassemble (51
             assert.ok(new TextEncoder().encode(doc).length <= 512, `entry "${entry.name}": ${doc.slice(0, 40)} exceeds 512 bytes`);
         }
     }
+});
+
+const join = (...parts) => {
+    const out = new Uint8Array(parts.reduce((n, p) => n + p.length, 0));
+    let o = 0;
+    for (const p of parts) { out.set(p, o); o += p.length; }
+    return out;
+};
+const ack = () => buildImprovFrame(IMPROV_FRAME_TYPE_RPC_RESULT, new Uint8Array([IMPROV_CMD_APPLY_OP, 0]));
+const refusal = () => buildImprovFrame(IMPROV_FRAME_TYPE_ERROR, new Uint8Array([IMPROV_ERROR_OP_REFUSED]));
+
+test("a reply is found between lines of log text", () => {
+    const text = new TextEncoder().encode("I (123) tick 125 fps\n");
+    const { frames, rest } = parseImprovFrames(join(text, ack(), text));
+    assert.equal(frames.length, 1);
+    assert.equal(applyOpReply(frames[0]), "ack");
+    assert.ok(rest.length < IMPROV_MAGIC.length, "the log text after it is not kept");
+});
+
+test("a reply split across two reads is kept until it is whole", () => {
+    const frame = refusal();
+    const first = parseImprovFrames(frame.subarray(0, 7));
+    assert.equal(first.frames.length, 0);
+    const second = parseImprovFrames(join(first.rest, frame.subarray(7)));
+    assert.equal(second.frames.length, 1);
+    assert.equal(applyOpReply(second.frames[0]), "refused");
+});
+
+test("a frame whose checksum fails is skipped and the next one still read", () => {
+    const bad = ack();
+    bad[bad.length - 1] ^= 0xff;
+    const { frames } = parseImprovFrames(join(bad, refusal()));
+    assert.deepEqual(frames.map(applyOpReply), ["refused"]);
+});
+
+test("an APPLY_OP reply is an ack, a refusal to resend, or an operation the firmware lacks", () => {
+    assert.equal(applyOpReply({ type: IMPROV_FRAME_TYPE_ERROR, payload: new Uint8Array([0x03]) }), "refused", "an error left from a failed join is resent past");
+    assert.equal(applyOpReply({ type: IMPROV_FRAME_TYPE_RPC_RESULT, payload: new Uint8Array([IMPROV_CMD_APPLY_OP, 0]) }), "ack");
+    assert.equal(applyOpReply({ type: IMPROV_FRAME_TYPE_ERROR, payload: new Uint8Array([IMPROV_ERROR_OP_REFUSED]) }), "refused");
+    assert.equal(applyOpReply({ type: IMPROV_FRAME_TYPE_ERROR, payload: new Uint8Array([0x02]) }), "unsupported");
+    assert.equal(applyOpReply({ type: IMPROV_FRAME_TYPE_ERROR, payload: new Uint8Array([0x00]) }), null, "no error is no reply");
+    assert.equal(applyOpReply({ type: 0x01, payload: new Uint8Array([0x04]) }), null, "a state frame is not a reply");
 });

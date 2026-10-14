@@ -7,31 +7,21 @@
 
 namespace mm {
 
-/// The table mapping each logical light to the physical lights it drives.
-///
-/// A logical light can map to one physical light, to none, or to many.
-/// The sequential identity case needs no table at all and is the fast path.
+/// The table mapping each logical light to the physical lights it drives: one, none or many, with no table at all on the sequential identity fast path.
 ///
 /// @moreinfo
 ///
 /// ## Four mapping kinds
 ///
-/// Identity means the logical index is the physical index, which a plain grid gives.
-/// A shuffled map reorders, as a serpentine grid does.
-/// An unmapped logical light has no physical output, which a sparse layout produces.
-/// A multimap drives several physical lights from one logical light, which mirroring produces.
-/// The last three need a table.
+/// Identity (a plain grid) needs no table; a shuffled map (serpentine), an unmapped light (a sparse layout) and a multimap (mirroring) each need one.
 ///
 /// ## Compressed sparse row
 ///
-/// Two arrays: one indexes each logical light into a run, the other holds the flat destinations.
-/// The container supplies the total, so every destination is in bounds by construction.
+/// One array indexes each logical light into a run, the other holds the flat destinations, and the container supplies the total, so every destination is in bounds.
 ///
 /// ## Paged destinations
 ///
-/// A large map on a board without PSRAM can exceed the largest contiguous block while heap remains.
-/// The destinations then split into power-of-two pages that each fit a fragmented heap.
-/// Paging is the exception: output is identical either way, so it stays an allocation detail.
+/// A large map on a board without PSRAM can outgrow the largest free block, so the destinations split into power-of-two pages; the output is identical either way.
 class MappingLUT {
 public:
     /// An empty table, in identity mode until one is built.
@@ -121,7 +111,7 @@ public:
         overwrites_ = true;
     }
 
-    /// Whether a table is allocated, rather than the identity fast path.
+    /// Whether a table is allocated, rather than the identity fast path. @xref{four-mapping-kinds}
     bool hasLUT() const { return !identity_; }
     /// Whether the destinations are split into pages.
     bool isPaged() const { return paged_; }
@@ -149,7 +139,7 @@ public:
              + static_cast<size_t>(maxDest) * sizeof(nrOfLightsType);
     }
 
-    /// Walk the physical destinations of one logical light, on the hot path.
+    /// Walk the physical destinations of one logical light, on the hot path. @xref{compressed-sparse-row}
     template<typename F>
     void forEachDestination(nrOfLightsType logicalIdx, F&& callback) const {
         if (identity_) {
@@ -173,8 +163,15 @@ public:
         }
     }
 
+    /// One light's channels, the common three unrolled since it runs per light on a gather.
+    static void copyLight(uint8_t* d, const uint8_t* s, size_t cpl) MM_NONBLOCKING {
+        if (cpl == 3) { d[0] = s[0]; d[1] = s[1]; d[2] = s[2]; }
+        else std::memcpy(d, s, cpl);
+    }
+
 private:
-    // Tier the destinations allocation. Returns false only on tier 3.
+
+    // Tier the destinations allocation, false only on tier 3. @xref{paged-destinations}
     bool allocateDestinations(size_t destBytes, nrOfLightsType maxDestinations) {
         if (destBytes == 0) { paged_ = false; return true; }  // nothing to map
 

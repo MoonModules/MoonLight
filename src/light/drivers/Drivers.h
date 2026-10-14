@@ -552,6 +552,7 @@ public:
             outputBuffer_.free();
         }
         setDynamicBytes(outputBuffer_.bytes());
+        wiredLast_ = false;   // a reallocated output holds no frame yet
 
         // Decided from the alloc OUTCOME, so a board that cannot claim the buffer runs inline.
         const bool shouldSplit = splitWanted && outputBuffer_.data();
@@ -588,22 +589,10 @@ public:
         }
         // Resolved ONCE: both single-layer branches need it, and an if-init shadowed the outer one.
         Layer* srcLayer = effects_ ? effects_->firstEnabledLayer() : layer_;
-
-        if (outputBuffer_.data() && effects_ && effects_->enabledLayerCount() > 1) {
-            // The bottom layer overwrites; each one above blends per its own mode and opacity: @xref{the-shared-output-buffer}.
-            effects_->forEachEnabledLayer([&](Layer* L, bool first) {
-                BlendOp op = first ? BlendOp::Overwrite : L->blendOp();
-                uint8_t op_opacity = first ? 255 : L->opacity;
-                blendMap(L->buffer(), outputBuffer_, L->lut(), L->channelsPerLight(),
-                         op, op_opacity, /*clearFirst=*/first);
-            });
-        } else if (outputBuffer_.data() && srcLayer && srcLayer->lut().hasLUT()) {
-            // One layer with a LUT: map its logical buffer into physical space.
-            blendMap(srcLayer->buffer(), outputBuffer_, srcLayer->lut(), srcLayer->channelsPerLight());
-        } else if (renderSplitActive_ && outputBuffer_.data() && srcLayer) {
-            // Copied even in the identity case: core 1 must not read a buffer core 0 is mutating.
-            blendMap(srcLayer->buffer(), outputBuffer_, srcLayer->lut(), srcLayer->channelsPerLight());
-        }
+        // A frame already in wiring order, which goes to the output as it is: one copy, whatever the layout.
+        EffectBase* const wired = outputBuffer_.data() && srcLayer ? srcLayer->wiringSource() : nullptr;
+        composite(srcLayer, wired);
+        wiredLast_ = wired != nullptr;
         // A socket write still lands in lwIP on core 0, so core 1 builds and core 0 sends.
         if (renderSplitActive_) {
             encodeDone_.store(false, std::memory_order_release);
@@ -612,6 +601,29 @@ public:
         } else {
             MoonModule::tick();   // parent already composited; base ticks all children
         }
+    }
+
+    /// Fill the shared output from the layers: blended when several, a wiring-order frame as it is, else the one layer mapped. @xref{the-shared-output-buffer}
+    void composite(Layer* srcLayer, EffectBase* wired) MM_NONBLOCKING {
+        if (!outputBuffer_.data()) return;   // the drivers read the layer's buffer directly
+        if (effects_ && effects_->enabledLayerCount() > 1) {
+            // The bottom layer overwrites; each one above blends per its own mode and opacity.
+            effects_->forEachEnabledLayer([&](Layer* L, bool first) {
+                BlendOp op = first ? BlendOp::Overwrite : L->blendOp();
+                uint8_t op_opacity = first ? 255 : L->opacity;
+                blendMap(L->buffer(), outputBuffer_, L->lut(), L->channelsPerLight(),
+                         op, op_opacity, /*clearFirst=*/first);
+            });
+            return;
+        }
+        if (wired) {
+            // Whole the first time, since the output held the mapped frame or a fresh allocation.
+            wired->copyWiringFrame(outputBuffer_.data(), outputBuffer_.bytes(), !wiredLast_);
+            return;
+        }
+        // A mapped layer goes through its LUT; an identity one is copied only for the split, as core 1 must not read a buffer core 0 is mutating.
+        if (srcLayer && (srcLayer->lut().hasLUT() || renderSplitActive_))
+            blendMap(srcLayer->buffer(), outputBuffer_, srcLayer->lut(), srcLayer->channelsPerLight());
     }
 
     // This container picks the SIDE; core's one tickChildren loop still applies the rule.
@@ -638,6 +650,7 @@ private:
     std::atomic<bool> encodeStop_{false};  // stop flag the worker fn observes via a woken waitNotify
                                            // atomic, not volatile: volatile is no thread primitive
     bool renderSplitActive_ = false;   // the split is engaged (task spawned, boundary in effect)
+    bool wiredLast_ = false;   ///< the last frame went out as a wiring-order copy, so the output already holds it
     bool encodeStalled_ = false;       // a stall warning is showing, so recovery can clear it
     uint32_t renderWaitUs_ = 0;                 // last frame's core-0 wait at the boundary (the tick-line KPI)
     uint32_t renderWaitPeakUs_ = 0;             // worst wait in the current 1 s window (what the control shows)

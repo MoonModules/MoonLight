@@ -155,6 +155,27 @@ TEST_CASE("the station tries each known network in priority order before the acc
     mm::platform::setTestWifiStaAvailable(false);   // reset, so cases stay independent
 }
 
+// A router can take seconds to lease an address, so a joined station waits for the lease on top of the join's grace before the next network.
+TEST_CASE("a station that joined waits for its lease before the next network is tried") {
+    FrozenClock clock;
+    mm::platform::setTestWifiStaAvailable(true);
+    {
+        WiFiNetwork w;
+        w.wifi.remember("second", "pw2");
+        w.wifi.remember("first", "pw1");
+        w.net.setup();
+        mm::platform::setTestWifiStaAssociated(true);   // joined, no address yet
+        mm::platform::setTestNowMs(1000 + 11000);   // past the join's grace
+        w.net.tick1s();
+        CHECK(std::strcmp(mm::platform::testLastStaSsid(), "first") == 0);
+        mm::platform::setTestNowMs(1000 + 26000);   // past the lease's wait as well
+        w.net.tick1s();
+        CHECK(std::strcmp(mm::platform::testLastStaSsid(), "second") == 0);
+    }
+    mm::platform::setTestWifiStaAssociated(false);
+    mm::platform::setTestWifiStaAvailable(false);
+}
+
 namespace {
 mm::ListSource* availableOf(mm::WiFiModule& w) {
     for (uint8_t i = 0; i < w.controls().count(); i++)
@@ -414,14 +435,9 @@ TEST_CASE("editing the joined network's IP settings applies them live") {
 TEST_CASE("a switch back to DHCP waits for the lease rather than falling back to the access point") {
     FrozenClock clock;
     mm::platform::setTestWifiStaAvailable(true);
-    const uint8_t staIp[4] = {192, 168, 1, 30};
     const auto run = [&](uint32_t gapMs, bool stillOnStation) {
         WiFiNetwork w;
-        w.wifi.remember("home", "pw");
-        w.net.setup();
-        mm::platform::setTestWifiStaIPv4(staIp);
-        w.net.tick1s();
-        REQUIRE(std::string(modeOf(w.net)) == "WiFi STA");
+        joinHomeOverWifi(w);
         constexpr uint32_t kFirstRowId = 1;
         REQUIRE(w.wifi.setListRowField(kFirstRowId, "ipSettings", "{\"value\":1}"));
         REQUIRE(w.wifi.setListRowField(kFirstRowId, "ip", "{\"value\":\"192.168.1.240\"}"));
@@ -441,6 +457,29 @@ TEST_CASE("a switch back to DHCP waits for the lease rather than falling back to
     run(12000, true);    // past the dropout grace, inside the lease's window
     run(16000, false);   // a lease that never comes still ends in the fallback (Idle here, with no access point wired)
     mm::platform::setTestWifiStaIPv4(nullptr);
+    mm::platform::setTestWifiStaAvailable(false);
+}
+
+// A dropout the radio rejoins from still needs a lease, which gets the same wait rather than the access point opening on a station that is back.
+TEST_CASE("a station that rejoins after a dropout waits for its lease") {
+    FrozenClock clock;
+    mm::platform::setTestWifiStaAvailable(true);
+    const uint8_t staIp[4] = {192, 168, 1, 30};
+    {
+        WiFiNetwork w;
+        joinHomeOverWifi(w);
+        mm::platform::setTestWifiStaIPv4(nullptr);   // dropped
+        w.net.tick1s();
+        mm::platform::setTestWifiStaAssociated(true);   // rejoined, the lease pending
+        mm::platform::setTestNowMs(1000 + 12000);   // past the join's grace
+        w.net.tick1s();
+        CHECK(std::string(modeOf(w.net)) == "WiFi STA");
+        mm::platform::setTestWifiStaIPv4(staIp);
+        w.net.tick1s();
+        CHECK(std::string(modeOf(w.net)) == "WiFi STA");
+    }
+    mm::platform::setTestWifiStaIPv4(nullptr);
+    mm::platform::setTestWifiStaAssociated(false);
     mm::platform::setTestWifiStaAvailable(false);
 }
 

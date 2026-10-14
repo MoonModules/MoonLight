@@ -92,18 +92,19 @@
                WiFi boots into PROVISIONED and the installer can't speak
                Improv to it; erase first avoids that)
              - clean-slate testing
-           Costs ~12 s of chip-erase time before the flash starts. -->
+           Costs about 3 s of chip-erase time per MB of flash before the flash starts. -->
       <div class="erase-row" id="erase-row">
         <label>
           <input type="checkbox" id="erase-before-flash">
           Erase chip first
-          <span class="note erase-note">wipes saved WiFi + device, adds ~12 s. Tick when switching firmware variant, starting clean, or <strong>when a normal update fails</strong> or the device comes back without its settings: the partition layout can change between releases, and only an erase install applies the new one cleanly. Back up first (see below), restore after.</span>
+          <span class="note erase-note">wipes saved WiFi + device, adds about 3 s per MB of flash. Tick when switching firmware variant, starting clean, or <strong>when a normal update fails</strong> or the device comes back without its settings: the partition layout can change between releases, and only an erase install applies the new one cleanly. Back up first (see below), restore after.</span>
         </label>
         <label>
           <input type="checkbox" id="apply-device-defaults">
           Apply device defaults
           <span class="note erase-note">sets this device model's recommended modules/settings. Auto-ticks with erase; untick to keep your current config when re-flashing a configured device.</span>
         </label>
+        <button type="button" class="secondary" id="apply-defaults-now">Apply device defaults now, without flashing</button>
       </div>
 
       <!-- Device picker: a control-row consistent with USB Port / Release / Firmware
@@ -357,7 +358,7 @@
       <div class="install-section" id="section-flashing">
         <div class="install-status" id="flashing-status">Preparing to flash…</div>
         <div class="install-progress"><div class="install-progress-bar" id="flash-bar"></div></div>
-        <p class="note install-warn">Don't close this window or unplug the device until flash completes — interrupting mid-write leaves the chip in a half-flashed state that needs a full re-flash to recover.</p>
+        <p class="note install-warn">Don't close this window or unplug the device until flash completes: interrupting mid-write leaves the chip in a half-flashed state that needs a full re-flash to recover.</p>
       </div>
 
       <!-- WiFi-creds form: rendered LAZILY by buildWifiForm() the first time

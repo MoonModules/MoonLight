@@ -1331,16 +1331,37 @@ Detail: [technical](moxygen/DemoReelEffect.md)
 
 [Tests](../../reference/tests/unit-tests.md#demoreeleffect)
 
+<a id="fseqplayer"></a>
+
+### FseqPlayer 🎞️
+
+<img src="../../assets/light/effects/FseqPlayerEffect.gif" width="300" alt="The reference sweep fseq_play writes, the show an FSEQ player plays">
+
+An FSEQ show, xLights' and Falcon Player's frame-by-frame channel data, played from a file. It lands where a sender-mapped [Network Receive](#networkreceive) stream does, so alone on its layer it reaches the lights in one copy on any layout. It reads no file yet, and its status says so: playback is the next step.
+
+- `file`: the show's path, an `.fseq` file on flash or under `/sd`.
+- `loop`: start again at the end.
+- `speed`: the playback speed, in percent of the file's step time, up to 255.
+
+Origin: MoonLight original (FSEQ v2, as Falcon Player documents it)
+
+Detail: [technical](moxygen/FseqPlayerEffect.md)
+
+[Tests](../../reference/tests/unit-tests.md#fseqplayereffect)
+
 <a id="networkreceive"></a>
 
 ### NetworkReceive 📡🌙
 
 <img src="../../assets/light/effects/NetworkReceiveEffect.gif" width="300" alt="NetworkReceive effect preview">
 
-Receives lights over UDP and writes them into the layer: the receive side for Resolume, Madrix, xLights and LedFx.
+Receives lights over UDP into the layer, from Resolume, Madrix, xLights and LedFx. Sender mapping is one copy alone on its layer, else two mappings, as the status shows. Behind a correcting sender, keep the profile in byte order, brightness 255 and the linear curve.
 
 - `universe_start`: the first incoming universe to map, mirroring the sender.
 - `channels_per_universe`: bytes each universe maps to; 510 or 512.
+- `mapped_by`: **receiver** (sent row by row) or **sender** (in wiring order).
+- `packets_per_s`: packets received in the last second, read-only.
+- `frames_per_s`: frames received in the last second, read-only.
 
 Origin: MoonLight original (E1.31 / Art-Net receive)
 
@@ -1349,6 +1370,23 @@ Detail: [technical](moxygen/NetworkReceiveEffect.md)
 [Tests](../../reference/tests/unit-tests.md#networkreceiveeffect)
 
 Listens for Art-Net, E1.31 and DDP at once. The end-to-end pair with [Network Send](drivers.md).
+
+<a id="picture"></a>
+
+### Picture 🖼️ · 2D
+
+<img src="../../assets/light/effects/PictureEffect.gif" width="300" alt="Picture effect preview">
+
+The active [Picture service](../core/services.md#picture)'s picture, sampled onto the layer, so a picture of any size shows on a layout of any size. A modifier rotates, mirrors or tiles it like any effect.
+
+- `fit`: keep the aspect with bands (**fit**), cropped (**fill**), or **stretch**.
+- `sampling`: **point**, one pixel per light, or **area**, a linear-light mean.
+
+Origin: MoonLight original
+
+Detail: [technical](moxygen/PictureEffect.md)
+
+[Tests](../../reference/tests/unit-tests.md#pictureeffect)
 
 <a id="sine"></a>
 

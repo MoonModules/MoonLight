@@ -88,3 +88,40 @@ export function encodeApplyOpFrames(doc) {
     }
     return frames;
 }
+
+// The device's replies: an RPC result per acknowledged chunk, an error state when it refuses one.
+export const IMPROV_FRAME_TYPE_ERROR = 0x02;
+export const IMPROV_FRAME_TYPE_RPC_RESULT = 0x04;
+// The device is still applying the previous document, or a chunk arrived out of order: send the document again from its first chunk.
+export const IMPROV_ERROR_OP_REFUSED = 0x82;
+
+// The Improv frames in bytes that also carry log text: each whole frame whose checksum holds, and the bytes to keep for the next read (an incomplete frame, or the start of a magic).
+export function parseImprovFrames(bytes) {
+    const frames = [];
+    let i = 0;
+    for (;;) {
+        let p = i;
+        while (p + IMPROV_MAGIC.length <= bytes.length && !IMPROV_MAGIC.every((m, k) => bytes[p + k] === m)) p++;
+        if (p + IMPROV_MAGIC.length > bytes.length) return { frames, rest: bytes.slice(Math.max(i, bytes.length - IMPROV_MAGIC.length + 1)) };
+        if (p + 9 > bytes.length || p + 10 + bytes[p + 8] > bytes.length) return { frames, rest: bytes.slice(p) };
+        const len = bytes[p + 8];
+        let sum = 0;
+        for (let k = 0; k < 9 + len; k++) sum = (sum + bytes[p + k]) & 0xff;
+        if (sum === bytes[p + 9 + len]) {
+            frames.push({ type: bytes[p + 7], payload: bytes.slice(p + 9, p + 9 + len) });
+            i = p + 10 + len;
+        } else {
+            i = p + 1;   // a magic inside log text, or a damaged frame
+        }
+    }
+}
+
+// Improv's "unknown RPC command": firmware without the operation, the one error a resend cannot fix.
+export const IMPROV_ERROR_UNKNOWN_RPC = 0x02;
+
+// What a reply frame says about an APPLY_OP chunk: "ack", "unsupported" (firmware without the operation), "refused" for any other error (send again: the device is busy, or an error state left from provisioning arrived first), or null for any other frame.
+export function applyOpReply(frame) {
+    if (frame.type === IMPROV_FRAME_TYPE_RPC_RESULT && frame.payload[0] === IMPROV_CMD_APPLY_OP) return "ack";
+    if (frame.type !== IMPROV_FRAME_TYPE_ERROR || !frame.payload[0]) return null;
+    return frame.payload[0] === IMPROV_ERROR_UNKNOWN_RPC ? "unsupported" : "refused";
+}

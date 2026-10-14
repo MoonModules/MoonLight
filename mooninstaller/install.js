@@ -213,7 +213,14 @@ document.addEventListener('DOMContentLoaded', () => {
     // Mapping from orchestrator's progress stage → which modal section to
     // show + any per-stage detail rendering. Centralizes the UI ↔ flow
     // contract so the orchestrator stays UI-agnostic.
+    // The erase reports no progress, so its bar runs on the estimate of about 3 s per MB, held short of full until the write takes over.
+    let eraseTimer = null;
+    function stopEraseEstimate() {
+      if (eraseTimer) { clearInterval(eraseTimer); eraseTimer = null; }
+    }
+
     function handleProgress(stage, detail) {
+      stopEraseEstimate();
       switch (stage) {
         case "request-port":
           showSection("connecting");
@@ -243,19 +250,29 @@ document.addEventListener('DOMContentLoaded', () => {
           break;
         case "erase": {
           showSection("flashing");
-          document.getElementById("flashing-status").textContent =
-            "Erasing flash (this takes ~12 s)…";
-          // esptool-js's eraseFlash doesn't report progress — animate the
-          // bar so the user sees the page isn't hung. flash stage clears
-          // the class below and switches to determinate progress.
-          //
-          // Clear the inline width set by an earlier stage (fetch-firmware
-          // forces `style.width = "0%"`); inline style beats the CSS class's
-          // `width: 100%` rule, so the animation would run invisibly on a
-          // zero-width bar without this reset.
+          const status = document.getElementById("flashing-status");
           const bar = document.getElementById("flash-bar");
-          bar.style.width = "";
-          bar.classList.add("indeterminate");
+          if (detail && detail.mb) {
+            // An estimate, so the bar stops at 95% and the text says so once the time is up.
+            const estimateS = detail.mb * 3;
+            const start = Date.now();
+            const show = () => {
+              const elapsedS = (Date.now() - start) / 1000;
+              const left = Math.ceil(estimateS - elapsedS);
+              bar.style.width = `${Math.min(95, (elapsedS / estimateS) * 100)}%`;
+              status.textContent = left > 0
+                ? `Erasing ${detail.mb} MB of flash… about ${left} s left`
+                : `Erasing ${detail.mb} MB of flash… almost done`;
+            };
+            bar.classList.remove("indeterminate");
+            show();
+            eraseTimer = setInterval(show, 500);
+          } else {
+            // No size to estimate from: the marquee shows the page is alive. The inline width an earlier stage set would hide it, the inline style beating the class.
+            status.textContent = "Erasing flash (about 3 s per MB)…";
+            bar.style.width = "";
+            bar.classList.add("indeterminate");
+          }
           break;
         }
         case "flash": {
@@ -315,10 +332,21 @@ document.addEventListener('DOMContentLoaded', () => {
           // inside the field. Don't leave that sitting in the DOM longer
           // than the active install.
           passEl.value = "";
-          try {
-            const saved = localStorage.getItem("MoonLight.installer.lastSsid");
-            if (saved) ssidEl.value = saved;
-          } catch (_) { /* hostile storage */ }
+          // A network the board could not join comes back with the reason, its name kept for the password to be typed again.
+          const failedSsid = detail && detail.failedSsid;
+          const formStatus = document.getElementById("wifi-form-status");
+          formStatus.textContent = failedSsid
+            ? `The board could not join "${failedSsid}". Check the password, and that the network is 2.4 GHz, then connect again.`
+            : "Flash done. Enter your WiFi credentials to provision the device.";
+          formStatus.classList.toggle("error", !!failedSsid);
+          if (failedSsid) {
+            ssidEl.value = failedSsid;
+          } else {
+            try {
+              const saved = localStorage.getItem("MoonLight.installer.lastSsid");
+              if (saved) ssidEl.value = saved;
+            } catch (_) { /* hostile storage */ }
+          }
           requestAnimationFrame(() => (ssidEl.value ? passEl : ssidEl).focus());
           break;
         }
@@ -378,7 +406,7 @@ document.addEventListener('DOMContentLoaded', () => {
       _wifiFormBuilt = true;
       const section = document.getElementById("section-wifi-form");
       section.innerHTML = `
-        <div class="install-status">Flash done. Enter your WiFi credentials to provision the device.</div>
+        <div class="install-status" id="wifi-form-status"></div>
         <form id="wifi-form" class="install-form" onsubmit="return false">
           <label for="wifi-ssid">Network name (SSID)</label>
           <input type="text" id="wifi-ssid" autocomplete="off"
@@ -1174,6 +1202,35 @@ document.addEventListener('DOMContentLoaded', () => {
         eraseBox.addEventListener("change", () => { defaultsBox.checked = eraseBox.checked; });
       }
     })();
+
+    // The device model's defaults for a board that already runs MoonLight, over USB, for an install that skipped them.
+    document.getElementById("apply-defaults-now").addEventListener("click", async () => {
+      const device = installPicker.getSelectedDevice();
+      if (!device) { alert("Pick the device model first, under Device."); return; }
+      if (_monitor.port) await closeMonitor();
+      openModal(`Applying ${device} defaults`);
+      showSection("connecting");
+      document.getElementById("connecting-detail").textContent = "";
+      await installer.applyDefaultsOnly({
+        port: pickedPort,
+        device,
+        onProgress: handleProgress,
+        onSuccess: () => {
+          disarmUnloadGuard();
+          showSection("done");
+          document.getElementById("done-status").textContent = "Defaults applied";
+          const a = document.getElementById("done-url");
+          a.removeAttribute("href");
+          a.textContent = "";
+          document.getElementById("done-url-mdns").hidden = true;
+          const note = document.getElementById("done-defaults");
+          note.textContent = `Applied ${device} defaults. They take effect at once; no restart needed.`;
+          note.hidden = false;
+        },
+        onError: handleError,
+        onLog: appendLog,
+      });
+    });
 
     myDevices.init({
       container: document.getElementById("devices-mount"),

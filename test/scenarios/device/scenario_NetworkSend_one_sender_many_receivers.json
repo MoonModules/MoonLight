@@ -1,0 +1,676 @@
+{
+  "name": "scenario_NetworkSend_one_sender_many_receivers",
+  "module": "NetworkSendDriver",
+  "also": [
+    "NetworkReceiveEffect"
+  ],
+  "mode": "mutate",
+  "live_only": true,
+  "boards": [
+    "sender",
+    "receiver2"
+  ],
+  "description": "One sender, two receivers: Network Send splits a grid over this device and receiver2 by unicast DDP, then sends one stream both take, by Art-Net broadcast and E1.31 multicast. Each receiver reports Network Receive's tick and its packets and frames per second against the sender's frame rate.",
+  "top": [
+    "Layouts",
+    "Effects",
+    "Drivers"
+  ],
+  "steps": [
+    {
+      "name": "sender-clear-layouts",
+      "op": "apply_state",
+      "document": {
+        "Layouts": {
+          "$patch": "replace"
+        }
+      },
+      "description": "The sender's canvas: one grid, one layer with a changing effect, and a Network Send aimed at both receivers.",
+      "device": "sender"
+    },
+    {
+      "name": "sender-clear-effects",
+      "op": "apply_state",
+      "document": {
+        "Effects": {
+          "$patch": "replace"
+        }
+      },
+      "device": "sender"
+    },
+    {
+      "name": "sender-grid",
+      "op": "apply_state",
+      "document": {
+        "Layouts": {
+          "Grid": {
+            "type": "GridLayout",
+            "width": 64,
+            "height": 64
+          }
+        }
+      },
+      "device": "sender"
+    },
+    {
+      "name": "sender-layer",
+      "op": "apply_state",
+      "document": {
+        "Effects": {
+          "Layer": {
+            "type": "Layer",
+            "Rainbow": {
+              "type": "RainbowEffect"
+            }
+          }
+        }
+      },
+      "device": "sender"
+    },
+    {
+      "name": "sender-send",
+      "op": "apply_state",
+      "document": {
+        "Drivers": {
+          "Send": {
+            "type": "NetworkSendDriver",
+            "hosts": "{host},{receiver2}",
+            "protocol": 2,
+            "fps": 40
+          }
+        }
+      },
+      "device": "sender"
+    },
+    {
+      "name": "host-clear-layouts",
+      "op": "apply_state",
+      "document": {
+        "Layouts": {
+          "$patch": "replace"
+        }
+      },
+      "description": "A receiver's canvas: one grid and one layer holding Network Receive."
+    },
+    {
+      "name": "host-clear-effects",
+      "op": "apply_state",
+      "document": {
+        "Effects": {
+          "$patch": "replace"
+        }
+      }
+    },
+    {
+      "name": "host-grid",
+      "op": "apply_state",
+      "document": {
+        "Layouts": {
+          "Grid": {
+            "type": "GridLayout",
+            "width": 64,
+            "height": 32
+          }
+        }
+      }
+    },
+    {
+      "name": "host-layer",
+      "op": "apply_state",
+      "document": {
+        "Effects": {
+          "Layer": {
+            "type": "Layer",
+            "NetworkReceive": {
+              "type": "NetworkReceiveEffect"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "receiver2-clear-layouts",
+      "op": "apply_state",
+      "document": {
+        "Layouts": {
+          "$patch": "replace"
+        }
+      },
+      "description": "A receiver's canvas: one grid and one layer holding Network Receive.",
+      "device": "receiver2"
+    },
+    {
+      "name": "receiver2-clear-effects",
+      "op": "apply_state",
+      "document": {
+        "Effects": {
+          "$patch": "replace"
+        }
+      },
+      "device": "receiver2"
+    },
+    {
+      "name": "receiver2-grid",
+      "op": "apply_state",
+      "document": {
+        "Layouts": {
+          "Grid": {
+            "type": "GridLayout",
+            "width": 64,
+            "height": 32
+          }
+        }
+      },
+      "device": "receiver2"
+    },
+    {
+      "name": "receiver2-layer",
+      "op": "apply_state",
+      "document": {
+        "Effects": {
+          "Layer": {
+            "type": "Layer",
+            "NetworkReceive": {
+              "type": "NetworkReceiveEffect"
+            }
+          }
+        }
+      },
+      "device": "receiver2"
+    },
+    {
+      "name": "split-64x64-sender-width",
+      "op": "set_control",
+      "id": "Grid",
+      "key": "width",
+      "value": 64,
+      "device": "sender"
+    },
+    {
+      "name": "split-64x64-sender-height",
+      "op": "set_control",
+      "id": "Grid",
+      "key": "height",
+      "value": 64,
+      "device": "sender"
+    },
+    {
+      "name": "split-64x64-host-width",
+      "op": "set_control",
+      "id": "Grid",
+      "key": "width",
+      "value": 64
+    },
+    {
+      "name": "split-64x64-host-height",
+      "op": "set_control",
+      "id": "Grid",
+      "key": "height",
+      "value": 32
+    },
+    {
+      "name": "split-64x64-receiver2-width",
+      "op": "set_control",
+      "id": "Grid",
+      "key": "width",
+      "value": 64,
+      "device": "receiver2"
+    },
+    {
+      "name": "split-64x64-receiver2-height",
+      "op": "set_control",
+      "id": "Grid",
+      "key": "height",
+      "value": 32,
+      "device": "receiver2"
+    },
+    {
+      "name": "split-64x64-host",
+      "op": "measure",
+      "read": [
+        "sender:fps",
+        "NetworkReceive.tick",
+        "NetworkReceive.packets_per_s",
+        "NetworkReceive.frames_per_s"
+      ],
+      "description": "4096 lights split over two receivers by unicast DDP, 2048 each. Read on host.",
+      "observed": {
+        "host=esp32s3-n16r8 sender=esp32s3-n16r8 receiver2=esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 2838,
+            "p95": 2876,
+            "min": 2838,
+            "max": 2876,
+            "n": 2,
+            "samples": [2838, 2876]
+          },
+          "free_heap": {
+            "p50": 8441263,
+            "p95": 8443035,
+            "min": 8441263,
+            "max": 8443035,
+            "n": 2,
+            "samples": [8443035, 8441263]
+          },
+          "max_alloc_block": {
+            "p50": 47104,
+            "p95": 49152,
+            "min": 47104,
+            "max": 49152,
+            "n": 2,
+            "samples": [49152, 47104]
+          },
+          "last_updated": "2026-10-14"
+        }
+      }
+    },
+    {
+      "name": "split-64x64-receiver2",
+      "op": "measure",
+      "read": [
+        "sender:fps",
+        "NetworkReceive.tick",
+        "NetworkReceive.packets_per_s",
+        "NetworkReceive.frames_per_s"
+      ],
+      "description": "4096 lights split over two receivers by unicast DDP, 2048 each. Read on receiver2.",
+      "device": "receiver2",
+      "observed": {
+        "host=esp32s3-n16r8 sender=esp32s3-n16r8 receiver2=esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 81,
+            "p95": 82,
+            "min": 81,
+            "max": 82,
+            "n": 2,
+            "samples": [81, 82]
+          },
+          "free_heap": {
+            "p50": 33835503,
+            "p95": 33891567,
+            "min": 33835503,
+            "max": 33891567,
+            "n": 2,
+            "samples": [33891567, 33835503]
+          },
+          "max_alloc_block": {
+            "p50": 192512,
+            "p95": 245760,
+            "min": 192512,
+            "max": 245760,
+            "n": 2,
+            "samples": [245760, 192512]
+          },
+          "last_updated": "2026-10-14"
+        }
+      }
+    },
+    {
+      "name": "split-128x96-sender-width",
+      "op": "set_control",
+      "id": "Grid",
+      "key": "width",
+      "value": 128,
+      "device": "sender"
+    },
+    {
+      "name": "split-128x96-sender-height",
+      "op": "set_control",
+      "id": "Grid",
+      "key": "height",
+      "value": 96,
+      "device": "sender"
+    },
+    {
+      "name": "split-128x96-host-width",
+      "op": "set_control",
+      "id": "Grid",
+      "key": "width",
+      "value": 128
+    },
+    {
+      "name": "split-128x96-host-height",
+      "op": "set_control",
+      "id": "Grid",
+      "key": "height",
+      "value": 48
+    },
+    {
+      "name": "split-128x96-receiver2-width",
+      "op": "set_control",
+      "id": "Grid",
+      "key": "width",
+      "value": 128,
+      "device": "receiver2"
+    },
+    {
+      "name": "split-128x96-receiver2-height",
+      "op": "set_control",
+      "id": "Grid",
+      "key": "height",
+      "value": 48,
+      "device": "receiver2"
+    },
+    {
+      "name": "split-128x96-host",
+      "op": "measure",
+      "read": [
+        "sender:fps",
+        "NetworkReceive.tick",
+        "NetworkReceive.packets_per_s",
+        "NetworkReceive.frames_per_s"
+      ],
+      "description": "12288 lights split over two receivers by unicast DDP, 6144 each. Read on host.",
+      "observed": {
+        "host=esp32s3-n16r8 sender=esp32s3-n16r8 receiver2=esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 3847,
+            "p95": 3980,
+            "min": 3847,
+            "max": 3980,
+            "n": 2,
+            "samples": [3980, 3847]
+          },
+          "free_heap": {
+            "p50": 8384291,
+            "p95": 8394931,
+            "min": 8384291,
+            "max": 8394931,
+            "n": 2,
+            "samples": [8384291, 8394931]
+          },
+          "max_alloc_block": {
+            "p50": 43008,
+            "p95": 47104,
+            "min": 43008,
+            "max": 47104,
+            "n": 2,
+            "samples": [43008, 47104]
+          },
+          "last_updated": "2026-10-14"
+        }
+      }
+    },
+    {
+      "name": "split-128x96-receiver2",
+      "op": "measure",
+      "read": [
+        "sender:fps",
+        "NetworkReceive.tick",
+        "NetworkReceive.packets_per_s",
+        "NetworkReceive.frames_per_s"
+      ],
+      "description": "12288 lights split over two receivers by unicast DDP, 6144 each. Read on receiver2.",
+      "device": "receiver2",
+      "observed": {
+        "host=esp32s3-n16r8 sender=esp32s3-n16r8 receiver2=esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 134,
+            "p95": 135,
+            "min": 134,
+            "max": 135,
+            "n": 2,
+            "samples": [135, 134]
+          },
+          "free_heap": {
+            "p50": 33788263,
+            "p95": 33849055,
+            "min": 33788263,
+            "max": 33849055,
+            "n": 2,
+            "samples": [33849055, 33788263]
+          },
+          "max_alloc_block": {
+            "p50": 188416,
+            "p95": 253952,
+            "min": 188416,
+            "max": 253952,
+            "n": 2,
+            "samples": [253952, 188416]
+          },
+          "last_updated": "2026-10-14"
+        }
+      }
+    },
+    {
+      "name": "shared-sender-width",
+      "op": "set_control",
+      "id": "Grid",
+      "key": "width",
+      "value": 64,
+      "device": "sender"
+    },
+    {
+      "name": "shared-sender-height",
+      "op": "set_control",
+      "id": "Grid",
+      "key": "height",
+      "value": 64,
+      "device": "sender"
+    },
+    {
+      "name": "shared-host-width",
+      "op": "set_control",
+      "id": "Grid",
+      "key": "width",
+      "value": 64
+    },
+    {
+      "name": "shared-host-height",
+      "op": "set_control",
+      "id": "Grid",
+      "key": "height",
+      "value": 64
+    },
+    {
+      "name": "shared-receiver2-width",
+      "op": "set_control",
+      "id": "Grid",
+      "key": "width",
+      "value": 64,
+      "device": "receiver2"
+    },
+    {
+      "name": "shared-receiver2-height",
+      "op": "set_control",
+      "id": "Grid",
+      "key": "height",
+      "value": 64,
+      "device": "receiver2"
+    },
+    {
+      "name": "artnet-broadcast-protocol",
+      "op": "set_control",
+      "id": "Send",
+      "key": "protocol",
+      "value": 0,
+      "device": "sender"
+    },
+    {
+      "name": "artnet-broadcast-addressing",
+      "op": "set_control",
+      "id": "Send",
+      "key": "addressing",
+      "value": 1,
+      "device": "sender"
+    },
+    {
+      "name": "artnet-broadcast-host",
+      "op": "measure",
+      "read": [
+        "sender:fps",
+        "NetworkReceive.tick",
+        "NetworkReceive.packets_per_s",
+        "NetworkReceive.frames_per_s"
+      ],
+      "description": "4096 lights to both receivers in one stream, Art-Net broadcast. Read on host.",
+      "observed": {
+        "host=esp32s3-n16r8 sender=esp32s3-n16r8 receiver2=esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 3555,
+            "p95": 3630,
+            "min": 3555,
+            "max": 3630,
+            "n": 2,
+            "samples": [3630, 3555]
+          },
+          "free_heap": {
+            "p50": 8416775,
+            "p95": 8420143,
+            "min": 8416775,
+            "max": 8420143,
+            "n": 2,
+            "samples": [8420143, 8416775]
+          },
+          "max_alloc_block": {
+            "p50": 47104,
+            "p95": 49152,
+            "min": 47104,
+            "max": 49152,
+            "n": 2,
+            "samples": [49152, 47104]
+          },
+          "last_updated": "2026-10-14"
+        }
+      }
+    },
+    {
+      "name": "artnet-broadcast-receiver2",
+      "op": "measure",
+      "read": [
+        "sender:fps",
+        "NetworkReceive.tick",
+        "NetworkReceive.packets_per_s",
+        "NetworkReceive.frames_per_s"
+      ],
+      "description": "4096 lights to both receivers in one stream, Art-Net broadcast. Read on receiver2.",
+      "device": "receiver2",
+      "observed": {
+        "host=esp32s3-n16r8 sender=esp32s3-n16r8 receiver2=esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 108,
+            "p95": 108,
+            "min": 108,
+            "max": 108,
+            "n": 2,
+            "samples": [108, 108]
+          },
+          "free_heap": {
+            "p50": 33813155,
+            "p95": 33874251,
+            "min": 33813155,
+            "max": 33874251,
+            "n": 2,
+            "samples": [33874251, 33813155]
+          },
+          "max_alloc_block": {
+            "p50": 192512,
+            "p95": 253952,
+            "min": 192512,
+            "max": 253952,
+            "n": 2,
+            "samples": [253952, 192512]
+          },
+          "last_updated": "2026-10-14"
+        }
+      }
+    },
+    {
+      "name": "e131-multicast-protocol",
+      "op": "set_control",
+      "id": "Send",
+      "key": "protocol",
+      "value": 1,
+      "device": "sender"
+    },
+    {
+      "name": "e131-multicast-addressing",
+      "op": "set_control",
+      "id": "Send",
+      "key": "addressing",
+      "value": 1,
+      "device": "sender"
+    },
+    {
+      "name": "e131-multicast-host",
+      "op": "measure",
+      "read": [
+        "sender:fps",
+        "NetworkReceive.tick",
+        "NetworkReceive.packets_per_s",
+        "NetworkReceive.frames_per_s"
+      ],
+      "description": "4096 lights to both receivers in one stream, E1.31 multicast. Read on host.",
+      "observed": {
+        "host=esp32s3-n16r8 sender=esp32s3-n16r8 receiver2=esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 3206,
+            "p95": 3249,
+            "min": 3206,
+            "max": 3249,
+            "n": 2,
+            "samples": [3249, 3206]
+          },
+          "free_heap": {
+            "p50": 8419959,
+            "p95": 8420095,
+            "min": 8419959,
+            "max": 8420095,
+            "n": 2,
+            "samples": [8420095, 8419959]
+          },
+          "max_alloc_block": {
+            "p50": 47104,
+            "p95": 49152,
+            "min": 47104,
+            "max": 49152,
+            "n": 2,
+            "samples": [49152, 47104]
+          },
+          "last_updated": "2026-10-14"
+        }
+      }
+    },
+    {
+      "name": "e131-multicast-receiver2",
+      "op": "measure",
+      "read": [
+        "sender:fps",
+        "NetworkReceive.tick",
+        "NetworkReceive.packets_per_s",
+        "NetworkReceive.frames_per_s"
+      ],
+      "description": "4096 lights to both receivers in one stream, E1.31 multicast. Read on receiver2.",
+      "device": "receiver2",
+      "observed": {
+        "host=esp32s3-n16r8 sender=esp32s3-n16r8 receiver2=esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 100,
+            "p95": 100,
+            "min": 100,
+            "max": 100,
+            "n": 2,
+            "samples": [100, 100]
+          },
+          "free_heap": {
+            "p50": 33813251,
+            "p95": 33874679,
+            "min": 33813251,
+            "max": 33874679,
+            "n": 2,
+            "samples": [33874679, 33813251]
+          },
+          "max_alloc_block": {
+            "p50": 192512,
+            "p95": 253952,
+            "min": 192512,
+            "max": 253952,
+            "n": 2,
+            "samples": [253952, 192512]
+          },
+          "last_updated": "2026-10-14"
+        }
+      }
+    }
+  ]
+}

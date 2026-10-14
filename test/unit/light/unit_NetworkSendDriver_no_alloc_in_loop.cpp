@@ -3,7 +3,7 @@
 
 /// Pins the no-allocation-in-loop contract for NetworkSendDriver. The framework fires prepare (topology) and onCorrectionChanged (preset toggle) off the hot path; tick() must read the pre-sized buffer and never allocate.
 ///
-/// We can't observe a malloc from inside the test without an interceptor, so the contract is pinned indirectly: capture the corrected_ buffer's data pointer and size after a build-state, then assert they're already correct (the resize fired before any tick()) and that the buffer matches the source.
+/// A malloc cannot be seen without an interceptor, so the contract is pinned indirectly: after a build-state the corrected_ buffer's pointer and shape are already right, before any tick(), and stay so.
 
 #include "doctest.h"
 #include "light/drivers/NetworkSendDriver.h"
@@ -30,7 +30,7 @@ TEST_CASE("NetworkSendDriver sizes corrected_ in prepare, not in tick") {
     CHECK(driver.correctedBuffer().count() == 64);
     CHECK(driver.correctedBuffer().channelsPerLight() == 3);
 
-    // tick() must not reallocate, same backing pointer, same shape, on every protocol path (ArtNet, E1.31, DDP all share the pre-sized buffer and a stack packet). Virtual time advances past the fps limiter between protocols so each send path actually executes.
+    // tick() keeps the backing pointer and shape on every protocol path, all sharing the pre-sized buffer and the member packet; virtual time passes the fps limiter between protocols so each path sends.
     const uint8_t* dataBefore = driver.correctedBuffer().data();
     for (uint8_t p = 0; p < mm::NetworkSendDriver::kProtocolCount; p++) {
         mm::platform::setTestNowMs(1000u + 100u * p);

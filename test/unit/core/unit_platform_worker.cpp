@@ -1,6 +1,6 @@
 /// @module platform
 
-/// Pins the platform worker-task seam (spawnPinnedTask / notifyTask / waitNotify / stopPinnedTask) that the multicore render↔encode split is built on. On the host the seam is a std::thread + condition_variable, so these tests run the REAL producer/consumer handoff on a second thread, the same invariants the ESP32 core-1 encode task relies on, exercised where CI can catch a race (run the suite under TSan/ASan). No RTOS on the host, so the `core` pin is a no-op; the wake, the single-slot latch, the timeout, and the clean stop-drain are what's under test.
+/// Pins the worker-task seam the multicore render/encode split is built on. On the host the seam is a std::thread and a condition variable, so these tests run the real handoff where CI can catch a race. The host leaves the core to the operating system.
 
 #include "doctest.h"
 #include "platform/platform.h"
@@ -13,7 +13,7 @@
 using namespace std::chrono_literals;
 
 namespace {
-// A worker body that counts wakes until stopped. `wakes` is the consumer-visible proof each notify was delivered exactly once; `running` proves the fn actually started; the loop exits when a woken waitNotify returns while `stop` is set (the production shape: wake, re-check stop, drain, return).
+// A worker body counting wakes until stopped: `wakes` proves each notify landed once, `running` that the fn started; it exits when a wake finds `stop` set, the production shape.
 struct Counter {
     mm::platform::WorkerTask task;
     std::atomic<int> wakes{0};
@@ -73,7 +73,7 @@ TEST_CASE("worker seam: waitNotify times out and returns false when not notified
     mm::platform::stopPinnedTask(p.task);
 }
 
-TEST_CASE("worker seam: stopPinnedTask joins — the fn has returned before it returns") {
+TEST_CASE("worker seam: stopPinnedTask joins: the fn has returned before it returns") {
     // The stop must be a real join: after stopPinnedTask returns, the worker body is guaranteed done (so its buffers are safe to free, the render-split drain contract). A flag the body sets last proves it ran to completion before stop returned.
     struct Joiner {
         mm::platform::WorkerTask task;
@@ -92,8 +92,8 @@ TEST_CASE("worker seam: stopPinnedTask joins — the fn has returned before it r
 }
 
 // --- TryLock: the cross-core sender latch ---------------------------------------------------------
-// The WS sender has two producers on two cores once the split engages (core 0's drain + state push, core 1's offloaded PreviewDriver). TryLock is what excludes them. Try-only BY DESIGN: a caller on the render/encode thread must never block on a peer (hot-path rule), so the loser SKIPS its slot.
-// That constraint is what lets it be a plain atomic_flag test-and-set rather than an OS mutex.
+// The WS sender has two producers on two cores under the split, core 0's drain and core 1's PreviewDriver, and TryLock excludes them; try-only by design, so the loser skips its slot.
+// That constraint is what lets it be an atomic exchange on a flag rather than an OS mutex.
 
 TEST_CASE("TryLock: acquiring excludes a second acquirer, release re-opens it") {
     mm::TryLock lk;
