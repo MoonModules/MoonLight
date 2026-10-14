@@ -116,7 +116,8 @@ def main() -> None:
     p.add_argument("--height", type=int, default=64)
     p.add_argument("--serpentine", action="store_true", help="every other row reversed, as most panels are wired")
     p.add_argument("--frames", type=int, default=400)
-    p.add_argument("--step", type=int, default=25, help="milliseconds per frame")
+    p.add_argument("--step", type=int, default=25, choices=range(1, 256), metavar="1-255",
+                   help="milliseconds per frame, one byte in the header")
     a = p.parse_args()
 
     if a.info:

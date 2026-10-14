@@ -124,11 +124,14 @@ TEST_CASE("PictureEffect does not sample again without a new picture") {
     CHECK(buf[0] == 255);
 }
 
-// Without a Picture service the effect says what to add and leaves the layer alone.
-TEST_CASE("PictureEffect without a Picture service says so") {
+// Without a Picture service the effect says what to add and shows black rather than its last picture.
+TEST_CASE("PictureEffect without a Picture service says so and shows black") {
     PictureRig r(8, 3, 8, 3);
+    r.layer.tick();
+    REQUIRE(r.cell(0, 0)[0] == 255);   // the white bar, while the service publishes
     r.pic.release();
     r.layer.tick();
     REQUIRE(r.fx.status() != nullptr);
     CHECK(std::string(r.fx.status()) == "no picture: add a Picture service under Services");
+    CHECK(r.cell(0, 0)[0] == 0);
 }

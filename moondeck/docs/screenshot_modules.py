@@ -98,6 +98,15 @@ def asset_dir_for(type_name: str) -> Path:
 # The longest module name the device accepts: MoonModule's kNameLen less its terminator.
 MAX_NAME = 15
 
+
+def capture_name(type_name: str) -> str:
+    """The name a capture gives a module: its type without the role suffix, as the UI names one, cut to what the device accepts."""
+    for suffix in ("Effect", "Modifier", "Layout", "Driver", "Service", "Module"):
+        if type_name.endswith(suffix) and len(type_name) > len(suffix):
+            type_name = type_name[: -len(suffix)]
+            break
+    return type_name[:MAX_NAME]
+
 MODULES = [
     # Layouts
     ("GridLayout",          "Layouts",  {}, True),
@@ -348,6 +357,8 @@ def add_module(host: str, id_: str | None, type_: str, parent_id: str | None,
     # `props` is deliberately NOT sent: the create endpoint ignores it (no handler reads it), so a
     # caller that needs a control set gets it through /api/control after the module exists.
     r = _post(f"http://{host}/api/modules", json=body, timeout=5)
+    if r.status_code == 409 and id_:
+        return id_   # a retried create whose first attempt landed: the module is there under this name
     if not r.ok:
         return None
     named = r.json().get("name") if r.headers.get("content-type", "").startswith("application/json") else None
@@ -905,8 +916,8 @@ def main() -> int:
         if args.no_modifier or args.grid:
             prepare_pipeline(args.host, args.no_modifier, args.grid or None)
 
-        # Known name prefixes for orphan sweep (each type name as the device would cut it).
-        known_prefixes = {t[:MAX_NAME] for t, _, _, _ in MODULES}
+        # The names this tool gives its modules, so the orphan sweep removes only what a previous run left.
+        known_names = {capture_name(t) for t, _, _, _ in MODULES}
 
         # Sweep orphans from a previous aborted run. Per-delete try/except
         # so one failed cleanup doesn't abort the whole recursion; outer
@@ -918,7 +929,7 @@ def main() -> int:
                 def _sweep_orphans(modules: list) -> None:
                     for m in modules:
                         n = m.get("name", "")
-                        if any(n.startswith(p) for p in known_prefixes):
+                        if n in known_names:
                             try:
                                 # delete_module returns False on HTTP failure
                                 # (4xx/5xx) — log that the same way as a raised
@@ -1078,7 +1089,7 @@ def main() -> int:
 
                 parent_id = parents.get(parent_type)
                 nav_root = nav_roots.get(parent_type, "")
-                req_id = None   # the device names it, as the UI's add does
+                req_id = capture_name(type_name)
                 print(f"  {type_name} …", end=" ", flush=True)
 
                 # The bed effect, removed again below, so the pipeline holds exactly one effect
@@ -1188,7 +1199,7 @@ def main() -> int:
                         def _sweep(modules: list) -> None:
                             for m in modules:
                                 n = m.get("name", "")
-                                if any(n.startswith(p) for p in known_prefixes):
+                                if n in known_names:
                                     try:
                                         # Same False-return check as the
                                         # opening sweep — HTTP failure is

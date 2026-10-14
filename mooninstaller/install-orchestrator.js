@@ -170,6 +170,11 @@ function applyOpReplies(port) {
             }
             return queue.shift();
         },
+        // Discard every reply until `ms` pass quietly, so a late acknowledgement is not taken for the resent chunk's.
+        async drain(ms) {
+            queue.length = 0;
+            while ((await this.next(ms)) !== "timeout") { /* a reply to a chunk already given up on */ }
+        },
         async close() {
             try { await reader.cancel(); } catch (_) { /* ignore */ }
             try { reader.releaseLock(); } catch (_) { /* ignore */ }
@@ -192,11 +197,11 @@ async function sendApplyOpDocument(port, replies, doc, onLog) {
                 if (reply !== "ack") { again = true; break; }
             }
             if (!again) return true;
+            await replies.drain(500);   // a late acknowledgement would pair with the wrong chunk
             if (Date.now() > giveUp) {
                 if (onLog) onLog(`[orchestrator] no acknowledgement from the device within 10 s`);
                 return false;
             }
-            await new Promise(r => setTimeout(r, 100));
         }
     } finally {
         writer.releaseLock();

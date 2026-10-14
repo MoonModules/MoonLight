@@ -143,7 +143,7 @@ public:
 
     /// The palette index at a height: it wraps with height, so ripples a few hundred high walk the whole palette, and each stone moves the start along it.
     static uint8_t paletteIndex(int16_t height, uint32_t stones) {
-        return static_cast<uint8_t>(128 + static_cast<int32_t>(stones * 8u) + height / 8);
+        return static_cast<uint8_t>(128u + stones * 8u + static_cast<uint32_t>(height / 8));   // unsigned, so the wrap is modulo 256 by definition
     }
 
 private:

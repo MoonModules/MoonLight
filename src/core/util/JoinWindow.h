@@ -12,7 +12,7 @@ namespace mm {
 inline constexpr uint32_t kStaGraceMs = 10000;
 /// How long a lease may take: a live Ethernet link or a joined station without an address, or an interface re-leasing after a switch to DHCP.
 inline constexpr uint32_t kDhcpWaitMs = 15000;
-/// How long a station gets before the next network or the fallback: the join's grace, plus the lease's wait once it has joined, as Ethernet waits on a live link.
+/// How long a station gets before the next network or the fallback. A joined station adds the lease's wait to the join's grace, as Ethernet waits on a live link.
 inline constexpr uint32_t staWindowMs(bool associated) { return associated ? kStaGraceMs + kDhcpWaitMs : kStaGraceMs; }
 
 /// @}

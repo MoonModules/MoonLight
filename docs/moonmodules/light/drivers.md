@@ -133,7 +133,7 @@ Streams the buffer over UDP as **Art-Net**, **E1.31 / sACN** or **DDP**, its pac
 - `lightsPerHost`: lights per receiver. Blank splits evenly, one number to all, a list each.
 - `universe_start`: first universe for Art-Net / E1.31, restarting per receiver. DDP ignores it.
 - `fps`: frame-rate limit (default 50, 1 to 120).
-- `packet_gap`: µs between a frame's packets (default 500); 0 bursts, for wired receivers.
+- `packet_gap`: µs between a frame's packets (default 500); 0 sends the frame as one burst.
 
 [Tests](../../reference/tests/unit-tests.md#networksenddriver)
 

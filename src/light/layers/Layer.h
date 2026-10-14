@@ -339,10 +339,7 @@ public:
         return layers == 1;
     }
 
-    /// Whether static modifiers fold the box into the mapping, so its inverse would undo them.
-    bool foldsStatically() const { return staticCount_ > 0; }
-
-    /// Each logical cell's physical light by the layout's own positions, `kNoDriver` where none: a wiring-order frame placed this way lands before the static modifiers, which then transform it.
+    /// Each logical cell's physical light by the layout's own positions, `kNoDriver` where none: a wiring-order frame placed this way lands before the modifiers, which then transform it.
     void placeByLayout(nrOfLightsType* out, nrOfLightsType cells) const {
         for (nrOfLightsType c = 0; c < cells; c++) out[c] = kNoDriver;
         if (!layouts_) return;

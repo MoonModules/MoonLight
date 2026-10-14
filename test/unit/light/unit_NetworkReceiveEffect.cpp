@@ -8,6 +8,7 @@
 #include "light/layouts/GridLayout.h"
 #include "light/modifiers/MirrorModifier.h"
 #include "light/modifiers/TransposeModifier.h"
+#include "light/effects/SolidEffect.h"
 #include "platform/platform.h"
 
 #include <cstring>
@@ -390,6 +391,20 @@ size_t serpentineIndex(size_t x, size_t y, size_t z, size_t w, size_t h) {
     return z * w * h + y * w + (y % 2 ? w - 1 - x : x);
 }
 }  // namespace
+
+// Beside another effect a sender-mapped frame shares the layer's buffer, so it is placed on the grid by the layout's positions and mapped forward like any effect.
+TEST_CASE("a sender-mapped frame beside another effect still reaches each light as sent") {
+    mm::SolidEffect under;   // ticks first, so the received frame is the last word on every cell
+    OrderRig r(4, 4, 1, mm::NetworkReceiveEffect::kMappedBySender);
+    r.layer.removeChild(&r.fx);
+    r.layer.addChild(&under);
+    r.layer.addChild(&r.fx);
+    under.defineControls();
+    r.layer.applyState();
+    CHECK(r.layer.wiringSource() == nullptr);
+    r.sendNumbered(16);
+    r.checkLightsAsSent(16);
+}
 
 // A mirror on a sender-mapped stream mirrors the frame: each light shows what was sent for the light its position folds onto, rather than the mirror undoing itself.
 TEST_CASE("a mirror on a sender-mapped serpentine grid mirrors the frame") {

@@ -2157,6 +2157,9 @@ int UdpSocket::waitReadable(UdpSocket* const* sockets, int count, uint32_t timeo
     int maxFd = -1;
     for (int i = 0; i < count; i++) {
         if (!sockets[i] || sockets[i]->fd_ < 0) continue;
+#ifndef _WIN32
+        if (sockets[i]->fd_ >= FD_SETSIZE) continue;   // FD_SET past the set's size is undefined on POSIX
+#endif
         FD_SET(sock(sockets[i]->fd_), &readable);
         if (sockets[i]->fd_ > maxFd) maxFd = sockets[i]->fd_;
     }
@@ -2165,7 +2168,8 @@ int UdpSocket::waitReadable(UdpSocket* const* sockets, int count, uint32_t timeo
     tv.tv_sec = static_cast<decltype(tv.tv_sec)>(timeoutMs / 1000);
     tv.tv_usec = static_cast<decltype(tv.tv_usec)>((timeoutMs % 1000) * 1000);
     const int r = ::select(maxFd + 1, &readable, nullptr, nullptr, &tv);
-    return r < 0 ? 0 : r;
+    if (r < 0) { delayMs(timeoutMs); return 0; }   // an error must not spin the receive loop
+    return r;
 }
 
 // Test override forcing a multicast join to fail, since a test cannot take the host's network away.

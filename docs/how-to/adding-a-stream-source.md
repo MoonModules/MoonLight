@@ -77,7 +77,7 @@ private:
 The sink does the rest: it holds the last frame so the lights keep it between frames, skips a frame that did not change, and places it.
 A frame mapped by the receiver is copied into the layer, which applies this board's wiring.
 A frame mapped by the sender, alone on its layer, goes to the output as it is, one copy on any layout.
-Beside another effect it is mapped back to the grid, and under a modifier it is placed by the layout's positions, so the modifier transforms it.
+Beside another effect or under a modifier it is placed on the grid by the layout's positions, so a modifier transforms it.
 A source writing from a task of its own calls `write` there, which waits out at most one render copy; one that reads in `tick()` calls `write<false>`.
 
 **What a channel-data source brings:**

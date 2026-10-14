@@ -37,6 +37,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_task_wdt.h"   // the render loop and the encode worker each subscribe themselves so a wedge self-heals (reboot) not hangs
+#include "esp_log.h"         // sleepUs says once when it falls back to a scheduler tick
 #include "esp_timer.h"       // sleepUs: a one-shot timer wakes the task, finer than the scheduler tick
 
 #include <atomic>
@@ -59,6 +60,7 @@ struct EspWorker {
     std::atomic<bool> detached{false};
     /// The one-shot timer sleepUs arms, created on the task's first sleep and deleted as the task ends.
     esp_timer_handle_t sleepTimer = nullptr;
+    bool sleepFellBack = false;   ///< a timer failed once and the task slept a whole tick, logged that first time
 };
 
 // The trampoline: run the caller's function, which owns its own loop and returns once it sees the stop flag, then delete the task. The function manages its own watchdog membership, subscribing at loop start and unsubscribing before returning; one that never subscribes leaves the feed a no-op, so this stays generic.
@@ -106,6 +108,13 @@ bool waitNotify(WorkerTask& t, uint32_t timeoutMs) {
     return ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(timeoutMs)) != 0;
 }
 
+// Without a timer the task sleeps a whole scheduler tick, which stretches a paced frame tenfold, so the first time says so.
+static void sleepTick(EspWorker* w) {
+    if (!w->sleepFellBack) ESP_LOGW("mm_worker", "sleepUs: no timer, sleeping a scheduler tick per gap");
+    w->sleepFellBack = true;
+    vTaskDelay(1);
+}
+
 // A one-shot esp_timer notifies the task, so a gap below the 10 ms scheduler tick costs no busy-wait; a stop's notification ends it early, as it should.
 void sleepUs(WorkerTask& t, uint32_t us) {
     auto* w = static_cast<EspWorker*>(t.impl);
@@ -114,9 +123,9 @@ void sleepUs(WorkerTask& t, uint32_t us) {
         const esp_timer_create_args_t args = {
             .callback = [](void* arg) { xTaskNotifyGive(static_cast<EspWorker*>(arg)->handle); },
             .arg = w, .dispatch_method = ESP_TIMER_TASK, .name = "sleepUs", .skip_unhandled_events = true};
-        if (esp_timer_create(&args, &w->sleepTimer) != ESP_OK) { w->sleepTimer = nullptr; vTaskDelay(1); return; }
+        if (esp_timer_create(&args, &w->sleepTimer) != ESP_OK) { w->sleepTimer = nullptr; sleepTick(w); return; }
     }
-    if (esp_timer_start_once(w->sleepTimer, us) != ESP_OK) { vTaskDelay(1); return; }
+    if (esp_timer_start_once(w->sleepTimer, us) != ESP_OK) { sleepTick(w); return; }
     ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(us / 1000 + 20));   // bounded, so a lost wake costs one gap and no hang
     esp_timer_stop(w->sleepTimer);   // a stop that woke it early leaves the timer armed
 }

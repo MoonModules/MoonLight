@@ -822,6 +822,7 @@
         "$patch": "replace",
         "Layer": {
           "type": "Layer",
+          "$patch": "replace",
           "BeatRipples": {
             "type": "BeatRipplesEffect",
             "rain": 73,

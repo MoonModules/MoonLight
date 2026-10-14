@@ -163,40 +163,6 @@ public:
         }
     }
 
-    /// Write a wiring-order frame into the logical buffer, inverting this mapping: each cell takes its first physical light's value; identity is one copy.
-    void gatherFromPhysical(uint8_t* logical, size_t logicalBytes, const uint8_t* physical, size_t physicalBytes,
-                            uint8_t channelsPerLight) const {
-        if (identity_) {
-            std::memcpy(logical, physical, logicalBytes < physicalBytes ? logicalBytes : physicalBytes);
-            return;
-        }
-        if (!offsets_ || channelsPerLight == 0) return;
-        if (paged_) gatherWalk(logical, logicalBytes, physical, physicalBytes, channelsPerLight,
-                               [this](nrOfLightsType s) { return pages_[s >> kPageShift][s & kPageMask]; });
-        else gatherWalk(logical, logicalBytes, physical, physicalBytes, channelsPerLight,
-                        [this](nrOfLightsType s) { return destinations_[s]; });
-    }
-
-private:
-    /// The gather loop, one instance per storage tier so the page test leaves the loop; each offset is read once.
-    template <class Dest>
-    void gatherWalk(uint8_t* logical, size_t logicalBytes, const uint8_t* physical, size_t physicalBytes,
-                    uint8_t channelsPerLight, Dest dest) const {
-        const size_t cpl = channelsPerLight;
-        const size_t physLights = physicalBytes / cpl;
-        const size_t cells = logicalBytes / cpl < logicalCount_ ? logicalBytes / cpl : logicalCount_;
-        nrOfLightsType start = offsets_[0];
-        for (size_t li = 0; li < cells; li++) {
-            const nrOfLightsType here = start;
-            start = offsets_[li + 1];
-            if (here == start) continue;   // a cell no light shows keeps its value
-            const size_t first = dest(here);
-            if (first >= physLights) continue;
-            copyLight(logical + li * cpl, physical + first * cpl, cpl);
-        }
-    }
-
-public:
     /// One light's channels, the common three unrolled since it runs per light on a gather.
     static void copyLight(uint8_t* d, const uint8_t* s, size_t cpl) MM_NONBLOCKING {
         if (cpl == 3) { d[0] = s[0]; d[1] = s[1]; d[2] = s[2]; }

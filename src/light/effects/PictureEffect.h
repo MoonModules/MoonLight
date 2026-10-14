@@ -35,8 +35,8 @@ public:
         controls_.addSelect("fit", fit, kFits, kFitCount);
         controls_.addSelect("sampling", sampling, kSamplings, kSamplingCount);
     }
-    /// The placement changes the ranges, so it refills them.
-    bool affectsPrepare(const char* name) const override { return std::strcmp(name, "fit") == 0; }
+    /// The placement changes the ranges and the sampling the picture drawn, so both redraw.
+    bool affectsPrepare(const char* name) const override { return std::strcmp(name, "fit") == 0 || std::strcmp(name, "sampling") == 0; }
 
     /// Size the range tables to the grid; the first picture fills them.
     void prepare() override {

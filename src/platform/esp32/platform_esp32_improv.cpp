@@ -383,7 +383,8 @@ static void improvTask(void* /*arg*/) {
                      esp_err_to_name(jtag_err));
         }
     } else {
-        // Someone else already installed it (rare). We can still read + write through it.
+        // Someone else already installed it (rare). We read and write through it, and the console must too.
+        usb_serial_jtag_vfs_use_driver();
         g_jtagReady = true;
     }
 #endif

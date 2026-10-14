@@ -1,9 +1,9 @@
 {
-  "commit": "4d3ed5b6",
+  "commit": "f487420a",
   "flash": {
-    "esp32s3-n16r8": 2453120,
-    "esp32": 2258768,
-    "esp32p4rev1-eth": 2396736,
+    "esp32s3-n16r8": 2452928,
+    "esp32": 2258576,
+    "esp32p4rev1-eth": 2396368,
     "esp32p4rev1-eth-wifi": 2623840,
     "esp32s3-n8r8": 2437792,
     "esp32s31": 2744032,
@@ -14,11 +14,11 @@
     "esp32p4rev3-eth": 2231792,
     "esp32s3-zero": 2224816,
     "esp32-pico": 2107168,
-    "desktop-macos": 2382184,
+    "desktop-macos": 2382040,
     "desktop-windows": 1925120,
     "esp32c3": 2335072,
     "desktop-linux": 2548000,
-    "esp32s3-n32r16": 2474800,
+    "esp32s3-n32r16": 2475808,
     "teensy41": 1271788
   },
   "measured": {
@@ -50,7 +50,7 @@
       "Control_a_palette_preset_changes_only_the_palette": {
         "desktop-macos": {
           "p50": 8,
-          "p95": 13,
+          "p95": 14,
           "n": 32,
           "last": "2026-10-14"
         },
@@ -128,7 +128,7 @@
       "State_one_document_adds_an_effect_with_its_controls": {
         "desktop-macos": {
           "p50": 7,
-          "p95": 9,
+          "p95": 8,
           "n": 32,
           "last": "2026-10-14"
         },
@@ -592,7 +592,7 @@
       "Drivers_output_and_brightness": {
         "desktop-macos": {
           "p50": 7,
-          "p95": 15,
+          "p95": 9,
           "n": 32,
           "last": "2026-10-14"
         },
@@ -624,7 +624,7 @@
       "Effects_pipeline_builds_and_renders": {
         "desktop-macos": {
           "p50": 7,
-          "p95": 9,
+          "p95": 10,
           "n": 32,
           "last": "2026-10-14"
         },
@@ -638,7 +638,7 @@
       "Effects_swap_while_running": {
         "desktop-macos": {
           "p50": 1,
-          "p95": 2,
+          "p95": 1,
           "n": 32,
           "last": "2026-10-14"
         },
@@ -670,7 +670,7 @@
       "Effects_teardown_under_a_running_pipeline": {
         "desktop-macos": {
           "p50": 8,
-          "p95": 18,
+          "p95": 15,
           "n": 32,
           "last": "2026-10-14"
         },
@@ -702,7 +702,7 @@
       "Layers_stack_and_blend_live": {
         "desktop-macos": {
           "p50": 267,
-          "p95": 355,
+          "p95": 309,
           "n": 32,
           "last": "2026-10-14"
         }
@@ -742,7 +742,7 @@
       "Modifiers_reshape_the_mapping": {
         "desktop-macos": {
           "p50": 7,
-          "p95": 11,
+          "p95": 10,
           "n": 32,
           "last": "2026-10-14"
         },
@@ -774,19 +774,19 @@
       "Palettes_a_script_drives_the_effects": {
         "desktop-macos": {
           "p50": 7,
-          "p95": 12,
+          "p95": 11,
           "n": 32,
           "last": "2026-10-14"
         }
       }
     },
     "desktop-macos": {
-      "tick_us": 6,
-      "fps": 166666,
+      "tick_us": 7,
+      "fps": 142857,
       "scenario_p50": {
         "Effects_pipeline_builds_and_renders": {
           "p50": 7,
-          "p95": 9,
+          "p95": 10,
           "n": 32,
           "last": "2026-10-14"
         },
@@ -823,11 +823,11 @@
   },
   "loc": {
     "core": 30403,
-    "light": 31915,
-    "platform": 21621,
+    "light": 31876,
+    "platform": 21635,
     "ui": 12473,
-    "test": 68310,
-    "moondeck": 31595
+    "test": 68328,
+    "moondeck": 31610
   },
   "comments": {
     "core": {
@@ -835,11 +835,11 @@
       "ratio": 0.236
     },
     "light": {
-      "lines": 7599,
-      "ratio": 0.267
+      "lines": 7597,
+      "ratio": 0.268
     },
     "platform": {
-      "lines": 4171,
+      "lines": 4172,
       "ratio": 0.216
     },
     "ui": {
@@ -847,28 +847,28 @@
       "ratio": 0.295
     },
     "test": {
-      "lines": 7192,
+      "lines": 7193,
       "ratio": 0.122
     },
     "moondeck": {
-      "lines": 4941,
+      "lines": 4942,
       "ratio": 0.178
     }
   },
   "tests": {
-    "cases": 2554,
+    "cases": 2555,
     "scenarios": 32
   },
   "docs": {
     "md_files": 161,
-    "md_lines": 34201,
+    "md_lines": 34209,
     "plans_files": 50,
     "backlog_lines": 3393,
     "lessons_lines": 532,
     "claude_md_lines": 287
   },
   "complexity": {
-    "functions": 5090,
+    "functions": 5087,
     "over_threshold": 353,
     "worst_ccn": 128
   }

@@ -28,9 +28,12 @@ def device_ips_for_port(port):
         state = json.loads(_STATE.read_text(encoding="utf-8"))
         active = next((n for n in (state.get("networks") or [])
                        if n.get("name") == state.get("active_network")), None)
-        return [d["ip"] for d in (active or {}).get("devices", [])
-                if d.get("ip") and ":" not in d["ip"]
-                and Path(d.get("last_port") or "").name.replace("tty.", "cu.", 1) == key][:1]
+        matches = [d for d in (active or {}).get("devices", [])
+                   if d.get("ip") and ":" not in d["ip"]
+                   and Path(d.get("last_port") or "").name.replace("tty.", "cu.", 1) == key]
+        # A port reused by a new board can leave the old one's record behind, offline: the online board is the one on the port.
+        matches.sort(key=lambda d: not d.get("online"))
+        return [d["ip"] for d in matches[:1]]
     except Exception:
         return []
 

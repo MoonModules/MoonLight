@@ -1,6 +1,6 @@
 /// @module platform
 
-/// Pins the worker-task seam the multicore render/encode split is built on. On the host the seam is a std::thread and a condition variable, so these tests run the real handoff where CI can catch a race. The core pin is a no-op there.
+/// Pins the worker-task seam the multicore render/encode split is built on. On the host the seam is a std::thread and a condition variable, so these tests run the real handoff where CI can catch a race. The host leaves the core to the operating system.
 
 #include "doctest.h"
 #include "platform/platform.h"

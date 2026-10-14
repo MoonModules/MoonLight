@@ -72,17 +72,12 @@ def _run(script: Path, args: list[str], timeout: float) -> tuple[int, str, str]:
         return 124, "", f"timeout after {timeout}s"
 
 
-def _device_url_from_provision_output(out: str) -> str | None:
-    """Extract `==> provisioned: http://...` URL from improv_provision.py stdout.
-
-    The line shape is set by improv_provision.py at the success exit;
-    pinning that contract here would make sense as a test, but for now we
-    just string-match. If the format changes, the reachability check
-    silently skips with a clearer message than a regex fail."""
+def _device_url(out: str) -> str | None:
+    """The device URL in a step's output: `==> provisioned: http://...` from improv_provision.py, or `url: http://...` from the probe's current state."""
     for line in out.splitlines():
         line = line.strip()
-        if line.startswith("==> provisioned:"):
-            return line.split(":", 1)[1].strip()
+        if line.startswith(("==> provisioned:", "url:")):
+            return line.split(":", 1)[1].strip() or None
     return None
 
 
@@ -163,6 +158,7 @@ def main() -> int:
                         ["--port", args.port, "--timeout", str(args.probe_timeout)],
                         timeout=args.probe_timeout + 5)
     sys.stdout.write(_indent(out))
+    probe_url = _device_url(out)   # a provisioned board reports it, so the network step runs when provisioning keeps its credentials
     if err.strip():
         sys.stderr.write(_indent(err))
     if rc != 0:
@@ -187,7 +183,7 @@ def main() -> int:
         return finish(1)
     summary["provision"] = True
 
-    url = _device_url_from_provision_output(out)
+    url = _device_url(out) or probe_url
     summary["device_url"] = url
 
     # ----- Step 3: reachable (optional) -----------------------------------
@@ -195,11 +191,8 @@ def main() -> int:
         print("==> [3/3] network   skipped (--no-network)")
         return finish(0)
     if not url:
-        # Provisioning succeeded but we couldn't parse the URL from the
-        # output — older firmware variants may not report the URL line.
-        # Don't fail (device IS provisioned), but skip the reachability
-        # check with a clear message.
-        print("==> [3/3] network   skipped (no device URL in provision output)")
+        # Neither step reported a URL; the device is provisioned, so the reachability check is skipped with the reason.
+        print("==> [3/3] network   skipped (no device URL in the probe or provision output)")
         summary["failure"] = "provision succeeded but device URL not parseable from output"
         return finish(0)
 

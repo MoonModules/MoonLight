@@ -289,7 +289,7 @@ What MoonLight builds first, so that every contribution after it is one source i
 
 | # | Piece | Where | What it does |
 |---|---|---|---|
-| G1 | **Light-list placement** ✅ built | `MappingLUT::gatherFromPhysical` | the mapping's own inverse, needing no table of its own: each logical cell takes the value its first physical light was sent, read from the CSR runs the layer already builds; one copy on the identity path ; it inverts the whole mapping today, modifiers included, so a mirror or a rotation on a sender-mapped stream cancels instead of applying: G5 inverts the layout's mapping alone, accepted on a rotated layer |
+| G1 | **Light-list placement** ✅ built | `Layer::placeByLayout`, `ChannelDataSink` | each logical cell takes the light the layout places at its position, from a table built at prepare, only when the frame shares its layer or sits under a modifier; on an identity mapping it is one copy, and alone on its layer G5 sends it to the output as it is; it replaced the mapping's inverse (G1's first form), whose static modifiers cancelled |
 | G2 | **Network Receive's `mapped_by`** ✅ built | `NetworkReceiveEffect` | `receiver` as before (the default), `sender` through G1, the status saying "one copy" or "mapped twice"; tests pin a serpentine grid and a 3D layout, which reversed every other row before; on the S3 at 12,288 lights a serpentine layout costs 4.5 ms per frame against 1.1 ms for receiver mapping, an identity layout the same as receiver mapping |
 | G3 | **The picture source** ✅ built | a core service, from #138's `VideoService` | the descriptor, publishing in `AudioService`'s pattern, a test pattern as its only source |
 | G4 | **The picture effect** ✅ built | a light effect, from #138's sampler | point or area sampling in linear light, fit or stretch, a table at prepare and one gather per frame |
@@ -315,7 +315,7 @@ Each later piece is a small pull request, one topic, based on current main, with
 | Browser pages: converter, baking to FSEQ | open | G1 to G4, G8 |
 | Recording, HDMI out on the ESP32-P4-PC, clock sync | open | FSEQ playback |
 
-#138 and #139 close with thanks once G3 and G4 land, their good parts credited in the groundwork; a stacked pull request waits for the one below it, as [CLAUDE.md](../../../CLAUDE.md) says.
+Pull requests #138 and #139 close with thanks once G3 and G4 land, their good parts credited in the groundwork; a stacked pull request waits for the one below it, as [CLAUDE.md](../../../CLAUDE.md) says.
 
 ## Skeletons for the contributions
 
@@ -380,7 +380,7 @@ Tests: a trim scaling one channel and leaving the others; a trim of 255 being th
 
 ## Where it stands (2026-10-14)
 
-Built and uncommitted: G1, G2 (`mapped_by`) and G5, and around them what measuring Network Receive on real boards turned up.
+Built on this branch: G1 to G7, and around them what measuring Network Receive on real boards turned up.
 
 <img src="../../assets/light/effects/NetworkReceiveEffect.png" width="404" alt="Network Receive receiving a sender-mapped stream in one copy">
 
@@ -401,7 +401,7 @@ Received at 12,288 lights, 40 frames/s sent (1,040 packets/s), mapped by the rec
 | S3 WiFi to P4 Ethernet | 984 | 32 | 0.3 ms |
 | P4 Ethernet to P4 Ethernet | 790 to 846 | 8 to 19 | 0.8 ms |
 
-P4 to P4 started the day at about 200 packets/s and 0 to 1 frames. What remains is the sender's burst: the access point drops it on WiFi, and on Ethernet the push packet at its end is the one most often lost. Network Send paces its packets, set by `packet_gap` and off at 0 (a 0.5 ms gap recovered 96% on WiFi), which took P4 to P4 to 26 to 36 frames/s. G5 removes the double mapping that sender mapping cost on a layout that is not the identity (4 ms against 1.6 ms on the S3): a stream alone on its layer goes to the output in one copy, and a static modifier on its layer transforms it. G6 is next. The rest is in the backlog below.
+P4 to P4 started the day at about 200 packets/s and 0 to 1 frames. What remains is the sender's burst: the access point drops it on WiFi, and on Ethernet the push packet at its end is the one most often lost. Network Send paces its packets, set by `packet_gap` and off at 0 (a 0.5 ms gap recovered 96% on WiFi), which took P4 to P4 to 26 to 36 frames/s. G5 removes the double mapping that sender mapping cost on a layout that is not the identity (4 ms against 1.6 ms on the S3): a stream alone on its layer goes to the output in one copy, and a static modifier on its layer transforms it. G8 is next. The rest is in the backlog below.
 
 ## Backlog, found while measuring
 

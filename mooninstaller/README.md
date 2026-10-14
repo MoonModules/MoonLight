@@ -16,17 +16,20 @@ A browser blocks an HTTPS page from POSTing to a plain-`http://` device (mixed c
 - [`install-orchestrator.js`](install-orchestrator.js): owns the SerialPort across flash → reboot → Improv provision → config push.
   Replaces the ESP Web Tools install button, whose `state-changed` event (EWT 10.x) fires inside a shadow DOM the host page cannot see.
   Owning the whole flow lets the orchestrator write its own vendor RPC frames.
+  A join the board reports as failed brings the WiFi form back with the reason, and Connect retries on the same port.
   After provisioning it pushes the picked device model's `state` over serial as APPLY_OP documents, one `{"<Root>": …}` per top-level container (see `stateFrames` in [`improv-frame.js`](improv-frame.js)).
   Each is the body `PATCH /api/state` takes, applied by the same device-side engine.
+  Each chunk waits for the board's acknowledgement, and a refused or unanswered document is sent again from its first chunk, for up to 10 s.
   An **Apply device defaults** checkbox gates that push.
   It ticks itself with **Erase chip first**, since a clean slate wants defaults, and starts unticked otherwise, so re-flashing a configured device keeps its modules and controls.
   The board's `txPower` brown-out cap goes first, through its own `SET_TX_POWER` RPC **before** provisioning, since a weak-power board fails its first association without it.
   A device that doesn't speak Improv back (the typed-IP or eth-only path) gets no serial push.
   Its defaults are applied later from MoonDeck on the LAN, over plain HTTP REST with no mixed content.
+  **Apply device defaults now, without flashing** sends the same documents over USB to a board that already runs MoonLight.
 - [`devices.js`](devices.js): the *Your devices* list.
   Stores devices the user provisioned from the installer so they can be revisited, erased or forgotten (Visit / Erase / Forget).
   The device-model defaults are applied during the install over serial, so this list has no "inject" button.
-  MoonDeck on the LAN re-applies a model to a running device.
+  A running device takes them again over USB with **Apply device defaults now, without flashing**, or from MoonDeck on the LAN.
 - [`deviceModels.json`](deviceModels.json): the device-model catalog (name → firmware variants + the `state` document).
   The installer slices it into the APPLY_OP documents; MoonDeck and the picker also read it.
   Schema below.
@@ -82,7 +85,7 @@ The `deviceModel` identity is part of it: `System.deviceModel`.
 
 **`"$patch": "replace"`** (optional, on a container): applying a state document is a merge, so an entry's children land *alongside* the container's current children.
 `replace` makes the entry's children the only ones, and the device keeps code-wired children such as `WiFi`.
-Used when an entry wants its own effects to replace the defaults rather than stack with them (the testbench above swaps the default `NoiseEffect` for `AudioSpectrumEffect` + `RandomMapModifier`).
+It applies to its own level, so a child the entry names again, such as the `Layer`, is merged. A layer that holds only the model's effects says `replace` too.
 
 **Drivers goes last.** The installer sends the documents in the entry's key order with `Drivers` last.
 Starting an output prints on UART0, which a classic board shares with Improv, and LED pins 1 or 3 end serial reception.

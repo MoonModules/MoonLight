@@ -276,7 +276,7 @@ The next function worth simplifying is at the top of each file's list.
 | `test/unit/light/unit_MoonLiveMotion.cpp` | 2 | `lines 209-214, also in test/unit/light/unit_MoonLiveMotion.cpp:118`, duplicated block 6 |
 | `test/unit/light/unit_MoonLiveParticles.cpp` | 2 | `lines 158-163, also in test/unit/light/unit_MoonLiveParticles.cpp:142`, duplicated block 6 |
 | `test/unit/light/unit_MoonLiveScriptResolve.cpp` | 2 | `lines 90-97, also in test/unit/light/unit_MoonLiveScriptResolve.cpp:78`, duplicated block 8 |
-| `test/unit/light/unit_NetworkReceiveEffect_protocols.cpp` | 2 | `lines 23-44, also in test/unit/light/unit_NetworkReceiveEffect.cpp:22`, duplicated block 22 |
+| `test/unit/light/unit_NetworkReceiveEffect_protocols.cpp` | 2 | `lines 23-44, also in test/unit/light/unit_NetworkReceiveEffect.cpp:23`, duplicated block 22 |
 | `test/unit/light/unit_NoiseEffect.cpp` | 2 | `lines 33-48, also in test/unit/light/unit_PolarLut_equivalence.cpp:40`, duplicated block 16 |
 | `test/unit/light/unit_Scroll.cpp` | 2 | `lines 6-20, also in test/unit/light/unit_Splat.cpp:6`, duplicated block 15 |
 | `test/unit/light/unit_SineEffect.cpp` | 2 | `lines 22-30, also in test/unit/light/unit_DistortionWavesEffect.cpp:26`, duplicated block 9 |
@@ -287,13 +287,13 @@ The next function worth simplifying is at the top of each file's list.
 | `moondeck/check/check_nonblocking.py` | 1 | `lines 30-40, also in moondeck/check/check_footprint.py:31`, duplicated block 11 |
 | `moondeck/ci/verify_version.py` | 1 | `lines 39-45, also in moondeck/scenario/run_scenario.py:33`, duplicated block 7 |
 | `moondeck/docs/build_docs.py` | 1 | `lines 43-49, also in moondeck/scenario/run_scenario.py:33`, duplicated block 7 |
-| `moondeck/docs/screenshot_modules.py` | 1 | `screenshot_modules.py`, large file 1237 |
+| `moondeck/docs/screenshot_modules.py` | 1 | `screenshot_modules.py`, large file 1248 |
 | `moondeck/moondeck.py` | 1 | `moondeck.py`, large file 2696 |
 | `moondeck/moontube/mtmeasure.py` | 1 | `lines 42-49, also in moondeck/moontube/mtnarrate.py:91`, duplicated block 8 |
 | `moondeck/moontube/mtnarrate.py` | 1 | `lines 91-98, also in moondeck/moontube/mtmeasure.py:42`, duplicated block 8 |
 | `moondeck/moontube/mtrun.py` | 1 | `mtrun.py`, large file 1711 |
 | `moondeck/scenario/run_live_scenario.py` | 1 | `run_live_scenario.py`, large file 1789 |
-| `mooninstaller/install-orchestrator.js` | 1 | `install-orchestrator.js`, large file 1468 |
+| `mooninstaller/install-orchestrator.js` | 1 | `install-orchestrator.js`, large file 1473 |
 | `mooninstaller/install.js` | 1 | `install.js`, large file 1610 |
 | `src/core/module/Control.h` | 1 | `sanitizeHostname`, complex function 16 |
 | `src/core/moonlive/MoonLive.h` | 1 | `moonlive::MoonLive::addDeclaredControl`, complex function 16 |
@@ -376,7 +376,7 @@ The next function worth simplifying is at the top of each file's list.
 | `test/unit/light/unit_GridLayout.cpp` | 1 | `lines 8-21, also in test/unit/light/unit_SingleColumnLayout.cpp:12`, duplicated block 14 |
 | `test/unit/light/unit_Layer_persistence.cpp` | 1 | `lines 45-51, also in test/unit/light/unit_TextEffect.cpp:18`, duplicated block 7 |
 | `test/unit/light/unit_Layer_phase_animation.cpp` | 1 | `lines 77-85, also in test/unit/light/unit_RandomMapModifier.cpp:115`, duplicated block 9 |
-| `test/unit/light/unit_NetworkReceiveEffect.cpp` | 1 | `lines 22-43, also in test/unit/light/unit_NetworkReceiveEffect_protocols.cpp:23`, duplicated block 22 |
+| `test/unit/light/unit_NetworkReceiveEffect.cpp` | 1 | `lines 23-44, also in test/unit/light/unit_NetworkReceiveEffect_protocols.cpp:23`, duplicated block 22 |
 | `test/unit/light/unit_ParallelLedDriver_doublebuffer.cpp` | 1 | `lines 93-104, also in test/unit/light/unit_ParallelLedDriver_pinexpander.cpp:94`, duplicated block 12 |
 | `test/unit/light/unit_Rings241Layout.cpp` | 1 | `lines 18-30, also in test/unit/light/unit_SingleColumnLayout.cpp:19`, duplicated block 13 |
 | `test/unit/light/unit_SpaceInvadersEffect.cpp` | 1 | `lines 13-20, also in test/unit/light/unit_SpritePopulation.cpp:23`, duplicated block 8 |
