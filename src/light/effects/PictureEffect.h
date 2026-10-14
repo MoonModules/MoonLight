@@ -5,13 +5,20 @@
 
 namespace mm {
 
-/// Effect: the active Picture service's picture, sampled onto the layer, so a picture of any size shows on a layout of any size.
+/// The active [Picture service](https://moonmodules.org/MoonLight/moonmodules/core/services.html#picture)'s picture on the layer, so a picture of any size shows on a layout of any size.
+/// @card PictureEffect.gif
 ///
-/// Geometry stays with the modifiers: a rotate, mirror or tile transforms the picture as it does any effect. A cube shows it on every slice.
+/// A modifier rotates, mirrors or tiles it as it does any effect, and a cube shows it on every slice.
 ///
-/// A cell's source rectangle is a column range times a row range, so two small tables sized at prepare hold them, refilled without allocating.
+/// @guide
 ///
-/// Area sampling averages in linear light, squaring each value and taking the root of the mean, gamma 2 standing in for the display curve.
+/// ## fit
+///
+/// **fit** shows the whole picture, with bands where its aspect leaves the grid empty. With **fill** it covers the grid and crops what overflows, and **stretch** distorts it to the grid's aspect.
+///
+/// ## sampling
+///
+/// **point** takes the one pixel at a light's center, sharp and the fastest. With **area** each light averages its rectangle of the picture, so fine detail stays steady when a large picture shrinks onto few lights.
 class PictureEffect : public EffectBase {
 public:
     /// Catalog tags for the visual catalog.
@@ -21,11 +28,11 @@ public:
 
     /// The ways `fit` places the picture, in option order.
     enum Fit : uint8_t { kFit, kFill, kStretch, kFitCount };
-    /// Keep the picture's aspect with bands or cropped, or distort it to the grid.
+    /// Keep the aspect with bands or cropped, or stretch it to the grid.
     uint8_t fit = kFit;
     /// The ways `sampling` reads a cell's part of the picture, in option order.
     enum Sampling : uint8_t { kPoint, kArea, kSamplingCount };
-    /// One pixel per cell, or the average of the cell's rectangle.
+    /// One pixel per light, or the mean of the light's rectangle.
     uint8_t sampling = kPoint;
 
     /// Publish the placement and the sampling.
@@ -128,7 +135,7 @@ private:
         return RGB{p[0], p[1], p[2]};
     }
 
-    /// The rectangle's mean in linear light, from at most four reads per axis.
+    /// The rectangle's mean in linear light (square, average, root: gamma 2 for the display curve), from at most four reads per axis.
     static RGB average(const PictureFrame& f, Range c, Range r) {
         const uint32_t sx = (c.hi - c.lo + 3u) / 4u, sy = (r.hi - r.lo + 3u) / 4u;
         uint32_t sum[3] = {0, 0, 0}, n = 0;

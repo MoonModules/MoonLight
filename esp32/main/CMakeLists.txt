@@ -166,10 +166,13 @@ endif()
 # than the portability win pays for.
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 set(UI_DIR ${COMPONENT_DIR}/../../src/ui)
+# Every UI file, by glob, so a file added to src/ui re-embeds without a second edit here: the hand-kept list had already missed migrate.js, semver.js and preview-adapt.js.
+file(GLOB UI_SOURCES CONFIGURE_DEPENDS ${UI_DIR}/*.js ${UI_DIR}/*.html ${UI_DIR}/*.css ${UI_DIR}/*.png
+     ${UI_DIR}/vendor/*.js)
 add_custom_command(
     OUTPUT ${UI_DIR}/ui_embedded.h
     COMMAND ${CMAKE_COMMAND} -DUI_DIR=${UI_DIR} -DOUT=${UI_DIR}/ui_embedded.h -DPYTHON_CMD=${Python3_EXECUTABLE} -P ${UI_DIR}/embed_ui.cmake
-    DEPENDS ${UI_DIR}/index.html ${UI_DIR}/app.js ${UI_DIR}/style.css ${UI_DIR}/install-picker.js ${UI_DIR}/preview3d.js ${UI_DIR}/moonmodules-logo.png ${UI_DIR}/embed_ui.cmake
+    DEPENDS ${UI_SOURCES} ${UI_DIR}/embed_ui.cmake
     COMMENT "Embedding UI files"
 )
 add_custom_target(ui_embed DEPENDS ${UI_DIR}/ui_embedded.h)

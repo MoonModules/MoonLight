@@ -466,6 +466,7 @@ bool HttpServerModule::handleConnection(platform::TcpConnection& conn, int patie
         else if (std::strcmp(path, "/preview3d.js") == 0) serveFile(conn, "preview3d.js", "application/javascript");
         else if (std::strcmp(path, "/preview-adapt.js") == 0) serveFile(conn, "preview-adapt.js", "application/javascript");
         else if (std::strcmp(path, "/migrate.js") == 0) serveFile(conn, "migrate.js", "application/javascript");
+        else if (std::strcmp(path, "/help.js") == 0) serveFile(conn, "help.js", "application/javascript");
         else if (std::strcmp(path, "/style.css") == 0) serveFile(conn, "style.css", "text/css");
         else if (std::strcmp(path, "/moonmodules-logo.png") == 0) serveFile(conn, "moonmodules-logo.png", "image/png");
         else if (std::strcmp(path, "/api/state") == 0) serveState(conn);
@@ -1133,6 +1134,24 @@ void HttpServerModule::handleMoonBaseUrl(platform::TcpConnection& conn, const ch
     sendResponse(conn, 202, "application/json", "{\"ok\":true}");
 }
 
+// The UI files built into the firmware (embed_ui.cmake), the text ones gzipped and served with Content-Encoding: gzip, the PNG raw.
+namespace {
+struct EmbeddedFile { const char* name; const uint8_t* data; size_t len; bool gzipped; };
+constexpr EmbeddedFile kEmbeddedFiles[] = {
+    {"index.html", ui::indexHtml, ui::indexHtmlLen, true},
+    {"app.js", ui::appJs, ui::appJsLen, true},
+    {"install-picker.js", ui::installPickerJs, ui::installPickerJsLen, true},
+    {"semver.js", ui::semverJs, ui::semverJsLen, true},
+    {"prism.js", ui::prismJs, ui::prismJsLen, true},
+    {"preview3d.js", ui::preview3dJs, ui::preview3dJsLen, true},
+    {"preview-adapt.js", ui::previewAdaptJs, ui::previewAdaptJsLen, true},
+    {"migrate.js", ui::migrateJs, ui::migrateJsLen, true},
+    {"help.js", ui::helpJs, ui::helpJsLen, true},
+    {"style.css", ui::styleCss, ui::styleCssLen, true},
+    {"moonmodules-logo.png", ui::logoPng, ui::logoPngLen, false},
+};
+}  // namespace
+
 void HttpServerModule::serveFile(platform::TcpConnection& conn, const char* filename, const char* contentType) {
     // Try disk first (desktop development: live editing without rebuild)
     char filepath[256];
@@ -1168,22 +1187,11 @@ void HttpServerModule::serveFile(platform::TcpConnection& conn, const char* file
         return;
     }
 
-    // Fall back to embedded data (ESP32 or no disk files): text assets are embedded gzipped (see embed_ui.cmake) and served with Content-Encoding: gzip, the PNG raw.
-    const uint8_t* data = nullptr;
-    size_t dataLen = 0;
-    bool gzipped = false;
-    if (std::strcmp(filename, "index.html") == 0) { data = ui::indexHtml; dataLen = ui::indexHtmlLen; gzipped = true; }
-    else if (std::strcmp(filename, "app.js") == 0) { data = ui::appJs; dataLen = ui::appJsLen; gzipped = true; }
-    else if (std::strcmp(filename, "install-picker.js") == 0) { data = ui::installPickerJs; dataLen = ui::installPickerJsLen; gzipped = true; }
-    else if (std::strcmp(filename, "semver.js") == 0) { data = ui::semverJs; dataLen = ui::semverJsLen; gzipped = true; }
-    else if (std::strcmp(filename, "prism.js") == 0) { data = ui::prismJs; dataLen = ui::prismJsLen; gzipped = true; }
-    else if (std::strcmp(filename, "preview3d.js") == 0) { data = ui::preview3dJs; dataLen = ui::preview3dJsLen; gzipped = true; }
-    else if (std::strcmp(filename, "preview-adapt.js") == 0) { data = ui::previewAdaptJs; dataLen = ui::previewAdaptJsLen; gzipped = true; }
-    else if (std::strcmp(filename, "migrate.js") == 0) { data = ui::migrateJs; dataLen = ui::migrateJsLen; gzipped = true; }
-    else if (std::strcmp(filename, "style.css") == 0) { data = ui::styleCss; dataLen = ui::styleCssLen; gzipped = true; }
-    else if (std::strcmp(filename, "moonmodules-logo.png") == 0) { data = ui::logoPng; dataLen = ui::logoPngLen; }
-
-    if (!data) {
+    // Fall back to the embedded files (ESP32, or no files on disk).
+    const EmbeddedFile* file = nullptr;
+    for (const EmbeddedFile& e : kEmbeddedFiles)
+        if (std::strcmp(filename, e.name) == 0) { file = &e; break; }
+    if (!file) {
         sendResponse(conn, 404, "text/plain", "File not found");
         return;
     }
@@ -1197,10 +1205,10 @@ void HttpServerModule::serveFile(platform::TcpConnection& conn, const char* file
         "Connection: close\r\n"
         "Cache-Control: no-cache\r\n"
         "\r\n",
-        contentType, dataLen,
-        gzipped ? "Content-Encoding: gzip\r\n" : "");
+        contentType, file->len,
+        file->gzipped ? "Content-Encoding: gzip\r\n" : "");
     conn.write(reinterpret_cast<const uint8_t*>(header), headerLen);
-    conn.write(data, dataLen);
+    conn.write(file->data, file->len);
 }
 
 void HttpServerModule::serveState(platform::TcpConnection& conn) {

@@ -123,7 +123,7 @@ Discovers other MoonLight devices on the LAN and lists them, persisting the last
 <img src="../../assets/core/DevicesModule.png" width="300" alt="Devices module, discovered LAN devices">
 
 - `devices`: a List of discovered devices; each row expands to a detail panel. Persistable.
-- `addressing`: `multicast + broadcast` (default), which WLED devices hear too, or `multicast`.
+- `addressing`: `multicast + broadcast`, which WLED devices hear too, or `multicast`.
 
 WLED announces and listens on broadcast, so it lists a device only from the broadcast copy. Presence is one small packet every ten seconds, so the copy costs the rest of the LAN next to nothing. A network that drops multicast is detected here, and the status says so. See [multicast and IGMP snooping](../../explanation/architecture/moonlight.md#multicast-and-igmp-snooping).
 
@@ -140,9 +140,9 @@ Bridges the light to an MQTT broker so a home-automation hub can control it, as 
 <img src="../../assets/core/MqttModule.png" width="300" alt="MQTT module controls">
 
 - `broker`: the broker hostname (e.g. `homeassistant.lan`) or IP. A hostname is resolved via DNS.
-- `port`: broker port (default 1883).
+- `port`: broker port.
 - `username` / `password`: broker credentials, optional, the password stored obfuscated.
-- `haDiscovery`: announce a Home Assistant discovery light, off by default.
+- `haDiscovery`: announce a Home Assistant discovery light.
 
 HA already discovers the device over the WLED shim with no broker, so this stays off to avoid a duplicate entity. Turn it on for broker-only or cross-subnet setups. See the [home-automation guide](../../how-to/home-automation.md).
 - read-only: `mqtt_status`, from `disabled` and `idle` through to `connected`, or an error.
@@ -191,7 +191,7 @@ One opt-in report about this install, sent once per install or upgrade, so devel
 
 <img src="../../assets/core/MoonStatsModule.png" width="300" alt="Stats module controls">
 
-- `consent`: a checkbox, off by default. Nothing is sent and no identifier computed while off.
+- `consent`: a checkbox. Nothing is sent and no identifier computed while it is off.
 - read-only: `version` and `reportedVersion`, which differ exactly when a report is due.
 - `send update`: reports again now, for a setup that changed without a version change.
 
@@ -211,9 +211,9 @@ A public message board between MoonLight devices, in the shape Meshtastic's chan
 
 <img src="../../assets/core/MoonTalkModule.png" width="300" alt="Talk module controls">
 
-- `consent`: a checkbox, off by default. Nothing is published or read while it is off.
-- `shareName`: whether your device name rides along, **off by default and a separate decision**.
-- `message`: what to say, up to 280 characters. Typing changes nothing on its own.
+- `consent`: a checkbox. Nothing is published or read while it is off.
+- `shareName`: whether your device name rides along, **a separate decision**.
+- `message`: what to say. Typing changes nothing on its own.
 - `send`: publishes the message and clears the box, as does Enter in the message field.
 
 A device name identifies a person rather than a machine. Without it your messages carry the first 8 characters of your installation id, which groups them without naming you.

@@ -1,7 +1,9 @@
 #!/usr/bin/env -S uv run --script
 # /// script
-# dependencies = ["markdown"]
+# dependencies = ["markdown", "libclang"]
 # ///
+# `libclang` because the help file the app reads is generated from the headers, and this check
+# regenerates it to prove the committed one matches.
 # `markdown` because this check renders a row through the BUILD's own renderer rather than
 # reimplementing it, and that renderer slugs a heading with Python-Markdown's own function.
 # MkDocs supplies it at build time; a bare `uv run` of this script does not.
@@ -64,6 +66,8 @@ MAX_DESC = 600            # characters of prose under the name
 MAX_DESC_VISUAL = 400     # ... on effects, modifiers and layouts, where the gif describes it
 MAX_CONTROL = 100         # characters of any ONE control line
 MAX_CONTROL_VISUAL = 80   # ... on the visual catalogs
+# A control's line says what it does. Its default is the reset button's and its range the slider's, so a line stating either restates the UI, and drifts from the code when either changes. Words in backticks are names, such as an option called `default`, and are not read.
+_RESTATES_RE = re.compile(r"\bdefaults?\b|-?\d+(?:\.\d+)?\s*(?:–|to)\s*-?\d+|\bup to \S*\d", re.IGNORECASE)
 
 # A details section continues the CARD, so it is written for the same reader: someone
 # choosing and using the module, not someone reading its implementation. Two limits keep
@@ -153,6 +157,8 @@ _UNREFERENCED_RULE = "unreferenced appendix section"
 # zero, so nothing is held hostage, and a split sentence reflows every line it spans on the next
 # word change, which costs a reviewer the same in a `.cpp` as in a header.
 _HARD_WRAP_RULE = "hard wrap"
+_STALE_HELP_RULE = "help.json stale"
+_RESTATES_RULE = "control restates the UI"
 # A paragraph spread over several lines: one topic is one paragraph and one line, cut to fit the cap rather than split. Staged as the line cap is, a new rule over comments written before it.
 _SPLIT_PARAGRAPH_RULE = "split paragraph"
 # One line, in every file. Depth is not forbidden, it is HOMED: a header carries it in an
@@ -198,7 +204,7 @@ def _blocks(key: str, why: str = "") -> bool:
     everywhere too, being the diff rather than the page, and a rule met everywhere is a rule that
     should hold everywhere.
     """
-    if why.startswith(_HARD_WRAP_RULE):
+    if why.startswith((_HARD_WRAP_RULE, _STALE_HELP_RULE)):
         return True
     if why.startswith(_LINE_LENGTH_RULES) and "chars >" in why:
         return False
@@ -262,7 +268,7 @@ def _cards(text: str):
     # lines inside it MEAN is this check's own business, and stays here.
     for title, start, end in h.split_blocks(text):
         cur = {"title": title, "desc": 0, "controls": 0, "widest": 0,
-               "widest_text": "", "img": False, "img_src": ""}
+               "widest_text": "", "img": False, "img_src": "", "restating": []}
         for ln in lines[start + 1:end]:
             if h._IMG_RE.match(ln):
                 cur["img"] = True
@@ -277,6 +283,9 @@ def _cards(text: str):
                 cur["controls"] += len(control)
                 if len(control) > cur["widest"]:
                     cur["widest"], cur["widest_text"] = len(control), control
+                name, sep, text = h._split_control(control)
+                if sep and _RESTATES_RE.search(re.sub(r"`[^`]*`", "", text)):
+                    cur["restating"].append(name.strip("`"))
             elif ln.strip():
                 cur["desc"] += len(ln.strip())
         yield cur
@@ -412,7 +421,8 @@ _RULE_NAMES = (
     "code comment", "comment line", "doc line", "lead",
     "unreferenced appendix section", "appendix section",
     "class comment", "member comment", "no image", "image is", "one control",
-    "description", "controls", "doc sentence", "hard wrap", "split paragraph",
+    "description", "controls", "doc sentence", "hard wrap", "split paragraph", _STALE_HELP_RULE,
+    _RESTATES_RULE,
 )
 
 
@@ -440,6 +450,7 @@ _RULE_LABELS = {
     "no image": "cards with no image",
     "image is": "wrong image format",
     "one control": "cards listing one control",
+    _RESTATES_RULE: "controls restating a default or range",
     "description": "over-long descriptions",
     "second column": "wrong second column",
     "details section": "misplaced details sections",
@@ -498,7 +509,7 @@ def _appendix_lines(text: str) -> int:
     n, inside = 0, False
     for line in text.split("\n"):
         s = line.strip()
-        if not s.startswith("///"):
+        if not s.startswith("///") or "@guide" in s:
             inside = False
         elif inside:
             n += 1
@@ -943,8 +954,13 @@ def _redundant_defgroup_rule(rel: str, lines: list[str], out: list) -> None:
                     "@defgroup on a single-class header: the class comment is already the page's lead"))
 
 
+def _appendix_marker(line: str) -> bool:
+    """Whether a line opens an appendix: `@guide`, the sections written for users that the app shows as a module's help, or `@moreinfo`, the ones written for developers. Both end the lead, sit only on a lead and cap each `## ` section; only `@moreinfo` counts toward the ratcheted total, since a guide section is help moved out of a card rather than depth moved out of the code."""
+    return "@moreinfo" in line or "@guide" in line
+
+
 def _moreinfo_placement_rule(rel: str, lines: list[str], out: list) -> None:
-    """`@moreinfo` is an appendix, and only a lead carries one.
+    """`@moreinfo` and `@guide` are appendices, and only a lead carries one.
 
     The file lead and each class or struct comment may have one; a member may not, because a member
     gets a single line and the generated page shows that line as its summary. An `@moreinfo` on a
@@ -952,7 +968,7 @@ def _moreinfo_placement_rule(rel: str, lines: list[str], out: list) -> None:
     block on every function in a swept header.
     """
     for start, end, nxt in _doc_runs(lines):
-        if not any("@moreinfo" in lines[k] for k in range(start, end)):
+        if not any(_appendix_marker(lines[k]) for k in range(start, end)):
             continue
         # A bare `///` run at the TOP of the file is a lead too. The `@defgroup` spelling is how a
         # header gathers free declarations under one page, and a file that needs no group still
@@ -1018,7 +1034,7 @@ def _header_rules(rel: str, text: str):
         # makes a lead is its POSITION, not the marker it carries.
         if (any("@defgroup" in lines[k] for k in range(start, end))
                 or start == _first_content_line(lines)):
-            head = next((k for k in range(start, end) if "@moreinfo" in lines[k]), end)
+            head = next((k for k in range(start, end) if _appendix_marker(lines[k])), end)
             n = head - start
             if n > MAX_CLASS_DOC:
                 out.append((f"{rel}::line {start + 1}",
@@ -1049,7 +1065,7 @@ def _header_rules(rel: str, text: str):
             # The LEAD only: the run ends at @moreinfo, whose own lines are the appendix and
             # are measured per section below. Counting both here would put the documented
             # budget (10 lead, then 10 per appendix section) out of reach of any header.
-            head = next((k for k in range(start, end) if "@moreinfo" in lines[k]), end)
+            head = next((k for k in range(start, end) if _appendix_marker(lines[k])), end)
             n = head - start
             if n > MAX_CLASS_DOC:
                 out.append((f"{rel}::{nxt.split()[1].rstrip('{:')}",
@@ -1132,11 +1148,11 @@ def _header_rules(rel: str, text: str):
     # each hold a handful of separately-diagnosed findings (a clock-divisor window, a latch-versus-
     # data fault, a ring's competing axes) that one shared budget could only force out of the tree.
     for i, ln in enumerate(lines):
-        if "@moreinfo" not in ln:
+        if not _appendix_marker(ln):
             continue
         section, count, fenced = "(lead)", 0, False
         for m in lines[i + 1:]:
-            if not m.lstrip().startswith("///"):
+            if not m.lstrip().startswith("///") or _appendix_marker(m):
                 break
             text = re.sub(r"^\s*///\s?", "", m).strip()
             # A fenced block is structure rather than prose, the same exemption the no-wrap rule
@@ -1332,6 +1348,9 @@ def _card_rules(rel: str, c: dict):
     max_control = MAX_CONTROL_VISUAL if visual else MAX_CONTROL
     if c["desc"] > max_desc:
         out.append((key, f"description {c['desc']} > {max_desc}"))
+    if c.get("restating"):
+        out.append((key, f"{_RESTATES_RULE}, a default or a range the reset button or slider shows: "
+                         f"{', '.join(c['restating'])}"))
     if c["widest"] > max_control:
         out.append((key, f"one control {c['widest']} > {max_control}: "
                          f"{c['widest_text'][:60]}..."))
@@ -1375,7 +1394,9 @@ def _orphan_pages():
     for md in (ROOT / "docs").rglob("*.md"):
         if "moxygen" in md.parts:
             continue
-        for m in re.finditer(r"(?:(\w+)/)?moxygen/(\w+)\.md", md.read_text(errors="ignore")):
+        # A catalog card drawn from help.json carries its Detail link only once drawn.
+        text = _hooks.fill_cards_from_help(md.read_text(errors="ignore"), md.relative_to(ROOT / "docs").as_posix())
+        for m in re.finditer(r"(?:(\w+)/)?moxygen/(\w+)\.md", text):
             # A relative link inside a domain omits it, so fall back to the linking page's own.
             domain = m.group(1) or (md.parts[-2] if md.parts[-2] in _DOC_DOMAINS else None)
             for d in ((domain,) if domain else _DOC_DOMAINS):
@@ -1397,7 +1418,7 @@ def _appendix_sections(lines: list[str]) -> list[str]:
             continue
         fenced = False
         for m in lines[i + 1:]:
-            if not m.lstrip().startswith("///"):
+            if not m.lstrip().startswith("///") or "@guide" in m:
                 break
             text = re.sub(r"^\s*///\s?", "", m).strip()
             if text.startswith("```"):
@@ -1527,13 +1548,26 @@ def _md_hard_wraps(rel: str, text: str):
     return out
 
 
+def _help_freshness():
+    """The committed help.json against what the headers and cards generate now: a header edit that never reached the file would ship help that contradicts the module."""
+    import gen_help
+    try:
+        stale = gen_help.stale()
+    except (SystemExit, Exception) as e:   # no LLVM, or a parse that failed: reported, so the rest of the report still runs
+        return [("docs/help/help.json", f"{_STALE_HELP_RULE} unchecked: {e}")]
+    return ([("docs/help/help.json",
+              f"{_STALE_HELP_RULE}: run `uv run moondeck/docs/gen_help.py` and commit the result")]
+            if stale else [])
+
+
 def _violations():
-    out = []
+    out = _help_freshness()
     for rel in _pages():
         path = ROOT / "docs" / rel
         if not path.exists():
             continue
-        text = path.read_text(encoding="utf-8")
+        # A card cut to its heading is drawn from help.json, and measured as drawn.
+        text = _hooks.fill_cards_from_help(path.read_text(encoding="utf-8"), rel)
         out.extend(_structure(text, rel))
         out.extend(_rendered_links(rel, text))
         out.extend(_details_tables(rel, text))

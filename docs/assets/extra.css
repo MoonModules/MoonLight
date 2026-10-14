@@ -52,6 +52,13 @@
   margin-top: 0.3rem;
 }
 
+/* The card's attribution, under its description: muted and smaller, credit rather than content. */
+.md-typeset .mm-catalog-wrap .mm-attribution {
+  color: var(--md-default-fg-color--lighter);
+  font-size: 0.9em;
+  font-style: italic;
+}
+
 /* Parameters column: each param on its own line, compact (small gap, no left rule
    — the earlier version made many-param effects like GameOfLife very tall). What
    makes each param scannable is the NAME standing out, not the spacing. */
@@ -162,3 +169,98 @@
 .md-typeset .mm-pf table td:nth-child(1) code,
 .md-typeset table.mm-pf td:nth-child(1) code { white-space: nowrap; }
 .md-typeset .mm-pf table td, .md-typeset table.mm-pf td { vertical-align: top; }
+
+/* ===== The card deck (assets/help-deck.js): the catalog as a hand of playing cards ===== */
+.mm-deck-bar { display: flex; gap: 0.6rem; align-items: center; margin: 0.5rem 0; }
+.mm-deck-search {
+  flex: 1; padding: 0.4rem 0.6rem; font: inherit; border-radius: 6px;
+  border: 1px solid var(--md-default-fg-color--lightest); background: var(--md-default-bg-color); color: inherit;
+}
+.mm-deck-nav { display: flex; gap: 0.4rem; align-items: center; white-space: nowrap; }
+.mm-deck-nav button {
+  width: 2rem; height: 2rem; border-radius: 50%; cursor: pointer; font-size: 1.1rem; line-height: 1;
+  border: 1px solid var(--md-default-fg-color--lightest); background: var(--md-default-bg-color); color: inherit;
+}
+.mm-deck-nav button:hover { border-color: var(--md-accent-fg-color); }
+.mm-deck-count { font-size: 0.75rem; color: var(--md-default-fg-color--light); font-variant-numeric: tabular-nums; }
+
+/* The type picker's chip row, the same classes the app uses, in the site's colors. */
+.md-typeset .type-picker-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 0.4rem; }
+.md-typeset .type-picker-chip {
+  border: 1px solid var(--md-default-fg-color--lightest); border-radius: 4px; padding: 2px 6px;
+  background: var(--md-default-bg-color); cursor: pointer; font-size: 0.9rem; line-height: 1.2;
+}
+.md-typeset .type-picker-chip:hover { border-color: var(--md-accent-fg-color); }
+.md-typeset .type-picker-chip.active { background: var(--md-accent-fg-color--transparent); border-color: var(--md-accent-fg-color); }
+.md-typeset .type-picker-chip-sep { width: 1px; align-self: stretch; margin: 2px 3px; background: var(--md-default-fg-color--lightest); }
+
+/* The row of cards: scroll-snapped, centered, with room for the fan's lean and sink. */
+.mm-deck { --mm-card-scale: 1; }
+.mm-deck-size { width: 6rem; accent-color: var(--md-accent-fg-color); }
+/* The row spans the window, its width and side padding set by help-deck.js align() from the visible width, so no page scroll appears beside a scrollbar. */
+.mm-deck-row {
+  display: flex; gap: 0.2rem; overflow-x: auto; scroll-snap-type: x mandatory;
+  padding-top: 1.2rem; padding-bottom: 3rem; scrollbar-width: thin; outline: none; cursor: grab;
+}
+/* While a mouse drags the deck, snapping waits and the text stays unselected. */
+.mm-deck-row.dragging { scroll-snap-type: none; cursor: grabbing; user-select: none; }
+/* A card's size and text follow the deck's scale, so a smaller card is a smaller card, not a cramped one. */
+.mm-pcard {
+  flex: 0 0 calc(15rem * var(--mm-card-scale)); aspect-ratio: 5 / 7; scroll-snap-align: start; perspective: 1200px;
+  transition: transform 0.15s ease-out; cursor: pointer; outline: none; font-size: max(0.8rem, calc(1rem * var(--mm-card-scale)));
+}
+.mm-pcard[hidden] { display: none; }
+.mm-pcard-inner { position: relative; width: 100%; height: 100%; transition: transform 0.5s; transform-style: preserve-3d; }
+.mm-pcard.flipped .mm-pcard-inner { transform: rotateY(180deg); }
+.mm-pcard-face {
+  position: absolute; inset: 0; backface-visibility: hidden; overflow: hidden; border-radius: 14px;
+  border: 1px solid var(--md-default-fg-color--lightest); background: var(--md-default-bg-color);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25); padding: 0.55em; display: flex; flex-direction: column; gap: 0.3em;
+}
+.mm-pcard:focus-visible .mm-pcard-face { border-color: var(--md-accent-fg-color); }
+.mm-pcard-back { transform: rotateY(180deg); overflow-y: auto; font-size: 0.72em; }
+.md-typeset .mm-pcard h3 { margin: 0; font-size: 1em; color: var(--md-primary-fg-color); }
+.md-typeset .mm-pcard p {
+  margin: 0; font-size: 0.75em; color: var(--md-default-fg-color--light);
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+}
+.mm-pcard-pips { display: flex; gap: 2px; font-size: 0.85em; }
+.mm-pcard-front img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 8px; background: #000; flex: 0 0 auto; }
+
+/* The app's help, on the card's back. */
+.mm-pcard .card-helpbox > summary { list-style: none; cursor: pointer; }
+.mm-pcard .card-helpbox > summary::-webkit-details-marker { display: none; }
+.mm-pcard .card-helpbox-body { display: flex; flex-direction: column; gap: 0.35rem; margin-top: 0.35rem; color: var(--md-default-fg-color--light); }
+.mm-pcard .help-attribution { font-style: italic; color: var(--md-default-fg-color--lighter); }
+.mm-pcard .control-row { margin-top: 0.4rem; }
+.mm-pcard .control-label { font-weight: 600; }
+.mm-pcard .control-helper { color: var(--md-default-fg-color--light); }
+.mm-pcard details.control-helper > summary { list-style: none; cursor: pointer; }
+.mm-pcard details.control-helper > summary::before { content: "▸ "; }
+.mm-pcard details.control-helper[open] > summary::before { content: "▾ "; }
+.mm-pcard .control-helper-more { margin: 0.2rem 0 0 1em; }
+/* Material draws a <details> as an admonition; on a card it is plain help. */
+.md-typeset .mm-pcard details {
+  border: none; box-shadow: none; background: none; padding: 0; margin: 0; font-size: inherit;
+}
+.md-typeset .mm-pcard details > summary {
+  background: none; padding: 0; margin: 0; font-weight: 600; color: var(--md-default-fg-color); border: none;
+}
+.md-typeset .mm-pcard details > summary::before, .md-typeset .mm-pcard details > summary::after { display: none; }
+.md-typeset .mm-pcard details.control-helper > summary { font-weight: normal; color: var(--md-default-fg-color--light); }
+.md-typeset .mm-pcard details.control-helper > summary::before { display: inline; content: "▸ "; position: static; background: none; mask: none; -webkit-mask: none; width: auto; height: auto; }
+.md-typeset .mm-pcard details.control-helper[open] > summary::before { content: "▾ "; }
+/* Small cards are their picture and emoji: the name and the line would be unreadable. */
+.mm-deck-small .mm-pcard h3, .mm-deck-small .mm-pcard p { display: none; }
+.mm-deck-small .mm-pcard-face { padding: 0.25em; border-radius: 6px; }
+.mm-deck-small .mm-pcard-front img { border-radius: 4px; }
+/* Spread out: the cards in rows across the page, every one in view, no fan and no snapping. */
+.mm-deck-spread .mm-deck-row {
+  flex-wrap: wrap; overflow: visible; scroll-snap-type: none; gap: 0.35rem; justify-content: flex-start;
+  width: auto; margin-left: 0; padding: 0.5rem 0 1rem !important; cursor: default;
+}
+.mm-deck-spread .mm-pcard:hover .mm-pcard-face { border-color: var(--md-accent-fg-color); }
+/* A compact card has room for two lines of its description, ended with an ellipsis. */
+.mm-deck-compact .md-typeset .mm-pcard p, .md-typeset .mm-deck-compact .mm-pcard p { -webkit-line-clamp: 2; }
+/* A screenshot of a module's controls shows whole, scaled into the frame; an animation fills it. */
+.mm-pcard-front img[src$=".png"] { object-fit: contain; }

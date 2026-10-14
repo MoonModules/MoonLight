@@ -2,7 +2,7 @@
 
 Every modifier, one block each: its preview, what it does, and what each control means, together. A modifier sits between an [effect](effects.md) and the output: it reshapes *where* pixels land (or masks them) without changing the effect's drawing. Modifiers compose: a [Layer](moxygen/Layer.md) folds its whole modifier stack each rebuild; a *dynamic* modifier (one that overrides `modifyLive`) also runs a per-frame pass, and an *animated* one keeps a static fold but rebuilds it on its own clock. See [ModifierBase](moxygen/ModifierBase.md) for the static-vs-dynamic split. Each block's emoji are its `tags()` (see the [tag emoji legend](../../explanation/architecture/index.md#tag-emoji-legend)); **Kind** is static (baked into the mapping at rebuild) or dynamic (per-frame remap). Modifiers are grouped into sections, and each block carries that modifier's preview, behavior, and control descriptions together. (For how this page maps to the source/asset folders, see the [folder-structure decision](../../contributing/documentation-standards.md#module-pages).)
 
-A modifier folds coordinates rather than drawing, so it reaches for very little of the shared [power function](power-functions.md) toolbox — that page states the split and lists which modifiers use what.
+A modifier folds coordinates rather than drawing, so it reaches for very little of the shared [power function](power-functions.md) toolbox; that page states the split and lists which modifiers use what.
 
 ## MoonLight modifiers
 
@@ -28,8 +28,8 @@ Detail: [technical](moxygen/BlockModifier.md)
 
 Masks the layer in a checkerboard: "off" squares are dropped, "on" squares pass through unchanged.
 
-- `size` — checker square edge in lights (1–64).
-- `invert` — flip which squares pass through vs are masked.
+- `size`: checker square edge in lights.
+- `invert`: flip which squares pass through vs are masked.
 
 Origin: MoonLight · by WildCats08 / [@Brandon502](https://github.com/Brandon502) · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Modifiers/M_MoonLight.h)
 
@@ -59,7 +59,7 @@ Detail: [technical](moxygen/CircleModifier.md)
 
 Folds the far half of the box back onto the near half per axis, mirroring the image across the box center (top-left quadrant reflected into the others in 2D, near octant into all eight in 3D).
 
-- `mirrorX` / `mirrorY` / `mirrorZ` — mirror across the center on that axis.
+- `mirrorX` / `mirrorY` / `mirrorZ`: mirror across the center on that axis.
 
 Origin: MoonLight · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Modifiers/M_MoonLight.h)
 
@@ -75,8 +75,8 @@ Detail: [technical](moxygen/MirrorModifier.md)
 
 Tiles the logical image across the box `multiply` times per axis, optionally mirroring alternate tiles (a pure mirror is `multiply = 2, mirror = true`).
 
-- `multiplyX` / `multiplyY` / `multiplyZ` — tiles per axis, `1` meaning none.
-- `mirrorX` / `mirrorY` / `mirrorZ` — reflect alternate tiles on that axis.
+- `multiplyX` / `multiplyY` / `multiplyZ`: tiles per axis, `1` meaning none.
+- `mirrorX` / `mirrorY` / `mirrorZ`: reflect alternate tiles on that axis.
 
 Origin: MoonLight · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Modifiers/M_MoonLight.h)
 
@@ -90,13 +90,13 @@ Detail: [technical](moxygen/MultiplyModifier.md)
 
 <img src="../../assets/light/modifiers/PinwheelModifier.gif" width="300" alt="Pinwheel modifier preview">
 
-Remaps the grid into radial **petals** around the center — the angle to each pixel picks its petal, with an optional swirl (angle sheared by radius), symmetry, and z-twist. Turns a linear or 2D effect into a rotating flower/spokes pattern.
+Remaps the grid into radial **petals** around the center: the angle to each pixel picks its petal, with an optional swirl (angle sheared by radius), symmetry, and z-twist. Turns a linear or 2D effect into a rotating flower/spokes pattern.
 
-- `petals` — number of petals radiating from the center.
-- `swirl` — shear the angle by radius (−127..127; a spiral; negative reverses).
-- `reverse` — reverse the petal order.
-- `symmetry` — fold the petals into a factor-of-360 symmetry.
-- `zTwist` — twist the petals along z (3D).
+- `petals`: number of petals radiating from the center.
+- `swirl`: shear the angle by radius (−127..127; a spiral; negative reverses).
+- `reverse`: reverse the petal order.
+- `symmetry`: fold the petals into a factor-of-360 symmetry.
+- `zTwist`: twist the petals along z (3D).
 
 Origin: MoonLight · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Modifiers/M_MoonLight.h)
 
@@ -110,10 +110,10 @@ Detail: [technical](moxygen/PinwheelModifier.md)
 
 <img src="../../assets/light/modifiers/RippleXZModifier.gif" width="300" alt="RippleXZ modifier preview">
 
-Collapses an axis to a single plane so a higher-dimensional effect ripples along the remaining axes — used to drive a 1D→2D/3D ripple.
+Collapses an axis to a single plane so a higher-dimensional effect ripples along the remaining axes, used to drive a 1D→2D/3D ripple.
 
-- `shrink` — collapse the selected axis (on = collapse).
-- `towardsX` / `towardsZ` — which axis collapses to a single line.
+- `shrink`: collapse the selected axis (on = collapse).
+- `towardsX` / `towardsZ`: which axis collapses to a single line.
 
 Origin: MoonLight · by @Troy (WLEDMM Art-Net) · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Modifiers/M_MoonLight.h)
 
@@ -127,10 +127,10 @@ Detail: [technical](moxygen/RippleXZModifier.md)
 
 <img src="../../assets/light/modifiers/TransposeModifier.gif" width="300" alt="Transpose modifier preview">
 
-Swaps a pair of box axes (and every coordinate through them), then optionally inverts each axis — rotate/flip the image without redrawing the effect.
+Swaps a pair of box axes (and every coordinate through them), then optionally inverts each axis: rotate or flip the image without redrawing the effect.
 
-- `XY` / `XZ` / `YZ` — swap that pair of axes.
-- `inverse X` / `inverse Y` / `inverse Z` — flip that axis after the swap.
+- `XY` / `XZ` / `YZ`: swap that pair of axes.
+- `inverse X` / `inverse Y` / `inverse Z`: flip that axis after the swap.
 
 Origin: MoonLight · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Modifiers/M_MoonLight.h)
 
@@ -163,9 +163,9 @@ Detail: [technical](moxygen/MoonLiveModifier.md) · [what a script transforms](#
 
 <img src="../../assets/light/modifiers/RandomMapModifier.gif" width="300" alt="RandomMap modifier preview">
 
-Remaps every light to another via a true 1:1 permutation, reshuffling to a fresh permutation on a `bpm` timer — the arrangement scrambles each beat, the content is untouched.
+Remaps every light to another via a true 1:1 permutation, reshuffling to a fresh permutation on a `bpm` timer: the arrangement scrambles each beat, the content is untouched.
 
-- `bpm` — reshuffles per minute, `0` freezing the permutation.
+- `bpm`: reshuffles per minute, `0` freezing the permutation.
 
 Origin: MoonLight · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Modifiers/M_MoonLight.h)
 
@@ -181,7 +181,7 @@ Detail: [technical](moxygen/RandomMapModifier.md)
 
 Carves the layer to a sub-rectangle given as percentages of the physical extent (so it survives a resize); outside the region is dark.
 
-- `startX` … `endZ` — the bounds as **percentages** of each axis.
+- `startX` … `endZ`: the bounds as **percentages** of each axis.
 
 Origin: MoonLight · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Modifiers/M_MoonLight.h)
 
@@ -197,7 +197,7 @@ Detail: [technical](moxygen/RegionModifier.md)
 
 Rotates the 2D image around its center, turning continuously over time (the codebase's transform-matrix reference).
 
-- `speed` — rotation speed (1–255; turns faster as it rises).
+- `speed`: rotation speed.
 
 Origin: MoonLight · by WildCats08 / [@Brandon502](https://github.com/Brandon502) · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Modifiers/M_MoonLight.h)
 

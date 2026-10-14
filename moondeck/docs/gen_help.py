@@ -1,0 +1,420 @@
+#!/usr/bin/env python3
+# /// script
+# requires-python = ">=3.10"
+# dependencies = ["libclang>=18"]
+# ///
+"""Generate help.json, the help the app shows per module and per control.
+
+The header is the source: clang's AST attaches each `///` comment to its declaration, so a module's help is its class comment and a control's help is the comment on the member its `add…` call publishes. libclang (the LLVM project's Python bindings) reads the registry's translation unit, `src/module_types.cpp`, which includes every registered module, in about a second, with no build: the registry needs only its include paths.
+
+A module whose catalog card still exists is read from that card instead: the bridge of the strangler-fig migration, so the file covers every module while the headers take over one by one. A card cut down to its heading is what moves its module to the header, and the docs build renders that card from the help. The bridge goes with the last card body.
+
+Usage:
+    uv run moondeck/docs/gen_help.py                 # writes docs/help/help.json
+    uv run moondeck/docs/gen_help.py --ref v6.1.0 --out <dir>/help.json   # links at that tag
+"""
+
+import argparse
+import json
+import os
+import re
+import subprocess
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent.parent
+sys.path.insert(0, str(ROOT / "moondeck" / "check"))
+sys.path.insert(0, str(ROOT / "moondeck" / "docs"))
+
+SITE = "https://moonmodules.org/MoonLight/"
+REPO = "https://github.com/MoonModules/MoonLight/blob/"
+REGISTRY = "src/module_types.cpp"
+CATALOG = ROOT / "docs" / "moonmodules"
+# In the docs tree, so every docs deploy publishes it at <site>/help/help.json, and committed, so the docs build reads it without LLVM and a header's change shows in the diff as its help line.
+HELP = ROOT / "docs" / "help" / "help.json"
+
+_MARKER_RE = re.compile(r"^(@guide|@moreinfo)\s*$", re.MULTILINE)
+_XREF_RE = re.compile(r"@xref\{([a-z0-9-]+)(?:\|([^}]+))?\}")
+_LINK_RE = re.compile(r"(\]\(|src=\")(?!https?://|#)([^)\"\s]+)")
+_ANCHOR_LINK_RE = re.compile(r"(\]\()#([^)]+)\)")
+# The lead's block tags, Javadoc's `@author` construct: a line opening `@<tag>` starts the field, and the field runs to the next blank line or tag. Each tag is the help field of the same name, so a header names what help.json carries; a new structured field is one entry here.
+#   card         the picture, a file under docs/assets/, then optionally its alt text
+#   attribution  what the module learned from or who wrote it first, shown apart from the summary, since writing our own rather than depending removes the automatic credit
+BLOCK_TAGS = ("card", "attribution")
+_TAG_RE = re.compile(r"^@(\w+)\s*(.*)$")
+_SENTENCE_RE = re.compile(r"(?<=[.!?])\s+(?=[A-Z`*\[])")
+
+
+# ---- the header's comments ------------------------------------------------------------------
+
+def comment_text(raw: str | None) -> str:
+    """A `///` or `///<` comment as plain text: the markers gone, the lines kept."""
+    if not raw:
+        return ""
+    lines = [re.sub(r"^\s*///<?\s?", "", ln) for ln in raw.splitlines()]
+    return _XREF_RE.sub(lambda m: m.group(2) or m.group(1), "\n".join(lines)).strip()
+
+
+def paragraphs(text: str) -> list[str]:
+    return [p.strip() for p in re.split(r"\n\s*\n", text) if p.strip()]
+
+
+def block_tags(lead: str) -> tuple[str, dict]:
+    """The lead's prose, and its block tags as fields: `{"card": "X.gif", "attribution": "..."}`."""
+    prose, fields, tag = [], {}, None
+    for ln in lead.split("\n"):
+        m = _TAG_RE.match(ln.strip())
+        if m and m.group(1) in BLOCK_TAGS:
+            tag = m.group(1)
+            fields[tag] = m.group(2).strip()
+        elif tag and ln.strip():
+            fields[tag] += " " + ln.strip()
+        else:
+            tag = None
+            prose.append(ln)
+    return "\n".join(prose), fields
+
+
+def class_help(raw: str | None) -> dict:
+    """A class comment as help levels: the first paragraph is the line, the rest of the lead the summary, each block tag its field, and each `## ` section after `@guide` a guide section. The `@moreinfo` sections are written for developers and stay in the header, which the help links."""
+    parts = _MARKER_RE.split(comment_text(raw))
+    lead, appendices = parts[0], dict(zip(parts[1::2], parts[2::2]))
+    prose, fields = block_tags(lead)
+    paras = paragraphs(prose)
+    guide = []
+    for sec in re.split(r"^## ", appendices.get("@guide", ""), flags=re.MULTILINE)[1:]:
+        title, _, body = sec.partition("\n")
+        guide.append({"title": title.strip(), "text": "\n\n".join(paragraphs(body))})
+    return {"line": paras[0] if paras else "", "summary": "\n\n".join(paras[1:]),
+            "guide": guide, **fields}
+
+
+# ---- the card, the bridge -------------------------------------------------------------------
+
+def site_url(target: str, page: Path) -> str:
+    """A link written on a catalog page, made absolute: a page becomes its URL on the site, an asset its file there, and a path outside docs/ its file on GitHub."""
+    if re.match(r"https?://", target):
+        return target
+    path, _, anchor = target.partition("#")
+    resolved = Path(os.path.normpath(page.parent / path)) if path else page
+    try:
+        rel = resolved.relative_to(ROOT / "docs").as_posix()
+    except ValueError:
+        return REPO + "main/" + resolved.relative_to(ROOT).as_posix() + (f"#{anchor}" if anchor else "")
+    if rel.endswith(".md"):
+        rel = rel[:-3] + ".html"   # mkdocs.yml sets use_directory_urls: false
+    return SITE + rel + (f"#{anchor}" if anchor else "")
+
+
+def absolutize(md: str, page: Path) -> str:
+    md = _ANCHOR_LINK_RE.sub(lambda m: f"{m.group(1)}{site_url('#' + m.group(2), page)})", md)
+    return _LINK_RE.sub(lambda m: m.group(1) + site_url(m.group(2), page), md)
+
+
+# What the card reader leaves out because help shows inline text only, counted so the run says how much a card holds that its help does not.
+DROPPED = {"code block": 0, "table": 0, "html": 0}
+
+
+def plain(lines: list[str]) -> list[str]:
+    """Card markdown as the help's inline text: a fenced block, a table and an HTML line dropped and counted, an inline tag reduced to its text, a heading made bold, a bullet that is not a control kept as a line; the picture and the controls pass as written."""
+    out, fenced = [], False
+    for ln in lines:
+        s = ln.strip()
+        if s.startswith("```"):
+            if not fenced:
+                DROPPED["code block"] += 1
+            fenced = not fenced
+        elif fenced:
+            continue
+        elif s.startswith("|"):
+            DROPPED["table"] += s.startswith("|---") or s.startswith("| ---")
+        elif s.startswith("<") and not s.startswith(("<a ", "<img")):
+            DROPPED["html"] += 1
+        elif m := re.match(r"#{2,6}\s+(.+)", s):
+            out.append(f"**{m.group(1)}**")
+        else:
+            out.append(re.sub(r"</?(?:span|br|em|strong|small|sup|sub|kbd)\b[^>]*>", "", re.sub(r"^(\s*)- (?!`)", r"\1", ln)))
+    return out
+
+
+def card_help(page: Path, anchor: str) -> dict | None:
+    """The card a registry link points at, read as help; None when the page has no such card, or when only its heading is left, which is what a module whose header carries its help leaves."""
+    from mkdocs_hooks import _ANCHOR_RE, _H2_RE, _DETAILS_RE, _split_control, card_name, split_blocks
+    if not page.exists():
+        return None
+    markdown = page.read_text(encoding="utf-8")
+    lines = markdown.split("\n")
+    for title, start, end in split_blocks(markdown):
+        ids = {m.group("id") for ln in lines[max(0, start - 3):start] if (m := _ANCHOR_RE.match(ln))}
+        if anchor not in ids and _slug(card_name(title)) != anchor:
+            continue
+        image, alt, prose, controls, attribution = None, "", [], {}, ""
+        for ln in plain(lines[start + 1:end]):
+            ln = ln.strip()
+            if m := re.match(r'<img\b[^>]*src="([^"]+)"', ln):
+                image = site_url(m.group(1), page)
+                alt = (re.search(r'alt="([^"]*)"', ln) or [None, ""])[1]
+            elif ln.startswith("- `"):
+                # `- `name`: text`, or several names sharing one text: `- `width` / `height`: text`.
+                head, sep, tail = _split_control(ln[2:])
+                if sep:
+                    text = absolutize(tail[:1].upper() + tail[1:], page)
+                    for name in re.findall(r"`([^`]+)`", head):
+                        controls[name] = {"line": text}
+            elif m := re.match(r"Origin:\s*(.+)", ln):
+                attribution = absolutize(m.group(1), page)
+            elif ln and not re.match(r"(Detail|Tests):|\[Tests\]|<a id=", ln):
+                prose.append(absolutize(ln, page))
+        if not (image or prose or controls):
+            return None
+        first = _SENTENCE_RE.split(prose[0], 1) if prose else [""]
+        summary = "\n\n".join(([first[1]] if len(first) > 1 else []) + prose[1:])
+        guide = []
+        name = card_name(title)
+        for i, ln in enumerate(lines):
+            if (m := _DETAILS_RE.match(ln)) and m.group("name") == name:
+                stop = next((j for j in range(i + 1, len(lines)) if _H2_RE.match(lines[j])), len(lines))
+                body = absolutize("\n".join(plain(lines[i + 1:stop])), page)
+                guide.append({"title": f"{name}, details", "text": "\n\n".join(paragraphs(body))})
+        return {"line": first[0], "summary": summary, "attribution": attribution, "guide": guide,
+                "image": image, "alt": alt, "controls": controls}
+    return None
+
+
+def _slug(text: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")
+
+
+# ---- clang ----------------------------------------------------------------------------------
+
+# The registry's compile flags. Its desktop entry in compile_commands.json holds these and only these, so the generator needs no build: the docs job parses the tree as it is checked out.
+CLANG_ARGS = ["-x", "c++", "-std=c++20", "-DNDEBUG", f"-I{ROOT / 'src'}",
+              f"-I{ROOT / 'src' / 'platform' / 'desktop'}", "-Wno-unknown-warning-option"]
+
+
+def load_clang():
+    """libclang and the flags that find the standard headers. The library comes from the LLVM `check_clang_query` uses when one is installed, else from the `libclang` wheel; the resource dir comes from that LLVM's clang, as the wheel ships no headers."""
+    import clang.cindex as ci
+    from check_clang_tidy import _find_tool, _toolchain_args
+    anchor = _find_tool("clang-query") or _find_tool("clang")
+    if not anchor:
+        sys.exit("clang not found: install LLVM (brew install llvm, apt install clang).")
+    llvm = Path(anchor).resolve().parent.parent
+    lib = next(iter(sorted((llvm / "lib").glob("libclang.*"))), None)
+    if lib:
+        ci.Config.set_library_file(str(lib))
+    clang = llvm / "bin" / "clang"
+    resource = subprocess.run([str(clang if clang.exists() else anchor), "-print-resource-dir"],
+                              capture_output=True, text=True).stdout.strip()
+    return ci, (["-resource-dir", resource] if resource else []) + _toolchain_args()
+
+
+def _referenced_field(expr):
+    """The member an argument names, through casts and array decay; None for a temporary."""
+    for node in expr.walk_preorder():
+        ref = node.referenced
+        if ref is not None and ref.kind.name in ("FIELD_DECL", "VAR_DECL"):
+            return ref
+    return None
+
+
+def _literal(expr) -> str | None:
+    for tok in expr.get_tokens():
+        if tok.kind.name == "LITERAL" and tok.spelling.startswith('"'):
+            return tok.spelling[1:-1]
+        return None
+    return None
+
+
+def _line_comment(call) -> str:
+    """A `///` above an `add…` line or `///<` behind it: the help of a control with no member."""
+    src = Path(call.location.file.name).read_text(encoding="utf-8").splitlines()
+    line = call.location.line
+    after = src[line - 1].partition("///<")
+    if after[1]:
+        return after[2].strip()
+    above = src[line - 2].strip() if line > 1 else ""
+    return above[3:].strip() if above.startswith("///") and not above.startswith("///<") else ""
+
+
+def controls_of(cls) -> dict:
+    """Each control `defineControls` publishes, in order, with its line: the `///` on the member the `add…` call names, else one on the call's own line; empty when there is neither."""
+    controls = {}
+    for method in cls.get_children():
+        if method.kind.name != "CXX_METHOD" or method.spelling != "defineControls":
+            continue
+        for call in method.walk_preorder():
+            if call.kind.name != "CALL_EXPR" or not call.spelling.startswith("add"):
+                continue
+            args = list(call.get_arguments())
+            name = _literal(args[0]) if args else None
+            if not name:
+                continue
+            field = _referenced_field(args[1]) if len(args) > 1 else None
+            controls[name] = (comment_text(field.raw_comment) if field is not None else "") \
+                or _line_comment(call)
+    return controls
+
+
+def _runs(cls, name):
+    """The definition of method `name` the class runs: its own, else the nearest base's, as the virtual call resolves it."""
+    queue, seen = [cls], set()
+    while queue:
+        c = queue.pop(0)
+        if c.hash in seen:
+            continue
+        seen.add(c.hash)
+        for m in c.get_children():
+            if m.kind.name == "CXX_METHOD" and m.spelling == name and m.is_definition():
+                return m
+        queue += [(b.referenced.get_definition() or b.referenced) for b in c.get_children()
+                  if b.kind.name == "CXX_BASE_SPECIFIER" and b.referenced is not None]
+    return None
+
+
+def _returns(cls, name) -> list[str]:
+    """The tokens of what method `name` returns, `ModuleRole :: Effect` or a string literal."""
+    m = _runs(cls, name)
+    toks = [t.spelling for t in m.get_tokens()] if m is not None else []
+    if "return" not in toks:
+        return []
+    rest = toks[toks.index("return") + 1:]
+    rest = rest[:rest.index(";")] if ";" in rest else rest
+    if len(rest) == 1 and re.fullmatch(r"\w+", rest[0]) and m is not None:
+        # A named constant or a member, `return kTags;` or `return dim_;`: its initializer is the value.
+        decl = next((n.referenced for n in m.walk_preorder()
+                     if n.kind.name in ("DECL_REF_EXPR", "MEMBER_REF_EXPR") and n.spelling == rest[0]
+                     and n.referenced is not None), None)
+        dt = [t.spelling for t in decl.get_tokens()] if decl is not None else []
+        for opener in ("=", "{"):
+            if opener in dt:
+                init = dt[dt.index(opener) + 1:]
+                return [t for t in init if t not in (";", "}")]
+    return rest
+
+
+def identity(cls) -> dict:
+    """What /api/types says of a type, read from the code: its role (ModuleRole lowercased, as roleName gives it), its tags() and its dimensions(), so the docs site's chips match the app's."""
+    role = _returns(cls, "role")
+    tags = "".join(t[1:-1] for t in _returns(cls, "tags") if t.startswith('"'))
+    dim = _returns(cls, "dimensions")
+    name = role[-1].lower() if role else "generic"
+    return {"role": name if name in ("effect", "modifier", "driver", "layout", "layer", "service") else "generic",
+            "tags": tags,
+            "dim": int(dim[-1][1:]) if dim and re.fullmatch(r"D\d", dim[-1]) else 0}
+
+
+def registrations(tu, ci):
+    """Each `registerType<Class>("Type", "page.md#anchor")` in the registry, in order."""
+    for call in tu.cursor.walk_preorder():
+        if (call.kind != ci.CursorKind.CALL_EXPR or call.spelling != "registerType"
+                or not call.location.file or not call.location.file.name.endswith(REGISTRY)):
+            continue
+        callee = next(call.get_children())
+        cls = next((n.referenced for n in callee.walk_preorder()
+                    if n.kind == ci.CursorKind.TYPE_REF and n.referenced.spelling != "ModuleFactory"),
+                   None)
+        args = [_literal(a) for a in call.get_arguments()]
+        if cls is not None and args and args[0]:
+            yield args[0], cls.get_definition() or cls, (args[1] if len(args) > 1 else "") or ""
+
+
+# ---- the file -------------------------------------------------------------------------------
+
+def asset_url(fname: str) -> str | None:
+    hits = sorted((ROOT / "docs" / "assets").rglob(fname))
+    return SITE + hits[0].relative_to(ROOT / "docs").as_posix() if hits else None
+
+
+def tests_url(cls_name: str, ref: str) -> str | None:
+    stem = re.sub(r"(Effect|Modifier|Layout|Driver|Service)$", "", cls_name)
+    for name in dict.fromkeys((cls_name, stem)):
+        hits = sorted((ROOT / "test").rglob(f"unit_{name}.cpp"))
+        if hits:
+            return REPO + ref + "/" + hits[0].relative_to(ROOT).as_posix()
+    return None
+
+
+def header_help(cls) -> dict:
+    """A module's help from its header: the class comment's levels, and per control its line and, from the `@guide` section titled with the control's name, its more."""
+    h = class_help(cls.raw_comment)
+    lines = controls_of(cls)
+    more = {g["title"]: g["text"] for g in h["guide"] if g["title"] in lines}
+    controls = {name: {"line": line, **({"more": more[name]} if name in more else {})}
+                for name, line in lines.items()}
+    image, _, alt = (h.get("card") or "").partition(" ")
+    return {"line": h["line"], "summary": h["summary"], "attribution": h.get("attribution"),
+            "guide": [g for g in h["guide"] if g["title"] not in lines],
+            "image": asset_url(image) if image else None, "alt": alt.strip(), "controls": controls}
+
+
+def module_help(cls, doc: str, ref: str) -> tuple[dict, str]:
+    """One module's entry, and where it came from: `card` while its card has a body, else `header`."""
+    page, _, anchor = doc.partition("#")
+    entry = card_help(CATALOG / page, anchor) if page else None
+    origin = "card"
+    if entry:
+        # The code says which controls exist; the card only describes them.
+        cards = entry["controls"]
+        entry["controls"] = {c: cards.get(c, {"line": ""}) for c in controls_of(cls)} or cards
+    else:
+        entry, origin = header_help(cls), "header"
+    source = Path(cls.location.file.name).resolve().relative_to(ROOT).as_posix()
+    entry.update(identity(cls))
+    entry["doc"] = doc
+    entry["source"] = REPO + ref + "/" + source
+    entry["tests"] = tests_url(cls.spelling, ref)
+    return {k: v for k, v in entry.items() if v not in (None, "", [], {})}, origin
+
+
+def generate(ref: str = "main") -> tuple[dict, dict]:
+    """The help file, and a report: which modules came from headers and cards, and the controls with no line."""
+    ci, extra = load_clang()
+    tu = ci.Index.create().parse(str(ROOT / REGISTRY), args=CLANG_ARGS + extra)
+    errors = [d for d in tu.diagnostics if d.severity >= ci.Diagnostic.Error]
+    if errors:
+        # A translation unit with errors loses declarations silently; a short file is not a clean one.
+        sys.exit("clang could not parse the registry:\n  " + "\n  ".join(map(str, errors[:5])))
+    modules, report = {}, {"card": [], "header": [], "missing": {}}
+    for type_name, cls, doc in registrations(tu, ci):
+        entry, origin = module_help(cls, doc, ref)
+        modules[type_name] = entry
+        report[origin].append(type_name)
+        missing = [c for c, h in entry.get("controls", {}).items() if not h.get("line")]
+        if missing or not entry.get("line"):
+            report["missing"][type_name] = missing if entry.get("line") else ["(module)"] + missing
+    return {"version": ref, "modules": modules}, report
+
+
+def render(data: dict) -> str:
+    """The file's text: one line per field, so a header's edit diffs as the help line it changed."""
+    return json.dumps(data, ensure_ascii=False, indent=1) + "\n"
+
+
+def stale() -> bool:
+    """Whether the committed file differs from what the headers and cards generate now."""
+    return not HELP.exists() or HELP.read_text(encoding="utf-8") != render(generate()[0])
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    ap.add_argument("--ref", default="main", help="Git ref the source and test links point at.")
+    ap.add_argument("--out", default=str(HELP))
+    args = ap.parse_args()
+    data, report = generate(args.ref)
+    out = Path(args.out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(render(data), encoding="utf-8")
+    print(f"{out.relative_to(ROOT) if out.is_relative_to(ROOT) else out}: {len(data['modules'])} modules, "
+          f"{len(report['header'])} from headers, {len(report['card'])} from cards, "
+          f"{out.stat().st_size // 1024} KB")
+    dropped = ", ".join(f"{n} {k}{'s' if n != 1 else ''}" for k, n in DROPPED.items() if n)
+    if dropped:
+        print(f"  left out of card help, which shows inline text only: {dropped}")
+    for t, names in sorted(report["missing"].items()):
+        print(f"  no help: {t}: {', '.join(names)}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

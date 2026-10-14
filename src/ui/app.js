@@ -7,6 +7,8 @@ import { installPicker } from "/install-picker.js";
 import { preview } from "/preview3d.js";
 import { isNewer, parse } from "/semver.js";
 import { applyMigrations, collectFiles, restoreDirs, diffRestore } from "/migrate.js";
+import { docUrl, moduleHelp, controlHelp, ROLE_EMOJI, DIM_EMOJI, SCRIPTED_EMOJI, COMPILED_EMOJI, EMOJI_LABEL,
+         emojiTagsFor, emojiChipRow, chipsMatch } from "/help.js";
 
 // Sections (top to bottom):
 //   1. State + storage
@@ -334,6 +336,9 @@ window.addEventListener("pagehide", () => {
 
 async function init() {
     applyTheme(theme);
+    // Before anything renders: the cached help and a ?help choice shape the first cards.
+    loadHelp();
+    applyHelpShown(lsRead(LS_HELP_SHOWN, "1") === "1");
     setupStatusBarButtons();
     setupUpdateBadge();
     setupCardsResize();
@@ -2128,14 +2133,7 @@ function createCard(mod, depth) {
         title.appendChild(assignBtn);
     }
 
-    // Help link → the module's spec page on the rendered docs site, far right of
-    // the row. docPath comes from /api/types (relative to docs/moonmodules/, e.g.
-    // "core/services.md#audio" or "light/effects.md#fire"); omitted if none.
-    // The site is Material for MkDocs at moonmodules.org/MoonLight/ (flat URLs, so
-    // foo.md → foo.html; the MkDocs heading slugs match these #anchors), reached
-    // via the same /MoonLight/ subpath the installer uses. Convert only the `.md`
-    // extension that sits right before the optional `#anchor` (suffix-anchored),
-    // so a docPath that ever contained ".md" mid-string wouldn't be mangled.
+    // Help link → the module's page on the docs site, far right of the row; docPath comes from /api/types, and the type declares none for no link.
     const docPath = docPathForType(mod.type);
     if (docPath) {
         const help = document.createElement("a");
@@ -2144,8 +2142,7 @@ function createCard(mod, depth) {
         help.title = "Open module documentation";
         help.target = "_blank";
         help.rel = "noopener";
-        const htmlPath = docPath.replace(/\.md(#.*)?$/, ".html$1");
-        help.href = "https://moonmodules.org/MoonLight/moonmodules/" + htmlPath;
+        help.href = docUrl(docPath);
         title.appendChild(help);
     }
 
@@ -2162,6 +2159,8 @@ function createCard(mod, depth) {
     title.appendChild(api);
 
     card.appendChild(title);
+    const help = helpFor(mod.type);
+    if (help && help.line) card.appendChild(moduleHelp(help, docPath));
 
     // -- Controls --
     // Child-hosting modules deeper in the tree (Effects, Layer, Drivers, Layouts)
@@ -2816,6 +2815,48 @@ function docPathForType(moduleType) {
     return (t && t.docPath) ? t.docPath : "";
 }
 
+// ---- Help: each module's own documentation, which the browser fetches, so the flash holds none ----
+//
+// help.json is generated from the module headers (moondeck/docs/gen_help.py) and published beside the docs site, whose Pages host sends `access-control-allow-origin: *`, so a page served by a device may read it. A device's page is plain HTTP, which has no Cache API, so the last copy lives in localStorage and shows at once, offline included; the fetch then revalidates it with the ETag Pages sends.
+const HELP_URL = "https://moonmodules.org/MoonLight/help/help.json";
+const LS_HELP = "mm_help";            // the last help.json fetched, as text
+const SS_HELP_URL = "mm_helpUrl";     // sessionStorage: another help source for this tab only, "" for none; `?help=<url>`, `?help=off` or `?help=default` sets it
+const LS_HELP_SHOWN = "mm_helpShown"; // "0" hides the help without a re-render, from the ⓘ in the status bar
+let helpModules = {};
+
+// A `?help=` source lasts for this tab only and must be http(s), so a shared link cannot pin a device's help to another server; only the docs site's file is kept for offline use.
+function loadHelp() {
+    const q = new URLSearchParams(location.search);
+    let url = HELP_URL;
+    try {
+        const v = q.get("help");
+        if (v === "default") sessionStorage.removeItem(SS_HELP_URL);
+        else if (v === "off" || /^https?:\/\//.test(v || "")) sessionStorage.setItem(SS_HELP_URL, v === "off" ? "" : v);
+        url = sessionStorage.getItem(SS_HELP_URL) ?? HELP_URL;
+    } catch { /* storage blocked: the docs site's help */ }
+    const own = url === HELP_URL;
+    const cached = own ? lsRead(LS_HELP, "") : "";
+    try { helpModules = cached ? JSON.parse(cached).modules || {} : {}; } catch { helpModules = {}; }
+    if (!url) { helpModules = {}; return; }
+    fetch(url, {cache: "no-cache"}).then(r => r.ok ? r.text() : Promise.reject(r.status)).then(text => {
+        if (text === cached) return;
+        helpModules = JSON.parse(text).modules || {};
+        if (own) try { localStorage.setItem(LS_HELP, text); } catch { /* full storage: the help still shows this session */ }
+        if (state && !userIsEditing()) renderCards();
+    }).catch(() => {});   // offline, as on the device's own access point: the cache, or no help
+}
+
+// Show or hide every help line at once: one class on <body>, so a field being edited is untouched.
+function applyHelpShown(shown) {
+    document.body.classList.toggle("help-hidden", !shown);
+    const btn = document.getElementById("help-toggle");
+    if (btn) { btn.setAttribute("aria-pressed", String(shown)); btn.title = shown ? "Hide help" : "Show help"; }
+}
+
+function helpFor(moduleType) {
+    return helpModules[moduleType] || null;
+}
+
 // Curated emoji string for a live module: its role emoji plus the type's
 // `tags` from /api/types, deduplicated, in role-first order. "" if the type
 // isn't loaded yet. Used on the card title and in the type picker.
@@ -3438,6 +3479,8 @@ function createControl(moduleName, moduleType, ctrl, writeTo = (name, value) => 
 
     // The key the edit cooldown stamps, so a list rebuild puts back a value still being typed; a list's own row fields keep theirs.
     for (const el of row.querySelectorAll("input, select, textarea")) if (!el.dataset.dragkey) el.dataset.dragkey = key;
+    const help = helpFor(moduleType);
+    controlHelp(row, help && help.controls ? help.controls[ctrl.name] : null);
     return row;
 }
 
@@ -5289,25 +5332,6 @@ function paletteGradientCss(colors) {
     return stops.length ? `linear-gradient(to right, ${stops.join(",")})` : "none";
 }
 
-// Role → emoji, derived here rather than duplicated in every module's tags(): one home in the UI
-// saves repeating the same character in ~90 module headers and a few bytes per type in /api/types.
-// The dimensional chip comes from the type's `dim` the same way (DIM_EMOJI below), and both are
-// merged with the module's own tags() in emojiTagsFor().
-//
-// What each emoji MEANS is documented once, for the people who read the chips:
-// docs/tutorials/how-moonlight-works.md, "The emoji on every card". Re-listing the vocabulary here
-// is how this comment came to name four emoji no module carries any more.
-const ROLE_EMOJI = {
-    effect:     "🔥",
-    driver:     "☸️",
-    modifier:   "💎",
-    layout:     "🚥",
-    layer:      "🥞",
-    effects:    "🥞",   // the container a preset captures; same pancake as the Layers it holds
-    service:    "🛰️",
-    generic:    "⚙️",
-};
-
 // Role → hue, the color half of the same vocabulary ROLE_EMOJI carries. Four capturable roles get a
 // distinct hue so a preset pad says what it covers before its name is read. Hues (not full colors) so
 // one value drives the face, the border and the glow at different mixes, and so several roles can be
@@ -5324,107 +5348,6 @@ const ROLE_HUE = {
 function roleHue(roles) {
     const hues = (roles || []).map(r => ROLE_HUE[r]).filter(h => h != null);
     return hues.length === 1 ? String(hues[0]) : null;
-}
-
-// Dim int → emoji. Effects, layouts and modifiers all carry `dim` (1/2/3); everything else has 0
-// and contribute nothing here. Same MoonLight key. Keeps emojiTagsFor() the
-// single place that assembles the chip set per type.
-const DIM_EMOJI = {
-    1: "📏",
-    2: "🟦",
-    3: "🧊",
-};
-
-// Split a string into grapheme clusters so multi-codepoint emoji (e.g. 🌫️,
-// which is base char + variation selector) stay whole. Falls back to a plain
-// code-point split if Intl.Segmenter is unavailable.
-const _graphemeSeg = (typeof Intl !== "undefined" && Intl.Segmenter)
-    ? new Intl.Segmenter(undefined, {granularity: "grapheme"})
-    : null;
-function graphemes(s) {
-    if (!s) return [];
-    if (_graphemeSeg) return [..._graphemeSeg.segment(s)].map(seg => seg.segment);
-    return [...s];
-}
-
-// All emoji for a type: role first, then dimensional (effects only), then each
-// curated tag emoji from tags(). Deduplicated, order preserved.
-// A script is marked; a compiled module is not. Two chips in the picker filter on this, and the
-// compiled one matches by ABSENCE, so adding it costs no tag on ninety existing modules.
-const SCRIPTED_EMOJI = "\u{1F4DD}";      // 📝 the module runs a MoonLive script
-// Not the gear: that is already the `generic` role's emoji, and reusing it drew the chip twice.
-const COMPILED_EMOJI = "\u{1F4E6}";      // 📦 chip only: never a tag any module carries
-
-// The POWER-FUNCTION tags: which kernels an effect is built on, rather than where it came from or
-// what it listens to. They are ordered LAST and kept together so they read as one group on a card
-// and sit adjacent in the picker's chip row, which is what makes "show me the fluid effects" a
-// glanceable filter rather than a hunt through a mixed string. A separator character is not used:
-// every chip is one grapheme, so a separator would become a chip of its own.
-// What an effect LISTENS to. Their own group in the picker: "show me the effects that react to
-// music" is the question a chip row is for, and the two notes answer it together.
-const AUDIO_EMOJI = ["\u{1F3B5}", "\u{1F3B6}"];   // volume, frequency
-
-const KERNEL_EMOJI = ["🖌️", "✨", "🌊", "💨", "🌫️", "🎡"];   // same order the legend lists them in
-
-// What each chip MEANS, as a tooltip. The chips are a filter, so a reader who does not yet know the
-// vocabulary has to guess what narrows the list; the title makes each one self-describing without
-// spending any screen space. Wording follows the legend that documents them for people reading a
-// card: docs/tutorials/how-moonlight-works.md, "The emoji on every card".
-const EMOJI_LABEL = {
-    // what the module IS
-    "\u{1F525}": "effect",
-    "\u2638\uFE0F": "driver",
-    "\u{1F48E}": "modifier",
-    "\u{1F6A5}": "layout",
-    "\u{1F95E}": "layer",
-    "\u{1F6F0}\uFE0F": "service",
-    "\u2699\uFE0F": "generic",
-    [SCRIPTED_EMOJI]: "runs a MoonLive script",
-    [COMPILED_EMOJI]: "compiled into the firmware",
-    // the shape it works in
-    "\u{1F4CF}": "1D: a line",
-    "\u{1F7E6}": "2D: a picture",
-    "\u{1F9CA}": "3D: a volume",
-    // where it came from
-    "\u{1F4AB}": "MoonLight",
-    "\u{1F319}": "MoonModules",
-    "\u{1F419}": "WLED",
-    "\u26A1\uFE0F": "FastLED",
-    "\u{1F985}": "a named contributor",
-    // what it listens to and what it does
-    "\u{1F3B5}": "reacts to volume: how loud the room is",
-    "\u{1F3B6}": "reacts to frequency: which notes are playing",
-    "\u{1F4E1}": "takes its picture from the network",
-    "\u{1F5BC}\uFE0F": "samples the Picture service's picture",
-    "\u{1F39E}\uFE0F": "plays a recorded show from a file",
-    "\u{1F3AF}": "aims moving heads",
-    "\u{1F47E}": "pixel art: games and sprites",
-    "\u{1F9EC}": "a simulation: cells evolving off their own last frame",
-    "\u{1F4F9}": "motion-tracking aware",
-    // the power functions, shown together at the end of a row
-    "\u{1F58C}\uFE0F": "power function: a shader, every pixel computed from its position",
-    "\u2728": "power function: particles, born, moved by forces, and dying",
-    "\u{1F30A}": "power function: a fluid working out its own motion",
-    "\u{1F4A8}": "power function: transport, light carried and fading rather than redrawn",
-    "\u{1F32B}\uFE0F": "power function: a noise field, the cloud and smoke family",
-    "\u{1F3A1}": "power function: polar, composed around a center",
-};
-
-function emojiTagsFor(t) {
-    const out = [];
-    const kernels = [];
-    const seen = new Set();
-    const push = (ch) => {
-        if (!ch || seen.has(ch)) return;
-        seen.add(ch);
-        (KERNEL_EMOJI.includes(ch) ? kernels : out).push(ch);
-    };
-    push(ROLE_EMOJI[t.role]);
-    push(DIM_EMOJI[t.dim]);
-    for (const ch of graphemes(t.tags || "")) push(ch);
-    // Kernel chips in a fixed order, so two effects on the same kernels show the same run.
-    kernels.sort((a, b) => KERNEL_EMOJI.indexOf(a) - KERNEL_EMOJI.indexOf(b));
-    return out.concat(kernels);
 }
 
 // The type picker serves two modes:
@@ -5659,9 +5582,7 @@ function openPicker(anchorEl, opts) {
 
     // Emoji chip filter row: every distinct emoji across the role-filtered types.
     // Toggling chips narrows the list (AND: a type must carry all active chips).
-    const activeChips = new Set();
-    const chipRow = document.createElement("div");
-    chipRow.className = "type-picker-chips";
+    let activeChips = new Set();
     const chipSeen = new Set();
     const present = [];
     for (const t of filtered) {
@@ -5675,49 +5596,7 @@ function openPicker(anchorEl, opts) {
     if (chipSeen.has(SCRIPTED_EMOJI) && filtered.some(t => !emojiTagsFor(t).includes(SCRIPTED_EMOJI))) {
         present.push(COMPILED_EMOJI);
     }
-    // Grouped rather than in first-seen order, so the row reads as the legend does: the scripted
-    // marker, then what a module IS (role, then dimension), then where it came from, then what it
-    // can do. A chip whose category is unknown falls in the last group rather than vanishing, so a
-    // new emoji is visible before anyone remembers to classify it.
-    const CHIP_GROUPS = [
-        [SCRIPTED_EMOJI, COMPILED_EMOJI],                // what a row IS: scripted or compiled
-        Object.values(ROLE_EMOJI),                       // type
-        Object.values(DIM_EMOJI),                        // dimension
-        ["\u{1F4AB}", "\u{1F319}", "\u{1F419}", "\u26A1\uFE0F"],   // origin
-        AUDIO_EMOJI,                                     // what it listens to
-        KERNEL_EMOJI,                                    // which power functions it is built on
-    ];
-    const groups = CHIP_GROUPS.map(g => present.filter(e => g.includes(e)));
-    const classified = new Set(CHIP_GROUPS.flat());
-    groups.push(present.filter(e => !classified.has(e)));   // capabilities and anything new
-
-    let first = true;
-    for (const group of groups) {
-        if (!group.length) continue;
-        // A separator between groups, never leading or trailing: it marks a boundary, and a
-        // boundary with nothing on one side is just a mark.
-        if (!first) {
-            const sep = document.createElement("span");
-            sep.className = "type-picker-chip-sep";
-            sep.setAttribute("aria-hidden", "true");
-            chipRow.appendChild(sep);
-        }
-        first = false;
-        for (const emoji of group) {
-            const chip = document.createElement("button");
-            chip.className = "type-picker-chip";
-            chip.textContent = emoji;
-            const label = EMOJI_LABEL[emoji];
-            if (label) { chip.title = label; chip.setAttribute("aria-label", label); }
-            chip.addEventListener("click", () => {
-                if (activeChips.has(emoji)) { activeChips.delete(emoji); chip.classList.remove("active"); }
-                else { activeChips.add(emoji); chip.classList.add("active"); }
-                refresh();
-            });
-            chipRow.appendChild(chip);
-        }
-    }
-    if (present.length > 0) picker.appendChild(chipRow);
+    if (present.length > 0) picker.appendChild(emojiChipRow(present, (a) => { activeChips = a; refresh(); }));
 
     const list = document.createElement("div");
     list.className = "type-picker-list";
@@ -5750,16 +5629,7 @@ function openPicker(anchorEl, opts) {
                 const disp = (t.displayName || t.name).toLowerCase();
                 if (!raw.includes(q) && !disp.includes(q)) return false;
             }
-            if (activeChips.size > 0) {
-                const has = new Set(emojiTagsFor(t));
-                for (const chip of activeChips) {
-                    // The compiled chip matches what carries NO scripted marker, since a compiled
-                    // module has no tag of its own: the two kind chips are each other's opposite.
-                    const ok = chip === COMPILED_EMOJI ? !has.has(SCRIPTED_EMOJI) : has.has(chip);
-                    if (!ok) return false;
-                }
-            }
-            return true;
+            return chipsMatch(emojiTagsFor(t), activeChips);
         });
     }
 
@@ -6020,6 +5890,11 @@ function setupStatusBarButtons() {
     if (rebootBtn) {
         armPressTwice(rebootBtn, rebootDevice, {armedTitle: "Click again to reboot"});
     }
+    document.getElementById("help-toggle")?.addEventListener("click", () => {
+        const shown = document.body.classList.contains("help-hidden");
+        localStorage.setItem(LS_HELP_SHOWN, shown ? "1" : "0");
+        applyHelpShown(shown);
+    });
     document.getElementById("theme-toggle")?.addEventListener("click", () => {
         theme = (theme === "dark") ? "light" : "dark";
         localStorage.setItem(LS_THEME, theme);

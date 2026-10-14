@@ -35,7 +35,7 @@ A user-added Service: the audio source the audio-reactive effects consume. `mode
 - `addressing`: (sending) `multicast`, which WLED hears, or `unicast` to `hosts`, faster on WiFi.
 - `hosts`: (unicast) the devices that follow this audio, addresses or names.
 - `simulate`: (Simulate) the pattern: `music`, a plausible song, or `sweep`, a test march.
-- `syncPort`: (network build) the UDP port, 11988 by default; `sync status` reports the state.
+- `syncPort`: (network build) the UDP port; `sync status` reports the state.
 - read-only: `level` (RMS), `peakHz` (the audio driving effects, from any source).
 
 Detail: [technical](moxygen/AudioService.md) · [the sync packet](moxygen/WLEDAudioSyncPacket.md) · [the lock-free ring](moxygen/SpscRing.md)
@@ -51,7 +51,7 @@ A user-added Service: the picture the [Picture effect](../light/effects.md#pictu
 <img src="../../assets/core/PictureService.png" width="300" alt="Picture module controls">
 
 - `source`: `test pattern`, a test card in the layout of Philips' PM5544, at any size.
-- `width` / `height`: the picture in pixels, up to 512 a side; 64 × 48 by default.
+- `width` / `height`: the picture in pixels.
 
 Detail: [technical](moxygen/PictureService.md)
 
@@ -65,13 +65,13 @@ Detail: [technical](moxygen/PictureService.md)
 
 Receives [OSC](https://opensoundcontrol.stanford.edu/) over UDP and writes it onto this device's controls, so a fader in Resolume, TouchDesigner or TouchOSC drives MoonLight directly. It owns no surface of its own: everything lands in the same control writes the HTTP API and the UI use, so every validator still runs. Addresses, feedback and setup: ⌄ details.
 
-- `listen`: receive OSC, off by default since the port is unauthenticated and writes controls.
-- `port`: the UDP port (default 9000, what TouchOSC uses). Applies live.
-- `feedback`: mirror every change back to the surface, off by default.
+- `listen`: receive OSC. The port is unauthenticated and writes controls, so it starts off.
+- `port`: the UDP port, the one TouchOSC uses out of the box.
+- `feedback`: mirror every change back to the surface.
 - `addressing`: where feedback goes, `unicast` to `hosts` or `multicast` to `group`.
 - `hosts`: (unicast) addresses or names; empty answers whoever wrote last.
-- `group`: (multicast) the group feedback goes to and this board joins, `239.255.77.78` by default.
-- `feedbackPort`: where the client listens, 9001 by default.
+- `group`: (multicast) the group feedback goes to and this board joins.
+- `feedbackPort`: where the client listens.
 - `status`: listening, off, or why the port could not be opened.
 
 Detail: [technical](moxygen/OscModule.md)
@@ -152,7 +152,7 @@ A Service added per device: **a MIDI control desk** driving the control surface.
 - `source`: `browser`, `USB` on this board's own port (S3, 8 MB of flash or more), or `network`.
 - `share`: (USB) pass the desk on over the network rather than driving this device.
 - `host`: (network) the desk's address or name, with an optional `:port`; empty waits to be invited.
-- `port`: (network, share) this device's RTP-MIDI port, 5004 by default, data on the one above.
+- `port`: (network, share) this device's RTP-MIDI port, data on the one above.
 
 Faders move the surface's faders, the knobs turn its encoders, and each channel's SELECT button flips its switch. The desk follows the surface back: motors, SELECT lights and knob rings. A hand on a fader holds its motor still. An APC40's clip pads apply presets. ⌄ details.
 

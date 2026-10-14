@@ -23,7 +23,7 @@ from check_docgen import (ANIMATED_PAGES, MAX_CONTROL, MAX_CONTROL_VISUAL,  # no
                            _header_rules, _structure)
 
 
-def _card(desc: str = "Short.", controls=("- `a` — one.",)) -> str:
+def _card(desc: str = "Short.", controls=("- `a`: one.",)) -> str:
     return "### Thing 💫 · kind\n\n" + desc + "\n\n" + "\n".join(controls) + "\n"
 
 
@@ -153,7 +153,7 @@ def test_many_short_controls_are_not_a_finding():
     # A module with twelve honest controls is not worse documented than one with three.
     # Only a control that runs to a paragraph makes a card unreadable, so the cap is per
     # LINE: ten short ones stay clean however tall the column gets.
-    many = [f"- `p{i}` — short." for i in range(10)]
+    many = [f"- `p{i}`: short." for i in range(10)]
     card = list(_cards(_card(controls=many)))[0]
     assert card["widest"] < MAX_CONTROL
 
@@ -167,7 +167,7 @@ def test_the_visual_catalogs_are_held_tighter():
     assert VISUAL in ANIMATED_PAGES and PLAIN not in ANIMATED_PAGES
 
     def findings(rel, desc_len, control_len):
-        text = _card(desc="x" * desc_len, controls=("- `a` — " + "z" * control_len + ".",))
+        text = _card(desc="x" * desc_len, controls=("- `a`: " + "z" * control_len + ".",))
         card = list(_cards(text))[0]
         card["img"], card["img_src"] = True, ("a.gif" if rel in ANIMATED_PAGES else "a.png")
         return [w for _, w in _card_rules(rel, card)]
@@ -187,7 +187,7 @@ def test_the_visual_catalogs_are_held_tighter():
 
 
 def test_the_widest_control_is_reported_with_its_text():
-    card = list(_cards(_card(controls=("- `a` — ok.", "- `b` — " + "z" * 200)))) [0]
+    card = list(_cards(_card(controls=("- `a`: ok.", "- `b`: " + "z" * 200)))) [0]
     assert card["widest"] > MAX_CONTROL
     assert "zzz" in card["widest_text"]
 
@@ -197,7 +197,7 @@ def test_links_and_image_lines_are_not_counted_as_description():
     # counting them as description would fail a card for text the column never holds.
     page = ('### Thing 💫 · kind\n\nShort.\n\n'
             '<img src="../../assets/x.png" alt="x">\n'
-            '- `a` — one.\n'
+            '- `a`: one.\n'
             'Origin: Someone · source [x.h](../../src/x.h)\n'
             '[Tests](../../reference/tests/unit-tests.md#x)\n'
             'Detail: [technical](moxygen/X.md)\n')
@@ -289,24 +289,27 @@ def test_the_header_names_the_two_columns():
 def test_links_are_labelled_not_only_iconed():
     """An icon alone made the reader decode a glyph, and the tests and API rows both
     render as a list of near-identical module names. The WORD carries the distinction."""
-    page = ('### Thing 💫 · kind\n\nShort.\n\n- `a` — one.\n'
+    page = ('### Thing 💫 · kind\n\nShort.\n\n- `a`: one.\n'
             '[Tests](../../reference/tests/unit-tests.md#thing)\n'
             'Detail: [technical](moxygen/Thing.md)\n')
     out = _row(page)
     assert "**Tests:**" in out and "**API:**" in out
 
 
-def test_attribution_is_not_linked_in_the_second_column():
-    """Attribution travels with the code it credits, in the header's `///` where the
-    generated page shows it. A `Source:` row under the controls duplicated it and made the
-    row length vary per card."""
-    page = ('### Thing 💫 · kind\n\nShort.\n\n- `a` — one.\n'
+def test_attribution_reads_under_the_description_not_among_the_links():
+    """Writing our own rather than depending removes the credit a dependency carries, so the
+    card carries it, muted under the description. Not as a `Source:` row under the controls,
+    which made the second column's length vary per card."""
+    page = ('### Thing 💫 · kind\n\nShort.\n\n- `a`: one.\n'
             '[Tests](../../reference/tests/unit-tests.md#thing)\n'
             'Detail: [technical](moxygen/Thing.md)\n'
             'Origin: MoonLight, by somebody\n')
     out = _row(page)
     assert "**Source:**" not in out
-    assert "by somebody" not in out
+    row = next(ln for ln in out.split("\n") if "mm-name" in ln)
+    col1, col2 = row.split(" | ")[0], row.split(" | ")[1]
+    assert '<span class="mm-attribution">Attribution: MoonLight, by somebody</span>' in col1
+    assert "by somebody" not in col2
 
 
 def test_all_three_links_show_even_when_a_target_is_missing():
@@ -330,7 +333,7 @@ def test_a_gif_on_a_non_animated_page_is_flagged():
     not, so half the convention went unenforced."""
     import check_docgen
     gif = ('### Thing 💫 · kind\n\n<img src="../../assets/x.gif" alt="x">\n\n'
-           'Short.\n\n- `a` — one.\n')
+           'Short.\n\n- `a`: one.\n')
     card = list(_cards(gif))[0]
     assert card["img_src"].endswith(".gif")
     assert "moonmodules/light/drivers.md" not in check_docgen.ANIMATED_PAGES
@@ -387,7 +390,7 @@ def test_an_effect_card_needs_a_gif_not_a_png():
     almost nothing about it. Everything else is cards and controls, where a png is
     sharper and smaller."""
     import check_docgen
-    png = ('### Thing 💫 · 2D\n\n<img src="../../assets/x.png" alt="x">\n\nShort.\n\n- `a` — one.\n')
+    png = ('### Thing 💫 · 2D\n\n<img src="../../assets/x.png" alt="x">\n\nShort.\n\n- `a`: one.\n')
     issues = check_docgen._structure(png, "moonmodules/light/effects.md")
     # _structure covers placement; the format rule lives with the per-card checks, so
     # exercise it the way _violations does.
@@ -398,7 +401,7 @@ def test_an_effect_card_needs_a_gif_not_a_png():
 
 
 def test_the_image_source_is_captured_for_the_format_rule():
-    gif = ('### Thing 💫 · 2D\n\n<img src="../../assets/x.gif" alt="x">\n\nShort.\n\n- `a` — one.\n')
+    gif = ('### Thing 💫 · 2D\n\n<img src="../../assets/x.gif" alt="x">\n\nShort.\n\n- `a`: one.\n')
     assert list(_cards(gif))[0]["img_src"].endswith(".gif")
 
 
@@ -410,7 +413,7 @@ def test_the_second_column_carries_only_tests_api_and_details():
     import check_docgen
     assert check_docgen.SECOND_COLUMN_LINKS == ("Tests:", "API:", "Details:")
     page = ('### Thing 💫 · kind\n\n<img src="../../assets/x.png" alt="x">\n\nShort.\n\n'
-            '- `a` — one.\n[Tests](../../reference/tests/unit-tests.md#thing)\n'
+            '- `a`: one.\n[Tests](../../reference/tests/unit-tests.md#thing)\n'
             'Detail: [technical](moxygen/Thing.md)\n')
     assert check_docgen._rendered_links("p.md", page) == []
 
@@ -429,7 +432,7 @@ def test_a_third_link_in_the_second_column_is_flagged():
 
     mkdocs_hooks._emit_row = patched
     try:
-        page = ('### Thing 💫 · kind\n\nShort.\n\n- `a` — one.\n')
+        page = ('### Thing 💫 · kind\n\nShort.\n\n- `a`: one.\n')
         issues = check_docgen._rendered_links("p.md", page)
     finally:
         mkdocs_hooks._emit_row = real
@@ -480,13 +483,13 @@ def test_a_card_without_an_image_is_flagged():
     cards = list(_cards(_card()))
     assert cards[0]["img"] is False
     page_with = ('### Thing 💫 · kind\n\n<img src="../../assets/x.png" alt="x">\n\n'
-                 'Short.\n\n- `a` — one.\n')
+                 'Short.\n\n- `a`: one.\n')
     assert list(_cards(page_with))[0]["img"] is True
 
 
 def test_links_share_the_controls_cell():
     """Not their own column: stacked under the controls they cost no page width."""
-    page = ('### Thing 💫 · kind\n\nShort.\n\n- `a` — one.\n'
+    page = ('### Thing 💫 · kind\n\nShort.\n\n- `a`: one.\n'
             'Detail: [technical](moxygen/Thing.md)\n')
     row = [l for l in _row(page).split("\n") if l.startswith("| ") and "Module |" not in l
            and not l.startswith("|--")][0]
@@ -524,7 +527,7 @@ def test_split_blocks_is_the_shared_boundary_rule():
     """check_specs and check_docgen both ask the build where a card starts and ends. One
     rule, so a page cannot be split two ways by two readers."""
     import mkdocs_hooks
-    page = ("### One 💫 · kind\n\nA.\n\n- `a` — one.\n\n"
+    page = ("### One 💫 · kind\n\nA.\n\n- `a`: one.\n\n"
             "### Two 💫 · kind\n\nB.\n\n## One, details\n\nprose\n")
     blocks = list(mkdocs_hooks.split_blocks(page))
     assert [t.split()[0] for t, _, _ in blocks] == ["One", "Two"]
@@ -1277,7 +1280,7 @@ def test_a_cpp_may_open_with_a_plain_comment_but_must_open_with_one():
 def test_a_cpp_is_asked_for_no_member_docs_of_either_kind():
     """Functions go the same way as variables, for the same reason: what the rule matched in a
     `.cpp` was the constructor or destructor of a file-local RAII struct — `~WinsockInit`,
-    `Lock`, `ParkGuard` — none of them public API, each already explained by the struct's own
+    `Lock`, `ParkGuard`: none of them public API, each already explained by the struct's own
     comment. A header keeps both halves, where a declaration really is the public surface."""
     import check_docgen
     src = ("struct State {\n"
@@ -1618,3 +1621,29 @@ def test_a_heading_inside_a_fenced_example_is_no_section():
     lines = ["/// The thing.", "///", "/// @moreinfo", "///", "/// ## Real", "///", "/// ```text",
              "/// ## not a section", "/// ```"]
     assert [k for k, _ in _unreferenced_in("src/core/x.h", lines, set())] == ["src/core/x.h::@moreinfo Real"]
+
+
+def test_a_control_stating_its_default_or_range_is_reported():
+    """The reset button shows a control's default and the slider its range, so a line stating
+    either restates the UI and drifts when the code changes. A name in backticks is not read: an
+    option called `default` is the option's name."""
+    import check_docgen
+    page = ('### Thing 💫 · kind\n\nShort.\n\n'
+            '- `fps`: frames per second (default 24, 1 to 25).\n'
+            '- `size`: square edge in lights (1–64).\n'
+            '- `device`: the input, `default` following the system.\n'
+            '- `name`: what to call it, up to 15 characters.\n'
+            '- `speed`: how fast it turns.\n')
+    findings = check_docgen._card_rules("moonmodules/light/drivers.md", list(_cards(page))[0])
+    restating = [why for _, why in findings if why.startswith("control restates the UI")]
+    assert len(restating) == 1 and restating[0].endswith(": fps, size, name")
+
+
+def test_without_llvm_the_help_freshness_is_reported_rather_than_ending_the_run(monkeypatch):
+    """A contributor without LLVM still gets the whole report, with one failing line naming the check it could not make."""
+    import check_docgen
+    import gen_help
+    monkeypatch.setattr(gen_help, "stale", lambda: (_ for _ in ()).throw(SystemExit("clang not found")))
+    findings = check_docgen._help_freshness()
+    assert findings == [("docs/help/help.json", "help.json stale unchecked: clang not found")]
+    assert check_docgen._blocks(*findings[0])

@@ -15,8 +15,10 @@
    /install/ so the local preview mirrors production's single-origin layout.
 """
 
+import json
 import logging
 import os
+import posixpath
 import re
 from pathlib import Path
 
@@ -29,6 +31,7 @@ if str(_HERE) not in sys.path:
 from _test_metadata import (  # noqa: E402
     ROOT,
     collect_unit_files,
+    parse_unit_file,
     collect_scenario_files,
 )
 from generate_test_docs import render_unit_tests, render_scenarios  # noqa: E402
@@ -192,16 +195,8 @@ _DETAILS_RE = re.compile(r'^##\s+(?P<name>.+?),\s+details\s*$')
 
 
 def _split_control(text: str):
-    """A control line as (name, separator, description).
-
-    Written `- `name`: what it does`. The em-dash form is read too, because the tree still
-    holds 143 of them, but it is not the form to write: see documentation-standards.md.
-    """
-    for sep in (": ", " — "):
-        head, found, tail = text.partition(sep)
-        if found:
-            return head, found, tail
-    return text, "", ""
+    """A control line as (name, separator, description), written `- `name`: what it does`."""
+    return text.partition(": ")
 
 
 def split_blocks(markdown: str):
@@ -223,6 +218,82 @@ def split_blocks(markdown: str):
         yield _H3_RE.match(lines[i]).group("title"), i, end
 
 
+_SITE_RE = re.compile(r"https://moonmodules\.org/MoonLight/([^)\"\s#]*)(#[^)\"\s]*)?")
+
+
+def _site_relative(md: str, src_uri: str) -> str:
+    """The help's absolute site links made relative to the page, so the build checks them and a local preview shows its own files: `moonmodules/core/services.html` is `../core/services.md`."""
+    def repl(m: re.Match) -> str:
+        path, anchor = m.group(1), m.group(2) or ""
+        if path.endswith(".html") or not path:
+            path = (path[:-5] or "index") + ".md"
+        if path == src_uri:
+            return anchor or "#"
+        return posixpath.relpath(path, posixpath.dirname(src_uri)) + anchor
+    return _SITE_RE.sub(repl, md)
+
+
+_help_cache = {}
+
+
+def _help_modules() -> dict:
+    """docs/help/help.json's modules, keyed by the registry link that names each one's card."""
+    if "modules" not in _help_cache:
+        path = Path(__file__).resolve().parent.parent.parent / "docs" / "help" / "help.json"
+        modules = json.loads(path.read_text(encoding="utf-8"))["modules"] if path.exists() else {}
+        _help_cache["modules"] = {m["doc"]: m for m in modules.values() if m.get("doc")}
+    return _help_cache["modules"]
+
+
+def _tests_link(url: str, src_uri: str) -> str:
+    """The test inventory's section for a test file, which reads its cases as sentences, where the file names its `@module`; else the file on GitHub, the link the help itself carries."""
+    rel = url.split("/blob/", 1)[-1].partition("/")[2]
+    path = ROOT / rel
+    module = parse_unit_file(path).get("module") if rel and path.exists() else None
+    if not module:
+        return url
+    page = posixpath.relpath("reference/tests/unit-tests.md", posixpath.dirname(src_uri))
+    return f"{page}#{_slug(module)}"
+
+
+def _card_control(line: str) -> str:
+    """A control's line as a card writes it, `name: what it does`, lowercase after the colon. The help keeps the sentence's capital; an acronym such as `FSEQ` keeps its own."""
+    return re.sub(r"^([A-Z])(?=[a-z])", lambda m: m.group(1).lower(), line)
+
+
+def fill_cards_from_help(markdown: str, src_uri: str) -> str:
+    """Each card cut down to its heading, drawn from the module's help: the header's text, so the card shows what the app shows and nothing describes the module twice. A card with a body is left as written, which is the strangler-fig bridge while the headers take over."""
+    lines = markdown.split("\n")
+    page = src_uri.removeprefix("moonmodules/")
+    for title, start, end in reversed(list(split_blocks(markdown))):
+        if any(ln.strip() and not _ANCHOR_RE.match(ln) for ln in lines[start + 1:end]):
+            continue
+        anchors = [m.group("id") for ln in lines[max(0, start - 3):start] if (m := _ANCHOR_RE.match(ln))]
+        entry = next((_help_modules().get(f"{page}#{a}") for a in anchors
+                      if f"{page}#{a}" in _help_modules()), None)
+        if entry is None:
+            continue
+        name = card_name(title)
+        body = [""]
+        if entry.get("image"):
+            alt = entry.get("alt") or f"{name} preview"
+            body += [f'<img src="{_site_relative(entry["image"], src_uri)}" width="300" alt="{alt}">', ""]
+        body += [_site_relative(" ".join([entry["line"]] + entry.get("summary", "").split("\n\n")).strip(),
+                                src_uri), ""]
+        body += [f"- `{c}`: {_card_control(_site_relative(h['line'], src_uri))}"
+                 for c, h in entry.get("controls", {}).items()]
+        if entry.get("attribution"):
+            body += ["", f"Origin: {_site_relative(entry['attribution'], src_uri)}"]
+        stem = posixpath.basename(entry["source"]).removesuffix(".h")
+        body += ["", f"Detail: [technical](moxygen/{stem}.md)"]
+        if entry.get("tests"):
+            body += ["", f"[Tests]({_tests_link(entry['tests'], src_uri)})"]
+        # The next card's `<a id>` sits inside this block, right above that card's heading: keep it.
+        anchors_after = [ln for ln in lines[start + 1:end] if _ANCHOR_RE.match(ln)]
+        lines[start + 1:end] = body + [""] + [x for a in anchors_after for x in (a, "")]
+    return "\n".join(lines)
+
+
 def _cell(s: str) -> str:
     """A markdown-table cell: collapse newlines to <br> so multi-line content
     survives inside a single pipe cell."""
@@ -238,6 +309,33 @@ def _slug(text: str) -> str:
     in the build env (it's a MkDocs dependency)."""
     from markdown.extensions.toc import slugify
     return slugify(text, "-")
+
+
+def _row_links(b: dict, details_names: set) -> list:
+    """A card's three links, Tests, API and Details, always all three."""
+    # THREE links, and always all three: Tests, API and Details. A card offers the same
+    # doors on every row, so a reader learns their position once instead of re-reading a
+    # list whose length changes per card. Everything else was prose wearing a link's clothes: the
+    # details section is already named in the card's own description, so a `More:` row restated a
+    # sentence the reader had read. The attribution reads under the description instead.
+    #
+    # A missing target still renders its label, greyed, rather than vanishing: a card with
+    # no tests is a gap worth seeing, and a row that silently loses a link hides it.
+    tests = (b["testsMulti"] if b.get("testsMulti")
+             else f'[{b["testsName"]}]({b["tests"]})' if b["tests"]
+             else '<span class="mm-missing">none yet</span>')
+    detail = (re.sub(r'^\[technical\]', '[reference]', b["detail"]) if b["detail"]
+              else '<span class="mm-missing">none yet</span>')
+    links = [f":material-test-tube: **Tests:** {tests}",
+             f":material-api: **API:** {detail}"]
+    # Details is a fixed row, not a per-card extra: most cards have one and a reader
+    # follows it often, so it earns a standing position. Any other link a card wants is
+    # made in the description, in the sentence that needs it.
+    name = card_name(b["title"])
+    details = (f"[{name}, details](#{_slug(name + ', details')})" if name in details_names
+               else '<span class="mm-missing">none yet</span>')
+    links.append(f":material-text-long: **Details:** {details}")
+    return links
 
 
 def _emit_row(b: dict, details_names: set) -> str:
@@ -259,17 +357,17 @@ def _emit_row(b: dict, details_names: set) -> str:
     # read as title + subtitle rather than one run-on line (styled in extra.css).
     name = f'{anchor_spans}<span class="mm-name">{b["title"]}</span>'
     desc = " ".join(b["desc"])
+    # The attribution under the description, muted: writing our own rather than depending removes the credit a dependency carries automatically, so the card carries it instead.
+    if b.get("origin"):
+        desc += f'<br><span class="mm-attribution">Attribution: {b["origin"]}</span>'
     col1 = _cell(f'{name}{img_html}<br><span class="mm-desc">{desc}</span>'
                  if desc else f'{name}{img_html}')
 
     # Col 2: controls, one per line, split into the name part (keeps its `code` chips,
     # styled accent) and the description (greyed via .mm-pdesc).
     #
-    # The separator is a COLON or an em-dash. Only the colon should be written: em-dashes
-    # are banned repo-wide, so a format that required one made the renderer and the prose
-    # rules contradict each other. The em-dash stays readable because 143 lines in the tree
-    # still use it, and a card is not the place to fail over punctuation. A control with
-    # neither renders whole in the name part.
+    # The separator is a colon, never an em-dash, which the prose rules ban repo-wide. A
+    # control without one renders whole in the name part.
     col2_parts = []
     for p in b["params"]:
         p = re.sub(r'^-\s+', '', p)
@@ -281,29 +379,7 @@ def _emit_row(b: dict, details_names: set) -> str:
             col2_parts.append(f'<span class="mm-param">{p}</span>')
     col2 = "".join(col2_parts) if col2_parts else "—"
 
-    # THREE links, and always all three: Tests, API and Details. A card offers the same
-    # doors on every row, so a reader learns their position once instead of re-reading a
-    # list whose length changes per card. Everything else was prose wearing a link's clothes: attribution
-    # belongs in the header's /// (it travels with the code it credits), and the details
-    # section is already named in the card's own description, so a `More:` row restated a
-    # sentence the reader had just read.
-    #
-    # A missing target still renders its label, greyed, rather than vanishing: a card with
-    # no tests is a gap worth seeing, and a row that silently loses a link hides it.
-    tests = (b["testsMulti"] if b.get("testsMulti")
-             else f'[{b["testsName"]}]({b["tests"]})' if b["tests"]
-             else '<span class="mm-missing">none yet</span>')
-    detail = (re.sub(r'^\[technical\]', '[reference]', b["detail"]) if b["detail"]
-              else '<span class="mm-missing">none yet</span>')
-    links = [f":material-test-tube: **Tests:** {tests}",
-             f":material-api: **API:** {detail}"]
-    # Details is a fixed row, not a per-card extra: most cards have one and a reader
-    # follows it often, so it earns a standing position. Any other link a card wants is
-    # made in the description, in the sentence that needs it.
-    name = card_name(b["title"])
-    details = (f"[{name}, details](#{_slug(name + ', details')})" if name in details_names
-               else '<span class="mm-missing">none yet</span>')
-    links.append(f":material-text-long: **Details:** {details}")
+    links = _row_links(b, details_names)
     # Controls and links share ONE cell: the links column was 18% of the page, which made
     # a three-link card taller than its own controls. Stacked under the controls they read
     # as what the card offers and where it continues.
@@ -393,6 +469,14 @@ def _render_catalog_table(markdown: str) -> str:
     return "\n".join(out)
 
 
+def _deck_page(title: str, catalog: str, page: str) -> str:
+    """A catalog page as a card deck: a container help-deck.js fills from help.json."""
+    return (f"# {title}\n\n"
+            f"Every module of the [{catalog} catalog]({posixpath.basename(page)}) as a card, drawn "
+            f"from the help the app shows. Tap a card to turn it, filter by its emoji or search.\n\n"
+            f'<div class="mm-deck" data-page="{page}"></div>\n')
+
+
 def on_files(files, config):
     """Inject build-time-generated pages into the virtual tree: the test inventories,
     and (Phase 4b) a per-module API reference for each infrastructure module,
@@ -407,6 +491,11 @@ def on_files(files, config):
         files.append(f)
 
     _add("reference/tests/unit-tests.md", render_unit_tests(collect_unit_files()))
+    # The card deck renders help with the app's own help.js, served beside assets/help-deck.js, so a card on the site reads as the module's help does on a device. One deck per catalog page.
+    _add("assets/help.js", (ROOT / "src" / "ui" / "help.js").read_text(encoding="utf-8"))
+    for page, title in (("light/effects", "Effects"), ("light/layouts", "Layouts"), ("light/modifiers", "Modifiers"),
+                        ("light/drivers", "Drivers"), ("core/system", "System"), ("core/services", "Services")):
+        _add(f"moonmodules/{page}-deck.md", _deck_page(f"{title} deck", title.lower(), f"{page}.md"))
     _add("reference/tests/scenario-tests.md", render_scenarios(collect_scenario_files()))
 
     # Source-generated technical pages. gen_api.generate() writes each to disk under
@@ -525,7 +614,7 @@ def on_page_markdown(markdown, page, config, files):
     .md stays authored as readable blocks; the table is build-time only."""
     markdown = _rewrite_out_of_docs_links(markdown, page.file.src_uri)
     if page.file.src_uri in _CATALOG_PAGES:
-        markdown = _render_catalog_table(markdown)
+        markdown = _render_catalog_table(fill_cards_from_help(markdown, page.file.src_uri))
     return markdown
 
 

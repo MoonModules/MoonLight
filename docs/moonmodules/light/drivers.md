@@ -18,11 +18,11 @@ The block every driver card opens with, shown here on RMT LED. Added once by [`D
 
 <img src="../../assets/light/drivers/RmtLedDriver.png" width="300" alt="The shared block at the top of a driver card, here on RMT LED">
 
-- `localBrightness`: this driver's dim (0 to 255), multiplied with the global brightness.
+- `localBrightness`: this driver's dim, multiplied with the global brightness.
 - `curve`: brightness to output: `CIE 1931`, `gamma 2.2`, `gamma 2.8`, or `linear`.
 - `fixture`: the [fixture profile](supporting.md) applied per light, for order and white.
 - `whiteMode`: how W is derived, shown when the profile carries a W channel.
-- `start`: first light of the shared buffer this driver reads (default `0`).
+- `start`: first light of the shared buffer this driver reads.
 - `count`: how many lights from `start`. **Blank drives all of them.**
 
 Detail: [technical](moxygen/DriverBase.md)
@@ -45,7 +45,7 @@ Plus the [shared controls](#shared-driver-controls) above:
 
 - `pins`: data GPIO list: `18,17,16`, or ranges like `20-23`, mixed freely. Empty idles until set.
 - `ledsPerPin`: lights per strand. Blank splits evenly, one number to all, a list per strand.
-- `timing`: the wire bit rate. A 12V WS2811 needs `400kHz`; the default suits the rest.
+- `timing`: the wire bit rate. A 12V WS2811 needs `400kHz`; most other LEDs take the faster one.
 - `t0hNs` / `t1hNs` / `periodNs`: the bit timing itself, shown when `timing` is `custom`.
 - 🔧 `loopbackTest`: a TX to RX self-test, verdict in the status field.
 - 🔧 `loopbackTxPin` / `loopbackRxPin` / `loopbackFrame`: its pins, and whether a whole frame is sent.
@@ -110,7 +110,7 @@ Lights whose channels are each a pin, pulsed by the chip's PWM: a bulb, an analo
 Plus the [shared controls](#shared-driver-controls) above, whose `fixture` names what each pin carries:
 
 - `pins`: one GPIO per channel, in the fixture's order.
-- `bits`: the resolution, default 12, from 11 to 16, or 14 on the C3 and S3.
+- `bits`: the resolution; the C3 and S3 reach 14 at most.
 - `frequency`: the pulse rate the resolution gives, read-only.
 
 Each bit more halves the rate: 12 bits pulse at 19531 Hz, 13 at 9765 Hz, 16 at 1220 Hz. More bits fade smoother, fewer band less on camera. The channels' pulses start spread over the period, so full white never switches all at once. One timer per driver and one channel per pin, up to 16 on the classic ESP32 and 6 on the C3.
@@ -127,13 +127,13 @@ Detail: [technical](moxygen/PwmLightDriver.md)
 
 Streams the buffer over UDP as **Art-Net**, **E1.31 / sACN** or **DDP**, its packets paced so receivers keep up, to Falcon/Advatek controllers, xLights and LedFx. Feeds several receivers from one driver, each its own slice. Mixed DMX fixtures and the addressing rules are in [the details below](#network-send-details).
 
-- `protocol`: Art-Net / E1.31 / DDP (default Art-Net); the port follows.
+- `protocol`: Art-Net / E1.31 / DDP; the port follows.
 - `addressing`: unicast for all three, multicast for E1.31, broadcast for Art-Net.
 - `hosts`: the receivers, such as `192.168.1.70-74, panel-01.local`. **Blank idles.**
 - `lightsPerHost`: lights per receiver. Blank splits evenly, one number to all, a list each.
 - `universe_start`: first universe for Art-Net / E1.31, restarting per receiver. DDP ignores it.
-- `fps`: frame-rate limit (default 50, 1 to 120).
-- `packet_gap`: µs between a frame's packets (default 500); 0 sends the frame as one burst.
+- `fps`: frame-rate limit.
+- `packet_gap`: µs between a frame's packets; 0 sends the frame as one burst.
 
 [Tests](../../reference/tests/unit-tests.md#networksenddriver)
 
@@ -148,10 +148,10 @@ Detail: [technical](moxygen/NetworkSendDriver.md)
 Streams the buffer to **ColorLight 5A-75 receiving cards** as raw Ethernet, taking the place of the sending card that normally feeds them. The board renders and sends, so it replaces a host PC driving the same wall. The link requirement and the protocol lineage are in [the details below](#panel-card-details).
 
 - `format`: the card's wire format (ColorLight 5A-75).
-- `firmware`: `v12 and older` (default) or `v13 and newer`. Wrong, and the wall barely updates.
+- `firmware`: `v12 and older` or `v13 and newer`. Wrong, and the wall barely updates.
 - **No geometry controls**: the wall comes from the [Layout](layouts.md), cut into card rows.
 - `interface`: which NIC to send from, by adapter name. Desktop only; raw sending needs privileges.
-- `fps`: frame-rate limit (default 40, 1 to 120).
+- `fps`: frame-rate limit.
 
 [Tests](../../reference/tests/unit-tests.md#panelcarddriver)
 
@@ -170,7 +170,7 @@ Drives **Philips Hue bulbs as pixels**: each color bulb in the driver's window b
 - `bridgeIp`: the bridge's LAN IPv4.
 - `appKey`: the Hue app key, filled by `pair`; a password, so masked and kept out of documents.
 - `pair`: button: press it, then the bridge's physical link button within ~30 s to claim a key.
-- `room` / `light`: dropdowns narrowing which color lights are driven (both default `All`).
+- `room` / `light`: dropdowns narrowing which color lights are driven.
 
 [Tests](../../reference/tests/unit-tests.md#huedriver)
 
@@ -188,7 +188,7 @@ Streams a true-shape 3D preview to the web UI as a **point list**, only the real
 
 It streams on its own WebSocket channel so a large frame never delays the control plane, and only while a viewer is watching. Moving heads show their beam. How the rate and detail trade off is in [the details below](#preview-details).
 
-- `targetFps`: the rate to aim for (default 24, 1 to 25). **Lower for detail, raise for smoothness.**
+- `targetFps`: the rate to aim for. **Lower for detail, raise for smoothness.**
 
 [Tests](../../reference/tests/unit-tests.md#previewdriver)
 
@@ -205,7 +205,7 @@ Publishes the layer as an **NDI video source**, so OBS, Resolume, TouchDesigner 
 The grid becomes the frame, one light per pixel, output correction applied, so a receiver sees what the wall sees. **Desktop only, and you install the NDI runtime yourself**; without it the driver says so and nothing else changes. See [the details below](#ndi-details).
 
 - `sourceName`: the name a receiver lists. Blank uses the device's own name.
-- `fps`: frame-rate ceiling (default 30, 1 to 120), declared in every frame.
+- `fps`: frame-rate ceiling, declared in every frame.
 
 Detail: [technical](moxygen/NdiDriver.md)
 
@@ -219,7 +219,7 @@ Streams the layer as **H.264 over HLS** from the device's own HTTP server. Open 
 
 The grid becomes the frame, output correction applied. Latency is HLS's own, **2-5 seconds**, so this is for watching rather than live-control feedback. Runs on desktop (you install ffmpeg) and on the **ESP32-P4**, which encodes in hardware. See [the details below](#hls-details).
 
-- `targetFps`: encode-rate ceiling (default 30, 1 to 120), and the bandwidth knob: bitrate follows.
+- `targetFps`: encode-rate ceiling, and the bandwidth knob: bitrate follows.
 - `scale`: video pixels per light (0 = auto). Each light is a solid block, never a blur.
 - `encoder`: which ffmpeg encoder (desktop only).
 - read-only: `url` to play. The card's status line carries state, drops, or why the encoder stopped.
@@ -236,7 +236,7 @@ Streams the layer as **H.264 over RTSP**, which a player pulls rather than fetch
 
 Runs on the **ESP32-P4** and on the desktop. One encoder, so **RTSP and [HLS](#hls) run one at a time**. See [the details below](#rtsp-details).
 
-- `targetFps`: encode-rate ceiling (default 30, 1 to 60), which is also the keyframe interval.
+- `targetFps`: encode-rate ceiling, which is also the keyframe interval.
 - `scale`: video pixels per light (0 = auto). Each light is a solid block, never a blur.
 - read-only: `url` to play. The card's status line names the connected viewer.
 

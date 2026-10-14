@@ -48,7 +48,7 @@ The container of driver modules, owning the shared buffer and the per-light outp
 
 <img src="../../assets/light/Drivers.png" width="300" alt="Drivers container with the on/off + brightness controls">
 
-- `on`: master power, on by default.
+- `on`: master power.
 
   Off scales the output to black while preserving `brightness`, so switching on restores the level. Every consumer drives it: the UI, infrared, the WLED app, Home Assistant and MQTT.
 - 🎚️ `relayPins`: GPIOs switching the LED power supply, closed while `on` and brightness > 0.

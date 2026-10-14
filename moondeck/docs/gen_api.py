@@ -305,7 +305,7 @@ def _unlink_inside_code_spans(md: str) -> str:
 # so in a richly-commented class the directive trails the last text run (`… esp_event.h. @card x.png`)
 # rather than sitting on its own line. Match it ANYWHERE, with optional surrounding whitespace, and
 # render to an <img> on its own block (a leading newline lifts it out of the trailing paragraph).
-_CARD_RE = re.compile(r'[ \t]*@card\s+(?P<file>\S+\.(?:png|jpe?g|gif))[ \t]*')
+_CARD_RE = re.compile(r'[ \t]*@card\s+(?P<file>\S+\.(?:png|jpe?g|gif))(?P<alt>[^\n]*)')
 _ASSETS = ROOT / "docs" / "assets"
 
 
@@ -315,6 +315,11 @@ _ASSETS = ROOT / "docs" / "assets"
 # Doxygen has no "trailing section" slot, so we relocate it here on the rendered markdown, the same
 # post-process layer `@card` uses. Like `@card`, the plain-text marker survives Doxygen → moxygen as-is.
 _MOREINFO_RE = re.compile(r'^[ \t]*@moreinfo[ \t]*$', re.MULTILINE)
+# `@guide` opens the sections written for users, which gen_help gives the app as the module's help.
+# On the technical page they read in place, in the description, so only the marker goes.
+_GUIDE_RE = re.compile(r'^[ \t]*@guide[ \t]*$\n?', re.MULTILINE)
+# `@attribution` is a block tag gen_help makes a help field; on the technical page it reads labeled.
+_ATTRIBUTION_RE = re.compile(r'^([ \t]*)@attribution[ \t]+', re.MULTILINE)
 # The first member-section heading moxygen emits. A CLASS page lists `### Public Attributes`,
 # `### Public Methods` and friends; a GROUP page lists `### Functions`, `### Variables`,
 # `### Enumerations` or `### Classes`. Both shapes are matched, because the detailed description
@@ -388,7 +393,7 @@ def _render_card_directives(md: str, domain: str, stem: str) -> str:
         out = ""
         for i, sh in enumerate(shots):
             rel = os.path.relpath(sh, DOCS_MOONMODULES / domain / "moxygen")
-            alt = f"{stem} card" if i == 0 else f"{stem} controls"
+            alt = (m.group("alt").strip() or f"{stem} card") if i == 0 else f"{stem} controls"
             out += f'<img src="{rel}" alt="{alt}" width="300">\n'
         return f"\n\n{out}"
     return _CARD_RE.sub(repl, md)
@@ -681,6 +686,8 @@ def generate() -> dict[str, str]:
             # code span can't render — keep the label, drop the target.
             body = _unlink_inside_code_spans(body)
             body = _render_card_directives(body, domain, stem)
+            body = _GUIDE_RE.sub("", body)
+            body = _ATTRIBUTION_RE.sub(r"\1**Attribution:** ", body)
             body = _render_ref_directives(body)   # @xref{anchor|label} → page-local [label](#anchor)
             # After card rendering (so a @card inside the More-info tail moves with it): relocate the
             # class description's @moreinfo tail to a `## More info` section below the member lists.

@@ -164,6 +164,8 @@ check, so it is not in the gate table until those are swept. It does two things 
 
 Report every place the generated documentation breaks the shape the standards define, and refuse a new one. Two surfaces, one check: the catalog pages that render as card tables, and the `///` comments that become the technical pages beside them.
 
+It also regenerates `docs/help/help.json` to prove the committed one is fresh, which needs LLVM, the one [gen_help](#gen_help) uses. Without it the report still runs and names the freshness as unchecked, which fails the gate.
+
 ```bash
 uv run moondeck/check/check_docgen.py
 ```
@@ -836,6 +838,17 @@ For each `.md` file, if `docs/assets/<type-folder>/<TypeName>.png` exists and th
 Also inserts MoonDeck tab screenshots and the installer screenshot into `moondeck/MoonDeck.md` and `README.md` at fixed anchor points (defined in the `EXTRA_SHOTS` list in the script).
 
 Reports unreferenced screenshots — any PNG or GIF in `docs/assets/` not mentioned anywhere in `docs/` or `moondeck/`.
+
+### gen_help
+
+Generate `help.json`, the help the app shows per module and per control, from the module headers.
+
+```bash
+uv run moondeck/docs/gen_help.py                 # writes docs/help/help.json
+uv run moondeck/docs/gen_help.py --ref v6.1.0 --out <dir>/help.json   # source and test links at that tag
+```
+
+libclang reads `src/module_types.cpp` with its include paths, so it needs LLVM (the one `check_clang_query` uses) but no build. The file is committed: the docs deploy publishes it, the docs build draws the cards of migrated modules from it, and `check_docgen` fails when it is stale. A module whose catalog card still has a body is read from the card; a card cut to its heading is read from the header. The run lists every control with no help.
 
 ### build_docs
 

@@ -13,6 +13,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { src, fnSource } from "./app-source.mjs";
 
 const SCRIPTED = "\u{1F4DD}";
@@ -94,7 +95,8 @@ test("the two kind chips partition the list, the compiled one matching by absenc
 test("the picker's chip groups lead with the two kinds", () => {
     // Order is the legend's: what a row IS, then role, then dimension, then origin. A reader scanning
     // the chip row should meet scripted/compiled first, because that is the coarsest split.
-    const groups = src.slice(src.indexOf("const CHIP_GROUPS = ["));
+    const help = readFileSync(new URL("../../src/ui/help.js", import.meta.url), "utf8");
+    const groups = help.slice(help.indexOf("const CHIP_GROUPS = ["));
     const firstGroup = groups.slice(0, groups.indexOf("]", groups.indexOf("[", 20)) + 1);
     assert.ok(firstGroup.includes("SCRIPTED_EMOJI") && firstGroup.includes("COMPILED_EMOJI"),
               "the first chip group is the scripted/compiled pair");

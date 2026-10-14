@@ -2,7 +2,7 @@
 
 ![layouts controls](../../assets/core/Layouts.png)
 
-Every layout, one block each: what it does and what each control means — together. A layout maps light indices to physical `(x, y, z)` positions — it defines the *shape* an [effect](effects.md) draws onto and a [driver](drivers.md) sends out. The [Layouts](moxygen/Layouts.md) container holds one or more layout children and composes them into one coordinate space; a [Layer](moxygen/Layer.md) renders over that combined space. (For how this page maps to the source/asset folders, see the [folder-structure decision](../../contributing/documentation-standards.md#module-pages).)
+Every layout, one block each: what it does and what each control means, together. A layout maps light indices to physical `(x, y, z)` positions: it defines the *shape* an [effect](effects.md) draws onto and a [driver](drivers.md) sends out. The [Layouts](moxygen/Layouts.md) container holds one or more layout children and composes them into one coordinate space; a [Layer](moxygen/Layer.md) renders over that combined space. (For how this page maps to the source/asset folders, see the [folder-structure decision](../../contributing/documentation-standards.md#module-pages).)
 
 <video src="../../assets/moontube/05-layouts.webm" controls playsinline width="720" title="Layouts: a grid, a ring, a spiral, a cube, tubes, and two written in MoonLive."></video>
 
@@ -12,13 +12,13 @@ Every layout, one block each: what it does and what each control means — toget
 
 ### Car Lights
 
-A pair of concentric-ring "headlight" clusters (nested rings of 1/8/12/16/24 LEDs) positioned to mimic a car's front lights — a fixed arrangement composed from [Ring](#ring) geometry.
+A pair of concentric-ring "headlight" clusters (nested rings of 1/8/12/16/24 LEDs) positioned to mimic a car's front lights, a fixed arrangement composed from [Ring](#ring) geometry.
 
 <img src="../../assets/light/layouts/CarLightsLayout.gif" width="300" alt="Car Lights layout preview">
 
-- `scale` — overall size scale (1–10).
+- `scale`: overall size scale.
 
-Origin: Eric Marciniak (Discord) — custom car-lights fixture
+Origin: Eric Marciniak (Discord), custom car-lights fixture
 
 Detail: [technical](moxygen/CarLightsLayout.md)
 
@@ -28,12 +28,12 @@ Detail: [technical](moxygen/CarLightsLayout.md)
 
 <img src="../../assets/light/layouts/CubeLayout.gif" width="300" alt="Cube layout preview">
 
-A 3D cube volume, `width`×`height`×`depth`, wired in a configurable axis order with optional per-axis serpentine — the 3D generalisation of Panel.
+A 3D cube volume, `width`×`height`×`depth`, wired in a configurable axis order with optional per-axis serpentine: the 3D generalization of Panel.
 
-- `width` / `height` / `depth` — cube extent per axis (1–128).
-- `wiringOrder` — the axis nesting order the strip follows.
-- `X++` / `Y++` / `Z++` — count up (vs down) along that axis.
-- `snakeX` / `snakeY` / `snakeZ` — serpentine on that axis.
+- `width` / `height` / `depth`: cube extent per axis.
+- `wiringOrder`: the axis nesting order the strip follows.
+- `X++` / `Y++` / `Z++`: count up (vs down) along that axis.
+- `snakeX` / `snakeY` / `snakeZ`: serpentine on that axis.
 
 Origin: MoonLight · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Layouts/L_MoonLight.h)
 
@@ -45,9 +45,9 @@ Detail: [technical](moxygen/CubeLayout.md)
 
 <img src="../../assets/light/layouts/HumanSizedCubeLayout.gif" width="300" alt="Human-Sized Cube layout preview">
 
-A hollow walk-in cube built from five LED-curtain faces (front, back, top, left, right), each a `width`×`height`×`depth` curtain — for large/room-scale cube installations.
+A hollow walk-in cube built from five LED-curtain faces (front, back, top, left, right), each a `width`×`height`×`depth` curtain, for large/room-scale cube installations.
 
-- `width` / `height` / `depth` — cube extent per axis (1–20).
+- `width` / `height` / `depth`: cube extent per axis.
 
 Origin: MoonLight · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Layouts/L_MoonLight.h)
 
@@ -59,12 +59,12 @@ Detail: [technical](moxygen/HumanSizedCubeLayout.md)
 
 <img src="../../assets/light/layouts/PanelLayout.gif" width="300" alt="Panel layout preview">
 
-A 2D matrix panel with full wiring control: choose the axis order, per-axis direction, and serpentine — the general matrix layout ([Grid](#grid) is the simple case).
+A 2D matrix panel with full wiring control: choose the axis order, per-axis direction, and serpentine: the general matrix layout ([Grid](#grid) is the simple case).
 
-- `panelWidth` / `panelHeight` — panel size in lights (1–512).
-- `wiringOrder` — `XY` (rows) or `YX` (columns) nesting.
-- `X++` / `Y++` — count up vs down along that axis.
-- `snake` — serpentine wiring (alternate lines reverse).
+- `panelWidth` / `panelHeight`: panel size in lights.
+- `wiringOrder`: `XY` (rows) or `YX` (columns) nesting.
+- `X++` / `Y++`: count up vs down along that axis.
+- `snake`: serpentine wiring (alternate lines reverse).
 
 Origin: MoonLight · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Layouts/L_MoonLight.h)
 
@@ -76,12 +76,12 @@ Detail: [technical](moxygen/PanelLayout.md)
 
 <img src="../../assets/light/layouts/PanelsLayout.gif" width="300" alt="Panels layout preview">
 
-Tiles an M×N grid of full matrix panels into one large display: an outer walk over the panel grid plus an inner walk over each panel's lights, both independently wired — for multi-panel video walls.
+Tiles an M×N grid of full matrix panels into one large display: an outer walk over the panel grid plus an inner walk over each panel's lights, both independently wired, for multi-panel video walls.
 
-- `horizontalPanels` / `verticalPanels` — panel-grid size (1–32 each).
-- `wiringOrderP` / `X++P` / `Y++P` / `snakeP` — the panel-to-panel wiring.
-- `panelWidth` / `panelHeight` — each panel's size (1–512).
-- `wiringOrder` / `X++` / `Y++` / `snake` — the per-panel light wiring.
+- `horizontalPanels` / `verticalPanels`: panel-grid size.
+- `wiringOrderP` / `X++P` / `Y++P` / `snakeP`: the panel-to-panel wiring.
+- `panelWidth` / `panelHeight`: each panel's size.
+- `wiringOrder` / `X++` / `Y++` / `snake`: the per-panel light wiring.
 
 Origin: MoonLight · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Layouts/L_MoonLight.h)
 
@@ -93,13 +93,13 @@ Detail: [technical](moxygen/PanelsLayout.md)
 
 <img src="../../assets/light/layouts/RingLayout.gif" width="300" alt="Ring layout preview">
 
-A single ring of LEDs evenly spaced around a circle — `nrOfLEDs` points, starting at `angleFirst`, spanning `rotation` degrees.
+A single ring of LEDs evenly spaced around a circle: `nrOfLEDs` points, starting at `angleFirst`, spanning `rotation` degrees.
 
-- `nrOfLEDs` — LEDs around the ring (1–255).
-- `angleFirst` — starting angle in degrees.
-- `rotation` — arc spanned (360 = full circle).
-- `clockwise` — direction of travel.
-- `scale` — spacing/radius scale.
+- `nrOfLEDs`: LEDs around the ring.
+- `angleFirst`: starting angle in degrees.
+- `rotation`: arc spanned (360 = full circle).
+- `clockwise`: direction of travel.
+- `scale`: spacing/radius scale.
 
 Origin: MoonLight · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Layouts/L_MoonLight.h)
 
@@ -113,9 +113,9 @@ Detail: [technical](moxygen/RingLayout.md)
 
 The classic 241-LED concentric-ring disc: nested rings of 1, 8, 12, 16, 24, 32, 40, 48, 60 LEDs sharing a center.
 
-- `scale` — overall radius scale (1–10).
-- `outside in` — light 0 on the outer ring, wired inward rather than outward.
-- `angleFirst` — where light 0 of each ring sits, in degrees.
+- `scale`: overall radius scale.
+- `outside in`: light 0 on the outer ring, wired inward rather than outward.
+- `angleFirst`: where light 0 of each ring sits, in degrees.
 
 Origin: MoonLight · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Layouts/L_MoonLight.h)
 
@@ -127,12 +127,12 @@ Detail: [technical](moxygen/Rings241Layout.md)
 
 <img src="../../assets/light/layouts/SingleColumnLayout.gif" width="300" alt="Single Column layout preview">
 
-A vertical line of LEDs at a fixed X — the 1D column primitive.
+A vertical line of LEDs at a fixed X, the 1D column primitive.
 
-- `starting Y` — the column's start row.
-- `height` — LEDs in the column (1–1000).
-- `X position` — the column's x.
-- `reversed order` — wire top-to-bottom instead of bottom-to-top.
+- `starting Y`: the column's start row.
+- `height`: LEDs in the column.
+- `X position`: the column's x.
+- `reversed order`: wire top-to-bottom instead of bottom-to-top.
 
 Origin: MoonLight · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Layouts/L_MoonLight.h)
 
@@ -144,12 +144,12 @@ Detail: [technical](moxygen/SingleColumnLayout.md)
 
 <img src="../../assets/light/layouts/SingleRowLayout.gif" width="300" alt="Single Row layout preview">
 
-A horizontal line of LEDs at a fixed Y — the 1D row primitive.
+A horizontal line of LEDs at a fixed Y, the 1D row primitive.
 
-- `starting X` — the row's start column.
-- `width` — LEDs in the row (1–1000).
-- `Y position` — the row's y.
-- `reversed order` — wire right-to-left instead of left-to-right.
+- `starting X`: the row's start column.
+- `width`: LEDs in the row.
+- `Y position`: the row's y.
+- `reversed order`: wire right-to-left instead of left-to-right.
 
 Origin: MoonLight · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Layouts/L_MoonLight.h)
 
@@ -163,9 +163,9 @@ Detail: [technical](moxygen/SingleRowLayout.md)
 
 A conical spiral: `ledCount` LEDs winding up a cone from `bottomRadius` to a point over `height`.
 
-- `ledCount` — LEDs along the spiral (1–2048).
-- `bottomRadius` — radius at the base.
-- `height` — spiral height.
+- `ledCount`: LEDs along the spiral.
+- `bottomRadius`: radius at the base.
+- `height`: spiral height.
 
 Origin: MoonLight · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Layouts/L_MoonLight.h)
 
@@ -175,14 +175,14 @@ Detail: [technical](moxygen/SpiralLayout.md)
 
 ### Toronto Bar Gourds
 
-Maps a set of decorative "gourd" objects (a specific bar installation), each rendered at one of three granularities — one light per gourd, per side, or per LED.
+Maps a set of decorative "gourd" objects (a specific bar installation), each rendered at one of three granularities: one light per gourd, per side, or per LED.
 
 <img src="../../assets/light/layouts/TorontoBarGourdsLayout.gif" width="300" alt="Toronto Bar Gourds layout preview">
 
-- `granularity` — one light per gourd, per side, or per LED.
-- `nrOfLightsPerGourd` — LEDs per gourd in the coarsest mode (1–128).
+- `granularity`: one light per gourd, per side, or per LED.
+- `nrOfLightsPerGourd`: LEDs per gourd in the coarsest mode.
 
-Origin: [troyhacks](https://github.com/troyhacks/WLED) — custom Toronto bar gourd installation
+Origin: [troyhacks](https://github.com/troyhacks/WLED), custom Toronto bar gourd installation
 
 Detail: [technical](moxygen/TorontoBarGourdsLayout.md)
 
@@ -194,10 +194,10 @@ Detail: [technical](moxygen/TorontoBarGourdsLayout.md)
 
 Parallel vertical tubes: `nrOfTubes` columns of `ledsPerTube` LEDs, spaced `tubeDistance` apart.
 
-- `nrOfTubes` — number of tubes (1–64).
-- `ledsPerTube` — LEDs per tube (1–255).
-- `tubeDistance` — spacing between tubes.
-- `reversed` — reverse the wiring order.
+- `nrOfTubes`: number of tubes.
+- `ledsPerTube`: LEDs per tube.
+- `tubeDistance`: spacing between tubes.
+- `reversed`: reverse the wiring order.
 
 Origin: MoonLight · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Layouts/L_MoonLight.h)
 
@@ -231,7 +231,7 @@ Detail: [technical](moxygen/MoonLiveLayout.md) · [how the count is known](#moon
 A dense 3D grid, row-major (x fastest, then y, then z); every position maps to a light.
 
 - `width` / `height` / `depth`: lights per axis (to 3840, 2160 and 512).
-- `serpentine` — every other row runs in reverse, matching a snaked strip.
+- `serpentine`: every other row runs in reverse, matching a snaked strip.
 
 Origin: MoonLight · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Layouts/L_MoonLight.h)
 
@@ -247,10 +247,10 @@ Detail: [technical](moxygen/GridLayout.md)
 
 A [Grid](#grid) with **mid-strand dark columns**, held black in every row, for a sealed panel that must stay dark down a strip or a slat wall. A dark column is still a wire position the driver clocks, so data flows through the unlit LEDs to the lit columns beyond. The lit columns keep their true positions, so an effect maps straight across the gap.
 
-- `width` / `height` / `depth` — grid extent on each axis in lights (1–512).
-- `serpentine` — boustrophedon-wire alternate rows.
-- `blackCount` — how many dark columns; `0` renders exactly like a Grid.
-- `blackStart` — first dark column (shown only once `blackCount` is set).
+- `width` / `height` / `depth`: grid extent on each axis in lights.
+- `serpentine`: boustrophedon-wire alternate rows.
+- `blackCount`: how many dark columns; `0` renders exactly like a Grid.
+- `blackStart`: first dark column (shown only once `blackCount` is set).
 
 Origin: MoonLight
 
@@ -264,9 +264,9 @@ Detail: [technical](moxygen/GridBlacksLayout.md)
 
 <img src="../../assets/light/layouts/SphereLayout.gif" width="300" alt="Sphere layout preview">
 
-Lights on the surface of a hollow sphere — a one-light-thick shell inside a `(2·radius+1)³` box, no interior lights.
+Lights on the surface of a hollow sphere: a one-light-thick shell inside a `(2·radius+1)³` box, no interior lights.
 
-- `radius` — the shell's radius in light-units (1–64).
+- `radius`: the shell's radius in light-units.
 
 Origin: MoonLight · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Layouts/L_MoonLight.h)
 
@@ -282,8 +282,8 @@ Detail: [technical](moxygen/SphereLayout.md)
 
 A bicycle-wheel: `spokes` straight rows radiate from a center hub, each carrying `ledsPerSpoke` LEDs spaced one unit apart outward.
 
-- `spokes` — number of spokes radiating from the hub (2–64).
-- `ledsPerSpoke` — LEDs along each spoke, one unit apart.
+- `spokes`: number of spokes radiating from the hub.
+- `ledsPerSpoke`: LEDs along each spoke, one unit apart.
 
 Origin: MoonLight · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Layouts/L_MoonLight.h)
 
@@ -291,7 +291,7 @@ Detail: [technical](moxygen/WheelLayout.md)
 
 [Tests](../../reference/tests/unit-tests.md#wheellayout)
 
-The [Layouts](moxygen/Layouts.md) container itself takes no controls — see its page for coordinate iteration, reordering, and rebuild propagation.
+The [Layouts](moxygen/Layouts.md) container itself takes no controls; its page covers coordinate iteration, reordering, and rebuild propagation.
 
 ## MoonLive, details
 

@@ -127,6 +127,9 @@ def check_spec_freshness(source_path, spec_path):
     issues = []
     source = source_path.read_text(encoding="utf-8")
     spec = spec_path.read_text(encoding="utf-8")
+    # A card cut to its heading is drawn from help.json, so the page is read as the build draws it.
+    if spec_path in CATALOG_PAGES:
+        spec = fill_cards_from_help(spec, spec_path.relative_to(SPECS.parent).as_posix())
 
     # Extract control names from source
     controls = re.findall(r'controls_\.add\w+\("(\w+)"', source)
@@ -225,7 +228,7 @@ def _check_author_url_drift(source, spec):
 # paths that stopped existing when docs/ was restructured, so the catalog branch below had
 # been unreachable and every catalog page took the `## Source` path instead.
 sys.path.insert(0, str(ROOT / "moondeck" / "docs"))
-from mkdocs_hooks import _CATALOG_PAGES, split_blocks  # noqa: E402
+from mkdocs_hooks import _CATALOG_PAGES, fill_cards_from_help, split_blocks  # noqa: E402
 CATALOG_PAGES = {SPECS.parent / rel for rel in _CATALOG_PAGES}
 
 

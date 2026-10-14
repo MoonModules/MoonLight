@@ -155,6 +155,13 @@ def stage_install_page():
         shutil.copy(library_json, STAGE_INSTALL / "library.json")
     _stage_referenced_board_images(STAGE_INSTALL)
 
+    # --- help → /help/help.json, where the docs deploy publishes it; a device UI opened with
+    # `?help=http://localhost:8421/help/help.json` reads this copy, CORS included ---
+    help_json = ROOT / "docs" / "help" / "help.json"
+    if help_json.exists():
+        (STAGE_DIR / "help").mkdir(parents=True, exist_ok=True)
+        shutil.copy(help_json, STAGE_DIR / "help" / "help.json")
+
     # --- root redirect / → /install/ (keeps the old entry point working) ---
     (STAGE_DIR / "index.html").write_text(
         '<!doctype html><meta http-equiv="refresh" content="0; url=./install/">'

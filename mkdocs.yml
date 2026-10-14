@@ -96,6 +96,11 @@ plugins:
 extra_css:
   - assets/extra.css
 
+# The card deck (assets/help-deck.js), a module that mounts on any page holding a .mm-deck.
+extra_javascript:
+  - path: assets/help-deck.js
+    type: module
+
 # Build-time hooks (moondeck/docs/mkdocs_hooks.py): generate the test-inventory pages
 # from the test files (never committed → can't drift), render each catalog page's
 # prose ### blocks as a 4-column table, and rewrite out-of-docs source links to
@@ -184,15 +189,21 @@ nav:
   - Lights:
       - Overview: moonmodules/light/index.md
       - Effects: moonmodules/light/effects.md
+      - Effects deck: moonmodules/light/effects-deck.md
       - Layouts: moonmodules/light/layouts.md
+      - Layouts deck: moonmodules/light/layouts-deck.md
       - Modifiers: moonmodules/light/modifiers.md
+      - Modifiers deck: moonmodules/light/modifiers-deck.md
       - Drivers: moonmodules/light/drivers.md
+      - Drivers deck: moonmodules/light/drivers-deck.md
       - MoonLive: moonmodules/light/moonlive.md
       - Power functions: moonmodules/light/power-functions.md
       - Supporting: moonmodules/light/supporting.md
   - Core:
       - System: moonmodules/core/system.md
+      - System deck: moonmodules/core/system-deck.md
       - Services: moonmodules/core/services.md
+      - Services deck: moonmodules/core/services-deck.md
       - Supporting: moonmodules/core/supporting.md
       - Web UI: moonmodules/core/ui.md
   - Architecture:

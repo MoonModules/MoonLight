@@ -60,7 +60,7 @@ Safe mode, factory reset and the access point's one-boot open gesture are recove
 
 ## What leaves the device
 
-Nothing leaves the device until the user switches a [MoonCloud](mooncloud.md) member on, each with its own consent. What each member sends and what the server keeps: [privacy policy](../legal/privacy-policy.md). MoonTalk's public message board has no accounts, so a message is as public as its text.
+Nothing leaves the device until the user switches a [MoonCloud](mooncloud.md) member on, each with its own consent. What each member sends and what the server keeps: [privacy policy](../legal/privacy-policy.md). MoonTalk's public message board has no accounts, so a message is as public as its text. The browser's own requests, such as the update check and the help, are listed in the same policy.
 
 ## Source
 

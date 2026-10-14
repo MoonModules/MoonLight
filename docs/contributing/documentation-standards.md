@@ -197,11 +197,13 @@ A unit is a device even when it is one bare board: "the bridge device", "the dev
 
 ### The card
 
+A card cut down to its anchor and `### ` heading is drawn from the module's header through `docs/help/help.json`. It then shows what the app's help shows, and the header is the one place the module is described. A card with a body describes its module itself, and the limits below hold for both kinds.
+
 Two columns. **Module** leads with the image, then the name and description. **Details** carries the controls, then three links below a rule: **Tests**, **API** (the generated page), **Details** (the section below the cards). Those three always show, greyed when there is no target, so their position is learned once. Every other link is prose, made in the sentence that needs it.
 
 Every card leads with an image: `.gif` on effects, modifiers and layouts, which show motion, `.png` elsewhere.
 
-A control reads `` - `name`: what it does ``. The colon separates the name from its description, and the build styles the two differently.
+A control reads `` - `name`: what it does ``. The colon separates the name from its description, and the build styles the two differently. It says what the control does and leaves out its default and its range, which the reset button and the slider show.
 
 | | Limit |
 |---|---|
@@ -291,6 +293,8 @@ These are traps, not style: each one silently loses content from the generated p
 - **`///`, not `//`.** Only `///` generates. A `//` comment is invisible on the technical page.
 - **The class `///` sits directly above `class X`**, inside the namespace. Separated by includes or the namespace open, Doxygen drops it and the page loses its description.
 - **Put detail on the member it describes**, not in the class comment. Every public control and method gets its own `///` leading with one sentence, which is what the generated page shows as its summary.
+- **A module's class comment is its help in the app.** `gen_help` reads it into `docs/help/help.json`. The first paragraph is the one line under the module's title and the rest of the lead its summary. Each control's member `///` is the control's line. A block tag, a line opening `@<tag>` and running to the next blank line, is the help field of that name. `@card` is the picture, its file then optionally its alt text, and `@attribution` what the module learned from or who wrote it first, shown apart from the summary. So the lead is written for users, and how it works goes after `@moreinfo`.
+- **A user guide goes after `@guide`**, before `@moreinfo`. Its `## ` sections are the module's help beyond the summary. A section titled with a control's name is that control's longer help, such as what each option does. The section budget applies, and the guide does not count toward the appendix total.
 - **Deep dives go after `@moreinfo`** at the end of the class block, and a post-process moves them below the member lists. The budget above applies: this is not an unbounded appendix.
 - **No relative `.md` links.** Doxygen keeps only `http(s)://` links. For an in-page link use `@xref{anchor|label}`, which renders to a link at a heading on the same generated page. The anchor is that heading's slug: lowercased, punctuation dropped, spaces to hyphens. `ParallelLedDriver.h` is the worked example, pointing its vocabulary sentence at its own appendix:
 
@@ -310,5 +314,5 @@ These are traps, not style: each one silently loses content from the generated p
 - **Write "such as", not "e.g."** The brief ends at the first period.
 - **A weasel that CONTRASTS is information.** "bytes actually allocated" against requested, "the factor actually in use" against configured: the word carries the distinction the comment exists to draw. Vale flags the word rather than the use, which is why its Weasel rule is a suggestion.
 - **A `"\u2014"` string literal is not prose.** The dash a control shows for an unset value is UI text: converting it changes what the device displays. Vale flags it, and it stays.
-- **`@xref`, `@card` and `@moreinfo` are ours, and Doxygen must not know them.** Each survives as plain text precisely because it is not a Doxygen command, and a post-process turns it into a link, an image or a section afterward. Declaring them as `ALIASES` makes Doxygen consume them and the post-process finds nothing left: every card image, cross-reference and More info section goes. This is also why the marker is `@xref` rather than `@ref`, which Doxygen does own.
+- **`@xref`, `@card`, `@attribution`, `@guide` and `@moreinfo` are ours, and Doxygen must not know them.** Each survives as plain text precisely because it is not a Doxygen command, and a post-process turns it into a link, an image or a section afterward. Declaring them as `ALIASES` makes Doxygen consume them and the post-process finds nothing left: every card image, cross-reference and More info section goes. This is also why the marker is `@xref` rather than `@ref`, which Doxygen does own.
 - **Doxygen's own warnings stay off.** `WARN_IF_DOC_ERROR` reports only the three commands above, so on this codebase it is noise by construction rather than a signal being silenced.

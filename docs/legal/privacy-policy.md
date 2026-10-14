@@ -14,9 +14,10 @@ Whatever you switch on, MoonLight does not transmit **your name, email or postal
 
 ## What reaches the internet before you opt in
 
-Four things, each either something you asked for or something your browser does, and none of them reach a server of ours:
+Five things, each either something you asked for or something your browser does, and none of them reach a server of ours:
 
 - **The update check**: your browser asks GitHub's public release API whether a newer version exists.
+- **The help**: your browser fetches the module help, one public file, from this documentation site. It sends nothing about your installation, and the ⓘ in the status bar only hides the help, so the file is still fetched.
 - **Downloading a MoonLive script**: your browser fetches it from `raw.githubusercontent.com`.
 - **A firmware update**: your device downloads it from GitHub, when you start one.
 - **The web installer**: served by GitHub Pages; flashing happens over USB, directly between your browser and the board.
@@ -25,7 +26,7 @@ These go to GitHub under [its privacy statement](https://docs.github.com/en/site
 
 ## Your browser's local storage
 
-The web interface stores a few conveniences in your browser: a cached update-check result, the release you last selected. This never leaves your browser and holds nothing personal.
+The web interface stores a few conveniences in your browser: a cached update-check result, the release you last selected, the last help file fetched. This never leaves your browser and holds nothing personal.
 
 ## What you can switch on
 
@@ -72,7 +73,7 @@ An MQTT broker, Home Assistant, Art-Net or E1.31 consoles: MoonLight speaks to t
 
 ## Changes to this policy
 
-**A new feature that transmits anything is documented here before it ships, and asks for its own consent.** We may later offer to collect things this policy does not describe today, such as which effects are used or automatic crash reports. Each would be a separate opt-in choice, described here first, and switched off until you turn it on.
+**A new feature that transmits anything is documented here before it ships, and asks for its own consent.** We may later offer to collect things this policy does not describe, such as which effects are used or automatic crash reports. Each would be a separate opt-in choice, described here first, and switched off until you turn it on.
 
 Revisions are made in the open: the policy lives in the [project repository](https://github.com/MoonModules/MoonLight/blob/main/docs/legal/privacy-policy.md), so every change is a commit you can read.
 

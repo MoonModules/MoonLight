@@ -54,10 +54,13 @@ add_custom_target(build_info_gen ALL
     WORKING_DIRECTORY ${REPO}
     COMMENT "Generating build_info.h (git build id)"
     VERBATIM)
+# Every UI file, by glob, so a file added to src/ui re-embeds without a second edit here: the hand-kept list named only three of them.
+file(GLOB UI_SOURCES CONFIGURE_DEPENDS ${REPO}/src/ui/*.js ${REPO}/src/ui/*.html ${REPO}/src/ui/*.css
+     ${REPO}/src/ui/*.png ${REPO}/src/ui/vendor/*.js)
 add_custom_command(
     OUTPUT ${REPO}/src/ui/ui_embedded.h
     COMMAND ${CMAKE_COMMAND} -DUI_DIR=${REPO}/src/ui -DOUT=${REPO}/src/ui/ui_embedded.h -DUV_EXECUTABLE=${UV_EXECUTABLE} -P ${REPO}/src/ui/embed_ui.cmake
-    DEPENDS ${REPO}/src/ui/index.html ${REPO}/src/ui/app.js ${REPO}/src/ui/style.css ${REPO}/src/ui/embed_ui.cmake
+    DEPENDS ${UI_SOURCES} ${REPO}/src/ui/embed_ui.cmake
     COMMENT "Embedding UI files")
 add_custom_target(ui_embed DEPENDS ${REPO}/src/ui/ui_embedded.h)
 file(GLOB MOONLIVE_SCRIPTS CONFIGURE_DEPENDS

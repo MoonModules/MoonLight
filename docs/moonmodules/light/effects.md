@@ -4,6 +4,8 @@ Every effect, one block each: its preview, what it does, and what each control m
 
 Effects are built from the shared [power functions](power-functions.md): the drawing, field and motion routines every effect composes; that page lists each one with its callers.
 
+The same effects as a [deck of cards](effects-deck.md), drawn from the help the app shows.
+
 **Jump to:** [MoonLight](#moonlight-effects) · [MoonModules](#moonmodules-effects) · [WLED](#wled-effects) · [FastLED](#fastled-effects) · [MoonLight-native](#moonlight-native-effects)
 
 > Some WLED-origin effects show a preview gif from [WLED-Utils](https://github.com/scottrbailey/WLED-Utils) by scottrbailey (the canonical WLED effect gif set, cross-linked with credit); these show WLED's rendering. Effects with a local `../../assets/…` gif show our own output.
@@ -120,7 +122,7 @@ Detail: [technical](moxygen/LinesEffect.md)
 
 - `bpm`: orbit speed.
 - `radius`: blob influence radius.
-- `count`: number of orbiting balls (1–8).
+- `count`: number of orbiting balls.
 - `hue_shift`: rotate the palette index.
 
 Origin: MoonLight original (metaballs)
@@ -137,7 +139,7 @@ Detail: [technical](moxygen/MetaballsEffect.md)
 
 A swarm of drifting particles with persistent fading trails.
 
-- `count`: number of particles (1–255).
+- `count`: number of particles.
 - `speed`: drift velocity.
 - `fade`: trail persistence (higher = longer tails).
 - `hue_shift`: rotate every particle's hue.
@@ -208,7 +210,7 @@ Detail: [technical](moxygen/RandomEffect.md)
 
 Expanding concentric rings from random centers, additive overlap (calm defaults).
 
-- `count`: number of concentric rings (1–255).
+- `count`: number of concentric rings.
 - `speed`: expansion rate.
 - `thickness`: ring band width.
 - `hue_shift`: rotate every ring's hue.
@@ -245,7 +247,7 @@ Detail: [technical](moxygen/RipplesEffect.md)
 A 3D Rubik's Cube projected onto the volume: it scrambles, then plays its solution back one turn at a time, the six faces in their standard colors.
 
 - `turnsPerSecond`: how fast the cube turns.
-- `cubeSize`: the cube order (1×1 up to 8×8).
+- `cubeSize`: the cube order, its side in cells.
 - `randomTurning`: turn endlessly at random instead of scramble-then-solve.
 - `usePalette`: color the faces from the palette, not the classic colors.
 
@@ -306,8 +308,8 @@ Detail: [technical](moxygen/FishTankEffect.md)
 
 The classic screensaver on a light wall: chrome toasters with flapping wings and slices of toast drift diagonally across the dark, forever. The wing flap carries a per-toaster offset, so the flock never falls into sync.
 
-- `toasters`: how many fly (1–12).
-- `toast`: how many slices trail along (0–8).
+- `toasters`: how many fly.
+- `toast`: how many slices trail along.
 - `speed`: drift rate in sprite-widths, the same on any grid.
 - `spriteSize`: integer magnification for toasters and toast; 0 is auto.
 - `audioReactive`: each sprite follows its own band, so the scene breathes.
@@ -867,7 +869,7 @@ Detail: [technical](moxygen/StarSkyEffect.md)
 Renders a multi-line string in a bitmap font. Static by default (laid out top-left, each newline dropping one font-height, clipped where it runs off the grid); turn on `scroll` to march the whole block leftwards as a wrapping marquee. Text color comes from the active palette.
 
 - `text`: the string to show; each line renders on its own row.
-- `scroll`: off (default) = static; on = horizontal marquee.
+- `scroll`: off is static, on a horizontal marquee.
 - `font`: glyph size (`4x6` compact, `6x8` larger).
 - `speed`: marquee speed (only used when `scroll` is on).
 - `hue`: palette index for the text color.
@@ -909,9 +911,9 @@ Conway's cellular automaton generalized to 2D and 3D, with selectable rulesets a
 - `backgroundColorR` / `G` / `B`: the color dead cells fade toward.
 - `ruleset`: the birth and survive rule: Conway, HighLife, Maze and others.
 - `customRuleString`: a custom `B#/S#` rule, read only when `ruleset` = Custom.
-- `GameSpeed (FPS)`: generation rate (0–100, 100 = uncapped).
-- `startingLifeDensity`: % of cells alive at start (10–90).
-- `mutationChance`: % chance a newborn gets a random color (0–100).
+- `GameSpeed (FPS)`: generation rate, where 100 is uncapped.
+- `startingLifeDensity`: % of cells alive at start.
+- `mutationChance`: % chance a newborn gets a random color.
 - `wrap`: toroidal edges (cells wrap around).
 - `disablePause`: skip the 1.5 s settle pause between boards.
 - `colorByAge`: age from green to red, not a neighbor's palette color.
@@ -932,11 +934,11 @@ Detail: [technical](moxygen/GameOfLifeEffect.md)
 
 A 3D-perspective graphic equaliser: audio bands rise as bars with faked depth, their side/top lines drawn toward a "projector" vanishing point (sweeping left↔right) and shortened by `depth`. Bands left of the projector are painted right-to-left, bands right of it left-to-right; per-face darkening (side/top/front) and optional `borders`.
 
-- `speed`: projector sweep rate (1–10, higher = faster).
-- `frontFill`: bar front-face fill strength (0–255).
+- `speed`: projector sweep rate.
+- `frontFill`: bar front-face fill strength.
 - `horizon`: vanishing-point row the projector sits on.
 - `depth`: how far the side/top perspective lines reach toward the projector.
-- `numBands`: bands shown (2–16, fewer = wider bars).
+- `numBands`: bands shown, fewer for wider bars.
 - `borders`: outline each bar.
 
 Origin: MoonModules (audio) · by [@TroyHacks](https://github.com/troyhacks) (GPLv3) · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_MoonModules.h)
@@ -953,9 +955,9 @@ Detail: [technical](moxygen/GEQ3DEffect.md)
 
 Audio-reactive brush strokes: lines whose 3D endpoints oscillate on the beat (`beatsin8`, audio-band timebase), each stroke shortened to a band-magnitude length so the moving tip sweeps a curve over the fading field.
 
-- `oscillatorOffset`: phase-spread between the oscillating endpoints (0–16).
-- `numLines`: parallel animated strokes (2–255).
-- `fadeRate`: background decay per frame (0–128, higher = shorter strokes).
+- `oscillatorOffset`: phase-spread between the oscillating endpoints.
+- `numLines`: parallel animated strokes.
+- `fadeRate`: background decay per frame, higher for shorter strokes.
 - `minLength`: a stroke draws only if longer than this, so quiet bands stay off.
 - `color_chaos`: per-line random hue vs a per-band gradient.
 - `phase_chaos`: random per-frame phase jitter.
@@ -1000,7 +1002,7 @@ Detail: [technical](moxygen/BlurzEffect.md)
 A row of balls per column bounce under gravity, each losing energy on impact and relaunching when it stops, palette-colored by ball index over a fading background.
 
 - `grav`: gravity strength (higher = faster fall, snappier bounce).
-- `numBalls`: balls per column (1–16).
+- `numBalls`: balls per column.
 
 Origin: WLED · by Andrew Tuline (WLED-SR) · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_WLED.h)
 
@@ -1016,7 +1018,7 @@ Detail: [technical](moxygen/BouncingBallsEffect.md)
 
 Two interfering sine waves beat against each other into a moiré color field.
 
-- `freq_x` / `freq_y`: horizontal/vertical wave frequency (1–8).
+- `freq_x` / `freq_y`: horizontal/vertical wave frequency.
 - `speed`: animation rate (0 = frozen).
 
 Origin: WLED · by ldirko & blazoncek (WLED port) · [gallery](https://editor.soulmatelights.com/gallery/1089-distorsion-waves) · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_WLED.h)
@@ -1038,7 +1040,7 @@ A 1D scrolling frequency display: each frame shifts the strip and injects a new 
 - `speed`: scroll rate.
 - `fx`: sound-effect intensity (scales the injected brightness).
 - `lowBin` / `highBin`: the frequency window mapped across the hue range.
-- `sensitivity`: input gain (10–100).
+- `sensitivity`: input gain.
 - `audioSpeed`: let the volume modulate the scroll speed.
 
 Origin: WLED (audio) · by Andrew Tuline (WLED-SR) · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_WLED.h)
@@ -1098,7 +1100,7 @@ Detail: [technical](moxygen/LissajousEffect.md)
 
 An audio VU meter rendered as a noise bar: the volume sets how many rows light from the bottom, each row colored by drifting Perlin noise, filling the full width and depth.
 
-- `fadeRate`: trail decay per frame (200–254).
+- `fadeRate`: trail decay per frame.
 - `width`: how strongly the volume drives the bar height.
 
 Origin: WLED (audio) · by Andrew Tuline (WLED-SR) · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_WLED.h)
@@ -1242,19 +1244,6 @@ Detail: [technical](moxygen/AudioSpectrumEffect.md)
 
 ### BeatRipples 💫🎶🖌️ · 2D
 
-<img src="../../assets/light/effects/BeatRipplesEffect.gif" width="300" alt="BeatRipples effect preview">
-
-Every beat is a stone dropped in water. A real wave simulation, which gives what a drawn expanding circle cannot: ripples that pass through each other, reflect off the walls and interfere into standing patterns. The loudest band decides where the stone lands, so a bass hit falls near the center and a treble hit out at the rim, and its strength sets how deep.
-
-- `damping`: how long the water keeps ringing.
-- `drop`: how deep a beat's stone falls.
-- `rain`: idle drops when there is no music, so the surface is alive in silence.
-- `shine`: how strongly the slope lights the surface.
-
-Origin: MoonLight original, the two-buffer water simulation (Gomez 2000) driven by the onset detector
-
-Detail: [technical](moxygen/BeatRipplesEffect.md)
-
 <a id="pulse"></a>
 
 ### Pulse 💫🎶 · 3D
@@ -1302,7 +1291,7 @@ Detail: [technical](moxygen/VuMetersEffect.md)
 
 The spectrum as ripples. Each band owns a sector around the center, mirrored left and right with the bass at top and bottom. Sound is born at the center and travels outward, so the radius is time and a ring's length is that band's recent history. Every sector is one band, so a band that is stuck shows as a sector that never moves. On a cube the ripples are expanding shells.
 
-- `speed`: how fast sound travels outward, a ring every 10 to 105 ms.
+- `speed`: how fast sound travels outward.
 - `persistence`: how far out a ripple stays visible.
 - `smooth`: read the meter ballistic rather than the raw bands.
 - `beat`: a white shockwave born at the center on every onset.
@@ -1320,10 +1309,10 @@ Detail: [technical](moxygen/RadialSpectrumEffect.md)
 
 Plays every other registered effect in turn, auto-advancing on a timer, so one Layer cycles the whole library hands-free. New effects are picked up automatically. It can pick a fresh palette each cycle and overlay the playing effect's name, and the status line says which is playing. It never hosts itself, and it plays in sequence rather than compositing.
 
-- `interval`: seconds each effect plays before advancing (1–120).
+- `interval`: seconds each effect plays before advancing.
 - `shuffle`: jump to a random next effect instead of registry order.
-- `randomPalette`: pick a random palette on each cycle; on by default.
-- `showName`: overlay the playing effect's name in a small font; default on.
+- `randomPalette`: pick a random palette on each cycle.
+- `showName`: overlay the playing effect's name in a small font.
 
 Origin: FastLED · Mark Kriegsman's [DemoReel100](https://github.com/FastLED/FastLED/blob/master/examples/DemoReel100/DemoReel100.ino); MoonLight reel
 
@@ -1334,20 +1323,6 @@ Detail: [technical](moxygen/DemoReelEffect.md)
 <a id="fseqplayer"></a>
 
 ### FseqPlayer 🎞️
-
-<img src="../../assets/light/effects/FseqPlayerEffect.gif" width="300" alt="The reference sweep fseq_play writes, the show an FSEQ player plays">
-
-An FSEQ show, xLights' and Falcon Player's frame-by-frame channel data, played from a file. It lands where a sender-mapped [Network Receive](#networkreceive) stream does, so alone on its layer it reaches the lights in one copy on any layout. It reads no file yet, and its status says so: playback is the next step.
-
-- `file`: the show's path, an `.fseq` file on flash or under `/sd`.
-- `loop`: start again at the end.
-- `speed`: the playback speed, in percent of the file's step time, up to 255.
-
-Origin: MoonLight original (FSEQ v2, as Falcon Player documents it)
-
-Detail: [technical](moxygen/FseqPlayerEffect.md)
-
-[Tests](../../reference/tests/unit-tests.md#fseqplayereffect)
 
 <a id="networkreceive"></a>
 
@@ -1375,19 +1350,6 @@ Listens for Art-Net, E1.31 and DDP at once. The end-to-end pair with [Network Se
 
 ### Picture 🖼️ · 2D
 
-<img src="../../assets/light/effects/PictureEffect.gif" width="300" alt="Picture effect preview">
-
-The active [Picture service](../core/services.md#picture)'s picture, sampled onto the layer, so a picture of any size shows on a layout of any size. A modifier rotates, mirrors or tiles it like any effect.
-
-- `fit`: keep the aspect with bands (**fit**), cropped (**fill**), or **stretch**.
-- `sampling`: **point**, one pixel per light, or **area**, a linear-light mean.
-
-Origin: MoonLight original
-
-Detail: [technical](moxygen/PictureEffect.md)
-
-[Tests](../../reference/tests/unit-tests.md#pictureeffect)
-
 <a id="sine"></a>
 
 ### Sine 💫 · 3D
@@ -1396,8 +1358,8 @@ Detail: [technical](moxygen/PictureEffect.md)
 
 R/G/B each follow a sine along one axis at 120° phase offset: a glowing, scrolling color box.
 
-- `frequency`: spatial frequency, waves across the box (1–20).
-- `amplitude`: peak brightness (0–255, 255 = full).
+- `frequency`: spatial frequency, waves across the box.
+- `amplitude`: peak brightness.
 - `bpm`: scroll speed.
 
 Origin: MoonLight (Sinus, AI-generated) · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h)
