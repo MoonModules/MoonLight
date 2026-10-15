@@ -72,6 +72,8 @@ An entry made on a newer MoonLight than yours says so: update first.
 
 To share one, press a card's `{ }` button, copy the JSON, and open an issue in the gallery as its [Sharing your own](https://github.com/MoonModules/MoonLight-Gallery#sharing-your-own) describes.
 
+For its moving preview, apply the preset and press ⏺ on the preview bar. Your browser records three seconds of the preview and saves them as a GIF to attach to the issue; the device does no extra work.
+
 ## Arranging the pads
 
 Drag a pad to move it. A pad is a **position, not a list entry**: slot 14 stays slot 14 whether or not anything sits in it, and deleting slot 3 does not shuffle slot 4 into its place.

@@ -213,14 +213,10 @@ public:
         ageOut(local);
     }
 
-    ModuleRole role() const MM_NONBLOCKING override { return ModuleRole::Generic; }
-
     /// Feed one packet through the real pipeline, so a test needs no network.
     void injectPacketForTest(const uint8_t* data, size_t len, const uint8_t srcIp[4]) {
         mergePacket(data, len, srcIp);
     }
-
-
 
 private:
     /// One discovered device, as the list serializes it.

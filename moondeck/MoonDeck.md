@@ -162,7 +162,7 @@ check, so it is not in the gate table until those are swept. It does two things 
 
 ### check_docgen
 
-Report every place the generated documentation breaks the shape the standards define, and refuse a new one. Two surfaces, one check: the catalog pages that render as card tables, and the `///` comments that become the technical pages beside them.
+Report every place the documentation breaks the shape the standards define, and refuse a new one. Two surfaces, one check: the catalog pages that render as card tables, and the `///` comments in the headers.
 
 It also regenerates `docs/help/help.json` to prove the committed one is fresh, which needs LLVM, the one [gen_help](#gen_help) uses. Without it the report still runs and names the freshness as unchecked, which fails the gate.
 
@@ -459,7 +459,7 @@ declaration. The report gives the matrix:
   attribute       133      183      923    10%
 
   950 declarations carry only a `//` where the rule asks for `///`; 2089 carry no comment at all.
-  Public surface: 503 of 2558 documented (19%) — the part doxygen publishes.
+  Public surface: 503 of 2558 documented (19%), the public API.
 ```
 
 Three columns because there are three states, each with a different fix: `///` is documented;
@@ -485,7 +485,7 @@ attribute 3 converts to the ideals below.
 | `DOC DEVIATION` | Signed % difference from the ideal doc size — **class 130 words, method and attribute 40**. `0%` is ideal, `-100%` is absent, and over-documenting is unbounded. Not a "ratio": a ratio is a bare quotient (2.3×), this is a deviation from a target. |
 | `DOC WORDS` | Raw `///` word count — the number the deviation is derived from, so it sits beside it. |
 | `DEV WORDS` | Raw `//` word count. **No deviation column**, because zero is the ideal: measuring against "one line" made the best case (no note at all) read as `-100%`, i.e. worst. |
-| `VIS` | `pub` or `priv`. Doxygen publishes only public members, so an undocumented public method is an **API gap** while a private one is a maintenance note. Both are reported — a bloated comment is bloat either way, and clangd's hover shows both kinds to whoever maintains the code — but the reader can weigh them. |
+| `VIS` | `pub` or `priv`. The header documents the public API, so an undocumented public method is an **API gap** while a private one is a maintenance note. Both are reported: a bloated comment is bloat either way, and clangd's hover shows both kinds to whoever maintains the code, and the reader can weigh them. |
 
 The `Public surface: N of M documented` line is the number the doc site reflects. It differs
 sharply from the overall figure: `HueDriver` reads 40% public against 13% overall, because 52 of

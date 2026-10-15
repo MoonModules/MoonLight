@@ -262,7 +262,7 @@ constexpr const char* kPaletteCatalogTags[] = {
     "🎨",
     "🎨",
     "🎨🎶",
-    "🎨🔥🎶",
+    "🎨🎶",
     "🎨",
 };
 constexpr const char* kPaletteFolder = "palettes";   ///< its directory upstream

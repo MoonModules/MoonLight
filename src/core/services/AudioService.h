@@ -430,6 +430,7 @@ public:
         if (frame_.level > levelPeak_) levelPeak_ = static_cast<uint8_t>(frame_.level);
     }
 
+    /// Reopen the mic when its bus frees or moves, publish the second's level, onset and peak readouts, and diagnose a silent mic.
     void tick1s() MM_NONBLOCKING override {
         // Re-init when the shared I2S bus came free, as the LED driver retries, or when the I2C bus moved under the codec.
         const bool micFreed = !inited_ && platform::audioMicSharedBusFree(micMode == kMicPdm ? platform::MicMode::Pdm

@@ -50,8 +50,6 @@ namespace mm {
 /// **The editable-list primitive.** The first consumer of `EditableListSource`. The whole add, delete, reorder and edit surface is reused rather than rebuilt. The per-row fields are the name, the channel count, and one role picker per channel.
 class FixtureProfilesModule : public MoonModule, public ListSource {
 public:
-    ModuleRole role() const MM_NONBLOCKING override { return ModuleRole::Generic; }
-
     // A deleted library could never be re-added, and every driver resolves its profile through it.
     /// Not user-editable: every driver resolves its profile through this one boot-wired library.
     bool userEditable() const override { return false; }

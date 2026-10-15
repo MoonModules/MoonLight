@@ -212,12 +212,7 @@ _SCOPE = {
 # right at ten times the ideal, because it IS the driver's spec.
 _IDEAL_DOC_WORDS = {"class": 130, "method": 40, "attribute": 40, "other": 40}
 
-# `@moreinfo` ends the part being measured. The directive splits a class comment in two (see
-# gen_api.py): everything before it is the lead description, rendered above the attribute/method
-# lists, and everything after is deep-dive reference relocated BELOW them under `## More info`.
-#
-# Only the lead is measured, because the ideal asks "how much must a reader take in before the
-# member lists" — and reference material deliberately parked at the bottom of the page is not that.
+# `@moreinfo` ends the part being measured: everything before it is the lead a reader takes in first, and everything after is the deep-dive reference, so only the lead is measured.
 # Counting the whole block punished the very structure the directive exists to encourage:
 # NetworkSendDriver read +407% as one blob, and +48% once its 469 More-info words were separated
 # from its 193-word lead.
@@ -649,8 +644,8 @@ def render_scratch(rows, max_rows=0):
 # cheap matcher pass listing the non-public declarations by file:line, and rows are tagged
 # against that set.
 #
-# Why report private members at all, rather than filtering them out: doxygen never publishes
-# them, so the "it should reach the module page" argument does not apply — but a bloated comment
+# Why report private members at all, rather than filtering them out: no other file calls
+# them, so the "it documents the API" argument does not apply, but a bloated comment
 # is still bloat, and clangd's hover shows it to whoever maintains the code. The VIS column lets
 # a reader weigh a finding (a public method with no `///` is an API gap; a private one is a
 # maintenance note) without dropping half the tree from the report.
@@ -842,14 +837,12 @@ def render_comments(rows, max_rows=0):
               f"{none} carry no comment at all."]
 
     name_w = min(max(len(r["name"]) for r in rows), 30)
-    # The public subset, called out because it is the part that SHIPS as documentation: doxygen
-    # publishes only public members, so an undocumented public method is an API gap while a
-    # private one is a maintenance note. Both are reported; the split says which is which.
+    # The public subset, called out because it is the API another file calls: an undocumented public method is an API gap, a private one a maintenance note. Both are reported; the split says which is which.
     pub = [r for r in rows if r.get("vis") == "pub"]
     if pub:
         pub_doc = sum(1 for r in pub if r["doc_words"])
         L += [f"  Public surface: {pub_doc} of {len(pub)} documented "
-              f"({100 * pub_doc // len(pub)}%) — the part doxygen publishes."]
+              f"({100 * pub_doc // len(pub)}%), the public API."]
 
     # DOC DEVIATION sits beside DOC WORDS: the percentage and the number it is derived from
     # belong together, and DEV WORDS is a separate measure. "Deviation", not "ratio" — a ratio is

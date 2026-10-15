@@ -159,6 +159,7 @@ public:
         DriverBase::release();
     }
 
+    /// Answer the RTSP control channel, then encode a frame on a fixed schedule while a client plays.
     void tick() MM_NONBLOCKING override {
         if constexpr (!platform::hasRtsp) return;
         if (!open_ || targetFps == 0 || !sourceBuffer_ || !sourceBuffer_->data()) return;

@@ -32,6 +32,7 @@ class Layer; // forward declaration, defined in light/layers/Layer.h and include
 /// Layer.h includes this file, since a Layer holds effect children, so this file forward-declares Layer and pulls Layer.h in once the class is complete. Layer.h re-enters harmlessly through its include guard and defines the accessor bodies.
 class EffectBase : public MoonModule {
 public:
+    /// An effect, so a layer accepts it as a child.
     ModuleRole role() const MM_NONBLOCKING override { return ModuleRole::Effect; }
 
     /// Which axes the effect iterates, read at frame time: a hardcoded bound is a buffer overrun.

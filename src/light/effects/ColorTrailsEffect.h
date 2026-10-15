@@ -76,6 +76,7 @@ public:
         front_ = true;
     }
 
+    /// Walk both clocks, shear the trail plane in one backward sample, and color it from the palette.
     void tick() MM_NONBLOCKING override {
         if (!plane_ || !scratch_ || !xProf_ || !yProf_) return;
         const lengthType w = width(), h = height(), d = depth();

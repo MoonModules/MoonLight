@@ -615,6 +615,10 @@ jobs:
              dist/MoonLight-control-surface.json
           ls -la dist/MoonLight-control-surface.json
 
+      # The module help this release's app shows, so a device reads the help of the firmware it runs: a newer file names controls it lacks. deploy-pages mirrors it beside the release's binaries, where the device's page can read it.
+      - name: Stage the module help
+        run: cp docs/help/help.json dist/MoonLight-help.json
+
       - name: Resolve effective tag
         id: tag
         env:
@@ -743,6 +747,7 @@ jobs:
             dist/MoonLight-*.tar.gz
             dist/MoonLight-*.zip
             dist/MoonLight-control-surface.json
+            dist/MoonLight-help.json
             dist/MoonLight-*.dmg
             dist/MoonLight-*-setup.exe
             dist/moonlight_*.deb
@@ -950,6 +955,7 @@ jobs:
               --pattern 'manifest-*.json' \
               --pattern 'MoonLight-*.tar.gz' \
               --pattern 'MoonLight-*.zip' \
+              --pattern 'MoonLight-help.json' \
               --pattern 'MoonLight-*.dmg' \
               --pattern 'moonlight_*.deb' \
               || echo "  (skip $T — no matching assets)"
@@ -990,23 +996,6 @@ jobs:
               || echo "WARNING: deviceModels.json image not found: $src"
           done
           ls -la pages/ pages/install/
-
-      # gen_api.py runs Doxygen -> moxygen to generate the per-module technical pages
-      # (moonmodules/{core,light}/moxygen/*.md) from each `.h`'s /// comments at
-      # MkDocs-build time. moxygen runs via `npx moxygen@2.1.10`, so Node must be
-      # present; pin it explicitly (rather than lean on the runner image's default) so
-      # a future image change can't silently drop npx or shift its behavior. Doxygen
-      # is the one apt binary we add — the justified non-uv dependency (like ESP-IDF's
-      # Python). With the tools present, a moxygen/doxygen failure now RAISES (gen_api
-      # GenApiError) and fails this build, rather than shipping a site with no API pages.
-      - name: Set up Node (for npx moxygen)
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-      - name: Install Doxygen (source-generated API pages)
-        run: |
-          set -euo pipefail
-          sudo apt-get update && sudo apt-get install -y doxygen
 
       - name: Build docs site into Pages root
         run: |

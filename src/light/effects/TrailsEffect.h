@@ -68,6 +68,7 @@ public:
         started_ = false;      // the next tick is the first: it has no previous frame to measure
     }
 
+    /// Move the trail plane along the flow, add the emitters, and draw it.
     void tick() MM_NONBLOCKING override {
         if (!plane_ || !scratch_) return;               // a zero grid, or an allocation that failed
         const lengthType w = width(), h = height(), d = depth();

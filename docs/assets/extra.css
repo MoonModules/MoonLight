@@ -125,26 +125,8 @@
   font-weight: 600;
 }
 
-/* ---------------------------------------------------------------------------
-   Signature standout on the generated moxygen technical pages. Each attribute /
-   method renders as a paragraph leading with its declaration
-   (`uint8_t protocol = 0`, `virtual void defineControls() override`) followed
-   by a `: summary`. gen_api.py rewrites each into
-   `<code class="mm-sig">…<span class="mm-sig-name">name</span>…</code>` so the
-   chip can highlight ONLY the declared member name while the type and arguments
-   stay muted — the eye lands on the name it's scanning for, and the signature
-   still reads as one code chip. (A flat `<code>` can't do this in CSS alone —
-   there's no way to select 'the name' inside an undelimited string.) */
-.md-typeset code.mm-sig {
-  background: color-mix(in srgb, var(--md-accent-fg-color) 7%, transparent);
-  border: 1px solid color-mix(in srgb, var(--md-accent-fg-color) 22%, transparent);
-  color: var(--md-default-fg-color--light);   /* type + args: muted */
-  padding: 0.15em 0.5em;
-}
-.md-typeset code.mm-sig .mm-sig-name {
-  color: var(--md-accent-fg-color);           /* the declared name: accent + bold */
-  font-weight: 700;
-}
+/* Every clip on the site plays at one size, small beside the text it illustrates; the player's fullscreen button enlarges it. */
+.md-typeset video { width: 240px; max-width: 100%; height: auto; }
 
 /* Power-functions tables: the first column holds a function NAME, which must never
    break mid-token (`draw::fill` wrapping to "draw::fil / l" is unreadable — the reader

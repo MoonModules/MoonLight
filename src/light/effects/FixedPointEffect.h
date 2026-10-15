@@ -65,6 +65,7 @@ public:
         shown_ = 0xFF;
     }
 
+    /// Fade, pick the demo the wall clock shows, and draw it.
     void tick() MM_NONBLOCKING override {
         const draw::Canvas cv = canvas();
         const lengthType w = width(), h = height();

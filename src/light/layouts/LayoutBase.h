@@ -80,6 +80,7 @@ struct LightEmitter {
 /// A layout can be built from others: it makes one, sets its public settings and places it through `LightEmitter::place` as the next part, its numbering continuing. The Layouts container places its children the same way. CarLights and Rings241 are made of rings, Tubes of columns, Panels of panels and GridBlacks of a grid.
 class LayoutBase : public MoonModule {
 public:
+    /// A layout, so the Layouts container accepts it as a child.
     ModuleRole role() const MM_NONBLOCKING override { return ModuleRole::Layout; }
     /// How many physical lights this layout places.
     virtual nrOfLightsType lightCount() const = 0;

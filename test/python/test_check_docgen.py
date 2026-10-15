@@ -200,7 +200,7 @@ def test_links_and_image_lines_are_not_counted_as_description():
             '- `a`: one.\n'
             'Origin: Someone · source [x.h](../../src/x.h)\n'
             '[Tests](../../reference/tests/unit-tests.md#x)\n'
-            'Detail: [technical](moxygen/X.md)\n')
+            'Detail: [source](../../../src/x.h)\n')
     card = list(_cards(page))[0]
     assert card["desc"] == len("Short.")
 
@@ -287,25 +287,24 @@ def test_the_header_names_the_two_columns():
 
 
 def test_links_are_labelled_not_only_iconed():
-    """An icon alone made the reader decode a glyph, and the tests and API rows both
+    """An icon alone made the reader decode a glyph, and the tests and source rows both
     render as a list of near-identical module names. The WORD carries the distinction."""
     page = ('### Thing 💫 · kind\n\nShort.\n\n- `a`: one.\n'
             '[Tests](../../reference/tests/unit-tests.md#thing)\n'
-            'Detail: [technical](moxygen/Thing.md)\n')
+            'Detail: [source](../../../src/thing.h)\n')
     out = _row(page)
-    assert "**Tests:**" in out and "**API:**" in out
+    assert "**Tests:**" in out and "**Source:**" in out
 
 
 def test_attribution_reads_under_the_description_not_among_the_links():
     """Writing our own rather than depending removes the credit a dependency carries, so the
-    card carries it, muted under the description. Not as a `Source:` row under the controls,
-    which made the second column's length vary per card."""
+    card carries it, muted under the description. Not as a row under the controls, which made
+    the second column's length vary per card."""
     page = ('### Thing 💫 · kind\n\nShort.\n\n- `a`: one.\n'
             '[Tests](../../reference/tests/unit-tests.md#thing)\n'
-            'Detail: [technical](moxygen/Thing.md)\n'
+            'Detail: [source](../../../src/thing.h)\n'
             'Origin: MoonLight, by somebody\n')
     out = _row(page)
-    assert "**Source:**" not in out
     row = next(ln for ln in out.split("\n") if "mm-name" in ln)
     col1, col2 = row.split(" | ")[0], row.split(" | ")[1]
     assert '<span class="mm-attribution">Attribution: MoonLight, by somebody</span>' in col1
@@ -316,7 +315,7 @@ def test_all_three_links_show_even_when_a_target_is_missing():
     """A card with no tests is a gap worth seeing. A row that silently drops the label
     hides it, and the three rows stop being in the same place on every card."""
     out = _row(_card())
-    for label in ("**Tests:**", "**API:**", "**Details:**"):
+    for label in ("**Tests:**", "**Source:**", "**Details:**"):
         assert label in out, label
     assert out.count("none yet") == 3
 
@@ -325,7 +324,7 @@ def test_the_three_labels_keep_their_order():
     """Same three, same sequence, so position carries meaning across cards."""
     import re as _re
     out = _row(_card())
-    assert _re.findall(r"\*\*(Tests|API|Details):\*\*", out) == ["Tests", "API", "Details"]
+    assert _re.findall(r"\*\*(Tests|Source|Details):\*\*", out) == ["Tests", "Source", "Details"]
 
 
 def test_a_gif_on_a_non_animated_page_is_flagged():
@@ -411,10 +410,10 @@ def test_the_second_column_carries_only_tests_api_and_details():
     link the DESCRIPTION makes in a sentence, where the reader meets it in context instead
     of as a bare label under the controls."""
     import check_docgen
-    assert check_docgen.SECOND_COLUMN_LINKS == ("Tests:", "API:", "Details:")
+    assert check_docgen.SECOND_COLUMN_LINKS == ("Tests:", "Source:", "Details:")
     page = ('### Thing 💫 · kind\n\n<img src="../../assets/x.png" alt="x">\n\nShort.\n\n'
             '- `a`: one.\n[Tests](../../reference/tests/unit-tests.md#thing)\n'
-            'Detail: [technical](moxygen/Thing.md)\n')
+            'Detail: [source](../../../src/thing.h)\n')
     assert check_docgen._rendered_links("p.md", page) == []
 
 
@@ -490,7 +489,7 @@ def test_a_card_without_an_image_is_flagged():
 def test_links_share_the_controls_cell():
     """Not their own column: stacked under the controls they cost no page width."""
     page = ('### Thing 💫 · kind\n\nShort.\n\n- `a`: one.\n'
-            'Detail: [technical](moxygen/Thing.md)\n')
+            'Detail: [source](../../../src/thing.h)\n')
     row = [l for l in _row(page).split("\n") if l.startswith("| ") and "Module |" not in l
            and not l.startswith("|--")][0]
     cells = row.strip("| ").split(" | ")
@@ -734,6 +733,14 @@ def test_an_undocumented_public_member_is_flagged():
     whys = [why for _, why in issues]
     assert "public variable has no ///" in whys
     assert "public function has no ///" in whys
+
+
+def test_a_function_carrying_an_attribute_macro_is_still_seen():
+    """A capitals macro after the parameter list, such as `MM_NONBLOCKING`, hid 25 public functions from the rule."""
+    for decl in ("void tick() MM_NONBLOCKING override {}", "uint16_t count() const MM_NONBLOCKING;",
+                 "void tick1s() MM_NONBLOCKING final;", "virtual void set(int v) = 0;"):
+        whys = [why for _, why in _hdr(f"class Foo {{\npublic:\n  {decl}\n}};")]
+        assert "public function has no ///" in whys, decl
 
 
 def test_a_documented_public_member_is_accepted():
@@ -1173,52 +1180,6 @@ def test_a_defgroup_is_asked_for_only_where_a_lone_class_already_leads():
         "second lead saying the same thing twice"
 
 
-def test_two_headers_claiming_one_group_id_are_reported(tmp_path, monkeypatch):
-    """Doxygen MERGES two groups sharing an id, so one header's page absorbs the other's and the
-    loser vanishes from the site. It fails silently both ways: the surviving page looks complete
-    and the missing one is simply absent. A core parser and a light-domain one both named their
-    group `PinList` that way, and only a dangling link in the strict build caught it. An
-    implementation file counts too — Doxygen reads it all the same — and is reported against
-    rather than the header, since the header owns the page."""
-    import check_docgen
-    from pathlib import Path
-    (tmp_path / "a.h").write_text("/// @defgroup Shared A\n/// @{\n/// A.\n/// @}\n", encoding="utf-8")
-    (tmp_path / "b.h").write_text("/// @defgroup Shared B\n/// @{\n/// B.\n/// @}\n", encoding="utf-8")
-    (tmp_path / "c.h").write_text("/// @defgroup Own C\n/// @{\n/// C.\n/// @}\n", encoding="utf-8")
-    (tmp_path / "c.cpp").write_text("/// @defgroup Own C\n/// @{\n/// C.\n/// @}\n", encoding="utf-8")
-    monkeypatch.setattr(check_docgen, "ROOT", tmp_path)
-    monkeypatch.setattr(check_docgen, "_headers",
-                        lambda: [Path(n) for n in ("a.h", "b.h", "c.h", "c.cpp")])
-    found = {key: why for key, why in check_docgen._duplicate_group_ids()}
-    assert any(k.startswith("b.h") for k in found), "the second header to claim an id is reported"
-    assert not any(k.startswith("a.h") for k in found), "the first keeps the id"
-    assert any(k.startswith("c.cpp") for k in found), "a .cpp re-declaring its header's id merges"
-    assert not any(k.startswith("c.h") for k in found), "the header owns the page"
-
-
-def test_a_group_that_documents_nothing_is_reported():
-    """A group is a label, not an entity, so `gen_api` infers its page from where its MEMBERS
-    sit. A `@}` that closes before the first declaration wraps only the comment: the group holds
-    nothing, resolves to no header, and the whole page is skipped — lead, appendix and members —
-    with nothing reported, because the header still looks documented and the unreachable-page
-    check only fires on a page that exists. Two headers shipped that way, their appendices
-    unreachable. A group closing after what it documents is the working shape."""
-    import check_docgen
-    def whys(src, rel="src/core/x.h"):
-        return [w for _, w in check_docgen._header_rules(rel, src) if "documents anything" in w]
-
-    LEAD = "/// @defgroup g G\n/// @{\n/// A lead.\n"
-    assert whys(LEAD + "/// @}\n\nnamespace mm {\n/// A thing.\ninline void f();\n}\n"), \
-        "a group closing before the namespace holds nothing"
-    assert not whys("namespace mm {\n" + LEAD + "/// A thing.\ninline void f();\n/// @}\n}\n"), \
-        "a group closing after its declarations is the working shape"
-    assert not whys(LEAD + "/// @}\n"), "a header with no declaration at all is not this fault"
-    assert whys(LEAD + "/// @}\n\nnamespace mm {\ninline void f();\n}\n",
-                rel="src/core/x.cpp"), \
-        "an implementation file carries groups too, so a group closing before its first " \
-        "declaration loses the same appendix there"
-
-
 def test_an_xref_that_cannot_render_is_reported():
     """`@xref{anchor|label}` renders to a same-page link, and the generator resolves `[a-z0-9-]+`
     only. An underscore therefore never becomes a link: the marker survives Doxygen untouched and
@@ -1245,23 +1206,6 @@ def test_an_xref_that_cannot_render_is_reported():
     # lands in the captured anchor and must not be read as part of the slug.
     assert not whys(HEAD + "/// See @xref{a-real-heading\\|this}.\n" + TAIL), \
         "an escaped pipe is a valid reference"
-
-
-def test_an_unclosed_group_scope_is_reported():
-    """`@defgroup` opens a scope with `@{` and Doxygen runs it to `@}`. Left open, every
-    declaration after the lead is absorbed into the group and the generated page is silently
-    reshaped: three headers shipped that way in one sweep because nothing counted the pair. An
-    orphan `@}` is the same bug from the other side, which is what a conversion away from a group
-    leaves behind."""
-    import check_docgen
-    def whys(src, rel="src/core/x.h"):
-        return [w for _, w in check_docgen._header_rules(rel, src) if "group scope" in w]
-
-    assert whys("/// @defgroup g G\n/// @{\n/// A lead.\ninline void f();\n")
-    assert whys("/// A lead.\ninline void f();\n/// @}\n")
-    assert not whys("/// @defgroup g G\n/// @{\n/// A lead.\ninline void f();\n/// @}\n")
-    assert whys("/// @defgroup g G\n/// @{\n/// A lead.\ninline void f();\n",
-                rel="src/core/x.cpp"), "an unbalanced scope is a defect in either kind of file"
 
 
 def test_a_cpp_may_open_with_a_plain_comment_but_must_open_with_one():
@@ -1542,9 +1486,8 @@ def test_the_real_pages_obey_the_structure_rules():
             assert _structure(path.read_text(encoding="utf-8"), rel) == [], rel
 
 
-def test_a_test_hook_needs_no_doc_and_stays_off_the_page():
-    """A test hook is named `...ForTest`, which Doxygen excludes from every page, so a `///` on it
-    has no reader. The exemption covers functions, a hook type's constructor and its destructor,
+def test_a_test_hook_needs_no_doc():
+    """A test hook is named `...ForTest`, which says what it is, so a `///` on it adds nothing. The exemption covers functions, a hook type's constructor and its destructor,
     and stops there: an ordinary undocumented member beside them is still reported."""
     src = ("class Foo {\npublic:\n"
            "  void injectForTest();\n"
@@ -1555,46 +1498,6 @@ def test_a_test_hook_needs_no_doc_and_stays_off_the_page():
            "  void other();\n};")
     flagged = [i for i in _hdr(src) if "has no ///" in i[1]]
     assert len(flagged) == 1, flagged   # only `other`
-    import gen_api
-    assert "EXCLUDE_SYMBOLS = *ForTest" in gen_api._doxyfile(["src/core/x.h"], "/tmp/xml")
-
-
-def test_a_private_nested_type_gets_no_page_however_well_documented(tmp_path):
-    """A type declared under `private:` is implementation detail, so a doc comment on it must not
-    publish it: the fields of DevicesModule's private Device struct once rendered as API. A public
-    nested type with a comment keeps its page."""
-    import gen_api
-    def compound(kind, name, inners="", brief=""):
-        return (f'<doxygen><compounddef kind="{kind}"><compoundname>{name}</compoundname>{inners}'
-                f'<briefdescription><para>{brief}</para></briefdescription>'
-                f'<location file="src/core/x.h"/></compounddef></doxygen>')
-    (tmp_path / "classmm_1_1Outer.xml").write_text(compound(
-        "class", "mm::Outer",
-        '<innerclass prot="private">mm::Outer::Hidden</innerclass>'
-        '<innerclass prot="public">mm::Outer::Shown</innerclass>', "the outer class"))
-    (tmp_path / "structmm_1_1Outer_1_1Hidden.xml").write_text(compound("struct", "mm::Outer::Hidden", brief="documented"))
-    (tmp_path / "structmm_1_1Outer_1_1Shown.xml").write_text(compound("struct", "mm::Outer::Shown", brief="documented"))
-    pages = gen_api._class_to_header(tmp_path)
-    assert "mm-Outer" in pages and "mm-Outer-Shown" in pages
-    assert "mm-Outer-Hidden" not in pages
-
-
-def test_a_type_nested_inside_a_private_one_gets_no_page(tmp_path):
-    """Public inside a private nested type is still out of reach of every caller, so its comment must not publish it either."""
-    import gen_api
-    def compound(kind, name, inners="", brief=""):
-        return (f'<doxygen><compounddef kind="{kind}"><compoundname>{name}</compoundname>{inners}'
-                f'<briefdescription><para>{brief}</para></briefdescription>'
-                f'<location file="src/core/x.h"/></compounddef></doxygen>')
-    (tmp_path / "classmm_1_1Outer.xml").write_text(compound(
-        "class", "mm::Outer", '<innerclass prot="private">mm::Outer::Hidden</innerclass>', "the outer class"))
-    (tmp_path / "structmm_1_1Outer_1_1Hidden.xml").write_text(compound(
-        "struct", "mm::Outer::Hidden", '<innerclass prot="public">mm::Outer::Hidden::Deeper</innerclass>', "documented"))
-    (tmp_path / "structmm_1_1Outer_1_1Hidden_1_1Deeper.xml").write_text(compound(
-        "struct", "mm::Outer::Hidden::Deeper", brief="documented too"))
-    pages = gen_api._class_to_header(tmp_path)
-    assert "mm-Outer" in pages
-    assert "mm-Outer-Hidden" not in pages and "mm-Outer-Hidden-Deeper" not in pages
 
 
 # ---- appendix sections nothing refers to ----
@@ -1605,22 +1508,21 @@ _APPENDIX = ["/// The thing.", "///", "/// @moreinfo", "///", "/// ## Why it wai
 
 def test_an_appendix_section_nothing_refers_to_is_a_finding():
     from check_docgen import _unreferenced_in
-    found = _unreferenced_in("src/core/x.h", _APPENDIX, set())
+    found = _unreferenced_in("src/core/x.h", _APPENDIX)
     assert [k for k, _ in found] == ["src/core/x.h::@moreinfo Why it waits", "src/core/x.h::@moreinfo The wire layout"]
 
 
-def test_an_xref_or_a_page_link_reaches_a_section():
+def test_an_xref_in_the_file_reaches_a_section():
     from check_docgen import _unreferenced_in
     lines = _APPENDIX + ["/// See @xref{why-it-waits}."]
-    found = _unreferenced_in("src/core/x.h", lines, {("x", "the-wire-layout")})
-    assert found == []
+    assert [k for k, _ in _unreferenced_in("src/core/x.h", lines)] == ["src/core/x.h::@moreinfo The wire layout"]
 
 
 def test_a_heading_inside_a_fenced_example_is_no_section():
     from check_docgen import _unreferenced_in
     lines = ["/// The thing.", "///", "/// @moreinfo", "///", "/// ## Real", "///", "/// ```text",
              "/// ## not a section", "/// ```"]
-    assert [k for k, _ in _unreferenced_in("src/core/x.h", lines, set())] == ["src/core/x.h::@moreinfo Real"]
+    assert [k for k, _ in _unreferenced_in("src/core/x.h", lines)] == ["src/core/x.h::@moreinfo Real"]
 
 
 def test_a_control_stating_its_default_or_range_is_reported():
@@ -1700,9 +1602,21 @@ def test_a_control_is_explained_on_its_member_never_in_the_module_guide():
         ("src/light/DemoDriver.h", "module guide explains a control `pins`: move it to the member's `/// @guide` line")]
 
 
-def test_a_modules_card_reaches_its_headers_technical_page():
+def test_every_module_and_every_control_has_the_line_the_app_shows():
     import check_docgen
-    help_file = {"modules": {"TasksModule": {"source": "https://github.com/MoonModules/MoonLight/blob/main/src/core/system/TasksModule.h"},
-                             "Bare": {}}}
-    assert check_docgen._card_links(help_file) == {("core", "TasksModule")}
+    help_file = {"modules": {"DemoDriver": {"source": "https://x/blob/main/src/light/DemoDriver.h", "line": "Drives a demo.",
+                                            "controls": {"pins": {"line": "The pins."}, "bare": {"line": ""}}},
+                             "Silent": {"source": "https://x/blob/main/src/light/Silent.h"}}}
+    assert check_docgen._help_lines(help_file) == [
+        ("src/light/DemoDriver.h", "help line missing: control `bare` has no `///` on its member or `add…` line"),
+        ("src/light/Silent.h", "help line missing: `Silent` has no class `///`")]
+
+
+def test_a_tag_emoji_groups_at_least_two_modules_or_scripts():
+    """A tag is a filter chip, so one carrier groups nothing; a script sharing it counts, and ⚡️ matches ⚡ whatever its variation selector."""
+    import check_docgen
+    help_file = {"modules": {"Fire": {"source": "https://x/blob/main/src/light/Fire.h", "tags": "⚡️🎯"},
+                             "Noise": {"source": "https://x/blob/main/src/light/Noise.h", "tags": "⚡🌊"}}}
+    assert check_docgen._tag_groups(help_file, {"moonlive/effects/aim.mle": "🎯"}) == [
+        ("src/light/Noise.h", "tag emoji on one module: 🌊 groups nothing; share one from the legend or drop it")]
 

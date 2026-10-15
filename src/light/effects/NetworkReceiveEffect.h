@@ -25,7 +25,7 @@ namespace mm {
 class NetworkReceiveEffect : public EffectBase {
 public:
     /// Catalog tags: network input, a MoonModules origin.
-    const char* tags() const override { return "📡🌙"; }
+    const char* tags() const override { return "🖼️🌙"; }
     /// The sender decides the geometry, so this writes whatever the layer has.
     Dim dimensions() const override { return Dim::D3; }
 

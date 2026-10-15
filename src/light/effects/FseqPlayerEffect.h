@@ -14,7 +14,7 @@ namespace mm {
 class FseqPlayerEffect : public EffectBase {
 public:
     /// Catalog tags: a recorded show, played back.
-    const char* tags() const override { return "🎞️"; }
+    const char* tags() const override { return "🖼️"; }
     /// The show's path, an `.fseq` file on flash or under `/sd`.
     char file[64] = "";
     /// Start again at the end.

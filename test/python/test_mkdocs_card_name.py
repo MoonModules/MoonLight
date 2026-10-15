@@ -22,7 +22,7 @@ def test_card_name_stops_at_the_emoji_whatever_it_is():
     assert card_name("HUB75 🟦 · panels on your own pins") == "HUB75"
     assert card_name("NDI 🖥️ · video out") == "NDI"
     assert card_name("Hue 💫 · bridge") == "Hue"
-    assert card_name("NetworkReceive 📡🌙") == "NetworkReceive"
+    assert card_name("NetworkReceive 🖼️🌙") == "NetworkReceive"
     # One nothing has used yet: a new emoji must not need a code change.
     assert card_name("Sunrise 🌅 · dawn") == "Sunrise"
 

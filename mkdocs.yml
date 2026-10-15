@@ -213,8 +213,7 @@ nav:
       - MoonModule: explanation/architecture/moonmodule.md
       - MoonCore: explanation/architecture/mooncore.md
       # The reference half of MoonCore's platform abstraction, so it sits beside it rather than
-      # carrying a tab of its own. The file stays under moonmodules/ because the generated
-      # moxygen/ tree is written beside it (gen_api.py writes moonmodules/<domain>/moxygen/).
+      # carrying a tab of its own.
       - Platform: moonmodules/platform/index.md
       - MoonLight: explanation/architecture/moonlight.md
       - MoonLive: explanation/architecture/moonlive.md
@@ -262,8 +261,4 @@ nav:
   - Legal:
       - Privacy policy: legal/privacy-policy.md
 
-# The per-module summary pages above (Effects & building shows › Supporting, Core ›
-# UI/Supporting) are the docs-v2 surface: each 4-column table row links to the module's
-# generated technical page (moonmodules/{core,light}/moxygen/<Module>.md, from each `.h`'s
-# /// comments) and, temporarily during the migration, to the original hand-written page.
-# Those per-module pages still BUILD and are reachable by link, but are OFF the menu.
+# The catalog pages above are drawn from the module headers through docs/help/help.json, and each card links its header on GitHub, the technical reference.

@@ -68,9 +68,6 @@ public:
     /// @guide A P4 has one LCD_CAM and one Parlio, so a board already driving WS2812 strips from one needs the panel on the other. Only you know which way round.
     uint8_t peripheralSel_ = 0;
 
-    /// The card's tag: this driver is two-dimensional.
-    const char* tags() const override { return "🟦"; }
-
     /// A panel shows a level only as lit time, so brightness shortens the planes' windows rather than scaling values.
     bool dimsByTime() const MM_NONBLOCKING override { return true; }
 
@@ -215,6 +212,7 @@ public:
         setStatus(statusBuf_, Severity::Status);
     }
 
+    /// Correct the frame and pack it into the panel's bit planes.
     void tick() MM_NONBLOCKING override {
         if (!running_ || !sourceBuffer_ || !sourceBuffer_->data()) return;
         uint8_t* out = platform::hub75Buffer(hub_);

@@ -82,6 +82,7 @@ public:
         rebuildControls();
     }
 
+    /// Hand the script its grid size, canvas and fade sink, and run it for one frame.
     void tick() MM_NONBLOCKING override {
         // The emitter writes three channels at a stride, so a sub-RGB layout renders dark instead.
         const auto cpl = channelsPerLight();

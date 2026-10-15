@@ -4,7 +4,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { helpMarkdown, safeUrl, technicalUrl, chipsMatch, typeDisplayName, COMPILED_EMOJI, SCRIPTED_EMOJI } from "../../src/ui/help.js";
+import { helpMarkdown, safeUrl, chipsMatch, typeDisplayName, COMPILED_EMOJI, SCRIPTED_EMOJI } from "../../src/ui/help.js";
 
 test("code, bold and absolute links render", () => {
     assert.equal(helpMarkdown("An `.fseq` file, **fit** or [the docs](https://moonmodules.org/MoonLight/)"),
@@ -92,14 +92,6 @@ test("a yes is kept, so help downloads and the question is not asked again", () 
     later.toggle();
     assert.equal(later.w.asked, 0);
     assert.equal(later.w.loads, 1);
-});
-
-test("a module's technical page is derived from its source link, where its @moreinfo renders", () => {
-    assert.equal(technicalUrl("https://github.com/MoonModules/MoonLight/blob/main/src/light/modifiers/BlockModifier.h"),
-        "https://moonmodules.org/MoonLight/moonmodules/light/moxygen/BlockModifier.html");
-    assert.equal(technicalUrl("https://github.com/MoonModules/MoonLight/blob/v6.1.0/src/core/services/AudioService.h"),
-        "https://moonmodules.org/MoonLight/moonmodules/core/moxygen/AudioService.html");
-    assert.equal(technicalUrl("https://github.com/MoonModules/MoonLight/blob/main/src/main.cpp"), null);
 });
 
 function linkWorld({ inHelp = true, blocked = false, meta = false } = {}) {

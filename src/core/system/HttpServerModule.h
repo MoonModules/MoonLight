@@ -16,6 +16,8 @@ struct StateDocumentResult;
 class JsonSink;   // forward declared: the bodies in the .cpp include the real headers
 class Scheduler;
 
+namespace ui { struct EmbeddedFile; }   // one served UI file, from the generated ui_embedded.h
+
 /// The embedded HTTP server and WebSocket: it serves the web UI and the REST API behind it.
 /// @card HttpServerModule.png
 ///
@@ -310,7 +312,9 @@ public:
     void setup() override;
     /// Close every connection and unwire the hook.
     void release() override;
+    /// Drain the preview and state sends, read inbound WebSocket frames, and serve a pending resync.
     void tick20ms() MM_NONBLOCKING override;
+    /// Push the state document to every WebSocket client.
     void tick1s() MM_NONBLOCKING override;
 
     /// What an apply-core operation did, which a transport maps onto its own error reporting.
@@ -611,7 +615,7 @@ private:
     /// The child module a delete or replace may act on: found, not top-level, and one the user can remove.
     OpResult editableChild(const char* moduleName, MoonModule*& mod);
     void sendPreflightResponse(platform::TcpConnection& conn);
-    void serveFile(platform::TcpConnection& conn, const char* filename, const char* contentType);
+    void serveFile(platform::TcpConnection& conn, const ui::EmbeddedFile& file);
 
     // A file body is not a control value, so the File Manager has its own vetted endpoints. @xref{mutations-and-the-file-manager}
     void serveFileContents(platform::TcpConnection& conn, const char* query);

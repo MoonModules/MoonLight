@@ -31,12 +31,6 @@ export function docUrl(docPath) {
     return "https://moonmodules.org/MoonLight/moonmodules/" + docPath.replace(/\.md(#.*)?$/, ".html$1");
 }
 
-// A header's technical page on the site, where its `@moreinfo` renders, derived from its source link: help's level 4, a link rather than text, since it is written for developers.
-export function technicalUrl(source) {
-    const m = /\/src\/(core|light|platform)\/(?:[^/]+\/)*([A-Za-z0-9_]+)\.h$/.exec(source || "");
-    return m ? `https://moonmodules.org/MoonLight/moonmodules/${m[1]}/moxygen/${m[2]}.html` : null;
-}
-
 // A module's help, progressive disclosure: the line and the summary always show, the guide and the rest open on a tap, and the picture loads only then.
 export function moduleHelp(help, docPath) {
     const box = document.createElement("details");
@@ -62,7 +56,7 @@ export function moduleHelp(help, docPath) {
     // Built as elements, each URL through safeUrl, so nothing in the file becomes an attribute of its own.
     const links = document.createElement("div");
     links.className = "help-links";
-    for (const [label, url] of [["Docs", docPath ? docUrl(docPath) : null], ["Technical", technicalUrl(help.source)], ["Source", help.source], ["Tests", help.tests]]) {
+    for (const [label, url] of [["Docs", docPath ? docUrl(docPath) : null], ["Source", help.source], ["Tests", help.tests]]) {
         const href = safeUrl(url);
         if (!href) continue;
         if (links.childNodes.length) links.append(" · ");
@@ -131,7 +125,7 @@ export const COMPILED_EMOJI = "\u{1F4E6}";      // 📦 chip only, never a tag; 
 // What an effect listens to, a chip group of its own.
 export const AUDIO_EMOJI = ["\u{1F3B5}", "\u{1F3B6}"];   // volume, frequency
 // The power functions an effect is built on, kept last and together on a card and in the chip row.
-export const KERNEL_EMOJI = ["🖌️", "✨", "🌊", "💨", "🌫️", "🎡"];   // the legend's order
+export const KERNEL_EMOJI = ["🖌️", "✨", "💨", "🌫️", "🎡"];   // the legend's order
 
 // Each chip's meaning as its tooltip, in the legend's words, so a filter chip explains itself.
 export const EMOJI_LABEL = {
@@ -158,9 +152,7 @@ export const EMOJI_LABEL = {
     // what it listens to and what it does
     "\u{1F3B5}": "reacts to volume: how loud the room is",
     "\u{1F3B6}": "reacts to frequency: which notes are playing",
-    "\u{1F4E1}": "takes its picture from the network",
-    "\u{1F5BC}\uFE0F": "samples the Picture service's picture",
-    "\u{1F39E}\uFE0F": "plays a recorded show from a file",
+    "\u{1F5BC}\uFE0F": "shows a picture made elsewhere: the network, the Picture service or a recorded show",
     "\u{1F3AF}": "aims moving heads",
     "\u{1F47E}": "pixel art: games and sprites",
     "\u{1F9EC}": "a simulation: cells evolving off their own last frame",
@@ -168,7 +160,6 @@ export const EMOJI_LABEL = {
     // the power functions, shown together at the end of a row
     "\u{1F58C}\uFE0F": "power function: a shader, every pixel computed from its position",
     "✨": "power function: particles, born, moved by forces, and dying",
-    "\u{1F30A}": "power function: a fluid working out its own motion",
     "\u{1F4A8}": "power function: transport, light carried and fading rather than redrawn",
     "\u{1F32B}\uFE0F": "power function: a noise field, the cloud and smoke family",
     "\u{1F3A1}": "power function: polar, composed around a center",

@@ -19,4 +19,4 @@ A light show stacks them: one layout, one or more layers of effects with modifie
 
 ## Source
 
-The pieces the whole pipeline is assembled from: [Layer](moxygen/Layer.md) holds the effects and composites them, [Layouts](moxygen/Layouts.md) and [Effects](moxygen/Effects.md) and [Drivers](moxygen/Drivers.md) are the three containers a user adds children to, and [Buffer](moxygen/Buffer.md) is the pixel memory they all read and write.
+The pieces the whole pipeline is assembled from: [Layer](supporting.md#layer) holds the effects and composites them, [Layouts](supporting.md#layouts) and [Effects](supporting.md#effects) and [Drivers](supporting.md#drivers) are the three containers a user adds children to, and [Buffer](../../../src/light/layers/Buffer.h) is the pixel memory they all read and write.

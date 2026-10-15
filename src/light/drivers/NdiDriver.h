@@ -107,6 +107,7 @@ public:
         if (open_) { platform::ndiSenderClose(); open_ = false; }
     }
 
+    /// Send a corrected frame to the NDI receivers, at most `fps` times a second.
     void tick() MM_NONBLOCKING override {
         if (!open_ || fps == 0 || !sourceBuffer_ || !sourceBuffer_->data()) return;
 

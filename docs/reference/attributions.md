@@ -35,7 +35,7 @@ The people, projects and published algorithms whose work shaped MoonLight. We st
 | [FFmpeg](https://ffmpeg.org) | The open video toolkit the desktop HLS and RTSP drivers encode through. |
 | [Fisher-Yates shuffle](https://en.wikipedia.org/wiki/Fisher%E2%80%93Yates_shuffle) File:Durstenfeld_shuffle.svg | A uniform random permutation in one pass. |
 | [FPP / Falcon Player](https://github.com/FalconChristmas/fpp) | The show player that prompted [PanelCardDriver](../moonmodules/light/drivers.md#panelcard): if a Linux host can feed a wall of HUB75 panels, so can the board already rendering them. Its receiving-card protocols, and its FSEQ format is what a show file is. |
-| [Frank / softhack007](https://github.com/softhack007) | Main author of the WLED-MM audio-reactive usermod. The ideas behind [AudioService](../moonmodules/core/moxygen/AudioService.md), including the adaptive noise gate analyzed with his permission, descend from years of collaboration, as do the AI principles and the care for code quality. |
+| [Frank / softhack007](https://github.com/softhack007) | Main author of the WLED-MM audio-reactive usermod. The ideas behind [AudioService](../moonmodules/core/services.md#audio), including the adaptive noise gate analyzed with his permission, descend from years of collaboration, as do the AI principles and the care for code quality. |
 | Gomez | The demoscene water effect, 2000. |
 | [Harald Kubota](https://hkubota.wordpress.com/2022/01/31/winter-project-colorlight-5a-75b-protocol/) | An independent write-up of the ColorLight 5A-75B wire format. |
 | [HLS](https://www.rfc-editor.org/rfc/rfc8216) | HTTP Live Streaming, RFC 8216: video as a playlist of short segments. |

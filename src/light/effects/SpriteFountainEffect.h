@@ -72,6 +72,7 @@ public:
         seed_ = 0;
     }
 
+    /// Sweep the nozzle, emit sprites by beat or audio band, and move and draw the pool.
     void tick() MM_NONBLOCKING override {
         const draw::Canvas cv = canvas();
         if (width() == 0 || height() == 0) return;

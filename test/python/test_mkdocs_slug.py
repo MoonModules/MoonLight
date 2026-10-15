@@ -52,9 +52,8 @@ def test_slug_resolves_to_the_real_rendered_heading_id():
 # The catalog pages hand-author each card's preview as a raw `<img src="../../assets/…">`.
 # MkDocs' --strict validates markdown `![]()` links but NOT raw-HTML `<img src>`, and the
 # catalog hook moves the tag into a table cell without touching its src — so a wrong `../`
-# depth ships a SILENT 404 on the live site (the exact bug this test pins: the pages sit one
-# level shallower than the generated moxygen pages, so they need `../../assets`, not the
-# moxygen pages' `../../../assets`). This test resolves every catalog `<img src>` against its
+# depth ships a SILENT 404 on the live site (the exact bug this test pins: the pages need
+# `../../assets`, one level shallower than a page nested one folder deeper). This test resolves every catalog `<img src>` against its
 # page's own directory and fails on any that doesn't exist on disk.
 import re  # noqa: E402
 

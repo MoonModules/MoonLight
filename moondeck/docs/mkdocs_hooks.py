@@ -20,6 +20,7 @@ import logging
 import os
 import posixpath
 import re
+import subprocess
 from pathlib import Path
 
 # moondeck/docs/ is on sys.path when mkdocs runs from repo root; import the shared parser.
@@ -35,26 +36,27 @@ from _test_metadata import (  # noqa: E402
     collect_scenario_files,
 )
 from generate_test_docs import render_unit_tests, render_scenarios  # noqa: E402
-import gen_api  # noqa: E402  (same dir, on sys.path via _HERE above)
 from gen_help import ATTRIBUTIONS, catalog_rows, display_name  # noqa: E402
 
 
 # ---- source-link rewrite: docs link OUT to repo files the site can't host ----
 
-# The blob base for links that escape docs/ into the repo (src/, moondeck/, test/,
-# CLAUDE.md, README.md, mooninstaller/). The site can't serve these — src/ isn't
-# published — so a relative link 404s on the deployed site. Rewrite to an absolute
-# GitHub blob URL so "source [Foo.h]" resolves everywhere (locally-served preview +
-# moonmodules.org). A `.h` link for a module that HAS a generated technical page is
-# repointed at that in-site page instead (see _API_MODULES / on_page_markdown); only
-# files with no generated page fall through to the GitHub blob URL.
-_BLOB_BASE = gen_api._BLOB_BASE   # one definition — branch-pinned, see gen_api._blob_base()
+# A link that escapes docs/ into the repo (src/, moondeck/, test/, CLAUDE.md, README.md, mooninstaller/) 404s on the site, which hosts none of it, so it becomes the file on GitHub. A header is the technical reference this way: its `///` comments read in place.
+def _blob_base() -> str:
+    """The GitHub blob URL a source link is built on, pinned to the branch being documented, so a page built on a feature branch links a file main may not have yet; main without git or on a detached head."""
+    branch = "main"
+    try:
+        out = subprocess.run(["git", "rev-parse", "--abbrev-ref", "HEAD"],
+                             cwd=ROOT, capture_output=True, text=True, timeout=5)
+        name = out.stdout.strip()
+        if out.returncode == 0 and name and name != "HEAD":
+            branch = name
+    except (OSError, subprocess.SubprocessError):
+        pass
+    return f"https://github.com/MoonModules/MoonLight/blob/{branch}"
 
-# {module stem: domain} for every module that got a generated technical page this
-# build, e.g. {"Control": "core", "FireEffect": "light"} — populated by on_files,
-# read by the link retargeter to build the domain-nested target path. Empty when the
-# doxygen/moxygen toolchain is absent (so links fall back to GitHub, unchanged).
-_API_MODULES: dict[str, str] = {}
+
+_BLOB_BASE = _blob_base()
 
 # Repo top-level dirs/files a doc may link into but the site doesn't host.
 _OUT_OF_DOCS = ("src/", "moondeck/", "test/", "esp32/", "mooninstaller/",
@@ -83,30 +85,10 @@ def _rewrite_out_of_docs_links(markdown: str, src_uri: str) -> str:
     page_dir = Path("docs") / src_uri
     page_dir = page_dir.parent
 
-    # Depth from this page up to docs/ (so a `.h` link can be repointed at the
-    # in-site generated API page with the right relative `../` count).
-    up = "../" * len(Path(src_uri).parent.parts) if str(Path(src_uri).parent) != "." else ""
-
     def _sub(m: re.Match) -> str:
         href = m.group("href")
         frag = m.group("frag") or ""
         rel = href.split("#", 1)[0]
-        # A `.h` whose module has a generated technical page → point at the in-site
-        # page, not GitHub. The generated reference IS the source view we want. The
-        # target nests by domain (core/light), so use the recorded domain. EXCEPT a
-        # `#L<n>` line-number fragment: that only resolves on GitHub's blob view (the
-        # generated page has no line anchors), so such links fall through to the blob
-        # rewrite below.
-        stem = Path(rel).stem
-        is_line_anchor = re.match(r'#L\d', frag)
-        # EXCEPT on a generated moxygen page: that page IS the `.h`'s technical view, so
-        # repointing its own `Source: Foo.h` banner at the in-site page links it to
-        # ITSELF and the reader can never reach the header. A generated page's `.h`
-        # links stay GitHub blob URLs.
-        on_generated_page = "/moxygen/" in src_uri
-        if rel.endswith(".h") and stem in _API_MODULES and not is_line_anchor and not on_generated_page:
-            domain = _API_MODULES[stem]
-            return f"]({up}moonmodules/{domain}/moxygen/{stem}.md{frag})"
         # Resolve against the page dir to a repo-relative path (the correct case).
         target = os.path.normpath(str(page_dir / rel)).replace(os.sep, "/")
         if target.startswith(_OUT_OF_DOCS) and not target.startswith("docs/"):
@@ -280,8 +262,11 @@ def _class_intro(cat: dict, src_uri: str) -> list[str]:
     out += [_site_relative(cat.get("line", ""), src_uri), ""]
     for para in (p for p in cat.get("summary", "").split("\n\n") if p):
         out += [_site_relative(para, src_uri), ""]
-    for clip in cat.get("videos", []):
-        out += [f'<video src="{_site_relative(clip["video"], src_uri)}" controls playsinline width="360" title="{clip.get("caption", "")}"></video>', ""]
+    # The clips share one line, so they sit side by side rather than stacked.
+    clips = [f'<video src="{_site_relative(clip["video"], src_uri)}" controls playsinline title="{clip.get("caption", "")}"></video>'
+             for clip in cat.get("videos", [])]
+    if clips:
+        out += [" ".join(clips), ""]
     return out
 
 
@@ -333,14 +318,14 @@ def fill_cards_from_help(markdown: str, src_uri: str) -> str:
         if entry.get("image"):
             alt = entry.get("alt") or f"{name} preview"
             body += [f'<img src="{_site_relative(entry["image"], src_uri)}" width="300" alt="{alt}">', ""]
-        body += [_site_relative(" ".join([entry["line"]] + entry.get("summary", "").split("\n\n")).strip(),
+        # A module with no help line yet is listed by gen_help's missing-help report; its card still draws, from what it has.
+        body += [_site_relative(" ".join([entry.get("line", "")] + entry.get("summary", "").split("\n\n")).strip(),
                                 src_uri), ""]
         body += [f"- `{c}`: {_card_control(_site_relative(h['line'], src_uri))}"
                  for c, h in entry.get("controls", {}).items()]
         if entry.get("attribution"):
             body += ["", f"Origin: {_site_relative(entry['attribution'], src_uri)}"]
-        stem = posixpath.basename(entry["source"]).removesuffix(".h")
-        body += ["", f"Detail: [technical](moxygen/{stem}.md)"]
+        body += ["", f"Detail: [source]({entry['source']})"]
         if entry.get("tests"):
             body += ["", f"[Tests]({_tests_link(entry['tests'], src_uri)})"]
         # The next card's `<a id>` sits inside this block, right above that card's heading: keep it.
@@ -367,22 +352,21 @@ def _slug(text: str) -> str:
 
 
 def _row_links(b: dict, details_names: set) -> list:
-    """A card's three links, Tests, API and Details, always all three."""
-    # THREE links, and always all three: Tests, API and Details. A card offers the same
+    """A card's three links, Tests, Source and Details, always all three."""
+    # THREE links, and always all three: Tests, Source and Details. A card offers the same
     # doors on every row, so a reader learns their position once instead of re-reading a
     # list whose length changes per card. Everything else was prose wearing a link's clothes: the
     # details section is already named in the card's own description, so a `More:` row restated a
     # sentence the reader had read. The attribution reads under the description instead.
     #
-    # A missing target still renders its label, greyed, rather than vanishing: a card with
+    # A missing target still renders its label, grayed, rather than vanishing: a card with
     # no tests is a gap worth seeing, and a row that silently loses a link hides it.
     tests = (b["testsMulti"] if b.get("testsMulti")
              else f'[{b["testsName"]}]({b["tests"]})' if b["tests"]
              else '<span class="mm-missing">none yet</span>')
-    detail = (re.sub(r'^\[technical\]', '[reference]', b["detail"]) if b["detail"]
-              else '<span class="mm-missing">none yet</span>')
+    detail = b["detail"] or '<span class="mm-missing">none yet</span>'
     links = [f":material-test-tube: **Tests:** {tests}",
-             f":material-api: **API:** {detail}"]
+             f":material-file-code: **Source:** {detail}"]
     # Details is a fixed row, not a per-card extra: most cards have one and a reader
     # follows it often, so it earns a standing position. Any other link a card wants is
     # made in the description, in the sentence that needs it.
@@ -419,7 +403,7 @@ def _emit_row(b: dict, details_names: set) -> str:
                  if desc else f'{name}{img_html}')
 
     # Col 2: controls, one per line, split into the name part (keeps its `code` chips,
-    # styled accent) and the description (greyed via .mm-pdesc).
+    # styled accent) and the description (grayed via .mm-pdesc).
     #
     # The separator is a colon, never an em-dash, which the prose rules ban repo-wide. A
     # control without one renders whole in the name part.
@@ -535,9 +519,7 @@ def on_pre_build(config):
 
 
 def on_files(files, config):
-    """Inject build-time-generated pages into the virtual tree: the test inventories,
-    and (Phase 4b) a per-module API reference for each infrastructure module,
-    generated from its `///` source comments by gen_api (Doxygen → moxygen)."""
+    """Inject the build-time pages into the virtual tree: the test inventories, the help the deck reads, and the catalog pages drawn from help.json."""
     from mkdocs.structure.files import File
 
     def _add(src_uri: str, content: str):
@@ -556,25 +538,6 @@ def on_files(files, config):
             _add(f"moonmodules/{page}", generated_catalog(f"moonmodules/{page}"))
     _add("reference/tests/scenario-tests.md", render_scenarios(collect_scenario_files()))
 
-    # Source-generated technical pages. gen_api.generate() writes each to disk under
-    # docs/moonmodules/<domain>/moxygen/<Module>.md (gitignored, so a human can preview
-    # the .md directly) and returns {uri: markdown}. We still inject via _add so THIS
-    # build sees them (MkDocs' file scan ran before this hook, so the fresh writes
-    # aren't in `files` yet; _add de-dups a same-URI entry a later scan would find).
-    # Empty dict when doxygen/npx are absent (local without the toolchain) — the site
-    # still builds; the pages appear in CI. But if the tools ARE present and fail (npx
-    # fetch error, doxygen crash, near-empty output), generate() raises GenApiError,
-    # which propagates and fails the build — so a transient failure can't silently ship
-    # a docs site with zero API pages. Record {stem: domain} so on_page_markdown can
-    # retarget a `.h` link to the domain-nested page.
-    global _API_MODULES
-    api_pages = gen_api.generate()
-    # uri: 'moonmodules/<domain>/moxygen/<Stem>.md' → {'<Stem>': '<domain>'}
-    _API_MODULES = {
-        Path(uri).stem: Path(uri).parts[1] for uri in api_pages
-    }
-    for uri, md in api_pages.items():
-        _add(uri, md)
     return files
 
 

@@ -13,19 +13,7 @@ ROOT = Path(__file__).resolve().parent.parent.parent
 SRC = ROOT / "src"
 SPECS = ROOT / "docs" / "moonmodules"
 
-# The module stems that get a source-generated technical page (every `.h` under
-# src/{core,light} — gen_api discovers them). A summary/overview may link its
-# `moxygen/<stem>.md` in place of a `## Source` section; this set validates that link
-# points at a real generated page. Import by path so this check needs no PYTHONPATH tweak.
-#
-# `_page_stem` rather than the bare filename, because the generator prefixes a COLLIDING
-# stem with its parent directory (`desktop/platform_config.h` becomes
-# `desktop_platform_config`). Deriving the set here with `Path(h).stem` instead duplicated
-# the naming rule and then disagreed with it: the page existed and was reachable, and this
-# check called the link dead. One function owns how a page is named.
 sys.path.insert(0, str(ROOT / "moondeck" / "docs"))
-from gen_api import _discover_headers, _page_stem  # noqa: E402
-_API_STEMS = {_page_stem(h) for h in _discover_headers()}
 
 # Map source directories to spec directories
 SOURCE_DIRS = {
@@ -35,11 +23,10 @@ SOURCE_DIRS = {
 
 
 # Subdirs under docs/moonmodules/ that are NOT hand-written active specs:
-#   moxygen/ — generated technical pages (no `## Source`; the page IS the source view)
 #   archive/ — the old per-module pages, kept for migration cross-check until Stage 5
 #              deletes them; transitional, not maintained (their relative links are
 #              stale after the archive move — no reason to fix links on doomed files).
-_NON_SPEC_DIRS = {"moxygen", "archive"}
+_NON_SPEC_DIRS = {"archive"}
 
 
 def spec_md_files():
@@ -155,11 +142,10 @@ def _module_block(source_path, spec):
     base = source_path.stem          # e.g. "BlurzEffect"
     lines = spec.splitlines()
     # Which line ties this module to its block. Several link shapes across the catalog
-    # pages: a direct `source [<stem>.h]`, a detail-page reference, or the card's own
-    # `Detail: [technical](moxygen/<base>.md)`.
+    # pages: a direct `source [<stem>.h]`, a detail-page reference, or a link to the header itself.
     def _match(ln):
         return (f"[{stem}]" in ln or f"[{base}.md]" in ln
-                or f"moxygen/{base}.md" in ln
+                or f"/{stem})" in ln
                 or f'alt="{base} ' in ln or f'alt="A {base} ' in ln)
     link_i = next((i for i, ln in enumerate(lines) if _match(ln)), None)
     if link_i is None:
@@ -238,7 +224,9 @@ def _resolve_link(md, href):
     candidate = (md.parent / target).resolve()
     if target.startswith("/") or not candidate.is_relative_to(ROOT):
         return f"source link escapes repo or is absolute: {href}"
-    if not candidate.exists():
+    # A catalog page drawn from help.json exists only in the build, under its own name.
+    generated = candidate.is_relative_to(SPECS) and candidate.relative_to(SPECS).as_posix() in _help_file().get("catalogs", {})
+    if not candidate.exists() and not generated:
         return f"source link does not resolve: {href}"
     return None
 
@@ -275,9 +263,8 @@ def check_source_links():
             # not the tail of a word like "resource [".
             src_links = re.findall(r'\bsource \[[^\]]+\]\(([^)]+)\)', text)
             if not src_links:
-                # Consolidated catalog pages now link each block to its generated
-                # technical page: `Detail: [technical](../moxygen/<Stem>.md)`.
-                src_links = re.findall(r'\]\(([^)]*moxygen/[^)]+\.md)\)', text)
+                # A card links its header, the technical reference: `Detail: [source](…/<Stem>.h)`.
+                src_links = re.findall(r'\]\(([^)]*src/[^)]+\.h)\)', text)
             if not src_links:
                 # index page: the per-entry links to detail pages (…Driver.md),
                 # same-dir (no ../) — e.g. `](RmtLedDriver.md)`.
@@ -302,18 +289,10 @@ def check_source_links():
             issues += ([(spec_rel, issue)] if issue else [])
             continue
 
-        # A summary page whose technical reference is the source-generated page
-        # (moonmodules/{core,light}/moxygen/<Module>.md, built by gen_api.py from the
-        # `.h`'s /// comments) links to that page instead of a `## Source` GitHub blob
-        # — the generated page *is* the source view. Validate EVERY moxygen link on the
-        # page (a summary page tables many modules, so it has many such links) against
-        # the discovered-header set; no `## Source` section required (it would
-        # duplicate the generated reference).
-        moxygen_links = re.findall(r'\]\([\w./-]*moxygen/([\w-]+)\.md(?:#[\w-]+)?\)', text)
-        if moxygen_links:
-            for stem in moxygen_links:
-                if stem not in _API_STEMS:
-                    issues.append((spec_rel, f"moxygen link to '{stem}' is not a generated module"))
+        # A summary page links each header it lists, the technical reference read in place, so every such link must resolve; it needs no `## Source` section beside them.
+        header_links = re.findall(r'\]\(([\w./-]*src/[\w./-]+\.h)\)', text)
+        if header_links:
+            issues += [(spec_rel, issue) for href in header_links if (issue := _resolve_link(md, href))]
             continue
 
         # Capture only the Source section body — stop at the next top-level
@@ -395,10 +374,10 @@ def main():
         rel = mod.relative_to(SRC)
         spec = find_spec(mod)
         if not spec:
-            # docs-v2: a module with no active hand-written .md is still documented if
-            # it has a source-generated technical page (its .h is in the moxygen
-            # discovery set). The generated page IS its spec; not a miss.
-            if mod.stem in _API_STEMS:
+            # A module with no hand-written page is documented by its header, which the help reads, as is a catalog's base class, whose comment is that catalog's intro.
+            if any(m.get("source", "").endswith("/" + mod.relative_to(ROOT).as_posix())
+                   for m in _help_file().get("modules", {}).values()) \
+                    or mod.stem in {c.get("base") for c in _help_file().get("catalogs", {}).values()}:
                 ok.append(rel)
             else:
                 missing.append(rel)

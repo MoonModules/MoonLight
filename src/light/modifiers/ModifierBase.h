@@ -28,6 +28,7 @@ namespace mm {
 /// Most modifiers are not affine, a mask being a predicate and a tile a modulo; rotation is the exception, written as an integer rotation matrix. It is the textbook image-warping pattern: a transform baked into a spatial table, built backward.
 class ModifierBase : public MoonModule {
 public:
+    /// A modifier, so a layer accepts it as a child.
     ModuleRole role() const MM_NONBLOCKING override { return ModuleRole::Modifier; }
 
     /// Whether a control change rebuilds the mapping, which every modifier control does.

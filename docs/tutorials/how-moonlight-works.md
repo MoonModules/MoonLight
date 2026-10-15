@@ -155,9 +155,7 @@ The rest the module declares about itself:
 | 💫 MoonLight · 🌙 MoonModules · 🐙 WLED · ⚡️ FastLED | where it came from |
 | 🦅 | a named contributor, credited on the module |
 | 🎵 volume · 🎶 frequency | it listens: one note reacts to how LOUD the room is, two to WHICH notes are playing |
-| 📡 | it takes its picture from the network |
-| 🖼️ | it samples the Picture service's picture |
-| 🎞️ | it plays a recorded show from a file |
+| 🖼️ | it shows a picture made elsewhere: from the network, the Picture service or a recorded show |
 | 🎯 | it aims moving heads |
 | 👾 | pixel art: the games and sprites |
 | 🧬 | a simulation: the picture emerges from cells evolving off their own last frame, rather than being drawn |
@@ -168,7 +166,6 @@ And a last group, shown together at the end of the row, saying which **power fun
 |---|---|
 | 🖌️ | a shader: every pixel computed from its own position, the way a screen shader works |
 | ✨ | particles: sparks that are born, move under forces and die |
-| 🌊 | a fluid: a medium that works out its own motion, so a vortex forms and travels because the equations say so |
 | 💨 | transport: light is CARRIED and fades rather than redrawn, so the effect has a memory of where it has been |
 | 🌫️ | a noise field: texture sampled from a field rather than drawn, the cloud and smoke family |
 | 🎡 | polar: composed around a center rather than across a grid, which is what suits a round fixture |

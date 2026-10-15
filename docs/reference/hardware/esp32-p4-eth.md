@@ -25,11 +25,11 @@ The onboard SMD mic and speaker header connect through an **ES8311 mono codec** 
 | ESP_I2C_SCL | 8 | codec control bus |
 | PA_Ctrl | 53 | NS4150B amplifier enable; wired on the board, not implemented |
 
-The ES8311's I2C address is `0x18`, the hardware default with no address-select strap. The catalog entry configures [AudioService](../../moonmodules/core/moxygen/AudioService.md)'s ES8311 codec on these pins, through the board's [I2cBusModule](../../moonmodules/core/moxygen/I2cBusModule.md). The speaker path (DSDIN, PA_Ctrl) is a separate, unimplemented capability.
+The ES8311's I2C address is `0x18`, the hardware default with no address-select strap. The catalog entry configures [AudioService](../../moonmodules/core/services.md#audio)'s ES8311 codec on these pins, through the board's [I2cBusModule](../../moonmodules/core/system.md#i2c-bus). The speaker path (DSDIN, PA_Ctrl) is a separate, unimplemented capability.
 
 ## Ethernet (IP101GRI PHY, RMII)
 
-The board uses the `P4 RMII` preset, shared with the Waveshare P4-NANO: MDC 31, MDIO 52, PHY reset 51, reference clock 50 (see [EthernetModule](../../moonmodules/core/moxygen/EthernetModule.md)). The RMII data lines, fixed by the chip and not part of that preset, read from the schematic:
+The board uses the `P4 RMII` preset, shared with the Waveshare P4-NANO: MDC 31, MDIO 52, PHY reset 51, reference clock 50 (see [EthernetModule](../../moonmodules/core/system.md#ethernet)). The RMII data lines, fixed by the chip and not part of that preset, read from the schematic:
 
 | Signal | GPIO |
 |---|---|

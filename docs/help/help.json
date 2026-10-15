@@ -1149,7 +1149,7 @@
     }
    },
    "role": "effect",
-   "tags": "📡🌙",
+   "tags": "🖼️🌙",
    "dim": 3,
    "doc": "light/effects.md#networkreceive",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/NetworkReceiveEffect.h",
@@ -1275,7 +1275,7 @@
     }
    },
    "role": "effect",
-   "tags": "🎞️",
+   "tags": "🖼️",
    "dim": 3,
    "doc": "light/effects.md#fseqplayer",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/FseqPlayerEffect.h",
@@ -1728,7 +1728,7 @@
     }
    },
    "role": "effect",
-   "tags": "💫🖌️🌊💨",
+   "tags": "💫🖌️💨",
    "dim": 3,
    "doc": "light/effects.md#fluid",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/FluidEffect.h",
@@ -3266,7 +3266,6 @@
     }
    },
    "role": "driver",
-   "tags": "🟦",
    "dim": 0,
    "doc": "light/drivers.md#hub75",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/drivers/Hub75Driver.h"
@@ -3615,7 +3614,6 @@
   "Services": {
    "line": "The container for the user-added Service modules, the capability bridges a device provides or consumes.",
    "summary": "A service is added and removed at runtime, the core twin of the light domain's Effects and Drivers. Fixed device infrastructure, such as identity and network, lives under System.",
-   "image": "https://moonmodules.org/MoonLight/assets/core/Services.png",
    "role": "generic",
    "dim": 0,
    "doc": "core/services.md",
@@ -4574,7 +4572,7 @@
    "title": "Drivers",
    "base": "DriverBase",
    "line": "A driver sends the lights out: to LEDs on a wire, a HUB75 panel, the network, a smart-light bridge or the web UI.",
-   "summary": "Every driver reads the shared buffer of the [Drivers](https://moonmodules.org/MoonLight/moonmodules/light/supporting.html#drivers) container, so several drivers drive one installation, each its own slice. A device's drivers come with its entry in the installer's device catalog, and [Preview](https://moonmodules.org/MoonLight/moonmodules/light/drivers.html#preview) is the one every device starts with.\n\nEach driver opens with the shared controls, then adds its own. The output correction (`localBrightness`, `curve`, `fixture`, `whiteMode`) sets how its slice looks, and the source window (`start`, `count`) sets which slice it reads. Hue and Preview show no correction controls, though Hue still applies the global brightness. HUB75, Preview and the video drivers take the whole buffer.\n\nEach card's emoji are its tags, as the [tag emoji legend](https://moonmodules.org/MoonLight/explanation/architecture/index.html#tag-emoji-legend) explains.",
+   "summary": "Each reads its own slice of the [Drivers](https://moonmodules.org/MoonLight/moonmodules/light/supporting.html#drivers) container's buffer, through the shared correction and window controls. A card's emoji are its [tags](https://moonmodules.org/MoonLight/explanation/architecture/index.html#tag-emoji-legend).",
    "videos": [
     {
      "video": "https://moonmodules.org/MoonLight/assets/moontube/07-drivers-desktop.webm",
@@ -4597,7 +4595,6 @@
    "base": "Services",
    "line": "The container for the user-added Service modules, the capability bridges a device provides or consumes.",
    "summary": "A service is added and removed at runtime, the core twin of the light domain's Effects and Drivers. Fixed device infrastructure, such as identity and network, lives under System.",
-   "image": "https://moonmodules.org/MoonLight/assets/core/Services.png",
    "videos": [
     {
      "video": "https://moonmodules.org/MoonLight/assets/moontube/09-services.webm",

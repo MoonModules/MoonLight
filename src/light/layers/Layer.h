@@ -44,6 +44,7 @@ namespace mm {
 /// **Fades.** An effect asks for a fade per sixtieth-of-a-second reference frame, and the layer scales it by the share of that frame the real frame covered. The layer keeps the gentlest request across the fading effects.
 class Layer : public MoonModule {
 public:
+    /// A layer, so the Layers container accepts it as a child.
     ModuleRole role() const MM_NONBLOCKING override { return ModuleRole::Layer; }
     /// The child roles a layer accepts: effects that write it, modifiers that reshape it.
     const char* acceptsChildRoles() const override { return "effect,modifier"; }
@@ -146,6 +147,7 @@ public:
         // applyState() recurses to the effects next, which allocate against the LUT built here.
     }
 
+    /// Apply the frame's fade, then tick each enabled effect into the layer's buffer.
     void tick() MM_NONBLOCKING override {
         // Gated per child here because the layer iterates its own children, not through the Scheduler.
         elapsed_ = platform::millis();

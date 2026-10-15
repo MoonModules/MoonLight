@@ -5,7 +5,7 @@ MoonLight's [Control](../moonmodules/core/system.md#control) card is a surface: 
 > New here? Start with **[Install & first light](../gettingstarted.md)**. What follows assumes MoonLight is running and you can find it in a browser.
 
 
-<video src="../assets/moontube/10-control.webm" controls playsinline width="720" title="The surface: the mapped controls, assigning your own, and OSC arriving from outside."></video>
+<video src="../assets/moontube/10-control.webm" controls playsinline title="The surface: the mapped controls, assigning your own, and OSC arriving from outside."></video>
 
 ---
 

@@ -575,6 +575,7 @@ public:
         passBufferToDrivers();
     }
 
+    /// Composite the layers into the output buffer, then hand it to the drivers, on the encode core when the render is split.
     void tick() MM_NONBLOCKING override {
         // Core 1 is encoding the PREVIOUS frame, so wait it out before overwriting the buffer.
         if (renderSplitActive_) {

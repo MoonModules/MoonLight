@@ -18,7 +18,7 @@ namespace mm {
 class FluidEffect : public EffectBase {
 public:
     /// Catalog tags: this effect is the power-function showcase.
-    const char* tags() const override { return "💫🖌️🌊💨"; }
+    const char* tags() const override { return "💫🖌️💨"; }
     /// Volumetric: a medium per slice, with the jets wandering in z.
     Dim dimensions() const override { return Dim::D3; }
 

@@ -2367,3 +2367,6 @@ body.assign-mode .control-encoder input { cursor: pointer; }
 /* One line on the Firmware card, only while stats consent is off. */
 .mooncloud-nudge { margin: 8px 0 0; font-size: 0.8em; line-height: 1.6; opacity: 0.7; }
 .fw-available { margin: 8px 0 0; font-size: 0.8em; color: #f5a623; }
+
+/* The record button glows while it records, so the three seconds are visible. */
+.preview-bar-btn.recording { color: var(--red); }

@@ -263,6 +263,7 @@ public:
             if (resendNext_[i] < kSurfaceValues) resendOne(surfaces_[i], resendNext_[i]++);
     }
 
+    /// Return the display strip to the device name once what it showed has gone stale.
     void tick1s() MM_NONBLOCKING override {
         MoonModule::tick1s();
         // The strip falls back to the device's name once what it was showing has gone stale.

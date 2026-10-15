@@ -144,7 +144,7 @@ Narrower still, it stacks into a single scrollable column, so it works on a phon
 Drag to rotate, scroll to zoom. Each dot is one light at its real position, lit with the color it's showing this instant. Turn on the numbers to see each light's index, handy when you're wiring or mapping a layout.
 The preview is a *view* of the device: it never slows the lights down, and on a slow connection it eases off (fewer updates, then fewer points) rather than stalling.
 
-> More on how the preview streams from the device: [PreviewDriver](moonmodules/light/moxygen/PreviewDriver.md).
+> More on how the preview streams from the device: [PreviewDriver](moonmodules/light/drivers.md#preview).
 
 ### Every card works the same way
 
@@ -233,7 +233,7 @@ The bottom three modules are where the fun is. They form a simple pipeline: a **
 
 ![The Drivers module](assets/gettingstarted/02-10-UI-Drivers.png)
 
-> [Drivers](moonmodules/light/supporting.md) · [NetworkSendDriver](moonmodules/light/moxygen/NetworkSendDriver.md)
+> [Drivers](moonmodules/light/supporting.md) · [NetworkSendDriver](moonmodules/light/drivers.md#networksend)
 
 That's the whole picture: **layout → layers → drivers**, previewed in 3D, all tuned live in your browser. Pick an effect, drag a slider, watch the lights, then keep going.
 

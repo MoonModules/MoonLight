@@ -5,7 +5,6 @@
 namespace mm {
 
 /// The container for the user-added Service modules, the capability bridges a device provides or consumes.
-/// @card Services.png
 /// @video 09-services.webm Every service in turn: audio, button, analog, infrared, and a scripted one.
 ///
 /// A service is added and removed at runtime, the core twin of the light domain's Effects and Drivers. Fixed device infrastructure, such as identity and network, lives under System.

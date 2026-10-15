@@ -1,6 +1,6 @@
 # Web UI
 
-The MoonLight web UI as shipped, the render layer over the MoonModule tree, and its implementation spec: status bar, cards, control rendering, styling, and the in-place update contract. The **high-level architecture**, hand-maintained files, MoonModule-driven rendering, the light-domain plug-in points, lives in [MoonCore, the web UI](../../explanation/architecture/mooncore.md#web-ui); the **backend contract** it consumes (every `/api/*` endpoint, the `/ws` frame shape, the control descriptors) is owned by [HttpServerModule](moxygen/HttpServerModule.md); the **emoji legend** the cards and picker render is [the tag emoji legend](../../explanation/architecture/index.md#tag-emoji-legend).
+The MoonLight web UI as shipped, the render layer over the MoonModule tree, and its implementation spec: status bar, cards, control rendering, styling, and the in-place update contract. The **high-level architecture**, hand-maintained files, MoonModule-driven rendering, the light-domain plug-in points, lives in [MoonCore, the web UI](../../explanation/architecture/mooncore.md#web-ui); the **backend contract** it consumes (every `/api/*` endpoint, the `/ws` frame shape, the control descriptors) is owned by [HttpServerModule](system.md#httpserver); the **emoji legend** the cards and picker render is [the tag emoji legend](../../explanation/architecture/index.md#tag-emoji-legend).
 What remains is the browser-side rendering behavior.
 
 ## Interaction principles
@@ -36,6 +36,7 @@ What remains is the browser-side rendering behavior.
   canvas is **not** capped, it spans the full content width.
 - Preview canvas is sticky just below the status bar and shrinks 0 % → 50 % as the user scrolls
   0 → 300 px.
+- The preview bar's ⏺ records three seconds of the canvas as a GIF the browser saves, encoded by `gif.js` (GIF89a with a median-cut palette), for a preset's gallery preview.
 
 ## Status bar
 
@@ -93,7 +94,7 @@ Each MoonModule renders as a card, with **child cards nested inside their parent
   `<button>` (transparent + muted border, 26×26); state shown by the glyph alone (accent **✓** on, muted **○** off; `data-checked` + `aria-pressed`). Toggling fires `onEnabled()`; the Scheduler skips disabled modules whose `respectsEnabled()` returns true (default).
 - **Emoji tags** next to the name show the same set the type picker uses: role + dimensional (both
   UI-derived) + the curated `tags()` from `/api/types`. Identical identity across card and picker; the assignments are [the tag emoji legend](../../explanation/architecture/index.md#tag-emoji-legend).
-- **Help** under the title, from `help.json`, which the browser fetches from the docs site and keeps in `mm_help`, so the firmware carries none of it. The module's line and summary show; a tap opens its guide, picture, attribution and links to the docs, the source and the tests. Each control with a line shows it under the field, and a ▸ before the line opens its longer help where it has one. Help is off until the ⓘ in the status bar turns it on. The first time it asks before downloading, since the file comes from the docs site rather than the device. While developing help, `?help=local` reads the file `gen_help` last wrote, which `preview_installer` serves on `localhost:8421`, and `?help=published` returns to the docs site.
+- **Help** under the title, from `help.json`, which the browser fetches from the docs site and keeps in `mm_help`, so the firmware carries none of it. Each release carries its own copy, so the help names the controls the running firmware has; a release the site no longer mirrors reads the newest. The module's line and summary show; a tap opens its guide, picture, attribution and links to the docs, the source and the tests. Each control with a line shows it under the field, and a ▸ before the line opens its longer help where it has one. Help is off until the ⓘ in the status bar turns it on. The first time it asks before downloading, since the file comes from the docs site rather than the device. While developing help, `?help=local` reads the file `gen_help` last wrote, which `preview_installer` serves on `localhost:8421`, and `?help=published` returns to the docs site.
 - **Help link (?)** at the far right of the title row opens the module's doc page in a new tab. The
   path comes from `docPath` in `/api/types` (engine-provided, relative to `docs/moonmodules/`); omitted when the type declares none.
 - **Stats line**: `🕒 <timing>` then `🧠 <static>[ + <dynamic>]`. Timing is a tick time
@@ -108,7 +109,7 @@ Each MoonModule renders as a card, with **child cards nested inside their parent
 
 ## Control types
 
-Auto-rendered by `controls[].type`, adding a MoonModule with these types needs no UI change. (The descriptors themselves, and their storage shape, are [Control](moxygen/Control.md) / [coding-standards § store values in their native shape](../../contributing/coding-standards.md); this table is how each *renders*.)
+Auto-rendered by `controls[].type`, adding a MoonModule with these types needs no UI change. (The descriptors themselves, and their storage shape, are [Control](../../../src/core/module/Control.h) / [coding-standards § store values in their native shape](../../contributing/coding-standards.md); this table is how each *renders*.)
 
 | Type | Element | Interaction | Debounce |
 |---|---|---|---|
@@ -175,7 +176,7 @@ The UI dedicates a binary slot on its WebSocket, separate from the JSON state up
 - WebGL clear color `(0, 0, 0, 0)`, a transparent canvas blends into either theme with no per-frame
   color work.
 
-The light-domain renderer (WebGL point cloud, the `0x03`/`0x02` frame format, orbit camera, downsampling) is [MoonCore, the web UI](../../explanation/architecture/mooncore.md#web-ui) / [PreviewDriver](../light/moxygen/PreviewDriver.md).
+The light-domain renderer (WebGL point cloud, the `0x03`/`0x02` frame format, orbit camera, downsampling) is [MoonCore, the web UI](../../explanation/architecture/mooncore.md#web-ui) / [PreviewDriver](../light/drivers.md#preview).
 
 ## State updates, patched in place
 
@@ -191,7 +192,7 @@ card-render closure holding a `mod` reference goes stale within ~1 s. Any "which
 
 ## Communication client behavior
 
-The endpoints, the `/ws` frame shape, and the streaming state sink are owned by [HttpServerModule](moxygen/HttpServerModule.md); `/api/control` is `{module, control, value}`. The
+The endpoints, the `/ws` frame shape, and the streaming state sink are owned by [HttpServerModule](system.md#httpserver); `/api/control` is `{module, control, value}`. The
 **browser-side** socket behavior the server doesn't dictate:
 
 - URL `ws://<host>/ws` (same port as HTTP). On open the page sends `{"subscribe":[…]}`; the server answers with a full state, then a patch of what changed in the subscribed modules each second.

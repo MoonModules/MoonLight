@@ -59,7 +59,7 @@ Four states, and the arrows are the only way between them. Boot runs its five ph
 
 ## What counts as a module
 
-The core building block is a **[MoonModule](../../moonmodules/core/moxygen/MoonModule.md)**. Everything is a MoonModule, more than effects, modifiers, layouts, and drivers, but also system infrastructure (HTTP server, WebSocket server, file server, WiFi, mDNS, OTA updates) and [services](mooncore.md#services) (sensors and actuators bridging to hardware/network). The core itself is minimal: MoonModule base, buffer management, a [Scheduler](../../moonmodules/core/moxygen/Scheduler.md).
+The core building block is a **[MoonModule](../../../src/core/module/MoonModule.h)**. Everything is a MoonModule: effects, modifiers, layouts and drivers, system infrastructure such as the HTTP server, WiFi and OTA updates, and [services](mooncore.md#services) bridging to hardware and the network. The core itself is minimal: MoonModule base, buffer management, a [Scheduler](../../../src/core/module/Scheduler.h).
 
 This means:
 
@@ -93,7 +93,7 @@ ModuleFactory is core infrastructure ([`src/core/util/ModuleFactory.h`](../../sr
 
 **Self-reporting.** Every MoonModule reports its own footprint and cost: `classSize()` (the `sizeof` of the class instance, captured at registration), `dynamicBytes()` (heap allocated during `prepare`), and `tickTimeUs()` (average time its `tick` took, accumulated per tick). These surface in `/api/system`, console output, and scenario tests: the same numbers for an effect, a driver, or a system service, because they're a base-class feature, not a light-domain one.
 
-Each MoonModule has two documentation surfaces under `docs/moonmodules/`. An end-user **summary page** gives it one table row in its group's page, and a **generated technical page** is built from the header's `///` comments. See [documentation-standards § Module pages](../../contributing/documentation-standards.md#module-pages) for the full model.
+Each MoonModule has two documentation surfaces under `docs/moonmodules/`. An end-user **summary page** gives it one table row in its group's page, and the **header** carries the technical reference in its `///` comments. See [documentation-standards § Module pages](../../contributing/documentation-standards.md#module-pages) for the full model.
 
 ## Disabling a module releases its resources
 
@@ -105,7 +105,7 @@ This is what makes the pin map truthful. A freed pin is genuinely reusable, beca
 
 ## Controls
 
-Every MoonModule exposes **[controls](../../moonmodules/core/moxygen/Control.md)**: runtime-configurable parameters visible in the web UI. A grid layout exposes width, height, depth. An ArtNet driver exposes destination IP and universe. A fire effect exposes speed, cooling, sparking.
+Every MoonModule exposes **[controls](../../../src/core/module/Control.h)**: runtime-configurable parameters visible in the web UI. A grid layout exposes width, height, depth. An ArtNet driver exposes destination IP and universe. A fire effect exposes speed, cooling, sparking.
 
 Controls bind to MoonModule member variables. The variable's default is the control's default. The hot path reads the variable directly, no function call. When a control value changes, the system notifies the owning MoonModule for cold-path reactions: recompute a derived table, re-size a buffer, re-bind a socket (the three-tier mechanism is [Event triggering between modules](#event-triggering-between-modules)).
 
@@ -117,7 +117,7 @@ Controls are the bridge between the [web UI](../../moonmodules/core/ui.md) and t
 
 ## Persistence
 
-Control values and each module's `enabled` flag are persisted to flash so settings survive a reboot. The mechanism lives in [FilesystemModule](../../moonmodules/core/moxygen/FilesystemModule.md):
+Control values and each module's `enabled` flag are persisted to flash so settings survive a reboot. The mechanism lives in [FilesystemModule](../../moonmodules/core/system.md#filesystem):
 
 - **Storage**: one file per top-level module under `/.config/<TypeName>.json`, holding that module's [state document](../../reference/integrating.md#setting-everything-at-once), the shape a preset and `PATCH /api/state` carry, with the module's secrets in it since the file never leaves the device. Children are keyed by name, so a file applies through the same engine as every other document, as a stored file: a type this build lacks and a key no control matches are skipped and logged, and a value clamps to its control's bounds.
 - **Lifecycle**: the five phases the diagram above draws, read from persistence's side. `defineControls` binds every module's control set. The load hook then applies each file, creating children with their controls bound and setting values twice around a `rebuildControls`, so a control set that depends on a value (a driver's `peripheral`) restores. Each module's own `setup()` runs with the values already in place, and `applyState` sizes the buffers. The fifth phase sets the controls a MoonLive script declares as it compiles, which the load held until then. Modules themselves know nothing about persistence; they bind their variables.

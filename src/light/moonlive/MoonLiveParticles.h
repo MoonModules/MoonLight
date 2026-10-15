@@ -48,7 +48,9 @@ public:
         time_.reset();
     }
 
+    /// The particle pool the script's particle calls act on.
     particles::Pool& pool() MM_NONBLOCKING { return pool_; }
+    /// The number of live particles.
     uint16_t count() const MM_NONBLOCKING { return pool_.count; }
 
     // Every per-frame builtin passes this on, so framerate independence is the system's property.

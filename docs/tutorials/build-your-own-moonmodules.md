@@ -175,11 +175,11 @@ The second argument is the doc anchor for the in-UI help link — point it at yo
 
 Two comment styles, two jobs:
 
-- **`///` — documentation.** A `///` comment above the class, and above each control and method, feeds the auto-generated technical page (via Doxygen/moxygen) *and* shows up on IDE hover. Put the "what this effect is" one-liner and each control's meaning here, so a reader gets your docs without opening the source.
-- **`//` — an implementation note.** A plain `//` comment explains a tricky line *to whoever is reading the source*. It stays in the code and is invisible to the generated docs — perfect for "why this maths" notes that would clutter the public page.
+- **`///`: documentation.** A `///` comment above the class, and above each control and method, feeds the app's help *and* shows up on IDE hover. Put the "what this effect is" one-liner and each control's meaning here, so a reader gets your docs without opening the source.
+- **`//`: an implementation note.** A plain `//` comment explains a tricky line *to whoever is reading the source*. It stays in the code and never reaches the help, the place for "why this maths" notes that would clutter the public docs.
 
 ```cpp
-/// Palette-cycling diagonal rainbow.       ← shows on the docs page + on hover
+/// Palette-cycling diagonal rainbow.       ← shows in the help + on hover
 class RainbowEffect : public EffectBase {
 public:
     uint8_t speed = 20;   /// One hue cycle per `speed` beats.   ← documents the control

@@ -87,7 +87,7 @@ The first audio-reactive capability: `AudioModule` (a SystemModule Peripheral) r
 - **Effects reach the producer via `AudioModule::latestFrame()` (a static accessor), not a boot setter**, because an audio effect can be added through the UI after boot and a setter only wired the boot instance. The active mic registers in `setup()`, clears in `teardown()`, returns a static silent frame when there's no mic.
 - **Two hardware-only bugs, now pinned:** a missing `registerType<AudioModule>` made `create(...)->markWiredByCode()` deref null and boot-loop; the I²S read blocked the tick ~7.7 ms at a 20 ms timeout (fixed to non-blocking + a cross-tick sample accumulator, dropping to ~400 µs). The INMP441 is on the **left** I²S slot here (right reads empty), the first bench suspect when level floors with sound present.
 - **Shipped the manual core; the adaptive conditioner was prototyped and removed.** Auto noise-floor + AGC + smoothing needs tuning in a *quiet* room; the dev environment (a campground van with strong varying low-frequency rumble) was the adversarial worst case that kept it from settling. Land the manual core, treat adaptive auto-tuning as its own increment, tune it where the noise floor is real-quiet. Also: `level` is overall RMS (independent of the FFT), don't derive it from the bands or it stops fluctuating with volume.
-- **Designed fresh from the datasheet + textbook DSP, not a prior project.** The datasheet made even a behaviour-reference unnecessary: a flat ±3 dB mic has no per-frequency error to correct, so the hand-tuned band-correction table years of prior-project work produced was the wrong tool; the textbook defaults sufficed. The DSP choices and *why* live in [AudioService.md](../../moonmodules/core/moxygen/AudioService.md).
+- **Designed fresh from the datasheet + textbook DSP, not a prior project.** The datasheet made even a behavior-reference unnecessary: a flat ±3 dB mic has no per-frequency error to correct, so the hand-tuned band-correction table years of prior-project work produced was the wrong tool; the textbook defaults sufficed. The DSP choices and *why* live in [AudioService.md](../../moonmodules/core/services.md#audio).
 
 ## ESP32-P4 round 3, WiFi via the C6: the abstraction the earlier round feared wasn't needed
 
@@ -146,7 +146,7 @@ Bringing up the two Limpkin ESP32-S3 boards' external W5500 (SPI) Ethernet surfa
 
 - **Interrupt mode needs `gpio_install_isr_service()`, miss it and the IRQ silently degrades to slow polling.** The W5500 has a real INT pin (SE16 GPIO18, LightCrafter GPIO45), but the IDF driver's `gpio_isr_handler_add()` requires the per-pin ISR service already installed, which nothing did. The `add` failed with a one-line log, the interrupt never fired, and RX serviced only on the slow fallback → a ~1 s sawtooth ping latency. Install the ISR service once before driver init (`ESP_ERR_INVALID_STATE` = already installed = fine). The `int_gpio=-1` polling fallback is a workaround that hides this.
 - **IDF v6's W5500 driver rejects `int_gpio_num < 0` unless a poll period is also set.** `int_gpio_num = -1` alone returns `invalid configuration argument combination`; you must also set `w5500_config.poll_period_ms` (e.g. 10). The pair is the API contract.
-- **A failed Ethernet init that cascades to WiFi masks the eth bug, "why are we on WiFi?" is the tell.** Both bugs above manifested as the board quietly running on WiFi with a healthy HTTP server and no eth log. The robustness cascade is correct behaviour but turns a loud init failure into a silent capability loss; a board that *should* be on Ethernet but is on WiFi is the signal to read the eth init log.
+- **A failed Ethernet init that cascades to WiFi masks the eth bug, "why are we on WiFi?" is the tell.** Both bugs above manifested as the board quietly running on WiFi with a healthy HTTP server and no eth log. The robustness cascade is correct behavior but turns a loud init failure into a silent capability loss; a board that *should* be on Ethernet but is on WiFi is the signal to read the eth init log.
 - **A `0x00` "version mismatched" read from an SPI PHY means the chip is held in reset.** The LightCrafter's WIZ850IO holds its own `nRST` until GPIO3 is driven HIGH; without releasing it the ESP32 read `0x00` from the W5500's version register (`expected 0x04, got 0x00`). The SE16's W5500 self-resets, which is why this was board-specific. Setting `ethRstGpio` (→ the driver's `reset_gpio_num`) fixed it. An all-zeros register read from an SPI peripheral is "the chip isn't talking"; the first suspect after wiring is a reset/enable line the host must drive.
 
 ## An RMT/IR done-callback runs in ISR context: signal only, decode on the task
@@ -159,7 +159,7 @@ The first NEC-decoder version crash-looped the board (USB dropped, port re-enume
 
 ## A new firmware default only reaches a factory-fresh device; persistence wins on an upgrade
 
-After changing the `ethType` firmware default to None and reflashing an already-provisioned board, the device *still* reported the old value, persistence (`FilesystemModule` overlays every saved control at boot) restores the value captured during earlier provisioning, and a plain `flash write` keeps the filesystem. The same shape bit the MQTT prefix (a stale stored prefix a reflash didn't clear). This is correct persistence behaviour (saved config wins over a constructor default), but a default change is invisible to any device that has already run, only an erase-flash or explicit re-set surfaces it. When you change a default to fix a bug, the fix lands only on factory-fresh devices; an already-provisioned fleet needs an explicit migration, and when debugging "my fix didn't take," check the persisted `.config/*.json` before the firmware default.
+After changing the `ethType` firmware default to None and reflashing an already-provisioned board, the device *still* reported the old value, persistence (`FilesystemModule` overlays every saved control at boot) restores the value captured during earlier provisioning, and a plain `flash write` keeps the filesystem. The same shape bit the MQTT prefix (a stale stored prefix a reflash didn't clear). This is correct persistence behavior (saved config wins over a constructor default), but a default change is invisible to any device that has already run, only an erase-flash or explicit re-set surfaces it. When you change a default to fix a bug, the fix lands only on factory-fresh devices; an already-provisioned fleet needs an explicit migration, and when debugging "my fix didn't take," check the persisted `.config/*.json` before the firmware default.
 
 ## Fixing "blocking in the tick" at the connect misses the same violation at the write
 
@@ -343,11 +343,11 @@ share a shape: a green build, plausible-looking output, and a defect only counti
   stop patching and look for the compensating bug** rather than tuning the fix.
 
 - **A "no-op" rewrite of a shared primitive needs a differential test, not a review.**
-  Replacing `wrap()`'s per-span loops with modulo changed its endpoint behaviour: the loops are
+  Replacing `wrap()`'s per-span loops with modulo changed its endpoint behavior: the loops are
   asymmetric (reducing from above stops *at* `span`, climbing from below stops at `0`), which
   no amount of reading the new code reveals. Diffing old against new across every span and
   2.8M inputs found it in seconds. **For a hot-path primitive whose replacement is meant to be
-  behaviour-identical, prove it by exhaustive comparison against the original.**
+  behavior-identical, prove it by exhaustive comparison against the original.**
 
 ## Lessons from the MoonLive-on-Xtensa branch (the register-window frame bug)
 

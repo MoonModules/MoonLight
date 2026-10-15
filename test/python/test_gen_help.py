@@ -105,27 +105,24 @@ def test_every_attribution_catalog_row_is_read():
     assert all(names and all(names) for _, names, _, _ in rows)
 
 
-def test_a_ref_to_a_module_links_its_card_and_to_a_class_its_technical_page_under_its_own_name():
+def test_a_ref_to_a_module_links_its_card_and_to_a_class_its_header_under_its_own_name():
     layer = SimpleNamespace(location=SimpleNamespace(file=SimpleNamespace(name=str(gen_help.ROOT / "src/light/layers/Layer.h"))))
     registered = {"CircleModifier": ("CircleModifier", "light/modifiers.md#circle")}
     definition = {"FooDriver": layer}.get
     assert gen_help.ref_link("CircleModifier", registered, definition) == "[Circle](https://moonmodules.org/MoonLight/moonmodules/light/modifiers.html#circle)"
     # A class that is no module keeps its role noun: only a module's display name drops it.
-    assert gen_help.ref_link("FooDriver", registered, definition) == "[FooDriver](https://moonmodules.org/MoonLight/moonmodules/light/moxygen/Layer.html)"
+    assert gen_help.ref_link("FooDriver", registered, definition) == "[FooDriver](https://github.com/MoonModules/MoonLight/blob/main/src/light/layers/Layer.h)"
     with pytest.raises(LookupError, match="@ref Nosuch"):
         gen_help.ref_link("Nosuch", registered, definition)
 
 
-def test_the_role_nouns_and_the_technical_page_path_match_the_app_and_the_firmware():
-    """Three homes derive a display name and two a technical page; this pins them to one another, so a noun added in one place cannot rename a module in only some of them."""
+def test_the_role_nouns_match_the_app_and_the_firmware():
+    """Three homes derive a display name; this pins them to one another, so a noun added in one place cannot rename a module in only some of them."""
     js = (gen_help.ROOT / "src/ui/help.js").read_text()
     cpp = (gen_help.ROOT / "src/core/util/ModuleFactory.h").read_text()
     js_nouns = re.search(r"const ROLE_NOUNS = \[([^\]]+)\]", js).group(1)
     assert set(re.findall(r'"(\w+)"', js_nouns)) == set(gen_help._ROLE_NOUNS)
     assert set(re.findall(r'suffix = "(\w+)"', cpp)) == set(gen_help._ROLE_NOUNS)
-    template = re.search(r"`(https://moonmodules\.org/MoonLight/moonmodules/\$\{m\[1\]\}/moxygen/\$\{m\[2\]\}\.html)`", js).group(1)
-    layer = SimpleNamespace(location=SimpleNamespace(file=SimpleNamespace(name=str(gen_help.ROOT / "src/light/layers/Layer.h"))))
-    assert gen_help.technical_url(layer) == template.replace("${m[1]}", "light").replace("${m[2]}", "Layer")
 
 
 def test_a_picture_is_named_by_its_file_and_found_under_the_assets():
@@ -137,11 +134,6 @@ def test_a_link_reads_the_type_as_the_app_names_it_without_its_role_noun():
     assert gen_help.display_name("CircleModifier") == "Circle"
     assert gen_help.display_name("Layer") == "Layer"
     assert gen_help.display_name("Effect") == "Effect"
-
-
-def test_a_class_that_is_no_module_links_to_its_headers_technical_page():
-    cls = SimpleNamespace(location=SimpleNamespace(file=SimpleNamespace(name=str(gen_help.ROOT / "src/light/layers/Layer.h"))))
-    assert gen_help.technical_url(cls) == "https://moonmodules.org/MoonLight/moonmodules/light/moxygen/Layer.html"
 
 
 HEADER = """
@@ -325,81 +317,6 @@ def test_the_module_guide_stays_general_even_when_a_section_names_a_control(demo
     assert [g["title"] for g in h["guide"]] == ["damping", "Tips"]   # check_docgen flags the first
 
 
-CARD_PAGE = """# Effects
-
-<a id="beatripples"></a>
-
-### BeatRipples 💫🎶🖌️ · 2D
-
-<img src="../../assets/light/effects/BeatRipplesEffect.gif" width="300" alt="preview">
-
-Every beat is a stone dropped in water. It lands where the [Picture service](../core/services.md#picture) says, or [here](#pulse).
-
-- `damping`: how long the water keeps ringing.
-- `width` / `height`: the size per axis.
-
-Origin: MoonLight original
-
-Detail: [technical](moxygen/BeatRipplesEffect.md)
-
-[Tests](../../reference/tests/unit-tests.md#beatripples)
-
-### Pulse 💫 · 3D
-
-A pulse.
-
-## BeatRipples, details
-
-How the stone falls.
-"""
-
-
-@pytest.fixture
-def card(tmp_path, monkeypatch):
-    page = tmp_path / "docs" / "moonmodules" / "light" / "effects.md"
-    page.parent.mkdir(parents=True)
-    page.write_text(CARD_PAGE, encoding="utf-8")
-    monkeypatch.setattr(gen_help, "ROOT", tmp_path)
-    return gen_help.card_help(page, "beatripples")
-
-
-def test_a_cards_first_sentence_is_the_line_and_its_other_prose_the_summary(card):
-    assert card["line"] == "Every beat is a stone dropped in water."
-    assert card["summary"].startswith("It lands where the [Picture service](")
-
-
-def test_a_cards_links_and_image_are_absolute_so_they_work_from_a_device(card):
-    assert "(https://moonmodules.org/MoonLight/moonmodules/core/services.html#picture)" in card["summary"]
-    assert "(https://moonmodules.org/MoonLight/moonmodules/light/effects.html#pulse)" in card["summary"]
-    assert card["image"] == "https://moonmodules.org/MoonLight/assets/light/effects/BeatRipplesEffect.gif"
-
-
-def test_a_cards_controls_read_shared_lines(card):
-    assert card["controls"] == {"damping": {"line": "How long the water keeps ringing."},
-                                "width": {"line": "The size per axis."},
-                                "height": {"line": "The size per axis."}}
-
-
-def test_a_cards_origin_is_its_attribution(card):
-    assert card["attribution"] == "MoonLight original"
-
-
-def test_a_cards_details_section_is_its_guide(card):
-    assert card["guide"] == [{"title": "BeatRipples, details", "text": "How the stone falls."}]
-
-
-def test_a_card_cut_to_its_heading_hands_the_module_to_its_header(tmp_path, monkeypatch, card):
-    page = tmp_path / "docs" / "moonmodules" / "light" / "effects.md"
-    page.write_text(CARD_PAGE.replace("A pulse.", ""), encoding="utf-8")
-    assert gen_help.card_help(page, "pulse") is None
-
-
-def test_a_registry_link_to_no_card_reads_nothing(tmp_path, monkeypatch, card):
-    page = tmp_path / "docs" / "moonmodules" / "light" / "effects.md"
-    assert gen_help.card_help(page, "picture") is None
-    assert gen_help.card_help(page.with_name("absent.md"), "beatripples") is None
-
-
 def test_a_link_outside_the_docs_points_at_the_file_on_github(tmp_path, monkeypatch):
     monkeypatch.setattr(gen_help, "ROOT", tmp_path)
     page = tmp_path / "docs" / "moonmodules" / "light" / "effects.md"
@@ -458,7 +375,7 @@ def test_a_card_cut_to_its_heading_is_drawn_from_the_help(hooks):
     assert "- `fit`: keep the aspect." in out          # a card writes `name: what it does`
     assert "- `file`: FSEQ only." in out               # an acronym keeps its capitals
     assert "Origin: Gomez 2000" in out
-    assert "Detail: [technical](moxygen/PictureEffect.md)" in out
+    assert "Detail: [source](https://github.com/" in out          # the header on GitHub is the technical reference
     assert "[Tests](../../reference/tests/unit-tests.md#pictureeffect)" in out   # the site's own page, by @module
     assert out.endswith('<a id="sine"></a>\n\n### Sine\n\nA sine.\n')   # the next card keeps its anchor
 
@@ -478,13 +395,6 @@ def test_an_absolute_link_or_picture_stays_as_written(tmp_path, monkeypatch):
     page = tmp_path / "docs" / "moonmodules" / "light" / "effects.md"
     url = "https://raw.githubusercontent.com/scottrbailey/WLED-Utils/main/gifs/FX_008.gif"
     assert gen_help.site_url(url, page) == url
-
-
-def test_card_markdown_becomes_inline_text_the_help_can_show():
-    """Help shows inline text, so a card's code block, table and video are left out rather than shown as raw markup, and a heading or a bullet keeps its words."""
-    out = gen_help.plain(["#### Wiring", "<video src=x controls></video>", "```sh", "ffplay x", "```",
-                          "| a | b |", "|---|---|", "- read-only: the level", "- `gain`: how loud", "Plain <span class=\"x\">words</span>."])
-    assert out == ["**Wiring**", "read-only: the level", "- `gain`: how loud", "Plain words."]
 
 
 def test_a_catalog_whose_page_is_gone_is_generated_from_the_help(monkeypatch):
@@ -517,7 +427,7 @@ def test_a_written_catalog_page_is_the_intro_its_deck_follows_and_its_intro_clas
     assert '<a id="alpha"></a>' in md and '<a id="demos"></a>' not in md
 
 
-def test_a_catalog_intro_shows_its_picture_above_the_line_and_its_clips_below_the_summary_in_order(monkeypatch):
+def test_a_catalog_intro_shows_its_picture_above_the_line_and_its_clips_side_by_side_below_the_summary(monkeypatch):
     import mkdocs_hooks
     help_file = {"catalogs": {"light/demo.md": {"title": "Demos", "line": "What a demo is.", "summary": "One.",
                                                 "image": "https://moonmodules.org/MoonLight/assets/core/Demos.png", "alt": "The Demos card",
@@ -527,8 +437,8 @@ def test_a_catalog_intro_shows_its_picture_above_the_line_and_its_clips_below_th
     monkeypatch.setitem(mkdocs_hooks._help_cache, "file", help_file)
     md = mkdocs_hooks.generated_catalog("moonmodules/light/demo.md")
     assert md.startswith('# Demos\n\n<img src="../../assets/core/Demos.png" width="300" alt="The Demos card">\n\nWhat a demo is.\n\nOne.\n\n'
-                         '<video src="../../assets/moontube/demo.webm" controls playsinline width="360" title="Demos at work."></video>\n\n'
-                         '<video src="../../assets/moontube/demo2.webm" controls playsinline width="360" title="On a device."></video>')
+                         '<video src="../../assets/moontube/demo.webm" controls playsinline title="Demos at work."></video> '
+                         '<video src="../../assets/moontube/demo2.webm" controls playsinline title="On a device."></video>')
 
 
 def test_a_closing_div_ends_the_last_card_so_it_is_still_drawn(hooks):

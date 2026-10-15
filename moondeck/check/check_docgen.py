@@ -103,8 +103,7 @@ PREVIEWLESS_PAGES = _hooks.PREVIEWLESS_PAGES
 # and the tests, which sat outside it only by build-system convention.
 #
 # `test` is in scope even though nothing generates a page from it: these rules are about how the
-# code READS, which is why a test's comments are held to them like any other source we own. Only
-# the page rules key off a generated page, and they run from `_orphan_pages` over src/{core,light}.
+# code READS, which is why a test's comments are held to them like any other source we own.
 HEADER_ROOTS = ("src", "test", "esp32/main", "moonbase/main", "moondeck/moonlive", "teensy")
 # `.cpp` too: a rule that stopped at the header was a tolerance the file extension decided, and
 # the same `///` and `//` comments live on both sides of a split. A `.cpp` gets no generated page,
@@ -165,6 +164,10 @@ _GUIDE_REPEATS_RULE = "guide repeats its control"
 _HELP_SIZE_RULE = "app help too long"
 # The module's guide is its general information, so a control explained there is in the wrong place: its member carries it.
 _GUIDE_NAMES_CONTROL_RULE = "module guide explains a control"
+# The app shows a module's line under its title and a control's line under its field, so either missing leaves the user a blank.
+_HELP_LINE_RULE = "help line missing"
+# A tag emoji is a filter chip, so one only a single module or script carries groups nothing.
+_TAG_GROUP_RULE = "tag emoji on one module"
 MAX_MORE_WORDS = 40      # a control's longer help, its `@guide` section titled with the control
 MAX_GUIDE_WORDS = 60     # any other `@guide` section
 MAX_HELP_WORDS = 250     # the summary, the guide and every control's longer help together
@@ -359,7 +362,7 @@ def _structure(text: str, rel: str):
 # them once. Everything else a card points at (a how-to, an explanation, a sibling module)
 # is a link the DESCRIPTION makes in a sentence, where the reader meets it in context
 # rather than as a bare label under the controls.
-SECOND_COLUMN_LINKS = ("Tests:", "API:", "Details:")
+SECOND_COLUMN_LINKS = ("Tests:", "Source:", "Details:")
 _LINK_LABEL_RE = re.compile(r"\*\*([A-Z][A-Za-z ]{1,12}):\*\*")
 
 
@@ -431,7 +434,8 @@ _RULE_NAMES = (
     "unreferenced appendix section", "appendix section",
     "class comment", "member comment", "no image", "image is", "one control",
     "description", "controls", "doc sentence", "hard wrap", "split paragraph", _STALE_HELP_RULE,
-    _RESTATES_RULE, _GUIDE_REPEATS_RULE, _HELP_SIZE_RULE, _GUIDE_NAMES_CONTROL_RULE,
+    _RESTATES_RULE, _GUIDE_REPEATS_RULE, _HELP_SIZE_RULE, _GUIDE_NAMES_CONTROL_RULE, _HELP_LINE_RULE,
+    _TAG_GROUP_RULE,
 )
 
 
@@ -463,6 +467,8 @@ _RULE_LABELS = {
     _GUIDE_REPEATS_RULE: "control guides repeating their line",
     _HELP_SIZE_RULE: "app help over its word caps",
     _GUIDE_NAMES_CONTROL_RULE: "controls explained in the module guide",
+    _HELP_LINE_RULE: "missing help lines",
+    _TAG_GROUP_RULE: "tag emoji on one module",
     "description": "over-long descriptions",
     "second column": "wrong second column",
     "details section": "misplaced details sections",
@@ -718,12 +724,11 @@ _STRING_LIT_RE = re.compile(r'"(?:[^"\\]|\\.)*"' + r"|'(?:[^'\\]|\\.)*'")
 # functions at all, and the single-class rule below would flag its legitimate group.
 _TOP_DECL_RE = re.compile(r"^(inline|constexpr|extern|template|using|typedef)\b|"
                           r"^[\w:<>,\s\*&]+\s+\w+\s*\([^)]*\)\s*(const)?\s*[;{]?\s*$")
-_FUNC_RE = re.compile(r"^[\w:<>,\s\*&]+\s+(\w+)\s*\([^)]*\)\s*(const)?\s*(override)?\s*[;{]")
-# A constructor and a destructor have no return type, and a pure virtual ends `= 0;`, so the
-# form above matches none of them: three public declarations the "needs a ///" rule never saw.
-_SPECIAL_FUNC_RE = re.compile(
-    r"^(?:explicit\s+|virtual\s+)*~?(\w+)\s*\([^)]*\)\s*"
-    r"(?:const\s*)?(?:noexcept\s*)?(?:override\s*)?(?:=\s*(?:0|default|delete)\s*)?[;{:]")
+# What may follow a parameter list: the qualifiers, and an attribute macro such as `MM_NONBLOCKING`, which is all capitals.
+_FUNC_TAIL = r"(?:\s*(?:const|noexcept|override|final|[A-Z][A-Z0-9_]+)\b)*\s*(?:=\s*(?:0|default|delete)\s*)?"
+_FUNC_RE = re.compile(r"^[\w:<>,\s\*&]+\s+(\w+)\s*\([^)]*\)" + _FUNC_TAIL + r"[;{]")
+# A constructor and a destructor have no return type, so the form above misses both.
+_SPECIAL_FUNC_RE = re.compile(r"^(?:explicit\s+|virtual\s+)*~?(\w+)\s*\([^)]*\)" + _FUNC_TAIL + r"[;{:]")
 _VAR_RE = re.compile(r"^[\w:<>,\s\*&]+\s+(\w+)\s*(=[^;]+)?;")
 
 
@@ -829,57 +834,6 @@ def _file_lead_rule(rel: str, lines: list[str], out: list) -> None:
         out.append((f"{rel}::line {i + 1}",
                     "file lead missing: a header opens with /// saying what the file is for"))
         return
-
-
-def _group_scope_rule(rel: str, lines: list[str], out: list) -> None:
-    """A `@defgroup` opens a scope with `@{`, and an unclosed one swallows the rest of the file.
-
-    Doxygen's member-group scope runs from `@{` to `@}`. Left open, every declaration after the
-    lead is absorbed into the group, so the generated page is silently reshaped: three headers
-    shipped that way in one sweep because nothing counted the pair. The close sits INSIDE the
-    namespace, just before it ends, which is where the majority of the tree already puts it and
-    what keeps group membership the same in every file.
-    """
-    opens = [i for i, l in enumerate(lines) if l.strip() == "/// @{"]
-    closes = [i for i, l in enumerate(lines) if l.strip() == "/// @}"]
-    if len(opens) == len(closes):
-        return
-    line = (opens[len(closes)] if len(opens) > len(closes) else closes[len(opens)]) + 1
-    which = "@{ with no @}" if len(opens) > len(closes) else "@} with no @{"
-    out.append((f"{rel}::line {line}",
-                f"unbalanced group scope: {which}, so the group runs past what it documents"))
-
-
-def _group_appendix_publishes_rule(rel: str, lines: list[str], out: list) -> None:
-    """A `@defgroup` scope actually contains the declarations it documents.
-
-    A group is a label rather than an entity, so it has no location of its own and `gen_api`
-    infers one from where its MEMBERS sit. A group holding no member resolves to no header, and
-    the whole page is skipped: the lead, the appendix and every heading go nowhere, with nothing
-    reported, because the header still LOOKS documented and the check that would notice only
-    fires on a page that exists.
-
-    The shape that loses it is a `@}` closing before the first declaration, so the brackets wrap
-    only the comment and the group holds nothing at all. Two headers shipped that way. The fix is
-    to close the group AFTER what it documents, which is what every publishing group already does.
-
-    The symptom is an appendix a reader can never reach, which is why this is checked from the
-    source shape rather than from a page that was never written.
-    """
-    opens = [i for i, l in enumerate(lines) if l.strip() == "/// @{"]
-    closes = [i for i, l in enumerate(lines) if l.strip() == "/// @}"]
-    if not opens or not closes:
-        return                          # the scope rule above reports an unbalanced pair
-    first_decl = next((i for i, l in enumerate(lines)
-                       if not l.strip().startswith(("///", "//", "#", "*", "/*"))
-                       and (_CLASS_RE.match(l.strip()) or l.strip().startswith("enum class")
-                            or _TOP_DECL_RE.match(l.strip()))), None)
-    if first_decl is None:
-        return                          # nothing to document either way
-    if closes[-1] < first_decl:
-        out.append((f"{rel}::line {closes[-1] + 1}",
-                    "group closes before it documents anything, so the page is never generated"))
-
 
 
 def _redundant_defgroup_rule(rel: str, lines: list[str], out: list) -> None:
@@ -1134,12 +1088,6 @@ def _header_rules(rel: str, text: str):
     # drops entirely.
     _file_lead_rule(rel, lines, out)
 
-    # An unclosed `@{` reshapes the page silently, so the pair is counted.
-    _group_scope_rule(rel, lines, out)
-
-    # A group that resolves to no single header generates no page at all, appendix included.
-    _group_appendix_publishes_rule(rel, lines, out)
-
     # Which lead shape is right follows from what the header holds: a `@defgroup` gathers free
     # declarations or peer types, where a lone class already IS the page and needs no second lead.
     _redundant_defgroup_rule(rel, lines, out)
@@ -1326,7 +1274,7 @@ def _header_rules(rel: str, text: str):
         prev = lines[j].lstrip() if j >= 0 else ""
         if prev.startswith("///") or "///" in ln:
             continue
-        # A test hook is named `...ForTest`, which gen_api excludes from every page, so a `///` on it has no reader.
+        # A test hook is named `...ForTest`, which says what it is, so a `///` on it adds nothing.
         if _declared_name(st, i).endswith("ForTest") or re.match(r"~\w+ForTest\s*\(", st):
             continue
         # Header-only, and this is the ONE place that is a detector limit rather than a rule
@@ -1385,61 +1333,6 @@ def _card_rules(rel: str, c: dict):
     return out
 
 
-# The domains that carry a generated moxygen tree. IMPORTED rather than restated: hard-coding
-# ("core", "light") here once left every page of a third domain reporting as unreachable, and a
-# copy kept in step by hand is only correct until someone moves. One tuple owns the answer.
-from gen_api import DOMAINS as _DOC_DOMAINS  # noqa: E402
-
-
-def _card_links(help_file: dict) -> set:
-    """The (domain, stem) of every module's header, whose technical page its card links as the help's Technical link."""
-    out = set()
-    for m in help_file.get("modules", {}).values():
-        src = re.search(r"/src/(\w+)/(?:[^/]+/)*(\w+)\.h$", m.get("source", ""))
-        if src:
-            out.add((src.group(1), src.group(2)))
-    return out
-
-
-def _orphan_pages():
-    """Generated pages nothing links to: a technical page a reader cannot reach.
-
-    Every `.h` under a domain directory gets a page, so a header nobody references from a
-    catalog card, another page, or another header's `///` is documentation that exists and
-    is unreachable. The link may come from anywhere: a card's Detail line, a prose page, or
-    a sibling header naming the file (the hook retargets a `.h` mention at its page).
-    """
-    # Keyed by (DOMAIN, stem): core/ and light/ each carry their own moxygen tree, so a page
-    # sharing a name across the two would mask the other and one domain's link would silently
-    # mark the other domain's page as reachable.
-    pages = {(p.parts[-3], p.stem)
-             for p in (ROOT / "docs" / "moonmodules").rglob("moxygen/*.md")}
-    linked = set()
-    # The written pages, and the catalog pages generated from help.json, which exist only in the build.
-    sources = {md.relative_to(ROOT / "docs").as_posix(): md.read_text(errors="ignore")
-               for md in (ROOT / "docs").rglob("*.md") if "moxygen" not in md.parts}
-    for rel in _pages():
-        if rel not in sources and (gen := _hooks.catalog_markdown(rel)) is not None:
-            sources[rel] = gen
-    for rel, raw in sources.items():
-        md = ROOT / "docs" / rel
-        # A catalog card drawn from help.json carries its Detail link only once drawn.
-        text = _hooks.fill_cards_from_help(raw, rel)
-        for m in re.finditer(r"(?:(\w+)/)?moxygen/(\w+)\.md", text):
-            # A relative link inside a domain omits it, so fall back to the linking page's own.
-            domain = m.group(1) or (md.parts[-2] if md.parts[-2] in _DOC_DOMAINS else None)
-            for d in ((domain,) if domain else _DOC_DOMAINS):
-                linked.add((d, m.group(2)))
-    linked |= _card_links(_hooks._help_file())
-    for d in _DOC_DOMAINS:
-        for h in (ROOT / "src" / d).rglob("*.h"):
-            for m in re.finditer(r"\b(\w+)\.h\b", h.read_text(errors="ignore")):
-                if m.group(1) != h.stem:
-                    linked.add((d, m.group(1)))
-    return [(f"moonmodules/{domain}::{name}", "generated page nothing links to: unreachable")
-            for domain, name in sorted(pages - linked)]
-
-
 def _appendix_sections(lines: list[str]) -> list[str]:
     """The `## ` headings of a file's `@moreinfo` appendices, in order, skipping fenced examples as the section budget does."""
     out = []
@@ -1459,74 +1352,22 @@ def _appendix_sections(lines: list[str]) -> list[str]:
 
 
 def _unreferenced_sections():
-    """Appendix sections no `@xref` in their file and no link from a page or another source reaches.
+    """Appendix sections no `@xref` in their file reaches.
 
-    A section only a reader scrolling past finds is the first to cut: the appendix total falls by
-    removing what no reader is sent to. A link names the section as `moxygen/<Stem>.md#<slug>`,
-    or as `<Stem>.h#<slug>`, which the docs hook retargets at the generated page.
+    A section only a reader scrolling past finds is the first to cut: the appendix total falls by removing what no reader is sent to. The header is read in place, on GitHub or in an editor, so only its own `@xref`s send a reader to a section.
     """
-    link_re = re.compile(r"(?:moxygen/(\w+)\.md|\b(\w+)\.h)#([a-z0-9-]+)")
-    linked = set()
-    sources = [p for p in (ROOT / "docs").rglob("*.md") if "moxygen" not in p.parts]
-    sources += [ROOT / rel for rel in _headers()]
-    for path in sources:
-        for m in link_re.finditer(path.read_text(encoding="utf-8", errors="ignore")):
-            linked.add((m.group(1) or m.group(2), m.group(3)))
     out = []
     for rel in _headers():
-        # Only a page can be linked into; an implementation file's appendix is read in the file.
         if _generates_a_page(rel.as_posix()):
-            out += _unreferenced_in(rel.as_posix(), (ROOT / rel).read_text(encoding="utf-8").split("\n"), linked)
+            out += _unreferenced_in(rel.as_posix(), (ROOT / rel).read_text(encoding="utf-8").split("\n"))
     return out
 
 
-def _unreferenced_in(rel: str, lines: list[str], linked: set) -> list:
-    """One file's appendix sections that neither its own `@xref`s nor the `(stem, slug)` links in `linked` reach."""
+def _unreferenced_in(rel: str, lines: list[str]) -> list:
+    """One file's appendix sections that none of its own `@xref`s reach."""
     xrefs = {m.group(1).strip().rstrip("\\") for ln in lines for m in re.finditer(r"@xref\{([^}|]+)", ln)}
-    stem = Path(rel).stem
-    return [(f"{rel}::@moreinfo {section}", f"{_UNREFERENCED_RULE}: no @xref or link reaches it")
-            for section in _appendix_sections(lines)
-            if _slugify_heading(section) not in xrefs and (stem, _slugify_heading(section)) not in linked]
-
-
-def _duplicate_group_ids():
-    """Each `@defgroup` id is claimed by one header.
-
-    Doxygen MERGES two groups sharing an id, so one header's page absorbs the other's and the
-    loser vanishes from the site. It fails silently in both directions: the surviving page looks
-    complete and the missing one is simply absent, so only a reader looking for the second page
-    ever notices. A core parser and a light-domain one both named their group `PinList` and took
-    `drivers_PinList.md` off the site that way; the strict docs build caught it by the dangling
-    link alone, which is luck rather than a guarantee.
-
-    Cross-file by nature, so it sits here rather than in the per-header rules. An implementation
-    file counts too, even though it generates no page of its own: Doxygen reads it all the same,
-    so a `.cpp` re-declaring its header's group id merges into that page and is a conflict like
-    any other. A header and its own `.cpp` sharing an id is the common shape, and it is reported
-    against the `.cpp`, since the header is the one that owns the page.
-    """
-    seen: dict[str, list[str]] = {}
-    for rel in _headers():
-        s = rel.as_posix()
-        for ln in (ROOT / rel).read_text(encoding="utf-8").splitlines():
-            st = ln.strip()
-            if st.startswith("/// @defgroup"):
-                parts = st.split(None, 2)
-                if len(parts) >= 3:
-                    seen.setdefault(parts[2].split()[0], []).append(s)
-    out = []
-    for gid, files in sorted(seen.items()):
-        if len(files) < 2:
-            continue
-        # The header owns the page, so it is the one kept and the others are reported.
-        owner = min(files, key=lambda f: (not _generates_a_page(f), f))
-        for f in sorted(files):
-            if f == owner:
-                continue
-            out.append((f"{f}::@defgroup {gid}",
-                        f"@defgroup id `{gid}` is also claimed by {owner}, and Doxygen "
-                        "merges them, so one page absorbs the other"))
-    return out
+    return [(f"{rel}::@moreinfo {section}", f"{_UNREFERENCED_RULE}: no @xref reaches it")
+            for section in _appendix_sections(lines) if _slugify_heading(section) not in xrefs]
 
 
 # Markdown prose is hard-wrapped when a paragraph line continues onto the next. The standards
@@ -1613,6 +1454,41 @@ def _guide_repeats(help_file: dict) -> list:
     return out
 
 
+def _help_lines(help_file: dict) -> list:
+    """Each module without its help line, and each control without its own: the `///` the app shows under a title and a field."""
+    out = []
+    for type_name, m in sorted(help_file.get("modules", {}).items()):
+        source = m.get("source", "").partition("/blob/")[2].partition("/")[2] or type_name
+        if not m.get("line"):
+            out.append((source, f"{_HELP_LINE_RULE}: `{type_name}` has no class `///`"))
+        out += [(source, f"{_HELP_LINE_RULE}: control `{c}` has no `///` on its member or `add…` line")
+                for c, h in m.get("controls", {}).items() if not h.get("line")]
+    return out
+
+
+def _tag_groups(help_file: dict, scripts: dict) -> list:
+    """Each tag emoji only one module or factory script carries, `scripts` mapping a script's path to its `tags()`."""
+    carriers = {}
+    for type_name, m in help_file.get("modules", {}).items():
+        source = m.get("source", "").partition("/blob/")[2].partition("/")[2] or type_name
+        for e in set(m.get("tags", "").replace("\uFE0F", "")):
+            carriers.setdefault(e, []).append(source)
+    for path, tags in scripts.items():
+        for e in set(tags.replace("\uFE0F", "")):
+            carriers.setdefault(e, []).append(path)
+    return [(who[0], f"{_TAG_GROUP_RULE}: {e} groups nothing; share one from the legend or drop it")
+            for e, who in sorted(carriers.items()) if len(who) == 1]
+
+
+def _script_tags() -> dict:
+    """The `tags()` of every factory MoonLive script, by path."""
+    out = {}
+    for p in sorted((ROOT / "moonlive").rglob("*.ml?")):
+        if m := re.search(r'tags\(\)\s*\{\s*return\s*"([^"]*)"', p.read_text(encoding="utf-8")):
+            out[p.relative_to(ROOT).as_posix()] = m.group(1)
+    return out
+
+
 def _guide_names_control(help_file: dict) -> list:
     """Each module whose general guide holds a section titled with one of its controls: a control is explained on its member, in its `@guide` line."""
     out = []
@@ -1649,6 +1525,8 @@ def _violations():
     out.extend(_guide_repeats(_hooks._help_file()))
     out.extend(_help_size(_hooks._help_file()))
     out.extend(_guide_names_control(_hooks._help_file()))
+    out.extend(_help_lines(_hooks._help_file()))
+    out.extend(_tag_groups(_hooks._help_file(), _script_tags()))
     for rel in _pages():
         page = _hooks.catalog_markdown(rel)   # the file, or the page generated from help.json
         if page is None:
@@ -1663,8 +1541,8 @@ def _violations():
 
     for rel in sorted((ROOT / "docs").rglob("*.md")):
         parts = rel.relative_to(ROOT / "docs").parts
-        # moxygen writes generated pages; docs/work/ is the exemption the standards name.
-        if "moxygen" in parts or parts[0] == "work":
+        # docs/work/ is the exemption the standards name.
+        if parts[0] == "work":
             continue
         # DOCS-relative, the key catalog findings use: a repo-relative one listed the same
         # page twice in the report, once per spelling.
@@ -1672,8 +1550,6 @@ def _violations():
 
     for rel in _headers():
         out.extend(_header_rules(rel.as_posix(), (ROOT / rel).read_text(encoding="utf-8")))
-    out.extend(_duplicate_group_ids())
-    out.extend(_orphan_pages())
     out.extend(_unreferenced_sections())
     return out
 

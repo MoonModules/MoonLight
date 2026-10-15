@@ -73,6 +73,13 @@
 
 namespace mm {
 
+// The UI file named `name`, from the table embed_ui.cmake generates, or null.
+static const ui::EmbeddedFile* embeddedFile(const char* name) {
+    for (const ui::EmbeddedFile& e : ui::kFiles)
+        if (std::strcmp(name, e.name) == 0) return &e;
+    return nullptr;
+}
+
 void HttpServerModule::defineControls() {
     controls_.addControl("port", port);
 }
@@ -458,17 +465,9 @@ bool HttpServerModule::handleConnection(platform::TcpConnection& conn, int patie
 
     // Route
     if (std::strcmp(method, "GET") == 0) {
-        if (std::strcmp(path, "/") == 0) serveFile(conn, "index.html", "text/html");
-        else if (std::strcmp(path, "/app.js") == 0) serveFile(conn, "app.js", "application/javascript");
-        else if (std::strcmp(path, "/install-picker.js") == 0) serveFile(conn, "install-picker.js", "application/javascript");
-        else if (std::strcmp(path, "/semver.js") == 0) serveFile(conn, "semver.js", "application/javascript");
-        else if (std::strcmp(path, "/prism.js") == 0) serveFile(conn, "prism.js", "application/javascript");
-        else if (std::strcmp(path, "/preview3d.js") == 0) serveFile(conn, "preview3d.js", "application/javascript");
-        else if (std::strcmp(path, "/preview-adapt.js") == 0) serveFile(conn, "preview-adapt.js", "application/javascript");
-        else if (std::strcmp(path, "/migrate.js") == 0) serveFile(conn, "migrate.js", "application/javascript");
-        else if (std::strcmp(path, "/help.js") == 0) serveFile(conn, "help.js", "application/javascript");
-        else if (std::strcmp(path, "/style.css") == 0) serveFile(conn, "style.css", "text/css");
-        else if (std::strcmp(path, "/moonmodules-logo.png") == 0) serveFile(conn, "moonmodules-logo.png", "image/png");
+        if (std::strcmp(path, "/") == 0) serveFile(conn, *embeddedFile("index.html"));
+        // Every UI file at `/<name>`, from the one list embed_ui.cmake generates.
+        else if (const ui::EmbeddedFile* file = embeddedFile(path + 1)) serveFile(conn, *file);
         else if (std::strcmp(path, "/api/state") == 0) serveState(conn);
         else if (std::strcmp(path, "/api/system") == 0) serveSystem(conn);
         else if (std::strcmp(path, "/api/types") == 0) serveTypes(conn);
@@ -1134,28 +1133,11 @@ void HttpServerModule::handleMoonBaseUrl(platform::TcpConnection& conn, const ch
     sendResponse(conn, 202, "application/json", "{\"ok\":true}");
 }
 
-// The UI files built into the firmware (embed_ui.cmake), the text ones gzipped and served with Content-Encoding: gzip, the PNG raw.
-namespace {
-struct EmbeddedFile { const char* name; const uint8_t* data; size_t len; bool gzipped; };
-constexpr EmbeddedFile kEmbeddedFiles[] = {
-    {"index.html", ui::indexHtml, ui::indexHtmlLen, true},
-    {"app.js", ui::appJs, ui::appJsLen, true},
-    {"install-picker.js", ui::installPickerJs, ui::installPickerJsLen, true},
-    {"semver.js", ui::semverJs, ui::semverJsLen, true},
-    {"prism.js", ui::prismJs, ui::prismJsLen, true},
-    {"preview3d.js", ui::preview3dJs, ui::preview3dJsLen, true},
-    {"preview-adapt.js", ui::previewAdaptJs, ui::previewAdaptJsLen, true},
-    {"migrate.js", ui::migrateJs, ui::migrateJsLen, true},
-    {"help.js", ui::helpJs, ui::helpJsLen, true},
-    {"style.css", ui::styleCss, ui::styleCssLen, true},
-    {"moonmodules-logo.png", ui::logoPng, ui::logoPngLen, false},
-};
-}  // namespace
-
-void HttpServerModule::serveFile(platform::TcpConnection& conn, const char* filename, const char* contentType) {
+void HttpServerModule::serveFile(platform::TcpConnection& conn, const ui::EmbeddedFile& file) {
+    const char* contentType = file.contentType;
     // Try disk first (desktop development: live editing without rebuild)
     char filepath[256];
-    std::snprintf(filepath, sizeof(filepath), "%s/%s", uiPath_, filename);
+    std::snprintf(filepath, sizeof(filepath), "%s/%s", uiPath_, file.name);
 
     FILE* f = std::fopen(filepath, "rb");
     if (f) {
@@ -1187,15 +1169,7 @@ void HttpServerModule::serveFile(platform::TcpConnection& conn, const char* file
         return;
     }
 
-    // Fall back to the embedded files (ESP32, or no files on disk).
-    const EmbeddedFile* file = nullptr;
-    for (const EmbeddedFile& e : kEmbeddedFiles)
-        if (std::strcmp(filename, e.name) == 0) { file = &e; break; }
-    if (!file) {
-        sendResponse(conn, 404, "text/plain", "File not found");
-        return;
-    }
-
+    // Fall back to the embedded copy (ESP32, or no files on disk).
     char header[256];
     int headerLen = std::snprintf(header, sizeof(header),
         "HTTP/1.1 200 OK\r\n"
@@ -1205,10 +1179,10 @@ void HttpServerModule::serveFile(platform::TcpConnection& conn, const char* file
         "Connection: close\r\n"
         "Cache-Control: no-cache\r\n"
         "\r\n",
-        contentType, file->len,
-        file->gzipped ? "Content-Encoding: gzip\r\n" : "");
+        contentType, file.len,
+        file.gzipped ? "Content-Encoding: gzip\r\n" : "");
     conn.write(reinterpret_cast<const uint8_t*>(header), headerLen);
-    conn.write(file->data, file->len);
+    conn.write(file.data, file.len);
 }
 
 void HttpServerModule::serveState(platform::TcpConnection& conn) {

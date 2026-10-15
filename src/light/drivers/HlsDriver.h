@@ -157,6 +157,7 @@ public:
         DriverBase::release();
     }
 
+    /// Send a corrected frame to the encoder on a fixed schedule, once the encoder is up.
     void tick() MM_NONBLOCKING override {
         // Gates HARD: after a mid-frame failure the pipe holds a partial frame and writes land shifted.
         if (!open_ || encoderDied_ || targetFps == 0 || !sourceBuffer_ || !sourceBuffer_->data()) return;
@@ -239,6 +240,7 @@ public:
         else if (wrote < 0) encoderDied_ = true;
     }
 
+    /// Restart a dead encoder with a doubling backoff, and report the stream's health.
     void tick1s() MM_NONBLOCKING override {
         if (!open_) return;
         if (encoderDied_ || !platform::encoderRunning()) {

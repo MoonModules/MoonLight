@@ -20,11 +20,7 @@ namespace mm {
 /// @video 07-drivers-desktop.webm Drivers on a desktop: preview, NDI, RTSP, HLS, network send and Hue.
 /// @video 07-drivers-esp32.webm Drivers on a device: RMT and parallel LED pins, HUB75, panel cards, and the network senders.
 ///
-/// Every driver reads the shared buffer of the @ref Drivers container, so several drivers drive one installation, each its own slice. A device's drivers come with its entry in the installer's device catalog, and @ref PreviewDriver is the one every device starts with.
-///
-/// Each driver opens with the shared controls, then adds its own. The output correction (`localBrightness`, `curve`, `fixture`, `whiteMode`) sets how its slice looks, and the source window (`start`, `count`) sets which slice it reads. Hue and Preview show no correction controls, though Hue still applies the global brightness. HUB75, Preview and the video drivers take the whole buffer.
-///
-/// Each card's emoji are its tags, as the [tag emoji legend](https://moonmodules.org/MoonLight/explanation/architecture/index.html#tag-emoji-legend) explains.
+/// Each reads its own slice of the @ref Drivers container's buffer, through the shared correction and window controls. A card's emoji are its [tags](https://moonmodules.org/MoonLight/explanation/architecture/index.html#tag-emoji-legend).
 class DriverBase : public MoonModule {
 public:
     // The OWNER must release before destroying: a base destructor cannot prevent the vptr race.
@@ -35,6 +31,7 @@ public:
     static constexpr uint8_t kHeldAfter = 4;
     /// Held once safe mode has failed to stop the boots with dark frames.
     bool heldInSafeMode() const override { return MoonModule::failedBoots() >= kHeldAfter; }
+    /// Point the driver at the buffer it reads its slice from.
     virtual void setSourceBuffer(Buffer* buf) = 0;
 
     // Virtual rather than RTTI: ESP32 builds compile without it, so the guard never casts.

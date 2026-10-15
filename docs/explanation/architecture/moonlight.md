@@ -57,7 +57,7 @@ flowchart TB
 **Data flow.** The pipeline instantiates both core data-exchange shapes (see [data exchange between modules](moonmodule.md#data-exchange-between-modules)):
 
 - *Shared-struct (pull):* `Drivers` hands every child driver a `Buffer*` (source) plus a `Correction*` (shared brightness/reorder/white), and `Layer` exposes its pixel buffer to `Drivers` directly on the identity-mapping fast path: each consumer holds a `const`-pointer and reads it per frame. The pointers are **(re)bound on every rebuild**, more than at boot: `Drivers::prepare()` re-resolves the active `Layer` (`Effects::activeLayer()`) and calls `passBufferToDrivers()`, which re-runs `setSourceBuffer()`/`setLayer()` on each child (clearing them to `nullptr` when there is no active Layer). So a held pointer is valid only until the next rebuild. That is why consumers re-read it each frame and tolerate a null, per the [robustness rule](moonmodule.md#robustness): a Layer add, delete or replace re-binds or clears it live, with no dangling reference.
-- *Push to a core sink:* `PreviewDriver` owns the preview wire format (a one-time coordinate table + per-frame RGB point list) and pushes the bytes to a `BinaryBroadcaster` (the core HTTP server). The server broadcasts them over WebSocket without knowing they're a preview: the format and the light types stay entirely in the driver. See [PreviewDriver](../../moonmodules/light/moxygen/PreviewDriver.md).
+- *Push to a core sink:* `PreviewDriver` owns the preview wire format and pushes it to the HTTP server's `BinaryBroadcaster`: a coordinate table once, then RGB per frame. The server broadcasts them over WebSocket without knowing they're a preview: the format and the light types stay entirely in the driver. See [PreviewDriver](../../moonmodules/light/drivers.md#preview).
 
 **Two WebSocket channels, by traffic class.** `/ws` carries the control plane (JSON state and patches); `/wsp` carries lossy binary streams (the preview). They are separate TCP connections on purpose. Preview frames are large and droppable while state messages are small and latency-sensitive, so sharing one connection makes the small ones queue behind the big ones. That head-of-line blocking surfaced as a flickering connection indicator and an unresponsive UI on large layouts. Separate connections is the standard remedy for that mixed-criticality case.
 
@@ -105,7 +105,7 @@ A **Layer** (a MoonModule, child of Effects) owns:
 
 A layer can have **multiple effects**. Each effect writes to the buffer sequentially in its listed order, overwriting or adding to the previous, so the effects stack (a base-color effect followed by a sparkle effect).
 
-A layer applies **all its enabled modifiers as a chain** during the mapping build (`Layer::rebuildLUT`): each modifier is a coordinate fold, and they compose in child order (M₁∘M₂∘…). Modifiers are **reorderable** in the UI, and order is meaningful (a multiply-then-checkerboard mask differs from checkerboard-then-multiply, as mirror-then-rotate differs from rotate-then-mirror). The fold contract (the three hooks, the physical→logical build, the live pass) is documented in [ModifierBase](../../moonmodules/light/moxygen/ModifierBase.md).
+A layer applies **all its enabled modifiers as a chain** during the mapping build (`Layer::rebuildLUT`): each modifier is a coordinate fold, and they compose in child order (M₁∘M₂∘…). Modifiers are **reorderable** in the UI, and order is meaningful (a multiply-then-checkerboard mask differs from checkerboard-then-multiply, as mirror-then-rotate differs from rotate-then-mirror). The fold contract (the three hooks, the physical→logical build, the live pass) is documented in [ModifierBase](../../../src/light/modifiers/ModifierBase.h).
 
 Each layer references the shared Layouts. The layer builds its mapping by walking the Layouts container's **physical** coordinates and folding each through the static modifier chain to its logical cell. N physical lights folding onto one logical cell is the fan-out, as in a Multiply kaleidoscope, so the build never produces a fan-out overflow. Different layers in Effects can have different modifiers, producing different mappings from the same Layouts.
 
@@ -140,7 +140,7 @@ Every effect declares its native dimensionality through `EffectBase::dimensions(
 
 D1/D2 are **opt-in promises**: declaring them tells the framework it can fill the missing axes, saving the per-effect work of iterating z (or x and z). Effects that don't make that promise stay at the D3 default and iterate the whole buffer.
 
-**Why 1D runs along Y, and the unified expand rule.** A lower-D effect occupies the low axes and the framework expands across the next: **1D → 2D adds columns across X**, **2D → 3D adds slices across Z**. 1D-along-Y, shared with MoonLight, makes a 1D effect the natural first column of its 2D form, so expanding to a panel is "repeat the column" with the same math. 1D-along-X would make it a row expanding downward, a worse fit since a strip is a column. A 1D effect therefore renders correctly on a `1 × N` grid (width 1, height N), but on `N × 1` the extrude runs the wrong way and flattens it. How a physical output (a strip, a row of [Hue lights](../../moonmodules/light/moxygen/HueDriver.md)) maps to `1 × N` is a layout concern.
+**Why 1D runs along Y, and the unified expand rule.** A lower-D effect occupies the low axes and the framework expands across the next: **1D → 2D adds columns across X**, **2D → 3D adds slices across Z**. 1D along Y makes a 1D effect the first column of its 2D form, so expanding to a panel repeats the column with the same math. 1D-along-X would make it a row expanding downward, a worse fit since a strip is a column. A 1D effect therefore renders correctly on a `1 × N` grid (width 1, height N), but on `N × 1` the extrude runs the wrong way and flattens it. How a physical output (a strip, a row of [Hue lights](../../moonmodules/light/drivers.md#hue)) maps to `1 × N` is a layout concern.
 
 Hot-path cost: extrude pays one comparison and returns for the D3 case. For D1/D2 on a layer whose unused axes are size 1 (a D2 effect on a 2D layer, a D1 effect on a 1D `1 × N` layer) the inner loops are guarded by `depth_ > 1` / `width_ > 1` and never run. Real `memcpy` work happens only for a D1 or D2 effect on a layer with more dimensions than the effect writes: exactly the case where you wanted the framework to do the duplication.
 
@@ -188,7 +188,7 @@ Two traps worth naming. A quantity already gated by wallclock must not ALSO be s
 
 A modifier (MoonModule) lives inside a layer alongside its effects. Modifiers expose a virtual interface: the Layer calls modifier methods without knowing the concrete type (no `dynamic_cast`). A layer applies **all** its enabled modifiers as a chain, in child order, each a coordinate fold composed into one mapping (see [Effects and Layer](#effects-and-layer)).
 
-A modifier is a coordinate transform, applied in one of two ways (the fold contract is in [ModifierBase](../../moonmodules/light/moxygen/ModifierBase.md)):
+A modifier is a coordinate transform, applied in one of two ways (the fold contract is in [ModifierBase](../../../src/light/modifiers/ModifierBase.h)):
 
 - **Static** (`modifyLogicalSize` + `modifyLogical`): folded into the mapping during the cold-path build, so it costs nothing per frame (Region crop, Multiply tile/mirror, a mask).
 - **Live** (`modifyLive`): a per-frame coordinate remap for animation (rotation), run only when an enabled modifier needs it, a static-only chain pays nothing.
@@ -242,7 +242,7 @@ The trade is deliberate: **a chain must be homogeneous**. Mixing fixture types o
 
 ## Multicast and IGMP snooping
 
-Four things MoonLight sends to more than one listener. Every one goes through one helper, `sendAddressed` in [Addressing](../../moonmodules/core/moxygen/Addressing.md), and a service offers the modes its protocol allows under one control, `addressing`, with `hosts` as its unicast list:
+Four things MoonLight sends to more than one listener. Every one goes through one helper, `sendAddressed` in [Addressing](../../../src/core/util/Addressing.h), and a service offers the modes its protocol allows under one control, `addressing`, with `hosts` as its unicast list:
 
 | | modes | why |
 |---|---|---|

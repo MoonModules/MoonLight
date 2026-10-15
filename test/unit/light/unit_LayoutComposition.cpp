@@ -4,6 +4,7 @@
 #include "doctest.h"
 #include "light/layouts/CarLightsLayout.h"
 #include "light/layouts/GridBlacksLayout.h"
+#include "light/layouts/GridLayout.h"
 #include "light/layouts/PanelsLayout.h"
 #include "light/layouts/Rings241Layout.h"
 #include "light/layouts/TubesLayout.h"
@@ -133,3 +134,19 @@ TEST_CASE("a GridBlacks without dark columns places what a Grid places") {
     grid.serpentine = true;
     CHECK(lightsOf(blacks) == lightsOf(grid));
 }
+
+TEST_CASE("a later part continues the numbering and stops at the light cap, the safe-mode boot's 1024") {
+    mm::GridLayout first;  first.width = 1023; first.height = 1;
+    mm::GridLayout second; second.width = 2;   second.height = 1;
+    std::vector<std::tuple<mm::nrOfLightsType, mm::lengthType>> placed;
+    mm::CoordSink sink{[](void* c, mm::nrOfLightsType i, mm::lengthType x, mm::lengthType, mm::lengthType) {
+        static_cast<std::vector<std::tuple<mm::nrOfLightsType, mm::lengthType>>*>(c)->emplace_back(i, x);
+    }, nullptr, &placed};
+    mm::LightEmitter e{&sink, 1024};
+    e.place(first);
+    e.place(second, 0, 1);
+    REQUIRE(placed.size() == 1024);
+    CHECK(placed.back() == std::make_tuple(mm::nrOfLightsType(1023), mm::lengthType(0)));   // the second part's first light
+    for (const auto& [i, x] : placed) CHECK(i < 1024);
+}
+

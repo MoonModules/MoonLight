@@ -55,7 +55,7 @@
     {"palettes/drift.mlp", 0x431d765e3fcc25abull},
     {"palettes/fire.mlp", 0x1acffb6bb6322e64ull},
     {"palettes/spectrum.mlp", 0x44d8cd5c43b0500eull},
-    {"palettes/stadbeest-fire.mlp", 0x0e3db80cc7ecd8a5ull},
+    {"palettes/stadbeest-fire.mlp", 0x2707ecda19a0abc5ull},
     {"palettes/temperature.mlp", 0x98bf482549960c5full},
     {"services/button.mls", 0x377a24ae1d49b9d1ull},
     {"services/chase.mls", 0x91984b68b9521c79ull},

@@ -5,6 +5,7 @@
 // default; entry-point is the WS init at the bottom: no ordering surprises.
 import { installPicker } from "/install-picker.js";
 import { preview } from "/preview3d.js";
+import { encodeGif } from "/gif.js";
 import { isNewer, parse } from "/semver.js";
 import { applyMigrations, collectFiles, restoreDirs, diffRestore } from "/migrate.js";
 import { docUrl, moduleHelp, controlHelp, ROLE_EMOJI, DIM_EMOJI, SCRIPTED_EMOJI, COMPILED_EMOJI, EMOJI_LABEL,
@@ -229,6 +230,7 @@ function connectWs() {
             // without a `modules` array, or it would clobber `state` and blank the module view.
             if (!Array.isArray(data.modules)) return;
             state = data;
+            if (helpPending) loadHelp();
             relayMoonCloudOutbox();
             // Defer the DOM rebuild while the user is mid-interaction: rebuilding under an open dropdown makes it unselectable. The state is stored above, so updateValues() still shows fresh values, and renderIfDeferred draws the structure once the edit ends.
             if (userIsEditing()) {
@@ -1044,18 +1046,7 @@ function buildNavFooter() {
             // doesn't include the name field.
             const devName = (systemJson && systemJson.deviceName)
                 || location.hostname || "device";
-            const fname = `MoonLight-diag-${devName}-${Date.now()}.json`;
-            const a = document.createElement("a");
-            const blobUrl = URL.createObjectURL(blob);
-            a.href = blobUrl;
-            a.download = fname;
-            a.click();
-            // Defer the revoke so the browser has time to start the download.
-            // Revoking immediately after click() is technically race-safe on
-            // recent Chrome / Firefox (the click navigation is synchronous)
-            // but Safari has been observed dropping downloads under a fast
-            // revoke. A few seconds is the canonical workaround.
-            setTimeout(() => URL.revokeObjectURL(blobUrl), 4000);
+            saveBlob(blob, `MoonLight-diag-${devName}-${Date.now()}.json`);
         } catch (e) {
             alert(`Diagnostic capture failed: ${e && e.message ? e.message : e}`);
         }
@@ -1500,10 +1491,15 @@ function carryingInterface() {
     return (net?.controls || []).find(c => c.name === "mode")?.value || "";
 }
 
+// The device's name as the System card sets it, or undefined before the state names it.
+function deviceName() {
+    return (allModules().find(m => m.type === "SystemModule")?.controls || []).find(c => c.name === "deviceName")?.value;
+}
+
 // Ask before an edit takes the device away from the open page, naming where it will be.
 function confirmAddressMove(to) {
     if (to === undefined) return Promise.resolve(true);
-    const name = (allModules().find(m => m.type === "SystemModule")?.controls || []).find(c => c.name === "deviceName")?.value;
+    const name = deviceName();
     const url = to ? `http://${to}/` : (name ? `http://${name}.local/` : "");
     const where = document.createElement("span");
     where.append(to ? "The device will be at " : "The device takes a new address from the router; reach it at ");
@@ -2823,8 +2819,9 @@ function docPathForType(moduleType) {
 
 // ---- Help: each module's own documentation, which the browser fetches, so the flash holds none ----
 //
-// help.json is generated from the module headers (moondeck/docs/gen_help.py) and published beside the docs site, whose Pages host sends `access-control-allow-origin: *`, so a page served by a device may read it. A device's page is plain HTTP, which has no Cache API, so the last copy lives in localStorage and shows at once, offline included; the fetch then revalidates it with the ETag Pages sends.
+// help.json is generated from the module headers (moondeck/docs/gen_help.py). Each release carries its own copy, mirrored on Pages beside its binaries, so a device reads the help of the firmware it runs; the docs site's copy serves a release Pages does not mirror. The Pages host sends `access-control-allow-origin: *`, so a page served by a device may read either. A device's page is plain HTTP, which has no Cache API, so the last copy lives in localStorage and shows at once, offline included; the fetch then revalidates it with the ETag Pages sends.
 const HELP_URL = "https://moonmodules.org/MoonLight/help/help.json";
+const HELP_URL_RELEASE = (tag) => `https://moonmodules.org/MoonLight/install/releases/${tag}/MoonLight-help.json`;
 // TEMPORARY, until the docs deploy publishes help.json after this branch merges: the same file read from the branch on GitHub, tried when the published one is missing. It goes with the merge.
 const HELP_URL_BRANCH = "https://raw.githubusercontent.com/MoonModules/MoonLight/next-iteration/docs/help/help.json";
 const LS_HELP = "mm_help";            // the last help.json fetched, as text
@@ -2834,6 +2831,7 @@ const LS_HELP_SOURCE = "mm_helpSource";   // "local" while developing help, else
 const LS_HELP_SHOWN = "mm_helpShown"; // "1" shows the help, from the ⓘ in the status bar; off by default
 const LS_HELP_CONSENT = "mm_helpConsent"; // "1" once the user agreed to download help; nothing is fetched before
 let helpModules = {};
+let helpPending = false;   // help was asked for before the first state arrived, so the fetch waits for the firmware's version
 
 // The cached copy at once, offline included, then a fetch that revalidates it; called only after the user agreed, since the request shows the docs site's host this browser's address.
 function loadHelp() {
@@ -2841,8 +2839,13 @@ function loadHelp() {
     const cached = local ? "" : lsRead(LS_HELP, "");
     try { helpModules = cached ? JSON.parse(cached).modules || {} : {}; } catch { helpModules = {}; }
     if (Object.keys(helpModules).length && state && !userIsEditing()) renderCards();
+    helpPending = !local && !state;
+    if (helpPending) return;
+    const fw = deviceFirmwareInfo();
     const get = (url) => fetch(url, {cache: "no-cache"}).then(r => r.ok ? r.text() : Promise.reject(r.status));
-    (local ? get(HELP_URL_LOCAL).catch(() => get(HELP_URL)) : get(HELP_URL)).catch(() => get(HELP_URL_BRANCH)).then(text => {
+    // A state that names no version reads the site's copy.
+    const published = () => (fw ? get(HELP_URL_RELEASE(releaseTagOf(fw.version))) : Promise.reject()).catch(() => get(HELP_URL));
+    (local ? get(HELP_URL_LOCAL).catch(() => get(HELP_URL)) : published()).catch(() => get(HELP_URL_BRANCH)).then(text => {
         if (text === cached) return;
         helpModules = JSON.parse(text).modules || {};
         if (!local) try { localStorage.setItem(LS_HELP, text); } catch { /* full storage: the help still shows this session */ }
@@ -5903,6 +5906,51 @@ function attachDragHandlers(card, mod) {
     });
 }
 
+// The browser saves a file the page made: the anchor is attached for Firefox, and the URL is revoked late, since Safari drops a download whose URL goes at once.
+function saveBlob(blob, name) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+}
+
+// Three seconds of the preview as a GIF the browser saves, to show a preset in the gallery: the browser records what it already draws, and the device does nothing new.
+async function recordPreviewGif(btn) {
+    const WIDTH = 240, FPS = 10, SECONDS = 3;
+    const frames = [];
+    const shot = document.createElement("canvas");
+    let ctx = null, last = 0;
+    btn.disabled = true;
+    btn.classList.add("recording");
+    await new Promise(done => {
+        // A hidden or idle preview draws nothing, so the recording ends with what it has.
+        const giveUp = setTimeout(done, (SECONDS + 5) * 1000);
+        preview.onDrawn(canvas => {
+            const now = performance.now();
+            if (now - last < 1000 / FPS || !canvas.width || !canvas.height) return;
+            last = now;
+            if (!ctx) {
+                shot.width = WIDTH;
+                shot.height = Math.max(1, Math.round(WIDTH * canvas.height / canvas.width));
+                ctx = shot.getContext("2d", { willReadFrequently: true });
+            }
+            ctx.drawImage(canvas, 0, 0, shot.width, shot.height);
+            frames.push(ctx.getImageData(0, 0, shot.width, shot.height).data);
+            if (frames.length >= FPS * SECONDS) { clearTimeout(giveUp); done(); }
+        });
+    });
+    preview.onDrawn(null);
+    btn.disabled = false;
+    btn.classList.remove("recording");
+    if (frames.length < 2) { alert("Nothing to record: open the preview while the lights run."); return; }
+    const name = deviceName() || "MoonLight";
+    saveBlob(new Blob([encodeGif(frames, shot.width, shot.height, Math.round(100 / FPS))], { type: "image/gif" }), `${name}-preview.gif`);
+}
+
 // ---------------------------------------------------------------------------
 // 8. Status bar wiring
 // ---------------------------------------------------------------------------
@@ -5911,6 +5959,8 @@ function setupStatusBarButtons() {
     document.getElementById("preview-reset")?.addEventListener("click", () => {
         preview.resetCamera();
     });
+    const recordBtn = document.getElementById("preview-record");
+    recordBtn?.addEventListener("click", () => recordPreviewGif(recordBtn));
 
     // Reboot: press once to arm, again to confirm: see armPressTwice. The glyph
     // stays (no armedText); only the title changes.
@@ -7661,17 +7711,8 @@ async function fmBackupConfig() {
         capturedAt: new Date().toISOString(), origin: location.origin,
         device, firmware, build, files,
     };
-    // The diagnostics-download tail: Blob, objectURL, a[download], revoke late (Safari races
-    // an immediate revoke against the save dialog).
     const blob = new Blob([JSON.stringify(bundle, null, 1)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `MoonLight-config-${device}-${new Date().toISOString().slice(0, 10)}.json`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 4000);
+    saveBlob(blob, `MoonLight-config-${device}-${new Date().toISOString().slice(0, 10)}.json`);
     if (skipped.length) {
         alert("Backed up. Skipped (not text, the bundle carries text only):\n" + skipped.join("\n"));
     }

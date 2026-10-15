@@ -294,7 +294,7 @@ The `encoded frame` column is the **fully-encoded shift frame** (~1,152 B/light 
 | 4 × 4 lights (18 KB) | 259 µs |
 | 8 × 8 lights (72 KB) | 1,210 µs |
 
-**What it costs us.** The encoder + the correction LUT + the SWAR transpose all become ISR-reachable and must be `IRAM_ATTR`; a flash access or a cache miss in that path is an underrun, and an underrun is a visible glitch. That is precisely the fragility the whole-frame design was chosen to avoid (see [MoonI80Peripheral](../../moonmodules/light/moxygen/MoonI80Peripheral.md)), and it is the price of going past 96 lights/strand on an S3. **Both drivers keep shipping**: `I80LedDriver` (esp_lcd, capped, bulletproof) and `MoonI80LedDriver` (ours, uncapped, real-time).
+**What it costs us.** The encoder + the correction LUT + the SWAR transpose all become ISR-reachable and must be `IRAM_ATTR`; a flash access or a cache miss in that path is an underrun, and an underrun is a visible glitch. That is precisely the fragility the whole-frame design was chosen to avoid (see [MoonI80Peripheral](../../../src/light/drivers/MoonI80Peripheral.h)), and it is the price of going past 96 lights/strand on an S3. **Both drivers keep shipping**: `I80LedDriver` (esp_lcd, capped, bulletproof) and `MoonI80LedDriver` (ours, uncapped, real-time).
 
 **The seam**, keeping the platform boundary intact — the platform owns the ring/descriptors/ISR, the domain owns the encode:
 
