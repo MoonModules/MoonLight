@@ -2810,8 +2810,6 @@ function docPathForType(moduleType) {
 // help.json is generated from the module headers (moondeck/docs/gen_help.py). Each release carries its own copy, mirrored on Pages beside its binaries, so a device reads the help of the firmware it runs; the docs site's copy serves a release Pages does not mirror. The Pages host sends `access-control-allow-origin: *`, so a page served by a device may read either. A device's page is plain HTTP, which has no Cache API, so the last copy lives in localStorage and shows at once, offline included; the fetch then revalidates it with the ETag Pages sends.
 const HELP_URL = "https://moonmodules.org/MoonLight/help/help.json";
 const HELP_URL_RELEASE = (tag) => `https://moonmodules.org/MoonLight/install/releases/${tag}/MoonLight-help.json`;
-// TEMPORARY, until the docs deploy publishes help.json after this branch merges: the same file read from the branch on GitHub, tried when the published one is missing. It goes with the merge.
-const HELP_URL_BRANCH = "https://raw.githubusercontent.com/MoonModules/MoonLight/next-iteration/docs/help/help.json";
 const LS_HELP = "mm_help";            // the last help.json fetched with its address, as {url, text}
 // While developing help: `?help=local` reads the file gen_help last wrote, which preview_installer serves on this machine, and `?help=published` returns to the docs site. A fixed address, so a shared link cannot point the help anywhere else.
 const HELP_URL_LOCAL = "http://localhost:8421/help/help.json";
@@ -2826,10 +2824,10 @@ function loadHelp() {
     const local = lsRead(LS_HELP_SOURCE, "") === "local";
     const fw = state ? deviceFirmwareInfo() : null;
     const release = fw ? HELP_URL_RELEASE(releaseTagOf(fw.version)) : null;
-    // A cached release copy shows only for the release this device runs, so an update or an offline device never shows another firmware's controls; the site's and the branch's copies serve any.
+    // A cached release copy shows only for the release this device runs, so an update or an offline device never shows another firmware's controls; the site's copy serves any.
     let cached = null;
     try { cached = local ? null : JSON.parse(lsRead(LS_HELP, "null")); } catch { cached = null; }
-    if (cached && cached.url !== release && cached.url !== HELP_URL && cached.url !== HELP_URL_BRANCH) cached = null;
+    if (cached && cached.url !== release && cached.url !== HELP_URL) cached = null;
     try { helpModules = cached ? JSON.parse(cached.text).modules || {} : {}; } catch { helpModules = {}; }
     if (Object.keys(helpModules).length && state && !userIsEditing()) renderCards();
     helpPending = !local && !state;
@@ -2837,7 +2835,7 @@ function loadHelp() {
     const get = (url) => fetch(url, {cache: "no-cache"}).then(r => r.ok ? r.text().then(text => ({url, text})) : Promise.reject(r.status));
     // A state that names no version reads the site's copy.
     const published = () => (release ? get(release) : Promise.reject()).catch(() => get(HELP_URL));
-    (local ? get(HELP_URL_LOCAL).catch(() => get(HELP_URL)) : published()).catch(() => get(HELP_URL_BRANCH)).then(got => {
+    (local ? get(HELP_URL_LOCAL).catch(() => get(HELP_URL)) : published()).then(got => {
         if (cached && got.url === cached.url && got.text === cached.text) return;
         helpModules = JSON.parse(got.text).modules || {};
         if (!local) try { localStorage.setItem(LS_HELP, JSON.stringify(got)); } catch { /* full storage: the help still shows this session */ }

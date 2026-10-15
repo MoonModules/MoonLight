@@ -1,11 +1,11 @@
-// The help a device shows comes from the copy of its own release, else the site's, else the branch's: a cached copy from another release never shows, so an update or an offline device never names another firmware's controls.
+// The help a device shows comes from the copy of its own release, else the site's: a cached copy from another release never shows, so an update or an offline device never names another firmware's controls.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { fnSource } from "./app-source.mjs";
 
 const RELEASE = (tag) => `https://rel/${tag}/help.json`;
-const SITE = "https://site/help.json", BRANCH = "https://branch/help.json";
+const SITE = "https://site/help.json";
 const help = (name) => JSON.stringify({ modules: { [name]: {} } });
 
 // loadHelp with its globals stubbed: the stored cache, the device's version, and what each address answers.
@@ -16,7 +16,7 @@ function harness({ cached = null, version = "1.0.0", stateKnown = true, answers 
     const run = new Function("lsRead", "state", "deviceFirmwareInfo", "releaseTagOf", "renderCards", "userIsEditing", "fetch", "localStorage",
         "let helpModules = {}, helpPending = false;\n" +
         "const LS_HELP = 'mm_help', LS_HELP_SOURCE = 'mm_helpSource', HELP_URL_LOCAL = 'http://local/help.json';\n" +
-        `const HELP_URL = '${SITE}', HELP_URL_BRANCH = '${BRANCH}', HELP_URL_RELEASE = (tag) => 'https://rel/' + tag + '/help.json';\n` +
+        `const HELP_URL = '${SITE}', HELP_URL_RELEASE = (tag) => 'https://rel/' + tag + '/help.json';\n` +
         fnSource("loadHelp") + "\nreturn { loadHelp, modules: () => helpModules, pending: () => helpPending };")(
         (k, d) => store[k] ?? d, stateKnown ? { modules: [] } : null, () => ({ version }), (v) => `v${v}`,
         () => {}, () => false, fetch, { setItem: (k, v) => { store[k] = v; } });
@@ -31,19 +31,17 @@ test("a cached copy of another release does not show, and one of the running rel
     assert.deepEqual(Object.keys(h.modules()), ["Mine"]);
 });
 
-test("the site's or the branch's cached copy serves any release, and an old plain-text cache is dropped", () => {
-    for (const url of [SITE, BRANCH]) {
-        const h = harness({ cached: { url, text: help("Any") } });
-        h.loadHelp();
-        assert.deepEqual(Object.keys(h.modules()), ["Any"]);
-    }
+test("the site's cached copy serves any release, and an old plain-text cache is dropped", () => {
+    const h = harness({ cached: { url: SITE, text: help("Any") } });
+    h.loadHelp();
+    assert.deepEqual(Object.keys(h.modules()), ["Any"]);
     const old = harness({});
     old.store.mm_help = help("Plain");
     old.loadHelp();
     assert.deepEqual(Object.keys(old.modules()), []);
 });
 
-test("the release's copy is asked first, then the site's, then the branch's, and the answer is cached with its address", async () => {
+test("the release's copy is asked first, then the site's, and the answer is cached with its address", async () => {
     const h = harness({ answers: { [SITE]: help("Site") } });
     h.loadHelp();
     await settle(); await settle(); await settle();
