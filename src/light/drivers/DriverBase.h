@@ -22,7 +22,7 @@ namespace mm {
 ///
 /// Every driver reads the shared buffer of the @ref Drivers container, so several drivers drive one installation, each its own slice. A device's drivers come with its entry in the installer's device catalog, and @ref PreviewDriver is the one every device starts with.
 ///
-/// Each driver opens with the shared controls, then adds its own. The output correction (`localBrightness`, `curve`, `fixture`, `whiteMode`) sets how its slice looks, and the source window (`start`, `count`) sets which slice it reads. Hue and Preview correct nothing, since the bridge and the browser do, and HUB75, Preview and the video drivers take the whole buffer.
+/// Each driver opens with the shared controls, then adds its own. The output correction (`localBrightness`, `curve`, `fixture`, `whiteMode`) sets how its slice looks, and the source window (`start`, `count`) sets which slice it reads. Hue and Preview show no correction controls, though Hue still applies the global brightness. HUB75, Preview and the video drivers take the whole buffer.
 ///
 /// Each card's emoji are its tags, as the [tag emoji legend](https://moonmodules.org/MoonLight/explanation/architecture/index.html#tag-emoji-legend) explains.
 class DriverBase : public MoonModule {

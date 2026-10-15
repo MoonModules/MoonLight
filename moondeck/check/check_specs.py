@@ -228,7 +228,7 @@ def _check_author_url_drift(source, spec):
 # paths that stopped existing when docs/ was restructured, so the catalog branch below had
 # been unreachable and every catalog page took the `## Source` path instead.
 sys.path.insert(0, str(ROOT / "moondeck" / "docs"))
-from mkdocs_hooks import _CATALOG_PAGES, catalog_markdown, fill_cards_from_help, split_blocks  # noqa: E402
+from mkdocs_hooks import _CATALOG_PAGES, _help_file, catalog_markdown, fill_cards_from_help, split_blocks  # noqa: E402
 CATALOG_PAGES = {SPECS.parent / rel for rel in _CATALOG_PAGES}
 
 
@@ -260,6 +260,9 @@ def check_source_links():
         spec_rel = md.relative_to(ROOT)
         text = md.read_text(encoding="utf-8")
 
+        # A catalog drawn from help.json links each card's header through the help's `source`, which gen_help writes from the header it read, so the page's own markdown holds only the intro.
+        if md.relative_to(SPECS).as_posix() in _help_file().get("catalogs", {}):
+            continue
         if md in CATALOG_PAGES:
             # A catalog page back-references code either directly — each `### ` block
             # carries a `source [Foo.h](...)` link (effects/modifiers/layouts) — or

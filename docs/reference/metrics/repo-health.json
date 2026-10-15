@@ -1,5 +1,5 @@
 {
-  "commit": "f2e1b2ee",
+  "commit": "ef20e444",
   "flash": {
     "esp32s3-n16r8": 2455008,
     "esp32": 2260176,
@@ -14,11 +14,11 @@
     "esp32p4rev3-eth": 2231792,
     "esp32s3-zero": 2224816,
     "esp32-pico": 2107168,
-    "desktop-macos": 2382920,
+    "desktop-macos": 2382968,
     "desktop-windows": 1925120,
     "esp32c3": 2335072,
     "desktop-linux": 2548000,
-    "esp32s3-n32r16": 2478256,
+    "esp32s3-n32r16": 2478304,
     "teensy41": 1271788
   },
   "measured": {
@@ -672,7 +672,7 @@
           "p50": 8,
           "p95": 15,
           "n": 32,
-          "last": "2026-10-14"
+          "last": "2026-10-15"
         },
         "esp32s3-n16r8": {
           "p50": 9080,
@@ -822,36 +822,36 @@
     }
   },
   "loc": {
-    "core": 30411,
-    "light": 30805,
+    "core": 30628,
+    "light": 30818,
     "platform": 21635,
-    "ui": 12621,
-    "test": 69145,
-    "moondeck": 32548
+    "ui": 12623,
+    "test": 69183,
+    "moondeck": 32596
   },
   "comments": {
     "core": {
-      "lines": 6487,
-      "ratio": 0.236
+      "lines": 6705,
+      "ratio": 0.242
     },
     "light": {
-      "lines": 6770,
-      "ratio": 0.247
+      "lines": 6783,
+      "ratio": 0.248
     },
     "platform": {
       "lines": 4172,
       "ratio": 0.216
     },
     "ui": {
-      "lines": 3454,
+      "lines": 3455,
       "ratio": 0.29
     },
     "test": {
-      "lines": 7243,
+      "lines": 7245,
       "ratio": 0.121
     },
     "moondeck": {
-      "lines": 4989,
+      "lines": 4994,
       "ratio": 0.175
     }
   },
@@ -861,7 +861,7 @@
   },
   "docs": {
     "md_files": 162,
-    "md_lines": 32161,
+    "md_lines": 31329,
     "plans_files": 51,
     "backlog_lines": 3393,
     "lessons_lines": 532,

@@ -36,9 +36,9 @@ Passwords live in plain text in the device's `/.config` files, where the firmwar
 
 A client on the device's own access point (subnet 4.3.2.0/24) sees every password empty, and its requests for `/.config` files are refused. While such a client is connected, every client gets the state with passwords empty. This keeps the home network's password from a visitor who joins the access point to set the device up.
 
-The access point uses the first known WiFi network's password, so it is as private as that network. The rule, the `opens` setting and the power-cycle gesture that opens it for one boot without a password: [the access point](../moonmodules/core/system.md#access-point-details).
+The access point uses the first known WiFi network's password, so it is as private as that network. The rule, the `opens` setting and the power-cycle gesture that opens it for one boot without a password: [the access point](../moonmodules/core/system.md#access-point).
 
-A [backup](../how-to/backup-and-restore.md) holds every file, `/.config` included, so it carries the WiFi passwords in plain text. A state document and a [preset](../moonmodules/core/system.md#what-a-preset-holds) carry no secret, and applying one keeps the stored secrets.
+A [backup](../how-to/backup-and-restore.md) holds every file, `/.config` included, so it carries the WiFi passwords in plain text. A state document and a [preset](../how-to/presets.md#what-a-preset-holds) carry no secret, and applying one keeps the stored secrets.
 
 ## Firmware
 

@@ -16,7 +16,12 @@ struct StateDocumentResult;
 class JsonSink;   // forward declared: the bodies in the .cpp include the real headers
 class Scheduler;
 
-/// The embedded HTTP server and WebSocket: it serves the web UI and the REST API behind it. @xref{the-rest-api} @xref{what-it-is-allowed-to-include}
+/// The embedded HTTP server and WebSocket: it serves the web UI and the REST API behind it.
+/// @card HttpServerModule.png
+///
+/// The routes are in @xref{the-rest-api|The REST API}, and the layering in @xref{what-it-is-allowed-to-include|What it is allowed to include}.
+///
+/// @attribution Moustachauve
 ///
 /// @moreinfo
 ///
@@ -198,12 +203,11 @@ class Scheduler;
 ///
 /// The `JsonSink` helpers are members because each reads this module's state. The sink, the SHA-1 of RFC 3174 and the base64 encoder live in headers of their own.
 ///
-/// ## Prior art
-///
-/// The shim's field requirements come from the [WLED-Android client](https://github.com/Moustachauve/WLED-Android) by Christophe Gagnier, so it is the minimal object that app accepts rather than a guessed full emulation.
+/// The WLED shim's field requirements come from the WLED-Android client, so it is the minimal object that app accepts rather than a guessed full emulation.
 class HttpServerModule : public MoonModule, public BinaryBroadcaster {
 public:
-    /// The port it listens on, 8080 on the desktop and 80 on a device. @xref{the-served-port-is-not-the-port-control}
+    /// The port the server listens on.
+    /// @guide 8080 on the desktop and 80 on a device. A change applies when the server next opens: @xref{the-served-port-is-not-the-port-control|why}.
     uint16_t port = 8080;
 
     /// The scheduler every control write is applied through.
@@ -663,7 +667,7 @@ private:
     void writeWledInfoBody(JsonSink& sink, const char* name, const uint8_t mac[6]);
     void writeWledName(JsonSink& sink, const char* name);   // 💫-prefixed WLED name (HA marker)
     void writeWledStateBody(JsonSink& sink);
-    /// The device's name, MAC and live address, resolved once for every WLED handler to share. @xref{prior-art}
+    /// The device's name, MAC and live address, resolved once for every WLED handler to share. @xref{the-wled-compatibility-shim}
     void resolveWledIdentity(const char*& name, uint8_t mac[6], uint8_t ip[4],
                              const char* nameFallback = "MoonLight");
     void writeModuleMetricsJson(JsonSink& sink, MoonModule* mod, bool& first);

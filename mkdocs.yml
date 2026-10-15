@@ -176,6 +176,7 @@ nav:
       - Building, running, flashing: how-to/building.md
       - Adding a picture or channel-data source: how-to/adding-a-stream-source.md
       - Driving LED panels with a receiving card: how-to/panel-cards.md
+      - Wiring a microphone or capturing audio: how-to/audio-input.md
       - Choosing and wiring an LED driver: how-to/led-drivers.md
       - Driving a HUB75 panel: how-to/hub75-panels.md
       - Watching the output as video: how-to/watching-the-output.md
@@ -200,9 +201,7 @@ nav:
       - Supporting: moonmodules/light/supporting.md
   - Core:
       - System: moonmodules/core/system.md
-      - System deck: moonmodules/core/system-deck.md
       - Services: moonmodules/core/services.md
-      - Services deck: moonmodules/core/services-deck.md
       - Supporting: moonmodules/core/supporting.md
       - Web UI: moonmodules/core/ui.md
   - Architecture:

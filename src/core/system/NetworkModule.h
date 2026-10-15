@@ -27,10 +27,18 @@ inline bool addressCounts(const uint8_t ip[4], bool buildHasWiFi, const uint8_t*
     return configured && std::memcmp(ip, configured, 4) == 0;
 }
 
-/// All device connectivity, cascading from Ethernet through WiFi to an access point: @xref{the-cascade}.
-///
-/// Network holds the cascade, its mode and mDNS; each interface's settings are on its own card: Ethernet, WiFi and the access point. A desktop builds the same cards over stubs.
+/// Brings the device onto the LAN before the HTTP and WebSocket servers start, trying Ethernet, then WiFi, then its own access point.
 /// @card NetworkModule.png
+///
+/// Network holds the cascade, its mode and mDNS; each interface's settings are on its own card: Ethernet, WiFi and the access point. A desktop builds the same cards over stubs. The order is in @xref{the-cascade|More info}.
+///
+/// @guide
+///
+/// ## A direct cable to a computer
+///
+/// With no DHCP server on an Ethernet-only build, the device takes a 169.254.x.y address after about 15 seconds. A computer on the same network does too, so open `<name>.local` and set a static address on the Ethernet card.
+///
+/// A DHCP server that appears later still wins.
 ///
 /// @moreinfo
 ///
@@ -507,11 +515,13 @@ private:
     // The name last advertised, so a live rename is noticed and re-registered.
     char lastMdnsName_[24] = {};
 
-    bool mdnsEnabled_ = true;                ///< whether to advertise the local name
+    /// The `<name>.local` hostname, on IPv4 and IPv6.
+    bool mdnsEnabled_ = true;
     // The storage behind the inherited status slot, which holds only a pointer into it.
     char statusBuf_[80] = {};   // 62 needed by the longest line, the link-local one: a 15-character address, a 23-character device name and .local
 
-    char modeStr_[20] = {};   ///< the mode label, sized to the longest
+    /// The interface in use.
+    char modeStr_[20] = {};
 
     // The platform takes quarter-decibels, and the applied value detects a change.
     int16_t appliedTxPowerSetting_ = -1;   ///< negative until the first apply

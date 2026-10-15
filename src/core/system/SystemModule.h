@@ -13,12 +13,16 @@
 
 namespace mm {
 
-/// The device's identity and its vitals, always loaded and always visible.
-///
-/// It owns the network name and the hardware model, and surfaces the live tick metrics: @xref{what-it-reports}.
-///
-/// Prior art: MoonLight's system diagnostics over REST, with the device name driving mDNS.
+/// The device's identity and vitals: its name, how long it has run, and the memory and tick it renders at.
 /// @card SystemModule.png
+///
+/// The name is the one the network sees, behind mDNS `<name>.local`, the access point SSID and the DHCP hostname. The readings are in @xref{what-it-reports|More info}.
+///
+/// @guide
+///
+/// ## Safe mode
+///
+/// Two failed boots in a row start the next boot with the LEDs off, no MoonLive script and at most 1,024 lights. A failed boot is a crash, a brownout, or a power loss within a minute of starting. Every boot raises the lights over five seconds.
 ///
 /// @moreinfo
 ///
@@ -128,6 +132,7 @@ public:
             controls_.addProgress("psram", psramUsedVal_, totalHeapVal_ - totalInternalVal_);
             // A compile-time string, so it binds read-only and adds nothing on a board without it.
             if (const char* pt = platform::psramType(); pt && pt[0]) {
+                /// The PSRAM interface and clock.
                 controls_.addReadOnly("psramType", const_cast<char*>(pt));
                 controls_.setAdvanced(controls_.count() - 1);   // for whoever asks why a board is slow, not for running a show
             }
@@ -139,25 +144,33 @@ public:
             controls_.addReadOnly("flash", flashStr_, sizeof(flashStr_));
             // Read once from the hardware: a board updated over the network keeps its bootloader's mode, and DIO fetches code over two lines where QIO uses four.
             if (const char* fm = platform::flashMode(); fm && fm[0]) {
+                /// How the chip reads its flash, such as QIO or DIO.
                 controls_.addReadOnly("flashMode", const_cast<char*>(fm));
                 controls_.setAdvanced(controls_.count() - 1);   // expert, as psramType
             }
         }
 
         // These never change at runtime, so each binds straight to the platform's own buffer.
-        controls_.addReadOnly("mac", const_cast<char*>(platform::macString()));   ///< tooling keys on this
+        /// The hardware address, which tooling identifies the device by.
+        controls_.addReadOnly("mac", const_cast<char*>(platform::macString()));
+        /// The chip model.
         controls_.addReadOnly("chip", const_cast<char*>(platform::chipModel()));
-        controls_.addReadOnly("cpu", const_cast<char*>(platform::cpuInfo()));   ///< the clock and core count
+        /// The clock and core count.
+        controls_.addReadOnly("cpu", const_cast<char*>(platform::cpuInfo()));
+        /// The SDK version the firmware is built on.
         controls_.addReadOnly("sdk", const_cast<char*>(platform::sdkVersion()));
+        /// Why the device last restarted.
         controls_.addReadOnly("bootReason", const_cast<char*>(platform::resetReason()));
         // The UI honors this client-side, so nothing in the firmware reads it. A LEVEL rather than a switch, because a control names the audience it is for and one number decides which audience is reading.
         controls_.addSelect("mode", mode_, kModeOptions, 3);
+        /// Delete every setting and preset and restart as freshly installed.
+        /// @guide Press twice to confirm. Scripts and other files stay.
         controls_.addButton("factory reset", /*confirm*/ true);
-        // Warn keeps the once-a-second line off the wire while warnings still print.
         controls_.addSelect("logLevel", logLevel_, logLevelOptions_, 6);
         controls_.setDeveloper(controls_.count() - 1);
         // Compiled out where the radio is native, so the control and its query both vanish.
         if constexpr (platform::hasWifiCoprocessor) {
+            /// The firmware version of the separate WiFi chip.
             controls_.addReadOnly("wifiCoproc", const_cast<char*>(platform::coprocessorWifi()));
         }
 
@@ -234,8 +247,12 @@ private:
     Scheduler* scheduler_ = nullptr;
     char statusBuf_[128] = {};   ///< the safe-mode line, 120 with a 9-character reset reason
 
-    char deviceName_[24] = {};   ///< the one network identity
-    uint8_t mode_ = 0;           ///< one level the whole UI composes against: user, expert, developer
+    /// The name behind mDNS, the access point and DHCP.
+    /// @guide Anything but letters, digits and hyphens is coerced to a valid hostname, and a rename reaches the network within a tick.
+    char deviceName_[24] = {};
+    /// How much of the UI is shown, cumulative.
+    /// @guide User shows the essentials, expert adds the 🎚️ controls, developer the 🔧 ones. Only the UI reads it.
+    uint8_t mode_ = 0;
     static constexpr const char* kModeOptions[3] = {"user", "expert", "developer"};
     /// Push the level to the logger, clamped so a corrupt value cannot index past the end.
     void applyLogLevel() {
@@ -244,23 +261,34 @@ private:
         platform::setLogLevel(static_cast<platform::LogLevel>(lvl));
     }
 
-    // The first 60 s always logs at Info regardless, which is when the installer reads the IP.
+    /// Serial log verbosity.
+    /// @guide Warn by default. The first 60 seconds always log at Info, which is when the installer reads the IP.
     uint8_t logLevel_ = static_cast<uint8_t>(platform::LogLevel::Warn);
     static constexpr const char* logLevelOptions_[] = {"None", "Error", "Warn", "Info", "Debug", "Verbose"};
-    char deviceModel_[32] = {};   ///< the catalog entry name, sized to the longest with headroom
-    char     firmwareVariant_[24] = {};   ///< the build variant, persisted for MoonBase to read
+    /// The board model, which selects the installer's catalog entry.
+    /// @guide Tooling sets it, since a device cannot identify its own hardware.
+    char deviceModel_[32] = {};
+    /// The build variant, kept for the MoonBase recovery image to read.
+    char     firmwareVariant_[24] = {};
 
     // Dynamic (updated in tick1s)
+    /// Time since boot.
     char uptimeStr_[16] = {};
+    /// Frames rendered per second.
     char fpsStr_[8] = {};
+    /// Microseconds one tick takes.
     char tickStr_[8] = {};
+    /// The largest free internal block, which bounds one allocation.
     char maxBlockStr_[12] = {};
+    /// Internal heap in use.
     uint32_t heapUsedVal_ = 0;
+    /// PSRAM in use.
     uint32_t psramUsedVal_ = 0;
 
     // Static (set in setup)
     uint32_t totalInternalVal_ = 0;
     uint32_t totalHeapVal_ = 0;
+    /// The flash chip size.
     char flashStr_[12] = {};
     uint32_t chipFlashVal_ = 0;     // total chip flash
 };

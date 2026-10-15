@@ -24,9 +24,19 @@ inline constexpr uint8_t kGamepadInputCount = sizeof(kGamepadInputs) / sizeof(kG
 /// A gamepad's buttons and sticks, each driving a control through the same rows every input service uses.
 /// @card GamepadService.png
 ///
-/// The interface reads the pad with the browser's Gamepad API and writes its state into the hidden, live `pad` control.
-/// The text is the button bits and then the four axes, each 0 to 255 with 128 at rest; each write runs the rows at once.
-/// A stick follows the surface's convention, up and right being more, so a stick, a fader and a paddle point the same way.
+/// The pad plugs into the computer showing the interface, over USB or Bluetooth, and the browser reports it, so it works on every chip. A fresh service maps the sticks and A onto the first faders and switch.
+///
+/// @guide
+///
+/// ## Finding the pad
+///
+/// A browser lists a pad only once a button is pressed with the page open. Chrome and Firefox also need a secure page, which a board's own page is not until marked once.
+///
+/// [The how-to](https://moonmodules.org/MoonLight/how-to/control-surface.html#a-midi-desk-or-a-gamepad-through-the-browser) has the steps.
+///
+/// ## Learning an input
+///
+/// Press learn on a row, then move or press the input to bind. A stick must travel a short way. A pad's first stick positions are rest, so plugging one in off-center moves nothing.
 class GamepadService : public MoonModule, public ListSource {
 public:
     /// A service, so the container accepts it as a child.
@@ -37,6 +47,8 @@ public:
         controls_.addText("pad", pad_, sizeof(pad_));
         controls_.setHidden(controls_.count() - 1, true);
         controls_.setLive(controls_.count() - 1);
+        /// The rows: each a button or stick of the standard layout, a learn button and a target.
+        /// @guide Assign the surface's controls on the Control card to play a game with the starter rows.
         controls_.addList("inputs", *this);
         MoonModule::defineControls();
     }
@@ -291,7 +303,9 @@ private:
         return nullptr;
     }
 
-    char     pad_[40] = {};          ///< the newest state the interface wrote
+    /// The latest pad state the browser wrote: the button bits, then four axes.
+    /// @guide Each axis rests at 128, its inputs named as SDL's GameController API names them.
+    char     pad_[40] = {};
     uint32_t learnedHeld_ = 0;       ///< buttons whose press bound a row, so their release runs nothing
     bool     primed_ = false;        ///< a baseline is held, so a change is a move
     uint32_t buttons_ = 0;           ///< the buttons as last acted on

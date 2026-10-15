@@ -10,23 +10,15 @@
 namespace mm {
 
 /// The container holding every rendering layer, which `Drivers` composites into one output.
-///
-/// Each child layer renders independently into its own buffer.
-/// The shared `Layouts` describing the physical topology is wired into all of them.
 /// @card Effects.png
+///
+/// Each layer renders independently into its own buffer, over the physical topology the shared `Layouts` describes.
 ///
 /// @moreinfo
 ///
-/// ## Why a container
+/// **Why a container.** Multi-layer composition needs one place that walks every layer in order. With a single child this is a pass-through, matching the one-layer pipeline exactly.
 ///
-/// Multi-layer composition needs one place that walks every layer in order.
-/// With a single child this is a pass-through, matching the one-layer pipeline exactly.
-///
-/// ## It owns no buffer
-///
-/// Each layer owns its buffer, and `Drivers` owns the composited output.
-/// Three queries serve the compositor: the active layer, the enabled count, and a walk in order.
-/// The count is what lets `Drivers` choose between handing one buffer over and blending several.
+/// **It owns no buffer.** Each layer owns its buffer and `Drivers` owns the composited output. Three queries serve the compositor: the active layer, the enabled count, and a walk in order.
 class Effects : public MoonModule {
 public:
     /// The child role this container accepts, which is layers alone.

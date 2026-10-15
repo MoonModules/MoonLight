@@ -11,30 +11,25 @@
 namespace mm {
 
 /// A list of push buttons, each on its own GPIO, each driving a control.
-///
-/// The physical twin of a UI click, and the same shape as the infrared service.
-/// A list because boards have more than one, and a single pin did not survive the second board.
 /// @card ButtonService.png
+///
+/// A press and a UI click are the same thing to whatever they drive. A foot pedal needs no module of its own, being electrically a momentary switch.
+///
+/// @guide
+///
+/// ## What a row does
+///
+/// Each row binds one pin to a target, a surface control such as `Control.switch1`. Its kind toggles the target, sets a value while held and 0 on release, or nudges the target by a value. A catalog board's first button targets `Control.switch1`, which switches the lights and their relay.
+///
+/// ## Wiring
+///
+/// A switch to ground with the internal pull-up is active low, the usual wiring. A switch feeding 3V3 is active high. The live pressed readout shows a button working before it is bound.
 ///
 /// @moreinfo
 ///
-/// ## How a press acts
+/// **Momentary or latching.** A toggle row flips its target on each press and ignores the release; a set row writes while held and clears on release, which a pedal needs. Only a set row acts on the release, or a toggle would fire twice per push.
 ///
-/// Through the one control-set primitive every transport uses.
-/// So a press and a message are indistinguishable to whatever they drive.
-/// A row names a surface control, so the button lands where every transport reaches it.
-///
-/// ## Momentary against latching
-///
-/// A wall switch and a stage pedal want opposite things.
-/// A toggle row flips its target on each press and ignores the release.
-/// A set row writes while held and clears on release, which is what a pedal needs.
-/// So a foot pedal needs no module of its own, being electrically a momentary switch.
-///
-/// ## Debounced here, not in the platform
-///
-/// A bouncing contact is a property of the switch, so this module owns the time constant.
-/// Polled at 50 Hz, since a press lasts tens of milliseconds.
+/// **Debounce.** A bouncing contact is a property of the switch, so this module owns the time constant, polled at 50 Hz since a press lasts tens of milliseconds.
 class ButtonService : public MoonModule, public ListSource {
 public:
     /// A service, so the container accepts it as a child.
@@ -43,6 +38,7 @@ public:
     /// Declare the shared debounce and the list of button rows.
     void defineControls() override {
         controls_.addControl("debounceMs", debounceMs_, 1, 200);
+        /// The buttons, each with a pin, its wiring, a live pressed readout and a target.
         controls_.addList("buttons", *this);
         MoonModule::defineControls();
     }
@@ -216,7 +212,8 @@ private:
     Row      rows_[kMaxRows];
     uint8_t  count_ = 0;
     uint32_t nextId_ = 1;
-    uint8_t  debounceMs_ = 25;     ///< shared: one switch type per board, in practice
+    /// How long a level must hold before it counts as a press, shared by every button.
+    uint8_t  debounceMs_ = 25;
     char     statusBuf_[48] = {};
 };
 

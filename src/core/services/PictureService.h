@@ -13,24 +13,23 @@
 
 namespace mm {
 
-/// Produces a picture for the effects that sample it: the source half of the picture pipeline, named for what it publishes, as Audio is.
+/// The picture the Picture effect samples onto the lights, from one source at a time.
+/// @card PictureService.png
 ///
-/// Each source is an option of `source`. One service is active at a time, and a `Reader` hands its picture to any number of effects.
-///
-/// A source writing from its own task fills a back picture while effects read the front one, and publishing swaps the two pointers.
-///
-/// Without room for the second picture, the one picture is locked while written, so frames may be skipped but never torn.
+/// One picture service is active at a time, as with Audio, and any number of effects read its picture.
 class PictureService : public MoonModule {
 public:
+    /// A service, the source half of the picture pipeline. It swaps a front and a back picture, or locks the one picture when there is no room for two, so frames skip but never tear.
     ModuleRole role() const MM_NONBLOCKING override { return ModuleRole::Service; }
 
     /// The sources `source` picks from, in option order.
     enum Source : uint8_t { kTestPattern, kSourceCount };
     /// Where the picture comes from.
+    /// @guide The test pattern is a test card in the layout of Philips' PM5544, drawn at any size.
     uint8_t source = kTestPattern;
     /// The picture's width in pixels.
     uint16_t width = 64;
-    /// The picture's height in pixels, 4:3 by default as the test card is.
+    /// The picture's height in pixels.
     uint16_t height = 48;
 
     /// Publish the source and the picture's size.

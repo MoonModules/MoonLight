@@ -2,9 +2,19 @@
  "version": "main",
  "modules": {
   "Layouts": {
-   "line": "The container of layout modules, walks each layout's coordinates to build the physical light set the mapping consumes.",
-   "image": "https://moonmodules.org/MoonLight/assets/light/Layouts.png",
-   "alt": "Layouts container",
+   "line": "The container defining the installation's physical light topology.",
+   "summary": "One `Layouts` describes the setup, and every layer in `Effects` renders into it. Children stitch into one flat physical address space, in registration order.",
+   "guide": [
+    {
+     "title": "Order and universes",
+     "text": "Disabling a layout removes its lights and the layouts after it shift down. Reordering by drag and drop shifts them too. Both move Art-Net universe assignments, so disable the driver to keep a mapping stable."
+    },
+    {
+     "title": "The status line",
+     "text": "It reports the total light count and the physical bounding box. A dense grid's count equals its box volume, so a smaller count signals a sparse layout."
+    }
+   ],
+   "image": "https://moonmodules.org/MoonLight/assets/core/Layouts.png",
    "role": "generic",
    "tags": "💫",
    "dim": 0,
@@ -12,31 +22,35 @@
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/layouts/Layouts.h"
   },
   "Effects": {
-   "line": "The container of layers, composites them (blend mode + opacity per layer) into the final light buffer.",
+   "line": "The container holding every rendering layer, which `Drivers` composites into one output.",
+   "summary": "Each layer renders independently into its own buffer, over the physical topology the shared `Layouts` describes.",
    "image": "https://moonmodules.org/MoonLight/assets/light/Effects.png",
-   "alt": "Effects container",
    "role": "generic",
    "dim": 0,
    "doc": "light/supporting.md#effects",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/layers/Effects.h"
   },
   "Layer": {
-   "line": "One rendering layer, an effect writes into its buffer, modifiers transform the coordinate mapping, and the layer composites onto the shared output.",
-   "summary": "The unit the render loop iterates.",
+   "line": "One rendering layer: a buffer, a mapping onto physical lights, and the effects that fill it.",
+   "summary": "Effects write the buffer, modifiers reshape it, and `Drivers` composites the stack of layers into one output.",
    "guide": [
     {
-     "title": "Layer, details",
-     "text": "**The buffer persists between frames**\n\nNothing clears the buffer per frame, which is the FastLED and WLED convention and the reason trails work at all. An effect can fade what is already there for a tail, or read prior pixels for a scroll or a Game of Life. Each effect owns its background: a full-grid effect overwrites every pixel, a trail effect fades and paints, and a sparse effect that wants a clean frame fills it first. The cold-path rebuild clears once, so a freshly added effect starts black.\n\n**A fade is a rate**\n\nAn effect asks for a fade per reference frame of a sixtieth of a second, and the layer scales it by the fraction of that frame the real frame covered. A trail is then the same length on a 470 fps device and a 140,000 fps desktop. The layer keeps the gentlest request across every fading effect. Several fading effects then cost one buffer pass, and none fades another's fresh pixels.\n\n**Compositing is the container's job**\n\n`blendMode` and `opacity` live on the layer but the layer never reads them: it cannot know its own position in the stack or what sits beneath it. The `Drivers` container reads both values plus the child order and does the compositing, bottom layer first. Keeping the values here means they travel with the layer through add, delete and reorder, instead of a separate list that drifts out of sync.\n\n**Two build paths**\n\nThe cold path folds the physical box through each enabled static modifier to get the logical box. It then builds the mapping with a counting-sort CSR: one pass counts destinations per cell, a prefix sum turns counts into offsets, and a second pass scatters. A dense grid in natural order with no modifier skips the table and takes an identity mapping, the frame-rate floor for the common case.\n\n**What the status line reports**\n\nThe status shows the logical box the effects render into, which can differ from the physical box on `Layouts`: a mirror modifier folds a 128 by 128 physical layout into a 64 by 64 logical one. The same slot carries a warning when a build cannot fit in memory, and a warning always wins over the neutral box line."
+     "title": "Trails and fades",
+     "text": "Nothing clears the buffer between frames, so an effect that fades what is already there leaves a trail. A fade is a rate, so a trail is the same length at any frame rate. Several fading effects cost one pass."
+    },
+    {
+     "title": "The status line",
+     "text": "The status shows the logical box the effects render into. A mirror modifier folds a 128 by 128 layout into a 64 by 64 box. A warning replaces it when the layer does not fit in memory."
     }
    ],
    "image": "https://moonmodules.org/MoonLight/assets/light/Layer.png",
-   "alt": "Layer container with a child effect",
    "controls": {
     "blendMode": {
-     "line": "How this layer combines with the ones below; a multiply layer is a mask over them."
+     "line": "How this layer combines with the layers below it.",
+     "more": "Multiply darkens what is beneath it, additive adds light, and alpha blends by opacity."
     },
     "opacity": {
-     "line": ""
+     "line": "How strongly this layer shows, from invisible to full."
     }
    },
    "role": "layer",
@@ -84,17 +98,23 @@
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/drivers/Drivers.h"
   },
   "FixtureProfilesModule": {
-   "line": "The named channel wirings drivers reference, which channel carries Red, Green, Blue, White, or a fixture role like Pan/Tilt.",
-   "summary": "Real fixtures ship read-only (the color orders, multi-channel pars, moving heads); add your own alongside them. A driver stores the profile's name, so reordering never breaks a reference; after a rename, a driver on the old name falls back to its default at the next boot, as [Drivers](https://moonmodules.org/MoonLight/moonmodules/light/drivers.html) describes.\n\nA row carries a name, a channel count, and one role picker per channel. Built-in rows are read-only, and custom rows persist across a reboot.",
+   "line": "The named channel wirings drivers reference: which channel carries Red, Green, Blue, White, or a fixture role such as Pan and Tilt.",
+   "summary": "Real fixtures ship read-only, the color orders, multi-channel pars and moving heads. Add your own alongside them. A driver saves its profile by name, so a rename sends it back to its default at the next boot.",
    "guide": [
     {
-     "title": "FixtureProfiles, details",
-     "text": "**16-bit channels**\n\nA fine role is the low byte of a 16-bit channel, the DMX convention: `R fine`, `G fine`, `B fine`, `W fine`, `WW fine`, `Pan fine`, `Tilt fine` and `Dimmer fine`.\n`RGB 16-bit`, `GRB 16-bit` and `RGBW 16-bit` ship built in, and a custom row places fine roles in any order a fixture needs.\n\nThe effects stay 8-bit, and the brightness and curve go to 16 bits on the way out, so a fade keeps all 256 steps at any brightness.\nThat takes a 512-byte table per driver; when it cannot be allocated the channel stays 8-bit, with a fine byte of 0.\nPan and tilt widen by repeating their byte, so a full 8-bit aim reaches the fixture's full 16-bit range.\nA master dimmer is held wide open on both bytes.\n\n**Which profile a chip takes**\n\nA WS2811 orders its colors as the strip or puck maker wired it, so try `RGB`, then the other five orders.\nThe TM1814 and TM1914 send a settings preamble on an inverted line before the pixels, which a profile cannot describe."
+     "title": "16-bit channels",
+     "text": "A fine role is the low byte of a 16-bit channel, the DMX convention. `RGB 16-bit`, `GRB 16-bit` and `RGBW 16-bit` ship built in. Effects stay 8-bit, and brightness and curve go to 16 bits on output. Pan and tilt widen by repeating their byte, and a master dimmer is held wide open."
+    },
+    {
+     "title": "Which profile a chip takes",
+     "text": "| Chip | Profile |\n|---|---|\n| WS2812B, WS2813, WS2815 | `GRB` |\n| SK6812 RGBW | `GRBW` |\n| WS2814 | `WRGB` |\n| WS2816 | `GRB 16-bit` |\n| UCS8903 | `RGB 16-bit` |\n| UCS8904 | `RGBW 16-bit` |\n\nA WS2811 orders its colors as its maker wired it, so try `RGB`, then the other five orders. The TM1814 and TM1914 need a settings preamble that a profile cannot describe."
     }
    ],
+   "image": "https://moonmodules.org/MoonLight/assets/light/drivers/fixtureprofiles.png",
    "controls": {
     "profiles": {
-     "line": "The editable list of profile definitions, one row per profile."
+     "line": "The editable list of profile rows.",
+     "more": "A row carries a name, a channel count and one role picker per channel. Built-in rows are read-only, and custom rows persist across a reboot."
     }
    },
    "role": "generic",
@@ -3442,80 +3462,99 @@
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/drivers/ParallelLedDriver.h"
   },
   "HttpServerModule": {
-   "line": "The embedded HTTP server and WebSocket: it serves the web UI and the REST API behind it. the-rest-api what-it-is-allowed-to-include",
+   "line": "The embedded HTTP server and WebSocket: it serves the web UI and the REST API behind it.",
+   "summary": "The routes are in The REST API, and the layering in What it is allowed to include.",
+   "attribution": "[Moustachauve](https://github.com/Moustachauve)",
+   "image": "https://moonmodules.org/MoonLight/assets/core/HttpServerModule.png",
+   "controls": {
+    "port": {
+     "line": "The port the server listens on.",
+     "more": "8080 on the desktop and 80 on a device. A change applies when the server next opens: why."
+    }
+   },
    "role": "generic",
    "dim": 0,
-   "doc": "core/system.md",
+   "doc": "core/system.md#httpserver",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/core/system/HttpServerModule.h"
   },
   "SystemModule": {
-   "line": "The device's identity and vitals: name (behind mDNS `<name>.local`, the SoftAP SSID, the DHCP hostname), uptime, heap and the tick it renders at.",
-   "summary": "Its fixed children (Tasks, the I2C bus, Pins) hang beneath it.\n\nread-only rate: `uptime`, `fps`, `tickTimeUs`.\n\nread-only memory: `heap`, `psram`, `maxBlock`, `flash`; `psramType` and `flashMode` in expert mode.\n\nread-only identity: `mac`, `chip`, `cpu`, `sdk`, `bootReason`.\n\n**Safe mode.** Two failed boots in a row start the next boot with the LEDs off, no MoonLive script and at most 1,024 lights. A failed boot is a crash, a brownout, or a power loss within a minute of starting. Every boot raises the lights over five seconds.",
+   "line": "The device's identity and vitals: its name, how long it has run, and the memory and tick it renders at.",
+   "summary": "The name is the one the network sees, behind mDNS `<name>.local`, the access point SSID and the DHCP hostname. The readings are in More info.",
+   "guide": [
+    {
+     "title": "Safe mode",
+     "text": "Two failed boots in a row start the next boot with the LEDs off, no MoonLive script and at most 1,024 lights. A failed boot is a crash, a brownout, or a power loss within a minute of starting. Every boot raises the lights over five seconds."
+    }
+   ],
    "image": "https://moonmodules.org/MoonLight/assets/core/SystemModule.png",
-   "alt": "System module controls",
    "controls": {
     "deviceName": {
-     "line": "The identity behind mDNS, the SoftAP SSID and the DHCP hostname."
+     "line": "The name behind mDNS, the access point and DHCP.",
+     "more": "Anything but letters, digits and hyphens is coerced to a valid hostname, and a rename reaches the network within a tick."
     },
     "deviceModel": {
-     "line": "The board model (drives the installer catalog entry)."
+     "line": "The board model, which selects the installer's catalog entry.",
+     "more": "Tooling sets it, since a device cannot identify its own hardware."
     },
     "firmware": {
-     "line": ""
+     "line": "The build variant, kept for the MoonBase recovery image to read."
     },
     "uptime": {
-     "line": ""
+     "line": "Time since boot."
     },
     "fps": {
-     "line": ""
+     "line": "Frames rendered per second."
     },
     "tickTimeUs": {
-     "line": ""
+     "line": "Microseconds one tick takes."
     },
     "heap": {
-     "line": ""
+     "line": "Internal heap in use."
     },
     "psram": {
-     "line": ""
+     "line": "PSRAM in use."
     },
     "psramType": {
-     "line": ""
+     "line": "The PSRAM interface and clock."
     },
     "maxBlock": {
-     "line": ""
+     "line": "The largest free internal block, which bounds one allocation."
     },
     "flash": {
-     "line": ""
+     "line": "The flash chip size."
     },
     "flashMode": {
-     "line": ""
+     "line": "How the chip reads its flash, such as QIO or DIO."
     },
     "mac": {
-     "line": ""
+     "line": "The hardware address, which tooling identifies the device by."
     },
     "chip": {
-     "line": ""
+     "line": "The chip model."
     },
     "cpu": {
-     "line": ""
+     "line": "The clock and core count."
     },
     "sdk": {
-     "line": ""
+     "line": "The SDK version the firmware is built on."
     },
     "bootReason": {
-     "line": ""
+     "line": "Why the device last restarted."
     },
     "mode": {
-     "line": "How much of the UI is shown, `user`, `expert` (🎚️) or `developer` (🔧), cumulative."
+     "line": "How much of the UI is shown, cumulative.",
+     "more": "User shows the essentials, expert adds the 🎚️ controls, developer the 🔧 ones. Only the UI reads it."
     },
     "factory reset": {
-     "line": "Back to freshly installed, scripts kept."
+     "line": "Delete every setting and preset and restart as freshly installed.",
+     "more": "Press twice to confirm. Scripts and other files stay."
     },
     "logLevel": {
-     "line": "Serial verbosity, defaulting to Warn. The first 60 s always logs at Info."
+     "line": "Serial log verbosity.",
+     "more": "Warn by default. The first 60 seconds always log at Info, which is when the installer reads the IP."
     },
     "wifiCoproc": {
-     "line": ""
+     "line": "The firmware version of the separate WiFi chip."
     }
    },
    "role": "generic",
@@ -3525,34 +3564,46 @@
    "tests": "https://github.com/MoonModules/MoonLight/blob/main/test/unit/core/unit_SystemModule.cpp"
   },
   "ControlModule": {
-   "line": "A grid of preset pads, a row of rotary encoders above them, a row of on/off switches above those, and a bank of faders below, the layout of a Mackie-style control desk ([X-Touch](https://www.behringer.com/product.html?modelCode=0808-AAF), [QCon Pro G2](https://www.iconproaudio.com/product/qcon-pro-g2/)), so a physical surface maps onto it without a translation layer.",
-   "summary": "automap: from the second slot on, an unassigned slot drives the effect enabled last.",
+   "line": "A control desk of switches, encoders, faders and preset pads that puts the device into a named state.",
+   "summary": "Eight switches, encoders and faders sit above 64 preset pads, laid out like a Mackie-style desk (X-Touch, QCon Pro G2), so a physical surface maps onto it.",
    "guide": [
     {
-     "title": "Control, details",
-     "text": "A control is one named, typed value on a module, declared once in `defineControls()` and reachable by name from every surface: the web UI, the REST interface, a preset file, a script, a physical desk. The type decides how it renders, what it accepts, and how it persists, so a module never writes UI code and never parses its own JSON.\n\n[`Control.h`](https://moonmodules.org/MoonLight/moonmodules/core/moxygen/Control.html) owns the type and its operations. The discriminator sits with the functions that interpret it, so adding a type is one enum entry plus the cases the compiler then demands, rather than a search for every `switch` in the tree.\n\nDetail: [technical](https://moonmodules.org/MoonLight/moonmodules/core/moxygen/Control.html)\n\n**The module tree**\n\nEvery module is the same building block, whatever it does: [`MoonModule`](https://moonmodules.org/MoonLight/moonmodules/core/moxygen/MoonModule.html) declares the lifecycle, and [`Scheduler`](https://moonmodules.org/MoonLight/moonmodules/core/moxygen/Scheduler.html) owns the top-level modules, boots them in phases, and drives every tick. A module is a node in a tree, so a driver, a layer and an effect nest the same way and the same walk serves all of them.\n\n[`ModuleFactory`](https://moonmodules.org/MoonLight/moonmodules/core/moxygen/ModuleFactory.html) turns a type name into an instance, which is what lets a preset file name a module this build has never instantiated.\n\nDetail: [technical](https://moonmodules.org/MoonLight/moonmodules/core/moxygen/MoonModule.html) · [Scheduler](https://moonmodules.org/MoonLight/moonmodules/core/moxygen/Scheduler.html) · [ModuleFactory](https://moonmodules.org/MoonLight/moonmodules/core/moxygen/ModuleFactory.html)\n\n**Surfaces and mappings**\n\n[`ControlSurface`](https://moonmodules.org/MoonLight/moonmodules/core/moxygen/ControlSurface.html) is the desk layout itself: which bank a control belongs to, and how a physical encoder or fader finds the value it drives.\n\n[`InputMapping`](https://moonmodules.org/MoonLight/moonmodules/core/moxygen/InputMapping.html) is the binding table behind it. A row says what an input does to a control: set it, step it, toggle it. A delta steps down as well as up, so one encoder covers a range without a second control to reverse it.\n\nDetail: [technical](https://moonmodules.org/MoonLight/moonmodules/core/moxygen/ControlSurface.html) · [InputMapping](https://moonmodules.org/MoonLight/moonmodules/core/moxygen/InputMapping.html)\n\n**Presets**\n\nA preset is a file: `/.config/presets/<name>.json`. Saving writes one, applying reads one, deleting removes one. Nothing else holds preset state, so there is no second copy to keep in step: the list is read from the folder at startup rather than persisted alongside it. After that a save, rename or delete re-reads its one file, and so does a file the file API writes or removes, which every module hears about, so a preset written through the File Manager or the gallery appears on its own. One file at a time matters on an ESP32, where walking the folder costs about 15 ms per preset and reading one about 60 ms.\n\nThe name becomes the file name, so it is restricted to printable ASCII without `/`, `\\` or `.`, a validator on the control, which every write path runs. The file's `$slot` records which pad the preset occupies, so a surface arranged to match a physical desk survives a reboot. The save form (`name`, `slot`, `source`) is input for the next save rather than configuration, so none of it is written to flash.\n\n**What a preset holds**\n\nA preset is a [state document](https://moonmodules.org/MoonLight/reference/integrating.html#setting-everything-at-once), the one `PATCH /api/state` applies, plus its `$slot`, a root `$` key the engine reads as the file's own:\n\nA save writes the `source` module through the same writer `GET /api/modules/<name>/document` uses, rooted at the top level. The pad editor names one of the four containers, which captures it whole: *a look*, *a geometry*, *a hardware setup* or *a service configuration*. A card's `{ }` button saves that card alone, which applied puts back that card and leaves its siblings. A hand-written or gallery preset may hold less, such as `{\"Drivers\":{\"palette\":\"Ocean\"}}`.\n\nAn `Effects` preset is a look and applies to a board with completely different hardware; a `Drivers` preset with pins is device-specific. A secret stays out of a document, so a preset never carries a password.\n\nA preset that fails names the first failure and where it is, and what came before it stays applied. A preset in the flat format older builds wrote is listed but not applied, and a backup and restore converts it. A malformed file leaves the live tree untouched.\n\n**One active preset per container**\n\nThe four containers are the **roles**: layout, effects, driver, service. A preset holds the roles of the containers it sets and leaves the others alone, so a layout preset and a look can be active at the same time, and a palette preset holds the driver pad beside a running look.\n\nA pad is tinted by its role: layout blue, effects violet, driver green, service amber.\n\n**Applying is a rebuild**\n\nA saved container carries `\"$patch\": \"replace\"`, so applying it creates, replaces and destroys modules to match: a preset carrying more than the device has adds it, and one describing less removes what it omits. Every removal runs before any creation, so a module can move between layers under its own name.\n\nStructural mutation quiesces the render worker, and mutations run inline on the render tick, so a large restore stalls rendering for its duration. `prepareTree()` runs once at the end. Presets are a cold-path feature; the tick path is untouched.\n\n**The gallery**\n\nUnder the pads, the gallery lists [MoonLight-Gallery](https://github.com/MoonModules/MoonLight-Gallery)'s `index.json`, most liked first. The browser fetches it from `raw.githubusercontent.com`, so the device needs no internet of its own. A preset installs onto the first free pad, or applies once through `PATCH /api/state`, and either way brings the scripts it names that the device lacks: the gallery's copy, else the one the firmware ships. A script installs into `/moonlive`. A look, a palette, or a look with its palette applies at once; a preset that also sets pins or geometry asks first, since those belong to the author's rig.\n\n**Home Assistant**\n\nLooks reach Home Assistant two ways, and only `Effects` presets travel either of them.\n\n**The WLED integration** (`/presets.json`) is the native path: HA renders looks in its own preset dropdown, shows which one is applied, and applies one when it is chosen. This is what HA calls a preset.\n\n**MQTT discovery** publishes the same looks as the light entity's **effect list**. HA has no preset concept over MQTT, so they arrive as effects, the same result from the user's side, reached through a different mechanism.\n\nHA caches the preset list and re-fetches only when the device's `info.fs.pmt` value changes, so the device reports a revision counter there that bumps on every preset save, rename and delete, a counter rather than a timestamp, so two changes inside one second still read as two. A constant there leaves HA showing the list it read at setup forever; over MQTT the same revision re-announces the effect list mid-session.\n\nOnly looks are exposed, on both paths. A `Drivers` or `Layouts` preset rewires pins or geometry, which must not be reachable from something that believes it is choosing a color scheme, the restriction is enforced at the apply entry point, not merely by omitting them from the list.\n\nHome Assistant's WLED integration connects on **port 80 only**: its host field rejects a port, so a desktop build (which defaults to 8080) needs `--port 80`, and that needs root:\n\nThe discovery buffers are sized to the looks this device actually has, and grow or shrink as presets are added and removed. There is no cap on the number: a fixed one would either reserve memory a small setup never uses, or silently publish nothing once the list outgrew it."
+     "title": "The surface",
+     "text": "Each switch, encoder and fader drives any control you assign; right-click an encoder to see its binding. The first switch drives the master on/off and the first fader the global brightness.\n\nFrom the second slot on, an unassigned slot follows the effect enabled last."
+    },
+    {
+     "title": "Presets",
+     "text": "Click a pad to apply its preset, drag to rearrange. A pad is tinted by its role: layout blue, effects violet, driver green, service amber. [The how-to](https://moonmodules.org/MoonLight/how-to/presets.html) has the rest."
+    },
+    {
+     "title": "Home Assistant",
+     "text": "Only effects presets reach Home Assistant, so a hub never rewires pins or geometry. [The how-to](https://moonmodules.org/MoonLight/how-to/home-automation.html#presets-in-home-assistant) has the setup."
     }
    ],
    "image": "https://moonmodules.org/MoonLight/assets/core/ControlModule.png",
-   "alt": "Control module surface: encoders, preset pads, faders",
    "controls": {
     "display": {
-     "line": ""
+     "line": "The strip above the desk: what the surface last touched, in words.",
+     "more": "Five seconds after a touch it shows MoonLight, and five more the device's name."
     },
     "presets": {
-     "line": "One pad per preset file. Click applies, right-click names, drag rearranges."
+     "line": "One pad per preset file. Click applies, right-click names, drag rearranges.",
+     "more": "Right-click a pad to rename it, delete it or save over it. A pad is a position: slot 14 stays slot 14."
     },
     "name": {
-     "line": ""
+     "line": "The name the next save gives its preset.",
+     "more": "Printable characters, up to 31, without slash, backslash or dot: it becomes the file name."
     },
     "slot": {
-     "line": ""
+     "line": "The pad the next save lands on.",
+     "more": "Unset, a save takes the pad its preset already holds, else the first free pad."
     },
     "source": {
-     "line": ""
+     "line": "The module the next save writes, by name.",
+     "more": "A container from the pad editor, or any card from its own save button."
     },
     "save": {
-     "line": ""
+     "line": "Saves the source module as the named preset."
     }
    },
    "role": "generic",
@@ -3562,89 +3613,100 @@
    "tests": "https://github.com/MoonModules/MoonLight/blob/main/test/unit/core/unit_ControlModule.cpp"
   },
   "Services": {
-   "line": "The top-level container for the user-added Service modules, added and removed at runtime.",
-   "summary": "The core twin of the light domain's containers, holding children of one role.\nSo the generic add, replace, delete and persistence machinery applies unchanged.\nFixed infrastructure lives under System, so this is exactly the mutable half of that split.\nA pure grouping node with no controls and no state, whose one job is to say what it accepts.",
+   "line": "The container for the user-added Service modules, the capability bridges a device provides or consumes.",
+   "summary": "A service is added and removed at runtime, the core twin of the light domain's Effects and Drivers. Fixed device infrastructure, such as identity and network, lives under System.",
    "image": "https://moonmodules.org/MoonLight/assets/core/Services.png",
    "role": "generic",
    "dim": 0,
-   "doc": "core/services.md#services",
+   "doc": "core/services.md",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/core/services/Services.h",
    "tests": "https://github.com/MoonModules/MoonLight/blob/main/test/unit/core/unit_Services.cpp"
   },
   "AudioService": {
-   "line": "A user-added Service: the audio source the audio-reactive effects consume.",
-   "summary": "`mode` is its identity, and each mode shows only its own controls. Wire, modes and loopback: ⌄ details.\n\nread-only: `level` (RMS), `peakHz` (the audio driving effects, from any source).",
+   "line": "The audio source the audio-reactive effects read: a level, sixteen bands and the peak.",
+   "summary": "Local analyzes a microphone, line-in or capture device here. Receive network follows a peer's WLED-compatible audio, and Simulate synthesizes a song for demos. A local source can send its analysis on to other devices.",
+   "attribution": "[softhack007](https://github.com/softhack007), [troyhacks](https://github.com/troyhacks), [wladi](https://shop.myhome-control.de)",
    "guide": [
     {
-     "title": "Audio, details",
-     "text": "**Microphone wiring**\n\n`I2S` suits a three-wire part, the INMP441 and most MEMS mics, and line-in ADCs. `PDM` suits a two-wire one, a clock and a data line, as on the QuinLED Dig-Next-2's onboard microphone: it uses `wsPin` as its clock and `sdPin` as its data, and hides the two clock pins it does not have.\n\n**Setting the levels**\n\n`automatic` measures each band's own floor and typical loudest level and maps that range onto the window, which is what makes a treble band read level with a bass one. The choice picks which controls are shown, so the mode is one decision rather than four interacting sliders.\n\n`floor` is the silence threshold in both modes, and its second half matters as much as its first: a learner that studies an empty room maps its noise floor onto the whole display and shows silence at full scale. Raise it until a quiet room reads still. It depends on the part and the room, so it is the knob to reach for first.\n\n`gain` sizes the band window directly and scales the level's own, which is wider because a block RMS covers more dB than a single bin's peak. The default suits a quiet MEMS mic, so turn it down hard for a loopback device or everything clips.\n\n**The three modes**\n\nLocal runs an input of its own, a microphone or line-in on a device and a capture device on desktop, and analyzes it locally. Receive network is a pure sink a peer's WLED-compatible audio drives. Simulate is a synthesized source for demos and tests. On ESP32 targets Local idles until real GPIOs are entered; on desktop it captures the picked device right away. A desktop in Local mode with `send audio` on is an audio-sync source: one machine's microphone or loopback drives a whole fleet of devices in Receive mode. The Receive mode and every network-sync control exist only on a network-capable build.\n\n**Capturing what the machine plays (loopback), per OS**\n\nmacOS has no native loopback: install [BlackHole](https://existential.audio/blackhole/), create a **Multi-Output Device** in Audio MIDI Setup (your speakers first plus BlackHole, with drift correction on BlackHole) and set it as the system output; the speakers keep playing while an identical copy lands in BlackHole, which this control captures. The Mac's volume keys go dead on a multi-output device, so set volume in the player. Windows usually needs nothing: enable **Stereo Mix** in the Recording tab and pick it here (VB-Cable is the fallback where a driver lacks it). Linux PulseAudio and PipeWire expose a **Monitor of <output>** source natively.\n\n**WLED audio sync: what is on the wire**\n\nSending and receiving both use the **multicast address 239.0.0.1**, which is what WLED's own usermod does (`beginMulticast` on both ends). On a network that does not carry multicast, receive still hears unicast, and the status says `listening, unicast only`. A receiver that hears nothing for 3 seconds joins the group again, which repairs a router that forgets members: [multicast and IGMP snooping](https://moonmodules.org/MoonLight/explanation/architecture/moonlight.html#multicast-and-igmp-snooping). It never uses broadcast, so a broadcast sender is inaudible to WLED and a receiver that only binds the port never hears WLED. This is a network-layer address, unrelated to any device grouping.\n\n**Port 11988 is the WLED contract**, and `syncPort` defaults to it. The port is configurable for\nMoonLight peers that want a private stream, but a custom port is not WLED-compatible: the endpoint WLED speaks is 239.0.0.1:11988 specifically.\n\nMulticast is also the better neighbor, with a caveat worth knowing: a switch or access point that does **IGMP snooping** forwards the group only to the ports that joined it, so the other hosts never see the traffic at all. Without snooping the switch floods it exactly like broadcast, and on WiFi it goes out at the lowest basic rate to every station. So multicast can reduce how many hosts have to process ~40 packets a second, but it does not guarantee it. See [multicast and IGMP snooping](https://moonmodules.org/MoonLight/explanation/architecture/moonlight.html#multicast-and-igmp-snooping).\n\nThe 44-byte v2 packet is byte-compatible with WLED, with one field that is not equivalent:\n\n**The magnitude scale differs, so it is converted at the wire.** WLED sends the raw magnitude of\nits FFT's dominant bin, scaled so that \"the end result is linear and ~4096 max\" (its own comment where it divides the input samples by 16). Its effects then divide that by 4, 8 or 16 depending on the effect and treat the result as a byte, which is why their thresholds read `< 48` squelch and `> 144` full brightness. MoonLight byte-scales the peak magnitude to 0..255 instead, through the same noise floor and gain conditioning as the 16 bands, so one pair of knobs governs the whole spectrum.\n\nMoonLight keeps its own units internally and multiplies by 16 on send, dividing by 16 on receive.\nThe factor is exact rather than a fudge: it is the divisor WLED's effects apply, so our full-scale 255 arrives as 4080, right on WLED's own ~4096 design target, and every effect's thresholds land where they were tuned to. Adopting WLED's range internally was the alternative, and was rejected because that range is an artifact of FFT size and input scaling rather than a specification (WLED's own fallback path admits \"no idea if 10000 is a good value\"), and importing it would cost the property that one floor/gain pair conditions every value the service publishes, in exchange for resolution the receiving effects discard anyway when they divide back down to a byte.\n\nA received magnitude is clamped to 255, since a real WLED source reaches ~9500 and an unclamped value would drive effects harder than locally analyzed audio ever could.\n\nPrior art: the WLED-MM audio-reactive usermod by **Frank ([@softhack007](https://github.com/softhack007))**, the most-used open-source audio-reactive LED implementation, whose adaptive noise-gate concept the analysis here descends from (analyzed with his permission); and **[@troyhacks](https://github.com/troyhacks/WLED)**, who reworked that DSP onto Espressif's [esp-dsp](https://github.com/espressif/esp-dsp) FFT, the same choice this service makes. The line-in path exists because **wladi ([myhome-control](https://shop.myhome-control.de))** supplied the hardware and pinout for the [MHC-WLED ESP32-P4 shield](https://moonmodules.org/MoonLight/reference/hardware/mhc-wled-esp32-p4-shield.html): its onboard PCM1808 I2S ADC is what `mclkPin` is for."
+     "title": "Choosing a source",
+     "text": "Simulate needs nothing. Receive network needs a WLED-compatible sender. Local idles on an ESP32 until real GPIOs are entered, and captures the picked device at once on desktop."
+    },
+    {
+     "title": "Wiring and capture",
+     "text": "Microphone wiring, setting the levels and capturing what a machine plays are in [the how-to](https://moonmodules.org/MoonLight/how-to/audio-input.html)."
     }
    ],
    "image": "https://moonmodules.org/MoonLight/assets/core/AudioService.png",
-   "alt": "Audio module controls",
    "controls": {
     "mode": {
-     "line": "Local audio, Receive network or Simulate, each showing only its own controls below."
+     "line": "The source: a synthesized signal, the network, or its own input."
     },
     "micMode": {
-     "line": "(Local, I²S targets) `I2S` for a three-wire part, `PDM` for a two-wire one."
+     "line": "Which kind of microphone is wired, I2S or two-wire PDM.",
+     "more": "PDM uses `wsPin` as its clock and `sdPin` as its data, as the QuinLED Dig-Next-2's onboard mic does."
     },
     "sckPin": {
-     "line": "(Local, I²S targets) the bus GPIOs, unset until entered."
+     "line": "The bit clock GPIO, unset until entered."
     },
     "wsPin": {
-     "line": "(Local, I²S targets) the bus GPIOs, unset until entered."
+     "line": "The word select GPIO, or the clock of a PDM mic."
     },
     "sdPin": {
-     "line": "(Local, I²S targets) the bus GPIOs, unset until entered."
+     "line": "The data GPIO, unset until entered."
     },
     "mclkPin": {
-     "line": "(Local, I²S targets) the master clock an ADC or codec needs; unset for a plain mic."
+     "line": "The master clock an ADC or codec needs, unset for a plain mic."
     },
     "codec": {
-     "line": "(Local, I²S targets) `ES8311` or `ES7210` in front of the mic, else `none`."
+     "line": "The codec in front of the microphone, `none` for a part that speaks I2S itself."
     },
     "codecAddr": {
-     "line": "Its [I2C](https://moonmodules.org/MoonLight/moonmodules/core/system.html#i2c-bus) address: `0x18` (ES8311), `0x40` to `0x43` (ES7210)."
+     "line": "The codec's 7-bit address on the board's I2C bus.",
+     "more": "0x18 for an ES8311, 0x40 to 0x43 for an ES7210 by its strapping. The bus is [I2cBus](https://moonmodules.org/MoonLight/moonmodules/core/system.html#i2c-bus)."
     },
     "device": {
-     "line": "(Local, desktop) the OS capture input, `default` following the system setting."
+     "line": "The capture input, `default` following the system setting."
     },
     "sampleRate": {
-     "line": "(Local) mic/ADC sample rate."
+     "line": "The mic or ADC sample rate."
     },
     "levels": {
-     "line": "(Local) who sets the display window: `manual`'s two sliders, or `automatic`, a learner."
+     "line": "Who sets the display window: the two sliders, or the learner.",
+     "more": "Automatic maps each band's own range onto the window, so treble reads level with bass."
     },
     "floor": {
-     "line": "(Local) the **silence threshold**: below it a band reads zero, and the learner ignores it."
+     "line": "The silence threshold: below it a band reads as nothing.",
+     "more": "Raise it until a quiet room reads still, or the learner maps the room's noise onto the whole display."
     },
     "gain": {
-     "line": "(Local, manual) the width of the display window: higher is narrower, so it runs hotter."
+     "line": "The window's width, a higher value running the display hotter.",
+     "more": "The default suits a quiet MEMS mic, so turn it down hard for a loopback device or everything clips."
     },
     "send audio": {
-     "line": "(Local, network build) send the local analysis as audio-sync packets."
+     "line": "Send the local analysis as audio-sync packets."
     },
     "addressing": {
-     "line": "(sending) `multicast`, which WLED hears, or `unicast` to `hosts`, faster on WiFi."
+     "line": "How the analysis travels: multicast, which WLED hears, or unicast.",
+     "more": "Unicast to `hosts` reaches a few MoonLight boards faster on WiFi, which retries it."
     },
     "hosts": {
-     "line": "(unicast) the devices that follow this audio, addresses or names."
+     "line": "The boards a unicast send reaches, addresses or names."
     },
     "simulate": {
-     "line": "(Simulate) the pattern: `music`, a plausible song, or `sweep`, a test march."
+     "line": "The pattern: a plausible song, or a test march."
     },
     "syncPort": {
-     "line": "(network build) the UDP port; `sync status` reports the state."
+     "line": "The UDP port both directions use, matching on both ends.",
+     "more": "WLED listens on 11988, so another port is not WLED-compatible."
     },
     "level RMS": {
-     "line": ""
+     "line": "The level of the audio driving the effects, from any source."
     },
     "onsets": {
-     "line": ""
+     "line": "The beats heard per second and their spectral flux."
     },
     "peakHz": {
-     "line": ""
+     "line": "The dominant frequency of the audio driving the effects."
     }
    },
    "role": "service",
@@ -3654,19 +3716,19 @@
    "tests": "https://github.com/MoonModules/MoonLight/blob/main/test/unit/light/unit_AudioService.cpp"
   },
   "PictureService": {
-   "line": "A user-added Service: the picture the [Picture effect](https://moonmodules.org/MoonLight/moonmodules/light/effects.html#picture) samples onto the lights.",
-   "summary": "One is active at a time, as with Audio.",
+   "line": "The picture the Picture effect samples onto the lights, from one source at a time.",
+   "summary": "One picture service is active at a time, as with Audio, and any number of effects read its picture.",
    "image": "https://moonmodules.org/MoonLight/assets/core/PictureService.png",
-   "alt": "Picture module controls",
    "controls": {
     "source": {
-     "line": "`test pattern`, a test card in the layout of Philips' PM5544, at any size."
+     "line": "Where the picture comes from.",
+     "more": "The test pattern is a test card in the layout of Philips' PM5544, drawn at any size."
     },
     "width": {
-     "line": "The picture in pixels."
+     "line": "The picture's width in pixels."
     },
     "height": {
-     "line": "The picture in pixels."
+     "line": "The picture's height in pixels."
     }
    },
    "role": "service",
@@ -3675,63 +3737,76 @@
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/core/services/PictureService.h",
    "tests": "https://github.com/MoonModules/MoonLight/blob/main/test/unit/core/unit_PictureService.cpp"
   },
-  "OscModule": {
-   "line": "Receives [OSC](https://opensoundcontrol.stanford.edu/) over UDP and writes it onto this device's controls, so a fader in Resolume, TouchDesigner or TouchOSC drives MoonLight directly.",
-   "summary": "It owns no surface of its own: everything lands in the same control writes the HTTP API and the UI use, so every validator still runs. Addresses, feedback and setup: ⌄ details.",
+  "OscService": {
+   "line": "Receives OSC over the network and writes it onto this device's controls, so a fader in Resolume, TouchDesigner or TouchOSC drives MoonLight.",
+   "summary": "A surface addresses the surface: the faders, encoders and switches the control module owns, which decides what each one drives. Everything lands in the same control writes the API and the UI use, so every validator still runs.",
    "guide": [
     {
-     "title": "OSC, details",
-     "text": "**Feedback: the device answers.** With `feedback` on, a control that changes anywhere (the web UI, a preset recall, an audio-reactive effect) is mirrored back to the surface, which is what keeps a client honest and what moves a motorized fader. `addressing` picks where it goes: `unicast` to each of `hosts`, addresses or names, or to whoever last wrote when `hosts` is empty; `multicast` to `group`, which every listening device with the same `group` joins; the default, `239.255.77.78`, sits beside discovery's own group, so multicast works with nothing to fill in, and a second rig on the same network picks another. `feedbackPort` is where that client LISTENS, which is not the port we listen on (Open Stage Control calls its own `osc-port`).\n\nA client learns the current state three ways: when it first writes to us from a new address, when its address changes, and whenever it sends **`/mm/hello`**. The last one exists because a client restarting on the SAME address is invisible to the other two, and most controllers send nothing of their own on load, so every widget would show its layout file's defaults until the user moved one.\nThe shipped session has a `sync from device` button for exactly this.\nEvery value also goes out again every 30 seconds, one every 20 ms, so a datagram lost on WiFi, or a client that rebooted, is repaired within that time.\nA pad's state goes out as an int on `/mm/padstate/N`: 0 for an empty pad, 1 for a stored preset, 2 for the one applied. It has its own address, so a board listening to this one's feedback never reads a state as a press.\nA value is never sent back to the host it came from, so two boards feeding each other cannot echo it between them.\n\n**Devices following one device.** A device with `listen` on, on the leader's `feedbackPort`, takes every value the leader sends and its assignments carry each to its own controls. A desk at the side of a room reaches the installation through a device that [shares it](https://moonmodules.org/MoonLight/moonmodules/core/services.html#midi-details) instead, since a desk belongs on the device it drives.\n\n**Setting one up**, from installing the app to using it from a phone, is its own page: [Connecting a control surface](https://moonmodules.org/MoonLight/how-to/control-surface.html). It needs no checkout and no tooling: the app and the session file from the latest release do.\n\n**Addresses.** These are a public contract: a TouchOSC layout built against them keeps working, so they stay small and boring.\n\nBoth argument forms are accepted because controllers disagree: apps send a float in 0..1, hardware bridges send an int in the target's range. Out-of-range values are clamped rather than ignored, so a controller sending 0..127 does something sensible instead of appearing dead.\n\nSend one from the bench with `uv run moondeck/check/send_osc.py <ip> /mm/fader/1 0.75`.\n\nOrigin: MoonLight original\n\n**One command to a working surface** (with the repo checked out). Install\n[Open Stage Control](https://openstagecontrol.ammd.net/) (free, macOS / Windows / Linux), then:\n\nOpen **http://127.0.0.1:8088** and the surface is there. On the device, turn `listen` and `feedback` on; nothing else needs configuring, because the launcher passes the session, the send address and the listen port as arguments rather than leaving them to be typed into a settings panel. The session itself sends `/mm/hello` when the page loads, so every widget shows the device's real values straight away instead of its layout file's defaults, and a browser refresh re-reads them.\n\nIt runs **headless**: a web server rather than a desktop window. That is deliberate. The surface is then reachable from a phone or another laptop on the same network (the launcher prints those URLs), and on macOS it sidesteps the quarantine dialog an unsigned download otherwise raises.\n\nThe launcher looks on PATH first, then in each platform's default install location. **Windows and Linux are untested**: the paths are the ones those installers use, but only macOS has been run. If it cannot find the app, `--app` takes the full path and that always works.\n\n**A ready-made control surface.** A session of the switches, encoders and faders ships as a release\nasset (`MoonLight-control-surface.json`) and lives in the repo at [`docs/reference/examples/open-stage-control.json`](https://moonmodules.org/MoonLight/reference/examples/open-stage-control.json).\nEditing the layout needs `read-only` off in the launcher.\n\n<img src=\"https://moonmodules.org/MoonLight/assets/core/OscModule-open-stage-control.png\" width=\"600\" alt=\"The shipped Open Stage Control session beside MoonLight's own Control card: eight switches, eight encoders and eight faders in both\">\n\nDriving the device from that session, beside the Control card it mirrors.\n\nIt binds only to `/mm/switch/N`, `/mm/encoder/N` and `/mm/fader/N`, N being 1 to 8, and to `/mm/pad/N` and `/mm/padstate/N`, N being 1 to 64, on purpose. A surface addresses the SURFACE, and [Control](https://moonmodules.org/MoonLight/moonmodules/core/system.html#control) decides what each one drives, so one layout keeps working as assignments change and a hardware desk lands on the same bindings. By default `switch1` drives `Drivers.on` and `fader1` drives `Drivers.brightness`; the Control card assigns the rest.\n\nThe session also carries a **pad grid** of the 64 preset pads, with a light per pad below it showing which hold a preset and which is applied.\n\n**A Mackie desk reaches the surface through the [MIDI service](https://moonmodules.org/MoonLight/moonmodules/core/services.html#midi)**, since the X-Touch and QCon Pro G2 speak Mackie Control over MIDI rather than OSC."
+     "title": "Getting a surface working",
+     "text": "Turn on listening, and on feedback so the faders follow the device. A phone or tablet needs a free app and one session file.\n\n[The how-to](https://moonmodules.org/MoonLight/how-to/control-surface.html#a-phone-or-tablet-over-osc) has the steps."
+    },
+    {
+     "title": "The addresses",
+     "text": "The addresses are a public contract, so a layout built on them keeps working. Send `/mm/hello` and the device sends every value again. [The how-to](https://moonmodules.org/MoonLight/how-to/control-surface.html#the-osc-addresses) lists them."
     }
    ],
-   "image": "https://moonmodules.org/MoonLight/assets/core/OscModule.png",
-   "alt": "OSC module controls: listen, port, status",
+   "image": "https://moonmodules.org/MoonLight/assets/core/OscService.png",
    "controls": {
     "listen": {
-     "line": "Receive OSC. The port is unauthenticated and writes controls, so it starts off."
+     "line": "Receive OSC, which writes controls with no password.",
+     "more": "Off, the device ignores every surface. Turn it on only on a network you trust (why)."
     },
     "port": {
-     "line": "The UDP port, the one TouchOSC uses out of the box."
+     "line": "The UDP port to listen on, the one TouchOSC uses out of the box."
     },
     "feedback": {
-     "line": "Mirror every change back to the surface."
+     "line": "Mirror every change back to the surface, making this a surface, not a remote: feedback.",
+     "more": "Off by default, since it sends traffic nobody asked for. It keeps a client honest and moves a motorized fader."
     },
     "addressing": {
-     "line": "Where feedback goes, `unicast` to `hosts` or `multicast` to `group`."
+     "line": "Where feedback goes: `unicast` to the hosts, or `multicast` to the group."
     },
     "hosts": {
-     "line": "(unicast) addresses or names; empty answers whoever wrote last."
+     "line": "Addresses or names feedback goes to (unicast).",
+     "more": "Empty answers whoever wrote last, which finds a surface on its own. Fill it to send feedback somewhere else."
     },
     "group": {
-     "line": "(multicast) the group feedback goes to and this board joins."
+     "line": "The multicast group feedback goes to and this device joins.",
+     "more": "Every listening device with the same group joins it. The default sits beside discovery's own group, so a second rig on the same network picks another."
     },
     "feedbackPort": {
-     "line": "Where the client listens."
+     "line": "The UDP port the client listens on for feedback.",
+     "more": "Differs from the port this device listens on; Open Stage Control calls it `osc-port`."
     }
    },
    "role": "service",
    "dim": 0,
    "doc": "core/services.md#osc",
-   "source": "https://github.com/MoonModules/MoonLight/blob/main/src/core/services/OscModule.h",
-   "tests": "https://github.com/MoonModules/MoonLight/blob/main/test/unit/core/unit_OscModule.cpp"
+   "source": "https://github.com/MoonModules/MoonLight/blob/main/src/core/services/OscService.h",
+   "tests": "https://github.com/MoonModules/MoonLight/blob/main/test/unit/core/unit_OscService.cpp"
   },
   "I2cBusModule": {
-   "line": "A fixed System module (wired-by-code, always present) that owns the board's I²C bus: it opens the bus on its pins, every device on the bus attaches to it, and a scan probes it.",
-   "summary": "A device names only its own address, such as AudioService's `codecAddr`; the wires are stated here, once per board. The pins default to unused (−1), so a board without an I²C device claims no GPIO.\n\nread-only: `result`, each address found, named by the module driving it: `0x18 Audio (ES8311)`.",
+   "line": "The board's I2C bus: its two pins, opened once and shared by every device on it, with a scan that detects them.",
+   "summary": "A device on the bus, such as the [Audio](https://moonmodules.org/MoonLight/moonmodules/core/services.html#audio) codec, names only its own address; the wires are stated here, once per board. The pins default to unused, so a board without an I2C device claims no GPIO.",
+   "guide": [
+    {
+     "title": "Reading the scan",
+     "text": "The scan names each answering address by the module driving it, as `0x18 Audio (ES8311)`. A claimed address that stays silent reads `no answer`: check the wiring and the device's power."
+    }
+   ],
    "image": "https://moonmodules.org/MoonLight/assets/core/I2cBusModule.png",
-   "alt": "I2C bus module controls",
    "controls": {
     "sda": {
-     "line": "The bus GPIOs, −1 for unused; a board's catalog entry sets them."
+     "line": "The bus data pin; a board's catalog entry sets it."
     },
     "scl": {
-     "line": "The bus GPIOs, −1 for unused; a board's catalog entry sets them."
+     "line": "The bus clock pin; a board's catalog entry sets it."
     },
     "scan": {
-     "line": "A button; press to probe the bus now."
+     "line": "Probe the bus now."
     },
     "result": {
-     "line": ""
+     "line": "Each address found, named by the module driving it, cut off cleanly past about three."
     }
    },
    "role": "generic",
@@ -3741,19 +3816,24 @@
    "tests": "https://github.com/MoonModules/MoonLight/blob/main/test/unit/core/unit_I2cBusModule.cpp"
   },
   "TasksModule": {
-   "line": "A read-only diagnostic showing **what runs where**: you cannot optimize which module runs on which core until you can see it.",
-   "summary": "A fixed System module, wired-by-code, with each task's MoonModules nested beneath it.\n\nread-only: `tasks`, a row per FreeRTOS task.\n\nread-only: `core0` / `core1`, what executes on each core, empty on a single-core chip.\n\nEach row carries `name`, `state`, `core`, `prio` and `stack`, the minimum free stack seen. A `cpu` percentage appears only in a profiling build, off by default because the run-time counter costs about 5% of the tick.\n\nExpand a row for the modules in that task, each as `Name · Nus · NB · Nheap`. A closing `∑ modules` line cross-checks them against the tick. Empty on desktop.",
+   "line": "A read-only diagnostic showing what runs where: the tasks, and the modules inside each.",
+   "summary": "You cannot optimize which module runs on which core until you can see it. Each task has its modules nested beneath it. The list is empty on the desktop.",
+   "guide": [
+    {
+     "title": "Reading a task row",
+     "text": "A row shows the task's name, state, core, priority and the minimum free stack seen. Expand it for its modules, each as `Name · Nus · NB · Nheap`, and a closing `∑ modules` line that cross-checks them against the tick.\n\nA `cpu` percentage appears only in a profiling build, since the run-time counter costs about 5% of the tick."
+    }
+   ],
    "image": "https://moonmodules.org/MoonLight/assets/core/TasksModule.png",
-   "alt": "Tasks module, a row per FreeRTOS task",
    "controls": {
     "tasks": {
-     "line": ""
+     "line": "A row per FreeRTOS task."
     },
     "core0": {
-     "line": ""
+     "line": "What executes on the first core."
     },
     "core1": {
-     "line": ""
+     "line": "What executes on the second core, empty on a single-core chip."
     }
    },
    "role": "generic",
@@ -3763,13 +3843,18 @@
    "tests": "https://github.com/MoonModules/MoonLight/blob/main/test/unit/core/unit_TasksModule.cpp"
   },
   "PinsModule": {
-   "line": "A read-only diagnostic showing **which module owns each GPIO, for what role, and whether that pin is safe for it**, the device's pin ownership map, keyed by physical GPIO.",
-   "summary": "A fixed System module, wired-by-code.\n\nIt walks the live tree for every claimed pin, holding no state, and flags double claims.\n\nread-only: `pins`, a row per claimed GPIO.\n\nEach row carries `gpio`, `owner` and `role`, plus live `dir`, `level` and `drive`. A row takes a colored edge when unsafe: red for a reserved or double-claimed pin, yellow for a driven role on a strap, per [gpio-usage.md](https://moonmodules.org/MoonLight/reference/hardware/gpio-usage.html).",
+   "line": "A read-only map of which module owns each GPIO, for what role, and whether the pin is safe for it.",
+   "summary": "It is keyed by physical GPIO, the way an OS device manager or a board template is. It walks the live tree for every claimed pin, holds no state, and flags double claims.",
+   "guide": [
+    {
+     "title": "Reading the map",
+     "text": "A row shows the GPIO, its owner and role, and the live direction, level and drive.\n\nA row takes a colored edge when unsafe: red for a reserved or double-claimed pin, yellow for a driven role on a strap.\n\nThe [GPIO usage reference](https://moonmodules.org/MoonLight/reference/hardware/gpio-usage.html) lists the pins per chip."
+    }
+   ],
    "image": "https://moonmodules.org/MoonLight/assets/core/PinsModule.png",
-   "alt": "Pins module, the GPIO ownership map",
    "controls": {
     "pins": {
-     "line": ""
+     "line": "A row per claimed GPIO."
     }
    },
    "role": "generic",
@@ -3779,22 +3864,25 @@
    "tests": "https://github.com/MoonModules/MoonLight/blob/main/test/unit/core/unit_PinsModule.cpp"
   },
   "ButtonService": {
-   "line": "A Service added per device: **a list of buttons**, each on its own GPIO, each driving a control through the same primitive the infrared service uses.",
-   "summary": "A press and a UI click are the same thing to whatever they drive. A **foot pedal needs no module of its own**: electrically it is a momentary switch.\n\n`activeLow` is on for the usual wiring, a switch to ground with an internal pull-up, and off for a switch feeding 3V3. The readout lets you see a button work before binding it.\n\nA catalog board's first button targets `Control.switch1`, which toggles `on`: a press switches the lights and their relay.",
+   "line": "A list of push buttons, each on its own GPIO, each driving a control.",
+   "summary": "A press and a UI click are the same thing to whatever they drive. A foot pedal needs no module of its own, being electrically a momentary switch.",
    "guide": [
     {
-     "title": "Button, details",
-     "text": "Debouncing happens here rather than in the platform layer, because a bouncing contact is a property of the switch. Rows are polled at 50 Hz, since a contact closes for tens of milliseconds.\n\nThe input services share three row fields, because what happens after an input fires is the same whichever input fired it.\n\n- `target`: a surface control, a switch, encoder, fader or pad with its number, such as `Control.switch1`. The [Control](https://moonmodules.org/MoonLight/moonmodules/core/system.html#control) card decides what that control drives, and OSC, MQTT and the web UI reach the same switch. A saved row that names any other control is left unassigned, and the service's status says how many.\n- `kind`: `toggle` reads the target and writes its inverse (a light switch); `set` writes `value` while held and 0 on release (hold-to-activate, a pedal); `delta` adds `value`, clamped to the control's own bounds (a brightness nudge, a palette step). **`set` is Button-only**: it needs a release to write the 0, and a remote reports a press with no release.\n- `value`: what `set` writes, or the signed nudge `delta` applies. Unused by `toggle`.\n\nOnly a `set` row acts on the release. A toggle or a delta acting on both edges would fire twice for one push."
+     "title": "What a row does",
+     "text": "Each row binds one pin to a target, a surface control such as `Control.switch1`. Its kind toggles the target, sets a value while held and 0 on release, or nudges the target by a value. A catalog board's first button targets `Control.switch1`, which switches the lights and their relay."
+    },
+    {
+     "title": "Wiring",
+     "text": "A switch to ground with the internal pull-up is active low, the usual wiring. A switch feeding 3V3 is active high. The live pressed readout shows a button working before it is bound."
     }
    ],
    "image": "https://moonmodules.org/MoonLight/assets/core/ButtonService.png",
-   "alt": "Button service controls",
    "controls": {
     "debounceMs": {
-     "line": "How long a level must hold before it counts as a real press."
+     "line": "How long a level must hold before it counts as a press, shared by every button."
     },
     "buttons": {
-     "line": "The rows, each with a `pin`, an `activeLow` for the wiring, and a live `pressed` readout."
+     "line": "The buttons, each with a pin, its wiring, a live pressed readout and a target."
     }
    },
    "role": "service",
@@ -3804,22 +3892,27 @@
    "tests": "https://github.com/MoonModules/MoonLight/blob/main/test/unit/core/unit_ButtonService.cpp"
   },
   "GamepadService": {
-   "line": "A Service added per device: **a gamepad's buttons and sticks**, each driving a control through the same rows the other input services use.",
-   "summary": "The pad plugs into the computer showing the interface, over USB or Bluetooth, and the browser reports it, so it works on every chip.\n\nA fresh service starts with rows onto the surface: the left stick's Y onto fader 1, the right stick's Y onto fader 2, the left stick's X onto fader 3, and A onto switch 1. Assign those on the [Control](https://moonmodules.org/MoonLight/moonmodules/core/system.html#control) card to play a game. ⌄ details.",
+   "line": "A gamepad's buttons and sticks, each driving a control through the same rows every input service uses.",
+   "summary": "The pad plugs into the computer showing the interface, over USB or Bluetooth, and the browser reports it, so it works on every chip. A fresh service maps the sticks and A onto the first faders and switch.",
    "guide": [
     {
-     "title": "Gamepad, details",
-     "text": "A browser lists a pad only once one of its buttons is pressed with the page open, a rule against fingerprinting a visitor's hardware. Chrome, Firefox and every browser built on Chrome list a pad only on a secure origin. The desktop app's page on `localhost` is one; a device's plain `http://` page is not, until its address is added the way [MIDI, details](https://moonmodules.org/MoonLight/moonmodules/core/services.html#midi-details) shows. Safari lists a pad on any page, and so does every browser on an iPhone or iPad, since they all run on Safari's engine. So a pad paired with a phone or tablet plays on any device's page with no computer involved. To check that the browser sees a pad, and which standard button or axis each control reports, open [hardwaretester.com/gamepad](https://hardwaretester.com/gamepad) in the same browser: if a button lights there, it reaches MoonLight too. The inputs are named as SDL's GameController API names them (`a`, `b`, `dpup`, `leftx`). That is the vocabulary GameControllerDB maps hundreds of controllers onto, so one set of rows works with any pad the browser reports in the standard mapping; a pad it does not recognize reports its own order, and learn binds it all the same. A stick follows the surface's convention, up and right being more, so a stick, a fader and a paddle point the same way; the service flips the browser's Y, which counts down the screen. It writes its position rescaled into the target's range, and only once it moves past a small deadband. A pad's first stick positions are taken as rest, so plugging one in with a stick off-center moves nothing, while the button press that makes the browser show the pad still counts. A switch on the surface driving a button control, such as Space Invaders' `fire`, presses it on the way down only."
+     "title": "Finding the pad",
+     "text": "A browser lists a pad only once a button is pressed with the page open. Chrome and Firefox also need a secure page, which a board's own page is not until marked once.\n\n[The how-to](https://moonmodules.org/MoonLight/how-to/control-surface.html#a-midi-desk-or-a-gamepad-through-the-browser) has the steps."
+    },
+    {
+     "title": "Learning an input",
+     "text": "Press learn on a row, then move or press the input to bind. A stick must travel a short way. A pad's first stick positions are rest, so plugging one in off-center moves nothing."
     }
    ],
    "image": "https://moonmodules.org/MoonLight/assets/core/GamepadService.png",
-   "alt": "Gamepad service controls",
    "controls": {
     "pad": {
-     "line": ""
+     "line": "The latest pad state the browser wrote: the button bits, then four axes.",
+     "more": "Each axis rests at 128, its inputs named as SDL's GameController API names them."
     },
     "inputs": {
-     "line": "The rows, each a button or stick of the standard layout, a `learn` and a target."
+     "line": "The rows: each a button or stick of the standard layout, a learn button and a target.",
+     "more": "Assign the surface's controls on the Control card to play a game with the starter rows."
     }
    },
    "role": "service",
@@ -3829,40 +3922,48 @@
    "tests": "https://github.com/MoonModules/MoonLight/blob/main/test/unit/core/unit_GamepadService.cpp"
   },
   "MidiService": {
-   "line": "A Service added per device: **a MIDI control desk** driving the control surface.",
-   "summary": "The desk plugs into the computer showing the interface and the browser reports it, so it works on every chip. A Mackie desk such as the iCON QCon or the Behringer X-Touch in MC mode works without setup, an Akai APC40 mkII after one choice.\n\nFaders move the surface's faders, the knobs turn its encoders, and each channel's SELECT button flips its switch. The desk follows the surface back: motors, SELECT lights and knob rings. A hand on a fader holds its motor still. An APC40's clip pads apply presets. ⌄ details.",
+   "line": "A MIDI control desk driving the control surface, in the Mackie Control or the Akai APC40 mkII layout.",
+   "summary": "The desk plugs into the computer showing the interface and the browser reports it. A Mackie desk such as the iCON QCon or the Behringer X-Touch in MC mode works without setup, an Akai APC40 mkII after one choice.\n\nFaders, knobs and SELECT buttons drive the surface, and the desk follows it back with motors, lights and knob rings.",
    "guide": [
     {
-     "title": "MIDI, details",
-     "text": "The browser reads the desk with the Web MIDI API, which Chrome, Edge and Firefox offer on a secure origin only, so it works on the desktop app's page on `localhost`; Safari has no Web MIDI. The first time, the browser asks permission to use MIDI devices.\n\nA device's own page, such as `http://192.168.1.158`, is not a secure origin, so Chrome asks nothing and the desk stays silent. To use a desk or a gamepad there, mark that address as secure once:\n\n1. Open `chrome://flags/#unsafely-treat-insecure-origin-as-secure`.\n2. Enter the device's address, such as `http://192.168.1.158`, set the flag to Enabled, and click Relaunch.\n3. Reload the device's page: Chrome now asks to use MIDI devices.\n\nThe decoding follows Mackie Control: a fader is 14-bit pitch bend on its own channel, its touch sensor a note from 0x68, a knob a relative turn on a control change from 0x10, and SELECT a note from 0x18. The master fader has no slot on the surface and is ignored. The way back uses the same messages: pitch bend moves a motor, a SELECT note at full velocity lights its button, and a control change from 0x30 fills a knob's ring over the range of what the knob drives, so it is full at that control's top. The device keeps what the desk should show and pushes it up to 25 times a second; the browser sends only what changed, so a page opened later moves the motors to where the surface already is.\n\n**The Akai APC40 mkII profile.** The browser greets the desk with the SysEx that puts it in Alternate Ableton Live mode, where every light is the host's. Chrome asks once to allow SysEx for it. Track faders 1-8 move the surface's faders and track knobs 1-8 set its encoders, each reading 0 to 127. Activator buttons 1-8 flip its switches. The 40 clip pads apply presets 1-40, the top-left pad being preset 1 as on the Control card. The way back lights each activator while its switch is on and fills each knob's ring like a meter. Each pad is dark when empty, dim white when a preset is stored, and green for the one applied. The faders have no motors. Every message is in [the APC40 reference](https://moonmodules.org/MoonLight/reference/hardware/control-surfaces.html#akai-apc40-mkii).\n\n**A desk on the board's own USB port.** With `source` on USB, the desk plugs into the board instead of the computer, and the device is the USB host. It reads the desk as USB-MIDI 1.0 packets, greets it, and sends it its state. The port then carries no serial log and no USB flashing, so a board with a second USB port keeps that one for the computer. The desk takes its power from the port, so the board supplies 5 V there, or a powered hub between them does; an APC40 mkII draws about 0.15 A.\n\n**A desk on the network.** With `source` on network, the desk is an [RTP-MIDI](https://www.rfc-editor.org/rfc/rfc6295) session, the standard Apple's Network MIDI uses. `host` names the other end: a device sharing the desk on its USB port, a desk with a network port, or a computer sharing its desk. The service invites it, and asks again every second until it answers, so either side may start first. With `host` empty the service waits to be invited, as a Mac's Audio MIDI Setup does when its Network window connects to the device. Windows does the same with the free rtpMIDI driver. The greeting, the surface and the touch handling are those of a desk on the device's own USB port, so a desk behaves the same whichever cable it is on.\n\n**Sharing a desk.** With `source` on USB and `share` on, the desk on this device's USB port drives nothing here: the device is a MIDI cable over the network, as a bought RTP-MIDI interface is, and the device the desk drives invites it. That device names it in `host` by address or by name, `<name>.local`, since a device waiting to be invited announces itself over Bonjour as `_apple-midi._udp`; a Mac lists it in Audio MIDI Setup's Network window the same way. The device passes each message on unchanged, both ways. The one exception is a SysEx the desk sends, which its USB side does not pass on, as with a desk on USB; the greeting SysEx from the host reaches the desk. It accepts a session only while a desk is plugged in, so a desk plugged in later is greeted: the host invites again until the bridge says yes. One host at a time: a second is refused while the first holds the session. The host's status says why it was refused: `no desk`, `in use`, or `it invites` when the device it invited has a `host` of its own. A lost message is not repaired, since the next fader message replaces it and a lost press is pressed again; sent packets carry no recovery journal, and a received one is skipped."
+     "title": "Where the desk plugs in",
+     "text": "The browser reads a desk on a secure page only: the desktop app's `localhost` is, a board's own page needs marking once. A desk on USB or the network works on any page.\n\n[The how-to](https://moonmodules.org/MoonLight/how-to/control-surface.html#a-midi-desk-or-a-gamepad-through-the-browser) has the steps."
+    },
+    {
+     "title": "The Akai APC40 mkII",
+     "text": "Track faders and knobs 1 to 8 move the surface's faders and encoders, and activators flip its switches. The 40 clip pads apply presets 1 to 40: dark when empty, dim white when stored, green when applied."
     }
    ],
    "image": "https://moonmodules.org/MoonLight/assets/core/MidiService.png",
-   "alt": "MIDI service controls",
    "controls": {
     "source": {
-     "line": "`browser`, `USB` on this board's own port (S3, 8 MB of flash or more), or `network`."
+     "line": "Where the desk plugs in: the browser's computer, this USB port, or the network.",
+     "more": "USB needs an S3 with 8 MB of flash or more. The port then carries no serial log or USB flashing, and the board supplies the desk's 5 V."
     },
     "share": {
-     "line": "(USB) pass the desk on over the network rather than driving this device."
+     "line": "Pass the desk on the USB port over the network instead of driving this device.",
+     "more": "The device the desk drives names this one in its `host`. One host at a time."
     },
     "profile": {
-     "line": "The desk's layout, `Mackie Control` or `Akai APC40 mkII`."
+     "line": "The desk's layout, since each desk lays its controls out in its own messages.",
+     "more": "Hidden on a shared desk, which the device it is shared with decodes."
     },
     "host": {
-     "line": "(network) the desk's address or name, with an optional `:port`; empty waits to be invited."
+     "line": "The desk on the network, an address or a name with an optional `:port`.",
+     "more": "Empty waits to be invited, as a Mac's Audio MIDI Setup does. A sharing device announces `<name>.local`."
     },
     "port": {
-     "line": "(network, share) this device's RTP-MIDI port, data on the one above."
+     "line": "The RTP-MIDI port of this device's session.",
+     "more": "Data goes on the port above it."
     },
     "midi": {
-     "line": ""
+     "line": "The latest desk messages the browser wrote, in hex."
     },
     "desk": {
-     "line": ""
+     "line": "What the desk shows: a message per fader motor, light and knob ring."
     },
     "hello": {
-     "line": ""
+     "line": "What the browser sends when the desk connects, such as an APC40's SysEx."
     }
    },
    "role": "service",
@@ -3871,25 +3972,29 @@
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/core/services/MidiService.h"
   },
   "AnalogService": {
-   "line": "A Service added per device: **a list of ADC pins**, each driving a control with a value rather than an event.",
-   "summary": "The continuous twin of Button, which drives the same controls from a contact.\n\nAn **expression pedal** is the shape this is built around, and why a row carries more than a pin.\n\nThe travel is mapped into **the control's own range**, so a pedal is configured once and works on any target. ⌄ details.",
+   "line": "A list of ADC pins, each driving a control with a value rather than an event.",
+   "summary": "The continuous twin of Button, which drives the same controls from a contact. An expression pedal is the shape it is built around.",
    "guide": [
     {
-     "title": "Analog, details",
-     "text": "The travel maps into the control's own range: a Select with five options takes 0..4, a bool takes on and off. A row pointed at a pad does nothing, since there is no sensible reading of a pedal held at 40% of a preset. Live `raw` and `value` readouts let a pedal be calibrated by watching it move, and reversed bounds mean inverted rather than being an error, since calibrating by moving to each end sets whichever was reached first. Without a `deadband` a resting pedal rewrites its target fifty times a second forever. Scripts reach the same hardware with `adcRead(pin)` and `adcMax()`, which is the path for a sensor whose mapping is a condition rather than a range."
+     "title": "Calibrating a pedal",
+     "text": "Each row maps the travel between its two raw counts onto the target's own range, so one setup works on any target. A Select with five options takes 0 to 4, and a bool takes on and off. Watch the live raw and value readouts while moving the pedal to each end."
+    },
+    {
+     "title": "Targets",
+     "text": "A row pointed at a pad does nothing, since a pedal held at 40% has no sensible reading as a preset. Reversed bounds mean inverted. Scripts reach the same pins with `adcRead(pin)` and `adcMax()`, the path for a sensor whose mapping is a condition rather than a range."
     }
    ],
    "image": "https://moonmodules.org/MoonLight/assets/core/AnalogService.png",
-   "alt": "Analog service controls",
    "controls": {
     "smoothing": {
      "line": "How hard the running average pulls toward each reading, as a percentage."
     },
     "deadband": {
-     "line": "How far the value must move before the control is written."
+     "line": "How far the value must move before the control is written.",
+     "more": "Without it a resting pedal rewrites its target fifty times a second."
     },
     "inputs": {
-     "line": "The rows, each with a `pin`, the raw counts its travel spans, and an `invert`."
+     "line": "The pins, each with its raw travel, an invert and a target."
     }
    },
    "role": "service",
@@ -3899,22 +4004,27 @@
    "tests": "https://github.com/MoonModules/MoonLight/blob/main/test/unit/core/unit_AnalogService.cpp"
   },
   "InfraredService": {
-   "line": "A Service added per device: an infrared receiver whose **rows** map learned codes onto other modules' controls, through the same primitive every other input uses.",
-   "summary": "A remote press and an OSC message are indistinguishable to whatever they drive.\n\n**A row is the binding**: a remote has twenty keys, so it has twenty rows. ⌄ details.",
+   "line": "An infrared receiver whose learned remote keys drive other modules' controls.",
+   "summary": "A row is the binding, so a remote with twenty keys has twenty rows. A remote press and an OSC message are indistinguishable to whatever they drive.",
+   "attribution": "[NEC](https://www.sbprojects.net/knowledge/ir/nec.php)",
    "guide": [
     {
-     "title": "Infrared, details",
-     "text": "Set a row's `learn` and the next code received binds to it, which is how any remote works without a shipped code table. Arming one row disarms any other, so a code cannot bind twice. A fresh service starts with no rows: add one, learn a key, pick a target. The status line reports whether the channel actually opened, not merely that a pin is set; on some boards the receiver shares its pin with another peripheral through a board switch.\n\nNothing is fixed in firmware. A row IS the binding: learn a key onto it, pick what it drives from the target dropdown, and pick whether the press toggles that control, or nudges it by a value. A handset with twenty keys is twenty rows. `set` is offered only where an input reports a release, so it is unavailable here: a remote code is a single event, and a `set` row would latch the control with nothing able to clear it.\n\nOne key binds to one row. Learning a key that another row already holds moves the binding rather than duplicating it, because dispatch fires the first row holding a code and a duplicate could never run.\n\nThe status line reports setup state (\"set pin to receive\" / \"ready\"), the learn prompt, a binding (\"learned 0x...\"), what a press did or why it did not, and an unbound code (\"received 0x...\n(unassigned)\")."
+     "title": "Learning a key",
+     "text": "Add a row, press its learn button, then press the remote key: the next code received binds to that row. Learning a key another row holds moves the binding. Pick what the row drives from its target, and whether a press toggles it or nudges it by a value. The status line reports each step."
+    },
+    {
+     "title": "Checking a key",
+     "text": "The status line says \"set pin to receive\" until a receiver pin is entered, and shows the code of a key no row holds. On some boards the receiver shares its pin with another peripheral through a board switch."
     }
    ],
    "image": "https://moonmodules.org/MoonLight/assets/core/InfraredService.png",
-   "alt": "Infrared service controls",
    "controls": {
     "pin": {
-     "line": "The receiver GPIO, unset until entered."
+     "line": "The receiver's GPIO, unset until a board or user enters it."
     },
     "codes": {
-     "line": "The mapping rows, each with its learned `code`, a `learn` arm, and a target below."
+     "line": "The learned codes, each row binding one remote key to a control.",
+     "more": "A `set` row is not offered, since a remote reports a press with no release."
     }
    },
    "role": "service",
@@ -3924,13 +4034,19 @@
    "tests": "https://github.com/MoonModules/MoonLight/blob/main/test/unit/core/unit_InfraredService.cpp"
   },
   "MoonLiveService": {
-   "line": "A Service added per device: **a MoonLive script that reads hardware and drives controls**.",
-   "summary": "The flexible half of the input story, and the twin of a scripted effect.\n\nWhy a script rather than another module: a mapping row is right for a button and wrong for anything with a condition in it. A script holds state and chooses between outcomes.\n\nrecompiles live; a compile error shows on the status line and the service does nothing until it is fixed.\n\nEverything the script declares appears as a real control on the card, so a slider move lands\n\nwithout a recompile.\n\nA script runs on the 50 Hz poll rather than the render tick, so a heavy one costs its own tick.",
+   "line": "A MoonLive script that reads hardware and drives controls, the input twin of a scripted effect.",
+   "summary": "A mapping row is right for a button and wrong for anything with a condition in it. A script holds state and chooses between outcomes, so a sensor nobody wrote a module for needs a datasheet and eight lines, not a release.",
+   "guide": [
+    {
+     "title": "Writing the script",
+     "text": "Everything the script declares appears as a control on the card, and a slider move lands without a recompile. A compile error shows on the status line, and the service does nothing until it is fixed. A script runs on the 50 Hz poll rather than the render tick, so a heavy one costs its own tick."
+    }
+   ],
    "image": "https://moonmodules.org/MoonLight/assets/core/MoonLiveService.png",
-   "alt": "MoonLive service controls",
    "controls": {
     "script": {
-     "line": "Which `.mls` file to run, picked from the script library. Naming a different one"
+     "line": "Which `.mls` file to run, picked from the script library.",
+     "more": "Naming a different file recompiles it live. The name is stored, not the text, so a module costs bytes."
     }
    },
    "role": "service",
@@ -3941,27 +4057,31 @@
   },
   "FileManagerModule": {
    "line": "Browse and manage the device filesystem: a folder tree with an inline text editor.",
-   "summary": "Distinct from Filesystem, the persistence engine. Behavior: ⌄ details.\n\n**Backup (⤓)**, download the device's files as one `.json` bundle.\n\n**Keep it private: it contains the WiFi password.** Through the access point the config files are left out. Every file is byte-verified against the listing, and an unreadable one is skipped and named.\n\n**Restore (⟲)**, upload a backup bundle, pressing twice since it overwrites the device's files.\n\nKnown renames from [MIGRATING.md](https://moonmodules.org/MoonLight/reference/MIGRATING.html) apply before upload, then a report lists what needs an eye. Every file applies as it lands, bar network settings and the web server's `port`, which the dialog names.",
+   "summary": "Each folder loads its children on first expand. It is distinct from [Filesystem](https://moonmodules.org/MoonLight/moonmodules/core/system.html#filesystem), the persistence engine that writes the config files this panel shows.",
    "guide": [
     {
-     "title": "File Manager, details",
-     "text": "The panel is a lazy folder **tree** (each folder loads its children on first expand) plus an inline text editor. Dot-prefixed entries (the `.config` persistence dir) are hidden unless `show hidden` is on.\n\nClick a folder's row to select it and toggle its expansion (▸/▾); click a selected file to open the editor.\nThe toolbar acts on the selected node: **＋ folder** creates a folder inside it, **＋ file** creates an empty file (click it to edit), **🗑 delete** removes the selected file, or a folder and everything inside it (press-twice to confirm), **⟳** refreshes.\n**Drag files from the desktop** onto a folder (or the tree) to upload them, the body streams straight to the file (any size, binary-safe; capped only by a sanity limit and the free space, which it reports if short); a per-file **⤓** streams it back to the desktop.\nThe editor loads a file's text, pretty-prints JSON on open, and saves atomically; a binary file (contains a NUL) loads read-only (use ⤓ to fetch it intact). Upload and download both stream, so neither truncates.\nCreate / delete are HTTP calls (`POST` / `DELETE /api/dir?path=`), not controls, the path rides the request, so nothing is stored on the device per op.\n\nLast-modified dates (needs an NTP time source + LittleFS mtime), binary/large + folder upload, folder-as-zip download, and `.ml` syntax highlighting are backlogged ([backlog-core § File Manager follow-ups](https://moonmodules.org/MoonLight/work/future/backlog-core.html#file-manager-follow-ups))."
+     "title": "Working with files",
+     "text": "Click a folder to select it and open or close it, and click a selected file to open the editor. The toolbar acts on the selection: new folder, new file, delete (press twice) and refresh.\n\nDrag files from the desktop onto a folder to upload them."
+    },
+    {
+     "title": "The editor",
+     "text": "The editor pretty-prints JSON on open and saves atomically. A binary file loads read-only: download it instead."
+    },
+    {
+     "title": "Backup and restore",
+     "text": "Backup downloads the device's files as one `.json` bundle, and Restore uploads one back. Keep the bundle private: it contains the WiFi password. [The how-to](https://moonmodules.org/MoonLight/how-to/backup-and-restore.html) walks through both."
     }
    ],
    "image": "https://moonmodules.org/MoonLight/assets/core/FileManagerModule.png",
-   "alt": "File Manager panel, folder tree + toolbar",
    "controls": {
-    "file browser": {
-     "line": "The panel itself: a folder tree, a toolbar and an inline text editor."
-    },
     "show hidden": {
      "line": "Reveal dot-prefixed files and folders, such as `.config`."
     },
     "flash": {
-     "line": "Read-only usage bar (used / total bytes, from the platform)."
+     "line": "Flash used and total, as the usage bar."
     },
     "lastSaved": {
-     "line": "Read-only; how long ago config was persisted (read from the Filesystem engine)."
+     "line": "How long ago the configuration was last saved."
     }
    },
    "role": "generic",
@@ -3972,33 +4092,57 @@
   },
   "SdCardService": {
    "line": "A board's microSD slot, where one is wired: its wiring, a usage gauge and a format button.",
-   "summary": "Mounted, its files appear under `/sd`, within the one [File Manager](https://moonmodules.org/MoonLight/moonmodules/core/system.html#file-manager) tree. Behavior: ⌄ details.",
+   "summary": "Mounted, its files appear under `/sd`, within the one [FileManager](https://moonmodules.org/MoonLight/moonmodules/core/system.html#file-manager) tree. This module never duplicates that tree.",
    "guide": [
     {
-     "title": "SD Card, details",
-     "text": "The presets: `P4 SDMMC` is the slot every P4 board with one wires, and a P4 opens on it. `Classic SDMMC (1-bit)` is the classic's own SD host pins, which the Olimex ESP32-Gateway wires, and `Classic SPI` the QuinLED Dig-Octa's. A 4 MB image carries no SD at all, so the 4 MB Olimex has none. `Teensy 4.1 SD socket` is the Teensy 4.1's built-in slot on its own SDIO host, and a Teensy opens on it; it mounts FAT and exFAT, and its format runs in the call, pausing the render for its few seconds, since the Teensy has no task to hand it to. SPI mode maps `clkPin` to SCK, `cmdPin` to MOSI, `d0Pin` to MISO and `d3Pin` to CS. Over SPI, reads hold but a write over about 50 KB can stop the card until a power cycle, so a card mounted that way says so on its status.\n\nMounts live, in `prepare()` rather than `setup()`: editing a pin unmounts and remounts on the new wiring, no reboot needed, the same contract the [I2C bus](https://moonmodules.org/MoonLight/moonmodules/core/system.html#i2c-bus)'s `sda`/`scl` have. A pulled card is noticed within a second. A missing or unreadable card shows its own status instead of retrying, since a mount attempt on an empty slot stalls the render thread: insert the card, then switch the module off and on, edit a pin, or reboot.\n\nThe card is FAT32 only (ESP-IDF's FatFs ships with exFAT compiled out), with the SD Association's 32 KB clusters. A card without a FAT filesystem, fresh or exFAT, says so, and `format` makes one in place rather than requiring a second device. A format takes seconds on a large card, so it runs in the background: the status reads \"formatting\" and the card refuses transfers until it finishes. Once mounted, its content is reached through the [File Manager](https://moonmodules.org/MoonLight/moonmodules/core/system.html#file-manager) exactly like the internal flash, under an `sd` folder; this module never duplicates that tree."
+     "title": "Mounting",
+     "text": "Wiring edits apply live, with no reboot. A pulled card is noticed within a second. A missing or unreadable card shows its status instead of retrying: insert the card, then switch the module off and on, edit a pin, or reboot."
+    },
+    {
+     "title": "Formatting",
+     "text": "The card is FAT32, with 32 KB clusters. A fresh or exFAT card says so on its status, and `format` makes a FAT32 one in place. A large card takes seconds, shown as \"formatting\", and refuses transfers meanwhile. A Teensy mounts exFAT too, and its format pauses the render."
+    },
+    {
+     "title": "SPI mode",
+     "text": "Reads hold, but a write over about 50 KB can stop the card until a power cycle. A card mounted that way says so on its status."
     }
    ],
-   "image": "https://moonmodules.org/MoonLight/assets/core/SdCardService-files.png",
-   "alt": "The card's files in the File Manager, under sd",
+   "image": "https://moonmodules.org/MoonLight/assets/core/SdCardService.png",
    "controls": {
     "board": {
-     "line": "The slot's wiring, from the presets this chip can wire; `Custom` sets bus and pins."
+     "line": "The slot's wiring, from the presets this chip can wire; Custom sets bus and pins.",
+     "more": "P4 SDMMC is the slot every P4 board wires. Classic SDMMC (1-bit) is the Olimex ESP32-Gateway's, Classic SPI the QuinLED Dig-Octa's, and Teensy 4.1 SD socket the Teensy's own slot."
     },
     "bus": {
-     "line": "Under `Custom`, the SD bus or the SD spec's SPI mode."
+     "line": "The bus under Custom: the SD bus, or the SD spec's SPI mode."
     },
     "clkPin": {
-     "line": "The pins under `Custom`; −1 unused, `d1`-`d3` unset is 1-bit."
+     "line": "The clock pin under Custom, SCK in SPI mode."
+    },
+    "cmdPin": {
+     "line": "The command pin under Custom, MOSI in SPI mode."
+    },
+    "d0Pin": {
+     "line": "Data line 0 under Custom, required, MISO in SPI mode."
+    },
+    "d1Pin": {
+     "line": "Data line 1 under Custom; unset with d2 and d3, the bus runs 1-bit."
+    },
+    "d2Pin": {
+     "line": "Data line 2 under Custom; unset with d1 and d3, the bus runs 1-bit."
+    },
+    "d3Pin": {
+     "line": "Data line 3 under Custom, CS in SPI mode."
     },
     "pwrPin": {
-     "line": "The pins under `Custom`; −1 unused, `d1`-`d3` unset is 1-bit."
+     "line": "The pin switching the slot's card power, unset where the slot has none."
     },
     "format": {
-     "line": "A button, press twice; erases and reformats the card as FAT32 in place."
+     "line": "Erase the card and make it FAT32, pressed twice to confirm."
     },
     "card": {
-     "line": "Read-only usage bar, counted in KiB so a card past 4 GiB still reports correctly."
+     "line": "The card's usage bar, counted in KiB.",
+     "more": "A KiB count keeps a card past 4 GiB reporting correctly: why-the-gauge-counts-kib."
     }
    },
    "role": "service",
@@ -4008,31 +4152,37 @@
    "tests": "https://github.com/MoonModules/MoonLight/blob/main/test/unit/core/unit_SdCardService.cpp"
   },
   "FirmwareUpdateModule": {
-   "line": "Over-the-air firmware flashing, the one operation that swaps the binary and needs a power cycle (every *config* change applies live; a firmware OTA does not).",
-   "summary": "read-only: `version`, `build` and `partition`.\n\nWhen MoonBase's version differs from the app's, the card warns and the top bar shows `⬆ MoonBase`; installing the matching one from its tab clears it. The `image` control's presence also tells the UI that installs run through the reboot-into-MoonBase cycle, behind one \"updating firmware\" overlay, and that a **Restart in MoonBase** button belongs on the card ([MoonBase](https://moonmodules.org/MoonLight/explanation/architecture/moonbase.html)).",
+   "line": "Over-the-air firmware flashing: what is installed, and how an install goes.",
+   "summary": "A flash swaps the binary and restarts the device, the one change that does not apply live. The flash is driven by the web route; the module shows its progress.",
+   "guide": [
+    {
+     "title": "Two images",
+     "text": "A device carrying two images, the app and MoonBase, shows them as two tabs. A Restart in MoonBase button sits on the card.\n\nWhen MoonBase's version differs from the app's, the card warns and the top bar shows `⬆ MoonBase`; installing the matching one from its tab clears it."
+    }
+   ],
    "image": "https://moonmodules.org/MoonLight/assets/core/FirmwareUpdateModule.png",
-   "alt": "Firmware update module controls",
    "controls": {
     "appVersion": {
-     "line": ""
+     "line": "The installed version."
     },
     "moonbaseMismatch": {
-     "line": ""
+     "line": "The installed version."
     },
     "image": {
-     "line": "On a device carrying two images, the app or MoonBase, drawn as the card's two tabs."
+     "line": "Which image the card describes, drawn as two tabs."
     },
     "version": {
-     "line": ""
+     "line": "The installed version."
     },
     "build": {
-     "line": ""
+     "line": "The git id, then the build date."
     },
     "firmware": {
-     "line": "The OTA image to flash."
+     "line": "The build variant; on the MoonBase tab, its chip."
     },
     "partition": {
-     "line": ""
+     "line": "The image against the size of its slot.",
+     "more": "The bar doubles as the install bar: it fills with the incoming image mid-install."
     }
    },
    "role": "generic",
@@ -4043,15 +4193,14 @@
   },
   "MoonCloudModule": {
    "line": "The container for everything MoonLight does with a server MoonModules runs.",
-   "summary": "It holds no settings of its own: each thing it does is a child with its own consent, because a user who wants one has not thereby agreed to the other.\n\n**Stats**, below: one opt-in report per install or upgrade, and the totals back.\n\n**Talk**, below: a public message board between devices.\n\n**Sync** (planned): device to device over the internet, a joint show across houses.",
+   "summary": "It holds no settings of its own. Each thing it does is a child with its own consent: [MoonStats](https://moonmodules.org/MoonLight/moonmodules/core/system.html#stats) reports the install and [MoonTalk](https://moonmodules.org/MoonLight/moonmodules/core/system.html#talk) is a message board. A user who wants one has not agreed to the other.",
    "image": "https://moonmodules.org/MoonLight/assets/core/MoonCloudModule.png",
-   "alt": "MoonCloud module card",
    "controls": {
     "outbox": {
-     "line": ""
+     "line": "The request waiting for the open page to post it."
     },
     "outbox sent": {
-     "line": ""
+     "line": "The id of the request the page delivered, which empties the outbox."
     }
    },
    "role": "generic",
@@ -4062,21 +4211,29 @@
   },
   "MoonStatsModule": {
    "line": "One opt-in report about this install, sent once per install or upgrade, so development effort goes where the users are.",
-   "summary": "Off until you answer yes. What it sends is in the [privacy policy](https://moonmodules.org/MoonLight/legal/privacy-policy.html).\n\nread-only: `version` and `reportedVersion`, which differ exactly when a report is due.\n\nThe two versions differing is what makes an upgrade send one report and a reboot send nothing. The button replaces this install's row rather than adding one.\n\nThe report carries the chip, flash, PSRAM, SDK, device model, memory, light count, and which modules you added. It carries no device name, no addresses, no credentials and no text you typed, which a unit test asserts.",
+   "summary": "Off until you answer yes. An upgrade sends one report and a reboot sends nothing.",
+   "guide": [
+    {
+     "title": "What it sends",
+     "text": "The report carries the chip, flash, PSRAM, SDK, device model, memory, light count, and which modules you added. It carries no device name, no addresses, no credentials and no text you typed.\n\nThe [privacy policy](https://moonmodules.org/MoonLight/legal/privacy-policy.html) states what is promised."
+    }
+   ],
    "image": "https://moonmodules.org/MoonLight/assets/core/MoonStatsModule.png",
-   "alt": "Stats module controls",
    "controls": {
     "consent": {
-     "line": "A checkbox. Nothing is sent and no identifier computed while it is off."
+     "line": "Whether this install may report.",
+     "more": "Nothing is sent and no identifier is computed while it is off."
     },
     "reportedVersion": {
-     "line": ""
+     "line": "The version that last reported.",
+     "more": "It differs from the running version exactly when a report is due."
     },
     "version": {
-     "line": ""
+     "line": "The version running now."
     },
     "send update": {
-     "line": "Reports again now, for a setup that changed without a version change."
+     "line": "Report again now.",
+     "more": "For a setup that changed without a version change. It replaces this install's row rather than adding one."
     }
    },
    "role": "generic",
@@ -4086,22 +4243,31 @@
    "tests": "https://github.com/MoonModules/MoonLight/blob/main/test/unit/core/unit_MoonStatsModule.cpp"
   },
   "MoonTalkModule": {
-   "line": "A public message board between MoonLight devices, in the shape Meshtastic's channel chat has.",
-   "summary": "Off until you turn it on, and a message is sent because you typed one: nothing posts on its own.\n\nA device name identifies a person rather than a machine. Without it your messages carry the first 8 characters of your installation id, which groups them without naming you.\n\n**Everything sent is public and permanent**: no private message, no recipient, no delete. **There is no authentication**, so a sender id can be fabricated by hand.",
+   "line": "A public message board between MoonLight devices, off until you turn it on.",
+   "summary": "A child of [MoonCloud](https://moonmodules.org/MoonLight/moonmodules/core/system.html#mooncloud) with its own consent. A message is sent because you typed one: nothing posts on its own.",
+   "attribution": "[Meshtastic](https://meshtastic.org)",
+   "guide": [
+    {
+     "title": "Public and permanent",
+     "text": "Everything sent is public and permanent: no private message, no recipient, no delete. There is no authentication, so a sender id can be fabricated by hand."
+    }
+   ],
    "image": "https://moonmodules.org/MoonLight/assets/core/MoonTalkModule.png",
-   "alt": "Talk module controls",
    "controls": {
     "consent": {
-     "line": "A checkbox. Nothing is published or read while it is off."
+     "line": "Whether posting and reading are on.",
+     "more": "Nothing is published or read while it is off."
     },
     "shareName": {
-     "line": "Whether your device name rides along, **a separate decision**."
+     "line": "Whether your device name rides along, a separate decision.",
+     "more": "A device name identifies a person rather than a machine. Without it your messages carry the first 8 characters of your installation id, which groups them without naming you."
     },
     "message": {
-     "line": "What to say. Typing changes nothing on its own."
+     "line": "What to say; typing changes nothing on its own."
     },
     "send": {
-     "line": "Publishes the message and clears the box, as does Enter in the message field."
+     "line": "Publish the message and clear the box.",
+     "more": "Enter in the message field sends too. The box keeps its text when the server is unreachable."
     }
    },
    "role": "generic",
@@ -4111,13 +4277,19 @@
    "tests": "https://github.com/MoonModules/MoonLight/blob/main/test/unit/core/unit_MoonTalkModule.cpp"
   },
   "ImprovProvisioningModule": {
-   "line": "Serial/BLE Improv Wi-Fi provisioning: the web installer hands credentials to a fresh device over this protocol during the flash-and-connect flow.",
-   "summary": "[Improv Wi-Fi](https://github.com/improv-wifi) is an open standard, and its [sdk-cpp](https://github.com/improv-wifi/sdk-cpp) / [sdk-js](https://github.com/improv-wifi/sdk-js) are the specification this implements, so any Improv-capable installer can provision a MoonLight device.",
+   "line": "Browser-driven WiFi provisioning over serial: the web installer hands the WiFi credentials to a fresh device.",
+   "summary": "A freshly flashed board is off your network. Improv carries that first handoff over the cable the browser already used to flash it.",
+   "attribution": "[Improv Wi-Fi](https://github.com/improv-wifi)",
+   "guide": [
+    {
+     "title": "Provisioning",
+     "text": "[Improv Wi-Fi](https://github.com/improv-wifi) is an open standard, and its sdk-cpp and sdk-js are the specification this implements. Any Improv-capable installer can provision a MoonLight device.\n\nWithout a serial link, the device's own access point serves the network instead."
+    }
+   ],
    "image": "https://moonmodules.org/MoonLight/assets/core/ImprovProvisioningModule.png",
-   "alt": "Improv provisioning module controls",
    "controls": {
     "provision_status": {
-     "line": "Read-only provisioning state."
+     "line": "The provisioning state."
     }
    },
    "role": "generic",
@@ -4126,31 +4298,39 @@
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/core/system/ImprovProvisioningModule.h"
   },
   "MqttModule": {
-   "line": "Bridges the light to an MQTT broker so a home-automation hub can control it, as a transport over the shared apply-core rather than new control logic.",
-   "summary": "Our own dependency-free MQTT 3.1.1 client, disabled until a broker is set. A wired-by-code child of Network. Topics, color-wheel mapping and the Homebridge config: ⌄ details.\n\nHA already discovers the device over the WLED shim with no broker, so this stays off to avoid a duplicate entity. Turn it on for broker-only or cross-subnet setups. See the [home-automation guide](https://moonmodules.org/MoonLight/how-to/home-automation.html).\n\nread-only: `mqtt_status`, from `disabled` and `idle` through to `connected`, or an error.",
+   "line": "Lets a home-automation hub switch the light on and off and set its brightness and color over MQTT.",
+   "summary": "A small MQTT 3.1.1 client of our own, off until a broker is set, wired by code as a child of Network. Every command goes through the shared control path, so MQTT adds only a transport.",
    "guide": [
     {
-     "title": "MQTT, details",
-     "text": "The topic prefix is `MoonLight/<mac>`, a **stable** identifier (the last 6 hex of the device's MAC), fixed for the device's life. Renaming the device does **not** change its topics, so a hub's config never breaks on a rename (the WLED/Tasmota/Home-Assistant convention). It's derived, not a stored control.\n\n**Topics** (for a device whose MAC ends `563cfe`): the device SUBSCRIBEs to the `set` topics and PUBLISHes the `get` topics on change (and on connect, so a controller never reads \"No Response\"). It also publishes its friendly `deviceName` on the retained `name` topic, so a hub can show the human name while the topics stay MAC-stable:\n\nThe HomeKit color wheel has no \"palette\" concept, so `hsv/set`'s hue+saturation pick the **nearest palette** (each built-in palette has a representative color; the closest one is selected) and the value drives brightness, the color wheel becomes a natural palette selector.\n\n**Homebridge**, install [`homebridge-mqttthing`](https://github.com/arachnetech/homebridge-mqttthing) and add a `lightbulb` accessory. Use the device's own MAC suffix (read it from the `mqtt_status`/topics, or `mosquitto_sub -t 'MoonLight/#'`) in place of `563cfe`:\n\nHome Assistant adopts the device two ways, both zero-config:\n**MQTT auto-discovery**: with `haDiscovery` on (opt-in; off by default) and a broker set, the device announces itself on `homeassistant/light/MoonLight_<mac6>/config` and HA auto-creates a wired entity with **on/off + brightness** (the config declares `brightness` only; color isn't in it, so the entity has no color control). Retained across reboots. Color/palette stays on the separate `hsv/set` topic above, not this entity. Off by default because the WLED `/json` shim already gives HA a richer light (color + palette + sensors) over mDNS with no broker, leaving both on lists the device twice; enable this only for broker-only / cross-subnet setups.\n**WLED integration**: HA's built-in WLED integration discovers the device over the WLED `/json` API MoonLight already serves; on/off + brightness work with no broker.\n\nBoth can be on at once. Setup walkthrough (including exposing HA to Apple Home via HA's HomeKit Bridge, no Homebridge needed) in the [Home Assistant recipe](https://moonmodules.org/MoonLight/how-to/home-automation.html#adopt-in-home-assistant)."
+     "title": "Which route",
+     "text": "Home Assistant finds the device over the WLED integration with no broker. Use MQTT for Homebridge, a broker-only network or another hub. [The how-to](https://moonmodules.org/MoonLight/how-to/home-automation.html#the-mqtt-topics) lists the topics."
+    },
+    {
+     "title": "Getting it connected",
+     "text": "The status line says why. Give the broker computer's LAN address, never 127.0.0.1, and let port 1883 through its firewall."
     }
    ],
    "image": "https://moonmodules.org/MoonLight/assets/core/MqttModule.png",
-   "alt": "MQTT module controls",
    "controls": {
     "broker": {
-     "line": "The broker hostname (e.g. `homeassistant.lan`) or IP. A hostname is resolved via DNS."
+     "line": "The broker's hostname or IP address.",
+     "more": "A hostname such as `homeassistant.lan` is resolved through DNS. On a laptop broker use its LAN address."
     },
     "port": {
-     "line": "Broker port."
+     "line": "The broker's TCP port."
     },
     "username": {
-     "line": "Broker credentials, optional, the password stored obfuscated."
+     "line": "The broker login, optional."
     },
     "password": {
-     "line": "Broker credentials, optional, the password stored obfuscated."
+     "line": "The broker password, stored obfuscated like the WiFi one."
     },
     "haDiscovery": {
-     "line": "Announce a Home Assistant discovery light."
+     "line": "Announce a Home Assistant discovery light, opt-in.",
+     "more": "Off by default: Home Assistant already finds the device over the WLED integration, and both would list it twice. Turn it on for broker-only or cross-subnet setups. The firmware update entity follows the same switch."
+    },
+    "mqtt_status": {
+     "line": "Where the connection stands, from disabled and idle through connected, or the error."
     }
    },
    "role": "generic",
@@ -4160,16 +4340,22 @@
    "tests": "https://github.com/MoonModules/MoonLight/blob/main/test/unit/core/unit_MqttModule.cpp"
   },
   "DevicesModule": {
-   "line": "Discovers other MoonLight devices on the LAN and lists them, persisting the last-known list across a reboot.",
-   "summary": "A wired-by-code child of Network.\n\nWLED announces and listens on broadcast, so it lists a device only from the broadcast copy. Presence is one small packet every ten seconds, so the copy costs the rest of the LAN next to nothing. A network that drops multicast is detected here, and the status says so. See [multicast and IGMP snooping](https://moonmodules.org/MoonLight/explanation/architecture/moonlight.html#multicast-and-igmp-snooping).",
+   "line": "Discovers other devices on the LAN, MoonLight and WLED among them, and lists them, this one included and marked as such.",
+   "summary": "The last-known list survives a reboot. A child of Network, discovery depending on the network being up.",
+   "guide": [
+    {
+     "title": "Finding WLED devices",
+     "text": "WLED lists a device only from the broadcast copy, and the copy costs the rest of the LAN next to nothing.\n\nA network that drops multicast is detected, and the status says so ([IGMP snooping](https://moonmodules.org/MoonLight/explanation/architecture/moonlight.html#multicast-and-igmp-snooping))."
+    }
+   ],
    "image": "https://moonmodules.org/MoonLight/assets/core/DevicesModule.png",
-   "alt": "Devices module, discovered LAN devices",
    "controls": {
     "addressing": {
-     "line": "`multicast + broadcast`, which WLED devices hear too, or `multicast`."
+     "line": "How presence travels: multicast, or multicast and broadcast.",
+     "more": "Broadcast is the default, since WLED devices hear it too."
     },
     "devices": {
-     "line": "A List of discovered devices; each row expands to a detail panel. Persistable."
+     "line": "The discovered devices; a row expands to its details."
     }
    },
    "role": "generic",
@@ -4179,12 +4365,17 @@
   },
   "NetworkModule": {
    "line": "Brings the device onto the LAN before the HTTP and WebSocket servers start, trying Ethernet, then WiFi, then its own access point.",
-   "summary": "Each interface's settings are on its own card below it.\n\nread-only: `mode`, the interface in use.\n\n**No DHCP server on an Ethernet-only build?** After about 20 seconds without a lease the device gives itself a `169.254.x.y` address (link-local). A computer on the same network without DHCP does the same, so open `<name>.local` in its browser and set a static address on the Ethernet card. A DHCP server that appears later still wins. Builds with WiFi try WiFi next, then their own access point.",
+   "summary": "Network holds the cascade, its mode and mDNS; each interface's settings are on its own card: Ethernet, WiFi and the access point. A desktop builds the same cards over stubs. The order is in More info.",
+   "guide": [
+    {
+     "title": "A direct cable to a computer",
+     "text": "With no DHCP server on an Ethernet-only build, the device takes a 169.254.x.y address after about 15 seconds. A computer on the same network does too, so open `<name>.local` and set a static address on the Ethernet card.\n\nA DHCP server that appears later still wins."
+    }
+   ],
    "image": "https://moonmodules.org/MoonLight/assets/core/NetworkModule.png",
-   "alt": "Network module controls",
    "controls": {
     "mode": {
-     "line": ""
+     "line": "The interface in use."
     },
     "mDNS": {
      "line": "The `<name>.local` hostname, on IPv4 and IPv6."
@@ -4197,52 +4388,59 @@
    "tests": "https://github.com/MoonModules/MoonLight/blob/main/test/unit/core/unit_NetworkModule.cpp"
   },
   "EthernetModule": {
-   "line": "The wired interface, a child of Network: which board's wiring it uses and how it gets an address.",
-   "summary": "Present where Ethernet is compiled in, and as a developer preview on the desktop.\n\nGateway and DNS are optional. A Static setting that cannot work, such as a gateway outside the subnet, is not used: the interface keeps DHCP and the card says why. Changing the addressing of the interface the page reaches the device through asks first, naming where the device will be.",
+   "line": "The wired interface: which board's wiring it uses, and how it gets an address.",
+   "summary": "A child of Network, which runs the cascade; it holds what Ethernet needs to join it. It exists where Ethernet is compiled in, and as a developer preview on the desktop.",
+   "guide": [
+    {
+     "title": "Choosing a static address",
+     "text": "Gateway and DNS are optional. A static setting that cannot work, such as a gateway outside the subnet, is not used: the interface keeps DHCP and the card says why.\n\nChanging the addressing of the interface the page reaches the device through asks first, naming where the device will be."
+    }
+   ],
    "image": "https://moonmodules.org/MoonLight/assets/core/EthernetModule.png",
-   "alt": "Ethernet module controls",
    "controls": {
     "ethBoard": {
-     "line": "The Ethernet wiring by name; `Custom` shows every pin, a fixed interface none."
+     "line": "The Ethernet wiring by name.",
+     "more": "Custom shows every pin; a fixed interface has no choice."
     },
     "ethType": {
-     "line": ""
+     "line": "The PHY chip, seeded per chip and overridden by the catalog."
     },
     "ethPhyAddr": {
-     "line": ""
+     "line": "The PHY's address on the management bus.",
+     "more": "-1 scans for it. Signed rather than a GPIO, so the auto-detect sentinel round-trips."
     },
     "ethRstGpio": {
-     "line": ""
+     "line": "The PHY's reset pin."
     },
     "ethMdcGpio": {
-     "line": ""
+     "line": "The management clock pin."
     },
     "ethMdioGpio": {
-     "line": ""
+     "line": "The management data pin."
     },
     "ethClockGpio": {
-     "line": ""
+     "line": "The RMII reference clock pin."
     },
     "ethClockExtIn": {
-     "line": ""
+     "line": "Whether the clock comes into the chip rather than out of it."
     },
     "ethSpiMiso": {
-     "line": ""
+     "line": "The W5500 data-in pin."
     },
     "ethSpiMosi": {
-     "line": ""
+     "line": "The W5500 data-out pin."
     },
     "ethSpiSck": {
-     "line": ""
+     "line": "The W5500 SPI clock pin."
     },
     "ethSpiCs": {
-     "line": ""
+     "line": "The W5500 chip-select pin."
     },
     "ethSpiIrq": {
-     "line": ""
+     "line": "The W5500 interrupt pin."
     },
     "ipSettings": {
-     "line": "DHCP or Static; Static reveals `ip`, `gateway`, `subnet` and `dns`."
+     "line": "DHCP or Static"
     }
    },
    "role": "generic",
@@ -4251,43 +4449,51 @@
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/core/system/EthernetModule.h"
   },
   "WiFiModule": {
-   "line": "The WiFi station, a child of Network: the networks the device knows, in the order it prefers them, and the radio's settings.",
-   "summary": "read-only: `rssi` and `txPower` (dBm) on a live radio.\n\nread-only after a join from the access point: `address` and `localName`, links to the device.\n\nJoining is connect-first, as on a phone: tap a network under `available`, type its password, Connect. ⌄ details.",
+   "line": "The WiFi station: the networks the device knows, in the order it prefers them, and the radio's settings.",
+   "summary": "A child of Network, which runs the cascade; it holds what joining WiFi needs. Joining is connect-first, as on a phone: tap a network in range, type its password, Connect.",
    "guide": [
     {
-     "title": "WiFi, details",
-     "text": "The device tries the known networks in priority order, each for ten seconds, and opens its access point only after the last. Networks a scan in the last five minutes did not see go to the end of that order, so no time goes to joining what is out of range. Each network keeps its own `ipSettings`, DHCP or Static, as a phone does, and a Static setting that cannot work joins by DHCP with the reason on its row. Editing the joined network's addressing from a page it carries asks first, as on Ethernet.\n\nConnect joins a network at once. A network picked from `available` is saved to `known` only once it joined, and \"incorrect password\" says why when it did not. A scan takes the radio off-channel for a few seconds, which drops incoming lights while connected, so the device scans by itself only when its access point opens, and otherwise when you press `scan`."
+     "title": "The order of joining",
+     "text": "The device tries the known networks in priority order, ten seconds each to join, and opens its access point after the last. Networks a scan in the last five minutes did not see go to the end of that order. Each network keeps its own IP settings."
+    },
+    {
+     "title": "Connecting",
+     "text": "Connect joins a network at once. A network picked from those in range is saved only once it joined, and \"incorrect password\" says why when it did not."
     }
    ],
    "image": "https://moonmodules.org/MoonLight/assets/core/WiFiModule.png",
-   "alt": "WiFi module controls",
    "controls": {
     "address": {
-     "line": ""
+     "line": "Where to reach the device on its new network, by address.",
+     "more": "It shows after a join from the access point. Open the link in a browser, since a phone's sign-in screen has no address bar."
     },
     "localName": {
-     "line": ""
+     "line": "The same, by the `.local` name."
     },
     "scan": {
-     "line": "Look for the networks in range; `scanned` says how long ago it last looked."
+     "line": "Look for the networks in range.",
+     "more": "A scan takes the radio off-channel for a few seconds, which drops incoming lights while connected. The device scans by itself only when its access point opens."
     },
     "scanned": {
-     "line": ""
+     "line": "How long ago the last scan finished."
     },
     "available": {
-     "line": "The networks in range, with signal bars and a lock; Connect joins one now."
+     "line": "The networks in range; Connect joins one now.",
+     "more": "Tap a network, type its password, Connect. A join from the access point shows the device's `.local` link on the row first, since the phone often lands back on its own network."
     },
     "known": {
-     "line": "The networks it joins, in priority order, each with its `ssid`, `password` and IP settings."
+     "line": "The networks it joins, in priority order.",
+     "more": "Each has its name, password and IP settings. A Static setting that cannot work joins by DHCP, with the reason on its row. Editing the addressing of the network the page arrives through asks first."
     },
     "rssi": {
-     "line": ""
+     "line": "The signal strength of the joined network."
     },
     "txPower": {
-     "line": ""
+     "line": "The power the radio transmits at now."
     },
     "txPowerSetting": {
-     "line": "Caps the radio's transmit power for a board that browns out; 0 lifts it."
+     "line": "Caps the radio's transmit power, for a board that browns out.",
+     "more": "0 lifts the cap. Lower it when the board resets as the radio sends."
     }
    },
    "role": "generic",
@@ -4297,25 +4503,30 @@
    "tests": "https://github.com/MoonModules/MoonLight/blob/main/test/unit/core/unit_WiFiModule.cpp"
   },
   "AccessPointModule": {
-   "line": "The device's own WiFi network, a child of Network, at `4.3.2.1`.",
-   "summary": "A captive portal: joining it opens the UI by itself, as a sign-in screen, and `http://4.3.2.1` reaches it too.\n\nread-only: `name`, `MM-` and four MAC digits, which says nothing about the owner.\n\nread-only: `clients`, the devices on it.\n\nIt carries the first known WiFi network's password, open only on a first setup or with an open home network. Its clients receive no stored password or config file.\n\n`always` waits for a WiFi join in progress to settle, since one radio serves both. Switching the device on and off four times, each within a few seconds, opens it for that boot without a password, whatever `opens` says, and keeps every setting. ⌄ details.",
+   "line": "The device's own WiFi network, at `4.3.2.1`: joining it opens the UI by itself, as a sign-in screen.",
+   "summary": "A child of Network, which opens and closes it; `http://4.3.2.1` reaches the UI as well.\n\nThe first known WiFi network's password protects it, so it is open only on a first setup or with an open home network. Its clients receive no stored password or config file.",
    "guide": [
     {
-     "title": "Access point, details",
-     "text": "A join asked for from a phone on the access point keeps the access point up beside the new network for two minutes, and the WiFi card shows `address` and `localName` to follow. A phone's sign-in screen has no address bar, so open a link in the browser. Joining moves the radio to the router's channel, which knocks the phone off, and a phone often lands back on its own network, where the sign-in screen is gone. So the network's row shows `afterJoining`, the device's `.local` link, before you press Connect.\n\nWhile the access point runs, its DNS answers every name with 4.3.2.1, and the web server sends any page request through it for another name to the UI, while the API answers as itself. That is what makes a phone show the sign-in screen."
+     "title": "Getting back in",
+     "text": "Switch the device on and off four times, each within a few seconds, and it opens for that boot without a password, whatever its setting says. That boot runs in safe mode: the way back to a device whose router changed, with every setting kept."
+    },
+    {
+     "title": "After a join from the access point",
+     "text": "A join asked for from a phone keeps the access point up beside the new network for two minutes, and the WiFi card shows the device's links.\n\nJoining moves the radio to the router's channel, which knocks the phone off, so open a link in the browser: the sign-in screen has no address bar."
     }
    ],
    "image": "https://moonmodules.org/MoonLight/assets/core/AccessPointModule.png",
-   "alt": "Access point module controls",
    "controls": {
     "opens": {
-     "line": "`on failure`, `always`, or `first setup only`, until a network or Ethernet is set."
+     "line": "When it opens: on failure, always, or first setup only.",
+     "more": "A join in progress holds it back, since one radio serves both; first setup stays open until a network or Ethernet is set."
     },
     "name": {
-     "line": ""
+     "line": "The network name: `MM-` and four MAC digits.",
+     "more": "Anonymous, so the air does not say whose device it is."
     },
     "clients": {
-     "line": ""
+     "line": "The devices on it."
     }
    },
    "role": "generic",
@@ -4325,10 +4536,9 @@
    "tests": "https://github.com/MoonModules/MoonLight/blob/main/test/unit/core/unit_AccessPointModule.cpp"
   },
   "FilesystemModule": {
-   "line": "The persistence **engine**: writes control values to `/.config/*.json` and restores them on boot, overlaying loaded values through each control's pointer during `defineControls()`.",
-   "summary": "The File Manager browses the stored files.\n\nCalling `defineControls()` again at runtime, when a Select changes mode, clears and rebuilds the set, so only the controls relevant to the current mode show. That is how a conditional `hidden` flag re-evaluates, and how a config change applies live with no reboot.",
+   "line": "The persistence engine: it writes control values to `/.config/*.json` and restores them on boot, so settings survive a reboot.",
+   "summary": "It is always loaded and runs first, so its load hook fires before any other module sets up. File Manager browses the stored files.",
    "image": "https://moonmodules.org/MoonLight/assets/core/FilesystemModule.png",
-   "alt": "Filesystem module controls",
    "role": "generic",
    "dim": 0,
    "doc": "core/system.md#filesystem",
@@ -4338,11 +4548,13 @@
  "catalogs": {
   "light/modifiers.md": {
    "title": "Modifiers",
+   "base": "ModifierBase",
    "line": "A modifier sits between an [effect](https://moonmodules.org/MoonLight/moonmodules/light/effects.html) and the output: it reshapes where the pixels land, or masks them, without changing what the effect draws.",
    "summary": "Modifiers compose: a [Layer](https://moonmodules.org/MoonLight/moonmodules/light/supporting.html#layer) applies its whole stack in child order, each reshaping the result of the one below. A static modifier is baked into the layer's mapping at rebuild. A dynamic one also runs a pass every frame, and an animated one rebuilds its static fold on its own clock.\n\nA modifier folds coordinates rather than drawing, so it uses little of the shared [power functions](https://moonmodules.org/MoonLight/moonmodules/light/power-functions.html). Each card's emoji are its tags, as the [tag emoji legend](https://moonmodules.org/MoonLight/explanation/architecture/index.html#tag-emoji-legend) explains."
   },
   "light/layouts.md": {
    "title": "Layouts",
+   "base": "LayoutBase",
    "line": "A layout says where the lights physically are: it maps each light's index to an (x, y, z) position, the shape an [effect](https://moonmodules.org/MoonLight/moonmodules/light/effects.html) draws onto and a [driver](https://moonmodules.org/MoonLight/moonmodules/light/drivers.html) sends out.",
    "summary": "The [Layouts](https://moonmodules.org/MoonLight/moonmodules/light/supporting.html#layouts) container holds one or more layouts and composes them into one coordinate space, which a [Layer](https://moonmodules.org/MoonLight/moonmodules/light/supporting.html#layer) renders over. The container itself takes no controls.\n\nEach card's emoji are its tags, as the [tag emoji legend](https://moonmodules.org/MoonLight/explanation/architecture/index.html#tag-emoji-legend) explains.",
    "videos": [
@@ -4354,13 +4566,15 @@
   },
   "light/effects.md": {
    "title": "Effects",
+   "base": "EffectBase",
    "line": "An effect draws: each frame it writes a color per light into its [Layer](https://moonmodules.org/MoonLight/moonmodules/light/supporting.html#layer)'s buffer, which modifiers reshape and a driver sends out.",
    "summary": "Effects are built from the shared [power functions](https://moonmodules.org/MoonLight/moonmodules/light/power-functions.html), the drawing, field and motion routines every effect composes. One that names an index color reads the global palette, the `palette` control on [Drivers](https://moonmodules.org/MoonLight/moonmodules/light/supporting.html#drivers).\n\nEach card's emoji are its tags, as the [tag emoji legend](https://moonmodules.org/MoonLight/explanation/architecture/index.html#tag-emoji-legend) explains, and its dimension is its native axes: a Layer extrudes a lower-dimensional effect onto a bigger grid."
   },
   "light/drivers.md": {
    "title": "Drivers",
+   "base": "DriverBase",
    "line": "A driver sends the lights out: to LEDs on a wire, a HUB75 panel, the network, a smart-light bridge or the web UI.",
-   "summary": "Every driver reads the shared buffer of the [Drivers](https://moonmodules.org/MoonLight/moonmodules/light/supporting.html#drivers) container, so several drivers drive one installation, each its own slice. A device's drivers come with its entry in the installer's device catalog, and [Preview](https://moonmodules.org/MoonLight/moonmodules/light/drivers.html#preview) is the one every device starts with.\n\nEach driver opens with the shared controls, then adds its own. The output correction (`localBrightness`, `curve`, `fixture`, `whiteMode`) sets how its slice looks, and the source window (`start`, `count`) sets which slice it reads. Hue and Preview correct nothing, since the bridge and the browser do, and HUB75, Preview and the video drivers take the whole buffer.\n\nEach card's emoji are its tags, as the [tag emoji legend](https://moonmodules.org/MoonLight/explanation/architecture/index.html#tag-emoji-legend) explains.",
+   "summary": "Every driver reads the shared buffer of the [Drivers](https://moonmodules.org/MoonLight/moonmodules/light/supporting.html#drivers) container, so several drivers drive one installation, each its own slice. A device's drivers come with its entry in the installer's device catalog, and [Preview](https://moonmodules.org/MoonLight/moonmodules/light/drivers.html#preview) is the one every device starts with.\n\nEach driver opens with the shared controls, then adds its own. The output correction (`localBrightness`, `curve`, `fixture`, `whiteMode`) sets how its slice looks, and the source window (`start`, `count`) sets which slice it reads. Hue and Preview show no correction controls, though Hue still applies the global brightness. HUB75, Preview and the video drivers take the whole buffer.\n\nEach card's emoji are its tags, as the [tag emoji legend](https://moonmodules.org/MoonLight/explanation/architecture/index.html#tag-emoji-legend) explains.",
    "videos": [
     {
      "video": "https://moonmodules.org/MoonLight/assets/moontube/07-drivers-desktop.webm",
@@ -4369,6 +4583,25 @@
     {
      "video": "https://moonmodules.org/MoonLight/assets/moontube/07-drivers-esp32.webm",
      "caption": "Drivers on a device: RMT and parallel LED pins, HUB75, panel cards, and the network senders."
+    }
+   ]
+  },
+  "light/supporting.md": {
+   "title": "Supporting"
+  },
+  "core/system.md": {
+   "title": "System"
+  },
+  "core/services.md": {
+   "title": "Services",
+   "base": "Services",
+   "line": "The container for the user-added Service modules, the capability bridges a device provides or consumes.",
+   "summary": "A service is added and removed at runtime, the core twin of the light domain's Effects and Drivers. Fixed device infrastructure, such as identity and network, lives under System.",
+   "image": "https://moonmodules.org/MoonLight/assets/core/Services.png",
+   "videos": [
+    {
+     "video": "https://moonmodules.org/MoonLight/assets/moontube/09-services.webm",
+     "caption": "Every service in turn: audio, button, analog, infrared, and a scripted one."
     }
    ]
   }

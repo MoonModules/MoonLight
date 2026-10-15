@@ -15,26 +15,39 @@
 
 namespace mm {
 
-/// The reusable fixture-profile library, a Drivers submodule owning NAMED channel-role wirings, each editable in its own row and referenced by many drivers. A driver stores a profile's STABLE id and resolves it here into its own Correction, so a wiring is built once and reordering other profiles disturbs no reference.
+/// The named channel wirings drivers reference: which channel carries Red, Green, Blue, White, or a fixture role such as Pan and Tilt.
+/// @card fixtureprofiles.png
 ///
-/// A curated set of real fixtures is seeded read-only on first boot. A user adds custom named wirings alongside them. The render loop never reads this module.
+/// Real fixtures ship read-only, the color orders, multi-channel pars and moving heads. Add your own alongside them. A driver saves its profile by name, so a rename sends it back to its default at the next boot.
+///
+/// @guide
+///
+/// ## 16-bit channels
+///
+/// A fine role is the low byte of a 16-bit channel, the DMX convention. `RGB 16-bit`, `GRB 16-bit` and `RGBW 16-bit` ship built in. Effects stay 8-bit, and brightness and curve go to 16 bits on output. Pan and tilt widen by repeating their byte, and a master dimmer is held wide open.
+///
+/// ## Which profile a chip takes
+///
+/// | Chip | Profile |
+/// |---|---|
+/// | WS2812B, WS2813, WS2815 | `GRB` |
+/// | SK6812 RGBW | `GRBW` |
+/// | WS2814 | `WRGB` |
+/// | WS2816 | `GRB 16-bit` |
+/// | UCS8903 | `RGB 16-bit` |
+/// | UCS8904 | `RGBW 16-bit` |
+///
+/// A WS2811 orders its colors as its maker wired it, so try `RGB`, then the other five orders. The TM1814 and TM1914 need a settings preamble that a profile cannot describe.
 ///
 /// @moreinfo
 ///
-/// ## What a profile is
+/// A driver stores a profile's stable id and resolves it into its own Correction, so reordering other profiles disturbs no reference. The render loop never reads this module. Without room for the 512-byte 16-bit table a channel stays 8-bit.
 ///
-/// A channel-role layout: role `r` at channel `i` says channel `i` of a light carries role `r`.
-/// The color roles cover the strip orders, and the fixture roles cover pan, tilt and the rest.
+/// **What a profile is.** A channel-role layout: role `r` at channel `i` says channel `i` of a light carries role `r`. The color roles cover the strip orders, and the fixture roles cover pan, tilt and the rest.
 ///
-/// ## Storage is uncapped
+/// **Storage is uncapped.** A profile is exactly as wide as its fixture. Role bytes live in one dynamic pool, each profile a slice, so a moving head declares as many channels as it has. Only the cold path touches the pool.
 ///
-/// A profile is exactly as wide as its fixture. Role bytes live in one dynamic pool, each profile a slice, so a moving head declares as many channels as it has. The pool is touched on the cold path only, leaving it free to reallocate.
-///
-/// ## The editable-list primitive
-///
-/// The first consumer of `EditableListSource`. The whole add, delete, reorder and edit surface is reused rather than rebuilt. The per-row fields are the name, the channel count, and one role picker per channel.
-///
-/// @card fixtureprofiles.png
+/// **The editable-list primitive.** The first consumer of `EditableListSource`. The whole add, delete, reorder and edit surface is reused rather than rebuilt. The per-row fields are the name, the channel count, and one role picker per channel.
 class FixtureProfilesModule : public MoonModule, public ListSource {
 public:
     ModuleRole role() const MM_NONBLOCKING override { return ModuleRole::Generic; }
@@ -117,6 +130,8 @@ public:
         MoonModule::defineControls();
         // The persisted rows INCLUDE the built-ins, so restoring replaces rather than duplicates.
         seedBuiltins();
+        /// The editable list of profile rows.
+        /// @guide A row carries a name, a channel count and one role picker per channel. Built-in rows are read-only, and custom rows persist across a reboot.
         controls_.addList("profiles", *this);   // this module is the (editable) ListSource
     }
 

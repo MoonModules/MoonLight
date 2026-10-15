@@ -281,6 +281,29 @@ def test_a_base_classs_template_method_and_its_helpers_publish_the_controls_a_dr
                                                                            "more": "Two drivers can share one buffer."}
 
 
+def test_controls_defined_in_the_cpp_beside_the_header_and_through_a_local_add_lambda_count(tmp_path):
+    """A class that only declares `defineControls` is read from its `.cpp`, and a lambda named `add…` publishes as a method does."""
+    header = tmp_path / "Slot.h"
+    header.write_text("""struct Controls { void addControl(const char*, int&) {} };
+struct Slot {
+    Controls controls_;
+    /// The clock pin.
+    int clk = 0;
+    void defineControls();
+};
+""", encoding="utf-8")
+    ci, tu = parsed(tmp_path / "Slot.cpp", """#include "Slot.h"
+void Slot::defineControls() {
+    const auto addPinRow = [&](const char* name, int& pin) { controls_.addControl(name, pin); };
+    addPinRow("clk", clk);
+}
+""")
+    gen_help._CLANG[:] = [ci, ["-I", str(tmp_path)]]
+    hdr = ci.Index.create().parse(str(header), args=["-x", "c++", "-std=c++20"])
+    cls = next(c for c in hdr.cursor.walk_preorder() if c.kind == ci.CursorKind.STRUCT_DECL and c.spelling == "Slot")
+    assert gen_help.controls_of(cls) == {"clk": "The clock pin."}
+
+
 def test_a_lead_may_name_several_clips_each_with_its_title():
     _, fields = gen_help.block_tags("Lead.\n@video a.webm On a desktop.\n@video b.webm On a\ndevice.")
     assert fields["video"] == ["a.webm On a desktop.", "b.webm On a device."]
@@ -480,6 +503,18 @@ def test_a_catalog_whose_page_is_gone_is_generated_from_the_help(monkeypatch):
     assert "### Alpha 💫 · static" in md and "### Zeta 💫 · dynamic" in md
     assert "## Alpha, details\n\n#### Tips\n\nUse it." in md
     assert mkdocs_hooks.generated_catalog("moonmodules/light/other.md") is None
+
+
+def test_a_written_catalog_page_is_the_intro_its_deck_follows_and_its_intro_class_is_no_card(monkeypatch):
+    """A catalog no class introduces keeps its own markdown as the intro; a container that introduces its page is not drawn again as a card."""
+    import mkdocs_hooks
+    help_file = {"catalogs": {"core/demo.md": {"title": "Demos", "base": "Demos"}},
+                 "modules": {"Demos": {"doc": "core/demo.md#demos", "line": "The container."},
+                             "AlphaService": {"doc": "core/demo.md#alpha", "line": "A."}}}
+    monkeypatch.setitem(mkdocs_hooks._help_cache, "file", help_file)
+    md = mkdocs_hooks.generated_catalog("moonmodules/core/demo.md", "# Demos\n\nWritten intro.\n")
+    assert md.startswith("# Demos\n\nWritten intro.\n\n<noscript>")
+    assert '<a id="alpha"></a>' in md and '<a id="demos"></a>' not in md
 
 
 def test_a_catalog_intro_shows_its_picture_above_the_line_and_its_clips_below_the_summary_in_order(monkeypatch):

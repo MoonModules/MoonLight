@@ -17,32 +17,31 @@
 namespace mm {
 
 /// One rendering layer: a buffer, a mapping onto physical lights, and the effects that fill it.
-///
-/// The unit the render loop iterates, turning coordinates into lights.
-/// Effects write the buffer, modifiers reshape it, and `Drivers` composites the stack.
 /// @card Layer.png
+///
+/// Effects write the buffer, modifiers reshape it, and `Drivers` composites the stack of layers into one output.
+///
+/// @guide
+///
+/// ## Trails and fades
+///
+/// Nothing clears the buffer between frames, so an effect that fades what is already there leaves a trail. A fade is a rate, so a trail is the same length at any frame rate. Several fading effects cost one pass.
+///
+/// ## The status line
+///
+/// The status shows the logical box the effects render into. A mirror modifier folds a 128 by 128 layout into a 64 by 64 box. A warning replaces it when the layer does not fit in memory.
 ///
 /// @moreinfo
 ///
-/// ## What it owns
+/// **What it owns.** A buffer sized to the logical box, a `MappingLUT` onto physical positions, and two child lists.
 ///
-/// A buffer sized to the logical box, a `MappingLUT` onto physical positions, and two child lists.
+/// **Compositing happens elsewhere.** `blendMode` and `opacity` are inert here: a layer cannot know its place in the stack, so `Drivers` reads both, plus the child order, and composites.
 ///
-/// ## Compositing happens elsewhere
+/// **The buffer persists.** Nothing clears it per frame, which is what makes trails possible, so each effect owns its background.
 ///
-/// `blendMode` and `opacity` are inert here: a layer cannot know its place in the stack.
-/// `Drivers` reads both, plus the child order, and composites.
+/// **Two paths.** The cold path folds the box through the static modifiers, then builds the table. The hot path runs each effect, extrudes, then applies the live modifiers.
 ///
-/// ## The buffer persists
-///
-/// Nothing clears it per frame, which is what makes trails possible.
-///
-/// ## Two paths
-///
-/// The cold path folds the box through the static modifiers, then builds the table.
-/// The hot path runs each effect, extrudes, then applies the live modifiers.
-///
-/// Details: [the supporting page](https://moonmodules.org/MoonLight/moonmodules/light/supporting.html#layer-details).
+/// **Fades.** An effect asks for a fade per sixtieth-of-a-second reference frame, and the layer scales it by the share of that frame the real frame covered. The layer keeps the gentlest request across the fading effects.
 class Layer : public MoonModule {
 public:
     ModuleRole role() const MM_NONBLOCKING override { return ModuleRole::Layer; }
@@ -57,9 +56,10 @@ public:
     /// The blend modes, in option order.
     enum BlendMode : uint8_t { kBlendAlpha, kBlendAdditive, kBlendMultiply, kBlendScreen, kBlendDarken, kBlendLighten,
                                kBlendDifference, kBlendExclusion, kBlendModeCount };
-    /// How this layer composites onto those below it, as an index into `kBlendModeOptions`.
+    /// How this layer combines with the layers below it.
+    /// @guide Multiply darkens what is beneath it, additive adds light, and alpha blends by opacity.
     uint8_t blendMode = kBlendAdditive;
-    /// How strongly this layer composites, from 0 for invisible to 255 for full.
+    /// How strongly this layer shows, from invisible to full.
     uint8_t opacity = 255;
 
     /// Publish the two composition controls the `Drivers` container reads.

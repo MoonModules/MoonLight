@@ -33,8 +33,11 @@ CATALOG = ROOT / "docs" / "moonmodules"
 # In the docs tree, so every docs deploy publishes it at <site>/help/help.json, and committed, so the docs build reads it without LLVM and a header's change shows in the diff as its help line.
 HELP = ROOT / "docs" / "help" / "help.json"
 # A catalog page drawn whole from help.json, named once here with the base class whose comment introduces it: the page's title and its intro, what every module on it shares.
+# A catalog with no shared class keeps its intro as the page's own markdown, and its base is None.
 CATALOGS = {"light/modifiers.md": ("Modifiers", "ModifierBase"), "light/layouts.md": ("Layouts", "LayoutBase"),
-            "light/effects.md": ("Effects", "EffectBase"), "light/drivers.md": ("Drivers", "DriverBase")}
+            "light/effects.md": ("Effects", "EffectBase"), "light/drivers.md": ("Drivers", "DriverBase"),
+            "light/supporting.md": ("Supporting", None), "core/system.md": ("System", None),
+            "core/services.md": ("Services", "Services")}
 
 _MARKER_RE = re.compile(r"^(@guide|@moreinfo)\s*$", re.MULTILINE)
 _XREF_RE = re.compile(r"@xref\{([a-z0-9-]+)(?:\|([^}]+))?\}")
@@ -305,7 +308,12 @@ def controls_of(cls) -> dict:
                 return
         if node.kind.name == "CALL_EXPR":
             args = list(node.get_arguments())
-            name = _literal(args[0]) if args and node.spelling.startswith("add") else None
+            # A local lambda named `add…` publishes the same way, its call being `operator()` on the variable.
+            callee = node.spelling if node.spelling != "operator()" else \
+                next((n.spelling for n in node.get_children() if n.kind.name in ("DECL_REF_EXPR", "UNEXPOSED_EXPR")), "")
+            if node.spelling == "operator()" and args and _literal(args[0]) is None:
+                args = args[1:]   # the lambda object itself leads the arguments
+            name = _literal(args[0]) if args and callee.startswith("add") else None
             if name:
                 field = _referenced_field(args[1]) if len(args) > 1 else None
                 controls[name] = (comment_text(field.raw_comment) if field is not None else "") \
@@ -341,7 +349,7 @@ def _is_base_or_self(cls, other) -> bool:
 
 
 def _runs(cls, name):
-    """The definition of method `name` the class runs: its own, else the nearest base's, as the virtual call resolves it."""
+    """The definition of method `name` the class runs: its own, else the nearest base's, as the virtual call resolves it. A method the class only declares is defined in its header's `.cpp`, which is read for it."""
     queue, seen = [cls], set()
     while queue:
         c = queue.pop(0)
@@ -349,11 +357,32 @@ def _runs(cls, name):
             continue
         seen.add(c.hash)
         for m in c.get_children():
-            if m.kind.name == "CXX_METHOD" and m.spelling == name and m.is_definition():
-                return m
+            if m.kind.name == "CXX_METHOD" and m.spelling == name:
+                return m if m.is_definition() else (m.get_definition() or _out_of_line(m))
         queue += [(b.referenced.get_definition() or b.referenced) for b in c.get_children()
                   if b.kind.name == "CXX_BASE_SPECIFIER" and b.referenced is not None]
     return None
+
+
+# The clang bindings and flags `generate` loaded, and each `.cpp` read so far, since the registry's unit holds headers only.
+_CLANG: list = []
+_CPP_UNITS: dict = {}
+
+
+def _out_of_line(decl):
+    """The definition of a method its class only declares, from the `.cpp` beside the header; None when there is none."""
+    if not _CLANG or decl.location.file is None:
+        return None
+    cpp = Path(decl.location.file.name).with_suffix(".cpp")
+    if not cpp.exists():
+        return None
+    ci, extra = _CLANG
+    if cpp not in _CPP_UNITS:
+        _CPP_UNITS[cpp] = ci.Index.create().parse(str(cpp), args=CLANG_ARGS + extra)
+    owner = decl.semantic_parent.spelling
+    return next((c for c in _CPP_UNITS[cpp].cursor.walk_preorder()
+                 if c.kind.name == "CXX_METHOD" and c.spelling == decl.spelling and c.is_definition()
+                 and c.semantic_parent is not None and c.semantic_parent.spelling == owner), None)
 
 
 def _returns(cls, name) -> list[str]:
@@ -524,12 +553,13 @@ def module_help(cls, doc: str, ref: str) -> tuple[dict, str]:
 def generate(ref: str = "main") -> tuple[dict, dict]:
     """The help file, and a report: which modules came from headers and cards, and the controls with no line."""
     ci, extra = load_clang()
+    _CLANG[:] = [ci, extra]
     tu = ci.Index.create().parse(str(ROOT / REGISTRY), args=CLANG_ARGS + extra)
     errors = [d for d in tu.diagnostics if d.severity >= ci.Diagnostic.Error]
     if errors:
         # A translation unit with errors loses declarations silently; a short file is not a clean one.
         sys.exit("clang could not parse the registry:\n  " + "\n  ".join(map(str, errors[:5])))
-    modules, report = {}, {"card": [], "header": [], "missing": {}, "unlisted": {}}
+    modules, report = {}, {"card": [], "header": [], "missing": {}, "unlisted": {}, "missing_assets": []}
     attributions = attribution_catalog()
     regs = list(registrations(tu, ci))
     registered = {cls.spelling: (type_name, doc) for type_name, cls, doc in regs}
@@ -558,16 +588,23 @@ def generate(ref: str = "main") -> tuple[dict, dict]:
             report["missing"][type_name] = missing if entry.get("line") else ["(module)"] + missing
     catalogs = {}
     for page, (title, base) in CATALOGS.items():
-        cls = definition(base)
-        if cls is not None:
+        cls = definition(base) if base else None
+        if base is None:
+            catalogs[page] = {"title": title}
+        elif cls is not None:
             try:
                 h = resolve_refs(class_help(cls.raw_comment), link)
             except LookupError as e:
                 sys.exit(f"{base}: {e}")
             image, _, alt = (h.get("card") or "").partition(" ")
-            videos = [{"video": asset_url(v), "caption": c.strip()}
-                      for v, _, c in (tag.partition(" ") for tag in h.get("video", []))]
-            catalogs[page] = {k: v for k, v in {"title": title, "line": h["line"], "summary": h["summary"],
+            videos = []
+            for v, _, c in (tag.partition(" ") for tag in h.get("video", [])):
+                # A clip whose file is missing is reported and left out, so the page never plays a broken source.
+                if url := asset_url(v):
+                    videos.append({"video": url, "caption": c.strip()})
+                else:
+                    report["missing_assets"].append(f"{base}: {v}")
+            catalogs[page] = {k: v for k, v in {"title": title, "base": base, "line": h["line"], "summary": h["summary"],
                                                  "image": asset_url(image) if image else None, "alt": alt.strip(),
                                                  "videos": videos,
                                                  "guide": h["guide"], "attribution": h.get("attribution")}.items() if v}
@@ -601,6 +638,8 @@ def main() -> int:
         print(f"  left out of card help, which shows inline text only: {dropped}")
     for t, names in sorted(report["missing"].items()):
         print(f"  no help: {t}: {', '.join(names)}")
+    for asset in report["missing_assets"]:
+        print(f"  no such file under docs/assets/: {asset}")
     for t, names in sorted(report["unlisted"].items()):
         print(f"  not in {ATTRIBUTIONS.relative_to(ROOT)} yet: {t}: {', '.join(names)}")
     return 0

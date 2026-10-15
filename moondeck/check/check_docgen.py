@@ -1391,6 +1391,16 @@ def _card_rules(rel: str, c: dict):
 from gen_api import DOMAINS as _DOC_DOMAINS  # noqa: E402
 
 
+def _card_links(help_file: dict) -> set:
+    """The (domain, stem) of every module's header, whose technical page its card links as the help's Technical link."""
+    out = set()
+    for m in help_file.get("modules", {}).values():
+        src = re.search(r"/src/(\w+)/(?:[^/]+/)*(\w+)\.h$", m.get("source", ""))
+        if src:
+            out.add((src.group(1), src.group(2)))
+    return out
+
+
 def _orphan_pages():
     """Generated pages nothing links to: a technical page a reader cannot reach.
 
@@ -1420,6 +1430,7 @@ def _orphan_pages():
             domain = m.group(1) or (md.parts[-2] if md.parts[-2] in _DOC_DOMAINS else None)
             for d in ((domain,) if domain else _DOC_DOMAINS):
                 linked.add((d, m.group(2)))
+    linked |= _card_links(_hooks._help_file())
     for d in _DOC_DOMAINS:
         for h in (ROOT / "src" / d).rglob("*.h"):
             for m in re.finditer(r"\b(\w+)\.h\b", h.read_text(errors="ignore")):
@@ -1624,10 +1635,10 @@ def _help_size(help_file: dict) -> list:
             continue
         source = m.get("source", "").partition("/blob/")[2].partition("/")[2] or type_name
         mores = {c: words(h["more"]) for c, h in m.get("controls", {}).items() if h.get("more")}
-        sections = {g["title"]: words(g["text"]) for g in m.get("guide", [])}
+        sections = [(g["title"], words(g["text"])) for g in m.get("guide", [])]   # a list, so two sections sharing a title each count
         out += [(source, f"{_HELP_SIZE_RULE}: `{c}`'s guide {n} words > {MAX_MORE_WORDS}") for c, n in mores.items() if n > MAX_MORE_WORDS]
-        out += [(source, f"{_HELP_SIZE_RULE}: guide '{t}' {n} words > {MAX_GUIDE_WORDS}") for t, n in sections.items() if n > MAX_GUIDE_WORDS]
-        total = words(m.get("summary", "")) + sum(mores.values()) + sum(sections.values())
+        out += [(source, f"{_HELP_SIZE_RULE}: guide '{t}' {n} words > {MAX_GUIDE_WORDS}") for t, n in sections if n > MAX_GUIDE_WORDS]
+        total = words(m.get("summary", "")) + sum(mores.values()) + sum(n for _, n in sections)
         if total > MAX_HELP_WORDS:
             out.append((source, f"{_HELP_SIZE_RULE}: {total} words > {MAX_HELP_WORDS}; move tables, steps and reasons to a how-to page"))
     return out

@@ -10,7 +10,7 @@ They live on the Control card as a grid of 64 pads. Click one to apply it.
 
 Right-click a pad, or press and hold it on a touchscreen. The pad editor opens.
 
-Type a name, choose which container it saves, and press **save current state here**.
+Type a name, choose which container it saves, and press **save current state here**. The name, pad and source in the editor are input for the next save, not configuration, so none of them is written to flash.
 
 Any card saves itself as well: press its `{ }` button, name the preset, and press **save as preset**. It lands on the first free pad and holds that card alone, so applying it puts back that card and leaves its neighbors running.
 
@@ -40,7 +40,7 @@ Saving from a pad captures one of four containers whole, chosen as a radio butto
 
 One container per save is what makes a look **portable**: an Effects preset applies on any board, because it carries no pin map. Add Drivers to it and it becomes a device snapshot tied to one rig's wiring, which is a different and much less shareable thing.
 
-A preset written by hand, or added from elsewhere, can hold less than a container. This one sets only the palette and leaves the brightness, the pins and the running look alone:
+A secret stays out of a document, so a preset never carries a password. A preset written by hand, or added from elsewhere, can hold less than a container. This one sets only the palette and leaves the brightness, the pins and the running look alone:
 
 ```json
 { "Drivers": { "palette": "Ocean" } }
@@ -52,7 +52,9 @@ Click the pad. The look, geometry or setup replaces what was there.
 
 **A saved container is a restore, not an overlay.** It carries `"$patch": "replace"`, so a preset carrying more modules than the device has adds them, and one describing fewer removes what it omits. That is what makes a pad reliable: what you saved is what comes back, rather than what you saved merged with whatever drifted since.
 
-**One active preset per container**, so a layout preset and a look stay lit together. Applying a new look replaces only the look, and a palette preset holds the Drivers pad next to it.
+**One active preset per container**, so a layout preset and a look stay lit together. Applying a new look replaces only the look, and a palette preset holds the Drivers pad next to it. A pad is tinted by its container: layout blue, effects violet, driver green, service amber.
+
+A restore changes the module tree, which pauses rendering while it runs, so a large preset stalls the lights for a moment. Every removal runs before any creation, so a module can move between layers under its own name.
 
 ## From the gallery
 
@@ -63,6 +65,8 @@ Search covers the name, the description and the author, and a chip per kind narr
 - **add to a pad** puts a preset on the first free pad, with any script it needs that the device lacks, from the gallery or from the scripts MoonLight ships.
 - **try now** applies it the same way without keeping it on a pad.
 - **install** puts a script into `/moonlive`.
+
+A look, a palette, or a look with its palette applies at once. A preset that also sets pins or geometry asks first, since those belong to the author's rig.
 
 An entry made on a newer MoonLight than yours says so: update first.
 
@@ -86,7 +90,7 @@ A preset file added, edited or removed in the File Manager shows on the pads at 
 
 Only **Effects** presets travel to Home Assistant, where they appear as the light entity's effect list over MQTT, or in the native preset dropdown through the WLED integration.
 
-Layouts and Drivers presets are deliberately excluded: they rewire pins and geometry, and should not be reachable from something that believes it is choosing a color scheme. Setting that up is in [Home automation](home-automation.md).
+Layouts and Drivers presets are deliberately excluded: they rewire pins and geometry, and should not be reachable from something that believes it is choosing a color scheme. The restriction is enforced where a preset is applied, not only by leaving them out of the list. Setting that up is in [Home automation](home-automation.md#presets-in-home-assistant).
 
 ## When a preset refuses to apply
 

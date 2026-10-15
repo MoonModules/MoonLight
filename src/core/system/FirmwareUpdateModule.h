@@ -15,18 +15,11 @@
 ///
 /// @moreinfo
 ///
-/// The status and the byte counters are inline globals rather than module state.
-/// The flash route and the platform's own task both write them, and both must see one instance.
-/// A module reading them reports the same install a socket handler started.
+/// The status and byte counters are inline globals rather than module state: the flash route and the platform's own task both write them, and both must see one instance.
 ///
-/// ## Two addresses, because a rename has to survive in the field
+/// **Two addresses, because a rename has to survive in the field.** A device flashed before v5.0.0 asks the repository's earlier name forever. The update path names both addresses and takes whichever answers, the current name first.
 ///
-/// A device flashed before v5.0.0 asks the repository's earlier name forever, and GitHub's rename redirect is what carries it across.
-/// The update path names both addresses and takes whichever answers, so an in-field update rests on more than that redirect.
-/// The current name comes first: every device reaches it directly, and the earlier one is a second chance when that request fails.
-/// Fetching another project's firmware is prevented separately.
-/// The OTA compares an incoming image's own ESP-IDF descriptor against the names in `FirmwareImage.h` before a byte is written.
-/// An address answering with a stranger's release is refused rather than flashed.
+/// Another project's firmware is refused: the OTA compares an incoming image's own ESP-IDF descriptor against the names in `FirmwareImage.h` before a byte is written.
 
 namespace mm {
 
@@ -58,31 +51,28 @@ inline bool otaInFlight() {
            std::strncmp(g_otaStatus, "writing MoonBase", 16) == 0;
 }
 
-/// The status surface for over-the-air flashing: what is installed, and how an install goes.
-///
-/// The flash itself is driven by the web route, which hands a URL to the platform task.
-/// This module polls that task's progress once a second into its own controls.
+/// Over-the-air firmware flashing: what is installed, and how an install goes.
 /// @card FirmwareUpdateModule.png
+///
+/// A flash swaps the binary and restarts the device, the one change that does not apply live. The flash is driven by the web route; the module shows its progress.
+///
+/// @guide
+///
+/// ## Two images
+///
+/// A device carrying two images, the app and MoonBase, shows them as two tabs. A Restart in MoonBase button sits on the card.
+///
+/// When MoonBase's version differs from the app's, the card warns and the top bar shows `⬆ MoonBase`; installing the matching one from its tab clears it.
 ///
 /// @moreinfo
 ///
-/// ## What the controls describe
+/// **What the controls describe.** The version is pure semver, so the channel is derivable. The build carries the git id first, since that answers which code is on a board. With two images, a selector says which the rest describe.
 ///
-/// The version is pure semver, so the channel is derivable rather than mixed into it.
-/// The build carries the git id first, since that answers which code is on a board.
-/// The partition bar shows the image filling its slot, or the incoming one mid-install.
-/// Where a device carries two images, a selector says which the rest describe.
+/// The `image` control tells the UI that installs reboot into MoonBase, behind one overlay ([MoonBase](https://moonmodules.org/MoonLight/explanation/architecture/moonbase.html)). Progress and phase use the shared status slot.
 ///
-/// Progress is not a control: it drives the overlay raised during an install.
-/// The phase is not one either, surfacing through the shared status slot.
+/// **Installing.** The task downloads, writes the next slot, flips the boot pointer and restarts, pausing long enough for the response to reach the browser. Every failure reports through the status slot until the next attempt.
 ///
-/// ## Installing
-///
-/// The task downloads, writes the next slot, flips the boot pointer, and restarts.
-/// The pause before that restart is long enough for the response to reach the browser.
-/// Every failure reports through the status slot and stays until the next attempt.
-/// A wrong image fails at the start or at boot, and is recoverable over USB.
-/// On a device with one app slot the recovery image installs and reboots back.
+/// A wrong image fails at the start or at boot, and is recoverable over USB. On a device with one app slot the recovery image installs and reboots back.
 class FirmwareUpdateModule : public MoonModule {
 public:
     /// Keep reporting whatever the toggle says, as the other fixed modules do.
@@ -221,20 +211,31 @@ public:
 private:
     char     statusStr_[64] = "idle";   ///< the phase, mirrored from the shared global
     uint32_t totalSnap_     = 0;        ///< the total the progress control was bound at
-    char     versionStr_[32] = {};   ///< pure semver
-    char     buildStr_[48]   = {};   ///< the git id, then the timestamp
-    char     firmwareStr_[24] = {};  ///< the build variant's name
-    uint32_t firmwareSizeVal_ = 0;   ///< bytes used in the app partition
+    /// The installed version.
+    char     versionStr_[32] = {};
+    /// The git id, then the build date.
+    char     buildStr_[48]   = {};
+    /// The build variant; on the MoonBase tab, its chip.
+    char     firmwareStr_[24] = {};
+    /// The image against the size of its slot.
+    /// @guide The bar doubles as the install bar: it fills with the incoming image mid-install.
+    uint32_t firmwareSizeVal_ = 0;
     uint32_t totalFlashVal_   = 0;   ///< app partition size
-    char     moonbaseStr_[32] = "standby";   ///< the recovery image's version
-    char     moonbaseBuildStr_[36] = {};   ///< its build id, then when it was built: `abc12345+ · Oct  4 2026 10:31:00` is 34
+    /// The installed version.
+    char     moonbaseStr_[32] = "standby";
+    /// The git id, then the build date.
+    char     moonbaseBuildStr_[36] = {};
     bool     moonbaseOutdated_ = false;    ///< it differs from this app's version
-    uint32_t moonbaseSizeVal_  = 0;        ///< bytes its image occupies
+    /// The image against the size of its slot.
+    /// @guide The bar doubles as the install bar: it fills with the incoming image mid-install.
+    uint32_t moonbaseSizeVal_  = 0;
     uint32_t moonbaseTotalVal_ = 0;        ///< the factory slot's size
-    char     moonbaseChipStr_[16] = {};    ///< the chip whose MoonBase image this board takes
+    /// The build variant; on the MoonBase tab, its chip.
+    char     moonbaseChipStr_[16] = {};
     /// The images `imageSel_` picks from, in kImages order.
     enum Image : uint8_t { kImageApp, kImageMoonBase, kImageCount };
-    uint8_t  imageSel_ = kImageApp;        ///< which image is described
+    /// Which image the card describes, drawn as two tabs.
+    uint8_t  imageSel_ = kImageApp;
     bool     wasWriting_ = false;          ///< edge-detects the end of any install, to restore the bar
     bool     wasInstallingMoonBase_ = false;   ///< edge-detects the end of a MoonBase install
 };

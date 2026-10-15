@@ -1686,6 +1686,10 @@ def test_the_app_help_fits_a_glance_per_control_per_section_and_in_total():
     help_file["modules"]["DemoDriver"]["summary"] = long + " " + long
     assert any(msg.startswith("app help too long: 281 words > 250") for _, msg in check_docgen._help_size(help_file))
     assert not any("other" in src for src, _ in found)   # a page still written by hand is not measured
+    help_file["modules"]["DemoDriver"]["summary"] = ""
+    help_file["modules"]["DemoDriver"]["guide"] = [{"title": "Wiring", "text": long}, {"title": "Wiring", "text": long}]
+    # Two sections sharing a title each count, toward the total too.
+    assert sum("guide 'Wiring'" in msg for _, msg in check_docgen._help_size(help_file)) == 2
 
 
 def test_a_control_is_explained_on_its_member_never_in_the_module_guide():
@@ -1694,4 +1698,11 @@ def test_a_control_is_explained_on_its_member_never_in_the_module_guide():
                                             "guide": [{"title": "pins", "text": "Wire them."}, {"title": "Wiring", "text": "Short."}]}}}
     assert check_docgen._guide_names_control(help_file) == [
         ("src/light/DemoDriver.h", "module guide explains a control `pins`: move it to the member's `/// @guide` line")]
+
+
+def test_a_modules_card_reaches_its_headers_technical_page():
+    import check_docgen
+    help_file = {"modules": {"TasksModule": {"source": "https://github.com/MoonModules/MoonLight/blob/main/src/core/system/TasksModule.h"},
+                             "Bare": {}}}
+    assert check_docgen._card_links(help_file) == {("core", "TasksModule")}
 

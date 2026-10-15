@@ -42,6 +42,7 @@ void SdCardService::defineControls() {
     addPinRow("pwrPin", pwrPin_, true);
 
     // Neither is hidden: there is no panel of this module's own, so the generic card is the only place either shows. Press-twice confirmed generically, the same contract every other confirm-gated button already has.
+    /// Erase the card and make it FAT32, pressed twice to confirm.
     controls_.addButton("format", /*confirm=*/true);
     // Usage gauge, bound only once mounted: an absent/unreadable card has nothing to show.
     if (mounted_ && totalKiB_ > 0) controls_.addProgress("card", usedKiB_, totalKiB_, ProgressUnit::KiB);

@@ -20,33 +20,26 @@
 
 namespace mm {
 
-/// Discovers other devices on the LAN and presents them as a browsable list.
-///
-/// It covers every device on the network, this one included and marked as such.
-/// Core and domain-neutral: it finds a device, and light modules consume the list.
-/// A submodule of the network module, discovery depending on the network being up.
+/// Discovers other devices on the LAN, MoonLight and WLED among them, and lists them, this one included and marked as such.
 /// @card DevicesModule.png
+///
+/// The last-known list survives a reboot. A child of Network, discovery depending on the network being up.
+///
+/// @guide
+///
+/// ## Finding WLED devices
+///
+/// WLED lists a device only from the broadcast copy, and the copy costs the rest of the LAN next to nothing.
+///
+/// A network that drops multicast is detected, and the status says so ([IGMP snooping](https://moonmodules.org/MoonLight/explanation/architecture/moonlight.html#multicast-and-igmp-snooping)).
 ///
 /// @moreinfo
 ///
-/// ## Discovery is passive
+/// **Discovery is passive.** Each device announces a presence packet on the multicast group and the broadcast address WLED listens on, and this listens for both. A device appears when heard and ages out when it stops; there is no sweep.
 ///
-/// Each device announces a small presence packet on the multicast group and, by default, the broadcast address WLED listens on; this listens for both.
-/// There is no subnet sweep: a device appears when heard, and ages out when it stops.
-/// We announce ourselves on a slow cadence, so peers discover us.
+/// **Plugins are the interop seam.** A foreign ecosystem hooks in as a plugin, not a branch. Each declares its port and turns a datagram into a device kind, ours offered first; a new system is one new file.
 ///
-/// ## Plugins are the interop seam
-///
-/// A foreign ecosystem hooks in as a plugin rather than a branch.
-/// Each declares its port and turns a datagram into a device kind, ours offered first.
-/// A new system is one new file, and a device found out of band registers through a seam.
-///
-/// ## Ageing out, and persistence
-///
-/// Each sighting is stamped, and a live-confirmed device is kept as durable history.
-/// A row restored from persistence gets a short probation, so a ghost cannot persist.
-/// The list persists, so the last-known set shows on boot before any packet arrives.
-/// This module does discovery only, never device-to-device commands.
+/// **Aging out, and persistence.** Each sighting is stamped; a live-confirmed device is kept as history. A restored row gets a short probation, so a ghost cannot persist, and the list shows on boot. Discovery only, never device commands.
 class DevicesModule : public MoonModule, public ListSource {
 public:
     /// Adopt this device's own name, so its own row matches what everything else shows.
@@ -127,13 +120,15 @@ public:
 
     /// The modes `addressing` picks from; its options start one entry into the shared Addressing names, since presence is never unicast.
     enum Mode : uint8_t { kDevMulticast, kDevMulticastBroadcast, kDevModeCount };
-    /// How presence travels: the multicast group, or the group plus the broadcast address WLED listens on, the default.
+    /// How presence travels: multicast, or multicast and broadcast.
+    /// @guide Broadcast is the default, since WLED devices hear it too.
     uint8_t addressing = kDevMulticastBroadcast;
 
     /// Declare the addressing and the list of discovered devices.
     void defineControls() override {
         MoonModule::defineControls();
         controls_.addSelect("addressing", addressing, kAddressingNames + 1, kDevModeCount);
+        /// The discovered devices; a row expands to its details.
         controls_.addList("devices", *this);   // this module is the ListSource
     }
 
@@ -157,7 +152,7 @@ public:
         }
         if (!d->name[0]) { formatDottedQuad(d->name, ip); persistChanged = true; }
         if (d->colorCount != color) { d->colorCount = color; persistChanged = true; }
-        d->lastSeenMs = platform::millis();   // transient: keeps the bridge from ageing out
+        d->lastSeenMs = platform::millis();   // transient: keeps the bridge from aging out
         // A cached row coming back online is a status change even with no field edit.
         const bool wasCached = d->cached;
         d->cached = false;

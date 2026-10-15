@@ -28,9 +28,9 @@ If you like MoonLight, give it a star, fork it, or open an issue. It helps the p
 
 🎵 **Audio-reactive**: an I²S microphone drives a 16-band FFT spectrum and sound level.
 
-🏠 **Home automation**: a device joins Homebridge and any MQTT hub for on/off, brightness and color. See [the MQTT module](docs/moonmodules/core/services.md#mqtt).
+🏠 **Home automation**: a device joins Homebridge and any MQTT hub for on/off, brightness and color. See [the MQTT module](docs/moonmodules/core/system.md#mqtt).
 
-📁 **On-device file manager**: browse and edit the device filesystem from the browser, with drag-drop upload and [firmware update over the LAN](docs/moonmodules/core/services.md#firmware-update).
+📁 **On-device file manager**: browse and edit the device filesystem from the browser, with drag-drop upload and [firmware update over the LAN](docs/moonmodules/core/system.md#firmware-update).
 
 🛡️ **Robust to any input**: add, delete, replace or reconfigure any module in any order, at any grid size, and the device keeps running. Every crash found becomes a regression test.
 

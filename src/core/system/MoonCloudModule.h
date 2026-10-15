@@ -14,17 +14,18 @@
 
 namespace mm {
 
-/// The container for everything MoonLight does with a server we run.
+/// The container for everything MoonLight does with a server MoonModules runs.
+/// @card MoonCloudModule.png
 ///
-/// It does no work of its own. Each thing MoonCloud does is a child with its own consent: Stats, Talk, and Sync to come. A user who wants a joint lightshow has not agreed to usage reporting.
+/// It holds no settings of its own. Each thing it does is a child with its own consent: @ref MoonStatsModule reports the install and @ref MoonTalkModule is a message board. A user who wants one has not agreed to the other.
 ///
 /// @moreinfo
 ///
 /// ## The browser relay, on a board without HTTPS
 ///
-/// A board with no TLS cannot post, so its one outbound call goes into a one-slot outbox instead, a hidden control the open page reads.
-/// The page posts it to the server, which accepts a cross-origin request, and writes the request's `id` to the hidden `outbox sent` to empty it. A report then goes out whenever someone has the page open, enough for a usage count.
-/// Two pages open at once can both post the waiting request before either empties it, a rare double the count tolerates. Neither control exists on a board with HTTPS, so the relay costs it nothing but the check.
+/// A board with no TLS cannot post, so its one outbound call goes into a one-slot outbox, a hidden control the open page reads. The page posts it, then clears it by writing the request's `id` to the hidden `outbox sent`.
+///
+/// A report goes out whenever someone has the page open, enough for a usage count. Two pages can both post the waiting request, a rare double the count tolerates. A board with HTTPS has neither control.
 class MoonCloudModule : public MoonModule {
 public:
     /// A board without HTTPS gets its outbox at construction, so the relay's controls are declared with the rest.
@@ -103,8 +104,10 @@ private:
     static constexpr const char* kHost = "mooncloud-stats.moonmodules.workers.dev";
     // One request: a usage report is well under this, and a talk message is capped at 280 characters.
     static constexpr uint16_t kOutboxBytes = 2048;
-    char* outbox_ = nullptr;   ///< the request waiting for the page, on a board without HTTPS only
-    int32_t acked_ = 0;        ///< the id the page last delivered, which it writes to `outbox sent`
+    /// The request waiting for the open page to post it.
+    char* outbox_ = nullptr;
+    /// The id of the request the page delivered, which empties the outbox.
+    int32_t acked_ = 0;
     int32_t pendingId_ = 0;    ///< the id of the request waiting in the outbox
     int32_t lastId_ = 0;       ///< the id given last
 };

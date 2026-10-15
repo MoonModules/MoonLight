@@ -21,16 +21,24 @@
 
 namespace mm {
 
-/// A MIDI control desk driving the control surface, decoded by its `profile`: Mackie Control, or the Akai APC40 mkII.
+/// A MIDI control desk driving the control surface, in the Mackie Control or the Akai APC40 mkII layout.
 /// @card MidiService.png
 ///
-/// The desk plugs into the computer showing the interface; the browser reads it with the Web MIDI API and writes each batch of messages into the hidden, live `midi` control.
-/// A batch is each message in hex, decoded as it is written, so two identical batches, such as two equal knob turns, both count.
+/// The desk plugs into the computer showing the interface and the browser reports it. A Mackie desk such as the iCON QCon or the Behringer X-Touch in MC mode works without setup, an Akai APC40 mkII after one choice.
 ///
-/// The way back is a surface: the hidden `desk` control holds what the desk shows, one message per fader motor, button light and knob ring.
-/// It is state rather than a log: the browser sends only the slots that changed, and a page opened later finds the motors' positions.
-/// The hidden `hello` control holds what the browser sends whenever the desk connects, such as the SysEx that hands an APC40's lights to the host.
-/// `source` puts the desk on this device's USB port or on the network as an RTP-MIDI session; `share` passes a USB desk on to the network.
+/// Faders, knobs and SELECT buttons drive the surface, and the desk follows it back with motors, lights and knob rings.
+///
+/// @guide
+///
+/// ## Where the desk plugs in
+///
+/// The browser reads a desk on a secure page only: the desktop app's `localhost` is, a board's own page needs marking once. A desk on USB or the network works on any page.
+///
+/// [The how-to](https://moonmodules.org/MoonLight/how-to/control-surface.html#a-midi-desk-or-a-gamepad-through-the-browser) has the steps.
+///
+/// ## The Akai APC40 mkII
+///
+/// Track faders and knobs 1 to 8 move the surface's faders and encoders, and activators flip its switches. The 40 clip pads apply presets 1 to 40: dark when empty, dim white when stored, green when applied.
 class MidiService : public MoonModule, public ControlSurface {
 public:
     /// A service, so the container accepts it as a child.
@@ -41,13 +49,17 @@ public:
     /// The places `source` picks from, in its option order.
     enum Source : uint8_t { kSourceBrowser, kSourceUsb, kSourceNetwork, kSourceCount };
 
-    /// Which desk this is, since each desk lays its controls out in its own messages.
+    /// The desk's layout, since each desk lays its controls out in its own messages.
+    /// @guide Hidden on a shared desk, which the device it is shared with decodes.
     uint8_t profile = kProfileMackie;
-    /// Where the desk is plugged in: the computer showing the interface, this device's own USB port, which then carries no serial log or USB flashing, or the network.
+    /// Where the desk plugs in: the browser's computer, this USB port, or the network.
+    /// @guide USB needs an S3 with 8 MB of flash or more. The port then carries no serial log or USB flashing, and the board supplies the desk's 5 V.
     uint8_t source = kSourceBrowser;
-    /// Whether the desk on the USB port is passed on over the network rather than driving this device.
+    /// Pass the desk on the USB port over the network instead of driving this device.
+    /// @guide The device the desk drives names this one in its `host`. One host at a time.
     bool share = false;
-    /// The RTP-MIDI port this device's session listens on, data on the one above.
+    /// The RTP-MIDI port of this device's session.
+    /// @guide Data goes on the port above it.
     uint16_t port = rtpmidi::kDefaultPort;
 
     /// Declare the desk's profile, its port, the inbound batch, the desk's state and its greeting.
@@ -615,9 +627,12 @@ private:
         mm::formatTo(lastMessage_, sizeof(lastMessage_), "switch%u %s", static_cast<unsigned>(index) + 1u, on ? "on" : "off");
     }
 
-    char midi_[512] = {};     ///< the newest batch the interface wrote
-    char desk_[kDeskSlots * kSlotChars] = {};   ///< the faders, the switches, the encoders, then the preset pads, as the desk should show them
-    char hello_[96] = {};     ///< what the browser sends when the desk connects
+    /// The latest desk messages the browser wrote, in hex.
+    char midi_[512] = {};
+    /// What the desk shows: a message per fader motor, light and knob ring.
+    char desk_[kDeskSlots * kSlotChars] = {};
+    /// What the browser sends when the desk connects, such as an APC40's SysEx.
+    char hello_[96] = {};
     char statusBuf_[48] = {}; ///< the status shown: what the last message did, or where the desk stands
     char lastMessage_[48] = {};   ///< what the message being decoded did, shown once the batch is done
     bool attached_ = false;
@@ -625,7 +640,9 @@ private:
     bool greeted_ = false;       ///< whether the desk on the USB port or the network was greeted since it appeared
     bool connected_ = false;     ///< what the status last said about that desk
     char shown_[kDeskSlots * 6] = {};   ///< per slot, the hex that desk was last sent
-    char host_[64] = {};         ///< the desk on the network, an address or a name with an optional `:port`, empty to be invited
+    /// The desk on the network, an address or a name with an optional `:port`.
+    /// @guide Empty waits to be invited, as a Mac's Audio MIDI Setup does. A sharing device announces `<name>.local`.
+    char host_[64] = {};
     char hostName_[64] = {};     ///< `host_` without its port
     uint8_t hostIp_[4] = {};
     uint16_t hostPort_ = rtpmidi::kDefaultPort;

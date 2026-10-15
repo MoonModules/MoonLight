@@ -15,17 +15,11 @@ namespace mm {
 ///
 /// @moreinfo
 ///
-/// ## The packet
+/// **The packet.** Forty-four bytes, hand-serialized rather than trusted to struct packing: a header, two little-endian float levels and a peak flag, sixteen bands clamped to 254, then the dominant bin. Padding goes out zero.
 ///
-/// Forty-four bytes on a fixed port, broadcast: a header string, two levels as floats and a peak flag.
-/// Then the sixteen bands as bytes, and the dominant bin's magnitude and frequency.
-/// Two padding runs are real wire bytes and go out as zero, and one reserved byte stays zero because the upstream may claim it later.
-/// The offsets are hand-serialized rather than trusted to struct packing, and the floats are little-endian, which every target here and upstream shares.
+/// **The network.** Both directions use multicast group 239.0.0.1 on port 11988, never broadcast or a custom port. See [IGMP snooping](https://moonmodules.org/MoonLight/explanation/architecture/moonlight.html#multicast-and-igmp-snooping).
 ///
-/// ## Units convert at this boundary
-///
-/// The wire carries the upstream's magnitude units and the audio frame keeps ours, byte-scaled and conditioned by the same noise floor and gain as the bands.
-/// The scale factor is exactly the divisor its own effects apply, so a byte of ours lands on the brightness a native source would produce.
+/// **Units.** The wire carries the upstream's magnitudes, about 0 to 4096, and the frame keeps ours, so they convert here by 16, the divisor its own effects apply. A received magnitude clamps to 255.
 
 constexpr uint16_t WLED_SYNC_PORT = 11988;
 constexpr size_t   WLED_SYNC_PACKET_SIZE = 44;

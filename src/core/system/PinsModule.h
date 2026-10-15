@@ -14,30 +14,28 @@
 
 namespace mm {
 
-/// The device's pin ownership map: which module owns each GPIO, for what, and whether it is safe.
+/// A read-only map of which module owns each GPIO, for what role, and whether the pin is safe for it.
+/// @card PinsModule.png
 ///
-/// It is keyed by physical GPIO, the way an OS device manager or a board template is.
-/// A fixed System module, wired by code, and read-only.
-/// Header-only: a small read-only diagnostic over the live tree and one platform seam.
+/// It is keyed by physical GPIO, the way an OS device manager or a board template is. It walks the live tree for every claimed pin, holds no state, and flags double claims.
+///
+/// @guide
+///
+/// ## Reading the map
+///
+/// A row shows the GPIO, its owner and role, and the live direction, level and drive.
+///
+/// A row takes a colored edge when unsafe: red for a reserved or double-claimed pin, yellow for a driven role on a strap.
+///
+/// The [GPIO usage reference](https://moonmodules.org/MoonLight/reference/hardware/gpio-usage.html) lists the pins per chip.
 ///
 /// @moreinfo
 ///
-/// ## What it collects
+/// **What it collects.** Both pin controls and driver lane lists. Each claim carries a severity flag and the live state read off the pad. A disabled module's pins drop out.
 ///
-/// It walks the live tree for every claimed pin, both pin controls and driver lane lists.
-/// Each claim carries a severity flag and the live state read off the pad.
-/// A disabled module's pins drop out, so the map reflects release-on-disable.
+/// A GPIO claimed twice shows the first owner and lists every claimant in the detail. It surfaces rather than arbitrates, the controls already being the registry.
 ///
-/// Each row is one GPIO with its owner and role.
-/// A GPIO claimed twice shows the first owner and lists every claimant in the detail.
-/// It surfaces rather than arbitrates, the controls already being the registry.
-///
-/// ## Why it only observes
-///
-/// MoonLight's equivalent is a central manager owning a table and assigning pins.
-/// This inverts that: each module owns its pins, and one module observes them.
-/// What is borrowed is the per-pin report rather than the ownership.
-/// The role is derived from the control name, with no central vocabulary.
+/// **Why it only observes.** The usual design is a central pin manager. This inverts it: each module owns its pins and one module observes them, the role derived from the control name. Header-only: one platform seam.
 class PinsModule : public MoonModule {
 public:
     /// Declare the one list of claimed pins.
@@ -273,6 +271,7 @@ private:
         }
     };
 
+    /// A row per claimed GPIO.
     PinListSource pins_;
 };
 

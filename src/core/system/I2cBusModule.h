@@ -10,26 +10,22 @@
 
 namespace mm {
 
-/// The board's I2C bus: its two pins, opened once and shared by every device on it, with the standard detect scan.
-///
-/// A device on the bus, such as AudioService's codec, names only its own address; the wires are stated here, once per board.
-/// A fixed System module, wired by code.
+/// The board's I2C bus: its two pins, opened once and shared by every device on it, with a scan that detects them.
 /// @card I2cBusModule.png
+///
+/// A device on the bus, such as the @ref AudioService codec, names only its own address; the wires are stated here, once per board. The pins default to unused, so a board without an I2C device claims no GPIO.
+///
+/// @guide
+///
+/// ## Reading the scan
+///
+/// The scan names each answering address by the module driving it, as `0x18 Audio (ES8311)`. A claimed address that stays silent reads `no answer`: check the wiring and the device's power.
 ///
 /// @moreinfo
 ///
-/// ## One bus, many devices
+/// **One bus, many devices.** Two drivers each opening a bus on the same port collide, so the bus is opened here and the devices attach to it. Moving it to other pins releases what is attached first, and each device attaches again.
 ///
-/// Two drivers each opening a bus on the same port collide the moment both are active, so the bus is opened here and the devices attach to it.
-/// Moving it to other pins releases what is attached first, and each device attaches again on its own.
-/// A scan names each answering address by the module driving it, as `0x18 Audio (ES8311)`; a claimed address that stays silent reads `no answer`.
-///
-/// ## The pins
-///
-/// They default to unused, so a board without an I2C device claims no GPIO.
-/// A board with a bus sets them from its catalog entry; on one whose bus pins drive something else, such as LED outputs, they stay unset.
-///
-/// Prior art: the scan mirrors MoonLight's, and the probe range follows Linux i2c-tools.
+/// **The pins.** A board with a bus sets them from its catalog entry; on one whose bus pins drive something else, such as LED outputs, they stay unset. The probe range follows Linux i2c-tools.
 class I2cBusModule : public MoonModule {
 public:
     // It respects the enabled toggle, so switching it off closes the bus and frees its pins.
@@ -38,6 +34,7 @@ public:
     void defineControls() override {
         controls_.addPin("sda", sda_);
         controls_.addPin("scl", scl_);
+        /// Probe the bus now.
         controls_.addButton("scan");
         controls_.addReadOnly("result", resultStr_, sizeof(resultStr_));
         MoonModule::defineControls();
@@ -69,9 +66,12 @@ public:
 
 private:
     // Unused by default, so a board without a bus claims no GPIO in the pin map.
-    int8_t sda_ = -1;            ///< the data pin, or -1 for unused
-    int8_t scl_ = -1;            ///< the clock pin, or -1 for unused
-    char resultStr_[64] = "";    ///< the addresses found, each with the module that drives it, cut off cleanly past about three
+    /// The bus data pin; a board's catalog entry sets it.
+    int8_t sda_ = -1;
+    /// The bus clock pin; a board's catalog entry sets it.
+    int8_t scl_ = -1;
+    /// Each address found, named by the module driving it, cut off cleanly past about three.
+    char resultStr_[64] = "";
     // The bus is the board's one, so only the instance that opened it closes it; a type probe released unprepared leaves the live bus alone.
     bool open_ = false;          ///< this instance opened the bus
 

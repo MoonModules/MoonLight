@@ -13,28 +13,35 @@
 
 namespace mm {
 
-/// A MoonCloud child with its own consent, sharing a chip model implying nothing more.
-/// Everything sent is public and permanent: no private message, and no delete.
-/// The module never posts on its own, so a message exists because somebody typed it.
+/// A public message board between MoonLight devices, off until you turn it on.
+/// @card MoonTalkModule.png
+///
+/// A child of @ref MoonCloudModule with its own consent. A message is sent because you typed one: nothing posts on its own.
+///
+/// @attribution Meshtastic
+///
+/// @guide
+///
+/// ## Public and permanent
+///
+/// Everything sent is public and permanent: no private message, no recipient, no delete. There is no authentication, so a sender id can be fabricated by hand.
 ///
 /// @moreinfo
 ///
-/// Two consents govern it: one allows posting, the other shares the device name.
-/// The second is off by default, a name saying more than an identifier does.
-/// Without it a message carries the first characters of the installation id.
+/// Two consents govern it: one allows posting, the other shares the device name. The second is off by default, a name saying more than an identifier does; without it a message carries the first characters of the installation id.
 ///
-/// Reading sends no identifier, and happens only while consent is on.
-/// There is no authentication, so a sender id can be fabricated by hand.
-/// That is acceptable where nothing is gated on identity, and is stated in the policy.
+/// Reading sends no identifier, and happens only while consent is on. Having no authentication is acceptable where nothing is gated on identity, and is stated in the policy.
 class MoonTalkModule : public MoonModule {
 public:
     /// Declare the two consents, the message box, and the button that publishes.
     void defineControls() override {
         controls_.clear();
-        controls_.addControl("consent", consent_);       // publishing is on or off
-        controls_.addControl("shareName", shareName_);   // off: a name identifies a person
+        controls_.addControl("consent", consent_);
+        controls_.addControl("shareName", shareName_);
         controls_.addText("message", message_, sizeof(message_));
-        controls_.addButton("send");                     // the only thing that publishes
+        /// Publish the message and clear the box.
+        /// @guide Enter in the message field sends too. The box keeps its text when the server is unreachable.
+        controls_.addButton("send");
     }
 
     /// Publish the consent explanation, a message being sent only when the button is pressed.
@@ -124,8 +131,13 @@ private:
         return cloud && cloud->post("/api/talk", body.data());
     }
 
-    bool consent_ = false;      ///< whether posting is allowed
-    bool shareName_ = false;    ///< whether the device name rides along
+    /// Whether posting and reading are on.
+    /// @guide Nothing is published or read while it is off.
+    bool consent_ = false;
+    /// Whether your device name rides along, a separate decision.
+    /// @guide A device name identifies a person rather than a machine. Without it your messages carry the first 8 characters of your installation id, which groups them without naming you.
+    bool shareName_ = false;
+    /// What to say; typing changes nothing on its own.
     // Sized to the server's own limit plus a terminator, rather than under it.
     char message_[281] = {};
 };

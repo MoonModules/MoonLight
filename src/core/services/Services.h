@@ -4,16 +4,14 @@
 
 namespace mm {
 
-/// The top-level container for the user-added Service modules, added and removed at runtime.
-///
-/// The core twin of the light domain's containers, holding children of one role.
-/// So the generic add, replace, delete and persistence machinery applies unchanged.
-/// Fixed infrastructure lives under System, so this is exactly the mutable half of that split.
-/// A pure grouping node with no controls and no state, whose one job is to say what it accepts.
+/// The container for the user-added Service modules, the capability bridges a device provides or consumes.
 /// @card Services.png
+/// @video 09-services.webm Every service in turn: audio, button, analog, infrared, and a scripted one.
+///
+/// A service is added and removed at runtime, the core twin of the light domain's Effects and Drivers. Fixed device infrastructure, such as identity and network, lives under System.
 class Services : public MoonModule {
 public:
-    /// Accept any service as a child, which is what makes this the mutable half.
+    /// Accept any service as a child, which is what makes this the mutable half; with no controls or state, the generic add, replace, delete and persistence machinery applies unchanged.
     const char* acceptsChildRoles() const override { return "service"; }
 };
 

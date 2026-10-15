@@ -15,6 +15,16 @@ namespace mm {
 /// One `Layouts` describes the setup, and every layer in `Effects` renders into it. Children stitch into one flat physical address space, in registration order.
 /// @card Layouts.png
 ///
+/// @guide
+///
+/// ## Order and universes
+///
+/// Disabling a layout removes its lights and the layouts after it shift down. Reordering by drag and drop shifts them too. Both move Art-Net universe assignments, so disable the driver to keep a mapping stable.
+///
+/// ## The status line
+///
+/// It reports the total light count and the physical bounding box. A dense grid's count equals its box volume, so a smaller count signals a sparse layout.
+///
 /// @moreinfo
 ///
 /// ## The container owns coordinate iteration
@@ -23,11 +33,7 @@ namespace mm {
 ///
 /// ## Disabling and reordering shift indices
 ///
-/// Disabling a layout removes its lights and later layouts shift down; reordering by drag and drop sets each layout's physical range. Both move ArtNet universe assignments, so disable the driver to keep a mapping stable.
-///
-/// ## The status line
-///
-/// It reports the total light count and the physical bounding box: a dense grid's count equals its box volume, so a smaller count signals a sparse layout.
+/// Disabling a layout removes its lights and later layouts shift down; reordering sets each layout's physical range.
 class Layouts : public MoonModule {
 public:
     /// The tag the UI shows for this container.

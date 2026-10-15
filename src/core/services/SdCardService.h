@@ -7,10 +7,24 @@
 
 namespace mm {
 
-/// A board's microSD slot: pins, a usage gauge and a format button. Its files appear under `/sd`, within the existing File Manager tree.
-///
-/// A Services child, added only to a board's catalog entry, the way AudioService's mic pins are.
+/// A board's microSD slot, where one is wired: its wiring, a usage gauge and a format button.
 /// @card SdCardService.png
+///
+/// Mounted, its files appear under `/sd`, within the one @ref FileManagerModule tree. This module never duplicates that tree.
+///
+/// @guide
+///
+/// ## Mounting
+///
+/// Wiring edits apply live, with no reboot. A pulled card is noticed within a second. A missing or unreadable card shows its status instead of retrying: insert the card, then switch the module off and on, edit a pin, or reboot.
+///
+/// ## Formatting
+///
+/// The card is FAT32, with 32 KB clusters. A fresh or exFAT card says so on its status, and `format` makes a FAT32 one in place. A large card takes seconds, shown as "formatting", and refuses transfers meanwhile. A Teensy mounts exFAT too, and its format pauses the render.
+///
+/// ## SPI mode
+///
+/// Reads hold, but a write over about 50 KB can stop the card until a power cycle. A card mounted that way says so on its status.
 ///
 /// @moreinfo
 ///
@@ -22,8 +36,6 @@ namespace mm {
 ///
 /// `board` picks a wiring boards follow, filtered to the ones this chip can wire, and hides the pins it sets; Custom shows them for a hand-wired slot. It persists by label, and a config holding only pins opens on the preset they match.
 ///
-/// A card mounted over SPI carries a warning: on the Dig-Octa, reads hold but writes past about 50 KB stop the card until a power cycle.
-///
 /// The default is Custom, unless the filter leaves this chip one preset: every P4 board with a slot wires the same pins, so a P4 opens on it. A classic has two, so its catalog entry names one.
 ///
 /// ## The mount re-attempts on every pin change, like the bus it rides
@@ -32,7 +44,7 @@ namespace mm {
 ///
 /// A cheap probe in `tick1s()` notices a pull. An inserted card mounts on a pin edit, a module restart or a boot, since mounting an empty slot stalls the render thread.
 ///
-/// An unmount or a format under an open stream is refused with "busy: transfer in progress", and a card pulled mid-transfer unmounts once the stall timeout has closed that stream.
+/// An unmount or a format under an open stream is refused with "busy: transfer in progress". A card pulled mid-transfer unmounts once the stall timeout has closed that stream.
 ///
 /// ## Pins, gauge and format are this module's whole surface
 ///
@@ -40,9 +52,8 @@ namespace mm {
 ///
 /// ## Why the gauge counts KiB
 ///
-/// A card's byte count overruns the `uint32_t` a Progress control carries, so `platform::sdCardUsed`/`Total` are `uint64_t` and this module narrows to KiB, which the gauge declares as its unit.
+/// A card's byte count overruns the `uint32_t` a Progress control carries. So `platform::sdCardUsed`/`Total` are `uint64_t`, and this module narrows to KiB, which the gauge declares as its unit.
 ///
-/// Prior art: I2cBusModule's live pin reconfiguration; FileManagerModule's usage gauge.
 class SdCardService : public MoonModule {
 public:
     /// A Services child, same as AudioService: the catalog entry attaches it under "Services".
@@ -84,19 +95,28 @@ private:
     bool formatting_ = false;         ///< a format runs in the background, which tick1s() waits out
     bool tried_ = false;              ///< whether prepare() has tried triedPins_ since the last release()
     platform::SdPinConfig triedPins_{};   ///< the pins prepare() last tried, mounted or not, so an unrelated prepare() is a no-op
-    uint32_t usedKiB_ = 0;             ///< card usage, in KiB: @xref{why-the-gauge-counts-kib}
+    /// The card's usage bar, counted in KiB.
+    /// @guide A KiB count keeps a card past 4 GiB reporting correctly: @xref{why-the-gauge-counts-kib}.
+    uint32_t usedKiB_ = 0;
     uint32_t totalKiB_ = 0;            ///< the card's capacity, in KiB, read once on mount
     uint8_t  secondsSinceScan_ = 0;    ///< paces the usage scan
 
-    // Unused by default, so a chip with no card wired claims no GPIO; a board's catalog entry sets the ones it wires.
-    int8_t clkPin_ = -1;   ///< SDMMC clock
-    int8_t cmdPin_ = -1;   ///< SDMMC command line
-    int8_t d0Pin_  = -1;   ///< SDMMC data line 0, required
-    int8_t d1Pin_  = -1;   ///< SDMMC data line 1; unset alongside d2/d3 drops the bus to 1-bit mode
-    int8_t d2Pin_  = -1;   ///< SDMMC data line 2
-    int8_t d3Pin_  = -1;   ///< SDMMC data line 3
-    int8_t pwrPin_ = -1;   ///< a slot's card-power switch, or -1 where the slot has none
-    uint8_t bus_ = 0;      ///< a platform::SdBus: the SD bus, or SPI mode
+    /// The clock pin under Custom, SCK in SPI mode.
+    int8_t clkPin_ = -1;
+    /// The command pin under Custom, MOSI in SPI mode.
+    int8_t cmdPin_ = -1;
+    /// Data line 0 under Custom, required, MISO in SPI mode.
+    int8_t d0Pin_  = -1;
+    /// Data line 1 under Custom; unset with d2 and d3, the bus runs 1-bit.
+    int8_t d1Pin_  = -1;
+    /// Data line 2 under Custom; unset with d1 and d3, the bus runs 1-bit.
+    int8_t d2Pin_  = -1;
+    /// Data line 3 under Custom, CS in SPI mode.
+    int8_t d3Pin_  = -1;
+    /// The pin switching the slot's card power, unset where the slot has none.
+    int8_t pwrPin_ = -1;
+    /// The bus under Custom: the SD bus, or the SD spec's SPI mode.
+    uint8_t bus_ = 0;
 
     /// One board's slot wiring, the fields matching platform::SdPinConfig; -1 leaves a line unused.
     struct SdPreset {
@@ -121,7 +141,9 @@ private:
     static constexpr uint8_t kSdPresetCount = sizeof(kSdPresets) / sizeof(kSdPresets[0]);
     static constexpr uint8_t kPresetNone = 0xFF;   ///< never a valid row, so the first build applies whatever the selection resolved to
 
-    uint8_t presetSel_ = 0;                           ///< the selected row of presetOptions_
+    /// The slot's wiring, from the presets this chip can wire; Custom sets bus and pins.
+    /// @guide P4 SDMMC is the slot every P4 board wires. Classic SDMMC (1-bit) is the Olimex ESP32-Gateway's, Classic SPI the QuinLED Dig-Octa's, and Teensy 4.1 SD socket the Teensy's own slot.
+    uint8_t presetSel_ = 0;
     const char* presetOptions_[kSdPresetCount] = {};  ///< the labels of the presets this build offers
     uint8_t presetIndex_[kSdPresetCount] = {};        ///< each offered row's index in kSdPresets
     uint8_t presetCount_ = 0;                         ///< how many presets this build offers

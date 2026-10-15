@@ -245,23 +245,17 @@ def _help_file() -> dict:
     return _help_cache["file"]
 
 
-def generated_catalog(src_uri: str) -> str | None:
-    """A catalog page drawn whole from help.json, for a page whose markdown is gone. The intro comes from the base class its modules share, the deck holds a heading per module for fill_cards_from_help to draw, and each module's guide is its details section."""
+def generated_catalog(src_uri: str, intro: str | None = None) -> str | None:
+    """A catalog page drawn from help.json. The intro is the page's own markdown when it has one, else the class comment its modules share; the deck holds a heading per module for fill_cards_from_help to draw, and each module's guide is its details section."""
     page = src_uri.removeprefix("moonmodules/")
     cat = _help_file().get("catalogs", {}).get(page)
     if not cat:
         return None
+    # The class whose comment is the intro is the page itself, so it is no card on it.
     mods = sorted(((t, m) for t, m in _help_file().get("modules", {}).items()
-                   if m.get("doc") == page or m.get("doc", "").startswith(page + "#")),
+                   if (m.get("doc") == page or m.get("doc", "").startswith(page + "#")) and t != cat.get("base")),
                   key=lambda tm: display_name(tm[0]).lower())
-    out = [f"# {cat['title']}", ""]
-    if cat.get("image"):
-        out += [f'<img src="{_site_relative(cat["image"], src_uri)}" width="300" alt="{cat.get("alt", "")}">', ""]
-    out += [_site_relative(cat.get("line", ""), src_uri), ""]
-    for para in (p for p in cat.get("summary", "").split("\n\n") if p):
-        out += [_site_relative(para, src_uri), ""]
-    for clip in cat.get("videos", []):
-        out += [f'<video src="{_site_relative(clip["video"], src_uri)}" controls playsinline width="360" title="{clip.get("caption", "")}"></video>', ""]
+    out = [intro.rstrip(), ""] if intro is not None else _class_intro(cat, src_uri)
     # The deck is the page: its cards render as the catalog table until the script replaces them, which is what search indexes and a reader without JavaScript sees.
     out += ["<noscript><style>.mm-deck .mm-catalog-wrap { display: block; }</style></noscript>", "",
             f'<div class="mm-deck" data-page="{page}" markdown="1">', ""]
@@ -278,10 +272,24 @@ def generated_catalog(src_uri: str) -> str | None:
     return "\n".join(out)
 
 
+def _class_intro(cat: dict, src_uri: str) -> list[str]:
+    """A catalog's intro from the class comment its modules share: the title, the picture, the line, the summary and the clips."""
+    out = [f"# {cat['title']}", ""]
+    if cat.get("image"):
+        out += [f'<img src="{_site_relative(cat["image"], src_uri)}" width="300" alt="{cat.get("alt", "")}">', ""]
+    out += [_site_relative(cat.get("line", ""), src_uri), ""]
+    for para in (p for p in cat.get("summary", "").split("\n\n") if p):
+        out += [_site_relative(para, src_uri), ""]
+    for clip in cat.get("videos", []):
+        out += [f'<video src="{_site_relative(clip["video"], src_uri)}" controls playsinline width="360" title="{clip.get("caption", "")}"></video>', ""]
+    return out
+
+
 def catalog_markdown(src_uri: str) -> str | None:
-    """A catalog page's markdown: the file while it exists, else the page generated from help.json."""
+    """A catalog page's markdown: generated from help.json, its own file being the intro when it has one; a page that is no catalog is its file."""
     path = Path(__file__).resolve().parent.parent.parent / "docs" / src_uri
-    return path.read_text(encoding="utf-8") if path.exists() else generated_catalog(src_uri)
+    written = path.read_text(encoding="utf-8") if path.exists() else None
+    return generated_catalog(src_uri, written) or written
 
 
 def _help_modules() -> dict:
@@ -521,14 +529,6 @@ def _render_catalog_table(markdown: str) -> str:
     return "\n".join(out)
 
 
-def _deck_page(title: str, catalog: str, page: str) -> str:
-    """A catalog page as a card deck: a container help-deck.js fills from help.json."""
-    return (f"# {title}\n\n"
-            f"Every module of the [{catalog} catalog]({posixpath.basename(page)}) as a card, drawn "
-            f"from the help the app shows. Tap a card to turn it, filter by its emoji or search.\n\n"
-            f'<div class="mm-deck" data-page="{page}"></div>\n')
-
-
 def on_pre_build(config):
     """Forget the last build's help.json, so a live server draws the file as it is now."""
     _help_cache.clear()
@@ -554,11 +554,6 @@ def on_files(files, config):
     for page in _help_file().get("catalogs", {}):
         if not (ROOT / "docs" / "moonmodules" / page).exists():
             _add(f"moonmodules/{page}", generated_catalog(f"moonmodules/{page}"))
-    # A generated catalog is a deck itself, so only a written catalog gets a deck page beside it.
-    for page, title in (("light/effects", "Effects"), ("light/layouts", "Layouts"), ("light/modifiers", "Modifiers"),
-                        ("light/drivers", "Drivers"), ("core/system", "System"), ("core/services", "Services")):
-        if (ROOT / "docs" / "moonmodules" / f"{page}.md").exists():
-            _add(f"moonmodules/{page}-deck.md", _deck_page(f"{title} deck", title.lower(), f"{page}.md"))
     _add("reference/tests/scenario-tests.md", render_scenarios(collect_scenario_files()))
 
     # Source-generated technical pages. gen_api.generate() writes each to disk under
@@ -715,6 +710,9 @@ def on_page_markdown(markdown, page, config, files):
     pages) render the prose ### blocks as a MoonLight-style 2-column table. Source
     .md stays authored as readable blocks; the table is build-time only."""
     markdown = _rewrite_out_of_docs_links(markdown, page.file.src_uri)
+    # A written catalog page is the intro its generated deck follows.
+    if page.file.abs_src_path and Path(page.file.abs_src_path).exists():
+        markdown = generated_catalog(page.file.src_uri, markdown) or markdown
     if page.file.src_uri in _CATALOG_PAGES:
         markdown = _render_catalog_table(fill_cards_from_help(markdown, page.file.src_uri))
     elif page.file.abs_src_path and Path(page.file.abs_src_path) == ATTRIBUTIONS:

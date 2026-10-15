@@ -50,6 +50,7 @@ The people, projects and published algorithms whose work shaped MoonLight. We st
 | [ldirko](https://github.com/ldirko) | The Distortion Waves effect. |
 | [Limpkin](https://github.com/limpkin) | The SE16 and LightCrafter boards, RGBW tuning. |
 | [Mark Kriegsman](https://github.com/kriegsman) | FastLED's Fire2012, DemoReel100, noise field and rainbow. |
+| [Meshtastic](https://meshtastic.org) | The off-grid text mesh whose channel chat gives Talk its shape. |
 | [MONSOONO / Flavourdynamics](https://github.com/Flavourdynamics) | The Praxis effect. |
 | [mplayer-colorlight](http://www.mylifesucks.de/oss/mplayer-colorlight/) | The original reverse engineering of the ColorLight receiving cards. |
 | [mrcodetastic](https://github.com/mrcodetastic) | ESP32 HUB75 DMA. |

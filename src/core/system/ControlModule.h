@@ -18,10 +18,26 @@
 
 namespace mm {
 
-/// Puts the device into a named state, and is where anything wanting to do that will live.
+/// A control desk of switches, encoders, faders and preset pads that puts the device into a named state.
+/// @card ControlModule.png
 ///
-/// Its first capability is presets: a preset is a file, saving writes one, selecting reads it.
-/// Top-level by necessity, since a preset reaches across the containers it captures from, and distinct from the fixture profiles module, a library of channel wirings.
+/// Eight switches, encoders and faders sit above 64 preset pads, laid out like a Mackie-style desk (X-Touch, QCon Pro G2), so a physical surface maps onto it.
+///
+/// @guide
+///
+/// ## The surface
+///
+/// Each switch, encoder and fader drives any control you assign; right-click an encoder to see its binding. The first switch drives the master on/off and the first fader the global brightness.
+///
+/// From the second slot on, an unassigned slot follows the effect enabled last.
+///
+/// ## Presets
+///
+/// Click a pad to apply its preset, drag to rearrange. A pad is tinted by its role: layout blue, effects violet, driver green, service amber. [The how-to](https://moonmodules.org/MoonLight/how-to/presets.html) has the rest.
+///
+/// ## Home Assistant
+///
+/// Only effects presets reach Home Assistant, so a hub never rewires pins or geometry. [The how-to](https://moonmodules.org/MoonLight/how-to/home-automation.html#presets-in-home-assistant) has the setup.
 ///
 /// @moreinfo
 ///
@@ -35,7 +51,7 @@ namespace mm {
 ///
 /// ## Why files
 ///
-/// One file per preset, with free-form names: deleting one is deleting a file, and backing them up is copying a folder. Applying one is applying a document, the engine every other writer shares.
+/// One file per preset, free-form names: deleting is deleting a file, backing up is copying a folder. Applying one is applying a document, as every other writer does. On an ESP32 a folder walk costs about 15 ms per preset and a read about 60 ms.
 class ControlModule : public MoonModule, public ListSource {
 public:
     /// Where the preset files live, one per preset: @xref{why-files}.
@@ -259,7 +275,7 @@ public:
         controls_.addReadOnly("display", display_, sizeof(display_));
         controls_.setDisplayStrip(controls_.count() - 1);
 
-        // The switch row sits at the TOP, above the encoders, matching the surfaces this mirrors (a.
+        // The switch row sits at the TOP, above the encoders, matching the surfaces this mirrors.
         for (uint8_t i = 0; i < kSwitchCount; i++) {
             controls_.addControl(kSwitchNames[i], switches_[i]);
             controls_.setSwitchRow(controls_.count() - 1, true, switchTarget(i));
@@ -295,6 +311,8 @@ public:
             controls_.setFader(controls_.count() - 1, true, surfaceTarget(i));
             controls_.setLive(controls_.count() - 1);
         }
+        /// One pad per preset file. Click applies, right-click names, drag rearranges.
+        /// @guide Right-click a pad to rename it, delete it or save over it. A pad is a position: slot 14 stays slot 14.
         controls_.addList("presets", *this);
         // The save form: input for the next save rather than configuration, so none of it is written to flash.
         controls_.addText("name", name_, sizeof(name_), validPresetName);
@@ -304,10 +322,10 @@ public:
         controls_.addControl("slot", saveSlot_, 0, kMaxPresets - 1);
         controls_.setHidden(controls_.count() - 1, true);
         controls_.setLive(controls_.count() - 1);
-        // The module a save writes, by name: a container from the pad editor, any card from its own save button.
         controls_.addText("source", source_, sizeof(source_));
         controls_.setHidden(controls_.count() - 1, true);
         controls_.setLive(controls_.count() - 1);
+        /// Saves the source module as the named preset.
         controls_.addButton("save");
         controls_.setHidden(controls_.count() - 1, true);
         MoonModule::defineControls();
@@ -1228,7 +1246,9 @@ private:
 
     static constexpr const char* kSwitchNames[kSwitchCount] =
         {"switch1", "switch2", "switch3", "switch4", "switch5", "switch6", "switch7", "switch8"};
-    char     display_[32] = "MoonLight";   ///< the strip: what the surface last touched, in words
+    /// The strip above the desk: what the surface last touched, in words.
+    /// @guide Five seconds after a touch it shows MoonLight, and five more the device's name.
+    char     display_[32] = "MoonLight";
     /// WHEN the strip was last written.
     uint32_t stripWrittenMs_ = 0;
     /// Whether a settle sequence is running.
@@ -1290,6 +1310,8 @@ private:
     bool switches_[kSwitchCount] = {};
     /// Which pad the next save fills, set by the surface popup.
     static constexpr uint8_t kNoSlot = 0xFF;
+    /// The pad the next save lands on.
+    /// @guide Unset, a save takes the pad its preset already holds, else the first free pad.
     uint8_t saveSlot_ = kNoSlot;
 
     Preset presets_[kMaxPresets];
@@ -1300,8 +1322,11 @@ private:
     uint32_t displayRevision_ = 1;   ///< bumped by every change to the display line
     uint32_t displayMirrored_ = 0;   ///< the displayRevision_ surfaces were last sent
     uint32_t nextId_ = 0;
+    /// The name the next save gives its preset.
+    /// @guide Printable characters, up to 31, without slash, backslash or dot: it becomes the file name.
     char name_[kMaxNameLen] = {};
-    /// The module the next save writes, a look by default.
+    /// The module the next save writes, by name.
+    /// @guide A container from the pad editor, or any card from its own save button.
     char source_[16] = "Effects";
     /// Which preset currently holds each capturable role, index-aligned with kCapturable.
     char current_[kCaptureCount][kMaxNameLen] = {};

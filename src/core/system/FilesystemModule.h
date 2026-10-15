@@ -12,28 +12,26 @@ namespace mm {
 
 class Scheduler;
 
-/// Control-list-driven JSON persistence: it writes control values to flash, so settings survive a reboot.
+/// The persistence engine: it writes control values to `/.config/*.json` and restores them on boot, so settings survive a reboot.
+/// @card FilesystemModule.png
 ///
-/// It is always loaded and runs first, so its load hook fires before any other module sets up.
-/// Storage is one file per top-level module, named after the module's type, holding that module's state document. Its bodies live in the `.cpp`, keeping the recompile cost off the tree.
+/// It is always loaded and runs first, so its load hook fires before any other module sets up. File Manager browses the stored files.
 ///
 /// @moreinfo
 ///
 /// ## One state document per module, applied at load
 ///
-/// A file is the same document a preset or `PATCH /api/state` carries, with the module's secrets in it, since it never leaves the device.
-/// Boot applies it as a stored file: unknown types and keys are skipped and logged, values clamp to their bounds, and a wired module stays when the file predates it.
-/// The boot phases after the load set up and build what it created, and a script's own controls take their values once it has compiled.
-/// Until the release after next, a file in the flat format older builds wrote is read as the document it describes and saved as one (see MIGRATING).
+/// A file is the same document a preset or `PATCH /api/state` carries, secrets included. Boot applies it as a stored file: unknown keys are skipped and logged, values clamp, and a wired module stays when the file predates it.
+///
+/// A script's own controls take their values once it has compiled. A flat-format file from older builds is read as the document it describes and saved as one until the release after next (see MIGRATING).
 ///
 /// ## Saving is debounced, and bounded
 ///
-/// Every successful mutation marks its module dirty, tree-shape changes included. A save waits for quiet, then writes each dirty subtree to a temporary file and renames it. A flag clears only once its write succeeds, so a failed write is retried.
+/// Every successful mutation marks its module dirty, tree-shape changes included. A save waits for quiet, then writes each dirty subtree to a temporary file and renames it. A flag clears once its write succeeds, so a failure is retried.
 ///
 /// ## Conditional controls, and the first boot
 ///
-/// A module binds its whole control set and hides what does not apply, so a value is always found. On the first boot no file exists, so each module keeps its defaults until something changes.
-/// @card FilesystemModule.png
+/// A module binds its whole control set and hides what does not apply; `defineControls()` reruns when a Select changes mode, so a conditional `hidden` flag re-evaluates. On the first boot no file exists, so each module keeps its defaults.
 class FilesystemModule : public MoonModule {
 public:
     static constexpr const char* CONFIG_DIR = "/.config";   ///< where every config file lives

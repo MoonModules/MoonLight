@@ -15,34 +15,32 @@
 
 namespace mm {
 
-/// Browser-driven WiFi provisioning over serial, using the open Improv protocol.
-///
-/// It solves the bootstrap problem: a freshly flashed board is not yet on your network.
-/// Improv carries that first handoff over the cable the browser already used to flash it.
-/// This module is the status surface, the protocol living in the platform layer.
+/// Browser-driven WiFi provisioning over serial: the web installer hands the WiFi credentials to a fresh device.
 /// @card ImprovProvisioningModule.png
+///
+/// A freshly flashed board is off your network. Improv carries that first handoff over the cable the browser already used to flash it.
+///
+/// @attribution Improv Wi-Fi
+///
+/// @guide
+///
+/// ## Provisioning
+///
+/// [Improv Wi-Fi](https://github.com/improv-wifi) is an open standard, and its sdk-cpp and sdk-js are the specification this implements. Any Improv-capable installer can provision a MoonLight device.
+///
+/// Without a serial link, the device's own access point serves the network instead.
 ///
 /// @moreinfo
 ///
-/// ## Transports
+/// This module is the status surface, the protocol living in the platform layer.
 ///
-/// The listener serves an external USB-to-UART bridge and a native USB port alike; on a Teensy it is the USB serial port, polled from this module's tick.
-/// Without either, the access-point flow remains, the device serving its own network.
+/// **Transports.** The listener serves an external USB-to-UART bridge and a native USB port alike; on a Teensy it is the USB serial port, polled from this module's tick. Without either, the access point serves instead.
 ///
-/// ## The commands
+/// **The commands.** Four standard commands report state, scan for networks, and set credentials. Two vendor commands extend them: one caps transmit power before any association, for a board whose supply browns out.
 ///
-/// Four standard commands report state, scan for networks, and set credentials.
-/// Two vendor commands extend them.
-/// One caps transmit power before any association, for a board whose supply browns out.
-/// The other carries a state document, applied by the same engine as `PATCH /api/state`.
-/// So a call over the network and one over serial execute identically.
-/// That is what lets the installer configure a device a browser cannot reach directly.
+/// The other carries a state document, applied by the same engine as `PATCH /api/state`, so a call over the network and one over serial execute identically. That lets the installer configure a device a browser cannot reach directly.
 ///
-/// ## Applying a document
-///
-/// A document merges, so sending it twice changes nothing, and a long one chunks across frames into a buffer.
-/// It is applied on the main loop rather than the serial task, one at a time.
-/// A failure cannot travel back on the spent acknowledgement, so it surfaces here.
+/// **Applying a document.** A document merges, so sending it twice changes nothing, and a long one chunks across frames. It is applied on the main loop, one at a time; a failure cannot travel back on the spent acknowledgement, so it surfaces here.
 class ImprovProvisioningModule : public MoonModule {
 public:
     /// Adopt the system module, whose name and version the device info reports.
@@ -123,7 +121,8 @@ private:
     SystemModule*     systemModule_     = nullptr;
     NetworkModule*    networkModule_    = nullptr;
     Scheduler* scheduler_ = nullptr;
-    char statusStr_[64] = "listening";   ///< what the one control reports
+    /// The provisioning state.
+    char statusStr_[64] = "listening";
 
     // Published with a release, which the acquire above pairs with across cores.
     char pendingSsid_[33] = {};              ///< the network to join

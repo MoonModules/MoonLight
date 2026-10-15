@@ -1,4 +1,4 @@
-/// @module OscModule
+/// @module OscService
 
 #include "doctest.h"
 #include "core/services/OscPacket.h"

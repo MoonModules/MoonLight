@@ -4,18 +4,13 @@
 /// @defgroup MoonStats Consent, and the once-per-install trigger
 /// @{
 ///
-/// It owns what decides whether a report is built, building none itself and sending none.
-/// Consent is the gate, and declining is silent: no connection opens and no identifier is computed.
+/// It owns what decides whether a report is built, building none itself and sending none. Consent is the gate, and declining is silent: no connection opens and no identifier is computed.
 ///
 /// @moreinfo
 ///
-/// The trigger is a version comparison rather than a timer.
-/// The reported version persists, so a reboot sends nothing and an upgrade sends one.
-/// An empty value means a fresh install and a different one an upgrade.
-/// No identifier is involved in telling those apart.
+/// The trigger is a version comparison rather than a timer: the reported version persists, so a reboot sends nothing and an upgrade sends one. An empty value means a fresh install and a different one an upgrade, with no identifier involved.
 ///
-/// Reporting is suppressed in AP mode, where there is no route out.
-/// See the privacy policy for what is promised.
+/// Reporting is suppressed in AP mode, where there is no route out. See the privacy policy for what is promised.
 
 #include <cstdint>
 #include <cstdio>
@@ -195,7 +190,22 @@ inline void buildMoonStatsReport(JsonSink& sink,
     sink.flush();
 }
 
-
+/// One opt-in report about this install, sent once per install or upgrade, so development effort goes where the users are.
+/// @card MoonStatsModule.png
+///
+/// Off until you answer yes. An upgrade sends one report and a reboot sends nothing.
+///
+/// @guide
+///
+/// ## What it sends
+///
+/// The report carries the chip, flash, PSRAM, SDK, device model, memory, light count, and which modules you added. It carries no device name, no addresses, no credentials and no text you typed.
+///
+/// The [privacy policy](https://moonmodules.org/MoonLight/legal/privacy-policy.html) states what is promised.
+///
+/// @moreinfo
+///
+/// A unit test asserts that the report leaks no device name, address, credential or typed text.
 class MoonStatsModule : public MoonModule {
 public:
     /// Read the running version, then publish the consent explanation.
@@ -269,6 +279,8 @@ public:
         controls_.addReadOnly("version", runningVersion_, sizeof(runningVersion_));
 
         // For a setup that changed without a version change, replacing the row rather than adding.
+        /// Report again now.
+        /// @guide For a setup that changed without a version change. It replaces this install's row rather than adding one.
         controls_.addButton("send update");
     }
 
@@ -411,10 +423,15 @@ protected:
     }
 
 private:
-    bool consent_ = false;             ///< whether the user has agreed to report
+    /// Whether this install may report.
+    /// @guide Nothing is sent and no identifier is computed while it is off.
+    bool consent_ = false;
     bool relayPending_ = false;        ///< a report waits in the container's outbox for the page
-    char reportedVersion_[32] = {};    ///< the version that last reported
-    char runningVersion_[32] = {};     ///< the version running now
+    /// The version that last reported.
+    /// @guide It differs from the running version exactly when a report is due.
+    char reportedVersion_[32] = {};
+    /// The version running now.
+    char runningVersion_[32] = {};
 };
 
 /// @}

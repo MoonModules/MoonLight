@@ -27,6 +27,8 @@ export const FILE_RENAMES = {
 // Old module type value (any "type" / "N.type" key) → new type. `set` writes a control the
 // merge made explicit when its value is deterministic; `review` flags what a map cannot decide.
 export const TYPE_RENAMES = {
+    // Every service is named for its role, so OSC takes the Service suffix its siblings carry.
+    "OscModule": { type: "OscService", date: "2026-10-15" },
     // The scanner became the board's I2C bus, which every device on it shares; its sda and scl carry over.
     "I2cScanModule": { type: "I2cBusModule", date: "2026-10-06" },
     // The library of named channel wirings takes the DMX industry term. Its list control follows (CONTROL_RENAMES).
@@ -75,7 +77,7 @@ export const CONTROL_RENAMES = {
     // One rule for reaching many receivers: a list is `hosts`, and how packets travel is `addressing`.
     "ips": { name: "hosts", date: "2026-10-02", onTypes: ["NetworkSendDriver"] },
     "lightsPerIp": { name: "lightsPerHost", date: "2026-10-02", onTypes: ["NetworkSendDriver"] },
-    "feedbackTo": { name: "hosts", date: "2026-10-02", onTypes: ["OscModule"] },
+    "feedbackTo": { name: "hosts", date: "2026-10-02", onTypes: ["OscService"] },
     "wledCompatible": { name: "addressing", date: "2026-10-02", onTypes: ["DevicesModule"] },
     // One name for one thing: the service is AudioService, the frame is AudioFrame, so the control
     // that makes a sprite effect follow the music is audioReactive. Scoped to the seven effects that
