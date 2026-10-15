@@ -674,16 +674,17 @@ details.control-helper > summary::-webkit-details-marker { display: none; }
 details.control-helper > summary::before { content: "▸"; display: inline-block; width: 1em; }
 .card-helpbox[open] > summary::before,
 details.control-helper[open] > summary::before { content: "▾"; }
-.card-helpbox[open] > summary { color: var(--fg); }
 .card-helpbox-body {
     margin: 6px 0 0 14px;
     display: flex;
     flex-direction: column;
     gap: 6px;
 }
+/* A thumbnail: the picture says what the module does at a glance, and the card's own preview is the full-size one. */
 .card-helpbox .help-image {
-    max-width: 100%;
-    width: 300px;
+    width: 64px;
+    height: 64px;
+    object-fit: cover;
     border-radius: 4px;
 }
 .card-helpbox .help-attribution { font-style: italic; }

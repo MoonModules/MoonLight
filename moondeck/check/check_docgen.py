@@ -1391,11 +1391,16 @@ def _orphan_pages():
     pages = {(p.parts[-3], p.stem)
              for p in (ROOT / "docs" / "moonmodules").rglob("moxygen/*.md")}
     linked = set()
-    for md in (ROOT / "docs").rglob("*.md"):
-        if "moxygen" in md.parts:
-            continue
+    # The written pages, and the catalog pages generated from help.json, which exist only in the build.
+    sources = {md.relative_to(ROOT / "docs").as_posix(): md.read_text(errors="ignore")
+               for md in (ROOT / "docs").rglob("*.md") if "moxygen" not in md.parts}
+    for rel in _pages():
+        if rel not in sources and (gen := _hooks.catalog_markdown(rel)) is not None:
+            sources[rel] = gen
+    for rel, raw in sources.items():
+        md = ROOT / "docs" / rel
         # A catalog card drawn from help.json carries its Detail link only once drawn.
-        text = _hooks.fill_cards_from_help(md.read_text(errors="ignore"), md.relative_to(ROOT / "docs").as_posix())
+        text = _hooks.fill_cards_from_help(raw, rel)
         for m in re.finditer(r"(?:(\w+)/)?moxygen/(\w+)\.md", text):
             # A relative link inside a domain omits it, so fall back to the linking page's own.
             domain = m.group(1) or (md.parts[-2] if md.parts[-2] in _DOC_DOMAINS else None)
@@ -1563,11 +1568,11 @@ def _help_freshness():
 def _violations():
     out = _help_freshness()
     for rel in _pages():
-        path = ROOT / "docs" / rel
-        if not path.exists():
+        page = _hooks.catalog_markdown(rel)   # the file, or the page generated from help.json
+        if page is None:
             continue
         # A card cut to its heading is drawn from help.json, and measured as drawn.
-        text = _hooks.fill_cards_from_help(path.read_text(encoding="utf-8"), rel)
+        text = _hooks.fill_cards_from_help(page, rel)
         out.extend(_structure(text, rel))
         out.extend(_rendered_links(rel, text))
         out.extend(_details_tables(rel, text))

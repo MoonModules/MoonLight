@@ -848,7 +848,7 @@ uv run moondeck/docs/gen_help.py                 # writes docs/help/help.json
 uv run moondeck/docs/gen_help.py --ref v6.1.0 --out <dir>/help.json   # source and test links at that tag
 ```
 
-libclang reads `src/module_types.cpp` with its include paths, so it needs LLVM (the one `check_clang_query` uses) but no build. The file is committed: the docs deploy publishes it, the docs build draws the cards of migrated modules from it, and `check_docgen` fails when it is stale. A module whose catalog card still has a body is read from the card; a card cut to its heading is read from the header. The run lists every control with no help.
+libclang reads `src/module_types.cpp` with its include paths, so it needs LLVM (the one `check_clang_query` uses) but no build. The file is committed: the docs deploy publishes it, the docs build draws the cards of migrated modules from it, and `check_docgen` fails when it is stale. A module whose catalog card still has a body is read from the card; a card cut to its heading is read from the header. The run lists every control with no help, and every attribution naming someone [the attribution catalog](../docs/reference/attributions.md) does not list yet. To see a regenerated file in the app, run [preview_installer](#preview_installer), which serves it live on `localhost:8421`, and open the app once with `?help=local`; `?help=published` returns to the docs site.
 
 ### build_docs
 
@@ -858,6 +858,7 @@ libclang reads `src/module_types.cpp` with its include paths, so it needs LLVM (
 uv run moondeck/docs/build_docs.py --serve     # what the button runs → http://localhost:8422/MoonLight/ (auto-reload)
 uv run moondeck/docs/build_docs.py            # one-shot build to site/ (CI parity; no server)
 uv run moondeck/docs/build_docs.py --strict    # promote every warning to an error (local anchor audit)
+uv run moondeck/docs/build_docs.py --serve --host 0.0.0.0   # reachable from a phone or tablet on the network
 ```
 
 The preview binds **:8422** — the [Installer Preview](#preview_installer) owns :8421 and MoonDeck :8420, so all three servers run at once. Config is `mkdocs.yml`; deps (`mkdocs-material`) are declared inline in the script, so `uv run` provisions them on first use. The two test-inventory pages and each effect/modifier's inline test list are generated from the test files at build time (`moondeck/docs/mkdocs_hooks.py`), so they're never committed and can't drift; `history/` and `backlog/` are built but kept off the nav. Warnings for links to repo files outside `docs/` (rewritten to GitHub URLs) and pre-existing stale anchors are expected — the build still succeeds.

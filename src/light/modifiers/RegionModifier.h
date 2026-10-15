@@ -4,44 +4,36 @@
 
 namespace mm {
 
-/// Modifier carving the layer to a percentage sub-rectangle.
+/// Crops the layer to a rectangle given in percentages of each axis, so it holds when the layout is resized; outside it is dark.
+/// @card RegionModifier.gif
+///
+/// Beyond 0 and 100 the window slides partly or wholly out of view.
 ///
 /// @moreinfo
 ///
-/// Carves the layer down to a sub-region of the physical bounding box: the effect renders only into the region, everything outside is dark.
-/// The region is given as PERCENTAGES of the physical extent on each axis (start 0 / end 100 = the full box, an identity carve).
-/// It survives a physical resize, a 0..50 region stays the left half whether the panel is 64 or 128 wide.
+/// The crop node of any compositor: the logical box shrinks to the window, and each light folds into window space by subtracting the start. A light outside the window is dropped.
 ///
-/// ## A crop, not a remap
+/// The interval is half-open, a start flooring to the lower light and an end ceiling to an exclusive one. So 0 to 50 and 50 to 100 split a 128-wide axis into two halves with no overlap and no gap.
 ///
-/// It is a region crop, the textbook crop node of any compositor.
-/// It shrinks the logical box to the region and folds each physical light into region-local space by subtracting the start offset.
-/// A light landing outside the region is then rejected, which is what makes everything beyond it dark.
-/// A 1:1 fold, same family as CheckerboardModifier.
-///
-/// ## The rounding rule
-///
-/// The interval is half-open: a start percentage floors to the lower pixel, and an end percentage ceils to an exclusive one.
-/// That makes abutting regions tile exactly: a 0..50 and a 50..100 layer split a 128-wide axis into two halves with no overlap and no gap.
-///
-/// Off-screen windows. start/end percentages may go **negative or past 100** (Int16 on the wire, default UI range −100..200) to slide the window partly or fully out of the visible box.
-/// The logical box is the full window span, so the effect renders at a consistent scale.
-/// A physical light outside the window is dropped, and a window cell with none under it is simply dark.
-/// A window entirely off-box renders nothing, the layer goes dark, which is how you move an effect completely out of view.
-///
-/// Fast path: the cheapest carve is *no modifier*, then Layer::rebuildLUT takes its identity/memcpy path with zero carving cost.
-/// Adding a full-region (0/100) RegionModifier is correct but not free; the default is to not add one.
-/// Author: MoonLight, https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Modifiers/M_MoonLight.h
+/// A whole-box region is correct but not free: with no modifier the Layer copies the layer straight, so add one only to crop.
 class RegionModifier : public ModifierBase {
 public:
-    /// The catalog tags this modifier carries.
+    /// The catalog tags: 💫, a MoonLight origin.
     const char* tags() const override { return "💫"; }
     /// Clips a box, which is an extent on every axis.
     Dim dimensions() const override { return Dim::D3; }
-    /// The region's low corner.
-    lengthType startX = 0,   startY = 0,   startZ = 0;
-    /// Its high corner.
-    lengthType endX   = 100, endY   = 100, endZ   = 100;
+    /// Where the region starts along x, in percent of the axis.
+    lengthType startX = 0;
+    /// Where it starts along y, in percent.
+    lengthType startY = 0;
+    /// Where it starts along z, in percent.
+    lengthType startZ = 0;
+    /// Where the region ends along x, in percent of the axis.
+    lengthType endX = 100;
+    /// Where it ends along y, in percent.
+    lengthType endY = 100;
+    /// Where it ends along z, in percent.
+    lengthType endZ = 100;
 
     /// The controls a user sets on the card.
     void defineControls() override {
@@ -80,7 +72,7 @@ private:
     /// Window size (logical box), stashed for the bound check.
     Coord3D region_;
 
-    // The lower edge, floored toward negative infinity so a negative percentage rounds consistently.
+    /// The lower edge, floored toward negative infinity so a negative percentage rounds consistently.
     static lengthType floorPx(lengthType pct, lengthType extent) {
         if (extent <= 0) return 0;
         long num = static_cast<long>(pct) * extent;
@@ -89,7 +81,7 @@ private:
         return static_cast<lengthType>(q);
     }
 
-    // The upper edge, exclusive and ceiled, which may exceed the extent.
+    /// The upper edge, exclusive and ceiled, which may exceed the extent.
     static lengthType ceilPx(lengthType pct, lengthType extent) {
         if (extent <= 0) return 0;
         long num = static_cast<long>(pct) * extent;
@@ -98,7 +90,7 @@ private:
         return static_cast<lengthType>(q);
     }
 
-    // The span between the edges, floored to one on a non-empty axis.
+    /// The span between the edges, floored to one on a non-empty axis.
     static lengthType span(lengthType startPx, lengthType endPx, lengthType extent) {
         if (extent <= 0) return 0;
         lengthType s = static_cast<lengthType>(endPx - startPx);

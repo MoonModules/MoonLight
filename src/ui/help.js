@@ -20,6 +20,12 @@ export function docUrl(docPath) {
     return "https://moonmodules.org/MoonLight/moonmodules/" + docPath.replace(/\.md(#.*)?$/, ".html$1");
 }
 
+// A header's technical page on the site, where its `@moreinfo` renders, derived from its source link: help's level 4, a link rather than text, since it is written for developers.
+export function technicalUrl(source) {
+    const m = /\/src\/(core|light|platform)\/(?:[^/]+\/)*([A-Za-z0-9_]+)\.h$/.exec(source || "");
+    return m ? `https://moonmodules.org/MoonLight/moonmodules/${m[1]}/moxygen/${m[2]}.html` : null;
+}
+
 // A module's help, progressive disclosure: the line always shows, the rest opens on a tap, and the picture loads only then.
 export function moduleHelp(help, docPath) {
     const box = document.createElement("details");
@@ -39,7 +45,7 @@ export function moduleHelp(help, docPath) {
     // Built as elements, each URL through safeUrl, so nothing in the file becomes an attribute of its own.
     const links = document.createElement("div");
     links.className = "help-links";
-    for (const [label, url] of [["Docs", docPath ? docUrl(docPath) : null], ["Source", help.source], ["Tests", help.tests]]) {
+    for (const [label, url] of [["Docs", docPath ? docUrl(docPath) : null], ["Technical", technicalUrl(help.source)], ["Source", help.source], ["Tests", help.tests]]) {
         const href = safeUrl(url);
         if (!href) continue;
         if (links.childNodes.length) links.append(" · ");

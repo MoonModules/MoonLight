@@ -401,7 +401,7 @@ Structural mutation quiesces the render worker, and mutations run inline on the 
 
 ##### The gallery
 
-Under the pads, the gallery lists [MoonLight-Gallery](https://github.com/MoonModules/MoonLight-Gallery)'s `index.json`, most liked first. The browser fetches it from `raw.githubusercontent.com`, so the device needs no internet of its own. A preset installs onto the first free pad, or applies once through `PATCH /api/state`, and either way brings the scripts it names that the device lacks: the gallery's copy, else the one the firmware ships. A script installs into `/moonlive`.
+Under the pads, the gallery lists [MoonLight-Gallery](https://github.com/MoonModules/MoonLight-Gallery)'s `index.json`, most liked first. The browser fetches it from `raw.githubusercontent.com`, so the device needs no internet of its own. A preset installs onto the first free pad, or applies once through `PATCH /api/state`, and either way brings the scripts it names that the device lacks: the gallery's copy, else the one the firmware ships. A script installs into `/moonlive`. A look, a palette, or a look with its palette applies at once; a preset that also sets pins or geometry asks first, since those belong to the author's rig.
 
 #### Home Assistant
 

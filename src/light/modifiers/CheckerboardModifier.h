@@ -4,27 +4,24 @@
 
 namespace mm {
 
-/// Modifier masking the layer in a checkerboard pattern.
-/// Author: WildCats08 / @Brandon502 (MoonLight), https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Modifiers/M_MoonLight.h
+/// Masks the layer in a checkerboard: the lights on the "off" squares stay dark, the rest show the effect unchanged.
 /// @card CheckerboardModifier.gif
+///
+/// @attribution Brandon502
 ///
 /// @moreinfo
 ///
-/// Masks the layer in a checkerboard pattern: lights in the "off" squares are dropped (the physical light maps nowhere), lights in the "on" squares pass through unchanged.
-/// `size` sets the square edge in lights; `invert` flips which squares are on.
-/// A mask, not a remap, the logical box is unchanged.
-///
-/// Prior art: MoonLight's Checkerboard modifier (M_MoonLight.h) drops lights by setting position to a sentinel; our fold returns false from modifyLogical.
+/// A mask rather than a remap: the logical box is unchanged, and a light on an "off" square returns false from the fold, so it maps nowhere.
 class CheckerboardModifier : public ModifierBase {
 public:
-    /// The catalog tags this modifier carries.
-    const char* tags() const override { return "💫"; }  // MoonLight origin
+    /// The catalog tags: 💫, a MoonLight origin.
+    const char* tags() const override { return "💫"; }
     /// Walks x, y and z, so it patterns a volume as readily as a panel.
     Dim dimensions() const override { return Dim::D3; }
 
-    /// Checker square edge, in lights (≥1).
+    /// The edge of a checker square, in lights.
     uint8_t size = 2;
-    /// Flip which squares pass through.
+    /// Swap which squares show the effect and which stay dark.
     bool invert = false;
 
     /// The controls a user sets on the card.
@@ -33,9 +30,7 @@ public:
         controls_.addControl("invert", invert);
     }
 
-    // A mask leaves the logical box unchanged (no modifyLogicalSize override).
-
-    /// Transform one light's logical position, false dropping it from the mapping.
+    /// A mask: a light on a square of the other parity is dropped, and the logical box stays as it is.
     bool modifyLogical(Coord3D& pos) const override {
         const lengthType s = size ? size : 1;
         // The parity of the square this light sits in, even passing through by default.

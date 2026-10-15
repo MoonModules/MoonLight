@@ -1647,3 +1647,13 @@ def test_without_llvm_the_help_freshness_is_reported_rather_than_ending_the_run(
     findings = check_docgen._help_freshness()
     assert findings == [("docs/help/help.json", "help.json stale unchecked: clang not found")]
     assert check_docgen._blocks(*findings[0])
+
+
+def test_a_generated_catalog_page_is_measured_as_its_cards_are_drawn(monkeypatch):
+    """A catalog whose markdown is gone exists only as the page generated from help.json, so the card rules must read that page; a check reading files alone would pass it unmeasured."""
+    import check_docgen
+    monkeypatch.setattr(check_docgen, "_pages", lambda: ["moonmodules/light/modifiers.md"])
+    monkeypatch.setattr(check_docgen, "_help_freshness", lambda: [])
+    monkeypatch.setattr(check_docgen._hooks, "catalog_markdown", lambda rel: _card() if rel == "moonmodules/light/modifiers.md" else None)
+    findings = check_docgen._violations()
+    assert any("modifiers" in key and "no image" in why for key, why in findings)

@@ -14,6 +14,8 @@ function card(type, help) {
     el.tabIndex = 0;
     el.setAttribute("aria-label", name);
     el.title = name;   // the name on hover, which a small card has no room to print
+    const anchor = (help.doc || "").split("#")[1];
+    if (anchor) el.id = anchor;   // a link to the module lands on its card
 
     const front = document.createElement("div");
     front.className = "mm-pcard-face mm-pcard-front";
@@ -40,14 +42,30 @@ function card(type, help) {
     p.innerHTML = helpMarkdown(help.line || "");
     front.appendChild(p);
 
+    // The back: a fixed head, a tiny picture and the title, so a turned card always says what it is, and the help below it scrolling on its own.
     const back = document.createElement("div");
     back.className = "mm-pcard-face mm-pcard-back";
+    const head = document.createElement("div");
+    head.className = "mm-pcard-head";
+    if (safeUrl(help.image)) {
+        const thumb = document.createElement("img");
+        thumb.loading = "lazy";
+        thumb.src = safeUrl(help.image);
+        thumb.alt = "";
+        head.appendChild(thumb);
+    }
     const h = document.createElement("h3");
     h.textContent = name;
-    back.appendChild(h);
-    const box = moduleHelp({...help, image: null}, help.doc);
-    box.open = true;
-    back.appendChild(box);
+    head.appendChild(h);
+    const scroll = document.createElement("div");
+    scroll.className = "mm-pcard-scroll";
+    back.append(head, scroll);
+    // The line as plain text rather than the app's disclosure, so a tap on it turns the card rather than folding the help.
+    const line = document.createElement("p");
+    line.className = "mm-pcard-line";
+    line.innerHTML = helpMarkdown(help.line || "");
+    scroll.appendChild(line);
+    scroll.appendChild(moduleHelp({...help, image: null}, help.doc).querySelector(".card-helpbox-body"));
     for (const [ctrl, ch] of Object.entries(help.controls || {})) {
         const row = document.createElement("div");
         row.className = "control-row";
@@ -56,53 +74,58 @@ function card(type, help) {
         label.textContent = ctrl;
         row.appendChild(label);
         controlHelp(row, ch);
-        back.appendChild(row);
+        scroll.appendChild(row);
     }
 
     const inner = document.createElement("div");
     inner.className = "mm-pcard-inner";
     inner.append(front, back);
     el.appendChild(inner);
+    // The face turned away is inert, so a keyboard reaches only what shows.
+    back.inert = true;
+    const flip = () => { const b = el.classList.toggle("flipped"); front.inert = b; back.inert = !b; };
     // A tap turns the card, unless it lands on something of its own to press, or ends a drag of the deck.
     el.addEventListener("click", (e) => {
         if (el.closest(".mm-deck-row")?.dataset.dragged) return;
-        if (!e.target.closest("a, summary")) el.classList.toggle("flipped");
+        if (!e.target.closest("a, summary")) flip();
     });
-    el.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); el.classList.toggle("flipped"); } });
+    // Only on the card itself: a link or a disclosure on its back handles its own keys.
+    el.addEventListener("keydown", (e) => { if (e.target === el && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); flip(); } });
     el._emoji = emoji;
     el._text = `${type} ${name} ${help.line}`.toLowerCase();
     return el;
 }
 
-// The deck's left edge lines up with the page's text, the first card standing there and the rest fanned to its right; the end padding lets the last card reach that spot too.
+// The deck spans the content area, between the navigation and the contents columns, so cards never pass over either; the first card starts at the page's text, and the end padding lets the last card reach the middle.
 function align(deck, host) {
     if (deck.closest(".mm-deck-spread")) { deck.style.width = deck.style.marginLeft = ""; return; }
-    const pad = Math.max(16, host.getBoundingClientRect().left);
-    // The visible width, which leaves out a scrollbar where 100vw counts it.
-    deck.style.width = `${document.documentElement.clientWidth}px`;
-    deck.style.marginLeft = `${-host.getBoundingClientRect().left}px`;
+    const area = (document.querySelector(".md-content") || document.documentElement).getBoundingClientRect();
+    const left = host.getBoundingClientRect().left;
+    const pad = Math.max(16, left - area.left);
+    deck.style.width = `${Math.min(area.width, document.documentElement.clientWidth)}px`;
+    deck.style.marginLeft = `${area.left - left}px`;
     const w = deck.querySelector(".mm-pcard:not([hidden])")?.offsetWidth || 240;
-    deck.style.paddingLeft = deck.style.scrollPaddingLeft = `${pad}px`;
-    deck.style.paddingRight = `${Math.max(pad, deck.clientWidth - pad - w)}px`;
-    deck.dataset.pad = String(pad);
+    deck.style.paddingLeft = `${pad}px`;
+    deck.style.paddingRight = `${Math.max(pad, (deck.clientWidth - w) / 2)}px`;
 }
 
-// The fan: a card leans and sinks with its distance from the card standing at the left, the way a hand of cards spreads.
+// The fan, a hand of cards: each card turns about one pivot below the deck, so the cards lie on an arc with the middle one straight, and a card is pulled toward the middle by the square of its distance, so the outer ones overlap more.
 function fan(deck) {
     if (deck.closest(".mm-deck-spread")) {
         for (const c of deck.children) { c.style.transform = ""; c.style.zIndex = ""; }
         return;
     }
     const first = deck.querySelector(".mm-pcard:not([hidden])");
-    // The lean shrinks with the card, so a long row of small cards stays level.
+    // The arc flattens with the card, so a long row of small cards stays level.
     const amp = Math.min(1, first ? first.offsetWidth / 240 : 1);
-    const mid = deck.scrollLeft + Number(deck.dataset.pad || 0) + (first ? first.offsetWidth / 2 : 0);
+    const mid = deck.scrollLeft + deck.clientWidth / 2;
     for (const c of deck.children) {
         if (c.hidden) continue;
-        const d = (c.offsetLeft + c.offsetWidth / 2 - mid) / c.offsetWidth;
-        const k = Math.max(-3, Math.min(3, d));
-        c.style.transform = `rotate(${k * 4 * amp}deg) translateY(${Math.abs(k) * 14 * amp}px) scale(${1 - Math.abs(k) * 0.06 * amp})`;
-        c.style.zIndex = String(10 - Math.round(Math.abs(k) * 3));
+        const d = (c.offsetLeft + c.offsetWidth / 2 - mid) / c.offsetWidth;   // in cards from the middle
+        const k = Math.max(-4, Math.min(4, d));
+        const pull = -Math.sign(k) * k * k * 0.12 * c.offsetWidth;            // overlap growing outward
+        c.style.transform = `translateX(${pull * amp}px) rotate(${k * 6 * amp}deg)`;
+        c.style.zIndex = String(20 - Math.round(Math.abs(k) * 4));
     }
 }
 
@@ -240,13 +263,18 @@ async function mount(host) {
     };
     const chips = emojiChipRow(present, (a) => { active = a; refresh(); });
 
-    const step = (dir) => deck.scrollBy({left: dir * (cards[0]?.offsetWidth || 280), behavior: "smooth"});
+    // One visible card and the gap after it, so a filtered deck moves a card at a time.
+    const step = (dir) => {
+        const c = cards.find(x => !x.hidden);
+        const gap = parseFloat(getComputedStyle(deck).columnGap) || 0;
+        if (c) deck.scrollBy({left: dir * (c.offsetWidth + gap), behavior: "smooth"});
+    };
     const nav = navButtons(step, count);
 
     const bar = document.createElement("div");
     bar.className = "mm-deck-bar";
     bar.append(search, sizeSlider(host, () => { align(deck, host); fan(deck); }), nav);
-    host.append(bar, chips, deck);
+    host.replaceChildren(bar, chips, deck);   // the cards the build wrote as a table give way to the deck
     draggable(deck);
     search.addEventListener("input", refresh);
     deck.addEventListener("scroll", () => requestAnimationFrame(() => fan(deck)), {passive: true});
@@ -256,6 +284,13 @@ async function mount(host) {
     });
     mounted.add({deck, host});
     refresh();
+    // A link to a module brings its card to the front of the deck, turned to its help.
+    const target = location.hash && cards.find(c => c.id === location.hash.slice(1));
+    if (target) {
+        deck.scrollLeft = target.offsetLeft + target.offsetWidth / 2 - deck.clientWidth / 2;
+        target.click();
+        host.scrollIntoView();
+    }
 }
 
 // One resize listener for every deck: instant navigation swaps pages without reloading, so a listener per mount would pile up over detached decks.

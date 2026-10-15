@@ -1,9 +1,9 @@
 {
-  "commit": "41eb3235",
+  "commit": "61c881a7",
   "flash": {
     "esp32s3-n16r8": 2455776,
     "esp32": 2261328,
-    "esp32p4rev1-eth": 2399040,
+    "esp32p4rev1-eth": 2400032,
     "esp32p4rev1-eth-wifi": 2623840,
     "esp32s3-n8r8": 2437792,
     "esp32s31": 2744032,
@@ -14,7 +14,7 @@
     "esp32p4rev3-eth": 2231792,
     "esp32s3-zero": 2224816,
     "esp32-pico": 2107168,
-    "desktop-macos": 2382136,
+    "desktop-macos": 2398648,
     "desktop-windows": 1925120,
     "esp32c3": 2335072,
     "desktop-linux": 2548000,
@@ -744,7 +744,7 @@
           "p50": 7,
           "p95": 10,
           "n": 32,
-          "last": "2026-10-14"
+          "last": "2026-10-15"
         },
         "esp32s3-n16r8": {
           "p50": 10350,
@@ -781,8 +781,8 @@
       }
     },
     "desktop-macos": {
-      "tick_us": 1,
-      "fps": 1000000,
+      "tick_us": 7,
+      "fps": 142857,
       "scenario_p50": {
         "Effects_pipeline_builds_and_renders": {
           "p50": 7,
@@ -823,11 +823,11 @@
   },
   "loc": {
     "core": 30411,
-    "light": 31880,
+    "light": 31794,
     "platform": 21635,
-    "ui": 12573,
-    "test": 68662,
-    "moondeck": 32163
+    "ui": 12604,
+    "test": 68829,
+    "moondeck": 32394
   },
   "comments": {
     "core": {
@@ -835,24 +835,24 @@
       "ratio": 0.236
     },
     "light": {
-      "lines": 7601,
-      "ratio": 0.268
+      "lines": 7514,
+      "ratio": 0.265
     },
     "platform": {
       "lines": 4172,
       "ratio": 0.216
     },
     "ui": {
-      "lines": 3447,
+      "lines": 3452,
       "ratio": 0.29
     },
     "test": {
-      "lines": 7222,
-      "ratio": 0.122
+      "lines": 7223,
+      "ratio": 0.121
     },
     "moondeck": {
-      "lines": 4968,
-      "ratio": 0.176
+      "lines": 4978,
+      "ratio": 0.175
     }
   },
   "tests": {
@@ -861,7 +861,7 @@
   },
   "docs": {
     "md_files": 162,
-    "md_lines": 34295,
+    "md_lines": 34153,
     "plans_files": 51,
     "backlog_lines": 3393,
     "lessons_lines": 532,

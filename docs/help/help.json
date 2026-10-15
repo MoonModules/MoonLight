@@ -101,7 +101,8 @@
    "tests": "https://github.com/MoonModules/MoonLight/blob/main/test/unit/light/unit_FixtureProfilesModule.cpp"
   },
   "CarLightsLayout": {
-   "line": "A pair of concentric-ring \"headlight\" clusters (nested rings of 1/8/12/16/24 LEDs) positioned to mimic a car's front lights, a fixed arrangement composed from [Ring](https://moonmodules.org/MoonLight/moonmodules/light/layouts.html#ring) geometry.",
+   "line": "A pair of concentric-ring \"headlight\" clusters, nested rings of 1/8/12/16/24 LEDs, placed like a car's front lights.",
+   "summary": "The arrangement is fixed, composed from [Ring](https://moonmodules.org/MoonLight/moonmodules/light/layouts.html#ring) geometry.",
    "attribution": "Eric Marciniak (Discord), custom car-lights fixture",
    "image": "https://moonmodules.org/MoonLight/assets/light/layouts/CarLightsLayout.gif",
    "alt": "Car Lights layout preview",
@@ -206,7 +207,8 @@
    "tests": "https://github.com/MoonModules/MoonLight/blob/main/test/unit/light/unit_MoonLiveLayout.cpp"
   },
   "PanelsLayout": {
-   "line": "Tiles an M×N grid of full matrix panels into one large display: an outer walk over the panel grid plus an inner walk over each panel's lights, both independently wired, for multi-panel video walls.",
+   "line": "Tiles an M×N grid of full matrix panels into one large display, for multi-panel video walls.",
+   "summary": "The wiring is two walks, each set on its own: an outer one over the panel grid and an inner one over each panel's lights.",
    "attribution": "MoonLight · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Layouts/L_MoonLight.h)",
    "image": "https://moonmodules.org/MoonLight/assets/light/layouts/PanelsLayout.gif",
    "alt": "Panels layout preview",
@@ -1237,7 +1239,7 @@
   },
   "FseqPlayerEffect": {
    "line": "An FSEQ show played from a file: the frame-by-frame channel data xLights and Falcon Player write.",
-   "summary": "It plays uncompressed FSEQ v2. A show lands where a sender-mapped [Network Receive](https://moonmodules.org/MoonLight/moonmodules/light/effects.html#networkreceive) stream does, so alone on its layer it reaches the lights in one copy on any layout.",
+   "summary": "A show, uncompressed FSEQ v2, lands where a sender-mapped [Network Receive](https://moonmodules.org/MoonLight/moonmodules/light/effects.html#networkreceive) stream does, so alone on its layer it reaches the lights in one copy on any layout. Reading the file is the next step, and its status says so.",
    "attribution": "FSEQ v2 as Falcon Player documents it in FSEQ_Sequence_File_Format.txt.",
    "image": "https://moonmodules.org/MoonLight/assets/light/effects/FseqPlayerEffect.gif",
    "alt": "The reference sweep fseq_play writes, the show an FSEQ player plays",
@@ -2109,7 +2111,7 @@
   "FlyingToastersEffect": {
    "line": "The classic screensaver on a light wall: chrome toasters with flapping wings and slices of toast drift diagonally across the dark, forever.",
    "summary": "The wing flap carries a per-toaster offset, so the flock never falls into sync.\n\nThe sprites carry their own colors (chrome, wing, crust), so the global palette does not apply. Needs a grid at least the toaster's size (12×9).",
-   "attribution": "MoonLight original; inspired by After Dark's Flying Toasters (Berkeley Systems, 1989), suggested by Frank ([softhack007](https://github.com/softhack007)): the pixel art here is drawn fresh for this effect",
+   "attribution": "MoonLight original; inspired by After Dark's Flying Toasters (Berkeley Systems, 1989), suggested by [troyhacks](https://github.com/troyhacks): the pixel art here is drawn fresh for this effect",
    "image": "https://moonmodules.org/MoonLight/assets/light/effects/FlyingToastersEffect.gif",
    "alt": "Flying Toasters effect preview",
    "controls": {
@@ -2562,276 +2564,284 @@
    "tests": "https://github.com/MoonModules/MoonLight/blob/main/test/unit/light/unit_WaveEffect.cpp"
   },
   "BlockModifier": {
-   "line": "Expands a 1D effect into concentric **square rings** (Chebyshev distance from the center): the effect's linear position becomes the ring index, so a gradient effect draws nested squares.",
-   "attribution": "MoonLight · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Modifiers/M_MoonLight.h)",
+   "line": "Expands a 1D effect into concentric square rings: its position along the strip becomes the ring, so a gradient draws nested squares.",
+   "summary": "The square sibling of [Circle](https://moonmodules.org/MoonLight/moonmodules/light/modifiers.html#circle), which draws round rings.",
+   "attribution": "[Chebyshev distance](https://en.wikipedia.org/wiki/Chebyshev_distance)",
    "image": "https://moonmodules.org/MoonLight/assets/light/modifiers/BlockModifier.gif",
-   "alt": "Block modifier preview",
    "role": "modifier",
    "tags": "💫",
    "dim": 2,
+   "kind": "static",
    "doc": "light/modifiers.md#block",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/modifiers/BlockModifier.h",
    "tests": "https://github.com/MoonModules/MoonLight/blob/main/test/unit/light/unit_BlockModifier.cpp"
   },
   "CheckerboardModifier": {
-   "line": "Masks the layer in a checkerboard: \"off\" squares are dropped, \"on\" squares pass through unchanged.",
-   "attribution": "MoonLight · by WildCats08 / [@Brandon502](https://github.com/Brandon502) · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Modifiers/M_MoonLight.h)",
+   "line": "Masks the layer in a checkerboard: the lights on the \"off\" squares stay dark, the rest show the effect unchanged.",
+   "attribution": "[Brandon502](https://github.com/Brandon502)",
    "image": "https://moonmodules.org/MoonLight/assets/light/modifiers/CheckerboardModifier.gif",
-   "alt": "Checkerboard modifier preview",
    "controls": {
     "size": {
-     "line": "Checker square edge in lights."
+     "line": "The edge of a checker square, in lights."
     },
     "invert": {
-     "line": "Flip which squares pass through vs are masked."
+     "line": "Swap which squares show the effect and which stay dark."
     }
    },
    "role": "modifier",
    "tags": "💫",
    "dim": 3,
+   "kind": "static",
    "doc": "light/modifiers.md#checkerboard",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/modifiers/CheckerboardModifier.h",
    "tests": "https://github.com/MoonModules/MoonLight/blob/main/test/unit/light/unit_CheckerboardModifier.cpp"
   },
   "MoonLiveModifier": {
    "line": "The coordinate transform written as text on the running device: mirror the pattern, shift it, swap its axes.",
-   "summary": "Each hand-written modifier is a class and a reflash, where a script is a line of text applied as you type. The language is [MoonLive](https://moonmodules.org/MoonLight/moonmodules/light/moonlive.html).\n\nEverything the script declares appears as a real control.",
-   "attribution": "MoonLight original",
+   "summary": "A compiled modifier is a class and a reflash, where a script is a line of text applied as you type, and every control it declares appears on the card. The language is [MoonLive](https://moonmodules.org/MoonLight/moonmodules/light/moonlive.html).",
    "guide": [
     {
-     "title": "MoonLive, details",
-     "text": "**One coordinate at a time**\n\nThe script transforms one coordinate and needs no loop, because the Layer already calls it once per physical light while building its mapping.\n\n`setXYZ(x, y, z)` writes the transformed position, mirroring `setRGB(index, r, g, b)`.\n\n**Read the grid rather than assuming it**\n\n`width` matters more than it looks. A mirror written against a fixed 255 sends every light of a 16-wide grid outside the grid, the Layer discards each one as out of bounds, and the fixture goes black with no error anywhere, because the script itself ran perfectly.\n\nA computed coordinate is full width. `setXYZ` hands its three values to the binding as a call rather than storing them as bytes, so `setXYZ(767 - xPos, ...)` on a 768-wide wall arrives as 767. It was an inline three-byte store once, and that is the bug it caused.\n\n**What a script cannot do**\n\nA modifier has two hooks: one reshapes the logical box once per rebuild, and one folds each coordinate. A script drives only the second. Transforms keeping the box the same size work, and one that halves it, as the built-in [Mirror](https://moonmodules.org/MoonLight/moonmodules/light/modifiers.html#mirror) does, needs the compiled modifier.\n\nA script that fails to compile shows the parse error and the mapping passes coordinates straight through, so the transform disappears until the script parses again and the device keeps rendering."
+     "title": "One coordinate at a time",
+     "text": "A script transforms one coordinate and needs no loop, because the Layer already calls it once per physical light while it builds the mapping.\n\n`setXYZ(x, y, z)` writes the transformed position, as `setRGB(index, r, g, b)` writes a color: a mirror is `void modifyLogical() { setXYZ(width - 1 - xPos, yPos, zPos); }`."
+    },
+    {
+     "title": "Read the grid rather than assuming it",
+     "text": "A mirror written against a fixed 255 sends every light of a 16-wide grid outside it. The Layer drops each one, and the fixture goes black with no error, because the script ran perfectly.\n\nA computed coordinate is full width: `setXYZ` hands its values to the binding as a call, so `setXYZ(767 - xPos, ...)` on a 768-wide wall arrives as 767."
+    },
+    {
+     "title": "What a script can transform",
+     "text": "A modifier has two hooks: one reshapes the logical box once per rebuild, and one folds each coordinate. A script drives the second, so a transform keeping the box its size works, and one halving it, as the built-in Mirror does, needs the compiled modifier.\n\nA script that fails to compile shows the parse error, and the mapping passes coordinates straight through, so the device keeps rendering until the script parses again."
     }
    ],
    "image": "https://moonmodules.org/MoonLight/assets/light/modifiers/MoonLiveModifier.gif",
-   "alt": "MoonLive scripted modifier preview",
    "controls": {
     "script": {
-     "line": "Which `.mlm` file runs, picked from the library and edited here."
+     "line": "Which `.mlm` script runs, picked from the library and edited here."
     }
    },
    "role": "modifier",
    "tags": "📝",
    "dim": 0,
+   "kind": "static",
    "doc": "light/modifiers.md#moonlive",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/moonlive/MoonLiveModifier.h",
    "tests": "https://github.com/MoonModules/MoonLight/blob/main/test/unit/light/unit_MoonLiveModifier.cpp"
   },
   "CircleModifier": {
-   "line": "Expands a 1D effect into concentric **circular rings** (Euclidean distance from the center): the effect's linear position becomes the radius, so a gradient effect draws nested circles.",
-   "summary": "The circular counterpart to [Block](https://moonmodules.org/MoonLight/moonmodules/light/modifiers.html#block).",
-   "attribution": "MoonLight · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Modifiers/M_MoonLight.h)",
+   "line": "Expands a 1D effect into concentric circular rings: its position along the strip becomes the radius, so a gradient draws nested circles.",
+   "summary": "The round sibling of [Block](https://moonmodules.org/MoonLight/moonmodules/light/modifiers.html#block), which draws square rings.",
+   "attribution": "[Euclidean distance](https://en.wikipedia.org/wiki/Euclidean_distance)",
    "image": "https://moonmodules.org/MoonLight/assets/light/modifiers/CircleModifier.gif",
-   "alt": "Circle modifier preview",
    "role": "modifier",
    "tags": "💫",
    "dim": 2,
+   "kind": "static",
    "doc": "light/modifiers.md#circle",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/modifiers/CircleModifier.h",
    "tests": "https://github.com/MoonModules/MoonLight/blob/main/test/unit/light/unit_CircleModifier.cpp"
   },
   "MirrorModifier": {
-   "line": "Folds the far half of the box back onto the near half per axis, mirroring the image across the box center (top-left quadrant reflected into the others in 2D, near octant into all eight in 3D).",
-   "attribution": "MoonLight · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Modifiers/M_MoonLight.h)",
+   "line": "Folds the far half of the box back onto the near half, mirroring the image across its center on each axis you choose.",
+   "summary": "In 2D one quadrant shows in all four, in 3D one octant in all eight.",
    "image": "https://moonmodules.org/MoonLight/assets/light/modifiers/MirrorModifier.gif",
-   "alt": "Mirror modifier preview",
    "controls": {
     "mirrorX": {
-     "line": "Mirror across the center on that axis."
+     "line": "Mirror across the center along x."
     },
     "mirrorY": {
-     "line": "Mirror across the center on that axis."
+     "line": "Mirror across the center along y."
     },
     "mirrorZ": {
-     "line": "Mirror across the center on that axis."
+     "line": "Mirror across the center along z."
     }
    },
    "role": "modifier",
    "tags": "💫",
    "dim": 3,
+   "kind": "static",
    "doc": "light/modifiers.md#mirror",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/modifiers/MirrorModifier.h",
    "tests": "https://github.com/MoonModules/MoonLight/blob/main/test/unit/light/unit_MirrorModifier.cpp"
   },
   "MultiplyModifier": {
-   "line": "Tiles the logical image across the box `multiply` times per axis, optionally mirroring alternate tiles (a pure mirror is `multiply = 2, mirror = true`).",
-   "attribution": "MoonLight · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Modifiers/M_MoonLight.h)",
+   "line": "Tiles the image across the box, a number of times per axis, and can mirror every other tile into a kaleidoscope.",
+   "summary": "Two tiles with mirroring on is a plain mirror.",
    "image": "https://moonmodules.org/MoonLight/assets/light/modifiers/MultiplyModifier.gif",
-   "alt": "Multiply modifier preview",
    "controls": {
     "multiplyX": {
-     "line": "Tiles per axis, `1` meaning none."
+     "line": "Tiles along x, one meaning none."
     },
     "multiplyY": {
-     "line": "Tiles per axis, `1` meaning none."
+     "line": "Tiles along y, one meaning none."
     },
     "multiplyZ": {
-     "line": "Tiles per axis, `1` meaning none."
+     "line": "Tiles along z, one meaning none."
     },
     "mirrorX": {
-     "line": "Reflect alternate tiles on that axis."
+     "line": "Reflect every other tile along x."
     },
     "mirrorY": {
-     "line": "Reflect alternate tiles on that axis."
+     "line": "Reflect every other tile along y."
     },
     "mirrorZ": {
-     "line": "Reflect alternate tiles on that axis."
+     "line": "Reflect every other tile along z."
     }
    },
    "role": "modifier",
    "tags": "💫",
    "dim": 3,
+   "kind": "static",
    "doc": "light/modifiers.md#multiply",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/modifiers/MultiplyModifier.h",
    "tests": "https://github.com/MoonModules/MoonLight/blob/main/test/unit/light/unit_MultiplyModifier.cpp"
   },
   "PinwheelModifier": {
-   "line": "Remaps the grid into radial **petals** around the center: the angle to each pixel picks its petal, with an optional swirl (angle sheared by radius), symmetry, and z-twist.",
-   "summary": "Turns a linear or 2D effect into a rotating flower/spokes pattern.",
-   "attribution": "MoonLight · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Modifiers/M_MoonLight.h)",
+   "line": "Remaps the grid into petals around the center, so a line or a 2D effect turns into a rotating flower or spokes.",
+   "summary": "The angle to each light picks its petal, and the radius runs along it; swirl, symmetry and z-twist bend the pattern.",
+   "attribution": "[Brandon502](https://github.com/Brandon502), [Polar coordinates](https://en.wikipedia.org/wiki/Polar_coordinate_system)",
    "image": "https://moonmodules.org/MoonLight/assets/light/modifiers/PinwheelModifier.gif",
-   "alt": "Pinwheel modifier preview",
    "controls": {
     "petals": {
-     "line": "Number of petals radiating from the center."
+     "line": "How many petals radiate from the center."
     },
     "swirl": {
-     "line": "Shear the angle by radius (−127..127; a spiral; negative reverses)."
+     "line": "How far a petal bends into a spiral, negative bending the other way."
     },
     "reverse": {
      "line": "Reverse the petal order."
     },
     "symmetry": {
-     "line": "Fold the petals into a factor-of-360 symmetry."
+     "line": "How many times the pattern repeats around the turn."
     },
     "zTwist": {
-     "line": "Twist the petals along z (3D)."
+     "line": "How far the petals twist from one z layer to the next."
     }
    },
    "role": "modifier",
    "tags": "💫",
    "dim": 2,
+   "kind": "static",
    "doc": "light/modifiers.md#pinwheel",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/modifiers/PinwheelModifier.h",
    "tests": "https://github.com/MoonModules/MoonLight/blob/main/test/unit/light/unit_PinwheelModifier.cpp"
   },
   "RandomMapModifier": {
-   "line": "Remaps every light to another via a true 1:1 permutation, reshuffling to a fresh permutation on a `bpm` timer: the arrangement scrambles each beat, the content is untouched.",
-   "attribution": "MoonLight · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Modifiers/M_MoonLight.h)",
+   "line": "Moves every light to another, each one exactly once, and reshuffles on a beat: the arrangement scrambles while the content stays.",
+   "attribution": "[Fisher-Yates shuffle](https://en.wikipedia.org/wiki/Fisher%E2%80%93Yates_shuffle)",
    "image": "https://moonmodules.org/MoonLight/assets/light/modifiers/RandomMapModifier.gif",
-   "alt": "RandomMap modifier preview",
    "controls": {
     "bpm": {
-     "line": "Reshuffles per minute, `0` freezing the permutation."
+     "line": "Reshuffles per minute, zero freezing the arrangement."
     }
    },
    "role": "modifier",
    "tags": "💫",
    "dim": 3,
+   "kind": "animated",
    "doc": "light/modifiers.md#randommap",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/modifiers/RandomMapModifier.h",
    "tests": "https://github.com/MoonModules/MoonLight/blob/main/test/unit/light/unit_RandomMapModifier.cpp"
   },
   "RegionModifier": {
-   "line": "Carves the layer to a sub-rectangle given as percentages of the physical extent (so it survives a resize); outside the region is dark.",
-   "attribution": "MoonLight · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Modifiers/M_MoonLight.h)",
+   "line": "Crops the layer to a rectangle given in percentages of each axis, so it holds when the layout is resized; outside it is dark.",
+   "summary": "Beyond 0 and 100 the window slides partly or wholly out of view.",
    "image": "https://moonmodules.org/MoonLight/assets/light/modifiers/RegionModifier.gif",
-   "alt": "Region modifier preview",
    "controls": {
     "startX": {
-     "line": "The bounds as **percentages** of each axis."
+     "line": "Where the region starts along x, in percent of the axis."
     },
     "startY": {
-     "line": ""
+     "line": "Where it starts along y, in percent."
     },
     "startZ": {
-     "line": ""
+     "line": "Where it starts along z, in percent."
     },
     "endX": {
-     "line": ""
+     "line": "Where the region ends along x, in percent of the axis."
     },
     "endY": {
-     "line": ""
+     "line": "Where it ends along y, in percent."
     },
     "endZ": {
-     "line": "The bounds as **percentages** of each axis."
+     "line": "Where it ends along z, in percent."
     }
    },
    "role": "modifier",
    "tags": "💫",
    "dim": 3,
+   "kind": "static",
    "doc": "light/modifiers.md#region",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/modifiers/RegionModifier.h",
    "tests": "https://github.com/MoonModules/MoonLight/blob/main/test/unit/light/unit_RegionModifier.cpp"
   },
   "RippleXZModifier": {
-   "line": "Collapses an axis to a single plane so a higher-dimensional effect ripples along the remaining axes, used to drive a 1D→2D/3D ripple.",
-   "attribution": "MoonLight · by @Troy (WLEDMM Art-Net) · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Modifiers/M_MoonLight.h)",
+   "line": "Collapses an axis to a single plane, so an effect drawn along the other axes ripples across the whole box.",
+   "attribution": "[troyhacks](https://github.com/troyhacks)",
    "image": "https://moonmodules.org/MoonLight/assets/light/modifiers/RippleXZModifier.gif",
-   "alt": "RippleXZ modifier preview",
    "controls": {
     "shrink": {
-     "line": "Collapse the selected axis (on = collapse)."
+     "line": "Collapse the chosen axes to a single plane."
     },
     "towardsX": {
-     "line": "Which axis collapses to a single line."
+     "line": "Collapse x, so each column shares one light."
     },
     "towardsZ": {
-     "line": "Which axis collapses to a single line."
+     "line": "Collapse z, so each x-y plane is shared across depth."
     }
    },
    "role": "modifier",
    "tags": "💫",
    "dim": 3,
+   "kind": "static",
    "doc": "light/modifiers.md#ripplexz",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/modifiers/RippleXZModifier.h",
    "tests": "https://github.com/MoonModules/MoonLight/blob/main/test/unit/light/unit_RippleXZModifier.cpp"
   },
   "RotateModifier": {
-   "line": "Rotates the 2D image around its center, turning continuously over time (the codebase's transform-matrix reference).",
-   "attribution": "MoonLight · by WildCats08 / [@Brandon502](https://github.com/Brandon502) · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Modifiers/M_MoonLight.h)",
+   "line": "Turns the 2D image around its center, continuously, at the speed you set.",
+   "attribution": "[Brandon502](https://github.com/Brandon502), [Rotation matrix](https://en.wikipedia.org/wiki/Rotation_matrix)",
    "image": "https://moonmodules.org/MoonLight/assets/light/modifiers/RotateModifier.gif",
-   "alt": "Rotate modifier preview",
    "controls": {
     "speed": {
-     "line": "Rotation speed."
+     "line": "How fast the image turns."
     }
    },
    "role": "modifier",
    "tags": "💫",
    "dim": 2,
+   "kind": "dynamic",
    "doc": "light/modifiers.md#rotate",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/modifiers/RotateModifier.h",
    "tests": "https://github.com/MoonModules/MoonLight/blob/main/test/unit/light/unit_RotateModifier.cpp"
   },
   "TransposeModifier": {
-   "line": "Swaps a pair of box axes (and every coordinate through them), then optionally inverts each axis: rotate or flip the image without redrawing the effect.",
-   "attribution": "MoonLight · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Modifiers/M_MoonLight.h)",
+   "line": "Swaps a pair of axes and can flip each one, so the image rotates or mirrors without the effect redrawing.",
+   "attribution": "[Transpose](https://en.wikipedia.org/wiki/Transpose)",
    "image": "https://moonmodules.org/MoonLight/assets/light/modifiers/TransposeModifier.gif",
-   "alt": "Transpose modifier preview",
    "controls": {
     "XY": {
-     "line": "Swap that pair of axes."
+     "line": "Swap x and y, rows becoming columns."
     },
     "XZ": {
-     "line": "Swap that pair of axes."
+     "line": "Swap x and z."
     },
     "YZ": {
-     "line": "Swap that pair of axes."
+     "line": "Swap y and z."
     },
     "inverse X": {
-     "line": "Flip that axis after the swap."
+     "line": "Flip x after the swaps, so it reads back to front."
     },
     "inverse Y": {
-     "line": "Flip that axis after the swap."
+     "line": "Flip y after the swaps."
     },
     "inverse Z": {
-     "line": "Flip that axis after the swap."
+     "line": "Flip z after the swaps."
     }
    },
    "role": "modifier",
    "tags": "💫",
    "dim": 3,
+   "kind": "static",
    "doc": "light/modifiers.md#transpose",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/modifiers/TransposeModifier.h",
    "tests": "https://github.com/MoonModules/MoonLight/blob/main/test/unit/light/unit_TransposeModifier.cpp"
@@ -3213,7 +3223,7 @@
    "guide": [
     {
      "title": "Control, details",
-     "text": "A control is one named, typed value on a module, declared once in `defineControls()` and reachable by name from every surface: the web UI, the REST interface, a preset file, a script, a physical desk. The type decides how it renders, what it accepts, and how it persists, so a module never writes UI code and never parses its own JSON.\n\n[`Control.h`](https://moonmodules.org/MoonLight/moonmodules/core/moxygen/Control.html) owns the type and its operations. The discriminator sits with the functions that interpret it, so adding a type is one enum entry plus the cases the compiler then demands, rather than a search for every `switch` in the tree.\n\nDetail: [technical](https://moonmodules.org/MoonLight/moonmodules/core/moxygen/Control.html)\n\n**The module tree**\n\nEvery module is the same building block, whatever it does: [`MoonModule`](https://moonmodules.org/MoonLight/moonmodules/core/moxygen/MoonModule.html) declares the lifecycle, and [`Scheduler`](https://moonmodules.org/MoonLight/moonmodules/core/moxygen/Scheduler.html) owns the top-level modules, boots them in phases, and drives every tick. A module is a node in a tree, so a driver, a layer and an effect nest the same way and the same walk serves all of them.\n\n[`ModuleFactory`](https://moonmodules.org/MoonLight/moonmodules/core/moxygen/ModuleFactory.html) turns a type name into an instance, which is what lets a preset file name a module this build has never instantiated.\n\nDetail: [technical](https://moonmodules.org/MoonLight/moonmodules/core/moxygen/MoonModule.html) · [Scheduler](https://moonmodules.org/MoonLight/moonmodules/core/moxygen/Scheduler.html) · [ModuleFactory](https://moonmodules.org/MoonLight/moonmodules/core/moxygen/ModuleFactory.html)\n\n**Surfaces and mappings**\n\n[`ControlSurface`](https://moonmodules.org/MoonLight/moonmodules/core/moxygen/ControlSurface.html) is the desk layout itself: which bank a control belongs to, and how a physical encoder or fader finds the value it drives.\n\n[`InputMapping`](https://moonmodules.org/MoonLight/moonmodules/core/moxygen/InputMapping.html) is the binding table behind it. A row says what an input does to a control: set it, step it, toggle it. A delta steps down as well as up, so one encoder covers a range without a second control to reverse it.\n\nDetail: [technical](https://moonmodules.org/MoonLight/moonmodules/core/moxygen/ControlSurface.html) · [InputMapping](https://moonmodules.org/MoonLight/moonmodules/core/moxygen/InputMapping.html)\n\n**Presets**\n\nA preset is a file: `/.config/presets/<name>.json`. Saving writes one, applying reads one, deleting removes one. Nothing else holds preset state, so there is no second copy to keep in step: the list is read from the folder at startup rather than persisted alongside it. After that a save, rename or delete re-reads its one file, and so does a file the file API writes or removes, which every module hears about, so a preset written through the File Manager or the gallery appears on its own. One file at a time matters on an ESP32, where walking the folder costs about 15 ms per preset and reading one about 60 ms.\n\nThe name becomes the file name, so it is restricted to printable ASCII without `/`, `\\` or `.`, a validator on the control, which every write path runs. The file's `$slot` records which pad the preset occupies, so a surface arranged to match a physical desk survives a reboot. The save form (`name`, `slot`, `source`) is input for the next save rather than configuration, so none of it is written to flash.\n\n**What a preset holds**\n\nA preset is a [state document](https://moonmodules.org/MoonLight/reference/integrating.html#setting-everything-at-once), the one `PATCH /api/state` applies, plus its `$slot`, a root `$` key the engine reads as the file's own:\n\nA save writes the `source` module through the same writer `GET /api/modules/<name>/document` uses, rooted at the top level. The pad editor names one of the four containers, which captures it whole: *a look*, *a geometry*, *a hardware setup* or *a service configuration*. A card's `{ }` button saves that card alone, which applied puts back that card and leaves its siblings. A hand-written or gallery preset may hold less, such as `{\"Drivers\":{\"palette\":\"Ocean\"}}`.\n\nAn `Effects` preset is a look and applies to a board with completely different hardware; a `Drivers` preset with pins is device-specific. A secret stays out of a document, so a preset never carries a password.\n\nA preset that fails names the first failure and where it is, and what came before it stays applied. A preset in the flat format older builds wrote is listed but not applied, and a backup and restore converts it. A malformed file leaves the live tree untouched.\n\n**One active preset per container**\n\nThe four containers are the **roles**: layout, effects, driver, service. A preset holds the roles of the containers it sets and leaves the others alone, so a layout preset and a look can be active at the same time, and a palette preset holds the driver pad beside a running look.\n\nA pad is tinted by its role: layout blue, effects violet, driver green, service amber.\n\n**Applying is a rebuild**\n\nA saved container carries `\"$patch\": \"replace\"`, so applying it creates, replaces and destroys modules to match: a preset carrying more than the device has adds it, and one describing less removes what it omits. Every removal runs before any creation, so a module can move between layers under its own name.\n\nStructural mutation quiesces the render worker, and mutations run inline on the render tick, so a large restore stalls rendering for its duration. `prepareTree()` runs once at the end. Presets are a cold-path feature; the tick path is untouched.\n\n**The gallery**\n\nUnder the pads, the gallery lists [MoonLight-Gallery](https://github.com/MoonModules/MoonLight-Gallery)'s `index.json`, most liked first. The browser fetches it from `raw.githubusercontent.com`, so the device needs no internet of its own. A preset installs onto the first free pad, or applies once through `PATCH /api/state`, and either way brings the scripts it names that the device lacks: the gallery's copy, else the one the firmware ships. A script installs into `/moonlive`.\n\n**Home Assistant**\n\nLooks reach Home Assistant two ways, and only `Effects` presets travel either of them.\n\n**The WLED integration** (`/presets.json`) is the native path: HA renders looks in its own preset dropdown, shows which one is applied, and applies one when it is chosen. This is what HA calls a preset.\n\n**MQTT discovery** publishes the same looks as the light entity's **effect list**. HA has no preset concept over MQTT, so they arrive as effects, the same result from the user's side, reached through a different mechanism.\n\nHA caches the preset list and re-fetches only when the device's `info.fs.pmt` value changes, so the device reports a revision counter there that bumps on every preset save, rename and delete, a counter rather than a timestamp, so two changes inside one second still read as two. A constant there leaves HA showing the list it read at setup forever; over MQTT the same revision re-announces the effect list mid-session.\n\nOnly looks are exposed, on both paths. A `Drivers` or `Layouts` preset rewires pins or geometry, which must not be reachable from something that believes it is choosing a color scheme, the restriction is enforced at the apply entry point, not merely by omitting them from the list.\n\nHome Assistant's WLED integration connects on **port 80 only**: its host field rejects a port, so a desktop build (which defaults to 8080) needs `--port 80`, and that needs root:\n\nThe discovery buffers are sized to the looks this device actually has, and grow or shrink as presets are added and removed. There is no cap on the number: a fixed one would either reserve memory a small setup never uses, or silently publish nothing once the list outgrew it."
+     "text": "A control is one named, typed value on a module, declared once in `defineControls()` and reachable by name from every surface: the web UI, the REST interface, a preset file, a script, a physical desk. The type decides how it renders, what it accepts, and how it persists, so a module never writes UI code and never parses its own JSON.\n\n[`Control.h`](https://moonmodules.org/MoonLight/moonmodules/core/moxygen/Control.html) owns the type and its operations. The discriminator sits with the functions that interpret it, so adding a type is one enum entry plus the cases the compiler then demands, rather than a search for every `switch` in the tree.\n\nDetail: [technical](https://moonmodules.org/MoonLight/moonmodules/core/moxygen/Control.html)\n\n**The module tree**\n\nEvery module is the same building block, whatever it does: [`MoonModule`](https://moonmodules.org/MoonLight/moonmodules/core/moxygen/MoonModule.html) declares the lifecycle, and [`Scheduler`](https://moonmodules.org/MoonLight/moonmodules/core/moxygen/Scheduler.html) owns the top-level modules, boots them in phases, and drives every tick. A module is a node in a tree, so a driver, a layer and an effect nest the same way and the same walk serves all of them.\n\n[`ModuleFactory`](https://moonmodules.org/MoonLight/moonmodules/core/moxygen/ModuleFactory.html) turns a type name into an instance, which is what lets a preset file name a module this build has never instantiated.\n\nDetail: [technical](https://moonmodules.org/MoonLight/moonmodules/core/moxygen/MoonModule.html) · [Scheduler](https://moonmodules.org/MoonLight/moonmodules/core/moxygen/Scheduler.html) · [ModuleFactory](https://moonmodules.org/MoonLight/moonmodules/core/moxygen/ModuleFactory.html)\n\n**Surfaces and mappings**\n\n[`ControlSurface`](https://moonmodules.org/MoonLight/moonmodules/core/moxygen/ControlSurface.html) is the desk layout itself: which bank a control belongs to, and how a physical encoder or fader finds the value it drives.\n\n[`InputMapping`](https://moonmodules.org/MoonLight/moonmodules/core/moxygen/InputMapping.html) is the binding table behind it. A row says what an input does to a control: set it, step it, toggle it. A delta steps down as well as up, so one encoder covers a range without a second control to reverse it.\n\nDetail: [technical](https://moonmodules.org/MoonLight/moonmodules/core/moxygen/ControlSurface.html) · [InputMapping](https://moonmodules.org/MoonLight/moonmodules/core/moxygen/InputMapping.html)\n\n**Presets**\n\nA preset is a file: `/.config/presets/<name>.json`. Saving writes one, applying reads one, deleting removes one. Nothing else holds preset state, so there is no second copy to keep in step: the list is read from the folder at startup rather than persisted alongside it. After that a save, rename or delete re-reads its one file, and so does a file the file API writes or removes, which every module hears about, so a preset written through the File Manager or the gallery appears on its own. One file at a time matters on an ESP32, where walking the folder costs about 15 ms per preset and reading one about 60 ms.\n\nThe name becomes the file name, so it is restricted to printable ASCII without `/`, `\\` or `.`, a validator on the control, which every write path runs. The file's `$slot` records which pad the preset occupies, so a surface arranged to match a physical desk survives a reboot. The save form (`name`, `slot`, `source`) is input for the next save rather than configuration, so none of it is written to flash.\n\n**What a preset holds**\n\nA preset is a [state document](https://moonmodules.org/MoonLight/reference/integrating.html#setting-everything-at-once), the one `PATCH /api/state` applies, plus its `$slot`, a root `$` key the engine reads as the file's own:\n\nA save writes the `source` module through the same writer `GET /api/modules/<name>/document` uses, rooted at the top level. The pad editor names one of the four containers, which captures it whole: *a look*, *a geometry*, *a hardware setup* or *a service configuration*. A card's `{ }` button saves that card alone, which applied puts back that card and leaves its siblings. A hand-written or gallery preset may hold less, such as `{\"Drivers\":{\"palette\":\"Ocean\"}}`.\n\nAn `Effects` preset is a look and applies to a board with completely different hardware; a `Drivers` preset with pins is device-specific. A secret stays out of a document, so a preset never carries a password.\n\nA preset that fails names the first failure and where it is, and what came before it stays applied. A preset in the flat format older builds wrote is listed but not applied, and a backup and restore converts it. A malformed file leaves the live tree untouched.\n\n**One active preset per container**\n\nThe four containers are the **roles**: layout, effects, driver, service. A preset holds the roles of the containers it sets and leaves the others alone, so a layout preset and a look can be active at the same time, and a palette preset holds the driver pad beside a running look.\n\nA pad is tinted by its role: layout blue, effects violet, driver green, service amber.\n\n**Applying is a rebuild**\n\nA saved container carries `\"$patch\": \"replace\"`, so applying it creates, replaces and destroys modules to match: a preset carrying more than the device has adds it, and one describing less removes what it omits. Every removal runs before any creation, so a module can move between layers under its own name.\n\nStructural mutation quiesces the render worker, and mutations run inline on the render tick, so a large restore stalls rendering for its duration. `prepareTree()` runs once at the end. Presets are a cold-path feature; the tick path is untouched.\n\n**The gallery**\n\nUnder the pads, the gallery lists [MoonLight-Gallery](https://github.com/MoonModules/MoonLight-Gallery)'s `index.json`, most liked first. The browser fetches it from `raw.githubusercontent.com`, so the device needs no internet of its own. A preset installs onto the first free pad, or applies once through `PATCH /api/state`, and either way brings the scripts it names that the device lacks: the gallery's copy, else the one the firmware ships. A script installs into `/moonlive`. A look, a palette, or a look with its palette applies at once; a preset that also sets pins or geometry asks first, since those belong to the author's rig.\n\n**Home Assistant**\n\nLooks reach Home Assistant two ways, and only `Effects` presets travel either of them.\n\n**The WLED integration** (`/presets.json`) is the native path: HA renders looks in its own preset dropdown, shows which one is applied, and applies one when it is chosen. This is what HA calls a preset.\n\n**MQTT discovery** publishes the same looks as the light entity's **effect list**. HA has no preset concept over MQTT, so they arrive as effects, the same result from the user's side, reached through a different mechanism.\n\nHA caches the preset list and re-fetches only when the device's `info.fs.pmt` value changes, so the device reports a revision counter there that bumps on every preset save, rename and delete, a counter rather than a timestamp, so two changes inside one second still read as two. A constant there leaves HA showing the list it read at setup forever; over MQTT the same revision re-announces the effect list mid-session.\n\nOnly looks are exposed, on both paths. A `Drivers` or `Layouts` preset rewires pins or geometry, which must not be reachable from something that believes it is choosing a color scheme, the restriction is enforced at the apply entry point, not merely by omitting them from the list.\n\nHome Assistant's WLED integration connects on **port 80 only**: its host field rejects a port, so a desktop build (which defaults to 8080) needs `--port 80`, and that needs root:\n\nThe discovery buffers are sized to the looks this device actually has, and grow or shrink as presets are added and removed. There is no cap on the number: a fixed one would either reserve memory a small setup never uses, or silently publish nothing once the list outgrew it."
     }
    ],
    "image": "https://moonmodules.org/MoonLight/assets/core/ControlModule.png",
@@ -3995,6 +4005,13 @@
    "dim": 0,
    "doc": "core/system.md#filesystem",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/core/system/FilesystemModule.h"
+  }
+ },
+ "catalogs": {
+  "light/modifiers.md": {
+   "title": "Modifiers",
+   "line": "A modifier sits between an [effect](https://moonmodules.org/MoonLight/moonmodules/light/effects.html) and the output: it reshapes where the pixels land, or masks them, without changing what the effect draws.",
+   "summary": "Modifiers compose: a [Layer](https://moonmodules.org/MoonLight/moonmodules/light/supporting.html#layer) applies its whole stack in child order, each reshaping the result of the one below. A static modifier is baked into the layer's mapping at rebuild. A dynamic one also runs a pass every frame, and an animated one rebuilds its static fold on its own clock.\n\nA modifier folds coordinates rather than drawing, so it uses little of the shared [power functions](https://moonmodules.org/MoonLight/moonmodules/light/power-functions.html). Each card's emoji are its tags, as the [tag emoji legend](https://moonmodules.org/MoonLight/explanation/architecture/index.html#tag-emoji-legend) explains."
   }
  }
 }

@@ -2,6 +2,7 @@
 
 The app shows these strings per module and per control, so each rule here is something a user reads: which sentence is the one line, where a control's help comes from, and that every link in it works from a device's own page."""
 
+import re
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -80,6 +81,64 @@ def test_a_class_without_a_comment_has_no_line():
     assert gen_help.class_help(None)["line"] == ""
 
 
+def test_a_ref_anywhere_in_the_help_becomes_the_link_its_class_name_resolves_to():
+    data = {"line": "The sibling of @ref CircleModifier.", "guide": [{"text": "See @ref Layer, then @ref Layer."}]}
+    out = gen_help.resolve_refs(data, lambda name: f"[{name}](#{name.lower()})")
+    assert out == {"line": "The sibling of [CircleModifier](#circlemodifier).",
+                   "guide": [{"text": "See [Layer](#layer), then [Layer](#layer)."}]}
+
+
+def test_an_attribution_names_catalog_entries_and_keeps_an_unlisted_name_as_written(tmp_path):
+    page = tmp_path / "attributions.md"
+    page.write_text("| Name | Known for |\n|---|---|\n| [Brandon502 / WildCats08](https://github.com/Brandon502) | Rotate |\n| Sören | The installer. |\n")
+    catalog = gen_help.attribution_catalog(page)
+    assert catalog == {"brandon502": "https://github.com/Brandon502", "wildcats08": "https://github.com/Brandon502", "sören": None}
+    text, unlisted = gen_help.resolve_attribution("WildCats08, Sören, @Troy", catalog)
+    assert text == "[WildCats08](https://github.com/Brandon502), Sören, @Troy"   # an entry with no page is listed, and shows as written
+    assert unlisted == ["@Troy"]
+
+
+def test_every_attribution_catalog_row_is_read():
+    text = gen_help.ATTRIBUTIONS.read_text()
+    rows = list(gen_help.catalog_rows(text))
+    assert len(rows) == sum(1 for ln in text.splitlines() if ln.startswith("| ")) - 1   # all but the header
+    assert all(names and all(names) for _, names, _, _ in rows)
+
+
+def test_a_ref_to_a_module_links_its_card_and_to_a_class_its_technical_page_under_its_own_name():
+    layer = SimpleNamespace(location=SimpleNamespace(file=SimpleNamespace(name=str(gen_help.ROOT / "src/light/layers/Layer.h"))))
+    registered = {"CircleModifier": ("CircleModifier", "light/modifiers.md#circle")}
+    definition = {"FooDriver": layer}.get
+    assert gen_help.ref_link("CircleModifier", registered, definition) == "[Circle](https://moonmodules.org/MoonLight/moonmodules/light/modifiers.html#circle)"
+    # A class that is no module keeps its role noun: only a module's display name drops it.
+    assert gen_help.ref_link("FooDriver", registered, definition) == "[FooDriver](https://moonmodules.org/MoonLight/moonmodules/light/moxygen/Layer.html)"
+    with pytest.raises(LookupError, match="@ref Nosuch"):
+        gen_help.ref_link("Nosuch", registered, definition)
+
+
+def test_the_role_nouns_and_the_technical_page_path_match_the_app_and_the_firmware():
+    """Three homes derive a display name and two a technical page; this pins them to one another, so a noun added in one place cannot rename a module in only some of them."""
+    js = (gen_help.ROOT / "src/ui/help.js").read_text()
+    cpp = (gen_help.ROOT / "src/core/util/ModuleFactory.h").read_text()
+    js_nouns = re.search(r"const ROLE_NOUNS = \[([^\]]+)\]", js).group(1)
+    assert set(re.findall(r'"(\w+)"', js_nouns)) == set(gen_help._ROLE_NOUNS)
+    assert set(re.findall(r'suffix = "(\w+)"', cpp)) == set(gen_help._ROLE_NOUNS)
+    template = re.search(r"`(https://moonmodules\.org/MoonLight/moonmodules/\$\{m\[1\]\}/moxygen/\$\{m\[2\]\}\.html)`", js).group(1)
+    layer = SimpleNamespace(location=SimpleNamespace(file=SimpleNamespace(name=str(gen_help.ROOT / "src/light/layers/Layer.h"))))
+    assert gen_help.technical_url(layer) == template.replace("${m[1]}", "light").replace("${m[2]}", "Layer")
+
+
+def test_a_link_reads_the_type_as_the_app_names_it_without_its_role_noun():
+    assert gen_help.display_name("CircleModifier") == "Circle"
+    assert gen_help.display_name("Layer") == "Layer"
+    assert gen_help.display_name("Effect") == "Effect"
+
+
+def test_a_class_that_is_no_module_links_to_its_headers_technical_page():
+    cls = SimpleNamespace(location=SimpleNamespace(file=SimpleNamespace(name=str(gen_help.ROOT / "src/light/layers/Layer.h"))))
+    assert gen_help.technical_url(cls) == "https://moonmodules.org/MoonLight/moonmodules/light/moxygen/Layer.html"
+
+
 HEADER = """
 struct Controls {
     void addControl(const char*, int&, int, int) {}
@@ -116,6 +175,35 @@ def demo(tmp_path_factory):
     cls = next(c for c in tu.cursor.walk_preorder()
                if c.kind == ci.CursorKind.CLASS_DECL and c.spelling == "DemoEffect")
     return cls
+
+
+KINDS = """
+enum class ModuleRole { Modifier };
+struct ModifierBase {
+    virtual ModuleRole role() const { return ModuleRole::Modifier; }
+    virtual bool hasModifyLive() const { return false; }
+    virtual void tick() {}
+    virtual bool consumeNeedsRebuild() { return false; }
+};
+struct Baked : ModifierBase {};
+struct Spinning : ModifierBase { bool hasModifyLive() const override { return true; } void tick() override {} };
+struct Shuffling : ModifierBase { void tick() override {} bool consumeNeedsRebuild() override { return true; } };
+struct Recompiling : ModifierBase { bool consumeNeedsRebuild() override { return true; } };
+"""
+
+
+def test_a_modifiers_kind_is_dynamic_animated_or_static_as_its_overrides_say(tmp_path):
+    """Dynamic remaps per frame; animated rebuilds on its own clock, a tick of its own asking for the rebuild; a rebuild asked for without a clock, as a recompile does, stays static."""
+    ci = pytest.importorskip("clang.cindex")
+    path = tmp_path / "Kinds.h"
+    path.write_text(KINDS, encoding="utf-8")
+    try:
+        tu = ci.Index.create().parse(str(path), args=["-x", "c++", "-std=c++20"])
+    except ci.LibclangError as e:
+        pytest.skip(str(e))
+    kind = {c.spelling: gen_help.identity(c).get("kind") for c in tu.cursor.walk_preorder()
+            if c.kind == ci.CursorKind.STRUCT_DECL and c.is_definition() and c.spelling != "ModifierBase"}
+    assert kind == {"Baked": "static", "Spinning": "dynamic", "Shuffling": "animated", "Recompiling": "static"}
 
 
 def test_a_controls_line_is_the_comment_on_the_member_it_publishes(demo):
@@ -245,6 +333,31 @@ def hooks(monkeypatch):
     return mkdocs_hooks
 
 
+def test_the_attribution_catalog_shows_avatars_and_the_modules_that_name_each_entry(monkeypatch):
+    import mkdocs_hooks
+    modules = {"RotateModifier": {"doc": "light/modifiers.md#rotate", "attribution": "[Brandon502](https://github.com/Brandon502), [Rotation matrix](https://en.wikipedia.org/wiki/Rotation_matrix)"},
+               "CheckerboardModifier": {"doc": "light/modifiers.md#checkerboard", "attribution": "[WildCats08](https://github.com/Brandon502)"},
+               "InstallerModule": {"doc": "core/system.md#installer", "attribution": "Sören"}}
+    monkeypatch.setitem(mkdocs_hooks._help_cache, "file", {"modules": modules})
+    page = "| Name | Known for |\n|------|-----------|\n| [Brandon502 / WildCats08](https://github.com/Brandon502) | Modifiers. |\n| Sören | The installer. |\n| [NDI](https://en.wikipedia.org/wiki/NDI) | Video. |"
+    assert mkdocs_hooks.attributed_by(page).split("\n") == [
+        "| Name | Known for | Attributed by |",
+        "|------|-----------|---|",
+        '| [Brandon502 / WildCats08](https://github.com/Brandon502)<br><img src="https://github.com/Brandon502.png?size=96" width="48" height="48" alt="" loading="lazy" style="width: 48px; height: 48px; object-fit: cover"> | Modifiers. | [Checkerboard](../moonmodules/light/modifiers.md#checkerboard), [Rotate](../moonmodules/light/modifiers.md#rotate) |',
+        "| Sören | The installer. | [Installer](../moonmodules/core/system.md#installer) |",
+        "| [NDI](https://en.wikipedia.org/wiki/NDI) | Video. |  |"]
+
+
+def test_a_catalog_row_naming_a_commons_file_shows_it_linked_to_its_file_page(monkeypatch):
+    import mkdocs_hooks
+    monkeypatch.setitem(mkdocs_hooks._help_cache, "file", {"modules": {}})
+    page = "| Name | Known for |\n|---|---|\n| [Bresenham](https://en.wikipedia.org/wiki/Bresenham) File:Bresenham.svg | Lines. |"
+    assert mkdocs_hooks.attributed_by(page).split("\n")[2] == (
+        '| [Bresenham](https://en.wikipedia.org/wiki/Bresenham)<br><a href="https://commons.wikimedia.org/wiki/File:Bresenham.svg">'
+        '<img src="https://commons.wikimedia.org/wiki/Special:FilePath/Bresenham.svg?width=96" width="48" height="48" alt="" loading="lazy" style="width: 48px; height: 48px; object-fit: cover"></a> | Lines. |  |')
+    assert list(gen_help.catalog_rows(page))[0][1:] == (["Bresenham"], "https://en.wikipedia.org/wiki/Bresenham", "Bresenham.svg")
+
+
 def test_a_card_cut_to_its_heading_is_drawn_from_the_help(hooks):
     page = '<a id="picture"></a>\n\n### Picture 🖼️ · 2D\n\n<a id="sine"></a>\n\n### Sine\n\nA sine.\n'
     out = hooks.fill_cards_from_help(page, "moonmodules/light/effects.md")
@@ -280,3 +393,29 @@ def test_card_markdown_becomes_inline_text_the_help_can_show():
     out = gen_help.plain(["#### Wiring", "<video src=x controls></video>", "```sh", "ffplay x", "```",
                           "| a | b |", "|---|---|", "- read-only: the level", "- `gain`: how loud", "Plain <span class=\"x\">words</span>."])
     assert out == ["**Wiring**", "read-only: the level", "- `gain`: how loud", "Plain words."]
+
+
+def test_a_catalog_whose_page_is_gone_is_generated_from_the_help(monkeypatch):
+    """The page keeps its name and every anchor, so the registry's links and the site's hold: its intro, a heading per module in name order with its kind, and each guide as a details section."""
+    import mkdocs_hooks
+    help_file = {"catalogs": {"light/demo.md": {"title": "Demos", "line": "What a demo is.", "summary": "One.\n\nTwo."}},
+                 "modules": {"ZetaModifier": {"doc": "light/demo.md#zeta", "tags": "💫", "kind": "dynamic", "line": "Z."},
+                             "AlphaModifier": {"doc": "light/demo.md#alpha", "tags": "💫", "kind": "static", "line": "A.",
+                                               "guide": [{"title": "Tips", "text": "Use it."}]}}}
+    monkeypatch.setitem(mkdocs_hooks._help_cache, "file", help_file)
+    md = mkdocs_hooks.generated_catalog("moonmodules/light/demo.md")
+    assert md.startswith("# Demos\n\nWhat a demo is.\n\nOne.\n\nTwo.\n\n<noscript>")   # the table shows only without JavaScript
+    assert '<div class="mm-deck" data-page="light/demo.md" markdown="1">' in md
+    assert md.index("### Zeta") < md.index("</div>") < md.index("## Alpha, details")   # the cards in the deck, the details after it
+    assert md.index('<a id="alpha"></a>') < md.index('<a id="zeta"></a>')
+    assert "### Alpha 💫 · static" in md and "### Zeta 💫 · dynamic" in md
+    assert "## Alpha, details\n\n#### Tips\n\nUse it." in md
+    assert mkdocs_hooks.generated_catalog("moonmodules/light/other.md") is None
+
+
+def test_a_closing_div_ends_the_last_card_so_it_is_still_drawn(hooks):
+    """A deck holds its cards in a container, and the last card ended at the next heading, past the container's end, so a card read as having a body and was left blank."""
+    page = '<div class="mm-deck" markdown="1">\n\n<a id="picture"></a>\n\n### Picture 🖼️ · 2D\n\n</div>\n\n## After\n'
+    out = hooks.fill_cards_from_help(page, "moonmodules/light/effects.md")
+    assert out.index("- `fit`: keep the aspect.") < out.index("</div>")
+

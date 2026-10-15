@@ -336,9 +336,15 @@ window.addEventListener("pagehide", () => {
 
 async function init() {
     applyTheme(theme);
-    // Before anything renders: the cached help and a ?help choice shape the first cards.
-    loadHelp();
-    applyHelpShown(lsRead(LS_HELP_SHOWN, "1") === "1");
+    // Before anything renders: help the user turned on shapes the first cards, and nothing is fetched until they agreed.
+    const helpSource = new URLSearchParams(location.search).get("help");
+    try {
+        if (helpSource === "local") localStorage.setItem(LS_HELP_SOURCE, "local");
+        else if (helpSource === "published") localStorage.removeItem(LS_HELP_SOURCE);
+    } catch { /* storage blocked: the published help */ }
+    const helpOn = lsRead(LS_HELP_SHOWN, "0") === "1" && lsRead(LS_HELP_CONSENT, "") === "1";
+    if (helpOn) loadHelp();
+    applyHelpShown(helpOn);
     setupStatusBarButtons();
     setupUpdateBadge();
     setupCardsResize();
@@ -2819,34 +2825,56 @@ function docPathForType(moduleType) {
 //
 // help.json is generated from the module headers (moondeck/docs/gen_help.py) and published beside the docs site, whose Pages host sends `access-control-allow-origin: *`, so a page served by a device may read it. A device's page is plain HTTP, which has no Cache API, so the last copy lives in localStorage and shows at once, offline included; the fetch then revalidates it with the ETag Pages sends.
 const HELP_URL = "https://moonmodules.org/MoonLight/help/help.json";
+// TEMPORARY, until the docs deploy publishes help.json after this branch merges: the same file read from the branch on GitHub, tried when the published one is missing. It goes with the merge.
+const HELP_URL_BRANCH = "https://raw.githubusercontent.com/MoonModules/MoonLight/next-iteration/docs/help/help.json";
 const LS_HELP = "mm_help";            // the last help.json fetched, as text
-const SS_HELP_URL = "mm_helpUrl";     // sessionStorage: another help source for this tab only, "" for none; `?help=<url>`, `?help=off` or `?help=default` sets it
-const LS_HELP_SHOWN = "mm_helpShown"; // "0" hides the help without a re-render, from the ⓘ in the status bar
+// While developing help: `?help=local` reads the file gen_help last wrote, which preview_installer serves on this machine, and `?help=published` returns to the docs site. A fixed address, so a shared link cannot point the help anywhere else.
+const HELP_URL_LOCAL = "http://localhost:8421/help/help.json";
+const LS_HELP_SOURCE = "mm_helpSource";   // "local" while developing help, else absent
+const LS_HELP_SHOWN = "mm_helpShown"; // "1" shows the help, from the ⓘ in the status bar; off by default
+const LS_HELP_CONSENT = "mm_helpConsent"; // "1" once the user agreed to download help; nothing is fetched before
 let helpModules = {};
 
-// A `?help=` source lasts for this tab only and must be http(s), so a shared link cannot pin a device's help to another server; only the docs site's file is kept for offline use.
+// The cached copy at once, offline included, then a fetch that revalidates it; called only after the user agreed, since the request shows the docs site's host this browser's address.
 function loadHelp() {
-    const q = new URLSearchParams(location.search);
-    let url = HELP_URL;
-    try {
-        const v = q.get("help");
-        if (v === "default") sessionStorage.removeItem(SS_HELP_URL);
-        else if (v === "off" || /^https?:\/\//.test(v || "")) sessionStorage.setItem(SS_HELP_URL, v === "off" ? "" : v);
-        url = sessionStorage.getItem(SS_HELP_URL) ?? HELP_URL;
-    } catch { /* storage blocked: the docs site's help */ }
-    const own = url === HELP_URL;
-    const cached = own ? lsRead(LS_HELP, "") : "";
+    const local = lsRead(LS_HELP_SOURCE, "") === "local";
+    const cached = local ? "" : lsRead(LS_HELP, "");
     try { helpModules = cached ? JSON.parse(cached).modules || {} : {}; } catch { helpModules = {}; }
-    if (!url) { helpModules = {}; return; }
-    fetch(url, {cache: "no-cache"}).then(r => r.ok ? r.text() : Promise.reject(r.status)).then(text => {
+    if (Object.keys(helpModules).length && state && !userIsEditing()) renderCards();
+    const get = (url) => fetch(url, {cache: "no-cache"}).then(r => r.ok ? r.text() : Promise.reject(r.status));
+    (local ? get(HELP_URL_LOCAL).catch(() => get(HELP_URL)) : get(HELP_URL)).catch(() => get(HELP_URL_BRANCH)).then(text => {
         if (text === cached) return;
         helpModules = JSON.parse(text).modules || {};
-        if (own) try { localStorage.setItem(LS_HELP, text); } catch { /* full storage: the help still shows this session */ }
+        if (!local) try { localStorage.setItem(LS_HELP, text); } catch { /* full storage: the help still shows this session */ }
         if (state && !userIsEditing()) renderCards();
     }).catch(() => {});   // offline, as on the device's own access point: the cache, or no help
 }
 
-// Show or hide every help line at once: one class on <body>, so a field being edited is untouched.
+// The ⓘ in the status bar: the first time it turns help on it asks, since help comes from the docs site rather than the device, and only a yes downloads it.
+// A help link opens in a popup window, so the app stays where it was; a phone shows the popup as a tab, and a blocked popup falls back to the link's own new tab. The window opens blank, has its opener cut, then goes to the page, so the page cannot navigate the app (reverse tabnabbing).
+function openHelpLink(ev) {
+    const a = ev.target.closest?.(".card-helpbox a[href], .control-helper a[href]");
+    if (!a || ev.button !== 0 || ev.metaKey || ev.ctrlKey || ev.shiftKey || ev.altKey) return;
+    const w = window.open("", "mm-help", "width=960,height=720");
+    if (!w) return;
+    ev.preventDefault();
+    try { w.opener = null; } catch { /* a reused window on another site, cut when it was opened */ }
+    w.location.href = a.href;
+    w.focus();
+}
+
+function toggleHelp() {
+    const on = document.body.classList.contains("help-hidden");
+    if (on && lsRead(LS_HELP_CONSENT, "") !== "1") {
+        if (!confirm("Help is downloaded from the MoonLight docs site, hosted by GitHub, which sees this browser's address. Download the help?")) return;
+        try { localStorage.setItem(LS_HELP_CONSENT, "1"); } catch { /* not remembered: asked again next time */ }
+    }
+    try { localStorage.setItem(LS_HELP_SHOWN, on ? "1" : "0"); } catch { /* not remembered */ }
+    applyHelpShown(on);
+    if (on && !Object.keys(helpModules).length) loadHelp();
+}
+
+// Show or hide every help line at once: one class on <body>, so a field being edited is untouched. The button keeps its name, "Help", and says on or off through aria-pressed, as a toggle button does.
 function applyHelpShown(shown) {
     document.body.classList.toggle("help-hidden", !shown);
     const btn = document.getElementById("help-toggle");
@@ -5890,11 +5918,8 @@ function setupStatusBarButtons() {
     if (rebootBtn) {
         armPressTwice(rebootBtn, rebootDevice, {armedTitle: "Click again to reboot"});
     }
-    document.getElementById("help-toggle")?.addEventListener("click", () => {
-        const shown = document.body.classList.contains("help-hidden");
-        localStorage.setItem(LS_HELP_SHOWN, shown ? "1" : "0");
-        applyHelpShown(shown);
-    });
+    document.getElementById("help-toggle")?.addEventListener("click", toggleHelp);
+    document.addEventListener("click", openHelpLink);
     document.getElementById("theme-toggle")?.addEventListener("click", () => {
         theme = (theme === "dark") ? "light" : "dark";
         localStorage.setItem(LS_THEME, theme);
@@ -6711,12 +6736,12 @@ function galleryIndex() {
 let galleryOpen = false;   // kept across re-renders, so a pad click does not fold it shut
 let galleryStatus = "";    // the last outcome, kept across the re-render an install causes
 
-/// A preset that applies without asking: a look (Effects only) or a palette (Drivers setting its palette and nothing else), since pins and geometry belong to one rig.
+/// A preset that applies without asking: a look (Effects), a palette (Drivers setting its palette and nothing else), or a look with its palette, since pins and geometry belong to one rig.
 function galleryAppliesUnasked(doc) {
     if (!doc || typeof doc !== "object" || Array.isArray(doc)) return false;
     const keys = Object.keys(doc).filter(k => !k.startsWith("$"));   // a `$` key is the file's own, such as its pad
-    if (keys.length === 1 && keys[0] === "Effects") return true;
-    if (keys.length !== 1 || keys[0] !== "Drivers") return false;
+    if (!keys.length || !keys.every(k => k === "Effects" || k === "Drivers")) return false;
+    if (!keys.includes("Drivers")) return true;
     const set = Object.keys(doc.Drivers || {});
     return set.length > 0 && set.every(k => k === "palette" || k === "paletteScript");
 }

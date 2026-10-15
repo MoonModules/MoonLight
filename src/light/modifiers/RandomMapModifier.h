@@ -6,33 +6,25 @@
 
 namespace mm {
 
-/// Modifier remapping every light through a random 1:1 permutation.
+/// Moves every light to another, each one exactly once, and reshuffles on a beat: the arrangement scrambles while the content stays.
+/// @card RandomMapModifier.gif
+///
+/// @attribution Fisher-Yates shuffle
 ///
 /// @moreinfo
 ///
-/// Randomly remaps every light to another light, a true 1:1 permutation (every light goes somewhere, no gaps or duplicates), and reshuffles on a `bpm` timer.
-/// A static fold whose mapping changes on a beat: modifyLogical applies the permutation (the box is unchanged, each light maps to exactly one other).
-/// The bpm tick bumps the generation and rebuilds the Layer's mapping on a beat boundary, the path a control change takes, scoped to one Layer. A permutation is a discrete reshuffle rather than smooth motion, so a beat-gated rebuild is the right cost, not a per-frame remap.
+/// A true 1:1 permutation over the box, with no gaps or duplicates, applied as a static fold. Each beat bumps a generation that rebuilds the Layer's mapping, the path a control change takes.
 ///
-/// ## How often it reshuffles
+/// A reshuffle costs one mapping rebuild on the render thread, a one-frame hitch at most once a second. The permutation lives in a member sized to the box and grows only with the grid; a failed allocation leaves the mapping as it is.
 ///
-/// The rate control is reshuffles per minute, from none up to one a second.
-/// At zero the permutation freezes and never reshuffles again.
-///
-/// Cost: each beat re-runs the Layer's mapping rebuild on the render thread (a transient one-frame hitch), bounded by bpm≤60.
-/// The permutation buffer is a member sized to the box, (re)allocated only on a grid resize, never per frame.
-/// An alloc failure degrades to identity passthrough.
-///
-/// Sparse layouts: the permutation is over box indices, so a real light can map to a non-light cell (dropped → dark).
-/// Acceptable for v1.
-/// Author: MoonLight, https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Modifiers/M_MoonLight.h
+/// On a sparse layout a light can land on a box cell without a light, and that one stays dark.
 class RandomMapModifier : public ModifierBase {
 public:
-    /// The catalog tags this modifier carries.
+    /// The catalog tags: 💫, a MoonLight origin.
     const char* tags() const override { return "💫"; }
     /// Shuffles within a box that spans all three axes.
     Dim dimensions() const override { return Dim::D3; }
-    /// Reshuffles per minute (0–60); 6 ≈ every 10 s; 0 = frozen.
+    /// Reshuffles per minute, zero freezing the arrangement.
     uint8_t bpm = 6;
 
     /// Releases the permutation buffers.
@@ -43,16 +35,13 @@ public:
         controls_.addControl("bpm", bpm, 0, 60);
     }
 
-    // The rate is read live each tick, so changing it needs no rebuild.
-    /// Whether a change here forces the mapping to rebuild.
+    /// No control forces a rebuild: the rate is read live each tick.
     bool affectsPrepare(const char* /*controlName*/) const override { return false; }
 
-    // A remap leaves the box unchanged but needs it for the permutation, stash it.
-    /// Resize the logical box this modifier presents to the effect.
+    /// The box stays as it is, stashed for the permutation.
     void modifyLogicalSize(Coord3D& size) override { box_ = size; }
 
-    // A coordinate flattens to an index, looks up its permuted one, and unflattens back.
-    /// Transform one light's logical position, false dropping it from the mapping.
+    /// Flatten the coordinate to an index, look up its permuted one, and unflatten it back.
     bool modifyLogical(Coord3D& pos) const override {
         const nrOfLightsType boxCount =
             static_cast<nrOfLightsType>(box_.x) * static_cast<nrOfLightsType>(box_.y) *
@@ -72,16 +61,16 @@ public:
         pos.x = static_cast<lengthType>(mapped % w);
         pos.y = static_cast<lengthType>((mapped / w) % h);
         pos.z = static_cast<lengthType>(mapped / (static_cast<nrOfLightsType>(w) * h));
-        return true;   // a permutation never rejects — every light maps somewhere
+        return true;   // a permutation never rejects, every light maps somewhere
     }
 
-    // On each beat the generation bumps, which is what makes the next rebuild reshuffle.
+    /// On each beat the generation bumps, which is what makes the next rebuild reshuffle.
     void tick() MM_NONBLOCKING override {
         const uint32_t now = platform::millis();
         if (lastElapsed_ == 0) lastElapsed_ = now;   // first tick: no dt jump
         const uint32_t dt = now - lastElapsed_;
         lastElapsed_ = now;
-        if (bpm == 0) return;                   // frozen — keep the current permutation
+        if (bpm == 0) return;                   // frozen: keep the current permutation
         // The raw product accumulates and divides only at the read, so a sub-millisecond step survives.
         phaseNum_ += static_cast<uint64_t>(dt) * bpm;
         const uint64_t beat = phaseNum_ / 60000u;
@@ -103,7 +92,7 @@ public:
     void reshuffle() { generation_++; }
 
 private:
-    // Rebuilt when the box count changed or a beat bumped the generation.
+    /// Rebuilt when the box count changed or a beat bumped the generation.
     void ensurePermutation(nrOfLightsType boxCount) const {
         if (boxCount == 0) { releasePerm(); return; }
         if (boxCount != permCount_ || !perm_) {
@@ -120,7 +109,7 @@ private:
         }
     }
 
-    // Fisher-Yates from the identity, so the result is always a true bijection.
+    /// Fisher-Yates from the identity, so the result is always a true bijection.
     void shuffle() const {
         for (nrOfLightsType i = 0; i < permCount_; i++) perm_[i] = i;
         rngState_ = 0xBADF00Du ^ (generation_ * 2654435761u);
@@ -133,7 +122,7 @@ private:
         }
     }
 
-    // LCG (glibc constants), same as ParticlesEffect, fast, integer, deterministic.
+    /// LCG (glibc constants), same as ParticlesEffect, fast, integer, deterministic.
     uint32_t rand() const {
         rngState_ = rngState_ * 1103515245u + 12345u;
         return rngState_ >> 8;   // drop the low bits (poor randomness in an LCG)
@@ -144,13 +133,14 @@ private:
         permCount_ = 0;
     }
 
+    /// The box the permutation is over, stashed in modifyLogicalSize.
+    Coord3D box_;
     /// Mutable: mapToPhysical is const but lazily (re)builds the permutation.
-    Coord3D box_;   // stashed in modifyLogicalSize (the box the permutation is over)
     mutable nrOfLightsType* perm_ = nullptr;
     mutable nrOfLightsType  permCount_ = 0;
     mutable uint32_t        rngState_ = 0xBADF00Du;
-    mutable uint32_t        generation_ = 1;   // bumped per beat; shuffle keys off it
-    mutable uint32_t        builtGen_ = 0;     // generation the current perm_ was built for
+    mutable uint32_t        generation_ = 1;   ///< bumped per beat; shuffle keys off it
+    mutable uint32_t        builtGen_ = 0;     ///< generation the current perm_ was built for
 
     /// Dt*bpm accumulator (numerator; one beat per 60000).
     uint64_t phaseNum_ = 0;

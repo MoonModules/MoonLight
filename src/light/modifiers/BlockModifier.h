@@ -4,26 +4,22 @@
 
 namespace mm {
 
-/// Modifier expanding a 1D effect into concentric square rings.
+/// Expands a 1D effect into concentric square rings: its position along the strip becomes the ring, so a gradient draws nested squares.
+/// @card BlockModifier.gif
+///
+/// The square sibling of @ref CircleModifier, which draws round rings.
+///
+/// @attribution Chebyshev distance
 ///
 /// @moreinfo
 ///
-/// Remaps a 1D effect onto the CHEBYSHEV-distance field of a 2D box.
-/// Each physical light folds to its block distance from the box center, max(|dx|,|dy|), so the effect draws as concentric SQUARE rings expanding from the middle.
-/// It is the square-ring sibling of the Circle modifier (which uses the Euclidean sqrt and draws round rings).
-/// Block swaps that for the Chebyshev max, which is why the rings are axis-aligned squares.
-/// Z is not part of the distance (this is a 2D remap, exactly as MoonLight defines it).
+/// Each light folds to its Chebyshev distance from the box center, max(|dx|, |dy|), which is why the rings are axis-aligned squares; z is not part of the distance.
 ///
-/// The logical box the fold produces is one row wide and (max block distance + 1) tall: a 1D effect painted along y lights the rings from center outward.
-///
-/// Prior art: MoonLight's BlockModifier (M_MoonLight.h), same center formula ((n+1)/2 - 1, a floor-biased middle), same dx/dy abs deltas, same distance = max(dx, dy), same {0, distance, 0} output.
-/// The same box transform (fold the box through the position map, then grow each axis by one).
-/// Written fresh against our fold interface: modifySize() -> modifyLogicalSize (stashing the incoming box), modifyPosition() -> the const modifyLogical fold that reads the stash.
-/// Author: MoonLight, https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Modifiers/M_MoonLight.h
+/// The logical box is one row wide and the largest distance plus one tall, so a 1D effect painted along y lights the rings from the center outward. The center is (n+1)/2 - 1 per axis, a floor-biased middle.
 class BlockModifier : public ModifierBase {
 public:
-    /// The catalog tags this modifier carries.
-    const char* tags() const override { return "💫"; }  // MoonLight origin
+    /// The catalog tags: 💫, a MoonLight origin.
+    const char* tags() const override { return "💫"; }
 
     /// Two-dimensional: it reads x and y and writes into y, leaving z untouched.
     Dim dimensions() const override { return Dim::D2; }
@@ -69,7 +65,7 @@ public:
     }
 
 private:
-    // The physical box, stashed at resize time so the const fold can read its center.
+    /// The physical box, stashed at resize time so the const fold can read its center.
     Coord3D modifierSize_;
 };
 

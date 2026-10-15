@@ -63,7 +63,7 @@ The next function worth simplifying is at the top of each file's list.
 | `src/ui/migrate.js` | 43 | `line 31: 'I2cBusModule'`, module type in the UI 1 |
 | `src/core/moonlive/MoonLiveCompiler.cpp` | 41 | `moonlive::Parser::parseDecl`, complex function 54 |
 | `src/platform/desktop/platform_desktop.cpp` | 40 | `platform::spawnEncoderProcess`, complex function 58 |
-| `src/ui/app.js` | 35 | `app.js`, large file 9074 |
+| `src/ui/app.js` | 35 | `app.js`, large file 9099 |
 | `src/core/system/MqttModule.cpp` | 31 | `MqttModule::routePublish`, complex function 29 |
 | `src/light/drivers/ParallelLedDriver.h` | 27 | `ParallelLedDriver::reinit`, complex function 36 |
 | `src/light/drivers/PreviewDriver.h` | 27 | `PreviewDriver::buildCoordTable`, complex function 37 |
@@ -80,13 +80,13 @@ The next function worth simplifying is at the top of each file's list.
 | `test/unit/light/unit_I80Peripheral.cpp` | 19 | `lines 132-151, also in test/unit/light/unit_ParlioPeripheral.cpp:197`, duplicated block 20 |
 | `src/platform/esp32/platform_esp32_moon_i80.cpp` | 18 | `platform::createRingState`, complex function 32 |
 | `test/unit/core/unit_PinsModule.cpp` | 18 | `lines 46-57, also in test/unit/light/unit_Hub75Driver_pins.cpp:66`, duplicated block 12 |
-| `src/core/services/AudioService.h` | 16 | `AudioService in 52 files`, name spread 52 |
+| `src/core/services/AudioService.h` | 16 | `AudioService in 53 files`, name spread 53 |
 | `src/light/effects/PacmanEffect.h` | 16 | `lines 243-257, also in src/light/effects/FishTankEffect.h:244`, duplicated block 15 |
 | `src/platform/esp32/platform_esp32_ota.cpp` | 15 | `platform::otaWriteMoonBase`, complex function 33 |
 | `test/unit/light/unit_PaintBrushEffect.cpp` | 15 | `lines 44-61, also in test/unit/light/unit_GEQ3DEffect.cpp:58`, duplicated block 18 |
 | `test/unit/light/unit_SolidEffect.cpp` | 15 | `lines 9-22, also in test/unit/light/unit_FixedRectangleEffect.cpp:90`, duplicated block 14 |
 | `src/core/module/Control.cpp` | 13 | `applyControlValue`, complex function 74 |
-| `src/light/layers/Layer.h` | 13 | `Layer in 130 files`, name spread 130 |
+| `src/light/layers/Layer.h` | 13 | `Layer in 132 files`, name spread 132 |
 | `src/light/moonlive/MoonLiveBuiltins_light.h` | 13 | `moonlive::mm_light_escape`, complex function 13 |
 | `test/unit/light/unit_HlsDriver.cpp` | 13 | `lines 30-47, also in test/unit/light/unit_PanelCardDriver.cpp:22`, duplicated block 18 |
 | `test/unit/light/unit_RandomMapModifier.cpp` | 13 | `lines 116-132, also in test/unit/light/unit_BlurzEffect.cpp:49`, duplicated block 17 |
@@ -282,7 +282,7 @@ The next function worth simplifying is at the top of each file's list.
 | `test/unit/light/unit_SineEffect.cpp` | 2 | `lines 22-30, also in test/unit/light/unit_DistortionWavesEffect.cpp:26`, duplicated block 9 |
 | `test/unit/light/unit_SingleColumnLayout.cpp` | 2 | `lines 12-25, also in test/unit/light/unit_GridLayout.cpp:8`, duplicated block 14 |
 | `moondeck/check/check_clang_query.py` | 1 | `check_clang_query.py`, large file 1057 |
-| `moondeck/check/check_docgen.py` | 1 | `check_docgen.py`, large file 1921 |
+| `moondeck/check/check_docgen.py` | 1 | `check_docgen.py`, large file 1926 |
 | `moondeck/check/check_footprint.py` | 1 | `lines 31-41, also in moondeck/check/check_nonblocking.py:30`, duplicated block 11 |
 | `moondeck/check/check_nonblocking.py` | 1 | `lines 30-40, also in moondeck/check/check_footprint.py:31`, duplicated block 11 |
 | `moondeck/ci/verify_version.py` | 1 | `lines 39-45, also in moondeck/scenario/run_scenario.py:33`, duplicated block 7 |
@@ -338,7 +338,7 @@ The next function worth simplifying is at the top of each file's list.
 | `src/light/layouts/PanelsLayout.h` | 1 | `lines 64-79, also in src/light/layouts/PanelLayout.h:54`, duplicated block 16 |
 | `src/light/layouts/SphereLayout.h` | 1 | `SphereLayout::forEachShellPoint`, deeply nested 4 |
 | `src/light/layouts/TubesLayout.h` | 1 | `lines 45-55, also in src/light/layouts/GridLayout.h:43`, duplicated block 11 |
-| `src/light/modifiers/RandomMapModifier.h` | 1 | `line 112: platform::alloc(static_cast<size_t>(boxCount) * sizeof(nrOfL`, raw allocation in light 1 |
+| `src/light/modifiers/RandomMapModifier.h` | 1 | `line 101: platform::alloc(static_cast<size_t>(boxCount) * sizeof(nrOfL`, raw allocation in light 1 |
 | `src/light/moonlive/MoonLiveModifier.h` | 1 | `MoonLiveModifier::modifyLogical`, complex function 12 |
 | `src/light/moonlive/MoonLivePalette.h` | 1 | `moonlive::MoonLive::runValue in tick`, blocking call on the render path 1 |
 | `src/light/powerfunctions/fluid.h` | 1 | `Fluid::resize`, complex function 14 |
@@ -364,7 +364,7 @@ The next function worth simplifying is at the top of each file's list.
 | `test/js/ui-render-guard.test.mjs` | 1 | `lines 13-25, also in test/js/ui-ws-scheme.test.mjs:10`, duplicated block 13 |
 | `test/js/ui-script-picker-download.test.mjs` | 1 | `lines 12-22, also in test/js/ui-ws-scheme.test.mjs:10`, duplicated block 11 |
 | `test/js/ui-visibility.test.mjs` | 1 | `lines 7-16, also in test/js/ui-ws-scheme.test.mjs:13`, duplicated block 10 |
-| `test/python/test_check_docgen.py` | 1 | `test_check_docgen.py`, large file 1649 |
+| `test/python/test_check_docgen.py` | 1 | `test_check_docgen.py`, large file 1659 |
 | `test/scenario_runner.cpp` | 1 | `scenario_runner.cpp`, large file 1075 |
 | `test/unit/core/unit_ControlModule.cpp` | 1 | `unit_ControlModule.cpp`, large file 2152 |
 | `test/unit/core/unit_Control_apply_absent_key.cpp` | 1 | `lines 92-103, also in test/unit/core/unit_HttpServerModule_apply.cpp:40`, duplicated block 12 |

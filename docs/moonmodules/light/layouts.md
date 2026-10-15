@@ -2,7 +2,7 @@
 
 ![layouts controls](../../assets/core/Layouts.png)
 
-Every layout, one block each: what it does and what each control means, together. A layout maps light indices to physical `(x, y, z)` positions: it defines the *shape* an [effect](effects.md) draws onto and a [driver](drivers.md) sends out. The [Layouts](moxygen/Layouts.md) container holds one or more layout children and composes them into one coordinate space; a [Layer](moxygen/Layer.md) renders over that combined space. (For how this page maps to the source/asset folders, see the [folder-structure decision](../../contributing/documentation-standards.md#module-pages).)
+Every layout, one block each: what it does and what each control means, together. A layout maps light indices to physical `(x, y, z)` positions: it defines the *shape* an [effect](effects.md) draws onto and a [driver](drivers.md) sends out. The [Layouts](moxygen/Layouts.md) container holds one or more layout children and composes them into one coordinate space; a [Layer](moxygen/Layer.md) renders over that combined space. The [folder-structure decision](../../contributing/documentation-standards.md#module-pages) maps the catalog to its source and asset folders.
 
 <video src="../../assets/moontube/05-layouts.webm" controls playsinline width="720" title="Layouts: a grid, a ring, a spiral, a cube, tubes, and two written in MoonLive."></video>
 
@@ -12,7 +12,7 @@ Every layout, one block each: what it does and what each control means, together
 
 ### Car Lights
 
-A pair of concentric-ring "headlight" clusters (nested rings of 1/8/12/16/24 LEDs) positioned to mimic a car's front lights, a fixed arrangement composed from [Ring](#ring) geometry.
+A pair of concentric-ring "headlight" clusters, nested rings of 1/8/12/16/24 LEDs, placed like a car's front lights. The arrangement is fixed, composed from [Ring](#ring) geometry.
 
 <img src="../../assets/light/layouts/CarLightsLayout.gif" width="300" alt="Car Lights layout preview">
 
@@ -76,7 +76,7 @@ Detail: [technical](moxygen/PanelLayout.md)
 
 <img src="../../assets/light/layouts/PanelsLayout.gif" width="300" alt="Panels layout preview">
 
-Tiles an M×N grid of full matrix panels into one large display: an outer walk over the panel grid plus an inner walk over each panel's lights, both independently wired, for multi-panel video walls.
+Tiles an M×N grid of full matrix panels into one large display, for multi-panel video walls. The wiring is two walks, each set on its own: an outer one over the panel grid and an inner one over each panel's lights.
 
 - `horizontalPanels` / `verticalPanels`: panel-grid size.
 - `wiringOrderP` / `X++P` / `Y++P` / `snakeP`: the panel-to-panel wiring.

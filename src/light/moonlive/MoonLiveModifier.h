@@ -24,35 +24,50 @@ inline constexpr const char* kModifierPick[3] = {kScriptDir, kModifierExt, kModi
 
 }  // namespace moonlive
 
-/// A coordinate transform authored live rather than compiled in.
+/// The coordinate transform written as text on the running device: mirror the pattern, shift it, swap its axes.
+/// @card MoonLiveModifier.gif
+///
+/// A compiled modifier is a class and a reflash, where a script is a line of text applied as you type, and every control it declares appears on the card. The language is [MoonLive](https://moonmodules.org/MoonLight/moonmodules/light/moonlive.html).
+///
+/// @guide
+///
+/// ## One coordinate at a time
+///
+/// A script transforms one coordinate and needs no loop, because the Layer already calls it once per physical light while it builds the mapping.
+///
+/// `setXYZ(x, y, z)` writes the transformed position, as `setRGB(index, r, g, b)` writes a color: a mirror is `void modifyLogical() { setXYZ(width - 1 - xPos, yPos, zPos); }`.
+///
+/// ## Read the grid rather than assuming it
+///
+/// A mirror written against a fixed 255 sends every light of a 16-wide grid outside it. The Layer drops each one, and the fixture goes black with no error, because the script ran perfectly.
+///
+/// A computed coordinate is full width: `setXYZ` hands its values to the binding as a call, so `setXYZ(767 - xPos, ...)` on a 768-wide wall arrives as 767.
+///
+/// ## What a script can transform
+///
+/// A modifier has two hooks: one reshapes the logical box once per rebuild, and one folds each coordinate. A script drives the second, so a transform keeping the box its size works, and one halving it, as the built-in Mirror does, needs the compiled modifier.
+///
+/// A script that fails to compile shows the parse error, and the mapping passes coordinates straight through, so the device keeps rendering until the script parses again.
 ///
 /// @moreinfo
 ///
-/// This is the second binding of the engine, and what shows the engine is domain-neutral: it needed no engine, IR, grammar or backend change.
-/// An effect script writes a color per light and a modifier a position, and both are three values stored at an index.
+/// This is the engine's second binding, and what shows it is domain-neutral: it needed no engine, IR, grammar or backend change. An effect script writes a color per light and a modifier a position, both three values stored at an index.
 ///
-/// ## Why the script does not loop
-///
-/// The Layer already does: `modifyLogical` is called once per physical light while the mapping builds, so a script transforms one coordinate.
-///
-/// A coordinate arriving outside the representable range passes through untransformed rather than wrapping to a wrong position.
-/// An out-of-range result is the script's own.
+/// A coordinate arriving outside the representable range passes through untransformed rather than wrapping to a wrong position; an out-of-range result is the script's own.
 class MoonLiveModifier : public ModifierBase {
 public:
-    // 📝 marks a script declaring nothing of its own, which is all a module can say about one.
-    /// The tags the script declares, or the scripted-module mark when it declares none.
+    /// The tags the script declares, or 📝 for one declaring none, which is all a module can say about it.
     const char* tags() const override {
         const char* t = script_.tags();
         return t ? t : "📝";
     }
 
-    // Advisory here rather than functional, since extrude reads the effect's dimensions.
-    /// The axes this modifier declares, which the card and the picker show.
+    /// The axes the script declares, for the card and the picker only, since extrude reads the effect's dimensions.
     Dim dimensions() const override { return script_.dimensions(); }
 
     /// Publish the script name, and every control the script declares.
     void defineControls() override {
-        // The script name rather than its text, so a module costs bytes instead of a kilobyte.
+        // The script's name rather than its text, so a module costs bytes instead of a kilobyte.
         controls_.addFilePath("script", script_.buffer(), script_.bufferSize(),
                               moonlive::kModifierPick);
         // Every control the script declared: a system variable is not one, so none appear here.
@@ -62,8 +77,7 @@ public:
     /// The script's controls appear once prepare has compiled it.
     bool declaresControlsAtPrepare() const override { return true; }
 
-    // Every control rebuilds: a source edit and a control move both change where lights land.
-    /// Compile the script as written.
+    /// Compile the script as written, on every control change, since a source edit and a control move both change where lights land.
     void prepare() override {
         // Only when a new program was installed, since the Layer's rebuild calls prepare() again.
         if (script_.sync(moonlive::modifierSysVars(), *this, moonlive::lightBuiltins())) needsRebuild_ = true;
@@ -137,11 +151,11 @@ public:
     void setScript(const char* name) { script_.setName(name); }
 
 private:
-    // Empty on a fresh card, passing coordinates through untouched until one is named.
+    /// Which `.mlm` script runs, picked from the library and edited here.
     mutable moonlive::MoonLiveScript script_;
 
-    bool needsRebuild_ = false;   // a recompile happened; the Layer's mapping is stale
-    Coord3D box_{0, 0, 0};        // the logical box, from modifyLogicalSize
+    bool needsRebuild_ = false;   ///< a recompile happened; the Layer's mapping is stale
+    Coord3D box_{0, 0, 0};        ///< the logical box, from modifyLogicalSize
 };
 
 }  // namespace mm

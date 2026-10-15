@@ -171,9 +171,9 @@
 .md-typeset .mm-pf table td, .md-typeset table.mm-pf td { vertical-align: top; }
 
 /* ===== The card deck (assets/help-deck.js): the catalog as a hand of playing cards ===== */
-.mm-deck-bar { display: flex; gap: 0.6rem; align-items: center; margin: 0.5rem 0; }
+.mm-deck-bar { display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: center; margin: 0.5rem 0; }   /* wraps on a phone rather than widening the page */
 .mm-deck-search {
-  flex: 1; padding: 0.4rem 0.6rem; font: inherit; border-radius: 6px;
+  flex: 1 1 12rem; min-width: 0; padding: 0.4rem 0.6rem; font: inherit; border-radius: 6px;
   border: 1px solid var(--md-default-fg-color--lightest); background: var(--md-default-bg-color); color: inherit;
 }
 .mm-deck-nav { display: flex; gap: 0.4rem; align-items: center; white-space: nowrap; }
@@ -195,19 +195,23 @@
 .md-typeset .type-picker-chip-sep { width: 1px; align-self: stretch; margin: 2px 3px; background: var(--md-default-fg-color--lightest); }
 
 /* The row of cards: scroll-snapped, centered, with room for the fan's lean and sink. */
-.mm-deck { --mm-card-scale: 1; }
+.mm-deck { --mm-card-scale: 1; isolation: isolate; }   /* the fan's z-index orders cards among themselves, never above the page's menu */
+/* The table the build writes inside a deck is for search and for readers without JavaScript; a browser running the deck never shows it, so the page opens without the old style first. The page's <noscript> shows it again. */
+.mm-deck .mm-catalog-wrap { display: none; }
 .mm-deck-size { width: 6rem; accent-color: var(--md-accent-fg-color); }
 /* The row spans the window, its width and side padding set by help-deck.js align() from the visible width, so no page scroll appears beside a scrollbar. */
 .mm-deck-row {
   display: flex; gap: 0.2rem; overflow-x: auto; scroll-snap-type: x mandatory;
   padding-top: 1.2rem; padding-bottom: 3rem; scrollbar-width: thin; outline: none; cursor: grab;
+  position: relative;   /* a card's offsetLeft is then measured in the row's scroll coordinates, which the fan and the steps rely on */
 }
 /* While a mouse drags the deck, snapping waits and the text stays unselected. */
 .mm-deck-row.dragging { scroll-snap-type: none; cursor: grabbing; user-select: none; }
 /* A card's size and text follow the deck's scale, so a smaller card is a smaller card, not a cramped one. */
 .mm-pcard {
-  flex: 0 0 calc(15rem * var(--mm-card-scale)); aspect-ratio: 5 / 7; scroll-snap-align: start; perspective: 1200px;
+  flex: 0 0 calc(15rem * var(--mm-card-scale)); aspect-ratio: 5 / 7; scroll-snap-align: center; perspective: 1200px;
   transition: transform 0.15s ease-out; cursor: pointer; outline: none; font-size: max(0.8rem, calc(1rem * var(--mm-card-scale)));
+  transform-origin: 50% 260%;   /* the pivot below the deck that puts the hand on an arc */
 }
 .mm-pcard[hidden] { display: none; }
 .mm-pcard-inner { position: relative; width: 100%; height: 100%; transition: transform 0.5s; transform-style: preserve-3d; }
@@ -218,13 +222,16 @@
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25); padding: 0.55em; display: flex; flex-direction: column; gap: 0.3em;
 }
 .mm-pcard:focus-visible .mm-pcard-face { border-color: var(--md-accent-fg-color); }
-.mm-pcard-back { transform: rotateY(180deg); overflow-y: auto; font-size: 0.72em; }
+.mm-pcard-back { transform: rotateY(180deg); font-size: 0.72em; }
+.mm-pcard-head { display: flex; align-items: center; gap: 0.4em; flex: 0 0 auto; }
+.mm-pcard-head img { width: 2.4em; height: 2.4em; object-fit: cover; border-radius: 4px; background: #000; flex: 0 0 auto; }
+.mm-pcard-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
 .md-typeset .mm-pcard h3 { margin: 0; font-size: 1em; color: var(--md-primary-fg-color); }
 .md-typeset .mm-pcard p {
   margin: 0; font-size: 0.75em; color: var(--md-default-fg-color--light);
   display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
 }
-.mm-pcard-pips { display: flex; gap: 2px; font-size: 0.85em; }
+.mm-pcard-pips { display: flex; gap: 2px; font-size: calc(0.85rem * var(--mm-card-scale)); overflow: hidden; }   /* scales with the card, without the text's readable minimum, so a small card's emoji stay in proportion */
 .mm-pcard-front img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 8px; background: #000; flex: 0 0 auto; }
 
 /* The app's help, on the card's back. */
@@ -251,7 +258,7 @@
 .md-typeset .mm-pcard details.control-helper > summary::before { display: inline; content: "▸ "; position: static; background: none; mask: none; -webkit-mask: none; width: auto; height: auto; }
 .md-typeset .mm-pcard details.control-helper[open] > summary::before { content: "▾ "; }
 /* Small cards are their picture and emoji: the name and the line would be unreadable. */
-.mm-deck-small .mm-pcard h3, .mm-deck-small .mm-pcard p { display: none; }
+.mm-deck-small .mm-pcard-front h3, .mm-deck-small .mm-pcard-front p { display: none; }   /* the back keeps its title, so a turned card says what it is */
 .mm-deck-small .mm-pcard-face { padding: 0.25em; border-radius: 6px; }
 .mm-deck-small .mm-pcard-front img { border-radius: 4px; }
 /* Spread out: the cards in rows across the page, every one in view, no fan and no snapping. */

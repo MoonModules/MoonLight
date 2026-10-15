@@ -36,6 +36,7 @@ from _test_metadata import (  # noqa: E402
 )
 from generate_test_docs import render_unit_tests, render_scenarios  # noqa: E402
 import gen_api  # noqa: E402  (same dir, on sys.path via _HERE above)
+from gen_help import ATTRIBUTIONS, catalog_rows, display_name  # noqa: E402
 
 
 # ---- source-link rewrite: docs link OUT to repo files the site can't host ----
@@ -208,13 +209,13 @@ def split_blocks(markdown: str):
     enough that its block-finding accepted four different link shapes to compensate.
 
     A `### ` opens a block; the next `### ` or `## ` closes it, which is what keeps a
-    `## <Name>, details` section out of the card it follows.
+    `## <Name>, details` section out of the card it follows, and so does the `</div>` closing a deck that holds the cards.
     """
     lines = markdown.split("\n")
     starts = [i for i, ln in enumerate(lines) if _H3_RE.match(ln)]
     for n, i in enumerate(starts):
         end = next((j for j in range(i + 1, len(lines))
-                    if _H3_RE.match(lines[j]) or _H2_RE.match(lines[j])), len(lines))
+                    if _H3_RE.match(lines[j]) or _H2_RE.match(lines[j]) or lines[j].strip() == "</div>"), len(lines))
         yield _H3_RE.match(lines[i]).group("title"), i, end
 
 
@@ -236,11 +237,52 @@ def _site_relative(md: str, src_uri: str) -> str:
 _help_cache = {}
 
 
+def _help_file() -> dict:
+    """docs/help/help.json, read once per build."""
+    if "file" not in _help_cache:
+        path = Path(__file__).resolve().parent.parent.parent / "docs" / "help" / "help.json"
+        _help_cache["file"] = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+    return _help_cache["file"]
+
+
+def generated_catalog(src_uri: str) -> str | None:
+    """A catalog page drawn whole from help.json, for a page whose markdown is gone. The intro comes from the base class its modules share, the deck holds a heading per module for fill_cards_from_help to draw, and each module's guide is its details section."""
+    page = src_uri.removeprefix("moonmodules/")
+    cat = _help_file().get("catalogs", {}).get(page)
+    if not cat:
+        return None
+    mods = sorted(((t, m) for t, m in _help_file().get("modules", {}).items()
+                   if m.get("doc") == page or m.get("doc", "").startswith(page + "#")),
+                  key=lambda tm: display_name(tm[0]).lower())
+    out = [f"# {cat['title']}", "", _site_relative(cat.get("line", ""), src_uri), ""]
+    for para in (p for p in cat.get("summary", "").split("\n\n") if p):
+        out += [_site_relative(para, src_uri), ""]
+    # The deck is the page: its cards render as the catalog table until the script replaces them, which is what search indexes and a reader without JavaScript sees.
+    out += ["<noscript><style>.mm-deck .mm-catalog-wrap { display: block; }</style></noscript>", "",
+            f'<div class="mm-deck" data-page="{page}" markdown="1">', ""]
+    for t, m in mods:
+        anchor = m["doc"].partition("#")[2] or _slug(display_name(t))
+        suffix = m.get("kind") or (f"{m['dim']}D" if m.get("dim") else "")
+        out += [f'<a id="{anchor}"></a>', "", f"### {display_name(t)} {m.get('tags', '')}".rstrip() + (f" · {suffix}" if suffix else ""), ""]
+    out += ["</div>", ""]
+    for t, m in mods:
+        if m.get("guide"):
+            out += [f"## {display_name(t)}, details", ""]
+            for g in m["guide"]:
+                out += [f"#### {g['title']}", "", _site_relative(g["text"], src_uri), ""]
+    return "\n".join(out)
+
+
+def catalog_markdown(src_uri: str) -> str | None:
+    """A catalog page's markdown: the file while it exists, else the page generated from help.json."""
+    path = Path(__file__).resolve().parent.parent.parent / "docs" / src_uri
+    return path.read_text(encoding="utf-8") if path.exists() else generated_catalog(src_uri)
+
+
 def _help_modules() -> dict:
     """docs/help/help.json's modules, keyed by the registry link that names each one's card."""
     if "modules" not in _help_cache:
-        path = Path(__file__).resolve().parent.parent.parent / "docs" / "help" / "help.json"
-        modules = json.loads(path.read_text(encoding="utf-8"))["modules"] if path.exists() else {}
+        modules = _help_file().get("modules", {})
         _help_cache["modules"] = {m["doc"]: m for m in modules.values() if m.get("doc")}
     return _help_cache["modules"]
 
@@ -434,6 +476,11 @@ def _render_catalog_table(markdown: str) -> str:
                    "testsName": card_name(_H3_RE.match(ln).group("title"))}
             pending_anchors = []
             continue
+        if ln.strip() == "</div>":                 # the end of a container holding cards, such as a deck
+            flush_block()
+            flush_table()
+            out.append(ln)
+            continue
         if _H2_RE.match(ln):                       # section boundary: close block + table
             flush_block()
             flush_table()
@@ -477,6 +524,11 @@ def _deck_page(title: str, catalog: str, page: str) -> str:
             f'<div class="mm-deck" data-page="{page}"></div>\n')
 
 
+def on_pre_build(config):
+    """Forget the last build's help.json, so a live server draws the file as it is now."""
+    _help_cache.clear()
+
+
 def on_files(files, config):
     """Inject build-time-generated pages into the virtual tree: the test inventories,
     and (Phase 4b) a per-module API reference for each infrastructure module,
@@ -493,9 +545,15 @@ def on_files(files, config):
     _add("reference/tests/unit-tests.md", render_unit_tests(collect_unit_files()))
     # The card deck renders help with the app's own help.js, served beside assets/help-deck.js, so a card on the site reads as the module's help does on a device. One deck per catalog page.
     _add("assets/help.js", (ROOT / "src" / "ui" / "help.js").read_text(encoding="utf-8"))
+    # A catalog page whose markdown is gone is generated from help.json, under the same name, so every link and anchor into it holds.
+    for page in _help_file().get("catalogs", {}):
+        if not (ROOT / "docs" / "moonmodules" / page).exists():
+            _add(f"moonmodules/{page}", generated_catalog(f"moonmodules/{page}"))
+    # A generated catalog is a deck itself, so only a written catalog gets a deck page beside it.
     for page, title in (("light/effects", "Effects"), ("light/layouts", "Layouts"), ("light/modifiers", "Modifiers"),
                         ("light/drivers", "Drivers"), ("core/system", "System"), ("core/services", "Services")):
-        _add(f"moonmodules/{page}-deck.md", _deck_page(f"{title} deck", title.lower(), f"{page}.md"))
+        if (ROOT / "docs" / "moonmodules" / f"{page}.md").exists():
+            _add(f"moonmodules/{page}-deck.md", _deck_page(f"{title} deck", title.lower(), f"{page}.md"))
     _add("reference/tests/scenario-tests.md", render_scenarios(collect_scenario_files()))
 
     # Source-generated technical pages. gen_api.generate() writes each to disk under
@@ -608,6 +666,45 @@ def on_page_content(html, page, config, files):
     return html
 
 
+_GITHUB_OWNER_RE = re.compile(r"^https://github\.com/([A-Za-z0-9-]+)(?:/|$)")
+
+
+def attributed_by(markdown: str) -> str:
+    """The attribution catalog as the site shows it. Under each name goes its picture: the Wikimedia Commons file the row names, else its GitHub avatar. The Attributed by column lists the modules naming the entry by link or name, read from help.json so the page lists none by hand."""
+    rows = {i: (names, url, picture) for i, names, url, picture in catalog_rows(markdown)}
+    users = {i: [] for i in rows}
+    for t, m in sorted(_help_file().get("modules", {}).items(), key=lambda tm: display_name(tm[0]).lower()):
+        attr = m.get("attribution", "")
+        urls = set(re.findall(r"\]\((https?://[^)\s]+)\)", attr))
+        said = {re.sub(r"^\[([^\]]+)\]\(.*\)$", r"\1", s.strip()).lower() for s in attr.split(",")}
+        said |= {s.lower() for s in re.findall(r"\[([^\]]+)\]\(", attr)}
+        page, _, anchor = m.get("doc", "").partition("#")
+        name = f"[{display_name(t)}](../moonmodules/{page}#{anchor})" if page else display_name(t)
+        for i, (names, url, _) in rows.items():
+            if (url and url in urls) or any(n.lower() in said for n in names):
+                users[i].append(name)
+    out = []
+    for i, ln in enumerate(markdown.split("\n")):
+        if i in rows:
+            _, url, picture = rows[i]
+            cell = ln.split("|")[1]
+            name = cell.partition(" File:")[0].strip()
+            owner = _GITHUB_OWNER_RE.match(url or "")
+            img = '<img src="{}" width="48" height="48" alt="" loading="lazy" style="width: 48px; height: 48px; object-fit: cover">'
+            if picture:
+                # The file page credits the picture's author and license, as reuse of a Commons file asks.
+                name += f'<br><a href="https://commons.wikimedia.org/wiki/File:{picture}">{img.format(f"https://commons.wikimedia.org/wiki/Special:FilePath/{picture}?width=96")}</a>'
+            elif owner:
+                name += "<br>" + img.format(f"https://github.com/{owner.group(1)}.png?size=96")
+            ln = ln.replace(cell, f" {name} ", 1) + f" {', '.join(users[i])} |"
+        elif ln.startswith("| Name "):
+            ln += " Attributed by |"
+        elif ln.startswith("|---"):
+            ln += "---|"
+        out.append(ln)
+    return "\n".join(out)
+
+
 def on_page_markdown(markdown, page, config, files):
     """Repoint out-of-docs source links to GitHub blob URLs, then (on the catalog
     pages) render the prose ### blocks as a MoonLight-style 2-column table. Source
@@ -615,6 +712,8 @@ def on_page_markdown(markdown, page, config, files):
     markdown = _rewrite_out_of_docs_links(markdown, page.file.src_uri)
     if page.file.src_uri in _CATALOG_PAGES:
         markdown = _render_catalog_table(fill_cards_from_help(markdown, page.file.src_uri))
+    elif page.file.abs_src_path and Path(page.file.abs_src_path) == ATTRIBUTIONS:
+        markdown = attributed_by(markdown)
     return markdown
 
 

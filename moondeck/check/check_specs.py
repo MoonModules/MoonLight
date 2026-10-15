@@ -228,7 +228,7 @@ def _check_author_url_drift(source, spec):
 # paths that stopped existing when docs/ was restructured, so the catalog branch below had
 # been unreachable and every catalog page took the `## Source` path instead.
 sys.path.insert(0, str(ROOT / "moondeck" / "docs"))
-from mkdocs_hooks import _CATALOG_PAGES, fill_cards_from_help, split_blocks  # noqa: E402
+from mkdocs_hooks import _CATALOG_PAGES, catalog_markdown, fill_cards_from_help, split_blocks  # noqa: E402
 CATALOG_PAGES = {SPECS.parent / rel for rel in _CATALOG_PAGES}
 
 
@@ -356,29 +356,29 @@ def _slugify(text: str) -> str:
     return s
 
 
-def _page_anchors(md_path: Path) -> set:
-    """Every anchor a page exposes: explicit `<a id>` (catalog cards) + heading slugs."""
-    text = md_path.read_text(encoding="utf-8", errors="replace")
+def _page_anchors(text: str) -> set:
+    """Every anchor a page's markdown exposes: explicit `<a id>` (catalog cards) + heading slugs."""
     anchors = set(_ANCHOR_ID_RE.findall(text))
     anchors.update(_slugify(m.group("text")) for m in _HEADING_RE.finditer(text))
     return anchors
 
 
 def check_registertype_docpaths():
-    """Each registerType docPath in main.cpp must resolve to a real page + anchor."""
+    """Each registerType docPath in the registry must resolve to a page, written or generated, and its anchor."""
     issues = []
-    main_cpp = SRC / "main.cpp"
-    if not main_cpp.exists():
-        return issues
-    for m in _REGISTER_RE.finditer(main_cpp.read_text(encoding="utf-8")):
+    registry = SRC / "module_types.cpp"
+    calls = list(_REGISTER_RE.finditer(registry.read_text(encoding="utf-8"))) if registry.exists() else []
+    if not calls:   # a registry this check cannot read is a finding, never a clean run
+        return [f"no registerType docPath found in {registry.name}"]
+    for m in calls:
         doc = m.group("doc")
         rel, _, frag = doc.partition("#")
-        page = SPECS / rel
-        if not page.exists():
-            issues.append(f'registerType docPath "{doc}" — file not found: docs/moonmodules/{rel}')
+        text = catalog_markdown(f"moonmodules/{rel}")
+        if text is None:
+            issues.append(f'registerType docPath "{doc}": file not found: docs/moonmodules/{rel}')
             continue
-        if frag and frag not in _page_anchors(page):
-            issues.append(f'registerType docPath "{doc}" — no anchor #{frag} in {rel}')
+        if frag and frag not in _page_anchors(text):
+            issues.append(f'registerType docPath "{doc}": no anchor #{frag} in {rel}')
     return issues
 
 

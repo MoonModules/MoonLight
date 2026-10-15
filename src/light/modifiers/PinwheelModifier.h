@@ -5,40 +5,34 @@
 
 namespace mm {
 
-/// Modifier remapping the grid into radial petals.
+/// Remaps the grid into petals around the center, so a line or a 2D effect turns into a rotating flower or spokes.
+/// @card PinwheelModifier.gif
+///
+/// The angle to each light picks its petal, and the radius runs along it; swirl, symmetry and z-twist bend the pattern.
+///
+/// @attribution Brandon502, Polar coordinates
 ///
 /// @moreinfo
 ///
-/// Polar remap: folds the logical box into `petals` angular wedges radiating from the box center, a pinwheel.
-/// Each physical light's angle about the center picks a petal (x), and (in 2D+) its radius becomes the along-petal coordinate (y).
-/// A 1D effect scrolls outward along every spoke and a 2D effect paints across the wheel.
-/// The swirl shears the angle by radius, giving a spiral, and the symmetry divides the full turn into a repeating sub-arc.
-/// The twist rotates the wheel per z slice, and the reverse flag flips the petal order.
+/// A polar fold: atan2 bins each light's angle about the center into a petal (x), and in 2D or more its radius becomes the position along the petal (y). Swirl shears the angle by the radius, giving a spiral.
 ///
-/// ## Prior art
-///
-/// Prior art: MoonLight's Pinwheel modifier (M_MoonLight.h), same atan2 petal binning, hypot swirl shear, FACTORS[]-of-360 symmetry table, and per-slice zTwist.
-/// Written fresh against our fold interface.
-/// The source gates on the effect's own dimensionality, which a modifier here cannot see, so the question becomes whether the incoming box is two-dimensional.
-/// Pins/wiring plumbing is dropped; this emits coordinates only.
-/// Float math (atan2/hypot/sqrt) runs on the build path (modifyLogical is called at rebuild, not in the hot render loop).
-/// Author: MoonLight, https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Modifiers/M_MoonLight.h
+/// Symmetry divides the full turn into a repeating arc from a table of the factors of 360, and z-twist rotates the wheel per slice. The float math runs while the mapping builds, never per frame.
 class PinwheelModifier : public ModifierBase {
 public:
-    /// The catalog tags this modifier carries.
-    const char* tags() const override { return "💫"; }  // MoonLight origin
+    /// The catalog tags: 💫, a MoonLight origin.
+    const char* tags() const override { return "💫"; }
     /// Polar around a center in the x/y plane.
     Dim dimensions() const override { return Dim::D2; }
 
-    /// How many petals the wheel is divided into.
+    /// How many petals radiate from the center.
     uint8_t petals = 60;
-    /// How far a petal twists along its radius, a negative value reversing the swirl.
+    /// How far a petal bends into a spiral, negative bending the other way.
     int16_t swirl = 30;
-    /// Whether the wheel turns the other way.
+    /// Reverse the petal order.
     bool reverse = false;
     /// How many times the pattern repeats around the turn.
     uint8_t symmetry = 1;
-    /// How much the pattern advances per z layer.
+    /// How far the petals twist from one z layer to the next.
     uint8_t zTwist = 0;
 
     /// The controls a user sets on the card.
@@ -128,7 +122,7 @@ private:
     /// Degrees per petal, from symmetry factor / petals.
     float petalWidth_ = 6.0f;
 
-    // Radians to degrees, as a plain helper so the header carries no Arduino dependency.
+    /// Radians to degrees, as a plain helper so the header carries no Arduino dependency.
     static float degrees_(float rad) { return rad * (180.0f / std::numbers::pi_v<float>); }
 };
 

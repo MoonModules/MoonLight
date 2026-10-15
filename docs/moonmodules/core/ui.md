@@ -51,7 +51,7 @@ Fixed top, 44 px, left-to-right:
    exponential backoff from 200 ms to a 5 s ceiling on close, and a page reload covers the rare half-dead socket.
 7. **Reboot button (⏻)**, red border via `data-crashed="true"` when `SystemModule.bootReason` is
    PANIC / INT_WDT / TASK_WDT / BROWNOUT. Press-twice to confirm: the first click arms it (solid red), a second sends `POST /api/reboot`. Disarms after 3 s or on pointer-leave, no `confirm()` popup.
-8. **Help toggle (ⓘ)**, shows or hides every help line by flipping `body.help-hidden`, dimmed while off; preference in `localStorage['mm_helpShown']`.
+8. **Help toggle (ⓘ)**, off by default: shows or hides every help line by flipping `body.help-hidden`, dimmed while off. The first time it turns help on it asks before downloading `help.json` from the docs site, and a yes is kept in `mm_helpConsent`; the choice is kept in `mm_helpShown`.
 9. **Theme toggle (☀/🌙)**, flips `[data-theme]` on `<body>`; preference in `localStorage['mm_theme']`.
 
 ## Side navigation
@@ -93,7 +93,7 @@ Each MoonModule renders as a card, with **child cards nested inside their parent
   `<button>` (transparent + muted border, 26×26); state shown by the glyph alone (accent **✓** on, muted **○** off; `data-checked` + `aria-pressed`). Toggling fires `onEnabled()`; the Scheduler skips disabled modules whose `respectsEnabled()` returns true (default).
 - **Emoji tags** next to the name show the same set the type picker uses: role + dimensional (both
   UI-derived) + the curated `tags()` from `/api/types`. Identical identity across card and picker; the assignments are [the tag emoji legend](../../explanation/architecture/index.md#tag-emoji-legend).
-- **Help** under the title, from `help.json`, which the browser fetches from the docs site and keeps in `mm_help`, so the firmware carries none of it. The module's one line shows; a tap opens its summary, picture, guide, attribution and links to the docs, the source and the tests. Each control with a line shows it under the field, and a ▸ before the line opens its longer help where it has one. `?help=<url>` reads another copy for that browser tab only, such as `http://localhost:8421/help/help.json` from `preview_installer`, and `?help=off` turns the fetch off; only the docs site's file is kept for offline use, so a shared link cannot pin a device's help to another server.
+- **Help** under the title, from `help.json`, which the browser fetches from the docs site and keeps in `mm_help`, so the firmware carries none of it. The module's one line shows; a tap opens its summary, picture, guide, attribution and links to the docs, the source and the tests. Each control with a line shows it under the field, and a ▸ before the line opens its longer help where it has one. Help is off until the ⓘ in the status bar turns it on. The first time it asks before downloading, since the file comes from the docs site rather than the device. While developing help, `?help=local` reads the file `gen_help` last wrote, which `preview_installer` serves on `localhost:8421`, and `?help=published` returns to the docs site.
 - **Help link (?)** at the far right of the title row opens the module's doc page in a new tab. The
   path comes from `docPath` in `/api/types` (engine-provided, relative to `docs/moonmodules/`); omitted when the type declares none.
 - **Stats line**: `🕒 <timing>` then `🧠 <static>[ + <dynamic>]`. Timing is a tick time
@@ -210,7 +210,9 @@ mm_expanded         modules whose "controls" disclosure is open ([name, …])
 mm_textareaSizes    user-dragged textarea heights               ({ "module:control": px })
 mm_cardsWidth       dragged width of the docked card column     (px)
 mm_help             the last help.json fetched                  (text)
-mm_helpShown        "1" | "0": help lines shown or hidden       (default: "1")
+mm_helpShown        "1" | "0": help lines shown or hidden       (default: "0")
+mm_helpConsent      "1" once the user agreed to download help   (default: absent, nothing fetched)
+mm_helpSource       "local" while developing help                (default: absent, the docs site)
 ```
 
 The rest, reorder, control values and the like, lives on the device.

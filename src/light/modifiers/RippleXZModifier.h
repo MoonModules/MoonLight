@@ -4,34 +4,28 @@
 
 namespace mm {
 
-/// Modifier that collapses one axis of the box to a single plane.
-/// Author: @Troy (WLEDMM Art-Net), https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Modifiers/M_MoonLight.h
+/// Collapses an axis to a single plane, so an effect drawn along the other axes ripples across the whole box.
+/// @card RippleXZModifier.gif
+///
+/// @attribution troyhacks
 ///
 /// @moreinfo
 ///
-/// Collapses one axis of the logical box to a single plane, so a lower-dimensional effect drawn on the collapsed axis maps identically onto every slice of the physical box.
-/// With the shrink flag on, an enabled axis flattens to a single slice and every coordinate on it folds to zero.
-/// A one-dimensional effect running along that axis is therefore painted once and broadcast across it.
-/// `towardsZ` does the same for the Z extent (each XY plane shared across depth).
-/// It is the static "collapse an axis" fold: the logical box loses the axis, and every coordinate on that axis folds to 0.
+/// With `shrink` on, each axis chosen flattens to one slice and every coordinate on it folds to zero. The effect is painted once and shown on every slice of that axis.
 ///
-/// Prior art: MoonLight's RippleXZ modifier (M_MoonLight.h), same shrink/towardsX/ towardsZ axis collapse (`modifySize` sets the axis to 1, `modifyPosition` sets the coordinate to 0).
-/// MoonLight additionally runs a per-frame buffer shift in tick() that propagates a ripple wave along the collapsed axis by reading and writing the layer's RGB pixels (setRGB/getRGB).
-/// That is a render-buffer effect rather than a coordinate transform, so it has no place in the static fold this base class expresses.
-/// A modifier emits coordinates only, so the wave is dropped and the axis collapse preserved exactly.
-/// Defaults match MoonLight: shrink=true, towardsX=true, towardsZ=false.
+/// MoonLight's original also shifts the frame along the collapsed axis each tick, a wave drawn into the pixels. A modifier transforms coordinates only, so the collapse is kept and the wave is not.
 class RippleXZModifier : public ModifierBase {
 public:
-    /// The catalog tags this modifier carries.
-    const char* tags() const override { return "💫"; }  // MoonLight origin
+    /// The catalog tags: 💫, a MoonLight origin.
+    const char* tags() const override { return "💫"; }
     /// Folds x or z into a ripple, so it needs the third axis.
     Dim dimensions() const override { return Dim::D3; }
 
-    /// Whether the box collapses, and on which axes; y is never collapsed.
+    /// Collapse the chosen axes to a single plane.
     bool shrink = true;
-    /// Whether the ripple runs along x.
+    /// Collapse x, so each column shares one light.
     bool towardsX = true;
-    /// Whether it runs along z.
+    /// Collapse z, so each x-y plane is shared across depth.
     bool towardsZ = false;
 
     /// The controls a user sets on the card.
@@ -57,7 +51,7 @@ public:
             if (towardsX) pos.x = 0;
             if (towardsZ) pos.z = 0;
         }
-        return true;  // never rejects — a collapse maps every coord onto a slice
+        return true;  // never rejects: a collapse maps every coord onto a slice
     }
 };
 

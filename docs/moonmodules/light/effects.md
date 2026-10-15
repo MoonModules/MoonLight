@@ -316,7 +316,7 @@ The classic screensaver on a light wall: chrome toasters with flapping wings and
 
 The sprites carry their own colors (chrome, wing, crust), so the global palette does not apply. Needs a grid at least the toaster's size (12×9).
 
-Origin: MoonLight original; inspired by After Dark's Flying Toasters (Berkeley Systems, 1989), suggested by Frank ([softhack007](https://github.com/softhack007)): the pixel art here is drawn fresh for this effect
+Origin: MoonLight original; inspired by After Dark's Flying Toasters (Berkeley Systems, 1989), suggested by [troyhacks](https://github.com/troyhacks): the pixel art here is drawn fresh for this effect
 
 Detail: [technical](moxygen/FlyingToastersEffect.md)
 
