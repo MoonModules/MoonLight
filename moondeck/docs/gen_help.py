@@ -33,7 +33,7 @@ CATALOG = ROOT / "docs" / "moonmodules"
 # In the docs tree, so every docs deploy publishes it at <site>/help/help.json, and committed, so the docs build reads it without LLVM and a header's change shows in the diff as its help line.
 HELP = ROOT / "docs" / "help" / "help.json"
 # A catalog page drawn whole from help.json, named once here with the base class whose comment introduces it: the page's title and its intro, what every module on it shares.
-CATALOGS = {"light/modifiers.md": ("Modifiers", "ModifierBase")}
+CATALOGS = {"light/modifiers.md": ("Modifiers", "ModifierBase"), "light/layouts.md": ("Layouts", "LayoutBase")}
 
 _MARKER_RE = re.compile(r"^(@guide|@moreinfo)\s*$", re.MULTILINE)
 _XREF_RE = re.compile(r"@xref\{([a-z0-9-]+)(?:\|([^}]+))?\}")
@@ -42,7 +42,8 @@ _ANCHOR_LINK_RE = re.compile(r"(\]\()#([^)]+)\)")
 # The lead's block tags, Javadoc's `@author` construct: a line opening `@<tag>` starts the field, and the field runs to the next blank line or tag. Each tag is the help field of the same name, so a header names what help.json carries; a new structured field is one entry here.
 #   card         the picture, a file under docs/assets/, then optionally its alt text
 #   attribution  what the module learned from or who wrote it first, shown apart from the summary, since writing our own rather than depending removes the automatic credit
-BLOCK_TAGS = ("card", "attribution")
+#   video        a clip, a file under docs/assets/, then optionally its title; a catalog's intro shows it
+BLOCK_TAGS = ("card", "attribution", "video")
 _TAG_RE = re.compile(r"^@(\w+)\s*(.*)$")
 _SENTENCE_RE = re.compile(r"(?<=[.!?])\s+(?=[A-Z`*\[])")
 # Doxygen's cross-reference, `@ref ClassName`: the class name, which the compiler keeps unique and a display rename leaves standing.
@@ -505,7 +506,11 @@ def generate(ref: str = "main") -> tuple[dict, dict]:
                 h = resolve_refs(class_help(cls.raw_comment), link)
             except LookupError as e:
                 sys.exit(f"{base}: {e}")
+            image, _, alt = (h.get("card") or "").partition(" ")
+            video, _, caption = (h.get("video") or "").partition(" ")
             catalogs[page] = {k: v for k, v in {"title": title, "line": h["line"], "summary": h["summary"],
+                                                 "image": asset_url(image) if image else None, "alt": alt.strip(),
+                                                 "video": asset_url(video) if video else None, "caption": caption.strip(),
                                                  "guide": h["guide"], "attribution": h.get("attribution")}.items() if v}
     return {"version": ref, "modules": modules, "catalogs": catalogs}, report
 

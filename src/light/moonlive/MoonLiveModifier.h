@@ -51,7 +51,7 @@ inline constexpr const char* kModifierPick[3] = {kScriptDir, kModifierExt, kModi
 ///
 /// @moreinfo
 ///
-/// This is the engine's second binding, and what shows it is domain-neutral: it needed no engine, IR, grammar or backend change. An effect script writes a color per light and a modifier a position, both three values stored at an index.
+/// The engine is domain-neutral: an effect script writes a color per light and a modifier a position, both three values stored at an index.
 ///
 /// A coordinate arriving outside the representable range passes through untransformed rather than wrapping to a wrong position; an out-of-range result is the script's own.
 class MoonLiveModifier : public ModifierBase {

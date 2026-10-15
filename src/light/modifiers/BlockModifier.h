@@ -15,7 +15,7 @@ namespace mm {
 ///
 /// Each light folds to its Chebyshev distance from the box center, max(|dx|, |dy|), which is why the rings are axis-aligned squares; z is not part of the distance.
 ///
-/// The logical box is one row wide and the largest distance plus one tall, so a 1D effect painted along y lights the rings from the center outward. The center is (n+1)/2 - 1 per axis, a floor-biased middle.
+/// The logical box is one row wide and the largest distance plus one tall, so a 1D effect painted along y lights the rings from the center outward.
 class BlockModifier : public ModifierBase {
 public:
     /// The catalog tags: 💫, a MoonLight origin.

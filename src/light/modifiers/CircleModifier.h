@@ -13,9 +13,7 @@ namespace mm {
 ///
 /// @moreinfo
 ///
-/// Each light folds to its Euclidean distance from the box center: the offsets are integers and the distance a float. The logical box is one column of radius plus one cells, which an effect paints as rings.
-///
-/// A static remap, baked into the Layer's mapping once per rebuild, so nothing runs per frame. The logical size is the incoming box run through the same fold, then grown by one on every axis.
+/// The logical box is one column of radius plus one cells, which an effect paints as rings.
 class CircleModifier : public ModifierBase {
 public:
     /// The catalog tags: 💫, a MoonLight origin.

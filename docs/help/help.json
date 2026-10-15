@@ -101,14 +101,13 @@
    "tests": "https://github.com/MoonModules/MoonLight/blob/main/test/unit/light/unit_FixtureProfilesModule.cpp"
   },
   "CarLightsLayout": {
-   "line": "A pair of concentric-ring \"headlight\" clusters, nested rings of 1/8/12/16/24 LEDs, placed like a car's front lights.",
-   "summary": "The arrangement is fixed, composed from [Ring](https://moonmodules.org/MoonLight/moonmodules/light/layouts.html#ring) geometry.",
-   "attribution": "Eric Marciniak (Discord), custom car-lights fixture",
+   "line": "A pair of car headlights: concentric rings of lights placed like a car's front lamps.",
+   "summary": "Nested rings of 1, 8, 12, 16 and 24 lights form each lamp, with a ring of 32 more on the outer two. Side strips join them, in a fixed arrangement drawn with [Ring](https://moonmodules.org/MoonLight/moonmodules/light/layouts.html#ring) geometry.",
+   "attribution": "Eric Marciniak, [Polar coordinates](https://en.wikipedia.org/wiki/Polar_coordinate_system)",
    "image": "https://moonmodules.org/MoonLight/assets/light/layouts/CarLightsLayout.gif",
-   "alt": "Car Lights layout preview",
    "controls": {
     "scale": {
-     "line": "Overall size scale."
+     "line": "The overall size: the spacing out from each lamp's center."
     }
    },
    "role": "layout",
@@ -118,40 +117,40 @@
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/layouts/CarLightsLayout.h"
   },
   "CubeLayout": {
-   "line": "A 3D cube volume, `width`×`height`×`depth`, wired in a configurable axis order with optional per-axis serpentine: the 3D generalization of Panel.",
-   "attribution": "MoonLight · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Layouts/L_MoonLight.h)",
+   "line": "A solid 3D cube of lights, wired through the volume in the axis order you choose.",
+   "summary": "Every point of a `width` × `height` × `depth` box holds a light. The strip's path is yours to set: which axis it runs along first, which way each axis counts, and which axes snake back and forth. It is the 3D form of [Panel](https://moonmodules.org/MoonLight/moonmodules/light/layouts.html#panel).",
+   "attribution": "[Boustrophedon](https://en.wikipedia.org/wiki/Boustrophedon)",
    "image": "https://moonmodules.org/MoonLight/assets/light/layouts/CubeLayout.gif",
-   "alt": "Cube layout preview",
    "controls": {
     "width": {
-     "line": "Cube extent per axis."
+     "line": "The cube's extent on x."
     },
     "height": {
-     "line": "Cube extent per axis."
+     "line": "The cube's extent on y."
     },
     "depth": {
-     "line": "Cube extent per axis."
+     "line": "Its extent on z."
     },
     "wiringOrder": {
-     "line": "The axis nesting order the strip follows."
+     "line": "The axis order the strip follows, fastest first."
     },
     "X++": {
-     "line": "Count up (vs down) along that axis."
+     "line": "Whether x counts up rather than down."
     },
     "Y++": {
-     "line": "Count up (vs down) along that axis."
+     "line": "Whether y counts up."
     },
     "Z++": {
-     "line": "Count up (vs down) along that axis."
+     "line": "Whether z counts up."
     },
     "snakeX": {
-     "line": "Serpentine on that axis."
+     "line": "Whether x snakes, reversing on alternate passes."
     },
     "snakeY": {
-     "line": "Serpentine on that axis."
+     "line": "Whether y snakes."
     },
     "snakeZ": {
-     "line": "Serpentine on that axis."
+     "line": "Whether z snakes."
     }
    },
    "role": "layout",
@@ -161,19 +160,19 @@
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/layouts/CubeLayout.h"
   },
   "HumanSizedCubeLayout": {
-   "line": "A hollow walk-in cube built from five LED-curtain faces (front, back, top, left, right), each a `width`×`height`×`depth` curtain, for large/room-scale cube installations.",
-   "attribution": "MoonLight · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Layouts/L_MoonLight.h)",
+   "line": "A walk-in cube of five LED curtains: front, back, top, left and right, open at the bottom.",
+   "summary": "Each face is a curtain the size of the box's side, for a room-scale cube a person stands inside.",
+   "attribution": "[troyhacks](https://github.com/troyhacks)",
    "image": "https://moonmodules.org/MoonLight/assets/light/layouts/HumanSizedCubeLayout.gif",
-   "alt": "Human-Sized Cube layout preview",
    "controls": {
     "width": {
-     "line": "Cube extent per axis."
+     "line": "The cube's extent on x."
     },
     "height": {
-     "line": "Cube extent per axis."
+     "line": "The cube's extent on y."
     },
     "depth": {
-     "line": "Cube extent per axis."
+     "line": "Its extent on z."
     }
    },
    "role": "layout",
@@ -184,19 +183,21 @@
   },
   "MoonLiveLayout": {
    "line": "Where the lights physically are, written as text on the running device.",
-   "summary": "A layout is the one part of the pipeline that differs for every build: a ring, a spiral staircase, a costume sewn last night. A script means the person who hung the lights describes where they went, and sees it immediately. The language is [MoonLive](https://moonmodules.org/MoonLight/moonmodules/light/moonlive.html).\n\nEverything the script declares appears as a real control.",
-   "attribution": "MoonLight original",
+   "summary": "A layout is the one part of the pipeline that differs for every build: a ring, a spiral staircase, a costume sewn last night. A script means the person who hung the lights describes where they went, and sees it at once. Everything the script declares appears as a real control. The language is [MoonLive](https://moonmodules.org/MoonLight/moonmodules/light/moonlive.html).",
    "guide": [
     {
-     "title": "MoonLive, details",
-     "text": "**How the light count is known**\n\nA layout answers how many lights before it produces a single coordinate, because the Layer sizes its buffer from that number and only then asks where each light is. A script cannot be asked how many without running it.\n\nSo it runs twice. The first pass counts what `addLight` places, and the second emits each position. Same script and same arithmetic, so a deterministic script agrees with itself, which is what the compiled layouts do for the same reason.\n\nNothing is stored between the passes. Staging 16,384 coordinates costs 48 KB, which a classic ESP32 driving that many lights does not have spare. Running the script again is cheaper than remembering what it said.\n\nA script calling `random16` breaks that determinism. The passes disagree on the count when a random value decides a loop bound, while a random coordinate keeps the count right and places the lights elsewhere on the second pass.\n\n**What a layout script is given**\n\n`addLight(x, y, z)` places the next light along the strand. There is no index, because the order the script calls it in is the strand order.\n\n`t` is the one system variable a layout reads, and it is always 0: the script runs twice per rebuild and must agree with itself. `width`, `height` and `depth` read 0, since a layout is upstream of the grid it defines.\n\nA script names its own size controls, such as `cols` and `rows`. The pipeline derives the bounding box from the coordinates actually placed, so a size passed in from outside would be a second answer that could disagree with the first."
+     "title": "How the light count is known",
+     "text": "A layout answers how many lights before it produces a single coordinate, because the Layer sizes its buffer from that number and only then asks where each light is. A script cannot be asked how many without running it.\n\nSo it runs twice. The first pass counts what `addLight` places, and the second emits each position. Same script and same arithmetic, so a deterministic script agrees with itself, which is what the compiled layouts do for the same reason.\n\nNothing is stored between the passes. Staging 16,384 coordinates costs 48 KB, which a classic ESP32 driving that many lights does not have spare. Running the script again is cheaper than remembering what it said.\n\nA script calling `random16` breaks that determinism. The passes disagree on the count when a random value decides a loop bound. A random coordinate keeps the count right, and places the lights elsewhere on the second pass."
+    },
+    {
+     "title": "What a layout script is given",
+     "text": "`addLight(x, y, z)` places the next light along the strand. There is no index, because the order the script calls it in is the strand order.\n\n`t` is the one system variable a layout reads, and it is always 0: the script runs twice per rebuild and must agree with itself. `width`, `height` and `depth` read 0, since a layout is upstream of the grid it defines.\n\nA script names its own size controls, such as `cols` and `rows`. The pipeline derives the bounding box from the coordinates placed, so a size passed in from outside would be a second answer that could disagree with the first."
     }
    ],
    "image": "https://moonmodules.org/MoonLight/assets/light/layouts/MoonLiveLayout.gif",
-   "alt": "MoonLive scripted layout preview",
    "controls": {
     "script": {
-     "line": "Which `.mll` file runs, picked from the library and edited here."
+     "line": "Which `.mll` script runs, picked from the library and edited here."
     }
    },
    "role": "layout",
@@ -207,47 +208,46 @@
    "tests": "https://github.com/MoonModules/MoonLight/blob/main/test/unit/light/unit_MoonLiveLayout.cpp"
   },
   "PanelsLayout": {
-   "line": "Tiles an M×N grid of full matrix panels into one large display, for multi-panel video walls.",
-   "summary": "The wiring is two walks, each set on its own: an outer one over the panel grid and an inner one over each panel's lights.",
-   "attribution": "MoonLight · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Layouts/L_MoonLight.h)",
+   "line": "An M × N grid of matrix panels, tiled into one large display for a video wall.",
+   "summary": "The wiring is two walks, each set on its own: an outer one over the panel grid and an inner one over each panel's lights, as [Panel](https://moonmodules.org/MoonLight/moonmodules/light/layouts.html#panel) wires one.",
+   "attribution": "[Boustrophedon](https://en.wikipedia.org/wiki/Boustrophedon)",
    "image": "https://moonmodules.org/MoonLight/assets/light/layouts/PanelsLayout.gif",
-   "alt": "Panels layout preview",
    "controls": {
     "horizontalPanels": {
-     "line": "Panel-grid size."
+     "line": "How many panels across."
     },
     "verticalPanels": {
-     "line": "Panel-grid size."
+     "line": "How many panels down."
     },
     "wiringOrderP": {
-     "line": "The panel-to-panel wiring."
+     "line": "Which axis the panel grid walks first."
     },
     "X++P": {
-     "line": "The panel-to-panel wiring."
+     "line": "Whether the panel grid's x counts up."
     },
     "Y++P": {
-     "line": "The panel-to-panel wiring."
+     "line": "Whether its y counts up."
     },
     "snakeP": {
-     "line": "The panel-to-panel wiring."
+     "line": "Serpentine across the panel grid: alternate panel rows run in reverse."
     },
     "panelWidth": {
-     "line": "Each panel's size."
+     "line": "Each panel's width in lights."
     },
     "panelHeight": {
-     "line": "Each panel's size."
+     "line": "Each panel's height in lights."
     },
     "wiringOrder": {
-     "line": "The per-panel light wiring."
+     "line": "Which axis a panel walks first."
     },
     "X++": {
-     "line": "The per-panel light wiring."
+     "line": "Whether a panel's x counts up."
     },
     "Y++": {
-     "line": "The per-panel light wiring."
+     "line": "Whether its y counts up."
     },
     "snake": {
-     "line": "The per-panel light wiring."
+     "line": "Serpentine inside each panel: alternate lines run in reverse."
     }
    },
    "role": "layout",
@@ -257,16 +257,16 @@
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/layouts/PanelsLayout.h"
   },
   "TorontoBarGourdsLayout": {
-   "line": "Maps a set of decorative \"gourd\" objects (a specific bar installation), each rendered at one of three granularities: one light per gourd, per side, or per LED.",
-   "attribution": "[troyhacks](https://github.com/troyhacks/WLED), custom Toronto bar gourd installation",
+   "line": "A bar's installation of 24 decorative gourds, each lit at one of three granularities: one light per gourd, per side, or per LED.",
+   "attribution": "[troyhacks](https://github.com/troyhacks)",
    "image": "https://moonmodules.org/MoonLight/assets/light/layouts/TorontoBarGourdsLayout.gif",
-   "alt": "Toronto Bar Gourds layout preview",
    "controls": {
     "granularity": {
-     "line": "One light per gourd, per side, or per LED."
+     "line": "How finely each gourd is lit.",
+     "more": "One gourd one light stacks a gourd's lights on its own position. One side one light gives each of a gourd's five sides one point, and one LED one light places every LED on its side's ring of 12. Both hold 61 lights a gourd, the middle one included."
     },
     "nrOfLightsPerGourd": {
-     "line": "LEDs per gourd in the coarsest mode."
+     "line": "Lights per gourd when one gourd is one light."
     }
    },
    "role": "layout",
@@ -276,22 +276,22 @@
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/layouts/TorontoBarGourdsLayout.h"
   },
   "GridLayout": {
-   "line": "A dense 3D grid, row-major (x fastest, then y, then z); every position maps to a light.",
-   "attribution": "MoonLight · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Layouts/L_MoonLight.h)",
+   "line": "A dense grid of lights in 1D, 2D or 3D: every position holds a light, wired row by row.",
+   "summary": "The wiring runs x fastest, then y, then z, and a strip that snakes back and forth runs every other row in reverse.",
+   "attribution": "[Boustrophedon](https://en.wikipedia.org/wiki/Boustrophedon)",
    "image": "https://moonmodules.org/MoonLight/assets/light/layouts/GridLayout.gif",
-   "alt": "Grid layout preview",
    "controls": {
     "width": {
-     "line": "Lights per axis (to 3840, 2160 and 512)."
+     "line": "The grid's extent on x."
     },
     "height": {
-     "line": "Lights per axis (to 3840, 2160 and 512)."
+     "line": "Its extent on y."
     },
     "depth": {
-     "line": "Lights per axis (to 3840, 2160 and 512)."
+     "line": "Its extent on z, 1 for a flat panel."
     },
     "serpentine": {
-     "line": "Every other row runs in reverse, matching a snaked strip."
+     "line": "Every other row runs in reverse, for a snaked strip."
     }
    },
    "role": "layout",
@@ -302,29 +302,28 @@
    "tests": "https://github.com/MoonModules/MoonLight/blob/main/test/unit/light/unit_GridLayout.cpp"
   },
   "GridBlacksLayout": {
-   "line": "A [Grid](https://moonmodules.org/MoonLight/moonmodules/light/layouts.html#grid) with **mid-strand dark columns**, held black in every row, for a sealed panel that must stay dark down a strip or a slat wall.",
-   "summary": "A dark column is still a wire position the driver clocks, so data flows through the unlit LEDs to the lit columns beyond. The lit columns keep their true positions, so an effect maps straight across the gap.",
-   "attribution": "MoonLight",
+   "line": "A grid with dark columns held black in every row, for a sealed panel that must stay dark down a strip, or a slat wall.",
+   "summary": "A dark column is still a wire position the driver clocks, so data flows through the unlit lights to the lit columns beyond. The lit columns keep their true positions, so an effect maps straight across the gap. Without dark columns it is a [Grid](https://moonmodules.org/MoonLight/moonmodules/light/layouts.html#grid).",
+   "attribution": "[Boustrophedon](https://en.wikipedia.org/wiki/Boustrophedon)",
    "image": "https://moonmodules.org/MoonLight/assets/light/layouts/GridBlacksLayout.gif",
-   "alt": "GridBlacks layout preview",
    "controls": {
     "width": {
-     "line": "Grid extent on each axis in lights."
+     "line": "The grid's extent on x."
     },
     "height": {
-     "line": "Grid extent on each axis in lights."
+     "line": "Its extent on y."
     },
     "depth": {
-     "line": "Grid extent on each axis in lights."
+     "line": "Its extent on z."
     },
     "serpentine": {
-     "line": "Boustrophedon-wire alternate rows."
+     "line": "Every other row runs in reverse, matching a snaked strip."
     },
     "blackCount": {
-     "line": "How many dark columns; `0` renders exactly like a Grid."
+     "line": "How many dark columns; none renders exactly like a Grid."
     },
     "blackStart": {
-     "line": "First dark column (shown only once `blackCount` is set)."
+     "line": "The first dark column."
     }
    },
    "role": "layout",
@@ -335,28 +334,28 @@
    "tests": "https://github.com/MoonModules/MoonLight/blob/main/test/unit/light/unit_GridBlacksLayout.cpp"
   },
   "PanelLayout": {
-   "line": "A 2D matrix panel with full wiring control: choose the axis order, per-axis direction, and serpentine: the general matrix layout ([Grid](https://moonmodules.org/MoonLight/moonmodules/light/layouts.html#grid) is the simple case).",
-   "attribution": "MoonLight · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Layouts/L_MoonLight.h)",
+   "line": "A 2D matrix panel with full wiring control: the axis order, the direction per axis, and serpentine.",
+   "summary": "The general matrix layout, of which [Grid](https://moonmodules.org/MoonLight/moonmodules/light/layouts.html#grid) is the simple case.",
+   "attribution": "[Boustrophedon](https://en.wikipedia.org/wiki/Boustrophedon)",
    "image": "https://moonmodules.org/MoonLight/assets/light/layouts/PanelLayout.gif",
-   "alt": "Panel layout preview",
    "controls": {
     "panelWidth": {
-     "line": "Panel size in lights."
+     "line": "The panel's width in lights."
     },
     "panelHeight": {
-     "line": "Panel size in lights."
+     "line": "The panel's height in lights."
     },
     "wiringOrder": {
-     "line": "`XY` (rows) or `YX` (columns) nesting."
+     "line": "Rows first or columns first."
     },
     "X++": {
-     "line": "Count up vs down along that axis."
+     "line": "Whether x counts up rather than down."
     },
     "Y++": {
-     "line": "Count up vs down along that axis."
+     "line": "Whether y counts up."
     },
     "snake": {
-     "line": "Serpentine wiring (alternate lines reverse)."
+     "line": "Serpentine wiring: alternate lines run in reverse."
     }
    },
    "role": "layout",
@@ -366,25 +365,31 @@
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/layouts/PanelLayout.h"
   },
   "RingLayout": {
-   "line": "A single ring of LEDs evenly spaced around a circle: `nrOfLEDs` points, starting at `angleFirst`, spanning `rotation` degrees.",
-   "attribution": "MoonLight · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Layouts/L_MoonLight.h)",
+   "line": "A ring of lights evenly spaced around a circle, or an arc of one.",
+   "summary": "The lights start at `angleFirst` and span `rotation` degrees, a full turn drawing the whole circle. A center of its own places the ring anywhere, which is how CarLights and Rings241 build their lamps and discs from rings.",
+   "attribution": "[Polar coordinates](https://en.wikipedia.org/wiki/Polar_coordinate_system)",
    "image": "https://moonmodules.org/MoonLight/assets/light/layouts/RingLayout.gif",
-   "alt": "Ring layout preview",
    "controls": {
     "nrOfLEDs": {
-     "line": "LEDs around the ring."
+     "line": "How many lights go around the ring."
     },
     "angleFirst": {
-     "line": "Starting angle in degrees."
+     "line": "The angle the first light sits at, in degrees."
     },
     "rotation": {
-     "line": "Arc spanned (360 = full circle)."
+     "line": "The arc spanned in degrees, less than a full turn a partial ring."
     },
     "clockwise": {
-     "line": "Direction of travel."
+     "line": "Whether the lights run clockwise."
     },
     "scale": {
-     "line": "Spacing/radius scale."
+     "line": "The spacing out from the center."
+    },
+    "centerX": {
+     "line": "The center's x before scaling; 0 places the ring by its size."
+    },
+    "centerY": {
+     "line": "The center's y before scaling; 0 places the ring by its size."
     }
    },
    "role": "layout",
@@ -394,19 +399,19 @@
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/layouts/RingLayout.h"
   },
   "Rings241Layout": {
-   "line": "The classic 241-LED concentric-ring disc: nested rings of 1, 8, 12, 16, 24, 32, 40, 48, 60 LEDs sharing a center.",
-   "attribution": "MoonLight · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Layouts/L_MoonLight.h)",
+   "line": "The classic 241-light disc: nine concentric rings of 1, 8, 12, 16, 24, 32, 40, 48 and 60 lights sharing a center.",
+   "attribution": "[Polar coordinates](https://en.wikipedia.org/wiki/Polar_coordinate_system)",
    "image": "https://moonmodules.org/MoonLight/assets/light/layouts/Rings241Layout.gif",
-   "alt": "Rings 241 layout preview",
    "controls": {
     "scale": {
-     "line": "Overall radius scale."
+     "line": "The size: scales the ring radii and the shared center."
     },
     "outside in": {
-     "line": "Light 0 on the outer ring, wired inward rather than outward."
+     "line": "Light 0 on the outer ring, wired inward rather than outward.",
+     "more": "A disc is soldered either from the center light outward, the default, or from the outer 60-light ring inward, and this names which end of the wire is light 0. Only the ring order flips; each ring keeps the direction it is wired in."
     },
     "angleFirst": {
-     "line": "Where light 0 of each ring sits, in degrees."
+     "line": "The angle light 0 of each ring sits at, in degrees."
     }
    },
    "role": "layout",
@@ -417,22 +422,21 @@
    "tests": "https://github.com/MoonModules/MoonLight/blob/main/test/unit/light/unit_Rings241Layout.cpp"
   },
   "SingleColumnLayout": {
-   "line": "A vertical line of LEDs at a fixed X, the 1D column primitive.",
-   "attribution": "MoonLight · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Layouts/L_MoonLight.h)",
+   "line": "A vertical line of lights at a fixed x, the 1D column.",
+   "attribution": "[Limpkin](https://github.com/limpkin)",
    "image": "https://moonmodules.org/MoonLight/assets/light/layouts/SingleColumnLayout.gif",
-   "alt": "Single Column layout preview",
    "controls": {
     "starting Y": {
-     "line": "The column's start row."
+     "line": "The row the column starts at."
     },
     "height": {
-     "line": "LEDs in the column."
+     "line": "How many lights the column holds."
     },
     "X position": {
      "line": "The column's x."
     },
     "reversed order": {
-     "line": "Wire top-to-bottom instead of bottom-to-top."
+     "line": "Wire it top to bottom rather than bottom to top."
     }
    },
    "role": "layout",
@@ -443,22 +447,21 @@
    "tests": "https://github.com/MoonModules/MoonLight/blob/main/test/unit/light/unit_SingleColumnLayout.cpp"
   },
   "SingleRowLayout": {
-   "line": "A horizontal line of LEDs at a fixed Y, the 1D row primitive.",
-   "attribution": "MoonLight · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Layouts/L_MoonLight.h)",
+   "line": "A horizontal line of lights at a fixed y: the 1D row, a bare strip laid straight.",
+   "attribution": "[Limpkin](https://github.com/limpkin)",
    "image": "https://moonmodules.org/MoonLight/assets/light/layouts/SingleRowLayout.gif",
-   "alt": "Single Row layout preview",
    "controls": {
     "starting X": {
-     "line": "The row's start column."
+     "line": "The column the row starts at."
     },
     "width": {
-     "line": "LEDs in the row."
+     "line": "How many lights the row holds."
     },
     "Y position": {
      "line": "The row's y."
     },
     "reversed order": {
-     "line": "Wire right-to-left instead of left-to-right."
+     "line": "Wire it right to left rather than left to right."
     }
    },
    "role": "layout",
@@ -468,13 +471,11 @@
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/layouts/SingleRowLayout.h"
   },
   "SphereLayout": {
-   "line": "Lights on the surface of a hollow sphere: a one-light-thick shell inside a `(2·radius+1)³` box, no interior lights.",
-   "attribution": "MoonLight · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Layouts/L_MoonLight.h)",
+   "line": "Lights on the surface of a hollow sphere: a shell one light thick, nothing inside.",
    "image": "https://moonmodules.org/MoonLight/assets/light/layouts/SphereLayout.gif",
-   "alt": "Sphere layout preview",
    "controls": {
     "radius": {
-     "line": "The shell's radius in light-units."
+     "line": "The shell's radius, in lights."
     }
    },
    "role": "layout",
@@ -485,19 +486,18 @@
    "tests": "https://github.com/MoonModules/MoonLight/blob/main/test/unit/light/unit_SphereLayout.cpp"
   },
   "SpiralLayout": {
-   "line": "A conical spiral: `ledCount` LEDs winding up a cone from `bottomRadius` to a point over `height`.",
-   "attribution": "MoonLight · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Layouts/L_MoonLight.h)",
+   "line": "A conical spiral: lights winding up a cone from a wide base to a point.",
+   "attribution": "[Conical spiral](https://en.wikipedia.org/wiki/Conical_spiral)",
    "image": "https://moonmodules.org/MoonLight/assets/light/layouts/SpiralLayout.gif",
-   "alt": "Spiral layout preview",
    "controls": {
     "ledCount": {
-     "line": "LEDs along the spiral."
+     "line": "How many lights wind up the spiral."
     },
     "bottomRadius": {
-     "line": "Radius at the base."
+     "line": "The radius at the base, in light-units."
     },
     "height": {
-     "line": "Spiral height."
+     "line": "The vertical rise from base to tip."
     }
    },
    "role": "layout",
@@ -507,22 +507,20 @@
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/layouts/SpiralLayout.h"
   },
   "TubesLayout": {
-   "line": "Parallel vertical tubes: `nrOfTubes` columns of `ledsPerTube` LEDs, spaced `tubeDistance` apart.",
-   "attribution": "MoonLight · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Layouts/L_MoonLight.h)",
+   "line": "Parallel vertical tubes, each a column of lights, standing side by side.",
    "image": "https://moonmodules.org/MoonLight/assets/light/layouts/TubesLayout.gif",
-   "alt": "Tubes layout preview",
    "controls": {
     "nrOfTubes": {
-     "line": "Number of tubes."
+     "line": "How many tubes stand side by side."
     },
     "ledsPerTube": {
-     "line": "LEDs per tube."
+     "line": "How many lights each tube carries."
     },
     "tubeDistance": {
-     "line": "Spacing between tubes."
+     "line": "The spacing between tubes, in light-units."
     },
     "reversed": {
-     "line": "Reverse the wiring order."
+     "line": "Wire each tube from its top."
     }
    },
    "role": "layout",
@@ -532,17 +530,15 @@
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/layouts/TubesLayout.h"
   },
   "WheelLayout": {
-   "line": "A bicycle-wheel: `spokes` straight rows radiate from a center hub, each carrying `ledsPerSpoke` LEDs spaced one unit apart outward.",
-   "summary": "The [Layouts](https://moonmodules.org/MoonLight/moonmodules/light/moxygen/Layouts.html) container itself takes no controls; its page covers coordinate iteration, reordering, and rebuild propagation.",
-   "attribution": "MoonLight · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Layouts/L_MoonLight.h)",
+   "line": "A bicycle wheel: spokes radiating from a center hub, each a straight row of lights.",
+   "attribution": "[Polar coordinates](https://en.wikipedia.org/wiki/Polar_coordinate_system)",
    "image": "https://moonmodules.org/MoonLight/assets/light/layouts/WheelLayout.gif",
-   "alt": "Wheel layout preview",
    "controls": {
     "spokes": {
-     "line": "Number of spokes radiating from the hub."
+     "line": "How many spokes radiate from the hub."
     },
     "ledsPerSpoke": {
-     "line": "LEDs along each spoke, one unit apart."
+     "line": "How many lights each spoke carries."
     }
    },
    "role": "layout",
@@ -844,7 +840,6 @@
   },
   "FreqSawsEffect": {
    "line": "Audio-reactive sawtooth waves: each column maps to a frequency band whose magnitude drives a per-band oscillator speed, so louder bands sweep their sawtooth up the column faster, with three phase methods.",
-   "attribution": "MoonLight (audio) · by [@TroyHacks](https://github.com/troyhacks) · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h)",
    "image": "https://moonmodules.org/MoonLight/assets/light/effects/FreqSawsEffect.gif",
    "alt": "FreqSaws effect preview",
    "controls": {
@@ -4012,6 +4007,13 @@
    "title": "Modifiers",
    "line": "A modifier sits between an [effect](https://moonmodules.org/MoonLight/moonmodules/light/effects.html) and the output: it reshapes where the pixels land, or masks them, without changing what the effect draws.",
    "summary": "Modifiers compose: a [Layer](https://moonmodules.org/MoonLight/moonmodules/light/supporting.html#layer) applies its whole stack in child order, each reshaping the result of the one below. A static modifier is baked into the layer's mapping at rebuild. A dynamic one also runs a pass every frame, and an animated one rebuilds its static fold on its own clock.\n\nA modifier folds coordinates rather than drawing, so it uses little of the shared [power functions](https://moonmodules.org/MoonLight/moonmodules/light/power-functions.html). Each card's emoji are its tags, as the [tag emoji legend](https://moonmodules.org/MoonLight/explanation/architecture/index.html#tag-emoji-legend) explains."
+  },
+  "light/layouts.md": {
+   "title": "Layouts",
+   "line": "A layout says where the lights physically are: it maps each light's index to an (x, y, z) position, the shape an [effect](https://moonmodules.org/MoonLight/moonmodules/light/effects.html) draws onto and a [driver](https://moonmodules.org/MoonLight/moonmodules/light/drivers.html) sends out.",
+   "summary": "The [Layouts](https://moonmodules.org/MoonLight/moonmodules/light/supporting.html#layouts) container holds one or more layouts and composes them into one coordinate space, which a [Layer](https://moonmodules.org/MoonLight/moonmodules/light/supporting.html#layer) renders over. The container itself takes no controls.\n\nEach card's emoji are its tags, as the [tag emoji legend](https://moonmodules.org/MoonLight/explanation/architecture/index.html#tag-emoji-legend) explains.",
+   "video": "https://moonmodules.org/MoonLight/assets/moontube/05-layouts.webm",
+   "caption": "Layouts: a grid, a ring, a spiral, a cube, tubes, and two written in MoonLive."
   }
  }
 }

@@ -23,7 +23,7 @@ namespace mm {
 ///
 /// A layer builds its mapping by folding every physical light through each enabled modifier, and the whole chain collapses into one table, so the per-frame render stays a single lookup.
 ///
-/// Three hooks do it, each a no-op by default, so a modifier implements only what it needs. The build walks physical lights, so several folding onto one logical cell is the fan-out, and the mapping cannot overflow.
+/// Three hooks do it, each a no-op by default, so a modifier implements only what it needs. The build walks physical lights, so several folding onto one logical cell is the fan-out, which costs nothing, and the mapping cannot overflow. Float math is fine in a static fold, since it runs while the mapping builds, never per frame.
 ///
 /// Most modifiers are not affine, a mask being a predicate and a tile a modulo; rotation is the exception, written as an integer rotation matrix. It is the textbook image-warping pattern: a transform baked into a spatial table, built backward.
 class ModifierBase : public MoonModule {

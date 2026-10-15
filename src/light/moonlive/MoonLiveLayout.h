@@ -36,40 +36,48 @@ inline constexpr const char* kLayoutPick[3] = {kScriptDir, kLayoutExt, kLayoutTe
 
 }  // namespace moonlive
 
-/// Where the lights physically are, written as text on a running device.
+/// Where the lights physically are, written as text on the running device.
+/// @card MoonLiveLayout.gif
+///
+/// A layout is the one part of the pipeline that differs for every build: a ring, a spiral staircase, a costume sewn last night. A script means the person who hung the lights describes where they went, and sees it at once. Everything the script declares appears as a real control. The language is [MoonLive](https://moonmodules.org/MoonLight/moonmodules/light/moonlive.html).
+///
+/// @guide
+///
+/// ## How the light count is known
+///
+/// A layout answers how many lights before it produces a single coordinate, because the Layer sizes its buffer from that number and only then asks where each light is. A script cannot be asked how many without running it.
+///
+/// So it runs twice. The first pass counts what `addLight` places, and the second emits each position. Same script and same arithmetic, so a deterministic script agrees with itself, which is what the compiled layouts do for the same reason.
+///
+/// Nothing is stored between the passes. Staging 16,384 coordinates costs 48 KB, which a classic ESP32 driving that many lights does not have spare. Running the script again is cheaper than remembering what it said.
+///
+/// A script calling `random16` breaks that determinism. The passes disagree on the count when a random value decides a loop bound. A random coordinate keeps the count right, and places the lights elsewhere on the second pass.
+///
+/// ## What a layout script is given
+///
+/// `addLight(x, y, z)` places the next light along the strand. There is no index, because the order the script calls it in is the strand order.
+///
+/// `t` is the one system variable a layout reads, and it is always 0: the script runs twice per rebuild and must agree with itself. `width`, `height` and `depth` read 0, since a layout is upstream of the grid it defines.
+///
+/// A script names its own size controls, such as `cols` and `rows`. The pipeline derives the bounding box from the coordinates placed, so a size passed in from outside would be a second answer that could disagree with the first.
 ///
 /// @moreinfo
 ///
-/// ## Why a layout is worth scripting
-///
-/// A layout is the one part of the pipeline that differs for every physical build, so each one has meant a new class, a rebuild and a reflash.
-/// A script means the person who hung the lights describes where they went and sees it immediately.
-///
-/// ## The binding that needed the language to grow
-///
-/// A modifier transforms one coordinate because the Layer calls it per light, where a layout places every light itself, which takes a loop.
-///
-/// ## Why it still allocates nothing
-///
-/// The script calls `addLight` per light, and the binding points that call at a counter on the sizing pass and at the sink on the walk.
-/// Staging the coordinates instead would cost 48 KB on a 16k-light fixture.
-/// The count and the coordinates come from the same code, so the two answers cannot drift apart.
+/// A layout script places every light itself in a loop, unlike a modifier the Layer calls per light. `addLight` binds to a counter on the sizing pass and to the sink on the walk.
 class MoonLiveLayout : public LayoutBase {
 public:
-    // 📝 marks a script declaring nothing of its own, which is all a module can say about one.
-    /// The tags the script declares, or the scripted-module mark when it declares none.
+    /// The tags the script declares, or 📝 for one declaring none, which is all a module can say about it.
     const char* tags() const override {
         const char* t = script_.tags();
         return t ? t : "📝";
     }
 
-    // Advisory here rather than functional, since extrude reads the effect's dimensions.
-    /// The axes this layout declares, which the card and the picker show.
+    /// The axes the script declares, for the card and the picker only, since extrude reads the effect's dimensions.
     Dim dimensions() const override { return script_.dimensions(); }
 
     /// Publish the script name, and every control the script declares.
     void defineControls() override {
-        // The script name rather than its text, so a module costs bytes instead of a kilobyte.
+        // The script's name rather than its text, so a module costs bytes instead of a kilobyte; empty on a fresh card, it places no lights until one is named.
         controls_.addFilePath("script", script_.buffer(), script_.bufferSize(),
                               moonlive::kLayoutPick);
         // A layout receives no width: the pipeline derives the box from the coordinates placed.
@@ -85,8 +93,7 @@ public:
         rebuildControls();
     }
 
-    // The Layer sizes its buffer from this before asking for a coordinate.
-    /// Run the script, counting what it places.
+    /// Run the script, counting what it places: the Layer sizes its buffer from this before asking for a coordinate.
     nrOfLightsType lightCount() const override {
         compile();
         if (!script_.ok()) return 0;
@@ -121,8 +128,7 @@ public:
     void setScript(const char* name) { script_.setName(name); }
 
 private:
-    // Called from lightCount and placeLights too, because applyState runs parent-first.
-    /// Compile if the source has changed since the program that is loaded.
+    /// Compile if the source has changed since the program that is loaded, called from lightCount and placeLights too, because applyState runs parent-first.
     void compile() const {
         // A content hash makes an unchanged call cost a read rather than a recompile.
         auto* self = const_cast<MoonLiveLayout*>(this);
@@ -141,8 +147,7 @@ private:
                        static_cast<lengthType>(y), static_cast<lengthType>(z));
     }
 
-    // Given a single scratch light, which satisfies run()'s precondition without staging anything.
-    /// Point addLight at `fn` and run the script once.
+    /// Point addLight at `fn` and run the script once, given a single scratch light, which satisfies run()'s precondition without staging anything.
     void runScript(moonlive::AddLightFn fn, void* ctx) const {
         uint8_t scratch[3] = {0, 0, 0};
         // Checked before the sink is installed, which would otherwise point at a dead frame.
@@ -152,7 +157,7 @@ private:
         moonlive::setAddLightSink(nullptr, nullptr);
     }
 
-    // Empty on a fresh card, placing no lights until one is named.
+    /// Which `.mll` script runs, picked from the library and edited here.
     mutable moonlive::MoonLiveScript script_;
 
 };

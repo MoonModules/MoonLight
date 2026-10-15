@@ -7,13 +7,10 @@ namespace mm {
 
 /// Audio-reactive effect: sawtooth bands driven by the frequency spectrum.
 /// @card FreqSawsEffect.gif
-/// Author: @TroyHacks (MoonLight / WLED MoonModules), https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h
 ///
 /// One vertical saw per band, each running at a rate its own loudness drives.
 /// A band's speed rises instantly to a loud hit and decays slowly once the sound stops.
 /// So a struck band keeps sawing for a while, and a quiet one winds down.
-///
-/// Prior art: MoonLight's FreqSaws, whose physics and three position methods this reproduces.
 ///
 /// @moreinfo
 ///
@@ -35,7 +32,6 @@ public:
     /// Writes the z=0 slice, which extrude fills through a volume.
     Dim dimensions() const override { return Dim::D2; }
 
-    // Defaults match MoonLight's own FreqSaws.
     /// The per-frame fade, which is the motion trail.
     uint8_t fade      = 4;
     /// How much a band's loudness gains into its target speed.

@@ -42,8 +42,7 @@ public:
         return MoonModule::safeMode() ? kSafeModeLights : std::numeric_limits<nrOfLightsType>::max();
     }
 
-    // Disabling the container reports zero, the same as disabling every child.
-    /// The lights across every enabled child, which sizes the layer and output buffers: @xref{disabling-and-reordering-shift-indices}.
+    /// The lights across every enabled child, zero when the container is disabled, which sizes the layer and output buffers: @xref{disabling-and-reordering-shift-indices}.
     nrOfLightsType totalLightCount() const {
         if (!enabled()) return 0;
         nrOfLightsType total = 0;
@@ -57,33 +56,12 @@ public:
     /// Emit every enabled child's positions into the sink, offset into one address space: @xref{the-container-owns-coordinate-iteration}.
     void placeLights(const CoordSink& sink) const {
         if (!enabled()) return;
-        nrOfLightsType offset = 0;
-        for (uint8_t i = 0; i < childCount(); i++) {
-            if (!child(i)->enabled()) continue;
-            auto* layout = static_cast<LayoutBase*>(child(i));
-            // Both kinds relay through their own offset, so a child's gap stays a gap here.
-            struct WrapCtx {
-                const CoordSink* sink;
-                nrOfLightsType offset;
-                uint32_t limit;
-            };
-            WrapCtx wctx{&sink, offset, maxLights()};
-            layout->placeLights(CoordSink{
-                [](void* wc, nrOfLightsType idx, lengthType x, lengthType y, lengthType z) {
-                    auto* w = static_cast<WrapCtx*>(wc);
-                    if (uint32_t(idx) + w->offset < w->limit) w->sink->pixel(idx + w->offset, x, y, z);
-                },
-                [](void* wc, nrOfLightsType idx, lengthType x, lengthType y, lengthType z) {
-                    auto* w = static_cast<WrapCtx*>(wc);
-                    if (uint32_t(idx) + w->offset < w->limit) w->sink->blackPixel(idx + w->offset, x, y, z);
-                },
-                &wctx});
-            offset += layout->lightCount();
-        }
+        LightEmitter e{&sink, maxLights()};
+        for (uint8_t i = 0; i < childCount(); i++)
+            if (child(i)->enabled()) e.place(*static_cast<LayoutBase*>(child(i)));
     }
 
-    // Gates the dense-identity fast path off, since an identity map would light a gap.
-    /// Whether any enabled child holds physical slots dark.
+    /// Whether any enabled child holds physical slots dark, which turns the dense-identity fast path off, since an identity map would light a gap.
     bool hasBlackPixels() const {
         if (!enabled()) return false;
         for (uint8_t i = 0; i < childCount(); i++) {
@@ -92,8 +70,7 @@ public:
         return false;
     }
 
-    // Recomputed on a rebuild rather than per tick, and an empty setup flags a warning.
-    /// Report the light count and the physical bounding box on the status line: @xref{the-status-line}.
+    /// Report the light count and the physical bounding box on the status line, recomputed on a rebuild rather than per tick, an empty setup flagging a warning: @xref{the-status-line}.
     void prepare() override {
         const nrOfLightsType lights = totalLightCount();
         // One placeLights pass for the bounding box: max coordinate + 1 per axis.
@@ -118,7 +95,7 @@ public:
 
 private:
     /// Backing store for the status line, which `setStatus` borrows rather than copies.
-    char statusBuf_[64] = {};   // the widest line, a 10-digit count, three 5-digit sides and the safe-mode mark, is 59
+    char statusBuf_[64] = {};   ///< the widest line, a 10-digit count, three 5-digit sides and the safe-mode mark, is 59
 };
 
 } // namespace mm

@@ -12,8 +12,6 @@ namespace mm {
 /// @moreinfo
 ///
 /// With `shrink` on, each axis chosen flattens to one slice and every coordinate on it folds to zero. The effect is painted once and shown on every slice of that axis.
-///
-/// MoonLight's original also shifts the frame along the collapsed axis each tick, a wave drawn into the pixels. A modifier transforms coordinates only, so the collapse is kept and the wave is not.
 class RippleXZModifier : public ModifierBase {
 public:
     /// The catalog tags: 💫, a MoonLight origin.

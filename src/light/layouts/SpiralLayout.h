@@ -5,28 +5,21 @@
 
 namespace mm {
 
-/// Layout winding LEDs up a conical spiral.
-/// Author: MoonLight, https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Layouts/L_MoonLight.h
+/// A conical spiral: lights winding up a cone from a wide base to a point.
+/// @card SpiralLayout.gif
+///
+/// @attribution Conical spiral
 ///
 /// @moreinfo
 ///
-/// A tapering conical spiral: lights wound up a cone whose radius falls linearly to zero at the top.
-/// The rise from base to tip is the height control.
-/// The winding rate is fixed at the base's light density, one light per unit of its circumference.
-/// The angle therefore simply accumulates while the radius shrinks, so the spiral packs tightly near the base and opens out toward the tip.
-/// The whole shape is offset so its base sits at (bottomRadius, 0, bottomRadius), keeping every coordinate non-negative.
-///
-/// Prior art: MoonLight SpiralLayout (ewowi/MoonLight, src light nodes).
-/// The geometry is reproduced exactly, its float trig running on the cold build path rather than the render loop.
-/// The source's own trig calls and its truncation of each coordinate are kept as they are.
-/// MoonLight's per-strip pin plumbing (nextPin) is dropped: a MoonLight layout emits coordinates only; the driver owns wiring.
+/// The radius falls linearly to zero at the top while the winding rate stays the base's, one light per unit of its circumference. So the spiral packs tightly near the base and opens toward the tip.
 class SpiralLayout : public LayoutBase {
 public:
-    /// The catalog tags this layout carries.
+    /// The catalog tags: 💫, a MoonLight origin.
     const char* tags() const override { return "💫"; }
     /// How many axes this layout places lights on.
     Dim dimensions() const override { return Dim::D3; }
-    /// Total lights along the spiral.
+    /// How many lights wind up the spiral.
     lengthType ledCount = 640;
     /// The radius at the base, in light-units.
     lengthType bottomRadius = 10;
@@ -43,9 +36,8 @@ public:
     /// How many lights the current settings place.
     nrOfLightsType lightCount() const override {
         // Clamped anyway, so any value a caller writes directly stays in range.
-        constexpr uint32_t kMax = std::numeric_limits<nrOfLightsType>::max();
         const uint32_t n = ledCount > 0 ? static_cast<uint32_t>(ledCount) : 0;
-        return static_cast<nrOfLightsType>(n > kMax ? kMax : n);
+        return clampedCount(n);
     }
 
     /// Emit every light's coordinate, in wiring order.

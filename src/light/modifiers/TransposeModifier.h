@@ -11,9 +11,7 @@ namespace mm {
 ///
 /// @moreinfo
 ///
-/// The swaps apply to the box and to every coordinate in the order XY, XZ, YZ, so enabling several composes them; XY alone is the matrix transpose, rows becoming columns.
-///
-/// The flips run after the swaps, against the already transposed box: x becomes size.x - 1 - x, so the axis reads back to front. A static remap, with no per-frame work.
+/// The swaps apply to the box and to every coordinate in the order XY, XZ, YZ, so enabling several composes them; XY alone is the matrix transpose. The flips run after the swaps, against the already transposed box.
 class TransposeModifier : public ModifierBase {
 public:
     /// The catalog tags: 💫, a MoonLight origin.

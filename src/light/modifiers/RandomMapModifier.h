@@ -13,9 +13,7 @@ namespace mm {
 ///
 /// @moreinfo
 ///
-/// A true 1:1 permutation over the box, with no gaps or duplicates, applied as a static fold. Each beat bumps a generation that rebuilds the Layer's mapping, the path a control change takes.
-///
-/// A reshuffle costs one mapping rebuild on the render thread, a one-frame hitch at most once a second. The permutation lives in a member sized to the box and grows only with the grid; a failed allocation leaves the mapping as it is.
+/// Each beat bumps a generation that rebuilds the Layer's mapping, the path a control change takes, a one-frame hitch at most once a second. The permutation lives in a member sized to the box; a failed allocation leaves the mapping as it is.
 ///
 /// On a sparse layout a light can land on a box cell without a light, and that one stays dark.
 class RandomMapModifier : public ModifierBase {

@@ -91,5 +91,5 @@ The sink's placement on serpentine, 3D, mirrored and transposed layouts is pinne
 
 ## Before the pull request
 
-One topic, based on main, max 400 changed lines and ten files, as [the process](../contributing/principles-and-process.md) describes.
+One topic, sized and based as [the process](../contributing/principles-and-process.md) sets.
 The desktop tests pass, the source works on the board it is for, and a board without the device builds and shows a status rather than failing.

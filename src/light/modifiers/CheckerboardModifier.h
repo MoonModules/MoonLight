@@ -8,10 +8,6 @@ namespace mm {
 /// @card CheckerboardModifier.gif
 ///
 /// @attribution Brandon502
-///
-/// @moreinfo
-///
-/// A mask rather than a remap: the logical box is unchanged, and a light on an "off" square returns false from the fold, so it maps nowhere.
 class CheckerboardModifier : public ModifierBase {
 public:
     /// The catalog tags: 💫, a MoonLight origin.

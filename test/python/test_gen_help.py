@@ -413,6 +413,18 @@ def test_a_catalog_whose_page_is_gone_is_generated_from_the_help(monkeypatch):
     assert mkdocs_hooks.generated_catalog("moonmodules/light/other.md") is None
 
 
+def test_a_catalog_intro_shows_its_picture_above_the_line_and_its_clip_below_the_summary(monkeypatch):
+    import mkdocs_hooks
+    help_file = {"catalogs": {"light/demo.md": {"title": "Demos", "line": "What a demo is.", "summary": "One.",
+                                                "image": "https://moonmodules.org/MoonLight/assets/core/Demos.png", "alt": "The Demos card",
+                                                "video": "https://moonmodules.org/MoonLight/assets/moontube/demo.webm", "caption": "Demos at work."}},
+                 "modules": {}}
+    monkeypatch.setitem(mkdocs_hooks._help_cache, "file", help_file)
+    md = mkdocs_hooks.generated_catalog("moonmodules/light/demo.md")
+    assert md.startswith('# Demos\n\n<img src="../../assets/core/Demos.png" width="300" alt="The Demos card">\n\nWhat a demo is.\n\nOne.\n\n'
+                         '<video src="../../assets/moontube/demo.webm" controls playsinline width="360" title="Demos at work."></video>')
+
+
 def test_a_closing_div_ends_the_last_card_so_it_is_still_drawn(hooks):
     """A deck holds its cards in a container, and the last card ended at the next heading, past the container's end, so a card read as having a body and was left blank."""
     page = '<div class="mm-deck" markdown="1">\n\n<a id="picture"></a>\n\n### Picture 🖼️ · 2D\n\n</div>\n\n## After\n'

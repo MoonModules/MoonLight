@@ -11,14 +11,17 @@ The people, projects and published algorithms whose work shaped MoonLight. We st
 | [Art-Net](https://en.wikipedia.org/wiki/Art-Net) | The lighting-network protocol for DMX over IP. |
 | [Bill Reeves / Particle system](https://en.wikipedia.org/wiki/Particle_system) File:Particle_sys_fire.jpg | Particle systems, as a technique. |
 | [blazoncek](https://github.com/blazoncek) | Blaž Kristan: WLED effects, and their ports. |
+| [Boustrophedon](https://en.wikipedia.org/wiki/Boustrophedon) File:Boustrophedon_example.svg | Alternate lines running in reverse, the serpentine wiring of a snaked strip. |
 | [Brandon502 / WildCats08](https://github.com/Brandon502) | Modifiers, particles, and Game of Life. |
 | [Bresenham](https://en.wikipedia.org/wiki/Bresenham%27s_line_algorithm) File:Bresenham.svg | Lines and circles on integer grids. |
 | [Chebyshev distance](https://en.wikipedia.org/wiki/Chebyshev_distance) File:Minkowski_distance_examples.svg | The grid metric max(\|dx\|, \|dy\|). |
 | [Christophe Gagnier / Moustachauve](https://github.com/Moustachauve) | Author of the native [WLED-Android](https://github.com/Moustachauve/WLED-Android) and [WLED-iOS](https://github.com/Moustachauve/WLED-iOS) apps, whose source let MoonLight devices appear in them. |
+| [Conical spiral](https://en.wikipedia.org/wiki/Conical_spiral) File:Spiral-cone-arch-s.svg | A spiral wound up the surface of a cone. |
 | [Damian Schneider / DedeHai](https://github.com/DedeHai) | Author of the WLED Particle System, whose shape our [particle kernel](../moonmodules/light/power-functions.md#particles) follows in fixed point. |
 | [DDP](http://www.3waylabs.com/ddp/) | The Distributed Display Protocol, pixel data over UDP. |
 | Delphium | HUB75, OSC, HLS, RTSP, NDI, and Windows. |
 | [E1.31 / sACN](https://en.wikipedia.org/wiki/Architecture_for_Control_Networks) | Streaming ACN, DMX over IP as ANSI standardizes it. |
+| Eric Marciniak | The car-lights fixture. |
 | [ESPHome](https://esphome.io) | Home Assistant discovery, and HUB75. |
 | [Euclidean distance](https://en.wikipedia.org/wiki/Euclidean_distance) File:Euclidean_distance_2d.svg | The straight-line metric. |
 | [ewowi](https://github.com/ewowi) | MoonLight, StarLight, WLED 2D, LED preview. |

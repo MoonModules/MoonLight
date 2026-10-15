@@ -16,7 +16,7 @@ namespace mm {
 ///
 /// A polar fold: atan2 bins each light's angle about the center into a petal (x), and in 2D or more its radius becomes the position along the petal (y). Swirl shears the angle by the radius, giving a spiral.
 ///
-/// Symmetry divides the full turn into a repeating arc from a table of the factors of 360, and z-twist rotates the wheel per slice. The float math runs while the mapping builds, never per frame.
+/// Symmetry divides the full turn into a repeating arc from a table of the factors of 360, and z-twist rotates the wheel per slice.
 class PinwheelModifier : public ModifierBase {
 public:
     /// The catalog tags: 💫, a MoonLight origin.

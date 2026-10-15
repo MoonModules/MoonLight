@@ -416,9 +416,8 @@ TEST_CASE("every script example in the docs compiles") {
     const std::filesystem::path repo = scriptRoot().parent_path();
     const std::filesystem::path pages[] = {
         repo / "moonlive" / "README.md",
-        // The language reference and the catalog page whose details carry whole scripts; a modifier's examples are the shipped scripts in moonlive/modifiers, compiled by the test above.
+        // The language reference; a layout's or a modifier's examples are the shipped scripts in moonlive/, compiled by the test above.
         repo / "docs" / "moonmodules" / "light" / "moonlive.md",
-        repo / "docs" / "moonmodules" / "light" / "layouts.md",
     };
 
     int checked = 0;

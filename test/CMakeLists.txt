@@ -139,6 +139,7 @@ add_executable(mm_tests
     unit/light/unit_GEQ3DEffect.cpp
     unit/light/unit_GEQEffect.cpp
     unit/light/unit_GridBlacksLayout.cpp
+    unit/light/unit_LayoutComposition.cpp
     unit/light/unit_LissajousEffect.cpp
     unit/light/unit_MirrorModifier.cpp
     unit/light/unit_NoiseMeterEffect.cpp

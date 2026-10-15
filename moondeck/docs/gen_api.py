@@ -320,6 +320,8 @@ _MOREINFO_RE = re.compile(r'^[ \t]*@moreinfo[ \t]*$', re.MULTILINE)
 _GUIDE_RE = re.compile(r'^[ \t]*@guide[ \t]*$\n?', re.MULTILINE)
 # `@attribution` is a block tag gen_help makes a help field; on the technical page it reads labeled.
 _ATTRIBUTION_RE = re.compile(r'^([ \t]*)@attribution[ \t]+', re.MULTILINE)
+# `@video <file> <title>` is a clip a catalog's intro shows; on the technical page it plays where it stands.
+_VIDEO_RE = re.compile(r'[ \t]*@video\s+(?P<file>\S+\.(?:webm|mp4))(?P<title>[^\n]*)')
 # The first member-section heading moxygen emits. A CLASS page lists `### Public Attributes`,
 # `### Public Methods` and friends; a GROUP page lists `### Functions`, `### Variables`,
 # `### Enumerations` or `### Classes`. Both shapes are matched, because the detailed description
@@ -368,6 +370,17 @@ def _relocate_moreinfo(md: str) -> str:
     # Excise the marker + its tail from the description, then append it (relabeled) after everything else.
     body = (md[:marker.start()] + md[tail_end:]).rstrip()
     return f"{body}\n\n## More info\n\n{tail}\n"
+
+
+def _render_video_directives(md: str, domain: str) -> str:
+    """Replace each `@video <file> <title>` with a <video> of the asset, or nothing when the file is absent, as a missing card does."""
+    def repl(m: re.Match) -> str:
+        hits = list(_ASSETS.rglob(m.group("file")))
+        if not hits:
+            return ""
+        rel = os.path.relpath(hits[0], DOCS_MOONMODULES / domain / "moxygen")
+        return f'\n\n<video src="{rel}" controls playsinline width="720" title="{m.group("title").strip()}"></video>\n'
+    return _VIDEO_RE.sub(repl, md)
 
 
 def _render_card_directives(md: str, domain: str, stem: str) -> str:
@@ -686,6 +699,7 @@ def generate() -> dict[str, str]:
             # code span can't render — keep the label, drop the target.
             body = _unlink_inside_code_spans(body)
             body = _render_card_directives(body, domain, stem)
+            body = _render_video_directives(body, domain)
             body = _GUIDE_RE.sub("", body)
             body = _ATTRIBUTION_RE.sub(r"\1**Attribution:** ", body)
             body = _render_ref_directives(body)   # @xref{anchor|label} → page-local [label](#anchor)

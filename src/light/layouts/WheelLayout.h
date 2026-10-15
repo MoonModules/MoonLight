@@ -4,24 +4,17 @@
 
 namespace mm {
 
-/// Layout of LEDs around a wheel/disc.
-/// Author: MoonLight, https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Layouts/L_MoonLight.h
+/// A bicycle wheel: spokes radiating from a center hub, each a straight row of lights.
+/// @card WheelLayout.gif
+///
+/// @attribution Polar coordinates
 ///
 /// @moreinfo
 ///
-/// A bicycle-wheel arrangement: `spokes` straight spokes radiate from a center hub, each carrying `ledsPerSpoke` LEDs spaced one unit apart from the center outward.
-/// Spoke k points at angle k/spokes of a full turn; LED r on it sits at radius r+1 along that angle. lightCount() = spokes * ledsPerSpoke.
-///
-/// Integer-only (same discipline as SphereLayout, even though layout iteration is a cold path).
-/// Angles are uint8_t (256 = full turn) and the project's sin8/cos8 LUT gives the direction. sin8/cos8 return 0..255 centerd at 128.
-/// (val-128) is the signed component in [-128,127].
-/// A radius-r offset is (r*(val-128))>>7 (÷128 → back to unit scale).
-/// The whole wheel is shifted by +maxRadius so every coordinate is ≥ 0 (the physical address space starts at 0), giving a (2R+1)-wide bounding box.
-///
-/// Prior art: MoonLight ring/spoke layouts (L_MoonLight.h); MoonLight v2 WheelLayoutModule (those used double cos/sin/round, this is the integer-LUT equivalent).
+/// Angles are a byte, 256 to the turn, read through the sin8 and cos8 table, so the placement is integer-only.
 class WheelLayout : public LayoutBase {
 public:
-    /// The catalog tags this layout carries.
+    /// The catalog tags: 💫, a MoonLight origin.
     const char* tags() const override { return "💫"; }
     /// How many axes this layout places lights on.
     Dim dimensions() const override { return Dim::D2; }

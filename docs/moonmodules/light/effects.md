@@ -71,8 +71,6 @@ Audio-reactive sawtooth waves: each column maps to a frequency band whose magnit
 - `keepOn`: keep oscillating even when a band is silent.
 - `method`: phase model (`Chaos`, `Chaos fix`, `BandPhases`).
 
-Origin: MoonLight (audio) · by [@TroyHacks](https://github.com/troyhacks) · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h)
-
 Detail: [technical](moxygen/FreqSawsEffect.md)
 
 [Tests](../../reference/tests/unit-tests.md#freqsawseffect)

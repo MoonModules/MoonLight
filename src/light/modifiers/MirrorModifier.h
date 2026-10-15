@@ -11,9 +11,7 @@ namespace mm {
 ///
 /// @moreinfo
 ///
-/// Per axis the logical extent halves, rounding up, so an odd extent keeps its center column unpaired. A coordinate at or past that half reflects back, and the mirrored lights share one logical source, so the fan-out costs nothing.
-///
-/// An even extent maps its far edge to the first logical column. An odd one makes its unpaired center the last logical column, so the far edge maps to the second.
+/// Per axis the logical extent halves, rounding up, so an odd extent keeps its center column unpaired, and a coordinate at or past that half reflects back.
 class MirrorModifier : public ModifierBase {
 public:
     /// The catalog tags: 💫, a MoonLight origin.

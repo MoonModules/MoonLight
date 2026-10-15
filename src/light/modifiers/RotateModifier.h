@@ -11,11 +11,9 @@ namespace mm {
 ///
 /// @moreinfo
 ///
-/// The one dynamic modifier: it overrides modifyLive, so the Layer applies it every frame for a smooth turn rather than a stepped rebuild, and a chain without it pays nothing.
+/// The one dynamic modifier: it overrides modifyLive, so the Layer applies it every frame for a smooth turn rather than a stepped rebuild.
 ///
 /// The live pass maps backward: for each destination cell it computes the source with the inverse rotation. That leaves no destination unfilled, the textbook reason image warping samples backward.
-///
-/// It is the codebase's matrix-backed transform, an explicit integer rotation matrix applied to the centered coordinate. An affine transform composing translation, scale and shear would build its matrix the same way.
 class RotateModifier : public ModifierBase {
 public:
     /// The catalog tags: 💫, a MoonLight origin.

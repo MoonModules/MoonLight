@@ -254,9 +254,14 @@ def generated_catalog(src_uri: str) -> str | None:
     mods = sorted(((t, m) for t, m in _help_file().get("modules", {}).items()
                    if m.get("doc") == page or m.get("doc", "").startswith(page + "#")),
                   key=lambda tm: display_name(tm[0]).lower())
-    out = [f"# {cat['title']}", "", _site_relative(cat.get("line", ""), src_uri), ""]
+    out = [f"# {cat['title']}", ""]
+    if cat.get("image"):
+        out += [f'<img src="{_site_relative(cat["image"], src_uri)}" width="300" alt="{cat.get("alt", "")}">', ""]
+    out += [_site_relative(cat.get("line", ""), src_uri), ""]
     for para in (p for p in cat.get("summary", "").split("\n\n") if p):
         out += [_site_relative(para, src_uri), ""]
+    if cat.get("video"):
+        out += [f'<video src="{_site_relative(cat["video"], src_uri)}" controls playsinline width="360" title="{cat.get("caption", "")}"></video>', ""]
     # The deck is the page: its cards render as the catalog table until the script replaces them, which is what search indexes and a reader without JavaScript sees.
     out += ["<noscript><style>.mm-deck .mm-catalog-wrap { display: block; }</style></noscript>", "",
             f'<div class="mm-deck" data-page="{page}" markdown="1">', ""]

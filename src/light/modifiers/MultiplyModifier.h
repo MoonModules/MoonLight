@@ -11,9 +11,7 @@ namespace mm {
 ///
 /// @moreinfo
 ///
-/// The logical box is the physical box divided by each axis's factor. Every physical light folds onto its logical cell with a modulo, so the lights of all the tiles share one source and the fan-out is free.
-///
-/// Mirroring is per axis and the factors are too, where MoonLight's original has one mirror flag; light past the last whole tile is dropped.
+/// The logical box is the physical box divided by each axis's factor, and every light folds onto its logical cell with a modulo. Light past the last whole tile is dropped.
 class MultiplyModifier : public ModifierBase {
 public:
     /// The catalog tags: 💫, a MoonLight origin.
