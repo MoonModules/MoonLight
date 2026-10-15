@@ -408,7 +408,7 @@
     },
     "outside in": {
      "line": "Light 0 on the outer ring, wired inward rather than outward.",
-     "more": "A disc is soldered either from the center light outward, the default, or from the outer 60-light ring inward, and this names which end of the wire is light 0. Only the ring order flips; each ring keeps the direction it is wired in."
+     "more": "A disc is soldered from its center or from its 60-light rim, and this follows the end the data enters. Each ring keeps the direction it is wired in."
     },
     "angleFirst": {
      "line": "The angle light 0 of each ring sits at, in degrees."
@@ -550,12 +550,12 @@
   },
   "AudioSpectrumEffect": {
    "line": "The 16 mic frequency bands spread across X, each column lit bottom-up by its magnitude.",
-   "attribution": "MoonLight original, on the WLED-SR GEQ / spectrum concept (Andrew Tuline) · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_WLED.h)",
+   "summary": "The classic equalizer display. The bands scale to any width, so a wide grid gives each several columns and a narrow one samples. On a grid at least three rows tall, the bottom row becomes a horizontal level bar and the spectrum bars sit above it. On a single row the bars collapse to per-column brightness.",
+   "attribution": "[Andrew Tuline](https://github.com/atuline)",
    "image": "https://moonmodules.org/MoonLight/assets/light/effects/AudioSpectrumEffect.gif",
-   "alt": "AudioSpectrum effect preview",
    "controls": {
     "colorMode": {
-     "line": "Bars colored by `height`, the VU look, or `per-band`, a rainbow."
+     "line": "Bars colored by height, the VU look, or per band, a rainbow."
     }
    },
    "role": "effect",
@@ -565,11 +565,9 @@
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/AudioSpectrumEffect.h"
   },
   "RadialSpectrumEffect": {
-   "line": "The spectrum as ripples.",
-   "summary": "Each band owns a sector around the center, mirrored left and right with the bass at top and bottom. Sound is born at the center and travels outward, so the radius is time and a ring's length is that band's recent history. Every sector is one band, so a band that is stuck shows as a sector that never moves. On a cube the ripples are expanding shells.",
-   "attribution": "MoonLight original, the radial spectrogram on `PolarLut` and the onset detector",
+   "line": "The spectrum as ripples: each band owns a sector around the center, mirrored left and right with the bass at top and bottom.",
+   "summary": "Sound is born at the center and travels outward, so the radius is time and a ring's length is that band's recent history. On a cube the ripples are expanding shells. `polarTable`, `polarTable16` and `mapping` set the polar address and its shape.",
    "image": "https://moonmodules.org/MoonLight/assets/light/effects/RadialSpectrumEffect.gif",
-   "alt": "RadialSpectrum effect preview",
    "controls": {
     "speed": {
      "line": "How fast sound travels outward."
@@ -592,22 +590,21 @@
   },
   "VuMetersEffect": {
    "line": "Sixteen needles, one per band, each with real mass.",
-   "summary": "What makes a VU meter beautiful is not the dial, it is the needle: it overshoots a peak, swings back and settles, which is why a mechanical meter reads as alive where a bar graph reads as a readout.\n\nThe bass needles are heavier than the treble ones, so the low end swings and the high end flickers.",
-   "attribution": "MoonLight original, on the VU ballistics of IEC 60268-17",
+   "summary": "What makes a VU meter beautiful is the needle: it overshoots a peak, swings back and settles. That is why a mechanical meter reads as alive where a bar graph reads as a readout.\n\nThe bass needles are heavier than the treble ones, so the low end swings and the high end flickers.",
+   "attribution": "[IEC 60268-17](https://en.wikipedia.org/wiki/VU_meter)",
    "image": "https://moonmodules.org/MoonLight/assets/light/effects/VuMetersEffect.gif",
-   "alt": "VuMeters effect preview",
    "controls": {
     "damping": {
-     "line": "How much the needle overshoots; high is a studio meter."
+     "line": "How much the needle overshoots: low swings, high settles."
     },
     "response": {
-     "line": "How hard the needle chases the signal at all."
+     "line": "How quickly the needle chases the signal at all."
     },
     "peakHold": {
-     "line": "How long the peak marker stays up, as a half-life."
+     "line": "How long the peak marker stays up."
     },
     "smooth": {
-     "line": "Drive from the meter ballistic rather than the raw band."
+     "line": "Drive from the smoothed ballistic rather than the raw band."
     }
    },
    "role": "effect",
@@ -619,7 +616,7 @@
   "BeatRipplesEffect": {
    "line": "Every beat is a stone dropped in water.",
    "summary": "A real wave simulation, which gives what a drawn expanding circle cannot: ripples pass through each other, reflect off the walls and interfere into standing patterns. The loudest band decides where the stone lands, a bass hit near the center and a treble hit out at the rim, and its strength sets how deep.",
-   "attribution": "the two-buffer water simulation (Gomez 2000) the demoscene settled on, here driven by the onset detector.",
+   "attribution": "Gomez",
    "image": "https://moonmodules.org/MoonLight/assets/light/effects/BeatRipplesEffect.gif",
    "controls": {
     "damping": {
@@ -643,10 +640,10 @@
    "tests": "https://github.com/MoonModules/MoonLight/blob/main/test/unit/light/unit_BeatRipples.cpp"
   },
   "BlurzEffect": {
-   "line": "Audio-reactive blurred dots: one frequency band per frame lights a dot whose position maps to that band (or to the major-peak frequency), then the whole frame is blurred for soft trails.",
-   "attribution": "WLED (audio) · by Andrew Tuline (WLED-SR), enhancements by [@softhack007](https://github.com/softhack007) · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_WLED.h)",
-   "image": "https://raw.githubusercontent.com/scottrbailey/WLED-Utils/master/gifs/FX_163.gif",
-   "alt": "Blurz effect preview",
+   "line": "Audio-reactive blurred dots: one frequency band per frame lights a dot, then the whole frame is blurred for soft trails.",
+   "summary": "The dot's position maps to that band, or to the major-peak frequency with `freqMap`. `geqScanner` sweeps the dot steadily across the strip, and with neither the dot jumps to a random position.",
+   "attribution": "[Andrew Tuline](https://github.com/atuline), [softhack007](https://github.com/softhack007)",
+   "image": "https://moonmodules.org/MoonLight/assets/light/effects/BlurzEffect.gif",
    "controls": {
     "fadeRate": {
      "line": "Background decay per frame."
@@ -669,13 +666,13 @@
    "tests": "https://github.com/MoonModules/MoonLight/blob/main/test/unit/light/unit_BlurzEffect.cpp"
   },
   "BouncingBallsEffect": {
-   "line": "A row of balls per column bounce under gravity, each losing energy on impact and relaunching when it stops, palette-colored by ball index over a fading background.",
-   "attribution": "WLED · by Andrew Tuline (WLED-SR) · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_WLED.h)",
-   "image": "https://raw.githubusercontent.com/scottrbailey/WLED-Utils/master/gifs/FX_091.gif",
-   "alt": "BouncingBalls effect preview",
+   "line": "A row of balls per column bounce under gravity, each losing energy on impact and relaunching when it stops.",
+   "summary": "Every column runs independently, so a panel shows a forest of bouncing dots, palette-colored by ball index over a fading background.",
+   "attribution": "[Andrew Tuline](https://github.com/atuline)",
+   "image": "https://moonmodules.org/MoonLight/assets/light/effects/BouncingBallsEffect.gif",
    "controls": {
     "grav": {
-     "line": "Gravity strength (higher = faster fall, snappier bounce)."
+     "line": "Gravity strength: higher falls faster and bounces snappier."
     },
     "numBalls": {
      "line": "Balls per column."
@@ -691,9 +688,8 @@
   "DemoReelEffect": {
    "line": "Plays every other registered effect in turn, auto-advancing on a timer, so one Layer cycles the whole library hands-free.",
    "summary": "New effects are picked up automatically. It can pick a fresh palette each cycle and overlay the playing effect's name, and the status line says which is playing. It never hosts itself, and it plays in sequence rather than compositing.",
-   "attribution": "FastLED · Mark Kriegsman's [DemoReel100](https://github.com/FastLED/FastLED/blob/master/examples/DemoReel100/DemoReel100.ino); MoonLight reel",
+   "attribution": "[FastLED](https://github.com/FastLED/FastLED), [Mark Kriegsman](https://github.com/kriegsman)",
    "image": "https://moonmodules.org/MoonLight/assets/light/effects/DemoReelEffect.gif",
-   "alt": "DemoReel effect preview",
    "controls": {
     "interval": {
      "line": "Seconds each effect plays before advancing."
@@ -716,19 +712,19 @@
    "tests": "https://github.com/MoonModules/MoonLight/blob/main/test/unit/light/unit_DemoReelEffect.cpp"
   },
   "DistortionWavesEffect": {
-   "line": "Two interfering sine waves beat against each other into a moiré color field.",
-   "attribution": "WLED · by ldirko & blazoncek (WLED port) · [gallery](https://editor.soulmatelights.com/gallery/1089-distorsion-waves) · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_WLED.h)",
+   "line": "Two interfering sine waves beat against each other into a moire color field.",
+   "summary": "The waves run at independent frequencies and slightly different time rates, and their summed value indexes the active palette.",
+   "attribution": "[ldirko](https://github.com/ldirko), [blazoncek](https://github.com/blazoncek)",
    "image": "https://moonmodules.org/MoonLight/assets/light/effects/DistortionWavesEffect.gif",
-   "alt": "DistortionWaves effect preview",
    "controls": {
     "freq_x": {
-     "line": "Horizontal/vertical wave frequency."
+     "line": "Horizontal wave frequency."
     },
     "freq_y": {
-     "line": "Horizontal/vertical wave frequency."
+     "line": "Vertical wave frequency."
     },
     "speed": {
-     "line": "Animation rate (0 = frozen)."
+     "line": "Animation rate; 0 freezes it."
     }
    },
    "role": "effect",
@@ -740,13 +736,12 @@
   },
   "FireEffect": {
    "line": "A Fire2012-style heat field: sparks at the base rise and cool through the active palette, coldest at its low end.",
-   "summary": "The spark count scales with the width.\n\nThe flame color comes from the **active palette**. For the classic fire look pick the **Lava** palette (black→red→orange→yellow→white: the recommended default); any palette works, so an Ocean or Forest palette turns the flame blue or green.",
-   "attribution": "FastLED / MoonLight · Mark Kriegsman's Fire2012; MoonLight adapts [MatrixFireFast](https://github.com/toggledbits/MatrixFireFast) (toggledbits)",
+   "summary": "The spark count scales with the width. The flame color comes from the active palette: the Lava palette (black, red, orange, yellow, white) gives the classic fire. An Ocean or Forest palette turns the flame blue or green.",
+   "attribution": "[Mark Kriegsman](https://github.com/kriegsman), [toggledbits](https://github.com/toggledbits), [David Jupijn](https://github.com/risingstep)",
    "image": "https://moonmodules.org/MoonLight/assets/light/effects/FireEffect.gif",
-   "alt": "Fire effect preview",
    "controls": {
     "cooling": {
-     "line": "How fast heat dissipates as it rises (higher = shorter flames)."
+     "line": "How fast heat dissipates as it rises; higher is shorter flames."
     },
     "sparking": {
      "line": "Chance of a new spark at the base each frame; higher is livelier."
@@ -761,39 +756,39 @@
   },
   "FixedRectangleEffect": {
    "line": "A solid color filling a positioned box within the grid, with an optional alternating-white checker on the box's pixels.",
-   "attribution": "MoonLight · by [limpkin](https://github.com/limpkin) · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h)",
+   "summary": "A box at a dialed-in position and extent over a slow motion-trail fade, so it serves as a static fixture, an alignment aid, or a painted region. An extent beyond the grid fills to the edge.",
+   "attribution": "[limpkin](https://github.com/limpkin)",
    "image": "https://moonmodules.org/MoonLight/assets/light/effects/FixedRectangleEffect.gif",
-   "alt": "FixedRectangle effect preview",
    "controls": {
     "red": {
-     "line": "The box color."
+     "line": "The box color, red."
     },
     "green": {
-     "line": "The box color."
+     "line": "The box color, green."
     },
     "blue": {
-     "line": "The box color."
+     "line": "The box color, blue."
     },
     "white": {
-     "line": "The box color."
+     "line": "The box color, white, on an RGBW grid."
     },
     "X position": {
-     "line": "The box's origin corner."
+     "line": "The box's origin corner on x."
     },
     "Y position": {
-     "line": "The box's origin corner."
+     "line": "The box's origin corner on y."
     },
     "Z position": {
-     "line": "The box's origin corner."
+     "line": "The box's origin corner on z."
     },
     "Rectangle width": {
-     "line": "The box extent on each axis."
+     "line": "The box extent along x."
     },
     "Rectangle height": {
-     "line": ""
+     "line": "The box extent along y."
     },
     "Rectangle depth": {
-     "line": ""
+     "line": "The box extent along z."
     },
     "alternateWhite": {
      "line": "Alternate box pixels to white in a checker pattern."
@@ -807,22 +802,22 @@
    "tests": "https://github.com/MoonModules/MoonLight/blob/main/test/unit/light/unit_FixedRectangleEffect.cpp"
   },
   "FreqMatrixEffect": {
-   "line": "A 1D scrolling frequency display: each frame shifts the strip and injects a new pixel at one end whose hue comes from the dominant frequency and whose brightness from the volume.",
-   "attribution": "WLED (audio) · by Andrew Tuline (WLED-SR) · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_WLED.h)",
-   "image": "https://raw.githubusercontent.com/scottrbailey/WLED-Utils/master/gifs/FX_138.gif",
-   "alt": "FreqMatrix effect preview",
+   "line": "A 1D scrolling frequency display: each frame shifts the strip and injects a new pixel at one end.",
+   "summary": "The new pixel's hue comes from the dominant frequency and its brightness from the volume, so pitch becomes color.",
+   "attribution": "[Andrew Tuline](https://github.com/atuline)",
+   "image": "https://moonmodules.org/MoonLight/assets/light/effects/FreqMatrixEffect.gif",
    "controls": {
     "speed": {
      "line": "Scroll rate."
     },
     "fx": {
-     "line": "Sound-effect intensity (scales the injected brightness)."
+     "line": "Sound-effect intensity, scaling the injected brightness."
     },
     "lowBin": {
-     "line": "The frequency window mapped across the hue range."
+     "line": "The lower edge of the frequency window mapped across the hue range."
     },
     "highBin": {
-     "line": "The frequency window mapped across the hue range."
+     "line": "The upper edge of that window."
     },
     "sensitivity": {
      "line": "Input gain."
@@ -839,12 +834,12 @@
    "tests": "https://github.com/MoonModules/MoonLight/blob/main/test/unit/light/unit_FreqMatrixEffect.cpp"
   },
   "FreqSawsEffect": {
-   "line": "Audio-reactive sawtooth waves: each column maps to a frequency band whose magnitude drives a per-band oscillator speed, so louder bands sweep their sawtooth up the column faster, with three phase methods.",
+   "line": "Audio-reactive sawtooth waves: each column maps to a frequency band whose loudness drives a per-band oscillator speed.",
+   "summary": "Louder bands sweep their sawtooth up the column faster. A band's speed rises instantly to a loud hit and decays slowly once the sound stops. A struck band keeps sawing for a while, and a quiet one winds down.",
    "image": "https://moonmodules.org/MoonLight/assets/light/effects/FreqSawsEffect.gif",
-   "alt": "FreqSaws effect preview",
    "controls": {
     "fade": {
-     "line": "Background decay per frame."
+     "line": "Background decay per frame, which is the motion trail."
     },
     "increaser": {
      "line": "How fast a band's speed ramps up with its magnitude."
@@ -856,13 +851,14 @@
      "line": "Ceiling on a band's oscillation speed."
     },
     "invert": {
-     "line": "Flip alternate columns vertically."
+     "line": "Flip alternate columns vertically, for a woven look."
     },
     "keepOn": {
      "line": "Keep oscillating even when a band is silent."
     },
     "method": {
-     "line": "Phase model (`Chaos`, `Chaos fix`, `BandPhases`)."
+     "line": "The phase model that places the saw.",
+     "more": "`Chaos` reads the position off the beat, so the saw teleports as the rate changes. `Chaos fix` carries a per-band offset, so a rate change continues smoothly. `BandPhases` integrates an accumulator, so the saw never jumps."
     }
    },
    "role": "effect",
@@ -873,47 +869,56 @@
    "tests": "https://github.com/MoonModules/MoonLight/blob/main/test/unit/light/unit_FreqSawsEffect.cpp"
   },
   "GameOfLifeEffect": {
-   "line": "Conway's cellular automaton generalized to 2D and 3D, with selectable rulesets and custom `B#/S#`.",
-   "summary": "Cells inherit a neighbor's palette color on birth, dead cells blur toward the background, and the board wraps toroidally. A stasis check respawns a pentomino or glider when the board goes static.",
-   "attribution": "MoonModules · by Ewoud Wijma (2022), mods by Brandon Butler / [@Brandon502](https://github.com/Brandon502) · [natureofcode](https://natureofcode.com/book/chapter-7-cellular-automata/) · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_MoonModules.h)",
+   "line": "Conway's cellular automaton generalized to 2D and 3D, with selectable rulesets and a custom `B#/S#` rule.",
+   "summary": "Cells live, die and are born by counting their live neighbors, on a panel or through a cube. New cells take a neighbor's palette color, and dead ones blur toward the background.",
+   "attribution": "[ewowi](https://github.com/ewowi), [Brandon502](https://github.com/Brandon502), [Nature of Code](https://thecodingtrain.com), [DougHaber](https://github.com/DougHaber)",
+   "guide": [
+    {
+     "title": "Reading a rule",
+     "text": "A rule names the neighbor counts that give birth (B) and those that let a cell survive (S). Conway's `B3/S23` gives birth at exactly 3 and keeps a cell alive at 2 or 3.\n\nHighLife, `B36/S23`, adds a birth at 6, which breeds self-copying replicators, and Maze, `B3/S12345`, grows corridors. `Custom B/S` runs your own, typed into `customRuleString` as `36/23`."
+    },
+    {
+     "title": "A board that never ends",
+     "text": "With `infinite` on, a board that dies out, repeats itself or thins below a twentieth gets a new R-pentomino or glider dropped in, so the show keeps going. Off, it pauses a moment and starts a fresh game, as `startingLifeDensity` fills it."
+    }
+   ],
    "image": "https://moonmodules.org/MoonLight/assets/light/effects/GameOfLifeEffect.gif",
-   "alt": "GameOfLife effect preview",
    "controls": {
     "backgroundColorR": {
-     "line": "The color dead cells fade toward."
+     "line": "The background's red channel, which dead cells fade toward."
     },
     "backgroundColorG": {
-     "line": ""
+     "line": "The background's green channel."
     },
     "backgroundColorB": {
-     "line": ""
+     "line": "The background's blue channel."
     },
     "ruleset": {
-     "line": "The birth and survive rule: Conway, HighLife, Maze and others."
+     "line": "The birth and survive rule, from Conway's to Maze, or your own."
     },
     "customRuleString": {
-     "line": "A custom `B#/S#` rule, read only when `ruleset` = Custom."
+     "line": "Your own rule: birth digits, a slash, survive digits."
     },
     "GameSpeed (FPS)": {
      "line": "Generation rate, where 100 is uncapped."
     },
     "startingLifeDensity": {
-     "line": "% of cells alive at start."
+     "line": "Percent of cells alive at the start."
     },
     "mutationChance": {
-     "line": "% chance a newborn gets a random color."
+     "line": "Percent chance a newborn gets a random color."
     },
     "wrap": {
-     "line": "Toroidal edges (cells wrap around)."
+     "line": "Toroidal edges on a 2D board; a lone glider and a cube run off."
     },
     "disablePause": {
-     "line": "Skip the 1.5 s settle pause between boards."
+     "line": "Skip the 1.5 second settle pause between boards."
     },
     "colorByAge": {
-     "line": "Age from green to red, not a neighbor's palette color."
+     "line": "Age cells from green to red, not a neighbor's palette color."
     },
     "infinite": {
-     "line": "Respawn on stasis (R-pentomino/glider) instead of resetting."
+     "line": "Respawn a pentomino or glider on stasis instead of resetting."
     },
     "blur": {
      "line": "Dead-cell fade strength toward the background color."
@@ -927,16 +932,16 @@
    "tests": "https://github.com/MoonModules/MoonLight/blob/main/test/unit/light/unit_GameOfLifeEffect.cpp"
   },
   "GEQEffect": {
-   "line": "A flat graphic equaliser: the 16 audio bands rise as vertical bars from the bottom, with optional smoothing between bars, per-bar palette coloring, and falling peak markers.",
-   "attribution": "WLED (audio) · by Andrew Tuline (WLED-SR) · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_WLED.h)",
-   "image": "https://raw.githubusercontent.com/scottrbailey/WLED-Utils/master/gifs/FX_139.gif",
-   "alt": "GEQ effect preview",
+   "line": "A flat graphic equalizer: the 16 audio bands rise as vertical bars from the bottom.",
+   "summary": "The bands spread across the columns, each rising to its loudness, with optional smoothing, per-bar palette coloring and falling peak markers. A peak dot sits at the highest the bar recently reached and falls back slowly. [GEQ3D](https://moonmodules.org/MoonLight/moonmodules/light/effects.html#geq3d) draws the same data in perspective.",
+   "attribution": "[Andrew Tuline](https://github.com/atuline), [softhack007](https://github.com/softhack007)",
+   "image": "https://moonmodules.org/MoonLight/assets/light/effects/GEQEffect.gif",
    "controls": {
     "fadeOut": {
-     "line": "How fast bars fade each frame."
+     "line": "How fast bars fade each frame, which is the motion trail."
     },
     "ripple": {
-     "line": "Falling-peak marker decay."
+     "line": "Falling-peak marker decay; 0 removes the marker."
     },
     "colorBars": {
      "line": "Color each bar from the palette by band instead of by row."
@@ -953,26 +958,25 @@
    "tests": "https://github.com/MoonModules/MoonLight/blob/main/test/unit/light/unit_GEQEffect.cpp"
   },
   "GEQ3DEffect": {
-   "line": "A 3D-perspective graphic equaliser: audio bands rise as bars with faked depth, their side/top lines drawn toward a \"projector\" vanishing point (sweeping left↔right) and shortened by `depth`.",
-   "summary": "Bands left of the projector are painted right-to-left, bands right of it left-to-right; per-face darkening (side/top/front) and optional `borders`.",
-   "attribution": "MoonModules (audio) · by [@TroyHacks](https://github.com/troyhacks) (GPLv3) · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_MoonModules.h)",
+   "line": "A 3D-perspective graphic equalizer: audio bands rise as bars with faked depth.",
+   "summary": "Side and top lines run toward a \"projector\" vanishing point that sweeps left and right, shortened by `depth`. Bands left of it paint right-to-left and bands right of it left-to-right, with per-face darkening and optional `borders`. [GEQ](https://moonmodules.org/MoonLight/moonmodules/light/effects.html#geq) draws the same data flat.",
+   "attribution": "[troyhacks](https://github.com/troyhacks)",
    "image": "https://moonmodules.org/MoonLight/assets/light/effects/GEQ3DEffect.gif",
-   "alt": "GEQ3D effect preview",
    "controls": {
     "speed": {
-     "line": "Projector sweep rate."
+     "line": "How fast the projector sweeps, the same position on every device."
     },
     "frontFill": {
-     "line": "Bar front-face fill strength."
+     "line": "How strongly a bar's front face fills."
     },
     "horizon": {
-     "line": "Vanishing-point row the projector sits on."
+     "line": "The row the vanishing point (the projector) sits on."
     },
     "depth": {
-     "line": "How far the side/top perspective lines reach toward the projector."
+     "line": "How far the side and top lines reach toward the projector."
     },
     "numBands": {
-     "line": "Bands shown, fewer for wider bars."
+     "line": "How many bands are shown, where fewer gives wider bars."
     },
     "borders": {
      "line": "Outline each bar."
@@ -986,19 +990,19 @@
    "tests": "https://github.com/MoonModules/MoonLight/blob/main/test/unit/light/unit_GEQ3DEffect.cpp"
   },
   "LavaLampEffect": {
-   "line": "Three slow blobs through a black→red→orange→yellow→white ramp: atmospheric lava look.",
-   "attribution": "MoonLight original (metaball lava lamp)",
+   "line": "Three slow metaball blobs that rise and merge, colored by the active palette.",
+   "summary": "The blobs' summed field indexes the palette, so the lamp takes its colors and a palette dark at its low end keeps the gaps dark. Its sibling [Metaballs](https://moonmodules.org/MoonLight/moonmodules/light/effects.html#metaballs) runs the same field fast and in HSV.",
+   "attribution": "[David Jupijn](https://github.com/risingstep)",
    "image": "https://moonmodules.org/MoonLight/assets/light/effects/LavaLampEffect.gif",
-   "alt": "LavaLamp effect preview",
    "controls": {
     "bpm": {
-     "line": "Blob drift speed."
+     "line": "How fast the blobs drift."
     },
     "radius": {
      "line": "Blob influence radius."
     },
     "intensity": {
-     "line": "Field gain into the black→red→orange→yellow→white ramp."
+     "line": "Field gain into the palette, which is what merges the blobs."
     }
    },
    "role": "effect",
@@ -1008,25 +1012,24 @@
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/LavaLampEffect.h"
   },
   "LinesEffect": {
-   "line": "Sweeps axis-aligned planes in sync; red/green/blue name the X/Y/Z axis: a preview-orientation test pattern.",
-   "attribution": "MoonLight · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h)",
+   "line": "Axis-aligned planes sweep in sync, where red, green and blue name the x, y and z axis.",
+   "summary": "A test pattern for verifying a preview's axis orientation. The `lines` mode sweeps a plane along each axis, and the `panel dots` mode shows a static panel-mapping aid where each panel lights one more dot than the last.",
    "image": "https://moonmodules.org/MoonLight/assets/light/effects/LinesEffect.gif",
-   "alt": "Lines effect preview",
    "controls": {
     "mode": {
-     "line": "`lines` sweeps a plane, `panel dots` walks a dot per panel."
+     "line": "Sweep the planes, or show the static panel dots."
     },
     "speed": {
-     "line": "Sweep BPM, in `lines`."
+     "line": "Sweep speed in BPM, in `lines` mode."
     },
     "axis": {
-     "line": "Which plane sweeps: `all`, `x`, `y` or `z`, in `lines`."
+     "line": "Which plane sweeps: all, x, y or z, in `lines` mode."
     },
     "panelW": {
-     "line": "The panel the dot walks, in `panel dots`."
+     "line": "The panel width the dots walk, in `panel dots` mode."
     },
     "panelH": {
-     "line": "The panel the dot walks, in `panel dots`."
+     "line": "The panel height the dots walk, in `panel dots` mode."
     }
    },
    "role": "effect",
@@ -1036,16 +1039,16 @@
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/LinesEffect.h"
   },
   "LissajousEffect": {
-   "line": "A Lissajous curve traced across the grid from two phase-shifted `sin8`/`cos8` sweeps, palette-colored along its length, with a fading trail.",
-   "attribution": "WLED · by Andrew Tuline (WLED-SR) · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_WLED.h)",
-   "image": "https://raw.githubusercontent.com/scottrbailey/WLED-Utils/master/gifs/FX_176.gif",
-   "alt": "Lissajous effect preview",
+   "line": "A Lissajous curve traced across the grid, palette-colored along its length, with a fading trail.",
+   "summary": "Sample points sweep an x and a y oscillator whose frequencies and shared phase drift, so the closed curve continuously morphs and rotates.",
+   "attribution": "[Andrew Tuline](https://github.com/atuline)",
+   "image": "https://moonmodules.org/MoonLight/assets/light/effects/LissajousEffect.gif",
    "controls": {
     "xFrequency": {
-     "line": "The x-axis sweep frequency (sets the curve's lobe count)."
+     "line": "The x-axis sweep frequency, which sets the curve's lobe count."
     },
     "fadeRate": {
-     "line": "Trail fade per frame."
+     "line": "How fast the trail fades each frame."
     },
     "speed": {
      "line": "How fast the curve's phase advances."
@@ -1059,22 +1062,22 @@
    "tests": "https://github.com/MoonModules/MoonLight/blob/main/test/unit/light/unit_LissajousEffect.cpp"
   },
   "MetaballsEffect": {
-   "line": "`count` blobs orbit via integer sin/cos; metaball field per pixel: bright HSV merge/split.",
-   "attribution": "MoonLight original (metaballs)",
+   "line": "Blobs orbit and merge smoothly, where the summed field of all balls picks each pixel's color and brightness.",
+   "summary": "Each ball contributes a field that falls off with distance, and the sum picks the color. Where two balls approach, their fields add and the blobs appear to merge. [LavaLamp](https://moonmodules.org/MoonLight/moonmodules/light/effects.html#lavalamp) runs the same field slowly through a palette instead.",
+   "attribution": "[David Jupijn](https://github.com/risingstep)",
    "image": "https://moonmodules.org/MoonLight/assets/light/effects/MetaballsEffect.gif",
-   "alt": "Metaballs effect preview",
    "controls": {
     "bpm": {
-     "line": "Orbit speed."
+     "line": "How fast the balls orbit."
     },
     "radius": {
-     "line": "Blob influence radius."
+     "line": "How far each blob's influence reaches."
     },
     "count": {
-     "line": "Number of orbiting balls."
+     "line": "How many balls orbit."
     },
     "hue_shift": {
-     "line": "Rotate the palette index."
+     "line": "Rotates the palette index."
     }
    },
    "role": "effect",
@@ -1085,14 +1088,13 @@
    "tests": "https://github.com/MoonModules/MoonLight/blob/main/test/unit/light/unit_MetaballsEffect.cpp"
   },
   "MoonLiveEffect": {
-   "line": "An effect you write as text on the running device, compiled to native code on the next tick.",
-   "summary": "Pick a script from the library or write your own, and it renders at the speed of a compiled effect. The language is [MoonLive](https://moonmodules.org/MoonLight/moonmodules/light/moonlive.html).\n\nEvery control the script declares, editable live without a recompile.",
-   "attribution": "MoonLight original, on the native-codegen approach of [ESPLiveScript](https://github.com/hpwit/ESPLiveScript) by Yves Bazin",
+   "line": "An effect written as text on the running device, compiled to native code on the next tick.",
+   "summary": "Pick a script from the library or write your own, and it renders at the speed of a compiled effect. Every control the script declares appears on the card and is editable live without a recompile. The language is [MoonLive](https://moonmodules.org/MoonLight/moonmodules/light/moonlive.html).",
+   "attribution": "[Yves Bazin](https://github.com/hpwit)",
    "image": "https://moonmodules.org/MoonLight/assets/light/effects/MoonLiveEffect.gif",
-   "alt": "MoonLive scripted effect preview",
    "controls": {
     "script": {
-     "line": "Which `.mle` file runs, picked from the library and edited here."
+     "line": "Which `.mle` script runs, picked from the library and edited here."
     }
    },
    "role": "effect",
@@ -1103,19 +1105,18 @@
   },
   "NetworkReceiveEffect": {
    "line": "Receives lights over UDP into the layer, from Resolume, Madrix, xLights and LedFx.",
-   "summary": "Sender mapping is one copy alone on its layer, else two mappings, as the status shows. Behind a correcting sender, keep the profile in byte order, brightness 255 and the linear curve.\n\nListens for Art-Net, E1.31 and DDP at once. The end-to-end pair with [Network Send](https://moonmodules.org/MoonLight/moonmodules/light/drivers.html).",
-   "attribution": "MoonLight original (E1.31 / Art-Net receive)",
+   "summary": "It listens for Art-Net, E1.31 and DDP at once, with no protocol control, so whatever a sender speaks works and the status names it. The received lights land in the layer buffer, so they compose with modifiers and blending.",
    "image": "https://moonmodules.org/MoonLight/assets/light/effects/NetworkReceiveEffect.gif",
-   "alt": "NetworkReceive effect preview",
    "controls": {
     "universe_start": {
      "line": "The first incoming universe to map, mirroring the sender."
     },
     "channels_per_universe": {
-     "line": "Bytes each universe maps to; 510 or 512."
+     "line": "Bytes each universe maps to, 510 or 512."
     },
     "mapped_by": {
-     "line": "**receiver** (sent row by row) or **sender** (in wiring order)."
+     "line": "Whether the sender or the receiver maps the frame onto the wiring.",
+     "more": "**receiver** means the frame is sent row by row and this board applies its own wiring. **sender** means the frame is sent in wiring order and placed as it arrives. Behind a correcting sender, keep the profile in byte order, brightness 255 and the linear curve; the end-to-end pair is [NetworkSend](https://moonmodules.org/MoonLight/moonmodules/light/drivers.html#networksend)."
     },
     "packets_per_s": {
      "line": "Packets received in the last second, read-only."
@@ -1132,19 +1133,20 @@
    "tests": "https://github.com/MoonModules/MoonLight/blob/main/test/unit/light/unit_NetworkReceiveEffect.cpp"
   },
   "NoiseEffect": {
-   "line": "A gradient-noise field indexed straight into the palette: the plainest way to turn the field into light, and the effect every other noise effect is a variation on.",
-   "attribution": "FastLED · inoise field (Mark Kriegsman); the `morph` form from WLED via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_WLED.h)",
+   "line": "A gradient-noise field indexed straight into the palette, the plainest way to turn noise into light.",
+   "summary": "It is the effect every other noise effect is a variation on. The `motion` control decides what moves, which is the whole character of the effect.",
+   "attribution": "[Mark Kriegsman](https://github.com/kriegsman)",
    "image": "https://moonmodules.org/MoonLight/assets/light/effects/NoiseEffect.gif",
-   "alt": "Noise effect preview",
    "controls": {
     "motion": {
-     "line": "`drift` slides the field across the fixture, `morph` changes it."
+     "line": "Whether the field drifts across the fixture or morphs in place.",
+     "more": "`drift` slides the field across the fixture like weather, each axis at its own rate. `morph` holds the field still and changes it in place, which on a panel is the plasma wash."
     },
     "scale": {
-     "line": "Spatial frequency: low is broad blobs, high is fine detail."
+     "line": "The field's spatial frequency: low is broad blobs, high is fine detail."
     },
     "bpm": {
-     "line": "How fast it moves."
+     "line": "How fast the field moves."
     }
    },
    "role": "effect",
@@ -1155,13 +1157,13 @@
    "tests": "https://github.com/MoonModules/MoonLight/blob/main/test/unit/light/unit_NoiseEffect.cpp"
   },
   "NoiseMeterEffect": {
-   "line": "An audio VU meter rendered as a noise bar: the volume sets how many rows light from the bottom, each row colored by drifting Perlin noise, filling the full width and depth.",
-   "attribution": "WLED (audio) · by Andrew Tuline (WLED-SR) · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_WLED.h)",
-   "image": "https://raw.githubusercontent.com/scottrbailey/WLED-Utils/master/gifs/FX_136.gif",
-   "alt": "NoiseMeter effect preview",
+   "line": "An audio VU meter rendered as a noise bar, where the volume sets how many rows light from the bottom.",
+   "summary": "Each row is colored by drifting Perlin noise, so a loud moment fills the full width and depth bottom-up with a drifting gradient rather than a flat bar.",
+   "attribution": "[Andrew Tuline](https://github.com/atuline), [Perlin noise](https://en.wikipedia.org/wiki/Perlin_noise)",
+   "image": "https://moonmodules.org/MoonLight/assets/light/effects/NoiseMeterEffect.gif",
    "controls": {
     "fadeRate": {
-     "line": "Trail decay per frame."
+     "line": "How fast the trail decays each frame."
     },
     "width": {
      "line": "How strongly the volume drives the bar height."
@@ -1175,25 +1177,25 @@
    "tests": "https://github.com/MoonModules/MoonLight/blob/main/test/unit/light/unit_NoiseMeterEffect.cpp"
   },
   "PaintBrushEffect": {
-   "line": "Audio-reactive brush strokes: lines whose 3D endpoints oscillate on the beat (`beatsin8`, audio-band timebase), each stroke shortened to a band-magnitude length so the moving tip sweeps a curve over the fading field.",
-   "attribution": "MoonModules (audio) · by [@TroyHacks](https://github.com/troyhacks) (GPLv3) · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_MoonModules.h)",
+   "line": "Audio-reactive brush strokes: lines whose 3D endpoints oscillate on the beat over a fading field.",
+   "summary": "Each stroke is shortened to a band-magnitude length, so the moving tip sweeps a curve. The field fades each frame, so the lines leave brush strokes rather than redrawing cleanly, and silence fades the field to black.",
+   "attribution": "[troyhacks](https://github.com/troyhacks)",
    "image": "https://moonmodules.org/MoonLight/assets/light/effects/PaintBrushEffect.gif",
-   "alt": "PaintBrush effect preview",
    "controls": {
     "oscillatorOffset": {
-     "line": "Phase-spread between the oscillating endpoints."
+     "line": "The phase spread between the oscillating endpoints."
     },
     "numLines": {
-     "line": "Parallel animated strokes."
+     "line": "How many parallel strokes are animated."
     },
     "fadeRate": {
-     "line": "Background decay per frame, higher for shorter strokes."
+     "line": "How fast the background decays, higher for shorter strokes."
     },
     "minLength": {
      "line": "A stroke draws only if longer than this, so quiet bands stay off."
     },
     "color_chaos": {
-     "line": "Per-line random hue vs a per-band gradient."
+     "line": "Random hue per line instead of a per-band gradient."
     },
     "phase_chaos": {
      "line": "Random per-frame phase jitter."
@@ -1208,21 +1210,21 @@
   },
   "ParticlesEffect": {
    "line": "A swarm of drifting particles with persistent fading trails.",
-   "attribution": "MoonLight · by WildCats08 / [@Brandon502](https://github.com/Brandon502) · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h)",
+   "summary": "Points drift, bounce off the walls and leave a fading trail behind them.",
+   "attribution": "[Brandon502](https://github.com/Brandon502), [Particle system](https://en.wikipedia.org/wiki/Particle_system), [David Jupijn](https://github.com/risingstep)",
    "image": "https://moonmodules.org/MoonLight/assets/light/effects/ParticlesEffect.gif",
-   "alt": "Particles effect preview",
    "controls": {
     "count": {
-     "line": "Number of particles."
+     "line": "How many particles drift."
     },
     "speed": {
-     "line": "Drift velocity."
+     "line": "The drift velocity."
     },
     "fade": {
-     "line": "Trail persistence (higher = longer tails)."
+     "line": "How long the trails persist, higher is longer tails."
     },
     "hue_shift": {
-     "line": "Rotate every particle's hue."
+     "line": "Rotates every particle's hue."
     }
    },
    "role": "effect",
@@ -1235,7 +1237,7 @@
   "FseqPlayerEffect": {
    "line": "An FSEQ show played from a file: the frame-by-frame channel data xLights and Falcon Player write.",
    "summary": "A show, uncompressed FSEQ v2, lands where a sender-mapped [Network Receive](https://moonmodules.org/MoonLight/moonmodules/light/effects.html#networkreceive) stream does, so alone on its layer it reaches the lights in one copy on any layout. Reading the file is the next step, and its status says so.",
-   "attribution": "FSEQ v2 as Falcon Player documents it in FSEQ_Sequence_File_Format.txt.",
+   "attribution": "[FPP](https://github.com/FalconChristmas/fpp)",
    "image": "https://moonmodules.org/MoonLight/assets/light/effects/FseqPlayerEffect.gif",
    "alt": "The reference sweep fseq_play writes, the show an FSEQ player plays",
    "controls": {
@@ -1278,22 +1280,22 @@
    "tests": "https://github.com/MoonModules/MoonLight/blob/main/test/unit/light/unit_PictureEffect.cpp"
   },
   "PlasmaEffect": {
-   "line": "Summed sine waves on orthogonal + diagonal axes; large rolling blobs (3D on volumetric layouts).",
-   "attribution": "FastLED / WLED lineage (classic plasma)",
+   "line": "Summed sine waves on orthogonal and diagonal axes make large rolling blobs, in 3D on volumetric layouts.",
+   "summary": "Four sines are summed per pixel, or five in a volume, with their average picking the palette index. A larger scale means a smaller per-pixel step, so the blobs grow bigger and calmer.",
+   "attribution": "[FastLED](https://github.com/FastLED/FastLED), [WLED](https://github.com/wled/WLED), [David Jupijn](https://github.com/risingstep)",
    "image": "https://moonmodules.org/MoonLight/assets/light/effects/PlasmaEffect.gif",
-   "alt": "Plasma effect preview",
    "controls": {
     "bpm": {
-     "line": "Roll speed."
+     "line": "How fast the field rolls."
     },
     "scale_x": {
-     "line": "Blob size on each axis; larger is bigger and calmer."
+     "line": "Blob size along x; larger is bigger and calmer."
     },
     "scale_y": {
-     "line": "Blob size on each axis; larger is bigger and calmer."
+     "line": "Blob size along y, which the depth axis reuses."
     },
     "hue_shift": {
-     "line": "Rotate the palette index."
+     "line": "Rotates the palette index."
     }
    },
    "role": "effect",
@@ -1304,31 +1306,31 @@
    "tests": "https://github.com/MoonModules/MoonLight/blob/main/test/unit/light/unit_PlasmaEffect.cpp"
   },
   "PraxisEffect": {
-   "line": "An algorithmic palette pattern driven by two beat oscillators (a macro and a micro mutator) whose frequencies and ranges reshape the hue field over time.",
-   "attribution": "MoonLight · by MONSOONO / @Flavourdynamics · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h)",
+   "line": "An algorithmic palette pattern driven by two beat oscillators, a macro and a micro mutator, whose frequencies and ranges reshape the hue field over time.",
+   "summary": "Each pixel's hue comes from the two mutators combined with its own position, so the pattern continually stretches, shears and rolls across the grid.",
+   "attribution": "[MONSOONO](https://github.com/Flavourdynamics)",
    "image": "https://moonmodules.org/MoonLight/assets/light/effects/PraxisEffect.gif",
-   "alt": "Praxis effect preview",
    "controls": {
     "speed": {
      "line": "How fast the pattern advances."
     },
     "macroMutatorFreq": {
-     "line": "The coarse mutator's beat rate and range."
+     "line": "The coarse mutator's beat rate."
     },
     "macroMutatorMin": {
-     "line": ""
+     "line": "The coarse mutator's range minimum."
     },
     "macroMutatorMax": {
-     "line": ""
+     "line": "The coarse mutator's range maximum."
     },
     "microMutatorFreq": {
-     "line": "The fine mutator's beat rate and range."
+     "line": "The fine mutator's beat rate."
     },
     "microMutatorMin": {
-     "line": ""
+     "line": "The fine mutator's range minimum."
     },
     "microMutatorMax": {
-     "line": ""
+     "line": "The fine mutator's range maximum."
     }
    },
    "role": "effect",
@@ -1339,14 +1341,18 @@
    "tests": "https://github.com/MoonModules/MoonLight/blob/main/test/unit/light/unit_PraxisEffect.cpp"
   },
   "PulseEffect": {
-   "line": "Shells expanding from a drifting origin, one per beat: a pair of fronts on a strip, a ring on a panel, a sphere in a volume.",
-   "summary": "Sound fires one and its pitch colors it, and an idle clock keeps them arriving in a silent room. The effect a device boots with.\n\nCompare with [BeatRipples](https://moonmodules.org/MoonLight/moonmodules/light/effects.html#beatripples), which simulates water on a plane. This one draws a moving front, which carries it into 1D and 3D.",
-   "attribution": "MoonLight original",
+   "line": "Shells expand from a drifting origin, one per beat: a pair of fronts on a strip, a ring on a panel, a sphere in a volume.",
+   "summary": "Sound fires a shell and its pitch colors it, and an idle clock keeps them arriving in a silent room.\n\nCompare with [BeatRipples](https://moonmodules.org/MoonLight/moonmodules/light/effects.html#beatripples), which simulates water on a plane, where this one draws a moving front that carries it into 1D and 3D.",
+   "guide": [
+    {
+     "title": "At boot",
+     "text": "It is the effect a fresh device starts with: one beat is unmistakable, and the drifting origin shows the device running before any sound arrives."
+    }
+   ],
    "image": "https://moonmodules.org/MoonLight/assets/light/effects/PulseEffect.gif",
-   "alt": "Pulse effect preview",
    "controls": {
     "bpm": {
-     "line": "Pulses a minute while nothing is heard, where 0 waits for sound alone."
+     "line": "Pulses a minute while nothing is heard; 0 waits for sound alone."
     },
     "speed": {
      "line": "How fast a shell crosses the layout, at any layout size."
@@ -1355,10 +1361,10 @@
      "line": "The shell's width, as a share of the layout rather than in lights."
     },
     "audioGain": {
-     "line": "How strongly sound fires a pulse, where 0 ignores it."
+     "line": "How strongly sound fires a pulse; 0 ignores it."
     },
     "drift": {
-     "line": "How far the origin wanders from the center, where 0 pins it there."
+     "line": "How far the origin wanders from the center; 0 pins it there."
     }
    },
    "role": "effect",
@@ -1368,13 +1374,13 @@
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/PulseEffect.h"
   },
   "RainbowEffect": {
-   "line": "Diagonal animated rainbow: always-visible default/test effect.",
-   "attribution": "FastLED · Mark Kriegsman (rainbow) · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_FastLED.h)",
+   "line": "A diagonal animated rainbow: the always-visible default and test effect.",
+   "summary": "A pixel's hue comes from its own x plus y, walked by the clock, so the bands run diagonally.",
+   "attribution": "[Mark Kriegsman](https://github.com/kriegsman)",
    "image": "https://moonmodules.org/MoonLight/assets/light/effects/RainbowEffect.gif",
-   "alt": "Rainbow effect preview",
    "controls": {
     "speed": {
-     "line": "Animation BPM (one full hue cycle per beat)."
+     "line": "Animation BPM: one full hue cycle per beat."
     }
    },
    "role": "effect",
@@ -1386,9 +1392,8 @@
   },
   "RandomEffect": {
    "line": "Lights one random light per frame in a random palette color over a fading background: a sparse, palette-tinted sparkle.",
-   "attribution": "MoonLight · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h)",
+   "summary": "The buffer dims a little, then one light takes a random palette color, and over many frames that scatters fading sparkles across the whole volume. `fade` sets the density: less lets them linger and fill, more leaves quick specks.",
    "image": "https://moonmodules.org/MoonLight/assets/light/effects/RandomEffect.gif",
-   "alt": "Random effect preview",
    "controls": {
     "fade": {
      "line": "How fast prior sparkles fade to black."
@@ -1402,13 +1407,13 @@
    "tests": "https://github.com/MoonModules/MoonLight/blob/main/test/unit/light/unit_RandomEffect.cpp"
   },
   "RingsEffect": {
-   "line": "Expanding concentric rings from random centers, additive overlap (calm defaults).",
-   "attribution": "MoonLight original (concentric rings)",
+   "line": "Expanding concentric rings from random centers, with additive overlap and calm defaults.",
+   "summary": "Each ring grows continuously and respawns somewhere fresh once it leaves the grid. Several overlap, and where two rings cross their brightness sums. [Ripples](https://moonmodules.org/MoonLight/moonmodules/light/effects.html#ripples) holds the sine-wave water surface, where this one is the concentric form.",
+   "attribution": "[David Jupijn](https://github.com/risingstep)",
    "image": "https://moonmodules.org/MoonLight/assets/light/effects/RingsEffect.gif",
-   "alt": "Rings effect preview",
    "controls": {
     "count": {
-     "line": "Number of concentric rings."
+     "line": "How many concentric rings; a few slow ones read as clean circles."
     },
     "speed": {
      "line": "Expansion rate."
@@ -1417,7 +1422,7 @@
      "line": "Ring band width."
     },
     "hue_shift": {
-     "line": "Rotate every ring's hue."
+     "line": "Rotates every ring's hue."
     }
    },
    "role": "effect",
@@ -1427,16 +1432,16 @@
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/RingsEffect.h"
   },
   "RipplesEffect": {
-   "line": "Distance-from-center sets a per-column wave phase; the lit surface ripples like water.",
-   "attribution": "MoonLight · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h)",
+   "line": "Distance from the center sets a per-column wave phase, so the lit surface ripples like water.",
+   "summary": "The effect writes a height across y, so it wants real depth to read as a surface, and a flat layout collapses it to a single row. Its sibling [WaterRipple](https://moonmodules.org/MoonLight/moonmodules/light/effects.html#waterripple) simulates a real wave equation on a plane.",
+   "attribution": "[David Jupijn](https://github.com/risingstep)",
    "image": "https://moonmodules.org/MoonLight/assets/light/effects/RipplesEffect.gif",
-   "alt": "Ripples effect preview",
    "controls": {
     "speed": {
-     "line": "Wave animation rate (0 = frozen, 99 = fast)."
+     "line": "Wave animation rate; 0 freezes it."
     },
     "interval": {
-     "line": "Wavefront spacing (low = tight rings, high = wide)."
+     "line": "Wavefront spacing; low is tight rings, high is wide."
     }
    },
    "role": "effect",
@@ -1447,9 +1452,9 @@
   },
   "RubiksCubeEffect": {
    "line": "A 3D Rubik's Cube projected onto the volume: it scrambles, then plays its solution back one turn at a time, the six faces in their standard colors.",
-   "attribution": "MoonLight · by WildCats08 / [@Brandon502](https://github.com/Brandon502) · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h)",
+   "summary": "Every voxel takes the color of the nearest outer face, which is what makes a solid read as a cube. The cube is a full six-face model with the real face, row and column rotations, and `cubeSize` of 2 through 8 gives real cubes where 1 is a single block.",
+   "attribution": "[Brandon502](https://github.com/Brandon502)",
    "image": "https://moonmodules.org/MoonLight/assets/light/effects/RubiksCubeEffect.gif",
-   "alt": "RubiksCube effect preview",
    "controls": {
     "turnsPerSecond": {
      "line": "How fast the cube turns."
@@ -1472,19 +1477,18 @@
    "tests": "https://github.com/MoonModules/MoonLight/blob/main/test/unit/light/unit_RubiksCubeEffect.cpp"
   },
   "SineEffect": {
-   "line": "R/G/B each follow a sine along one axis at 120° phase offset: a glowing, scrolling color box.",
-   "attribution": "MoonLight (Sinus, AI-generated) · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h)",
+   "line": "Red, green and blue each follow a sine along one axis at a third of a turn apart: a glowing, scrolling color box.",
+   "summary": "A flat layout holds its depth term constant, which reads as a red and green wash.",
    "image": "https://moonmodules.org/MoonLight/assets/light/effects/SineEffect.gif",
-   "alt": "Sine effect preview",
    "controls": {
     "frequency": {
-     "line": "Spatial frequency, waves across the box."
+     "line": "How many waves cross the box."
     },
     "amplitude": {
      "line": "Peak brightness."
     },
     "bpm": {
-     "line": "Scroll speed."
+     "line": "How fast the field scrolls."
     }
    },
    "role": "effect",
@@ -1495,34 +1499,33 @@
    "tests": "https://github.com/MoonModules/MoonLight/blob/main/test/unit/light/unit_SineEffect.cpp"
   },
   "SolidEffect": {
-   "line": "A flat fill with five color modes: a plain RGB(W) color, the active palette spread across the lights, an RMS-averaged single palette color, or the palette banded along the grid's rows or columns.",
-   "attribution": "MoonLight · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h)",
+   "line": "A flat fill with five color modes: a plain RGB(W) color, the palette spread across the lights, one RMS-averaged palette color, or the palette banded along rows or columns.",
+   "summary": "Brightness scales the flat and palette-spread results.",
    "image": "https://moonmodules.org/MoonLight/assets/light/effects/SolidEffect.gif",
-   "alt": "Solid effect preview",
    "controls": {
     "red": {
-     "line": "The flat color in `RGB(W)` mode."
+     "line": "The flat color's red channel."
     },
     "green": {
-     "line": "The flat color in `RGB(W)` mode."
+     "line": "Its green channel."
     },
     "blue": {
-     "line": "The flat color in `RGB(W)` mode."
+     "line": "Its blue channel."
     },
     "white": {
-     "line": "The flat color in `RGB(W)` mode."
+     "line": "Its white channel, written only where the light carries one."
     },
     "brightness": {
-     "line": "Scales the flat and palette-spread output."
+     "line": "Scales the flat and palette-spread results."
     },
     "colorMode": {
-     "line": "Flat `RGB(W)`, or the palette spread, averaged, or banded."
+     "line": "Which of the five color modes fills the layer."
     },
     "minRGB": {
-     "line": "In the band modes, drop palette entries darker than this floor."
+     "line": "The band modes drop palette entries darker than this on every channel."
     },
     "randomColors": {
-     "line": "In the band modes, shuffle the surviving palette entries."
+     "line": "The band modes shuffle the surviving entries, reproducibly."
     }
    },
    "role": "effect",
@@ -1534,10 +1537,9 @@
   },
   "SdfShapesEffect": {
    "line": "A circle and a box orbit and melt into each other, drawn as signed distance fields rather than outlines.",
-   "summary": "One distance per pixel yields three looks at once: a smooth fill, an outline, and a glow falling off into the field.\n\nMeasured on an ESP32-S3 at 128×128: 20 fps, 728 cycles/pixel using the true-distance form, alongside StarSky (692) and Metaballs (647) at the same size.",
-   "attribution": "MoonLight original, after Iñigo Quilez's distance-function catalog and polynomial smooth-minimum (iquilezles.org)",
+   "summary": "One distance per pixel yields three looks at once: a smooth fill, an outline, and a glow falling off into the field. The two shapes flow together like mercury rather than merely overlapping.",
+   "attribution": "[Iñigo Quilez](https://iquilezles.org/)",
    "image": "https://moonmodules.org/MoonLight/assets/light/effects/SdfShapesEffect.gif",
-   "alt": "SdfShapes effect preview",
    "controls": {
     "bpm": {
      "line": "Orbit speed."
@@ -1546,16 +1548,16 @@
      "line": "Circle radius, as a fraction of the short side."
     },
     "boxSize": {
-     "line": "Box half-extent, same scale."
+     "line": "Box half-extent, on the same scale."
     },
     "blend": {
-     "line": "Melt radius; 0 unions the shapes hard."
+     "line": "The melt radius, where 0 unions the shapes hard."
     },
     "outline": {
-     "line": "0 fills the shape; higher draws an outline of that width."
+     "line": "Outline width, where 0 fills the shape."
     },
     "glow": {
-     "line": "Tint the field around the shape by distance."
+     "line": "Tint the surrounding field by its distance from the shape."
     }
    },
    "role": "effect",
@@ -1566,13 +1568,12 @@
   },
   "AuroraEffect": {
    "line": "Several noise fields, each on its own clock, read in polar coordinates and composited into curtains of light.",
-   "summary": "Nothing is simulated: layers of one field at different scales interfere, and that is what reads as curtains folding through one another. The strongest layer at each pixel wins, so they stay distinct rather than averaging into haze.",
-   "attribution": "MoonLight original, in the shader vocabulary Stefan Petrick made recognizable in the LED world",
+   "summary": "Nothing is simulated: layers of one field at different scales interfere, and that is what reads as curtains folding through one another. `polarTable` and `polarTable16` choose the polar address table and its precision.",
+   "attribution": "[Stefan Petrick](https://github.com/StefanPetrick)",
    "image": "https://moonmodules.org/MoonLight/assets/light/effects/AuroraEffect.gif",
-   "alt": "Aurora effect preview",
    "controls": {
     "speed": {
-     "line": "Master rate; every layer scales from it, and 0 freezes it."
+     "line": "Master rate, every layer scales from it; 0 freezes it."
     },
     "scale": {
      "line": "Noise cells across the grid; low is broad, high is fine."
@@ -1581,7 +1582,7 @@
      "line": "How many fields are composited, and the main cost knob."
     },
     "warp": {
-     "line": "How far the field displaces its own angle, folding a curtain over."
+     "line": "How far the field displaces its own sample angle."
     },
     "twist": {
      "line": "How much the radius shears the angle, giving the curtains their lean."
@@ -1605,10 +1606,19 @@
   },
   "PolarNoiseEffect": {
    "line": "A warped noise field addressed by angle and radius, folded into a kaleidoscope.",
-   "summary": "The field turns and breathes around the center rather than scrolling past it.\n\nCost scales with `octaves` and `warp`: at `warp` > 0 and `octaves` 2 it is roughly 4 noise samples per pixel. On a large wall set `octaves` to 1 or `warp` to 0, which degrades to a plain polar noise that still reads well.",
-   "attribution": "MoonLight original, after Stefan Petrick's polar/noise vocabulary and Iñigo Quilez's domain warping",
+   "summary": "Cost scales with `octaves` and `warp`: at `warp` above 0 and `octaves` 2 it is roughly 4 noise samples per pixel. On a large wall set `octaves` to 1 or `warp` to 0, which degrades to a plain polar noise that still reads well.",
+   "attribution": "[Stefan Petrick](https://github.com/StefanPetrick), [Iñigo Quilez](https://iquilezles.org/), [Polar coordinates](https://en.wikipedia.org/wiki/Polar_coordinate_system)",
+   "guide": [
+    {
+     "title": "polarTable",
+     "text": "Each pixel's angle and radius come from a table at 2 bytes a pixel."
+    },
+    {
+     "title": "polarTable16",
+     "text": "The table at full precision, 4 bytes a pixel."
+    }
+   ],
    "image": "https://moonmodules.org/MoonLight/assets/light/effects/PolarNoiseEffect.gif",
-   "alt": "PolarNoise effect preview",
    "controls": {
     "bpm": {
      "line": "How fast the field drifts."
@@ -1637,31 +1647,30 @@
   },
   "WaterRippleEffect": {
    "line": "A propagating wave simulation: drops land, their rings spread outward, reflect off the edges and interfere where they cross.",
-   "summary": "The crossing is what a drawn ripple cannot fake, because two rings meeting have to add and cancel.\n\nDistinct from [Ripples](https://moonmodules.org/MoonLight/moonmodules/light/effects.html#ripples), which draws clean concentric circles; this behaves like water.",
-   "attribution": "MoonLight original, on Hugo Elias's water surface algorithm",
+   "summary": "The crossing is what a drawn ripple cannot fake, because two rings meeting have to add and cancel. Distinct from [Ripples](https://moonmodules.org/MoonLight/moonmodules/light/effects.html#ripples), which draws clean concentric circles; this behaves like water.",
+   "attribution": "Hugo Elias",
    "image": "https://moonmodules.org/MoonLight/assets/light/effects/WaterRippleEffect.gif",
-   "alt": "WaterRipple effect preview",
    "controls": {
     "speed": {
-     "line": "Simulation steps per second: how fast the water itself moves."
+     "line": "Simulation steps a second, which is how fast the water itself moves."
     },
     "dropRate": {
-     "line": "How often drops land, in time rather than per frame."
+     "line": "How often drops land, where 0 leaves the surface still."
     },
     "damping": {
-     "line": "How fast waves lose energy; higher is calmer water."
+     "line": "How fast waves lose energy, so higher is calmer water."
     },
     "strength": {
      "line": "How hard a drop hits."
     },
     "colorByHeight": {
-     "line": "Color by height, so crests and troughs read differently."
+     "line": "Color the surface by height rather than by brightness alone."
     },
     "hueBase": {
-     "line": "Where the still surface sits, and how far waves go."
+     "line": "Where in the palette the still surface sits."
     },
     "hueSpread": {
-     "line": "Where the still surface sits, and how far waves go."
+     "line": "How far a crest and a trough reach from that."
     }
    },
    "role": "effect",
@@ -1672,16 +1681,15 @@
   },
   "FluidEffect": {
    "line": "Light poured into a simulated medium and carried by it.",
-   "summary": "Every other flow here is a function of position and time; this one is state, so a jet fired now changes where everything downstream goes for seconds afterwards.\n\nOn a cube every depth slice is its own medium, so the slices differ. Sized for the desktop and the P4.",
-   "attribution": "MoonLight original, after Stam 1999 \"Stable Fluids\"",
+   "summary": "Every other flow here is a function of position and time. This one is state, so a jet fired now changes where everything downstream goes for seconds afterwards. On a cube every depth slice is its own medium, so the slices differ. Sized for the desktop and the P4; an S3 runs it on a small grid.",
+   "attribution": "[Jos Stam](https://en.wikipedia.org/wiki/Jos_Stam)",
    "image": "https://moonmodules.org/MoonLight/assets/light/effects/FluidEffect.gif",
-   "alt": "Fluid effect preview",
    "controls": {
     "jets": {
      "line": "How many places light is poured in."
     },
     "force": {
-     "line": "How hard each one pushes the medium."
+     "line": "How hard each jet pushes the medium."
     },
     "swirl": {
      "line": "How fast the jets sweep, which is what stirs vortices."
@@ -1704,32 +1712,37 @@
    "tests": "https://github.com/MoonModules/MoonLight/blob/main/test/unit/light/unit_Fluid.cpp"
   },
   "NebulaEffect": {
-   "line": "A noise field decides where light is born, a curl flow decides where it goes, and between them the cloud keeps folding into itself.",
-   "summary": "The emitter is a field rather than a handful of dots, so light enters everywhere at once and the flow shapes a whole cloud instead of drawing trails.\n\nHeld at 16 bits and dithered on the way out, which keeps a slow fade smooth.",
-   "attribution": "MoonLight original, composing the noise-field and curl-flow kernels: the contrast window is Aurora's, in the shader vocabulary Stefan Petrick made recognizable in the LED world, and the flow is Bridson's curl noise (SIGGRAPH 2007)",
+   "line": "A noise field decides where light is born, a curl flow decides where it goes, and the cloud keeps folding into itself.",
+   "summary": "The emitter is a field rather than a handful of dots, so light enters everywhere at once and the flow shapes a whole cloud instead of drawing trails. The cloud is held at 16 bits and dithered on the way out, which keeps a slow fade smooth.",
+   "attribution": "[Stefan Petrick](https://github.com/StefanPetrick), [Robert Bridson](https://www.cs.ubc.ca/~rbridson/docs/bridson-siggraph2007-curlnoise.pdf)",
+   "guide": [
+    {
+     "title": "Cheaper fields",
+     "text": "`fieldScale` and `fieldRate` make the field cheaper, smaller or less often computed. That costs detail, not smoothness, since the flow still carries the cloud every frame."
+    }
+   ],
    "image": "https://moonmodules.org/MoonLight/assets/light/effects/NebulaEffect.gif",
-   "alt": "Nebula effect preview",
    "controls": {
     "speed": {
      "line": "How fast the medium moves, and with it the whole cloud."
     },
     "scale": {
-     "line": "The field's cell size; low is broad clouds, high is wisps."
+     "line": "The field's cell size: low is broad clouds, high is wisps."
     },
     "contrast": {
      "line": "What fraction of the field is bright enough to be born."
     },
     "persistence": {
-     "line": "How long light survives once it is in the flow, as a half-life."
+     "line": "How long light survives in the flow, as a half-life."
     },
     "octaves": {
      "line": "Detail within the field, and its cost knob."
     },
     "fieldScale": {
-     "line": "Compute the field at half or quarter resolution and stretch it."
+     "line": "Compute the field at a fraction of the grid and stretch it."
     },
     "fieldRate": {
-     "line": "Recompute the field every N frames; the flow still runs each one."
+     "line": "Recompute the field every N frames."
     }
    },
    "role": "effect",
@@ -1740,10 +1753,9 @@
   },
   "TrailsEffect": {
    "line": "Dots thrown into a moving medium, leaving tails the flow carries and bends.",
-   "summary": "Nothing draws a tail: it is the previous frames' dots, transported along a velocity field and dimmed, which is why the flow's shape is visible in it. On a cube each depth slice gets its own flow.\n\nThe trail plane is 16-bit, which is what lets a tail fade smoothly rather than stepping.",
-   "attribution": "MoonLight original, in the flow-field idiom (4wheeljive's FlowFields, from a Stefan Petrick concept), with Stam's backward advection for the transport",
+   "summary": "Nothing draws a tail: it is the previous frames' dots, transported along a velocity field and dimmed, which is why the flow's shape is visible in it. On a cube each depth slice gets its own flow.",
+   "attribution": "[4wheeljive](https://github.com/4wheeljive), [Stefan Petrick](https://github.com/StefanPetrick), [Jos Stam](https://en.wikipedia.org/wiki/Jos_Stam)",
    "image": "https://moonmodules.org/MoonLight/assets/light/effects/TrailsEffect.gif",
-   "alt": "Trails effect preview",
    "controls": {
     "speed": {
      "line": "How fast the medium moves, and with it every tail."
@@ -1752,7 +1764,7 @@
      "line": "How many emitters are throwing light in."
     },
     "scale": {
-     "line": "The flow field's cell size; low is broad sweeps, high is eddies."
+     "line": "The flow field's cell size. Low gives broad sweeps, high gives eddies."
     },
     "persistence": {
      "line": "How long a tail survives, as a half-life."
@@ -1770,10 +1782,9 @@
   },
   "ColorTrailsEffect": {
    "line": "Emitters pouring color into a flow that carries and folds it.",
-   "summary": "There is no velocity field: one noise value shifts each row sideways, one shifts each column, and the two shears compose into a swirling current. A large grid is steered by a few hundred numbers, which is why it runs where a solver does not.\n\nCompare with [Fluid](https://moonmodules.org/MoonLight/moonmodules/light/effects.html#fluid): the solver when the medium is the subject, this when the color is.",
-   "attribution": "MoonLight · concept by [Stefan Petrick](https://github.com/StefanPetrick), composition by Jeff (mindful_stone / [4wheeljive](https://github.com/4wheeljive)) in [FlowFields](https://github.com/4wheeljive/FlowFields/blob/main/src/flows/flow_noise.h) · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_FastLED.h)",
+   "summary": "There is no velocity field: one noise value shifts each row sideways, one shifts each column, and the two shears compose into a swirling current. A large grid is steered by a few hundred numbers, which is why it runs where a solver does not. Compare with [Fluid](https://moonmodules.org/MoonLight/moonmodules/light/effects.html#fluid): the solver when the medium is the subject, this when the color is.",
+   "attribution": "[Stefan Petrick](https://github.com/StefanPetrick), [4wheeljive](https://github.com/4wheeljive)",
    "image": "https://moonmodules.org/MoonLight/assets/light/effects/ColorTrailsEffect.gif",
-   "alt": "ColorTrails effect preview",
    "controls": {
     "speed": {
      "line": "How fast the emitters travel."
@@ -1797,10 +1808,10 @@
      "line": "The orbit's radius and the Lissajous figure's reach."
     },
     "mode": {
-     "line": "All three emitters, or one at a time to see what each contributes."
+     "line": "All three emitters, or one at a time to see what each adds."
     },
     "flowType": {
-     "line": "The field carrying them: `Noise`, `Radial out`, `Radial in`."
+     "line": "The field carrying them: Noise, Radial out or Radial in."
     }
    },
    "role": "effect",
@@ -1813,9 +1824,8 @@
   "TunnelEffect": {
    "line": "A texture mapped onto the inside of an infinite tube, so the viewer appears to fly down it forever.",
    "summary": "Nothing is 3D: the angle around the center is one texture coordinate and the reciprocal of the distance is the other, which is perspective for the price of a divide.",
-   "attribution": "MoonLight original, on the standard demoscene tunnel",
+   "attribution": "[Stefan Petrick](https://github.com/StefanPetrick), [Iñigo Quilez](https://iquilezles.org/)",
    "image": "https://moonmodules.org/MoonLight/assets/light/effects/TunnelEffect.gif",
-   "alt": "Tunnel effect preview",
    "controls": {
     "bpm": {
      "line": "How fast the tunnel flies past."
@@ -1827,13 +1837,13 @@
      "line": "Rotation per unit depth, so the tunnel corkscrews."
     },
     "segments": {
-     "line": "Kaleidoscope the wall; 1 leaves it plain."
+     "line": "Kaleidoscope the wall, where 1 leaves it plain."
     },
     "octaves": {
      "line": "Wall texture detail, and the cost knob."
     },
     "vignette": {
-     "line": "Darken toward the vanishing point so it reads as receding."
+     "line": "Darken toward the vanishing point, so it reads as receding."
     }
    },
    "role": "effect",
@@ -1843,11 +1853,9 @@
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/TunnelEffect.h"
   },
   "EchoEffect": {
-   "line": "The previous frame fed back through a zoom and rotation, dimmed, with a bright source drawn on top: trails that spiral away from themselves, like a camera pointed at its own monitor.",
-   "summary": "Shows that feedback is not a primitive: once the grid can be read as a texture (`sampleWrap`), the whole family of trails, zoom blur and smear is a few lines.",
-   "attribution": "MoonLight original, on video feedback and the standard texture-feedback shader shape",
+   "line": "The previous frame fed back through a zoom and rotation, dimmed, with a bright source drawn on top.",
+   "summary": "The trails spiral away from themselves, like a camera pointed at its own monitor. Feedback is not a primitive: once the grid can be read as a texture (`sampleWrap`), the whole family of trails, zoom blur and smear is a few lines.",
    "image": "https://moonmodules.org/MoonLight/assets/light/effects/EchoEffect.gif",
-   "alt": "Echo effect preview",
    "controls": {
     "bpm": {
      "line": "How fast the source orbits."
@@ -1872,11 +1880,9 @@
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/EchoEffect.h"
   },
   "DissolveEffect": {
-   "line": "Two color fields trade places pixel by pixel in an order that looks random but is computed, so the transition needs no per-pixel state and no shuffled index list.",
-   "summary": "Two devices rendering the same frame dissolve identically without exchanging anything.",
-   "attribution": "MoonLight original, on the classic dissolve transition in its position-addressed (shader) form",
+   "line": "Two color fields trade places pixel by pixel in an order that looks random but is computed.",
+   "summary": "The transition needs no per-pixel state and no shuffled index list, so two devices rendering the same frame dissolve identically without exchanging anything.",
    "image": "https://moonmodules.org/MoonLight/assets/light/effects/DissolveEffect.gif",
-   "alt": "Dissolve effect preview",
    "controls": {
     "bpm": {
      "line": "How fast one transition completes."
@@ -1898,26 +1904,25 @@
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/DissolveEffect.h"
   },
   "SpectrumEffect": {
-   "line": "An audio analyzer with real meter ballistics: bars rise fast enough to catch a transient and fall slowly enough to read, and a peak dot marks the recent maximum and drifts down.",
-   "summary": "The asymmetry is the whole point; a symmetric follower either misses the hit or flickers.",
-   "attribution": "MoonLight original, on standard VU/PPM meter ballistics and WLED's GEQ band mapping",
+   "line": "An audio analyzer with real meter ballistics: bars rise fast enough to catch a transient and fall slowly enough to read.",
+   "summary": "A peak dot marks the recent maximum and drifts down. The asymmetry is the whole point: a symmetric follower either misses the hit or flickers.",
+   "attribution": "[IEC 60268-17](https://en.wikipedia.org/wiki/VU_meter), [WLED](https://github.com/wled/WLED)",
    "image": "https://moonmodules.org/MoonLight/assets/light/effects/SpectrumEffect.gif",
-   "alt": "Spectrum effect preview",
    "controls": {
     "attack": {
      "line": "How fast a bar rises toward a new level."
     },
     "release": {
-     "line": "How fast it falls back."
+     "line": "How fast a bar falls back."
     },
     "peakDecay": {
      "line": "How fast the peak dot drifts down."
     },
     "showPeaks": {
-     "line": "Draw the floating peak dots."
+     "line": "Draw the held peak above each bar."
     },
     "colorByColumn": {
-     "line": "Color per band instead of by height."
+     "line": "Color each bar by its column rather than by height."
     }
    },
    "role": "effect",
@@ -1928,31 +1933,30 @@
   },
   "FireworksEffect": {
    "line": "Shells rise, stall, and burst into sparks that arc over and fall.",
-   "summary": "Nothing schedules the apex: the shell decelerates under gravity and bursts when its vertical velocity crosses zero, so a faster launch bursts higher without a second control.\n\nPhysics runs on elapsed time, so the same settings behave identically at any frame rate.",
-   "attribution": "MoonLight original, on the WLED Particle System's firework family by Damian Schneider / [@DedeHai](https://github.com/DedeHai)",
+   "summary": "Nothing schedules the apex: the shell decelerates under gravity and bursts when its vertical velocity crosses zero, so a faster launch bursts higher without a second control. Physics runs on elapsed time, so the same settings behave identically at any frame rate.",
+   "attribution": "[Damian Schneider](https://github.com/DedeHai), [Particle system](https://en.wikipedia.org/wiki/Particle_system)",
    "image": "https://moonmodules.org/MoonLight/assets/light/effects/FireworksEffect.gif",
-   "alt": "Fireworks effect preview",
    "controls": {
     "launchRate": {
      "line": "How often a new shell goes up."
     },
     "launchSpeed": {
-     "line": "How hard it is thrown, and so how high it bursts."
+     "line": "How hard a shell is thrown, and so how high it bursts."
     },
     "gravity": {
      "line": "How fast everything falls, per 60 Hz of simulated time."
     },
     "sparks": {
-     "line": "Sparks per burst."
+     "line": "How many sparks each burst throws."
     },
     "sparkLife": {
      "line": "How long a spark survives."
     },
     "drag": {
-     "line": "Air resistance flattening the arc."
+     "line": "Air resistance, which flattens the arc."
     },
     "fade": {
-     "line": "Trail length (the Layer's decay, not the pool's)."
+     "line": "Trail length, which is the Layer's decay rather than the pool's."
     }
    },
    "role": "effect",
@@ -1963,19 +1967,18 @@
   },
   "FishTankEffect": {
    "line": "An aquarium on a light wall: fish of three shapes swim across a dark tank, each in its own color from the active palette, tails beating.",
-   "summary": "The art carries shade roles rather than fixed colors, and each fish fills them from its own place on the palette, so one drawing yields as many colorways as there are fish.\n\nUses the global palette, each fish's band a paler version of its own body color.",
-   "attribution": "MoonLight original; inspired by the aquarium screensavers of the After Dark era, the pixel art drawn fresh for this effect",
+   "summary": "The art carries shade roles rather than fixed colors. Each fish fills them from its own place on the palette, so one drawing yields as many colorways as there are fish. Each fish's band is a paler version of its own body color.",
+   "attribution": "[After Dark](https://en.wikipedia.org/wiki/After_Dark_%28software%29)",
    "image": "https://moonmodules.org/MoonLight/assets/light/effects/FishTankEffect.gif",
-   "alt": "Fish Tank effect preview",
    "controls": {
     "fish": {
-     "line": "How many broad tropical fish (0-8)."
+     "line": "How many broad tropical fish swim."
     },
     "slim": {
-     "line": "How many slender fish (0-8)."
+     "line": "How many slender fish swim."
     },
     "school": {
-     "line": "How many tiny schooling fish (0-8)."
+     "line": "How many tiny schooling fish swim."
     },
     "speed": {
      "line": "Swim rate in body-lengths, the same on any grid."
@@ -1994,23 +1997,22 @@
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/FishTankEffect.h"
   },
   "PacmanEffect": {
-   "line": "The arcade cast crossing a light wall: Pacman chomps his way along while the four ghosts drift past, each in its own color, wrapping around the edges forever.",
-   "summary": "The characters travel independently, each on its own path.\n\nPacman keeps his yellow; the ghosts take their colors from the active palette.",
-   "attribution": "MoonLight original; inspired by Namco's Pac-Man (1980), the pixel art drawn fresh for this effect",
+   "line": "The arcade cast crossing a light wall: Pacman chomps along while the ghosts drift past, wrapping around the edges forever.",
+   "summary": "The characters travel independently, each on its own path. Pacman keeps his yellow, and the ghosts take their colors from the active palette.",
+   "attribution": "[Pac-Man](https://en.wikipedia.org/wiki/Pac-Man)",
    "image": "https://moonmodules.org/MoonLight/assets/light/effects/PacmanEffect.gif",
-   "alt": "Pacman effect preview",
    "controls": {
     "pacmen": {
-     "line": "How many Pacmen (0-4)."
+     "line": "How many Pacmen cross the wall, up to four."
     },
     "ghosts": {
-     "line": "How many ghosts (0-8); the arcade cast is four."
+     "line": "How many ghosts cross the wall, the arcade cast being four."
     },
     "speed": {
-     "line": "Travel rate in sprite-widths, the same on any grid."
+     "line": "Travel rate in sprite widths, the same on any grid."
     },
     "spriteSize": {
-     "line": "Integer magnification; 0 is auto, scaling with the grid."
+     "line": "Sprite magnification, scaled with the grid at zero."
     },
     "audioReactive": {
      "line": "Each sprite follows its own band, so the scene breathes."
@@ -2024,13 +2026,13 @@
   },
   "FixedPointEffect": {
    "line": "Shapes placed between pixels rather than on them.",
-   "summary": "A clock hand drawn on whole pixels jumps a pixel at a time and reads as broken; the same hand at a fractional position moves smoothly, because a pixel's brightness carries the fraction its position cannot.\n\nEleven figures, from a geared clock through a spirograph to boids and a swaying tree.",
-   "attribution": "MoonLight (Sutaburosu)",
+   "summary": "A clock hand drawn on whole pixels jumps a pixel at a time and reads as broken. The same hand at a fractional position moves smoothly, because a pixel's brightness carries the fraction its position cannot.",
+   "attribution": "[Sutaburosu](https://github.com/sutaburosu)",
    "image": "https://moonmodules.org/MoonLight/assets/light/effects/FixedPointEffect.gif",
-   "alt": "FixedPoint effect preview",
    "controls": {
     "demo": {
-     "line": "Which figure, or `all` to cycle them."
+     "line": "Which figure to draw, or `all` to cycle them.",
+     "more": "Eleven figures, from a geared clock through a spirograph to boids and a swaying tree, or `all` to cycle through them."
     },
     "bpm": {
      "line": "How fast the orbits and curves run; the clock keeps its own."
@@ -2039,7 +2041,7 @@
      "line": "How much of the previous frame survives, which leaves the trail."
     },
     "dwell": {
-     "line": "Seconds each demo holds before `all` moves on."
+     "line": "Seconds each demo holds before `all` moves to the next."
     },
     "drift": {
      "line": "How far the scene wanders from center, in pixels; 0 pins it."
@@ -2056,44 +2058,45 @@
    "tests": "https://github.com/MoonModules/MoonLight/blob/main/test/unit/light/unit_FixedPointEffect.cpp"
   },
   "MovingHeadEffect": {
-   "line": "Aims a rig of moving heads as one instrument.",
-   "summary": "Pan and tilt sweep at different rates, so a beam traces a path rather than a line, and `formation` decides how the heads relate.\n\nThe first effect that aims a fixture rather than only coloring it.\n\n**fan**, **mirror**, **chase**, **cross** and **unison**.\n\nA fixture chain is one-dimensional, so lay the rig out as a **1 x N** grid.",
-   "attribution": "MoonLight original",
+   "line": "Aims a rig of moving heads as one instrument, where `formation` decides how the heads relate.",
+   "summary": "One head sweeping a sine is a demo, and a rig of them is a show. Pan and tilt sweep at different rates, so a beam traces a path rather than a line, and one control changes the rig's whole character without touching speed or range. A fixture chain is one-dimensional, so lay the rig out as a **1 x N** grid.",
    "image": "https://moonmodules.org/MoonLight/assets/light/effects/MovingHeadEffect.gif",
-   "alt": "MovingHead effect preview",
    "controls": {
     "formation": {
-     "line": "How the heads relate:"
+     "line": "How the heads relate: fan, mirror, chase, cross or unison.",
+     "more": "With **fan** the beams open like a hand, and **mirror** splits the rig into two halves that sweep against each other. With **chase** the same sweep is delayed head by head, **cross** makes alternate heads oppose each other, and **unison** moves every head as one."
     },
     "panBpm": {
-     "line": "Sweep rates. Differing rates trace a path, not a line."
+     "line": "Pan sweep rate in BPM."
     },
     "tiltBpm": {
-     "line": "Sweep rates. Differing rates trace a path, not a line."
+     "line": "Tilt sweep rate in BPM, unequal to the pan rate to trace a path."
     },
     "panRange": {
-     "line": "How much of the fixture's travel to use."
+     "line": "How much of the fixture's pan travel to use."
     },
     "tiltRange": {
-     "line": "How much of the fixture's travel to use."
+     "line": "How much of the fixture's tilt travel to use."
     },
     "panCenter": {
-     "line": "Where the sweep is centered; 128 is the middle."
+     "line": "Where the pan sweep is centered, 128 being the middle."
     },
     "tiltCenter": {
-     "line": "Where the sweep is centered; 128 is the middle."
+     "line": "Where the tilt sweep is centered."
     },
     "audioReactive": {
      "line": "The beam widens with the room, each head on its own band."
     },
     "gobo": {
-     "line": "The beam's wheels, as raw bytes; see the manual."
+     "line": "The gobo wheel as a raw byte, see the fixture's manual.",
+     "more": "Only the fixture's manual says what a value selects. `rotate` works the same way for the gobo or prism spin."
     },
     "rotate": {
-     "line": "The beam's wheels, as raw bytes; see the manual."
+     "line": "The gobo or prism spin as a raw byte, see the fixture's manual."
     },
     "goboOnBeat": {
-     "line": "Roll a new gobo on a bass hit, then hold it a moment."
+     "line": "Roll a new gobo when the level jumps, then hold it a moment.",
+     "more": "The hold stops a busy track from strobing through patterns."
     }
    },
    "role": "effect",
@@ -2105,16 +2108,15 @@
   },
   "FlyingToastersEffect": {
    "line": "The classic screensaver on a light wall: chrome toasters with flapping wings and slices of toast drift diagonally across the dark, forever.",
-   "summary": "The wing flap carries a per-toaster offset, so the flock never falls into sync.\n\nThe sprites carry their own colors (chrome, wing, crust), so the global palette does not apply. Needs a grid at least the toaster's size (12×9).",
-   "attribution": "MoonLight original; inspired by After Dark's Flying Toasters (Berkeley Systems, 1989), suggested by [troyhacks](https://github.com/troyhacks): the pixel art here is drawn fresh for this effect",
+   "summary": "The wing flap carries a per-toaster offset, so the flock never falls into sync. The sprites carry their own colors (chrome, wing, crust), so the global palette does not apply. Needs a grid at least the toaster's size (12×9).",
+   "attribution": "[troyhacks](https://github.com/troyhacks), [After Dark](https://en.wikipedia.org/wiki/After_Dark_%28software%29)",
    "image": "https://moonmodules.org/MoonLight/assets/light/effects/FlyingToastersEffect.gif",
-   "alt": "Flying Toasters effect preview",
    "controls": {
     "toasters": {
-     "line": "How many fly."
+     "line": "How many toasters fly."
     },
     "toast": {
-     "line": "How many slices trail along."
+     "line": "How many slices of toast fly with them."
     },
     "speed": {
      "line": "Drift rate in sprite-widths, the same on any grid."
@@ -2133,32 +2135,37 @@
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/FlyingToastersEffect.h"
   },
   "SpaceInvadersEffect": {
-   "line": "The 1978 formation marching down the wall: five ranks stepping sideways in the two-frame wiggle, dropping a row and reversing at each wall, and speeding up as the ranks thin.",
-   "summary": "That acceleration is the defining mechanic. Invaders fire down, the cannon fires back, and a landing resets the board.\n\nThe invaders take their body color from the active palette.",
-   "attribution": "MoonLight original, after Taito's Space Invaders (1978)",
+   "line": "The 1978 formation marching down the wall: five ranks stepping sideways in the two-frame wiggle, dropping a row and reversing at each wall.",
+   "summary": "The march speeds up as the ranks thin, which is the defining mechanic.\n\nThe game plays itself in attract mode, and `player` and `fire` hand the cannon to a person. The invaders take their body color from the active palette.",
+   "attribution": "[Space Invaders](https://en.wikipedia.org/wiki/Space_Invaders)",
+   "guide": [
+    {
+     "title": "The game",
+     "text": "Invaders fire down and the cannon fires back. A formation that lands, or a board cleared of invaders, resets the board."
+    }
+   ],
    "image": "https://moonmodules.org/MoonLight/assets/light/effects/SpaceInvadersEffect.gif",
-   "alt": "Space Invaders effect preview",
    "controls": {
     "marchBpm": {
-     "line": "Steps per minute when full; it speeds up as the ranks thin."
+     "line": "March beats per minute, two steps a beat, faster as ranks thin."
     },
     "stepX": {
      "line": "How far a step moves the formation sideways, in pixels."
     },
     "dropY": {
-     "line": "How far a wall turn drops it, in pixels."
+     "line": "How far a wall turn drops the formation, in pixels."
     },
     "size": {
-     "line": "Magnification per art pixel; 1 on a matrix, 2 or more on a wall."
+     "line": "Magnification per art pixel: 1 on a matrix, 2 or more on a wall."
     },
     "audioReactive": {
-     "line": "The formation steps on transients, locking to the track."
+     "line": "The formation steps on the beat, and silence holds it still."
     },
     "player": {
      "line": "The cannon, for a fader or an input; idle, the game plays it."
     },
     "fire": {
-     "line": "A button that fires the cannon, one shot in the air at a time."
+     "line": "Fires the cannon, one shot in the air at a time."
     }
    },
    "role": "effect",
@@ -2169,23 +2176,21 @@
    "tests": "https://github.com/MoonModules/MoonLight/blob/main/test/unit/light/unit_SpaceInvadersEffect.cpp"
   },
   "SpriteFountainEffect": {
-   "line": "A fountain that throws the project's whole sprite cast: fish, Pacman and his ghosts, toasters and toast, and the three invaders, launched from the floor on a sweeping nozzle and falling back under gravity.",
-   "summary": "The art is shared with the effects that introduced it, so a fix to a fish fixes it in both places.\n\nColors come from the active palette, one per sprite, held for its whole flight.",
-   "attribution": "MoonLight original",
+   "line": "A fountain that throws the project's whole sprite cast, launched from the floor on a sweeping nozzle and falling back under gravity.",
+   "summary": "The cast is fish, Pacman and his ghosts, toasters and toast, and the three invaders.\n\nColors come from the active palette, one per sprite, held for its whole flight.",
    "image": "https://moonmodules.org/MoonLight/assets/light/effects/SpriteFountainEffect.gif",
-   "alt": "Sprite Fountain effect preview",
    "controls": {
     "lift": {
-     "line": "How hard the nozzle throws; it scales with the grid."
+     "line": "How hard the nozzle throws, scaled with the grid."
     },
     "pull": {
-     "line": "Gravity. 3 gives a two-second arc, long enough to read a toaster."
+     "line": "Gravity: gentle enough that a sprite stays legible for its whole arc."
     },
     "rate": {
      "line": "Sprites launched per beat of the emit clock."
     },
     "emitBpm": {
-     "line": "Launches per minute, so the plume's density is a choice."
+     "line": "Launches per minute, which sets the plume's density."
     },
     "size": {
      "line": "Integer magnification per art pixel."
@@ -2201,23 +2206,28 @@
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/SpriteFountainEffect.h"
   },
   "PongEffect": {
-   "line": "Two paddles rallying a ball, the attract mode of the 1972 original where both players are the machine.",
-   "summary": "A perfect tracker would rally forever and never look like a game, so each paddle has a reaction delay and a small aiming error, re-rolled every exchange. That is what produces the occasional point. The score shows at the top, and the first to 11 starts a new game.\n\nUses the global palette.",
-   "attribution": "MoonLight original, after Atari's Pong (1972)",
+   "line": "Two paddles rally a ball, the attract mode of the 1972 original where both players are the machine.",
+   "summary": "A perfect tracker would rally forever and never look like a game, so each paddle has a reaction delay and a small aiming error, re-rolled every exchange.\n\n`player1` and `player2` are the paddles as controls, for a fader or an input, and while idle the game plays.",
+   "attribution": "[Pong](https://en.wikipedia.org/wiki/Pong)",
+   "guide": [
+    {
+     "title": "Scoring",
+     "text": "The score shows at the top once the grid is at least 32 by 18, and the first side to 11 starts a new game."
+    }
+   ],
    "image": "https://moonmodules.org/MoonLight/assets/light/effects/PongEffect.gif",
-   "alt": "Pong effect preview",
    "controls": {
     "rallyBpm": {
      "line": "Ball crossings per minute, the same time on any grid."
     },
     "paddle": {
-     "line": "Length as a percentage of the court; short paddles miss more."
+     "line": "Paddle length as a share of the court; short paddles miss more."
     },
     "reflex": {
-     "line": "How sharply a paddle chases. Below full it lags a fast ball."
+     "line": "How sharply a paddle chases the ball; below full it lags a fast one."
     },
     "spriteBall": {
-     "line": "Swap the square for a sprite, re-picked on every hit."
+     "line": "Swap the square ball for a sprite, re-picked on every hit."
     },
     "size": {
      "line": "Integer magnification of the sprite ball, shown while it is on."
@@ -2226,7 +2236,7 @@
      "line": "The left paddle's height, for a fader or input; idle, the game plays."
     },
     "player2": {
-     "line": "The right paddle, the same way."
+     "line": "The right paddle's height, the same way."
     }
    },
    "role": "effect",
@@ -2238,22 +2248,21 @@
   },
   "BreakoutEffect": {
    "line": "A paddle knocking down a wall of bricks, the attract mode of the 1976 original where the machine plays itself.",
-   "summary": "The paddle waits out a reaction delay and aims slightly off, so steep balls outrun it. The ball speeds up as bricks fall, and the paddle halves once the ball reaches the back wall. Three misses, or a cleared wall, deal a fresh one.\n\nThe brick rows take their colors from the active palette.",
-   "attribution": "MoonLight original, after Atari's Breakout (1976)",
+   "summary": "The paddle waits out a reaction delay and aims slightly off, so steep balls outrun it. The ball speeds up as bricks fall, and the paddle halves once the ball reaches the back wall. Three misses, or a cleared wall, deal a fresh one. The brick rows take their colors from the active palette.",
+   "attribution": "[Breakout](https://en.wikipedia.org/wiki/Breakout_%28video_game%29)",
    "image": "https://moonmodules.org/MoonLight/assets/light/effects/BreakoutEffect.gif",
-   "alt": "Breakout effect preview",
    "controls": {
     "speedBpm": {
-     "line": "Court crossings per minute at the serve, the same time on any grid."
+     "line": "Court crossings per minute at the serve, on any grid size."
     },
     "rows": {
      "line": "Rows of bricks, fewer where the grid has no room."
     },
     "paddle": {
-     "line": "Width as a percentage of the court."
+     "line": "Paddle width as a percentage of the court."
     },
     "reflex": {
-     "line": "How sharply the paddle chases. Below full it lags a steep ball."
+     "line": "How sharply the paddle chases; below full it lags a steep ball."
     },
     "descend": {
      "line": "The wall creeps down and new rows enter at the top."
@@ -2274,13 +2283,12 @@
   },
   "BallpitEffect": {
    "line": "Falling balls that pile up and shove each other aside.",
-   "summary": "The heap is emergent: gravity pulls, the floor stops, and contact between neighbors makes the shape. `tilt` turns the pit into a slope and the pile slides and re-settles.\n\nCollisions are the one non-linear part of the particle kernel, so the pool is small.",
-   "attribution": "MoonLight original, on the WLED Particle System's ballpit family by Damian Schneider / [@DedeHai](https://github.com/DedeHai)",
+   "summary": "The heap is emergent: gravity pulls, the floor stops, and contact between neighbors makes the shape. `tilt` turns the pit into a slope and the pile slides and re-settles.",
+   "attribution": "[Damian Schneider](https://github.com/DedeHai)",
    "image": "https://moonmodules.org/MoonLight/assets/light/effects/BallpitEffect.gif",
-   "alt": "Ballpit effect preview",
    "controls": {
     "balls": {
-     "line": "How many share the pit."
+     "line": "How many balls share the pit."
     },
     "gravity": {
      "line": "How hard they fall."
@@ -2289,7 +2297,7 @@
      "line": "Contact radius in pixels: how far apart balls sit when touching."
     },
     "bounce": {
-     "line": "Restitution: how much speed a contact keeps."
+     "line": "How much speed a contact keeps."
     },
     "tilt": {
      "line": "Sideways force, turning the pit into a slope."
@@ -2306,10 +2314,9 @@
   },
   "TruchetEffect": {
    "line": "A maze of interlocking arcs that never repeats, drawn without storing a single tile.",
-   "summary": "Randomly turned tiles join into continuous winding paths across the surface: the pattern looks designed, and nothing designed it.\n\n**The representative 2D shader**: no 3D, no rays, no float, and cheap on any target.",
-   "attribution": "MoonLight original, on Sébastien Truchet's 1704 tiling and the standard shader fract/hash/smoothstep idiom",
+   "summary": "Randomly turned tiles join into continuous winding paths across the surface: the pattern looks designed, and nothing designed it. This is the representative 2D shader: no 3D, no rays, no float, and cheap on any target.",
+   "attribution": "[Sébastien Truchet](https://en.wikipedia.org/wiki/Truchet_tiles)",
    "image": "https://moonmodules.org/MoonLight/assets/light/effects/TruchetEffect.gif",
-   "alt": "Truchet effect preview",
    "controls": {
     "bpm": {
      "line": "How fast the pattern drifts."
@@ -2321,13 +2328,13 @@
      "line": "How fat the arcs are."
     },
     "softness": {
-     "line": "Edge softness: the anti-aliasing width."
+     "line": "Edge softness, which is the anti-aliasing width."
     },
     "shuffle": {
      "line": "Reshuffles which way the tiles face."
     },
     "drift": {
-     "line": "Slide the pattern instead of holding still."
+     "line": "Slide the pattern rather than holding it still."
     }
    },
    "role": "effect",
@@ -2338,16 +2345,15 @@
   },
   "VectorBallsEffect": {
    "line": "A rotating 3D object drawn as shaded spheres, the demoscene classic that named the technique.",
-   "summary": "The smallest complete demonstration of putting 3D on a panel: rotate, project, sort back to front, shade by distance, draw.\n\nWithout painter's ordering a far ball paints over a near one and the object turns inside out.",
-   "attribution": "MoonLight original, on the Amiga-era demoscene vector-ball effect",
+   "summary": "The smallest complete demonstration of putting 3D on a panel: rotate, project, sort back to front, shade by distance, draw. Without painter's ordering a far ball paints over a near one and the object turns inside out.",
+   "attribution": "[Demoscene](https://en.wikipedia.org/wiki/Demoscene)",
    "image": "https://moonmodules.org/MoonLight/assets/light/effects/VectorBallsEffect.gif",
-   "alt": "VectorBalls effect preview",
    "controls": {
     "bpm": {
      "line": "Rotation speed."
     },
     "size": {
-     "line": "Ball radius at the object's center, in pixels."
+     "line": "A ball's radius at the object's center, in pixels."
     },
     "spread": {
      "line": "How far apart the balls sit."
@@ -2367,10 +2373,15 @@
   },
   "RaymarchEffect": {
    "line": "A lit 3D scene rendered by marching a ray through a distance field, one ray per pixel.",
-   "summary": "Nothing draws a sphere: the scene is a function returning the distance to the nearest surface, and the spheres emerge where each ray stops.\n\nCompiled only where the chip has a hardware FPU. Cost is per pixel, so `steps` trades quality against it.",
-   "attribution": "MoonLight original, on Iñigo Quilez's raymarching and distance-function articles",
+   "summary": "Nothing draws a sphere: the scene is a function returning the distance to the nearest surface, and the spheres emerge where each ray stops. Writing a different 3D effect means writing a different `scene()`, which is the whole API. Cost is per pixel, and `steps` trades quality against it.",
+   "attribution": "[Iñigo Quilez](https://iquilezles.org/), [John Hart](https://en.wikipedia.org/wiki/Ray_marching)",
+   "guide": [
+    {
+     "title": "Where it runs",
+     "text": "It is compiled only for a chip with a hardware FPU, so a classic ESP32 does not offer it."
+    }
+   ],
    "image": "https://moonmodules.org/MoonLight/assets/light/effects/RaymarchEffect.gif",
-   "alt": "Raymarch effect preview",
    "controls": {
     "bpm": {
      "line": "How fast the scene animates."
@@ -2396,9 +2407,8 @@
   },
   "SphereMoveEffect": {
    "line": "A hollow spherical shell that bounces through the 3D volume, its surface colored from the palette, leaving no trail.",
-   "attribution": "MoonLight · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h)",
+   "summary": "The shell sweeps the volume on a Lissajous path, breathing as it goes. Every voxel inside the one-unit shell lights from the palette, jittered so it shimmers.",
    "image": "https://moonmodules.org/MoonLight/assets/light/effects/SphereMoveEffect.gif",
-   "alt": "SphereMove effect preview",
    "controls": {
     "speed": {
      "line": "How fast the sphere moves through the volume."
@@ -2412,19 +2422,19 @@
    "tests": "https://github.com/MoonModules/MoonLight/blob/main/test/unit/light/unit_SphereMoveEffect.cpp"
   },
   "SpiralEffect": {
-   "line": "Rotating spiral from angle + distance (`atan2_8`/`dist8`).",
-   "attribution": "MoonLight original (rotating spiral)",
+   "line": "A rotating spiral built from each pixel's angle and distance from the center.",
+   "summary": "Each pixel's hue comes from its angle plus its radius times `twist`, walked by the clock. So the arms wind outward, and turning `twist` up tightens them.",
+   "attribution": "[David Jupijn](https://github.com/risingstep)",
    "image": "https://moonmodules.org/MoonLight/assets/light/effects/SpiralEffect.gif",
-   "alt": "Spiral effect preview",
    "controls": {
     "bpm": {
-     "line": "Rotation speed."
+     "line": "How fast the spiral turns."
     },
     "twist": {
-     "line": "How tightly the arm winds (hue gain per unit of distance)."
+     "line": "How tightly the arms wind, as hue per unit radius."
     },
     "hue_shift": {
-     "line": "Rotate the palette index."
+     "line": "Rotates the palette index."
     }
    },
    "role": "effect",
@@ -2435,18 +2445,18 @@
   },
   "StarFieldEffect": {
    "line": "A perspective starfield: stars approach the viewer from a vanishing point, brightening as they near, then respawn at depth.",
-   "attribution": "MoonLight · by [@Brandon502](https://github.com/Brandon502), inspired by Daniel Shiffman / [Coding Train](https://www.youtube.com/watch?v=17WoOqgXsRM) · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h)",
+   "summary": "Each star is a 3D point drifting toward the viewer, re-projected onto the panel every advance. A near star splays outward and flies off the edge while a distant one sits near the center. A star passing the camera respawns at the far plane.",
+   "attribution": "[Brandon502](https://github.com/Brandon502), [Daniel Shiffman](https://thecodingtrain.com)",
    "image": "https://moonmodules.org/MoonLight/assets/light/effects/StarFieldEffect.gif",
-   "alt": "StarField effect preview",
    "controls": {
     "speed": {
-     "line": "How fast stars approach (frame throttle)."
+     "line": "How fast the stars approach, where 0 pauses the field."
     },
     "numStars": {
      "line": "How many stars are active."
     },
     "blur": {
-     "line": "Motion-trail fade per frame."
+     "line": "The motion-trail fade per frame."
     },
     "usePalette": {
      "line": "Color the stars from the palette instead of white."
@@ -2461,15 +2471,15 @@
   },
   "StarSkyEffect": {
    "line": "Twinkling stars at random light positions, each fading in and out independently over a dark background.",
-   "attribution": "MoonLight · by [limpkin](https://github.com/limpkin) · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h)",
+   "summary": "A pool of stars, sized from the light count, each taking a random cell and brightness. A small per-frame chance flips a star's direction early, so the field never pulses in sync.",
+   "attribution": "[Limpkin](https://github.com/limpkin)",
    "image": "https://moonmodules.org/MoonLight/assets/light/effects/StarSkyEffect.gif",
-   "alt": "StarSky effect preview",
    "controls": {
     "speed": {
-     "line": "Fade rate per frame (how fast each star brightens/dims)."
+     "line": "Fade rate: how fast each star brightens and dims."
     },
     "star_fill_ratio": {
-     "line": "How many stars (as a fraction of the light count)."
+     "line": "How many stars, as a fraction of the light count."
     },
     "usePalette": {
      "line": "Color the stars from the active palette instead of white."
@@ -2484,15 +2494,15 @@
   },
   "TetrixEffect": {
    "line": "Falling Tetris-style blocks: each column drops a brick that lands on the growing stack, fills the column, then clears and restarts.",
-   "attribution": "WLED · by Andrew Tuline (WLED-SR) · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_WLED.h)",
+   "summary": "At speed 0 each brick picks its own fall rate; otherwise all fall at the set speed. Every column runs its own state machine, so they desync into a rain of stacking bricks.",
+   "attribution": "[Andrew Tuline](https://github.com/atuline), [Aircoookie](https://github.com/Aircoookie), [blazoncek](https://github.com/blazoncek)",
    "image": "https://moonmodules.org/MoonLight/assets/light/effects/TetrixEffect.gif",
-   "alt": "Tetrix effect preview",
    "controls": {
     "speed": {
-     "line": "Fall speed (0 = randomised per brick)."
+     "line": "Fall speed, where 0 gives each brick a random speed."
     },
     "width": {
-     "line": "Brick height (0 = randomised)."
+     "line": "Brick height, where 0 randomizes it."
     },
     "oneColor": {
      "line": "One advancing palette color for every brick, not one each."
@@ -2506,11 +2516,9 @@
    "tests": "https://github.com/MoonModules/MoonLight/blob/main/test/unit/light/unit_TetrixEffect.cpp"
   },
   "TextEffect": {
-   "line": "Renders a multi-line string in a bitmap font.",
-   "summary": "Static by default (laid out top-left, each newline dropping one font-height, clipped where it runs off the grid); turn on `scroll` to march the whole block leftwards as a wrapping marquee. Text color comes from the active palette.",
-   "attribution": "MoonLight original, on MoonLight's Scrolling Text · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h)",
+   "line": "Renders a multi-line string in a bitmap font, static by default or as a wrapping marquee.",
+   "summary": "Static text is laid out top-left, each newline dropping one font height, and clipped where it runs off the grid. Turn on `scroll` to march the whole block leftward as a marquee. Text color comes from the active palette.",
    "image": "https://moonmodules.org/MoonLight/assets/light/effects/TextEffect.gif",
-   "alt": "Text effect preview",
    "controls": {
     "text": {
      "line": "The string to show; each line renders on its own row."
@@ -2519,10 +2527,10 @@
      "line": "Off is static, on a horizontal marquee."
     },
     "font": {
-     "line": "Glyph size (`4x6` compact, `6x8` larger)."
+     "line": "Glyph size: 4x6 compact, 6x8 larger."
     },
     "speed": {
-     "line": "Marquee speed (only used when `scroll` is on)."
+     "line": "Marquee speed, used when `scroll` is on."
     },
     "hue": {
      "line": "Palette index for the text color."
@@ -2536,19 +2544,18 @@
    "tests": "https://github.com/MoonModules/MoonLight/blob/main/test/unit/light/unit_TextEffect.cpp"
   },
   "WaveEffect": {
-   "line": "An oscilloscope waveform scrolls across the grid with a fading trail; six selectable shapes.",
-   "attribution": "MoonLight · by Ewoud Wijma · via [MoonLight](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h)",
+   "line": "An oscilloscope waveform scrolls across the grid with a fading trail.",
+   "summary": "Six selectable shapes: sawtooth, triangle, sine, square, sin3 and noise. Each column plots one point of a moving wave, so the lit points trace a scrolling curve.",
    "image": "https://moonmodules.org/MoonLight/assets/light/effects/WaveEffect.gif",
-   "alt": "Wave effect preview",
    "controls": {
     "bpm": {
-     "line": "Travel speed (phase advance per minute)."
+     "line": "Travel speed, as phase advance per minute."
     },
     "fade": {
-     "line": "Trail fade per frame (0 = instant clear, 255 = long tail)."
+     "line": "How much trail each frame keeps; 0 clears it at once."
     },
     "waveform": {
-     "line": "Sawtooth, triangle, sine, square, sin3 or noise."
+     "line": "Which waveform shape is drawn."
     }
    },
    "role": "effect",
@@ -4014,6 +4021,11 @@
    "summary": "The [Layouts](https://moonmodules.org/MoonLight/moonmodules/light/supporting.html#layouts) container holds one or more layouts and composes them into one coordinate space, which a [Layer](https://moonmodules.org/MoonLight/moonmodules/light/supporting.html#layer) renders over. The container itself takes no controls.\n\nEach card's emoji are its tags, as the [tag emoji legend](https://moonmodules.org/MoonLight/explanation/architecture/index.html#tag-emoji-legend) explains.",
    "video": "https://moonmodules.org/MoonLight/assets/moontube/05-layouts.webm",
    "caption": "Layouts: a grid, a ring, a spiral, a cube, tubes, and two written in MoonLive."
+  },
+  "light/effects.md": {
+   "title": "Effects",
+   "line": "An effect draws: each frame it writes a color per light into its [Layer](https://moonmodules.org/MoonLight/moonmodules/light/supporting.html#layer)'s buffer, which modifiers reshape and a driver sends out.",
+   "summary": "Effects are built from the shared [power functions](https://moonmodules.org/MoonLight/moonmodules/light/power-functions.html), the drawing, field and motion routines every effect composes. One that names an index color reads the global palette, the `palette` control on [Drivers](https://moonmodules.org/MoonLight/moonmodules/light/supporting.html#drivers).\n\nEach card's emoji are its tags, as the [tag emoji legend](https://moonmodules.org/MoonLight/explanation/architecture/index.html#tag-emoji-legend) explains, and its dimension is its native axes: a Layer extrudes a lower-dimensional effect onto a bigger grid."
   }
  }
 }

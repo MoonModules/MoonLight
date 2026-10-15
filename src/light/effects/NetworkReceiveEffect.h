@@ -14,44 +14,40 @@
 
 namespace mm {
 
-
-// Author: MoonLight original (E1.31 / Art-Net receive)
-/// Effect that paints the layer from received Art-Net/E1.31/DDP pixels.
+/// Receives lights over UDP into the layer, from Resolume, Madrix, xLights and LedFx.
 /// @card NetworkReceiveEffect.gif
 ///
-/// External light data written into the layer buffer, so it composes with modifiers and blending; the receive side for NetworkSendDriver and industry senders.
+/// It listens for Art-Net, E1.31 and DDP at once, with no protocol control, so whatever a sender speaks works and the status names it. The received lights land in the layer buffer, so they compose with modifiers and blending.
 ///
-/// Prior art: MoonLight's D_NetworkIn, WLED's realtime UDP input, and MoonLight v1's ArtNetInModule.
+/// @guide
+///
+/// ## mapped_by
+///
+/// **receiver** means the frame is sent row by row and this board applies its own wiring. **sender** means the frame is sent in wiring order and placed as it arrives. Behind a correcting sender, keep the profile in byte order, brightness 255 and the linear curve; the end-to-end pair is @ref NetworkSendDriver.
 ///
 /// @moreinfo
 ///
-/// ## Three protocols at once
-///
-/// It binds Art-Net 6454, E1.31 5568 and DDP 4048 with no protocol control, so whatever a sender speaks works; the status names it, and an ArtPoll gets an ArtPollReply.
-///
-/// ## Mapped by the receiver or by the sender
-///
-/// A receiver-mapped frame arrives row by row and the layer applies this board's wiring; a sender-mapped one arrives in wiring order, placed by the channel-data sink.
+/// Sender mapping is one copy alone on its layer, else two mappings, as the status shows. It binds Art-Net 6454, E1.31 5568 and DDP 4048, and an ArtPoll gets an ArtPollReply so controllers list the device.
 class NetworkReceiveEffect : public EffectBase {
 public:
-    /// Catalog tags: network input, of MoonLight and v1 lineage.
+    /// Catalog tags: network input, a MoonModules origin.
     const char* tags() const override { return "📡🌙"; }
     /// The sender decides the geometry, so this writes whatever the layer has.
     Dim dimensions() const override { return Dim::D3; }
 
-    /// Mirrors the sender's own universe start, for ArtNet and E1.31.
+    /// The first incoming universe to map, mirroring the sender.
     uint16_t universeStart = 0;
-    /// Bytes a universe maps to, which also clamps the payload against bleeding into the next.
+    /// Bytes each universe maps to, 510 or 512.
     uint16_t channelsPerUniverse = static_cast<uint16_t>(MAX_CHANNELS_PER_UNIVERSE);
     /// Who maps a frame onto the wiring, in the `mapped_by` options' order: row by row with this board applying its wiring, or in the order the lights are wired.
     enum MappedBy : uint8_t { kMappedByReceiver, kMappedBySender, kMappedByCount };
     /// The `mapped_by` option names.
     static constexpr const char* kMappers[kMappedByCount] = {"receiver", "sender"};
-    /// Who maps the frame onto the wiring. @xref{mapped-by-the-receiver-or-by-the-sender}
+    /// Whether the sender or the receiver maps the frame onto the wiring.
     uint8_t mappedBy = kMappedByReceiver;
-    /// Packets received in the last second, of any protocol.
+    /// Packets received in the last second, read-only.
     uint16_t packetsPerS = 0;
-    /// Frames received in the last second: a DDP push, or the first universe of an Art-Net or E1.31 frame.
+    /// Frames received in the last second, read-only.
     uint16_t framesPerS = 0;
 
     /// Publish the universe start, the per-universe stride and who maps.
@@ -98,7 +94,7 @@ public:
         clearStatus();
     }
 
-    /// Bind the three receive sockets independently, and size the staging buffer to the layer. @xref{three-protocols-at-once}
+    /// Bind the three receive sockets independently, and size the staging buffer to the layer.
     void prepare() override {
         stopReceiveTask();   // the task writes into staging, which is resized below
         const bool artnetOk = artnetSocket_.open() && artnetSocket_.bind(ARTNET_PORT);
@@ -159,8 +155,7 @@ private:
     static constexpr int kMaxPacketsPerDrain = 128;   ///< packets one drain takes per socket, so a flood cannot hold the caller
     static constexpr uint32_t kWaitMs = 20;   ///< how long the task waits for a packet before it checks for a stop
     static constexpr const char* kBindFailMsg = "UDP bind failed, port in use?";
-    // A member rather than a stack buffer: setStatus holds the pointer, so the string must outlive it.
-    char recvStatus_[56] = "";          ///< "receiving <protocol> from <ip>, <path>", sized for the longest form
+    char recvStatus_[56] = "";          ///< "receiving <protocol> from <ip>, <path>", a member since setStatus holds the pointer
     const char* lastProto_ = nullptr;   ///< the last protocol literal the status was built from
     uint8_t lastPath_ = 0;              ///< the last path the status was built from
     /// The status note for each of the sink's paths: none for receiver mapping, which maps once as every layer does.
@@ -190,7 +185,7 @@ private:
         }
     }
 
-    // lwIP holds a frame's burst in a small mailbox, so a task on core 1 drains it as it arrives; a board without tasks drains in the tick.
+    /// Start the receive task, since lwIP holds a frame's burst in a small mailbox that a task on core 1 drains as it arrives. A board without tasks drains in the tick.
     void startReceiveTask() {
         receiveStop_.store(false, std::memory_order_release);
         platform::spawnPinnedTask(receiveTask_, "mmReceive", &receiveTrampoline, this, 4096, 3, 1);
@@ -241,8 +236,7 @@ private:
         }
     }
 
-    // Read-modify-writes on both sides, since a module lives in PSRAM, as TryLock explains.
-    /// Count one packet, and a frame when it starts or ends one.
+    /// Count one packet, and a frame when it starts or ends one, with read-modify-writes on both sides since a module lives in PSRAM, as TryLock explains.
     void countPacket(bool frame) {
         packets_.fetch_add(1, std::memory_order_relaxed);
         if (frame) frames_.fetch_add(1, std::memory_order_relaxed);

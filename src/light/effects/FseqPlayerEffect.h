@@ -10,7 +10,7 @@ namespace mm {
 ///
 /// A show, uncompressed FSEQ v2, lands where a sender-mapped [Network Receive](https://moonmodules.org/MoonLight/moonmodules/light/effects.html#networkreceive) stream does, so alone on its layer it reaches the lights in one copy on any layout. Reading the file is the next step, and its status says so.
 ///
-/// @attribution FSEQ v2 as Falcon Player documents it in FSEQ_Sequence_File_Format.txt.
+/// @attribution FPP
 class FseqPlayerEffect : public EffectBase {
 public:
     /// Catalog tags: a recorded show, played back.

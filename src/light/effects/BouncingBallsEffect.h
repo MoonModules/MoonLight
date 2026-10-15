@@ -5,25 +5,16 @@
 
 namespace mm {
 
-/// Physics effect: gravity-bounced balls trailing along the layer.
+/// A row of balls per column bounce under gravity, each losing energy on impact and relaunching when it stops.
 /// @card BouncingBallsEffect.gif
-/// Author: Andrew Tuline (WLED-SR), via the predecessor, https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_WLED.h
 ///
-/// One column of balls per x, each launched upward and bouncing with energy loss.
-/// A ball is relaunched once its velocity dies out.
-/// Every column runs independently, so a panel shows a forest of bouncing dots.
+/// Every column runs independently, so a panel shows a forest of bouncing dots, palette-colored by ball index over a fading background.
 ///
-/// Prior art: MoonLight's BouncingBalls, generalizing WLED's own from the FastLED demo lineage.
+/// @attribution Andrew Tuline
 ///
 /// @moreinfo
 ///
-/// ## The motion is analytic, not integrated
-///
-/// A ball's height is the projectile equation evaluated against its own clock.
-/// So the trajectory is real physics rather than a frame-step integration that drifts.
-/// Only `impactVelocity` and `lastBounceTime` carry between frames, and height is recomputed.
-///
-/// Reproduced from the source: its gravity, time scale, dampening, kick and palette spacing.
+/// A ball's height is the projectile equation evaluated against its own clock, so the trajectory does not drift as a frame-step integration would; only `impactVelocity` and `lastBounceTime` carry between frames.
 class BouncingBallsEffect : public EffectBase {
 public:
     /// Catalog tags: WLED origin.
@@ -34,9 +25,9 @@ public:
     /// The per-column ceiling, and the stride of the flattened ball array.
     static constexpr uint8_t maxNumBalls = 16;
 
-    /// Gravity's strength, where higher falls faster.
+    /// Gravity strength: higher falls faster and bounces snappier.
     uint8_t grav     = 128;
-    /// How many balls each column carries.
+    /// Balls per column.
     uint8_t numBalls = 8;
 
     /// Publish gravity and the ball count.

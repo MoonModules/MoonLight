@@ -5,30 +5,16 @@
 
 namespace mm {
 
-/// Audio-reactive effect: scrolls the dominant frequency as a color column.
+/// A 1D scrolling frequency display: each frame shifts the strip and injects a new pixel at one end.
 /// @card FreqMatrixEffect.gif
-/// Author: Andrew Tuline (WLED-SR), via the predecessor, https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_WLED.h
 ///
-/// A vertical shift register driven by the music's major peak frequency.
-/// Each scroll moves the column one pixel and paints a new one at the source end.
-/// Its hue comes from that peak and its brightness from the loudness, so pitch becomes color.
+/// The new pixel's hue comes from the dominant frequency and its brightness from the volume, so pitch becomes color.
 ///
-/// Prior art: WLED's Freqmatrix, by way of MoonLight.
+/// @attribution Andrew Tuline
 ///
 /// @moreinfo
 ///
-/// ## The column is the shift register
-///
-/// Each pass reads pixel y-1 into pixel y and writes the new color at y=0.
-/// No history buffer is needed, since the look lives entirely in the buffer's own scroll.
-/// As a D1 effect it writes the x=0 column along y, which extrude fans across a wider layer.
-///
-/// ## The one deviation from WLED's math
-///
-/// WLED works on a volume normalized to 0..1, where `AudioFrame::level` is a 0..255 integer.
-/// So its 0.25 threshold is reproduced as 64, and its 256.0 divisor as 2560.
-/// That lands a full-scale reading near 255, which is the same response curve on our scale.
-/// Every other constant is preserved: 80 Hz, and the 42 and 3 multipliers of the window.
+/// The column is the shift register: each pass reads pixel y-1 into pixel y and writes the new color at y=0, so no history buffer is needed. The volume is a 0..255 integer, so WLED's 0.25 threshold is 64 and its 256.0 divisor is 2560.
 class FreqMatrixEffect : public EffectBase {
 public:
     /// Catalog tags: WLED origin, audio-reactive.
@@ -36,18 +22,17 @@ public:
     /// Writes the x=0 column along y, which extrude fans across a wider layer.
     Dim dimensions() const override { return Dim::D1; }
 
-    // Defaults from WLED's own Freqmatrix.
-    /// The scroll throttle, where higher scrolls more often.
+    /// Scroll rate.
     uint8_t speed       = 255;
-    /// The brightness intensity scaler.
+    /// Sound-effect intensity, scaling the injected brightness.
     uint8_t fx          = 128;
-    /// The lower edge of the frequency window the hue maps across.
+    /// The lower edge of the frequency window mapped across the hue range.
     uint8_t lowBin      = 18;
     /// The upper edge of that window.
     uint8_t highBin     = 48;
-    /// Brightness sensitivity.
+    /// Input gain.
     uint8_t sensitivity = 30;
-    /// Let the audio level modulate the scroll rate.
+    /// Let the volume modulate the scroll speed.
     bool    audioSpeed  = false;
 
     /// Publish the scroll rate, the brightness response and the frequency window.

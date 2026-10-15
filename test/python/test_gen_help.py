@@ -128,6 +128,11 @@ def test_the_role_nouns_and_the_technical_page_path_match_the_app_and_the_firmwa
     assert gen_help.technical_url(layer) == template.replace("${m[1]}", "light").replace("${m[2]}", "Layer")
 
 
+def test_a_picture_is_named_by_its_file_and_found_under_the_assets():
+    assert gen_help.asset_url("RotateModifier.gif").endswith("/assets/light/modifiers/RotateModifier.gif")
+    assert gen_help.asset_url("nosuch.gif") is None
+
+
 def test_a_link_reads_the_type_as_the_app_names_it_without_its_role_noun():
     assert gen_help.display_name("CircleModifier") == "Circle"
     assert gen_help.display_name("Layer") == "Layer"

@@ -4,27 +4,26 @@
 
 namespace mm {
 
-/// Effect: a warped, kaleidoscopic noise field in polar coordinates.
+/// A warped noise field addressed by angle and radius, folded into a kaleidoscope.
 /// @card PolarNoiseEffect.gif
 ///
-/// Not a texture scrolling past the panel, but a field that turns and breathes inside it.
-/// Three power functions compose to get there, and the effect is mostly parameter choices.
+/// Cost scales with `octaves` and `warp`: at `warp` above 0 and `octaves` 2 it is roughly 4 noise samples per pixel. On a large wall set `octaves` to 1 or `warp` to 0, which degrades to a plain polar noise that still reads well.
 ///
-/// Prior art: Stefan Petrick's polar and noise vocabulary, and Inigo Quilez's domain warping.
+/// @attribution Stefan Petrick, Iñigo Quilez, Polar coordinates
+///
+/// @guide
+///
+/// ## polarTable
+///
+/// Each pixel's angle and radius come from a table at 2 bytes a pixel.
+///
+/// ## polarTable16
+///
+/// The table at full precision, 4 bytes a pixel.
 ///
 /// @moreinfo
 ///
-/// ## The three power functions
-///
-/// `PolarLut` addresses the grid by angle and radius, which rotates the motion around the center.
-/// That address never changes between frames, and computing it per pixel measured 39% of a frame on an S3.
-/// `warp8` displaces the sample coordinate by a second field, so the field marbles rather than drifts.
-/// `kaleido` folds the angle into mirrored wedges, and the symmetry is free before any sampling.
-///
-/// ## The controls are the cost knobs
-///
-/// `warp` is two noise samples plus its inner fbm, so at two octaves this is about four a pixel.
-/// On a large wall drop `octaves` to 1, or `warp` to 0, and it degrades to a plain polar noise.
+/// Three power functions compose it: `PolarLut` addresses the grid by angle and radius. `warp8` displaces the sample coordinate by a second field. `kaleido` folds the angle into mirrored wedges. The polar address never changes between frames, and computing it per pixel measured 39% of a frame on an S3.
 class PolarNoiseEffect : public EffectBase {
 public:
     /// Catalog tags: this effect is the power-function showcase.
@@ -34,18 +33,18 @@ public:
 
     /// How fast the field drifts.
     uint8_t bpm      = 8;
-    /// Noise cells across the grid. Low gives broad shapes, high gives fine detail.
+    /// Noise cells across the grid; low is broad, high is fine detail.
     uint8_t scale    = 40;
-    /// Kaleidoscope wedges, where 1 disables the fold.
+    /// Kaleidoscope wedges; 1 disables the fold.
     uint8_t segments = 6;
-    /// Domain-warp strength, where 0 leaves the field plain.
+    /// Domain-warp strength; 0 gives a plain field.
     uint8_t warp     = 90;
-    /// fbm octaves, and the main cost knob.
+    /// Fbm octaves, and the main cost knob.
     uint8_t octaves  = 2;
-    /// How much the radius shears the angle, giving the field its spiral.
+    /// How much the radius shears the angle, setting the spiral.
     uint8_t twist    = 30;
 
-    /// The polar address: the table, its precision, and how a volumetric fixture maps to angle and radius.
+    /// The polar address: the table (2 bytes a pixel, buying back the per-pixel atan16 and dist16), its precision, and the volumetric mapping.
     PolarLut::Controls polar;
 
     /// Publish the drift, the field's shape, the fold and the polar address.
@@ -56,7 +55,6 @@ public:
         controls_.addControl("warp", warp, 0, 255);
         controls_.addControl("octaves", octaves, 1, 4);
         controls_.addControl("twist", twist, 0, 255);
-        // The table costs 2 bytes a pixel and buys back the per-pixel atan16 and dist16.
         PolarLut::addControls(controls_, polar);
     }
     /// Build the polar address table for the current geometry.

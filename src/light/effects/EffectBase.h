@@ -11,38 +11,25 @@ namespace mm {
 
 class Layer; // forward declaration, defined in light/layers/Layer.h and included at the bottom
 
-/// The light-domain MoonModule an effect derives from, adding the rendering context.
+/// An effect draws: each frame it writes a color per light into its @ref Layer's buffer, which modifiers reshape and a driver sends out.
 ///
-/// A zero-state layer holding accessors that forward to the parent Layer.
-/// An effect reads its context through these rather than caching a `Layer*` and the extents.
-/// `DriverBase` plays the same role for drivers against the Drivers container.
+/// Effects are built from the shared [power functions](https://moonmodules.org/MoonLight/moonmodules/light/power-functions.html), the drawing, field and motion routines every effect composes. One that names an index color reads the global palette, the `palette` control on @ref Drivers.
 ///
-/// Prior art: MoonLight's Node and VirtualLayer, where an effect reaches the layer directly.
+/// Each card's emoji are its tags, as the [tag emoji legend](https://moonmodules.org/MoonLight/explanation/architecture/index.html#tag-emoji-legend) explains, and its dimension is its native axes: a Layer extrudes a lower-dimensional effect onto a bigger grid.
 ///
 /// @moreinfo
 ///
 /// ## Writing an effect
 ///
-/// Derive from EffectBase and include this one file, which is the whole surface an effect may use.
-/// A scripted MoonLive effect gets the same one, and unused declarations emit no code.
-/// An effect needing something outside that surface adds one include, and nothing more.
+/// Derive from EffectBase and include this one file, the whole surface an effect may use. A scripted MoonLive effect gets the same one, and an effect needing more adds one include. EffectBase holds no state of its own: its accessors forward to the parent Layer, so an effect never caches a `Layer*` or the extents. `DriverBase` does the same for drivers.
 ///
 /// ## Animation
 ///
-/// Speed controls use BPM rather than an abstract range, so 60 BPM is one beat a second.
-/// Multiply a time offset by the panel dimension, or a large display looks sluggish.
-/// Drive animation off `elapsed()` rather than a frame count, so speed holds at any frame rate.
-/// The speed control sets the dynamics and never the frame rate, which stays maximal.
-///
-/// ## One include writes an effect
-///
-/// This file brings `EffectBase` and every helper an effect may use, so an effect includes it alone.
+/// Speed controls use BPM, so 60 BPM is one beat a second, and animation follows `elapsed()` rather than a frame count, so speed holds at any frame rate. Multiply a time offset by the panel dimension, or a large display looks sluggish.
 ///
 /// ## Why the helper includes sit at the bottom
 ///
-/// Layer.h includes this file, since a Layer holds effect children.
-/// So this file forward-declares Layer, and pulls Layer.h in after the class is complete.
-/// Layer.h re-enters harmlessly through the include guard and defines the accessor bodies.
+/// Layer.h includes this file, since a Layer holds effect children, so this file forward-declares Layer and pulls Layer.h in once the class is complete. Layer.h re-enters harmlessly through its include guard and defines the accessor bodies.
 class EffectBase : public MoonModule {
 public:
     ModuleRole role() const MM_NONBLOCKING override { return ModuleRole::Effect; }

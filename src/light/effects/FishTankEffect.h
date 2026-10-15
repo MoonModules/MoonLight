@@ -1,5 +1,4 @@
 #pragma once
-// Author: MoonLight original
 
 #include "core/util/math16.h"      // BeatPhase: the shared tail-beat clock
 #include "core/util/math8.h"       // Random8: fixed-seed spawn variation, golden-reproducible
@@ -14,7 +13,7 @@ namespace fishart {
 enum : uint8_t { kClear = 0, kBody = 1, kDark = 2, kLight = 3, kFin = 4, kEye = 5, kBand = 6 };
 inline constexpr uint8_t kPaletteCount = 7;
 
-// A broad reef fish, 16x11 in 3 tail-beat frames, facing right since flipX serves the other way.
+/// A broad reef fish, 16x11 in 3 tail-beat frames, facing right since flipX serves the other way.
 inline constexpr uint8_t W = 16, H = 11, F = 3;
 inline constexpr uint8_t kFish[] = {
     // frame 0: tail spread
@@ -56,7 +55,7 @@ inline constexpr uint8_t kFish[] = {
 };
 static_assert(sizeof(kFish) == static_cast<size_t>(W) * H * F, "fish: 3 frames of 16x11");
 
-// A slender fish, 13x7 in 3 frames: a different silhouette, since one outline reads as a repeat.
+/// A slender fish, 13x7 in 3 frames: a different silhouette, since one outline reads as a repeat.
 inline constexpr uint8_t SW = 13, SH = 7, SF = 3;
 inline constexpr uint8_t kSlim[] = {
     0,0,0,0,0,2,2,2,2,2,0,0,0,
@@ -85,7 +84,7 @@ inline constexpr uint8_t kSlim[] = {
 };
 static_assert(sizeof(kSlim) == static_cast<size_t>(SW) * SH * SF, "slim: 3 frames of 13x7");
 
-// A tiny schooling fish, 6x4 in one frame, being too small for a tail beat to read.
+/// A tiny schooling fish, 6x4 in one frame, being too small for a tail beat to read.
 inline constexpr uint8_t TW = 6, TH = 4;
 inline constexpr uint8_t kTiny[] = {
     0,0,2,2,2,0,
@@ -97,20 +96,16 @@ static_assert(sizeof(kTiny) == static_cast<size_t>(TW) * TH, "tiny: one 6x4 fram
 
 }  // namespace fishart
 
-/// Effect: colorful fish swim across a dark tank, each tinted from the active palette.
+/// An aquarium on a light wall: fish of three shapes swim across a dark tank, each in its own color from the active palette, tails beating.
 /// @card FishTankEffect.gif
 ///
-/// Inspired by the aquarium screensavers of the After Dark era, with the art drawn fresh here.
-/// Movement is `particles::Pool` and appearance is `draw::sprite`, as FlyingToasters does.
+/// The art carries shade roles rather than fixed colors. Each fish fills them from its own place on the palette, so one drawing yields as many colorways as there are fish. Each fish's band is a paler version of its own body color.
+///
+/// @attribution After Dark
 ///
 /// @moreinfo
 ///
-/// ## One shape, as many colorways as there are fish
-///
-/// A Sprite points at its palette rather than owning one.
-/// So each fish is drawn through a palette this effect fills from the user's active one.
-/// That is why the art carries shade roles, body and dark and light, rather than fixed colors.
-/// The reference aquarium's appeal is the mix, and a tank of one color is not that.
+/// Movement is `particles::Pool` and appearance is `draw::sprite`, as FlyingToasters does. A Sprite points at its palette rather than owning one, so each fish is drawn through a palette this effect fills from the active one.
 class FishTankEffect : public EffectBase {
 public:
     /// The pool size: the three count controls at their maxima, summed.
@@ -121,17 +116,17 @@ public:
     /// A tank needs a width and a height, so it is a 2D effect.
     Dim dimensions() const override { return Dim::D2; }
 
-    /// How many of the broad tropical shape swim.
+    /// How many broad tropical fish swim.
     uint8_t fish  = 3;
-    /// How many of the slender shape swim.
+    /// How many slender fish swim.
     uint8_t slim  = 3;
-    /// How many of the tiny schooling fish swim.
+    /// How many tiny schooling fish swim.
     uint8_t tiny  = 5;
-    /// How fast the tank swims, in body lengths a second.
+    /// Swim rate in body-lengths, the same on any grid.
     uint8_t speed = 80;
-    /// Pixels per art pixel, where 0 scales with the grid.
+    /// Integer magnification; 0 is auto, scaling with the grid.
     uint8_t spriteSize = 0;
-    /// Move to the music, each sprite on its own band, holding still in silence.
+    /// Each sprite follows its own band, so the scene breathes.
     bool audioReactive = false;
 
     /// Publish the three counts, the speed, the sprite scale and the audio switch.

@@ -514,12 +514,12 @@ def test_the_catalog_pages_actually_yield_cards():
     it, so the count itself is pinned: these pages have cards, and a change that stops
     finding them fails here rather than going quiet."""
     import check_docgen
-    from pathlib import Path as _P
     total = 0
     for rel in check_docgen._pages():
-        path = ROOT / "docs" / rel
-        if path.exists():
-            total += len(list(_cards(path.read_text(encoding="utf-8"))))
+        # As the check reads them: a written page or one generated from help.json, its cards drawn.
+        page = check_docgen._hooks.catalog_markdown(rel)
+        if page is not None:
+            total += len(list(_cards(check_docgen._hooks.fill_cards_from_help(page, rel))))
     assert total > 100, f"only {total} cards found across the catalog pages"
 
 
@@ -1657,3 +1657,13 @@ def test_a_generated_catalog_page_is_measured_as_its_cards_are_drawn(monkeypatch
     monkeypatch.setattr(check_docgen._hooks, "catalog_markdown", lambda rel: _card() if rel == "moonmodules/light/modifiers.md" else None)
     findings = check_docgen._violations()
     assert any("modifiers" in key and "no image" in why for key, why in findings)
+
+
+def test_a_control_guide_repeating_its_line_is_reported_and_one_adding_to_it_is_not():
+    import check_docgen
+    help_file = {"modules": {"DemoEffect": {"source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/DemoEffect.h", "controls": {
+        "persistence": {"line": "How long light survives in the flow, as a half-life.", "more": "How long light survives once it is in the flow, as a half-life."},
+        "fit": {"line": "Keep the aspect with bands or cropped, or stretch it to the grid.", "more": "**fit** shows the whole picture, with bands where its aspect leaves the grid empty."},
+        "formation": {"line": "How the heads relate: fan, mirror, chase, cross or unison.", "more": "How the heads relate. With fan the beams open like a hand."}}}}}
+    findings = check_docgen._guide_repeats(help_file)
+    assert [f[1].split("`")[1] for f in findings] == ["persistence", "formation"]   # the guide saying the line, and opening with part of it

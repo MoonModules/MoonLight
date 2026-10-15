@@ -7,28 +7,16 @@
 
 namespace mm {
 
-/// Showcase effect: cycles through other effects with a name overlay.
+/// Plays every other registered effect in turn, auto-advancing on a timer, so one Layer cycles the whole library hands-free.
 /// @card DemoReelEffect.gif
-/// Author: MoonLight original, on Mark Kriegsman's FastLED DemoReel100 pattern, https://github.com/FastLED/FastLED/blob/master/examples/DemoReel100/DemoReel100.ino
 ///
-/// Cycles through every other registered effect, advancing every `interval` seconds.
-/// It hosts one live child at a time, created from the registry and parented to this Layer.
-/// So the reel is an effect that swaps which effect it is over time.
+/// New effects are picked up automatically. It can pick a fresh palette each cycle and overlay the playing effect's name, and the status line says which is playing. It never hosts itself, and it plays in sequence rather than compositing.
 ///
-/// Prior art: FastLED's DemoReel100 sketch, with the registry-driven, self-skipping variant ours.
+/// @attribution FastLED, Mark Kriegsman
 ///
 /// @moreinfo
 ///
-/// ## It sequences rather than composites
-///
-/// The Layer stack and its blend modes already composite, so the reel plays effects in turn.
-/// The child's own controls stay at their defaults, and the reel exposes only the cycle controls.
-///
-/// ## The child rides the normal lifecycle
-///
-/// A swap tears the child down, deletes it, and creates the next one.
-/// That child sees the Layer as its parent, so its buffer, extents and clock resolve to this target.
-/// It runs the same create, defineControls, setup, prepare and loop lifecycle a Layer gives any effect.
+/// It hosts one live child at a time, created from the registry and parented to this Layer. The child runs the normal lifecycle against this Layer's buffer, extents and clock. The child's own controls stay at their defaults.
 class DemoReelEffect : public EffectBase {
 public:
     /// Catalog tags: the demo reel.
@@ -36,13 +24,13 @@ public:
     /// D3, since the reel produces a complete frame and extrudes the child itself before the overlay.
     Dim dimensions() const override { return Dim::D3; }
 
-    /// Seconds each effect plays before the reel advances.
+    /// Seconds each effect plays before advancing.
     uint8_t interval      = 8;
-    /// Pick the next effect at random rather than in registry order.
+    /// Jump to a random next effect instead of registry order.
     bool    shuffle       = false;
-    /// Pick a fresh palette on each cycle, which showcases the palette set.
+    /// Pick a random palette on each cycle.
     bool    randomPalette = true;
-    /// Overlay the playing effect's name, which is what makes the reel a showcase tool.
+    /// Overlay the playing effect's name in a small font.
     bool    showName      = true;
 
     /// Publish the cycle interval, the order, the palette and the overlay.

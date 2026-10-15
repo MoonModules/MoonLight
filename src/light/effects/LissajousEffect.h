@@ -5,22 +5,16 @@
 
 namespace mm {
 
-/// Parametric effect tracing a Lissajous curve across the layer.
+/// A Lissajous curve traced across the grid, palette-colored along its length, with a fading trail.
 /// @card LissajousEffect.gif
-/// Author: Andrew Tuline (WLED-SR), via the predecessor, https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_WLED.h
 ///
-/// Sample points sweep an x and a y oscillator whose frequencies and shared phase drift.
-/// So the closed curve continuously morphs and rotates, leaving a fading trail.
+/// Sample points sweep an x and a y oscillator whose frequencies and shared phase drift, so the closed curve continuously morphs and rotates.
 ///
-/// Prior art: MoonLight's Lissajous, itself the WLED effect of the same name.
+/// @attribution Andrew Tuline
 ///
 /// @moreinfo
 ///
-/// ## One truncation point closes the figure
-///
-/// The phase stays wide, and only the final oscillator argument narrows to a byte.
-/// That wrap across the samples is what produces a closed figure rather than an open trace.
-/// It is the source's only truncation, so keeping it exact keeps the shape exact.
+/// The phase stays wide and only the final oscillator argument narrows to a byte. That one truncation closes the figure, so keeping it exact keeps the shape exact.
 class LissajousEffect : public EffectBase {
 public:
     /// Catalog tags: WLED lineage.
@@ -28,11 +22,11 @@ public:
     /// The curve is traced across a plane.
     Dim dimensions() const override { return Dim::D2; }
 
-    /// How many x oscillations happen per y one, which is the figure's lobe count.
+    /// The x-axis sweep frequency, which sets the curve's lobe count.
     uint8_t xFrequency = 64;
-    /// The per-frame trail fade, where higher leaves a shorter tail.
+    /// How fast the trail fades each frame.
     uint8_t fadeRate   = 128;
-    /// How fast the shared phase advances.
+    /// How fast the curve's phase advances.
     uint8_t speed      = 128;
 
     /// Publish the figure's shape, its trail and its speed.

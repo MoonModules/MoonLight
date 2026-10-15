@@ -1,5 +1,4 @@
 #pragma once
-// Author: MoonLight original
 
 #include "core/util/format.h"   // formatTo: the score digits
 #include "light/powerfunctions/draw.h"
@@ -10,23 +9,24 @@
 
 namespace mm {
 
-/// Effect: two self-playing paddles rallying a ball across the grid.
+/// Two paddles rally a ball, the attract mode of the 1972 original where both players are the machine.
 /// @card PongEffect.gif
 ///
-/// The attract-mode reading of the 1972 original, so both paddles play themselves.
-/// A perfect tracker would rally forever and never look like a game.
-/// So each paddle waits out a reaction delay and aims slightly off center.
-/// That is what produces the near-misses, edge hits and occasional points.
-/// The score shows at the top, and the first to 11 starts a new game, as the original played.
-/// `player1` and `player2` are the paddles as controls, held through `PlayerSeat`.
+/// A perfect tracker would rally forever and never look like a game, so each paddle has a reaction delay and a small aiming error, re-rolled every exchange.
+///
+/// `player1` and `player2` are the paddles as controls, for a fader or an input, and while idle the game plays.
+///
+/// @attribution Pong
+///
+/// @guide
+///
+/// ## Scoring
+///
+/// The score shows at the top once the grid is at least 32 by 18, and the first side to 11 starts a new game.
 ///
 /// @moreinfo
 ///
-/// ## The ball is the shared sprite cast
-///
-/// It is either the classic square or one member of the cast in SpriteCast.h.
-/// A Pacman crossing the court is the same code path as the fountain throwing one.
-/// That is why the cast lives in its own header rather than in either effect.
+/// The sprite ball is a member of the shared cast in SpriteCast.h, so a Pacman crossing the court runs the same code path as the fountain throwing one.
 class PongEffect : public EffectBase {
 public:
     /// Catalog tags: MoonLight origin, a game.
@@ -34,17 +34,17 @@ public:
     /// A court needs a width and a height, so it is a 2D effect.
     Dim dimensions() const override { return Dim::D2; }
 
-    /// Rally speed in crossings per minute, so the court's width leaves it alone.
+    /// Ball crossings per minute, the same time on any grid.
     uint8_t rallyBpm = 40;
-    /// Paddle length as a percentage of the court's height, since short paddles miss more.
+    /// Paddle length as a share of the court; short paddles miss more.
     uint8_t paddle = 30;
-    /// How sharply a paddle chases the ball, from sluggish to instant.
+    /// How sharply a paddle chases the ball; below full it lags a fast one.
     uint8_t reflex = 150;
-    /// Swap the square ball for a member of the shared sprite cast, re-picked on every hit.
+    /// Swap the square ball for a sprite, re-picked on every hit.
     bool spriteBall = false;
-    /// Pixels per art pixel, when the ball is a sprite.
+    /// Integer magnification of the sprite ball, shown while it is on.
     uint8_t size = 1;
-    /// The left paddle's height, bottom to top as a fader reads; follows the game until an input writes it.
+    /// The left paddle's height, for a fader or input; idle, the game plays.
     uint8_t player1 = 128;
     /// The right paddle's height, the same way.
     uint8_t player2 = 128;

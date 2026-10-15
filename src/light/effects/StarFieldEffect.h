@@ -6,29 +6,22 @@
 
 namespace mm {
 
-/// Star-field effect: drifting points like flying through stars.
+/// A perspective starfield: stars approach the viewer from a vanishing point, brightening as they near, then respawn at depth.
 /// @card StarFieldEffect.gif
-/// Author: @Brandon502 (MoonLight), inspired by Daniel Shiffman / Coding Train, https://www.youtube.com/watch?v=17WoOqgXsRM , https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h
 ///
-/// Each star is a 3D point drifting toward the viewer, re-projected onto the panel every advance.
-/// So a near star splays outward and flies off the edge while a distant one sits near the center.
-/// That is the classic warp look, and a star passing the camera respawns at the far plane.
+/// Each star is a 3D point drifting toward the viewer, re-projected onto the panel every advance. A near star splays outward and flies off the edge while a distant one sits near the center. A star passing the camera respawns at the far plane.
 ///
-/// Prior art: MoonLight's StarField, whose model and respawn rule this reproduces.
+/// @attribution Brandon502, Daniel Shiffman
 ///
 /// @moreinfo
 ///
 /// ## Depth drives brightness, and the fade draws the streak
 ///
-/// A nearer star is brighter, and with `usePalette` its depth picks the hue too.
-/// `blur` fades the previous frame rather than clearing it, so each star leaves a motion streak.
-/// `speed` throttles how often the field advances, and 0 pauses it.
+/// A nearer star is brighter, and with `usePalette` its depth picks the hue too. `blur` fades the previous frame rather than clearing it, so each star leaves a motion streak.
 ///
-/// ## The port is exact on purpose
+/// ## Floats, deliberately
 ///
-/// The per-star perspective divide keeps floats, running once a star rather than once a pixel.
-/// The center offset and the projection scale are integer halves, so an odd-width panel matches.
-/// A ported effect that looks different is a regression, so fidelity wins over tidiness here.
+/// The per-star perspective divide keeps floats, running once a star rather than once a pixel. The center offset and the projection scale are integer halves, so an odd-width panel projects symmetrically.
 class StarFieldEffect : public EffectBase {
 public:
     /// Catalog tags: MoonLight origin.
@@ -36,13 +29,13 @@ public:
     /// Writes the z=0 slice.
     Dim dimensions() const override { return Dim::D2; }
 
-    /// How fast the field advances, where 0 pauses it.
+    /// How fast the stars approach, where 0 pauses the field.
     uint8_t speed      = 20;
     /// How many stars are active.
     uint8_t numStars   = 16;
-    /// The fade rate, where a stronger fade leaves shorter streaks.
+    /// The motion-trail fade per frame.
     uint8_t blur       = 128;
-    /// Color the stars from the palette rather than in grayscale.
+    /// Color the stars from the palette instead of white.
     bool    usePalette = false;
 
     /// Publish the flight speed, the population, the streaks and the coloring.
@@ -92,7 +85,7 @@ public:
 
         const int sizeX = w;
         const int sizeY = h;
-        // Integer halves, so an odd-width panel projects as the source does.
+        // Integer halves, so the projection center is a whole pixel.
         const int halfX = sizeX / 2;
         const int halfY = sizeY / 2;
 

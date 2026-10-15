@@ -5,28 +5,14 @@
 
 namespace mm {
 
-/// Effect of a traveling wave across the layer.
+/// An oscilloscope waveform scrolls across the grid with a fading trail.
 /// @card WaveEffect.gif
-/// Author: Ewoud Wijma (MoonLight), https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h
 ///
-/// Each column plots one point of a moving wave, so the lit points trace a scrolling curve.
-/// A fading trail follows it, which is the classic oscilloscope look.
-///
-/// Prior art: MoonLight's Wave effect, whose six shapes and travel this reproduces.
+/// Six selectable shapes: sawtooth, triangle, sine, square, sin3 and noise. Each column plots one point of a moving wave, so the lit points trace a scrolling curve.
 ///
 /// @moreinfo
 ///
-/// ## The axis convention
-///
-/// The waveform sets a y, so its shape lives on height and width is the travel axis.
-/// A 1-tall grid therefore shows no wave.
-/// To drive a strip or a row of lights, lay it out as 1xN, the project's 1D convention.
-///
-/// ## How a column finds its point
-///
-/// Each column's phase is the travel plus its own skew, which is what moves the wave sideways.
-/// That phase maps through the selected waveform to a y inside the grid, and that pixel lights.
-/// A vertical segment then joins the previous column, so a sawtooth or square reads as one line.
+/// The waveform sets a y, so its shape lives on height and width is the travel axis: a 1-tall grid shows no wave. To drive a strip or a row of lights, lay it out as 1xN, the project's 1D convention.
 class WaveEffect : public EffectBase {
 public:
     /// Catalog tags for the visual catalog.
@@ -34,14 +20,14 @@ public:
     /// Writes the z=0 plane, which extrude duplicates through a volume.
     Dim dimensions() const override { return Dim::D2; }
 
-    // Index-aligned with waveY's switch. Sin3 sums three sines, and Noise plots a jittered band.
+    /// The waveform names, index-aligned with waveY's switch: sin3 sums three sines, noise plots a jittered band.
     static constexpr const char* kWaveforms[] = {"Sawtooth", "Triangle", "Sine", "Square", "Sin3", "Noise"};
     /// The waveform shapes, in option order, ending with how many the select offers.
     enum Waveform : uint8_t { kSawtooth, kTriangle, kSine, kSquare, kSin3, kNoise, kWaveformCount };
 
     /// Travel speed, as phase advance per minute.
     uint8_t bpm  = 30;
-    /// How much of the trail each frame keeps, so 0 clears the old wave at once.
+    /// How much trail each frame keeps; 0 clears it at once.
     uint8_t fade = 32;
     /// Which waveform shape is drawn.
     uint8_t waveform = kSine;

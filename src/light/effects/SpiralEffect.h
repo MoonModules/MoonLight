@@ -4,12 +4,12 @@
 
 namespace mm {
 
-// Author: MoonLight original (rotating spiral)
-/// Effect winding a lit spiral up a conical layout.
+/// A rotating spiral built from each pixel's angle and distance from the center.
 /// @card SpiralEffect.gif
 ///
-/// Each pixel's hue comes from its angle plus its radius times `twist`, walked by the clock.
-/// So the arms wind outward, and turning `twist` up tightens them.
+/// Each pixel's hue comes from its angle plus its radius times `twist`, walked by the clock. So the arms wind outward, and turning `twist` up tightens them.
+///
+/// @attribution David Jupijn
 class SpiralEffect : public EffectBase {
 public:
     /// Catalog tags: MoonLight origin, David Jupijn and Rising Step.
@@ -21,7 +21,7 @@ public:
     uint8_t bpm = 40;
     /// How tightly the arms wind, as hue per unit radius.
     uint8_t twist = 4;
-    /// Walks every arm around the palette.
+    /// Rotates the palette index.
     uint8_t hue_shift = 0;
 
     /// The polar address: the table, its precision, and how a volumetric fixture maps to angle and radius.

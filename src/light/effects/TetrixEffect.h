@@ -7,24 +7,18 @@
 
 namespace mm {
 
-/// Tetris-style effect: falling, stacking blocks.
-/// Author: Andrew Tuline (WLED-SR), via the predecessor, https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_WLED.h
+/// Falling Tetris-style blocks: each column drops a brick that lands on the growing stack, fills the column, then clears and restarts.
 /// @card TetrixEffect.gif
 ///
-/// Each column drops a brick of light that falls at its own speed onto a growing stack.
-/// Once the stack fills a column, that column fades to black and the cycle restarts.
-/// Every column runs its own state machine, so they desync into a rain of stacking bricks.
+/// At speed 0 each brick picks its own fall rate; otherwise all fall at the set speed. Every column runs its own state machine, so they desync into a rain of stacking bricks.
 ///
-/// Prior art: MoonLight's Tetrix, descended from the WLED effect by Aircoookie and blazoncek.
+/// @attribution Andrew Tuline, Aircoookie, blazoncek
 ///
 /// @moreinfo
 ///
 /// ## The per-column state machine
 ///
-/// `step` carries the state: 0 idle, 1 start-roll, 2 falling.
-/// Above 2 it holds a future millis() timestamp instead, for the start delay and the blank delay.
-/// The physics come from the MoonLight spec, written fresh on EffectBase and the draw primitives.
-/// With `oneColor` a column's bricks share one slowly-advancing palette index, else each is random.
+/// `step` carries the state: 0 idle, 1 start-roll, 2 falling. Above 2 it holds a future millis() timestamp, for the start delay and the blank delay.
 class TetrixEffect : public EffectBase {
 public:
     /// Catalog tags: WLED origin, a game.
@@ -32,11 +26,11 @@ public:
     /// Writes the z=0 slice only, iterating x and y.
     Dim dimensions() const override { return Dim::D2; }
 
-    /// Fall speed, MoonLight's default. 0 gives each brick a random speed.
+    /// Fall speed, where 0 gives each brick a random speed.
     uint8_t speedControl = 0;
-    /// Brick height. 0 randomizes it, otherwise it derives from this.
+    /// Brick height, where 0 randomizes it.
     uint8_t widthControl = 0;
-    /// Share one slowly-advancing color across a column's bricks.
+    /// One advancing palette color for every brick, not one each.
     bool    oneColor     = false;
 
     /// Publish the fall speed, the brick height and the one-color switch.
@@ -46,7 +40,7 @@ public:
         controls_.addControl("oneColor", oneColor);
     }
 
-    /// Per-column falling-brick state, MoonLight's Tetris struct.
+    /// Per-column falling-brick state.
     struct Tetris {
         float    pos   = 0.0f;  ///< head position of the falling brick, in LED rows
         float    speed = 0.0f;  ///< fall speed in rows per frame
@@ -176,7 +170,7 @@ public:
     }
 
 private:
-    /// MoonLight's 25 ms frame, the step the fall speed is calibrated against.
+    /// The 25 ms reference frame, the step the fall speed is calibrated against.
     static constexpr int FRAMETIME = 1000 / 40;
 
     /// FastLED's integer map, used with a descending range so the result falls as speed rises.
@@ -186,12 +180,11 @@ private:
         return (x - inMin) * (outMax - outMin) / den + outMin;
     }
 
-    // The *Control suffix keeps these from shadowing the inherited width() and depth() accessors.
     ScratchBuffer<Tetris> drops_{*this};   ///< one drop per X column
     ScratchBuffer<uint8_t> stackCol_{*this};   ///< each landed row's palette index, column by column
     Random8        rng_;
 
-    particles::FrameTime fallTime_{40};   ///< MoonLight's reference rate
+    particles::FrameTime fallTime_{40};   ///< the reference rate
     float frameScale_ = 1.0f;             ///< this frame's share of a reference frame
 };
 

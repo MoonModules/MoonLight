@@ -688,6 +688,8 @@ details.control-helper[open] > summary::before { content: "▾"; }
     border-radius: 4px;
 }
 .card-helpbox .help-attribution { font-style: italic; }
+/* The summary sits under the line, indented past the arrow, so it reads as the line's own. */
+.card-helpbox .help-summary { margin: 4px 0 0 1em; }
 
 /* A control's help: one line under the field, indented to the control column so it reads as the field's own. Only a row with help wraps. Proximity groups it, Gestalt's rule rather than color alone: 2px under its own field, 12px before the next one. */
 .control-row.has-help { flex-wrap: wrap; row-gap: 2px; margin-bottom: 12px; }

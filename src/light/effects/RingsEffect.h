@@ -4,13 +4,12 @@
 
 namespace mm {
 
-// Author: MoonLight original (concentric rings)
-/// Effect of expanding concentric rings from random centers.
+/// Expanding concentric rings from random centers, with additive overlap and calm defaults.
 /// @card RingsEffect.gif
 ///
-/// Each ring grows continuously and respawns somewhere fresh once it leaves the grid.
-/// Several overlap, and where two rings cross their brightness sums.
-/// RipplesEffect holds the sine-wave water surface, where this one is the concentric form.
+/// Each ring grows continuously and respawns somewhere fresh once it leaves the grid. Several overlap, and where two rings cross their brightness sums. @ref RipplesEffect holds the sine-wave water surface, where this one is the concentric form.
+///
+/// @attribution David Jupijn
 class RingsEffect : public EffectBase {
 public:
     /// Catalog tags: MoonLight origin, David Jupijn and Rising Step.
@@ -21,14 +20,13 @@ public:
     /// How many rings the effect can hold at once.
     static constexpr uint8_t MAX_RIPPLES = 8;
 
-    // Calm defaults: a couple of slow rings read as clean circles, where more reads as chaos.
-    /// How many rings expand at a time.
+    /// How many concentric rings; a few slow ones read as clean circles.
     uint8_t count = 2;
-    /// How fast each one grows.
+    /// Expansion rate.
     uint8_t speed = 30;
-    /// How wide a ring's lit band is.
+    /// Ring band width.
     uint8_t thickness = 3;
-    /// Walks every ring around the palette.
+    /// Rotates every ring's hue.
     uint8_t hue_shift = 0;
 
     /// Publish the population, the growth rate, the band's width and the palette shift.

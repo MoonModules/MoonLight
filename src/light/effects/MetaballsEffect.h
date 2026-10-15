@@ -5,13 +5,12 @@
 
 namespace mm {
 
-// Author: MoonLight original (metaballs)
-/// Metaballs effect: smooth merging blobs via a scalar field.
+/// Blobs orbit and merge smoothly, where the summed field of all balls picks each pixel's color and brightness.
 /// @card MetaballsEffect.gif
 ///
-/// Each ball contributes a field that falls off with distance, and the sum picks the color.
-/// Where two balls approach, their fields add and the blobs appear to merge.
-/// LavaLampEffect runs the same field slowly through a palette instead.
+/// Each ball contributes a field that falls off with distance, and the sum picks the color. Where two balls approach, their fields add and the blobs appear to merge. @ref LavaLampEffect runs the same field slowly through a palette instead.
+///
+/// @attribution David Jupijn
 class MetaballsEffect : public EffectBase {
 public:
     /// Catalog tags: MoonLight origin, David Jupijn and Rising Step.
@@ -19,13 +18,13 @@ public:
     /// Iterates y and x, which extrude fills through a volume.
     Dim dimensions() const override { return Dim::D2; }
 
-    /// How fast the balls travel their orbits.
+    /// How fast the balls orbit.
     uint8_t bpm = 30;
-    /// How far each ball's field reaches.
+    /// How far each blob's influence reaches.
     uint8_t radius = 28;
-    /// How many balls share the field, each on its own path.
+    /// How many balls orbit.
     uint8_t count = 4;
-    /// Walks the whole field around the palette.
+    /// Rotates the palette index.
     uint8_t hue_shift = 0;
 
     /// The orbit table's size, and so the ball count's ceiling.

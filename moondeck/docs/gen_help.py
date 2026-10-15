@@ -33,7 +33,8 @@ CATALOG = ROOT / "docs" / "moonmodules"
 # In the docs tree, so every docs deploy publishes it at <site>/help/help.json, and committed, so the docs build reads it without LLVM and a header's change shows in the diff as its help line.
 HELP = ROOT / "docs" / "help" / "help.json"
 # A catalog page drawn whole from help.json, named once here with the base class whose comment introduces it: the page's title and its intro, what every module on it shares.
-CATALOGS = {"light/modifiers.md": ("Modifiers", "ModifierBase"), "light/layouts.md": ("Layouts", "LayoutBase")}
+CATALOGS = {"light/modifiers.md": ("Modifiers", "ModifierBase"), "light/layouts.md": ("Layouts", "LayoutBase"),
+            "light/effects.md": ("Effects", "EffectBase")}
 
 _MARKER_RE = re.compile(r"^(@guide|@moreinfo)\s*$", re.MULTILINE)
 _XREF_RE = re.compile(r"@xref\{([a-z0-9-]+)(?:\|([^}]+))?\}")
@@ -352,6 +353,7 @@ def registrations(tu, ci):
 # ---- the file -------------------------------------------------------------------------------
 
 def asset_url(fname: str) -> str | None:
+    """A picture or clip `@card` and `@video` name, a file under docs/assets/, as its URL on the site."""
     hits = sorted((ROOT / "docs" / "assets").rglob(fname))
     return SITE + hits[0].relative_to(ROOT / "docs").as_posix() if hits else None
 

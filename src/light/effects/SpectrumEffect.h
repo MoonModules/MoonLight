@@ -5,23 +5,16 @@
 
 namespace mm {
 
-/// Audio effect: a spectrum analyzer with asymmetric ballistics and falling peak dots.
+/// An audio analyzer with real meter ballistics: bars rise fast enough to catch a transient and fall slowly enough to read.
 /// @card SpectrumEffect.gif
 ///
-/// Two behaviors are what make a meter read as an instrument rather than a bar chart.
-/// A bar rises fast enough to catch a transient and falls slowly enough to be readable.
-/// A dot then marks the highest recent level and drifts down, showing what has passed.
+/// A peak dot marks the recent maximum and drifts down. The asymmetry is the whole point: a symmetric follower either misses the hit or flickers.
 ///
-/// Prior art: the standard VU and PPM meter ballistics, and WLED's GEQ for the band mapping.
+/// @attribution IEC 60268-17, WLED
 ///
 /// @moreinfo
 ///
-/// ## The ballistics live in the toolbox
-///
-/// `smoothFollow` and `peakHold` are shared, so any effect wanting a meter gets the same feel.
-/// GEQEffect hand-rolls its own peak tracker into a buffer sized to the column count instead.
-/// `draw::bar` draws the columns too, so this effect owns no drawing loop.
-/// What remains is the band-to-column mapping and the choice of colors, which is its own.
+/// The ballistics live in the shared `smoothFollow` and `peakHold`, so any effect wanting a meter gets the same feel, and `draw::bar` draws the columns. The band-to-column mapping follows WLED's GEQ.
 class SpectrumEffect : public EffectBase {
 public:
     /// Catalog tags: a showcase, and audio-reactive.
@@ -29,9 +22,9 @@ public:
     /// Writes the z=0 slice, which extrude fills through a volume.
     Dim dimensions() const override { return Dim::D2; }
 
-    /// How fast a bar rises toward a new level, where 255 is instant.
+    /// How fast a bar rises toward a new level.
     uint8_t attack   = 200;
-    /// How fast it falls back, which is deliberately slower.
+    /// How fast a bar falls back.
     uint8_t release  = 30;
     /// How fast the peak dot drifts down.
     uint8_t peakDecay = 2;

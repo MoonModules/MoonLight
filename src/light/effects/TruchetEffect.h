@@ -6,30 +6,16 @@
 
 namespace mm {
 
-/// Effect: randomly-turned arc tiles that join into endless winding paths.
+/// A maze of interlocking arcs that never repeats, drawn without storing a single tile.
 /// @card TruchetEffect.gif
 ///
-/// Randomly turned tiles with arcs at their edges join into continuous winding paths.
-/// The pattern looks designed, and nothing designed it.
-/// Nothing is stored either: this is one function of position and time, evaluated per pixel.
+/// Randomly turned tiles join into continuous winding paths across the surface: the pattern looks designed, and nothing designed it. This is the representative 2D shader: no 3D, no rays, no float, and cheap on any target.
 ///
-/// Prior art: Sebastien Truchet's tiling, revived by Cyril Smith in 1987.
-/// The shader form follows the standard fract, hash and smoothstep idiom.
+/// @attribution Sébastien Truchet
 ///
 /// @moreinfo
 ///
-/// ## The three moves most shader effects are built from
-///
-/// Space folding: `repeat` chops the plane into cells and returns the position inside one.
-/// So the shader only has to draw a single tile, and the coordinate takes care of the hundreds.
-///
-/// Per-cell variation from position alone: `hashInt` on the cell index turns that tile.
-/// Being a pure function, tile (7, 3) is always the same tile, and two devices agree on it.
-///
-/// Distance plus smoothstep: each tile is two arcs drawn as the distance to a ring.
-/// The smoothstep across that distance is what stops a curve reading as a staircase.
-///
-/// Cost is two SDF evaluations and a hash per pixel, all integer, so any target runs it.
+/// One function of position and time, evaluated per pixel. Its `repeat` folds the plane into one tile, and `hashInt` on the cell index turns it, so two devices agree on tile (7, 3). A smoothstep across the distance to an arc stops a curve reading as a staircase.
 class TruchetEffect : public EffectBase {
 public:
     /// Catalog tags: this effect is the power-function showcase.

@@ -26,17 +26,23 @@ export function technicalUrl(source) {
     return m ? `https://moonmodules.org/MoonLight/moonmodules/${m[1]}/moxygen/${m[2]}.html` : null;
 }
 
-// A module's help, progressive disclosure: the line always shows, the rest opens on a tap, and the picture loads only then.
+// A module's help, progressive disclosure: the line and the summary always show, the guide and the rest open on a tap, and the picture loads only then.
 export function moduleHelp(help, docPath) {
     const box = document.createElement("details");
     box.className = "card-helpbox";
+    // The line and the summary always show; the arrow opens the guide, the picture, the attribution and the links.
     const line = document.createElement("summary");
     line.innerHTML = helpMarkdown(help.line);
+    if (help.summary) {
+        const s = document.createElement("div");
+        s.className = "help-summary";
+        s.innerHTML = helpMarkdown(help.summary);
+        line.appendChild(s);
+    }
     box.appendChild(line);
     const body = document.createElement("div");
     body.className = "card-helpbox-body";
     const part = (cls, html) => { const d = document.createElement("div"); d.className = cls; d.innerHTML = html; body.appendChild(d); };
-    if (help.summary) part("help-summary", helpMarkdown(help.summary));
     let img = null;
     const image = safeUrl(help.image);
     if (image) { img = document.createElement("img"); img.className = "help-image"; img.alt = help.alt || ""; body.appendChild(img); }

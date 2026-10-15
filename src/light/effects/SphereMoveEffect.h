@@ -4,21 +4,14 @@
 
 namespace mm {
 
-/// Effect moving a lit sphere through a 3D layout.
+/// A hollow spherical shell that bounces through the 3D volume, its surface colored from the palette, leaving no trail.
 /// @card SphereMoveEffect.gif
 ///
-/// A hollow sphere whose shell sweeps the volume on a Lissajous path, breathing as it goes.
-/// Every voxel inside the one-unit shell lights from the palette, jittered so it shimmers.
-///
-/// Prior art: MoonLight's SphereMove, whose oscillator and shell test this reproduces.
+/// The shell sweeps the volume on a Lissajous path, breathing as it goes. Every voxel inside the one-unit shell lights from the palette, jittered so it shimmers.
 ///
 /// @moreinfo
 ///
-/// ## Float per voxel, deliberately
-///
-/// The distance test is a square root per voxel, kept for exact fidelity with the source.
-/// The time base is float throughout, so the sweep and the breathing integrate continuously.
-/// Dividing in integers first would quantize both into visible steps.
+/// The distance test is a square root per voxel, and the time base is float throughout, so the sweep and the breathing integrate continuously. Dividing in integers first quantizes both into visible steps.
 class SphereMoveEffect : public EffectBase {
 public:
     /// Catalog tags: MoonLight origin, and 3D-native.
@@ -26,7 +19,7 @@ public:
     /// A sphere needs the whole volume.
     Dim dimensions() const override { return Dim::D3; }
 
-    /// How fast the sphere sweeps, where higher shrinks the divisor.
+    /// How fast the sphere moves through the volume.
     uint8_t speed = 50;
 
     /// Publish the sweep rate.

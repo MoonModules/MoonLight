@@ -10,22 +10,22 @@
 
 namespace mm {
 
-/// Effect: a raymarched 3D scene of melting spheres, lit by a normal derived from the field.
+/// A lit 3D scene rendered by marching a ray through a distance field, one ray per pixel.
 /// @card RaymarchEffect.gif
 ///
-/// The effect is deliberately thin, and that is its point.
-/// The tracing, the primitives, the normal, the camera and the lighting all live in `raymarch.h`.
-/// What remains here is a `scene()` of two spheres and a floor, and a choice of colors.
-/// Writing a different 3D effect means writing a different `scene()`, which is the whole API.
+/// Nothing draws a sphere: the scene is a function returning the distance to the nearest surface, and the spheres emerge where each ray stops. Writing a different 3D effect means writing a different `scene()`, which is the whole API. Cost is per pixel, and `steps` trades quality against it.
 ///
-/// Prior art: Inigo Quilez's distance-function and raymarching articles.
+/// @attribution Iñigo Quilez, John Hart
+///
+/// @guide
+///
+/// ## Where it runs
+///
+/// It is compiled only for a chip with a hardware FPU, so a classic ESP32 does not offer it.
 ///
 /// @moreinfo
 ///
-/// ## Cost is per pixel, not per chip
-///
-/// Measured on a desktop at 128x128 and on an S3 at 4096 lights, it holds hundreds of frames a second.
-/// `steps` caps how far each ray may search, so halving it roughly halves the cost.
+/// The tracing, the primitives, the normal, the camera and the lighting live in `raymarch.h`. This effect is a scene of two spheres and a floor plus a choice of colors.
 class RaymarchEffect : public EffectBase {
 public:
     /// Catalog tags: this effect is the power-function showcase.
@@ -35,13 +35,13 @@ public:
 
     /// How fast the scene animates.
     uint8_t bpm      = 10;
-    /// How far each ray may search, which is the quality and cost knob.
+    /// Ray marching steps: the quality and cost knob.
     uint8_t steps    = 40;
     /// How much the two spheres melt into each other.
     uint8_t blend    = 80;
-    /// The camera's height above the floor.
+    /// Camera height above the floor.
     uint8_t cameraY  = 128;
-    /// Draw the floor plane under the spheres.
+    /// Include the ground plane.
     bool    showFloor = true;
 
     /// Publish the animation, the ray budget, the melt and the camera.

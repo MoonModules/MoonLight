@@ -83,6 +83,23 @@ bool runEffectOnGrid(const std::string& name, mm::MoonModule* fx, const GridCase
     return wrote;
 }
 
+// A 16x16 RGB layer running one effect, prepared and ready to tick: the setup the buffer and release sweeps share.
+struct OneEffectLayer {
+    mm::Layouts layouts;
+    mm::GridLayout grid;
+    mm::Layer layer;
+    explicit OneEffectLayer(mm::MoonModule* effect) {
+        grid.width = 16; grid.height = 16; grid.depth = 1;
+        layouts.addChild(&grid);
+        layer.setLayouts(&layouts);
+        layer.setChannelsPerLight(3);
+        effect->defineControls();
+        layer.addChild(effect);
+        layouts.applyState();
+        layer.applyState();
+    }
+};
+
 }  // namespace
 
 // The sweep. One TEST_CASE over every effect keeps the failure output readable: a broken effect names itself and the grid it died on, and the rest still run. 1 and 2 channels are the interesting cases: an effect that assumes RGB either writes past its light or (with a guard) declines to render at all, and a user sees a black fixture either way.
@@ -139,6 +156,31 @@ TEST_CASE("every effect survives degenerate grid sizes") {
     MESSAGE("swept " << swept << " effects x " << (sizeof(kGrids) / sizeof(kGrids[0])) << " grids");
 }
 
+// A release frees every scratch buffer an effect holds, and the next prepare must size them again. An effect deciding on a size it cached finds it unchanged and allocates nothing.
+TEST_CASE("every effect holds its memory again after a release and a re-prepare") {
+    int checked = 0;
+    mm::forEachEffect([&](const char* name, auto make) {
+        const std::string effectName(name);
+        CAPTURE(effectName);
+        mm::MoonModule* effect = make();
+        REQUIRE_MESSAGE(effect != nullptr, "could not construct " << effectName);
+        OneEffectLayer rig(effect);
+        mm::Layer& layer = rig.layer;
+        const size_t before = effect->dynamicBytes();
+        layer.release();      // what disabling, a preset or a rebuild does to the tree
+        layer.applyState();   // and the prepare that follows
+        CHECK_MESSAGE(effect->dynamicBytes() == before, effectName << " held " << before << " bytes before the release and " << effect->dynamicBytes() << " after");
+        // And it runs on what it holds: a table that calls itself ready over freed memory reads null here.
+        mm::platform::setTestNowMs(100000u); layer.tick();
+        mm::platform::setTestNowMs(100016u); layer.tick();
+        mm::platform::setTestNowMs(0);
+        layer.release();
+        delete effect;
+        checked++;
+    });
+    CHECK_MESSAGE(checked > 0, "no effects checked");
+}
+
 // The Layer does NOT clear the buffer between frames (an effect can fade its own last frame for trails, or read prior pixels for a scroll). The corollary is a contract every effect owes: it owns its background. An effect that only writes the pixels it lights, and skips the rest, inherits whatever was on screen, its own path from earlier frames as permanent ghosts, and the entire picture of whatever effect ran before it.
 //
 // A golden-frame test cannot see this: it renders into a buffer that starts zeroed, so the pixels an effect never writes are black by luck and hash correctly. This starts from a DIRTY buffer, which is what a real device hands an effect on every frame after the first.
@@ -152,19 +194,9 @@ TEST_CASE("every effect owns its background rather than inheriting the last fram
         const std::string effectName(name);
         if (effectName == "DemoReelEffect" || effectName == "NetworkReceiveEffect") { audited++; return; }
 
-        mm::Layouts layouts;
-        auto* grid = new mm::GridLayout();
-        grid->width = 16; grid->height = 16; grid->depth = 1;
-        layouts.addChild(grid);
-
-        mm::Layer layer;
-        layer.setLayouts(&layouts);
-        layer.setChannelsPerLight(3);
         mm::MoonModule* effect = make();
-        effect->defineControls();
-        layer.addChild(effect);
-        layouts.applyState();
-        layer.applyState();
+        OneEffectLayer rig(effect);
+        mm::Layer& layer = rig.layer;
 
         // A recognizable value no palette produces, standing in for the previous effect's frame.
         constexpr uint8_t kStale = 0xA7;

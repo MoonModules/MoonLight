@@ -4,29 +4,16 @@
 
 namespace mm {
 
-/// Effect rendering a rotating Rubik's cube on a 3D layout.
+/// A 3D Rubik's Cube projected onto the volume: it scrambles, then plays its solution back one turn at a time, the six faces in their standard colors.
 /// @card RubiksCubeEffect.gif
-/// Author: WildCats08 / @Brandon502 (MoonLight), https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h
 ///
-/// The cube scrambles itself, then plays the scramble back one slice at a time.
-/// Every voxel takes the color of the nearest face, which is what makes a solid read as a cube.
+/// Every voxel takes the color of the nearest outer face, which is what makes a solid read as a cube. The cube is a full six-face model with the real face, row and column rotations, and `cubeSize` of 2 through 8 gives real cubes where 1 is a single block.
 ///
-/// Prior art: MoonLight's RubiksCube, whose model and move list this reproduces.
+/// @attribution Brandon502
 ///
 /// @moreinfo
 ///
-/// ## The model behind the picture
-///
-/// The cube is a full six-face model, up to 8x8 stickers a face, with the real face, row and column rotations.
-/// Each frame it is drawn onto the LED volume by classifying every in-bounds voxel as belonging to whichever outer face it sits nearest, and coloring it from that face's sticker.
-/// Turns play at `turnsPerSecond`, and `cubeSize` is the order of the cube, 2 through 8 being real cubes and 1 a degenerate single block.
-/// With `randomTurning` the cube tumbles through endless random moves instead of solving a stored scramble.
-///
-/// ## One difference from the source
-///
-/// MoonLight has no per-cell mapping mask, so every in-bounds voxel counts as mapped.
-/// The source's mapping-driven size adjustments are therefore dropped.
-/// The projection uses the extent less one instead, floored at 1.
+/// Without a per-cell mapping mask every in-bounds voxel counts as mapped, so the projection uses the extent less one, floored at 1.
 class RubiksCubeEffect : public EffectBase {
 public:
     /// Catalog tags: MoonLight origin, and 3D-native.
@@ -34,14 +21,13 @@ public:
     /// A cube needs all three axes, so this effect is volumetric.
     Dim dimensions() const override { return Dim::D3; }
 
-    // Defaults match MoonLight's own RubiksCube.
-    /// How many slices turn each second.
+    /// How fast the cube turns.
     uint8_t turnsPerSecond = 2;
-    /// The cube's order, so 3 is the familiar 3x3x3.
+    /// The cube order, its side in cells.
     uint8_t cubeSize       = 3;
-    /// Turn random slices rather than replaying the scramble backward.
+    /// Turn endlessly at random instead of scramble-then-solve.
     bool    randomTurning  = false;
-    /// Take the six face colors from the active palette, where a primary-ish one stays distinct.
+    /// Color the faces from the palette, not the classic colors.
     bool    usePalette     = false;
 
     /// Publish the turn rate, the cube's order and the two coloring choices.
@@ -104,7 +90,7 @@ public:
     }
 
 private:
-    // --- The cube model -------------------------------------------------------------------------
+    /// The six-face cube model: stickers, rotations and the projection onto the volume.
     struct Cube {
         uint8_t SIZE = 3;
         static const uint8_t MAX_SIZE = 8;
@@ -247,7 +233,7 @@ private:
         }
     };
 
-    // One move packed into a byte: 3 bits of face, 3 of width, 1 of direction.
+    /// One move: a face, a slice width and a direction.
     struct Move { uint8_t face, width, direction; };
 
     Move createRandomMoveStruct(uint8_t size, uint8_t prevFace) {
@@ -273,7 +259,7 @@ private:
         &Cube::rotateFront, &Cube::rotateBack, &Cube::rotateLeft,
         &Cube::rotateRight, &Cube::rotateTop, &Cube::rotateBottom};
 
-    // A solved cube, a few whole-cube turns, then a stored scramble playback can reverse.
+    /// A solved cube, a few whole-cube turns, then a stored scramble playback can reverse.
     void init(const draw::Canvas& cv, lengthType w, lengthType h, lengthType d) {
         cube_.init(cubeSize);
         const int moveCount = cubeSize * 10 + rng_.below(20);
@@ -295,7 +281,7 @@ private:
         cube_.drawCube(cv, w, h, d, faceColors());
     }
 
-    // Kept local so the code above reads like the MoonLight source it follows.
+    /// Small integer helpers, kept local to the effect.
     static int MINi(int a, int b) { return a < b ? a : b; }
     static int MAXi(int a, int b) { return a > b ? a : b; }
     static int constrainI(int v, int lo, int hi) { return v < lo ? lo : (v > hi ? hi : v); }

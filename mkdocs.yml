@@ -189,7 +189,6 @@ nav:
   - Lights:
       - Overview: moonmodules/light/index.md
       - Effects: moonmodules/light/effects.md
-      - Effects deck: moonmodules/light/effects-deck.md
       - Layouts: moonmodules/light/layouts.md
       - Modifiers: moonmodules/light/modifiers.md
       - Drivers: moonmodules/light/drivers.md

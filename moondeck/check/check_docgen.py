@@ -159,6 +159,8 @@ _UNREFERENCED_RULE = "unreferenced appendix section"
 _HARD_WRAP_RULE = "hard wrap"
 _STALE_HELP_RULE = "help.json stale"
 _RESTATES_RULE = "control restates the UI"
+# A control's longer help, its `@guide` section, adds what its line cannot hold: what each option does, a consequence, a reason. Words shared with the line show a repeat mechanically.
+_GUIDE_REPEATS_RULE = "guide repeats its control"
 # A paragraph spread over several lines: one topic is one paragraph and one line, cut to fit the cap rather than split. Staged as the line cap is, a new rule over comments written before it.
 _SPLIT_PARAGRAPH_RULE = "split paragraph"
 # One line, in every file. Depth is not forbidden, it is HOMED: a header carries it in an
@@ -422,7 +424,7 @@ _RULE_NAMES = (
     "unreferenced appendix section", "appendix section",
     "class comment", "member comment", "no image", "image is", "one control",
     "description", "controls", "doc sentence", "hard wrap", "split paragraph", _STALE_HELP_RULE,
-    _RESTATES_RULE,
+    _RESTATES_RULE, _GUIDE_REPEATS_RULE,
 )
 
 
@@ -451,6 +453,7 @@ _RULE_LABELS = {
     "image is": "wrong image format",
     "one control": "cards listing one control",
     _RESTATES_RULE: "controls restating a default or range",
+    _GUIDE_REPEATS_RULE: "control guides repeating their line",
     "description": "over-long descriptions",
     "second column": "wrong second column",
     "details section": "misplaced details sections",
@@ -1565,8 +1568,31 @@ def _help_freshness():
             if stale else [])
 
 
+_STOPWORDS = {"with", "from", "that", "this", "into", "each", "when", "then", "than", "their", "there", "which",
+              "while", "what", "only", "also", "them", "they", "does", "over", "under", "onto", "just", "more", "most", "such"}
+
+
+def _guide_repeats(help_file: dict) -> list:
+    """Each control whose longer help opens by repeating its line: most of the line's words back in the guide's first sentence."""
+    words = lambda t: {w for w in re.findall(r"[a-z]{4,}", t.lower()) if w not in _STOPWORDS}
+    out = []
+    for type_name, m in sorted(help_file.get("modules", {}).items()):
+        for name, h in m.get("controls", {}).items():
+            line, more = h.get("line", ""), h.get("more", "")
+            said = words(line)
+            if not more or not said:
+                continue
+            first = words(re.split(r"(?<=[.!?])\s", more, maxsplit=1)[0])
+            # Either way round: the guide saying most of the line, or opening with a sentence the line already holds.
+            if len(said & first) / len(said) >= 0.6 or (len(first) >= 2 and len(said & first) / len(first) >= 0.6):
+                source = m.get("source", "").partition("/blob/")[2].partition("/")[2] or type_name
+                out.append((source, f"{_GUIDE_REPEATS_RULE} `{name}`: its guide opens with what its line says; say only what the line cannot hold"))
+    return out
+
+
 def _violations():
     out = _help_freshness()
+    out.extend(_guide_repeats(_hooks._help_file()))
     for rel in _pages():
         page = _hooks.catalog_markdown(rel)   # the file, or the page generated from help.json
         if page is None:

@@ -9,7 +9,7 @@ namespace mm {
 ///
 /// A real wave simulation, which gives what a drawn expanding circle cannot: ripples pass through each other, reflect off the walls and interfere into standing patterns. The loudest band decides where the stone lands, a bass hit near the center and a treble hit out at the rim, and its strength sets how deep.
 ///
-/// @attribution the two-buffer water simulation (Gomez 2000) the demoscene settled on, here driven by the onset detector.
+/// @attribution Gomez
 ///
 /// @moreinfo
 ///

@@ -4,12 +4,10 @@
 
 namespace mm {
 
-/// Test effect: axis-aligned planes sweeping in sync, where red, green and blue name x, y and z.
+/// Axis-aligned planes sweep in sync, where red, green and blue name the x, y and z axis.
 /// @card LinesEffect.gif
 ///
-/// Three planes sweep together, each color naming the axis it moves along.
-/// That makes it the effect for verifying a preview's axis orientation.
-/// A second mode drops the sweep for a static panel-mapping aid instead.
+/// A test pattern for verifying a preview's axis orientation. The `lines` mode sweeps a plane along each axis, and the `panel dots` mode shows a static panel-mapping aid where each panel lights one more dot than the last.
 class LinesEffect : public EffectBase {
 public:
     /// Catalog tags for the visual catalog.
@@ -22,15 +20,15 @@ public:
     /// The two display modes, in option order.
     enum Mode : uint8_t { kModeLines, kModePanelDots, kModeCount };
 
-    /// How fast the planes sweep.
+    /// Sweep speed in BPM, in `lines` mode.
     uint8_t speed = 30;
-    /// Which axis sweeps, or all three together.
+    /// Which plane sweeps: all, x, y or z, in `lines` mode.
     uint8_t axis  = kAxisAll;
     /// Sweep the planes, or show the static panel dots.
     uint8_t mode  = kModeLines;
-    /// A panel block's width in lights, for the dots mapping.
+    /// The panel width the dots walk, in `panel dots` mode.
     uint8_t panelW = 16;
-    /// Its height, kept separate since a non-square panel would otherwise skip whole rows.
+    /// The panel height the dots walk, in `panel dots` mode.
     uint8_t panelH = 16;
 
     /// Publish the sweep, the axis and the panel geometry, hiding whichever mode is inactive.

@@ -14,7 +14,7 @@ namespace mm {
 ///
 /// ## outside in
 ///
-/// A disc is soldered either from the center light outward, the default, or from the outer 60-light ring inward, and this names which end of the wire is light 0. Only the ring order flips; each ring keeps the direction it is wired in.
+/// A disc is soldered from its center or from its 60-light rim, and this follows the end the data enters. Each ring keeps the direction it is wired in.
 ///
 /// @moreinfo
 ///

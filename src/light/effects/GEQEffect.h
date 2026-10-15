@@ -5,28 +5,16 @@
 
 namespace mm {
 
-/// Audio-reactive graphic-equalizer effect: 16 bands as vertical bars.
+/// A flat graphic equalizer: the 16 audio bands rise as vertical bars from the bottom.
 /// @card GEQEffect.gif
-/// Author: Andrew Tuline (WLED-SR), via the predecessor, https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_WLED.h
 ///
-/// The 16 audio bands spread across a panel's columns, each rising to its band's loudness.
-/// A peak dot sits at the highest the bar recently reached and falls back slowly.
-/// GEQ3D in this folder draws the same data in perspective instead.
+/// The bands spread across the columns, each rising to its loudness, with optional smoothing, per-bar palette coloring and falling peak markers. A peak dot sits at the highest the bar recently reached and falls back slowly. @ref GEQ3DEffect draws the same data in perspective.
 ///
-/// Prior art: WLED's 2D GEQ, of the Aircoookie and Andrew Tuline lineage, by way of MoonLight.
+/// @attribution Andrew Tuline, softhack007
 ///
 /// @moreinfo
 ///
-/// ## One frame
-///
-/// The buffer fades a little, which is the motion trail `fadeOut` sets.
-/// Each column then reads its band, optionally smoothed against its neighbors, and fills from the floor.
-/// The bar takes one color per column under `colorBars`, or a gradient running up it.
-/// A per-column tracker remembers the tallest the bar reached, drawn as a dot once the bar falls below.
-/// That dot decays one row every `ripple` frames, and `ripple` 0 disables it.
-///
-/// Reproduced from WLED: the band mapping, the smoothing weights, the fill and the falling peak.
-/// Silence flattens the bars and the peaks fall away.
+/// A per-column tracker remembers the tallest the bar reached, drawn as a dot once the bar falls below it.
 class GEQEffect : public EffectBase {
 public:
     /// Catalog tags: WLED origin, audio-reactive.
@@ -34,14 +22,13 @@ public:
     /// Writes the z=0 slice, which extrude fills through a volume.
     Dim dimensions() const override { return Dim::D2; }
 
-    // Defaults match the WLED and MoonLight GEQ.
-    /// The per-frame fade, which is the motion trail. A fast fade snaps the bars rather than smearing.
+    /// How fast bars fade each frame, which is the motion trail.
     uint8_t fadeOut    = 248;
-    /// The peak dot falls one row every this many frames, and 0 removes the dot.
+    /// Falling-peak marker decay; 0 removes the marker.
     uint8_t ripple     = 4;
-    /// Color each bar by its column rather than by height along it.
+    /// Color each bar from the palette by band instead of by row.
     bool    colorBars  = false;
-    /// Blend each band with its neighbors, for a smoother profile.
+    /// Blend neighboring bands for smoother bar heights.
     bool    smoothBars = false;
 
     /// Publish the trail, the peak fall rate and the two coloring toggles.

@@ -4,30 +4,16 @@
 
 namespace mm {
 
-/// Effect: layered noise curtains in polar coordinates, each layer on its own oscillators.
-/// Prior art: the shader vocabulary Stefan Petrick made recognizable in the LED world.
+/// Several noise fields, each on its own clock, read in polar coordinates and composited into curtains of light.
 /// @card AuroraEffect.gif
 ///
-/// The shader idiom rather than a picture: no aurora is simulated.
-/// Layers of one field at different scales, moved by different oscillators, are composited.
-/// The interference between them reads as curtains folding through each other.
+/// Nothing is simulated: layers of one field at different scales interfere, and that is what reads as curtains folding through one another. `polarTable` and `polarTable16` choose the polar address table and its precision.
+///
+/// @attribution Stefan Petrick
 ///
 /// @moreinfo
 ///
-/// ## Four power functions
-///
-/// `PolarLut` gives every pixel its angle and radius once, addressing the field around the center.
-/// `OscillatorBank` drives the motion, holding the layers' phases together so they keep their relationships.
-/// `fbm8` over gradient noise is the field, giving each layer a broad shape and fine structure.
-/// A contrast window then decides what is visible, which is what separates a shader from a blur.
-///
-/// ## Palette and structure are separate
-///
-/// The strongest layer at each pixel wins, and its color comes from which layer won.
-/// So the palette controls the mood and the layers control the structure.
-/// Every palette gives a different aurora and none of them look wrong.
-///
-/// Cost: one fbm per layer per pixel, so `layers` is the cost knob and `octaves` multiplies it.
+/// `PolarLut` addresses the field around the center, `OscillatorBank` keeps the layers' phases related, and `fbm8` over gradient noise is the field. One fbm runs per layer per pixel.
 class AuroraEffect : public EffectBase {
 public:
     /// Catalog tags: this effect is the power-function showcase.
@@ -38,9 +24,9 @@ public:
     /// The compositing ceiling, and the width of the oscillator bank.
     static constexpr uint8_t kMaxLayers = 4;
 
-    /// Master rate: every layer's motion scales from this.
+    /// Master rate, every layer scales from it; 0 freezes it.
     uint8_t speed    = 30;
-    /// Noise cells across the grid. Low gives broad curtains, high gives fine detail.
+    /// Noise cells across the grid; low is broad, high is fine.
     uint8_t scale    = 40;
     /// How many fields are composited, and the main cost knob.
     uint8_t layers   = 3;
@@ -48,9 +34,9 @@ public:
     uint8_t warp     = 60;
     /// How much the radius shears the angle, giving the curtains their lean.
     uint8_t twist    = 40;
-    /// Kaleidoscope fold. 1 leaves the composition unfolded.
+    /// Kaleidoscope wedges; 1 leaves the composition unfolded.
     uint8_t segments = 1;
-    /// The visibility window. Higher gives fewer, sharper curtains.
+    /// How much of the field lights; low is cloud, high is sharp.
     uint8_t contrast = 140;
     /// Detail within each layer, multiplying the cost knob.
     uint8_t octaves  = 2;

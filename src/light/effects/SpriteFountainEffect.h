@@ -1,5 +1,4 @@
 #pragma once
-// Author: MoonLight original
 
 #include "core/services/AudioService.h"   // latestFrame: the spectrum the audio-reactive mode reads
 #include "core/util/math16.h"
@@ -10,21 +9,18 @@
 
 namespace mm {
 
-/// Effect: a fountain of sprites, thrown up from the floor and falling back under gravity.
+/// A fountain that throws the project's whole sprite cast, launched from the floor on a sweeping nozzle and falling back under gravity.
 /// @card SpriteFountainEffect.gif
 ///
-/// A fountain is a particle system, and the sprite effects already own a cast.
-/// This effect draws that cast through SpriteCast.h rather than copying the pixel art.
-/// A fix to a fish fixes it here and in FishTankEffect alike.
+/// The cast is fish, Pacman and his ghosts, toasters and toast, and the three invaders.
+///
+/// Colors come from the active palette, one per sprite, held for its whole flight.
 ///
 /// @moreinfo
 ///
 /// ## The `hue` byte carries the sprite kind
 ///
-/// The pool holds one byte per particle, a palette index in every other particle effect.
-/// Here it picks the sprite, chosen once at launch so a particle keeps its species for its flight.
-/// A sprite id of its own would cost every particle system memory for a field only this effect reads.
-/// The color index comes from the particle's slot instead, stable and spread across the palette.
+/// The pool holds one byte per particle, a palette index in every other particle effect. Here it picks the sprite, chosen once at launch so a particle keeps its species for its flight, and the color index comes from the particle's slot instead.
 class SpriteFountainEffect : public EffectBase {
 public:
     /// Catalog tags: the audio glyph applies when `audioReactive` is set.
@@ -32,18 +28,18 @@ public:
     /// A fountain needs a floor and a height, so it is a 2D effect.
     Dim dimensions() const override { return Dim::D2; }
 
-    /// How hard the nozzle throws. Scales with the grid, so one setting suits a panel and a wall.
+    /// How hard the nozzle throws, scaled with the grid.
     uint8_t lift = 45;
-    /// How hard gravity pulls back. Gentle enough that a 12x8 sprite stays legible for its whole arc.
+    /// Gravity: gentle enough that a sprite stays legible for its whole arc.
     uint8_t pull = 3;
-    /// Sprites launched per beat of the emit clock, so the frame rate leaves the rate alone.
+    /// Sprites launched per beat of the emit clock.
     uint8_t rate = 2;
-    /// Launches per minute: the nozzle's own tempo, and the plume's density with it.
+    /// Launches per minute, which sets the plume's density.
     uint8_t emitBpm = 120;
-    /// Pixels per art pixel. 1 on a small panel, and a wall can afford 2.
+    /// Integer magnification per art pixel.
     uint8_t size = 1;
 
-    /// Let the music decide what comes out: a loud band launches a sprite, and picks which one.
+    /// One sprite per band, so the cast maps onto the spectrum.
     bool audioReactive = false;
 
     /// Publish the nozzle, the emit clock, the sprite scale and the audio switch.
@@ -173,9 +169,9 @@ private:
     particles::Pool pool_;
     BeatPhase launch_;
     BeatPhase emit_;
-    // The full phase counter: phase() keeps counting, so a narrower latch wraps and fires every frame.
+    /// The full phase counter: phase() keeps counting, so a narrower latch wraps and fires every frame.
     uint32_t  lastEmit_ = 0;
-    particles::FrameTime time_;   // the physics clock: one step per reference frame, not per frame
+    particles::FrameTime time_;   ///< the physics clock: one step per reference frame, not per frame
     uint32_t seed_ = 0;
 };
 

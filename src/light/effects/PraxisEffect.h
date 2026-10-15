@@ -4,22 +4,16 @@
 
 namespace mm {
 
-/// Algorithmic palette-pattern effect driven by two beat oscillators.
+/// An algorithmic palette pattern driven by two beat oscillators, a macro and a micro mutator, whose frequencies and ranges reshape the hue field over time.
 /// @card PraxisEffect.gif
-/// Author: MONSOONO / @Flavourdynamics (MoonLight), https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h
 ///
-/// Each pixel's hue comes from two oscillating mutators combined with its own position.
-/// So the pattern continually stretches, shears and rolls across the grid.
+/// Each pixel's hue comes from the two mutators combined with its own position, so the pattern continually stretches, shears and rolls across the grid.
 ///
-/// Prior art: MoonLight's Praxis, whose two-mutator model this reproduces.
+/// @attribution MONSOONO
 ///
 /// @moreinfo
 ///
-/// ## What each mutator does
-///
-/// The micro mutator divides the spatial term, so it sets the pattern's spatial frequency.
-/// The macro mutator multiplies the cross term instead, which is what warps the field.
-/// A steadily advancing hue base then scrolls the whole thing through the palette.
+/// The micro mutator divides the spatial term, so it sets the pattern's spatial frequency. The macro mutator multiplies the cross term instead, which warps the field, and a steadily advancing hue base scrolls it through the palette.
 class PraxisEffect : public EffectBase {
 public:
     /// Catalog tags: MoonLight origin.
@@ -27,21 +21,20 @@ public:
     /// Writes the z=0 slice, which extrude fills through a volume.
     Dim dimensions() const override { return Dim::D2; }
 
-    /// How fast the hue scrolls, which is this port's own addition to the source.
+    /// How fast the pattern advances.
     uint8_t speed = 4;
 
-    // Defaults and ranges match MoonLight's own Praxis.
-    /// The macro mutator's beat frequency.
+    /// The coarse mutator's beat rate.
     uint8_t macroMutatorFreq = 3;
-    /// Its low end, scaled into the wide sweep.
+    /// The coarse mutator's range minimum.
     uint8_t macroMutatorMin  = 250;
-    /// And its high end.
+    /// The coarse mutator's range maximum.
     uint8_t macroMutatorMax  = 255;
-    /// The micro mutator's beat frequency.
+    /// The fine mutator's beat rate.
     uint8_t microMutatorFreq = 4;
-    /// Its low end.
+    /// The fine mutator's range minimum.
     uint8_t microMutatorMin  = 200;
-    /// And its high end.
+    /// The fine mutator's range maximum.
     uint8_t microMutatorMax  = 255;
 
     /// Publish the hue scroll and both mutators.

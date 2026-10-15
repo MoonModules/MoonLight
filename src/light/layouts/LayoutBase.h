@@ -104,7 +104,7 @@ public:
 inline void LightEmitter::place(const LayoutBase& part, lengthType dx, lengthType dy, lengthType dz) {
     if (sink) {
         struct Relay { const CoordSink* sink; uint32_t offset, limit; lengthType dx, dy, dz; };
-        Relay r{sink, idx, limit, dx, dy, dz};
+        Relay relay{sink, idx, limit, dx, dy, dz};
         part.placeLights(CoordSink{
             [](void* c, nrOfLightsType i, lengthType x, lengthType y, lengthType z) {
                 auto* r = static_cast<Relay*>(c);
@@ -116,7 +116,7 @@ inline void LightEmitter::place(const LayoutBase& part, lengthType dx, lengthTyp
                 if (uint32_t(i) + r->offset < r->limit)
                     r->sink->blackPixel(static_cast<nrOfLightsType>(i + r->offset), static_cast<lengthType>(x + r->dx), static_cast<lengthType>(y + r->dy), static_cast<lengthType>(z + r->dz));
             },
-            &r});
+            &relay});
     }
     idx += part.lightCount();
 }

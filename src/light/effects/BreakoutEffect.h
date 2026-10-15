@@ -1,21 +1,20 @@
 #pragma once
-// Author: MoonLight original (Breakout, Atari 1976, is the inspiration)
 
 #include "light/effects/EffectBase.h"
 #include "light/effects/PlayerSeat.h"   // a person takes the paddle, the game plays it again later
 
 namespace mm {
 
-/// Effect: a self-playing paddle knocking down a wall of bricks.
+/// A paddle knocking down a wall of bricks, the attract mode of the 1976 original where the machine plays itself.
 /// @card BreakoutEffect.gif
 ///
-/// The attract-mode reading of the 1976 original, so the paddle plays itself.
-/// It waits out a reaction delay and aims slightly off center, so steep balls outrun it and it misses.
-/// The arcade's pressure is kept: the ball speeds up as bricks fall, and the paddle halves once the ball reaches the back wall.
-/// Three misses, or a cleared wall, deal a fresh wall.
-/// `player` is the paddle as a control, held through `PlayerSeat`.
-/// With `descend` the wall creeps down and new rows enter at the top, as in Super Breakout's progressive game.
-/// With `audioReactive` each brick column glows with its bands and the palette drifts with the volume; the game itself keeps its clock.
+/// The paddle waits out a reaction delay and aims slightly off, so steep balls outrun it. The ball speeds up as bricks fall, and the paddle halves once the ball reaches the back wall. Three misses, or a cleared wall, deal a fresh one. The brick rows take their colors from the active palette.
+///
+/// @attribution Breakout
+///
+/// @moreinfo
+///
+/// `player` is the paddle as a control, held through `PlayerSeat`: a person writing it takes the paddle, and idle, the game plays it again.
 class BreakoutEffect : public EffectBase {
 public:
     /// Catalog tags: the audio glyph applies when `audioReactive` is set.
@@ -23,19 +22,19 @@ public:
     /// A wall needs a width and a height, so it is a 2D effect.
     Dim dimensions() const override { return Dim::D2; }
 
-    /// Court crossings per minute at the serve, so the grid's size leaves the pace alone.
+    /// Court crossings per minute at the serve, on any grid size.
     uint8_t speedBpm = 30;
-    /// Rows of bricks, fewer where the grid has no room for them.
+    /// Rows of bricks, fewer where the grid has no room.
     uint8_t rows = 5;
     /// Paddle width as a percentage of the court.
     uint8_t paddle = 25;
-    /// How sharply the paddle chases the ball, from sluggish to instant.
+    /// How sharply the paddle chases; below full it lags a steep ball.
     uint8_t reflex = 160;
-    /// The wall creeps down a row every few seconds, new rows entering at the top.
+    /// The wall creeps down and new rows enter at the top.
     bool descend = false;
-    /// Color the bricks by the music: each column glows with its bands, the palette drifts with the volume.
+    /// Columns glow with their bands, the palette follows the volume.
     bool audioReactive = false;
-    /// The paddle's position, left to right; follows the game until an input writes it.
+    /// The paddle, for a fader or an input; idle, the game plays it.
     uint8_t player = 128;
 
     /// Publish the pace, the wall, the paddle and the audio switch.

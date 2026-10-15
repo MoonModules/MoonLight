@@ -5,25 +5,14 @@
 
 namespace mm {
 
-/// Effect: two color fields trading places pixel by pixel, with no per-pixel state.
+/// Two color fields trade places pixel by pixel in an order that looks random but is computed.
 /// @card DissolveEffect.gif
 ///
-/// The order looks random but is computed rather than stored.
-/// Each pixel asks a hash of its own position for a threshold, and compares it against the progress.
-///
-/// Prior art: the classic dissolve, where the position-addressed form is the shader approach.
+/// The transition needs no per-pixel state and no shuffled index list, so two devices rendering the same frame dissolve identically without exchanging anything.
 ///
 /// @moreinfo
 ///
-/// ## The point is what it does not need
-///
-/// A dissolve normally shuffles a list of pixel indices, which costs memory and must stay in step.
-/// Here there is no array, no shuffle and no per-pixel state.
-/// Two devices agree without exchanging anything, since the hash is a function of position.
-///
-/// That is the supersync property: a stream generator advances per call and drifts, and this cannot.
-///
-/// Cost is one hash and one compare a pixel, with nothing scaling beyond the pixel count.
+/// Each pixel asks a hash of its own position for a threshold and compares it against the progress. So the order is a function of position: a stream generator advances per call and drifts, and this cannot.
 class DissolveEffect : public EffectBase {
 public:
     /// Catalog tags: this effect is the power-function showcase.
@@ -33,11 +22,11 @@ public:
 
     /// How fast one transition completes.
     uint8_t bpm      = 12;
-    /// How long a pixel spends mid-flight, where 0 gives a hard edge.
+    /// How long pixels spend mid-flight; 0 gives a hard edge.
     uint8_t spread   = 60;
-    /// Ease the progress rather than sweeping it linearly, which reads as mechanical.
+    /// Ease the progress instead of sweeping linearly.
     bool    eased    = true;
-    /// Dissolve in a scattered order, or wipe positionally when off.
+    /// Random order; off gives a positional wipe from the same code.
     bool    scatter  = true;
 
     /// Publish the transition's speed, its softness and its order.

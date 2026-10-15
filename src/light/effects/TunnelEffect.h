@@ -4,26 +4,16 @@
 
 namespace mm {
 
-/// Effect: a texture-mapped tunnel flying toward a vanishing point.
+/// A texture mapped onto the inside of an infinite tube, so the viewer appears to fly down it forever.
 /// @card TunnelEffect.gif
 ///
-/// A texture mapped onto the inside of an infinite tube, so the viewer flies down it forever.
-/// Nothing here is 3D: perspective costs one divide.
+/// Nothing is 3D: the angle around the center is one texture coordinate and the reciprocal of the distance is the other, which is perspective for the price of a divide.
 ///
-/// Prior art: the standard demoscene tunnel, and Inigo Quilez's write-ups of it.
+/// @attribution Stefan Petrick, Iñigo Quilez
 ///
 /// @moreinfo
 ///
-/// ## Angle and reciprocal are the two texture coordinates
-///
-/// Each pixel's angle around the center becomes one coordinate, and 1/r the other.
-/// Since 1/r grows without bound toward the center, the texture compresses to a vanishing point.
-/// Adding time to that coordinate then pulls the wall toward the viewer.
-///
-/// This is the polar vocabulary carried to its conclusion, with one reciprocal on top of it.
-/// EchoEffect holds the gather primitive instead, reading the grid itself as a texture.
-///
-/// Cost: one divide, one atan and one noise sample a pixel, the divide being the expensive part.
+/// The reciprocal grows without bound toward the center, so the texture compresses to a vanishing point, and adding time to it pulls the wall toward the viewer. The divide is the expensive part of the per-pixel cost.
 class TunnelEffect : public EffectBase {
 public:
     /// Catalog tags: this effect is the power-function showcase.
@@ -33,7 +23,7 @@ public:
 
     /// How fast the tunnel flies past.
     uint8_t bpm      = 20;
-    /// Texture scale along the tunnel, shadowing `EffectBase::depth()`, which is qualified below.
+    /// Texture scale along the tunnel; higher is finer rings.
     uint8_t depth    = 60;
     /// Rotation per unit depth, so the tunnel corkscrews.
     uint8_t twist    = 40;

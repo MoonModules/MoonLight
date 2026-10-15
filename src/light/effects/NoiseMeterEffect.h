@@ -4,22 +4,16 @@
 
 namespace mm {
 
-/// Audio-reactive effect: a noise field modulated by sound level.
+/// An audio VU meter rendered as a noise bar, where the volume sets how many rows light from the bottom.
 /// @card NoiseMeterEffect.gif
-/// Author: Andrew Tuline (WLED-SR), via the predecessor, https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_WLED.h
 ///
-/// A vertical meter whose height tracks the sound level and whose color is a scrolling noise field.
-/// So a loud moment fills the panel bottom-up with a drifting gradient rather than a flat bar.
+/// Each row is colored by drifting Perlin noise, so a loud moment fills the full width and depth bottom-up with a drifting gradient rather than a flat bar.
 ///
-/// Prior art: WLED's Noisemeter, whose mapping and field sampling this reproduces.
+/// @attribution Andrew Tuline, Perlin noise
 ///
 /// @moreinfo
 ///
-/// ## The color depends only on the row
-///
-/// Each lit row samples a field that both scrolls on its own phases and is modulated by the level.
-/// Since nothing varies along x, the effect writes the x=0 column and extrude fans it across.
-/// The meter then reads as one wide block without this effect duplicating the broadcast itself.
+/// Each lit row samples a field that scrolls on its own phases and is modulated by the level. Nothing varies along x, so the effect writes the x=0 column and extrude fans it across.
 class NoiseMeterEffect : public EffectBase {
 public:
     /// Catalog tags: WLED origin, audio-reactive.
@@ -27,10 +21,9 @@ public:
     /// Writes the x=0 column, which extrude fans across x and z.
     Dim dimensions() const override { return Dim::D1; }
 
-    // Defaults match WLED's own Noisemeter.
-    /// The per-frame fade, which is the motion trail.
+    /// How fast the trail decays each frame.
     uint8_t fadeRate = 240;
-    /// How much of the column a given level fills.
+    /// How strongly the volume drives the bar height.
     uint8_t width    = 128;
 
     /// Publish the trail and the meter's gain.

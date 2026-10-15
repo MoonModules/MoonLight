@@ -5,25 +5,22 @@
 
 namespace mm {
 
-/// Effect: a noise field births light, a curl flow carries it, and the two make a folding cloud.
-/// Prior art: Stefan Petrick's shader vocabulary, and Bridson's curl noise (SIGGRAPH 2007).
+/// A noise field decides where light is born, a curl flow decides where it goes, and the cloud keeps folding into itself.
 /// @card NebulaEffect.gif
 ///
-/// Built from two power functions rather than one, which is what makes it a nebula.
-/// A noise field decides where light is born, thresholded so only its top survives.
-/// A curl flow decides where that light goes, and being divergence-free nothing piles up.
-/// The emitter is a field rather than a handful of dots, so light enters everywhere at once.
+/// The emitter is a field rather than a handful of dots, so light enters everywhere at once and the flow shapes a whole cloud instead of drawing trails. The cloud is held at 16 bits and dithered on the way out, which keeps a slow fade smooth.
+///
+/// @attribution Stefan Petrick, Robert Bridson
+///
+/// @guide
+///
+/// ## Cheaper fields
+///
+/// `fieldScale` and `fieldRate` make the field cheaper, smaller or less often computed. That costs detail, not smoothness, since the flow still carries the cloud every frame.
 ///
 /// @moreinfo
 ///
-/// ## Two cost levers
-///
-/// The field is the expensive half, and both levers cut it while leaving the motion alone.
-/// `fieldScale` computes the field at half or quarter resolution and stretches it.
-/// `fieldRate` recomputes it every N frames instead of every frame.
-/// The flow still carries the plane each frame, so a cheaper field costs detail, not smoothness.
-///
-/// Cost: one curl per light per frame, and one fbm per light at whatever the levers ask for.
+/// The cost is one curl per light per frame, and one fbm per light at whatever the two levers ask for. The curl flow is divergence-free, so nothing piles up.
 class NebulaEffect : public EffectBase {
 public:
     /// Catalog tags: this effect is the power-function showcase.
@@ -33,15 +30,15 @@ public:
 
     /// How fast the medium moves, and with it the whole cloud.
     uint8_t speed       = 40;
-    /// The field's cell size. Low gives broad clouds, high gives wisps.
+    /// The field's cell size: low is broad clouds, high is wisps.
     uint8_t scale       = 40;
-    /// The birth window, placed against the field's own range so it means the same on any fixture.
+    /// What fraction of the field is bright enough to be born.
     uint8_t contrast    = 192;
-    /// How long light survives once it is in the flow.
+    /// How long light survives in the flow, as a half-life.
     uint8_t persistence = 140;
-    /// Detail in the field, and its cost knob.
+    /// Detail within the field, and its cost knob.
     uint8_t octaves     = 2;
-    /// The field's resolution: 1 is full, 2 half, 4 quarter.
+    /// Compute the field at a fraction of the grid and stretch it.
     uint8_t fieldScale  = 1;
     /// Recompute the field every N frames.
     uint8_t fieldRate   = 1;

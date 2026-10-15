@@ -95,11 +95,11 @@ public:
         panel.snake = snake;
         // Each cell of the grid walk places one whole panel at its tile.
         struct Tiler { LightEmitter* e; const PanelLayout* panel; lengthType w, h; };
-        Tiler t{&e, &panel, panelWidth, panelHeight};
+        Tiler tiler{&e, &panel, panelWidth, panelHeight};
         grid.placeLights(CoordSink{[](void* c, nrOfLightsType, lengthType px, lengthType py, lengthType) {
             auto* t = static_cast<Tiler*>(c);
             t->e->place(*t->panel, static_cast<lengthType>(px * t->w), static_cast<lengthType>(py * t->h));
-        }, nullptr, &t});
+        }, nullptr, &tiler});
     }
 
 };

@@ -6,25 +6,14 @@
 
 namespace mm {
 
-/// Effect: the previous frame fed back through a zoom and rotation, leaving spiraling trails.
+/// The previous frame fed back through a zoom and rotation, dimmed, with a bright source drawn on top.
 /// @card EchoEffect.gif
 ///
-/// Each frame reads the previous one back zoomed, rotated and dimmed, with a bright source on top.
-/// The trail then spirals away from itself, as a camera pointed at its own monitor does.
-///
-/// Prior art: video feedback, a demoscene and video-art staple.
+/// The trails spiral away from themselves, like a camera pointed at its own monitor. Feedback is not a primitive: once the grid can be read as a texture (`sampleWrap`), the whole family of trails, zoom blur and smear is a few lines.
 ///
 /// @moreinfo
 ///
-/// ## Feedback is not a primitive
-///
-/// Once the grid reads as a texture at sub-pixel coordinates, feedback is three lines.
-/// Sample the last frame through a transform, combine it, and draw a source.
-/// Motion trails, zoom blur, spiral smear and kaleidoscopic feedback all follow from `sampleWrap`.
-/// So the toolbox gains a general capability rather than one more special case.
-///
-/// This is the clearest use of the gather half of draw.h, where `sampleWrap` reads with wrapping.
-/// Cost is one bilinear sample a pixel plus a scratch copy, with no divide and no noise.
+/// This is the clearest use of the gather half of draw.h, where `sampleWrap` reads with wrapping; the cost is one bilinear sample a pixel plus a scratch copy.
 class EchoEffect : public EffectBase {
 public:
     /// Catalog tags: this effect is the power-function showcase.
@@ -34,13 +23,13 @@ public:
 
     /// How fast the source orbits.
     uint8_t bpm    = 30;
-    /// How much the feedback grows each pass, where 0 leaves it still.
+    /// How much the feedback grows each frame.
     uint8_t zoom   = 12;
     /// Rotation per frame, which turns the trail into a spiral.
     uint8_t rotate = 8;
-    /// How fast the echo fades, so higher gives a shorter trail.
+    /// How fast the echo fades; higher is a shorter trail.
     uint8_t decay  = 24;
-    /// The bright source's radius.
+    /// Radius of the bright source.
     uint8_t size   = 2;
 
     /// Publish the source's orbit, the feedback transform and the trail's decay.

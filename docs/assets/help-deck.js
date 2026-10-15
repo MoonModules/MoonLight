@@ -65,7 +65,10 @@ function card(type, help) {
     line.className = "mm-pcard-line";
     line.innerHTML = helpMarkdown(help.line || "");
     scroll.appendChild(line);
-    scroll.appendChild(moduleHelp({...help, image: null}, help.doc).querySelector(".card-helpbox-body"));
+    const box = moduleHelp({...help, image: null}, help.doc);
+    const summary = box.querySelector(".help-summary");
+    if (summary) scroll.appendChild(summary);
+    scroll.appendChild(box.querySelector(".card-helpbox-body"));
     for (const [ctrl, ch] of Object.entries(help.controls || {})) {
         const row = document.createElement("div");
         row.className = "control-row";

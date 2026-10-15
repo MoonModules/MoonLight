@@ -4,14 +4,12 @@
 
 namespace mm {
 
-/// Test effect: draws a fixed rectangle at set coordinates.
+/// A solid color filling a positioned box within the grid, with an optional alternating-white checker on the box's pixels.
 /// @card FixedRectangleEffect.gif
-/// Author: limpkin (MoonLight), https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h
 ///
-/// A solid box at a dialed-in position and extent, over a slow motion-trail fade.
-/// So it serves as a static fixture, an alignment aid, or a painted region.
+/// A box at a dialed-in position and extent over a slow motion-trail fade, so it serves as a static fixture, an alignment aid, or a painted region. An extent beyond the grid fills to the edge.
 ///
-/// Prior art: MoonLight's FixedRectangle, whose clamping and checkerboard this reproduces.
+/// @attribution limpkin
 ///
 /// @moreinfo
 ///
@@ -30,30 +28,29 @@ public:
     /// The box has an extent on all three axes.
     Dim dimensions() const override { return Dim::D3; }
 
-    /// The box's red channel.
+    /// The box color, red.
     uint8_t red   = 182;
-    /// Its green channel.
+    /// The box color, green.
     uint8_t green = 15;
-    /// Its blue channel.
+    /// The box color, blue.
     uint8_t blue  = 98;
-    /// Its white channel, used only on an RGBW grid.
+    /// The box color, white, on an RGBW grid.
     uint8_t white = 0;
 
-    // Named rect* so they do not hide the inherited width(), height() and depth() accessors.
-    /// The box's origin on x.
+    /// The box's origin corner on x.
     int16_t rectX = 0;
-    /// Its origin on y.
+    /// The box's origin corner on y.
     int16_t rectY = 0;
-    /// Its origin on z.
+    /// The box's origin corner on z.
     int16_t rectZ = 0;
-    /// Its extent along x, clamped to the grid so a small panel fills to the edge.
+    /// The box extent along x.
     int16_t rectW = 15;
-    /// Its extent along y.
+    /// The box extent along y.
     int16_t rectH = 15;
-    /// Its extent along z.
+    /// The box extent along z.
     int16_t rectD = 15;
 
-    /// Render the box as a checkerboard of white and its color.
+    /// Alternate box pixels to white in a checker pattern.
     bool alternateWhite = false;
 
     /// Publish the box's color, its origin and extent, and the checkerboard.
