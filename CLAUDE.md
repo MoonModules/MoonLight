@@ -4,7 +4,7 @@ The rules that bind every change. What the system is: [README.md](README.md). Ho
 
 A high-performance system driving large LED installations and DMX fixtures. One source tree drives ESP32, Teensy, Raspberry Pi, macOS, Windows and Linux.
 
-**Read on every task**: this file. **Read when the task touches them**: the architecture, the two standards pages, and the spec of the module being changed. Everything else is linked from where it applies.
+**Read on every task**: this file. **Read when the task touches them**: the architecture, the two standards pages, and the header of the module being changed. Everything else is linked from where it applies.
 
 ## Principles
 
@@ -173,7 +173,7 @@ New behavior is pinned before it ships: a unit test for module logic, a scenario
 
 ### Document
 
-Docs land with the code: the module's spec and catalog card describe what shipped, a breaking change gets its [MIGRATING](docs/reference/MIGRATING.md) entry, and a shipped backlog item or spec draft is deleted. The merge gate verifies this happened. How the writing looks and how much of it there is: [documentation-standards.md](docs/contributing/documentation-standards.md), which is the one home for all of it.
+Docs land with the code: the module's header describes what shipped, a breaking change gets its [MIGRATING](docs/reference/MIGRATING.md) entry, and a shipped backlog item or spec draft is deleted. The merge gate verifies this happened. How the writing looks and how much of it there is: [documentation-standards.md](docs/contributing/documentation-standards.md), which is the one home for all of it.
 
 ### Commit
 

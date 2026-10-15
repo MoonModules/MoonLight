@@ -460,3 +460,11 @@ def test_a_catalog_intro_shows_its_picture_above_the_line_and_its_clips_side_by_
                          '<video src="../../assets/moontube/demo.webm" controls playsinline title="Demos at work."></video> '
                          '<video src="../../assets/moontube/demo2.webm" controls playsinline title="On a device."></video>')
 
+
+
+def test_the_docs_strip_the_same_role_nouns_the_app_does():
+    """A module's name on the site and in the app is its type without the role noun; `gen_help` and `help.js` each keep the list, so they must agree."""
+    import re as _re
+    js = (gen_help.ROOT / "src" / "ui" / "help.js").read_text()
+    nouns = _re.search(r"const ROLE_NOUNS = \[([^\]]*)\]", js).group(1)
+    assert tuple(_re.findall(r'"(\w+)"', nouns)) == gen_help._ROLE_NOUNS

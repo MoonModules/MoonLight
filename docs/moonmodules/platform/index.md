@@ -10,49 +10,49 @@ Why the boundary is drawn here, and what is allowed to cross it, is [MoonCore's 
 
 `millis`, `micros`, `delayMs`, `delayUs`. The clock every animation is written against, and the only sleep a module may take.
 
-Detail: [technical](../../../src/platform/platform.h)
+Source: [platform.h](../../../src/platform/platform.h)
 
 ## Memory
 
 `alloc`, `free`, `allocInternal`, `freeHeap`, `freeInternalHeap`, plus the accounting (`allocatedBytes`, `allocatedCount`, `allocatedPeak`) that MoonStats reports. Internal versus PSRAM is a platform question, so a module asks for what it needs and the layer decides where it lands.
 
-Detail: [technical](../../../src/platform/platform.h)
+Source: [platform.h](../../../src/platform/platform.h)
 
 ## Executable memory
 
 `allocExec`, `writeExec`, `freeExec`. Memory a CPU will fetch instructions from, which is IRAM on an ESP32 and an mmap page on desktop. [MoonLive](../light/moonlive.md) compiles into it; nothing else does.
 
-Detail: [technical](../../../src/platform/platform.h)
+Source: [platform.h](../../../src/platform/platform.h)
 
 ## Filesystem
 
 `fsMount`, `fsRead`, `fsWrite`, `fsList`, `fsExists`, `fsMkdir`. LittleFS on a device and `std::filesystem` on desktop, behind one set of names, so a config file and a script are read the same way on both.
 
-Detail: [technical](../../../src/platform/platform.h)
+Source: [platform.h](../../../src/platform/platform.h)
 
 ## GPIO and ADC
 
 `gpioRead`, `gpioWrite`, `gpioInputBegin`, `adcRead`, `adcReadMv`, `adcMaxCount`, and the capability introspection PinsModule renders. A pin's existence is a per-chip fact, so the layer answers it rather than each module guessing.
 
-Detail: [technical](../../../src/platform/platform.h)
+Source: [platform.h](../../../src/platform/platform.h)
 
 ## Networking
 
 Sockets, plus the raw-L2 ethernet path (`ethInit`, `ethSendRaw`, `ethLinkUp`, `ethGetIPv4`). Art-Net and sACN reach the wire through this, which is why a driver never opens a socket itself.
 
-Detail: [technical](../../../src/platform/platform.h)
+Source: [platform.h](../../../src/platform/platform.h)
 
 ## Tasks and workers
 
 RTOS task introspection for TasksModule, and the pinned worker with wake notification that carries the render and encode split across cores. On desktop these are threads; the contract is identical.
 
-Detail: [technical](../../../src/platform/platform.h)
+Source: [platform.h](../../../src/platform/platform.h)
 
 ## Video output
 
 NDI and HLS. Present where the target can carry them and absent elsewhere, which a module discovers by asking rather than by target.
 
-Detail: [technical](../../../src/platform/platform.h)
+Source: [platform.h](../../../src/platform/platform.h)
 
 ## Three implementations, one contract
 

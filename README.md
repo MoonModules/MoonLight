@@ -28,9 +28,9 @@ If you like MoonLight, give it a star, fork it, or open an issue. It helps the p
 
 🎵 **Audio-reactive**: an I²S microphone drives a 16-band FFT spectrum and sound level.
 
-🏠 **Home automation**: a device joins Homebridge and any MQTT hub for on/off, brightness and color. See [the MQTT module](docs/moonmodules/core/system.md#mqtt).
+🏠 **Home automation**: a device joins Homebridge and any MQTT hub for on/off, brightness and color. See [the MQTT module](https://moonmodules.org/MoonLight/moonmodules/core/system.html#mqtt).
 
-📁 **On-device file manager**: browse and edit the device filesystem from the browser, with drag-drop upload and [firmware update over the LAN](docs/moonmodules/core/system.md#firmware-update).
+📁 **On-device file manager**: browse and edit the device filesystem from the browser, with drag-drop upload and [firmware update over the LAN](https://moonmodules.org/MoonLight/moonmodules/core/system.html#firmware-update).
 
 🛡️ **Robust to any input**: add, delete, replace or reconfigure any module in any order, at any grid size, and the device keeps running. Every crash found becomes a regression test.
 
@@ -94,7 +94,7 @@ The domain-neutral runtime: the module base class, controls, scheduling, persist
 
 ![The Services card, built from declared controls](docs/assets/core/Services.png)
 
-Architecture: [MoonCore](docs/explanation/architecture/mooncore.md) · [MoonModule](docs/explanation/architecture/moonmodule.md) · Use it: [System](docs/moonmodules/core/system.md) · [Control](docs/moonmodules/core/system.md#control) · [Services](docs/moonmodules/core/services.md)
+Architecture: [MoonCore](docs/explanation/architecture/mooncore.md) · [MoonModule](docs/explanation/architecture/moonmodule.md) · Use it: [System](https://moonmodules.org/MoonLight/moonmodules/core/system.html) · [Control](https://moonmodules.org/MoonLight/moonmodules/core/system.html#control) · [Services](https://moonmodules.org/MoonLight/moonmodules/core/services.html)
 
 ### MoonLight
 
@@ -102,7 +102,7 @@ The light domain, and the bigger half of the code: light values, layouts, layers
 
 ![The Layers panel: a layer, an effect, and its controls](docs/assets/light/Effects.png)
 
-Architecture: [MoonLight](docs/explanation/architecture/moonlight.md) · Use it: [Effects](docs/moonmodules/light/effects.md) · [Layouts](docs/moonmodules/light/layouts.md) · [Modifiers](docs/moonmodules/light/modifiers.md) · [Drivers](docs/moonmodules/light/drivers.md)
+Architecture: [MoonLight](docs/explanation/architecture/moonlight.md) · Use it: [Effects](https://moonmodules.org/MoonLight/moonmodules/light/effects.html) · [Layouts](https://moonmodules.org/MoonLight/moonmodules/light/layouts.html) · [Modifiers](https://moonmodules.org/MoonLight/moonmodules/light/modifiers.html) · [Drivers](https://moonmodules.org/MoonLight/moonmodules/light/drivers.html)
 
 ### MoonLive
 
@@ -110,19 +110,19 @@ Scripts compiled to native machine code on the device. Write an effect in the br
 
 ![A MoonLive effect running](docs/assets/light/effects/MoonLiveEffect.gif)
 
-Architecture: [MoonLive](docs/explanation/architecture/moonlive.md) · Use it: [MoonLiveEffect](docs/moonmodules/light/moonlive.md) · [the script language](moonlive/README.md)
+Architecture: [MoonLive](docs/explanation/architecture/moonlive.md) · Use it: [MoonLiveEffect](https://moonmodules.org/MoonLight/moonmodules/light/moonlive.html) · [the script language](moonlive/README.md)
 
 ### MoonI80
 
-Our own DMA driver for parallel WS2812 output, one of the backends [ParallelLedDriver](docs/moonmodules/light/drivers.md#parallelled) selects. It adds a streaming ring and 74HCT595 expander support, which is what drives 12,288 lights from a single board.
+Our own DMA driver for parallel WS2812 output, one of the backends [ParallelLedDriver](https://moonmodules.org/MoonLight/moonmodules/light/drivers.html#parallelled) selects. It adds a streaming ring and 74HCT595 expander support, which is what drives 12,288 lights from a single board.
 
-Architecture: [MoonLight drivers](docs/explanation/architecture/moonlight.md#drivers) · Use it: [LED drivers](docs/moonmodules/light/drivers.md#parallelled)
+Architecture: [MoonLight drivers](docs/explanation/architecture/moonlight.md#drivers) · Use it: [LED drivers](https://moonmodules.org/MoonLight/moonmodules/light/drivers.html#parallelled)
 
 ### MoonBase
 
 A small maintenance image in the factory slot that installs updates into one large app slot, instead of spending half the flash on a second copy of the firmware. A power cut mid-update lands back in MoonBase rather than a half-written app.
 
-Architecture: [MoonBase](docs/explanation/architecture/moonbase.md) · Use it: [System modules](docs/moonmodules/core/system.md)
+Architecture: [MoonBase](docs/explanation/architecture/moonbase.md) · Use it: [System modules](https://moonmodules.org/MoonLight/moonmodules/core/system.html)
 
 ### MoonCloud
 
