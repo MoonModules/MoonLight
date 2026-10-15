@@ -161,6 +161,13 @@ _STALE_HELP_RULE = "help.json stale"
 _RESTATES_RULE = "control restates the UI"
 # A control's longer help, its `@guide` section, adds what its line cannot hold: what each option does, a consequence, a reason. Words shared with the line show a repeat mechanically.
 _GUIDE_REPEATS_RULE = "guide repeats its control"
+# The app's help is read at the card with a setting in hand, so each piece fits a glance: a control's longer help shows inline under the control, a guide section opens under the arrow, and the whole is what one tap shows. Tables, steps and reasons belong on a how-to page the guide links.
+_HELP_SIZE_RULE = "app help too long"
+# The module's guide is its general information, so a control explained there is in the wrong place: its member carries it.
+_GUIDE_NAMES_CONTROL_RULE = "module guide explains a control"
+MAX_MORE_WORDS = 40      # a control's longer help, its `@guide` section titled with the control
+MAX_GUIDE_WORDS = 60     # any other `@guide` section
+MAX_HELP_WORDS = 250     # the summary, the guide and every control's longer help together
 # A paragraph spread over several lines: one topic is one paragraph and one line, cut to fit the cap rather than split. Staged as the line cap is, a new rule over comments written before it.
 _SPLIT_PARAGRAPH_RULE = "split paragraph"
 # One line, in every file. Depth is not forbidden, it is HOMED: a header carries it in an
@@ -424,7 +431,7 @@ _RULE_NAMES = (
     "unreferenced appendix section", "appendix section",
     "class comment", "member comment", "no image", "image is", "one control",
     "description", "controls", "doc sentence", "hard wrap", "split paragraph", _STALE_HELP_RULE,
-    _RESTATES_RULE, _GUIDE_REPEATS_RULE,
+    _RESTATES_RULE, _GUIDE_REPEATS_RULE, _HELP_SIZE_RULE, _GUIDE_NAMES_CONTROL_RULE,
 )
 
 
@@ -454,6 +461,8 @@ _RULE_LABELS = {
     "one control": "cards listing one control",
     _RESTATES_RULE: "controls restating a default or range",
     _GUIDE_REPEATS_RULE: "control guides repeating their line",
+    _HELP_SIZE_RULE: "app help over its word caps",
+    _GUIDE_NAMES_CONTROL_RULE: "controls explained in the module guide",
     "description": "over-long descriptions",
     "second column": "wrong second column",
     "details section": "misplaced details sections",
@@ -959,7 +968,8 @@ def _redundant_defgroup_rule(rel: str, lines: list[str], out: list) -> None:
 
 def _appendix_marker(line: str) -> bool:
     """Whether a line opens an appendix: `@guide`, the sections written for users that the app shows as a module's help, or `@moreinfo`, the ones written for developers. Both end the lead, sit only on a lead and cap each `## ` section; only `@moreinfo` counts toward the ratcheted total, since a guide section is help moved out of a card rather than depth moved out of the code."""
-    return "@moreinfo" in line or "@guide" in line
+    # `@guide` alone on its line opens the module's guide; on a member it starts the control's longer help, which is no appendix.
+    return "@moreinfo" in line or re.fullmatch(r"\s*(///)?\s*@guide\s*", line) is not None
 
 
 def _moreinfo_placement_rule(rel: str, lines: list[str], out: list) -> None:
@@ -1086,8 +1096,9 @@ def _header_rules(rel: str, text: str):
             # Structure discounts here exactly as it does on the `//` cap. Without that, one
             # marker exempted a bulleted list and the other did not, so the same six lines were
             # clean as `//` and a finding as `///`, which is two rule sets wearing one name.
+            # A control's `@guide` line is its longer help, Doxygen's detailed description, and rides beside the one line.
             prose = n - sum(1 for k in range(start, start + n)
-                            if _is_structural(re.sub(r"^\s*///\s?", "", lines[k])))
+                            if _is_structural(body := re.sub(r"^\s*///\s?", "", lines[k])) or body.startswith("@guide"))
             if prose > MAX_MEMBER_DOC:
                 out.append((f"{rel}::{_declared_key(nxt, start)}",
                             f"member comment {prose} lines > {MAX_MEMBER_DOC}: "
@@ -1574,7 +1585,8 @@ _STOPWORDS = {"with", "from", "that", "this", "into", "each", "when", "then", "t
 
 def _guide_repeats(help_file: dict) -> list:
     """Each control whose longer help opens by repeating its line: most of the line's words back in the guide's first sentence."""
-    words = lambda t: {w for w in re.findall(r"[a-z]{4,}", t.lower()) if w not in _STOPWORDS}
+    def words(t: str) -> set:
+        return {w for w in re.findall(r"[a-z]{4,}", t.lower()) if w not in _STOPWORDS}
     out = []
     for type_name, m in sorted(help_file.get("modules", {}).items()):
         for name, h in m.get("controls", {}).items():
@@ -1590,9 +1602,42 @@ def _guide_repeats(help_file: dict) -> list:
     return out
 
 
+def _guide_names_control(help_file: dict) -> list:
+    """Each module whose general guide holds a section titled with one of its controls: a control is explained on its member, in its `@guide` line."""
+    out = []
+    for type_name, m in sorted(help_file.get("modules", {}).items()):
+        source = m.get("source", "").partition("/blob/")[2].partition("/")[2] or type_name
+        for g in m.get("guide", []):
+            if g["title"] in m.get("controls", {}):
+                out.append((source, f"{_GUIDE_NAMES_CONTROL_RULE} `{g['title']}`: move it to the member's `/// @guide` line"))
+    return out
+
+
+def _help_size(help_file: dict) -> list:
+    """Each module on a generated catalog page whose app help runs past a glance: a control's longer help, a guide section, or the whole."""
+    def words(t: str) -> int:
+        return len(re.findall(r"\w+", t))
+    pages = set(help_file.get("catalogs", {}))
+    out = []
+    for type_name, m in sorted(help_file.get("modules", {}).items()):
+        if m.get("doc", "").partition("#")[0] not in pages:
+            continue
+        source = m.get("source", "").partition("/blob/")[2].partition("/")[2] or type_name
+        mores = {c: words(h["more"]) for c, h in m.get("controls", {}).items() if h.get("more")}
+        sections = {g["title"]: words(g["text"]) for g in m.get("guide", [])}
+        out += [(source, f"{_HELP_SIZE_RULE}: `{c}`'s guide {n} words > {MAX_MORE_WORDS}") for c, n in mores.items() if n > MAX_MORE_WORDS]
+        out += [(source, f"{_HELP_SIZE_RULE}: guide '{t}' {n} words > {MAX_GUIDE_WORDS}") for t, n in sections.items() if n > MAX_GUIDE_WORDS]
+        total = words(m.get("summary", "")) + sum(mores.values()) + sum(sections.values())
+        if total > MAX_HELP_WORDS:
+            out.append((source, f"{_HELP_SIZE_RULE}: {total} words > {MAX_HELP_WORDS}; move tables, steps and reasons to a how-to page"))
+    return out
+
+
 def _violations():
     out = _help_freshness()
     out.extend(_guide_repeats(_hooks._help_file()))
+    out.extend(_help_size(_hooks._help_file()))
+    out.extend(_guide_names_control(_hooks._help_file()))
     for rel in _pages():
         page = _hooks.catalog_markdown(rel)   # the file, or the page generated from help.json
         if page is None:

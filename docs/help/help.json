@@ -46,33 +46,36 @@
   },
   "Drivers": {
    "line": "The container of driver modules, owning the shared buffer and the per-light output correction every driver applies before sending.",
-   "summary": "Off scales the output to black while preserving `brightness`, so switching on restores the level. Every consumer drives it: the UI, infrared, the WLED app, Home Assistant and MQTT.\n\n🎚️ `relayPins`: GPIOs switching the LED power supply, closed while `on` and brightness > 0.\n\nOn by default, and it falls back to single-core by itself when the extra frame buffer will not fit. The switch exists to compare the two.\n\nNear zero means render and output overlap well, and a large value means core 0 idles on a slow output stage. Shown only while `multicore` is on.",
+   "summary": "Every driver under it reads its own slice of that buffer, as the [drivers catalog](https://moonmodules.org/MoonLight/moonmodules/light/drivers.html) shows.",
    "image": "https://moonmodules.org/MoonLight/assets/light/Drivers.png",
-   "alt": "Drivers container with the on/off + brightness controls",
    "controls": {
     "on": {
-     "line": "Master power."
+     "line": "Master power.",
+     "more": "Off scales the output to black and keeps `brightness`, so switching on restores the level. The UI, infrared, the WLED app, Home Assistant and MQTT all drive it."
     },
     "relayPins": {
-     "line": ""
+     "line": "GPIOs switching the LED power supply, closed while `on` and brightness is above 0."
     },
     "brightness": {
-     "line": "Global output brightness, multiplied with each driver's `localBrightness`."
+     "line": "Global output brightness, multiplied with each driver's `localBrightness`.",
+     "more": "It starts low, so a fresh device on USB 5 V never browns out at full white."
     },
     "palette": {
-     "line": "What effects sample from, built in or [scripted](https://moonmodules.org/MoonLight/moonmodules/light/moonlive.html); settable by name too."
+     "line": "What effects sample from: a built-in palette or a scripted `.mlp` one."
     },
     "paletteScript": {
-     "line": ""
+     "line": "The scripted palette's file, which `palette` picks."
     },
     "motionHold": {
-     "line": ""
+     "line": "How long a powered-off rig keeps tracking before its heads go still, in seconds."
     },
     "multicore": {
-     "line": "Run the output stage on the second core."
+     "line": "Run the output stage on the second core.",
+     "more": "It falls back to one core by itself when the extra frame buffer does not fit. The switch exists to compare the two."
     },
     "renderWait": {
-     "line": "Read-only: how long core 0 waited for core 1 at the frame boundary."
+     "line": "How long core 0 waited for core 1 at the frame boundary.",
+     "more": "Near zero means render and output overlap well. A large value means core 0 idles on a slow output stage."
     }
    },
    "role": "generic",
@@ -187,11 +190,11 @@
    "guide": [
     {
      "title": "How the light count is known",
-     "text": "A layout answers how many lights before it produces a single coordinate, because the Layer sizes its buffer from that number and only then asks where each light is. A script cannot be asked how many without running it.\n\nSo it runs twice. The first pass counts what `addLight` places, and the second emits each position. Same script and same arithmetic, so a deterministic script agrees with itself, which is what the compiled layouts do for the same reason.\n\nNothing is stored between the passes. Staging 16,384 coordinates costs 48 KB, which a classic ESP32 driving that many lights does not have spare. Running the script again is cheaper than remembering what it said.\n\nA script calling `random16` breaks that determinism. The passes disagree on the count when a random value decides a loop bound. A random coordinate keeps the count right, and places the lights elsewhere on the second pass."
+     "text": "The Layer sizes its buffer from the light count before it asks for any position, so the script runs twice: the first pass counts `addLight` calls, the second emits positions. Nothing is stored between passes, which saves 48 KB at 16,384 lights. A `random16` loop bound makes the passes disagree on the count."
     },
     {
      "title": "What a layout script is given",
-     "text": "`addLight(x, y, z)` places the next light along the strand. There is no index, because the order the script calls it in is the strand order.\n\n`t` is the one system variable a layout reads, and it is always 0: the script runs twice per rebuild and must agree with itself. `width`, `height` and `depth` read 0, since a layout is upstream of the grid it defines.\n\nA script names its own size controls, such as `cols` and `rows`. The pipeline derives the bounding box from the coordinates placed, so a size passed in from outside would be a second answer that could disagree with the first."
+     "text": "`addLight(x, y, z)` places the next light, in call order. `t` is always 0 and `width`, `height` and `depth` read 0, since a layout is upstream of the grid. Name your own size controls, such as `cols` and `rows`. [The MoonLive guide](https://moonmodules.org/MoonLight/moonmodules/light/moonlive.html#system-variables) lists the vocabulary."
     }
    ],
    "image": "https://moonmodules.org/MoonLight/assets/light/layouts/MoonLiveLayout.gif",
@@ -263,7 +266,7 @@
    "controls": {
     "granularity": {
      "line": "How finely each gourd is lit.",
-     "more": "One gourd one light stacks a gourd's lights on its own position. One side one light gives each of a gourd's five sides one point, and one LED one light places every LED on its side's ring of 12. Both hold 61 lights a gourd, the middle one included."
+     "more": "One gourd one light stacks its lights on one position. One side one light gives each of five sides a point. One LED one light places each LED on its side's ring of 12."
     },
     "nrOfLightsPerGourd": {
      "line": "Lights per gourd when one gourd is one light."
@@ -875,7 +878,7 @@
    "guide": [
     {
      "title": "Reading a rule",
-     "text": "A rule names the neighbor counts that give birth (B) and those that let a cell survive (S). Conway's `B3/S23` gives birth at exactly 3 and keeps a cell alive at 2 or 3.\n\nHighLife, `B36/S23`, adds a birth at 6, which breeds self-copying replicators, and Maze, `B3/S12345`, grows corridors. `Custom B/S` runs your own, typed into `customRuleString` as `36/23`."
+     "text": "A rule lists the neighbor counts that give birth (B) and let a cell survive (S): Conway's `B3/S23` is born at 3, survives at 2 or 3. HighLife `B36/S23` breeds replicators, Maze `B3/S12345` grows corridors. `Custom B/S` takes `customRuleString` as `36/23`."
     },
     {
      "title": "A board that never ends",
@@ -1116,7 +1119,7 @@
     },
     "mapped_by": {
      "line": "Whether the sender or the receiver maps the frame onto the wiring.",
-     "more": "**receiver** means the frame is sent row by row and this board applies its own wiring. **sender** means the frame is sent in wiring order and placed as it arrives. Behind a correcting sender, keep the profile in byte order, brightness 255 and the linear curve; the end-to-end pair is [NetworkSend](https://moonmodules.org/MoonLight/moonmodules/light/drivers.html#networksend)."
+     "more": "**receiver**: frames arrive row by row and this board applies its wiring. **sender**: a [NetworkSend](https://moonmodules.org/MoonLight/moonmodules/light/drivers.html#networksend) sends wiring order, keeping byte order, brightness 255 and the linear curve."
     },
     "packets_per_s": {
      "line": "Packets received in the last second, read-only."
@@ -1438,7 +1441,7 @@
    "image": "https://moonmodules.org/MoonLight/assets/light/effects/RipplesEffect.gif",
    "controls": {
     "speed": {
-     "line": "Wave animation rate; 0 freezes it."
+     "line": "Wave animation rate."
     },
     "interval": {
      "line": "Wavefront spacing; low is tight rings, high is wide."
@@ -1500,7 +1503,7 @@
   },
   "SolidEffect": {
    "line": "A flat fill with five color modes: a plain RGB(W) color, the palette spread across the lights, one RMS-averaged palette color, or the palette banded along rows or columns.",
-   "summary": "Brightness scales the flat and palette-spread results.",
+   "summary": "Brightness scales every mode except Palette avg.",
    "image": "https://moonmodules.org/MoonLight/assets/light/effects/SolidEffect.gif",
    "controls": {
     "red": {
@@ -1516,7 +1519,7 @@
      "line": "Its white channel, written only where the light carries one."
     },
     "brightness": {
-     "line": "Scales the flat and palette-spread results."
+     "line": "Scales the color in every mode except Palette avg."
     },
     "colorMode": {
      "line": "Which of the five color modes fills the layer."
@@ -1933,7 +1936,7 @@
   },
   "FireworksEffect": {
    "line": "Shells rise, stall, and burst into sparks that arc over and fall.",
-   "summary": "Nothing schedules the apex: the shell decelerates under gravity and bursts when its vertical velocity crosses zero, so a faster launch bursts higher without a second control. Physics runs on elapsed time, so the same settings behave identically at any frame rate.",
+   "summary": "Nothing schedules the apex: the shell decelerates under gravity and bursts when its vertical velocity crosses zero, so a faster launch bursts higher without a second control. The physics runs on elapsed time, so a shell and its sparks follow the same arc at any frame rate.",
    "attribution": "[Damian Schneider](https://github.com/DedeHai), [Particle system](https://en.wikipedia.org/wiki/Particle_system)",
    "image": "https://moonmodules.org/MoonLight/assets/light/effects/FireworksEffect.gif",
    "controls": {
@@ -2063,8 +2066,8 @@
    "image": "https://moonmodules.org/MoonLight/assets/light/effects/MovingHeadEffect.gif",
    "controls": {
     "formation": {
-     "line": "How the heads relate: fan, mirror, chase, cross or unison.",
-     "more": "With **fan** the beams open like a hand, and **mirror** splits the rig into two halves that sweep against each other. With **chase** the same sweep is delayed head by head, **cross** makes alternate heads oppose each other, and **unison** moves every head as one."
+     "line": "How the heads move relative to each other.",
+     "more": "**fan** opens the beams like a hand, **mirror** sweeps two halves against each other, **chase** delays it head by head, **cross** opposes alternate heads, **unison** moves all as one."
     },
     "panBpm": {
      "line": "Pan sweep rate in BPM."
@@ -2608,11 +2611,11 @@
     },
     {
      "title": "Read the grid rather than assuming it",
-     "text": "A mirror written against a fixed 255 sends every light of a 16-wide grid outside it. The Layer drops each one, and the fixture goes black with no error, because the script ran perfectly.\n\nA computed coordinate is full width: `setXYZ` hands its values to the binding as a call, so `setXYZ(767 - xPos, ...)` on a 768-wide wall arrives as 767."
+     "text": "A mirror written against a fixed 255 sends every light of a 16-wide grid outside it, and the Layer drops each one: the fixture goes black with no error. Read `width` instead. A computed coordinate arrives at full width, so `767 - xPos` is 767 on a 768-wide wall."
     },
     {
      "title": "What a script can transform",
-     "text": "A modifier has two hooks: one reshapes the logical box once per rebuild, and one folds each coordinate. A script drives the second, so a transform keeping the box its size works, and one halving it, as the built-in Mirror does, needs the compiled modifier.\n\nA script that fails to compile shows the parse error, and the mapping passes coordinates straight through, so the device keeps rendering until the script parses again."
+     "text": "A script drives the per-light hook, so a transform keeping the box its size works; one halving it, as the built-in Mirror does, needs the compiled modifier. A script that fails to compile shows the parse error, and coordinates pass through."
     }
    ],
    "image": "https://moonmodules.org/MoonLight/assets/light/modifiers/MoonLiveModifier.gif",
@@ -2849,25 +2852,32 @@
    "tests": "https://github.com/MoonModules/MoonLight/blob/main/test/unit/light/unit_TransposeModifier.cpp"
   },
   "HueDriver": {
-   "line": "Drives **Philips Hue bulbs as pixels**: each color bulb in the driver's window becomes one pixel, pushed to the bridge over its HTTP API.",
-   "summary": "Paced to the bridge's ~10 cmd/s limit, so smooth ambient color, not strobing. Up to 32 bulbs, which is a LAN's worth and bounds the driver's memory.",
+   "line": "Drives Philips Hue bulbs as pixels: each color bulb in the driver's window becomes one pixel, pushed to the bridge over its HTTP API.",
+   "summary": "The same shape as [NetworkSend](https://moonmodules.org/MoonLight/moonmodules/light/drivers.html#networksend), over HTTP rather than UDP. One command goes to the bridge every half second, so it gives smooth ambient color, not strobing. Up to 32 bulbs, a LAN's worth, which bounds the driver's memory.",
+   "attribution": "[Philips Hue](https://developers.meethue.com)",
    "image": "https://moonmodules.org/MoonLight/assets/light/drivers/HueDriver.png",
-   "alt": "A HueDriver in the UI",
    "controls": {
     "bridgeIp": {
-     "line": "The bridge's LAN IPv4."
+     "line": "The bridge's LAN IP, entered in the UI (4 octets)."
     },
     "appKey": {
      "line": "The Hue app key, filled by `pair`; a password, so masked and kept out of documents."
     },
     "pair": {
-     "line": "Button: press it, then the bridge's physical link button within ~30 s to claim a key."
+     "line": "Press it, then the bridge's link button within about 30 s to claim a key."
     },
     "room": {
-     "line": "Dropdowns narrowing which color lights are driven."
+     "line": "All rooms, or the one whose lights are driven."
     },
     "light": {
-     "line": "Dropdowns narrowing which color lights are driven."
+     "line": "Narrows the driven lights to one light of that room; 0 is All."
+    },
+    "start": {
+     "line": "The first light of the shared buffer this driver reads."
+    },
+    "count": {
+     "line": "How many lights it reads from `start`; blank reads them all.",
+     "more": "So drivers share one buffer: a status LED takes `start 0, count 1` and the strip `start 1`."
     }
    },
    "role": "driver",
@@ -2877,37 +2887,63 @@
    "tests": "https://github.com/MoonModules/MoonLight/blob/main/test/unit/light/unit_HueDriver.cpp"
   },
   "NetworkSendDriver": {
-   "line": "Streams the buffer over UDP as **Art-Net**, **E1.31 / sACN** or **DDP**, its packets paced so receivers keep up, to Falcon/Advatek controllers, xLights and LedFx.",
-   "summary": "Feeds several receivers from one driver, each its own slice. Mixed DMX fixtures and the addressing rules are in [the details below](https://moonmodules.org/MoonLight/moonmodules/light/drivers.html#network-send-details).",
+   "line": "Streams the buffer over UDP as Art-Net, E1.31 or DDP, its packets paced so receivers keep up, to Falcon and Advatek controllers, xLights and LedFx.",
+   "summary": "One driver feeds many receivers, each taking a contiguous run of the window under its own address. A wall of tubes is one driver, the twin of one LED driver fanning out to several lanes.",
+   "attribution": "[Art-Net](https://en.wikipedia.org/wiki/Art-Net), [E1.31](https://en.wikipedia.org/wiki/Architecture_for_Control_Networks), [DDP](http://www.3waylabs.com/ddp/)",
    "guide": [
     {
-     "title": "Network Send, details",
-     "text": "**Unicast is the default** because Art-Net 4 requires it and because broadcast makes every host on the LAN parse every packet; Art-Net's `broadcast` remains for legacy receivers. **E1.31 multicast** sends to sACN's own per-universe group (`239.255.{universe_hi}.{universe_lo}`) rather than to `hosts`, so one send reaches every receiver that joined that universe. It is opt-in rather than the default, because the saving only materializes on a switch that does IGMP snooping and firmware cannot tell. See [multicast and IGMP snooping](https://moonmodules.org/MoonLight/explanation/architecture/moonlight.html#multicast-and-igmp-snooping). On a network shown to drop multicast, the card says so rather than broadcasting every universe. A name in `hosts` resolves in the background, `.local` by mDNS and anything else by DNS: it sends nothing until it first resolves, keeps its last address while it stops answering, and the card says which names are still waiting.\n\n**A DMX chain of MIXED fixtures needs one driver per fixture type.** `lightsPerHost` splits a window between receivers that share one fixture profile, so it cannot describe a chain where the fixtures differ. Add a driver per type instead, each reading its own `start`/`count` slice of the same buffer with its own `fixture`. Two moving-head types followed by RGBW pars is three drivers:\n\nEach maps its slice onto that fixture's real channels, so differing channel counts and orders are fine, and each carries its own `universe_start`. The layout must hold every light, 16 here, since the windows are slices of one shared buffer.\n\nTwo consequences of motion channels being a property of the LAYER rather than of a driver:\n\n**Order matters when the motion ROLES differ**, which is why the table puts the pan/tilt/zoom heads first. The layer's motion slots come from the first enabled driver whose profile carries motion, so the richest fixture has to lead. Swap A and B and the zoom has no slot at all, so those heads never zoom. Fixtures differing only in channel count or order are unaffected.\n**Every light carries the motion bytes**, used or not, so a mixed rig's buffer is as wide as its widest fixture. Memory rather than correctness: a par's `Correction` discards the aim.\n\nAn effect writes `setPan` for every light in its layer, so a formation spanning the window treats the pars as rig positions too. Use separate **Layers** when the heads should move independently.\n\n<a id=\"panel-card-details\"></a>"
+     "title": "Mixed fixtures",
+     "text": "A chain of mixed fixtures needs one driver per fixture type, each with its own `start`, `count` and `fixture`, the richest motion fixture first.\n\n| driver | window | fixtures |\n|---|---|---|\n| A | `start 0`, `count 2` | the two big pan/tilt/zoom heads |\n| B | `start 2`, `count 4` | four smaller pan/tilt heads |\n| C | `start 6`, `count 10` | ten RGBW pars |"
     }
    ],
    "image": "https://moonmodules.org/MoonLight/assets/light/drivers/NetworkSendDriver.png",
-   "alt": "NetworkSend controls",
    "controls": {
+    "localBrightness": {
+     "line": "This driver's dim, multiplied with the global brightness."
+    },
+    "curve": {
+     "line": "How brightness maps to output: CIE 1931, a gamma, or linear."
+    },
+    "fixture": {
+     "line": "The fixture profile applied per light, for channel order and white.",
+     "more": "A reorder or a reboot keeps it. After renaming the profile, re-pick it: the next reboot falls back to the default."
+    },
+    "whiteMode": {
+     "line": "How the white channel is derived, shown when the profile carries one."
+    },
+    "fixtureRef": {
+     "line": "The profile name an older config saved, read once and then emptied."
+    },
     "protocol": {
-     "line": "Art-Net / E1.31 / DDP; the port follows."
+     "line": "The wire protocol: Art-Net, E1.31 or DDP; the port follows."
     },
     "addressing": {
-     "line": "Unicast for all three, multicast for E1.31, broadcast for Art-Net."
+     "line": "How packets travel: unicast, Art-Net broadcast or E1.31 multicast.",
+     "more": "Art-Net 4 requires unicast; broadcast loads every host. E1.31 `multicast` needs [IGMP snooping](https://moonmodules.org/MoonLight/explanation/architecture/moonlight.html#multicast-and-igmp-snooping), and the status says when it is dropped."
     },
     "hosts": {
-     "line": "The receivers, such as `192.168.1.70-74, panel-01.local`. **Blank idles.**"
+     "line": "Receiver addresses or names, in fan-out order; blank idles.",
+     "more": "A name resolves in the background, `.local` by mDNS and anything else by DNS. It sends nothing until it first resolves, keeps its last address while it stops answering, and the status names the ones still waiting."
     },
     "lightsPerHost": {
-     "line": "Lights per receiver. Blank splits evenly, one number to all, a list each."
+     "line": "Lights per receiver; blank splits evenly, one number to all, a list each."
     },
     "universe_start": {
-     "line": "First universe for Art-Net / E1.31, restarting per receiver. DDP ignores it."
+     "line": "The first universe, emitted verbatim with no one-based adjust; DDP ignores it."
+    },
+    "start": {
+     "line": "The first light of the shared buffer this driver reads."
+    },
+    "count": {
+     "line": "How many lights it reads from `start`; blank reads them all.",
+     "more": "So drivers share one buffer: a status LED takes `start 0, count 1` and the strip `start 1`."
     },
     "fps": {
-     "line": "Frame-rate limit."
+     "line": "Frame-rate limit, so a fast render tick does not flood the LAN."
     },
     "packet_gap": {
-     "line": "Μs between a frame's packets; 0 sends the frame as one burst."
+     "line": "Microseconds between a frame's packets; 0 sends a burst.",
+     "more": "The pause lets a receiver keep up, sent from a task so the render loop never waits."
     }
    },
    "role": "driver",
@@ -2916,19 +2952,26 @@
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/drivers/NetworkSendDriver.h"
   },
   "PreviewDriver": {
-   "line": "Streams a true-shape 3D preview to the web UI as a **point list**, only the real lights at their real positions, so a sphere/ring/arbitrary map shows in its true shape.",
-   "summary": "The one boot-wired driver.\n\nIt streams on its own WebSocket channel so a large frame never delays the control plane, and only while a viewer is watching. Moving heads show their beam. How the rate and detail trade off is in [the details below](https://moonmodules.org/MoonLight/moonmodules/light/drivers.html#preview-details).",
+   "line": "Streams a true-shape 3D preview of the layer to the web UI.",
+   "summary": "Only the real lights are sent, at their real positions, so a sphere, ring or arbitrary map shows in its true shape. It is the one boot-wired driver.\n\nIt streams on its own WebSocket channel so a large frame never delays the control plane. It sends only while a viewer is watching, and moving heads show their beam.",
    "guide": [
     {
-     "title": "Preview, details",
-     "text": "**Close the preview when you do not need it.** The device renders preview frames only while the preview pane is open. Dismissing it stops that work entirely, which frees the device for rendering and keeps the UI responsive on a large layout, worth doing while you are editing effects on a big wall.\n\n**The preview thins itself out.** When the connection cannot carry full detail, the preview shows a regular sample of the lights rather than all, the status reads `preview 1/4` and so on. The device reports every frame it had to drop and your browser reacts. Persistent drops trade detail for rate, drop-free stretches earn it back a step at a time, and a step that brings the drops back is undone with growing patience, so a borderline connection settles instead of flickering between sizes. A slow *effect* drops nothing, so it never costs preview detail. A fast connection previews everything, with nothing to configure.\n\n**If the preview looks choppy**, it is the connection rather than the device: frames are dropped rather than queued, so the wall itself is never held up by the preview. Lower `targetFps` if you would rather keep full detail at a slower rate.\n\n<a id=\"ndi-details\"></a>"
+     "title": "Close it when you do not need it",
+     "text": "The device renders preview frames only while the preview pane is open. Dismissing the pane stops that work entirely, which frees the device and keeps the UI responsive on a large layout. Worth doing while you edit effects on a big wall."
+    },
+    {
+     "title": "It thins itself out",
+     "text": "When the connection cannot carry full detail, the preview shows a regular sample of the lights and the status reads `2 watching · 1/4`. Drop-free stretches earn detail back a step at a time. A slow effect drops nothing, so it never costs detail."
+    },
+    {
+     "title": "If the preview looks choppy",
+     "text": "The connection is the cause, not the device: frames are dropped rather than queued, so the wall itself is never held up. Lower `targetFps` to keep full detail at a slower rate."
     }
    ],
    "image": "https://moonmodules.org/MoonLight/assets/light/drivers/PreviewDriver.png",
-   "alt": "PreviewDriver controls",
    "controls": {
     "targetFps": {
-     "line": "The rate to aim for. **Lower for detail, raise for smoothness.**"
+     "line": "The rate the preview aims for: lower for detail, raise for smoothness."
     }
    },
    "role": "driver",
@@ -2938,19 +2981,43 @@
    "tests": "https://github.com/MoonModules/MoonLight/blob/main/test/unit/light/unit_PreviewDriver.cpp"
   },
   "NdiDriver": {
-   "line": "Publishes the layer as an **NDI video source**, so OBS, Resolume, TouchDesigner or any other NDI receiver picks MoonLight up by name, on this machine or another on the network.",
-   "summary": "Where the Preview driver draws the lights for a person, this hands the same frame to a production tool as video.\n\nThe grid becomes the frame, one light per pixel, output correction applied, so a receiver sees what the wall sees. **Desktop only, and you install the NDI runtime yourself**; without it the driver says so and nothing else changes. See [the details below](https://moonmodules.org/MoonLight/moonmodules/light/drivers.html#ndi-details).",
+   "line": "Publishes the layer as an NDI video source that OBS, Resolume, TouchDesigner or any NDI receiver finds by name on the network.",
+   "summary": "The grid becomes the frame, one light per pixel, output correction applied, so a receiver sees what the wall sees. Where [Preview](https://moonmodules.org/MoonLight/moonmodules/light/drivers.html#preview) draws the lights for a person, this hands the same frame to a production tool.\n\nDesktop only, as no NDI runtime exists for the ESP32 chips. A board reaches the same tools over Art-Net, sACN or DDP with [NetworkSend](https://moonmodules.org/MoonLight/moonmodules/light/drivers.html#networksend), and takes them in with [NetworkReceive](https://moonmodules.org/MoonLight/moonmodules/light/effects.html#networkreceive).",
+   "attribution": "[NDI](https://en.wikipedia.org/wiki/Network_Device_Interface), Delphium",
    "guide": [
     {
-     "title": "NDI, details",
-     "text": "**You install the NDI runtime yourself**, MoonLight cannot ship it. Until you do, the driver reports `NDI runtime not installed` and everything else works normally.\n\n**To see the output** you need a receiver. **NDI Video Monitor** (part of NDI Tools) is the simplest; OBS gains an \"NDI Source\" via the [DistroAV](https://github.com/DistroAV/DistroAV) plugin. MoonLight appears by the name in `sourceName`, or the device's own name when that is blank.\n\n**Desktop only.** No NDI runtime exists for the ESP32 chips, so the driver is not offered there. An ESP32 reaches the same tools over Art-Net, sACN or DDP instead, send with the [Network Send](https://moonmodules.org/MoonLight/moonmodules/light/drivers.html#networksend) driver, receive with the NetworkReceive effect.\n\n**Status line**"
+     "title": "The NDI runtime",
+     "text": "You install it yourself; without it the driver says so and nothing else changes. The steps: [installing the NDI runtime](https://moonmodules.org/MoonLight/how-to/watching-the-output.html#installing-the-ndi-runtime)."
+    },
+    {
+     "title": "Receivers",
+     "text": "To see the output you need a receiver. NDI Video Monitor, part of NDI Tools, is the simplest; OBS gains an NDI Source through the DistroAV plugin. MoonLight appears under the name in `sourceName`, or the device's own name when that is blank."
+    },
+    {
+     "title": "Status line",
+     "text": "| It says | It means |\n|---|---|\n| `NDI runtime not installed` | Install it, per the how-to page |\n| `could not create the NDI source` | The runtime is there but refused, usually a name clash with another source |\n| `sending <w>x<h> at <n> fps` | Live; look for it in your receiver |"
     }
    ],
    "image": "https://moonmodules.org/MoonLight/assets/light/drivers/NdiDriver.png",
-   "alt": "NDI driver controls",
    "controls": {
+    "localBrightness": {
+     "line": "This driver's dim, multiplied with the global brightness."
+    },
+    "curve": {
+     "line": "How brightness maps to output: CIE 1931, a gamma, or linear."
+    },
+    "fixture": {
+     "line": "The fixture profile applied per light, for channel order and white.",
+     "more": "A reorder or a reboot keeps it. After renaming the profile, re-pick it: the next reboot falls back to the default."
+    },
+    "whiteMode": {
+     "line": "How the white channel is derived, shown when the profile carries one."
+    },
+    "fixtureRef": {
+     "line": "The profile name an older config saved, read once and then emptied."
+    },
     "sourceName": {
-     "line": "The name a receiver lists. Blank uses the device's own name."
+     "line": "The name a receiver lists; blank uses the device's own."
     },
     "fps": {
      "line": "Frame-rate ceiling, declared in every frame."
@@ -2964,25 +3031,51 @@
    "tests": "https://github.com/MoonModules/MoonLight/blob/main/test/unit/light/unit_NdiDriver.cpp"
   },
   "HlsDriver": {
-   "line": "Streams the layer as **H.264 over HLS** from the device's own HTTP server.",
-   "summary": "Open the `url` the card shows in VLC or a browser, or hand it to an Apple TV. Where NDI feeds production tools, this feeds anything that plays video.\n\nThe grid becomes the frame, output correction applied. Latency is HLS's own, **2-5 seconds**, so this is for watching rather than live-control feedback. Runs on desktop (you install ffmpeg) and on the **ESP32-P4**, which encodes in hardware. See [the details below](https://moonmodules.org/MoonLight/moonmodules/light/drivers.html#hls-details).\n\nread-only: `url` to play. The card's status line carries state, drops, or why the encoder stopped.",
+   "line": "Streams the layer as H.264 over HLS from the device's own HTTP server, which a TV, VLC or a browser can play.",
+   "summary": "Open the `url` the card shows in VLC, a browser or an Apple TV. Where [Ndi](https://moonmodules.org/MoonLight/moonmodules/light/drivers.html#ndi) feeds production tools, this feeds anything that plays video.\n\nThe grid becomes the frame, output correction applied. Latency is HLS's own, 2 to 5 seconds, so this is for watching rather than live-control feedback. The card's status line carries the state, the drops, or why the encoder stopped.",
+   "attribution": "Delphium, [HLS](https://www.rfc-editor.org/rfc/rfc8216), [FFmpeg](https://ffmpeg.org)",
    "guide": [
     {
-     "title": "HLS, details",
-     "text": "**On desktop you install ffmpeg yourself** (any 5.x+, on PATH), because MoonLight never ships or links an encoder. Install it with `brew` on macOS, `winget` on Windows, or `apt` on Debian, Ubuntu and Raspberry Pi OS. Without it the driver reports `ffmpeg not found` and nothing else changes.\n\nThe `encoder` control picks which one ffmpeg uses: `libx264` (the default, in practically every build) is software.\n\nThree hardware encoders offload it instead, and are worth picking on large grids: `h264_videotoolbox` on a Mac (~10% CPU for a 1024x1024 stream on Apple Silicon), `h264_v4l2m2m` on a Raspberry Pi, and `h264_nvenc` on NVIDIA.\n\nAn encoder your ffmpeg lacks starts and exits immediately; the status then reads `encoder exited - check ffmpeg`.\n\n**On the ESP32-P4** there is no ffmpeg and no filesystem in the path: the chip's own H.264 block encodes and MoonLight packages the MPEG-TS itself. Segments are served from a RAM ring rather than written to flash, which at one segment per second would wear it for nothing. The `encoder` control is absent, since the hardware offers only one.\n\n**Sizing the picture.** The P4's encoder takes only EVEN dimensions between 80x80 and 1920x2032, so an odd wall has its scale doubled so both axes come out even. A wall whose scaled size exceeds the maximum is refused with a status rather than streaming something the hardware cannot encode. Desktop ffmpeg has none of these limits. The floor is what the auto scale exists for: the P4 will not accept a frame smaller than 80x80, and a small wall streamed 1:1 arrives as a postage stamp in the player. `scale` at 0 (the default) therefore picks the smallest whole factor that lifts *both* axes to 80: a 20x10 wall streams as 160x80 rather than being refused, and a wall already past 80 stays 1:1. One factor serves both axes, so the aspect ratio is preserved and each light stays a square block. Raising `scale` by hand on an already-large wall costs real time (a 128x128 wall at scale 4 measures about 60 ms per frame against 1 ms at 1:1) and buys nothing a player's own zoom does not.\n\n**The bitrate is derived, not a setting.** It follows from the grid size and `targetFps` at about 0.1 bits per pixel per frame, which puts a 512x512 wall at 30 fps near 800 kbit; a 128x128 lands under the 500 kbit floor the derivation clamps to. `targetFps` is the knob for bandwidth, and the better trade for LED content: fewer frames rather than a blockier picture.\n\n**Where the segments live.** On desktop, the transient `/.hls/` directory, served at `/hls/` and excluded from config backups. Large grids trade framerate, the render loop being single-threaded: 512x512 streams smoothly, TV-native resolutions stutter.\n\n<a id=\"rtsp-details\"></a>"
+     "title": "ffmpeg",
+     "text": "It runs on the desktop, where you install ffmpeg yourself and then open the stream ([how-to](https://moonmodules.org/MoonLight/how-to/watching-the-output.html#installing-ffmpeg))."
+    },
+    {
+     "title": "On the ESP32-P4",
+     "text": "There is no ffmpeg: the chip's H.264 block encodes. It takes even dimensions from 80x80 to 1920x2032; an odd wall has its scale doubled, a larger wall is refused."
     }
    ],
    "image": "https://moonmodules.org/MoonLight/assets/light/drivers/HlsDriver.png",
-   "alt": "HLS driver controls",
    "controls": {
+    "localBrightness": {
+     "line": "This driver's dim, multiplied with the global brightness."
+    },
+    "curve": {
+     "line": "How brightness maps to output: CIE 1931, a gamma, or linear."
+    },
+    "fixture": {
+     "line": "The fixture profile applied per light, for channel order and white.",
+     "more": "A reorder or a reboot keeps it. After renaming the profile, re-pick it: the next reboot falls back to the default."
+    },
+    "whiteMode": {
+     "line": "How the white channel is derived, shown when the profile carries one."
+    },
+    "fixtureRef": {
+     "line": "The profile name an older config saved, read once and then emptied."
+    },
     "targetFps": {
-     "line": "Encode-rate ceiling, and the bandwidth knob: bitrate follows."
+     "line": "Encode-rate ceiling, and the bandwidth knob: bitrate follows.",
+     "more": "The bitrate follows from grid size and rate, near 800 kbit for 512x512 at 30 fps. Lower the rate to save bandwidth: fewer frames beat a blockier picture."
     },
     "scale": {
-     "line": "Video pixels per light (0 = auto). Each light is a solid block, never a blur."
+     "line": "Video pixels per light, 0 being auto; one factor for both axes.",
+     "more": "Auto lifts both axes to 80, the encoder's minimum, so a 20x10 wall streams as 160x80. Raising it on a large wall buys nothing a player's zoom does not."
     },
     "encoder": {
-     "line": "Which ffmpeg encoder (desktop only)."
+     "line": "Which ffmpeg encoder to use; hardware ones offload the encode.",
+     "more": "`libx264` is software, the default. Hardware encoders suit large grids: `h264_videotoolbox` on a Mac, `h264_v4l2m2m` on a Raspberry Pi, `h264_nvenc` on NVIDIA. One your ffmpeg lacks reads `encoder exited - check ffmpeg`."
+    },
+    "url": {
+     "line": "The address to open in VLC or a browser, relative to this device."
     }
    },
    "role": "driver",
@@ -2993,22 +3086,50 @@
    "tests": "https://github.com/MoonModules/MoonLight/blob/main/test/unit/light/unit_HlsDriver.cpp"
   },
   "RtspDriver": {
-   "line": "Streams the layer as **H.264 over RTSP**, which a player pulls rather than fetching segments.",
-   "summary": "Point VLC or `ffplay` at the `url` the card shows. It reaches a viewer **much sooner than HLS**, which buffers whole segments before it plays one, so this is the remote view to reach for. [Preview](https://moonmodules.org/MoonLight/moonmodules/light/drivers.html#preview) stays the one that keeps pace with the lights, sending raw pixels and no codec at all.\n\nRuns on the **ESP32-P4** and on the desktop. One encoder, so **RTSP and [HLS](https://moonmodules.org/MoonLight/moonmodules/light/drivers.html#hls) run one at a time**. See [the details below](https://moonmodules.org/MoonLight/moonmodules/light/drivers.html#rtsp-details).\n\nread-only: `url` to play. The card's status line names the connected viewer.",
+   "line": "Serves the layer as an H.264 stream a player pulls over RTSP, with a fraction of the delay HLS carries.",
+   "summary": "HLS ships whole segments and a player buffers several before it starts, so a viewer sees seconds ago. RTSP sends each frame as the encoder produces it, which makes this the remote view to reach for.\n\nPoint VLC or ffplay at the `url` the card shows. It runs on the ESP32-P4 and the desktop, and shares one encoder with [Hls](https://moonmodules.org/MoonLight/moonmodules/light/drivers.html#hls), so only one of the two runs at a time.",
+   "attribution": "Delphium, [RTSP](https://www.rfc-editor.org/rfc/rfc2326), [RTP](https://www.rfc-editor.org/rfc/rfc6184)",
    "guide": [
     {
-     "title": "RTSP, details",
-     "text": "**Playing the stream.** Any RTSP player opens the `url` the card shows. These two are what the driver is tested against:\n\n`-fflags nobuffer -flags low_delay` is what makes ffplay show the stream as it arrives rather than filling a buffer first, which is the whole point of reaching for RTSP. VLC buffers about a second by default, so `--network-caching=100` brings it closer.\n\n**Watching LEDs on a monitor.** A grid is small in pixels and large in meaning, so scale it up with nearest-neighbor and each light stays a crisp square instead of a blurred blob:\n\n`-probesize 32 -analyzeduration 0` skips the startup probing, so the picture appears at once. `format=yuv420p` silences ffplay's `No accelerated colorspace conversion` notice, which reports a missing SIMD path in the player's own window conversion and says nothing about the stream.\n\n**The newest viewer is the viewer.** One session plays at a time, since each viewer costs another send on a device that is also driving lights. A new connection takes the session over rather than being refused. The reason is that a player which vanishes without `TEARDOWN` leaves a socket open and silent, and TCP reports a peer's absence only to a write it stops acknowledging, so waiting on that would strand the stream for minutes. The displaced viewer sees its connection close, which every player reports.\n\n**UDP carries the video.** The control conversation runs over TCP on port 554, and the frames go to the UDP port the viewer names in `SETUP`. A network that blocks that port pair leaves the stream silent while the session looks connected. A player asking for interleaved TCP instead is told so by code, since this server speaks UDP.\n\n**The rate is what the device renders.** `targetFps` is a ceiling rather than a promise: a heavy effect that ticks at 8 fps is streamed at 8 fps, since a frame that was never rendered cannot be sent. A stream slower than expected is therefore a question about the render loop rather than the transport. Each module's own tick time in the UI says which effect is spending the time.\n\n**The delay that remains is the codec's.** H.264 emits a frame once it has the whole frame, and a decoder holds one more, so tens of milliseconds stay whatever the transport does. What RTSP removes is HLS's segment buffering, which is the seconds.\n\n<a id=\"preview-details\"></a>"
+     "title": "Playing it",
+     "text": "Open the `url` in VLC or ffplay ([how-to](https://moonmodules.org/MoonLight/how-to/watching-the-output.html#playing-an-rtsp-stream)). The second of RTSP and HLS to start reports that the encoder is in use."
+    },
+    {
+     "title": "One viewer at a time",
+     "text": "A new connection takes the session over, and the displaced viewer sees its connection close. A network that blocks the UDP port the viewer names leaves the stream silent ([how-to](https://moonmodules.org/MoonLight/how-to/watching-the-output.html#when-an-rtsp-stream-stays-silent))."
+    },
+    {
+     "title": "The delay that remains",
+     "text": "H.264 emits a frame once it has the whole frame, and a decoder holds one more, so tens of milliseconds stay. RTSP removes HLS's segment buffering, the seconds."
     }
    ],
    "image": "https://moonmodules.org/MoonLight/assets/light/drivers/RtspDriver.png",
-   "alt": "RTSP driver controls",
    "controls": {
+    "localBrightness": {
+     "line": "This driver's dim, multiplied with the global brightness."
+    },
+    "curve": {
+     "line": "How brightness maps to output: CIE 1931, a gamma, or linear."
+    },
+    "fixture": {
+     "line": "The fixture profile applied per light, for channel order and white.",
+     "more": "A reorder or a reboot keeps it. After renaming the profile, re-pick it: the next reboot falls back to the default."
+    },
+    "whiteMode": {
+     "line": "How the white channel is derived, shown when the profile carries one."
+    },
+    "fixtureRef": {
+     "line": "The profile name an older config saved, read once and then emptied."
+    },
     "targetFps": {
-     "line": "Encode-rate ceiling, which is also the keyframe interval."
+     "line": "Frame-rate ceiling, which is also the keyframe interval.",
+     "more": "The rate is a ceiling: a heavy effect that renders at 8 fps streams at 8 fps. Each module's tick time in the UI says which effect spends it."
     },
     "scale": {
-     "line": "Video pixels per light (0 = auto). Each light is a solid block, never a blur."
+     "line": "Video pixels per light, 0 for auto; each light a solid block."
+    },
+    "url": {
+     "line": "The address to play in VLC or ffplay, with the device's own IP."
     }
    },
    "role": "driver",
@@ -3018,28 +3139,53 @@
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/drivers/RtspDriver.h"
   },
   "PanelCardDriver": {
-   "line": "Streams the buffer to **ColorLight 5A-75 receiving cards** as raw Ethernet, taking the place of the sending card that normally feeds them.",
-   "summary": "The board renders and sends, so it replaces a host PC driving the same wall. The link requirement and the protocol lineage are in [the details below](https://moonmodules.org/MoonLight/moonmodules/light/drivers.html#panel-card-details).\n\n**No geometry controls**: the wall comes from the [Layout](https://moonmodules.org/MoonLight/moonmodules/light/layouts.html), cut into card rows.",
+   "line": "Streams the buffer to ColorLight 5A-75 receiving cards as raw Ethernet, taking the place of the sending card that normally feeds them.",
+   "summary": "The board renders and sends, so it replaces a host PC driving the same wall. There are no geometry controls: the wall comes from the [Layout](https://moonmodules.org/MoonLight/moonmodules/light/layouts.html), cut into card rows.",
+   "attribution": "[FPP](https://github.com/FalconChristmas/fpp), [Harald Kubota](https://hkubota.wordpress.com/2022/01/31/winter-project-colorlight-5a-75b-protocol/), [mplayer-colorlight](http://www.mylifesucks.de/oss/mplayer-colorlight/)",
    "guide": [
     {
-     "title": "Panel Card, details",
-     "text": "**These cards need a 1 Gbit link**, not for bandwidth but for wire time. A 256x256 panel at 40 fps is only about 65 Mbit/s, but the cards have no buffering and latch on the sync frame, so a whole frame must arrive inside the inter-frame window. At 100 Mbit the same bytes take ten times as long, which breaks that timing and shows as tearing or wrong rows rather than as an error. The driver reads the negotiated speed and warns, but still sends: a small panel may be fine, and a measurement beats a refusal.\n\n**No IP is involved**, no address, no port, no DHCP, so the driver works on a link that never got a lease. A row wider than 497 pixels goes out as several packets.\n\n**The `interface` dropdown lists DETECTED adapters**, friendly names on Windows via Npcap and kernel names on Linux and macOS, re-listed on every control change so a hot-plugged NIC appears. The choice is remembered by adapter name rather than by index, so it survives reboots and Npcap reinstalls. `none (capture only)` records frames without sending. Raw sending is privileged: root or `CAP_NET_RAW` on Linux, BPF access on macOS, [Npcap](https://npcap.com/) or WinPcap on Windows; without it the driver records frames instead and says so. Step by step per OS: [Driving LED panels with a receiving card](https://moonmodules.org/MoonLight/how-to/panel-cards.html).\n\n**Card firmware.** v13 and newer act on the *second* copy of the brightness and sync frames, so both are sent twice; v12 and older act on the first and take a second sync as another latch. Reading and changing a card's version: [the tutorial](https://moonmodules.org/MoonLight/how-to/panel-cards.html#7-card-firmware-and-the-flicker).\n\nProtocol references: [FPP's ColorLight-5a-75.cpp](https://github.com/FalconChristmas/fpp/blob/master/src/channeloutput/ColorLight-5a-75.cpp) is the implementation this driver's byte layout agrees with. Harald Kubota's [5A-75B protocol write-up](https://hkubota.wordpress.com/2022/01/31/winter-project-colorlight-5a-75b-protocol/) documents the same wire format independently, including the brightness and color-temperature bytes and the discovery exchange.\n\nRead the write-up with its comments: a reader supplied the controller-number field that makes multiple cards on one segment distinguishable. The article's own MAC pair is printed the other way round from FPP's (destination `11:22:33:44:55:66`, source `22:22:33:44:55:66`, which is what this driver sends and what the cards filter on). Its lineage runs back to the [original mplayer-colorlight reverse engineering](http://www.mylifesucks.de/oss/mplayer-colorlight/).\n\n<a id=\"hls-details\"></a>"
+     "title": "Why 1 Gbit",
+     "text": "The cards need 1000 Mbps for wire time, not bandwidth: they latch on the sync frame, so a whole frame must arrive inside the inter-frame window. At 100 Mbit expect tearing or wrong rows; the driver warns but still sends ([how-to](https://moonmodules.org/MoonLight/how-to/panel-cards.html#the-one-hardware-fact-that-decides-everything))."
     }
    ],
    "image": "https://moonmodules.org/MoonLight/assets/light/drivers/PanelCardDriver.png",
-   "alt": "PanelCard controls",
    "controls": {
+    "localBrightness": {
+     "line": "This driver's dim, multiplied with the global brightness."
+    },
+    "curve": {
+     "line": "How brightness maps to output: CIE 1931, a gamma, or linear."
+    },
+    "fixture": {
+     "line": "The fixture profile applied per light, for channel order and white.",
+     "more": "A reorder or a reboot keeps it. After renaming the profile, re-pick it: the next reboot falls back to the default."
+    },
+    "whiteMode": {
+     "line": "How the white channel is derived, shown when the profile carries one."
+    },
+    "fixtureRef": {
+     "line": "The profile name an older config saved, read once and then emptied."
+    },
     "format": {
-     "line": "The card's wire format (ColorLight 5A-75)."
+     "line": "The card's wire format."
     },
     "firmware": {
-     "line": "`v12 and older` or `v13 and newer`. Wrong, and the wall barely updates."
+     "line": "The card firmware; a wrong one and the wall barely updates.",
+     "more": "v13 and newer acts on the second copy of brightness and sync, which go out twice; v12 and older on the first ([how-to](https://moonmodules.org/MoonLight/how-to/panel-cards.html#7-card-firmware-and-the-flicker))."
     },
     "interface": {
-     "line": "Which NIC to send from, by adapter name. Desktop only; raw sending needs privileges."
+     "line": "The network adapter the frames go out on.",
+     "more": "`none (capture only)` records frames without sending. Sending needs root or `CAP_NET_RAW` on Linux, BPF on macOS, Npcap on Windows ([steps](https://moonmodules.org/MoonLight/how-to/panel-cards.html#6-from-a-desktop))."
+    },
+    "start": {
+     "line": "The first light of the shared buffer this driver reads."
+    },
+    "count": {
+     "line": "How many lights it reads from `start`; blank reads them all.",
+     "more": "So drivers share one buffer: a status LED takes `start 0, count 1` and the strip `start 1`."
     },
     "fps": {
-     "line": "Frame-rate limit."
+     "line": "Frame-rate limit, so a fast render tick does not saturate the link."
     }
    },
    "role": "driver",
@@ -3049,46 +3195,54 @@
    "tests": "https://github.com/MoonModules/MoonLight/blob/main/test/unit/light/unit_PanelCardDriver.cpp"
   },
   "Hub75Driver": {
-   "line": "Drives **HUB75 LED panels straight from the board's GPIO**, with no receiving card in between.",
-   "summary": "The sibling of [Panel Card](https://moonmodules.org/MoonLight/moonmodules/light/drivers.html#panelcard), which drives the same panels over Ethernet instead; which one a wall wants is a size question, answered in [the details below](https://moonmodules.org/MoonLight/moonmodules/light/drivers.html#hub75-details).\n\n**Run on one panel.** A [MoonHub75](https://moonmodules.org/projects/hardware/#moonhub75-pcb) drives a 64x64 1/32-scan panel at 6-bit and 1,508 Hz. Larger walls and other panel families wait on reports: `refresh` plus your geometry makes one useful.",
+   "line": "Drives HUB75 LED panels straight from the board's own pins, with no receiving card in between.",
+   "summary": "The sibling of [PanelCard](https://moonmodules.org/MoonLight/moonmodules/light/drivers.html#panelcard), which drives the same panels over Ethernet. A [MoonHub75](https://moonmodules.org/projects/hardware/#moonhub75-pcb) runs a 64x64 1/32-scan panel at 6-bit and 1,508 Hz; larger walls wait on reports.",
+   "attribution": "[LostHope](https://github.com/LostHope), Delphium, [mrcodetastic](https://github.com/mrcodetastic), [hzeller](https://github.com/hzeller), [ESPHome](https://esphome.io), [Adafruit](https://www.adafruit.com), [Waveshare](https://www.waveshare.com)",
    "guide": [
     {
-     "title": "HUB75, details",
-     "text": "**Which of the two HUB75 paths.** A receiving card ([Panel Card](https://moonmodules.org/MoonLight/moonmodules/light/drivers.html#panelcard)) earns its place above roughly 16,384 pixels. Below that it is a Windows tool to configure and a dedicated Ethernet link to run, for a panel the board could have driven itself. This driver is the small end of that split.\n\n**Which silicon.** A chip with an LCD_CAM or Parlio block. The classic ESP32 has neither, and is excluded on pins before memory is even a question: it has 13 usable output GPIOs and a 1/16 port needs all 13, leaving nothing for a strand, a button or a microphone.\n\n**Where the pins come from.** The `board` select fills all fourteen lines on first use. A published map (MoonHub75, MatrixPortal S3, Waveshare RGB Matrix) hides the pin rows, because those lines are soldered and there is nothing to act on; the generic per-chip sets and Custom show them. Hidden rows stay bound, so the values persist, still drive the panel, and still show in the pin map. A line on a pin the chip has wired to flash or PSRAM is refused before init, with the line named. That is why the MatrixPortal S3 runs the `esp32s3-zero` image: three of its lines sit on 35-37, which the octal N8R8/N16R8 images hold for PSRAM. Wiring your own: the per-chip free sets are in [GPIO usage](https://moonmodules.org/MoonLight/reference/hardware/gpio-usage.html).\n\n**The published board maps.** Each is taken from that board's own source, written in this driver's control order (clk, lat, oe). A panel's ribbon numbers its color lines R1/G1/B1 (upper half) and R2/G2/B2 (lower half). Some board docs call the same pairs R0/G0/B0 and R1/G1/B1. That is the one naming trap worth knowing before wiring.\n\nThe [MoonHub75 PCB](https://moonmodules.org/projects/hardware/#moonhub75-pcb) is a Lilygo T7-S3 on a passive adapter, designed by Sören (lost-hope). Its map comes from the hardware repository's own README. The same board carries an INMP441 microphone socket on IO10/11/12, so an audio-reactive effect and a panel run together on it. The Adafruit MatrixPortal S3 map is from the board's CircuitPython `pins.c`. The Waveshare is SKU 34422, not to be confused with the Waveshare ESP32-S3-Matrix, a different product with an onboard 8x8 WS2812 matrix and no HUB75 connector. A 1/32-scan panel needs `e`; on 1/16 panels that pin is free.\n\n**Two controls a panel cannot tell you.** `scanRate` is the panel's own, and two panels of identical dimensions can scan differently, so it is read off the panel rather than calculated from its size. `peripheral` is yours rather than the driver's: a P4 has one LCD_CAM and one Parlio, so a board already driving WS2812 strips from one needs the panel on the other, and only you know which way round.\n\n**How a HUB75 panel works, in two facts.** It is *scanned*, not addressed: two rows light at once, the upper half-panel through R1/G1/B1 and the lower through R2/G2/B2, selected by a row address on A/B/C (and D/E on finer panels). The controller walks every scan row in turn and persistence of vision does the rest, so a 64-row panel has 32 scan rows and row `r` drives panel rows `r` and `r + 32` together.\n\nAnd brightness is *time*, not amplitude. A HUB75 pixel is a switch, on or off, so intensity comes from binary coded modulation: bit plane `p` is displayed for 2^p time units, and a value lights its planes for a total proportional to itself. That weighting is the output-enable window, which the encoder sets per plane. Either way the encoder stores each plane once. Emitting plane `p` 2^p times is the obvious reading and it is wrong: 255 passes at 8-bit is 1,060,800 bytes for a single 64x64 panel, where storing once is 33,280.\n\n**What depth costs, and why brightness is time.** Every bit plane is a full scan, so depth costs refresh and memory linearly, and each slot on the wire is 2 bytes because the address, latch and output-enable lines sit above bit 7 of a 16-bit word. One 64x64 panel at 1/32 scan is 16,384 bytes a frame at 4-bit and 24,576 at 6-bit. A panel's chips only switch a column on or off, so each plane is lit twice as long as the one below and brightness shortens every plane's lit time instead of scaling the colors, which keeps every level at any brightness. The price is top brightness: full white lights about a third of the time at 6-bit. Repeating the upper planes instead, for full brightness and 8-bit depth, is [backlogged](https://github.com/MoonModules/MoonLight/blob/main/docs/work/future/backlog-light.md)."
+     "title": "Which of the two paths",
+     "text": "A receiving card ([PanelCard](https://moonmodules.org/MoonLight/moonmodules/light/drivers.html#panelcard)) earns its place above roughly 16,384 pixels; below that this driver is the small end of the split. [The HUB75 how-to](https://moonmodules.org/MoonLight/how-to/hub75-panels.html#which-of-the-two-paths) has the choice."
     }
    ],
    "image": "https://moonmodules.org/MoonLight/assets/light/drivers/Hub75Driver.png",
-   "alt": "HUB75 driver controls",
    "controls": {
+    "localBrightness": {
+     "line": "This driver's dim, multiplied with the global brightness."
+    },
+    "curve": {
+     "line": "How brightness maps to output: CIE 1931, a gamma, or linear."
+    },
+    "fixture": {
+     "line": "The fixture profile applied per light, for channel order and white.",
+     "more": "A reorder or a reboot keeps it. After renaming the profile, re-pick it: the next reboot falls back to the default."
+    },
+    "whiteMode": {
+     "line": "How the white channel is derived, shown when the profile carries one."
+    },
+    "fixtureRef": {
+     "line": "The profile name an older config saved, read once and then emptied."
+    },
     "board": {
-     "line": "The wiring to use; picking one fills in the fourteen pins."
-    },
-    "r1 g1 b1": {
-     "line": "The six color lines, upper half-panel and lower."
-    },
-    "r2 g2 b2": {
-     "line": "The six color lines, upper half-panel and lower."
-    },
-    "a b c d e": {
-     "line": "The row address. `d` on 1/16 panels, `e` on 1/32."
-    },
-    "clk lat oe": {
-     "line": "Shift clock, latch, output enable."
+     "line": "The board's wiring: picking one fills the fourteen pins, Custom keeps yours.",
+     "more": "A published map hides the pin rows, which stay bound. A pin on flash or PSRAM is refused. Boards and the R1/G1/B1 naming trap: [the how-to](https://moonmodules.org/MoonLight/how-to/hub75-panels.html#which-board)."
     },
     "peripheral": {
-     "line": "`LCD_CAM` or `Parlio`, where the chip has both and the frame fits."
+     "line": "The silicon block that drives the panel, LCD_CAM or Parlio, where the chip has both.",
+     "more": "A P4 has one LCD_CAM and one Parlio, so a board already driving WS2812 strips from one needs the panel on the other. Only you know which way round."
     },
     "scanRate": {
-     "line": "1/8, 1/16 or 1/32, **read off the panel**, not calculated."
+     "line": "The panel's scan rate: 1/8, 1/16 or 1/32, read off the panel.",
+     "more": "Two panels of identical dimensions can scan differently, so the size does not give the rate. A 1/32-scan panel needs `e`; on 1/16 panels that pin is free."
     },
     "bitDepth": {
-     "line": "Color levels against refresh and memory."
+     "line": "Bit planes per frame: color levels against refresh and memory.",
+     "more": "Depth costs refresh and memory linearly. Brightness shortens each plane's lit time, so full white lights about a third of the time at 6-bit."
     },
     "clockEdge": {
-     "line": "`rising` or `falling`. Every pixel one column over means the other one."
+     "line": "The edge the chips sample on; every pixel one column over means the other."
     },
     "refresh": {
-     "line": "The **measured** rate. The number to report if a panel flickers."
+     "line": "The measured refresh rate: the number to report when a panel flickers."
     }
    },
    "role": "driver",
@@ -3098,8 +3252,65 @@
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/drivers/Hub75Driver.h"
   },
   "RmtLedDriver": {
-   "line": "Output driver: WS2812B-class addressable LEDs over the ESP32 RMT peripheral, one GPIO and one RMT TX channel per strand fed consecutive slices of the source buffer. The default on classic-ESP32 and S3 boards, and the example future drivers copy. It fuses the correction and the wire-byte encode into one pass, then hands per-pin slices to the platform.",
-   "summary": "Prior art: WS2812B on FastLED and WLED, and the clockless RMT techniques of hpwit (Yves Bazin).\n\nFlicker on LEDs that should be off is signal integrity rather than firmware. The playbook is on the drivers page.",
+   "line": "Addressable WS2812B-class LEDs on a handful of strands, clocked by the chip's RMT peripheral.",
+   "summary": "The classic choice, and the one that needs no DMA peripheral: for more than a few strands see [ParallelLed](https://moonmodules.org/MoonLight/moonmodules/light/drivers.html#parallelled). Flicker on LEDs that should be off is signal integrity rather than firmware, and [the signal integrity playbook](https://moonmodules.org/MoonLight/how-to/led-signal-integrity.html) walks the checks.",
+   "attribution": "[hpwit](https://github.com/hpwit), [WLED](https://github.com/wled/WLED), [FastLED](https://github.com/FastLED/FastLED)",
+   "image": "https://moonmodules.org/MoonLight/assets/light/drivers/RmtLedDriver.png",
+   "controls": {
+    "localBrightness": {
+     "line": "This driver's dim, multiplied with the global brightness."
+    },
+    "curve": {
+     "line": "How brightness maps to output: CIE 1931, a gamma, or linear."
+    },
+    "fixture": {
+     "line": "The fixture profile applied per light, for channel order and white.",
+     "more": "A reorder or a reboot keeps it. After renaming the profile, re-pick it: the next reboot falls back to the default."
+    },
+    "whiteMode": {
+     "line": "How the white channel is derived, shown when the profile carries one."
+    },
+    "fixtureRef": {
+     "line": "The profile name an older config saved, read once and then emptied."
+    },
+    "start": {
+     "line": "The first light of the shared buffer this driver reads."
+    },
+    "count": {
+     "line": "How many lights it reads from `start`; blank reads them all.",
+     "more": "So drivers share one buffer: a status LED takes `start 0, count 1` and the strip `start 1`."
+    },
+    "pins": {
+     "line": "Data GPIO list: `18,17,16` or ranges like `20-23`. Empty idles."
+    },
+    "ledsPerPin": {
+     "line": "Lights per strand: blank splits evenly, a number, or a list."
+    },
+    "timing": {
+     "line": "Wire bit rate: a 12V WS2811 needs 400kHz, most LEDs the faster."
+    },
+    "t0hNs": {
+     "line": "Custom timing: how long a 0 bit stays high, in nanoseconds."
+    },
+    "t1hNs": {
+     "line": "Custom timing: how long a 1 bit stays high, in nanoseconds."
+    },
+    "periodNs": {
+     "line": "Custom timing: the whole bit cell, in nanoseconds."
+    },
+    "loopbackTest": {
+     "line": "TX to RX self-test: send a known pattern, verify the capture."
+    },
+    "loopbackTxPin": {
+     "line": "TX pin override for the test; unset uses the first data pin."
+    },
+    "loopbackRxPin": {
+     "line": "Jumper this to the TX pin: the test reads the pattern back here."
+    },
+    "loopbackFrame": {
+     "line": "Send whole frames back to back and verify every bit."
+    }
+   },
    "role": "driver",
    "dim": 0,
    "doc": "light/drivers.md#rmtled",
@@ -3107,18 +3318,41 @@
   },
   "PwmLightDriver": {
    "line": "Lights whose channels are each a pin, pulsed by the chip's PWM: a bulb, an analog RGB, RGBW or RGBCCT strip, a QuinLED An-Penta controller, on any ESP32's LEDC.",
-   "summary": "Plus the [shared controls](https://moonmodules.org/MoonLight/moonmodules/light/drivers.html#shared-driver-controls) above, whose `fixture` names what each pin carries:\n\nEach bit more halves the rate: 12 bits pulse at 19531 Hz, 13 at 9765 Hz, 16 at 1220 Hz. More bits fade smoother, fewer band less on camera. The channels' pulses start spread over the period, so full white never switches all at once. One timer per driver and one channel per pin, up to 16 on the classic ESP32 and 6 on the C3.",
+   "summary": "The fixture profile names what each pin carries, so the light count is the pins divided by the profile's channels. One timer serves the driver and each pin takes one channel, up to 16 on the classic ESP32 and 6 on the C3. The channels' pulses start spread over the period, so full white never switches all at once.",
    "image": "https://moonmodules.org/MoonLight/assets/light/drivers/PwmLightDriver.png",
-   "alt": "PWM Light driver controls",
    "controls": {
+    "localBrightness": {
+     "line": "This driver's dim, multiplied with the global brightness."
+    },
+    "curve": {
+     "line": "How brightness maps to output: CIE 1931, a gamma, or linear."
+    },
+    "fixture": {
+     "line": "The fixture profile applied per light, for channel order and white.",
+     "more": "A reorder or a reboot keeps it. After renaming the profile, re-pick it: the next reboot falls back to the default."
+    },
+    "whiteMode": {
+     "line": "How the white channel is derived, shown when the profile carries one."
+    },
+    "fixtureRef": {
+     "line": "The profile name an older config saved, read once and then emptied."
+    },
+    "start": {
+     "line": "The first light of the shared buffer this driver reads."
+    },
+    "count": {
+     "line": "How many lights it reads from `start`; blank reads them all.",
+     "more": "So drivers share one buffer: a status LED takes `start 0, count 1` and the strip `start 1`."
+    },
     "pins": {
-     "line": "One GPIO per channel, in the fixture's order."
+     "line": "One GPIO per output channel, in the fixture's channel order."
     },
     "bits": {
-     "line": "The resolution; the C3 and S3 reach 14 at most."
+     "line": "PWM resolution, which sets the pulse rate.",
+     "more": "Each bit more halves the pulse rate: 12 bits pulse at 19531 Hz, QuinLED's recommendation, and 16 at 1220 Hz. More bits fade smoother, fewer band less on camera. The C3 and S3 reach 14."
     },
     "frequency": {
-     "line": "The pulse rate the resolution gives, read-only."
+     "line": "The pulse rate the resolution gives, to read against a fixture's datasheet."
     }
    },
    "role": "driver",
@@ -3128,9 +3362,80 @@
    "tests": "https://github.com/MoonModules/MoonLight/blob/main/test/unit/light/unit_PwmLightDriver.cpp"
   },
   "ParallelLedDriver": {
-   "line": "The registered parallel WS2812B driver: up to 16 strands clocking out at once, one GPIO lane each, fed consecutive slices of the source buffer over whichever peripheral the control selects. Backends: I80Peripheral.h, MoonI80Peripheral.h, ParlioPeripheral.h.",
-   "summary": "The whole frame is encoded up front and shipped as one autonomous transfer. So there is no CPU deadline while it is on the wire: why single-shot. The encode is a fused correct and transpose, per row (ParallelSlots.h): the transpose. Vocabulary: strand, lane, slot, row, under\nMore info → Terminology.",
+   "line": "WS2812B-class LEDs on up to 16 strands clocked out at once by a DMA peripheral, which makes a large wall possible.",
+   "summary": "Each strand takes the next run of lights on its own GPIO. Switching between peripherals is a control change, with no reflash. For a few strands see [RmtLed](https://moonmodules.org/MoonLight/moonmodules/light/drivers.html#rmtled), and for a Teensy 4.1 its [hardware page](https://moonmodules.org/MoonLight/reference/hardware/teensy-4-1.html).",
+   "attribution": "[hpwit](https://github.com/hpwit), [OctoWS2811](https://www.pjrc.com/teensy/td_libs_OctoWS2811.html), [ObjectFLED](https://github.com/KurtMF/ObjectFLED)",
+   "guide": [
+    {
+     "title": "Which peripheral",
+     "text": "Start with `i80`. Choose `MoonI80` for frames too big for memory or a pin expander, `Parlio` on a P4, `GPIO-DMA` on a Teensy 4.1. [The LED driver how-to](https://moonmodules.org/MoonLight/how-to/led-drivers.html#which-one) has the chips, limits and wiring."
+    }
+   ],
    "image": "https://moonmodules.org/MoonLight/assets/light/drivers/ParallelLedDriver.png",
+   "controls": {
+    "localBrightness": {
+     "line": "This driver's dim, multiplied with the global brightness."
+    },
+    "curve": {
+     "line": "How brightness maps to output: CIE 1931, a gamma, or linear."
+    },
+    "fixture": {
+     "line": "The fixture profile applied per light, for channel order and white.",
+     "more": "A reorder or a reboot keeps it. After renaming the profile, re-pick it: the next reboot falls back to the default."
+    },
+    "whiteMode": {
+     "line": "How the white channel is derived, shown when the profile carries one."
+    },
+    "fixtureRef": {
+     "line": "The profile name an older config saved, read once and then emptied."
+    },
+    "start": {
+     "line": "The first light of the shared buffer this driver reads."
+    },
+    "count": {
+     "line": "How many lights it reads from `start`; blank reads them all.",
+     "more": "So drivers share one buffer: a status LED takes `start 0, count 1` and the strip `start 1`."
+    },
+    "pins": {
+     "line": "Data GPIO list: `18,17,16` or ranges like `20-23`. Empty idles."
+    },
+    "ledsPerPin": {
+     "line": "Lights per strand: blank splits evenly, a number, or a list."
+    },
+    "frameTime": {
+     "line": "What one frame costs on the wire: the pipeline's headroom."
+    },
+    "peripheral": {
+     "line": "The DMA peripheral that clocks the strands out, filtered to what the chip supports."
+    },
+    "doubleBuffer": {
+     "line": "Encode the next frame while this one clocks out, where supported.",
+     "more": "Leave it on: a tick costs the longer of encode and wire, not their sum, for one extra DMA buffer and 8 to 20 ms of latency. A board without room falls back to one buffer."
+    },
+    "pinExpander": {
+     "line": "A 74HCT595 per data pin: each pin then drives 8 strands.",
+     "more": "It buys pins, not memory: the frame grows eightfold, about 1.1 KB per light, up to 64 strands. `i80` stops at about 96 lights per strand, `MoonI80` drives 128."
+    },
+    "latchPin": {
+     "line": "The 74HCT595 latch (RCLK) pin, needed with the expander."
+    },
+    "loopbackTest": {
+     "line": "TX to RX self-test: send a known pattern, bit-verify the capture."
+    },
+    "loopbackTxPin": {
+     "line": "TX pin override for the test; unset uses lane 0."
+    },
+    "loopbackRxPin": {
+     "line": "Jumper this to the TX pin: the self-test reads the pattern back here."
+    },
+    "loopbackStrand": {
+     "line": "Strand carrying the test pattern, expander mode only.",
+     "more": "Strand 0 is Q7, strand S is Q(7 - S%8): jumper it to `loopbackRxPin`. The '595 is 5 V: divide it ([how-to](https://moonmodules.org/MoonLight/how-to/led-drivers.html#testing-the-wire-with-the-loopback))."
+    },
+    "loopbackIntrusive": {
+     "line": "ON rides the live pipeline, OFF rebuilds a private bus."
+    }
+   },
    "role": "driver",
    "dim": 0,
    "doc": "light/drivers.md#parallelled",
@@ -3280,6 +3585,27 @@
    "controls": {
     "mode": {
      "line": "Local audio, Receive network or Simulate, each showing only its own controls below."
+    },
+    "micMode": {
+     "line": "(Local, I²S targets) `I2S` for a three-wire part, `PDM` for a two-wire one."
+    },
+    "sckPin": {
+     "line": "(Local, I²S targets) the bus GPIOs, unset until entered."
+    },
+    "wsPin": {
+     "line": "(Local, I²S targets) the bus GPIOs, unset until entered."
+    },
+    "sdPin": {
+     "line": "(Local, I²S targets) the bus GPIOs, unset until entered."
+    },
+    "mclkPin": {
+     "line": "(Local, I²S targets) the master clock an ADC or codec needs; unset for a plain mic."
+    },
+    "codec": {
+     "line": "(Local, I²S targets) `ES8311` or `ES7210` in front of the mic, else `none`."
+    },
+    "codecAddr": {
+     "line": "Its [I2C](https://moonmodules.org/MoonLight/moonmodules/core/system.html#i2c-bus) address: `0x18` (ES8311), `0x40` to `0x43` (ES7210)."
     },
     "device": {
      "line": "(Local, desktop) the OS capture input, `default` following the system setting."
@@ -4019,13 +4345,32 @@
    "title": "Layouts",
    "line": "A layout says where the lights physically are: it maps each light's index to an (x, y, z) position, the shape an [effect](https://moonmodules.org/MoonLight/moonmodules/light/effects.html) draws onto and a [driver](https://moonmodules.org/MoonLight/moonmodules/light/drivers.html) sends out.",
    "summary": "The [Layouts](https://moonmodules.org/MoonLight/moonmodules/light/supporting.html#layouts) container holds one or more layouts and composes them into one coordinate space, which a [Layer](https://moonmodules.org/MoonLight/moonmodules/light/supporting.html#layer) renders over. The container itself takes no controls.\n\nEach card's emoji are its tags, as the [tag emoji legend](https://moonmodules.org/MoonLight/explanation/architecture/index.html#tag-emoji-legend) explains.",
-   "video": "https://moonmodules.org/MoonLight/assets/moontube/05-layouts.webm",
-   "caption": "Layouts: a grid, a ring, a spiral, a cube, tubes, and two written in MoonLive."
+   "videos": [
+    {
+     "video": "https://moonmodules.org/MoonLight/assets/moontube/05-layouts.webm",
+     "caption": "Layouts: a grid, a ring, a spiral, a cube, tubes, and two written in MoonLive."
+    }
+   ]
   },
   "light/effects.md": {
    "title": "Effects",
    "line": "An effect draws: each frame it writes a color per light into its [Layer](https://moonmodules.org/MoonLight/moonmodules/light/supporting.html#layer)'s buffer, which modifiers reshape and a driver sends out.",
    "summary": "Effects are built from the shared [power functions](https://moonmodules.org/MoonLight/moonmodules/light/power-functions.html), the drawing, field and motion routines every effect composes. One that names an index color reads the global palette, the `palette` control on [Drivers](https://moonmodules.org/MoonLight/moonmodules/light/supporting.html#drivers).\n\nEach card's emoji are its tags, as the [tag emoji legend](https://moonmodules.org/MoonLight/explanation/architecture/index.html#tag-emoji-legend) explains, and its dimension is its native axes: a Layer extrudes a lower-dimensional effect onto a bigger grid."
+  },
+  "light/drivers.md": {
+   "title": "Drivers",
+   "line": "A driver sends the lights out: to LEDs on a wire, a HUB75 panel, the network, a smart-light bridge or the web UI.",
+   "summary": "Every driver reads the shared buffer of the [Drivers](https://moonmodules.org/MoonLight/moonmodules/light/supporting.html#drivers) container, so several drivers drive one installation, each its own slice. A device's drivers come with its entry in the installer's device catalog, and [Preview](https://moonmodules.org/MoonLight/moonmodules/light/drivers.html#preview) is the one every device starts with.\n\nEach driver opens with the shared controls, then adds its own. The output correction (`localBrightness`, `curve`, `fixture`, `whiteMode`) sets how its slice looks, and the source window (`start`, `count`) sets which slice it reads. Hue and Preview correct nothing, since the bridge and the browser do, and HUB75, Preview and the video drivers take the whole buffer.\n\nEach card's emoji are its tags, as the [tag emoji legend](https://moonmodules.org/MoonLight/explanation/architecture/index.html#tag-emoji-legend) explains.",
+   "videos": [
+    {
+     "video": "https://moonmodules.org/MoonLight/assets/moontube/07-drivers-desktop.webm",
+     "caption": "Drivers on a desktop: preview, NDI, RTSP, HLS, network send and Hue."
+    },
+    {
+     "video": "https://moonmodules.org/MoonLight/assets/moontube/07-drivers-esp32.webm",
+     "caption": "Drivers on a device: RMT and parallel LED pins, HUB75, panel cards, and the network senders."
+    }
+   ]
   }
  }
 }

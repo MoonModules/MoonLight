@@ -17,7 +17,7 @@ public:
     /// The surface fills a volume, so all three axes are used.
     Dim dimensions() const override { return Dim::D3; }
 
-    /// Wave animation rate; 0 freezes it.
+    /// Wave animation rate.
     uint8_t speed = 50;
     /// Wavefront spacing; low is tight rings, high is wide.
     uint8_t interval = 128;
@@ -44,7 +44,7 @@ public:
                                      * std::sqrt(static_cast<float>(h));
         if (rippleInterval < 0.01f) return;
 
-        // The animation, which a speed of 0 freezes.
+        // The animation phase, which a higher speed advances faster.
         const float timeInterval = static_cast<float>(elapsed())
                                   / (100.0f - static_cast<float>(speed)) / 6.4f;
 

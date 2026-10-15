@@ -50,7 +50,7 @@ def test_the_first_paragraph_is_the_line_and_the_rest_of_the_lead_the_summary():
 
 def test_a_card_tag_names_the_picture_then_its_alt_text(demo):
     comment = "/// Water.\n/// @card PictureEffect.gif A wave on a grid\n///\n/// More."
-    h = gen_help.header_help(SimpleNamespace(raw_comment=comment, get_children=demo.get_children))
+    h = gen_help.header_help(SimpleNamespace(raw_comment=comment, get_children=demo.get_children, hash=demo.hash, spelling=demo.spelling))
     assert h["image"].endswith("/PictureEffect.gif") and h["alt"] == "A wave on a grid"
 
 
@@ -168,15 +168,19 @@ class DemoEffect {
 """
 
 
-@pytest.fixture(scope="module")
-def demo(tmp_path_factory):
+def parsed(path: Path, source: str):
+    """The translation unit clang reads from `source` written to `path`, with the bindings; the test skips on a host without libclang."""
     ci = pytest.importorskip("clang.cindex")
-    path = tmp_path_factory.mktemp("help") / "DemoEffect.h"
-    path.write_text(HEADER, encoding="utf-8")
+    path.write_text(source, encoding="utf-8")
     try:
-        tu = ci.Index.create().parse(str(path), args=["-x", "c++", "-std=c++20"])
+        return ci, ci.Index.create().parse(str(path), args=["-x", "c++", "-std=c++20"])
     except ci.LibclangError as e:   # no libclang on this host: nothing here can run
         pytest.skip(str(e))
+
+
+@pytest.fixture(scope="module")
+def demo(tmp_path_factory):
+    ci, tu = parsed(tmp_path_factory.mktemp("help") / "DemoEffect.h", HEADER)
     cls = next(c for c in tu.cursor.walk_preorder()
                if c.kind == ci.CursorKind.CLASS_DECL and c.spelling == "DemoEffect")
     return cls
@@ -199,13 +203,7 @@ struct Recompiling : ModifierBase { bool consumeNeedsRebuild() override { return
 
 def test_a_modifiers_kind_is_dynamic_animated_or_static_as_its_overrides_say(tmp_path):
     """Dynamic remaps per frame; animated rebuilds on its own clock, a tick of its own asking for the rebuild; a rebuild asked for without a clock, as a recompile does, stays static."""
-    ci = pytest.importorskip("clang.cindex")
-    path = tmp_path / "Kinds.h"
-    path.write_text(KINDS, encoding="utf-8")
-    try:
-        tu = ci.Index.create().parse(str(path), args=["-x", "c++", "-std=c++20"])
-    except ci.LibclangError as e:
-        pytest.skip(str(e))
+    ci, tu = parsed(tmp_path / "Kinds.h", KINDS)
     kind = {c.spelling: gen_help.identity(c).get("kind") for c in tu.cursor.walk_preorder()
             if c.kind == ci.CursorKind.STRUCT_DECL and c.is_definition() and c.spelling != "ModifierBase"}
     assert kind == {"Baked": "static", "Spinning": "dynamic", "Shuffling": "animated", "Recompiling": "static"}
@@ -229,13 +227,79 @@ def test_a_control_with_no_comment_anywhere_has_an_empty_line(demo):
     assert controls["bare"] == controls["fps"] == ""
 
 
-def test_a_guide_section_titled_with_a_controls_name_is_that_controls_more(demo):
-    comment = ("/// Water.\n///\n/// @guide\n///\n/// ## damping\n///\n/// Low rings long."
-               "\n///\n/// ## Tips\n///\n/// Use rain.")
-    h = gen_help.header_help(SimpleNamespace(raw_comment=comment, get_children=demo.get_children))
-    assert h["controls"]["damping"] == {"line": "How long the water keeps ringing.", "more": "Low rings long."}
-    assert h["controls"]["restart"] == {"line": "Start the show again."}
-    assert [g["title"] for g in h["guide"]] == ["Tips"]
+DRIVERS = """
+struct Controls { void addControl(const char*, int&) {} void addButton(const char*) {} };
+struct DriverBase {
+    Controls controls_;
+    /// This driver's dim.
+    int localBrightness = 0;
+    /// The first light it reads.
+    /// @guide Two drivers can share one buffer.
+    int start = 0;
+    void defineControls() {
+        if (hasCorrectionControls()) defineCorrectionControls();
+        defineDriverControls();
+    }
+    virtual bool hasCorrectionControls() const { return true; }
+    void defineCorrectionControls() { controls_.addControl("localBrightness", localBrightness); }
+    void addWindowControls() { controls_.addControl("start", start); }
+    virtual void defineDriverControls() {}
+};
+struct WireDriver : DriverBase {
+    /// The data pins.
+    int pins = 0;
+    void defineDriverControls() override { controls_.addControl("pins", pins); addWindowControls(); }
+};
+struct BridgeDriver : DriverBase {
+    /// The bridge's address.
+    int bridge = 0;
+    bool hasCorrectionControls() const override { return false; }
+    bool bare() const { return false; }
+    void defineDriverControls() override {
+        controls_.addControl("bridge", bridge);
+        /// Claim a key.
+        /// @guide Press the bridge's own button first.
+        controls_.addButton("pair");
+        if (!bare()) addWindowControls();
+    }
+};
+"""
+
+
+def test_a_base_classs_template_method_and_its_helpers_publish_the_controls_a_driver_shows(tmp_path):
+    """A driver adds its own controls in the hook its base's `defineControls` calls, between the base's own blocks, and a block the driver opts out of is not its control."""
+    ci, tu = parsed(tmp_path / "Drivers.h", DRIVERS)
+    cls = {c.spelling: c for c in tu.cursor.walk_preorder() if c.kind == ci.CursorKind.STRUCT_DECL and c.is_definition()}
+    assert gen_help.controls_of(cls["WireDriver"]) == {"localBrightness": "This driver's dim.", "pins": "The data pins.",
+                                                      "start": "The first light it reads.\n@guide Two drivers can share one buffer."}
+    # A negated branch on a literal `false` runs, and a run of `///` above an `add…` line is that control's comment.
+    assert gen_help.controls_of(cls["BridgeDriver"]) == {"bridge": "The bridge's address.",
+                                                        "pair": "Claim a key.\n@guide Press the bridge's own button first.",
+                                                        "start": "The first light it reads.\n@guide Two drivers can share one buffer."}
+    # The base's member carries the control's longer help, so every driver shows it.
+    assert gen_help.header_help(cls["WireDriver"])["controls"]["start"] == {"line": "The first light it reads.",
+                                                                           "more": "Two drivers can share one buffer."}
+
+
+def test_a_lead_may_name_several_clips_each_with_its_title():
+    _, fields = gen_help.block_tags("Lead.\n@video a.webm On a desktop.\n@video b.webm On a\ndevice.")
+    assert fields["video"] == ["a.webm On a desktop.", "b.webm On a device."]
+
+
+def test_a_controls_comment_is_its_line_and_its_guide_line_its_more():
+    """Doxygen's brief and detailed description: the first line under the control, the `@guide` line behind its arrow."""
+    assert gen_help.control_help("How long the water keeps ringing.\n@guide Low rings long.") == \
+        {"line": "How long the water keeps ringing.", "more": "Low rings long."}
+    assert gen_help.control_help("Start the show again.") == {"line": "Start the show again."}
+    # The word inside a sentence is text, not the marker.
+    assert gen_help.control_help("Use the @guide link.") == {"line": "Use the @guide link."}
+
+
+def test_the_module_guide_stays_general_even_when_a_section_names_a_control(demo):
+    comment = "/// Water.\n///\n/// @guide\n///\n/// ## damping\n///\n/// Low rings long.\n///\n/// ## Tips\n///\n/// Use rain."
+    h = gen_help.header_help(SimpleNamespace(raw_comment=comment, get_children=demo.get_children, hash=demo.hash, spelling=demo.spelling))
+    assert h["controls"]["damping"] == {"line": "How long the water keeps ringing."}
+    assert [g["title"] for g in h["guide"]] == ["damping", "Tips"]   # check_docgen flags the first
 
 
 CARD_PAGE = """# Effects
@@ -418,16 +482,18 @@ def test_a_catalog_whose_page_is_gone_is_generated_from_the_help(monkeypatch):
     assert mkdocs_hooks.generated_catalog("moonmodules/light/other.md") is None
 
 
-def test_a_catalog_intro_shows_its_picture_above_the_line_and_its_clip_below_the_summary(monkeypatch):
+def test_a_catalog_intro_shows_its_picture_above_the_line_and_its_clips_below_the_summary_in_order(monkeypatch):
     import mkdocs_hooks
     help_file = {"catalogs": {"light/demo.md": {"title": "Demos", "line": "What a demo is.", "summary": "One.",
                                                 "image": "https://moonmodules.org/MoonLight/assets/core/Demos.png", "alt": "The Demos card",
-                                                "video": "https://moonmodules.org/MoonLight/assets/moontube/demo.webm", "caption": "Demos at work."}},
+                                                "videos": [{"video": "https://moonmodules.org/MoonLight/assets/moontube/demo.webm", "caption": "Demos at work."},
+                                                           {"video": "https://moonmodules.org/MoonLight/assets/moontube/demo2.webm", "caption": "On a device."}]}},
                  "modules": {}}
     monkeypatch.setitem(mkdocs_hooks._help_cache, "file", help_file)
     md = mkdocs_hooks.generated_catalog("moonmodules/light/demo.md")
     assert md.startswith('# Demos\n\n<img src="../../assets/core/Demos.png" width="300" alt="The Demos card">\n\nWhat a demo is.\n\nOne.\n\n'
-                         '<video src="../../assets/moontube/demo.webm" controls playsinline width="360" title="Demos at work."></video>')
+                         '<video src="../../assets/moontube/demo.webm" controls playsinline width="360" title="Demos at work."></video>\n\n'
+                         '<video src="../../assets/moontube/demo2.webm" controls playsinline width="360" title="On a device."></video>')
 
 
 def test_a_closing_div_ends_the_last_card_so_it_is_still_drawn(hooks):

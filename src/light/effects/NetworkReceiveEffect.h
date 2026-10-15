@@ -19,12 +19,6 @@ namespace mm {
 ///
 /// It listens for Art-Net, E1.31 and DDP at once, with no protocol control, so whatever a sender speaks works and the status names it. The received lights land in the layer buffer, so they compose with modifiers and blending.
 ///
-/// @guide
-///
-/// ## mapped_by
-///
-/// **receiver** means the frame is sent row by row and this board applies its own wiring. **sender** means the frame is sent in wiring order and placed as it arrives. Behind a correcting sender, keep the profile in byte order, brightness 255 and the linear curve; the end-to-end pair is @ref NetworkSendDriver.
-///
 /// @moreinfo
 ///
 /// Sender mapping is one copy alone on its layer, else two mappings, as the status shows. It binds Art-Net 6454, E1.31 5568 and DDP 4048, and an ArtPoll gets an ArtPollReply so controllers list the device.
@@ -44,6 +38,7 @@ public:
     /// The `mapped_by` option names.
     static constexpr const char* kMappers[kMappedByCount] = {"receiver", "sender"};
     /// Whether the sender or the receiver maps the frame onto the wiring.
+    /// @guide **receiver**: frames arrive row by row and this board applies its wiring. **sender**: a @ref NetworkSendDriver sends wiring order, keeping byte order, brightness 255 and the linear curve.
     uint8_t mappedBy = kMappedByReceiver;
     /// Packets received in the last second, read-only.
     uint16_t packetsPerS = 0;

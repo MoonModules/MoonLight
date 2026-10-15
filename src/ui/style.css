@@ -690,6 +690,13 @@ details.control-helper[open] > summary::before { content: "▾"; }
 .card-helpbox .help-attribution { font-style: italic; }
 /* The summary sits under the line, indented past the arrow, so it reads as the line's own. */
 .card-helpbox .help-summary { margin: 4px 0 0 1em; }
+/* A guide's table, compact and ruled, so a few rows of choices fit the card's width. */
+.card-helpbox table,
+.control-helper table { border-collapse: collapse; margin-top: 4px; }
+.card-helpbox th,
+.card-helpbox td,
+.control-helper th,
+.control-helper td { border: 1px solid var(--border); padding: 2px 6px; text-align: left; vertical-align: top; }
 
 /* A control's help: one line under the field, indented to the control column so it reads as the field's own. Only a row with help wraps. Proximity groups it, Gestalt's rule rather than color alone: 2px under its own field, 12px before the next one. */
 .control-row.has-help { flex-wrap: wrap; row-gap: 2px; margin-bottom: 12px; }

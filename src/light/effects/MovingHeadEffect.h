@@ -11,20 +11,6 @@ namespace mm {
 ///
 /// One head sweeping a sine is a demo, and a rig of them is a show. Pan and tilt sweep at different rates, so a beam traces a path rather than a line, and one control changes the rig's whole character without touching speed or range. A fixture chain is one-dimensional, so lay the rig out as a **1 x N** grid.
 ///
-/// @guide
-///
-/// ## formation
-///
-/// With **fan** the beams open like a hand, and **mirror** splits the rig into two halves that sweep against each other. With **chase** the same sweep is delayed head by head, **cross** makes alternate heads oppose each other, and **unison** moves every head as one.
-///
-/// ## gobo
-///
-/// Only the fixture's manual says what a value selects. `rotate` works the same way for the gobo or prism spin.
-///
-/// ## goboOnBeat
-///
-/// The hold stops a busy track from strobing through patterns.
-///
 /// @moreinfo
 ///
 /// Two sines at different rates trace a Lissajous path. It closes into a loop when the rates share a small ratio and drifts when they do not, which keeps a long show from looking like a metronome. Everything is written through EffectBase's role setters, which no-op on an absent channel, so on an LED strip this effect paints its color pattern and moves nothing.
@@ -40,7 +26,8 @@ public:
     /// The formation names, in enum order, for the select control.
     static constexpr const char* kFormationNames[] = {"fan", "mirror", "chase", "cross", "unison"};
 
-    /// How the heads relate: fan, mirror, chase, cross or unison.
+    /// How the heads move relative to each other.
+    /// @guide **fan** opens the beams like a hand, **mirror** sweeps two halves against each other, **chase** delays it head by head, **cross** opposes alternate heads, **unison** moves all as one.
     uint8_t formation = kFan;
 
     /// Pan sweep rate in BPM.
@@ -57,10 +44,12 @@ public:
     uint8_t tiltCenter = 128;
 
     /// The gobo wheel as a raw byte, see the fixture's manual.
+    /// @guide Only the fixture's manual says what a value selects. `rotate` works the same way for the gobo or prism spin.
     uint8_t gobo   = 0;
     /// The gobo or prism spin as a raw byte, see the fixture's manual.
     uint8_t rotate = 0;
     /// Roll a new gobo when the level jumps, then hold it a moment.
+    /// @guide The hold stops a busy track from strobing through patterns.
     bool goboOnBeat = false;
 
     /// The beam widens with the room, each head on its own band.

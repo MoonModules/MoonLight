@@ -12,25 +12,32 @@
 
 namespace mm {
 
-/// The registered parallel WS2812B driver: up to 16 strands clocking out at once, one GPIO lane each, fed consecutive slices of the source buffer over whichever peripheral the control selects. Backends: I80Peripheral.h, MoonI80Peripheral.h, ParlioPeripheral.h.
-///
-/// The whole frame is encoded up front and shipped as one autonomous transfer. So there is no CPU deadline while it is on the wire: @xref{why-single-shot|why single-shot}. The encode is a fused correct and transpose, per row (ParallelSlots.h): @xref{the-frame-transpose-correct-transpose-per-row|the transpose}. Vocabulary: strand, lane, slot, row, under
-/// @xref{terminology|More info → Terminology}.
+/// WS2812B-class LEDs on up to 16 strands clocked out at once by a DMA peripheral, which makes a large wall possible.
 /// @card ParallelLedDriver.png
+///
+/// Each strand takes the next run of lights on its own GPIO. Switching between peripherals is a control change, with no reflash. For a few strands see @ref RmtLedDriver, and for a Teensy 4.1 its [hardware page](https://moonmodules.org/MoonLight/reference/hardware/teensy-4-1.html).
+///
+/// @attribution hpwit, OctoWS2811, ObjectFLED
+///
+/// @guide
+///
+/// ## Which peripheral
+///
+/// Start with `i80`. Choose `MoonI80` for frames too big for memory or a pin expander, `Parlio` on a P4, `GPIO-DMA` on a Teensy 4.1. [The LED driver how-to](https://moonmodules.org/MoonLight/how-to/led-drivers.html#which-one) has the chips, limits and wiring.
 ///
 /// @moreinfo
 ///
-/// ## Why single-shot
+/// **Peripherals.** The peripherals are I80Peripheral.h, MoonI80Peripheral.h, ParlioPeripheral.h and GpioDmaPeripheral.h, each behind LedPeripheral.h. A slot is one WS2812 bit on the wire, and a row is one light across every strand.
 ///
-/// Encoding the whole frame first removes the deadline: a driver refilling as the DMA drains must beat the clock every time, and a WiFi interrupt garbles the rest. MoonI80Peripheral's ring gives this up to hold a frame too big for memory.
+/// **Single-shot.** Encoding the whole frame first removes the deadline a refilling driver must beat every time. MoonI80Peripheral's ring gives that up for frames too big for memory, and its longest strands have a known last-row sparkle.
 ///
-/// ## Terminology
+/// **Transpose.** The encoder turns 8 lights on their side, an 8x8 bit transpose, and writes one word per slot fused with the correction (ParallelSlots.h). Each bus word then carries one bit of every strand.
 ///
-/// A **strand** is one chain of LEDs. A **lane** is one bus data line: in the normal case, one GPIO driving one strand. A **slot** is one WS2812 bit on the wire. A **row** is one light across every strand at once, so a frame is `maxLaneLights` rows.
+/// **Expander limits.** Above about 96 lights per strand the frame falls to PSRAM, which the S3's GDMA cannot sustain at 26.67 MHz, so `i80` is capped. Past 128 a refill race stalls `MoonI80`. `latchPin` is a data lane.
 ///
-/// ## The frame transpose (correct + transpose, per row)
+/// **Loopback:** in shift mode a data GPIO carries the serial stream, so the wire comes from a register output. No continuity check runs, so a mis-wired jumper shows as a bit failure. Intrusive OFF re-allocates the whole ring pool.
 ///
-/// The source holds each light's bytes together; the wire needs each bus WORD to carry one bit of EVERY strand at once. The encoder turns 8 lights on their side, an 8x8 bit matrix transpose, writing one word per slot fused with the correction. A Parlio bus word and an i80 bus word have the same meaning.
+/// **GPIO-DMA.** A timer ticks every 373 ns and one DMA channel writes the next slot into the GPIO port, widened to 32 bits by the platform. The next frame encodes meanwhile, so `doubleBuffer` has no effect there.
 class ParallelLedDriver : public DriverBase {
 public:
     /// Test-only: borrow a mock backend, dropping any existing one. The caller keeps ownership.
@@ -46,7 +53,7 @@ public:
     /// Recompute the heap total for the module readout; a test with no alloc site asks for it.
     void publishHeapBytesForTest() { publishHeapBytes(); }
 
-    // `#if`-gated per chip in main.cpp, so the Select offers the linked-and-supported subset.
+    /// Builds one backend: `#if`-gated per chip in main.cpp, so the select offers the linked-and-supported subset.
     using PeripheralFactory = LedPeripheral* (*)();
     struct PeripheralEntry { const char* label; PeripheralFactory make; };
     /// How many backends can register, sized to the most any one chip links in.
@@ -63,81 +70,65 @@ public:
         return true;
     }
 
-    // On desktop no backend links, so peripheral_ stays null and the driver idles.
-    /// A fresh driver takes the GRB profile (WS2812 wiring) and the first backend this chip supports.
+    /// A fresh driver takes the GRB profile (WS2812 wiring) and the first backend this chip supports; on desktop none links, so the driver idles.
     ParallelLedDriver() {
         this->setDefaultFixtureName("GRB");
         selectDefaultPeripheral(nullptr);
     }
 
-    // The ownership flag decides, so the delete lives once in the base rather than per subclass.
-    /// Free the owned backend; a test-borrowed mock is left alone.
+    /// Free the owned backend; a test-borrowed mock is left alone, the ownership flag deciding.
     ~ParallelLedDriver() override {
         if (peripheral_ && peripheralOwned_) delete peripheral_;
         peripheral_ = nullptr;
     }
 
-    // The bus width follows the pin count: up to 8 pins an 8-bit bus, 9 to 16 a 16-bit one.
-    /// Max parallel lanes: the peripheral's 16 data lines. Strands can exceed it, see kMaxStrands.
+    /// Max parallel lanes: the peripheral's 16 data lines, an 8-bit bus up to 8 pins and a 16-bit one up to 16. Strands can exceed it, see kMaxStrands.
     static constexpr uint8_t kMaxLanes = 16;
 
-    // 64 because the active-strand mask is a uint64_t; parseConfig refuses more rather than dropping.
-    /// Max strands: every data line fanned out through its '595 chain. Direct mode uses kMaxLanes.
+    /// Max strands: every data line fanned out through its '595 chain, 64 because the active-strand mask is a uint64_t. Direct mode uses kMaxLanes.
     static constexpr uint8_t kMaxStrands = 64;
 
-    // Small on purpose: a big frame exceeds the RMT-RX capture depth and reads as "bad bit 0".
-    /// Light count the loopback self-test drives, or the strand length when that is smaller.
+    /// Light count the loopback self-test drives, or the strand length when smaller. It stays small because a big frame exceeds the RMT-RX capture depth and reads as "bad bit 0".
     static constexpr nrOfLightsType kLoopbackTestLights = 256;
 
-    // A token is a pin or an inclusive range, mixing freely: "20-22,35,38-40". Parsers in PinList.h.
-    /// Comma-separated GPIO list, one parallel lane per pin, each fed a slice of this driver's window.
+    /// Data GPIO list: `18,17,16` or ranges like `20-23`. Empty idles.
     char pins[64] = "";
-    // A lane is a STRAND: with the expander each pin fans out to 8, so entry N is strand N.
-    /// Comma-separated lights per lane; the remainder splits evenly over the rest. Empty splits all.
+    /// Lights per strand: blank splits evenly, a number, or a list.
     char ledsPerPin[kMaxStrands * 5 + 1] = "";
 
-    // Toggling rebuilds the bus; a buffer that will not fit degrades to synchronous by itself.
-    /// Encode the next frame while the current clocks out, so a tick costs max(encode, wire).
+    /// Encode the next frame while this one clocks out, where supported.
+    /// @guide Leave it on: a tick costs the longer of encode and wire, not their sum, for one extra DMA buffer and 8 to 20 ms of latency. A board without room falls back to one buffer.
     bool doubleBuffer = true;
-    // Live, not a prepare trigger: it changes only what tickRing does per frame. Ring path only.
-    /// Freeze the source each frame so the ring's off-thread refill reads an immutable copy.
+    /// Freeze the source each frame for the ring's off-thread refill.
     bool ringSnapshot = true;
-    // A persistent mode: while on it re-runs on every relevant change; off clears the verdict.
-    /// On-device loopback self-test: transmit a known pattern and bit-verify the capture.
+    /// TX to RX self-test: send a known pattern, bit-verify the capture.
     bool     loopbackTest = false;
-    // Lets the bench loopback run on a dedicated jumper pin without re-typing the operational `pins`.
-    /// TX override for the self-test; unset (-1) falls back to lane 0.
+    /// TX pin override for the test; unset uses lane 0.
     int8_t   loopbackTxPin = -1;
-    // Walking this 0..N-1 until the test passes identifies the tapped strand empirically.
-    /// Which strand carries the test pattern, shift mode only; direct mode always uses lane 0.
+    /// Strand carrying the test pattern, expander mode only.
+    /// @guide Strand 0 is Q7, strand S is Q(7 - S%8): jumper it to `loopbackRxPin`. The '595 is 5 V: divide it ([how-to](https://moonmodules.org/MoonLight/how-to/led-drivers.html#testing-the-wire-with-the-loopback)).
     uint8_t  loopbackStrand = 0;
-    // OFF tests a replica, and on the ring path it re-allocates the whole pool.
-    /// Loopback mode: ON rides the live pipeline, OFF rebuilds a private bus for the test.
+    /// ON rides the live pipeline, OFF rebuilds a private bus.
     bool     loopbackIntrusive = false;
-    // With a '595 the jumper comes off a 5 V register output and MUST be level-shifted.
-    /// Jumper this to the TX lane for the self-test; unset (-1) by default.
+    /// Jumper this to the TX pin: the self-test reads the pattern back here.
     int8_t   loopbackRxPin = -1;
 
-    // A checkbox, not a fan-out number: 8 is the '595's own width. Limits: the driver page.
-    /// Is a 74HCT595 shift-register expander fitted? Each data pin then drives 8 strands.
+    /// A 74HCT595 per data pin: each pin then drives 8 strands.
+    /// @guide It buys pins, not memory: the frame grows eightfold, about 1.1 KB per light, up to 64 strands. `i80` stops at about 96 lights per strand, `MoonI80` drives 128.
     bool     pinExpander = false;
-    // A DATA lane: it takes a bit of every bus word, so it cannot share a data pin or clockPin.
-    /// The 74HCT595 latch (RCLK), pulsed once the shifted byte is in. Unset (-1) until wired.
+    /// The 74HCT595 latch (RCLK) pin, needed with the expander.
     int8_t   latchPin = -1;
 
-    // Gated here rather than by mutating `pinExpander`, so the saved value survives a round trip.
-    /// Is the shift-register expander engaged, after the peripheral's own capability?
+    /// Is the shift-register expander engaged, after the peripheral's own capability? Gated here rather than by mutating `pinExpander`, so the saved value survives a round trip.
     bool pinExpanderMode() const { return pinExpander && peripheral_ && peripheral_->supportsPinExpander(); }
     /// Strands per physical data pin: 1 direct, or the '595's width through the expander.
     uint8_t outputsPerPin() const { return pinExpanderMode() ? kPinExpanderOutputs : uint8_t(1); }
 
-    // Above the `peripheral` selector is invariant, below is what that peripheral supports.
     /// Bind the controls: the invariant block, the peripheral selector, then that backend's own.
     void defineDriverControls() override {
         addWindowControls();   // start / count: the slice of the shared buffer this driver outputs
         controls_.addText("pins", pins, sizeof(pins));
         controls_.addText("ledsPerPin", ledsPerPin, sizeof(ledsPerPin));
-        // The pure output floor, independent of render load: the headroom the pipeline has left.
         controls_.addReadOnly("frameTime", frameTimeStr_, sizeof(frameTimeStr_));
         // The live backend must agree with peripheralSel_ BEFORE the backend surfaces its controls.
         buildPeripheralOptions();
@@ -177,8 +168,7 @@ public:
         controls_.setDeveloper(controls_.count() - 1);
     }
 
-    // doubleBuffer, pinExpander and latchPin decide an allocation only bus init can change.
-    /// Which control changes re-parse and re-init the bus live, through the prepare sweep.
+    /// Which control changes re-parse and re-init the bus live through the prepare sweep: the ones that decide an allocation only bus init can change.
     bool affectsPrepare(const char* name) const override {
         return std::strcmp(name, "pins") == 0 || std::strcmp(name, "ledsPerPin") == 0
             || std::strcmp(name, "doubleBuffer") == 0
@@ -234,15 +224,13 @@ public:
         DriverBase::release();   // frees the correction scratch, clears failBuf_ + configErr_
     }
 
-    // The caller has already drained any in-flight refill, so no ISR reads it.
-    /// Free the ring snapshot buffer, clear the encode source, refresh the memory readout.
+    /// Free the ring snapshot buffer, clear the encode source, refresh the memory readout; the caller has drained any in-flight refill, so no ISR reads it.
     void freeSnapshot() {
         if (snapshotBuf_) { platform::free(snapshotBuf_); snapshotBuf_ = nullptr; snapshotCap_ = 0; this->publishHeapBytes(); }
         encodeSrc_ = nullptr;
     }
 
-    // No enabled() check: applyState routes a disabled driver to release() instead.
-    /// Pure build: re-parse the lanes and re-init the bus, off the hot path.
+    /// Pure build: re-parse the lanes and re-init the bus, off the hot path. A disabled driver never gets here, applyState routes it to release().
     void prepare() override {
         // BEFORE parseConfig, which reallocates state the ring's refill task reads on its own core.
         drainInFlight();
@@ -250,8 +238,7 @@ public:
         reinit();
     }
 
-    // The gate stops a double reinit: rebuilding twice left the ring's GDMA EOF interrupt dead.
-    /// Re-init when a channel-count change resizes the frame, and only then.
+    /// Re-init when a channel-count change resizes the frame, and only then: a second rebuild left the ring's GDMA EOF interrupt dead.
     void onCorrectionChanged() override {
         // A brightness change drains no transfer and re-parses no lane: at a desk's 20 changes a second that stalled the render for half a second.
         if (!effectivelyEnabled()) return;
@@ -266,9 +253,7 @@ public:
     /// Point the driver at the source frame buffer and re-parse the lane config.
     void setSourceBuffer(Buffer* buf) override { sourceBuffer_ = buf; parseConfig(); }
 
-    // Which path runs is decided by whether a second DMA buffer was allocated, not by the flag.
-    /// Per-tick output: correct and transpose each row into the DMA buffer, then ship one transfer.
-    // Reported as blocking deliberately: hiding it would make the hot-path report worthless.
+    /// Per-tick output: correct and transpose each row into the DMA buffer, then ship one transfer. A second DMA buffer picks the path, not the flag. Reported as blocking on purpose, so the hot-path report stays honest.
     void tick() MM_NONBLOCKING override {
         if (!peripheral_ || peripheral_->lanesAvailable() == 0) return;  // no backend / inert off this chip
         // Loopback owns the peripheral exclusively: it tears the bus down and rebuilds it.
@@ -293,8 +278,7 @@ public:
         else                           tickSync(outCh);    // synchronous (doubleBuffer OFF / no 2nd buf)
     }
 
-    // One DMA buffer, no alternation, no deferred-wait bookkeeping, zero added latency.
-    /// Blocking path: encode, send, wait out the wire, so a tick costs encode plus wire.
+    /// Blocking path: encode, send, wait out the wire, so a tick costs encode plus wire. One DMA buffer, no alternation, zero added latency.
     void tickSync(uint8_t outCh) {
         if (busGaveUp()) return;
         // A timed-out wait leaves the DMA reading: re-wait rather than encode over a live transfer.
@@ -313,8 +297,7 @@ public:
         }
     }
 
-    // Costs the second DMA buffer and one frame of output latency.
-    /// Deferred-wait path: encode N+1 while N clocks out, so a tick costs max(encode, wire).
+    /// Deferred-wait path: encode N+1 while N clocks out, so a tick costs max(encode, wire). Costs the second DMA buffer and one frame of output latency.
     void tickAsync(uint8_t outCh) {
         if (busGaveUp()) return;
         // A timed-out wait skips the frame, so a wedged DMA idles rather than emits garbage.
@@ -334,8 +317,7 @@ public:
         }
     }
 
-    // ASYNC per tick: blocking here starves the refill task past its deadline on the same core.
-    /// Streaming-ring path: wait, arm the next frame, and return with the wire still running.
+    /// Streaming-ring path: wait, arm the next frame, and return with the wire still running; blocking here would starve the refill task past its deadline on the same core.
     void tickRing(uint8_t /*outCh*/) {
         if (busGaveUp()) return;
         // Bench diagnostic: the ring tick's wire-wait, snapshot and prime segments, via ringDbg.
@@ -366,8 +348,7 @@ public:
     /// Microseconds the ring tick spent priming buffers, for `ringDbg`.
     static inline volatile uint32_t dbgTickPrimeUs = 0;
 
-    // The pure WS2812 output floor: the render loop can never beat it.
-    /// Refresh the `frameTime` KPI once a second: the measured wire time and its fps ceiling.
+    /// Refresh the `frameTime` KPI once a second: the measured wire time and its fps ceiling, the floor the render loop can never beat.
     void tick1s() MM_NONBLOCKING override {
         if (!peripheral_) return;
         // A bus refused to a sibling comes back on its own, retried at most once per second.
@@ -379,8 +360,7 @@ public:
         peripheral_->refreshBusKpi();   // per-backend extra read-only KPIs (MoonI80's ring diagnostic); base no-op
     }
 
-    // False means it timed out and the DMA may still be reading, so leave the buffer alone.
-    /// Wait for buffer `i` if a transfer is in flight; false means it wedged. A no-op when idle.
+    /// Wait for buffer `i` if a transfer is in flight; false means it timed out, the DMA may still be reading, and the buffer is left alone. A no-op when idle.
     bool busWaitIfBusy(uint8_t i) {
         if (!inFlight_[i]) return true;
         if (!peripheral_ || !peripheral_->busWait(i, waitBudgetMs())) {
@@ -395,8 +375,7 @@ public:
         return true;
     }
 
-    // A never-delivering bus eats the CPU WiFi needs, so the driver gives up: dark but reachable.
-    /// How long a transfer gets before it counts as dead: derived from the frame, never a constant.
+    /// Report once that the frame exceeds the bus capacity, in lights per lane, the control the user sets, rather than failing silently.
     void reportOverCapacity(uint8_t outCh, size_t cap) {
         if (overCapReported_) return;
         overCapReported_ = true;
@@ -416,7 +395,7 @@ public:
         setStatus(statusBuf_, Severity::Error);
     }
 
-    /// Whether the bus has failed for long enough to stop trying, reported once.
+    /// Whether the bus has failed for long enough to stop trying, reported once: a never-delivering bus eats the CPU WiFi needs, so the driver goes dark but stays reachable.
     bool busGaveUp() {
         if (deadFrames_ < kDeadFramesBeforeGiveUp) return false;
         if (!gaveUpReported_) {
@@ -436,8 +415,7 @@ public:
         return true;
     }
 
-    // Four times the wire time, floored at 20 ms and capped at 100 ms.
-    /// How long a transfer gets before it counts as dead, derived from the frame, never a constant.
+    /// How long a transfer gets before it counts as dead: four times the wire time, floored at 20 ms and capped at 100 ms, derived from the frame.
     uint32_t waitBudgetMs() const {
         constexpr uint32_t kSlotNs = 375;   // WS2812 wire slot; 3 per bit (ParallelSlots.h)
         const uint32_t bits = static_cast<uint32_t>(maxLaneLights_) * correction_.outChannels * 8u;
@@ -446,8 +424,7 @@ public:
         return budget < 20u ? 20u : (budget > 100u ? 100u : budget);
     }
 
-    // Cannot skip on a timeout: the teardown itself cancels the transfer.
-    /// Block until nothing reads the DMA buffers or the snapshot: the barrier a live resize needs.
+    /// Block until nothing reads the DMA buffers or the snapshot: the barrier a live resize needs. It cannot skip on a timeout, since the teardown cancels the transfer.
     void drainInFlight() {
         if (!busWaitIfBusy(0)) inFlight_[0] = false;   // deinit below cancels the wedged transfer
         if (!busWaitIfBusy(1)) inFlight_[1] = false;
@@ -466,15 +443,13 @@ public:
         }
     }
 
-    // Prefilled in RUNS: a strand ending mid-frame must stop asserting or it flashes white.
-    /// Write the shift-mode frame constants into every DMA buffer, once, off the hot path.
+    /// Write the shift-mode frame constants into every DMA buffer, once, off the hot path, in runs so a strand ending mid-frame stops asserting instead of flashing white.
     template <class Slot>
     void prefillShiftFrame(uint8_t outCh, uint8_t* dst) {
         prefillShiftRows<Slot>(outCh, dst, 0, maxLaneLights_);
     }
 
-    // Written dst-relative, so a ring slice gets the same constants the whole-frame buffer would.
-    /// Prefill the shift constants for a row range; `rowCount == 0` means to the end.
+    /// Prefill the shift constants for a row range, `rowCount == 0` meaning to the end; written dst-relative, so a ring slice gets the same constants the whole-frame buffer would.
     template <class Slot>
     void MM_RAMFUNC prefillShiftRows(uint8_t outCh, uint8_t* dst, nrOfLightsType firstRow, nrOfLightsType rowCount) {
         auto* out = reinterpret_cast<Slot*>(dst);
@@ -504,8 +479,7 @@ public:
         }
     }
 
-    // The ring encodes one slice straight into the buffer the DMA is about to read.
-    /// Encode a row range into `dst`, dst-relative; only the last slice may set `closeFrame`.
+    /// Encode a row range into `dst`, dst-relative; only the last slice may set `closeFrame`. The ring encodes one slice straight into the buffer the DMA is about to read.
     template <class Slot>
     void MM_RAMFUNC encodeRows(uint8_t outCh, uint8_t* dst,
                     nrOfLightsType firstRow = 0, nrOfLightsType rowCount = 0,
@@ -563,8 +537,7 @@ public:
         else                  encodeWs2812ShiftLatchPad<uint16_t>(latchBit_, reinterpret_cast<uint16_t*>(dst));
     }
 
-    // Matches the private loopback bus's width, so the DMA stride is right.
-    /// Build the direct-mode self-test frame: the known pattern on lane 0, every other lane idle.
+    /// Build the direct-mode self-test frame: the known pattern on lane 0, every other lane idle, at the private loopback bus's width so the DMA stride is right.
     template <class Slot>
     void encodeLoopbackFrame(uint8_t* frame, const uint8_t* wire, uint8_t outCh,
                              nrOfLightsType lights) {
@@ -575,8 +548,7 @@ public:
         }
     }
 
-    // A '595 shifts MSB-first, so strand 0 appears on the register's LAST output, Q7.
-    /// Build the expander self-test frame, latch and all, so the capture proves the real wire.
+    /// Build the expander self-test frame, latch and all, so the capture proves the real wire. A '595 shifts MSB-first, so strand 0 appears on the register's last output, Q7.
     template <class Slot>
     void encodeLoopbackFrameShift(uint8_t* frame, const uint8_t* wire, uint8_t outCh,
                                   nrOfLightsType lights) {
@@ -601,16 +573,14 @@ public:
     bool inFlightForTest(uint8_t i) const { return inFlight_[i]; }
     /// Lights on lane `i` (0 if out of range). Test-only.
     nrOfLightsType laneLightCount(uint8_t i) const { return i < laneCount_ ? laneCounts_[i] : 0; }
-    // Best-effort counters: NOT volatile, which is the wrong tool and deprecated on a compound assign.
-    /// Cycles spent gathering a row, accumulated for `ringDbg`.
+    /// Cycles spent gathering a row, accumulated for `ringDbg`; best-effort counters, not volatile, which is the wrong tool and deprecated on a compound assign.
     static inline uint32_t dbgSegGatherCy = 0;
     /// Cycles spent transposing and emitting a row, accumulated for `ringDbg`.
     static inline uint32_t dbgSegEmitCy = 0;
     /// How many rows the two counters above cover, so `ringDbg` can average them.
     static inline uint32_t dbgSegRows = 0;
 
-    // The prefill-skip needs a constant per-row mask; an empty lane is in no mask at all.
-    /// Are all POPULATED strands the same length? Gates the ring's prefill-skip.
+    /// Are all POPULATED strands the same length? Gates the ring's prefill-skip, which needs a constant per-row mask: an empty lane is in no mask at all.
     bool MM_RAMFUNC uniformLaneCounts() const {
         nrOfLightsType ref = 0;
         for (uint8_t i = 0; i < laneCount_; i++) {
@@ -627,15 +597,13 @@ public:
     /// Total DMA frame size in bytes (rows + latch pad). Test-only.
     size_t frameBytes() const { return frameBytes_; }
 
-    // The back-pointer's read side: what CRTP inheritance gave a derived class for free.
-    /// Bus-bit index of the latch line, shift mode only; a backend reads it through the owner.
+    /// Bus-bit index of the latch line, shift mode only; the first of the accessors a backend reads through its owner.
     uint8_t latchBit() const { return latchBit_; }
     /// The parsed physical data GPIOs, bus-width bound, for a backend's encode trampoline.
     const uint16_t* laneList() const { return laneList_; }
     /// The live output Correction, which a backend's encode and prefill helpers read through.
     const Correction& correction() const { return correction_; }
-    // addControl binds a bool by reference, so the control needs the member's address.
-    /// Mutable reference to the ring-snapshot knob, for a backend's addRingControls to bind.
+    /// Mutable reference to the ring-snapshot knob, for a backend's addRingControls to bind: addControl binds by reference, so it needs the member's address.
     bool& ringSnapshotRef() { return ringSnapshot; }
     /// The ring snapshot buffer, null off the ring path; a backend's KPI reads its residency.
     const uint8_t* snapshotBuf() const { return snapshotBuf_; }
@@ -643,7 +611,7 @@ public:
     const Buffer* sourceBuffer() const { return sourceBuffer_; }
 
 protected:
-    // Re-points by backend, not by index, so a filtered list cannot select a different one.
+    /// Rebuild the select's options from the registry, keeping the selection on the same backend by label, not by index, so a filtered list cannot select a different one.
     void buildPeripheralOptions() {
         // Remember which backend is selected now (by label) so we can re-find it after filtering.
         const char* current = (peripheralSel_ < peripheralOptionCount_) ? peripheralOptions_[peripheralSel_]
@@ -671,7 +639,7 @@ protected:
         peripheralSel_ = sel;
     }
 
-    // Only the selected peripheral costs memory; a bad index leaves peripheral_ null and idles.
+    /// Replace the live backend with registry entry `k`; only the selected peripheral costs memory, and a bad index leaves it null and the driver idle.
     void swapPeripheral(uint8_t k) {
         // Quiesce the encode worker first: it dereferences peripheral_ every tick.
         if (peripheral_) MoonModule::notifyQuiesceRender();
@@ -690,7 +658,7 @@ protected:
         if (peripheral_) { peripheral_->attach(this); peripheralActiveReg_ = reg; peripheralOwned_ = true; }
     }
 
-    // A board naming an unavailable default still gets the first usable backend, so it works.
+    /// Select the named backend, or the first usable one, so a board naming an unavailable default still works.
     void selectDefaultPeripheral(const char* label) {
         buildPeripheralOptions();
         peripheralSel_ = 0;   // fallback: the first usable backend (a board naming an absent default
@@ -701,7 +669,7 @@ protected:
         swapPeripheral(peripheralSel_);
     }
 
-    // A no-op when they already agree, so it is cheap on every rebuild.
+    /// Swap the backend when it differs from the select; a no-op when they agree, so it is cheap on every rebuild.
     void ensurePeripheralMatchesSelection() {
         // Never swap a test-borrowed mock out for a registry backend.
         if (peripheral_ && !peripheralOwned_) return;
@@ -711,7 +679,7 @@ protected:
         swapPeripheral(peripheralSel_);
     }
 
-    // RTTI-free: every module answers hwBlock(), and a non-parallel driver returns None.
+    /// Does an enabled sibling driver already claim this backend's hardware block? RTTI-free: every module answers hwBlock(), and a non-parallel driver returns None.
     bool siblingClaimsBlock() const {
         if (!peripheral_) return false;
         const LedHwBlock mine = peripheral_->hwBlock();
@@ -729,8 +697,7 @@ protected:
     }
 
 public:
-    // Gated on inited_, so the claim means "the bus is up" rather than "a backend is selected".
-    /// The hardware block this driver is DRIVING, for the sibling claim guard.
+    /// The hardware block this driver is DRIVING, for the sibling claim guard: gated on inited_, so the claim means the bus is up rather than that a backend is selected.
     LedHwBlock hwBlock() const override {
         return (inited_ && peripheral_) ? peripheral_->hwBlock() : LedHwBlock::None;
     }
@@ -741,68 +708,60 @@ protected:
     /// The runtime backend; null only before the constructor wires one, so every use guards.
     LedPeripheral* peripheral_ = nullptr;
 
-    // peripheralOptions_ is a stable member array because addSelect borrows the pointer.
+    /// The DMA peripheral that clocks the strands out, filtered to what the chip supports.
     uint8_t peripheralSel_ = 0;
     const char* peripheralOptions_[kMaxPeripherals] = {};
     uint8_t peripheralIndex_[kMaxPeripherals] = {};
     uint8_t peripheralOptionCount_ = 0;
-    uint8_t peripheralActiveReg_ = 0xFF;   // registry index the LIVE peripheral_ came from (0xFF = none)
-    bool peripheralOwned_ = false;         // does the orchestrator own peripheral_ (delete it): false
-                                           // for a test-borrowed mock (setPeripheralForTest)
+    uint8_t peripheralActiveReg_ = 0xFF;   ///< registry index the LIVE peripheral_ came from, 0xFF for none
+    bool peripheralOwned_ = false;         ///< does the orchestrator own peripheral_ (delete it): false for a test-borrowed mock
 
     Buffer* sourceBuffer_ = nullptr;
 
     LedDriverConfig cfg_;
     bool inited_ = false;
-    uint8_t* dmaBuf_ = nullptr;          // platform-owned buffer 0; cached as the "inited" flag
-                                         // the per-tick encode target, alternating 0/1
-    uint8_t active_ = 0;                 // which DMA buffer this tick encodes into (0/1); stays 0
-                                         // in single-buffer mode (no second buffer allocated)
-    bool inFlight_[2] = {};              // is buffer i's DMA transfer outstanding (awaiting its wait)
-    // Dead transfers, not the healthy `stallUs` wait: 0 on any working bus.
+    uint8_t* dmaBuf_ = nullptr;          ///< platform-owned buffer 0, cached as the "inited" flag
+    uint8_t active_ = 0;                 ///< which DMA buffer this tick encodes into, alternating 0/1; stays 0 in single-buffer mode
+    bool inFlight_[2] = {};              ///< is buffer i's DMA transfer outstanding (awaiting its wait)
+    /// Dead transfers in a row, not the healthy `stallUs` wait: 0 on any working bus.
     uint8_t deadFrames_ = 0;
-    bool gaveUpReported_ = false;        // one status write per give-up, not one per tick
-    // A member because setStatus keeps the POINTER: stack storage would dangle on return.
-    /// One buffer for every formatted status this driver reports.
+    bool gaveUpReported_ = false;        ///< one status write per give-up, not one per tick
+    /// One buffer for every formatted status this driver reports; a member because setStatus keeps the POINTER, and stack storage would dangle on return.
     char statusBuf_[96] = {};
     bool overCapReported_ = false;
     static constexpr uint8_t kDeadFramesBeforeGiveUp = 8;
-    // About a second between retries: rare enough not to starve the network, often enough to feel live.
+    /// Ticks since the last retry while given up: about a second between retries, rare enough not to starve the network, often enough to feel live.
     uint16_t giveUpRetry_ = 0;
     static constexpr uint16_t kGiveUpRetryTicks = 50;
-    // One slice PER CORE: a fixed 4-byte stride here boot-looped the SE16 on a 5-channel correction.
-    char frameTimeStr_[40] = "—";             // read-only `frameTime` KPI text (refreshed in tick1s); sized
-                                         // the worst case plus the 3-byte UTF-8 micro sign
-    uint16_t laneList_[kMaxLanes] = {};              // physical data GPIOs (bus width bound)
-    uint16_t busPinBuf_[kMaxLanes] = {};             // data pins + latch: the list busInit() builds from
-    nrOfLightsType laneCounts_[kMaxStrands] = {};    // per-STRAND light count (expander bound)
-    nrOfLightsType laneStart_[kMaxStrands] = {};     // per-STRAND offset into the window
-    nrOfLightsType winStart_ = 0;   // first source-buffer light this driver reads (the window)
-    nrOfLightsType winLen_ = 0;     // window length (lights), clamped to the buffer
-    uint8_t laneCount_ = 0;      // STRAND lanes driven = physPins_ × outputsPerPin() (expanded)
-    uint8_t physPins_ = 0;       // physical data GPIOs (== laneCount_ in direct mode)
-    uint8_t latchBit_ = 0;       // bus-bit index of the latch line (shift mode only)
+    char frameTimeStr_[40] = "—";             ///< What one frame costs on the wire: the pipeline's headroom.
+    uint16_t laneList_[kMaxLanes] = {};              ///< physical data GPIOs, bus width bound
+    uint16_t busPinBuf_[kMaxLanes] = {};             ///< data pins plus latch: the list busInit() builds from
+    nrOfLightsType laneCounts_[kMaxStrands] = {};    ///< per-STRAND light count, expander bound
+    nrOfLightsType laneStart_[kMaxStrands] = {};     ///< per-STRAND offset into the window
+    nrOfLightsType winStart_ = 0;   ///< first source-buffer light this driver reads (the window)
+    nrOfLightsType winLen_ = 0;     ///< window length in lights, clamped to the buffer
+    uint8_t laneCount_ = 0;      ///< STRAND lanes driven: physPins_ x outputsPerPin() when expanded
+    uint8_t physPins_ = 0;       ///< physical data GPIOs, equal to laneCount_ in direct mode
+    uint8_t latchBit_ = 0;       ///< bus-bit index of the latch line, shift mode only
     nrOfLightsType maxLaneLights_ = 0;
     size_t frameBytes_ = 0;
 
-    // Only THIS DRIVER'S WINDOW, biased by -winStart_ so encodeRows' index is unchanged.
-    uint8_t* snapshotBuf_ = nullptr;      // driver-owned copy of the source WINDOW (ring only)
-    size_t   snapshotCap_ = 0;            // allocated capacity, grows to fit the window
+    /// Driver-owned copy of this driver's window alone, ring only, biased by -winStart_ so encodeRows' index is unchanged.
+    uint8_t* snapshotBuf_ = nullptr;
+    size_t   snapshotCap_ = 0;            ///< allocated capacity, grown to fit the window
 
-    // The DMA buffers count: what a user needs is what choosing this driver costs.
-    /// This driver's heap: the scratch, the ring snapshot, and the peripheral's DMA buffers.
+    /// This driver's heap: the scratch, the ring snapshot, and the peripheral's DMA buffers, which is what choosing this driver costs.
     size_t driverHeapBytes() const override {
         // The buffers that EXIST, as the bus counts them: a readout trusting the request reports unspent memory.
         const size_t dma = peripheral_ ? peripheral_->busHeapBytes() : 0;
         return DriverBase::driverHeapBytes() + snapshotCap_ + dma;
     }
-    // The snapshot is serial; only the ring prime still forks to the core-0 helper.
+    /// The snapshot copy's source, set before copyRange: the snapshot is serial, only the ring prime still forks to the core-0 helper.
     const uint8_t* snapCopySrc_ = nullptr;
-    uint8_t  snapCopyCh_ = 0;
-    const uint8_t* encodeSrc_ = nullptr;  // when non-null, encodeRows reads this (bias-corrected) instead of sourceBuffer_
+    uint8_t  snapCopyCh_ = 0;             ///< the snapshot copy's channel stride
+    const uint8_t* encodeSrc_ = nullptr;  ///< when non-null, encodeRows reads this (bias-corrected) instead of sourceBuffer_
 
-    // Grow-only and off the hot path, so the render thread only ever memcpys into it.
-    /// Resize the ring snapshot to hold this driver's whole window.
+    /// Resize the ring snapshot to hold this driver's whole window; grow-only and off the hot path, so the render thread only ever memcpys into it.
     bool ensureSnapshotCap() {
         if (!sourceBuffer_) return true;   // sized on the first build that has a source; harmless if absent
         // Sized by the SOURCE channel count: the copy is raw, with correction fused into the gather.
@@ -820,8 +779,7 @@ protected:
         return true;
     }
 
-    // The bias pointer is only dereferenced past winStart_, so it never reads out of bounds.
-    /// Freeze this driver's window into the snapshot and point the ring's encode at it.
+    /// Freeze this driver's window into the snapshot and point the ring's encode at it; the bias pointer is only dereferenced past winStart_, so it never reads out of bounds.
     bool snapshotSourceForRing() {
         encodeSrc_ = nullptr;
         if (!sourceBuffer_ || !sourceBuffer_->data() || !snapshotBuf_) return false;
@@ -863,8 +821,7 @@ protected:
         return true;
     }
 
-    // MM_RAMFUNC because both cores run it: keep it out of the shared flash cache.
-    /// Copy lights [lo, hi) of the window into the snapshot: a raw memcpy at srcCh stride.
+    /// Copy lights [lo, hi) of the window into the snapshot: a raw memcpy at srcCh stride. MM_RAMFUNC because both cores run it, which keeps it out of the shared flash cache.
     void MM_RAMFUNC copyRange(nrOfLightsType lo, nrOfLightsType hi) {
         const size_t ch = snapCopyCh_;
         if (hi > lo)
@@ -873,8 +830,7 @@ protected:
     }
 
 
-    // Each half then owns whole cache lines, so the two cores never share one (false sharing).
-    /// Split the window near the middle, rounded so the second half starts on a cache line.
+    /// Split the window near the middle, rounded so the second half starts on a cache line. Each half then owns whole cache lines, so the two cores never share one (false sharing).
     static nrOfLightsType snapLineAlignedHalf(nrOfLightsType winLights, size_t chStride) {
         if (chStride == 0) return winLights / 2;
         // 64 / gcd(64, stride) lights: a plain 64/stride rounds down and misses the line boundary.
@@ -884,15 +840,12 @@ protected:
         if (half == 0) half = lightsPerAlign;                         // never give the helper nothing
         return half < winLights ? half : winLights / 2;               // tiny window: plain (unaligned) halve
     }
-    // Which strand carries the pinned pattern (-1 = off), and the bytes the bit-verify expects.
+    /// Which strand carries the pinned pattern while a loopback runs, -1 for off.
     int16_t patternHoldStrand_ = -1;
-    uint8_t kPatternRGB_[3] = {0xA5, 0x00, 0xFF};
+    uint8_t kPatternRGB_[3] = {0xA5, 0x00, 0xFF};   ///< the bytes the bit-verify expects
 
-    /// The two wirings that exist: strands on the GPIOs, or a 74HCT595 per GPIO.
-    uint16_t busPins_[kMaxLanes] = {};   // data pins the live bus/unit was built
-                                         // a pin change rebuilds even when the buffer fits
-    uint8_t  busLaneCount_ = 0;          // lane count the live bus was built with:
-                                         // a lane-count change keeps frameBytes_ but needs a rebuild
+    uint16_t busPins_[kMaxLanes] = {};   ///< data pins the live bus was built with: a pin change rebuilds even when the buffer fits
+    uint8_t  busLaneCount_ = 0;          ///< lane count the live bus was built with: a change keeps frameBytes_ but needs a rebuild
 
     /// The pin-list parser's cap: the peripheral's lane count when narrower, else kMaxLanes.
     uint8_t maxLanesForTarget() const {
@@ -900,15 +853,16 @@ protected:
         return (avail > 0 && avail < kMaxLanes) ? avail : kMaxLanes;
     }
 
-    // The one source of the row geometry, so the ring's slice size cannot drift from the frame's.
+    /// Bytes per row: the one source of the row geometry, so the ring's slice size cannot drift from the frame's.
     static size_t rowBytesFor(uint8_t outCh, uint8_t slotBytes, uint8_t outPerPin) {
         return static_cast<size_t>(outCh) * 24 * slotBytes * outPerPin;
     }
-    // Scaled by slotBytes and outPerPin: the shift bus clocks faster, so an unscaled pad is short.
+    /// Bytes of frame-closing pad, scaled by slotBytes and outPerPin: the shift bus clocks faster, so an unscaled pad is short.
     static size_t padBytesFor(uint8_t slotBytes, uint8_t outPerPin) {
         return static_cast<size_t>(800 + 64) * slotBytes * outPerPin;
     }
 
+    /// The whole DMA frame in bytes: the rows plus the pad, rounded up to 64.
     static size_t frameBytesFor(nrOfLightsType maxLights, uint8_t outCh, uint8_t slotBytes,
                                 uint8_t outPerPin = 1) {
         if (maxLights == 0 || outCh == 0 || outPerPin == 0) return 0;
@@ -917,22 +871,20 @@ protected:
         return (bytes + 63) & ~static_cast<size_t>(63);
     }
 
-    // 0 means no bound. A bounded driver checks this before busInit and idles with a clear status.
+    /// Does the frame fit the peripheral's DMA budget? 0 means no bound; a bounded driver checks this before busInit and idles with a clear status.
     static bool frameFitsDmaBudget(size_t frameBytes, size_t budgetBytes) {
         return budgetBytes == 0 || frameBytes <= budgetBytes;
     }
 
-    // A peripheral fact, independent of the strand count: the driver rounds up and pads the spares.
+    /// Bus width in pins, 8 or 16: a peripheral fact independent of the strand count, so the driver rounds up and pads the spares.
     uint8_t busWidthPins() const {
         // Data pins, plus the latch lane when a '595 expander is in use.
         const uint8_t needed = static_cast<uint8_t>(physPins_ + (pinExpanderMode() ? 1 : 0));
         return needed <= 8 ? uint8_t{8} : uint8_t{16};
     }
 
-    // Data pins, then the latch in shift mode, then every spare lane parked on WR.
 public:
-    // Public because a backend reaches it through owner_; the rest of this block stays protected.
-    /// The bus-geometry accessors a backend builds its bus from.
+    /// The bus pin list a backend builds its bus from: data pins, then the latch in shift mode, then every spare lane parked on WR. Public because a backend reaches it through owner_.
     const uint16_t* busPinList() {
         const uint8_t width = busPinCount();
         const uint16_t clockPin = peripheral_ ? peripheral_->clockPinForBus() : laneList_[0];
@@ -943,8 +895,7 @@ public:
         }
         return busPinBuf_;
     }
-    // Only a backend that cannot leave a lane unconnected needs the spare lanes padded.
-    /// How many lanes the PERIPHERAL is handed.
+    /// How many lanes the PERIPHERAL is handed: the spare lanes are padded only for a backend that cannot leave one unconnected.
     uint8_t busPinCount() const {
         const uint8_t width = busWidthPins();
         if (peripheral_ && !peripheral_->spareLanesNeedPad()) {
@@ -959,13 +910,13 @@ public:
     uint8_t slotBytes() const { return busWidthPins() > 8 ? 2 : 1; }
 protected:
 
-    // Sized to outCh rather than a fixed 4, which is what lets any channel count lay out safely.
+    /// Size the per-core wire scratch to outCh rather than a fixed 4, so any channel count lays out safely.
     void prepareWire(uint8_t outCh) {
         // Sized for STRANDS and one slice per core: the ring's prime runs encodeRows on both.
         ensureWire(static_cast<size_t>(kMaxStrands) * (outCh ? outCh : 1) * platform::kMaxCores);
     }
 
-    // Off the hot path; on error the driver idles with the parse literal in its status.
+    /// Parse pins and counts into the lane geometry, off the hot path; on error the driver idles with the parse literal in its status.
     bool parseConfig() {
         laneCount_ = 0;
         physPins_ = 0;
@@ -1035,8 +986,7 @@ protected:
         return true;
     }
 
-    // Bus and buffer are fused: max_transfer_bytes is fixed at creation, so both rebuild together.
-
+    /// Rebuild the bus and its buffer together, since max_transfer_bytes is fixed at creation, then prefill the shift constants.
     void reinit() {
         if (!peripheral_ || peripheral_->lanesAvailable() == 0) return;
         // One block per chip, so a sibling holding it means idle with a status rather than fight.
@@ -1138,6 +1088,7 @@ protected:
         }
     }
 
+    /// Drain, then release the bus and reset the transfer state; the correction scratch stays, release() frees it.
     void deinit() {
         if (!peripheral_ || peripheral_->lanesAvailable() == 0) return;
         // Freeing while a transfer reads is a use-after-free, so drain first; a no-op when idle.
@@ -1153,16 +1104,14 @@ protected:
         // wire_ is NOT freed here: reinit calls this after parseConfig sized it. release() frees it.
     }
 
+    /// Does the live bus still use the parsed pins? Only a pin change rebuilds when the buffer fits.
     bool busPinsCurrent() const {
         for (uint8_t i = 0; i < laneCount_; i++)
             if (busPins_[i] != laneList_[i]) return false;
         return peripheral_ && peripheral_->extraBusPinsCurrent();   // i80 also checks WR/DC
     }
 
-    // Builds the REAL frame on a private bus and verifies every captured bit.
-
-    // Driver-agnostic, so every family shares this one path, unlike busLoopback.
-    /// Intrusive ride: arm the RX on the live wire and bit-verify, transmitting nothing.
+    /// Intrusive ride: arm the RX on the live wire and bit-verify, transmitting nothing. Driver-agnostic, so every family shares this one path, unlike busLoopback.
     platform::RmtLoopbackResult busLoopbackRide(const uint8_t* sent, uint8_t sentLen,
                                                 size_t dataBytes, uint8_t rowBits) {
         return platform::ws2812LoopbackRide(static_cast<uint16_t>(loopbackRxPin), sent, sentLen,
@@ -1192,6 +1141,7 @@ protected:
         reportLoopbackResult(r, outCh);
     }
 
+    /// Self-test: build the REAL frame on a private bus and verify every captured bit; the intrusive variant rides the live pipeline instead.
     void runLoopbackSelfTest() {
         if (!peripheral_ || peripheral_->lanesAvailable() == 0) {
             clearFailBuf();
@@ -1279,8 +1229,7 @@ protected:
         reinit();
     }
 
-    // Names the fault CLASS, so an empty capture reads as wiring rather than a misleading bad bit.
-    /// Turn a loopback result into a status string, shared by both test paths.
+    /// Turn a loopback result into a status string shared by both test paths, naming the fault class so an empty capture reads as wiring rather than a misleading bad bit.
     void reportLoopbackResult(const platform::RmtLoopbackResult& r, uint8_t outCh) {
         if (!r.jumperDetected) {
             clearFailBuf();

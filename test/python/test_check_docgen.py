@@ -1667,3 +1667,31 @@ def test_a_control_guide_repeating_its_line_is_reported_and_one_adding_to_it_is_
         "formation": {"line": "How the heads relate: fan, mirror, chase, cross or unison.", "more": "How the heads relate. With fan the beams open like a hand."}}}}}
     findings = check_docgen._guide_repeats(help_file)
     assert [f[1].split("`")[1] for f in findings] == ["persistence", "formation"]   # the guide saying the line, and opening with part of it
+
+
+
+def test_the_app_help_fits_a_glance_per_control_per_section_and_in_total():
+    """A control's longer help shows inline under it, a guide section under the arrow: each is capped in words, and so is the whole, so tables and steps go to a how-to page."""
+    long = " ".join(["word"] * 70)
+    help_file = {"catalogs": {"light/demo.md": {}},
+                 "modules": {"DemoDriver": {"doc": "light/demo.md#demo", "source": "https://x/blob/main/src/light/DemoDriver.h",
+                                            "summary": "", "controls": {"pins": {"line": "The pins.", "more": long}},
+                                            "guide": [{"title": "Wiring", "text": long}, {"title": "Tips", "text": "Short."}]},
+                             "OtherModule": {"doc": "core/other.md#other", "controls": {"x": {"more": long}}}}}
+    import check_docgen
+    found = check_docgen._help_size(help_file)
+    assert ("src/light/DemoDriver.h", "app help too long: `pins`'s guide 70 words > 40") in found
+    assert ("src/light/DemoDriver.h", "app help too long: guide 'Wiring' 70 words > 60") in found
+    assert not any("Tips" in msg or "> 250" in msg for _, msg in found)   # 141 words in all
+    help_file["modules"]["DemoDriver"]["summary"] = long + " " + long
+    assert any(msg.startswith("app help too long: 281 words > 250") for _, msg in check_docgen._help_size(help_file))
+    assert not any("other" in src for src, _ in found)   # a page still written by hand is not measured
+
+
+def test_a_control_is_explained_on_its_member_never_in_the_module_guide():
+    import check_docgen
+    help_file = {"modules": {"DemoDriver": {"source": "https://x/blob/main/src/light/DemoDriver.h", "controls": {"pins": {"line": "The pins."}},
+                                            "guide": [{"title": "pins", "text": "Wire them."}, {"title": "Wiring", "text": "Short."}]}}}
+    assert check_docgen._guide_names_control(help_file) == [
+        ("src/light/DemoDriver.h", "module guide explains a control `pins`: move it to the member's `/// @guide` line")]
+

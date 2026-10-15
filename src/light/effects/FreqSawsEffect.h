@@ -10,12 +10,6 @@ namespace mm {
 ///
 /// Louder bands sweep their sawtooth up the column faster. A band's speed rises instantly to a loud hit and decays slowly once the sound stops. A struck band keeps sawing for a while, and a quiet one winds down.
 ///
-/// @guide
-///
-/// ## method
-///
-/// `Chaos` reads the position off the beat, so the saw teleports as the rate changes. `Chaos fix` carries a per-band offset, so a rate change continues smoothly. `BandPhases` integrates an accumulator, so the saw never jumps.
-///
 /// @moreinfo
 ///
 /// The band loop caches each band's position and the column loop only reads that cache, so a band spanning many columns integrates once a frame.
@@ -41,6 +35,7 @@ public:
     /// The position methods, in option order.
     enum Method : uint8_t { kMethodChaos, kMethodChaosFix, kMethodBandPhases, kMethodCount };
     /// The phase model that places the saw.
+    /// @guide `Chaos` reads the position off the beat, so the saw teleports as the rate changes. `Chaos fix` carries a per-band offset, so a rate change continues smoothly. `BandPhases` integrates an accumulator, so the saw never jumps.
     uint8_t method    = kMethodBandPhases;
 
     /// Publish the trail, the band physics and the position method.

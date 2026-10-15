@@ -9,7 +9,7 @@ namespace mm {
 /// Shells rise, stall, and burst into sparks that arc over and fall.
 /// @card FireworksEffect.gif
 ///
-/// Nothing schedules the apex: the shell decelerates under gravity and bursts when its vertical velocity crosses zero, so a faster launch bursts higher without a second control. Physics runs on elapsed time, so the same settings behave identically at any frame rate.
+/// Nothing schedules the apex: the shell decelerates under gravity and bursts when its vertical velocity crosses zero, so a faster launch bursts higher without a second control. The physics runs on elapsed time, so a shell and its sparks follow the same arc at any frame rate.
 ///
 /// @attribution Damian Schneider, Particle system
 ///

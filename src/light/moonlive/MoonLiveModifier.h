@@ -39,15 +39,11 @@ inline constexpr const char* kModifierPick[3] = {kScriptDir, kModifierExt, kModi
 ///
 /// ## Read the grid rather than assuming it
 ///
-/// A mirror written against a fixed 255 sends every light of a 16-wide grid outside it. The Layer drops each one, and the fixture goes black with no error, because the script ran perfectly.
-///
-/// A computed coordinate is full width: `setXYZ` hands its values to the binding as a call, so `setXYZ(767 - xPos, ...)` on a 768-wide wall arrives as 767.
+/// A mirror written against a fixed 255 sends every light of a 16-wide grid outside it, and the Layer drops each one: the fixture goes black with no error. Read `width` instead. A computed coordinate arrives at full width, so `767 - xPos` is 767 on a 768-wide wall.
 ///
 /// ## What a script can transform
 ///
-/// A modifier has two hooks: one reshapes the logical box once per rebuild, and one folds each coordinate. A script drives the second, so a transform keeping the box its size works, and one halving it, as the built-in Mirror does, needs the compiled modifier.
-///
-/// A script that fails to compile shows the parse error, and the mapping passes coordinates straight through, so the device keeps rendering until the script parses again.
+/// A script drives the per-light hook, so a transform keeping the box its size works; one halving it, as the built-in Mirror does, needs the compiled modifier. A script that fails to compile shows the parse error, and coordinates pass through.
 ///
 /// @moreinfo
 ///

@@ -9,12 +9,6 @@ namespace mm {
 ///
 /// @attribution troyhacks
 ///
-/// @guide
-///
-/// ## granularity
-///
-/// One gourd one light stacks a gourd's lights on its own position. One side one light gives each of a gourd's five sides one point, and one LED one light places every LED on its side's ring of 12. Both hold 61 lights a gourd, the middle one included.
-///
 /// @moreinfo
 ///
 /// A gourd is a five-sided body, front, back, left, right and bottom, plus a middle light, at a fixed position in a 3D grid.
@@ -25,6 +19,7 @@ public:
     /// How coarsely the gourds are lit, in option order.
     enum Granularity : uint8_t { kGourdPerLight, kSidePerLight, kLedPerLight, kGranularityCount };
     /// How finely each gourd is lit.
+    /// @guide One gourd one light stacks its lights on one position. One side one light gives each of five sides a point. One LED one light places each LED on its side's ring of 12.
     uint8_t granularity = kLedPerLight;
 
     /// The controls a user sets on the card.

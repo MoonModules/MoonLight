@@ -232,6 +232,7 @@
   display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
 }
 .mm-pcard-pips { display: flex; gap: 2px; font-size: calc(0.85rem * var(--mm-card-scale)); overflow: hidden; }   /* scales with the card, without the text's readable minimum, so a small card's emoji stay in proportion */
+.md-typeset .mm-pcard-front p { font-size: calc(0.75rem * var(--mm-card-scale)); }   /* like the emoji: the card's scale, without the text's readable minimum */
 .mm-pcard-front img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 8px; background: #000; flex: 0 0 auto; }
 
 /* The app's help, on the card's back. */
@@ -257,8 +258,8 @@
 .md-typeset .mm-pcard details.control-helper > summary { font-weight: normal; color: var(--md-default-fg-color--light); }
 .md-typeset .mm-pcard details.control-helper > summary::before { display: inline; content: "▸ "; position: static; background: none; mask: none; -webkit-mask: none; width: auto; height: auto; }
 .md-typeset .mm-pcard details.control-helper[open] > summary::before { content: "▾ "; }
-/* Small cards are their picture and emoji: the name and the line would be unreadable. */
-.mm-deck-small .mm-pcard-front h3, .mm-deck-small .mm-pcard-front p { display: none; }   /* the back keeps its title, so a turned card says what it is */
+/* The name rides beside the emoji, at their scale, cut short rather than wrapped. */
+.mm-pcard-name { margin-left: 0.3em; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--md-primary-fg-color); font-weight: 600; }
 .mm-deck-small .mm-pcard-face { padding: 0.25em; border-radius: 6px; }
 .mm-deck-small .mm-pcard-front img { border-radius: 4px; }
 /* Spread out: the cards in rows across the page, every one in view, no fan and no snapping. */

@@ -10,12 +10,6 @@ namespace mm {
 ///
 /// @attribution Polar coordinates
 ///
-/// @guide
-///
-/// ## outside in
-///
-/// A disc is soldered from its center or from its 60-light rim, and this follows the end the data enters. Each ring keeps the direction it is wired in.
-///
 /// @moreinfo
 ///
 /// Every ring is a @ref RingLayout object about the disc's shared center.
@@ -28,6 +22,7 @@ public:
     /// The size: scales the ring radii and the shared center.
     uint8_t scale = 2;
     /// Light 0 on the outer ring, wired inward rather than outward.
+    /// @guide A disc is soldered from its center or from its 60-light rim, and this follows the end the data enters. Each ring keeps the direction it is wired in.
     bool outside_in = false;
     /// The angle light 0 of each ring sits at, in degrees.
     uint16_t angleFirst = 0;

@@ -14,3 +14,9 @@ def test_a_video_tag_plays_its_clip_and_a_missing_clip_leaves_nothing():
     assert '<video src="../../../assets/moontube/05-layouts.webm" controls playsinline width="720" title="Layouts at work."></video>' in md
     assert "@video" not in gen_api._render_video_directives("Lead.\n@video nosuch.webm Gone.\n", "light")
 
+
+def test_a_guide_marker_goes_and_its_text_reads_in_place():
+    """A class `@guide` line and a member's `@guide` line both lose only the marker on the technical page."""
+    assert gen_api._GUIDE_RE.sub("", "Lead.\n@guide\n## Tips\n") == "Lead.\n## Tips\n"
+    assert gen_api._GUIDE_RE.sub("", "Master power.\n@guide Off keeps the level.") == "Master power.\nOff keeps the level."
+

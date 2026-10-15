@@ -15,9 +15,7 @@ namespace mm {
 ///
 /// ## Reading a rule
 ///
-/// A rule names the neighbor counts that give birth (B) and those that let a cell survive (S). Conway's `B3/S23` gives birth at exactly 3 and keeps a cell alive at 2 or 3.
-///
-/// HighLife, `B36/S23`, adds a birth at 6, which breeds self-copying replicators, and Maze, `B3/S12345`, grows corridors. `Custom B/S` runs your own, typed into `customRuleString` as `36/23`.
+/// A rule lists the neighbor counts that give birth (B) and let a cell survive (S): Conway's `B3/S23` is born at 3, survives at 2 or 3. HighLife `B36/S23` breeds replicators, Maze `B3/S12345` grows corridors. `Custom B/S` takes `customRuleString` as `36/23`.
 ///
 /// ## A board that never ends
 ///

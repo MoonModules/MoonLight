@@ -12,36 +12,43 @@
 
 namespace mm {
 
-/// Output driver: publishes the rendered frame as an H.264 stream over HLS, from the device's own HTTP server. A TV, VLC or a browser can play it. It complements NdiDriver: NDI is the pro-tools path, HLS is the consumer-playback path.
+/// Streams the layer as H.264 over HLS from the device's own HTTP server, which a TV, VLC or a browser can play.
+/// @card HlsDriver.png
 ///
-/// The driver states numbers and the platform encodes. This driver packs the corrected frame and hands it over with the geometry, rate and bitrate. How those become H.264 differs per platform.
+/// Open the `url` the card shows in VLC, a browser or an Apple TV. Where @ref NdiDriver feeds production tools, this feeds anything that plays video.
 ///
-/// Prior art: HLS is Apple's, described in RFC 8216, and ffmpeg does the desktop encoding.
+/// The grid becomes the frame, output correction applied. Latency is HLS's own, 2 to 5 seconds, so this is for watching rather than live-control feedback. The card's status line carries the state, the drops, or why the encoder stopped.
+///
+/// @attribution Delphium, HLS, FFmpeg
+///
+/// @guide
+///
+/// ## ffmpeg
+///
+/// It runs on the desktop, where you install ffmpeg yourself and then open the stream ([how-to](https://moonmodules.org/MoonLight/how-to/watching-the-output.html#installing-ffmpeg)).
+///
+/// ## On the ESP32-P4
+///
+/// There is no ffmpeg: the chip's H.264 block encodes. It takes even dimensions from 80x80 to 1920x2032; an odd wall has its scale doubled, a larger wall is refused.
 ///
 /// @moreinfo
 ///
-/// ## Pixel-exact contract
+/// **Division of labor.** The driver packs the corrected frame and hands it over with the geometry, rate and bitrate. The platform turns that into H.264, and on the ESP32-P4 MpegTs.h muxes the transport stream.
 ///
-/// The encoded frame is the grid from the layer, letterboxed by the display. Above scale 1 a light becomes a solid square block, still pixel-exact since replication invents no color. Scaling exists because a hardware encoder has a minimum frame size, and a small wall at one to one is a postage stamp.
+/// **Pixel-exact.** Above scale 1 a light becomes a solid square block, so replication invents no color. Scaling exists because a hardware encoder has a minimum frame size.
 ///
-/// ## Frame pacing
+/// **Frame pacing.** A fixed schedule, not a last-sent timestamp: millisecond truncation and re-basing on arrival let one late tick shift it, and the drift ends in the player re-buffering.
 ///
-/// A fixed schedule rather than a last-sent timestamp. Millisecond division truncates and re-basing on arrival lets one late tick shift the schedule, and either drift ends in the player re-buffering.
-///
-/// ## Where it runs
-///
-/// H.264 needs a desktop-class CPU or a hardware encoder, so desktop and the ESP32-P4. Every other board reaches viewers through the preview instead.
-/// @card HlsDriver.png
+/// **Segments.** On the desktop they live in the transient `/.hls/` directory, served at `/hls/` and excluded from config backups.
 class HlsDriver : public DriverBase {
 public:
-    /// A destroyed driver releases the encoder, since nothing else can: a claim outliving its owner would refuse every later driver, and the next one can even land on this address.
+    /// A destroyed driver releases the encoder, since nothing else can: a claim outliving its owner would refuse every later driver.
     ~HlsDriver() override { platform::encoderRelease(this); }
 
     /// The catalog tag this driver carries.
     static constexpr const char* kTags = "🖥️";
-    /// Where the encoder's segments are written, under the filesystem mount.
-    static constexpr const char* kSegmentDir = "/.hls";   // under the fs mount; served at /hls/
-                                                          // same literal in the file server
+    /// Where the encoder's segments are written, under the filesystem mount and served at /hls/, the same literal the file server uses.
+    static constexpr const char* kSegmentDir = "/.hls";
 
     /// Bind the two scratch buffers to this module, so their memory is accounted for.
     HlsDriver() : rgb_(*this), corrScratch_(*this) {}
@@ -63,7 +70,7 @@ public:
             // Persisted by LABEL: editing the option list must never remap a stored pick.
             controls_.setPersistLabel(controls_.count() - 1);
         }
-        // The playable address, one copy away from VLC or a Safari AirPlay hand-off.
+        /// The address to open in VLC or a browser, relative to this device.
         controls_.addReadOnly("url", urlBuf_, sizeof(urlBuf_));
     }
 
@@ -266,11 +273,14 @@ public:
     }
 
     /// Video pixels per light, 0 being auto; one factor for both axes.
+    /// @guide Auto lifts both axes to 80, the encoder's minimum, so a 20x10 wall streams as 160x80. Raising it on a large wall buys nothing a player's zoom does not.
     uint8_t  scale       = 0;
-    /// Encode-rate ceiling; the render loop runs faster and extra frames are not encoded.
+    /// Encode-rate ceiling, and the bandwidth knob: bitrate follows.
+    /// @guide The bitrate follows from grid size and rate, near 800 kbit for 512x512 at 30 fps. Lower the rate to save bandwidth: fewer frames beat a blockier picture.
     uint8_t  targetFps   = 30;
-    /// The ffmpeg encoder pick; hardware entries offload the encode (see the control's comment).
-    uint8_t  encoderSel_ = 0;   // index into kEncoderOptions; 0 = libx264, the universal default
+    /// Which ffmpeg encoder to use; hardware ones offload the encode.
+    /// @guide `libx264` is software, the default. Hardware encoders suit large grids: `h264_videotoolbox` on a Mac, `h264_v4l2m2m` on a Raspberry Pi, `h264_nvenc` on NVIDIA. One your ffmpeg lacks reads `encoder exited - check ffmpeg`.
+    uint8_t  encoderSel_ = 0;
 
 private:
     static constexpr uint8_t kMaxRestarts = 3;
@@ -284,8 +294,9 @@ private:
     static_assert(kMaxScale >= kMinEncodeSize,
                   "auto-scale must be able to reach the encoder's minimum from a 1-pixel axis");
 
-    static constexpr uint32_t kWarmupMs = 750;   // encoder init headroom before the first frame
-    // vaapi is deliberately absent: it needs filter plumbing this argument list does not build.
+    /// Encoder init headroom before the first frame.
+    static constexpr uint32_t kWarmupMs = 750;
+    /// The encoders the select offers; vaapi is deliberately absent, since it needs filter plumbing this argument list does not build.
     static constexpr const char* kEncoderOptions[] = {
         "libx264",            // software; practically every ffmpeg distribution ships it
         "h264_videotoolbox",  // macOS media engine
@@ -302,8 +313,7 @@ private:
         return static_cast<uint8_t>(f);
     }
 
-    // Derived, not asked for: the knob a user wants for bandwidth is the frame rate.
-    /// The encode bitrate, following from the pixels and the frame rate.
+    /// The encode bitrate, derived rather than asked for, since the knob a user wants for bandwidth is the frame rate.
     uint16_t autoBitrateKbit() const {
         const uint64_t pixels = static_cast<uint64_t>(width_) * height_;
         const uint64_t kbit = (pixels * targetFps) / 10000u;   // 0.1 bpp, expressed in kbit
@@ -365,27 +375,27 @@ private:
     }
 
     Buffer*        sourceBuffer_ = nullptr;
-    lengthType     srcWidth_  = 0;   // the wall
+    lengthType     srcWidth_  = 0;   ///< the wall
     lengthType     srcHeight_ = 0;
-    lengthType     width_  = 0;      // the encoded frame: the wall times scale_
+    lengthType     width_  = 0;      ///< the encoded frame: the wall times scale_
     lengthType     height_ = 0;
-    uint8_t        scale_  = 1;      // the factor in use: the control, or autoScale
-    // The two ticks run on different tasks, so every field both touch is an atomic.
+    uint8_t        scale_  = 1;      ///< the factor in use: the control, or autoScale
+    /// The two ticks run on different tasks, so every field both touch is an atomic.
     std::atomic<bool>     open_{false};
     std::atomic<bool>     encoderDied_{false};
-    bool           statusStale_ = false;   // tick1s-only
+    bool           statusStale_ = false;   ///< tick1s-only
     uint8_t        restartsLeft_ = kMaxRestarts;
-    uint8_t        restartWaitS_ = 0;    // backoff countdown, in tick1s steps
-    uint8_t        healthySecs_  = 0;    // sustained-health counter that replenishes the budget
-    // A fixed schedule rather than a last-sent timestamp, so a late tick shifts nothing.
+    uint8_t        restartWaitS_ = 0;    ///< backoff countdown, in tick1s steps
+    uint8_t        healthySecs_  = 0;    ///< sustained-health counter that replenishes the budget
+    /// A fixed schedule rather than a last-sent timestamp, so a late tick shifts nothing.
     uint32_t       sendEpochMs_ = 0;
     uint32_t       nextSendMs_  = 0;
     uint32_t       frameIndex_  = 0;
     std::atomic<uint32_t> warmupUntilMs_{0};
     std::atomic<uint32_t> droppedFrames_{0};
-    uint32_t       lastReportedDrops_ = 0; // tick1s-only
-    ScratchBuffer<uint8_t> rgb_;          // tight RGB staging, sized in prepare()
-    ScratchBuffer<uint8_t> corrScratch_;  // one corrected light, when the wiring is wider than RGB
+    uint32_t       lastReportedDrops_ = 0; ///< tick1s-only
+    ScratchBuffer<uint8_t> rgb_;          ///< tight RGB staging, sized in prepare()
+    ScratchBuffer<uint8_t> corrScratch_;  ///< one corrected light, when the wiring is wider than RGB
     char           urlBuf_[64]{};
     char           statusBuf_[64]{};
 };

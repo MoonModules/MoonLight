@@ -32,10 +32,13 @@ The people, projects and published algorithms whose work shaped MoonLight. We st
 | [Euclidean distance](https://en.wikipedia.org/wiki/Euclidean_distance) File:Euclidean_distance_2d.svg | The straight-line metric. |
 | [ewowi](https://github.com/ewowi) | MoonLight, StarLight, WLED 2D, LED preview. |
 | [FastLED](https://github.com/FastLED/FastLED) | The canonical LED-effects library whose names and models MoonLight carries forward (`scale8`, `sin8`, the gradient-palette model, the `beatsin8` family) so a contributor recognizes them on sight. The implementations are our own, integer-only and hot-path-tuned. Color maths and the basic power functions. |
+| [FFmpeg](https://ffmpeg.org) | The open video toolkit the desktop HLS and RTSP drivers encode through. |
 | [Fisher-Yates shuffle](https://en.wikipedia.org/wiki/Fisher%E2%80%93Yates_shuffle) File:Durstenfeld_shuffle.svg | A uniform random permutation in one pass. |
 | [FPP / Falcon Player](https://github.com/FalconChristmas/fpp) | The show player that prompted [PanelCardDriver](../moonmodules/light/drivers.md#panelcard): if a Linux host can feed a wall of HUB75 panels, so can the board already rendering them. Its receiving-card protocols, and its FSEQ format is what a show file is. |
 | [Frank / softhack007](https://github.com/softhack007) | Main author of the WLED-MM audio-reactive usermod. The ideas behind [AudioService](../moonmodules/core/moxygen/AudioService.md), including the adaptive noise gate analyzed with his permission, descend from years of collaboration, as do the AI principles and the care for code quality. |
 | Gomez | The demoscene water effect, 2000. |
+| [Harald Kubota](https://hkubota.wordpress.com/2022/01/31/winter-project-colorlight-5a-75b-protocol/) | An independent write-up of the ColorLight 5A-75B wire format. |
+| [HLS](https://www.rfc-editor.org/rfc/rfc8216) | HTTP Live Streaming, RFC 8216: video as a playlist of short segments. |
 | Hugo Elias | The water surface algorithm. |
 | [hzeller](https://github.com/hzeller) | Henner Zeller: the HUB75 lineage on the Pi. |
 | [IEC 60268-17](https://en.wikipedia.org/wiki/VU_meter) File:VU_Meter.jpg | VU meter ballistics, to the millisecond. |
@@ -48,12 +51,16 @@ The people, projects and published algorithms whose work shaped MoonLight. We st
 | [Limpkin](https://github.com/limpkin) | The SE16 and LightCrafter boards, RGBW tuning. |
 | [Mark Kriegsman](https://github.com/kriegsman) | FastLED's Fire2012, DemoReel100, noise field and rainbow. |
 | [MONSOONO / Flavourdynamics](https://github.com/Flavourdynamics) | The Praxis effect. |
+| [mplayer-colorlight](http://www.mylifesucks.de/oss/mplayer-colorlight/) | The original reverse engineering of the ColorLight receiving cards. |
 | [mrcodetastic](https://github.com/mrcodetastic) | ESP32 HUB75 DMA. |
 | [MycilaSafeBoot](https://github.com/mathieucarbou/MycilaSafeBoot) | Mathieu Carbou's safeboot, with Tasmota's the pattern behind [MoonBase](../explanation/architecture/moonbase.md). |
 | [NDI](https://en.wikipedia.org/wiki/Network_Device_Interface) | NewTek and Vizrt's video-over-network protocol. |
 | [NEC](https://www.sbprojects.net/knowledge/ir/nec.php) | The infrared protocol consumer remotes speak. |
 | [NetMindz](https://github.com/netmindz) | Will Tatam: WLED audio sync, and the statistics work. |
+| [ObjectFLED](https://github.com/KurtMF/ObjectFLED) | Parallel WS2812 output on the Teensy 4 by DMA to a GPIO port. |
+| [OctoWS2811](https://www.pjrc.com/teensy/td_libs_OctoWS2811.html) | Paul Stoffregen's parallel WS2812 library for the Teensy, timer-driven DMA. |
 | [Pac-Man](https://en.wikipedia.org/wiki/Pac-Man) | Namco's 1980 arcade game. |
+| [Philips Hue](https://developers.meethue.com) | The smart-light bridge and its local REST API. |
 | [Piper](https://github.com/OHF-Voice/piper1-gpl) | OHF-Voice's offline text-to-speech that narrates the documentation clips, the voice you hear, with voice models from rhasspy. GPL, and used as a tool rather than linked: MoonTube calls it to render an audio track. |
 | [Polar coordinates](https://en.wikipedia.org/wiki/Polar_coordinate_system) File:Examples_of_Polar_Coordinates.svg | A point as an angle and a radius. |
 | [Pong](https://en.wikipedia.org/wiki/Pong) File:Signed_Pong_Cabinet.jpg | Atari's 1972 arcade game. |
@@ -62,6 +69,8 @@ The people, projects and published algorithms whose work shaped MoonLight. We st
 | [Robert Bridson / Curl noise](https://www.cs.ubc.ca/~rbridson/docs/bridson-siggraph2007-curlnoise.pdf) | Curl noise, SIGGRAPH 2007. |
 | [RobWomp / wompslab](https://github.com/wompslab) | HUB75 drivers, and Linux on NanoPi and Pi 5. |
 | [Rotation matrix](https://en.wikipedia.org/wiki/Rotation_matrix) File:Counterclockwise_rotation.png | A rotation as a matrix product. |
+| [RTP](https://www.rfc-editor.org/rfc/rfc6184) | The RTP payload format for H.264, RFC 6184: how a frame is cut into packets. |
+| [RTSP](https://www.rfc-editor.org/rfc/rfc2326) | The Real Time Streaming Protocol, RFC 2326: a player pulls a live stream. |
 | [Space Invaders](https://en.wikipedia.org/wiki/Space_Invaders) | Taito's 1978 arcade game. |
 | [Stefan Petrick](https://github.com/StefanPetrick) | The shader vocabulary of the LED world. Its generative fields come from [Animartrix](https://github.com/StefanPetrick/animartrix), [FunkyNoise](https://github.com/StefanPetrick/FunkyNoise) and [ColorTrails](https://github.com/StefanPetrick/ColorTrails). [Aurora](../moonmodules/light/effects.md#aurora), [PolarNoise](../moonmodules/light/effects.md#polarnoise), [Tunnel](../moonmodules/light/effects.md#tunnel) and [Trails](../moonmodules/light/effects.md#trails) sit in that tradition, written on the published algorithms underneath. |
 | [Sutaburosu](https://github.com/sutaburosu) | The fixed-point canvas demos. |
@@ -72,6 +81,7 @@ The people, projects and published algorithms whose work shaped MoonLight. We st
 | [Transpose](https://en.wikipedia.org/wiki/Transpose) File:Matrix_transpose.gif | Rows becoming columns. |
 | [troyhacks](https://github.com/troyhacks) | Reworked the WLED-MM audio DSP onto Espressif's [esp-dsp](https://github.com/espressif/esp-dsp) FFT, the same choice AudioService makes, and WLED-MM's Art-Net, WLED effects, and P4 tuning. |
 | [Verlet / Verlet integration](https://en.wikipedia.org/wiki/Verlet_integration) | The integration the particle kernel runs on. |
+| [Waveshare](https://www.waveshare.com) | The ESP32-S3 RGB Matrix board and its HUB75 pin map. |
 | [wladi / myhome-control](https://shop.myhome-control.de) | Designer of the [MHC-WLED ESP32-P4 shield](https://shop.myhome-control.de/en/ABC-WLED-ESP32-P4-shield/HW10027), and the source of the pinout details that got its line-in audio working. |
 | [WLED](https://github.com/wled/WLED) | MoonLight is born out of WLED and takes the usermod idea further, where everything is a module. A MoonLight device also acts as a WLED device and talks to WLED devices. |
 | [WLED-MM](https://github.com/MoonModules/WLED) | The MoonModules fork of WLED, which MoonLight is born out of with WLED. |

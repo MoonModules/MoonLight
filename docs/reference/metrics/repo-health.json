@@ -1,5 +1,5 @@
 {
-  "commit": "436f37e9",
+  "commit": "f2e1b2ee",
   "flash": {
     "esp32s3-n16r8": 2455008,
     "esp32": 2260176,
@@ -18,7 +18,7 @@
     "desktop-windows": 1925120,
     "esp32c3": 2335072,
     "desktop-linux": 2548000,
-    "esp32s3-n32r16": 2475808,
+    "esp32s3-n32r16": 2478256,
     "teensy41": 1271788
   },
   "measured": {
@@ -52,7 +52,7 @@
           "p50": 8,
           "p95": 14,
           "n": 32,
-          "last": "2026-10-14"
+          "last": "2026-10-15"
         },
         "esp32s3-n16r8": {
           "p50": 2073,
@@ -592,9 +592,9 @@
       "Drivers_output_and_brightness": {
         "desktop-macos": {
           "p50": 7,
-          "p95": 9,
+          "p95": 11,
           "n": 32,
-          "last": "2026-10-14"
+          "last": "2026-10-15"
         },
         "desktop-windows": {
           "p50": 4,
@@ -776,7 +776,7 @@
           "p50": 7,
           "p95": 11,
           "n": 32,
-          "last": "2026-10-14"
+          "last": "2026-10-15"
         }
       }
     },
@@ -823,11 +823,11 @@
   },
   "loc": {
     "core": 30411,
-    "light": 30914,
+    "light": 30805,
     "platform": 21635,
-    "ui": 12610,
-    "test": 69039,
-    "moondeck": 32446
+    "ui": 12621,
+    "test": 69145,
+    "moondeck": 32548
   },
   "comments": {
     "core": {
@@ -835,23 +835,23 @@
       "ratio": 0.236
     },
     "light": {
-      "lines": 6870,
-      "ratio": 0.25
+      "lines": 6770,
+      "ratio": 0.247
     },
     "platform": {
       "lines": 4172,
       "ratio": 0.216
     },
     "ui": {
-      "lines": 3453,
+      "lines": 3454,
       "ratio": 0.29
     },
     "test": {
-      "lines": 7232,
+      "lines": 7243,
       "ratio": 0.121
     },
     "moondeck": {
-      "lines": 4982,
+      "lines": 4989,
       "ratio": 0.175
     }
   },
@@ -860,8 +860,8 @@
     "scenarios": 32
   },
   "docs": {
-    "md_files": 160,
-    "md_lines": 32444,
+    "md_files": 162,
+    "md_lines": 32161,
     "plans_files": 51,
     "backlog_lines": 3393,
     "lessons_lines": 532,

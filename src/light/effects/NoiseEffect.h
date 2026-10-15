@@ -12,12 +12,6 @@ namespace mm {
 ///
 /// @attribution Mark Kriegsman
 ///
-/// @guide
-///
-/// ## motion
-///
-/// `drift` slides the field across the fixture like weather, each axis at its own rate. `morph` holds the field still and changes it in place, which on a panel is the plasma wash.
-///
 /// @moreinfo
 ///
 /// Drift scrolls the sample coordinates and spends the third axis on depth, so volumetric slices differ. Morph spends that axis on time, so every slice of a volume shows the same field.
@@ -33,6 +27,7 @@ public:
     static constexpr const char* kMotionOptions[] = {"drift", "morph"};
 
     /// Whether the field drifts across the fixture or morphs in place.
+    /// @guide `drift` slides the field across the fixture like weather, each axis at its own rate. `morph` holds the field still and changes it in place, which on a panel is the plasma wash.
     uint8_t motion = kMotionDrift;
     /// The field's spatial frequency: low is broad blobs, high is fine detail.
     uint8_t scale = 4;

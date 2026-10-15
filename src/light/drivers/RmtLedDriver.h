@@ -9,24 +9,20 @@
 
 namespace mm {
 
-/// Output driver: WS2812B-class addressable LEDs over the ESP32 RMT peripheral, one GPIO and one RMT TX channel per strand fed consecutive slices of the source buffer. The default on classic-ESP32 and S3 boards, and the example future drivers copy. It fuses the correction and the wire-byte encode into one pass, then hands per-pin slices to the platform.
+/// Addressable WS2812B-class LEDs on a handful of strands, clocked by the chip's RMT peripheral.
+/// @card RmtLedDriver.png
 ///
-/// Prior art: WS2812B on FastLED and WLED, and the clockless RMT techniques of hpwit (Yves Bazin).
+/// The classic choice, and the one that needs no DMA peripheral: for more than a few strands see @ref ParallelLedDriver. Flicker on LEDs that should be off is signal integrity rather than firmware, and [the signal integrity playbook](https://moonmodules.org/MoonLight/how-to/led-signal-integrity.html) walks the checks.
 ///
-/// Flicker on LEDs that should be off is signal integrity rather than firmware. The playbook is on the drivers page.
+/// @attribution hpwit, WLED, FastLED
 ///
 /// @moreinfo
 ///
-/// ## The wire contract
+/// **Wire contract.** One-wire NRZ at 800 kHz: each bit is a 1.25 µs cell, high then low, the high duration encoding the bit, MSB-first. A frame latches on 300 µs of idle-low. Timings convert to RMT ticks from the granted resolution, never hard-coded.
 ///
-/// One-wire NRZ at 800 kHz. Each bit is a 1.25 µs cell starting high then dropping low, the high duration encoding the bit, MSB-first per byte. `Correction` applies channel order before the encode, and a frame latches on 300 µs of idle-low. Timings convert to RMT ticks from the granted resolution, never hard-coded.
+/// **RMT API.** The peripheral half uses the modern RMT driver, since the legacy channel-numbered one was removed in ESP-IDF v6. The presets are named by speed, not chipset, because chipset names do not partition the timings.
 ///
-/// ## Which RMT API
-///
-/// The peripheral half uses the modern RMT driver, not the legacy channel-numbered one. That is not a preference: the legacy driver was removed entirely in ESP-IDF v6, which is the build IDF.
-/// On chips whose RMT has a DMA backend, the whole-frame loopback capture uses it.
-///
-/// @card RmtLedDriver.png
+/// **Loopback.** RMT is a transceiver, so the driver verifies its own output and re-runs the test on every relevant change. The frame variant exists because a 24-bit burst passes through a wire that mangles a sustained frame.
 class RmtLedDriver : public DriverBase {
 public:
     /// Default to the GRB profile, which is how WS2812 and SK6812 strips are physically wired.
@@ -35,19 +31,16 @@ public:
     /// Hard cap on the pin arrays: the largest RMT TX group of any supported chip.
     static constexpr uint8_t kMaxPins = 8;
 
-    // UNSET by default: the strand is user-soldered, so a hard-coded pin would be a guess.
-    /// Comma-separated GPIO list, one RMT TX channel per pin.
+    /// Data GPIO list: `18,17,16` or ranges like `20-23`. Empty idles.
     char pins[24] = "";
 
-    // An unassigned remainder splits evenly, and each pin is capped at a WS2812 ceiling.
-    /// Comma-separated lights-per-pin, matched to `pins` by position.
+    /// Lights per strand: blank splits evenly, a number, or a list.
     char ledsPerPin[48] = "";
 
-    // Named by SPEED, not chipset: chipset names do not partition the timings.
-    /// Wire timing; the default satisfies WS2812, WS2812B and SK6812 at once.
+    /// Wire bit rate: a 12V WS2811 needs 400kHz, most LEDs the faster.
     uint8_t timing = kTiming800k;
 
-    /// The three numbers behind `timing`, shown only when it is set to custom.
+    /// Custom timing: how long a 0 bit stays high, in nanoseconds.
     uint16_t t0hNs = 350;
     /// Custom timing: how long a 1 bit stays high, in nanoseconds.
     uint16_t t1hNs = 700;
@@ -57,32 +50,26 @@ public:
     /// The presets `timing` picks from, in the table's order; `kTimingCustom` is the one option that reads the three fields.
     enum Timing : uint8_t { kTiming800k, kTiming400k, kTiming800kFast, kTimingCustom, kTimingCount };
 
-    /// The presets, in the order the select lists them.
+    /// The presets in the order the select lists them: 800kHz 350/700/1250 ns for most strips; 400kHz 500/1200/2500 for 12V WS2811 in low-speed mode. Then 800kHz WS2811 fast 250/600/1250, and custom from the three fields.
     static constexpr const char* kTimingOptions[] = {
-        "800kHz WS2812B/SK6812",   // 350 / 700 / 1250: the default, and most strips
-        "400kHz WS2811",           // 500 / 1200 / 2500: 12V WS2811 in low-speed mode
-        "800kHz WS2811 fast",      // 250 / 600 / 1250: WS2811 strapped to high speed
-        "custom",                  // the three fields below
+        "800kHz WS2812B/SK6812",
+        "400kHz WS2811",
+        "800kHz WS2811 fast",
+        "custom",
     };
 
-    // RMT is a transceiver, so the driver can verify its own output on real silicon.
-    /// On-device loopback self-test: transmit a known pattern over a jumper and verify it.
-    bool     loopbackTest = false;  // checkbox: on = run + keep re-running on change
-    // -1 as unset, rather than 0, so GPIO 0 stays a valid loopback pin.
-    /// Optional TX override for the test, so it runs on a dedicated jumper.
+    /// TX to RX self-test: send a known pattern, verify the capture.
+    bool     loopbackTest = false;
+    /// TX pin override for the test; unset uses the first data pin.
     int8_t   loopbackTxPin = -1;
-    /// Jumper this to the TX pin for the test (unset = -1 by default; bench used pin 5).
+    /// Jumper this to the TX pin: the test reads the pattern back here.
     int8_t   loopbackRxPin = -1;
 
-    // A 24-bit burst passes through a wire that mangles a sustained frame; this catches that.
-    /// Whole-frame stress variant: transmit real frames back to back and verify every bit.
+    /// Send whole frames back to back and verify every bit.
     bool     loopbackFrame = false;
 
-    // The requested clock, not a tick count: the encoder converts via the granted resolution.
-    /// The RMT tick clock this driver requests, 25 ns per tick.
+    /// The RMT tick clock this driver requests, 25 ns per tick: a clock, not a tick count, since the encoder converts via the granted resolution.
     static constexpr uint32_t kResolutionHz = 40'000'000;
-
-    // The pin and count parsing lives in PinList.h, shared with I80Peripheral.
 
     /// Bind the window, the two pin text lists, and the loopback self-test controls.
     void defineDriverControls() override {
@@ -123,8 +110,7 @@ public:
             || isWindowControl(name);
     }
 
-    // Runs off the render loop, in the API handler context, so a blocking self-test is fine.
-    /// React to a control change, re-running the loopback while its mode is on.
+    /// React to a control change off the render loop, in the API handler context, re-running the loopback while its mode is on; a blocking self-test is fine there.
     void onControlChanged(const char* name) override {
         const bool isTestControl = std::strcmp(name, "loopbackTest") == 0;
         const bool isPinControl  = std::strcmp(name, "pins") == 0
@@ -146,8 +132,7 @@ public:
         DriverBase::onControlChanged(name);
     }
 
-    // The buffer and the channels are separate concerns: a rebuild must not free the buffer.
-    /// One-time wiring: parse the pin lists; the acquire lives in prepare().
+    /// One-time wiring: parse the pin lists; the acquire lives in prepare(), since a channel rebuild must not free the buffer.
     void setup() override { parseConfig(); }
     /// Release the RMT channels, free the frame buffer, and clear the shared error state.
     void release() override {
@@ -252,7 +237,7 @@ public:
     size_t pinFrameOffsetBytes(uint8_t i) const { return i < pinCount_ ? pinOffsets_[i] : 0; }
 
 private:
-    // The correction lives on DriverBase, applied per light, as in NetworkSendDriver.
+    /// The source frame; the correction lives on DriverBase, applied per light.
     Buffer* sourceBuffer_ = nullptr;
 
     LedDriverConfig cfg_;
@@ -263,23 +248,21 @@ public:
 
 private:
     platform::RmtWs2812Handle rmt_[kMaxPins];
-    uint16_t       pinList_[kMaxPins] = {};    // parsed pins, list order
-    nrOfLightsType pinCounts_[kMaxPins] = {};  // lights per pin (slice lengths)
-    size_t         pinOffsets_[kMaxPins] = {}; // slice start in frame_, bytes
-    nrOfLightsType txLightCount_ = 0;          // Σ pinCounts_: the lights encoded and transmitted
-    nrOfLightsType winStart_ = 0;              // first source-buffer light this driver reads (the window)
-    nrOfLightsType winLen_ = 0;                // window length (lights), clamped to the buffer
-    uint8_t pinCount_ = 0;                     // 0 = idle (parse error / no pins)
-    bool inited_ = false;                      // all-or-nothing across the pins
-    bool started_[kMaxPins] = {};              // which pins have a transmit still to be waited on
-    bool frameUnusable_ = false;  // frame buffer missing, or in PSRAM the refill cannot read
-    bool txInFlight_ = false;                  // a frame is still clocking out of frame_
-    uint8_t* frame_ = nullptr;      // owned; the wire bytes for the whole frame (outChannels per light)
-    size_t frameCap_ = 0;          // bytes allocated
+    uint16_t       pinList_[kMaxPins] = {};    ///< parsed pins, list order
+    nrOfLightsType pinCounts_[kMaxPins] = {};  ///< lights per pin, the slice lengths
+    size_t         pinOffsets_[kMaxPins] = {}; ///< slice start in frame_, in bytes
+    nrOfLightsType txLightCount_ = 0;          ///< sum of pinCounts_: the lights encoded and transmitted
+    nrOfLightsType winStart_ = 0;              ///< first source-buffer light this driver reads (the window)
+    nrOfLightsType winLen_ = 0;                ///< window length in lights, clamped to the buffer
+    uint8_t pinCount_ = 0;                     ///< 0 means idle: a parse error or no pins
+    bool inited_ = false;                      ///< all-or-nothing across the pins
+    bool started_[kMaxPins] = {};              ///< which pins have a transmit still to be waited on
+    bool frameUnusable_ = false;               ///< frame buffer missing, or in PSRAM where the refill cannot read
+    bool txInFlight_ = false;                  ///< a frame is still clocking out of frame_
+    uint8_t* frame_ = nullptr;                 ///< owned; the wire bytes for the whole frame, outChannels per light
+    size_t frameCap_ = 0;                      ///< bytes allocated
 
-    // The status helpers live on DriverBase, shared verbatim with the other parallel drivers.
-
-    // Falls back to kMaxPins off RMT chips, so the slicing stays host-testable.
+    /// The RMT TX channel count, falling back to kMaxPins off RMT chips so the slicing stays host-testable.
     static constexpr uint8_t maxPinsForTarget() {
         return (platform::rmtTxChannels > 0 && platform::rmtTxChannels < kMaxPins)
                    ? platform::rmtTxChannels
@@ -306,8 +289,6 @@ private:
         if (hz == 0) hz = kResolutionHz;
         return static_cast<uint16_t>((static_cast<uint64_t>(ns) * hz) / 1'000'000'000ull);
     }
-
-    // --- pin/count config (plain parsing; runs on every platform) ---
 
     /// Turn the `timing` selection into the wire timing the encoder reads.
     void applyTiming() {
@@ -361,9 +342,7 @@ private:
         return true;
     }
 
-    // --- symbol buffer (plain heap; runs on every platform) ---
-
-    // Grows only, keeping a big-enough existing allocation. Off the hot path.
+    /// Size the frame buffer to what the pins clock out; grow-only, keeping a big-enough existing allocation, off the hot path.
     void resizeFrame() {
         if (!sourceBuffer_) return;
         // Sized to what the pins CLOCK OUT, not the window, which can be far larger.
@@ -413,9 +392,7 @@ protected:
 
 private:
 
-    // --- loopback self-test (control-driven) ---
-
-    // The status slot holds a pointer, not a copy, so only the FAIL case needs a buffer.
+    /// Run the loopback self-test: the status slot holds a pointer, not a copy, so only the FAIL case needs a buffer.
     void runLoopbackSelfTest() {
         if constexpr (platform::rmtTxChannels == 0) {
             clearFailBuf();
@@ -480,12 +457,10 @@ private:
         }
     }
 
-    // --- RMT channels (hardware; RMT targets only) ---
-
     static constexpr const char* kInitFailMsg = "RMT init failed, check the pins";
     static constexpr const char* kNoFrameMemMsg = "out of memory for this many lights";
 
-    // All-or-nothing: one clear error beats some strands dark and some lit.
+    /// Init every channel or none: one clear error beats some strands dark and some lit.
     void reinit() {
         if constexpr (platform::rmtTxChannels == 0) return;
         deinitAll();
@@ -514,7 +489,7 @@ private:
         if (status() == kInitFailMsg) clearStatus();
     }
 
-    // Channels only, NOT the buffer: reinit calls this, so freeing here strands tick().
+    /// Release the channels only, not the buffer: reinit calls this, so freeing the buffer here would strand tick().
     void deinitAll() {
         if constexpr (platform::rmtTxChannels == 0) return;
         for (uint8_t i = 0; i < kMaxPins; i++) {

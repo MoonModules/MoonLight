@@ -116,7 +116,7 @@ Architecture: [MoonLive](docs/explanation/architecture/moonlive.md) · Use it: [
 
 Our own DMA driver for parallel WS2812 output, one of the backends [ParallelLedDriver](docs/moonmodules/light/drivers.md#parallelled) selects. It adds a streaming ring and 74HCT595 expander support, which is what drives 12,288 lights from a single board.
 
-Architecture: [MoonLight drivers](docs/explanation/architecture/moonlight.md#drivers) · Use it: [LED drivers](docs/moonmodules/light/drivers.md#moonled)
+Architecture: [MoonLight drivers](docs/explanation/architecture/moonlight.md#drivers) · Use it: [LED drivers](docs/moonmodules/light/drivers.md#parallelled)
 
 ### MoonBase
 

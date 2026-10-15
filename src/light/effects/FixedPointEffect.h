@@ -12,12 +12,6 @@ namespace mm {
 ///
 /// @attribution Sutaburosu
 ///
-/// @guide
-///
-/// ## demo
-///
-/// Eleven figures, from a geared clock through a spirograph to boids and a swaying tree, or `all` to cycle through them.
-///
 /// @moreinfo
 ///
 /// The shapes come from the sub-pixel family in `draw.h`, `disc`, `ring`, `strokeLine` and `line`, which work in the 24.8 `pos_t` the whole draw layer speaks. Nothing here computes coverage itself.
@@ -38,6 +32,7 @@ public:
     static constexpr uint8_t kCycled = kDemoCount - 1;
 
     /// Which figure to draw, or `all` to cycle them.
+    /// @guide Eleven figures, from a geared clock through a spirograph to boids and a swaying tree, or `all` to cycle through them.
     uint8_t demo = kAll;
     /// How fast the orbits and curves run; the clock keeps its own.
     uint8_t bpm = 20;

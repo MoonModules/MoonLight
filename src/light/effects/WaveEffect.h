@@ -12,7 +12,7 @@ namespace mm {
 ///
 /// @moreinfo
 ///
-/// The waveform sets a y, so its shape lives on height and width is the travel axis: a 1-tall grid shows no wave. To drive a strip or a row of lights, lay it out as 1xN, the project's 1D convention.
+/// The waveform sets a y, so its shape lives on height and width is the travel axis: a scrolling curve needs a grid more than one light wide and tall.
 class WaveEffect : public EffectBase {
 public:
     /// Catalog tags for the visual catalog.

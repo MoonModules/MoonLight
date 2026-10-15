@@ -16,9 +16,15 @@
 
 namespace mm {
 
-/// Base class for one driver: a consumer that reads the shared source buffer and emits it. The destination is a physical LED output, a network sink, or the preview.
+/// A driver sends the lights out: to LEDs on a wire, a HUB75 panel, the network, a smart-light bridge or the web UI.
+/// @video 07-drivers-desktop.webm Drivers on a desktop: preview, NDI, RTSP, HLS, network send and Hue.
+/// @video 07-drivers-esp32.webm Drivers on a device: RMT and parallel LED pins, HUB75, panel cards, and the network senders.
 ///
-/// A driver reads dimensions from an active Layer, applies the shared output correction, and may restrict its output to a window of the source buffer. The zero-state role EffectBase plays for effects.
+/// Every driver reads the shared buffer of the @ref Drivers container, so several drivers drive one installation, each its own slice. A device's drivers come with its entry in the installer's device catalog, and @ref PreviewDriver is the one every device starts with.
+///
+/// Each driver opens with the shared controls, then adds its own. The output correction (`localBrightness`, `curve`, `fixture`, `whiteMode`) sets how its slice looks, and the source window (`start`, `count`) sets which slice it reads. Hue and Preview correct nothing, since the bridge and the browser do, and HUB75, Preview and the video drivers take the whole buffer.
+///
+/// Each card's emoji are its tags, as the [tag emoji legend](https://moonmodules.org/MoonLight/explanation/architecture/index.html#tag-emoji-legend) explains.
 class DriverBase : public MoonModule {
 public:
     // The OWNER must release before destroying: a base destructor cannot prevent the vptr race.
@@ -181,11 +187,15 @@ protected:
     Correction correction_;
     ScratchBuffer<uint16_t> lut16_{*this};   // the correction's 16-bit table, allocated the first time it is wanted
     uint32_t profileId_ = 0;          // stable id into the FixtureProfiles library (0 → resolve to default)
-    uint8_t fixtureSel_ = 0;          // the fixture Select's chosen INDEX (mapped to an id in onControlChanged)
-    uint8_t whiteMode_ = static_cast<uint8_t>(WhiteMode::Min);  // index into kWhiteModeOptions
-    uint8_t localBrightness_ = 255;  // per-driver dim, multiplied with the global brightness
-    /// Which perceptual curve the output LUT is built through; CIE lightness by default.
-    uint8_t curveSel_ = 0;           // index into kCurveOptions; 0 = CIE
+    /// The fixture profile applied per light, for channel order and white.
+    /// @guide A reorder or a reboot keeps it. After renaming the profile, re-pick it: the next reboot falls back to the default.
+    uint8_t fixtureSel_ = 0;
+    /// How the white channel is derived, shown when the profile carries one.
+    uint8_t whiteMode_ = static_cast<uint8_t>(WhiteMode::Min);
+    /// This driver's dim, multiplied with the global brightness.
+    uint8_t localBrightness_ = 255;
+    /// How brightness maps to output: CIE 1931, a gamma, or linear.
+    uint8_t curveSel_ = 0;
     static constexpr uint8_t kCurveCount = 4;
     static constexpr const char* kCurveOptions[kCurveCount] = {
         "CIE 1931",        // perceptual, the standard
@@ -196,7 +206,7 @@ protected:
     uint8_t lastGlobalBrightness_ = 0;  // last global brightness the container pushed (for self-rebuilds)
     uint8_t laidOutChannels_ = 0xFF;    // the channel count outChannelsChanged last saw, none yet
     uint8_t effectiveBrightness_ = 255; // global times local, for a driver that dims by time
-    // A config saved before `fixture` held the profile's name kept it here; read for one release, then emptied.
+    /// The profile name an older config saved, read once and then emptied.
     char fixtureRef_[16] = {};
     const char* defaultFixture_ = nullptr;   // the profile a new driver of this type starts on, by name
 
@@ -281,8 +291,11 @@ protected:
 
     // Each driver names its own slice, rather than the buffer being split by driver order.
     static constexpr uint16_t kWindowAll = 65535;  ///< count default: clamped to buffer length = all lights
-    uint16_t start_ = 0;   ///< First source-buffer light this driver outputs (default 0).
-    uint16_t count_ = kWindowAll;   ///< Lights from start_; default kWindowAll (clamped to buffer = all).
+    /// The first light of the shared buffer this driver reads.
+    uint16_t start_ = 0;
+    /// How many lights it reads from `start`; blank reads them all.
+    /// @guide So drivers share one buffer: a status LED takes `start 0, count 1` and the strip `start 1`.
+    uint16_t count_ = kWindowAll;
 
     /// Add the two window controls, which a driver calls where its own controls go.
     void addWindowControls() {

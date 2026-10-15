@@ -11,13 +11,30 @@
 
 namespace mm {
 
-/// Streams a true-shape 3D preview to the web UI over its own binary WebSocket: @xref{its-own-channel-and-why}.
+/// Streams a true-shape 3D preview of the layer to the web UI.
+/// @card PreviewDriver.png
 ///
-/// The preview is a POINT LIST, not a dense grid. Only the real lights are sent, at their real (x, y, z) positions, on MoonLight's PhysicalLayer model. Positions go out once at mapping time and channels per frame. This driver owns both wire formats, and the HTTP server is a domain-neutral broadcaster that writes the bytes.
+/// Only the real lights are sent, at their real positions, so a sphere, ring or arbitrary map shows in its true shape. It is the one boot-wired driver.
 ///
-/// Resolution is client-driven, over the wire format in @xref{the-wire-format}: the browser reads the drops counter each frame carries and posts the standing request it wants. No standing request means no work at all.
+/// It streams on its own WebSocket channel so a large frame never delays the control plane. It sends only while a viewer is watching, and moving heads show their beam.
+///
+/// @guide
+///
+/// ## Close it when you do not need it
+///
+/// The device renders preview frames only while the preview pane is open. Dismissing the pane stops that work entirely, which frees the device and keeps the UI responsive on a large layout. Worth doing while you edit effects on a big wall.
+///
+/// ## It thins itself out
+///
+/// When the connection cannot carry full detail, the preview shows a regular sample of the lights and the status reads `2 watching · 1/4`. Drop-free stretches earn detail back a step at a time. A slow effect drops nothing, so it never costs detail.
+///
+/// ## If the preview looks choppy
+///
+/// The connection is the cause, not the device: frames are dropped rather than queued, so the wall itself is never held up. Lower `targetFps` to keep full detail at a slower rate.
 ///
 /// @moreinfo
+///
+/// **Point list.** The preview sends a point list, not a dense grid: positions once at mapping time, channels per frame. The browser posts the standing request it wants, in @xref{the-wire-format}; no request means no work.
 ///
 /// ## The wire format
 ///
@@ -36,8 +53,6 @@ namespace mm {
 /// ## Its own channel, and why
 ///
 /// Preview frames are lossy and large; control-plane state is small and latency-sensitive. Sharing one WebSocket queues the small messages behind the big ones, which reads as a flickering connection indicator, so each gets its own.
-///
-/// @card PreviewDriver.png
 class PreviewDriver : public DriverBase, public BinaryBroadcaster::ClientMessageSink {
 public:
     /// Not user-editable: deleting it from the UI would silently kill the 3D preview.
@@ -45,7 +60,7 @@ public:
     /// Running in safe mode, which leaves the lights to the screen.
     bool heldInSafeMode() const override { return false; }
 
-    /// The frame rate the preview aims for, in Hz, independent of the render rate.
+    /// The rate the preview aims for: lower for detail, raise for smoothness.
     uint8_t targetFps = 24;
 
     /// Set the sink each message is pushed to, and register as its inbound-message sink.
@@ -54,8 +69,7 @@ public:
         if (b) b->setClientMessageSink(this);
     }
 
-    // Arrives on the transport thread; single-byte fields, so the encode reader tolerates the race.
-    /// Handle a client request: a standing frame request, or a one-shot table request.
+    /// Handle a client request, a standing frame request or a one-shot table request, which arrives on the transport thread; single-byte fields, so the encode reader tolerates the race.
     void onClientMessage(int slot, const uint8_t* payload, int len) override {
         if (slot < 0 || slot >= kMaxRequestSlots || len < 2) return;
         if (payload[0] == 0x51) {
@@ -129,8 +143,7 @@ public:
         sourceBuffer_ = buf;
     }
 
-    // Cancels any in-flight send FIRST: a resize reallocs the buffer a half-sent frame reads.
-    /// Rebuild the coordinate table for the new geometry and start a fresh epoch.
+    /// Rebuild the coordinate table for the new geometry and start a fresh epoch, canceling any in-flight send first since a resize reallocs the buffer a half-sent frame reads.
     void prepare() override {
         // Cancel BEFORE the rebuild: an in-flight send holds a pointer about to dangle.
         if (broadcaster_) broadcaster_->cancelBufferedSend();
@@ -175,8 +188,7 @@ public:
     /// No control changes the transport structure, so nothing here re-runs prepare.
     bool affectsPrepare(const char* /*name*/) const override { return false; }
 
-    // REPORTED AS BLOCKING deliberately: the socket write and the resize are both real.
-    /// Serve a requested table, then stream one frame if the previous one finished draining.
+    /// Serve a requested table, then stream one frame on @xref{its-own-channel-and-why|its own channel} if the previous one finished draining; blocking, since the socket write and the resize are real.
     void tick() MM_NONBLOCKING override {
         // The PULL model: no standing request means no gather, no send, nothing at all.
         if (!broadcaster_) return;
@@ -233,8 +245,7 @@ public:
         }
     }
 
-    // Sampling positions rather than indices, so a downsampled preview shows no moiré.
-    /// Build the cached coordinate table from the layout's real lights.
+    /// Build the cached coordinate table from the layout's real lights, sampling positions rather than indices so a downsampled preview shows no moiré.
     void buildCoordTable() {
         coordCount_ = 0;
         if (!layer_ || !layer_->layouts()) return;
@@ -366,8 +377,7 @@ public:
         return broadcaster_->sendBufferedFrame(h, sizeof(h), staging_, stagingUsed_);
     }
 
-    // Costs nothing on a rig without motion: the first line is a flag test, and an LED wall stops.
-    /// Stream one aim message, so the preview can draw where each moving head points.
+    /// Stream one aim message, so the preview can draw where each moving head points; it costs nothing on a rig without motion, where the first line is a flag test.
     bool sendAim() {
         Layer* l = layer();
         if (!l) return false;
@@ -500,7 +510,7 @@ public:
     }
 
 private:
-    /// Free the preview buffers, cancelling any in-flight send so no drain outlives its buffer.
+    /// Free the preview buffers, canceling any in-flight send so no drain outlives its buffer.
     void freePreviewBuffers() {
         if (broadcaster_) broadcaster_->cancelBufferedSend();
         freeKeptIndex();
@@ -560,10 +570,10 @@ private:
     int lastClients_ = 0;
     nrOfLightsType lastShownStride_ = 0;
     char statusBuf_[40]{};
-    bool keptIdxAllocFailed_ = false;     // index cache couldn't allocate → gather walks per frame
-    nrOfLightsType* keptIdx_ = nullptr;   // sparse layouts: kept lights' buffer indices, coord-table order
+    bool keptIdxAllocFailed_ = false;     ///< index cache couldn't allocate → gather walks per frame
+    nrOfLightsType* keptIdx_ = nullptr;   ///< sparse layouts: kept lights' buffer indices, coord-table order
     nrOfLightsType keptIdxCap_ = 0, keptCount_ = 0;
-    // Each kept light's (x,y,z): a coarser frame applies the device's own modulo test rather than re-walking placeLights (~8 ms at 12K lights, per frame).
+    /// Each kept light's (x,y,z): a coarser frame applies the device's own modulo test rather than re-walking placeLights (~8 ms at 12K lights, per frame).
     uint8_t* keptPos_ = nullptr;
 
 protected:
@@ -577,10 +587,10 @@ protected:
 
 private:
 
-    // No LUT means Drivers passed the dense box buffer, so the closed-form path is valid.
-    /// Whether the source is a dense grid in natural order, which needs no placeLights walk.
+    /// Whether the source is a dense grid in natural order, which needs no placeLights walk: no LUT means Drivers passed the dense box buffer.
     bool denseGrid() const { return layer_ && !layer_->lut().hasLUT(); }
 
+    /// How many points the table may hold: memory is the only bound, with a floor so any board previews something.
     nrOfLightsType maxPreviewPoints() const {
         // NO display cap: memory is the only bound, and everything else self-degrades where it binds.
         constexpr size_t kReserve = 32u * 1024u;     // leave this much contiguous headroom
@@ -597,7 +607,7 @@ private:
         return static_cast<nrOfLightsType>(memPts);
     }
 
-    // Scaled by the largest box edge, so a >255 axis is not flattened onto the 255 plane.
+    /// Scale a coordinate by the largest box edge, so a >255 axis is not flattened onto the 255 plane.
     uint8_t scaleAxis(lengthType v) const {
         if (v < 0) return 0;
         int32_t s = posScale_ ? (static_cast<int32_t>(v) * 255 / posScale_) : v;
@@ -606,24 +616,24 @@ private:
 
     Buffer* sourceBuffer_ = nullptr;
     BinaryBroadcaster* broadcaster_ = nullptr;
-    bool aimTurn_ = false;          // alternates color/aim so each gets its own send slot
-    uint8_t* staging_ = nullptr;           // stable body for table + gathered frames (see ensureStaging)
+    bool aimTurn_ = false;          ///< alternates color/aim so each gets its own send slot
+    uint8_t* staging_ = nullptr;           ///< stable body for table + gathered frames (see ensureStaging)
     size_t stagingCap_ = 0;
-    nrOfLightsType coordCount_ = 0;        // lights the lattice keeps = the streamed 0x03/0x02 count
-    nrOfLightsType previewStride_ = 1;     // wire field: the lattice/downscale factor (1 = full res)
+    nrOfLightsType coordCount_ = 0;        ///< lights the lattice keeps = the streamed 0x03/0x02 count
+    nrOfLightsType previewStride_ = 1;     ///< wire field: the lattice/downscale factor (1 = full res)
     uint8_t bx_ = 0, by_ = 0, bz_ = 0;
-    int32_t posScale_ = 0;            // 0 = positions 1:1; else largest box edge (>255) to scale by
+    int32_t posScale_ = 0;            ///< 0 = positions 1:1; else largest box edge (>255) to scale by
     uint32_t lastSendTime_ = 0;
-    // Written on the transport thread and read on the encode one: single bytes, benign to race.
+    /// The client slots, written on the transport thread and read on the encode one: single bytes, benign to race.
     static constexpr int kMaxRequestSlots = 8;
-    volatile uint8_t reqStride_[kMaxRequestSlots] = {};   // 0 = no standing request in this slot
-    volatile uint8_t reqFps_[kMaxRequestSlots] = {};      // 0 = use the targetFps control
-    volatile bool tableRequested_ = false;                // a [0x52] is owed the table
-    uint8_t epoch_ = 0;             // bumped per geometry rebuild; the table-cache key's half
-    uint8_t dropsSinceLast_ = 0;    // frames discarded at the source since the last delivered one
-    size_t stagingUsed_ = 0;        // byte length of the last-built table in staging_
+    volatile uint8_t reqStride_[kMaxRequestSlots] = {};   ///< 0 = no standing request in this slot
+    volatile uint8_t reqFps_[kMaxRequestSlots] = {};      ///< 0 = use the targetFps control
+    volatile bool tableRequested_ = false;                ///< a [0x52] is owed the table
+    uint8_t epoch_ = 0;             ///< bumped per geometry rebuild; the table-cache key's half
+    uint8_t dropsSinceLast_ = 0;    ///< frames discarded at the source since the last delivered one
+    size_t stagingUsed_ = 0;        ///< byte length of the last-built table in staging_
 
-    // The coarsest standing client request; 1 is full resolution and the value with no request.
+    /// The coarsest standing client request; 1 is full resolution and the value with no request.
     nrOfLightsType downscale_ = 1;
 };
 

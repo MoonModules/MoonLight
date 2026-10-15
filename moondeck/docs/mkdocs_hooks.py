@@ -260,8 +260,8 @@ def generated_catalog(src_uri: str) -> str | None:
     out += [_site_relative(cat.get("line", ""), src_uri), ""]
     for para in (p for p in cat.get("summary", "").split("\n\n") if p):
         out += [_site_relative(para, src_uri), ""]
-    if cat.get("video"):
-        out += [f'<video src="{_site_relative(cat["video"], src_uri)}" controls playsinline width="360" title="{cat.get("caption", "")}"></video>', ""]
+    for clip in cat.get("videos", []):
+        out += [f'<video src="{_site_relative(clip["video"], src_uri)}" controls playsinline width="360" title="{clip.get("caption", "")}"></video>', ""]
     # The deck is the page: its cards render as the catalog table until the script replaces them, which is what search indexes and a reader without JavaScript sees.
     out += ["<noscript><style>.mm-deck .mm-catalog-wrap { display: block; }</style></noscript>", "",
             f'<div class="mm-deck" data-page="{page}" markdown="1">', ""]

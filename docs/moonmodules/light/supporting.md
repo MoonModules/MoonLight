@@ -44,27 +44,6 @@ Detail: [technical](moxygen/Layouts.md)
 
 ### Drivers
 
-The container of driver modules, owning the shared buffer and the per-light output correction every driver applies before sending.
-
-<img src="../../assets/light/Drivers.png" width="300" alt="Drivers container with the on/off + brightness controls">
-
-- `on`: master power.
-
-  Off scales the output to black while preserving `brightness`, so switching on restores the level. Every consumer drives it: the UI, infrared, the WLED app, Home Assistant and MQTT.
-- 🎚️ `relayPins`: GPIOs switching the LED power supply, closed while `on` and brightness > 0.
-- `brightness`: global output brightness, multiplied with each driver's `localBrightness`.
-- `palette`: what effects sample from, built in or [scripted](moonlive.md); settable by name too.
-- `multicore`: run the output stage on the second core.
-
-  On by default, and it falls back to single-core by itself when the extra frame buffer will not fit. The switch exists to compare the two.
-- `renderWait`: read-only: how long core 0 waited for core 1 at the frame boundary.
-
-  Near zero means render and output overlap well, and a large value means core 0 idles on a slow output stage. Shown only while `multicore` is on.
-
-Detail: [technical](moxygen/Drivers.md)
-
-[Tests](../../reference/tests/unit-tests.md#drivers)
-
 <a id="fixtureprofiles"></a>
 
 ### FixtureProfiles

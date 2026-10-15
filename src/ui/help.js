@@ -1,13 +1,24 @@
 // How a module describes itself, its help and its emoji, shared by the app and the docs site's card deck so both show the same; it imports nothing, as the site serves it beside its own scripts.
 
 // Inline markdown as HTML: everything escaped first, then code, bold and absolute links, so text from the file cannot become markup.
+const inline = s => s
+    .replace(/`([^`]+)`/g, "<code>$1</code>")
+    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+
+// A GitHub-flavored markdown table, a paragraph whose every line is a `| … |` row: the first row heads it and the `|---|` row below it is dropped.
+const isTable = p => p.split("\n").every(l => /^\|.*\|$/.test(l.trim()));
+const isSeparator = l => /^\|[\s:|-]+\|$/.test(l.trim());
+function table(p) {
+    const lines = p.split("\n").filter((l, i) => !(i === 1 && isSeparator(l)));
+    const rows = lines.map(l => l.trim().slice(1, -1).split("|").map(c => inline(c.trim())));
+    const body = rows.slice(1).map(r => `<tr>${r.map(c => `<td>${c}</td>`).join("")}</tr>`).join("");
+    return `<table><tr>${rows[0].map(c => `<th>${c}</th>`).join("")}</tr>${body}</table>`;
+}
+
 export function helpMarkdown(text) {
     const esc = String(text).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-    return esc.split(/\n\n+/).map(p => p
-        .replace(/`([^`]+)`/g, "<code>$1</code>")
-        .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
-        .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>'))
-        .join("<br><br>");
+    return esc.split(/\n\n+/).map(p => isTable(p) ? table(p) : inline(p)).join("<br><br>");
 }
 
 // A URL taken from help.json, only when it is https and cannot leave its attribute; anything else is no link at all.

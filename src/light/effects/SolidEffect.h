@@ -7,7 +7,7 @@ namespace mm {
 /// A flat fill with five color modes: a plain RGB(W) color, the palette spread across the lights, one RMS-averaged palette color, or the palette banded along rows or columns.
 /// @card SolidEffect.gif
 ///
-/// Brightness scales the flat and palette-spread results.
+/// Brightness scales every mode except Palette avg.
 ///
 /// @moreinfo
 ///
@@ -33,7 +33,7 @@ public:
     uint8_t blue = 98;
     /// Its white channel, written only where the light carries one.
     uint8_t white = 0;
-    /// Scales the flat and palette-spread results.
+    /// Scales the color in every mode except Palette avg.
     uint8_t brightness = 255;
     /// Which of the five color modes fills the layer.
     uint8_t colorMode = kColorFlat;

@@ -5,7 +5,7 @@ import { helpMarkdown, safeUrl, moduleHelp, controlHelp, emojiTagsFor, emojiChip
 
 const HELP = new URL("../help/help.json", import.meta.url);
 
-// A playing card: the picture and the one line on its face, the module's help and controls on its back, turned with a tap.
+// A playing card: the name, the picture and the one line on its face, the module's help and controls on its back, turned with a tap.
 function card(type, help) {
     const name = typeDisplayName(type);
     const emoji = emojiTagsFor(help);
@@ -27,6 +27,11 @@ function card(type, help) {
         if (EMOJI_LABEL[e]) s.title = EMOJI_LABEL[e];
         pips.appendChild(s);
     }
+    // The name beside the emoji, at their scale, so it reads at every card size.
+    const pipName = document.createElement("span");
+    pipName.className = "mm-pcard-name";
+    pipName.textContent = name;
+    pips.appendChild(pipName);
     front.appendChild(pips);
     if (safeUrl(help.image)) {
         const img = document.createElement("img");
@@ -35,9 +40,6 @@ function card(type, help) {
         img.alt = help.alt || `${name} preview`;
         front.appendChild(img);
     }
-    const title = document.createElement("h3");
-    title.textContent = name;
-    front.appendChild(title);
     const p = document.createElement("p");
     p.innerHTML = helpMarkdown(help.line || "");
     front.appendChild(p);

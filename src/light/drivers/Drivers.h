@@ -23,9 +23,10 @@
 
 namespace mm {
 
-/// Top-level container for the drivers: the consumer side of the pipeline. Owns the shared output buffer, composites every enabled layer into it each frame, and holds the global power, brightness and palette each Correction multiplies with.
+/// The container of driver modules, owning the shared buffer and the per-light output correction every driver applies before sending.
+/// @card Drivers.png
 ///
-/// Prior art: MoonLight's PhysicalLayer, which owns the display buffer and maps virtual channels into it.
+/// Every driver under it reads its own slice of that buffer, as the [drivers catalog](https://moonmodules.org/MoonLight/moonmodules/light/drivers.html) shows.
 ///
 /// @moreinfo
 ///
@@ -34,8 +35,6 @@ namespace mm {
 /// Blend and map write to arbitrary physical positions through a LUT, so the output is readable only once whole. One enabled layer with a 1:1 unshuffled mapping is the exception: drivers read that layer's buffer directly, giving up parallelism.
 ///
 /// Two or more enabled layers composite in Effects order, bottom to top. Drivers owns that because only it sees both the stack order and the output buffer.
-///
-/// @card Drivers.png
 class Drivers : public MoonModule, public LightOutput {
 public:
     // Drivers only, so the picker is not buried under every generic system module.
@@ -126,22 +125,20 @@ public:
         return fc;
     }
 
-    // Default low, around 8%: a fresh device on USB 5 V must not brown out at full white.
-    /// Global brightness, scaling every channel through a 256-entry LUT.
+    /// Global output brightness, multiplied with each driver's `localBrightness`.
+    /// @guide It starts low, so a fresh device on USB 5 V never browns out at full white.
     uint8_t brightness = 20;
-    // Black without touching `brightness`, so toggling back restores the level.
     /// Master power.
+    /// @guide Off scales the output to black and keeps `brightness`, so switching on restores the level. The UI, infrared, the WLED app, Home Assistant and MQTT all drive it.
     bool on = true;
 
-    // A LIST, and not per driver: a relay gates the supply, which several drivers share.
-    /// The GPIOs that switch the LED power supply, comma-separated; empty on most boards.
+    /// GPIOs switching the LED power supply, closed while `on` and brightness is above 0.
     char relayPins[24] = "";
 
-    // Owned here because this container owns the handoff buffer and the frame boundary.
-    /// Run the drivers' encode on the second core, so a frame costs max(render, encode).
+    /// Run the output stage on the second core.
+    /// @guide It falls back to one core by itself when the extra frame buffer does not fit. The switch exists to compare the two.
     bool multicore = true;
-    // The wire format is per driver; this container owns only the global brightness above.
-    /// The global active color palette, which every palette-driven effect reads live.
+    /// What effects sample from: a built-in palette or a scripted `.mlp` one.
     uint8_t palette = 0;
 
     /// Run the script `paletteScript_` names, compiling it, whose size or error the card shows.
@@ -239,7 +236,7 @@ public:
     uint32_t    softStartAt_ = 0;               ///< when they started rising
 
     // Reached through a static seam, because the layers sample the palette before this ticks.
-    /// The scripted palette: a `.mlp` name, and the binding that runs it. Empty means built-in.
+    /// The scripted palette's file, which `palette` picks.
     char paletteScript_[moonlive::kMaxScriptName + 1] = {};
     /// The engine that runs the selected scripted palette, one per Drivers.
     MoonLivePalette paletteScriptModule_;
@@ -654,7 +651,9 @@ private:
     bool encodeStalled_ = false;       // a stall warning is showing, so recovery can clear it
     uint32_t renderWaitUs_ = 0;                 // last frame's core-0 wait at the boundary (the tick-line KPI)
     uint32_t renderWaitPeakUs_ = 0;             // worst wait in the current 1 s window (what the control shows)
-    char renderWaitStr_[32] = {};               // the `renderWait` read-only control's text (refreshed in tick1s)
+    /// How long core 0 waited for core 1 at the frame boundary.
+    /// @guide Near zero means render and output overlap well. A large value means core 0 idles on a slow output stage.
+    char renderWaitStr_[32] = {};
 
     // One rule, no per-driver opt-out: the whole output stage lives on core 1 while it is on.
     /// The core-1 body: wait for a notify, tick every driver, signal done.

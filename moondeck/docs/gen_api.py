@@ -316,8 +316,8 @@ _ASSETS = ROOT / "docs" / "assets"
 # post-process layer `@card` uses. Like `@card`, the plain-text marker survives Doxygen → moxygen as-is.
 _MOREINFO_RE = re.compile(r'^[ \t]*@moreinfo[ \t]*$', re.MULTILINE)
 # `@guide` opens the sections written for users, which gen_help gives the app as the module's help.
-# On the technical page they read in place, in the description, so only the marker goes.
-_GUIDE_RE = re.compile(r'^[ \t]*@guide[ \t]*$\n?', re.MULTILINE)
+# On the technical page they read in place, in the description, so only the marker goes, as it does on a member's `@guide` line.
+_GUIDE_RE = re.compile(r'^[ \t]*@guide(?:[ \t]*$\n?|[ \t]+)', re.MULTILINE)
 # `@attribution` is a block tag gen_help makes a help field; on the technical page it reads labeled.
 _ATTRIBUTION_RE = re.compile(r'^([ \t]*)@attribution[ \t]+', re.MULTILINE)
 # `@video <file> <title>` is a clip a catalog's intro shows; on the technical page it plays where it stands.

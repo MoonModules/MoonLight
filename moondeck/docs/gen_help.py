@@ -34,7 +34,7 @@ CATALOG = ROOT / "docs" / "moonmodules"
 HELP = ROOT / "docs" / "help" / "help.json"
 # A catalog page drawn whole from help.json, named once here with the base class whose comment introduces it: the page's title and its intro, what every module on it shares.
 CATALOGS = {"light/modifiers.md": ("Modifiers", "ModifierBase"), "light/layouts.md": ("Layouts", "LayoutBase"),
-            "light/effects.md": ("Effects", "EffectBase")}
+            "light/effects.md": ("Effects", "EffectBase"), "light/drivers.md": ("Drivers", "DriverBase")}
 
 _MARKER_RE = re.compile(r"^(@guide|@moreinfo)\s*$", re.MULTILINE)
 _XREF_RE = re.compile(r"@xref\{([a-z0-9-]+)(?:\|([^}]+))?\}")
@@ -43,8 +43,10 @@ _ANCHOR_LINK_RE = re.compile(r"(\]\()#([^)]+)\)")
 # The lead's block tags, Javadoc's `@author` construct: a line opening `@<tag>` starts the field, and the field runs to the next blank line or tag. Each tag is the help field of the same name, so a header names what help.json carries; a new structured field is one entry here.
 #   card         the picture, a file under docs/assets/, then optionally its alt text
 #   attribution  what the module learned from or who wrote it first, shown apart from the summary, since writing our own rather than depending removes the automatic credit
-#   video        a clip, a file under docs/assets/, then optionally its title; a catalog's intro shows it
+#   video        a clip, a file under docs/assets/, then optionally its title; a catalog's intro shows each one, in order
 BLOCK_TAGS = ("card", "attribution", "video")
+# The block tags a lead may repeat, each occurrence one item of a list field.
+REPEATED_TAGS = ("video",)
 _TAG_RE = re.compile(r"^@(\w+)\s*(.*)$")
 _SENTENCE_RE = re.compile(r"(?<=[.!?])\s+(?=[A-Z`*\[])")
 # Doxygen's cross-reference, `@ref ClassName`: the class name, which the compiler keeps unique and a display rename leaves standing.
@@ -77,9 +79,15 @@ def block_tags(lead: str) -> tuple[str, dict]:
         m = _TAG_RE.match(ln.strip())
         if m and m.group(1) in BLOCK_TAGS:
             tag = m.group(1)
-            fields[tag] = m.group(2).strip()
+            if tag in REPEATED_TAGS:
+                fields.setdefault(tag, []).append(m.group(2).strip())
+            else:
+                fields[tag] = m.group(2).strip()
         elif tag and ln.strip():
-            fields[tag] += " " + ln.strip()
+            if tag in REPEATED_TAGS:
+                fields[tag][-1] += " " + ln.strip()
+            else:
+                fields[tag] += " " + ln.strip()
         else:
             tag = None
             prose.append(ln)
@@ -252,33 +260,84 @@ def _literal(expr) -> str | None:
 
 
 def _line_comment(call) -> str:
-    """A `///` above an `add…` line or `///<` behind it: the help of a control with no member."""
+    """The `///` run above an `add…` line, or a `///<` behind it: the help of a control with no member."""
     src = Path(call.location.file.name).read_text(encoding="utf-8").splitlines()
     line = call.location.line
     after = src[line - 1].partition("///<")
     if after[1]:
         return after[2].strip()
-    above = src[line - 2].strip() if line > 1 else ""
-    return above[3:].strip() if above.startswith("///") and not above.startswith("///<") else ""
+    run, k = [], line - 2
+    while k >= 0 and src[k].strip().startswith("///") and not src[k].strip().startswith("///<"):
+        run.insert(0, src[k].strip()[3:].strip())
+        k -= 1
+    return "\n".join(run)
+
+
+def control_help(text: str) -> dict:
+    """A control's comment as its help: the first line is its line, and a `@guide` line below it its longer help, Doxygen's brief and detailed description."""
+    # Only a line opening `@guide`, so the word inside a sentence stays text.
+    m = re.search(r"(?m)^@guide\b", text)
+    line, more = (text[:m.start()], text[m.end():]) if m else (text, "")
+    return {"line": line.strip(), **({"more": more.strip()} if more.strip() else {})}
 
 
 def controls_of(cls) -> dict:
-    """Each control `defineControls` publishes, in order, with its line: the `///` on the member the `add…` call names, else one on the call's own line; empty when there is neither."""
-    controls = {}
-    for method in cls.get_children():
-        if method.kind.name != "CXX_METHOD" or method.spelling != "defineControls":
-            continue
-        for call in method.walk_preorder():
-            if call.kind.name != "CALL_EXPR" or not call.spelling.startswith("add"):
-                continue
-            args = list(call.get_arguments())
-            name = _literal(args[0]) if args else None
-            if not name:
-                continue
-            field = _referenced_field(args[1]) if len(args) > 1 else None
-            controls[name] = (comment_text(field.raw_comment) if field is not None else "") \
-                or _line_comment(call)
+    """Each control the `defineControls` the class runs publishes, in order, with its comment: the `///` on the member the `add…` call names, else the run above the call or a `///<` behind it; empty when there is neither. A call to one of the class's own methods is followed as the virtual call resolves it, so a base's template method and its helpers count, and a branch on a method returning a literal `true` or `false` follows that value."""
+    controls, entered = {}, set()
+
+    def own(node):
+        """The method the class runs for a call to one of its own or its bases' methods, else None."""
+        ref = node.referenced
+        if node.kind.name != "CALL_EXPR" or ref is None or ref.kind.name != "CXX_METHOD":
+            return None
+        return _runs(cls, node.spelling) if _is_base_or_self(cls, ref.semantic_parent) else None
+
+    def visit(node):
+        if node.kind.name == "IF_STMT":
+            kids = list(node.get_children())
+            cond = next((n for n in kids[0].walk_preorder() if own(n) is not None), None) if kids else None
+            value = _returns(cls, cond.spelling) if cond is not None else []
+            if value in (["true"], ["false"]):
+                # The branch a literal return takes, flipped by a leading `!`; the else is kids[2] when there is one.
+                negated = next((t.spelling for t in kids[0].get_tokens()), "") == "!"
+                for k in (kids[1:2] if (value == ["true"]) != negated else kids[2:]):
+                    visit(k)
+                return
+        if node.kind.name == "CALL_EXPR":
+            args = list(node.get_arguments())
+            name = _literal(args[0]) if args and node.spelling.startswith("add") else None
+            if name:
+                field = _referenced_field(args[1]) if len(args) > 1 else None
+                controls[name] = (comment_text(field.raw_comment) if field is not None else "") \
+                    or _line_comment(node)
+                return
+            method = own(node)
+            if method is not None and method.hash not in entered:
+                entered.add(method.hash)
+                visit(method)
+                return
+        for child in node.get_children():
+            visit(child)
+
+    root = _runs(cls, "defineControls")
+    if root is not None:
+        visit(root)
     return controls
+
+
+def _is_base_or_self(cls, other) -> bool:
+    """Whether `other` is the class or one of its bases, the classes whose methods a call on `this` reaches."""
+    queue, seen = [cls], set()
+    while queue:
+        c = queue.pop(0)
+        if c is None or c.hash in seen:
+            continue
+        if c.spelling == other.spelling:
+            return True
+        seen.add(c.hash)
+        queue += [(b.referenced.get_definition() or b.referenced) for b in c.get_children()
+                  if b.kind.name == "CXX_BASE_SPECIFIER" and b.referenced is not None]
+    return False
 
 
 def _runs(cls, name):
@@ -430,15 +489,12 @@ def tests_url(cls_name: str, ref: str) -> str | None:
 
 
 def header_help(cls) -> dict:
-    """A module's help from its header: the class comment's levels, and per control its line and, from the `@guide` section titled with the control's name, its more."""
+    """A module's help from its header: the class comment's levels, and per control its line and, from the `@guide` line on its member, its more."""
     h = class_help(cls.raw_comment)
-    lines = controls_of(cls)
-    more = {g["title"]: g["text"] for g in h["guide"] if g["title"] in lines}
-    controls = {name: {"line": line, **({"more": more[name]} if name in more else {})}
-                for name, line in lines.items()}
+    controls = {name: control_help(text) for name, text in controls_of(cls).items()}
     image, _, alt = (h.get("card") or "").partition(" ")
     return {"line": h["line"], "summary": h["summary"], "attribution": h.get("attribution"),
-            "guide": [g for g in h["guide"] if g["title"] not in lines],
+            "guide": h["guide"],
             "image": asset_url(image) if image else None, "alt": alt.strip(), "controls": controls}
 
 
@@ -509,10 +565,11 @@ def generate(ref: str = "main") -> tuple[dict, dict]:
             except LookupError as e:
                 sys.exit(f"{base}: {e}")
             image, _, alt = (h.get("card") or "").partition(" ")
-            video, _, caption = (h.get("video") or "").partition(" ")
+            videos = [{"video": asset_url(v), "caption": c.strip()}
+                      for v, _, c in (tag.partition(" ") for tag in h.get("video", []))]
             catalogs[page] = {k: v for k, v in {"title": title, "line": h["line"], "summary": h["summary"],
                                                  "image": asset_url(image) if image else None, "alt": alt.strip(),
-                                                 "video": asset_url(video) if video else None, "caption": caption.strip(),
+                                                 "videos": videos,
                                                  "guide": h["guide"], "attribution": h.get("attribution")}.items() if v}
     return {"version": ref, "modules": modules, "catalogs": catalogs}, report
 

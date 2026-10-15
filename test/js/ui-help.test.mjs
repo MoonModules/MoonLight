@@ -23,6 +23,16 @@ test("paragraphs stay apart", () => {
     assert.equal(helpMarkdown("One.\n\nTwo."), "One.<br><br>Two.");
 });
 
+test("a table renders with its first row as the head, its cells formatted", () => {
+    assert.equal(helpMarkdown("Pick one.\n\n| Want | Use |\n|---|---|\n| Many strands | `i80` |"),
+        "Pick one.<br><br><table><tr><th>Want</th><th>Use</th></tr><tr><td>Many strands</td><td><code>i80</code></td></tr></table>");
+});
+
+test("a table without a separator row keeps every body row", () => {
+    assert.equal(helpMarkdown("| Want | Use |\n| Few | RMT |"),
+        "<table><tr><th>Want</th><th>Use</th></tr><tr><td>Few</td><td>RMT</td></tr></table>");
+});
+
 test("a module matches when it carries every active chip", () => {
     assert.equal(chipsMatch(["🔥", "🟦", "🎶"], new Set(["🔥", "🎶"])), true);
     assert.equal(chipsMatch(["🔥", "🟦"], new Set(["🔥", "🎶"])), false);

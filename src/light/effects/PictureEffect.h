@@ -9,16 +9,6 @@ namespace mm {
 /// @card PictureEffect.gif
 ///
 /// A modifier rotates, mirrors or tiles it as it does any effect, and a cube shows it on every slice.
-///
-/// @guide
-///
-/// ## fit
-///
-/// **fit** shows the whole picture, with bands where its aspect leaves the grid empty. With **fill** it covers the grid and crops what overflows, and **stretch** distorts it to the grid's aspect.
-///
-/// ## sampling
-///
-/// **point** takes the one pixel at a light's center, sharp and the fastest. With **area** each light averages its rectangle of the picture, so fine detail stays steady when a large picture shrinks onto few lights.
 class PictureEffect : public EffectBase {
 public:
     /// Catalog tags for the visual catalog.
@@ -29,10 +19,12 @@ public:
     /// The ways `fit` places the picture, in option order.
     enum Fit : uint8_t { kFit, kFill, kStretch, kFitCount };
     /// Keep the aspect with bands or cropped, or stretch it to the grid.
+    /// @guide **fit** shows the whole picture, with bands where its aspect leaves the grid empty. With **fill** it covers the grid and crops what overflows, and **stretch** distorts it to the grid's aspect.
     uint8_t fit = kFit;
     /// The ways `sampling` reads a cell's part of the picture, in option order.
     enum Sampling : uint8_t { kPoint, kArea, kSamplingCount };
     /// One pixel per light, or the mean of the light's rectangle.
+    /// @guide **point** takes the one pixel at a light's center, sharp and the fastest. With **area** each light averages its rectangle of the picture, so fine detail stays steady when a large picture shrinks onto few lights.
     uint8_t sampling = kPoint;
 
     /// Publish the placement and the sampling.

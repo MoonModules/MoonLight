@@ -45,21 +45,11 @@ inline constexpr const char* kLayoutPick[3] = {kScriptDir, kLayoutExt, kLayoutTe
 ///
 /// ## How the light count is known
 ///
-/// A layout answers how many lights before it produces a single coordinate, because the Layer sizes its buffer from that number and only then asks where each light is. A script cannot be asked how many without running it.
-///
-/// So it runs twice. The first pass counts what `addLight` places, and the second emits each position. Same script and same arithmetic, so a deterministic script agrees with itself, which is what the compiled layouts do for the same reason.
-///
-/// Nothing is stored between the passes. Staging 16,384 coordinates costs 48 KB, which a classic ESP32 driving that many lights does not have spare. Running the script again is cheaper than remembering what it said.
-///
-/// A script calling `random16` breaks that determinism. The passes disagree on the count when a random value decides a loop bound. A random coordinate keeps the count right, and places the lights elsewhere on the second pass.
+/// The Layer sizes its buffer from the light count before it asks for any position, so the script runs twice: the first pass counts `addLight` calls, the second emits positions. Nothing is stored between passes, which saves 48 KB at 16,384 lights. A `random16` loop bound makes the passes disagree on the count.
 ///
 /// ## What a layout script is given
 ///
-/// `addLight(x, y, z)` places the next light along the strand. There is no index, because the order the script calls it in is the strand order.
-///
-/// `t` is the one system variable a layout reads, and it is always 0: the script runs twice per rebuild and must agree with itself. `width`, `height` and `depth` read 0, since a layout is upstream of the grid it defines.
-///
-/// A script names its own size controls, such as `cols` and `rows`. The pipeline derives the bounding box from the coordinates placed, so a size passed in from outside would be a second answer that could disagree with the first.
+/// `addLight(x, y, z)` places the next light, in call order. `t` is always 0 and `width`, `height` and `depth` read 0, since a layout is upstream of the grid. Name your own size controls, such as `cols` and `rows`. [The MoonLive guide](https://moonmodules.org/MoonLight/moonmodules/light/moonlive.html#system-variables) lists the vocabulary.
 ///
 /// @moreinfo
 ///
