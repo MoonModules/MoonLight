@@ -5,7 +5,7 @@
 
 namespace mm {
 
-/// The active [Picture service](https://moonmodules.org/MoonLight/moonmodules/core/services.html#picture)'s picture on the layer, so a picture of any size shows on a layout of any size.
+/// The active @ref PictureService "Picture service"'s picture on the layer, so a picture of any size shows on a layout of any size.
 /// @card PictureEffect.gif
 ///
 /// A modifier rotates, mirrors or tiles it as it does any effect, and a cube shows it on every slice.

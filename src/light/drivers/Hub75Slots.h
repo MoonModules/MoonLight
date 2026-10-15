@@ -12,6 +12,8 @@ namespace mm {
 /// One pixel clock is one SLOT. Sibling of ParallelSlots.h, which does the same job for WS2812.
 /// A pure data transform with no platform include, so unit_Hub75Slots.cpp pins it without an ESP32.
 ///
+/// @attribution mrcodetastic, hzeller, ESPHome
+///
 /// @moreinfo
 ///
 /// ## The wire layout
@@ -41,10 +43,6 @@ namespace mm {
 ///
 /// Address, latch and OE share the color bits' word, since the panel wants them at once; `Hub75Layout` names each line's bit.
 /// OE is active low and a peripheral idles its lines low, so the OE bit means lit and the platform inverts the pin.
-///
-/// ## Prior art
-///
-/// mrcodetastic/ESP32-HUB75-MatrixPanel-DMA, hzeller/rpi-rgb-led-matrix and ESPHome's hub75.
 
 /// Which bus bit each HUB75 line occupies. The peripheral drives one 16-bit bus word per slot.
 /// Every line is a bit position rather than a GPIO here, and the platform layer maps bit to GPIO.

@@ -9,6 +9,8 @@
 ///
 /// Two sizes ship, a compact 4x6 and a larger 6x8, and more are pure data to add.
 ///
+/// @attribution raster-fonts
+///
 /// @moreinfo
 ///
 /// ## The layout
@@ -16,10 +18,7 @@
 /// Glyphs are the 95 printable ASCII characters, stored row-major, so a glyph's rows begin at its index times the height.
 /// The high bits of each byte are the columns, left to right.
 ///
-/// ## Prior art
-///
-/// The public [raster-fonts set](https://github.com/idispatch/raster-fonts), the same bitmap console fonts WLED and MoonLight ship.
-/// Carried as data; the blitter is ours.
+/// The glyphs are carried as data from the public raster-fonts set, and the blitter is ours.
 namespace mm::fonts {
 
 struct Font { const uint8_t* rows; uint8_t width; uint8_t height; };  // rows: 95*height bytes

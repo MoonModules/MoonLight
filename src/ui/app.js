@@ -8,7 +8,7 @@ import { preview } from "/preview3d.js";
 import { encodeGif } from "/gif.js";
 import { isNewer, parse } from "/semver.js";
 import { applyMigrations, collectFiles, restoreDirs, diffRestore } from "/migrate.js";
-import { docUrl, moduleHelp, controlHelp, ROLE_EMOJI, DIM_EMOJI, SCRIPTED_EMOJI, COMPILED_EMOJI, EMOJI_LABEL,
+import { moduleHelp, controlHelp, ROLE_EMOJI, DIM_EMOJI, SCRIPTED_EMOJI, COMPILED_EMOJI, EMOJI_LABEL,
          emojiTagsFor, emojiChipRow, chipsMatch } from "/help.js";
 
 // Sections (top to bottom):
@@ -2135,24 +2135,11 @@ function createCard(mod, depth) {
         title.appendChild(assignBtn);
     }
 
-    // Help link → the module's page on the docs site, far right of the row; docPath comes from /api/types, and the type declares none for no link.
-    const docPath = docPathForType(mod.type);
-    if (docPath) {
-        const help = document.createElement("a");
-        help.className = "card-help";
-        help.textContent = "?";
-        help.title = "Open module documentation";
-        help.target = "_blank";
-        help.rel = "noopener";
-        help.href = docUrl(docPath);
-        title.appendChild(help);
-    }
-
     // `{ }` → this card as a state document: the one JSON a preset holds, PATCH /api/state takes and the gallery shares, so it copies into any of them.
-    // On EVERY card, unlike ✎/× (user-editable children only) and ? (types with a doc page): any card's state is worth sharing or keeping.
+    // On EVERY card, unlike ✎/× (user-editable children only): any card's state is worth sharing or keeping.
     const api = document.createElement("a");
     api.className = "card-api";
-    // A glyph, not a word: braces read as JSON at a glance and match the ?/× glyph style.
+    // A glyph, not a word: braces read as JSON at a glance and match the ✎/× glyph style.
     api.textContent = "{ }";
     api.title = "This card as JSON: copy it, save it as a preset, or open its diagnostics";
     // Relative, so it follows whatever host the UI is served from; the link itself opens the document for a middle-click.
@@ -2162,7 +2149,8 @@ function createCard(mod, depth) {
 
     card.appendChild(title);
     const help = helpFor(mod.type);
-    if (help && help.line) card.appendChild(moduleHelp(help, docPath));
+    // The help's Docs link leads to the module's card on the docs site; docPath comes from /api/types.
+    if (help && help.line) card.appendChild(moduleHelp(help, docPathForType(mod.type)));
 
     // -- Controls --
     // Child-hosting modules deeper in the tree (Effects, Layer, Drivers, Layouts)
@@ -2824,7 +2812,7 @@ const HELP_URL = "https://moonmodules.org/MoonLight/help/help.json";
 const HELP_URL_RELEASE = (tag) => `https://moonmodules.org/MoonLight/install/releases/${tag}/MoonLight-help.json`;
 // TEMPORARY, until the docs deploy publishes help.json after this branch merges: the same file read from the branch on GitHub, tried when the published one is missing. It goes with the merge.
 const HELP_URL_BRANCH = "https://raw.githubusercontent.com/MoonModules/MoonLight/next-iteration/docs/help/help.json";
-const LS_HELP = "mm_help";            // the last help.json fetched, as text
+const LS_HELP = "mm_help";            // the last help.json fetched with its address, as {url, text}
 // While developing help: `?help=local` reads the file gen_help last wrote, which preview_installer serves on this machine, and `?help=published` returns to the docs site. A fixed address, so a shared link cannot point the help anywhere else.
 const HELP_URL_LOCAL = "http://localhost:8421/help/help.json";
 const LS_HELP_SOURCE = "mm_helpSource";   // "local" while developing help, else absent
@@ -2836,19 +2824,23 @@ let helpPending = false;   // help was asked for before the first state arrived,
 // The cached copy at once, offline included, then a fetch that revalidates it; called only after the user agreed, since the request shows the docs site's host this browser's address.
 function loadHelp() {
     const local = lsRead(LS_HELP_SOURCE, "") === "local";
-    const cached = local ? "" : lsRead(LS_HELP, "");
-    try { helpModules = cached ? JSON.parse(cached).modules || {} : {}; } catch { helpModules = {}; }
+    const fw = state ? deviceFirmwareInfo() : null;
+    const release = fw ? HELP_URL_RELEASE(releaseTagOf(fw.version)) : null;
+    // A cached release copy shows only for the release this device runs, so an update or an offline device never shows another firmware's controls; the site's and the branch's copies serve any.
+    let cached = null;
+    try { cached = local ? null : JSON.parse(lsRead(LS_HELP, "null")); } catch { cached = null; }
+    if (cached && cached.url !== release && cached.url !== HELP_URL && cached.url !== HELP_URL_BRANCH) cached = null;
+    try { helpModules = cached ? JSON.parse(cached.text).modules || {} : {}; } catch { helpModules = {}; }
     if (Object.keys(helpModules).length && state && !userIsEditing()) renderCards();
     helpPending = !local && !state;
     if (helpPending) return;
-    const fw = deviceFirmwareInfo();
-    const get = (url) => fetch(url, {cache: "no-cache"}).then(r => r.ok ? r.text() : Promise.reject(r.status));
+    const get = (url) => fetch(url, {cache: "no-cache"}).then(r => r.ok ? r.text().then(text => ({url, text})) : Promise.reject(r.status));
     // A state that names no version reads the site's copy.
-    const published = () => (fw ? get(HELP_URL_RELEASE(releaseTagOf(fw.version))) : Promise.reject()).catch(() => get(HELP_URL));
-    (local ? get(HELP_URL_LOCAL).catch(() => get(HELP_URL)) : published()).catch(() => get(HELP_URL_BRANCH)).then(text => {
-        if (text === cached) return;
-        helpModules = JSON.parse(text).modules || {};
-        if (!local) try { localStorage.setItem(LS_HELP, text); } catch { /* full storage: the help still shows this session */ }
+    const published = () => (release ? get(release) : Promise.reject()).catch(() => get(HELP_URL));
+    (local ? get(HELP_URL_LOCAL).catch(() => get(HELP_URL)) : published()).catch(() => get(HELP_URL_BRANCH)).then(got => {
+        if (cached && got.url === cached.url && got.text === cached.text) return;
+        helpModules = JSON.parse(got.text).modules || {};
+        if (!local) try { localStorage.setItem(LS_HELP, JSON.stringify(got)); } catch { /* full storage: the help still shows this session */ }
         if (state && !userIsEditing()) renderCards();
     }).catch(() => {});   // offline, as on the device's own access point: the cache, or no help
 }
@@ -5923,32 +5915,44 @@ async function recordPreviewGif(btn) {
     const WIDTH = 240, FPS = 10, SECONDS = 3;
     const frames = [];
     const shot = document.createElement("canvas");
-    let ctx = null, last = 0;
+    let ctx = null, last = 0, giveUp = 0;
     btn.disabled = true;
     btn.classList.add("recording");
-    await new Promise(done => {
-        // A hidden or idle preview draws nothing, so the recording ends with what it has.
-        const giveUp = setTimeout(done, (SECONDS + 5) * 1000);
-        preview.onDrawn(canvas => {
-            const now = performance.now();
-            if (now - last < 1000 / FPS || !canvas.width || !canvas.height) return;
-            last = now;
-            if (!ctx) {
-                shot.width = WIDTH;
-                shot.height = Math.max(1, Math.round(WIDTH * canvas.height / canvas.width));
-                ctx = shot.getContext("2d", { willReadFrequently: true });
-            }
-            ctx.drawImage(canvas, 0, 0, shot.width, shot.height);
-            frames.push(ctx.getImageData(0, 0, shot.width, shot.height).data);
-            if (frames.length >= FPS * SECONDS) { clearTimeout(giveUp); done(); }
-        });
-    });
-    preview.onDrawn(null);
-    btn.disabled = false;
-    btn.classList.remove("recording");
-    if (frames.length < 2) { alert("Nothing to record: open the preview while the lights run."); return; }
-    const name = deviceName() || "MoonLight";
-    saveBlob(new Blob([encodeGif(frames, shot.width, shot.height, Math.round(100 / FPS))], { type: "image/gif" }), `${name}-preview.gif`);
+    try {
+        try {
+            await new Promise((done, fail) => {
+                // A hidden or idle preview draws nothing, so the recording ends with what it has.
+                giveUp = setTimeout(done, (SECONDS + 5) * 1000);
+                // A capture that throws ends the recording rather than the preview's own render.
+                preview.onDrawn(canvas => {
+                    try {
+                        const now = performance.now();
+                        if (frames.length >= FPS * SECONDS || now - last < 1000 / FPS || !canvas.width || !canvas.height) return;
+                        last = now;
+                        if (!ctx) {
+                            shot.width = WIDTH;
+                            shot.height = Math.max(1, Math.round(WIDTH * canvas.height / canvas.width));
+                            ctx = shot.getContext("2d", { willReadFrequently: true });
+                        }
+                        ctx.drawImage(canvas, 0, 0, shot.width, shot.height);
+                        frames.push(ctx.getImageData(0, 0, shot.width, shot.height).data);
+                        if (frames.length >= FPS * SECONDS) done();
+                    } catch (e) { fail(e); }
+                });
+            });
+        } finally {
+            clearTimeout(giveUp);
+            preview.onDrawn(null);
+        }
+        if (frames.length < 2) { alert("Nothing to record: open the preview while the lights run."); return; }
+        const name = deviceName() || "MoonLight";
+        saveBlob(new Blob([encodeGif(frames, shot.width, shot.height, Math.round(100 / FPS))], { type: "image/gif" }), `${name}-preview.gif`);
+    } catch (e) {
+        alert(`The recording failed: ${e.message || e}`);
+    } finally {
+        btn.disabled = false;
+        btn.classList.remove("recording");
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -8340,7 +8344,7 @@ function buildPaletteControl(row, key, def, moduleName, ctrl) {
     // (browsers ignore a gradient background on <option>, and the macOS popup is OS-drawn),
     // so this is a custom dropdown: a trigger button (selected swatch + name + caret) that
     // toggles a list of styled rows, each a gradient swatch + name. The value still rides as
-    // the option index. Prior art: MoonLight's palette control (same native-select limit).
+    // the option index.
     const opts = ctrl.options || [];
     const selected = Math.max(0, paletteIndex(ctrl.value, opts));
     const wrap = document.createElement("div");

@@ -10,6 +10,8 @@
 ///
 /// A shader is one function that runs per pixel and returns a color, given that pixel's position and the time.
 ///
+/// @attribution GLSL, Iñigo Quilez
+///
 /// @moreinfo
 ///
 /// ## A shared vocabulary
@@ -23,9 +25,7 @@
 /// A value is a fraction of one, a distance is in sub-pixel units, and a color index is a byte because palettes are.
 /// The 8-bit forms stay for genuinely 8-bit domains.
 ///
-/// ## Prior art
-///
-/// The GLSL built-in function set, deliberately under the standard names, and Iñigo Quilez's articles on distance functions and their operators.
+/// The functions keep GLSL's built-in names.
 
 namespace mm::shader {
 

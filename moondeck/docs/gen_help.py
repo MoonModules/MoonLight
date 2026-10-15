@@ -50,8 +50,8 @@ BLOCK_TAGS = ("card", "attribution", "video")
 REPEATED_TAGS = ("video",)
 _TAG_RE = re.compile(r"^@(\w+)\s*(.*)$")
 _SENTENCE_RE = re.compile(r"(?<=[.!?])\s+(?=[A-Z`*\[])")
-# Doxygen's cross-reference, `@ref ClassName`: the class name, which the compiler keeps unique and a display rename leaves standing.
-_REF_RE = re.compile(r"@ref\s+(\w+)")
+# Doxygen's cross-reference, `@ref ClassName` or `@ref ClassName "text"`: the class name, which the compiler keeps unique and a display rename leaves standing, and optionally the words the link reads.
+_REF_RE = re.compile(r'@ref\s+(\w+)(?:\s+"([^"]+)")?')
 # The attribution catalog: a table whose rows name an entry, linked to its person, project or page when it has one, which a module's `@attribution` refers to by any of its names.
 ATTRIBUTIONS = ROOT / "docs" / "reference" / "attributions.md"
 _LINKED_RE = re.compile(r"^\[([^\]]+)\]\((https?://[^)\s]+)\)$")
@@ -390,21 +390,21 @@ def resolve_attribution(text: str, catalog: dict) -> tuple[str, list[str]]:
             [s for s in items if s.lower() not in catalog])
 
 
-def ref_link(name: str, registered: dict, definition, ref: str = "main") -> str:
-    """`@ref name` as a markdown link: a module to its catalog card, named as the app names it, and any other class to its header on GitHub, under its own name; LookupError when no class has that name."""
+def ref_link(name: str, registered: dict, definition, ref: str = "main", text: str | None = None) -> str:
+    """`@ref name` as a markdown link: a module to its catalog card, named as the app names it, and any other class to its header on GitHub, under its own name, or under `text` when given; LookupError when no class has that name."""
     type_name, doc = registered.get(name, (None, ""))
     if doc:
-        return f"[{display_name(type_name)}]({site_url(doc, CATALOG / 'index.md')})"
+        return f"[{text or display_name(type_name)}]({site_url(doc, CATALOG / 'index.md')})"
     cls = definition(name)
     if cls is None:
         raise LookupError(f"@ref {name}: no class of that name in the registry's translation unit")
-    return f"[{name}]({header_url(cls, ref)})"
+    return f"[{text or name}]({header_url(cls, ref)})"
 
 
 def resolve_refs(node, link):
-    """Every `@ref Name` in the help's text replaced by `link(Name)`, its markdown link."""
+    """Every `@ref Name` in the help's text replaced by `link(Name, text)`, its markdown link."""
     if isinstance(node, str):
-        return _REF_RE.sub(lambda m: link(m.group(1)), node)
+        return _REF_RE.sub(lambda m: link(m.group(1), m.group(2)), node)
     if isinstance(node, dict):
         return {k: resolve_refs(v, link) for k, v in node.items()}
     if isinstance(node, list):
@@ -459,8 +459,8 @@ def generate(ref: str = "main") -> tuple[dict, dict]:
         return next((c for c in tu.cursor.walk_preorder() if c.kind in (ci.CursorKind.CLASS_DECL, ci.CursorKind.STRUCT_DECL)
                      and c.spelling == name and c.is_definition()), None)
 
-    def link(name):
-        return ref_link(name, registered, definition, ref)
+    def link(name, text=None):
+        return ref_link(name, registered, definition, ref, text)
 
     for type_name, cls, doc in regs:
         entry = module_help(cls, doc, ref)

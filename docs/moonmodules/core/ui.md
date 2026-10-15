@@ -77,7 +77,7 @@ Each MoonModule renders as a card, with **child cards nested inside their parent
 
 ```text
 ┌─ card ──────────────────────────────────┐
-│ [name] [emoji]  [timing · 🧠 mem]  [enabled toggle]  [✎ × ☰]  [? help] [{ } api] │
+│ [name] [emoji]  [timing · 🧠 mem]  [enabled toggle]  [✎ × ☰]  [{ } api] │
 │ [control rows, one per control]        │
 │ ┌─ child card ────────────────────────┐ │
 │ │ …                                   │ │
@@ -89,14 +89,12 @@ Each MoonModule renders as a card, with **child cards nested inside their parent
 - The parent's own controls render **above** its children; `+ add child` renders **below** them.
   Child cards live in a `.card-children` wrapper appended into the parent card's DOM node (not flat siblings); `renderModuleTree` recurses into the parent card, not into `main`.
 - **`{ }`** opens `GET /api/modules/{name}` in a new tab, that one module's live JSON, for issue
-  reports (see [Log an issue](../../how-to/logging-an-issue.md)). On EVERY card, unlike `✎`/`×` (user-editable children only) and `?` (types that have a doc page).
+  reports (see [Log an issue](../../how-to/logging-an-issue.md)). On EVERY card, unlike `✎`/`×` (user-editable children only).
 - **Enabled toggle** in the right-hand action cluster mirrors `MoonModule::enabled()`, a styled
   `<button>` (transparent + muted border, 26×26); state shown by the glyph alone (accent **✓** on, muted **○** off; `data-checked` + `aria-pressed`). Toggling fires `onEnabled()`; the Scheduler skips disabled modules whose `respectsEnabled()` returns true (default).
 - **Emoji tags** next to the name show the same set the type picker uses: role + dimensional (both
   UI-derived) + the curated `tags()` from `/api/types`. Identical identity across card and picker; the assignments are [the tag emoji legend](../../explanation/architecture/index.md#tag-emoji-legend).
-- **Help** under the title, from `help.json`, which the browser fetches from the docs site and keeps in `mm_help`, so the firmware carries none of it. Each release carries its own copy, so the help names the controls the running firmware has; a release the site no longer mirrors reads the newest. The module's line and summary show; a tap opens its guide, picture, attribution and links to the docs, the source and the tests. Each control with a line shows it under the field, and a ▸ before the line opens its longer help where it has one. Help is off until the ⓘ in the status bar turns it on. The first time it asks before downloading, since the file comes from the docs site rather than the device. While developing help, `?help=local` reads the file `gen_help` last wrote, which `preview_installer` serves on `localhost:8421`, and `?help=published` returns to the docs site.
-- **Help link (?)** at the far right of the title row opens the module's doc page in a new tab. The
-  path comes from `docPath` in `/api/types` (engine-provided, relative to `docs/moonmodules/`); omitted when the type declares none.
+- **Help** under the title, from `help.json`, which the browser fetches from the docs site and keeps in `mm_help`, so the firmware carries none of it. Each release carries its own copy, so the help names the controls the running firmware has; a release absent from the Pages mirror reads the site's copy. A cached copy shows only for the release it came from. The module's line and summary show; a tap opens its guide, picture, attribution and links to the docs, the source and the tests. The Docs link opens the module's card on the docs site, from `docPath` in `/api/types`. Each control with a line shows it under the field, and a ▸ before the line opens its longer help where it has one. Help is off until the ⓘ in the status bar turns it on. The first time it asks before downloading, since the file comes from the docs site rather than the device. While developing help, `?help=local` reads the file `gen_help` last wrote, which `preview_installer` serves on `localhost:8421`, and `?help=published` returns to the docs site.
 - **Stats line**: `🕒 <timing>` then `🧠 <static>[ + <dynamic>]`. Timing is a tick time
   (µs under 1 ms, ms above), omitted when the module has no measured loop time. Memory is the C++ object size (`classSize`); the `+ <dynamic>` part (`dynamicBytes`, heap) shows only when the module allocated heap. The line shows from expert mode up, and holding it peeks at the rate on every card, the password field's gesture: a tick time inverts to a figure that reads as a frame rate and is not one, so the rate is a press away rather than a mode the cards sit in.
 - **Reorder is drag-and-drop** (HTML5 DnD) on the whole card, desktop and mobile. A drag starting on
@@ -210,7 +208,7 @@ mm_selectedTabs     the open tab per container                  ({ container: ch
 mm_expanded         modules whose "controls" disclosure is open ([name, …])
 mm_textareaSizes    user-dragged textarea heights               ({ "module:control": px })
 mm_cardsWidth       dragged width of the docked card column     (px)
-mm_help             the last help.json fetched                  (text)
+mm_help             the last help.json fetched and its address  ({url, text})
 mm_helpShown        "1" | "0": help lines shown or hidden       (default: "0")
 mm_helpConsent      "1" once the user agreed to download help   (default: absent, nothing fetched)
 mm_helpSource       "local" while developing help                (default: absent, the docs site)

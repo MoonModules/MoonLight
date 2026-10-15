@@ -1,21 +1,28 @@
-// The catalog as a card deck: every module of a page, drawn from help.json by the app's own help.js, so a card reads as the module's help does on a device.
-// Mounted on every page that holds a `.mm-deck`, through Material's document$ so instant navigation mounts it too.
+// The card decks: a catalog's modules drawn from help.json by the app's own help.js, so a card reads as the module's help does on a device, and the attribution catalog drawn from its own table.
+// Mounted on every page that holds a `.mm-deck`, through Material's document$ so instant navigation mounts it too. A deck with a `data-page` holds that page's modules; one without holds the table inside it, which stays what search indexes and a reader without JavaScript sees.
 
-import { helpMarkdown, safeUrl, moduleHelp, controlHelp, emojiTagsFor, emojiChipRow, chipsMatch, typeDisplayName, EMOJI_LABEL } from "./help.js";
+import { helpMarkdown, safeUrl, moduleHelp, controlHelp, emojiTagsFor, emojiChipRow, chipsMatch, typeDisplayName, EMOJI_LABEL, graphemes } from "./help.js";
 
 const HELP = new URL("../help/help.json", import.meta.url);
 
-// A playing card: the name, the picture and the one line on its face, the module's help and controls on its back, turned with a tap.
-function card(type, help) {
-    const name = typeDisplayName(type);
-    const emoji = emojiTagsFor(help);
+// The attribution kinds, in the legend's order, each its chip's tooltip.
+const KIND_LABEL = {
+    "\u{1F9D1}": "a person",
+    "\u{1F3E2}": "a company or shop",
+    "\u{1F9F0}": "a project or library",
+    "\u{1F4DC}": "a standard or protocol",
+    "\u{1F9EE}": "an algorithm",
+    "\u{1F3A8}": "an art form or culture",
+};
+
+// A playing card: the name and its emoji, a picture and a line on its face, and `back` under a fixed head on the other side, turned with a tap.
+function playingCard({id, name, emoji, labels, image, alt, line, back, text}) {
     const el = document.createElement("article");
     el.className = "mm-pcard";
     el.tabIndex = 0;
     el.setAttribute("aria-label", name);
     el.title = name;   // the name on hover, which a small card has no room to print
-    const anchor = (help.doc || "").split("#")[1];
-    if (anchor) el.id = anchor;   // a link to the module lands on its card
+    if (id) el.id = id;   // a link to the entry lands on its card
 
     const front = document.createElement("div");
     front.className = "mm-pcard-face mm-pcard-front";
@@ -24,7 +31,7 @@ function card(type, help) {
     for (const e of emoji) {
         const s = document.createElement("span");
         s.textContent = e;
-        if (EMOJI_LABEL[e]) s.title = EMOJI_LABEL[e];
+        if (labels[e]) s.title = labels[e];
         pips.appendChild(s);
     }
     // The name beside the emoji, at their scale, so it reads at every card size.
@@ -33,26 +40,32 @@ function card(type, help) {
     pipName.textContent = name;
     pips.appendChild(pipName);
     front.appendChild(pips);
-    if (safeUrl(help.image)) {
+    if (image) {
         const img = document.createElement("img");
         img.loading = "lazy";
-        img.src = safeUrl(help.image);
-        img.alt = help.alt || `${name} preview`;
+        img.src = image;
+        img.alt = alt;
         front.appendChild(img);
+    } else {
+        // No picture: the card's emoji stand in, so every face has the same shape.
+        const glyph = document.createElement("div");
+        glyph.className = "mm-pcard-glyph";
+        glyph.textContent = emoji.join("");
+        front.appendChild(glyph);
     }
     const p = document.createElement("p");
-    p.innerHTML = helpMarkdown(help.line || "");
+    p.innerHTML = line;
     front.appendChild(p);
 
-    // The back: a fixed head, a tiny picture and the title, so a turned card always says what it is, and the help below it scrolling on its own.
-    const back = document.createElement("div");
-    back.className = "mm-pcard-face mm-pcard-back";
+    // The back: a fixed head, a tiny picture and the title, so a turned card always says what it is, and the rest below it scrolling on its own.
+    const backFace = document.createElement("div");
+    backFace.className = "mm-pcard-face mm-pcard-back";
     const head = document.createElement("div");
     head.className = "mm-pcard-head";
-    if (safeUrl(help.image)) {
+    if (image) {
         const thumb = document.createElement("img");
         thumb.loading = "lazy";
-        thumb.src = safeUrl(help.image);
+        thumb.src = image;
         thumb.alt = "";
         head.appendChild(thumb);
     }
@@ -61,34 +74,16 @@ function card(type, help) {
     head.appendChild(h);
     const scroll = document.createElement("div");
     scroll.className = "mm-pcard-scroll";
-    back.append(head, scroll);
-    // The line as plain text rather than the app's disclosure, so a tap on it turns the card rather than folding the help.
-    const line = document.createElement("p");
-    line.className = "mm-pcard-line";
-    line.innerHTML = helpMarkdown(help.line || "");
-    scroll.appendChild(line);
-    const box = moduleHelp({...help, image: null}, help.doc);
-    const summary = box.querySelector(".help-summary");
-    if (summary) scroll.appendChild(summary);
-    scroll.appendChild(box.querySelector(".card-helpbox-body"));
-    for (const [ctrl, ch] of Object.entries(help.controls || {})) {
-        const row = document.createElement("div");
-        row.className = "control-row";
-        const label = document.createElement("span");
-        label.className = "control-label";
-        label.textContent = ctrl;
-        row.appendChild(label);
-        controlHelp(row, ch);
-        scroll.appendChild(row);
-    }
+    scroll.append(...back);
+    backFace.append(head, scroll);
 
     const inner = document.createElement("div");
     inner.className = "mm-pcard-inner";
-    inner.append(front, back);
+    inner.append(front, backFace);
     el.appendChild(inner);
     // The face turned away is inert, so a keyboard reaches only what shows.
-    back.inert = true;
-    const flip = () => { const b = el.classList.toggle("flipped"); front.inert = b; back.inert = !b; };
+    backFace.inert = true;
+    const flip = () => { const b = el.classList.toggle("flipped"); front.inert = b; backFace.inert = !b; };
     // A tap turns the card, unless it lands on something of its own to press, or ends a drag of the deck.
     el.addEventListener("click", (e) => {
         if (el.closest(".mm-deck-row")?.dataset.dragged) return;
@@ -97,8 +92,76 @@ function card(type, help) {
     // Only on the card itself: a link or a disclosure on its back handles its own keys.
     el.addEventListener("keydown", (e) => { if (e.target === el && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); flip(); } });
     el._emoji = emoji;
-    el._text = `${type} ${name} ${help.line}`.toLowerCase();
+    el._text = text.toLowerCase();
     return el;
+}
+
+// A module's card: its help on the back, the line first as plain text rather than the app's disclosure, so a tap on it turns the card rather than folding the help.
+function moduleCard(type, help) {
+    const name = typeDisplayName(type);
+    const line = document.createElement("p");
+    line.className = "mm-pcard-line";
+    line.innerHTML = helpMarkdown(help.line || "");
+    const back = [line];
+    const box = moduleHelp({...help, image: null}, help.doc);
+    const summary = box.querySelector(".help-summary");
+    if (summary) back.push(summary);
+    back.push(box.querySelector(".card-helpbox-body"));
+    for (const [ctrl, ch] of Object.entries(help.controls || {})) {
+        const row = document.createElement("div");
+        row.className = "control-row";
+        const label = document.createElement("span");
+        label.className = "control-label";
+        label.textContent = ctrl;
+        row.appendChild(label);
+        controlHelp(row, ch);
+        back.push(row);
+    }
+    return playingCard({
+        id: (help.doc || "").split("#")[1], name, emoji: emojiTagsFor(help), labels: EMOJI_LABEL,
+        image: safeUrl(help.image), alt: help.alt || `${name} preview`, line: helpMarkdown(help.line || ""),
+        back, text: `${type} ${name} ${help.line}`,
+    });
+}
+
+// An attribution's card from its table row: the build wrote the row, with its picture at thumbnail size, the entry's link on its name, and the modules that name it.
+function entryCard(cell) {
+    const nameLink = cell.name.querySelector("a:not(:has(img))");
+    const name = (nameLink || cell.name).textContent.trim().split("\n")[0];
+    // The table shows a 48-pixel thumbnail; the card asks the same host for a larger one.
+    const thumb = cell.name.querySelector("img")?.getAttribute("src");
+    const image = thumb ? safeUrl(thumb.replace(/([?&](?:width|size)=)96\b/, "$1480")) : null;
+    const known = document.createElement("p");
+    known.className = "mm-pcard-line";
+    known.innerHTML = cell.known.innerHTML;
+    const back = [known];
+    if (cell.by?.textContent.trim()) {
+        const by = document.createElement("p");
+        by.innerHTML = `<strong>Named by</strong> ${cell.by.innerHTML}`;
+        back.push(by);
+    }
+    if (nameLink) {
+        const visit = document.createElement("p");
+        visit.append(nameLink.cloneNode(true));
+        back.push(visit);
+    }
+    return playingCard({
+        // The entry's first name as an anchor, so a hand-typed `#jos-stam` brings that card forward.
+        id: name.split(" / ")[0].normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""),
+        name, emoji: graphemes(cell.kind.textContent.trim()), labels: KIND_LABEL,
+        image, alt: "", line: cell.known.innerHTML, back,
+        text: `${name} ${cell.known.textContent} ${cell.by?.textContent || ""}`,
+    });
+}
+
+// The rows of a deck's table as cells named by their column's heading, so a column added later moves nothing.
+function tableEntries(table) {
+    const heads = [...table.querySelectorAll("thead th")].map(th => th.textContent.trim().toLowerCase());
+    const col = (label) => heads.indexOf(label);
+    return [...table.querySelectorAll("tbody tr")].map(tr => {
+        const td = tr.children;
+        return {name: td[col("name")], kind: td[col("kind")], known: td[col("known for")], by: td[col("attributed by")]};
+    });
 }
 
 // The deck spans the content area, between the navigation and the contents columns, so cards never pass over either; the first card starts at the page's text, and the end padding lets the last card reach the middle.
@@ -225,34 +288,21 @@ function navButtons(step, count) {
     return nav;
 }
 
-async function mount(host) {
-    if (host.dataset.mounted) return;
-    host.dataset.mounted = "1";
-    const page = host.dataset.page;
-    let modules;
-    try {
-        modules = (await (await fetch(HELP)).json()).modules;
-    } catch {
-        host.textContent = "The cards could not load: help/help.json is missing or unreadable.";
-        return;
-    }
-    const onPage = (doc) => doc === page || doc.startsWith(page + "#");   // a registry link may name the page without a card
-    const types = Object.keys(modules).filter(t => onPage(modules[t].doc || ""))
-        .sort((a, b) => typeDisplayName(a).localeCompare(typeDisplayName(b)));
-
+// The deck: search, the size slider, the ‹ › buttons, the filter chips and the fanned row of cards, the same for every kind of card.
+function mountDeck(host, cards, noun, chipOrder) {
     const search = document.createElement("input");
     search.type = "search";
-    search.placeholder = `Search ${types.length} modules`;
+    search.placeholder = `Search ${cards.length} ${noun}`;
     search.className = "mm-deck-search";
     const count = document.createElement("span");
     count.className = "mm-deck-count";
     const deck = document.createElement("div");
     deck.className = "mm-deck-row";
-    const cards = types.map(t => card(t, modules[t]));
     deck.append(...cards);
 
-    const present = [];
+    let present = [];
     for (const c of cards) for (const e of c._emoji) if (!present.includes(e)) present.push(e);
+    if (chipOrder) present = chipOrder.filter(e => present.includes(e));
     let active = new Set();
     const refresh = () => {
         const q = search.value.trim().toLowerCase();
@@ -266,7 +316,7 @@ async function mount(host) {
         align(deck, host);
         fan(deck);
     };
-    const chips = emojiChipRow(present, (a) => { active = a; refresh(); });
+    const chips = emojiChipRow(present, (a) => { active = a; refresh(); }, chipOrder ? KIND_LABEL : EMOJI_LABEL);
 
     // One visible card and the gap after it, so a filtered deck moves a card at a time.
     const step = (dir) => {
@@ -279,7 +329,8 @@ async function mount(host) {
     const bar = document.createElement("div");
     bar.className = "mm-deck-bar";
     bar.append(search, sizeSlider(host, () => { align(deck, host); fan(deck); }), nav);
-    host.replaceChildren(bar, chips, deck);   // the cards the build wrote as a table give way to the deck
+    host.replaceChildren(bar, chips, deck);   // what the build wrote gives way to the deck
+    host.classList.add("mm-deck-ready");
     draggable(deck);
     search.addEventListener("input", refresh);
     deck.addEventListener("scroll", () => requestAnimationFrame(() => fan(deck)), {passive: true});
@@ -289,13 +340,37 @@ async function mount(host) {
     });
     mounted.add({deck, host});
     refresh();
-    // A link to a module brings its card to the front of the deck, turned to its help.
+    // A link to an entry brings its card to the front of the deck, turned to its back.
     const target = location.hash && cards.find(c => c.id === location.hash.slice(1));
     if (target) {
         deck.scrollLeft = target.offsetLeft + target.offsetWidth / 2 - deck.clientWidth / 2;
         target.click();
         host.scrollIntoView();
     }
+}
+
+async function mount(host) {
+    if (host.dataset.mounted) return;
+    host.dataset.mounted = "1";
+    const page = host.dataset.page;
+    if (!page) {
+        const table = host.querySelector("table");
+        if (table) mountDeck(host, tableEntries(table).map(entryCard), "entries", Object.keys(KIND_LABEL));
+        else host.classList.add("mm-deck-ready");   // nothing to draw: what the build wrote shows
+        return;
+    }
+    let modules;
+    try {
+        modules = (await (await fetch(HELP)).json()).modules;
+    } catch {
+        host.textContent = "The cards could not load: help/help.json is missing or unreadable.";
+        host.classList.add("mm-deck-ready");
+        return;
+    }
+    const onPage = (doc) => doc === page || doc.startsWith(page + "#");   // a registry link may name the page without a card
+    const types = Object.keys(modules).filter(t => onPage(modules[t].doc || ""))
+        .sort((a, b) => typeDisplayName(a).localeCompare(typeDisplayName(b)));
+    mountDeck(host, types.map(t => moduleCard(t, modules[t])), "modules");
 }
 
 // One resize listener for every deck: instant navigation swaps pages without reloading, so a listener per mount would pile up over detached decks.

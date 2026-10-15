@@ -36,7 +36,7 @@ namespace mm {
 ///
 /// A fresh service starts empty, since shipping defaults would need the catalog to express a row, which no operation does yet.
 ///
-/// A row acts through the one control-set primitive every transport uses. Prior art: consumer remotes use the NEC protocol, which the chip's own peripheral decodes behind the platform seam.
+/// A row acts through the one control-set primitive every transport uses. Consumer remotes speak the NEC protocol, which the chip's own peripheral decodes behind the platform seam.
 class InfraredService : public MoonModule, public ListSource {
 public:
     /// A service, so the container accepts it as a child.

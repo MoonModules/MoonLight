@@ -7,7 +7,7 @@ namespace mm {
 
 /// Output driver: parallel WS2812B by one DMA channel writing each slot into a GPIO port, paced by a timer; the Teensy 4.1's path. The shared body (slicing, encode, loopback) lives in ParallelLedDriver.
 ///
-/// Prior art: OctoWS2811 and ObjectFLED (MIT), which drive WS2812 from Teensy GPIO by timer-paced DMA: architecture studied, never copied.
+/// @attribution OctoWS2811, ObjectFLED
 class GpioDmaPeripheral : public LedPeripheral {
 public:
     /// The lanes this chip provides; 0 makes the orchestrator's guards hold the driver inert.

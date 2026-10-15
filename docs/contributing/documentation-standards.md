@@ -184,7 +184,7 @@ A unit is a device even when it is one bare board: "the bridge device", "the dev
 
 ### Two surfaces per module
 
-1. **A summary card**, for the end user. One table row in its group's page, carrying the module's description, image, controls, and links.
+1. **A catalog card**, for the end user. One card in its group's deck, drawn from the module's help: its picture, name and line on the face, its help and controls on the back.
 2. **The header**, for the developer. Its `///` comments are the technical reference, read in the repo or on GitHub.
 
 `docs/moonmodules/` mirrors `src/`: a `core/` and a `light/` subtree, one flat page per group. The tree is `<core|light>/<type>/Module`, flat within a type, and **library is a tag, not a folder level**. In code and assets it rides in `tags()` and in docs in the page name, so `effects.md` splits to `effects_<library>.md` only when a section outgrows it. A blended-lineage module then needs no file move, and a mis-filing is a one-line edit. Test inventories have their own generator, [`generate_test_docs.py`](../moondeck/docs/generate_test_docs.py), because unit tests are macros and scenarios are JSON.
@@ -195,27 +195,11 @@ A unit is a device even when it is one bare board: "the bridge device", "the dev
 
 ### The card
 
-A card cut down to its anchor and `### ` heading is drawn from the module's header through `docs/help/help.json`. It then shows what the app's help shows, and the header is the one place the module is described. A card with a body describes its module itself, and the limits below hold for both kinds. A catalog whose every module has moved loses its markdown altogether, and its page is generated from help.json under the same name. Its intro comes from the base class `gen_help`'s `CATALOGS` names for it, and its details from the modules' `@guide`.
+A catalog page is generated from `docs/help/help.json` under its name. Its intro is the class comment of the base `gen_help`'s `CATALOGS` names, or the page's own markdown where it keeps one. A deck with a card per module follows, then each module's `@guide` as its details section. Under the deck the build writes each module as plain markdown, which search indexes and a reader without JavaScript reads, and the deck script replaces it. The header is the one place a module is described.
 
-Two columns. **Module** leads with the image, then the name and description. **Details** carries the controls, then three links below a rule: **Tests**, **Source** (the header), **Details** (the section below the cards). Those three always show, grayed when there is no target, so their position is learned once. Every other link is prose, made in the sentence that needs it.
+Every card leads with its `@card` picture: `.gif` on effects, modifiers and layouts, which show motion, `.png` elsewhere. A control's line says what it does and leaves out its default and its range, which the reset button and the slider show. It runs to 100 characters with its name, 80 on effects, modifiers and layouts, where the picture carries the rest.
 
-Every card leads with an image: `.gif` on effects, modifiers and layouts, which show motion, `.png` elsewhere.
-
-A control reads `` - `name`: what it does ``. The colon separates the name from its description, and the build styles the two differently. It says what the control does and leaves out its default and its range, which the reset button and the slider show.
-
-| | Limit |
-|---|---|
-| Description | 600 characters, 400 on effects, modifiers and layouts |
-| One control | 100 characters, 80 on effects, modifiers and layouts |
-| Details table | 4 columns, 300 characters a cell |
-
-There is no limit on the controls together. A module with twelve honest controls is not worse documented than one with three, and capping the sum only punished the richer module. The visual catalogs are tighter because the `.gif` carries the description, so the words are there for what the reader cannot see.
-
-Over a limit, **cut first**: most overflow restates what the controls or the code already say. What survives has one home per kind. Behavior of the module goes in the header's `///`. What a reader needs before choosing between siblings goes in a `## <Name>, details` section below the cards, which the build links from the row.
-
-A details section continues the card, so it is written for the same reader. Implementation belongs in the `///`. The heading takes a comma, never an em-dash: the build matches `## <Name>, details` exactly, and [em-dashes are banned](#writing) everywhere.
-
-The card rules are enforced by [`check_docgen.py`](../moondeck/check/check_docgen.py), pinned by [`test_check_docgen.py`](../../test/python/test_check_docgen.py). Where a card begins and ends is the build's own rule, shared: the renderer, `check_docgen` and `check_specs` all ask `split_blocks` rather than each deciding for itself. A check that silently stopped matching would report a clean run, so each rule is tested firing as well as staying quiet.
+The card rules are enforced by [`check_docgen.py`](../moondeck/check/check_docgen.py) on help.json, pinned by [`test_check_docgen.py`](../../test/python/test_check_docgen.py). A check that silently stopped matching would report a clean run, so each rule is tested firing as well as staying quiet.
 
 **Prose is Vale's**, wherever it sits: a page, a `///` block, a comment. One checker for what text says, so a rule has one home and one vocabulary.
 
@@ -291,7 +275,7 @@ Enforced by [`check_docgen.py`](../moondeck/check/check_docgen.py) over every he
 - **`///`, not `//`.** Only `///` is documentation. A `//` comment is a note to the source reader.
 - **The class `///` sits directly above `class X`**, inside the namespace. Separated by includes or the namespace open, clang does not attach it and the help loses its description.
 - **Put detail on the member it describes**, not in the class comment. Every public control and method gets its own `///` leading with one sentence.
-- **A module's class comment is its help in the app.** `gen_help` reads it into `docs/help/help.json`. The first paragraph is the one line under the module's title and the rest of the lead its summary. Each control's member `///` is the control's line. A block tag, a line opening `@<tag>` and running to the next blank line, is the help field of that name. `@card` is the picture, its file then optionally its alt text. `@video` is a clip a catalog's intro shows, its file then its title. `@attribution` is what the module learned from or who wrote it first, shown apart from the summary. It names entries of [the attribution catalog](../reference/attributions.md), comma-separated, and the help links each one. A name the catalog lacks shows as written, and the generator lists it for adding. An origin a tag names, 💫 MoonLight, 🌙 MoonModules, 🐙 WLED or ⚡️ FastLED, is no attribution; a module written here credits what it learned from. So the lead is written for users, and how it works goes after `@moreinfo`.
+- **A module's class comment is its help in the app.** `gen_help` reads it into `docs/help/help.json`. The first paragraph is the one line under the module's title and the rest of the lead its summary. Each control's member `///` is the control's line. A block tag, a line opening `@<tag>` and running to the next blank line, is the help field of that name. `@card` is the picture, its file then optionally its alt text. `@video` is a clip a catalog's intro shows, its file then its title. `@attribution` is what the module learned from or who wrote it first, shown apart from the summary. It names entries of [the attribution catalog](../reference/attributions.md), comma-separated, and the help links each one. A name the catalog lacks shows as written, and the generator lists it for adding. Code that is no module, such as a power function, a packet format or a script, carries its own `@attribution` line, which the catalog lists beside the modules. An origin a tag names, 💫 MoonLight, 🌙 MoonModules, 🐙 WLED or ⚡️ FastLED, is no attribution; a module written here credits what it learned from. So the lead is written for users, and how it works goes after `@moreinfo`.
 - **Another module or class is named with `@ref ClassName`.** `gen_help` writes it into the help as a link: to a module's catalog card, named as the app names the type, or else to the class's header on GitHub. The class name rather than the display name, since the compiler keeps it unique and a display rename leaves it standing.
 - **A user guide goes after `@guide`**, before `@moreinfo`. Its `##` sections are the module's general help beyond the summary: how it works and how to get a look from it. A control is never explained there. Its longer help is a `/// @guide` line on its member, which the app shows under the control. It adds only what the line cannot hold and never says the line again. `check_docgen` flags a module guide section titled with a control, and a control's guide that repeats its line. The section budget applies, and the guide does not count toward the appendix total.
 - **Deep dives go after `@moreinfo`** at the end of the class block. The budget above applies: this is not an unbounded appendix.

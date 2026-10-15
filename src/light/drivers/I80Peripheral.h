@@ -10,7 +10,7 @@ namespace mm {
 
 /// Output driver: parallel 8-or-16-lane WS2812B over the ESP-IDF esp_lcd i80 bus, the scale path on all three i80-capable ESP32 families. RMT gives a chip 4-8 channels; this gives 8-16 lanes for the wall time of one. The shared body lives in ParallelLedDriver and the wire format in ParallelSlots.h.
 ///
-/// Prior art: Adafruit's LCD_CAM discovery, hpwit's I2SClockless lineage, FastLED's S3 driver. Architecture studied and never copied, on IDF's esp_lcd rather than the raw registers.
+/// @attribution Adafruit, hpwit, FastLED
 ///
 /// @moreinfo
 ///

@@ -44,7 +44,7 @@ Actual behavior:
 
 1. Find the card that misbehaved, the effect that went dark, the driver that
    isn't lighting, the network card that won't connect
-2. Click the **`{ }`** link in its title row, next to the `?`
+2. Click the **`{ }`** link at the end of its title row
 3. Select all in the new tab (Ctrl/Cmd+A), copy, and paste it into the issue
 
 **Which cards to include:**

@@ -8,6 +8,8 @@ namespace mm {
 
 /// The 44-byte header a WLED device broadcasts for discovery.
 ///
+/// @attribution WLED, Moustachauve
+///
 /// @moreinfo
 ///
 /// It goes to the broadcast address on UDP 65506, and it is discovery rather than sync.
@@ -41,10 +43,7 @@ namespace mm {
 /// A sentinel is stamped into the version field, which no WLED validator reads, so the packet stays valid while marking us uniquely.
 /// Its top three bytes are ASCII `MM` and a small protocol version; the low byte says which copy this is, multicast or broadcast.
 ///
-/// ## Prior art
-///
-/// The layout was observed from a live WLED and cross-checked against the field names in MoonLight's device module, then written fresh here.
-/// The native-app discovery contract was reverse-engineered from Christophe Gagnier's [WLED-Android client](https://github.com/Moustachauve/WLED-Android), whose discovery and state models told us exactly which fields the app requires.
+/// The layout is observed from a live WLED; the fields the native app requires come from the discovery and state models of Christophe Gagnier's [WLED-Android client](https://github.com/Moustachauve/WLED-Android).
 struct WledPacket {
     static constexpr uint16_t kPort = 65506;   ///< the UDP port presence is broadcast on
     static constexpr size_t   kSize = 44;      ///< the fixed header size

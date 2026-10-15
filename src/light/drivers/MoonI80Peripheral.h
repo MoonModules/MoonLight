@@ -9,8 +9,9 @@ namespace mm {
 
 /// A `LedPeripheral` backend: parallel WS2812B on the LCD_CAM peripheral, driven by our own DMA code. Same peripheral, pins and wire contract as the `i80` backend, differing underneath, and it buys a streamed frame and a 74HCT595 expander driving 8 strands per GPIO.
 ///
-/// Prior art: hpwit's I2SClocklessVirtualLedDriver and his expander board, written fresh here.
 /// The wiring and the peripheral comparison are on the drivers page.
+///
+/// @attribution hpwit
 ///
 /// @moreinfo
 ///

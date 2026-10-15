@@ -626,11 +626,8 @@ body.cards-resizing {
 .card-spacer {
     flex: 1;
 }
-/* Per-module help link → spec page on GitHub. Styled as a .card-btn so the
-   right-hand cluster (✎ × ☰ ?) is visually uniform — same 26×26 square frame. */
-/* `{ }` shares the help link's frame exactly — same 26px square, so the two read as one cluster
-   at the end of the title row rather than as a button and a label. */
-.card-help, .card-api {
+/* `{ }` in a .card-btn's 26px square frame, so it reads as one cluster with ✎ and × at the end of the title row. */
+.card-api {
     background: transparent;
     border: 1px solid var(--border);
     color: var(--fg-muted);
@@ -645,7 +642,7 @@ body.cards-resizing {
     align-items: center;
     justify-content: center;
 }
-.card-help:hover, .card-api:hover {
+.card-api:hover {
     color: var(--fg);
     border-color: var(--accent);
 }

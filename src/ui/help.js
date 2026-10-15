@@ -190,8 +190,8 @@ export function typeDisplayName(type) {
     return (noun ? type.slice(0, -noun.length) : type).slice(0, kNameMax);
 }
 
-// The filter chips for the emoji present, grouped as the legend reads (kind, role, dimension, origin, listening, power functions, then anything unclassified, so a new emoji still shows), each with its tooltip; `onToggle` gets the active set.
-export function emojiChipRow(present, onToggle) {
+// The filter chips for the emoji present, grouped as the legend reads (kind, role, dimension, origin, listening, power functions, then anything unclassified, so a new emoji still shows), each with its tooltip from `labels`; `onToggle` gets the active set.
+export function emojiChipRow(present, onToggle, labels = EMOJI_LABEL) {
     const CHIP_GROUPS = [
         [SCRIPTED_EMOJI, COMPILED_EMOJI],
         Object.values(ROLE_EMOJI),
@@ -221,7 +221,7 @@ export function emojiChipRow(present, onToggle) {
             chip.type = "button";
             chip.className = "type-picker-chip";
             chip.textContent = emoji;
-            const label = EMOJI_LABEL[emoji];
+            const label = labels[emoji];
             if (label) { chip.title = label; chip.setAttribute("aria-label", label); }
             chip.addEventListener("click", () => {
                 if (active.has(emoji)) { active.delete(emoji); chip.classList.remove("active"); }

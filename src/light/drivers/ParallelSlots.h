@@ -14,7 +14,7 @@ namespace mm {
 /// The peripheral sets that word's width, and both the i80 and Parlio buses use it.
 /// A pure data transform with no platform include, so the host test pins it without an ESP32.
 ///
-/// Prior art: the technique is hpwit's, Adafruit's and FastLED's, studied rather than copied.
+/// @attribution hpwit, Adafruit, FastLED
 ///
 /// @moreinfo
 ///

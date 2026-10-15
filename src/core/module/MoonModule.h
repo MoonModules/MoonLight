@@ -37,8 +37,6 @@ inline const char* roleName(ModuleRole role) {
 ///
 /// It is the one deliberate hierarchy, so the UI renders any module with no per-module UI code: @xref{parent-and-child}. The base is the smallest possible, since dozens load at once without PSRAM: @xref{enabled-and-self-reporting}.
 ///
-/// Prior art: MoonLight's Node, a small base whose controls bind by reference.
-///
 /// @moreinfo
 ///
 /// ## The lifecycle

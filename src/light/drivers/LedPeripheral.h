@@ -18,7 +18,7 @@ enum class LedHwBlock : uint8_t { None = 0, LcdCam, I2s, Parlio, GpioDma };
 ///
 /// Not a hot-path boundary: every method here is called per frame or per reinit, never per light. The per-light encode writes into the raw buffer and never calls back into the peripheral.
 ///
-/// Prior art: the Strategy pattern, in the same shape this project's other pluggable seams take.
+/// It is the Strategy pattern, in the shape this project's other pluggable seams take.
 class LedPeripheral {
 public:
     /// Virtual, since the orchestrator owns every backend through this interface.

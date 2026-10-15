@@ -6,7 +6,7 @@ Plan, for the product owner's approval (2026-10-15). MoonLight has many processe
 
 The same steps live in several places today. Installing on the desktop is a how-to, a getting-started section, a README paragraph and a MoonTube clip. The commit gates are a diagram and prose in CLAUDE.md, the scripts in MoonDeck.md and the agents' memory. A scenario JSON and a MoonTube clip, which is also the UI test, each list steps with an action and an expectation, each in its own format. Every copy drifts on its own, and a stakeholder cannot see the whole journey.
 
-**What it removes**: the duplicated step lists across the docs, CLAUDE.md and the clips, in time the separate step formats once the mapping shows which reduce to one, and the hand-written gate results in commit messages once the gates record on GitHub.
+**What it removes**: the duplicated step lists across the docs, CLAUDE.md and the clips, in time the separate step formats once the mapping shows which reduce to one, the hand-written gate results in commit messages once the gates record on GitHub, and `collect_kpi.py`'s own map of which script measures what, once each step declares its metrics.
 
 ## The method
 
@@ -93,6 +93,12 @@ Arazzo covers what the processes found so far need:
 
 Arazzo has no timers, events or swimlanes of its own. BPMN carries those, and is the move only if a process needs them, which none found so far does.
 
+## Metrics on steps
+
+A step declares what it measures, as Arazzo declares a step's `outputs`, and each run records the values on its instance, so a process carries its own measurements rather than a separate report knowing which script produces which number. The measurements exist today, spread over scripts: a scenario's tick time and heap, a build's flash size per target, the hot-path findings and the code ratchets, and the gate times. `collect_kpi.py` gathers them per commit into repo-health; the process file names them per step instead, and the trend of a value is the series of its runs.
+
+The process itself is measured the same way: how long each step takes and how often it fails, and from a plan's first step to its release. These are the DORA metrics (lead time, deployment frequency, change failure rate, time to restore), the industry's standard measure of a delivery process. A value moving without a reason in its change is the irregularity CLAUDE.md asks to explain before committing; a control chart, the textbook of statistical process control, draws the line between noise and a shift.
+
 ## Where it runs
 
 No server. The definitions are files in the repo, the generator runs in the docs build as `gen_help` does, `process.json` is a static file on Pages, and the runners are the tools that exist: MoonDeck, the scenario runner, MoonTube's Playwright runs, the browser and the agents. GitHub records the runs. Two existing tools are worth a look in step 2: Redocly's Respect runs Arazzo workflows against an API and Spectral lints them, adopted only where they replace code of ours.
@@ -124,6 +130,8 @@ Little would differ, because the order is the textbook one. The help is the refe
 10. **Executions on GitHub.** A process file is the definition and one run of it is an instance, the split workflow engines make. GitHub keeps the instances; the definition stays in the repo as the one copy. Steps come in two kinds:
     - **Volatile steps** act on a device or in the app, such as a user choosing an effect. Nothing records them, since nothing outside the device changes.
     - **Recorded steps** change the repo or what ships: a plan step, a commit gate, a merge, a release, a verification on hardware, a gallery submission. Each run leaves a record.
+
+    A run's measurements, the step metrics above, ride on its record: a check run's output on GitHub, and the value series repo-health draws.
 
     Automated recorded steps record as check runs on the commit or pull request, the local gates included through `gh api`, so a pull request shows which gate passed on which commit. Manual recorded steps record in an issue created from an issue form generated from the process file, a step per sub-issue, and a GitHub Project shows every run and the step it stands at. To decide: whether a step's kind is declared or follows from its action, and whether a plan becomes such an issue instead of a file in `docs/work/present/`, which changes CLAUDE.md's process.
 11. **The checks.** Every script, scenario, clip, page and API operation a step names exists, every module and control a step targets is in `help.json`, and a process no runner verifies is reported.

@@ -188,8 +188,6 @@ struct ControlDescriptor {
 ///
 /// A control binds to a class variable by reference, so the hot path reads it directly: @xref{persistence-and-rebuilding}. Descriptors live in a fixed array with no per-control allocation: @xref{what-a-control-costs}.
 ///
-/// Prior art: MoonLight's `addControl`, which binds a variable the same way.
-///
 /// @moreinfo
 ///
 /// ## What a control costs

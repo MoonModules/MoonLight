@@ -82,10 +82,10 @@ def test_a_class_without_a_comment_has_no_line():
 
 
 def test_a_ref_anywhere_in_the_help_becomes_the_link_its_class_name_resolves_to():
-    data = {"line": "The sibling of @ref CircleModifier.", "guide": [{"text": "See @ref Layer, then @ref Layer."}]}
-    out = gen_help.resolve_refs(data, lambda name: f"[{name}](#{name.lower()})")
+    data = {"line": "The sibling of @ref CircleModifier.", "guide": [{"text": "See @ref Layer, then @ref Layer \"the layer\"'s picture."}]}
+    out = gen_help.resolve_refs(data, lambda name, text: f"[{text or name}](#{name.lower()})")
     assert out == {"line": "The sibling of [CircleModifier](#circlemodifier).",
-                   "guide": [{"text": "See [Layer](#layer), then [Layer](#layer)."}]}
+                   "guide": [{"text": "See [Layer](#layer), then [the layer](#layer)'s picture."}]}   # Doxygen's `@ref Name "text"` reads as its text
 
 
 def test_an_attribution_names_catalog_entries_and_keeps_an_unlisted_name_as_written(tmp_path):
@@ -105,6 +105,17 @@ def test_every_attribution_catalog_row_is_read():
     assert all(names and all(names) for _, names, _, _ in rows)
 
 
+def test_every_attribution_entry_has_a_kind_the_deck_filters_by():
+    """The deck's chips are the six kinds, so an entry with none, or with another emoji, has no chip to find it by."""
+    text = gen_help.ATTRIBUTIONS.read_text()
+    kinds = set("".join(re.findall(r"(\S+) an? ", text.partition("The deck filters by kind:")[2].partition("\n")[0])))
+    assert len(kinds) == 6
+    lines = text.splitlines()
+    for i, _, _, _ in gen_help.catalog_rows(text):
+        kind = lines[i].split("|")[2].strip()
+        assert kind and set(kind) <= kinds, lines[i][:60]
+
+
 def test_a_ref_to_a_module_links_its_card_and_to_a_class_its_header_under_its_own_name():
     layer = SimpleNamespace(location=SimpleNamespace(file=SimpleNamespace(name=str(gen_help.ROOT / "src/light/layers/Layer.h"))))
     registered = {"CircleModifier": ("CircleModifier", "light/modifiers.md#circle")}
@@ -112,6 +123,7 @@ def test_a_ref_to_a_module_links_its_card_and_to_a_class_its_header_under_its_ow
     assert gen_help.ref_link("CircleModifier", registered, definition) == "[Circle](https://moonmodules.org/MoonLight/moonmodules/light/modifiers.html#circle)"
     # A class that is no module keeps its role noun: only a module's display name drops it.
     assert gen_help.ref_link("FooDriver", registered, definition) == "[FooDriver](https://github.com/MoonModules/MoonLight/blob/main/src/light/layers/Layer.h)"
+    assert gen_help.ref_link("CircleModifier", registered, definition, text="a circle").startswith("[a circle](")
     with pytest.raises(LookupError, match="@ref Nosuch"):
         gen_help.ref_link("Nosuch", registered, definition)
 
@@ -335,31 +347,26 @@ HELP = {"line": "A picture on the layer.",
         "tests": "https://github.com/MoonModules/MoonLight/blob/main/test/unit/light/unit_PictureEffect.cpp"}
 
 
-@pytest.fixture
-def hooks(monkeypatch):
-    import mkdocs_hooks
-    monkeypatch.setitem(mkdocs_hooks._help_cache, "modules", {HELP["doc"]: HELP})
-    return mkdocs_hooks
-
-
 def test_the_attribution_catalog_shows_avatars_and_the_modules_that_name_each_entry(monkeypatch):
     import mkdocs_hooks
     modules = {"RotateModifier": {"doc": "light/modifiers.md#rotate", "attribution": "[Brandon502](https://github.com/Brandon502), [Rotation matrix](https://en.wikipedia.org/wiki/Rotation_matrix)"},
                "CheckerboardModifier": {"doc": "light/modifiers.md#checkerboard", "attribution": "[WildCats08](https://github.com/Brandon502)"},
                "InstallerModule": {"doc": "core/system.md#installer", "attribution": "Sören"}}
     monkeypatch.setitem(mkdocs_hooks._help_cache, "file", {"modules": modules})
+    monkeypatch.setattr(mkdocs_hooks, "_source_attributions", lambda modules: [("[draw.h](https://x/draw.h)", "NDI")])
     page = "| Name | Known for |\n|------|-----------|\n| [Brandon502 / WildCats08](https://github.com/Brandon502) | Modifiers. |\n| Sören | The installer. |\n| [NDI](https://en.wikipedia.org/wiki/NDI) | Video. |"
     assert mkdocs_hooks.attributed_by(page).split("\n") == [
         "| Name | Known for | Attributed by |",
         "|------|-----------|---|",
         '| [Brandon502 / WildCats08](https://github.com/Brandon502)<br><img src="https://github.com/Brandon502.png?size=96" width="48" height="48" alt="" loading="lazy" style="width: 48px; height: 48px; object-fit: cover"> | Modifiers. | [Checkerboard](../moonmodules/light/modifiers.md#checkerboard), [Rotate](../moonmodules/light/modifiers.md#rotate) |',
         "| Sören | The installer. | [Installer](../moonmodules/core/system.md#installer) |",
-        "| [NDI](https://en.wikipedia.org/wiki/NDI) | Video. |  |"]
+        "| [NDI](https://en.wikipedia.org/wiki/NDI) | Video. | [draw.h](https://x/draw.h) |"]   # code that is no module credits by its own `@attribution`
 
 
 def test_a_catalog_row_naming_a_commons_file_shows_it_linked_to_its_file_page(monkeypatch):
     import mkdocs_hooks
     monkeypatch.setitem(mkdocs_hooks._help_cache, "file", {"modules": {}})
+    monkeypatch.setattr(mkdocs_hooks, "_source_attributions", lambda modules: [])
     page = "| Name | Known for |\n|---|---|\n| [Bresenham](https://en.wikipedia.org/wiki/Bresenham) File:Bresenham.svg | Lines. |"
     assert mkdocs_hooks.attributed_by(page).split("\n")[2] == (
         '| [Bresenham](https://en.wikipedia.org/wiki/Bresenham)<br><a href="https://commons.wikimedia.org/wiki/File:Bresenham.svg">'
@@ -367,27 +374,40 @@ def test_a_catalog_row_naming_a_commons_file_shows_it_linked_to_its_file_page(mo
     assert list(gen_help.catalog_rows(page))[0][1:] == (["Bresenham"], "https://en.wikipedia.org/wiki/Bresenham", "Bresenham.svg")
 
 
-def test_a_card_cut_to_its_heading_is_drawn_from_the_help(hooks):
-    page = '<a id="picture"></a>\n\n### Picture 🖼️ · 2D\n\n<a id="sine"></a>\n\n### Sine\n\nA sine.\n'
-    out = hooks.fill_cards_from_help(page, "moonmodules/light/effects.md")
+def test_a_module_reads_as_plain_markdown_under_its_deck():
+    """What search indexes and a reader without JavaScript sees: the heading, picture, line and summary, controls, attribution and links."""
+    import mkdocs_hooks
+    out = "\n".join(mkdocs_hooks._module_markdown("PictureEffect", HELP, "moonmodules/light/effects.md"))
+    assert out.startswith('<a id="picture"></a>\n\n**Picture**')
     assert '<img src="../../assets/light/effects/PictureEffect.gif" width="300" alt="A test card">' in out
     assert "A picture on the layer. Read [the service](../core/services.md#picture)." in out
-    assert "- `fit`: keep the aspect." in out          # a card writes `name: what it does`
-    assert "- `file`: FSEQ only." in out               # an acronym keeps its capitals
-    assert "Origin: Gomez 2000" in out
-    assert "Detail: [source](https://github.com/" in out          # the header on GitHub is the technical reference
+    assert "- `fit`: Keep the aspect." in out and "- `file`: FSEQ only." in out
+    assert "Attribution: Gomez 2000" in out
+    assert "[Source](https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/PictureEffect.h)" in out   # the header on GitHub
     assert "[Tests](../../reference/tests/unit-tests.md#pictureeffect)" in out   # the site's own page, by @module
-    assert out.endswith('<a id="sine"></a>\n\n### Sine\n\nA sine.\n')   # the next card keeps its anchor
 
 
-def test_a_card_with_a_body_is_left_as_written(hooks):
-    page = '<a id="picture"></a>\n\n### Picture 🖼️ · 2D\n\nWritten by hand.\n'
-    assert hooks.fill_cards_from_help(page, "moonmodules/light/effects.md") == page
+def test_the_attribution_table_is_wrapped_in_a_deck_the_page_never_writes():
+    import mkdocs_hooks
+    out = mkdocs_hooks.deck_around_table("# T\n\nIntro.\n\n| Name |\n|---|\n| A |\n\nAfter.")
+    assert out == ("# T\n\nIntro.\n\n" + mkdocs_hooks._NOSCRIPT + '\n\n<div class="mm-deck" markdown="1">\n\n| Name |\n|---|\n| A |\n\n</div>\n\nAfter.')
 
 
-def test_a_link_to_the_same_page_becomes_its_anchor(hooks):
+def test_a_source_file_outside_the_modules_credits_by_its_attribution_line():
+    """A header comment, a `.cpp` comment and a script's docstring each carry `@attribution`, and a module header is left to help.json."""
+    import mkdocs_hooks
+    found = mkdocs_hooks._source_attributions({"Fx": {"source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/FireEffect.h"}})
+    names = {link.split("]")[0][1:]: attr for link, attr in found}
+    assert names.get("draw.h") == "Bresenham, Xiaolin Wu"
+    assert names.get("moonbase_main.cpp") == "MycilaSafeBoot, Tasmota"
+    assert names.get("mtvoiceover.py") == "Piper, rhasspy"
+    assert "FireEffect.h" not in names
+
+
+def test_a_link_to_the_same_page_becomes_its_anchor():
+    import mkdocs_hooks
     md = "[here](https://moonmodules.org/MoonLight/moonmodules/light/effects.html#sine)"
-    assert hooks._site_relative(md, "moonmodules/light/effects.md") == "[here](#sine)"
+    assert mkdocs_hooks._site_relative(md, "moonmodules/light/effects.md") == "[here](#sine)"
 
 
 def test_an_absolute_link_or_picture_stays_as_written(tmp_path, monkeypatch):
@@ -398,7 +418,7 @@ def test_an_absolute_link_or_picture_stays_as_written(tmp_path, monkeypatch):
 
 
 def test_a_catalog_whose_page_is_gone_is_generated_from_the_help(monkeypatch):
-    """The page keeps its name and every anchor, so the registry's links and the site's hold: its intro, a heading per module in name order with its kind, and each guide as a details section."""
+    """The page keeps its name and every anchor, so the registry's links and the site's hold: its intro, each module in name order with its kind, and each guide as a details section."""
     import mkdocs_hooks
     help_file = {"catalogs": {"light/demo.md": {"title": "Demos", "line": "What a demo is.", "summary": "One.\n\nTwo."}},
                  "modules": {"ZetaModifier": {"doc": "light/demo.md#zeta", "tags": "💫", "kind": "dynamic", "line": "Z."},
@@ -406,11 +426,11 @@ def test_a_catalog_whose_page_is_gone_is_generated_from_the_help(monkeypatch):
                                                "guide": [{"title": "Tips", "text": "Use it."}]}}}
     monkeypatch.setitem(mkdocs_hooks._help_cache, "file", help_file)
     md = mkdocs_hooks.generated_catalog("moonmodules/light/demo.md")
-    assert md.startswith("# Demos\n\nWhat a demo is.\n\nOne.\n\nTwo.\n\n<noscript>")   # the table shows only without JavaScript
+    assert md.startswith("# Demos\n\nWhat a demo is.\n\nOne.\n\nTwo.\n\n<noscript>")   # the plain list shows only without JavaScript
     assert '<div class="mm-deck" data-page="light/demo.md" markdown="1">' in md
-    assert md.index("### Zeta") < md.index("</div>") < md.index("## Alpha, details")   # the cards in the deck, the details after it
+    assert md.index("**Zeta**") < md.index("</div>") < md.index("## Alpha, details")   # the cards in the deck, the details after it
     assert md.index('<a id="alpha"></a>') < md.index('<a id="zeta"></a>')
-    assert "### Alpha 💫 · static" in md and "### Zeta 💫 · dynamic" in md
+    assert "**Alpha** 💫 · static" in md and "**Zeta** 💫 · dynamic" in md
     assert "## Alpha, details\n\n#### Tips\n\nUse it." in md
     assert mkdocs_hooks.generated_catalog("moonmodules/light/other.md") is None
 
@@ -439,11 +459,4 @@ def test_a_catalog_intro_shows_its_picture_above_the_line_and_its_clips_side_by_
     assert md.startswith('# Demos\n\n<img src="../../assets/core/Demos.png" width="300" alt="The Demos card">\n\nWhat a demo is.\n\nOne.\n\n'
                          '<video src="../../assets/moontube/demo.webm" controls playsinline title="Demos at work."></video> '
                          '<video src="../../assets/moontube/demo2.webm" controls playsinline title="On a device."></video>')
-
-
-def test_a_closing_div_ends_the_last_card_so_it_is_still_drawn(hooks):
-    """A deck holds its cards in a container, and the last card ended at the next heading, past the container's end, so a card read as having a body and was left blank."""
-    page = '<div class="mm-deck" markdown="1">\n\n<a id="picture"></a>\n\n### Picture 🖼️ · 2D\n\n</div>\n\n## After\n'
-    out = hooks.fill_cards_from_help(page, "moonmodules/light/effects.md")
-    assert out.index("- `fit`: keep the aspect.") < out.index("</div>")
 

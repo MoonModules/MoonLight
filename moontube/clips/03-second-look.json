@@ -55,13 +55,6 @@
     },
     {
       "action": "follow_link",
-      "selector": ".card[data-module=\"Layer\"] .card-help",
-      "seconds": 3.2,
-      "caption": "? opens this module's own page, written per module rather than one manual for everything.",
-      "speech": 8.2
-    },
-    {
-      "action": "follow_link",
       "selector": ".card[data-module=\"Layer\"] .card-api",
       "seconds": 3.2,
       "caption": "{ } opens this one card's JSON: every control, its value, its live telemetry.",

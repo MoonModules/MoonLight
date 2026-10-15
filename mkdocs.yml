@@ -92,7 +92,7 @@ markdown_extensions:
 plugins:
   - search
 
-# Column widths + preview-image sizing for the catalog tables (see mkdocs_hooks.py).
+# The site's styles: colored headings, the card deck, the clips.
 extra_css:
   - assets/extra.css
 

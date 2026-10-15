@@ -5,6 +5,8 @@
 # ///
 """Lay a spoken track over a recorded clip, one line per caption.
 
+@attribution Piper, rhasspy
+
 A clip already says what it is showing, in its captions. This speaks them, so the clip can be
 watched rather than read. The words are the captions themselves: a second script would drift from
 what is on screen the first time either is edited.

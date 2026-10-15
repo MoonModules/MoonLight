@@ -22,7 +22,7 @@ namespace mm {
 ///
 /// One driver feeds many receivers, each taking a contiguous run of the window under its own address. A wall of tubes is one driver, the twin of one LED driver fanning out to several lanes.
 ///
-/// @attribution Art-Net, E1.31, DDP
+/// @attribution Art-Net, E1.31, DDP, troyhacks
 ///
 /// @guide
 ///

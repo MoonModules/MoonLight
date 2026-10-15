@@ -4,36 +4,10 @@
 # ///
 # `libclang` because the help file the app reads is generated from the headers, and this check
 # regenerates it to prove the committed one matches.
-# `markdown` because this check renders a row through the BUILD's own renderer rather than
-# reimplementing it, and that renderer slugs a heading with Python-Markdown's own function.
-# MkDocs supplies it at build time; a bare `uv run` of this script does not.
+# `markdown` because the docs hooks it imports slug a heading with Python-Markdown's own function.
 """The documentation the build GENERATES, held to the standards that describe it.
 
-Two surfaces, one check, because they are one pipeline: the hand-written catalog pages
-that render as card tables, and the `///` comments in the sources that become the
-technical pages beside them. A rule about the first is a rule about a cell width; a rule
-about the second is a rule doxygen enforces by silently dropping what it cannot read.
-Prose is NOT here: em-dashes, spelling and weasel words are Vale's, and a second prose
-checker is the thing the documentation sweep exists to delete.
-
-A card is one table row, and a row is read across. Text that outgrows its cell turns the
-column into a ribbon: at the worst, 3,416 characters of description in a cell 44% of the
-page wide. The rule and its limits are in documentation-standards.md § The card; this
-script owns the measuring.
-
-Over a limit, cut first. What survives the cut, and only that, has exactly two homes:
-
-  * Behavior of the module itself -> the `///` comments in its .h, which reach the reader
-    through the generated technical page the card already links. Free, and it cannot drift
-    from the code it sits beside.
-  * Rationale spanning modules, or guidance a user needs before choosing -> a
-    `## <Name>, details` section under the same page, which the build links as
-    `⌄ details`. documentation-standards.md forbids a per-module detail page, and this
-    section is what it offers instead.
-
-Parsing is the BUILD's parser (mkdocs_hooks._render_catalog_table's block loop), imported
-rather than reimplemented: a second parser of the same format is the drift this check exists
-to prevent.
+The header is the one source: its `///` comments are the technical reference, read in place, and `gen_help` compiles them into help.json, which the app's help and the docs site's card decks both read. So this check holds the header comments to the comment rules, and the help they compile to to the help rules: a line for every module and control, the app's word caps, and a card that leads with its picture. Prose is NOT here: em-dashes, spelling and weasel words are Vale's.
 
 Pinned by test/python/test_check_docgen.py. A check like this fails silently when it
 breaks: a regex that stops matching prints a clean run, which reads exactly like a tree
@@ -51,38 +25,13 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(ROOT / "moondeck" / "docs"))
 
-# The limits. Description and controls share one number deliberately: two cells side by side
-# with different caps makes one column reliably longer than the other, which is the shape
-# this check exists to remove.
-# A card is read in a narrow column beside its image, so the limits are per LINE rather than
-# per card: a module with twelve honest controls is not worse documented than one with three,
-# and capping their sum only punished the richer module for being rich. What makes a card
-# unreadable is one control that runs to a paragraph, which the per-control cap catches.
-#
-# The visual catalogs are tighter because the GIF carries the description: a moving effect
-# shows what it looks like far better than prose can, so the words are there to say what the
-# reader cannot see. Elsewhere a still PNG shows a card, and the prose does more of the work.
-MAX_DESC = 600            # characters of prose under the name
-MAX_DESC_VISUAL = 400     # ... on effects, modifiers and layouts, where the gif describes it
-MAX_CONTROL = 100         # characters of any ONE control line
+# A card's control line is read in a narrow column beside its picture, so one control that runs to a paragraph is what makes it unreadable. The visual catalogs are tighter, the GIF carrying what the words would.
+MAX_CONTROL = 100         # characters of any ONE control line, its name included
 MAX_CONTROL_VISUAL = 80   # ... on the visual catalogs
 # A control's line says what it does. Its default is the reset button's and its range the slider's, so a line stating either restates the UI, and drifts from the code when either changes. Words in backticks are names, such as an option called `default`, and are not read.
 _RESTATES_RE = re.compile(r"\bdefaults?\b|-?\d+(?:\.\d+)?\s*(?:–|to)\s*-?\d+|\bup to \S*\d", re.IGNORECASE)
 
-# A details section continues the CARD, so it is written for the same reader: someone
-# choosing and using the module, not someone reading its implementation. Two limits keep
-# it that way. A table wider than this stops being scannable and starts being a spec
-# sheet, and its widest cell is where implementation prose hides (one Notes cell reached
-# 991 characters of GDMA chains and ISR refills, which is API-page material).
-MAX_DETAILS_TABLE_COLS = 4
-MAX_DETAILS_CELL = 300
-# Every card carries an image, no threshold: it either leads with one or it does not.
-# Effects, modifiers and layouts show MOTION, so theirs is a .gif: a still frame of a
-# moving effect says almost nothing about it. The rest are cards and controls, where a
-# .png is sharper and smaller. The tree already follows this (66 gifs on effects.md, png
-# throughout drivers and system); the rule writes down what it does.
-# From the hook, the one home: the build renders these pages and screenshot_modules
-# captures for them, so a third copy here is a third thing to forget.
+# Every card carries an image. Effects, modifiers and layouts show MOTION, so theirs is a .gif; the rest are cards and controls, sharper and smaller as a .png. From the hook, the one home that screenshot_modules shares.
 import mkdocs_hooks as _hooks  # noqa: E402
 ANIMATED_PAGES = _hooks.ANIMATED_PAGES
 PREVIEWLESS_PAGES = _hooks.PREVIEWLESS_PAGES
@@ -259,181 +208,16 @@ def _is_structural(body: str) -> bool:
 
 
 
-def _pages():
-    """The pages the build renders as card tables: the hook's own list, so a page added
-    there is checked here without a second edit."""
-    import mkdocs_hooks
-    return sorted(mkdocs_hooks._CATALOG_PAGES)
-
-
-def _cards(text: str):
-    """Every `### ` block on a page, measured the way the build splits it: a line starting
-    `- ` is a control, an <img> is the preview, Detail:/Tests:/Origin: are links, and the
-    rest is description. A `## ` closes the block, so a details section is never counted.
-
-    Takes the page TEXT rather than a path, so the rules can be exercised against a page
-    written to break them (test/python/test_check_docgen.py) rather than only against the
-    docs tree, where a rule that silently stopped matching would look like a clean run."""
-    import mkdocs_hooks as h
-    lines = text.split("\n")
-    # WHERE a block begins and ends is the build's rule, shared with check_specs. What the
-    # lines inside it MEAN is this check's own business, and stays here.
-    for title, start, end in h.split_blocks(text):
-        cur = {"title": title, "desc": 0, "controls": 0, "widest": 0,
-               "widest_text": "", "img": False, "img_src": "", "restating": []}
-        for ln in lines[start + 1:end]:
-            if h._IMG_RE.match(ln):
-                cur["img"] = True
-                src = re.search(r'src="([^"]+)"', ln)
-                cur["img_src"] = src.group(1) if src else ""
-            elif (h._ORIGIN_RE.match(ln) or h._TESTS_RE.match(ln)
-                  or h._TESTS_MULTI_RE.match(ln) or h._DETAIL_RE.match(ln)
-                  or h._ANCHOR_RE.match(ln)):
-                continue                      # renders in another cell, or not at all
-            elif h._PARAM_RE.match(ln):
-                control = re.sub(r"^-\s+", "", ln.strip())
-                cur["controls"] += len(control)
-                if len(control) > cur["widest"]:
-                    cur["widest"], cur["widest_text"] = len(control), control
-                name, sep, text = h._split_control(control)
-                if sep and _RESTATES_RE.search(re.sub(r"`[^`]*`", "", text)):
-                    cur["restating"].append(name.strip("`"))
-            elif ln.strip():
-                cur["desc"] += len(ln.strip())
-        yield cur
-
-
-def _structure(text: str, rel: str):
-    """The two rules that keep a page readable as a whole rather than card by card.
-
-    A `## <Name>, details` section is a CONTINUATION of a card, so it belongs after every
-    card on the page. Placed between two cards it splits the table in half, and a reader
-    scanning the rows meets a wall of prose where the next row should be.
-
-    And the heading form is load-bearing: the build links a card to its details by matching
-    `, details` exactly, so `Infrared: details` renders a section that nothing links to. A
-    COMMA rather than an em-dash, because em-dashes are banned repo-wide and a form the
-    build requires must not be the one character the prose rules forbid.
-    """
-    import mkdocs_hooks as h
-    out = []
-    lines = text.split("\n")
-
-    last_card = max((i for i, l in enumerate(lines) if h._H3_RE.match(l)), default=-1)
-    card_names = {h.card_name(h._H3_RE.match(l).group("title"))
-                  for l in lines if h._H3_RE.match(l)}
-
-    # One section per card. Two headings with the same name both slug to the same anchor,
-    # so the row's `More:` link resolves to whichever MkDocs emits first and the other is
-    # unreachable. A sweep that adds a section where one already exists is exactly how
-    # that happens, silently.
-    seen = set()
-
-    for i, ln in enumerate(lines):
-        if not ln.startswith("## ") or ln.startswith("###"):
-            continue
-        # A details section by intent: any `## ` heading whose last word is "details".
-        if not re.search(r"\bdetails\s*$", ln, re.I):
-            continue
-        m = h._DETAILS_RE.match(ln)
-        if not m:
-            out.append((f"{rel}::{ln[3:].strip()}",
-                        "details heading must read `## <Name>, details` "
-                        "(a comma, never an em-dash), or the build links nothing to it"))
-            continue
-        if i < last_card:
-            out.append((f"{rel}::{m.group('name')}",
-                        f"details section sits at line {i + 1}, above the last card "
-                        f"(line {last_card + 1}): move it below every card"))
-        if m.group("name") not in card_names:
-            out.append((f"{rel}::{m.group('name')}",
-                        "details heading names no card on the page, so no row links to it"))
-        if m.group("name") in seen:
-            out.append((f"{rel}::{m.group('name')}",
-                        "a second details section with this name: both slug to one anchor, "
-                        "so one of them is unreachable"))
-        seen.add(m.group("name"))
-    return out
-
-
-# The second column links to exactly three places: the test inventory, the generated API
-# page, and the card's details section. Three because all three are followed often enough
-# to earn a standing position, so they sit identically on every card and the eye learns
-# them once. Everything else a card points at (a how-to, an explanation, a sibling module)
-# is a link the DESCRIPTION makes in a sentence, where the reader meets it in context
-# rather than as a bare label under the controls.
-SECOND_COLUMN_LINKS = ("Tests:", "Source:", "Details:")
-_LINK_LABEL_RE = re.compile(r"\*\*([A-Z][A-Za-z ]{1,12}):\*\*")
-
-
-def _rendered_links(rel: str, text: str):
-    """Which labeled links the build puts in the second column, per card."""
-    import mkdocs_hooks as h
-    out = []
-    for row in h._render_catalog_table(text).split("\n"):
-        if not row.startswith("| ") or row.startswith("|--") or "| Module |" in row:
-            continue
-        cells = row.strip("| ").split(" | ")
-        if len(cells) < 2:
-            continue
-        for label in _LINK_LABEL_RE.findall(cells[1]):
-            if f"{label}:" not in SECOND_COLUMN_LINKS:
-                name = re.search(r'class="mm-name">([^<]*)', cells[0])
-                out.append((f"{rel}::{name.group(1) if name else '?'}",
-                            f"second column links to `{label}:`, which is not one of "
-                            f"{', '.join(sorted(SECOND_COLUMN_LINKS))}: put it in the description"))
-    return out
-
-
-def _details_tables(rel: str, text: str):
-    """Tables inside a details section: narrow enough to read, and no cell carrying an
-    essay. A wide table with one huge column is the shape prose takes when it is put in a
-    grid to look organized."""
-    out = []
-    lines = text.split("\n")
-    sec = None
-    for i, ln in enumerate(lines):
-        m = re.match(r"^## (.+?), details$", ln)
-        if m:
-            sec = m.group(1)
-            continue
-        if ln.startswith("## "):
-            sec = None
-            continue
-        if sec is None or not ln.startswith("|"):
-            continue
-        if set(ln.replace("|", "").strip()) > set("-: "):
-            continue                       # not the separator row
-        cols = lines[i - 1].count("|") - 1
-        widest = 0
-        for body in lines[i + 1:]:
-            if not body.startswith("|"):
-                break
-            for cell in body.strip("|").split("|"):
-                widest = max(widest, len(cell.strip()))
-        if cols > MAX_DETAILS_TABLE_COLS:
-            out.append((f"{rel}::{sec}",
-                        f"details table has {cols} columns (max {MAX_DETAILS_TABLE_COLS})"))
-        if widest > MAX_DETAILS_CELL:
-            out.append((f"{rel}::{sec}",
-                        f"details table cell is {widest} characters "
-                        f"(max {MAX_DETAILS_CELL}): prose in a grid"))
-    # One entry per table+rule, however many rows it has: a table reported once per body
-    # row turned a single wide table into five identical lines of output.
-    return list(dict.fromkeys(out))
-
-
 # Every rule this check emits, longest first so "details table cell" wins over
 # "details table". The FULL name, not a first word: "no image" and "one control" each
 # truncate to a word that names nothing, and the two details-table rules share theirs.
 _RULE_NAMES = (
-    "details table cell", "details table has", "details section", "details heading",
-    "public function has no", "public variable has no", "second column",
+    "public function has no", "public variable has no",
     "file opens with //", "file lead missing", "@moreinfo on a member", "@xref",
     "code comment", "comment line", "doc line", "lead",
     "unreferenced appendix section", "appendix section",
     "class comment", "member comment", "no image", "image is", "one control",
-    "description", "controls", "doc sentence", "hard wrap", "split paragraph", _STALE_HELP_RULE,
+    "doc sentence", "hard wrap", "split paragraph", _STALE_HELP_RULE,
     _RESTATES_RULE, _GUIDE_REPEATS_RULE, _HELP_SIZE_RULE, _GUIDE_NAMES_CONTROL_RULE, _HELP_LINE_RULE,
     _TAG_GROUP_RULE,
 )
@@ -469,13 +253,6 @@ _RULE_LABELS = {
     _GUIDE_NAMES_CONTROL_RULE: "controls explained in the module guide",
     _HELP_LINE_RULE: "missing help lines",
     _TAG_GROUP_RULE: "tag emoji on one module",
-    "description": "over-long descriptions",
-    "second column": "wrong second column",
-    "details section": "misplaced details sections",
-    "details heading": "wrong details heading",
-    "details table has": "over-wide details tables",
-    "details table cell": "prose in a details table",
-    "controls": "over-long control lists",
 }
 
 
@@ -1295,41 +1072,33 @@ def _header_rules(rel: str, text: str):
     return out
 
 
-def _card_rules(rel: str, c: dict):
-    """Every rule that reads ONE card: its sizes and its image.
-
-    A function rather than a loop body inside _violations, so a test can hand it a card
-    and assert the rule fires. Read through the page's rendered form, the rules stayed
-    untested against anything but the real tree, which is where a rule that had stopped
-    matching would look like a clean run.
-    """
+def _help_cards(help_file: dict) -> list:
+    """Each catalog card that misses its picture or shows the wrong kind, and each control line that runs too long or restates its default or range."""
     out = []
-    key = f"{rel}::{c['title']}"
-    visual = rel in ANIMATED_PAGES
-    max_desc = MAX_DESC_VISUAL if visual else MAX_DESC
-    max_control = MAX_CONTROL_VISUAL if visual else MAX_CONTROL
-    if c["desc"] > max_desc:
-        out.append((key, f"description {c['desc']} > {max_desc}"))
-    if c.get("restating"):
-        out.append((key, f"{_RESTATES_RULE}, a default or a range the reset button or slider shows: "
-                         f"{', '.join(c['restating'])}"))
-    if c["widest"] > max_control:
-        out.append((key, f"one control {c['widest']} > {max_control}: "
-                         f"{c['widest_text'][:60]}..."))
-    # A card leads with its picture. The image is the first thing the eye reaches on a
-    # row, and a card without one starts with a name against blank space, which reads as
-    # a gap rather than as a module that happens to be invisible. The summary pages are
-    # the exception: their rows describe machinery with no card in the UI to capture.
-    if not c["img"]:
-        if rel not in PREVIEWLESS_PAGES:
-            out.append((key, "no image: every card leads with one"))
-    else:
-        want = ".gif" if rel in ANIMATED_PAGES else ".png"
-        if not c["img_src"].lower().endswith(want):
-            why = ("an effect, modifier or layout shows motion" if want == ".gif"
-                   else "a card or control is sharper and smaller as a png")
-            out.append((key, f"image is {c['img_src'].rsplit('.', 1)[-1]}, "
-                             f"not a {want.lstrip('.')}: {why}"))
+    for type_name, m in sorted(help_file.get("modules", {}).items()):
+        page = "moonmodules/" + m.get("doc", "").partition("#")[0]
+        catalog = help_file.get("catalogs", {}).get(m.get("doc", "").partition("#")[0])
+        # The class whose comment introduces the page is no card on it, as the docs build draws it.
+        if catalog is None or type_name == catalog.get("base"):
+            continue
+        source = m.get("source", "").partition("/blob/")[2].partition("/")[2] or type_name
+        max_control = MAX_CONTROL_VISUAL if page in ANIMATED_PAGES else MAX_CONTROL
+        restating = [c for c, h in m.get("controls", {}).items() if _RESTATES_RE.search(re.sub(r"`[^`]*`", "", h.get("line", "")))]
+        if restating:
+            out.append((source, f"{_RESTATES_RULE}, a default or a range the reset button or slider shows: {', '.join(restating)}"))
+        for c, h in m.get("controls", {}).items():
+            width = len(f"`{c}`: {h.get('line', '')}")
+            if width > max_control:
+                out.append((source, f"one control {width} > {max_control}: {c}"))
+        image = m.get("image", "")
+        if not image:
+            if page not in PREVIEWLESS_PAGES:
+                out.append((source, "no image: every card leads with one"))
+        else:
+            want = ".gif" if page in ANIMATED_PAGES else ".png"
+            if not image.lower().endswith(want):
+                why = "an effect, modifier or layout shows motion" if want == ".gif" else "a card or control is sharper and smaller as a png"
+                out.append((source, f"image is {image.rsplit('.', 1)[-1]}, not a {want.lstrip('.')}: {why}"))
     return out
 
 
@@ -1527,17 +1296,7 @@ def _violations():
     out.extend(_guide_names_control(_hooks._help_file()))
     out.extend(_help_lines(_hooks._help_file()))
     out.extend(_tag_groups(_hooks._help_file(), _script_tags()))
-    for rel in _pages():
-        page = _hooks.catalog_markdown(rel)   # the file, or the page generated from help.json
-        if page is None:
-            continue
-        # A card cut to its heading is drawn from help.json, and measured as drawn.
-        text = _hooks.fill_cards_from_help(page, rel)
-        out.extend(_structure(text, rel))
-        out.extend(_rendered_links(rel, text))
-        out.extend(_details_tables(rel, text))
-        for card in _cards(text):
-            out.extend(_card_rules(rel, card))
+    out.extend(_help_cards(_hooks._help_file()))
 
     for rel in sorted((ROOT / "docs").rglob("*.md")):
         parts = rel.relative_to(ROOT / "docs").parts
@@ -1852,8 +1611,7 @@ def main() -> int:
 
     risen = _ratchet(found, appendix)
     if not found and not risen:
-        print(f"Docgen check: clean. Limits: description {MAX_DESC} "
-              f"({MAX_DESC_VISUAL} visual), one control {MAX_CONTROL} "
+        print(f"Docgen check: clean. Limits: one control {MAX_CONTROL} "
               f"({MAX_CONTROL_VISUAL} visual), one comment line, "
               f"{MAX_DOC_WORDS} words.")
         return 0

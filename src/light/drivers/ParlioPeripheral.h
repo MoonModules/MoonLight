@@ -8,7 +8,7 @@ namespace mm {
 
 /// Output driver: parallel WS2812B over the ESP32-P4 Parlio (Parallel IO) TX peripheral, the P4's scale path and sibling of I80Peripheral. The shared body (slicing, encode, single-shot DMA, loopback) lives in ParallelLedDriver.
 ///
-/// Prior art: the ESP32-P4 Parlio peripheral, the hpwit/FastLED parallel-WS2812 lineage: architecture studied, never copied.
+/// @attribution hpwit, FastLED
 ///
 /// @moreinfo
 ///

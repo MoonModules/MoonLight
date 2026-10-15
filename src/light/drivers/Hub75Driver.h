@@ -16,7 +16,7 @@ namespace mm {
 ///
 /// The sibling of @ref PanelCardDriver, which drives the same panels over Ethernet. A [MoonHub75](https://moonmodules.org/projects/hardware/#moonhub75-pcb) runs a 64x64 1/32-scan panel at 6-bit and 1,508 Hz; larger walls wait on reports.
 ///
-/// @attribution LostHope, Delphium, mrcodetastic, hzeller, ESPHome, Adafruit, Waveshare
+/// @attribution LostHope, Delphium, RobWomp, mrcodetastic, hzeller, ESPHome, Adafruit, Waveshare
 ///
 /// @guide
 ///

@@ -162,7 +162,7 @@ check, so it is not in the gate table until those are swept. It does two things 
 
 ### check_docgen
 
-Report every place the documentation breaks the shape the standards define, and refuse a new one. Two surfaces, one check: the catalog pages that render as card tables, and the `///` comments in the headers.
+Report every break of the shape the standards define, and refuse a new one, in help.json and in the headers' `///` comments.
 
 It also regenerates `docs/help/help.json` to prove the committed one is fresh, which needs LLVM, the one [gen_help](#gen_help) uses. Without it the report still runs and names the freshness as unchecked, which fails the gate.
 
@@ -170,13 +170,11 @@ It also regenerates `docs/help/help.json` to prove the committed one is fresh, w
 uv run moondeck/check/check_docgen.py
 ```
 
-Reads the pages the docs build renders as card tables and reports, per card:
+Reads help.json and reports, per catalog card:
 
-- the sizes: 600 characters of description and 100 for any one control, 400 and 80 on the visual catalogs
-- a missing image, or the wrong format for its page
-- a details section placed above a card, or named for a card that does not exist
-- a details table past 4 columns, or a cell past 300 characters
-- any link in the second column that is not Tests, API or Details
+- a missing picture, or the wrong format for its page
+- a control line past 100 characters, 80 on the visual catalogs, or one stating its default or range
+- a missing help line, a guide repeating its control, a module guide explaining a control, help past the app's word caps, and a tag emoji only one module carries
 
 And per file, over every `.h` and `.cpp` under `src/`, `test/`, `esp32/main`, `moonbase/main` and `moondeck/moonlive`, excluding the two vendored trees and the bundled test framework:
 
@@ -195,7 +193,7 @@ The comparison is per rule as well as on the total, because each hides a differe
 
 **There is no tolerated list.** The limits are the limits, and the check is red until the tree meets them. A grandfather list was tried and removed: while one exists, the cheapest way to make the check green is to add to it, which is how the comment budget eroded in the first place.
 
-The rules are in [documentation-standards.md](../docs/contributing/documentation-standards.md#the-card), and the check itself is pinned by `test/python/test_check_docgen.py`: every rule is tested firing on a page built to break it, because a regex that silently stopped matching would report a clean run.
+The rules are in [documentation-standards.md](../docs/contributing/documentation-standards.md#the-card), and `test/python/test_check_docgen.py` pins the check. Every rule is tested firing on input built to break it, because a regex that silently stopped matching would report a clean run.
 
 ### check_esp32_built
 
@@ -818,26 +816,11 @@ Connects to a running MoonLight server, builds a minimal pipeline scaffold (Layo
 - `moondeck_desktop.png`, `moondeck_esp32.png`, `moondeck_live.png` — MoonDeck tab screenshots (requires MoonDeck running on port 8420)
 - `installer.png` — web installer preview (requires `preview_installer` running on port 8421)
 
-Without `--force`, existing screenshots are skipped — only missing files are captured. Run with `--force` to re-capture everything (e.g. after a UI change).
+Without `--force`, existing screenshots are skipped, so only missing files are captured. Run with `--force` to re-capture everything (e.g. after a UI change).
 
-GIF capture uses ffmpeg (install with `brew install ffmpeg`). Each GIF is assembled from frames captured via Playwright — the WebGL canvas is read via `page.screenshot(clip=...)` rather than `canvas.toDataURL()` to work correctly in headless mode.
+GIF capture uses ffmpeg (install with `brew install ffmpeg`). Each GIF is assembled from frames captured via Playwright: the WebGL canvas is read via `page.screenshot(clip=...)` rather than `canvas.toDataURL()` to work correctly in headless mode.
 
-After capture, run `update_module_docs` to insert the references into the module spec files.
-
-### update_module_docs
-
-Insert screenshot and GIF references into `docs/moonmodules/**/*.md` files.
-
-```bash
-uv run moondeck/docs/update_module_docs.py            # update all
-uv run moondeck/docs/update_module_docs.py --dry-run  # preview without writing
-```
-
-For each `.md` file, if `docs/assets/<type-folder>/<TypeName>.png` exists and the file doesn't already contain a screenshot reference, inserts the image after the first heading. If a matching `<TypeName>.gif` also exists, inserts the GIF reference on the next line. Safe to re-run — skips files that already have all references.
-
-Also inserts MoonDeck tab screenshots and the installer screenshot into `moondeck/MoonDeck.md` and `README.md` at fixed anchor points (defined in the `EXTRA_SHOTS` list in the script).
-
-Reports unreferenced screenshots — any PNG or GIF in `docs/assets/` not mentioned anywhere in `docs/` or `moondeck/`.
+A module's card picture is the `@card` file its header names, so a capture that keeps the file name needs no other edit.
 
 ### gen_help
 

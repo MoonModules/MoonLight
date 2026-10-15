@@ -17,7 +17,7 @@ namespace mm {
 ///
 /// Each strand takes the next run of lights on its own GPIO. Switching between peripherals is a control change, with no reflash. For a few strands see @ref RmtLedDriver, and for a Teensy 4.1 its [hardware page](https://moonmodules.org/MoonLight/reference/hardware/teensy-4-1.html).
 ///
-/// @attribution hpwit, OctoWS2811, ObjectFLED
+/// @attribution hpwit, troyhacks, OctoWS2811, ObjectFLED
 ///
 /// @guide
 ///

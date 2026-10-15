@@ -13,6 +13,8 @@ namespace mm {
 ///
 /// The contract is fixed upstream, so the bytes must be exact, and a unit test round-trips against a golden vector.
 ///
+/// @attribution NetMindz
+///
 /// @moreinfo
 ///
 /// **The packet.** Forty-four bytes, hand-serialized rather than trusted to struct packing: a header, two little-endian float levels and a peak flag, sixteen bands clamped to 254, then the dominant bin. Padding goes out zero.

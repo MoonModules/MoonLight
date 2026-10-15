@@ -24,7 +24,7 @@ namespace mm {
 ///
 /// Local analyzes a microphone, line-in or capture device here. Receive network follows a peer's WLED-compatible audio, and Simulate synthesizes a song for demos. A local source can send its analysis on to other devices.
 ///
-/// @attribution softhack007, troyhacks, wladi
+/// @attribution softhack007, troyhacks, NetMindz, wladi
 ///
 /// @guide
 ///

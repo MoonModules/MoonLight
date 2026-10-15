@@ -19,6 +19,8 @@ namespace mm {
 ///
 /// It listens for Art-Net, E1.31 and DDP at once, with no protocol control, so whatever a sender speaks works and the status names it. The received lights land in the layer buffer, so they compose with modifiers and blending.
 ///
+/// @attribution Art-Net, E1.31, DDP, troyhacks
+///
 /// @moreinfo
 ///
 /// Sender mapping is one copy alone on its layer, else two mappings, as the status shows. It binds Art-Net 6454, E1.31 5568 and DDP 4048, and an ArtPoll gets an ArtPollReply so controllers list the device.

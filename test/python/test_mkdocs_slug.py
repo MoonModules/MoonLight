@@ -1,12 +1,6 @@
-"""The catalog-table hook builds a "⌄ details" anchor link, `#{_slug(name + ' — details')}`,
-that must land on the `## <Name> — details` heading MkDocs renders on the catalog pages.
-Because `validation.links.anchors` is `warn` (not `fail`), a slug that diverges from the
-real heading id produces a SILENT dead link, not a build failure — so this test pins
-`_slug()` to the actual anchor Python-Markdown generates.
+"""The docs hooks build anchors by hand, a module's card from its name and a test file's section in the test inventory, and each must land on the heading id MkDocs renders. Because `validation.links.anchors` is `warn` (not `fail`), a slug that diverges from the real heading id produces a SILENT dead link, not a build failure, so this test pins `_slug()` to the anchor Python-Markdown generates.
 
-`_slug()` delegates to `markdown.extensions.toc.slugify` (the exact function MkDocs' toc
-uses), so this both guards that delegation and documents the contract. If `_slug` is ever
-re-hand-rolled, the unicode / consecutive-separator cases below catch the drift.
+`_slug()` delegates to `markdown.extensions.toc.slugify` (the exact function MkDocs' toc uses), so this both guards that delegation and documents the contract. If `_slug` is ever re-hand-rolled, the unicode and consecutive-separator cases below catch the drift.
 """
 
 import sys

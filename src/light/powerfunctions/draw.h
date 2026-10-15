@@ -17,6 +17,8 @@
 ///
 /// The Bresenham walk and the clipping live here once, so an effect calls `line` rather than re-rolling it.
 ///
+/// @attribution Bresenham, Xiaolin Wu
+///
 /// @moreinfo
 ///
 /// ## Why the box is clipped

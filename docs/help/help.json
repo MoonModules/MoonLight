@@ -1129,6 +1129,7 @@
   "NetworkReceiveEffect": {
    "line": "Receives lights over UDP into the layer, from Resolume, Madrix, xLights and LedFx.",
    "summary": "It listens for Art-Net, E1.31 and DDP at once, with no protocol control, so whatever a sender speaks works and the status names it. The received lights land in the layer buffer, so they compose with modifiers and blending.",
+   "attribution": "[Art-Net](https://en.wikipedia.org/wiki/Art-Net), [E1.31](https://en.wikipedia.org/wiki/Architecture_for_Control_Networks), [DDP](http://www.3waylabs.com/ddp/), [troyhacks](https://github.com/troyhacks)",
    "image": "https://moonmodules.org/MoonLight/assets/light/effects/NetworkReceiveEffect.gif",
    "controls": {
     "universe_start": {
@@ -1259,7 +1260,7 @@
   },
   "FseqPlayerEffect": {
    "line": "An FSEQ show played from a file: the frame-by-frame channel data xLights and Falcon Player write.",
-   "summary": "A show, uncompressed FSEQ v2, lands where a sender-mapped [Network Receive](https://moonmodules.org/MoonLight/moonmodules/light/effects.html#networkreceive) stream does, so alone on its layer it reaches the lights in one copy on any layout. Reading the file is the next step, and its status says so.",
+   "summary": "A show, uncompressed FSEQ v2, lands where a sender-mapped [NetworkReceive](https://moonmodules.org/MoonLight/moonmodules/light/effects.html#networkreceive) stream does, so alone on its layer it reaches the lights in one copy on any layout. Reading the file is the next step, and its status says so.",
    "attribution": "[FPP](https://github.com/FalconChristmas/fpp)",
    "image": "https://moonmodules.org/MoonLight/assets/light/effects/FseqPlayerEffect.gif",
    "alt": "The reference sweep fseq_play writes, the show an FSEQ player plays",
@@ -2909,7 +2910,7 @@
   "NetworkSendDriver": {
    "line": "Streams the buffer over UDP as Art-Net, E1.31 or DDP, its packets paced so receivers keep up, to Falcon and Advatek controllers, xLights and LedFx.",
    "summary": "One driver feeds many receivers, each taking a contiguous run of the window under its own address. A wall of tubes is one driver, the twin of one LED driver fanning out to several lanes.",
-   "attribution": "[Art-Net](https://en.wikipedia.org/wiki/Art-Net), [E1.31](https://en.wikipedia.org/wiki/Architecture_for_Control_Networks), [DDP](http://www.3waylabs.com/ddp/)",
+   "attribution": "[Art-Net](https://en.wikipedia.org/wiki/Art-Net), [E1.31](https://en.wikipedia.org/wiki/Architecture_for_Control_Networks), [DDP](http://www.3waylabs.com/ddp/), [troyhacks](https://github.com/troyhacks)",
    "guide": [
     {
      "title": "Mixed fixtures",
@@ -3217,7 +3218,7 @@
   "Hub75Driver": {
    "line": "Drives HUB75 LED panels straight from the board's own pins, with no receiving card in between.",
    "summary": "The sibling of [PanelCard](https://moonmodules.org/MoonLight/moonmodules/light/drivers.html#panelcard), which drives the same panels over Ethernet. A [MoonHub75](https://moonmodules.org/projects/hardware/#moonhub75-pcb) runs a 64x64 1/32-scan panel at 6-bit and 1,508 Hz; larger walls wait on reports.",
-   "attribution": "[LostHope](https://github.com/LostHope), Delphium, [mrcodetastic](https://github.com/mrcodetastic), [hzeller](https://github.com/hzeller), [ESPHome](https://esphome.io), [Adafruit](https://www.adafruit.com), [Waveshare](https://www.waveshare.com)",
+   "attribution": "[LostHope](https://github.com/LostHope), Delphium, [RobWomp](https://github.com/wompslab), [mrcodetastic](https://github.com/mrcodetastic), [hzeller](https://github.com/hzeller), [ESPHome](https://esphome.io), [Adafruit](https://www.adafruit.com), [Waveshare](https://www.waveshare.com)",
    "guide": [
     {
      "title": "Which of the two paths",
@@ -3383,7 +3384,7 @@
   "ParallelLedDriver": {
    "line": "WS2812B-class LEDs on up to 16 strands clocked out at once by a DMA peripheral, which makes a large wall possible.",
    "summary": "Each strand takes the next run of lights on its own GPIO. Switching between peripherals is a control change, with no reflash. For a few strands see [RmtLed](https://moonmodules.org/MoonLight/moonmodules/light/drivers.html#rmtled), and for a Teensy 4.1 its [hardware page](https://moonmodules.org/MoonLight/reference/hardware/teensy-4-1.html).",
-   "attribution": "[hpwit](https://github.com/hpwit), [OctoWS2811](https://www.pjrc.com/teensy/td_libs_OctoWS2811.html), [ObjectFLED](https://github.com/KurtMF/ObjectFLED)",
+   "attribution": "[hpwit](https://github.com/hpwit), [troyhacks](https://github.com/troyhacks), [OctoWS2811](https://www.pjrc.com/teensy/td_libs_OctoWS2811.html), [ObjectFLED](https://github.com/KurtMF/ObjectFLED)",
    "guide": [
     {
      "title": "Which peripheral",
@@ -3623,7 +3624,7 @@
   "AudioService": {
    "line": "The audio source the audio-reactive effects read: a level, sixteen bands and the peak.",
    "summary": "Local analyzes a microphone, line-in or capture device here. Receive network follows a peer's WLED-compatible audio, and Simulate synthesizes a song for demos. A local source can send its analysis on to other devices.",
-   "attribution": "[softhack007](https://github.com/softhack007), [troyhacks](https://github.com/troyhacks), [wladi](https://shop.myhome-control.de)",
+   "attribution": "[softhack007](https://github.com/softhack007), [troyhacks](https://github.com/troyhacks), [NetMindz](https://github.com/netmindz), [wladi](https://shop.myhome-control.de)",
    "guide": [
     {
      "title": "Choosing a source",
@@ -4572,7 +4573,7 @@
    "title": "Drivers",
    "base": "DriverBase",
    "line": "A driver sends the lights out: to LEDs on a wire, a HUB75 panel, the network, a smart-light bridge or the web UI.",
-   "summary": "Each reads its own slice of the [Drivers](https://moonmodules.org/MoonLight/moonmodules/light/supporting.html#drivers) container's buffer, through the shared correction and window controls. A card's emoji are its [tags](https://moonmodules.org/MoonLight/explanation/architecture/index.html#tag-emoji-legend).",
+   "summary": "Each reads its own slice of the [Drivers](https://moonmodules.org/MoonLight/moonmodules/light/supporting.html#drivers) container's buffer through the shared window controls. A physical output corrects it through the shared correction controls, while [Preview](https://moonmodules.org/MoonLight/moonmodules/light/drivers.html#preview) shows it as it is. A card's emoji are its [tags](https://moonmodules.org/MoonLight/explanation/architecture/index.html#tag-emoji-legend).",
    "videos": [
     {
      "video": "https://moonmodules.org/MoonLight/assets/moontube/07-drivers-desktop.webm",

@@ -8,7 +8,7 @@ namespace mm {
 /// An FSEQ show played from a file: the frame-by-frame channel data xLights and Falcon Player write.
 /// @card FseqPlayerEffect.gif The reference sweep fseq_play writes, the show an FSEQ player plays
 ///
-/// A show, uncompressed FSEQ v2, lands where a sender-mapped [Network Receive](https://moonmodules.org/MoonLight/moonmodules/light/effects.html#networkreceive) stream does, so alone on its layer it reaches the lights in one copy on any layout. Reading the file is the next step, and its status says so.
+/// A show, uncompressed FSEQ v2, lands where a sender-mapped @ref NetworkReceiveEffect stream does, so alone on its layer it reaches the lights in one copy on any layout. Reading the file is the next step, and its status says so.
 ///
 /// @attribution FPP
 class FseqPlayerEffect : public EffectBase {
