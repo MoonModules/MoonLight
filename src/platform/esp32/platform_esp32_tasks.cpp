@@ -1,9 +1,8 @@
-/// @defgroup platform_esp32_tasks RTOS task introspection
 /// The one seam that reads the task table, so no RTOS type escapes the platform layer.
 ///
 /// The module above does the domain work; this file answers what the tasks are.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## Two SDK options gate what it can answer
 ///

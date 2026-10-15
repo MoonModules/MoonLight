@@ -3,7 +3,6 @@
 
 #include <cstring>
 
-/// @defgroup moonlive_emit_riscv MoonLive RISC-V fill routines
 /// The fill routines as native machine code for the P4 and S31.
 ///
 /// The engine copies the bytes into instruction RAM and calls them through a function pointer, which is the path a bench run validates.

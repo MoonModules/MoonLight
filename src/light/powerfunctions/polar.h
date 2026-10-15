@@ -14,7 +14,7 @@ namespace mm {
 ///
 /// A radial effect addresses the grid by angle and radius, which turns its motion around the center.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## The address is a constant
 ///
@@ -122,8 +122,8 @@ public:
     /// The volumetric form.
     bool prepare(uint16_t w, uint16_t h, uint16_t d, bool wide,
                  Mapping mapping = Mapping::Cylindrical) {
-        if (w == w_ && h == h_ && d == d_ && wide == wide_ && mapping == mapping_ && ready_) return true;
-        w_ = w; h_ = h; d_ = d; wide_ = wide; mapping_ = mapping; ready_ = false;
+        if (w == w_ && h == h_ && d == d_ && wide == wide_ && mapping == mapping_ && ready()) return true;
+        w_ = w; h_ = h; d_ = d; wide_ = wide; mapping_ = mapping;
         const std::size_t n = static_cast<std::size_t>(w) * h * (d ? d : 1);
         if (n == 0) { release(); return false; }      // an empty grid holds nothing, not the old table
 
@@ -186,21 +186,19 @@ public:
                 }
             }
         }
-        ready_ = true;
         return true;
     }
 
     /// Free the tables, for a caller that has switched the address back to per-pixel computation.
     void release() {
-        if (!ready_ && bytes() == 0) return;
+        if (bytes() == 0) return;
         angle8_.resize(0); radius8_.resize(0); pitch8_.resize(0);
         angle16_.resize(0); radius16_.resize(0); pitch16_.resize(0);
         w_ = h_ = d_ = 0;
-        ready_ = false;
     }
 
     /// True once the tables hold a grid; false if allocation failed and the caller must compute.
-    bool ready() const { return ready_; }
+    bool ready() const { return wide_ ? static_cast<bool>(radius16_) : static_cast<bool>(radius8_); }
     /// True when the 16-bit tables are the ones built.
     bool wide() const { return wide_; }
     /// The distance from center to the furthest corner, in pixels: what `radius` is scaled against.
@@ -215,7 +213,7 @@ public:
 
     /// The elevation of pixel `i` above the xy plane, under the spherical projection. Zero under the other two, which have no second angle.
     angle16 pitch(std::size_t i) const {
-        if (!ready_) return 0;
+        if (!ready()) return 0;
         if (wide_) return pitch16_.count() ? pitch16_.data()[i] : 0;
         if (!pitch8_.count()) return 0;
         const uint32_t v = pitch8_.data()[i];
@@ -224,7 +222,7 @@ public:
 
     /// The angle of pixel `i` (row-major, y * width + x), as a full angle16 whichever width is built.
     angle16 angle(std::size_t i) const {
-        if (!ready_) return 0;
+        if (!ready()) return 0;
         if (wide_) return angle16_.data()[i];
         const uint32_t v = angle8_.data()[i];
         return static_cast<angle16>((v << 8) | v);
@@ -232,7 +230,7 @@ public:
 
     /// The radius of pixel `i`, 0 at the center to 65535 at the furthest corner.
     uint16_t radius(std::size_t i) const {
-        if (!ready_) return 0;
+        if (!ready()) return 0;
         if (wide_) return radius16_.data()[i];
         // Widened so the top of the narrow range reaches full scale, or the outer edge never arrives.
         const uint32_t v = radius8_.data()[i];
@@ -241,7 +239,7 @@ public:
 
     /// The radius of pixel `i` in PIXELS from the center, which is the form a field scaled in grid units wants. Rounded, so it round-trips the stored value rather than landing short.
     uint32_t radiusPixels(std::size_t i) const {
-        if (!ready_) return 0;
+        if (!ready()) return 0;
         return (static_cast<uint32_t>(radius(i)) * maxRadius_ + 32768u) >> 16;
     }
 
@@ -264,7 +262,6 @@ private:
     Mapping  mapping_ = Mapping::Cylindrical;
     uint32_t maxRadius_ = 1;
     bool     wide_ = false;
-    bool     ready_ = false;
 };
 
 }  // namespace mm

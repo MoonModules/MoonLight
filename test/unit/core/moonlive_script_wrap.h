@@ -3,11 +3,9 @@
 #include <cstdio>
 #include <cstring>
 
-/// @defgroup moonlive_script_wrap Wrapping a script body
-/// @{
 /// Wrap a bare statement body in the class and entry point a script needs.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## Why the buffers are a thread-local ring
 ///
@@ -79,4 +77,3 @@ inline const char* mmScriptAs(const char* entry, const char* body) {
 }
 
 inline const char* mmScript(const char* body) { return mmScriptAs("tick", body); }
-/// @}

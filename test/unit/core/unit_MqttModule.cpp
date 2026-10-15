@@ -3,7 +3,7 @@
 ///
 /// Pins MqttModule's inbound routing: a PUBLISH on a set topic drives the matching Drivers control.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## Delivering a PUBLISH
 ///

@@ -16,9 +16,16 @@ struct StateDocumentResult;
 class JsonSink;   // forward declared: the bodies in the .cpp include the real headers
 class Scheduler;
 
-/// The embedded HTTP server and WebSocket: it serves the web UI and the REST API behind it. @xref{the-rest-api} @xref{what-it-is-allowed-to-include}
+namespace ui { struct EmbeddedFile; }   // one served UI file, from the generated ui_embedded.h
+
+/// The embedded HTTP server and WebSocket: it serves the web UI and the REST API behind it.
+/// @card HttpServerModule.png
 ///
-/// @moreinfo
+/// The routes are in @xref{the-rest-api|The REST API}, and the layering in @xref{what-it-is-allowed-to-include|What it is allowed to include}.
+///
+/// @attribution Moustachauve
+///
+/// @technical
 ///
 /// ## What it is allowed to include
 ///
@@ -198,12 +205,11 @@ class Scheduler;
 ///
 /// The `JsonSink` helpers are members because each reads this module's state. The sink, the SHA-1 of RFC 3174 and the base64 encoder live in headers of their own.
 ///
-/// ## Prior art
-///
-/// The shim's field requirements come from the [WLED-Android client](https://github.com/Moustachauve/WLED-Android) by Christophe Gagnier, so it is the minimal object that app accepts rather than a guessed full emulation.
+/// The WLED shim's field requirements come from the WLED-Android client, so it is the minimal object that app accepts rather than a guessed full emulation.
 class HttpServerModule : public MoonModule, public BinaryBroadcaster {
 public:
-    /// The port it listens on, 8080 on the desktop and 80 on a device. @xref{the-served-port-is-not-the-port-control}
+    /// The port the server listens on.
+    /// @guide 8080 on the desktop and 80 on a device. A change applies when the server next opens: @xref{the-served-port-is-not-the-port-control|why}.
     uint16_t port = 8080;
 
     /// The scheduler every control write is applied through.
@@ -306,7 +312,9 @@ public:
     void setup() override;
     /// Close every connection and unwire the hook.
     void release() override;
+    /// Drain the preview and state sends, read inbound WebSocket frames, and serve a pending resync.
     void tick20ms() MM_NONBLOCKING override;
+    /// Push the state document to every WebSocket client.
     void tick1s() MM_NONBLOCKING override;
 
     /// What an apply-core operation did, which a transport maps onto its own error reporting.
@@ -376,12 +384,12 @@ private:
     Scheduler* scheduler_ = nullptr;
     const char* uiPath_ = "src/ui";
 
-    // Eight: a few viewers plus the overlap while a refresh's old socket is still being reaped. @xref{how-the-two-channel-caps-are-sized}
+    /// Eight: a few viewers plus the overlap while a refresh's old socket is still being reaped. @xref{how-the-two-channel-caps-are-sized}
     static constexpr int MAX_WS_CLIENTS = 8;
     platform::TcpConnection wsClients_[MAX_WS_CLIENTS];
     bool wsOnAccessPoint_[MAX_WS_CLIENTS] = {};   // each client's side, read when it connected
 
-    // Four, deliberately fewer: the two arrays share one lwIP socket budget with every other service. @xref{why-the-preview-cap-is-lower}
+    /// Four, deliberately fewer: the two arrays share one lwIP socket budget with every other service. @xref{why-the-preview-cap-is-lower}
     static constexpr int MAX_PREVIEW_CLIENTS = 4;
     platform::TcpConnection previewClients_[MAX_PREVIEW_CLIENTS];
     static constexpr int kParkedSlots = 4;          // connections open with no request yet
@@ -389,7 +397,7 @@ private:
     platform::TcpConnection parked_[kParkedSlots];
     uint32_t parkedAt_[kParkedSlots] = {};
 
-    // Every upload, and every /sd download, resumes here across ticks, a bounded slice at a time, drainPreviewSend's shape: neither a large file nor a slow client holds the render loop.
+    /// Every upload, and every /sd download, resumes here across ticks, a bounded slice at a time, drainPreviewSend's shape: neither a large file nor a slow client holds the render loop.
     struct FileTransfer {
         bool active = false;
         bool isUpload = false;
@@ -423,16 +431,14 @@ private:
 
     ClientMessageSink* clientSink_ = nullptr;   // the producer's inbound-message sink (PreviewDriver) @xref{crossing-the-domain-boundary}
 
-    // One resumable frame: a copied header plus a pointer into the caller's stable body buffer. @xref{why-the-preview-has-its-own-connections}
+    /// One resumable frame: a copied header plus a pointer into the caller's stable body buffer. @xref{why-the-preview-has-its-own-connections}
     struct PreviewSend {
-        // 24, not 16: a payload over 64 KB needs the ten-byte length form plus the app headers.
-        uint8_t hdr[24] = {};                 // WS + app header, copied (caller's may be a stack local)
+        uint8_t hdr[24] = {};                 // WS + app header, copied (caller's may be a stack local); 24 not 16, as a payload over 64 KB needs the ten-byte length form
         size_t hdrLen = 0;
-        const uint8_t* body = nullptr;        // the frame body; ownsBody says who frees it
+        const uint8_t* body = nullptr;        // the frame body, borrowed: the producer keeps it alive and cancels before a resize frees it
         size_t bodyLen = 0;
         size_t sent[MAX_PREVIEW_CLIENTS] = {};  // per-PREVIEW-client cursor over [hdr ++ body]; a slow client lags
         bool active = false;
-        // Borrowed, not owned: the producer keeps it alive and cancels before a resize frees it.
     };
     PreviewSend previewSend_;
 public:
@@ -482,9 +488,9 @@ public:
     void buildClientPatchesForTest(JsonSink* outs, int count);
 
 private:
-    // The resumable fragment a stream sends at a time: small enough for a fragmented heap, large enough that frame headers stay noise.
+    /// The resumable fragment a stream sends at a time: small enough for a fragmented heap, large enough that frame headers stay noise.
     static constexpr size_t kStreamFragmentBytes = 2048;
-    // One client's full state in flight: the cursor, and the fragment leaving as one WebSocket frame. @xref{the-full-state-streams}
+    /// One client's full state in flight: the cursor, and the fragment leaving as one WebSocket frame. @xref{the-full-state-streams}
     struct StateStream {
         bool active = false;
         Subscription sub;          // copied at the start, so a subscribe arriving mid-document cannot switch the view halfway
@@ -502,97 +508,98 @@ private:
     bool resyncClient_[MAX_WS_CLIENTS] = {};   // this client alone needs a full state: it subscribed, changed what it views, or asked again
     uint32_t resyncId_[MAX_WS_CLIENTS] = {};   // the id of the request a client's next document answers
     bool fragmentRefused_ = false;   // a fragment found no memory; logged once per run of refusals
-    // Whether a frame may go to this client now: no fragment of its stream is half written. The uplink is read only then, so a Ping is always answered between frames (RFC 6455 §5.4).
+    /// Whether a frame may go to this client now: no fragment of its stream is half written. The uplink is read only then, so a Ping is always answered between frames (RFC 6455 §5.4).
     bool atFrameBoundary(int client) const;
-    // Answer a Ping with a Pong, or a Close with a Close and the end of the connection. @xref{ping-and-close}
+    /// Answer a Ping with a Pong, or a Close with a Close and the end of the connection. @xref{ping-and-close}
     void onControlFrame(int client, uint8_t opcode, const uint8_t* payload, size_t len);
-    // Write one unfragmented control frame, `opcode` with FIN, carrying `payload`.
+    /// Write one unfragmented control frame, `opcode` with FIN, carrying `payload`.
     static bool sendWsControlFrame(platform::TcpConnection& conn, uint8_t opcode, const uint8_t* payload, size_t len);
-    // Guards the preview channel alone, whose producers sit on two cores under the split.
+    /// Guards the preview channel alone, whose producers sit on two cores under the split.
     mutable TryLock wsLock_;
-    // Drain one chunk per client, finishing when every live client holds the whole frame. @xref{why-the-drain-runs-on-the-transport-tick}
+    /// Drain one chunk per client, finishing when every live client holds the whole frame. @xref{why-the-drain-runs-on-the-transport-tick}
     void drainPreviewSend();
-    // Advance every open stream by one bounded chunk, generating each fragment as the previous one leaves. Called from tick20ms.
+    /// Advance every open stream by one bounded chunk, generating each fragment as the previous one leaves. Called from tick20ms.
     void drainStateSend();
-    // One client's stream, as far as `budget` bytes and the socket allow.
+    /// One client's stream, as far as `budget` bytes and the socket allow.
     void drainStream(int client, size_t budget);
-    // A fragment found no memory: close the client, which reconnects and is sent its document again.
+    /// A fragment found no memory: close the client, which reconnects and is sent its document again.
     void refuseFragment(int client);
-    // Give each client due a document its stream, from the baseline taken this pass.
+    /// Give each client due a document its stream, from the baseline taken this pass.
     void startStreams();
-    // Generate a stream's next fragment and its frame header, false when even one fragment does not fit in memory.
+    /// Generate a stream's next fragment and its frame header, false when even one fragment does not fit in memory.
     bool nextStreamFrame(int client);
-    // Free a stream's fragment and close it.
+    /// Free a stream's fragment and close it.
     void endStream(StateStream& s);
-    // Whether any client is mid-document, which holds every other frame on the control channel.
+    /// Whether any client is mid-document, which holds every other frame on the control channel.
     bool anyStreamActive() const;
-    // Whether some client alone waits for a full state.
+    /// Whether some client alone waits for a full state.
     bool anyClientResync() const;
-    // Store a client's subscription, resyncing when it changed.
+    /// Store a client's subscription, resyncing when it changed.
     void applySubscription(int client, const char* body);
-    // The module at a cursor's path, or null when the deepest index has run past its siblings.
+    /// The module at a cursor's path, or null when the deepest index has run past its siblings.
     MoonModule* moduleAt(const TreeCursor& c) const;
-    // Derived from free contiguous memory, so a tight board takes small bites and a roomy one drains fast.
+    /// Derived from free contiguous memory, so a tight board takes small bites and a roomy one drains fast.
     size_t drainChunkBytes() const;
 
-    // The wire diff's cache: one path hash and one value hash per leaf, eight bytes each. @xref{how-a-leaf-is-named}
+    /// The wire diff's cache: one path hash and one value hash per leaf, eight bytes each. @xref{how-a-leaf-is-named}
     struct LeafHash { uint32_t path = 0; uint32_t value = 0; };
-    // Growable rather than fixed: sized to the exact leaf count each baseline, so no leaf is dropped.
+    /// Growable rather than fixed: sized to the exact leaf count each baseline, so no leaf is dropped.
     ScratchBuffer<LeafHash> leafHashes_{*this};
     uint16_t leafHashCount_ = 0;
     bool fullResyncPending_ = true;    // send a full state next push (set on connect / structural change)
-    // Emit only the leaves whose value hash moved, returning how many there were. @xref{state-push-a-diff-on-the-wire}
+    /// Emit only the leaves whose value hash moved, returning how many there were. @xref{state-push-a-diff-on-the-wire}
     uint16_t buildStatePatch(JsonSink& sink);
-    // One module's changed leaves, a slice of the patch entries that each client takes when its subscription covers the module.
+    /// One module's changed leaves, a slice of the patch entries that each client takes when its subscription covers the module.
     struct PatchSlice { const MoonModule* mod; uint32_t begin; uint32_t end; uint16_t count; };
-    // Sized at each baseline to the modules it covers, one slice each.
+    /// Sized at each baseline to the modules it covers, one slice each.
     ScratchBuffer<PatchSlice> patchSlices_{*this};
-    // The changed leaves over what `walk` visits, as comma-led entries in one slice per module, returning how many there were.
+    /// The changed leaves over what `walk` visits, as comma-led entries in one slice per module, returning how many there were.
     template <class Walk> uint16_t collectPatch(JsonSink& entries, uint16_t& sliceCount, Walk&& walk);
-    // Wrap the slices `sub` covers as one patch frame, null covering all, returning how many entries it holds.
+    /// Wrap the slices `sub` covers as one patch frame, null covering all, returning how many entries it holds.
     uint16_t writeClientPatch(JsonSink& out, const JsonSink& entries, uint16_t sliceCount, const Subscription* sub);
-    // Collect over `walk`, then send each control client the share its subscription covers; a client about to get a full state is skipped when `skipResyncing`.
+    /// Collect over `walk`, then send each control client the share its subscription covers; a client about to get a full state is skipped when `skipResyncing`.
     template <class Walk> void sendPatches(Walk&& walk, bool skipResyncing = false);
-    // Whether some client's subscription covers `mod`, so its leaves are worth hashing.
+    /// Whether some client's subscription covers `mod`, so its leaves are worth hashing.
     bool anyClientCovers(const MoonModule* mod) const;
 
-    // Modules whose changed values go out ahead of the periodic patch, by name since one may be deleted before the tick.
+    /// Modules whose changed values go out ahead of the periodic patch, by name since one may be deleted before the tick.
     static constexpr uint8_t kSoonModules = 4;
-    // At most 25 early patches a second: smooth for a motor, and half the frames of one per tick. @xref{a-value-someone-watches-move}
+    /// At most 25 early patches a second: smooth for a motor, and half the frames of one per tick. @xref{a-value-someone-watches-move}
     static constexpr uint32_t kSoonMs = 40;
     char soon_[kSoonModules][16] = {};   // a module name's own size
     uint8_t soonCount_ = 0;
     uint32_t soonSentMs_ = 0;
-    // Patch the modules that asked over the whole tree, and forget them, for a test.
+    /// Patch the modules that asked over the whole tree, and forget them, for a test.
     uint16_t buildSoonPatch(JsonSink& sink);
-    // Visit the leaves of the modules that asked, and forget them.
+    /// Visit the leaves of the modules that asked, and forget them.
     template <class Fn> void forEachSoonLeaf(Fn&& fn, bool everything = false);
-    // Send the early patch, held while a full state drains and paced by kSoonMs.
+    /// Send the early patch, held while a full state drains and paced by kSoonMs.
     void pushSoonPatch();
-    // Routes a module's request to the live instance.
+    /// Routes a module's request to the live instance.
     static void onValuesChanged(MoonModule* mod);
-    // Re-hash every subscribed leaf without emitting, so the next patch reports only changes since now; `everything` covers the whole tree, for a test.
+    /// Re-hash every subscribed leaf without emitting, so the next patch reports only changes since now; `everything` covers the whole tree, for a test.
     void baselineLeafHashes(bool everything = false);
-    // Visit every UI leaf some client subscribes to, in the state's own order, templated so the lambda inlines; `everything` visits the whole tree, for a test.
+    /// Visit every UI leaf some client subscribes to, in the state's own order, templated so the lambda inlines; `everything` visits the whole tree, for a test.
     template <class Fn> void forEachStateLeaf(Fn&& fn, bool everything = false);
-    // One module's own leaves, `fn` taking the module first so the patch knows whose slice each belongs to.
+    /// One module's own leaves, `fn` taking the module first so the patch knows whose slice each belongs to.
     template <class Fn> void visitOwnLeaves(MoonModule* mod, Fn&& fn);
-    // A subtree's leaves, skipping a module no client covers unless `everything`.
+    /// A subtree's leaves, skipping a module no client covers unless `everything`.
     template <class Fn> void visitModuleLeaves(MoonModule* mod, Fn&& fn, bool everything = false);
     LeafHash* findLeaf(uint32_t pathHash);
-    // The next push must be a full state and a fresh baseline. @xref{when-a-patch-cannot-describe-the-change}
+    /// The next push must be a full state and a fresh baseline. @xref{when-a-patch-cannot-describe-the-change}
     void requestFullResync() { fullResyncPending_ = true; }
 
-    // Routes any module's schema change to the live instance's resync request.
+    /// Routes any module's schema change to the live instance's resync request.
     static void onSchemaChanged();
     static inline HttpServerModule* instance_ = nullptr;
-    // One frame cut in half by a read waits here for the rest, for one client at a time: the bridges' writes are small.
+    /// One frame cut in half by a read waits here for the rest, for one client at a time: the bridges' writes are small.
     uint8_t  carry_[kWsTextMax + 16] = {};
     size_t   carryLen_ = 0;
     int      carryClient_ = -1;
     uint16_t boundPort_ = 0;   // the port open() actually bound; 0 when no server is live
 
     // HTTP handling
+
     /// Serve one connection; false when no request arrived within `patienceMs`, the connection left open to be parked.
     bool handleConnection(platform::TcpConnection& conn, int patienceMs = 5);
     void park(platform::TcpConnection& conn);
@@ -607,45 +614,48 @@ private:
     /// The child module a delete or replace may act on: found, not top-level, and one the user can remove.
     OpResult editableChild(const char* moduleName, MoonModule*& mod);
     void sendPreflightResponse(platform::TcpConnection& conn);
-    void serveFile(platform::TcpConnection& conn, const char* filename, const char* contentType);
+    void serveFile(platform::TcpConnection& conn, const ui::EmbeddedFile& file);
 
-    // A file body is not a control value, so the File Manager has its own vetted endpoints. @xref{mutations-and-the-file-manager}
+    /// A file body is not a control value, so the File Manager has its own vetted endpoints. @xref{mutations-and-the-file-manager}
     void serveFileContents(platform::TcpConnection& conn, const char* query);
     /// The one streamed-file sender both file routes share: fs path, MIME, extra header lines.
     void streamFsFile(platform::TcpConnection& conn, const char* path, const char* mime,
                       const char* extraHeaders);
     /// One HLS artifact (playlist / segment) from /.hls/, video MIME + no-cache; flat names only.
     void serveHlsFile(platform::TcpConnection& conn, const char* name);
-    // Checks an upload against its storage's limits, then streams it through a transfer slot, so an upload of any size never needs one buffer.
+    /// Checks an upload against its storage's limits, then streams it through a transfer slot, so an upload of any size never needs one buffer.
     void handleWriteFile(platform::TcpConnection& conn, const char* query,
                          const char* initialBody, size_t initialLen, size_t contentLen);
-    // Claims a transfer slot for a checked upload, writes the bytes already buffered and hands the rest to driveTransfers.
+    /// Claims a transfer slot for a checked upload, writes the bytes already buffered and hands the rest to driveTransfers.
     void startUpload(platform::TcpConnection& conn, const char* path,
                      const char* initialBody, size_t initialLen, size_t contentLen);
-    // One directory's children, single-level, which is what the lazy tree loads a node from.
+    /// One directory's children, single-level, which is what the lazy tree loads a node from.
     void serveDirListing(platform::TcpConnection& conn, const char* query);
     void handleMakeDir(platform::TcpConnection& conn, const char* query);      // POST /api/dir?path=
     void handleRemoveEntry(platform::TcpConnection& conn, const char* query);  // DELETE /api/dir?path=
 
     // JSON state @xref{why-the-sink-helpers-are-members}
+
     void serveState(platform::TcpConnection& conn);
     void buildStateJson(JsonSink& sink);
     void writeModuleJson(JsonSink& sink, MoonModule* mod);
-    // A module's fields before its controls, which an outline carries alone.
+    /// A module's fields before its controls, which an outline carries alone.
     void writeModuleHeader(JsonSink& sink, MoonModule* mod);
     static void writeControl(JsonSink& sink, const ControlDescriptor& c);
-    // Emit a module's status and severity where set, shared so the two endpoints stay in sync.
+    /// Emit a module's status and severity where set, shared so the two endpoints stay in sync.
     static void writeStatus(JsonSink& sink, MoonModule* mod);
 
     // Control setter
+
     void handleSetControl(platform::TcpConnection& conn, const char* body);
     /// Apply a state document from the request body, which may outgrow the request buffer: `PATCH /api/state`.
     void handleApplyState(platform::TcpConnection& conn, const char* initialBody, size_t initialLen, size_t contentLen);
 
-    // Delegates to the scheduler's own canonical tree walk, guarding a null scheduler first.
+    /// Delegates to the scheduler's own canonical tree walk, guarding a null scheduler first.
     MoonModule* findModuleByName(const char* name);
 
     // System metrics
+
     void serveSystem(platform::TcpConnection& conn);
     /// The WLED shim's routes: one lists the device, the others carry and accept its state. @xref{the-wled-compatibility-shim}
     void serveWledInfo(platform::TcpConnection& conn);
@@ -658,29 +668,30 @@ private:
     void pollUplinks();
     void pollPreviewClient(int client);
     void pollControlClient(int client);
-    // What a text frame from a control client asks for.
+    /// What a text frame from a control client asks for.
     void onTextFrame(int client, const char* body);
     void writeWledInfoBody(JsonSink& sink, const char* name, const uint8_t mac[6]);
     void writeWledName(JsonSink& sink, const char* name);   // 💫-prefixed WLED name (HA marker)
     void writeWledStateBody(JsonSink& sink);
-    /// The device's name, MAC and live address, resolved once for every WLED handler to share. @xref{prior-art}
+    /// The device's name, MAC and live address, resolved once for every WLED handler to share. @xref{the-wled-compatibility-shim}
     void resolveWledIdentity(const char*& name, uint8_t mac[6], uint8_t ip[4],
                              const char* nameFallback = "MoonLight");
     void writeModuleMetricsJson(JsonSink& sink, MoonModule* mod, bool& first);
 
     // Module CRUD
+
     void handleAddModule(platform::TcpConnection& conn, const char* body);
     void handleDeleteModule(platform::TcpConnection& conn, const char* moduleName);
     void handleReplaceModule(platform::TcpConnection& conn, const char* moduleName, const char* body);
     void serveTypes(platform::TcpConnection& conn);
-    // The compiled-in script catalog, so the UI can offer a script the device does not hold yet.
+    /// The compiled-in script catalog, so the UI can offer a script the device does not hold yet.
     void serveScriptCatalog(platform::TcpConnection& conn);
 
     /// One module's JSON, identical to its entry in the full state, its name possibly encoded. @xref{the-per-module-state-route}
     void serveModule(platform::TcpConnection& conn, const char* name);
     void writeTypeDefaults(JsonSink& sink, const char* typeName);
     void handleMoveModule(platform::TcpConnection& conn, const char* moduleName, const char* body);
-    // The editable-list primitive, the tail naming a module, a control and optionally a row.
+    /// The editable-list primitive, the tail naming a module, a control and optionally a row.
     void handleListAddRow(platform::TcpConnection& conn, const char* tail);
     void handleListPatchRow(platform::TcpConnection& conn, const char* tail, const char* jsonBody);
     void handleListDeleteRow(platform::TcpConnection& conn, const char* tail);
@@ -702,6 +713,7 @@ private:
     void handleMoonBaseUrl(platform::TcpConnection& conn, const char* body);   // POST /api/firmware/moonbase-update-url
 
     // WebSocket
+
     /// Complete the handshake, `previewChannel` putting the connection on the lossy channel.
     void handleWebSocketUpgrade(platform::TcpConnection& conn, const char* req,
                                 bool previewChannel = false);

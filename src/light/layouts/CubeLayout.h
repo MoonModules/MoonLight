@@ -4,56 +4,40 @@
 
 namespace mm {
 
-/// Layout of a 3D cube volume (width×height×depth).
-/// Author: MoonLight, https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Layouts/L_MoonLight.h
+/// A solid 3D cube of lights, wired through the volume in the axis order you choose.
+/// @card CubeLayout.gif
 ///
-/// @moreinfo
+/// Every point of a `width` × `height` × `depth` box holds a light. The strip's path is yours to set: which axis it runs along first, which way each axis counts, and which axes snake back and forth. It is the 3D form of @ref PanelLayout.
 ///
-/// A solid cube of lights: every integer lattice point in a width×height×depth box gets one LED.
-/// Unlike SphereLayout (a shell), this is a filled volume, so lightCount() is simply the product of the three edges.
+/// @attribution Boustrophedon
 ///
-/// The interesting geometry is the WIRING ORDER, the sequence in which the LEDs are addressed.
-/// A physical cube is built from a strip that snakes through the volume.
-/// Which axis the strip runs along fastest (plus whether it reverses direction on alternate passes, boustrophedon / "snake") determines the index→position mapping.
-/// This layout reproduces the predecessor MoonLight's Cube: a 6-way axis-order select, a per-axis increasing-direction flag, and a per-axis snake toggle.
-/// The emitted COORDINATE is always the true (x,y,z); only the ORDER of emission (the driver index) changes with these controls, the same principle as GridLayout's serpentine, generalised to three axes.
+/// @technical
 ///
-/// Prior art: CubeLayout in the predecessor MoonLight, github.com/ewowi/MoonLight, which keeps its own name now that it is ours too.
-/// It drives a `Wiring` helper with per-plane pins (nextPin() per plane).
-/// Ours emit coordinates only, the driver owns pins, so that plumbing is dropped and only the geometry is kept.
-///
-/// ## The wiring walk is reconstructed
-///
-/// MoonLight expresses this through an iterate helper that is not in the sources we have, so the walk here is the standard boustrophedon its usage and defaults imply.
-/// The per-axis increment picks the base scan direction, ascending by default, and the per-axis snake reverses that direction on odd passes of the enclosing loop.
-/// That is the snaking a grid applies on one axis, generalised to three.
-///
-/// The snake toggle keys on the enclosing loop's counter, the physical pass number, which is the physically correct boustrophedon.
-/// For the all-ascending default that counter equals the emitted coordinate, so this reproduces MoonLight's default exactly.
+/// A per-axis snake reverses that axis on odd passes of its enclosing loop, keyed on the loop's counter, the physical pass number.
 class CubeLayout : public LayoutBase {
 public:
-    /// Cube edges. Defaults 10×10×10, range 1..128, MoonLight's exact defaults.
+    /// The cube's extent on x.
     lengthType width = 10;
     /// The cube's extent on y.
     lengthType height = 10;
     /// Its extent on z.
     lengthType depth = 10;
 
-    /// Which axis the strip runs along fastest, an index into the axis-order table.
+    /// The axis order the strip follows, fastest first.
     uint8_t wiringOrder = 3;
 
-    /// Per-axis scan direction: set counts up from zero, clear counts down.
+    /// Whether x counts up rather than down.
     bool incX = true;
     /// Whether y counts up.
     bool incY = true;
     /// Whether z counts up.
     bool incZ = true;
 
-    /// Per-axis snake: reverse that axis on alternate passes of the enclosing loop.
+    /// Whether x snakes, reversing on alternate passes.
     bool snakeX = false;
-    /// Whether y does.
+    /// Whether y snakes.
     bool snakeY = true;
-    /// Whether z does.
+    /// Whether z snakes.
     bool snakeZ = false;
 
     /// The controls a user sets on the card.
@@ -70,17 +54,16 @@ public:
         controls_.addControl("snakeZ", snakeZ);
     }
 
-    /// The catalog tags this layout carries.
-    const char* tags() const override { return "💫"; }  // MoonLight origin
+    /// The catalog tags: 💫, a MoonLight origin.
+    const char* tags() const override { return "💫"; }
     /// How many axes this layout places lights on.
     Dim dimensions() const override { return Dim::D3; }
 
     /// How many lights the current settings place.
     nrOfLightsType lightCount() const override {
-        /// Widened before the multiply, so an oversized cube clamps rather than wrapping.
+        // Widened before the multiply, so an oversized cube clamps rather than wrapping.
         uint32_t n = static_cast<uint32_t>(width) * height * depth;
-        constexpr uint32_t kMax = std::numeric_limits<nrOfLightsType>::max();
-        return static_cast<nrOfLightsType>(n > kMax ? kMax : n);
+        return clampedCount(n);
     }
 
     /// Emit every light's coordinate, in wiring order.
@@ -106,7 +89,7 @@ public:
                 for (lengthType k = 0; k < n2 && idx < limit; k++) {
                     const lengthType v2 = axisValue(k, n2, inc[a2], snake[a2], j);
 
-                    /// Scatter the three loop values onto their real axes, then emit.
+                    // Scatter the three loop values onto their real axes, then emit.
                     lengthType coords[3] = {0, 0, 0};
                     coords[a0] = v0;
                     coords[a1] = v1;
@@ -119,21 +102,21 @@ public:
     }
 
 private:
-    // Each row is an outer, middle and inner axis index; the wiring select maps onto these.
+    /// Each row is an outer, middle and inner axis index; the wiring select maps onto these.
     static constexpr uint8_t kAxisOrders[6][3] = {
-        {2, 1, 0},  // XYZ label — Z outer, Y middle, X inner (X fastest)
-        {2, 0, 1},  // YXZ       — Z, X, Y
-        {1, 2, 0},  // XZY       — Y, Z, X
-        {1, 0, 2},  // YZX       — Y, X, Z   (default, wiringOrder = 3)
-        {0, 2, 1},  // ZXY       — X, Z, Y
-        {0, 1, 2},  // ZYX       — X, Y, Z
+        {2, 1, 0},  // XYZ label: Z outer, Y middle, X inner (X fastest)
+        {2, 0, 1},  // YXZ: Z, X, Y
+        {1, 2, 0},  // XZY: Y, Z, X
+        {1, 0, 2},  // YZX: Y, X, Z   (default, wiringOrder = 3)
+        {0, 2, 1},  // ZXY: X, Z, Y
+        {0, 1, 2},  // ZYX: X, Y, Z
     };
     static constexpr const char* kWiringOrderOptions[6] = {
         "XYZ", "YXZ", "XZY", "YZX", "ZXY", "ZYX"
     };
     static constexpr uint8_t kWiringOrderCount = 6;
 
-    // One pass's value: the base direction, flipped when the enclosing counter is odd.
+    /// One pass's value: the base direction, flipped when the enclosing counter is odd.
     static lengthType axisValue(lengthType step, lengthType count,
                                 bool inc, bool snake, lengthType prev) {
         bool ascending = inc;

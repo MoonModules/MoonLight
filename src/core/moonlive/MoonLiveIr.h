@@ -6,14 +6,11 @@
 #include "core/moonlive/MoonLiveBuiltins.h"   // InlineOp (a neutral opcode tag)
 #include "platform/platform.h"                // alloc/free, since the op array is script-sized
 
-/// @defgroup moonlive_ir MoonLive intermediate representation
-/// @{
 /// The typed form between the front-end and the per-ISA assembler.
 ///
-/// The front-end lowers an AST to a flat list of three-address ops over virtual registers, and each backend lowers that same list to machine bytes.
-/// Compile-time only, consumed during lowering and never present at run time.
+/// The front-end lowers an AST to a flat list of three-address ops over virtual registers, and each backend lowers that same list to machine bytes. Compile-time only, consumed during lowering and never present at run time.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## It knows operations, not targets
 ///
@@ -21,25 +18,24 @@
 ///
 /// ## Virtual registers
 ///
-/// Plain indices a backend maps to machine registers.
-/// The host arguments arrive in fixed ones, named neutrally, so the front-end refers to them without knowing the calling convention.
+/// Plain indices a backend maps to machine registers. The host arguments arrive in fixed ones, named neutrally, so the front-end refers to them without knowing the calling convention.
 
 namespace mm::moonlive {
 
 using VReg = uint8_t;
 
-// kArg4 is a per-instance data pointer the host passes at run time, which LoadCtrl reads from.
+/// The host argument registers, where kArg4 is a per-instance data pointer the host passes at run time, which LoadCtrl reads from; temporaries start at kFirstTemp.
 enum : VReg { kArg0 = 0, kArg1 = 1, kArg2 = 2, kArg3 = 3, kArg4 = 4, kFirstTemp = 5 };
 
-// Larger than any register file, since this bounds the compiler's tables, not the script.
+/// Virtual registers a program may name; larger than any register file, since this bounds the compiler's tables, not the script.
 static constexpr uint8_t kMaxVRegs = 32;
-// A sanity bound rather than the working limit, so a runaway source fails with a diagnostic.
+/// A sanity bound on IR ops rather than the working limit, so a runaway source fails with a diagnostic.
 static constexpr uint16_t kMaxIrOps = 4096;
 
-// The shipped scripts measure up to 0.91 ops per token; structs and `&&` reach 1.6, and grow the array rather than raise every script's reservation.
+/// IR ops reserved per source token. The shipped scripts measure up to 0.91 ops per token; structs and `&&` reach 1.6, and grow the array rather than raise every script's reservation.
 static constexpr uint16_t kIrOpsPerToken = 1;
 
-// The op set, in three-address form: a destination plus up to three source operands.
+/// The op set, in three-address form: a destination plus up to three source operands.
 enum class IrOp : uint8_t {
     Const,     // dst = imm
     Add,       // dst = a + b
@@ -110,15 +106,13 @@ struct DeclaredControl {
     const char* name = nullptr;
     /// The UI range, as wide as the widest member a control can bind.
     int32_t     min = 0, max = 255;
-    // Separate from the range, since a member may be seeded outside what its slider spans.
-    /// The initializer, wide enough for the widest member type.
+    /// The initializer, wide enough for the widest member type; separate from the range, since a member may be seeded outside what its slider spans.
     int32_t     def = 0;
     /// How many characters of `name` are used.
     uint8_t     nameLen = 0;
     /// The member's element type, from which its width derives.
     CtrlType    type = CtrlType::Int;
-    // A running cursor rather than the declaration index, since a scalar costs a whole slot.
-    /// Byte offset into the controls arena, which everything downstream keys on.
+    /// Byte offset into the controls arena, which everything downstream keys on; a running cursor, not the declaration index, since a scalar costs a whole slot.
     uint8_t     offset = 0;
     /// Elements: 1 for a scalar, the length for an array.
     uint8_t     count = 1;
@@ -126,8 +120,7 @@ struct DeclaredControl {
     const char* const* options = nullptr;
 };
 
-// One encoder and three accessors, so the emitter and the lowering cannot disagree.
-/// Pack base, width and count into `imm`, the one field the allocator does not rewrite.
+/// Pack base, width and count into `imm`, the one field the allocator does not rewrite; one encoder and three accessors, so the emitter and the lowering cannot disagree.
 constexpr int32_t idxPack(uint8_t base, uint8_t width, uint8_t count) {
     return int32_t(base) | (int32_t(width) << 8) | (int32_t(count) << 16);
 }
@@ -136,28 +129,23 @@ constexpr uint8_t idxWidth(int32_t p) { return uint8_t((p >> 8) & 0xff); }
 constexpr uint8_t idxCount(int32_t p) { return uint8_t((p >> 16) & 0xff); }
 
 
-// Two per `for`, counted program-wide, so this bounds total loops rather than nesting depth.
-/// Branch targets one IR program may use.
+/// Branch targets one IR program may use: two per `for`, counted program-wide, so this bounds total loops rather than nesting depth.
 static constexpr uint8_t kIrLabels = 96;
 
-// On the heap for one compile; a label is a two-byte code position and a fixup four bytes, under the 16 KB code cap.
-/// Labels and fixups an assembler's tables hold, the most an eight-bit index addresses.
+/// Labels and fixups an assembler's tables hold, the most an eight-bit index addresses. They sit on the heap for one compile, a label being a two-byte code position and a fixup four bytes.
 static constexpr uint8_t kAsmLabels = 255;
 static constexpr uint8_t kAsmFixups = 255;
 /// Where a label is bound in the code, or kUnbound before it is.
 using CodePos = uint16_t;
 static constexpr CodePos kUnbound = 0xFFFF;
 
-// What is live at once rather than a total, since a block hands its slots back at its brace.
-/// How many frame slots one program may hold at once.
+/// How many frame slots one program may hold at once: what is live rather than a total, since a block hands its slots back at its brace.
 static constexpr uint8_t kMaxLocals = 32;
 
-// Bounded by the frame rather than the register file, which is what makes a wide builtin work.
-/// The most arguments one call can carry.
+/// The most arguments one call can carry, bounded by the frame rather than the register file, which is what makes a wide builtin work.
 static constexpr uint8_t kMaxCallArgs = kMaxLocals;
 
-// Holding them in registers costs five program-wide, which on Xtensa decides a compile.
-/// Where the host arguments are parked.
+/// Where the host arguments are parked; holding them in registers costs five program-wide, which on Xtensa decides a compile.
 static constexpr uint8_t kHostArgSlots = kFirstTemp;                 // 5
 constexpr uint8_t hostArgSlot(VReg v) {
     return static_cast<uint8_t>(kMaxLocals + kHostArgSlots - kFirstTemp + v);
@@ -165,15 +153,14 @@ constexpr uint8_t hostArgSlot(VReg v) {
 /// Total frame slots a backend must address: the allocator range plus the parked host arguments.
 static constexpr uint8_t kTotalSlots = kMaxLocals + kHostArgSlots;
 
-// Mirrors kMaxEntryPoints, since the two are filled from the same parse.
-/// Named functions one program may define.
+/// Named functions one program may define; mirrors kMaxEntryPoints, since the two are filled from the same parse.
 static constexpr uint8_t kMaxIrEntries = 8;
 
 
-static constexpr uint8_t kMaxControlName = 24;   // max control-name length (incl. NUL); the compiler
-                                                 // Longer names are rejected, so none collide.
+/// Max control-name length including the NUL; longer names are rejected, so none collide.
+static constexpr uint8_t kMaxControlName = 24;
 
-// A lowered program: the ops, sized to the script, plus the vreg high-water mark.
+/// A lowered program: the ops, sized to the script, plus the vreg high-water mark.
 struct IrProgram {
     /// The lowered ops, heap-allocated and sized to the script.
     IrInst*  ops = nullptr;
@@ -183,12 +170,10 @@ struct IrProgram {
     uint16_t count = 0;
     /// The high-water mark of virtual registers this program names.
     VReg     vregsUsed = kFirstTemp;
-    // The allocator numbers any spill from here up, since the two share one frame.
-    /// Frame slots the front end allocated for script variables.
+    /// Frame slots the front end allocated for script variables; the allocator numbers any spill from here up, since the two share one frame.
     uint8_t  localSlots = 0;
 
-    // The parser records the index and the lowering fills the byte, the crossing a linker makes.
-    /// Where each named function's code starts, filled in as the lowering walks the ops.
+    /// Where each named function's code starts, filled in as the lowering walks the ops; the parser records the index and the lowering fills the byte, as a linker does.
     uint16_t fnIrStart[kMaxIrEntries] = {};
     /// The byte each named function starts at, which the lowering fills.
     uint16_t fnOffset[kMaxIrEntries]  = {};
@@ -213,8 +198,7 @@ struct IrProgram {
         return ops != nullptr;
     }
 
-    // By half, as a dynamic array grows, so the reservation can be the typical script's size and a dense one still fits.
-    /// Enlarge the op array, keeping its contents, up to kMaxIrOps; false at the bound or out of memory.
+    /// Enlarge the op array by half, keeping its contents, up to kMaxIrOps; false at the bound or out of memory. The reservation can then be the typical script's size and a dense one still fits.
     bool grow() {
         if (!ops || cap >= kMaxIrOps) return false;
         const uint32_t want = uint32_t(cap) + cap / 2 + 8;
@@ -244,8 +228,7 @@ struct IrProgram {
         return true;
     }
 
-    // The allocator builds the rewritten program in a second one and swaps it in.
-    /// Exchange contents with `o`.
+    /// Exchange contents with `o`; the allocator builds the rewritten program in a second one and swaps it in.
     void swap(IrProgram& o) {
         IrInst* p = ops; ops = o.ops; o.ops = p;
         uint16_t t = cap; cap = o.cap; o.cap = t;
@@ -260,8 +243,7 @@ struct IrProgram {
         }
     }
 
-    // How many registers each op costs is per-ISA; which ops are present is the program's property.
-    /// Which inline ops this program contains, so a backend reserves only the scratch it needs.
+    /// Which inline ops this program contains, so a backend reserves only the scratch it needs. Which ops are present is the program's property; the registers each costs is per-ISA.
     bool hasInline(InlineOp which) const {
         for (uint16_t i = 0; i < count; i++)   // uint16_t: `count` is, so a uint8_t never terminates
             if (ops[i].op == IrOp::Inline && ops[i].inlineOp == which) return true;
@@ -275,7 +257,5 @@ struct IrProgram {
         return false;
     }
 };
-
-/// @}
 
 }  // namespace mm::moonlive

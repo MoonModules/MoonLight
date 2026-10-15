@@ -4,42 +4,26 @@
 
 namespace mm {
 
-/// Modifier rotating the 2D image about its center over time.
-/// Author: WildCats08 / @Brandon502 (MoonLight), https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Modifiers/M_MoonLight.h
+/// Turns the 2D image around its center, continuously, at the speed you set.
+/// @card RotateModifier.gif
 ///
-/// @moreinfo
+/// @attribution Brandon502, Rotation matrix
 ///
-/// Rotates the 2D image around its center, turning continuously over time.
-/// The one DYNAMIC modifier in the set: it overrides modifyLive(), so the Layer re-applies it every frame (a smooth turn, not a stepped LUT rebuild).
-/// A static-only chain pays nothing, the per-frame pass runs only because this modifier reports hasModifyLive().
+/// @technical
 ///
-/// ## The live pass maps backward
+/// The one dynamic modifier: it overrides modifyLive, so the Layer applies it every frame for a smooth turn rather than a stepped rebuild.
 ///
-/// For each destination logical cell it computes the source cell to gather from.
-/// No destination is ever left unfilled, which is the textbook reason image warping samples backward.
-/// The source is the inverse rotation R(-θ) of the destination.
-///
-/// ## The transform-matrix reference
-///
-/// This modifier is also the codebase's reference for a matrix-backed transform.
-/// Rotation is the canonical affine transform, unlike the non-affine folds that mask or repeat.
-/// It is written as an explicit rotation matrix applied to the centerd coordinate.
-/// The matrix entries are integer fixed point, the trig table's output centerd so subtracting its midpoint gives a signed unit component.
-/// A future affine transform combining translation, scale, rotation and shear would compose its matrix the same way, so the fold interface hosts one with no change.
-/// A non-affine modifier cannot use a matrix at all, a mask being a predicate and a tile a modulo, which is why only this one is matrix-shaped.
-///
-/// Prior art: MoonLight M_MoonLight.h Rotate (modifyXYZ per-frame transform).
-/// Same per-frame coordinate remap; we name the hook modifyLive and carry an explicit matrix.
+/// The live pass maps backward: for each destination cell it computes the source with the inverse rotation. That leaves no destination unfilled, the textbook reason image warping samples backward.
 class RotateModifier : public ModifierBase {
 public:
-    /// The catalog tags this modifier carries.
+    /// The catalog tags: 💫, a MoonLight origin.
     const char* tags() const override { return "💫"; }
-    /// Which axes this modifier works on, advisory for the UI chip.
-    Dim dimensions() const override { return Dim::D2; }   // 2D rotation (advisory chip)
-    /// Whether this modifier also transforms per frame.
-    bool hasModifyLive() const override { return true; }  // animates every frame
+    /// A rotation in the plane, so 2D, advisory for the UI chip.
+    Dim dimensions() const override { return Dim::D2; }
+    /// It animates, so it also transforms every frame.
+    bool hasModifyLive() const override { return true; }
 
-    /// Rotation speed, 1..255 (turns faster as it rises).
+    /// How fast the image turns.
     uint8_t speed = 1;
 
     /// The controls a user sets on the card.
@@ -47,12 +31,10 @@ public:
         controls_.addControl("speed", speed, 1, 255);
     }
 
-    // The rotation is applied live rather than baked in, so a speed edit needs no rebuild.
-    /// Whether a change here forces the mapping to rebuild.
+    /// No control forces a rebuild: the rotation is applied live rather than baked in.
     bool affectsPrepare(const char* /*controlName*/) const override { return false; }
 
-    // A backward map: each destination is replaced by the source cell it samples.
-    /// Transform a position per frame, after the mapping is built.
+    /// A backward map, per frame: each destination is replaced by the source cell it samples.
     void modifyLive(Coord3D& pos, const Coord3D& logical) const override {
         // Center in half-units (×2) so an even-width box rotates about its true center.
         const int32_t cx2 = logical.x - 1;                       // 2·centerX
@@ -72,7 +54,7 @@ public:
         // z passes through (2D rotation).
     }
 
-    // The angle advances on the timer, applied next frame without any rebuild.
+    /// The angle advances on the timer, applied next frame without any rebuild.
     void tick() MM_NONBLOCKING override {
         const uint32_t now = platform::millis();
         if (lastElapsed_ == 0) lastElapsed_ = now;

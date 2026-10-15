@@ -6,30 +6,16 @@
 
 namespace mm {
 
-/// Effect: a rotating 3D object of shaded spheres, drawn with real perspective.
+/// A rotating 3D object drawn as shaded spheres, the demoscene classic that named the technique.
 /// @card VectorBallsEffect.gif
 ///
-/// The smallest complete demonstration of putting 3D on a panel.
-/// Every step is a shared power function rather than something this effect invented.
+/// The smallest complete demonstration of putting 3D on a panel: rotate, project, sort back to front, shade by distance, draw. Without painter's ordering a far ball paints over a near one and the object turns inside out.
 ///
-/// Prior art: the demoscene vector-ball effect, where the projection and shading are the library's.
+/// @attribution Demoscene
 ///
-/// @moreinfo
+/// @technical
 ///
-/// ## Five steps, all of them shared
-///
-/// Two `shader::rotate` calls turn the object, one per axis.
-/// `shader::project` puts it on screen, which is the one divide that is perspective.
-/// A painter's-order pass sorts back to front and `shader::depthFade` shades by distance.
-/// `draw::fillCircle` then draws each ball at the size that same divide gives it.
-///
-/// Painter's order matters: without it a far ball paints over a near one and the object inverts.
-///
-/// ## The shape is a point table
-///
-/// A cube's eight corners plus its six face centers: legible when it turns, trivial to sort.
-/// A different shape is a different table, and the machinery is unchanged.
-/// Cost is a rotate, a divide and a small disc per point, so `size` is the knob.
+/// The shape is a point table, a cube's eight corners plus its six face centers; a different shape is a different table. Every step is a shared power function.
 class VectorBallsEffect : public EffectBase {
 public:
     /// Catalog tags: this effect is the power-function showcase.

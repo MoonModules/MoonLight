@@ -4,21 +4,12 @@
 
 namespace mm {
 
-/// Water-ripple effect: distance from the center drives a wave phase.
+/// Distance from the center sets a per-column wave phase, so the lit surface ripples like water.
 /// @card RipplesEffect.gif
 ///
-/// Each column of the floor takes a phase from its distance to the center.
-/// One pixel per column then lights at the height that phase gives, so the surface ripples.
+/// The effect writes a height across y, so it wants real depth to read as a surface, and a flat layout collapses it to a single row. Its sibling @ref WaterRippleEffect simulates a real wave equation on a plane.
 ///
-/// @moreinfo
-///
-/// ## It is genuinely 3D
-///
-/// The effect writes a height across y, so it wants real depth to read as a surface.
-/// A flat layout collapses it to a single row, which is honest rather than a failure.
-/// WaterRippleEffect simulates a real wave equation on a plane instead.
-///
-/// Float trig runs in the loop, since the integer preference is for per-light color work.
+/// @attribution David Jupijn
 class RipplesEffect : public EffectBase {
 public:
     /// Catalog tags: MoonLight origin, a water ripple.
@@ -26,9 +17,9 @@ public:
     /// The surface fills a volume, so all three axes are used.
     Dim dimensions() const override { return Dim::D3; }
 
-    /// How fast the ripples travel, where 0 freezes them.
+    /// Wave animation rate.
     uint8_t speed = 50;
-    /// The wavefront spacing, where low gives tight rings.
+    /// Wavefront spacing; low is tight rings, high is wide.
     uint8_t interval = 128;
 
     /// Publish the ripple's speed and its spacing.
@@ -53,7 +44,7 @@ public:
                                      * std::sqrt(static_cast<float>(h));
         if (rippleInterval < 0.01f) return;
 
-        // The animation, which a speed of 0 freezes.
+        // The animation phase, which a higher speed advances faster.
         const float timeInterval = static_cast<float>(elapsed())
                                   / (100.0f - static_cast<float>(speed)) / 6.4f;
 

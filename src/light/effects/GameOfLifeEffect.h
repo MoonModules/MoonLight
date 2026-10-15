@@ -4,26 +4,26 @@
 
 namespace mm {
 
-/// Conway's Game of Life cellular-automaton effect.
+/// Conway's cellular automaton generalized to 2D and 3D, with selectable rulesets and a custom `B#/S#` rule.
 /// @card GameOfLifeEffect.gif
-/// Author: Ewoud Wijma (2022), modifications by Brandon Butler / @Brandon502 / wildcats08, https://natureofcode.com/book/chapter-7-cellular-automata/ , https://github.com/DougHaber/nlife-color , https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_MoonModules.h
 ///
-/// A live cell survives when its live-neighbor count is in the ruleset's survive set.
-/// A dead cell is born when its count is in the birth set.
-/// Neighbors are the 8 around a cell in 2D and the 26 in 3D, optionally wrapping toroidally.
+/// Cells live, die and are born by counting their live neighbors, on a panel or through a cube. New cells take a neighbor's palette color, and dead ones blur toward the background.
 ///
-/// Prior art: MoonLight's GameOfLife, after natureofcode chapter 7 and DougHaber/nlife-color.
+/// @attribution ewowi, Brandon502, Nature of Code, DougHaber
 ///
-/// @moreinfo
+/// @guide
 ///
-/// ## How a game ends, and the next begins
+/// ## Reading a rule
 ///
-/// The board fingerprints itself with crc16 at three periods.
-/// Every 16 generations catches oscillators, every lcm(h,w)*4 catches spaceships.
-/// Every sixth of those catches cube gliders in a volume.
-/// A recurring fingerprint, a die-out, a density floor or a random nudge respawns or resets it.
-/// A respawn injects an R-pentomino, or a glider one time in five.
-/// Each new game opens with a 1.5 second settle pause, unless `disablePause` is set.
+/// A rule lists the neighbor counts that give birth (B) and let a cell survive (S): Conway's `B3/S23` is born at 3, survives at 2 or 3. HighLife `B36/S23` breeds replicators, Maze `B3/S12345` grows corridors. `Custom B/S` takes `customRuleString` as `36/23`.
+///
+/// ## A board that never ends
+///
+/// With `infinite` on, a board that dies out, repeats itself or thins below a twentieth gets a new R-pentomino or glider dropped in, so the show keeps going. Off, it pauses a moment and starts a fresh game, as `startingLifeDensity` fills it.
+///
+/// @technical
+///
+/// The board fingerprints itself with crc16 at three periods: every 16 generations catches oscillators, every lcm(h,w)*4 spaceships, and six times that cube gliders. A repeat, a die-out, a density floor or a random nudge respawns or resets it.
 class GameOfLifeEffect : public EffectBase {
 public:
     /// Catalog tags: MoonModules origin.
@@ -31,7 +31,7 @@ public:
     /// Volumetric: a 3D board uses the 26-cell neighborhood.
     Dim dimensions() const override { return Dim::D3; }
 
-    // The menu labels are descriptive only, since parsing reads the digits around the slash.
+    /// The menu labels, descriptive only, since parsing reads the digits around the slash.
     static constexpr const char* kRulesetOptions[] = {
         "Custom B/S",
         "Conway's Game of Life B3/S23",
@@ -43,7 +43,7 @@ public:
     /// The rulesets in option order, the custom entry first, ending with how many the select offers.
     enum Ruleset : uint8_t { kRulesetCustom, kRulesetConway, kRulesetHighLife, kRulesetInverseLife, kRulesetMaze, kRulesetMazecentric, kRulesetDrighLife, kRulesetCount };
 
-    // Kept separate from the label, so a preset parses its rule rather than its menu wording.
+    /// The rule strings, kept separate from the labels so a preset parses its rule rather than its menu wording.
     static constexpr const char* kRulesetStrings[] = {
         nullptr,            // 0: custom → customRuleString
         "B3/S23",           // Conway
@@ -53,32 +53,31 @@ public:
         "B3/S1234",         // Mazecentric
         "B367/S23"};        // DrighLife
 
-    // Defaults match MoonLight's own GameOfLife.
     /// The background's red channel, which dead cells fade toward.
     uint8_t backgroundColorR = 0;
     /// The background's green channel.
     uint8_t backgroundColorG = 0;
     /// The background's blue channel.
     uint8_t backgroundColorB = 0;
-    /// The selected ruleset, 0 reading `customRuleString`.
+    /// The birth and survive rule, from Conway's to Maze, or your own.
     uint8_t ruleset    = kRulesetConway;
-    /// A user-typed rule, parsed as digits around a slash.
+    /// Your own rule: birth digits, a slash, survive digits.
     char    customRuleString[20] = "B/S";
-    /// Generations a second, where 100 runs uncapped.
+    /// Generation rate, where 100 is uncapped.
     uint8_t speed      = 20;
-    /// What percentage of cells a new game starts alive.
+    /// Percent of cells alive at the start.
     uint8_t lifeChance = 32;
-    /// How often a birth takes a random color rather than inheriting one.
+    /// Percent chance a newborn gets a random color.
     uint8_t mutation   = 2;
-    /// Wrap the board toroidally, so a glider leaving one edge returns at the other.
+    /// Toroidal edges on a 2D board; a lone glider and a cube run off.
     bool    wrap       = true;
-    /// Skip the settle pause a new game opens with.
+    /// Skip the 1.5 second settle pause between boards.
     bool    disablePause = false;
-    /// Age a live cell from green toward red rather than painting its palette color.
+    /// Age cells from green to red, not a neighbor's palette color.
     bool    colorByAge = false;
-    /// Respawn a static board rather than letting it sit.
+    /// Respawn a pentomino or glider on stasis instead of resetting.
     bool    infinite   = true;
-    /// How far a dead cell blurs toward the background, leaving a trail.
+    /// Dead-cell fade strength toward the background color.
     uint8_t blur       = 128;
 
     /// Publish the ruleset, the speed, the density and the coloring.
@@ -104,24 +103,21 @@ public:
         const nrOfLightsType count = nrOfLights();
         if (count > 0) {
             const size_t planeBytes = (static_cast<size_t>(count) + 7) / 8;
-            if (count != cellCount_) {
+            // Decided on the buffers themselves, which a release frees: a cached count would outlive that and skip the reallocation.
+            if (colors_.count() != count) {
                 // Resize all three, then test: every buffer is sized even if an earlier one fails.
                 const bool a = cells_.resize(planeBytes);
                 const bool b = future_.resize(planeBytes);
                 const bool c = colors_.resize(count);
                 const bool ok = a && b && c;
                 if (ok) {
-                    cellCount_ = count;
-                    planeBytes_ = planeBytes;
                     generation_ = 0;   // force a fresh fill on the next loop
                 } else {
                     cells_.resize(0); future_.resize(0); colors_.resize(0);
-                    cellCount_ = 0; planeBytes_ = 0;
                 }
             }
         } else {
             cells_.resize(0); future_.resize(0); colors_.resize(0);
-            cellCount_ = 0; planeBytes_ = 0;
         }
     }
 
@@ -140,8 +136,7 @@ public:
         const bool a = cells_.resize(planeBytes);
         const bool b = future_.resize(planeBytes);
         const bool c = colors_.resize(count);
-        if (!(a && b && c)) { cells_.resize(0); future_.resize(0); colors_.resize(0); cellCount_ = 0; planeBytes_ = 0; return false; }
-        cellCount_ = count; planeBytes_ = planeBytes;
+        if (!(a && b && c)) { cells_.resize(0); future_.resize(0); colors_.resize(0); return false; }
         // Unconditional: resize() zero-fills only on a size change, so a re-seed inherits stale cells.
         std::memset(cells_.data(), 0, planeBytes);
         std::memset(future_.data(), 0, planeBytes);
@@ -168,7 +163,7 @@ public:
 
     /// Run a generation when the speed allows, painting births, deaths and the blur trail.
     void tick() MM_NONBLOCKING override {
-        if (!cells_ || !future_ || !colors_ || cellCount_ == 0) return;
+        if (!cells_ || !future_ || !colors_) return;
         const lengthType w = width(), h = height(), d = depth();
 
         parseRuleset();
@@ -224,21 +219,18 @@ public:
     }
 
 private:
-    // cellCount_ and planeBytes_ carry automaton semantics the loops need, not buffer sizes.
     ScratchBuffer<uint8_t> cells_{*this};    ///< bit-packed alive/dead, current generation
     ScratchBuffer<uint8_t> future_{*this};   ///< bit-packed next generation, swapped in
     ScratchBuffer<uint8_t> colors_{*this};   ///< palette index per cell, 0 marking dead
-    nrOfLightsType cellCount_ = 0;
-    size_t   planeBytes_ = 0;
 
     uint32_t generation_ = 0;
-    uint32_t step_ = 0;           // ms timestamp gating the next step / settle pause
+    uint32_t step_ = 0;           ///< ms timestamp gating the next step and the settle pause
     Random8  rng_{0x6C0FFEE5u};
 
     bool     birthNumbers_[9]   = {};   ///< a dead cell with n live neighbors is born
     bool     surviveNumbers_[9] = {};   ///< a live cell with n live neighbors survives
 
-    // Three stasis fingerprints sampled at three periods, plus the solo-glider flag.
+    /// Three stasis fingerprints sampled at three periods, plus the solo-glider flag.
     uint16_t oscillatorCRC_ = 0, spaceshipCRC_ = 0, cubeGliderCRC_ = 0;
     uint16_t gliderLength_ = 0, cubeGliderLength_ = 0;
     bool     soloGlider_ = false;
@@ -247,7 +239,6 @@ private:
 
     uint32_t now() const { return elapsed(); }
 
-    // --- bit-packed cell access ---
     static bool getBit(const uint8_t* plane, nrOfLightsType i) { return (plane[i >> 3] >> (i & 7)) & 1; }
     static void setBit(uint8_t* plane, nrOfLightsType i, bool on) {
         const uint8_t m = static_cast<uint8_t>(1u << (i & 7));
@@ -257,12 +248,12 @@ private:
         return static_cast<nrOfLightsType>((static_cast<size_t>(z) * h + y) * w + x);
     }
 
-    // Green under colorByAge, since it ages toward red from there.
+    /// Green under colorByAge, since it ages toward red from there.
     RGB liveColor(uint8_t colorIndex) const {
         return colorByAge ? RGB{0, 255, 0} : colorFromPalette(*Palettes::active(), colorIndex);
     }
 
-    // Digits before the slash are birth counts and after are survive, so "36/23" parses.
+    /// Digits before the slash are birth counts and after are survive, so "36/23" parses.
     void parseRuleset() {
         const char* r = (ruleset == kRulesetCustom) ? customRuleString
                                        : (ruleset < kRulesetCount ? kRulesetStrings[ruleset] : kRulesetStrings[kRulesetConway]);
@@ -280,17 +271,18 @@ private:
         }
     }
 
-    // Integer gcd and lcm: the spaceship sampling period is lcm(h,w)*4.
+    /// Integer gcd, for the spaceship sampling period lcm(h,w)*4.
     static uint32_t gcd(uint32_t a, uint32_t b) { while (b) { const uint32_t t = a % b; a = b; b = t; } return a; }
+    /// Integer lcm.
     static uint32_t lcm(uint32_t a, uint32_t b) { if (!a || !b) return 0; return a / gcd(a, b) * b; }
 
-    // Fill at lifeChance density, seed the three CRCs, and set the settle pause.
+    /// Fill at lifeChance density, seed the three CRCs, and set the settle pause.
     void startNewGame(lengthType w, lengthType h, lengthType d) {
         generation_ = 1;
         step_ = disablePause ? now() : now() + 1500;
 
-        std::memset(cells_.data(), 0, planeBytes_);
-        std::memset(colors_.data(), 0, cellCount_);
+        std::memset(cells_.data(), 0, cells_.bytes());
+        std::memset(colors_.data(), 0, colors_.count());
 
         const draw::Canvas cv = canvas();
         for (lengthType z = 0; z < d; z++)
@@ -303,16 +295,16 @@ private:
                         draw::pixel(cv, {x, y, z}, liveColor(colors_[i]));
                     }
                 }
-        std::memcpy(future_.data(), cells_.data(), planeBytes_);
+        std::memcpy(future_.data(), cells_.data(), cells_.bytes());
 
         soloGlider_ = false;
-        const uint16_t crc = crc16(cells_.data(), planeBytes_);
+        const uint16_t crc = crc16(cells_.data(), cells_.bytes());
         oscillatorCRC_ = spaceshipCRC_ = cubeGliderCRC_ = crc;
         gliderLength_ = static_cast<uint16_t>(lcm(static_cast<uint32_t>(h), static_cast<uint32_t>(w)) * 4);
         cubeGliderLength_ = static_cast<uint16_t>(gliderLength_ * 6);  // rectangular-cuboid case left as-is
     }
 
-    // The frame between games: startNewGame already set the cells, so this is a straight repaint.
+    /// The frame between games: startNewGame already set the cells, so this is a straight repaint.
     void renderInitial(lengthType w, lengthType h, lengthType d) {
         const draw::Canvas cv = canvas();
         for (lengthType z = 0; z < d; z++)
@@ -324,7 +316,7 @@ private:
                 }
     }
 
-    // An R-pentomino, or a glider one time in five, in up to 100 attempts avoiding overlap.
+    /// An R-pentomino, or a glider one time in five, in up to 100 attempts avoiding overlap.
     void placePentomino(lengthType w, lengthType h, lengthType d, const draw::Canvas* cv) {
         // R-pentomino offsets; pattern[0][1] becomes 3 for the glider variant.
         uint8_t pattern[5][2] = {{1, 0}, {0, 1}, {1, 1}, {2, 1}, {2, 2}};
@@ -363,7 +355,7 @@ private:
         }
     }
 
-    // One generation, where `testMode` runs the automaton alone with no rendering or respawn.
+    /// One generation, where `testMode` runs the automaton alone with no rendering or respawn.
     void evolveAutomaton(lengthType w, lengthType h, lengthType d, bool testMode,
                          const draw::Canvas* cv = nullptr, RGB bg = {},
                          uint8_t frameBlur = 0, int fadedBackground = 0) {
@@ -442,12 +434,12 @@ private:
                 }
 
         soloGlider_ = (aliveCount == 5);
-        std::memcpy(cells_.data(), future_.data(), planeBytes_);
+        std::memcpy(cells_.data(), future_.data(), cells_.bytes());
 
         // The pure automaton: a deterministic blinker must not meet the respawn machinery.
         if (testMode) return;
 
-        const uint16_t crc = crc16(cells_.data(), planeBytes_);
+        const uint16_t crc = crc16(cells_.data(), cells_.bytes());
 
         bool repetition = false;
         if (!aliveCount || crc == oscillatorCRC_ || crc == spaceshipCRC_ || crc == cubeGliderCRC_)
@@ -458,7 +450,7 @@ private:
         const bool densityFloor = total > 0 && aliveCount * 20 < total;
         if ((repetition && infinite) || (infinite && !rng_.below(50)) || (infinite && densityFloor)) {
             placePentomino(w, h, d, testMode ? nullptr : cv);
-            std::memcpy(cells_.data(), future_.data(), planeBytes_);
+            std::memcpy(cells_.data(), future_.data(), cells_.bytes());
             repetition = false;
         }
         if (repetition) {

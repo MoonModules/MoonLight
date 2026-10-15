@@ -11,73 +11,67 @@
 
 namespace mm {
 
-/// Output driver: HUB75 panels driven directly from the board's own pins, with no receiving card.
+/// Drives HUB75 LED panels straight from the board's own pins, with no receiving card in between.
+/// @card Hub75Driver.png
 ///
-/// The sibling of `PanelCardDriver`, which reaches the same panels over raw Ethernet to a 5A-75B/E card and wins above roughly 16,384 pixels. The bit-plane wire format is Hub75Slots.h, pure data and host-tested.
+/// The sibling of @ref PanelCardDriver, which drives the same panels over Ethernet. A [MoonHub75](https://moonmodules.org/projects/hardware/#moonhub75-pcb) runs a 64x64 1/32-scan panel at 6-bit and 1,508 Hz; larger walls wait on reports.
 ///
-/// Prior art: the HUB75 lineage generally (mrcodetastic/ESP32-HUB75-MatrixPanel-DMA, hzeller/rpi-rgb-led-matrix, ESPHome's hub75 component). The scan and bit-plane structure belongs to the panel rather than to any library; studied, not copied.
+/// @attribution LostHope, Delphium, RobWomp, mrcodetastic, hzeller, ESPHome, Adafruit, Waveshare
 ///
-/// @moreinfo
+/// @guide
 ///
-/// **Output is continuous.** A WS2812 strand latches a frame and holds it; a HUB75 panel holds
-/// nothing and is lit only while being clocked, so the platform arms one scan and re-sends the same buffer forever. This driver writes the next frame into that buffer between scans, which is why tick() transmits nothing and waits for nothing. `Hub75Slots.h` covers scanning and why brightness is time.
+/// ## Which of the two paths
 ///
-/// **The `board` select supplies the pins**, defaulting to MoonHub75 and prefilling all fourteen on
-/// first definition, because a soldered line must never be guessed from nothing. Each map is taken from that board's own published source. The maps themselves are on the driver's page. A user wiring a panel reads them beside the rest of the card.
+/// A receiving card (@ref PanelCardDriver) earns its place above roughly 16,384 pixels; below that this driver is the small end of the split. [The HUB75 how-to](https://moonmodules.org/MoonLight/how-to/hub75-panels.html#which-of-the-two-paths) has the choice.
 ///
-/// **Two naming traps, both worth knowing before wiring.** A panel's ribbon numbers its color lines
-/// R1/G1/B1 (upper half) and R2/G2/B2 (lower half); some board docs call the same pairs R0/G0/B0 and R1/G1/B1. WLED's pin array ends `...LAT,OE,CLK`, so a map transcribed as `...CLK,LAT,OE` swaps three lines silently. Every map here is already in this driver's control order (clk, lat, oe).
+/// @technical
 ///
+/// **Continuous output.** A HUB75 panel is lit only while clocked, so the platform arms one scan and re-sends the buffer forever. The driver writes the next frame into it between scans, so tick() transmits nothing. The wire format is Hub75Slots.h.
+///
+/// **Brightness.** Binary coded modulation lights plane `p` for 2^p time units. Each plane is stored once, since emitting it 2^p times costs 1,060,800 bytes at 8-bit on a 64x64 panel against 33,280.
+///
+/// **Pins.** The first definition fills them from the chip's first board; the members stay -1, since a blind guess lands on octal PSRAM, USB, UART0 or a strapping pin. WLED's pin array ends `...LAT,OE,CLK`, so a map transcribed as `...CLK,LAT,OE` swaps three lines silently.
 class Hub75Driver : public DriverBase {
 public:
-    // Custom leaves whatever is there, so a hand-wired tweak survives the switch.
-    /// Which board's wiring to use; index into boardOptions_, 0 being MoonHub75.
+    /// The board's wiring: picking one fills the fourteen pins, Custom keeps yours.
+    /// @guide A published map hides the pin rows, which stay bound. A pin on flash or PSRAM is refused. Boards and the R1/G1/B1 naming trap: [the how-to](https://moonmodules.org/MoonLight/how-to/hub75-panels.html#which-board).
     uint8_t boardSel = 0;
 
-    // Unset by default: a blind guess lands on octal-PSRAM, USB, UART0 or a strapping pin.
-    /// Red, green and blue for the upper half-panel.
-    int8_t r1 = -1;
+    int8_t r1 = -1;   ///< Red, upper half-panel.
     int8_t g1 = -1;   ///< Green, upper half-panel.
     int8_t b1 = -1;   ///< Blue, upper half-panel.
-    /// Red, green and blue for the lower half-panel.
-    int8_t r2 = -1;
+    int8_t r2 = -1;   ///< Red, lower half-panel.
     int8_t g2 = -1;   ///< Green, lower half-panel.
     int8_t b2 = -1;   ///< Blue, lower half-panel.
-    /// Row address lines; a 1/16 panel leaves `addrE` unset.
-    int8_t addrA = -1;
+    int8_t addrA = -1;   ///< Row address bit 0.
     int8_t addrB = -1;   ///< Row address bit 1.
     int8_t addrC = -1;   ///< Row address bit 2.
     int8_t addrD = -1;   ///< Row address bit 3.
     int8_t addrE = -1;   ///< Row address bit 4, on 1/32 panels.
-    /// The pixel clock.
-    int8_t clk = -1;
+    int8_t clk = -1;   ///< The shift clock.
     int8_t lat = -1;   ///< Latch: moves the shift register to the output drivers.
     int8_t oe = -1;    ///< Output enable, active LOW.
 
-    // NOT derivable from the panel's size: two of one size can scan differently.
     /// The clock edges `clockEdgeSel` picks from, in kEdgeOptions order.
     enum ClockEdge : uint8_t { kEdgeRising, kEdgeFalling, kEdgeCount };
-    /// Which clock edge the panel's chips sample on.
+    /// The edge the chips sample on; every pixel one column over means the other.
     uint8_t clockEdgeSel = kEdgeRising;
-    /// The panel's own scan rate; index into kScanOptions.
+    /// The panel's scan rate: 1/8, 1/16 or 1/32, read off the panel.
+    /// @guide Two panels of identical dimensions can scan differently, so the size does not give the rate. A 1/32-scan panel needs `e`; on 1/16 panels that pin is free.
     uint8_t scanSel = 1;
 
-    // Every plane costs a full scan, so this trades color precision against refresh and memory.
-    /// Bit planes per frame, and therefore the refresh tradeoff.
+    /// Bit planes per frame: color levels against refresh and memory.
+    /// @guide Depth costs refresh and memory linearly. Brightness shortens each plane's lit time, so full white lights about a third of the time at 6-bit.
     uint8_t bitDepth = 6;
 
-    // A P4 has one of each, so a board driving strips from one needs the panel on the other.
-    /// Which silicon block drives the panel, where the chip offers a choice.
+    /// The silicon block that drives the panel, LCD_CAM or Parlio, where the chip has both.
+    /// @guide A P4 has one LCD_CAM and one Parlio, so a board already driving WS2812 strips from one needs the panel on the other. Only you know which way round.
     uint8_t peripheralSel_ = 0;
-
-    /// The card's tag: this driver is two-dimensional.
-    const char* tags() const override { return "🟦"; }
 
     /// A panel shows a level only as lit time, so brightness shortens the planes' windows rather than scaling values.
     bool dimsByTime() const MM_NONBLOCKING override { return true; }
 
-    // Reported only while the bus is up, so a failed init cannot phantom-claim the block.
-    /// The peripheral block this driver holds, for the sibling claim guard.
+    /// The peripheral block this driver holds while the bus is up, so a failed init claims nothing; the sibling claim guard reads it.
     LedHwBlock hwBlock() const override {
         if (!running_) return LedHwBlock::None;
         // WHICH block, not a guess: claiming the wrong one frees a live block and holds a free one.
@@ -115,12 +109,11 @@ public:
         // The one knob a chip family changes. WLED exposes the same flag as its bus "reversed" box.
         controls_.addSelect("clockEdge", clockEdgeSel, kEdgeOptions, kEdgeCount);
 
-        // The MEASURED refresh: what turns "it flickers" into a number someone can act on.
+        /// The measured refresh rate: the number to report when a panel flickers.
         controls_.addReadOnly("refresh", refreshStr_, sizeof(refreshStr_));
     }
 
-    // Written here rather than at the next rebuild, so the card's fields update at once.
-    /// Apply a control change; picking a board writes its map into the pin controls.
+    /// Apply a control change; picking a board writes its map into the pin controls at once, not at the next rebuild.
     void onControlChanged(const char* name) override {
         if (name && std::strcmp(name, "board") == 0) {
             applyBoard();
@@ -130,8 +123,7 @@ public:
         DriverBase::onControlChanged(name);
     }
 
-    // The rest, such as a pin typo being corrected, are handled by prepare() re-initializing.
-    /// Whether changing `name` forces a rebuild: the wire format and the geometry do.
+    /// Whether changing `name` forces a rebuild: the wire format and the geometry do, and prepare() re-initializes for the rest, such as a pin typo.
     bool affectsPrepare(const char* name) const override {
         static const char* const kRebuild[] = {
             "r1", "g1", "b1", "r2", "g2", "b2", "a", "b", "c", "d", "e",
@@ -220,6 +212,7 @@ public:
         setStatus(statusBuf_, Severity::Status);
     }
 
+    /// Correct the frame and pack it into the panel's bit planes.
     void tick() MM_NONBLOCKING override {
         if (!running_ || !sourceBuffer_ || !sourceBuffer_->data()) return;
         uint8_t* out = platform::hub75Buffer(hub_);
@@ -256,15 +249,13 @@ public:
         hub75Encode(wire_, out, geo_);
     }
 
-    // An override because the geometry can change under it: resize before the next tick reads.
-    /// Resize the correction scratch when the wiring changes.
+    /// Resize the correction scratch when the wiring changes, since the geometry can change under it before the next tick reads.
     void onCorrectionChanged() override {
         if (!running_) return;
         ensureWire(static_cast<size_t>(geo_.width) * geo_.height * 3);
     }
 
-    // MM_NONBLOCKING STAYS: dropping it widens the base's contract and the compiler refuses.
-    /// Publish the measured refresh rate.
+    /// Publish the measured refresh rate; MM_NONBLOCKING stays, or the base's contract widens and the compiler refuses.
     void tick1s() MM_NONBLOCKING override {
         if (!running_) return;
         const uint16_t hz = platform::hub75RefreshHz(hub_);
@@ -274,8 +265,7 @@ public:
     }
 
 private:
-    // Re-points by LABEL, so a geometry change that drops a backend cannot select another.
-    /// Offer the backends this silicon has and that can carry this geometry.
+    /// Offer the backends this silicon has and that can carry this geometry, re-pointing by label so a dropped backend cannot select another.
     void buildBackendOptions() {
         const char* current = (peripheralSel_ < backendOptionCount_)
                                   ? backendOptions_[peripheralSel_] : nullptr;
@@ -322,13 +312,12 @@ private:
         bool editable;   // false on a published map: those lines are soldered
     };
 
-    // The platform names the chip; inferring it from GPIO counts was a guess dressed as a test.
+    /// Whether this chip is an S3, as the platform names it; likewise for P4 and S31, since inferring the chip from GPIO counts is a guess dressed as a test.
     static bool chipIsS3()  { return platform::isEsp32S3; }
     static bool chipIsP4()  { return platform::isEsp32P4; }
     static bool chipIsS31() { return platform::isEsp32S31; }
 
-    /// The boards this driver knows, and the per-chip generic sets.
-    // The `-generic` rows are NOT boards: free pins from gpio-usage.md, and editable.
+    /// The boards this driver knows, and the per-chip generic sets, which are editable free pins from gpio-usage.md rather than boards.
     static constexpr BoardPins kBoards[] = {
         // MoonHub75 PCB (Lilygo T7-S3). MOONHUB75/README.md names the upper half R0/G0/B0.
         {"MoonHub75",   1,  5,  6,   7, 13,  9,  16, 48, 47, 21, 38,  18,  8,  4, chipIsS3, false},
@@ -346,8 +335,7 @@ private:
     };
     static constexpr uint8_t kBoardCount = sizeof(kBoards) / sizeof(kBoards[0]);
 
-    // A P4-generic row on an S3 would be fourteen pins that chip does not have.
-    /// Offer the boards that make sense on this chip.
+    /// Offer the boards that make sense on this chip: a P4-generic row on an S3 would be fourteen pins that chip lacks.
     void buildBoardOptions() {
         const char* current = (boardSel < boardOptionCount_) ? boardOptions_[boardSel] : nullptr;
         boardOptionCount_ = 0;
@@ -422,8 +410,7 @@ private:
         return -1;
     }
 
-    // Custom writes nothing, so switching to it after an edit keeps the edit.
-    /// Write the chosen board's map into the pin controls.
+    /// Write the chosen board's map into the pin controls; Custom writes nothing, so switching to it keeps an edit.
     void applyBoard() {
         if (boardSel >= boardOptionCount_) return;
         const BoardPins& b = kBoards[boardIndex_[boardSel]];
@@ -449,8 +436,7 @@ private:
     static constexpr const char* kScanOptions[kScanCount] = {"1/8", "1/16", "1/32"};
     static constexpr uint8_t kScanRates[kScanCount] = {8, 16, 32};
 
-    // -1 for unset becomes 0xFFFF: a P4 GPIO number can exceed int8_t's range.
-    /// Convert a Pin control's value to the platform seam's pin type.
+    /// Convert a Pin control's value to the platform seam's pin type; -1 for unset becomes 0xFFFF, since a P4 GPIO number can exceed int8_t's range.
     static uint16_t toPin(int8_t p) {
         return p < 0 ? 0xFFFF : static_cast<uint16_t>(p);
     }

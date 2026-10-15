@@ -10,49 +10,49 @@ Why the boundary is drawn here, and what is allowed to cross it, is [MoonCore's 
 
 `millis`, `micros`, `delayMs`, `delayUs`. The clock every animation is written against, and the only sleep a module may take.
 
-Detail: [technical](moxygen/platform.md)
+Source: [platform.h](../../../src/platform/platform.h)
 
 ## Memory
 
 `alloc`, `free`, `allocInternal`, `freeHeap`, `freeInternalHeap`, plus the accounting (`allocatedBytes`, `allocatedCount`, `allocatedPeak`) that MoonStats reports. Internal versus PSRAM is a platform question, so a module asks for what it needs and the layer decides where it lands.
 
-Detail: [technical](moxygen/platform.md)
+Source: [platform.h](../../../src/platform/platform.h)
 
 ## Executable memory
 
 `allocExec`, `writeExec`, `freeExec`. Memory a CPU will fetch instructions from, which is IRAM on an ESP32 and an mmap page on desktop. [MoonLive](../light/moonlive.md) compiles into it; nothing else does.
 
-Detail: [technical](moxygen/platform.md)
+Source: [platform.h](../../../src/platform/platform.h)
 
 ## Filesystem
 
 `fsMount`, `fsRead`, `fsWrite`, `fsList`, `fsExists`, `fsMkdir`. LittleFS on a device and `std::filesystem` on desktop, behind one set of names, so a config file and a script are read the same way on both.
 
-Detail: [technical](moxygen/platform.md)
+Source: [platform.h](../../../src/platform/platform.h)
 
 ## GPIO and ADC
 
 `gpioRead`, `gpioWrite`, `gpioInputBegin`, `adcRead`, `adcReadMv`, `adcMaxCount`, and the capability introspection PinsModule renders. A pin's existence is a per-chip fact, so the layer answers it rather than each module guessing.
 
-Detail: [technical](moxygen/platform.md)
+Source: [platform.h](../../../src/platform/platform.h)
 
 ## Networking
 
 Sockets, plus the raw-L2 ethernet path (`ethInit`, `ethSendRaw`, `ethLinkUp`, `ethGetIPv4`). Art-Net and sACN reach the wire through this, which is why a driver never opens a socket itself.
 
-Detail: [technical](moxygen/platform.md)
+Source: [platform.h](../../../src/platform/platform.h)
 
 ## Tasks and workers
 
 RTOS task introspection for TasksModule, and the pinned worker with wake notification that carries the render and encode split across cores. On desktop these are threads; the contract is identical.
 
-Detail: [technical](moxygen/platform.md)
+Source: [platform.h](../../../src/platform/platform.h)
 
 ## Video output
 
 NDI and HLS. Present where the target can carry them and absent elsewhere, which a module discovers by asking rather than by target.
 
-Detail: [technical](moxygen/platform.md)
+Source: [platform.h](../../../src/platform/platform.h)
 
 ## Three implementations, one contract
 
@@ -62,13 +62,13 @@ The MoonLive assemblers live here too, one per instruction set, because emitting
 
 | Assembler | Target |
 |---|---|
-| [moonlive_asm_xtensa](moxygen/moonlive_asm_xtensa.md) | classic ESP32 and S3 |
-| [moonlive_asm_riscv](moxygen/moonlive_asm_riscv.md) | ESP32-P4 |
-| [moonlive_asm_thumb2](moxygen/moonlive_asm_thumb2.md) | Teensy 4.1 |
-| [moonlive_asm_host](moxygen/moonlive_asm_host.md) | desktop arm64 and x86-64 |
+| [moonlive_asm_xtensa](../../../src/platform/esp32/moonlive_asm_xtensa.h) | classic ESP32 and S3 |
+| [moonlive_asm_riscv](../../../src/platform/esp32/moonlive_asm_riscv.h) | ESP32-P4 |
+| [moonlive_asm_thumb2](../../../src/platform/teensy/moonlive_asm_thumb2.h) | Teensy 4.1 |
+| [moonlive_asm_host](../../../src/platform/desktop/moonlive_asm_host.h) | desktop arm64 and x86-64 |
 
-Each satisfies the assembler contract [the lowering](../light/moonlive.md) names, so adding an instruction set is a new file behind an unchanged IR. Per-target build settings are in each target's own `platform_config`: [desktop](moxygen/desktop_platform_config.md), [ESP32](moxygen/esp32_platform_config.md), which carries the per-chip capability table, and [Teensy 4.1](moxygen/teensy_platform_config.md).
-Two headers serve every target: [the Ethernet wiring](moxygen/eth_config.md) each config's default is written in, and [the loopback bit check](moxygen/loopback_verify.md) every LED self-test ends in.
+Each satisfies the assembler contract [the lowering](../light/moonlive.md) names, so adding an instruction set is a new file behind an unchanged IR. Per-target build settings are in each target's own `platform_config`: [desktop](../../../src/platform/desktop/platform_config.h), [ESP32](../../../src/platform/esp32/platform_config.h), which carries the per-chip capability table, and [Teensy 4.1](../../../src/platform/teensy/platform_config.h).
+Two headers serve every target: [the Ethernet wiring](../../../src/platform/eth_config.h) each config's default is written in, and [the loopback bit check](../../../src/platform/loopback_verify.h) every LED self-test ends in.
 
 ## What does not belong here
 

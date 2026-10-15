@@ -1,10 +1,8 @@
 #pragma once
 
-/// @defgroup ControlSurface A transport that mirrors the surface state
-/// @{
 /// A control surface is a view of the state ControlModule owns, kept in step in both directions.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## Why a surface mirrors rather than syncs
 ///
@@ -47,5 +45,4 @@ public:
     virtual void sendDisplay(const char* text) { (void)text; }
 };
 
-/// @}
 }  // namespace mm

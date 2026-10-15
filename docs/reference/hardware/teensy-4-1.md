@@ -90,7 +90,7 @@ The device opens by name (`http://MM-Teensy41.local`) through mDNS.
 ## LED outputs
 
 Up to 16 WS2812B lanes, on any of the pins of GPIO port 6: **0, 1, 14 to 27 and 38 to 41**, in any order.
-The [Parallel LED](../../moonmodules/light/drivers.md#parallel-led-details) driver's `GPIO-DMA` peripheral drives them.
+The [Parallel LED](../../moonmodules/light/drivers.md#parallelled) driver's `GPIO-DMA` peripheral drives them.
 One DMA channel, paced by a timer, writes each 373 ns slot into the port, so the CPU is free while a frame clocks out.
 A frame of 256 lights on a lane takes 7.2 ms (a 138 fps ceiling).
 The data leaves the pins at 3.3 V, below the 3.5 V a WS2812B powered at 5 V reads as a high.

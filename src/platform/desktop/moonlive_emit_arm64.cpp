@@ -1,7 +1,6 @@
 #include "core/moonlive/moonlive_emit.h"
 #include <cstring>
 
-/// @defgroup moonlive_emit_arm64 MoonLive arm64 fill routines
 /// The fill routines as native machine code, copied into an executable page and called through a function pointer.
 ///
 /// One instruction set per file, self-guarding, matching the assembler beside it.

@@ -8,8 +8,6 @@
 
 namespace mm {
 
-/// @defgroup Ipv4 An IPv4 address as four octets
-/// @{
 /// Reading one from text, and whether a static setting can be used.
 ///
 /// MoonBase includes it as well as the app, so the recovery image refuses the same static settings the app refuses and comes up where the app does.
@@ -39,8 +37,7 @@ inline uint32_t word(const uint8_t q[4]) MM_NONBLOCKING {
     return (uint32_t(q[0]) << 24) | (uint32_t(q[1]) << 16) | (uint32_t(q[2]) << 8) | q[3];
 }
 
-// Not 0.x, loopback 127.x, or multicast and reserved from 224.x on.
-/// Whether an address can name a host.
+/// Whether an address can name a host: not 0.x, loopback 127.x, or multicast and reserved from 224.x on.
 inline bool isHost(uint32_t a) MM_NONBLOCKING {
     const uint32_t first = a >> 24;
     return first != 0 && first != 127 && first < 224;
@@ -49,14 +46,12 @@ inline bool isHost(uint32_t a) MM_NONBLOCKING {
 /// Whether a netmask is ones then zeros, with at least one of each.
 inline bool isMask(uint32_t m) MM_NONBLOCKING { return m != 0 && m != 0xFFFFFFFFu && (~m & (~m + 1)) == 0; }
 
-// A /31 has no network or broadcast address (RFC 3021), so both of its addresses are hosts.
-/// Whether an address is its subnet's network or broadcast address.
+/// Whether an address is its subnet's network or broadcast address; a /31 has neither (RFC 3021), so both of its addresses are hosts.
 inline bool isNetworkOrBroadcast(uint32_t a, uint32_t m) MM_NONBLOCKING {
     return ~m > 1 && ((a & ~m) == 0 || (a | m) == 0xFFFFFFFFu);
 }
 
-// A code rather than a sentence, so MoonBase, which only asks whether a setting is usable, carries none of the text.
-/// Why a static setting cannot be used, or None when it can.
+/// Why a static setting cannot be used, or None when it can. It is a code rather than a sentence, so MoonBase, which only asks whether a setting is usable, carries none of the text.
 enum class Fault : uint8_t { None, Mask, NoAddress, AddressNotHost, AddressReserved, GatewayOutside, GatewaySelf, GatewayReserved, Dns };
 
 /// Why a static address cannot be used in its subnet.
@@ -67,8 +62,7 @@ inline Fault addressFault(uint32_t a, uint32_t m) MM_NONBLOCKING {
     return Fault::None;
 }
 
-// A gateway of 0.0.0.0 is none, which a local-only device runs without.
-/// Why a gateway cannot be used for an address.
+/// Why a gateway cannot be used for an address; a gateway of 0.0.0.0 is none, which a local-only device runs without.
 inline Fault gatewayFault(uint32_t g, uint32_t a, uint32_t m) MM_NONBLOCKING {
     if (!g) return Fault::None;
     if ((g & m) != (a & m)) return Fault::GatewayOutside;
@@ -89,7 +83,5 @@ inline Fault staticFault(const uint8_t ip[4], const uint8_t gateway[4], const ui
 }
 
 }  // namespace ipv4
-
-/// @}
 
 }  // namespace mm

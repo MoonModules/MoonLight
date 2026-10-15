@@ -11,32 +11,28 @@ namespace mm { class ControlModule; }   // presets published as the HA effect li
 
 namespace mm {
 
-/// Bridges the light's controls to an MQTT broker, so a home-automation hub can drive it.
-///
-/// A network sub-service, wired by code beside the other network children.
-/// Every command routes through the shared control primitive, adding only a transport.
+/// Lets a home-automation hub switch the light on and off and set its brightness and color over MQTT.
 /// @card MqttModule.png
 ///
-/// @moreinfo
+/// A small MQTT 3.1.1 client of our own, off until a broker is set, wired by code as a child of Network. Every command goes through the shared control path, so MQTT adds only a transport.
 ///
-/// ## The client is our own
+/// @guide
 ///
-/// MQTT 3.1.1 is small and standard, so the wire format lives in a tested header.
-/// This module owns only the socket lifecycle.
-/// The topic prefix derives from a stable hardware id, so a rename never repoints topics.
-/// The friendly name rides its own retained topic instead.
+/// ## Which route
 ///
-/// ## Home Assistant discovery
+/// Home Assistant finds the device over the WLED integration with no broker. Use MQTT for Homebridge, a broker-only network or another hub. [The how-to](https://moonmodules.org/MoonLight/how-to/home-automation.html#the-mqtt-topics) lists the topics.
 ///
-/// With the opt-in on, a retained config makes a discovery-aware hub create a wired entity.
-/// It defaults off because the compatibility shim already gives that hub a richer light.
-/// The same gate publishes an update entity, where a firmware update surfaces.
+/// ## Getting it connected
 ///
-/// ## Lifecycle
+/// The status line says why. Give the broker computer's LAN address, never 127.0.0.1, and let port 1883 through its firewall.
 ///
-/// Everything runs on the slow tick, off the render path, since MQTT is slow control.
-/// It connects lazily, subscribes, keeps alive, and publishes on change and on connect.
-/// A dropped socket reconnects with a backoff.
+/// @technical
+///
+/// **The client is our own.** MQTT 3.1.1 is small and standard, so the wire format lives in a tested header and this module owns the socket lifecycle. The topic prefix derives from a stable hardware id, so a rename never repoints topics.
+///
+/// **Home Assistant discovery.** With the opt-in on, a retained config makes a discovery-aware hub create a wired entity. It defaults off because the compatibility shim already gives that hub a richer light. The same gate publishes an update entity.
+///
+/// **Lifecycle.** Everything runs on the slow tick, off the render path, since MQTT is slow control. It connects lazily, subscribes, keeps alive, and publishes on change and on connect; a dropped socket reconnects with a backoff.
 class MqttModule : public MoonModule {
 public:
     /// Adopt the system module, whose name and address the published topics carry.
@@ -106,8 +102,7 @@ private:
     /// Subscribe to the hub's own command topic.
     void subscribeHaSet();
 
-    // A second discovery component in the light's shape, behind the same gate.
-    /// Build the discovery topic for the update entity.
+    /// Build the discovery topic for the update entity, a second discovery component in the light's shape behind the same gate.
     void buildUpdateDiscoveryTopic(char* out, size_t cap) const;
     /// Announce the update entity, or retract it.
     void publishUpdateDiscovery(bool announce);
@@ -123,7 +118,7 @@ private:
     uint32_t lastPresetsRev_ = 0;   ///< the preset revision last announced
     char lastLook_[32] = "";        ///< the look last published, part of the change gate
 
-    // constexpr so the compiler can prove the buffer bounds a runtime pointer would not.
+    /// The topic root, constexpr so the compiler can prove the buffer bounds a runtime pointer would not.
     static constexpr const char kPrefixRoot[] = "MoonLight";
     /// Derived from the root rather than counted from it, so a renamed root cannot silently truncate every topic.
     static constexpr size_t kPrefixLen = sizeof(kPrefixRoot) + 1 + 6;
@@ -132,12 +127,20 @@ private:
     /// Write one full topic from its suffix.
     void buildTopic(char* out, size_t cap, const char* suffix) const;
 
-    char     broker_[64]   = "";          ///< the broker's hostname or address
-    uint16_t port_         = 1883;        ///< the broker's port
-    char     username_[48] = "";          ///< optional credentials
-    char     password_[48] = "";          ///< stored obfuscated, like the WiFi password
-    bool     haDiscovery_  = false;       ///< announce a discovery light, opt-in
-    char     statusStr_[64] = "disabled"; ///< what the card reports
+    /// The broker's hostname or IP address.
+    /// @guide A hostname such as `homeassistant.lan` is resolved through DNS. On a laptop broker use its LAN address.
+    char     broker_[64]   = "";
+    /// The broker's TCP port.
+    uint16_t port_         = 1883;
+    /// The broker login, optional.
+    char     username_[48] = "";
+    /// The broker password, stored obfuscated like the WiFi one.
+    char     password_[48] = "";
+    /// Announce a Home Assistant discovery light, opt-in.
+    /// @guide Off by default: Home Assistant already finds the device over the WLED integration, and both would list it twice. Turn it on for broker-only or cross-subnet setups. The firmware update entity follows the same switch.
+    bool     haDiscovery_  = false;
+    /// Where the connection stands, from disabled and idle through connected, or the error.
+    char     statusStr_[64] = "disabled";
 
     platform::TcpConnection conn_;
     MqttInboundParser parser_;
@@ -149,7 +152,7 @@ private:
     uint32_t nameSig_        = 0;         ///< detects a rename while connected
     uint16_t nextPacketId_   = 1;         ///< the next id to hand out
 
-    // The last published state, so a publish only emits on a change.
+    /// The last published state, so a publish only emits on a change.
     bool    lastOn_    = false;
     uint8_t lastBri_   = 0;
     uint8_t lastPalette_ = 0xFF;          ///< a sentinel forcing the first publish
@@ -157,7 +160,7 @@ private:
 
     bool     lastConnectFailed_ = false;  ///< widens the backoff, a bad hostname costing a lookup
 
-    // Allocated only while discovery publishes, so a device that never enables it pays nothing.
+    /// Allocated only while discovery publishes, so a device that never enables it pays nothing.
     static constexpr size_t kDiscoveryPayloadBase = 320;
     static constexpr size_t kDiscoveryBufBase     = 448;
     static_assert(kDiscoveryDynamicBytes == kDiscoveryPayloadBase + kDiscoveryBufBase,
@@ -175,14 +178,14 @@ private:
     /// Free both, which release and turning discovery off both do.
     void freeDiscoveryBuffers();
 
-    // Test-only, and null in production.
+    /// Test-only send capture buffer, null in production.
     uint8_t* sendCapture_    = nullptr;
     size_t   sendCaptureCap_ = 0;
     size_t   sendCaptureLen_ = 0;
 
     static constexpr uint16_t kKeepaliveSec = 30;          ///< how often to ping
     static constexpr uint32_t kReconnectBackoffMs = 5000;  ///< after a clean disconnect
-    // Harder after a failure, since a bad hostname re-runs a blocking lookup each try.
+    /// Reconnect backoff after a failure, longer since a bad hostname re-runs a blocking lookup each try.
     static constexpr uint32_t kFailedBackoffMs    = 30000;
     static constexpr uint32_t kConnectTimeoutMs = 8000;    ///< the whole connect handshake
 };

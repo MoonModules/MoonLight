@@ -298,7 +298,7 @@ test("the receiver lists become hosts, and discovery's WLED switch becomes its a
     assert.equal(send.lightsPerHost, "100");
     const net = rootOf(files, "/.config/Network.json");
     assert.equal(kids(net, "DevicesModule")[0].addressing, 1);                 // multicast + broadcast
-    assert.equal(kids(net, "OscModule")[0].hosts, "192.168.1.147");
+    assert.equal(kids(net, "OscService")[0].hosts, "192.168.1.147");   // the type renamed as well
 });
 
 test("the MIDI desk's usb switch becomes its source, browser or USB", () => {

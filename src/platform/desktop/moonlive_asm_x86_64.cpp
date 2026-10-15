@@ -3,12 +3,11 @@
 
 #include <cstring>
 
-/// @defgroup moonlive_asm_x86_64 MoonLive x86-64 assembler
 /// Each named instruction encoded once, composed by the shared lowering.
 ///
 /// One architecture per file, self-guarding, the shape the device backends use; it carries its own binding of the shared walk to this assembler.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## A second axis the other host backend does not have
 ///

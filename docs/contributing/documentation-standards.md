@@ -8,7 +8,7 @@ It starts with the four kinds of page and which one each of ours is. Then how a 
 
 ## The hierarchy
 
-A reader enters at the top and stops as soon as they have enough. A writer puts a fact at the shallowest level that fully owns it, and links to it from every level above. Purple is the four [Diátaxis](https://diataxis.fr/) types, green is written once in the source and generated from there, and gold sits outside the grid.
+A reader enters at the top and stops as soon as they have enough. A writer puts a fact at the shallowest level that fully owns it, and links to it from every level above. Purple is the four [Diátaxis](https://diataxis.fr/) types, green is written once in the source, and gold sits outside the grid.
 
 ```mermaid
 flowchart TB
@@ -20,14 +20,13 @@ flowchart TB
     ref["<b>reference</b><br/>reference/ · moonmodules/<br/><i>facts, fast</i>"]
 
     mod["<b>moonmodules/</b><br/><i>reference: one row per module</i>"]
-    mox["<b>moxygen/</b><br/><i>every member, generated</i>"]
     hdr["<b>src/**/*.h</b><br/><i>per-member detail lives here</i>"]
 
     rules["<b>the rules</b><br/>CLAUDE.md · contributing/<br/><i>for contributors</i>"]
     outside["<b>work/</b> · <b>friend-repos/</b><br/><i>planned, shipped, watched</i>"]
 
     entry --> tut --> how --> exp --> ref
-    entry --> mod --> mox --> hdr
+    entry --> mod --> hdr
     entry -.-> rules
     rules -.-> outside
 
@@ -37,7 +36,7 @@ flowchart TB
     classDef outsideGrid fill:#4d3d1f,stroke:#c9a95f,color:#fff
     class entry entryCell
     class tut,how,exp,ref diataxis
-    class mod,mox,hdr generated
+    class mod,hdr generated
     class rules,outside outsideGrid
 ```
 
@@ -45,7 +44,7 @@ Each level says what a thing is and links down for the rest. A fact stated above
 
 ### Zooming in on the green boxes
 
-The three green levels above are one domain, one summary page, one group of headers. A reader drills down: pick the domain, pick the page whose subject matches the question, follow a card's `technical` link into the members. A writer walks the same path in reverse, and a documentation sweep follows it page by page, which is how progress is tracked.
+The green levels above are one domain, one summary page, one group of headers. A reader drills down: pick the domain, pick the page whose subject matches the question, follow a card's Source link into the header. A writer walks the same path in reverse, and a documentation sweep follows it page by page, which is how progress is tracked.
 
 ```mermaid
 flowchart LR
@@ -121,7 +120,7 @@ Every page serves one of four reader needs, and only one. This is [Diátaxis](ht
 | | Doing | Understanding |
 |---|---|---|
 | **Learning** | **Tutorial**: a lesson to follow. `gettingstarted.md`, `tutorials/`. | **Explanation**: why it is shaped this way. `explanation/`. |
-| **Working** | **How-to**: one task you already have. `how-to/`. | **Reference**: facts, fast. `reference/`, the generated technical pages, the catalog rows. |
+| **Working** | **How-to**: one task you already have. `how-to/`. | **Reference**: facts, fast. `reference/`, the catalog rows, the headers. |
 
 **The folder under `docs/` is the type.** A page's path says which cell it sits in. So `how-to/building.md` is a how-to by location, and a reader never has to be told. The nav labels stay reader-facing ("Understanding MoonLight" over "Explanation"), because the type is a writer's tool.
 
@@ -129,9 +128,9 @@ The test for any page is the cell it sits in. A tutorial that stops to explain, 
 
 Two kinds of page sit outside the grid on purpose. **The rules** ([CLAUDE.md](../../CLAUDE.md), [coding-standards.md](coding-standards.md), this page) live in `contributing/`, are for contributors, and bind every change. `legal/` sits outside it too. **Work not yet in the code** lives under `docs/work/`, and nothing there describes the system as it is. `future` is what does not exist, `present` is being built and deleted at its PR, `past` is what shipped.
 
-Two scales below a page. **A module** has exactly one reference page written and one generated (see [Module pages](#module-pages)); **a line of code** carries its own reason in a comment (see [Comments](#comments)).
+Two scales below a page. **A module** has one reference card and one header (see [Module pages](#module-pages)); **a line of code** carries its own reason in a comment (see [Comments](#comments)).
 
-**The split that decides everything else.** A hand-written page says what the code cannot; a generated page IS the code. Nobody edits a generated page, because the next build overwrites it. So a fact about behavior belongs in the `.h` and reaches the reader through generation; a fact about intent, cost or sequence has no source to generate from, and is written.
+**The split that decides everything else.** A hand-written page says what the code cannot; the header is the code's own documentation. So a fact about behavior belongs in the `.h`, beside the code. A fact about intent, cost or sequence has no member to sit on, and is written.
 
 **A shipped plan is a working document, not testimony.** It may be edited, trimmed, or deleted: whatever its PR already carries is duplication. Only a dated record stating what was true at a moment (release notes, an inventory quoted from another project) is kept unrewritten.
 
@@ -158,6 +157,7 @@ Two scales below a page. **A module** has exactly one reference page written and
 - **A diagram beats the paragraph that describes it.** Draw a structure, a flow or a hierarchy as a [Mermaid](https://mermaid.js.org/) diagram: it renders on the site and on GitHub, and it diffs as text. A screenshot does the same where the point is what a reader sees. Both follow the example rule: they replace prose rather than decorate it.
 - **One example, only where the prose alone would be misread.** A code block earns its place by preventing a wrong reading; a second example is the author enjoying the subject.
 - **A link's text says what it reaches.** "See the hot path rule" tells the reader whether to follow it; "see here" does not, and a bare filename only if the filename is the point.
+- **A module is linked by its catalog card**, which links its header in turn. A link to the code itself, a line or a symbol, goes to the header.
 - **One parenthetical per sentence.** A second qualification means the sentence carries two ideas: split it, or drop the weaker one.
 - **Mechanism lives with the mechanism.** How a generator or script works belongs in that script. A page says what the reader must do.
 - **American English spelling, everywhere**: identifiers, wire keys, comments, docs, UI strings. A grep for one dialect silently misses the other, and a drifting wire key breaks a contract with no compile error. A proper noun keeps its own spelling.
@@ -184,38 +184,22 @@ A unit is a device even when it is one bare board: "the bridge device", "the dev
 
 ### Two surfaces per module
 
-1. **A summary page**, hand-written, for the end user. One table row in its group's page, carrying the module's description, image, controls, and links. Catalog controls live here because they are runtime `controls_.add(...)` calls that no static tool sees.
-2. **A technical page**, generated from the header's `///` comments by [`moondeck/docs/gen_api.py`](../moondeck/docs/gen_api.py).
+1. **A catalog card**, for the end user. One card in its group's deck, drawn from the module's help: its picture, name and line on the face, its help and controls on the back.
+2. **The header**, for the developer. Its `///` comments are the technical reference, read in the repo or on GitHub.
 
-`docs/moonmodules/` mirrors `src/`: a `core/` and a `light/` subtree, one flat page per group. The tree is `<core|light>/<type>/Module`, flat within a type, and **library is a tag, not a folder level**. In code and assets it rides in `tags()` and in docs in the page name, so `effects.md` splits to `effects_<library>.md` only when a section outgrows it. A blended-lineage module then needs no file move, and a mis-filing is a one-line edit. Generated pages are gitignored and rebuilt. Test inventories have their own generator, [`generate_test_docs.py`](../moondeck/docs/generate_test_docs.py), because unit tests are macros and scenarios are JSON.
+`docs/moonmodules/` mirrors `src/`: a `core/` and a `light/` subtree, one flat page per group. The tree is `<core|light>/<type>/Module`, flat within a type, and **library is a tag, not a folder level**. In code and assets it rides in `tags()` and in docs in the page name, so `effects.md` splits to `effects_<library>.md` only when a section outgrows it. A blended-lineage module then needs no file move, and a mis-filing is a one-line edit. Test inventories have their own generator, [`generate_test_docs.py`](../moondeck/docs/generate_test_docs.py), because unit tests are macros and scenarios are JSON.
 
 **Reference a module generically** outside its own home: say "a modifier", not `FooModifier`. A module's home is its `.h`, its catalog card, its registration, and its tests. Naming it elsewhere multiplies rename cost.
 
 **No per-module detail page.** Cross-file rationale that no single `.h` owns goes in a prose section under its group's summary page. Rationale shared by sibling modules lives once on their base class.
 
-**Every generated page is reachable.** A technical page nothing links to is a page no reader arrives at. The summary pages are what make the generated tree navigable, and `check_docgen` reports any page with no link into it. The fix is a link from the group's summary page rather than a deletion. The page is generated from a header that exists, so an unreachable one means the summary is incomplete.
-
 ### The card
 
-Two columns. **Module** leads with the image, then the name and description. **Details** carries the controls, then three links below a rule: **Tests**, **API** (the generated page), **Details** (the section below the cards). Those three always show, greyed when there is no target, so their position is learned once. Every other link is prose, made in the sentence that needs it.
+A catalog page is generated from `docs/help/help.json` under its name. Its intro is the class comment of the base `gen_help`'s `CATALOGS` names, or the page's own markdown where it keeps one. A deck with a card per module follows, then each module's `@guide` as its details section. Under the deck the build writes each module as plain markdown, which search indexes and a reader without JavaScript reads, and the deck script replaces it. The header is the one place a module is described.
 
-Every card leads with an image: `.gif` on effects, modifiers and layouts, which show motion, `.png` elsewhere.
+Every card leads with its `@card` picture: `.gif` on effects, modifiers and layouts, which show motion, `.png` elsewhere. A control's line says what it does and leaves out its default and its range, which the reset button and the slider show. It runs to 100 characters with its name, 80 on effects, modifiers and layouts, where the picture carries the rest.
 
-A control reads `` - `name`: what it does ``. The colon separates the name from its description, and the build styles the two differently.
-
-| | Limit |
-|---|---|
-| Description | 600 characters, 400 on effects, modifiers and layouts |
-| One control | 100 characters, 80 on effects, modifiers and layouts |
-| Details table | 4 columns, 300 characters a cell |
-
-There is no limit on the controls together. A module with twelve honest controls is not worse documented than one with three, and capping the sum only punished the richer module. The visual catalogs are tighter because the `.gif` carries the description, so the words are there for what the reader cannot see.
-
-Over a limit, **cut first**: most overflow restates what the controls or the code already say. What survives has one home per kind. Behavior of the module goes in the header's `///`, reaching the reader as the generated page. What a reader needs before choosing between siblings goes in a `## <Name>, details` section below the cards, which the build links from the row.
-
-A details section continues the card, so it is written for the same reader. Implementation belongs in the `///`. The heading takes a comma, never an em-dash: the build matches `## <Name>, details` exactly, and [em-dashes are banned](#writing) everywhere.
-
-The card rules are enforced by [`check_docgen.py`](../moondeck/check/check_docgen.py), pinned by [`test_check_docgen.py`](../../test/python/test_check_docgen.py). Where a card begins and ends is the build's own rule, shared: the renderer, `check_docgen` and `check_specs` all ask `split_blocks` rather than each deciding for itself. A check that silently stopped matching would report a clean run, so each rule is tested firing as well as staying quiet.
+The card rules are enforced by [`check_docgen.py`](../moondeck/check/check_docgen.py) on help.json, pinned by [`test_check_docgen.py`](../../test/python/test_check_docgen.py). A check that silently stopped matching would report a clean run, so each rule is tested firing as well as staying quiet.
 
 **Prose is Vale's**, wherever it sits: a page, a `///` block, a comment. One checker for what text says, so a rule has one home and one vocabulary.
 
@@ -226,29 +210,31 @@ A header reaches Vale through a **View**, `.vale/styles/config/views/CComments.y
 These rules cover every comment the project writes, in whatever language: a `///` in a header, a `//` beside a line of the web interface, a `#` in a MoonDeck script. The prose gate reads all three, by two different routes. A C-family file needs the `CComments` View, since Vale has no parser for C and skips the file without one. That View hands back the comment nodes alone, so an identifier is never read as prose. JavaScript and Python need no View: Vale reads those as plain text. Both routes report the same findings, measured by breaking a View on purpose and watching the count hold.
 
 - **Comments say WHY.** Restating what the line does is noise, and usually a naming failure: see [prefer naming over commenting](coding-standards.md#writing-a-line-of-code).
-- **One line, above the code it explains.** A second line is the author still talking. A class `///` gets about ten lines, and each `## ` section of an `@moreinfo` appendix about ten; over that, cut. A file whose comments outnumber its code has stopped being a header.
-- **Settle the `///` first, then the `//`.** The doc comment is what a reader sees on the generated page, so it is where the explanation belongs. A `//` block below one that repeats it is deleted rather than shortened, and most of them turn out to be exactly that. Working the other way round collapses a `//` into one careful line, then deletes it an hour later once the `///` above says the same thing.
+- **One line, above the code it explains.** A second line is the author still talking. A class `///` gets about ten lines, and each `##` section of an `@technical` appendix about ten; over that, cut. A file whose comments outnumber its code has stopped being a header.
+- **Settle the `///` first, then the `//`.** The doc comment is what a reader sees on hover and in the app's help, so it is where the explanation belongs. A `//` block below one that repeats it is deleted rather than shortened, and most of them turn out to be exactly that. Working the other way round collapses a `//` into one careful line, then deletes it an hour later once the `///` above says the same thing.
 - **Keep the constraint, cut the exposition.** A constraint cannot be recovered from the code: the latch is 300 us, the DMA cannot read PSRAM at shift clock. What was tried first, and why this pattern over another, goes in the commit message.
 - **Removing a comment needs the same justification as removing code**: outdated, wrong, or it only restated the code. Never strip to hit a length target, and never delete a reason you cannot reconstruct.
 - **Say each fact once.** A restatement for emphasis reads as new information and costs the reader a second pass to learn it is not.
-- **A heading inside a comment means it is not a comment.** Needing signposts is the signal to cut. The one exception is `@moreinfo`, whose `##` sections become the generated page's own headings; inside a lead comment a heading wants to be a page, or wants to not exist.
+- **A heading inside a comment means it is not a comment.** Needing signposts is the signal to cut. The one exception is `@technical`, whose `##` sections become the help's own headings; inside a lead comment a heading wants to be a page, or wants to not exist.
 - **MoonLive scripts get three comments, one line each**: what the script is, what each `addControl` knob does, what each function it defines does. Lifecycle functions need none. A script is read in the device's own editor, where prose buries the effect.
 
 ### The comment budget
 
-A card is read across a row; a member comment is read beside the thing it describes, and the generated page shows its first sentence as the summary. So the budget is one line: cut first, and only a fact the code does not say goes after `@moreinfo`. The member rule covers a header, where a member comment becomes a page row.
+A card is read across a row; a member comment is read beside the thing it describes. So the budget is one line: cut first, and only a fact the code does not say goes after `@technical`.
 
-**A header opens with `///`**, so its page says what the file is for rather than starting with a bare member list. A header of free functions, constants or several peer types leads with a `@defgroup` block. A header declaring one type leads with that type's comment, which is the file's documentation already, and takes no group around it. The two are exclusive. A group wrapping a lone class is a second lead saying the same thing twice, leaving an editor two homes to keep in step. Nested types are implementation detail and do not make a header a multi-type one. A provenance marker above the lead, an SPDX tag or an `// Author:` line, is machine-read or a credit rather than documentation, and passes through. A `//` block at the top generates nothing, because Doxygen reads `//` as a note to the next reader of the source.
+**A header opens with `///`**, so a reader learns what the file is for before the first member. A header of free functions, constants or several peer types leads with a `///` block of its own, the file's first comment before any code. A header declaring one type leads with that type's comment, which is the file's documentation already. A provenance marker above the lead, an SPDX tag or an `// Author:` line, is machine-read or a credit rather than documentation, and passes through. So does a block of tags such as the test inventory's `/// @module`.
 
-**A test hook is named `...ForTest`**, and that name keeps it off the generated page: Doxygen excludes it, so it needs no `///`, and a `//` line is enough for the source reader.
+**A test hook is named `...ForTest`**, and that name marks it as outside the public API: it needs no `///`.
 
-**`@moreinfo` is an appendix, and only a lead carries one**: the file's, or a class's. A member gets one line, so an `@moreinfo` there is depth in the wrong place, and it belongs in the file lead's appendix or on the module's page. Relaxing that once put a four-line block on every function in a swept header and cost 230 lines to undo.
+**A declaration's comment is its `///`.** A `//` above a declaration reaches neither the help, the docs nor the IDE hover. So a note on a declaration is its `///` line, and `//` lives inside a body, on the line it explains. A section banner grouping the members below stands apart, with a blank line after it, and a `// --8<--` snippet marker is machine-read.
+
+**`@technical` is an appendix, and only a lead carries one**: the file's, or a class's. A member gets one line, so an `@technical` there is depth in the wrong place, and it belongs in the file lead's appendix or on the module's page. Relaxing that once put a four-line block on every function in a swept header and cost 230 lines to undo.
 
 | | Limit |
 |---|---|
 | The file's `///` lead | 10 lines |
 | Class `///` | 10 lines |
-| An `@moreinfo` `## ` section | 10 lines, and the appendix only on a file or class lead |
+| An `@technical` `##` section | 10 lines, and the appendix only on a file or class lead |
 | Any other `///` run | 1 line |
 | One sentence in a comment | 30 words |
 | A `//` run beside code | 1 line |
@@ -263,52 +249,52 @@ A card is read across a row; a member comment is read beside the thing it descri
 
 **The line cap is a ratchet, not a target.** It sits at 250 and comes down as the tree does, which is one constant in `check_docgen.py` and nothing else. 120 was tried first and fought the other rules. Several short sentences sharing a line is exactly the compactness asked for above, and it passes 120 easily, so the cap fired on 4727 lines already inside the word budget. What a character count catches that a word count cannot is the paragraph living on one line, and those run from 320 to 1057 characters.
 
-**One rule set, both kinds of file.** An implementation file follows exactly the limits above. What differs is that its findings are warnings where a header's are errors, because a header's comments are the published page. Three of these were once scoped to headers alone, and each reason turned out to be false. A `.cpp` carries a file lead with its own `@moreinfo` appendix, just as a header does. A `.cpp` declares classes, 238 of them here. And a header is read as source far more often than as a rendered page, so its line width reaches a reader exactly as an implementation file's does. Two columns of limits drift apart, and the deduction is what keeps them honest.
+**One rule set, both kinds of file.** An implementation file follows exactly the limits above. What differs is that its findings are warnings where a header's are errors, because a header's comments are the published page. Three of these were once scoped to headers alone, and each reason turned out to be false. A `.cpp` carries a file lead with its own `@technical` appendix, just as a header does. A `.cpp` declares classes, 238 of them here. And a header is read as source far more often than as a rendered page, so its line width reaches a reader exactly as an implementation file's does. Two columns of limits drift apart, and the deduction is what keeps them honest.
 
 The first five cut and the last adds, deliberately: the result is a short line on everything rather than an essay on a few things. The word limit counts a SENTENCE rather than a line, because the no-wrap rule makes a line a paragraph. Three short sentences on one line are correct, and one rambling sentence is not. Thirty is where a machine stops a commit, while twenty above is what to aim for when writing. Measured over the tree, a cap of 20 fired on the median sentence and 30 leaves it alone. Vale carries the same 30 as a suggestion, so one number means one thing in both tools.
 
-**The appendix budget counts a SECTION, not the whole appendix.** A single total punishes a file for having several distinct topics. The cheapest way to satisfy one is to delete a section rather than tighten the prose. Ten lines per `## ` section asks each one to be disciplined and lets a file carry as many as it genuinely has. That is what an implementation file needs: the platform backends each hold a handful of separately diagnosed findings, and one shared budget could only force them out of the tree. A fenced block does not count, the same exemption the no-wrap rule makes. A protocol listing is as long as the thing it describes, and counting its lines would ask an author to delete wire format to fit a prose budget.
+**The appendix budget counts a SECTION, not the whole appendix.** A single total punishes a file for having several distinct topics. The cheapest way to satisfy one is to delete a section rather than tighten the prose. Ten lines per `##` section asks each one to be disciplined and lets a file carry as many as it genuinely has. That is what an implementation file needs: the platform backends each hold a handful of separately diagnosed findings, and one shared budget could only force them out of the tree. A fenced block does not count, the same exemption the no-wrap rule makes. A protocol listing is as long as the thing it describes, and counting its lines would ask an author to delete wire format to fit a prose budget.
 
-**No hard wrap in a comment, for the reason markdown gives.** Let the editor soft-wrap, so a one-word edit is a one-word diff rather than a reflowed paragraph. The one-line budget already forbids this on a header's member or code comment. So the rule bites where a block is allowed to be multi-line. That is the class comment, the `@moreinfo` appendix, and any multi-line run in an implementation file. A list item, a heading, a table row and a fenced block are structure rather than a wrapped sentence, and each is left alone. This one holds everywhere, because its reason is the diff rather than the page. A split sentence reflows every line it spans when a word changes, which costs a reviewer the same in either file. A paragraph goes the same way: the sentences of one topic are one paragraph, and a paragraph is one line. Markdown joins them anyway, and a reader takes separate lines as separate topics. Past the cap the paragraph is cut until it fits, never split into sentence lines or line-sized chunks.
+**No hard wrap in a comment, for the reason markdown gives.** Let the editor soft-wrap, so a one-word edit is a one-word diff rather than a reflowed paragraph. The one-line budget already forbids this on a header's member or code comment. So the rule bites where a block is allowed to be multi-line. That is the class comment, the `@technical` appendix, and any multi-line run in an implementation file. A list item, a heading, a table row and a fenced block are structure rather than a wrapped sentence, and each is left alone. This one holds everywhere, because its reason is the diff rather than the page. A split sentence reflows every line it spans when a word changes, which costs a reviewer the same in either file. A paragraph goes the same way: the sentences of one topic are one paragraph, and a paragraph is one line. Markdown joins them anyway, and a reader takes separate lines as separate topics. Past the cap the paragraph is cut until it fits, never split into sentence lines or line-sized chunks.
 
 **Use `//` sparingly.** A comment restating what the code does is a naming failure, and the fix is a better name rather than a better sentence. What survives is the WHY a reader cannot recover from the code.
 
-**`//` carries the same one-line budget as `///` in a header, and that is what makes the `///` cap mean anything.** Without it the one-line rule moves text rather than removing it. A fifty-line member comment re-spelled as `//` satisfies every other rule and leaves the file exactly as long. One line is room to say why, and past that the text is cut first. The `//` block above the first class is exempt, being the non-Doxygen sibling of the class comment.
+**`//` carries the same one-line budget as `///` in a header, and that is what makes the `///` cap mean anything.** Without it the one-line rule moves text rather than removing it. A fifty-line member comment re-spelled as `//` satisfies every other rule and leaves the file exactly as long. One line is room to say why, and past that the text is cut first. The `//` block above the first class is exempt, being the sibling of the class comment.
 
-**An implementation file is asked for no member docs.** This one is a detector limit rather than a rule difference. "Public" is read from the shape of a declaration, which cannot see an anonymous namespace or a function body. In a header that approximation holds, because a header's declarations mostly are the public API and each becomes a row on a generated page. In a `.cpp` it matched the fields of file-local structs and plain locals, asking a variable named `got` for a doc comment, so the rule stops at the header. A field that needs explaining carries a trailing `//`, which is what those already did.
+**An implementation file is asked for no member docs.** This one is a detector limit rather than a rule difference. "Public" is read from the shape of a declaration, which cannot see an anonymous namespace or a function body. In a header that approximation holds, because a header's declarations mostly are the public API and each is documented. In a `.cpp` it matched the fields of file-local structs and plain locals, asking a variable named `got` for a doc comment, so the rule stops at the header. A field that needs explaining carries a trailing `//`, which is what those already did.
 
-**Cut first, then home what survives.** Most of what overflows one line restates the code, the test name or the spec, and goes. A fact none of them says moves to an existing home first, the module's spec or page. Only without one does it go to an `@moreinfo` appendix, with an `@xref` back from the line that raised it. `check_docgen` ratchets the appendix total, so a cleanup that moves rather than cuts fails the gate.
+**Cut first, then home what survives.** Most of what overflows one line restates the code, the test name or the spec, and goes. A fact none of them says moves to an existing home first, the module's spec or page. Only without one does it go to an `@technical` appendix, with an `@xref` back from the line that raised it. `check_docgen` ratchets the appendix total, so a cleanup that moves rather than cuts fails the gate.
 
 **A finding in a header is an error; one in an implementation file is a warning, with one rule in each direction.** No-hard-wrap blocks in both kinds of file: the tree is at zero findings, so there is nothing left to stage. The line-length cap warns in both, because it is new and its findings are lines nobody wrote wrongly. A staged rule joins the others as the tree meets it. A header's comments are the published page, so a defect there ships, while a `.cpp` publishes nothing and its comments are a note to the next reader. Both are counted and both are reported, because a warning nobody sees is a warning nobody fixes. The split stages the sweep rather than ranking the two kinds of comment, so it goes and everything blocks once the warning column reaches zero. That is how Vale's own config promotes a page to error as the sweep finishes it.
 
 Enforced by [`check_docgen.py`](../moondeck/check/check_docgen.py) over every header under `src/`, the vendored ones excepted.
 
 
-### Writing a `///` that generates correctly
+### Writing a `///` the help reads
 
-These are traps, not style: each one silently loses content from the generated page.
+`gen_help` reads the `///` comments into the app's help and the catalog pages, so the shape below decides what a reader sees.
 
-- **`///`, not `//`.** Only `///` generates. A `//` comment is invisible on the technical page.
-- **The class `///` sits directly above `class X`**, inside the namespace. Separated by includes or the namespace open, Doxygen drops it and the page loses its description.
-- **Put detail on the member it describes**, not in the class comment. Every public control and method gets its own `///` leading with one sentence, which is what the generated page shows as its summary.
-- **Deep dives go after `@moreinfo`** at the end of the class block, and a post-process moves them below the member lists. The budget above applies: this is not an unbounded appendix.
-- **No relative `.md` links.** Doxygen keeps only `http(s)://` links. For an in-page link use `@xref{anchor|label}`, which renders to a link at a heading on the same generated page. The anchor is that heading's slug: lowercased, punctuation dropped, spaces to hyphens. `ParallelLedDriver.h` is the worked example, pointing its vocabulary sentence at its own appendix:
+- **`///`, not `//`.** Only `///` is documentation. A `//` comment is a note to the source reader.
+- **The class `///` sits directly above `class X`**, inside the namespace. Separated by includes or the namespace open, clang does not attach it and the help loses its description.
+- **Put detail on the member it describes**, not in the class comment. Every public control and method gets its own `///` leading with one sentence.
+- **A module's class comment is its help in the app.** `gen_help` reads it into `docs/help/help.json`. The first paragraph is the one line under the module's title and the rest of the lead its summary. Each control's member `///` is the control's line. A block tag, a line opening `@<tag>` and running to the next blank line, is the help field of that name. `@card` is the picture, its file then optionally its alt text. `@video` is a clip a catalog's intro shows, its file then its title. `@attribution` is what the module learned from or who wrote it first, shown apart from the summary. It names entries of [the attribution catalog](../reference/attributions.md), comma-separated, and the help links each one. A name the catalog lacks shows as written, and the generator lists it for adding. Code that is no module, such as a power function, a packet format or a script, carries its own `@attribution` line, which the catalog lists beside the modules. An origin a tag names, 💫 MoonLight, 🌙 MoonModules, 🐙 WLED or ⚡️ FastLED, is no attribution; a module written here credits what it learned from. So the lead is written for users, and how it works goes after `@technical`.
+- **Another module or class is named with `@ref ClassName`.** `gen_help` writes it into the help as a link: to a module's catalog card, named as the app names the type, or else to the class's header on GitHub. The class name rather than the display name, since the compiler keeps it unique and a display rename leaves it standing.
+- **A user guide goes after `@guide`**, before `@technical`. Its `##` sections are the module's general help beyond the summary: how it works and how to get a look from it. A control is never explained there. Its longer help is a `/// @guide` line on its member, which the app shows under the control. It adds only what the line cannot hold and never says the line again. `check_docgen` flags a module guide section titled with a control, and a control's guide that repeats its line. The section budget applies, and the guide does not count toward the appendix total.
+- **Deep dives go after `@technical`** at the end of the class block. The budget above applies: this is not an unbounded appendix.
+- **`@xref{slug|label}` points at a `##` heading of the same file's `@technical`**, read as text by the developer at the header. The slug is that heading's slug: lowercased, punctuation dropped, spaces to hyphens. `ParallelLedDriver.h` is the worked example, pointing its vocabulary sentence at its own appendix:
 
     ```cpp
     /// The encode is a fused correct and transpose, per row. Vocabulary: strand, lane, slot, row, under
-    /// @xref{terminology|More info → Terminology}.
+    /// @xref{terminology|Technical → Terminology}.
     ///
-    /// @moreinfo
+    /// @technical
     ///
     /// ## Terminology
     ```
 
-    A renamed heading leaves the anchor pointing at nothing, and the generator drops the dead link rather than failing. So `check_docgen` verifies that every `@xref` names a heading in the same file. The reverse is counted. A `@moreinfo` section that no `@xref` in its file and no link from a page or another source reaches is a section nothing refers to. It is a warning whose count only falls, since a section no reader is sent to is the first to cut.
+    A renamed heading leaves the slug pointing at nothing, so `check_docgen` verifies that every `@xref` names a heading in the same file. The reverse is counted. A `@technical` section that no `@xref` in its file reaches is a section nothing refers to. It is a warning whose count only falls, since a section no reader is sent to is the first to cut.
 
-    **A section written to hold a comment's depth carries an `@xref` back from that comment.** Moving the reasoning out is what keeps the code readable; the anchor is what keeps it findable. The reader at the line that raises the question gets a link to the answer. Where no single line owns the section, a page that sends readers there links it as `moxygen/<Stem>.md#<slug>`, or the section is a candidate to cut.
-- **Wrap any `<tag>` in backticks**, or it renders as a live element and swallows the page.
-- **Write "such as", not "e.g."** The brief ends at the first period.
+    **A section written to hold a comment's depth carries an `@xref` back from that comment.** Moving the reasoning out is what keeps the code readable; the slug is what keeps it findable. The reader at the line that raises the question gets a pointer to the answer.
+- **Wrap any `<tag>` in backticks**, or the help renders it as a live element and swallows the text.
 - **A weasel that CONTRASTS is information.** "bytes actually allocated" against requested, "the factor actually in use" against configured: the word carries the distinction the comment exists to draw. Vale flags the word rather than the use, which is why its Weasel rule is a suggestion.
 - **A `"\u2014"` string literal is not prose.** The dash a control shows for an unset value is UI text: converting it changes what the device displays. Vale flags it, and it stays.
-- **`@xref`, `@card` and `@moreinfo` are ours, and Doxygen must not know them.** Each survives as plain text precisely because it is not a Doxygen command, and a post-process turns it into a link, an image or a section afterward. Declaring them as `ALIASES` makes Doxygen consume them and the post-process finds nothing left: every card image, cross-reference and More info section goes. This is also why the marker is `@xref` rather than `@ref`, which Doxygen does own.
-- **Doxygen's own warnings stay off.** `WARN_IF_DOC_ERROR` reports only the three commands above, so on this codebase it is noise by construction rather than a signal being silenced.

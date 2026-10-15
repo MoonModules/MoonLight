@@ -19,32 +19,34 @@
 
 namespace mm {
 
-/// Acquires an audio source and publishes a frame: a level, sixteen bands, and the peak.
-///
-/// The producer half of the audio-reactive pipeline, which every audio effect reads.
-/// Named for what it does, acquisition plus analysis, rather than for one source.
+/// The audio source the audio-reactive effects read: a level, sixteen bands and the peak.
 /// @card AudioService.png
 ///
-/// @moreinfo
+/// Local analyzes a microphone, line-in or capture device here. Receive network follows a peer's WLED-compatible audio, and Simulate synthesizes a song for demos. A local source can send its analysis on to other devices.
+///
+/// @attribution softhack007, troyhacks, NetMindz, wladi
+///
+/// @guide
+///
+/// ## Choosing a source
+///
+/// Simulate needs nothing. Receive network needs a WLED-compatible sender. Local idles on an ESP32 until real GPIOs are entered, and captures the picked device at once on desktop.
+///
+/// ## Wiring and capture
+///
+/// Microphone wiring, setting the levels and capturing what a machine plays are in [the how-to](https://moonmodules.org/MoonLight/how-to/audio-input.html).
+///
+/// @technical
 ///
 /// ## The modes run simple to advanced
 ///
-/// Simulate synthesizes a signal for a demo or a test. Receive is a sink a peer drives.
-/// Local runs the device's own input and analyzes it here.
-/// A device is exactly one of these, and changing it acquires or releases hardware live.
+/// Simulate synthesizes a signal for a demo or a test, Receive is a sink a peer drives, and Local runs the device's own input and analyzes it here. A device is exactly one of these, and changing it acquires or releases hardware live.
 ///
-/// They are ordered by what each one needs: simulate needs nothing, receive needs a network, local needs a part wired to pins.
-/// So the default is the first entry rather than an index that depended on the platform, and a device demonstrates sound before anything is attached to it.
+/// They are ordered by what each one needs: simulate nothing, receive a network, local a part wired to pins. So the default is the first entry, and a device demonstrates sound before anything is attached.
 ///
-/// ## The pipeline
+/// **The pipeline.** Each block: read, block the offset, measure the level, window, transform, map to bands. The high-pass conditions the block once so both halves see the same signal, and a tick completing no block re-publishes the last frame.
 ///
-/// Each block: read, block the offset, measure the level, window, transform, map to bands.
-/// The high-pass conditions the block once, so both halves see the same cleaned signal.
-/// A block outlasts a tick, so a tick completing none re-publishes the last frame.
-/// The level is measured independently of the bands.
-///
-/// Only the read and the transform are platform code; the rest is host-tested maths.
-/// The scratch is fixed and resident, so a block allocates nothing.
+/// Only the read and the transform are platform code; the rest is host-tested maths on a fixed resident scratch, so a block allocates nothing.
 class AudioService : public MoonModule {
 public:
     /// Finish a block of raw bands:
@@ -69,25 +71,27 @@ public:
     /// A service, so the container accepts it as a child.
     ModuleRole role() const MM_NONBLOCKING override { return ModuleRole::Service; }
 
-    // It respects the enabled flag, unlike a free diagnostic:
-
-    // The pins default to unset, so adding the module claims no GPIO until a user wires one.
-    /// Which capture device to open, where the host offers a choice.
+    /// The capture input, `default` following the system setting.
     uint8_t device = 0;
     /// The microphone kinds `micMode` picks from, in its option order.
     enum Mic : uint8_t { kMicI2s, kMicPdm, kMicCount };
-    /// Which kind of microphone is wired, the two-wire kind having no clocks to set.
+    /// Which kind of microphone is wired, I2S or two-wire PDM.
+    /// @guide PDM uses `wsPin` as its clock and `sdPin` as its data, as the QuinLED Dig-Next-2's onboard mic does.
     uint8_t micMode = kMicI2s;
-    int8_t sckPin = -1;          ///< the bit clock, or -1 while unset
-    int8_t wsPin = -1;           ///< the word select, or -1 while unset
-    int8_t sdPin = -1;           ///< the data line, or -1 while unset
-    /// The master clock a converter may need, a self-clocked part leaving it unset.
+    /// The bit clock GPIO, unset until entered.
+    int8_t sckPin = -1;
+    /// The word select GPIO, or the clock of a PDM mic.
+    int8_t wsPin = -1;
+    /// The data GPIO, unset until entered.
+    int8_t sdPin = -1;
+    /// The master clock an ADC or codec needs, unset for a plain mic.
     int8_t mclkPin = -1;
     /// The codecs `codec` picks from, in its option order.
     enum Codec : uint8_t { kCodecNone, kCodecEs8311, kCodecEs7210, kCodecCount };
-    /// Which codec sits in front of the microphone, none for a part that speaks I2S itself; the device model names it.
+    /// The codec in front of the microphone, `none` for a part that speaks I2S itself.
     uint8_t codec = kCodecNone;
-    /// The codec's 7-bit address on the board's I2C bus (I2cBusModule): 0x18 for an ES8311, 0x40 to 0x43 for an ES7210 by its strapping.
+    /// The codec's 7-bit address on the board's I2C bus.
+    /// @guide 0x18 for an ES8311, 0x40 to 0x43 for an ES7210 by its strapping. The bus is @ref I2cBusModule.
     uint8_t codecAddr = 0x18;
 
     /// The codec the settings ask for.
@@ -104,24 +108,26 @@ public:
         out[0] = {codecAddr, kCodecOptions[codec]};
         return 1;
     }
-    /// Which of the standard rates to run at, a choice rather than a free number.
+    /// The mic or ADC sample rate.
     uint8_t  sampleRateSel = 2;
     /// The silence threshold: below it a band reads as nothing.
+    /// @guide Raise it until a quiet room reads still, or the learner maps the room's noise onto the whole display.
     uint8_t  floor = 100;
     /// The window's width, a higher value running the display hotter.
+    /// @guide The default suits a quiet MEMS mic, so turn it down hard for a loopback device or everything clips.
     uint8_t  gain = 128;
     /// The display window owners `levels` picks from, in its option order.
     enum Levels : uint8_t { kLevelsManual, kLevelsAutomatic, kLevelsCount };
     /// Who sets the display window: the two sliders, or the learner.
+    /// @guide Automatic maps each band's own range onto the window, so treble reads level with bass.
     uint8_t  levels = kLevelsAutomatic;
-    // Both act on the learned per-band range, already normalized per rig, so one value serves.
-    /// How much of a band's deviation to correct, short of the ratios that pump.
+    /// How much of a band's deviation to correct, short of the ratios that pump; it and the lift cap act on the learned per-band range, already normalized per rig.
     static constexpr uint8_t kRatio = 4;
     /// How far a band may be lifted, so a silent one is never amplified into its own noise.
     static constexpr uint8_t kMaxGainDb = 24;
     /// The synthesized patterns `simulate` picks from, in its option order.
     enum Simulate : uint8_t { kSimMusic, kSimSweep, kSimulateCount };
-    /// Which synthesized pattern to produce: a plausible song, or a deterministic march.
+    /// The pattern: a plausible song, or a test march.
     uint8_t  simulate = kSimMusic;
     /// The source: a synthesized signal, the network, or its own input.
     uint8_t  mode = 0;
@@ -131,18 +137,20 @@ public:
     static constexpr uint8_t kReceiveMode = 1;
     /// This device's own microphone, which needs pins and a part to be connected to them.
     static constexpr uint8_t kLocalMode = platform::hasNetwork ? 2 : 1;
-    /// Whether to broadcast the local analysis, which only the local mode can do.
+    /// Send the local analysis as audio-sync packets.
     bool     send = false;
     /// What the sync machinery does: nothing, broadcast the local analysis, or sink a peer's.
     enum Sync : uint8_t { kSyncNone, kSyncSend, kSyncReceive };
     /// The role the current mode and `send` give the sync socket.
     Sync     sync() const { return (platform::hasNetwork && mode == kReceiveMode) ? kSyncReceive
                                  : (mode == kLocalMode && send ? kSyncSend : kSyncNone); }
-    /// The port both directions use, which must match on both ends.
+    /// The UDP port both directions use, matching on both ends.
+    /// @guide WLED listens on 11988, so another port is not WLED-compatible.
     uint16_t syncPort = WLED_SYNC_PORT;
-    /// How the analysis travels: the WLED multicast group, which WLED devices hear too, or unicast to `hosts`, retried by WiFi.
+    /// The addressings `addressing` picks from, in its option order.
     enum SyncAddressing : uint8_t { kAddressMulticast, kAddressUnicast, kAddressCount };
-    /// The addressing `addressing` picks, in its option order.
+    /// How the analysis travels: multicast, which WLED hears, or unicast.
+    /// @guide Unicast to `hosts` reaches a few MoonLight boards faster on WiFi, which retries it.
     uint8_t  addressing = kAddressMulticast;
     /// The boards a unicast send reaches, addresses or names.
     char     hosts[64] = {};
@@ -230,10 +238,12 @@ public:
             controls_.addControl("syncPort", syncPort, 1, 65535);
             controls_.setHidden(controls_.count() - 1, !hasSocket);
         }
-        // The audio driving the effects, so these stay visible in every mode.
+        // These stay visible in every mode.
+        /// The level of the audio driving the effects, from any source.
         controls_.addReadOnly("level RMS", levelStr_, sizeof(levelStr_));
-        // The one row that answers whether the detector is hearing the beat.
+        /// The beats heard per second and their spectral flux.
         controls_.addReadOnly("onsets", onsetStr_, sizeof(onsetStr_));
+        /// The dominant frequency of the audio driving the effects.
         controls_.addReadOnly("peakHz", peakStr_, sizeof(peakStr_));
         MoonModule::defineControls();
     }
@@ -278,8 +288,7 @@ public:
     /// The latest analyzed frame, always valid, so a consumer without a mic reads silence.
     const AudioFrame* audioFrame() const { return &frame_; }
 
-    // Read-only views of the socket lifecycle, so a test can assert it through the public tick.
-    /// Whether the sync socket is open.
+    /// Whether the sync socket is open, a read-only view of the socket lifecycle so a test can assert it through the public tick.
     bool syncOpenForTest() const { return syncOpen_; }
 
     /// Whether a mic diagnosis is outstanding, which suppresses the sync line while it is.
@@ -417,6 +426,7 @@ public:
         if (frame_.level > levelPeak_) levelPeak_ = static_cast<uint8_t>(frame_.level);
     }
 
+    /// Reopen the mic when its bus frees or moves, publish the second's level, onset and peak readouts, and diagnose a silent mic.
     void tick1s() MM_NONBLOCKING override {
         // Re-init when the shared I2S bus came free, as the LED driver retries, or when the I2C bus moved under the codec.
         const bool micFreed = !inited_ && platform::audioMicSharedBusFree(micMode == kMicPdm ? platform::MicMode::Pdm
@@ -470,7 +480,7 @@ public:
     }
 
 private:
-    // The one-active-mic election:
+    /// The one-active-mic election.
     ActiveInstance<AudioService> micSeat_{*this};
 
     platform::AudioMicHandle mic_;
@@ -479,7 +489,7 @@ private:
     size_t filled_ = 0;         // samples accumulated toward the next full block
     DcBlocker dc_;              // ~40 Hz high-pass, continuous across blocks
 
-    // Fixed hot-path scratch, sized once, never reallocated.
+    /// Fixed hot-path scratch, sized once, never reallocated.
     int32_t samples_[kBlock] = {};
     float windowed_[kBlock] = {};
     float mag_[kMag] = {};
@@ -493,16 +503,15 @@ private:
     char peakStr_[12] = {};
     uint8_t levelPeak_ = 0;   // peak frame_.level across the current 1 s display window (UI only)
 
-    // Mic-health tallies over the 1 s window (see the read path + tick1s diagnosis).
+    /// Mic-health tallies over the 1 s window (see the read path and the tick1s diagnosis).
     uint32_t micSamples1s_ = 0;
     uint32_t micNonzero1s_ = 0;
     bool     micStatusStale_ = false;
 
-    // WLED audio sync (core/util/WLEDAudioSyncPacket.h). One socket, bound only in Send/Receive.
+    /// The WLED audio sync socket (core/util/WLEDAudioSyncPacket.h): one, bound only in Send/Receive.
     platform::UdpSocket syncSock_;
     uint32_t lastSyncSend_ = 0;      // millis of the last send (send throttle)
-    uint32_t syncSendCount_ = 0;         // sends made; test-visible so the throttle can be observed
-                                         // (NOT a wire field: byte 17 is WLED's reserved2)
+    uint32_t syncSendCount_ = 0;         // sends made; test-visible so the throttle can be observed, NOT a wire field (byte 17 is WLED's reserved2)
     bool     syncPeakLatched_ = false;   // a beat seen since the last transmit (WLED's udpSamplePeak)
     uint32_t lastPeakMs_ = 0;            // when that beat was, for the refractory window
     uint32_t lastSyncRecv_ = 0;      // millis of the last received packet (receive auto-blend)
@@ -698,9 +707,9 @@ private:
     }
 
     static constexpr uint16_t kSyncPeakMargin = 8;   // level over smoothed = a beat (samplePeak hint)
-    // WLED gates its own peak detection on `millis() - timeOfPeak > 80`, so one loud passage.
+    /// Minimum gap between latched beats, matching WLED's own gate of `millis() - timeOfPeak > 80`, so one loud passage reports one beat.
     static constexpr uint32_t kSyncPeakRefractoryMs = 80;
-    // The IP MULTICAST ADDRESS WLED audio sync uses:
+    /// The IP multicast address WLED audio sync uses.
     static constexpr uint8_t kSyncMulticastAddr_[4] = {239, 0, 0, 1};
 
     /// How many boards a unicast audio send reaches.

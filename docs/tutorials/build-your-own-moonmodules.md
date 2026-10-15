@@ -162,27 +162,28 @@ The division of labour: **read a value → just use it in `tick()`; a cheap side
 
 ### Registering it so the UI can add it
 
-One line in `src/main.cpp` makes your effect appear in the "add effect" list:
+One line in `src/module_types.cpp` makes your effect appear in the "add effect" list:
 
 ```cpp
 mm::ModuleFactory::registerType<mm::RainbowEffect>(
     "RainbowEffect", "light/effects.md#rainbow");
 ```
 
-The second argument is the doc anchor for the in-UI help link — point it at your effect's entry in the effects catalog page.
+The second argument is the doc anchor the help's Docs link opens: point it at your effect's entry in the effects catalog page.
 
 ### Comments: `///` for docs, `//` for notes
 
 Two comment styles, two jobs:
 
-- **`///` — documentation.** A `///` comment above the class, and above each control and method, feeds the auto-generated technical page (via Doxygen/moxygen) *and* shows up on IDE hover. Put the "what this effect is" one-liner and each control's meaning here, so a reader gets your docs without opening the source.
-- **`//` — an implementation note.** A plain `//` comment explains a tricky line *to whoever is reading the source*. It stays in the code and is invisible to the generated docs — perfect for "why this maths" notes that would clutter the public page.
+- **`///`: documentation.** A `///` comment above the class and above each control's member feeds the app's help, and shows up on IDE hover. A `///` above a method shows on IDE hover only. Put the "what this effect is" one-liner and each control's meaning here, so a user reads them in the app.
+- **`//`: an implementation note.** A plain `//` comment explains a tricky line *to whoever is reading the source*. It stays in the code and never reaches the help, the place for "why this maths" notes that would clutter the public docs.
 
 ```cpp
-/// Palette-cycling diagonal rainbow.       ← shows on the docs page + on hover
+/// Palette-cycling diagonal rainbow.       ← shows in the help + on hover
 class RainbowEffect : public EffectBase {
 public:
-    uint8_t speed = 20;   /// One hue cycle per `speed` beats.   ← documents the control
+    /// Hue cycles per minute.   ← the control's help in the app
+    uint8_t speed = 20;
 
     void tick() override {
         // 64-bit widen so the phase can't overflow.   ← a note for the code reader only

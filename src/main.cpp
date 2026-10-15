@@ -1,6 +1,6 @@
 /// The entry point: registers every module type with the factory, builds the boot module tree, and runs the render loop.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## How the boot tree is created
 ///

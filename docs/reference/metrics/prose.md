@@ -9,39 +9,39 @@ This number is the debt behind that gate, and it RATCHETS: a rise fails the chec
 docgen.md does. A comment is prose wherever it lives, so a `//` in the web interface and a
 `#` in a script are counted beside a `///` in a header.
 
-**2847 finding(s)** across 361 file(s).
+**2572 finding(s)** across 340 file(s).
 
 | rule | findings |
 |---|---|
-| `MoonLight.EmDash` | 1455 |
-| `MoonLight.Weasel` | 671 |
-| `MoonLight.SentenceLength` | 426 |
-| `MoonLight.Temporal` | 210 |
+| `MoonLight.EmDash` | 1264 |
+| `MoonLight.Weasel` | 636 |
+| `MoonLight.SentenceLength` | 394 |
+| `MoonLight.Temporal` | 197 |
 | `MoonLight.Spelling` | 42 |
-| `MoonLight.SelfReference` | 30 |
+| `MoonLight.SelfReference` | 26 |
 | `MoonLight.NegatedHeading` | 13 |
 
 ## Worst files
 
 | file | findings |
 |---|---|
-| `moondeck/MoonDeck.md` | 239 |
+| `moondeck/MoonDeck.md` | 232 |
 | `moondeck/moondeck.py` | 156 |
-| `docs/how-to/home-automation.md` | 117 |
-| `docs/tutorials/build-your-own-moonmodules.md` | 92 |
 | `moondeck/moondeck_ui/app.js` | 92 |
 | `mooninstaller/install-orchestrator.js` | 91 |
-| `docs/how-to/building.md` | 78 |
-| `moondeck/check/check_clang_query.py` | 73 |
-| `src/ui/app.js` | 69 |
+| `docs/tutorials/build-your-own-moonmodules.md` | 88 |
+| `docs/how-to/building.md` | 77 |
+| `moondeck/check/check_clang_query.py` | 71 |
 | `mooninstaller/install.js` | 68 |
+| `src/ui/app.js` | 67 |
 | `src/ui/install-picker.js` | 55 |
-| `moondeck/docs/gen_api.py` | 53 |
 | `src/ui/preview3d.js` | 49 |
 | `moondeck/check/check_nonblocking.py` | 47 |
-| `docs/reference/testing.md` | 40 |
-| `moondeck/docs/mkdocs_hooks.py` | 40 |
-| `docs/explanation/architecture/moonlight.md` | 39 |
+| `docs/explanation/architecture/moonlight.md` | 38 |
+| `docs/reference/testing.md` | 37 |
 | `src/platform/esp32/platform_esp32_moon_i80.cpp` | 37 |
 | `docs/reference/hardware/gpio-usage.md` | 34 |
 | `docs/tutorials/generative-effects.md` | 33 |
+| `docs/how-to/panel-cards.md` | 29 |
+| `docs/explanation/architecture/moonmodule.md` | 28 |
+| `docs/reference/hardware/mhc-wled-esp32-p4-shield.md` | 27 |

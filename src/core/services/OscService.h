@@ -15,52 +15,57 @@
 
 namespace mm {
 
-/// Receives OSC over the network and writes it onto this device's controls.
+/// Receives OSC over the network and writes it onto this device's controls, so a fader in Resolume, TouchDesigner or TouchOSC drives MoonLight.
+/// @card OscService.png
 ///
-/// A surface addresses the surface: the faders, encoders and switches the control module owns, which decides what each one drives.
-/// @card OscModule.png
+/// A surface addresses the surface: the faders, encoders and switches the control module owns, which decides what each one drives. Everything lands in the same control writes the API and the UI use, so every validator still runs.
 ///
-/// @moreinfo
+/// @guide
+///
+/// ## Getting a surface working
+///
+/// Turn on listening, and on feedback so the faders follow the device. A phone or tablet needs a free app and one session file.
+///
+/// [The how-to](https://moonmodules.org/MoonLight/how-to/control-surface.html#a-phone-or-tablet-over-osc) has the steps.
+///
+/// ## The addresses
+///
+/// The addresses are a public contract, so a layout built on them keeps working. Send `/mm/hello` and the device sends every value again. [The how-to](https://moonmodules.org/MoonLight/how-to/control-surface.html#the-osc-addresses) lists them.
+///
+/// @technical
 ///
 /// ## Feedback
 ///
-/// With it on, a control that changes anywhere is mirrored back to the surface, which keeps a client honest and moves a motorized fader.
-/// `addressing` picks where it goes: `unicast` to each of `hosts`, or to whoever last wrote when the list is empty; `multicast` to `group`, which every device listening on it joins.
-/// A client learns the state three ways: on its first write, on an address change, and on asking.
-/// The last exists because a restart on the same address is invisible to the other two.
-/// Most controllers send nothing on load, so every widget would otherwise show its own defaults.
-/// A value is never sent back to the host it came from, so two devices feeding each other cannot echo it between them.
+/// With it on, a control that changes anywhere is mirrored back to the surface, which keeps a client honest. `addressing` picks `unicast` to each of `hosts`, or `multicast` to `group`.
+///
+/// A client learns the state on its first write, on an address change and on asking. The last exists because a restart on the same address is invisible to the other two. A value never returns to its source host.
 ///
 /// ## What it refuses
 ///
-/// The port is unauthenticated and writes controls, so it is off until turned on.
-/// Feedback is off for the same reason, sending unasked-for traffic to whatever last wrote.
+/// The port is unauthenticated and writes controls, so it is off until turned on. Feedback is off for the same reason, sending unasked-for traffic to whatever last wrote.
 ///
-/// @moreinfo
-///
-/// It owns no surface of its own.
-/// The control module already has the pads, encoders and faders, and everything here lands in the same control-set primitive the API and the UI use.
-///
-/// So OSC gains no privilege, every validator still runs, and there is no second copy of state.
-/// Sending OSC, bundles and address wildcards are all out of scope.
-class OscModule : public MoonModule, public ControlSurface {
+/// It owns no surface, so everything lands in the control-set primitive the API and the UI use: no privilege, every validator runs, no second copy of state. Sending OSC, bundles and wildcards are out of scope.
+class OscService : public MoonModule, public ControlSurface {
 public:
     /// Start on the default group, so multicast works with nothing filled in.
-    OscModule() { std::memcpy(group_, osc::kDefaultGroup, sizeof(osc::kDefaultGroup)); }
+    OscService() { std::memcpy(group_, osc::kDefaultGroup, sizeof(osc::kDefaultGroup)); }
 
     /// A service, so the container accepts it as a child.
     ModuleRole role() const MM_NONBLOCKING override { return ModuleRole::Service; }
 
-    /// Whether to receive at all, off by default since the port is unauthenticated: @xref{what-it-refuses}.
+    /// Receive OSC, which writes controls with no password.
+    /// @guide Off, the device ignores every surface. Turn it on only on a network you trust (@xref{what-it-refuses|why}).
     bool enabledOsc = false;
-    /// The port we listen on.
+    /// The UDP port to listen on, the one TouchOSC uses out of the box.
     uint16_t port = osc::kDefaultPort;
 
-    /// Whether to mirror changes back, which is what makes this a surface rather than a remote: @xref{feedback}.
+    /// Mirror every change back to the surface, making this a surface, not a remote: @xref{feedback}.
+    /// @guide Off by default, since it sends traffic nobody asked for. It keeps a client honest and moves a motorized fader.
     bool feedback = false;
-    /// How feedback travels, an Addressing value up to multicast + broadcast.
+    /// Where feedback goes: `unicast` to the hosts, or `multicast` to the group.
     uint8_t addressing = static_cast<uint8_t>(Addressing::Unicast);
-    /// Where the client listens, which is not where we do.
+    /// The UDP port the client listens on for feedback.
+    /// @guide Differs from the port this device listens on; Open Stage Control calls it `osc-port`.
     uint16_t feedbackPort = osc::kDefaultFeedbackPort;
 
     /// Declare the receive settings and the feedback settings.
@@ -325,8 +330,12 @@ private:
         }
     }
 
-    char     hosts_[64] = {};         ///< where unicast feedback goes, empty meaning whoever wrote to us
-    char     group_[16] = {};          ///< the multicast group feedback goes to and this device joins
+    /// Addresses or names feedback goes to (unicast).
+    /// @guide Empty answers whoever wrote last, which finds a surface on its own. Fill it to send feedback somewhere else.
+    char     hosts_[64] = {};
+    /// The multicast group feedback goes to and this device joins.
+    /// @guide Every listening device with the same group joins it. The default sits beside discovery's own group, so a second rig on the same network picks another.
+    char     group_[16] = {};
     static_assert(sizeof(osc::kDefaultGroup) <= sizeof(group_), "the default group fits its control");
     Host     hostList_[kMaxHosts] = {};
     uint8_t  hostCount_ = 0;

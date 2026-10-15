@@ -1,7 +1,4 @@
-/// @defgroup file_manager_impl File Manager implementation
-/// The device's filesystem browser, whose surface is the UI tree panel rather than a control list.
-/// Public surface and class layout live in FileManagerModule.h.
-/// @{
+/// The device's filesystem browser, whose surface is the UI tree panel rather than a control list. Public surface and class layout live in FileManagerModule.h.
 #include "core/system/FileManagerModule.h"
 
 #include "core/system/FilesystemModule.h"   // instance()->lastSavedStr() for the "last saved" readout
@@ -13,7 +10,7 @@ void FileManagerModule::defineControls() {
     // `show hidden` is the one setting: the File Manager's surface is the tree panel, and the flag stays bound for the API while the generic control list skips it.
     controls_.addControl("show hidden", showHidden_);      // reveal dot-prefixed entries (e.g. .config)
     controls_.setHidden(controls_.count() - 1, true);
-    // The `flash` gauge, bound when the platform reports a partition: the total is read once and the usage on tick1s, since defineControls re-runs and a LittleFS usage scan walks every block.
+    // The `flash` gauge: the total is read once and the usage on tick1s, since defineControls re-runs and a usage scan walks every block.
     if (totalBytes_ == 0) {
         totalBytes_ = static_cast<uint32_t>(platform::filesystemTotal());
         usedBytes_ = static_cast<uint32_t>(platform::filesystemUsed());
@@ -22,8 +19,9 @@ void FileManagerModule::defineControls() {
         controls_.addProgress("flash", usedBytes_, totalBytes_);
         controls_.setHidden(controls_.count() - 1, true);   // renders as the usage bar in the panel, not generically
     }
-    // How long ago config was saved, bound straight to the FilesystemModule engine's buffer, which its tick1s keeps current, as SystemModule binds its strings.
+    // Bound straight to the FilesystemModule engine's buffer, which its tick1s keeps current, as SystemModule binds its strings.
     if (FilesystemModule* fs = FilesystemModule::instance()) {
+        /// How long ago the configuration was last saved.
         controls_.addReadOnly("lastSaved", fs->lastSavedStr());
         controls_.setHidden(controls_.count() - 1, true);   // shown in the panel header, not generically
     }
@@ -47,5 +45,3 @@ void FileManagerModule::setup() {
 // Creating and deleting are HttpServerModule's /api/dir routes, which carry the path in the request, so this module holds no op state; parseFilePath is the one path guard.
 
 } // namespace mm
-
-/// @}

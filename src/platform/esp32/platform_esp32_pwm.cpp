@@ -1,4 +1,3 @@
-/// @defgroup platform_esp32_pwm PWM output on LEDC
 /// The LEDC peripheral behind the PWM functions: timers set the resolution and so the rate, channels drive the pins.
 
 #include "platform/platform.h"

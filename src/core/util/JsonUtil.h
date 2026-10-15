@@ -1,13 +1,11 @@
 #pragma once
 
-/// @defgroup JsonUtil Reading JSON
-/// @{
 /// Two layers, both off the hot path, so bounded stack use is fine; the integer reader is out of line for its flash, as its number conversion is (parse.h).
 ///
 /// The flat helpers scan for a key over the subset we emit, and never descend into a nested object or an array.
 /// The recursive reader walks nested structure, which the persisted device and preset lists need.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## What the flat scan covers
 ///
@@ -42,7 +40,7 @@
 
 namespace mm::json {
 
-// The longest search pattern these readers build, sized from its parts rather than a round number so the bound is provable.
+/// The longest search pattern these readers build, sized from its parts rather than a round number so the bound is provable.
 inline constexpr size_t kMaxKeyLen = 58;
 inline constexpr size_t kSearchLen = kMaxKeyLen + 5;
 
@@ -124,7 +122,7 @@ inline bool parseBool(const char* json, const char* key) {
 
 // The recursive reader: a standard recursive-descent parser that copies the input into the document's own buffer and links nodes by index.
 
-// The recursion bound for a device task stack, far deeper than anything we emit yet a hard guard against a pathological input.
+/// The recursion bound for a device task stack, far deeper than anything we emit yet a hard guard against a pathological input.
 inline constexpr int kMaxDepth = 64;
 
 enum class JsonType : uint8_t { Null, Bool, Int, String, Object, Array };
@@ -370,7 +368,7 @@ inline bool parse(const char* json, JsonDoc& out) {
 
 // Navigation. Every accessor is null-safe and bounds-safe, returning a child or a safe default rather than crashing on a wrong-typed or missing node.
 
-// Member of an object by key, or nullptr if `obj` is not an object / has no such member.
+/// Member of an object by key, or nullptr if `obj` is not an object or has no such member.
 inline const JsonNode* member(const JsonDoc& doc, const JsonNode* obj, const char* key) {
     if (!obj || obj->type != JsonType::Object || !key) return nullptr;
     for (int i = obj->firstChild; i >= 0;) {
@@ -382,7 +380,7 @@ inline const JsonNode* member(const JsonDoc& doc, const JsonNode* obj, const cha
     return nullptr;
 }
 
-// Number of elements in an array (0 if `arr` is not an array).
+/// Number of elements in an array, 0 if `arr` is not an array.
 inline int arraySize(const JsonDoc& doc, const JsonNode* arr) {
     if (!arr || arr->type != JsonType::Array) return 0;
     int count = 0;
@@ -395,7 +393,7 @@ inline int arraySize(const JsonDoc& doc, const JsonNode* arr) {
     return count;
 }
 
-// Element `index` of an array, or nullptr if out of range / not an array.
+/// Element `index` of an array, or nullptr if out of range or not an array.
 inline const JsonNode* element(const JsonDoc& doc, const JsonNode* arr, int index) {
     if (!arr || arr->type != JsonType::Array || index < 0) return nullptr;
     int at = 0;
@@ -419,14 +417,14 @@ inline bool readString(const JsonNode* n, char* out, size_t maxLen) {
     return true;
 }
 
-// Read a node as an int. A Bool reads as 0/1; anything else returns `fallback`.
+/// Read a node as an int. A Bool reads as 0 or 1; anything else returns `fallback`.
 inline long readInt(const JsonNode* n, long fallback = 0) {
     if (!n) return fallback;
     if (n->type == JsonType::Int || n->type == JsonType::Bool) return n->intValue;
     return fallback;
 }
 
-// Read a node as a bool. A non-zero Int reads as true; anything non-bool/non-int is `fallback`.
+/// Read a node as a bool. A non-zero Int reads as true; anything that is neither a bool nor an int is `fallback`.
 inline bool readBool(const JsonNode* n, bool fallback = false) {
     if (!n) return fallback;
     if (n->type == JsonType::Bool || n->type == JsonType::Int) return n->intValue != 0;
@@ -456,5 +454,4 @@ inline bool forEachListElement(const char* json, const char* key, Fn&& fn) {
     return true;
 }
 
-/// @}
 } // namespace mm::json

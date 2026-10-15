@@ -5,24 +5,19 @@
 
 namespace mm {
 
-/// Effect: sub-pixel shapes, drawn between pixels so small panels move smoothly.
+/// Shapes placed between pixels rather than on them.
 /// @card FixedPointEffect.gif
-/// Author: concept and the original fixed-point canvas demos by Sutaburosu, in FastLED, via MoonLight.
 ///
-/// @moreinfo
+/// A clock hand drawn on whole pixels jumps a pixel at a time and reads as broken. The same hand at a fractional position moves smoothly, because a pixel's brightness carries the fraction its position cannot.
 ///
-/// ## The point is the technique, not the picture
+/// @attribution Sutaburosu
 ///
-/// On a 16x16 panel a clock hand drawn on whole pixels jumps a full pixel at a time and reads as broken.
-/// The same hand placed at a fractional position and antialiased moves smoothly, because a pixel's brightness carries the fraction its position cannot.
-/// Everything here is built from that one idea, so a small matrix gets motion a whole-pixel renderer cannot express at any frame rate.
+/// @technical
 ///
-/// The shapes come from the sub-pixel family in `draw.h`, `disc`, `ring`, `strokeLine` and `line`, which work in the 24.8 `pos_t` the whole draw layer speaks.
-/// Nothing here computes coverage itself.
+/// The shapes come from the sub-pixel family in `draw.h`, `disc`, `ring`, `strokeLine` and `line`, which work in the 24.8 `pos_t` the whole draw layer speaks. Nothing here computes coverage itself.
 class FixedPointEffect : public EffectBase {
 public:
-    // Every shape is computed from a position rather than accumulated.
-    /// The catalog tags shown on this effect's card.
+    /// Catalog tags. Every shape is computed from a position rather than accumulated.
     const char* tags() const override { return "⚡️🖌️"; }
     /// This effect draws in two dimensions.
     Dim dimensions() const override { return Dim::D2; }
@@ -36,17 +31,18 @@ public:
     /// How many demos `all` rotates through.
     static constexpr uint8_t kCycled = kDemoCount - 1;
 
-    /// Which demonstration is showing.
+    /// Which figure to draw, or `all` to cycle them.
+    /// @guide Eleven figures, from a geared clock through a spirograph to boids and a swaying tree, or `all` to cycle through them.
     uint8_t demo = kAll;
-    /// How fast the whole scene runs, in BPM like every other effect here.
+    /// How fast the orbits and curves run; the clock keeps its own.
     uint8_t bpm = 20;
-    /// How much of the previous frame survives, which is what leaves the trail.
+    /// How much of the previous frame survives, which leaves the trail.
     uint8_t fade = 70;
     /// Seconds each demo holds before `all` moves to the next.
     uint8_t dwell = 12;
-    /// How far the scene drifts from the panel's center, in pixels; 0 pins it.
+    /// How far the scene wanders from center, in pixels; 0 pins it.
     uint8_t drift = 2;
-    /// The camera, which pushes in and settles back on a cycle; 0 holds it still.
+    /// The camera pushes in and settles back; 0 holds it fixed.
     uint8_t zoom = 150;
 
     /// Bind the demo selector, the rate, the trail, the dwell, the drift and the camera.
@@ -69,6 +65,7 @@ public:
         shown_ = 0xFF;
     }
 
+    /// Fade, pick the demo the wall clock shows, and draw it.
     void tick() MM_NONBLOCKING override {
         const draw::Canvas cv = canvas();
         const lengthType w = width(), h = height();
@@ -115,14 +112,14 @@ public:
             if (zs > 0) {
                 // Only the positive half pushes in, so the scene rests for half the cycle.
                 const int32_t amount = (zs * zoom) / 255;              // 0..32767
-                // Track the second hand's tip, which is the point the original follows.
+                // Track the second hand's tip.
                 const angle16 secA = static_cast<angle16>((static_cast<uint64_t>(ms % kSecMs) * 65536u) / kSecMs);
                 const draw::pos_t tipX = cx + scaleAngle(sin16(secA), r);
                 const draw::pos_t tipY = cy - scaleAngle(cos16(secA), r);
                 // Screen = center + (world - camera) * zoom, with the camera lerped toward the tip.
                 const draw::pos_t camX = cx + static_cast<draw::pos_t>((static_cast<int64_t>(tipX - cx) * amount) / 32767);
                 const draw::pos_t camY = cy + static_cast<draw::pos_t>((static_cast<int64_t>(tipY - cy) * amount) / 32767);
-                const int32_t mag = 65536 + (amount * 3);              // up to ~2.5x, as the original
+                const int32_t mag = 65536 + (amount * 3);              // up to ~2.5x
                 vx = cx + static_cast<draw::pos_t>((static_cast<int64_t>(cx - camX) * mag) >> 16);
                 vy = cy + static_cast<draw::pos_t>((static_cast<int64_t>(cy - camY) * mag) >> 16);
                 vr = static_cast<draw::pos_t>((static_cast<int64_t>(r) * mag) >> 16);
@@ -145,8 +142,7 @@ public:
     }
 
 private:
-    // Fixed periods rather than `bpm`: a hand geared to a speed control is a rotating stick.
-    /// A clock face: a rim, twelve marks and three hands geared 1:12:144.
+    /// A clock face: a rim, twelve marks and three hands geared 1:12:144, on fixed periods rather than `bpm` since a hand geared to a speed control is a rotating stick.
     void drawClock(const draw::Canvas& cv, draw::pos_t cx, draw::pos_t cy, draw::pos_t r,
                    uint32_t ms) const {
         // angle16 wraps at 65536, so a period maps on by modulo and the whole path stays integer.
@@ -493,8 +489,7 @@ private:
     }
 
     static constexpr uint32_t kZoomMs = 20000u;   ///< the camera push-in cycle
-    // The clock runs 10x, so a second hand sweeps in 6, keeping the real 1:12:144 ratio.
-    static constexpr uint32_t kSecMs  = 6000u;    ///< one sweep of the second hand
+    static constexpr uint32_t kSecMs  = 6000u;    ///< one sweep of the second hand: the clock runs 10x, keeping the real 1:12:144 ratio
     static constexpr uint32_t kMinMs  = 72000u;   ///< one sweep of the minute hand
     static constexpr uint32_t kHourMs = 864000u;  ///< one sweep of the hour hand
 

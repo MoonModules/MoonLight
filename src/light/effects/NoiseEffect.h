@@ -5,24 +5,16 @@
 
 namespace mm {
 
-/// Effect: a gradient-noise field through the palette, drifting across the fixture or morphing in place.
+/// A gradient-noise field indexed straight into the palette, the plainest way to turn noise into light.
 /// @card NoiseEffect.gif
-/// Author: FastLED inoise field (Mark Kriegsman), and MoonLight's Noise2D for the morph form.
 ///
-/// The plainest way to turn a noise field into light, and the reference the others vary on.
-/// One control decides what moves, which is the whole character of the effect.
+/// It is the effect every other noise effect is a variation on. The `motion` control decides what moves, which is the whole character of the effect.
 ///
-/// @moreinfo
+/// @attribution Mark Kriegsman
 ///
-/// ## Drift against morph is an argument over the third axis
+/// @technical
 ///
-/// Drift scrolls the sample coordinates, so the field slides across the fixture like weather.
-/// Each axis scrolls at its own rate, so it flows rather than translating rigidly.
-/// A volumetric fixture spends the third axis on the light's own depth, so its slices differ.
-///
-/// Morph holds the coordinates still and spends that axis on time instead.
-/// The field then changes in place without going anywhere, which on a panel is the plasma wash.
-/// A volumetric fixture has no axis left for depth, so every slice shows the same field.
+/// Drift scrolls the sample coordinates and spends the third axis on depth, so volumetric slices differ. Morph spends that axis on time, so every slice of a volume shows the same field.
 class NoiseEffect : public EffectBase {
 public:
     /// Catalog tags: FastLED origin, the noise kernel.
@@ -34,11 +26,12 @@ public:
     enum Motion : uint8_t { kMotionDrift, kMotionMorph, kMotionCount };
     static constexpr const char* kMotionOptions[] = {"drift", "morph"};
 
-    /// Whether the field moves across the fixture or changes in place.
+    /// Whether the field drifts across the fixture or morphs in place.
+    /// @guide `drift` slides the field across the fixture like weather, each axis at its own rate. `morph` holds the field still and changes it in place, which on a panel is the plasma wash.
     uint8_t motion = kMotionDrift;
-    /// The field's spatial frequency, where lower is broader.
+    /// The field's spatial frequency: low is broad blobs, high is fine detail.
     uint8_t scale = 4;
-    /// How fast it moves.
+    /// How fast the field moves.
     uint8_t bpm = 60;
 
     /// Publish the motion, the field's scale and its speed.
@@ -90,8 +83,7 @@ public:
     }
 
 private:
-    BeatPhase phase_;   ///< the motion clock
-    // The field itself is the shared inoise8, which this effect only scales coordinates into.
+    BeatPhase phase_;   ///< the motion clock, since the field itself is the shared inoise8
 };
 
 } // namespace mm

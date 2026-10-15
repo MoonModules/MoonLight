@@ -7,7 +7,7 @@ namespace mm_structural {
 
 /// One decoded instruction, as the structural checker sees it.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// This type is split from the checks themselves because each ISA's decoder must be declared before the checks that call it and defined after, and both halves need this.
 ///

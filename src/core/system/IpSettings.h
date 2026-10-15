@@ -7,8 +7,6 @@
 #include <cstdint>
 #include <cstring>
 
-/// @defgroup IpSettings An interface's IP settings, DHCP or Static, in the words routers and phones use
-/// @{
 /// Shared by every interface that keeps its own addressing: Ethernet's card and each known WiFi network.
 
 namespace mm::ipsettings {
@@ -19,8 +17,7 @@ inline constexpr uint8_t kStatic = 1;   ///< the address the user set
 inline constexpr const char* kOptions[] = {"DHCP", "Static"};
 /// The four addresses a static setting holds, in the order they are written.
 inline constexpr const char* kFields[4] = {"ip", "gateway", "subnet", "dns"};
-// In ipv4::Fault's order, with no sentence for None; the app's alone, so MoonBase carries none of the text.
-/// What the card says about each reason a static setting is not used.
+/// What the card says about each reason a static setting is not used, in ipv4::Fault's order with no sentence for None. It is the app's alone, so MoonBase carries none of the text.
 inline constexpr const char* kWhy[] = {
     nullptr,
     "static IP not used: the subnet mask is not a valid mask",
@@ -138,5 +135,3 @@ struct IpApplied {
 };
 
 }  // namespace mm
-
-/// @}

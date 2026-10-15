@@ -1,6 +1,4 @@
-/// @defgroup scheduler_impl Scheduler implementation
 /// The module tree's owner: registration, naming, the tick order and control routing; the public surface lives in Scheduler.h.
-/// @{
 #include "core/module/Scheduler.h"
 #include "core/module/StateDocument.h"
 
@@ -329,5 +327,3 @@ MoonModule* Scheduler::firstInTree(MoonModule* mod, const char* name) {
 }
 
 } // namespace mm
-
-/// @}

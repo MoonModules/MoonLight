@@ -1,10 +1,10 @@
 #pragma once
 
-/// @defgroup MqttPacket MQTT 3.1.1 wire framing
-/// @{
 /// The framing and the handful of control packets a client light needs, in pure C++.
 ///
-/// @moreinfo
+/// @attribution MQTT
+///
+/// @technical
 ///
 /// There are no ESP-IDF or network dependencies here, deliberately, so the packet maths is host-unit-tested against golden byte vectors exactly as the Improv framing is.
 /// The live socket lifecycle, its connect, keepalive and reconnect, lives in `MqttModule`; this is only the bytes.
@@ -35,10 +35,7 @@
 /// That is the availability seam Home Assistant greys an entity out on.
 /// Retaining it means a late-joining subscriber still sees the device as offline.
 ///
-/// ## Prior art
-///
-/// The protocol is the OASIS MQTT 3.1.1 standard, the same framing mosquitto, HiveMQ and homebridge-mqttthing speak.
-/// It is written fresh against our own buffers, with no library.
+/// The protocol is the OASIS MQTT 3.1.1 standard, the framing mosquitto, HiveMQ and homebridge-mqttthing speak, written against our own buffers with no library.
 
 #include <cstdint>
 #include <cstddef>
@@ -312,5 +309,4 @@ private:
     char     topicBuf_[128] = {};
 };
 
-/// @}
 } // namespace mm

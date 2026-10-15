@@ -1,10 +1,8 @@
 #pragma once
 
-/// @defgroup ConfigScrape Reading a few keys out of a saved config without a parser
-/// @{
 /// How MoonBase, the recovery image, reads the WiFi credentials, the Ethernet wiring and the access point out of the application's saved config.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## Why a scraper, and why it is shared
 ///
@@ -207,8 +205,7 @@ inline SavedIp findChildIp(const char* json, const char* childType) {
     }, &ctx);
 }
 
-// String-aware, since a password may hold a brace; an unclosed object has no end.
-/// The closing brace of the object `p` sits inside, or null when there is none.
+/// The closing brace of the object `p` sits inside, or null when there is none. String-aware, since a password may hold a brace; an unclosed object has no end.
 inline const char* objectEnd(const char* p) {
     int depth = 0;
     for (; p && *p; p++) {
@@ -235,5 +232,3 @@ inline SavedIp findNetworkIp(const char* json, uint8_t index) {
 }
 
 }  // namespace mm::configscrape
-
-/// @}

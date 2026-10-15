@@ -13,36 +13,39 @@
 
 namespace mm {
 
-/// Output driver: serves the rendered frame as an H.264 stream a player pulls over RTSP, which arrives with a fraction of the delay HLS carries.
-///
-/// HLS ships whole segments and a player buffers several before it starts, so a viewer sees seconds ago. RTSP sends each frame as the encoder produces it, which puts a viewer far closer to live.
-///
-/// Prior art: RTSP is RFC 2326, its RTP payload format for H.264 is RFC 6184, and the hardware encoder is the one HLS already drives.
-///
-/// @moreinfo
-///
-/// ## One encoder, one driver at a time
-///
-/// HLS muxes the encoder's output into segments where this packetises the same NALs into RTP, so the two read the same shape of frame.
-/// They cannot run together: there is one encoder instance, and a second `encoderStart` would silently reconfigure the first driver's stream.
-/// So the encoder is claimed, and whichever driver starts second reports that it is in use.
-/// Sharing one encode between both readers is the better end state, filed in the backlog.
-/// It needs the two drivers to agree on geometry, rate and bitrate, which nothing makes them do today.
-///
-/// ## The newest viewer is the viewer
-///
-/// Each viewer costs another send on a device that is also driving lights, so one session plays at a time and a new connection takes it over.
-/// A player that vanishes without TEARDOWN leaves a socket open and silent, since TCP reports a peer's absence only to a write it stops acknowledging.
-/// Waiting on that would strand the stream for minutes, so someone asking to watch now outranks an old socket's silence.
-/// The displaced viewer sees its connection close, which every player reports.
-///
-/// ## Where it runs
-///
-/// The encoder is the P4's in hardware and the desktop's ffmpeg, so `hasRtsp` is true on both. Every other board reaches viewers through the preview driver, which sends raw pixels and no codec.
+/// Serves the layer as an H.264 stream a player pulls over RTSP, with a fraction of the delay HLS carries.
 /// @card RtspDriver.png
+///
+/// HLS ships whole segments and a player buffers several before it starts, so a viewer sees seconds ago. RTSP sends each frame as the encoder produces it, which makes this the remote view to reach for.
+///
+/// Point VLC or ffplay at the `url` the card shows. It runs on the ESP32-P4 and the desktop, and shares one encoder with @ref HlsDriver, so only one of the two runs at a time.
+///
+/// @attribution Delphium, RTSP, RTP
+///
+/// @guide
+///
+/// ## Playing it
+///
+/// Open the `url` in VLC or ffplay ([how-to](https://moonmodules.org/MoonLight/how-to/watching-the-output.html#playing-an-rtsp-stream)). The second of RTSP and HLS to start reports that the encoder is in use.
+///
+/// ## One viewer at a time
+///
+/// A new connection takes the session over, and the displaced viewer sees its connection close. A network that blocks the UDP port the viewer names leaves the stream silent ([how-to](https://moonmodules.org/MoonLight/how-to/watching-the-output.html#when-an-rtsp-stream-stays-silent)).
+///
+/// ## The delay that remains
+///
+/// H.264 emits a frame once it has the whole frame, and a decoder holds one more, so tens of milliseconds stay. RTSP removes HLS's segment buffering, the seconds.
+///
+/// @technical
+///
+/// **One encoder.** HLS muxes the encoder's output into segments where this packetizes the same NALs into RTP. A second `encoderStart` would silently reconfigure the first driver's stream, so the second driver reports the encoder in use.
+///
+/// **The newest viewer wins.** A player that vanishes without TEARDOWN leaves a silent socket, since TCP reports a peer's absence only to a write it stops acknowledging. Waiting on that would strand the stream, so a new request outranks it.
+///
+/// **Transport.** A player asking for interleaved TCP is refused by code, since this server speaks UDP only.
 class RtspDriver : public DriverBase {
 public:
-    /// A destroyed driver releases the encoder, since nothing else can: a claim outliving its owner would refuse every later driver, and the next one can even land on this address.
+    /// A destroyed driver releases the encoder, since nothing else can: a claim outliving its owner would refuse every later driver.
     ~RtspDriver() override { platform::encoderRelease(this); }
 
     /// The catalog tag this driver carries.
@@ -61,7 +64,7 @@ public:
     void defineDriverControls() override {
         controls_.addControl("targetFps", targetFps, 1, 60);
         controls_.addControl("scale", scale, 0, kMaxScale);
-        /// The address to paste into VLC or ffplay, carrying the device's own IP.
+        /// The address to play in VLC or ffplay, with the device's own IP.
         controls_.addReadOnly("url", urlBuf_, sizeof(urlBuf_));
     }
 
@@ -156,6 +159,7 @@ public:
         DriverBase::release();
     }
 
+    /// Answer the RTSP control channel, then encode a frame on a fixed schedule while a client plays.
     void tick() MM_NONBLOCKING override {
         if constexpr (!platform::hasRtsp) return;
         if (!open_ || targetFps == 0 || !sourceBuffer_ || !sourceBuffer_->data()) return;
@@ -328,9 +332,10 @@ private:
     static constexpr uint8_t kMaxScale = 16;
 
 public:
-    /// Frames per second the encoder is asked for, which is also its GOP.
+    /// Frame-rate ceiling, which is also the keyframe interval.
+    /// @guide The rate is a ceiling: a heavy effect that renders at 8 fps streams at 8 fps. Each module's tick time in the UI says which effect spends it.
     uint8_t targetFps = 30;
-    /// Lights per encoded block, or 0 to pick the smallest that clears the encoder's floor.
+    /// Video pixels per light, 0 for auto; each light a solid block.
     uint8_t scale = 0;
 
 private:

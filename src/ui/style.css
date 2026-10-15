@@ -8,6 +8,7 @@
     --bg-1:        #16213e;
     --fg:          #e0e0e0;
     --fg-muted:    #a0a0b0;
+    --fg-subtle:   #8788a2;   /* helper text, Material's medium emphasis; 4.6:1 on a top-level card, just over WCAG AA */
     --accent:      #a78bfa;
     --accent-soft: #6b5b9a;
     --card-bg-0:   #16213e;
@@ -24,6 +25,7 @@ body[data-theme="light"] {
     --bg-1:        #ffffff;
     --fg:          #222;
     --fg-muted:    #555;
+    --fg-subtle:   #6b6b78;
     --accent:      #6d4abe;
     --accent-soft: #b9a4e6;
     --card-bg-0:   #ffffff;
@@ -510,13 +512,13 @@ body.cards-resizing {
     border: none;
     border-bottom: 2px solid transparent;
     background: none;
-    color: var(--fg-muted);
+    color: var(--fg);                   /* high emphasis like a label, so it stands apart from help */
     font: inherit;
     font-size: 13px;
     cursor: pointer;
     white-space: nowrap;
 }
-.tab:hover { color: var(--fg); }
+.tab:hover { border-bottom-color: var(--accent-soft); }
 .tab-active {
     color: var(--accent);
     border-bottom-color: var(--accent);
@@ -624,11 +626,8 @@ body.cards-resizing {
 .card-spacer {
     flex: 1;
 }
-/* Per-module help link → spec page on GitHub. Styled as a .card-btn so the
-   right-hand cluster (✎ × ☰ ?) is visually uniform — same 26×26 square frame. */
-/* `{ }` shares the help link's frame exactly — same 26px square, so the two read as one cluster
-   at the end of the title row rather than as a button and a label. */
-.card-help, .card-api {
+/* `{ }` in a .card-btn's 26px square frame, so it reads as one cluster with ✎ and × at the end of the title row. */
+.card-api {
     background: transparent;
     border: 1px solid var(--border);
     color: var(--fg-muted);
@@ -643,7 +642,7 @@ body.cards-resizing {
     align-items: center;
     justify-content: center;
 }
-.card-help:hover, .card-api:hover {
+.card-api:hover {
     color: var(--fg);
     border-color: var(--accent);
 }
@@ -653,6 +652,64 @@ body.cards-resizing {
     font-size: 11px;
     letter-spacing: -0.05em;
 }
+
+/* A module's help under its title: the one line always visible, the rest one tap away. */
+.card-helpbox {
+    margin: 2px 0 6px;
+    font-size: 12px;
+    color: var(--fg-subtle);
+}
+/* One disclosure arrow for module and control help alike, before the line, drawn rather than the native marker, which Safari and Chrome draw differently. */
+.card-helpbox > summary,
+details.control-helper > summary {
+    cursor: pointer;
+    list-style: none;
+}
+.card-helpbox > summary::-webkit-details-marker,
+details.control-helper > summary::-webkit-details-marker { display: none; }
+.card-helpbox > summary::before,
+details.control-helper > summary::before { content: "▸"; display: inline-block; width: 1em; }
+.card-helpbox[open] > summary::before,
+details.control-helper[open] > summary::before { content: "▾"; }
+.card-helpbox-body {
+    margin: 6px 0 0 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+/* A thumbnail: the picture says what the module does at a glance, and the card's own preview is the full-size one. */
+.card-helpbox .help-image {
+    width: 64px;
+    height: 64px;
+    object-fit: cover;
+    border-radius: 4px;
+}
+.card-helpbox .help-attribution { font-style: italic; }
+/* The summary sits under the line, indented past the arrow, so it reads as the line's own. */
+.card-helpbox .help-summary { margin: 4px 0 0 1em; }
+/* A guide's table, compact and ruled, so a few rows of choices fit the card's width. */
+.card-helpbox table,
+.control-helper table { border-collapse: collapse; margin-top: 4px; }
+.card-helpbox th,
+.card-helpbox td,
+.control-helper th,
+.control-helper td { border: 1px solid var(--border); padding: 2px 6px; text-align: left; vertical-align: top; }
+
+/* A control's help: one line under the field, indented to the control column so it reads as the field's own. Only a row with help wraps. Proximity groups it, Gestalt's rule rather than color alone: 2px under its own field, 12px before the next one. */
+.control-row.has-help { flex-wrap: wrap; row-gap: 2px; margin-bottom: 12px; }
+/* Padding rather than margin for the indent: the line is the row's full width, so a margin on top of it ran past the card's edge and cut the text off. */
+.control-helper {
+    flex: 1 0 100%;
+    padding-left: calc(clamp(100px, 25%, 160px) + 8px);
+    font-size: 11px;
+    color: var(--fg-subtle);
+}
+.control-helper-more { margin: 2px 0 0 1em; }
+/* The status bar's ⓘ hides every help line; dimmed while help is off. */
+body.help-hidden .card-helpbox,
+body.help-hidden .control-helper { display: none; }
+body.help-hidden .control-row.has-help { margin-bottom: 6px; }
+#help-toggle[aria-pressed="false"] { opacity: 0.45; }
 
 .card-stats {
     font-size: 11px;
@@ -733,7 +790,8 @@ body.cards-resizing {
     text-overflow: ellipsis;
     white-space: nowrap;
     font-size: 12px;
-    color: var(--fg-muted);
+    /* High emphasis, as the value it names: help text sits a step below, in --fg-subtle. */
+    color: var(--fg);
 }
 
 /* A control above user mode carries a glyph naming the tier that reveals it, which reads at a glance
@@ -1490,7 +1548,7 @@ body.cards-resizing {
 
 .control-value {
     font-size: 12px;
-    color: var(--fg-muted);
+    color: var(--fg);
     min-width: 50px;
     text-align: right;
     font-variant-numeric: tabular-nums;
@@ -1536,10 +1594,11 @@ body.cards-resizing {
 }
 @keyframes rp-spin { to { transform: rotate(360deg); } }
 
-.status-value { flex: 1; font-size: 12px; }
+/* A status is a value, so it reads as one: high emphasis, a display value's size, figures that hold still. */
+.status-value { flex: 1; font-variant-numeric: tabular-nums; }
 .status-value[data-sev="error"]   { color: #e94560; }
 .status-value[data-sev="warning"] { color: #f5a623; }
-.status-value[data-sev="status"]  { color: var(--fg-muted); }
+.status-value[data-sev="status"]  { color: var(--fg); }
 
 .control-row button.action-btn {
     background: var(--accent);
@@ -2305,3 +2364,6 @@ body.assign-mode .control-encoder input { cursor: pointer; }
 /* One line on the Firmware card, only while stats consent is off. */
 .mooncloud-nudge { margin: 8px 0 0; font-size: 0.8em; line-height: 1.6; opacity: 0.7; }
 .fw-available { margin: 8px 0 0; font-size: 0.8em; color: #f5a623; }
+
+/* The record button glows while it records, so the three seconds are visible. */
+.preview-bar-btn.recording { color: var(--red); }

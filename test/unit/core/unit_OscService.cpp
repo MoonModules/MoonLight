@@ -1,10 +1,10 @@
-/// @module OscModule
+/// @module OscService
 /// @also Scheduler
 
 /// OSC feedback: its settings are validated without a socket, and every value is sent again every 30 seconds, one per tick.
 
 #include "doctest.h"
-#include "core/services/OscModule.h"
+#include "core/services/OscService.h"
 #include "core/module/Scheduler.h"
 #include "core/system/ControlModule.h"
 
@@ -15,7 +15,7 @@ using namespace mm;
 namespace {
 struct Rig {
     Scheduler scheduler;
-    OscModule* osc = new OscModule();
+    OscService* osc = new OscService();
     Rig() {
         osc->setName("Osc");
         scheduler.addModule(osc);
@@ -45,7 +45,7 @@ TEST_CASE("OSC multicast feedback without a group says so, and the default group
 
 namespace {
 // The OSC module with its datagrams counted instead of sent, so the test needs no socket and no clock.
-struct CountingOsc : OscModule {
+struct CountingOsc : OscService {
     int sent = 0;
     void sendValue(SurfaceControl, uint8_t, uint8_t) override { sent++; }
 };

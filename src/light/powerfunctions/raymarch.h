@@ -4,13 +4,13 @@
 
 #include <cmath>
 
-/// @defgroup raymarch Raymarching
-/// @{
 /// Rendering a 3D scene by walking a ray through a distance field.
 ///
 /// A scene is described as a function saying how far the nearest surface is from any point, so geometry emerges from arithmetic rather than being stored.
 ///
-/// @moreinfo
+/// @attribution John Hart, Iñigo Quilez
+///
+/// @technical
 ///
 /// ## Sphere tracing
 ///
@@ -23,10 +23,7 @@
 /// A raymarch is per-pixel float by nature, each ray taking many square roots, so this header compiles only where the platform declares a hardware FPU.
 /// Everything in the shader vocabulary stays fixed point and runs everywhere: this is the one bounded exception, gated as a whole header rather than weakening a rule in place.
 ///
-/// ## Prior art
-///
-/// John Hart's sphere tracing, and Iñigo Quilez's distance-function and raymarching articles.
-/// The primitives, the gradient normal and the operators follow his descriptions, implemented fresh.
+/// The primitives, the gradient normal and the operators follow Iñigo Quilez's descriptions, implemented fresh.
 
 #if MM_HEAVY_COMPUTE
 
@@ -139,7 +136,7 @@ inline uint8_t diffuse(Vec3 normal, Vec3 lightDir, uint8_t ambient = 38) {
 
 /// A camera: where it stands, what it looks at, and how wide it sees.
 ///
-/// @moreinfo Building a pixel's ray is what every effect would otherwise re-derive, and getting it wrong puts a scene half off-screen.
+/// @technical Building a pixel's ray is what every effect would otherwise re-derive, and getting it wrong puts a scene half off-screen.
 struct Camera {
     Vec3  position{0, 1, -3};
     Vec3  target{0, 0, 0};
@@ -162,8 +159,6 @@ struct Camera {
         return normalise(right * u + up * v + fwd * focal);
     }
 };
-
-/// @}
 
 }  // namespace mm::raymarch
 

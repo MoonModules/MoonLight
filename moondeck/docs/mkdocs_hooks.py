@@ -15,9 +15,12 @@
    /install/ so the local preview mirrors production's single-origin layout.
 """
 
+import json
 import logging
 import os
+import posixpath
 import re
+import subprocess
 from pathlib import Path
 
 # moondeck/docs/ is on sys.path when mkdocs runs from repo root; import the shared parser.
@@ -29,28 +32,31 @@ if str(_HERE) not in sys.path:
 from _test_metadata import (  # noqa: E402
     ROOT,
     collect_unit_files,
+    parse_unit_file,
     collect_scenario_files,
 )
 from generate_test_docs import render_unit_tests, render_scenarios  # noqa: E402
-import gen_api  # noqa: E402  (same dir, on sys.path via _HERE above)
+from gen_help import ATTRIBUTIONS, catalog_rows, display_name  # noqa: E402
 
 
 # ---- source-link rewrite: docs link OUT to repo files the site can't host ----
 
-# The blob base for links that escape docs/ into the repo (src/, moondeck/, test/,
-# CLAUDE.md, README.md, mooninstaller/). The site can't serve these — src/ isn't
-# published — so a relative link 404s on the deployed site. Rewrite to an absolute
-# GitHub blob URL so "source [Foo.h]" resolves everywhere (locally-served preview +
-# moonmodules.org). A `.h` link for a module that HAS a generated technical page is
-# repointed at that in-site page instead (see _API_MODULES / on_page_markdown); only
-# files with no generated page fall through to the GitHub blob URL.
-_BLOB_BASE = gen_api._BLOB_BASE   # one definition — branch-pinned, see gen_api._blob_base()
+# A link that escapes docs/ into the repo (src/, moondeck/, test/, CLAUDE.md, README.md, mooninstaller/) 404s on the site, which hosts none of it, so it becomes the file on GitHub. A header is the technical reference this way: its `///` comments read in place.
+def _blob_base() -> str:
+    """The GitHub blob URL a source link is built on, pinned to the branch being documented, so a page built on a feature branch links a file main may not have yet; main without git or on a detached head."""
+    branch = "main"
+    try:
+        out = subprocess.run(["git", "rev-parse", "--abbrev-ref", "HEAD"],
+                             cwd=ROOT, capture_output=True, text=True, timeout=5)
+        name = out.stdout.strip()
+        if out.returncode == 0 and name and name != "HEAD":
+            branch = name
+    except (OSError, subprocess.SubprocessError):
+        pass
+    return f"https://github.com/MoonModules/MoonLight/blob/{branch}"
 
-# {module stem: domain} for every module that got a generated technical page this
-# build, e.g. {"Control": "core", "FireEffect": "light"} — populated by on_files,
-# read by the link retargeter to build the domain-nested target path. Empty when the
-# doxygen/moxygen toolchain is absent (so links fall back to GitHub, unchanged).
-_API_MODULES: dict[str, str] = {}
+
+_BLOB_BASE = _blob_base()
 
 # Repo top-level dirs/files a doc may link into but the site doesn't host.
 _OUT_OF_DOCS = ("src/", "moondeck/", "test/", "esp32/", "mooninstaller/",
@@ -79,30 +85,10 @@ def _rewrite_out_of_docs_links(markdown: str, src_uri: str) -> str:
     page_dir = Path("docs") / src_uri
     page_dir = page_dir.parent
 
-    # Depth from this page up to docs/ (so a `.h` link can be repointed at the
-    # in-site generated API page with the right relative `../` count).
-    up = "../" * len(Path(src_uri).parent.parts) if str(Path(src_uri).parent) != "." else ""
-
     def _sub(m: re.Match) -> str:
         href = m.group("href")
         frag = m.group("frag") or ""
         rel = href.split("#", 1)[0]
-        # A `.h` whose module has a generated technical page → point at the in-site
-        # page, not GitHub. The generated reference IS the source view we want. The
-        # target nests by domain (core/light), so use the recorded domain. EXCEPT a
-        # `#L<n>` line-number fragment: that only resolves on GitHub's blob view (the
-        # generated page has no line anchors), so such links fall through to the blob
-        # rewrite below.
-        stem = Path(rel).stem
-        is_line_anchor = re.match(r'#L\d', frag)
-        # EXCEPT on a generated moxygen page: that page IS the `.h`'s technical view, so
-        # repointing its own `Source: Foo.h` banner at the in-site page links it to
-        # ITSELF and the reader can never reach the header. A generated page's `.h`
-        # links stay GitHub blob URLs.
-        on_generated_page = "/moxygen/" in src_uri
-        if rel.endswith(".h") and stem in _API_MODULES and not is_line_anchor and not on_generated_page:
-            domain = _API_MODULES[stem]
-            return f"]({up}moonmodules/{domain}/moxygen/{stem}.md{frag})"
         # Resolve against the page dir to a repo-relative path (the correct case).
         target = os.path.normpath(str(page_dir / rel)).replace(os.sep, "/")
         if target.startswith(_OUT_OF_DOCS) and not target.startswith("docs/"):
@@ -126,27 +112,6 @@ def _rewrite_out_of_docs_links(markdown: str, src_uri: str) -> str:
 
 # ---- catalog-page table transform: render prose ### blocks as a MoonLight-style table ----
 
-# The consolidated catalog pages whose ### effect/modifier/layout blocks are rendered
-# as a table (source stays authored as readable prose blocks; the table is build-time).
-# The ONE list of pages rendered as card tables, and the one home for it: this is the code
-# that renders them, so a page is a catalog page exactly when the build treats it as one.
-# check_specs and check_docgen import this rather than keeping their own (check_specs kept a
-# four-entry copy whose paths stopped existing at the docs restructure, so its catalog branch
-# quietly never ran).
-_CATALOG_PAGES = {
-    "moonmodules/light/effects.md",
-    "moonmodules/light/modifiers.md",
-    "moonmodules/light/layouts.md",
-    "moonmodules/light/drivers.md",
-    # Summary pages for the non-catalog module groups use the same ### -block → table
-    # transform, one common authoring process for every summary page (supporting rows
-    # just leave the preview/controls columns blank).
-    "moonmodules/core/supporting.md",
-    "moonmodules/core/system.md",
-    "moonmodules/core/services.md",
-    "moonmodules/light/supporting.md",
-}
-
 # The module types whose preview is MOTION, so their image is a .gif rather than a .png:
 # a still frame of a moving effect says almost nothing about it. One home, because three
 # places act on it: check_docgen enforces the format, screenshot_modules captures it, and
@@ -163,70 +128,105 @@ PREVIEWLESS_PAGES = frozenset({
     "moonmodules/light/supporting.md",
 })
 
-_H3_RE = re.compile(r'^###\s+(?P<title>.+?)\s*$')
-# A card title is `Name <emoji> · qualifier`: the name runs until the first word that does
-# not start with a letter, digit or "(". Written as a class rather than a list of the emoji
-# in use, because every new emoji silently broke the previous form (a name kept its emoji,
-# so its `## <Name>, details` section stopped resolving) and nothing failed loudly.
-_CARD_NAME_RE = re.compile(r"\s+[^\w(]")
+_SITE_RE = re.compile(r"https://moonmodules\.org/MoonLight/([^)\"\s#]*)(#[^)\"\s]*)?")
 
 
-def card_name(title: str) -> str:
-    """The card's name: its title up to the first emoji or separator."""
-    return _CARD_NAME_RE.split(title)[0].strip()
-_H2_RE = re.compile(r'^##\s+')                         # any level-2 heading = section boundary
-_ANCHOR_RE = re.compile(r'^<a id="(?P<id>[^"]+)"></a>\s*$')
-_IMG_RE = re.compile(r'^<img\b.*?>\s*$')
-_PARAM_RE = re.compile(r'^-\s+')
-_ORIGIN_RE = re.compile(r'^Origin:\s*(?P<body>.+?)\s*$')
-# `[Tests](href)` — the single-link form every card used before a card could cover several
-# modules. `Tests: [RMT](..) · [Moon](..)` is the multi-link form (mirrors the `Detail:` line),
-# for a merged card whose modules each have their own test section.
-_TESTS_RE = re.compile(r'^\[Tests\]\((?P<href>[^)]+)\)\s*$')
-_TESTS_MULTI_RE = re.compile(r'^Tests:\s*(?P<body>.+?)\s*$')
-_DETAIL_RE = re.compile(r'^Detail:\s*(?P<body>.+?)\s*$')   # `Detail: [Foo.md](..) · …` → Links column
-# `## <Name>, details`. A COMMA, not an em-dash: em-dashes are banned repo-wide
-# (documentation-standards.md), and a heading form the build requires must not be the
-# one character the prose rules forbid.
-_DETAILS_RE = re.compile(r'^##\s+(?P<name>.+?),\s+details\s*$')
+def _site_relative(md: str, src_uri: str) -> str:
+    """The help's absolute site links made relative to the page, so the build checks them and a local preview shows its own files: `moonmodules/core/services.html` is `../core/services.md`."""
+    def repl(m: re.Match) -> str:
+        path, anchor = m.group(1), m.group(2) or ""
+        if path.endswith(".html") or not path:
+            path = (path[:-5] or "index") + ".md"
+        if path == src_uri:
+            return anchor or "#"
+        return posixpath.relpath(path, posixpath.dirname(src_uri)) + anchor
+    return _SITE_RE.sub(repl, md)
 
 
-def _split_control(text: str):
-    """A control line as (name, separator, description).
-
-    Written `- `name`: what it does`. The em-dash form is read too, because the tree still
-    holds 143 of them, but it is not the form to write: see documentation-standards.md.
-    """
-    for sep in (": ", " — "):
-        head, found, tail = text.partition(sep)
-        if found:
-            return head, found, tail
-    return text, "", ""
+_help_cache = {}
 
 
-def split_blocks(markdown: str):
-    """Every `### ` block on a catalog page, as (title, start, end) line indices.
-
-    Where a card begins and ends is ONE rule, and three readers need it: this renderer,
-    check_specs looking for the block that documents a module, and check_docgen measuring
-    a card against the standards. Each had its own copy, and check_specs' drifted far
-    enough that its block-finding accepted four different link shapes to compensate.
-
-    A `### ` opens a block; the next `### ` or `## ` closes it, which is what keeps a
-    `## <Name>, details` section out of the card it follows.
-    """
-    lines = markdown.split("\n")
-    starts = [i for i, ln in enumerate(lines) if _H3_RE.match(ln)]
-    for n, i in enumerate(starts):
-        end = next((j for j in range(i + 1, len(lines))
-                    if _H3_RE.match(lines[j]) or _H2_RE.match(lines[j])), len(lines))
-        yield _H3_RE.match(lines[i]).group("title"), i, end
+def _help_file() -> dict:
+    """docs/help/help.json, read once per build."""
+    if "file" not in _help_cache:
+        path = Path(__file__).resolve().parent.parent.parent / "docs" / "help" / "help.json"
+        _help_cache["file"] = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+    return _help_cache["file"]
 
 
-def _cell(s: str) -> str:
-    """A markdown-table cell: collapse newlines to <br> so multi-line content
-    survives inside a single pipe cell."""
-    return s.replace("\n", "<br>")
+def generated_catalog(src_uri: str, intro: str | None = None) -> str | None:
+    """A catalog page drawn from help.json. The intro is the page's own markdown when it has one, else the class comment its modules share; the deck holds each module as plain markdown, which search indexes and a reader without JavaScript reads until the deck script replaces it, and each module's guide is its details section."""
+    page = src_uri.removeprefix("moonmodules/")
+    cat = _help_file().get("catalogs", {}).get(page)
+    if not cat:
+        return None
+    # The class whose comment is the intro is the page itself, so it is no card on it.
+    mods = sorted(((t, m) for t, m in _help_file().get("modules", {}).items()
+                   if (m.get("doc") == page or m.get("doc", "").startswith(page + "#")) and t != cat.get("base")),
+                  key=lambda tm: display_name(tm[0]).lower())
+    out = [intro.rstrip(), ""] if intro is not None else _class_intro(cat, src_uri)
+    out += [f'<div class="mm-deck" data-page="{page}" markdown="1">', ""]
+    for t, m in mods:
+        out += _module_markdown(t, m, src_uri)
+    out += ["</div>", ""]
+    for t, m in mods:
+        if m.get("guide"):
+            out += [f"## {display_name(t)}, details", ""]
+            for g in m["guide"]:
+                out += [f"#### {g['title']}", "", _site_relative(g["text"], src_uri), ""]
+    return "\n".join(out)
+
+
+def _class_intro(cat: dict, src_uri: str) -> list[str]:
+    """A catalog's intro from the class comment its modules share: the title, the picture, the line, the summary and the clips."""
+    out = [f"# {cat['title']}", ""]
+    if cat.get("image"):
+        out += [f'<img src="{_site_relative(cat["image"], src_uri)}" width="300" alt="{cat.get("alt", "")}">', ""]
+    out += [_site_relative(cat.get("line", ""), src_uri), ""]
+    for para in (p for p in cat.get("summary", "").split("\n\n") if p):
+        out += [_site_relative(para, src_uri), ""]
+    # The clips share one line, so they sit side by side rather than stacked.
+    clips = [f'<video src="{_site_relative(clip["video"], src_uri)}" controls playsinline title="{clip.get("caption", "")}"></video>'
+             for clip in cat.get("videos", [])]
+    if clips:
+        out += [" ".join(clips), ""]
+    return out
+
+
+def catalog_markdown(src_uri: str) -> str | None:
+    """A catalog page's markdown: generated from help.json, its own file being the intro when it has one; a page that is no catalog is its file."""
+    path = Path(__file__).resolve().parent.parent.parent / "docs" / src_uri
+    written = path.read_text(encoding="utf-8") if path.exists() else None
+    return generated_catalog(src_uri, written) or written
+
+
+def _tests_link(url: str, src_uri: str) -> str:
+    """The test inventory's section for a test file, which reads its cases as sentences, where the file names its `@module`; else the file on GitHub, the link the help itself carries."""
+    rel = url.split("/blob/", 1)[-1].partition("/")[2]
+    path = ROOT / rel
+    module = parse_unit_file(path).get("module") if rel and path.exists() else None
+    if not module:
+        return url
+    page = posixpath.relpath("reference/tests/unit-tests.md", posixpath.dirname(src_uri))
+    return f"{page}#{_slug(module)}"
+
+
+def _module_markdown(type_name: str, m: dict, src_uri: str) -> list[str]:
+    """One module as plain markdown: its anchor and name, picture, line and summary, controls, attribution and links. The name is bold rather than a heading, so the page's table of contents lists no entry the deck replaces."""
+    name = display_name(type_name)
+    anchor = m["doc"].partition("#")[2] or _slug(name)
+    suffix = m.get("kind") or (f"{m['dim']}D" if m.get("dim") else "")
+    out = [f'<a id="{anchor}"></a>', "", f"**{name}** {m.get('tags', '')}".rstrip() + (f" · {suffix}" if suffix else ""), ""]
+    if m.get("image"):
+        out += [f'<img src="{_site_relative(m["image"], src_uri)}" width="300" alt="{m.get("alt") or name + " preview"}">', ""]
+    out += [_site_relative(" ".join([m.get("line", "")] + m.get("summary", "").split("\n\n")).strip(), src_uri), ""]
+    controls = [f"- `{c}`: {_site_relative(h['line'], src_uri)}" for c, h in m.get("controls", {}).items()]
+    if controls:
+        out += controls + [""]
+    if m.get("attribution"):
+        out += [f"Attribution: {_site_relative(m['attribution'], src_uri)}", ""]
+    links = ([f"[Source]({m['source']})"] if m.get("source") else []) + ([f"[Tests]({_tests_link(m['tests'], src_uri)})"] if m.get("tests") else [])
+    return out + ([" · ".join(links), ""] if links else [])
 
 
 def _slug(text: str) -> str:
@@ -240,163 +240,13 @@ def _slug(text: str) -> str:
     return slugify(text, "-")
 
 
-def _emit_row(b: dict, details_names: set) -> str:
-    """One 2-column table row for a parsed ### block: module (preview, name,
-    description) and details (controls, then the labeled links)."""
-    # Col 1: anchored name (so a help #anchor lands on the row) + description. A
-    # merged card (e.g. the LED-output drivers) carries several ids so each old
-    # per-driver anchor still resolves onto the one row.
-    anchor_spans = "".join(f'<span id="{a}"></span>' for a in b.get("anchors", []))
-    # The NAME leads the cell and the preview sits under it: a reader scanning the
-    # table is looking for a name, and a picture above it pushes the thing they are
-    # scanning for down the row. The image stays in this column rather than its own,
-    # which is what kept a 900-character description from rendering as a ribbon.
-    img_html = ""
-    if b["img"]:
-        img = re.sub(r'\s+(width|height)="[^"]*"', "", b["img"])
-        img_html = "<br>" + img.replace("<img ", '<img class="mm-preview" ', 1)
-    # Name in a distinct styled span, description below in a muted span, so the two
-    # read as title + subtitle rather than one run-on line (styled in extra.css).
-    name = f'{anchor_spans}<span class="mm-name">{b["title"]}</span>'
-    desc = " ".join(b["desc"])
-    col1 = _cell(f'{name}{img_html}<br><span class="mm-desc">{desc}</span>'
-                 if desc else f'{name}{img_html}')
-
-    # Col 2: controls, one per line, split into the name part (keeps its `code` chips,
-    # styled accent) and the description (greyed via .mm-pdesc).
-    #
-    # The separator is a COLON or an em-dash. Only the colon should be written: em-dashes
-    # are banned repo-wide, so a format that required one made the renderer and the prose
-    # rules contradict each other. The em-dash stays readable because 143 lines in the tree
-    # still use it, and a card is not the place to fail over punctuation. A control with
-    # neither renders whole in the name part.
-    col2_parts = []
-    for p in b["params"]:
-        p = re.sub(r'^-\s+', '', p)
-        head, sep, tail = _split_control(p)
-        if sep:
-            col2_parts.append(f'<span class="mm-param">{head}'
-                              f' — <span class="mm-pdesc">{tail}</span></span>')
-        else:
-            col2_parts.append(f'<span class="mm-param">{p}</span>')
-    col2 = "".join(col2_parts) if col2_parts else "—"
-
-    # THREE links, and always all three: Tests, API and Details. A card offers the same
-    # doors on every row, so a reader learns their position once instead of re-reading a
-    # list whose length changes per card. Everything else was prose wearing a link's clothes: attribution
-    # belongs in the header's /// (it travels with the code it credits), and the details
-    # section is already named in the card's own description, so a `More:` row restated a
-    # sentence the reader had just read.
-    #
-    # A missing target still renders its label, greyed, rather than vanishing: a card with
-    # no tests is a gap worth seeing, and a row that silently loses a link hides it.
-    tests = (b["testsMulti"] if b.get("testsMulti")
-             else f'[{b["testsName"]}]({b["tests"]})' if b["tests"]
-             else '<span class="mm-missing">none yet</span>')
-    detail = (re.sub(r'^\[technical\]', '[reference]', b["detail"]) if b["detail"]
-              else '<span class="mm-missing">none yet</span>')
-    links = [f":material-test-tube: **Tests:** {tests}",
-             f":material-api: **API:** {detail}"]
-    # Details is a fixed row, not a per-card extra: most cards have one and a reader
-    # follows it often, so it earns a standing position. Any other link a card wants is
-    # made in the description, in the sentence that needs it.
-    name = card_name(b["title"])
-    details = (f"[{name}, details](#{_slug(name + ', details')})" if name in details_names
-               else '<span class="mm-missing">none yet</span>')
-    links.append(f":material-text-long: **Details:** {details}")
-    # Controls and links share ONE cell: the links column was 18% of the page, which made
-    # a three-link card taller than its own controls. Stacked under the controls they read
-    # as what the card offers and where it continues.
-    col2_links = (f'<br><span class="mm-links">{_cell("<br>".join(links))}</span>'
-                  if links else "")
-
-    return f"| {col1} | {col2}{col2_links} |"
-
-
-def _render_catalog_table(markdown: str) -> str:
-    """Render each run of consecutive `### ` blocks as a 2-column table, section by
-    section. Everything else — the page H1/lead, `## Group` headers, the trailing
-    `## Source` list, `## <Name>, details` sections, stray prose between blocks,
-    passes through verbatim, so a table only ever contains genuine module blocks
-    (a `##` heading closes the current table). Source .md stays authored as prose."""
-    lines = markdown.split("\n")
-    details_names = {_DETAILS_RE.match(ln).group("name") for ln in lines if _DETAILS_RE.match(ln)}
-
-    out = []
-    rows = []                # accumulated table rows for the current run
-    cur = None               # block being parsed
-    pending_anchors = []     # <a id> lines seen before the next ### (a merged card can carry several)
-
-    def flush_block():
-        nonlocal cur
-        if cur is not None:
-            rows.append(_emit_row(cur, details_names))
-            cur = None
-
-    def flush_table():
-        """Emit the accumulated rows as one wrapped table, then reset."""
-        if rows:
-            out.append('<div class="mm-catalog-wrap" markdown="1">')
-            out.append("")
-            out.append("| Module | Details |")
-            out.append("|--------|---------|")
-            out.extend(rows)
-            out.append("")
-            out.append("</div>")
-            out.append("")
-            rows.clear()
-
-    for ln in lines:
-        if _ANCHOR_RE.match(ln):
-            pending_anchors.append(_ANCHOR_RE.match(ln).group("id"))
-            continue
-        if _H3_RE.match(ln):                       # start a new block (same table run)
-            flush_block()
-            cur = {"anchors": pending_anchors, "title": _H3_RE.match(ln).group("title"),
-                   "desc": [], "img": None, "params": [], "origin": None,
-                   "tests": None, "testsMulti": None, "detail": None,
-                   "testsName": card_name(_H3_RE.match(ln).group("title"))}
-            pending_anchors = []
-            continue
-        if _H2_RE.match(ln):                       # section boundary: close block + table
-            flush_block()
-            flush_table()
-            for a in pending_anchors:              # stray anchors before a ## — keep them
-                out.append(f'<a id="{a}"></a>')
-            pending_anchors = []
-            out.append(ln)
-            continue
-        if cur is not None:                        # inside a block: classify the line
-            if _IMG_RE.match(ln):
-                cur["img"] = ln.strip()
-            elif _PARAM_RE.match(ln):
-                cur["params"].append(ln.strip())
-            elif _ORIGIN_RE.match(ln):
-                cur["origin"] = _ORIGIN_RE.match(ln).group("body")
-            elif _TESTS_RE.match(ln):
-                cur["tests"] = _TESTS_RE.match(ln).group("href")
-            elif _TESTS_MULTI_RE.match(ln):
-                cur["testsMulti"] = _TESTS_MULTI_RE.match(ln).group("body")
-            elif _DETAIL_RE.match(ln):
-                cur["detail"] = _DETAIL_RE.match(ln).group("body")
-            elif ln.strip():
-                cur["desc"].append(ln.strip())
-            # blank line inside a block is a separator — ignore
-            continue
-        # outside any block and not a heading: passthrough (intro, prose, Source items)
-        out.append(ln)
-
-    flush_block()
-    flush_table()
-    for a in pending_anchors:
-        out.append(f'<a id="{a}"></a>')
-    return "\n".join(out)
+def on_pre_build(config):
+    """Forget the last build's help.json, so a live server draws the file as it is now."""
+    _help_cache.clear()
 
 
 def on_files(files, config):
-    """Inject build-time-generated pages into the virtual tree: the test inventories,
-    and (Phase 4b) a per-module API reference for each infrastructure module,
-    generated from its `///` source comments by gen_api (Doxygen → moxygen)."""
+    """Inject the build-time pages into the virtual tree: the test inventories, the help the deck reads, and the catalog pages drawn from help.json."""
     from mkdocs.structure.files import File
 
     def _add(src_uri: str, content: str):
@@ -407,27 +257,14 @@ def on_files(files, config):
         files.append(f)
 
     _add("reference/tests/unit-tests.md", render_unit_tests(collect_unit_files()))
+    # The card deck renders help with the app's own help.js, served beside assets/help-deck.js, so a card on the site reads as the module's help does on a device. One deck per catalog page.
+    _add("assets/help.js", (ROOT / "src" / "ui" / "help.js").read_text(encoding="utf-8"))
+    # A catalog page whose markdown is gone is generated from help.json, under the same name, so every link and anchor into it holds.
+    for page in _help_file().get("catalogs", {}):
+        if not (ROOT / "docs" / "moonmodules" / page).exists():
+            _add(f"moonmodules/{page}", generated_catalog(f"moonmodules/{page}"))
     _add("reference/tests/scenario-tests.md", render_scenarios(collect_scenario_files()))
 
-    # Source-generated technical pages. gen_api.generate() writes each to disk under
-    # docs/moonmodules/<domain>/moxygen/<Module>.md (gitignored, so a human can preview
-    # the .md directly) and returns {uri: markdown}. We still inject via _add so THIS
-    # build sees them (MkDocs' file scan ran before this hook, so the fresh writes
-    # aren't in `files` yet; _add de-dups a same-URI entry a later scan would find).
-    # Empty dict when doxygen/npx are absent (local without the toolchain) — the site
-    # still builds; the pages appear in CI. But if the tools ARE present and fail (npx
-    # fetch error, doxygen crash, near-empty output), generate() raises GenApiError,
-    # which propagates and fails the build — so a transient failure can't silently ship
-    # a docs site with zero API pages. Record {stem: domain} so on_page_markdown can
-    # retarget a `.h` link to the domain-nested page.
-    global _API_MODULES
-    api_pages = gen_api.generate()
-    # uri: 'moonmodules/<domain>/moxygen/<Stem>.md' → {'<Stem>': '<domain>'}
-    _API_MODULES = {
-        Path(uri).stem: Path(uri).parts[1] for uri in api_pages
-    }
-    for uri, md in api_pages.items():
-        _add(uri, md)
     return files
 
 
@@ -519,13 +356,86 @@ def on_page_content(html, page, config, files):
     return html
 
 
+_GITHUB_OWNER_RE = re.compile(r"^https://github\.com/([A-Za-z0-9-]+)(?:/|$)")
+
+
+# A source file's own `@attribution` line: a header's or a `.cpp`'s comment, or a script's docstring.
+_SOURCE_ATTRIBUTION_RE = re.compile(r"^\s*(?:///|//|#)?\s*@attribution\s+(.+?)\s*$")
+
+
+def _source_attributions(modules: dict) -> list[tuple[str, str]]:
+    """Each source file outside the modules that names attributions, as (its link on GitHub, the names): code that is no module, such as a power function or MoonBase, credits where its idea lives."""
+    module_sources = {m.get("source", "").partition("/blob/")[2].partition("/")[2] for m in modules.values()}
+    found = subprocess.run(["git", "grep", "-n", "-F", "@attribution", "--", "src", "moonbase", "moondeck", "esp32"],
+                           cwd=ROOT, capture_output=True, text=True)
+    if found.returncode > 1:   # 1 is no match; more is no repository, which would drop every credit in silence
+        raise RuntimeError(f"git grep for @attribution failed: {found.stderr.strip()}")
+    out = []
+    for hit in found.stdout.splitlines():
+        rel, _, text = hit.partition(":")
+        m = _SOURCE_ATTRIBUTION_RE.match(text.partition(":")[2])
+        if m and rel not in module_sources:
+            out.append((f"[{Path(rel).name}]({_BLOB_BASE}/{rel})", m.group(1)))
+    return sorted(out)
+
+
+def deck_around_table(markdown: str) -> str:
+    """The page's table inside a deck, which the deck script turns into cards; the table stays for search and for a reader without JavaScript."""
+    lines = markdown.split("\n")
+    start = next((i for i, ln in enumerate(lines) if ln.startswith("|")), None)
+    if start is None:
+        return markdown
+    end = next((i for i in range(start, len(lines)) if not lines[i].startswith("|")), len(lines))
+    return "\n".join(lines[:start] + ['<div class="mm-deck" markdown="1">', ""] + lines[start:end] + ["", "</div>"] + lines[end:])
+
+
+def attributed_by(markdown: str) -> str:
+    """The attribution catalog as the site shows it. Under each name goes its picture: the Wikimedia Commons file the row names, else its GitHub avatar. The Attributed by column lists the modules naming the entry by link or name, read from help.json, then the other source files whose `@attribution` names it, so the page lists none by hand."""
+    rows = {i: (names, url, picture) for i, names, url, picture in catalog_rows(markdown)}
+    users = {i: [] for i in rows}
+    modules = _help_file().get("modules", {})
+    credits = []
+    for t, m in sorted(modules.items(), key=lambda tm: display_name(tm[0]).lower()):
+        page, _, anchor = m.get("doc", "").partition("#")
+        credits.append((f"[{display_name(t)}](../moonmodules/{page}#{anchor})" if page else display_name(t), m.get("attribution", "")))
+    credits += _source_attributions(modules)
+    for name, attr in credits:
+        urls = set(re.findall(r"\]\((https?://[^)\s]+)\)", attr))
+        said = {re.sub(r"^\[([^\]]+)\]\(.*\)$", r"\1", s.strip()).lower() for s in attr.split(",")}
+        said |= {s.lower() for s in re.findall(r"\[([^\]]+)\]\(", attr)}
+        for i, (names, url, _) in rows.items():
+            if ((url and url in urls) or any(n.lower() in said for n in names)) and name not in users[i]:
+                users[i].append(name)
+    out = []
+    for i, ln in enumerate(markdown.split("\n")):
+        if i in rows:
+            _, url, picture = rows[i]
+            cell = ln.split("|")[1]
+            name = cell.partition(" File:")[0].strip()
+            owner = _GITHUB_OWNER_RE.match(url or "")
+            img = '<img src="{}" width="48" height="48" alt="" loading="lazy" style="width: 48px; height: 48px; object-fit: cover">'
+            if picture:
+                # The file page credits the picture's author and license, as reuse of a Commons file asks.
+                name += f'<br><a href="https://commons.wikimedia.org/wiki/File:{picture}">{img.format(f"https://commons.wikimedia.org/wiki/Special:FilePath/{picture}?width=96")}</a>'
+            elif owner:
+                name += "<br>" + img.format(f"https://github.com/{owner.group(1)}.png?size=96")
+            ln = ln.replace(cell, f" {name} ", 1) + f" {', '.join(users[i])} |"
+        elif ln.startswith("| Name "):
+            ln += " Attributed by |"
+        elif ln.startswith("|---"):
+            ln += "---|"
+        out.append(ln)
+    return "\n".join(out)
+
+
 def on_page_markdown(markdown, page, config, files):
-    """Repoint out-of-docs source links to GitHub blob URLs, then (on the catalog
-    pages) render the prose ### blocks as a MoonLight-style 2-column table. Source
-    .md stays authored as readable blocks; the table is build-time only."""
+    """Repoint out-of-docs source links to GitHub blob URLs, follow a written catalog page with its deck, and give the attribution catalog its pictures and the modules naming each entry."""
     markdown = _rewrite_out_of_docs_links(markdown, page.file.src_uri)
-    if page.file.src_uri in _CATALOG_PAGES:
-        markdown = _render_catalog_table(markdown)
+    # A written catalog page is the intro its generated deck follows.
+    if page.file.abs_src_path and Path(page.file.abs_src_path).exists():
+        markdown = generated_catalog(page.file.src_uri, markdown) or markdown
+    if page.file.abs_src_path and Path(page.file.abs_src_path) == ATTRIBUTIONS:
+        markdown = deck_around_table(attributed_by(markdown))
     return markdown
 
 

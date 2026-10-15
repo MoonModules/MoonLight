@@ -8,23 +8,24 @@
 
 namespace mm {
 
-/// Output driver: streams the buffer to LED panel cards over raw Ethernet frames, below IP. These cards take a sender-card feed, so they need an L2 seam rather than a socket. The wire format lives in ColorLight5A75Packet.h, and this driver owns the window, the correction and the chunking. The board renders and sends, making the device a complete panel controller.
-///
-/// Prior art: FPP (Falcon Player), which drives these cards from a Raspberry Pi, and the ColorLight 5A-75 documented byte layout. The wiring, the vendors and the host setup are on the panel cards page.
-///
-/// @moreinfo
-///
-/// ## Why a gigabit link
-///
-/// The cards require a 1000 Mbps link, for wire time rather than bandwidth. They latch on the sync frame with no buffering, so a whole frame must arrive inside the inter-frame window. At 100 Mbit the same bytes overrun the frame budget and break the timing the sync depends on.
-///
-/// A slow link is silent: frames go out, the link is up, and the panels tear or never latch. The driver reads the negotiated speed and says so, then sends anyway, since a small panel may be fine.
-///
-/// ## No geometry controls
-///
-/// The panel arrangement belongs to the Layout. It states the count, size, wiring order and snaking, and maps every light to an (x, y). This driver reads the finished picture and cuts it into card rows. So a wall is described in exactly one place.
-///
+/// Streams the buffer to ColorLight 5A-75 receiving cards as raw Ethernet, taking the place of the sending card that normally feeds them.
 /// @card PanelCardDriver.png
+///
+/// The board renders and sends, so it replaces a host PC driving the same wall. There are no geometry controls: the wall comes from the [Layout](https://moonmodules.org/MoonLight/moonmodules/light/layouts.html), cut into card rows.
+///
+/// @attribution FPP, Harald Kubota, mplayer-colorlight
+///
+/// @guide
+///
+/// ## Why 1 Gbit
+///
+/// The cards need 1000 Mbps for wire time, not bandwidth: they latch on the sync frame, so a whole frame must arrive inside the inter-frame window. At 100 Mbit expect tearing or wrong rows; the driver warns but still sends ([how-to](https://moonmodules.org/MoonLight/how-to/panel-cards.html#the-one-hardware-fact-that-decides-everything)).
+///
+/// @technical
+///
+/// **Wire.** No IP, port or DHCP is involved, so it works on a link that never got a lease. A row wider than 497 pixels goes out as several packets. The byte layout is ColorLight5A75Packet.h.
+///
+/// **References.** FPP's ColorLight-5a-75.cpp and Harald Kubota's 5A-75B write-up agree on this layout, but print the MAC pair the other way round. The cards filter on destination `11:22:33:44:55:66` and source `22:22:33:44:55:66`.
 class PanelCardDriver : public DriverBase {
 public:
     /// Default to the RGB profile, as the network sinks do, rather than the strips' GRB.
@@ -38,25 +39,25 @@ public:
     /// How many wire formats the selector offers.
     static constexpr uint8_t kFormatCount = 1;
 
-    /// Wire format (index into kFormatOptions).
+    /// The card's wire format.
     uint8_t format = 0;
 
-    // A control rather than a probe because this driver is send-only, having no receive seam.
-    /// Card firmware generation, which decides whether the sync frame goes out once or twice.
+    /// Card firmware generations: a control rather than a probe, since this driver is send-only and has no receive seam.
     static constexpr const char* kFirmwareOptions[] = {"v12 and older", "v13 and newer"};
     /// The card firmware generations `firmware` picks from, in kFirmwareOptions order.
     enum Firmware : uint8_t { kFirmwareV12, kFirmwareV13, kFirmwareCount };
 
-    /// Card firmware generation: v12-and-older or v13+.
+    /// The card firmware; a wrong one and the wall barely updates.
+    /// @guide v13 and newer acts on the second copy of brightness and sync, which go out twice; v12 and older on the first ([how-to](https://moonmodules.org/MoonLight/how-to/panel-cards.html#7-card-firmware-and-the-flicker)).
     uint8_t firmware = kFirmwareV12;
-    // Persisted by LABEL, not index, so a NIC keeps its identity across a re-enumeration.
-    /// Host NIC to send from, row 0 being capture-only. Not built on ESP32.
+    /// The network adapter the frames go out on.
+    /// @guide `none (capture only)` records frames without sending. Sending needs root or `CAP_NET_RAW` on Linux, BPF on macOS, Npcap on Windows ([steps](https://moonmodules.org/MoonLight/how-to/panel-cards.html#6-from-a-desktop)).
     uint8_t interfaceSel_ = 0;
     /// The label behind the selected row, so a reordered list restores the same NIC.
     char chosenIf_[64] = {};
     /// The row the last rebuild settled on, which tells a user's pick from a re-enumeration.
     uint8_t lastResolvedSel_ = 0;
-    /// Send-rate ceiling (Hz); tick() rate-limits so a fast render tick doesn't saturate the link.
+    /// Frame-rate limit, so a fast render tick does not saturate the link.
     uint8_t fps = 40;
 
     /// Bind the format, the host interface and the shared window, after the correction block.
@@ -340,8 +341,7 @@ public:
     const Buffer& correctedBuffer() const { return corrected_; }
 
 private:
-    // The source stride need not match the wire's 3 bytes, so a white channel has nowhere to go.
-    /// Build one row packet into the reused frame buffer.
+    /// Build one row packet into the reused frame buffer; the source stride need not match the wire's 3 bytes, so a white channel has nowhere to go.
     size_t packRow(uint16_t row, uint16_t pixelOffset, uint16_t pixelCount,
                    const uint8_t* src, uint8_t stride) MM_NONBLOCKING {
         if (stride == COLORLIGHT_BYTES_PER_PIXEL) {

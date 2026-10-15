@@ -15,6 +15,8 @@
 //    chip-dependent or semantics-changing gets a "review" report entry instead of a guess.
 //  - A control that moves to a wired child module is a CHILD_MOVES entry: a transform stage after the renames, the one non-rename break so far.
 
+import { typeDisplayName, kNameMax } from "./help.js";
+
 // Old .config filename → new (the file IS the module's typeName).
 export const FILE_RENAMES = {
     "Layers.json": { to: "Effects.json", date: "2026-08-08" },   // Layers container → Effects (L.E.D. naming)
@@ -25,6 +27,8 @@ export const FILE_RENAMES = {
 // Old module type value (any "type" / "N.type" key) → new type. `set` writes a control the
 // merge made explicit when its value is deterministic; `review` flags what a map cannot decide.
 export const TYPE_RENAMES = {
+    // Every service is named for its role, so OSC takes the Service suffix its siblings carry.
+    "OscModule": { type: "OscService", date: "2026-10-15" },
     // The scanner became the board's I2C bus, which every device on it shares; its sda and scl carry over.
     "I2cScanModule": { type: "I2cBusModule", date: "2026-10-06" },
     // The library of named channel wirings takes the DMX industry term. Its list control follows (CONTROL_RENAMES).
@@ -73,7 +77,7 @@ export const CONTROL_RENAMES = {
     // One rule for reaching many receivers: a list is `hosts`, and how packets travel is `addressing`.
     "ips": { name: "hosts", date: "2026-10-02", onTypes: ["NetworkSendDriver"] },
     "lightsPerIp": { name: "lightsPerHost", date: "2026-10-02", onTypes: ["NetworkSendDriver"] },
-    "feedbackTo": { name: "hosts", date: "2026-10-02", onTypes: ["OscModule"] },
+    "feedbackTo": { name: "hosts", date: "2026-10-02", onTypes: ["OscService"] },
     "wledCompatible": { name: "addressing", date: "2026-10-02", onTypes: ["DevicesModule"] },
     // One name for one thing: the service is AudioService, the frame is AudioFrame, so the control
     // that makes a sprite effect follow the music is audioReactive. Scoped to the seven effects that
@@ -156,13 +160,6 @@ export const PRESET_VALUE_RENAMES = {
     "layer": { to: "effects", date: "2026-08-08" },
 };
 
-// The name a module takes on the device: its type without the role noun, as ModuleFactory::displayNameFor gives it, in the 15 characters a name holds.
-const ROLE_NOUNS = ["Effect", "Modifier", "Layout", "Driver", "Module", "Service"];
-const kNameMax = 15;
-function displayName(type) {
-    const noun = ROLE_NOUNS.find(n => type.length > n.length && type.endsWith(n));
-    return (noun ? type.slice(0, -noun.length) : type).slice(0, kNameMax);
-}
 
 // One module of a flat config object, the keys under `prefix`, as a state document member: its controls, then its children named as the device names them.
 // A child takes its saved `$name`, else the name the live module of its type under `live` has, since main.cpp names the modules it wires, else its type's.
@@ -177,7 +174,7 @@ function documentNode(cfg, prefix, type, unique, live) {
         const t = cfg[`${prefix}${i}.type`];
         const at = liveLeft.findIndex(c => c.type === t);
         const match = at >= 0 ? liveLeft.splice(at, 1)[0] : undefined;
-        const name = cfg[`${prefix}${i}.$name`] || (match && match.name) || displayName(t);
+        const name = cfg[`${prefix}${i}.$name`] || (match && match.name) || typeDisplayName(t);
         node[unique(name)] = documentNode(cfg, `${prefix}${i}.`, t, unique, match);
     }
     return node;
@@ -198,7 +195,7 @@ function uniqueNames(taken = []) {
 /// The module and its children are named as the live tree names them where it has them, so a module wired in code is found rather than created twice.
 export function configToDocument(flat, type, live = []) {
     const top = live.find(m => m.type === type);
-    const rootName = top ? top.name : displayName(type);
+    const rootName = top ? top.name : typeDisplayName(type);
     return { [rootName]: documentNode(flat, "", null, uniqueNames([rootName]), top) };
 }
 

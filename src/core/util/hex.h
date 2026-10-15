@@ -1,7 +1,5 @@
 #pragma once
 
-/// @defgroup hex A hexadecimal digit's value
-/// @{
 /// The digit rule the URL and JSON decoders share, in one place; it needs nothing past the language, so MoonBase includes it as well.
 
 namespace mm {
@@ -15,5 +13,3 @@ inline int hexDigit(char h) {
 }
 
 }  // namespace mm
-
-/// @}

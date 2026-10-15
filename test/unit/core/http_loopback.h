@@ -15,7 +15,7 @@ namespace http_loopback {
 
 using CR = mm::platform::TcpConnection::ConnectResult;
 
-// Connects `client` to the server on `port`, then ticks once so the server accepts it.
+/// Connects `client` to the server on `port`, then ticks once so the server accepts it.
 inline bool connectAndAccept(mm::HttpServerModule& http, mm::platform::TcpConnection& client, uint16_t port) {
     if (!client.connectStart("127.0.0.1", port)) return false;
     CR r = CR::Pending;
@@ -29,7 +29,7 @@ inline bool connectAndAccept(mm::HttpServerModule& http, mm::platform::TcpConnec
     return true;
 }
 
-// Ticks the server, accumulating what the client reads, until it holds at least `wantAtLeast` bytes or `maxTicks` is spent.
+/// Ticks the server, accumulating what the client reads, until it holds at least `wantAtLeast` bytes or `maxTicks` is spent.
 inline std::string pumpUntil(mm::HttpServerModule& http, mm::platform::TcpConnection& client,
                              size_t wantAtLeast, int maxTicks = 3000) {
     std::string out;
@@ -43,7 +43,7 @@ inline std::string pumpUntil(mm::HttpServerModule& http, mm::platform::TcpConnec
     return out;
 }
 
-// What a read answers after the server closes the socket: -1 while the close is in flight, then 0.
+/// What a read answers after the server closes the socket: -1 while the close is in flight, then 0.
 inline int readAfterClose(mm::platform::TcpConnection& client) {
     char buf[32];
     int got = -1;
@@ -54,7 +54,7 @@ inline int readAfterClose(mm::platform::TcpConnection& client) {
     return got;
 }
 
-// Connects `client`, posts `body` to `path` and returns the reply once its status line has arrived.
+/// Connects `client`, posts `body` to `path` and returns the reply once its status line has arrived.
 inline std::string postSmall(mm::HttpServerModule& http, mm::platform::TcpConnection& client, uint16_t port,
                              const char* path, const std::string& body) {
     if (!connectAndAccept(http, client, port)) return {};
@@ -64,7 +64,7 @@ inline std::string postSmall(mm::HttpServerModule& http, mm::platform::TcpConnec
     return pumpUntil(http, client, 12);
 }
 
-// A deterministic byte pattern, longer than one 4 KB transfer chunk when `n` is, so an upload spans several ticks.
+/// A deterministic byte pattern, longer than one 4 KB transfer chunk when `n` is, so an upload spans several ticks.
 inline std::string pattern(size_t n) {
     std::string s(n, '\0');
     for (size_t i = 0; i < n; i++) s[i] = static_cast<char>('A' + (i % 26));

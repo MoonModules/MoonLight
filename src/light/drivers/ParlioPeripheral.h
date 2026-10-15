@@ -8,9 +8,9 @@ namespace mm {
 
 /// Output driver: parallel WS2812B over the ESP32-P4 Parlio (Parallel IO) TX peripheral, the P4's scale path and sibling of I80Peripheral. The shared body (slicing, encode, single-shot DMA, loopback) lives in ParallelLedDriver.
 ///
-/// Prior art: the ESP32-P4 Parlio peripheral, the hpwit/FastLED parallel-WS2812 lineage: architecture studied, never copied.
+/// @attribution hpwit, FastLED
 ///
-/// @moreinfo
+/// @technical
 ///
 /// Parlio is the simpler peripheral, so this backend adds less than the i80 one: it generates the pixel clock itself and its bus width IS the pin count. The user names only the pins that drive a strand.
 ///
@@ -28,8 +28,7 @@ public:
     /// What the status says when the bus will not come up.
     const char* initFailMsg() const override { return "Parlio init failed, check pins / memory"; }
 
-    // The P4 Parlio's 160 MHz PLL divides to this exactly (/60); another rate needs that checked.
-    /// The WS2812 slot rate: 375 ns at 2.67 MHz, the same slot the LCD backend uses.
+    /// The WS2812 slot rate: 375 ns at 2.67 MHz, the same slot the LCD backend uses, which the P4 Parlio's 160 MHz PLL divides to exactly (/60).
     static constexpr uint32_t kClockHz = 2'666'666;
 
     /// No bus controls: Parlio has no sacrificial clock or DC pins.
@@ -41,8 +40,7 @@ public:
     /// No extra pins to track, so they are always current.
     bool extraBusPinsCurrent() const override { return true; }
 
-    // A x8 fan-out frame is ~145 KB against a 65,535-byte transfer cap: chunked transfer, not a flag.
-    /// Whether a 74HCT595 pin expander can ride this bus. On Parlio it cannot.
+    /// Whether a 74HCT595 pin expander can ride this bus. On Parlio it cannot: a x8 fan-out frame is ~145 KB against a 65,535-byte transfer cap.
     bool supportsPinExpander() const override { return false; }
 
     /// Create the Parlio bus and its DMA buffers for `frameBytes`, clocked at kClockHz.
@@ -54,8 +52,7 @@ public:
     uint8_t* busBuffer(uint8_t i) override        { return platform::parlioWs2812Buffer(parlio_, i); }
     /// The per-buffer byte capacity (fixed at bus creation; both buffers equal).
     size_t   busCapacity() const override         { return platform::parlioWs2812BufferCapacity(parlio_); }
-    // Asked, not hard-coded: reinit() refuses an oversized frame before the alloc fails (issue #44).
-    /// The largest frame one transfer can carry.
+    /// The largest frame one transfer can carry, asked rather than hard-coded so reinit() refuses an oversized frame before the alloc fails.
     size_t   dmaBudgetBytes() const override      { return platform::parlioMaxTransferBytes(); }
     /// Start the autonomous transfer of the first `bytes` of DMA buffer `i`, returning whether it began.
     bool  busTransmit(uint8_t i, size_t bytes) override { return platform::parlioWs2812Transmit(parlio_, i, bytes); }

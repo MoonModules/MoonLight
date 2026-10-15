@@ -280,7 +280,7 @@ The StadBeest takes an [Akai APC40 mkII](../reference/hardware/control-surfaces.
 
 1. On the leader, add a **MIDI** service under **Services** and set its `profile` to `Akai APC40 mkII`.
 2. Plug the APC40 into a laptop next to the beast, and open the leader's page in Chrome.
-3. Mark the leader's address as secure in Chrome once, as [MIDI, details](../moonmodules/core/services.md#midi-details) shows, since a device's own page is plain `http`.
+3. Mark the leader's address as secure in Chrome once, as [the control-surface how-to](control-surface.md#a-boards-own-page-needs-marking-as-secure-once) shows, since a device's own page is plain `http`.
 4. Allow MIDI, with SysEx, when Chrome asks. The desk lights up: the knob rings, the activator lights and the preset pads.
 
 The browser is the bridge between desk and device, so the laptop keeps the leader's page open while the desk is in use.

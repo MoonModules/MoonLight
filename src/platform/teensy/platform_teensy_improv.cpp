@@ -1,8 +1,6 @@
-/// @defgroup platform_teensy_improv The serial listener on the Teensy 4.1
-/// @{
 /// The installer's state documents over the USB serial port, so a device model's defaults apply right after an install.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## Only the state document
 ///
@@ -81,5 +79,3 @@ void improvPoll() MM_NONBLOCKING {
 }
 
 }  // namespace mm::platform
-
-/// @}

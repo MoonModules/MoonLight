@@ -5,28 +5,16 @@
 
 namespace mm {
 
-/// Effect: a propagating water surface where drops ripple, reflect and interfere.
+/// A propagating wave simulation: drops land, their rings spread outward, reflect off the edges and interfere where they cross.
 /// @card WaterRippleEffect.gif
 ///
-/// Drops land and their rings spread outward, reflect off the edges and cross each other.
-/// The crossing is what a formula cannot fake, since two rings meeting have to add and cancel.
+/// The crossing is what a drawn ripple cannot fake, because two rings meeting have to add and cancel. Distinct from @ref RipplesEffect, which draws clean concentric circles; this behaves like water.
 ///
-/// Prior art: Hugo Elias's water surface algorithm, the standard demoscene form.
+/// @attribution Hugo Elias
 ///
-/// @moreinfo
+/// @technical
 ///
-/// ## The wave equation, discretized
-///
-/// Keep the surface height at this step and the previous one.
-/// The next height is the four neighbors averaged, minus the previous height, damped toward zero.
-/// That one line is the wave equation, so the ripple is emergent rather than drawn.
-///
-/// RipplesEffect draws expanding rings from a closed-form radius instead.
-/// That one is cheaper and always looks like clean circles, where this behaves like water.
-///
-/// Cost is two int16 buffers sized to the grid, and four neighbor reads a pixel a frame.
-/// The memory scales with the fixture, so a large wall is worth checking against the budget.
-/// Drop placement uses `hashInt`, so two devices put drops in the same places.
+/// The next height is the four neighbors averaged, minus the previous height, damped toward zero, so the ripple is emergent rather than drawn. Two int16 buffers scale with the fixture, so a large wall is worth checking against the memory budget; `hashInt` places drops, so two devices agree.
 class WaterRippleEffect : public EffectBase {
 public:
     /// Catalog tags: this effect is the power-function showcase.
@@ -168,7 +156,7 @@ public:
 private:
     static constexpr uint32_t kDropSeed = 0x5EAu;
 
-    // The fields exchange roles rather than contents, since copying the grid is a second full pass.
+    /// The two fields exchange roles rather than contents, since copying the grid is a second full pass.
     ScratchBuffer<int16_t>& field()     { return flip_ ? b_ : a_; }
     ScratchBuffer<int16_t>& lastField() { return flip_ ? a_ : b_; }
 

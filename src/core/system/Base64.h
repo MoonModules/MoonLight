@@ -6,11 +6,9 @@
 
 namespace mm {
 
-/// @defgroup Base64 Base64 encoding
-/// @{
 /// RFC 4648 with the standard alphabet and `=` padding.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// Two places use it.
 /// The WebSocket handshake response encodes a hash of the client key and the protocol's magic string, and the password serialization in the state response obfuscates with an XOR before encoding.
@@ -36,5 +34,4 @@ inline void base64Encode(std::span<const uint8_t> in, std::span<char> out) {
     out[oi] = 0;
 }
 
-/// @}
 } // namespace mm

@@ -1,8 +1,6 @@
-/// @defgroup platform_teensy_eth_driver One firmware, both Ethernet chips
-/// @{
 /// QNEthernet's driver contract, answered by whichever chip the board has: its own PHY, else a W5500 on the SPI port.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## Why one firmware carries both
 ///
@@ -87,5 +85,3 @@ bool set_incoming_mac_address_allowed(const uint8_t mac[ETH_HWADDR_LEN], bool al
 }  // namespace qindesign::network
 
 bool mmEthernetIsW5500() { return qindesign::network::w5500(); }
-
-/// @}

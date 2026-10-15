@@ -3,11 +3,9 @@
 #include <cstddef>
 #include <cstdint>
 
-/// @defgroup crc A 16-bit fingerprint of a byte span
-/// @{
 /// CRC-16/CCITT-FALSE, a cheap well-distributed checksum used to notice that state changed.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// Game of Life is the caller today, hashing its grid each generation to detect that the pattern has gone static or fallen into a short oscillation, the same CRC recurring.
 /// It respawns then, instead of looping forever.
@@ -33,5 +31,4 @@ constexpr uint16_t crc16(const uint8_t* data, size_t len, uint16_t crc = 0xFFFFu
     return crc;
 }
 
-/// @}
 }  // namespace mm

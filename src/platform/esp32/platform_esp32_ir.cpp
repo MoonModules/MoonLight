@@ -1,9 +1,8 @@
-/// @defgroup platform_esp32_ir IR receive
 /// The read seam, decoding the NEC remote protocol off the RMT receiver.
 ///
 /// A persistent channel runs on the pin, and the render task drains it, decodes and re-arms.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## The interrupt does almost nothing
 ///

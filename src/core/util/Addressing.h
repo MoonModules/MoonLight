@@ -6,8 +6,6 @@
 
 namespace mm {
 
-/// @defgroup Addressing How a service reaches many receivers
-/// @{
 /// One rule for every service that sends one packet to many receivers: unicast to a host list, multicast to a group, or broadcast.
 /// Why each, and how discovery proves a network drops multicast: [Multicast and IGMP snooping](../../../explanation/architecture/moonlight.md#multicast-and-igmp-snooping).
 
@@ -64,5 +62,4 @@ void sendAddressed(Addressing mode, Traffic traffic, const Host* hosts, uint8_t 
     }
 }
 
-/// @}
 }  // namespace mm

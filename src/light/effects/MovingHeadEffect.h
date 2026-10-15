@@ -1,5 +1,4 @@
 #pragma once
-// Author: MoonLight original
 
 #include "core/services/AudioService.h"   // latestFrame: the spectrum the audio-reactive mode reads
 #include "core/util/math16.h"         // sin16, BeatPhase: the sweep clocks
@@ -7,26 +6,14 @@
 
 namespace mm {
 
-/// Effect: aims a rig of moving heads, with formations and an audio-reactive mode.
+/// Aims a rig of moving heads as one instrument, where `formation` decides how the heads relate.
 /// @card MovingHeadEffect.gif
 ///
-/// One head sweeping a sine is a demo, and a rig of them is a show.
-/// `formation` is the relationship between them: one sweep, a per-head phase and direction.
-/// One control changes the rig's whole character without touching speed or range.
+/// One head sweeping a sine is a demo, and a rig of them is a show. Pan and tilt sweep at different rates, so a beam traces a path rather than a line, and one control changes the rig's whole character without touching speed or range. A fixture chain is one-dimensional, so lay the rig out as a **1 x N** grid.
 ///
-/// @moreinfo
+/// @technical
 ///
-/// ## Pan and tilt run at different rates
-///
-/// Two sines at different rates trace a Lissajous path.
-/// It closes into a loop when the rates share a small ratio, and drifts when they do not.
-/// That drift keeps a long show from looking like a metronome.
-///
-/// ## The same effect runs on a strip
-///
-/// Everything is written through EffectBase's role setters, which no-op on an absent channel.
-/// So this effect on an LED strip paints its color pattern and moves nothing.
-/// An effect says what it wants, and the fixture's preset decides what can be expressed.
+/// Two sines at different rates trace a Lissajous path. It closes into a loop when the rates share a small ratio and drifts when they do not, which keeps a long show from looking like a metronome. Everything is written through EffectBase's role setters, which no-op on an absent channel, so on an LED strip this effect paints its color pattern and moves nothing.
 class MovingHeadEffect : public EffectBase {
 public:
     /// Catalog tags: the audio glyph applies when `audioReactive` is set.
@@ -34,35 +21,38 @@ public:
     /// D3: every head has its own aim, so the effect places all of them rather than being extruded.
     Dim dimensions() const override { return Dim::D3; }
 
-    /// How the heads relate to each other, which is what the audience reads.
+    /// The formation choices, in option order.
     enum : uint8_t { kFan = 0, kMirror, kChase, kCross, kUnison, kFormationCount };
     /// The formation names, in enum order, for the select control.
     static constexpr const char* kFormationNames[] = {"fan", "mirror", "chase", "cross", "unison"};
 
-    /// The selected formation.
+    /// How the heads move relative to each other.
+    /// @guide **fan** opens the beams like a hand, **mirror** sweeps two halves against each other, **chase** delays it head by head, **cross** opposes alternate heads, **unison** moves all as one.
     uint8_t formation = kFan;
 
-    /// Pan sweep rate in BPM, so 60 is one sweep a second.
+    /// Pan sweep rate in BPM.
     uint8_t panBpm  = 6;
-    /// Tilt sweep rate in BPM, deliberately unequal to `panBpm`.
+    /// Tilt sweep rate in BPM, unequal to the pan rate to trace a path.
     uint8_t tiltBpm = 9;
-    /// How much pan travel to use: a band around center, since full pan aims away from the audience.
+    /// How much of the fixture's pan travel to use.
     uint8_t panRange  = 128;
-    /// How much tilt travel to use.
+    /// How much of the fixture's tilt travel to use.
     uint8_t tiltRange = 96;
-    /// Where the pan sweep is centered, 128 being the fixture's middle.
+    /// Where the pan sweep is centered, 128 being the middle.
     uint8_t panCenter  = 128;
     /// Where the tilt sweep is centered.
     uint8_t tiltCenter = 128;
 
-    /// The gobo pattern, a raw fixture byte: only the fixture's manual says what a value selects.
+    /// The gobo wheel as a raw byte, see the fixture's manual.
+    /// @guide Only the fixture's manual says what a value selects. `rotate` works the same way for the gobo or prism spin.
     uint8_t gobo   = 0;
-    /// The gobo or prism spin, a raw fixture byte.
+    /// The gobo or prism spin as a raw byte, see the fixture's manual.
     uint8_t rotate = 0;
-    /// Roll a new gobo on a bass hit, with a hold so a busy track cannot strobe through patterns.
+    /// Roll a new gobo when the level jumps, then hold it a moment.
+    /// @guide The hold stops a busy track from strobing through patterns.
     bool goboOnBeat = false;
 
-    /// Move and light with the music: the beam widens with the room and each head takes its own band.
+    /// The beam widens with the room, each head on its own band.
     bool audioReactive = false;
 
     /// Publish the formation, the sweep, the beam wheels and the audio switch.

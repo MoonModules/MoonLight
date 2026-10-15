@@ -6,23 +6,24 @@
 #include "platform_config.h"  // hasOta / hasPsram / …: flags this header's contract refers to
 #include "nonblocking.h"      // MM_NONBLOCKING, which every declaration below carries
 
-/// @defgroup platform The platform layer
-/// @{
 /// The one interface every module reaches hardware through, so the same source drives an ESP32, a Teensy, a Raspberry Pi and a desktop.
 ///
 /// Core and the light domain call these names and never a vendor SDK. A module that needs something this interface does not offer gets a new function here rather than a target check at the call site.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## Ethernet transmit can wedge
 ///
-/// The driver's internal link state can diverge from both the PHY and our own event-driven flag. Observed on an S31 under sustained transmit, with the link genuinely lost, no disconnect event delivered, and nothing recovering short of a reboot.
-/// A stop and start re-runs link negotiation, which is the only supported way back, and it blocks for up to four seconds while autonegotiation polls the PHY to its timeout.
+/// The driver's internal link state can diverge from both the PHY and our own flag: seen on an S31 under sustained transmit, with the link lost and no disconnect event.
+///
+/// A stop and start re-runs link negotiation, the only supported way back, and blocks for up to four seconds while autonegotiation polls the PHY.
+///
 /// The housekeeping tick calls it only where every frame is being refused anyway, so a stalled render loop for one tick costs nothing a user can see.
 ///
 /// ## DMA cannot read PSRAM at the expander's clock
 ///
 /// Measured fine at 2.67 MHz and never completing at 26.67 MHz, which is why a frame above the expander's cap is never materialized.
+///
 /// The streaming ring loops a small pool of internal buffers instead, and the CPU encodes the next slice into each as it drains.
 ///
 /// ## Internal RAM for what an interrupt reads
@@ -31,7 +32,7 @@
 ///
 /// ## Why a second write primitive
 ///
-/// `fsWriteStream` pulls a whole upload to completion in one call, which is fine for a config file but not for a card-sized one shared with a render loop. `fsWriteStreamOpen`/`Write`/`Close` let a caller hand over one bounded chunk per tick instead, resuming where the last call left off.
+/// `fsWriteStream` pulls a whole upload to completion in one call, which suits a config file but not a card-sized one shared with a render loop. `fsWriteStreamOpen`/`Write`/`Close` take one bounded chunk per tick instead.
 
 // Per-thread state; a target with one thread and no TLS support in its linker script defines it `static`.
 #ifndef MM_THREAD_LOCAL
@@ -56,12 +57,10 @@ uintptr_t currentThreadId() MM_NONBLOCKING;
 /// Microseconds since boot, for measuring a tick rather than driving one.
 uint32_t micros() MM_NONBLOCKING;
 
-// A device honours it too, so a scenario run on real hardware can freeze time.
-/// Drive `millis()` from a test; zero restores the real clock, which a test must do in release.
+/// Drive `millis()` from a test, on a device too so a scenario run on real hardware can freeze time. Zero restores the real clock, which a test must do in release.
 void setTestNowMs(uint32_t ms);
 
-// Hogging the port instead is not portable: Linux permits the overlapping bind under SO_REUSEADDR, and macOS lets a non-root process bind port 80.
-/// Make the next bind fail, so a test reaches that path; false restores.
+/// Make the next bind fail, so a test reaches that path; false restores. Hogging the port instead is not portable: Linux permits the overlapping bind under SO_REUSEADDR, and macOS lets a non-root process bind port 80.
 void setTestBindFails(bool fail);
 #ifndef ESP_PLATFORM   // a host-test seam, which no ESP32 code calls
 /// Make the next multicast join fail, as on a network without multicast; false restores.
@@ -123,6 +122,7 @@ size_t maxInternalAllocBlock();
 size_t maxExecAllocBlock();
 
 // --- RTOS task introspection: an allocation-free snapshot, on tick1s rather than per frame ----
+
 /// What a task is doing right now.
 enum class TaskState : uint8_t { Running, Ready, Blocked, Suspended, Deleted, Invalid, Unknown };
 /// Stands in for cpuPermille where run-time stats are compiled out, so the caller can omit the column.
@@ -146,6 +146,7 @@ const char* renderTaskName();
 void setTestTaskSnapshot(const TaskInfo* tasks, size_t count, const char* renderTask);
 
 // --- Pinned worker task and wake: FreeRTOS's lock-free pairing for a single producer ----------
+
 /// An opaque handle to a spawned task, keeping FreeRTOS types out of the header.
 struct WorkerTask { void* impl = nullptr; };
 /// The body a pinned task runs; it owns its loop and returns once stopPinnedTask signals it.
@@ -169,9 +170,10 @@ void taskWdtUnsubscribe();
 void taskWdtReset();
 
 // --- GPIO capability introspection (PinsModule) ---------------------------------------------
+
 /// What one GPIO is, so the pin ownership map can flag a claim landing on an unsafe pin.
 ///
-/// @moreinfo The SDK answers the first three fields; `strap` and `reserved` come from a per-chip table, being datasheet knowledge.
+/// @technical The SDK answers the first three fields; `strap` and `reserved` come from a per-chip table, being datasheet knowledge.
 /// Desktop reports everything valid and nothing reserved, a host build having no real pins to protect.
 struct GpioCapability {
     bool validGpio = true;      ///< a real, usable GPIO on this chip
@@ -191,7 +193,7 @@ void clearTestGpioCapability();
 
 /// What one GPIO is doing now, the pin map's second axis beside gpioCapability's static view.
 ///
-/// @moreinfo The pad reads on any pin, even one a peripheral drives.
+/// @technical The pad reads on any pin, even one a peripheral drives.
 /// So a driver's output must toggle while it renders, and a mic clock while the mic runs.
 struct GpioLiveState {
     bool valid = false;    ///< pin is readable; false out of range, and on desktop, which omits the columns
@@ -256,8 +258,7 @@ struct BootRecord {
     uint8_t abnormalRestarts = 0;   ///< failed boots in a row: panics, watchdogs, brownouts, and power losses of a boot younger than a minute
     bool booted = false;            ///< this run is a device boot, which a host process never is
 };
-// Counted in flash once per boot and cleared once the device stays up; a restart from the UI, an update or a deep sleep clears it too.
-/// How the last boots went, counted once on the first call.
+/// How the last boots went, counted once on the first call. The count lives in flash and clears once the device stays up, or on a restart, an update or a deep sleep.
 const BootRecord& bootRecord();
 #ifndef ESP_PLATFORM   // a host-test seam, which no ESP32 code calls
 /// What bootRecord answers on the host, which has no boot to count.
@@ -281,6 +282,7 @@ size_t filesystemUsed();
 size_t filesystemTotal();
 
 // LittleFS on ESP32, std::filesystem on desktop. Paths start with '/', which desktop strips to reach its root.
+
 /// Redirect the desktop root, so a test gets an isolated directory without chdir; call it before fsMount.
 void fsSetRoot(const char* path);
 const char* fsRootPath();                                    // the resolved root, for diagnostics
@@ -344,8 +346,7 @@ inline bool isFsRoot(const char* path) {
     return path && (path[0] == '\0' || (path[0] == '/' && path[1] == '\0'));
 }
 
-// Never where hasSdCard is false, so a flash folder named `sd` stays an ordinary folder there.
-/// Whether `path` is rooted at the SD mount: "sd", "/sd", "sd/foo" or "/sd/foo" (a leading slash is optional).
+/// Whether `path` is rooted at the SD mount: "sd", "/sd", "sd/foo" or "/sd/foo"; never where hasSdCard is false, so a flash folder named `sd` stays ordinary.
 inline bool isSdPath(const char* path) {
     if constexpr (!hasSdCard) return false;
     if (!path) return false;
@@ -408,6 +409,7 @@ void setTestSdFormatHeld(bool held);
 #endif
 
 // Network: ESP32 only, stubs on desktop.
+
 /// Override the per-chip default pin and PHY map with a board's own, before ethInit.
 void setEthConfig(const EthPinConfig& cfg);
 /// Bring up the Ethernet driver.
@@ -472,6 +474,7 @@ void ndiSenderClose();
 bool ndiSendFrame(const uint8_t* rgb, uint16_t w, uint16_t h, uint8_t fps);
 
 // A desktop seam recording what the driver sent, pinning geometry, packing and pacing without a runtime.
+
 #ifndef ESP_PLATFORM
 /// Force the runtime's apparent presence, overriding what is installed.
 enum class NdiTestMode : uint8_t { Off, ForceAvailable, ForceMissing };
@@ -772,8 +775,7 @@ bool http_fetch_to_ota(const char* url,
 bool otaWriteStream(FsWriteSrc src, void* user, size_t contentLen,
                     char* statusBuf, size_t statusBufLen, uint32_t* bytesReadOut);
 
-// MoonBase is the second boot image: a board cannot rewrite the partition it executes from.
-/// Does this partition table carry MoonBase?
+/// Does this partition table carry MoonBase, the second boot image (a board cannot rewrite the partition it executes from)?
 bool otaHasMoonBase();
 /// Point the bootloader at MoonBase; false when there is none.
 bool otaBootMoonBase();
@@ -811,6 +813,7 @@ bool httpsPost(const char* url, const char* body, uint32_t timeoutMs);
 bool httpsAvailable() MM_NONBLOCKING;
 
 // Improv provisioning over UART0, sharing the channel with logging, which writes registers directly.
+
 /// What Improv tells the client about this device; the task copies the strings, so pass static storage.
 struct ImprovDeviceInfo {
     const char* name;            ///< device hostname, such as "MM-3A7F"
@@ -845,18 +848,15 @@ public:
 
     /// Open the socket, answering whether it came up.
     bool open();
-    // Listening flips the whole socket non-blocking, sends included.
-    /// Listen on a port, on one local address or on any interface; false when it is taken.
+    /// Listen on a port, on one local address or on any interface; false when it is taken. Listening flips the whole socket non-blocking, sends included.
     bool bind(uint16_t port, const uint8_t localIp[4] = nullptr);
-    // A datagram longer than `maxLen` is truncated; `srcIp` and `srcPort` also answer who sent it, which a reply is addressed to.
-    /// Receive one datagram without blocking: bytes copied, or -1 when nothing is pending.
+    /// Receive one datagram without blocking: bytes copied, or -1 when nothing is pending; a datagram longer than `maxLen` is truncated, and `srcIp` and `srcPort` answer who sent it.
     int recvFrom(uint8_t* buf, size_t maxLen, uint8_t srcIp[4] = nullptr, uint16_t* srcPort = nullptr);
     /// Block until any of `sockets` has a datagram waiting or `timeoutMs` passes: how many are readable, 0 on a timeout, -1 where a platform cannot wait.
     static int waitReadable(UdpSocket* const* sockets, int count, uint32_t timeoutMs);
     /// Send once to an explicit address.
     bool sendToAddr(const uint8_t ip[4], uint16_t port, const uint8_t* data, size_t len);
-    // Without the membership the OS never delivers those datagrams, however correct the port.
-    /// Join a multicast group on a bound socket, its own sends not looping back, and keep the membership while the socket is silent.
+    /// Join a multicast group on a bound socket, its own sends not looping back, and keep the membership while silent. Without it the OS never delivers those datagrams.
     bool joinMulticast(const char* group) {
         if (joined_) { membership(group_, false); joined_ = false; }   // an earlier group is left, not leaked
         size_t i = 0;
@@ -890,7 +890,7 @@ private:
         return joined_;
     }
     void heard() { if (group_[0]) lastHeardMs_ = millis(); }
-    // A router can stop forwarding a group to a member it has not heard from; a silent socket joins again, which also retries a failed join.
+    /// Join again when the socket has been silent, since a router can stop forwarding a group to a member it has not heard from; this also retries a failed join.
     void keepMembership() {
         if (!group_[0]) return;
         const uint32_t now = millis();
@@ -923,8 +923,7 @@ public:
 
     /// How an in-flight connect is going.
     enum class ConnectResult : uint8_t { Pending, Connected, Failed };
-    // The caller polls across ticks and enforces its own timeout, gating on networkReady().
-    /// Start a connect and return at once; false is an immediate DNS or socket failure.
+    /// Start a connect and return at once; false is an immediate DNS or socket failure. The caller polls across ticks, enforces its own timeout and gates on networkReady().
     bool connectStart(const char* host, uint16_t port);
     /// Check that connect without blocking; call it after connectStart.
     ConnectResult connectPoll();
@@ -940,8 +939,7 @@ public:
     bool localIPv4(uint8_t out[4]) const;
     /// Write every byte, blocking until it is sent, which an HTTP response needs.
     bool write(const uint8_t* data, size_t len);
-    // The caller advances its own offset and calls again, streaming across ticks without blocking.
-    /// Write what the socket accepts now: the count written, 0 when full, -1 on error.
+    /// Write what the socket accepts now: the count written, 0 when full, -1 on error; the caller advances its own offset and calls again, streaming across ticks.
     int writeSome(const uint8_t* data, size_t len);
 
     /// Close it, which the destructor also does.
@@ -1040,7 +1038,7 @@ size_t rmtWs2812RxCapture(uint8_t gpio, uint32_t resolutionHz,
 
 /// What a loopback self-test observed.
 ///
-/// @moreinfo The verdict says why it failed rather than only that it did: an empty capture is a different fault from a full one that decodes wrong.
+/// @technical The verdict says why it failed rather than only that it did: an empty capture is a different fault from a full one that decodes wrong.
 /// Without those numbers both collapse into the same "bad bit 0 of 0" and isolate nothing.
 struct RmtLoopbackResult {
     bool jumperDetected = false;  ///< the plain-GPIO continuity pre-check passed
@@ -1161,7 +1159,7 @@ uint32_t moonI80Ws2812LastTransmitUs(const MoonI80Ws2812Handle& h);
 
 /// What the ring has been doing, for a read-only control; every field is 0 on a whole-frame handle.
 ///
-/// @moreinfo Best-effort volatile reads without a lock, so this is a diagnostic rather than a contract.
+/// @technical Best-effort volatile reads without a lock, so this is a diagnostic rather than a contract.
 struct MoonI80RingStats {
     bool     isRing = false;     ///< whether this handle runs a ring
     uint32_t nSlices = 0;        ///< slices a frame takes, the light count over rowsPerBuf
@@ -1265,7 +1263,7 @@ RmtLoopbackResult gpioDmaWs2812Loopback(const uint16_t* dataPins, uint8_t laneCo
 
 /// The pins one HUB75 port needs; `e` serves 1/32-scan panels alone.
 ///
-/// @moreinfo Every pin defaults to unset because a soldered line must never be guessed.
+/// @technical Every pin defaults to unset because a soldered line must never be guessed.
 /// A default would pick the user's wiring, and on an S3 could land on PSRAM or a strapping pin.
 struct Hub75Pins {
     uint16_t r1 = 0xFFFF, g1 = 0xFFFF, b1 = 0xFFFF;   ///< upper half-panel color
@@ -1319,8 +1317,7 @@ void hub75Deinit(Hub75Handle& h);
 /// Which codec sits in front of the microphone, none for a microphone that speaks I2S itself.
 enum class CodecType : uint8_t { None = 0, Es8311 = 1, Es7210 = 2 };
 
-// The codec is a device on the board's I2C bus (i2cBusOpen), so only its address is its own; its master clock is the microphone's `mclkPin`.
-/// Configure the audio codec at this 7-bit address, where the board has one; true when there is nothing to do.
+/// Configure the audio codec at this 7-bit address, where the board has one; true when there is nothing to do. It is a device on the I2C bus (i2cBusOpen), and its master clock is the microphone's `mclkPin`.
 bool audioCodecInit(CodecType type, uint8_t i2cAddr, uint32_t sampleRate);
 
 /// Release the codec.
@@ -1447,7 +1444,5 @@ void setTestUsbMidiDesk(bool attached);
 void injectTestUsbMidi(const uint8_t (*packets)[4], size_t count);
 /// Take up to `max` of the packets sent to the test desk, oldest first; the count taken.
 size_t takeTestUsbMidiSent(uint8_t (*packets)[4], size_t max);
-
-/// @}
 
 } // namespace mm::platform

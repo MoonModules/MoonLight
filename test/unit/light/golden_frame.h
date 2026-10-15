@@ -1,10 +1,8 @@
 #pragma once
 
-/// @defgroup golden_frame The golden-frame harness
-/// @{
 /// Pins an effect's exact output, so a refactor claiming it renders the same is proved.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## Why it exists
 ///
@@ -107,5 +105,4 @@ inline void checkGolden(const char* name, uint64_t actual, uint64_t expected) {
     CHECK(actual == expected);
 }
 
-/// @}
 }  // namespace mm::golden

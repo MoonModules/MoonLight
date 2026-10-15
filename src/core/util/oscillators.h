@@ -4,11 +4,9 @@
 
 #include <cstdint>
 
-/// @defgroup oscillators An oscillator bank
-/// @{
 /// Independent low-frequency oscillators, advanced once per frame and read as often as an effect likes.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// Every animated quantity in a generative field is an oscillator.
 /// Where a shape sits, how far a coordinate is displaced, how fast a layer rotates, how bright it is this instant.
@@ -130,5 +128,4 @@ private:
     BeatPhase  phase_[N];
 };
 
-/// @}
 }  // namespace mm

@@ -6,28 +6,16 @@
 
 namespace mm {
 
-/// Effect: falling balls that pile up and push each other aside.
+/// Falling balls that pile up and shove each other aside.
 /// @card BallpitEffect.gif
 ///
-/// The half of the particle kernel Fireworks leaves untouched, since sparks never notice each other.
-/// Here the balls rest on the floor, stack, and shove the pile aside rather than passing through.
+/// The heap is emergent: gravity pulls, the floor stops, and contact between neighbors makes the shape. `tilt` turns the pit into a slope and the pile slides and re-settles.
 ///
-/// Prior art: the WLED Particle System's ballpit family, where the impulse response is the kernel's.
+/// @attribution Damian Schneider
 ///
-/// @moreinfo
+/// @technical
 ///
-/// ## Piling is emergent
-///
-/// Gravity pulls everything down, the floor stops it, and contact between neighbors does the rest.
-/// So the heap's shape is whatever the collisions produce, with nothing scripting it.
-///
-/// `tilt` shows why a force belongs in the kernel: one call turns the pit into a slope.
-/// The whole heap then slides and re-settles, with no code here that knows about slopes.
-///
-/// ## Collisions are the non-linear part
-///
-/// They cost pair checks rather than one pass, so the pool is deliberately small.
-/// `collide` runs once a frame before the move, and nearly every pair rejects on one axis alone.
+/// Collisions are the one non-linear part of the particle kernel, so the pool is small. `collide` runs once a frame before the move, and nearly every pair rejects on one axis alone.
 class BallpitEffect : public EffectBase {
 public:
     /// Catalog tags: this effect is the power-function showcase.
@@ -39,13 +27,13 @@ public:
     uint8_t balls    = 30;
     /// How hard they fall.
     uint8_t gravity  = 8;
-    /// The contact radius, which is how far apart two balls sit when touching.
+    /// Contact radius in pixels: how far apart balls sit when touching.
     uint8_t size     = 2;
-    /// Restitution: how much speed a contact keeps.
+    /// How much speed a contact keeps.
     uint8_t bounce   = 120;
-    /// A sideways force, which turns the pit into a slope.
+    /// Sideways force, turning the pit into a slope.
     uint8_t tilt     = 0;
-    /// Damping, so the heap settles rather than sloshing forever.
+    /// Damping, so the heap settles instead of sloshing.
     uint8_t drag     = 6;
 
     /// Publish the population, the physics and the slope.

@@ -4,11 +4,9 @@
 
 namespace mm {
 
-/// @defgroup Sort Sorting a small fixed array
-/// @{
 /// The one sort primitive for the small bounded collections the system holds.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// A device list or a handful of rows is what this is for, and it lives in core so every module sorts the same way and supplies only its comparator.
 ///
@@ -35,5 +33,4 @@ inline void insertionSort(T* arr, size_t n, Less less) {
     }
 }
 
-/// @}
 }  // namespace mm

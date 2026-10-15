@@ -1,12 +1,6 @@
-"""The catalog-table hook builds a "⌄ details" anchor link, `#{_slug(name + ' — details')}`,
-that must land on the `## <Name> — details` heading MkDocs renders on the catalog pages.
-Because `validation.links.anchors` is `warn` (not `fail`), a slug that diverges from the
-real heading id produces a SILENT dead link, not a build failure — so this test pins
-`_slug()` to the actual anchor Python-Markdown generates.
+"""The docs hooks build anchors by hand, a module's card from its name and a test file's section in the test inventory, and each must land on the heading id MkDocs renders. Because `validation.links.anchors` is `warn` (not `fail`), a slug that diverges from the real heading id produces a SILENT dead link, not a build failure, so this test pins `_slug()` to the anchor Python-Markdown generates.
 
-`_slug()` delegates to `markdown.extensions.toc.slugify` (the exact function MkDocs' toc
-uses), so this both guards that delegation and documents the contract. If `_slug` is ever
-re-hand-rolled, the unicode / consecutive-separator cases below catch the drift.
+`_slug()` delegates to `markdown.extensions.toc.slugify` (the exact function MkDocs' toc uses), so this both guards that delegation and documents the contract. If `_slug` is ever re-hand-rolled, the unicode and consecutive-separator cases below catch the drift.
 """
 
 import sys
@@ -52,9 +46,8 @@ def test_slug_resolves_to_the_real_rendered_heading_id():
 # The catalog pages hand-author each card's preview as a raw `<img src="../../assets/…">`.
 # MkDocs' --strict validates markdown `![]()` links but NOT raw-HTML `<img src>`, and the
 # catalog hook moves the tag into a table cell without touching its src — so a wrong `../`
-# depth ships a SILENT 404 on the live site (the exact bug this test pins: the pages sit one
-# level shallower than the generated moxygen pages, so they need `../../assets`, not the
-# moxygen pages' `../../../assets`). This test resolves every catalog `<img src>` against its
+# depth ships a SILENT 404 on the live site (the exact bug this test pins: the pages need
+# `../../assets`, one level shallower than a page nested one folder deeper). This test resolves every catalog `<img src>` against its
 # page's own directory and fails on any that doesn't exist on disk.
 import re  # noqa: E402
 

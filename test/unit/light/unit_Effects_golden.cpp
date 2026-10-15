@@ -1,6 +1,6 @@
 /// @module EffectBase
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## What carries no golden, and why
 ///

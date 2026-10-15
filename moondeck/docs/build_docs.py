@@ -83,6 +83,8 @@ def main() -> int:
                     help="Live-preview the site locally instead of building.")
     ap.add_argument("--port", type=int, default=SERVE_PORT,
                     help=f"Port for --serve (default: {SERVE_PORT}; installer preview owns 8421, MoonDeck 8420).")
+    ap.add_argument("--host", default="localhost",
+                    help="address the preview listens on; 0.0.0.0 lets a phone or tablet on the network open it")
     ap.add_argument("--site-dir", default=None,
                     help="Output directory for the built site (default: site/).")
     args = ap.parse_args()
@@ -94,7 +96,7 @@ def main() -> int:
     if args.serve:
         # Bind :8422 (overriding mkdocs' :8000 default) so the docs preview and
         # the installer preview (:8421) can run side by side.
-        cmd += ["--dev-addr", f"localhost:{args.port}"]
+        cmd += ["--dev-addr", f"{args.host}:{args.port}"]
     if args.strict:
         cmd.append("--strict")
     if args.site_dir and not args.serve:

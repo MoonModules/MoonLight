@@ -5,14 +5,10 @@
 
 namespace mm {
 
-/// Effect that fills the layer with animated random colors.
+/// Lights one random light per frame in a random palette color over a fading background: a sparse, palette-tinted sparkle.
 /// @card RandomEffect.gif
 ///
-/// The buffer dims a little, then one light takes a random palette color.
-/// Over many frames that scatters fading sparkles across the whole volume.
-/// `fade` sets the density: less lets them linger and fill, more leaves quick specks.
-///
-/// Prior art: MoonLight's Random effect.
+/// The buffer dims a little, then one light takes a random palette color, and over many frames that scatters fading sparkles across the whole volume. `fade` sets the density: less lets them linger and fill, more leaves quick specks.
 class RandomEffect : public EffectBase {
 public:
     /// Catalog tags: MoonLight origin.
@@ -20,7 +16,7 @@ public:
     /// The lit light is picked across the whole volume, so it addresses every axis.
     Dim dimensions() const override { return Dim::D3; }
 
-    /// How fast a lit light fades, which sets the field's density.
+    /// How fast prior sparkles fade to black.
     uint8_t fade = 70;
 
     /// Publish the fade.

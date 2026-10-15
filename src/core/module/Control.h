@@ -140,6 +140,7 @@ struct ListSource {
 };
 
 // How much a reader wants to see. One number the whole UI composes against, so a control names the audience it is for rather than every card deciding for itself.
+
 inline constexpr uint8_t kModeUser = 0;       ///< the show: what a light does
 inline constexpr uint8_t kModeExpert = 1;     ///< and the tuning an installation needs: the peripheral, the pin, the rate
 inline constexpr uint8_t kModeDeveloper = 2;  ///< and what diagnoses the firmware, meaning nothing without the source beside it
@@ -152,8 +153,7 @@ struct ControlDescriptor {
     const char* name = nullptr; ///< the control's name, a flash literal
     uintptr_t aux = 0;          ///< a total, an options array, or a unit, by type
     ControlType type = ControlType::Uint8;   ///< which storage, widget and mapping apply
-    // Signed and wide, so one pair bounds every numeric type and sizes every buffer.
-    int32_t min = 0;            ///< the lower bound, or unused for a text type
+    int32_t min = 0;            ///< the lower bound, or unused for a text type; signed and wide, so one pair bounds every numeric type and sizes every buffer
     int32_t max = 255;          ///< the upper bound, or the buffer size for a text type
     /// The sentinel meaning no default was declared, so an ordinary control costs nothing.
     static constexpr int32_t kNoDefault = INT32_MIN;
@@ -170,6 +170,7 @@ struct ControlDescriptor {
     /// Whether a numeric renders as a number input, for an integer that is an address not a magnitude.
     bool numberField = false;
     // These sit after the other flags, since the text initializers below are positional.
+
     bool fader = false;        ///< render as a vertical fader
     bool encoder = false;      ///< render as a rotary encoder
     bool switchRow = false;    ///< render in the horizontal switch strip
@@ -188,14 +189,11 @@ struct ControlDescriptor {
 ///
 /// A control binds to a class variable by reference, so the hot path reads it directly: @xref{persistence-and-rebuilding}. Descriptors live in a fixed array with no per-control allocation: @xref{what-a-control-costs}.
 ///
-/// Prior art: MoonLight's `addControl`, which binds a variable the same way.
-///
-/// @moreinfo
+/// @technical
 ///
 /// ## What a control costs
 ///
-/// A descriptor is a pointer, a name, an auxiliary word, the type, the bounds and some flags, about forty-eight bytes on a host and less on a device.
-/// The value itself is the module's own variable, of one to four bytes. A module that overflows the default capacity is probably too complex.
+/// A descriptor is a pointer, a name, an auxiliary word, the type, the bounds and some flags, about forty-eight bytes on a host and less on a device. The value itself is the module's own variable, of one to four bytes.
 ///
 /// ## Persistence and rebuilding
 ///
@@ -346,8 +344,7 @@ public:
         controls_[count_++] = {&source, name, 0, ControlType::List, 0, 0};
     }
 
-    // `confirm` asks the UI for a second press, for one that cannot be undone; the API, a desk or MQTT acts on one write, as for every button.
-    /// Add a momentary button, whose click reaches the module's changed hook rather than storage.
+    /// Add a momentary button, whose click reaches the module's changed hook rather than storage. `confirm` asks the UI for a second press, while the API, a desk or MQTT acts on one write.
     void addButton(const char* name, bool confirm = false) {
         grow();
         controls_[count_++] = {nullptr, name, confirm ? 1u : 0u, ControlType::Button, 0, 0};

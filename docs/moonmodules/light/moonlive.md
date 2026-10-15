@@ -126,7 +126,7 @@ class RainEffect {
 
 `dimensions()` returns 1, 2 or 3, and it decides how the layer EXTRUDES the script. A script that returns 1 paints the x=0 column and the framework fans it across the width; one that returns 2 paints the z=0 slice and the framework copies it through the depth. So a script fills a rig it never indexed, and a wrong answer is visible: declare 1 and paint a picture, and only the first column survives. A script that stays silent is treated as 2, which is what every script rendered as before this existed.
 
-`tags()` returns the emoji shown beside the script, so a row in the picker reads like a compiled effect's. The vocabulary is shared with the compiled modules: 📊 audio-reactive, ✨ particles, 🎯 aims moving heads. A script that declares none shows 📝, the mark of a scripted effect.
+`tags()` returns the emoji shown beside the script, so a row in the picker reads like a compiled effect's. The vocabulary is shared with the compiled modules: 🎶 reacts to frequency, ✨ particles, 🎯 aims moving heads. A script that declares none shows 📝, the mark of a scripted effect.
 
 Both reach the picker before a factory script is downloaded, because the build extracts them from the source into the catalog. That copy is for display only: once a script is on the device, the compiled script is what decides.
 
@@ -308,4 +308,4 @@ tick, so a print costs frame time every frame it survives. Each compile grants a
 
 ## Source
 
-[MoonLive](../core/moxygen/MoonLive.md) is the engine, [MoonLiveCompiler](../core/moxygen/MoonLiveCompiler.md) the front-end, and [MoonLiveBuiltins_light](moxygen/MoonLiveBuiltins_light.md) the table registering every call above. [The lowering](../core/moxygen/moonlive_lower.md) turns the intermediate form into machine bytes, written once for every backend.
+[MoonLive](../../../src/core/moonlive/MoonLive.h) is the engine, [MoonLiveCompiler](../../../src/core/moonlive/MoonLiveCompiler.h) the front-end, and [MoonLiveBuiltins_light](../../../src/light/moonlive/MoonLiveBuiltins_light.h) the table registering every call above. [The lowering](../../../src/core/moonlive/moonlive_lower.h) turns the intermediate form into machine bytes, written once for every backend.

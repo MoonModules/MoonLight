@@ -166,7 +166,7 @@
           "particle systems, as a technique"
         ],
         [
-          "Verlet",
+          "Semi-implicit Euler",
           "the integration the particle kernel runs on"
         ],
         [

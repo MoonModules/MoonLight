@@ -8,16 +8,13 @@
 
 namespace mm::particles {
 
-/// @defgroup particles The particle kernel
-/// @{
 /// One home for things that move under forces and get drawn.
 ///
-/// @moreinfo
+/// @attribution Damian Schneider, Bill Reeves, Semi-implicit Euler
 ///
-/// ## Prior art
+/// @technical
 ///
-/// The WLED Particle System by Damian Schneider, and Reeves for the name.
-/// Its vocabulary of emitters, forces and walls over one pool is the shape this follows, written fresh in fixed point.
+/// Its vocabulary of emitters, forces and walls over one pool follows the WLED Particle System, written fresh in fixed point.
 
 /// Converts elapsed time into a per-frame scale, so physics runs at one speed on every target.
 ///
@@ -432,7 +429,5 @@ struct Pool {
         return n;
     }
 };
-
-/// @}
 
 }  // namespace mm::particles

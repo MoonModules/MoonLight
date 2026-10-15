@@ -893,6 +893,9 @@ function startRenderLoop() {
     requestAnimationFrame(loop);
 }
 
+// The per-frame observer onDrawn installs, null when nothing records.
+let drawn_ = null;
+
 function drawVerts() {
     if (!gl || !lastVerts || !glLocs) return;
     const canvas = document.getElementById("preview");
@@ -1002,6 +1005,8 @@ function drawVerts() {
     drawBoundingBox(mvp);
     drawBeams(mvp);
     drawSeqLabels(mvp, canvas, pointSize);
+    // In the same task as the draw, so the canvas still holds the frame without preserveDrawingBuffer.
+    if (drawn_) drawn_(canvas);
 }
 
 // Faint wireframe cuboid around the light volume. Rebuilt only when the box extent
@@ -1418,6 +1423,8 @@ export const preview = {
         announceRequest();
     },
     onSendRequest(cb) { sendRequest_ = cb; },
+    /// Install a callback that sees the canvas after every drawn frame, or null to remove it; what a recorder reads.
+    onDrawn(cb) { drawn_ = cb; },
     /// Install the frames-wanted callback and report the current state immediately, so the caller
     /// can open or close the preview socket without waiting for the next visibility change.
     onWantsFrames(cb) { wantsFrames_ = cb; if (cb) cb(!document.querySelector(".preview-hidden")); },

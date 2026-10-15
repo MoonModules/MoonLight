@@ -4,25 +4,16 @@
 
 namespace mm {
 
-/// Effect that paints moving brush-stroke lines across the layer.
+/// Audio-reactive brush strokes: lines whose 3D endpoints oscillate on the beat over a fading field.
 /// @card PaintBrushEffect.gif
-/// Author: @TroyHacks (WLED MoonModules, GPLv3), https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_MoonModules.h
 ///
-/// Lines whose endpoints oscillate in 3D on the beat, each shortened by a band's magnitude.
-/// That shortening is what makes the strokes curve and sweep.
-/// The field fades each frame, so the lines leave brush strokes rather than redrawing cleanly.
+/// Each stroke is shortened to a band-magnitude length, so the moving tip sweeps a curve. The field fades each frame, so the lines leave brush strokes rather than redrawing cleanly, and silence fades the field to black.
 ///
-/// Prior art: MoonLight's PaintBrush, whose six endpoints and length feedback this reproduces.
+/// @attribution troyhacks
 ///
-/// @moreinfo
+/// @technical
 ///
-/// ## What a line does
-///
-/// Each line takes one band, and its Euclidean span scaled by that band becomes the shorten amount.
-/// A line draws only when it runs longer than `minLength`, so quiet bands stay dark.
-/// Silence leaves no lines at all, and the field fades to black.
-///
-/// The soft anti-alias control is omitted, since `draw::line` is crisp and has no Xiaolin-Wu form.
+/// Each line takes one band, and its Euclidean span scaled by that band becomes the shorten amount. The lines are crisp, since `draw::line` has no anti-aliased form.
 class PaintBrushEffect : public EffectBase {
 public:
     /// Catalog tags: MoonModules origin, audio-reactive.
@@ -30,17 +21,17 @@ public:
     /// Volumetric: the endpoints oscillate on all three axes.
     Dim dimensions() const override { return Dim::D3; }
 
-    /// The phase-spread multiplier between the six endpoint oscillators.
+    /// The phase spread between the oscillating endpoints.
     uint8_t oscillatorOffset = 6 * 160 / 255;
-    /// How many lines are animated in parallel.
+    /// How many parallel strokes are animated.
     uint8_t numLines   = 255;
-    /// How fast the background decays, which is the brush-stroke trail.
+    /// How fast the background decays, higher for shorter strokes.
     uint8_t fadeRate   = 40;
-    /// A line draws only when it runs longer than this.
+    /// A stroke draws only if longer than this, so quiet bands stay off.
     uint8_t minLength  = 0;
-    /// Vary the hue per line rather than running a gradient across the bands.
+    /// Random hue per line instead of a per-band gradient.
     bool    color_chaos = false;
-    /// Jitter every endpoint's phase once a frame.
+    /// Random per-frame phase jitter.
     bool    phase_chaos = false;
 
     /// Publish the oscillators, the line count, the trail and the two chaos switches.

@@ -5,11 +5,9 @@
 
 namespace mm {
 
-/// @defgroup ColorLight5A75Packet The ColorLight 5A-75 wire format
-/// @{
-/// The one home for the layout, which `PanelCardDriver` builds frames against.
+/// The ColorLight 5A-75 wire format, in one home, which `PanelCardDriver` builds frames against.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// This is the same shape as `ArtNetPacket.h` and `DdpPacket.h`, with one structural difference.
 /// The format has no receiver in the tree, the cards being the receiver, so there is no build-and-parse round trip to test against.
@@ -91,11 +89,12 @@ namespace mm {
 /// FPP packs rows the same way, while Harald Kubota's write-up sends 128 pixels a packet instead.
 /// Both work against the cards, and the larger packet is fewer frames for the same wall.
 
-// Fixed MACs. The cards filter on the destination, so these are not arbitrary.
+/// The fixed destination MAC; the cards filter on it, so it is not arbitrary.
 constexpr uint8_t kColorLightDestMac[6] = {0x11, 0x22, 0x33, 0x44, 0x55, 0x66};
+/// The fixed source MAC.
 constexpr uint8_t kColorLightSrcMac[6]  = {0x22, 0x22, 0x33, 0x44, 0x55, 0x66};
 
-// Byte 12 is the type; byte 13 begins the payload (see the EtherType note above).
+/// Byte 12 is the type; byte 13 begins the payload (see the EtherType note above).
 constexpr size_t COLORLIGHT_TYPE_OFFSET = 12;
 constexpr size_t COLORLIGHT_DATA_OFFSET = 13;
 
@@ -103,7 +102,7 @@ constexpr uint8_t COLORLIGHT_TYPE_ROW        = 0x55;
 constexpr uint8_t COLORLIGHT_TYPE_SYNC       = 0x01;
 constexpr uint8_t COLORLIGHT_TYPE_BRIGHTNESS = 0x0A;
 
-// Row header: row, offset, count, two constants — 8 bytes, so pixels start at 13 + 8 = 21.
+/// The row header (row, offset, count, two constants) is 8 bytes, so pixels start at 13 + 8 = 21.
 constexpr size_t COLORLIGHT_ROW_HEADER = 8;
 constexpr size_t COLORLIGHT_ROW_PREFIX = COLORLIGHT_DATA_OFFSET + COLORLIGHT_ROW_HEADER;  // 21
 
@@ -175,5 +174,4 @@ inline size_t buildColorLightBrightnessPacket(uint8_t* out, uint8_t brightness) 
     return COLORLIGHT_BRIGHTNESS_FRAME;
 }
 
-/// @}
 }  // namespace mm

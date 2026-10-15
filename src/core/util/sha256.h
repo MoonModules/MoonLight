@@ -1,11 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 
-/// @defgroup sha256 SHA-256, vendored
-/// @{
 /// SHA-256 as FIPS 180-4 defines it, carried in the tree rather than linked from a library.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## Why a copy rather than a library
 ///
@@ -43,5 +41,4 @@ void sha256(const void* data, size_t len, uint8_t out[kSha256DigestSize]);
 /// Hash `len` bytes and write the first `outBytes` of the digest as lowercase hex into `out`, which must hold `outBytes * 2 + 1` characters.
 void sha256Hex(const void* data, size_t len, char* out, size_t outBytes = 16);
 
-/// @}
 }  // namespace mm

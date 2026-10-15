@@ -18,26 +18,7 @@ ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(ROOT / "moondeck" / "check"))
 sys.path.insert(0, str(ROOT / "moondeck" / "docs"))
 
-from check_docgen import (ANIMATED_PAGES, MAX_CONTROL, MAX_CONTROL_VISUAL,  # noqa: E402
-                           MAX_DESC, MAX_DESC_VISUAL, _card_rules, _cards,
-                           _header_rules, _structure)
-
-
-def _card(desc: str = "Short.", controls=("- `a` — one.",)) -> str:
-    return "### Thing 💫 · kind\n\n" + desc + "\n\n" + "\n".join(controls) + "\n"
-
-
-# ---- sizes ----
-
-def test_description_over_the_limit_is_measured():
-    card = list(_cards(_card(desc="x" * (MAX_DESC + 50))))[0]
-    assert card["desc"] > MAX_DESC
-
-
-def test_a_card_within_the_limits_measures_under_them():
-    card = list(_cards(_card()))[0]
-    assert card["desc"] <= MAX_DESC
-    assert card["widest"] <= MAX_CONTROL
+from check_docgen import _header_rules  # noqa: E402
 
 
 def test_a_wrapped_sentence_in_a_class_comment_is_a_finding():
@@ -106,7 +87,7 @@ def test_an_indented_block_keeps_its_layout():
     # that carries the meaning. Collapsing one produced a 43-word "sentence" of protocol bytes
     # in PreviewDriver.h, which is the worst of both readings.
     table = ("#pragma once\nnamespace mm {\n"
-             "/// Lead.\n///\n/// @moreinfo\n///\n/// ## S\n///\n"
+             "/// Lead.\n///\n/// @technical\n///\n/// ## S\n///\n"
              "///     POST /api            pair, once pressed\n"
              "///     GET  /api/lights     the lights by id\n"
              "class Probe {\npublic:\n    /// Fine.\n    int a = 0;\n};\n}\n")
@@ -136,7 +117,7 @@ def test_structure_is_not_read_as_a_wrapped_sentence():
     header = ("#pragma once\nnamespace mm {\n"
               "/// A finished sentence.\n"
               "///\n"
-              "/// @moreinfo\n"
+              "/// @technical\n"
               "///\n"
               "/// ## A section\n"
               "///\n"
@@ -149,390 +130,6 @@ def test_structure_is_not_read_as_a_wrapped_sentence():
     assert not [w for _, w in _header_rules("probe.h", header) if "hard wrap" in w]
 
 
-def test_many_short_controls_are_not_a_finding():
-    # A module with twelve honest controls is not worse documented than one with three.
-    # Only a control that runs to a paragraph makes a card unreadable, so the cap is per
-    # LINE: ten short ones stay clean however tall the column gets.
-    many = [f"- `p{i}` — short." for i in range(10)]
-    card = list(_cards(_card(controls=many)))[0]
-    assert card["widest"] < MAX_CONTROL
-
-
-def test_the_visual_catalogs_are_held_tighter():
-    # An effect's gif says what it looks like, so its prose says only what the eye cannot
-    # see. The SAME card passes off a still-image page and fails on a gif one, which is the
-    # whole rule: asserting the constants alone would pass against a _card_rules that never
-    # read them.
-    VISUAL, PLAIN = "moonmodules/light/effects.md", "moonmodules/light/drivers.md"
-    assert VISUAL in ANIMATED_PAGES and PLAIN not in ANIMATED_PAGES
-
-    def findings(rel, desc_len, control_len):
-        text = _card(desc="x" * desc_len, controls=("- `a` — " + "z" * control_len + ".",))
-        card = list(_cards(text))[0]
-        card["img"], card["img_src"] = True, ("a.gif" if rel in ANIMATED_PAGES else "a.png")
-        return [w for _, w in _card_rules(rel, card)]
-
-    # Just under the tighter caps: clean on both pages.
-    assert findings(VISUAL, MAX_DESC_VISUAL - 50, MAX_CONTROL_VISUAL - 30) == []
-    assert findings(PLAIN, MAX_DESC_VISUAL - 50, MAX_CONTROL_VISUAL - 30) == []
-
-    # Between the two caps: the visual page reports, the plain page stays silent.
-    over = findings(VISUAL, MAX_DESC_VISUAL + 50, MAX_CONTROL_VISUAL + 10)
-    assert any("description" in w for w in over)
-    assert any("one control" in w for w in over)
-    assert findings(PLAIN, MAX_DESC_VISUAL + 50, MAX_CONTROL_VISUAL + 10) == []
-
-    # Past the loose caps: both pages report.
-    assert findings(PLAIN, MAX_DESC + 50, MAX_CONTROL + 10)
-
-
-def test_the_widest_control_is_reported_with_its_text():
-    card = list(_cards(_card(controls=("- `a` — ok.", "- `b` — " + "z" * 200)))) [0]
-    assert card["widest"] > MAX_CONTROL
-    assert "zzz" in card["widest_text"]
-
-
-def test_links_and_image_lines_are_not_counted_as_description():
-    # A card's Detail:/Tests:/Origin: lines and its <img> render in other cells, so
-    # counting them as description would fail a card for text the column never holds.
-    page = ('### Thing 💫 · kind\n\nShort.\n\n'
-            '<img src="../../assets/x.png" alt="x">\n'
-            '- `a` — one.\n'
-            'Origin: Someone · source [x.h](../../src/x.h)\n'
-            '[Tests](../../reference/tests/unit-tests.md#x)\n'
-            'Detail: [technical](moxygen/X.md)\n')
-    card = list(_cards(page))[0]
-    assert card["desc"] == len("Short.")
-
-
-def test_a_details_section_is_not_counted_into_the_card():
-    # `## ` closes the block: the details prose belongs to the section, not the row.
-    page = _card() + "\n## Thing — details\n\n" + "w" * 5000 + "\n"
-    card = list(_cards(page))[0]
-    assert card["desc"] <= MAX_DESC
-
-
-# ---- structure ----
-
-def test_details_above_a_card_is_flagged():
-    page = _card() + "\n## Thing, details\n\nWhy.\n\n### Other 💫 · kind\n\nShort.\n"
-    issues = _structure(page, "p.md")
-    assert issues and "above the last card" in issues[0][1]
-
-
-def test_details_below_every_card_is_accepted():
-    page = _card() + "\n### Other 💫 · kind\n\nShort.\n\n## Thing, details\n\nWhy.\n"
-    assert _structure(page, "p.md") == []
-
-
-def test_a_details_heading_without_a_comma_is_flagged():
-    # The build matches `, details` exactly to link a row to its section, so any other
-    # punctuation renders a section nothing points at. The em-dash form is in this list
-    # because it is banned repo-wide, not merely unmatched.
-    for bad in ("## Thing — details", "## Thing: details", "## Thing details"):
-        page = _card() + "\n" + bad + "\n\nWhy.\n"
-        issues = _structure(page, "p.md")
-        assert issues and "comma" in issues[0][1], bad
-
-
-def test_details_naming_no_card_is_flagged():
-    page = _card() + "\n## Ghost, details\n\nWhy.\n"
-    issues = _structure(page, "p.md")
-    assert issues and "names no card" in issues[0][1]
-
-
-def test_two_details_sections_with_one_name_are_flagged():
-    """Both slug to the same anchor, so the row's More: link reaches one and the other
-    is unreachable. A sweep that adds a section where one already exists does this
-    silently, which is how drivers.md ended up with two LED driver sections."""
-    page = (_card() + "\n## Thing, details\n\nOne.\n\n## Thing, details\n\nTwo.\n")
-    issues = _structure(page, "p.md")
-    assert issues and "second details section" in issues[0][1]
-
-
-def test_one_details_section_per_name_is_accepted():
-    page = (_card() + "\n### Other 💫 · kind\n\nShort.\n\n"
-            "## Thing, details\n\nOne.\n\n## Other, details\n\nTwo.\n")
-    assert _structure(page, "p.md") == []
-
-
-def test_a_section_heading_that_is_not_details_is_left_alone():
-    # `## LED drivers` is a group header, not a details section: it must not be judged
-    # by the details rules, or every catalog page would fail on its own structure.
-    page = "## LED drivers\n\n" + _card() + "\n## Network drivers\n\n" + _card()
-    assert _structure(page, "p.md") == []
-
-
-# ---- the rendered row: two columns, labeled links ----
-
-def _row(md: str) -> str:
-    """One rendered table row, through the build's own renderer."""
-    import mkdocs_hooks
-    return mkdocs_hooks._render_catalog_table(md)
-
-
-def test_a_row_renders_as_two_columns():
-    """Two, not three or four. Every added column divides the page again, which is what
-    turned a long description into a ribbon and made a three-link card taller than its
-    own controls."""
-    out = _row(_card())
-    row = [l for l in out.split("\n") if l.startswith("| ") and "Module |" not in l
-           and not l.startswith("|--")][0]
-    assert row.count(" |") == 2, row
-
-
-def test_the_header_names_the_two_columns():
-    out = _row(_card())
-    assert "| Module | Details |" in out
-
-
-def test_links_are_labelled_not_only_iconed():
-    """An icon alone made the reader decode a glyph, and the tests and API rows both
-    render as a list of near-identical module names. The WORD carries the distinction."""
-    page = ('### Thing 💫 · kind\n\nShort.\n\n- `a` — one.\n'
-            '[Tests](../../reference/tests/unit-tests.md#thing)\n'
-            'Detail: [technical](moxygen/Thing.md)\n')
-    out = _row(page)
-    assert "**Tests:**" in out and "**API:**" in out
-
-
-def test_attribution_is_not_linked_in_the_second_column():
-    """Attribution travels with the code it credits, in the header's `///` where the
-    generated page shows it. A `Source:` row under the controls duplicated it and made the
-    row length vary per card."""
-    page = ('### Thing 💫 · kind\n\nShort.\n\n- `a` — one.\n'
-            '[Tests](../../reference/tests/unit-tests.md#thing)\n'
-            'Detail: [technical](moxygen/Thing.md)\n'
-            'Origin: MoonLight, by somebody\n')
-    out = _row(page)
-    assert "**Source:**" not in out
-    assert "by somebody" not in out
-
-
-def test_all_three_links_show_even_when_a_target_is_missing():
-    """A card with no tests is a gap worth seeing. A row that silently drops the label
-    hides it, and the three rows stop being in the same place on every card."""
-    out = _row(_card())
-    for label in ("**Tests:**", "**API:**", "**Details:**"):
-        assert label in out, label
-    assert out.count("none yet") == 3
-
-
-def test_the_three_labels_keep_their_order():
-    """Same three, same sequence, so position carries meaning across cards."""
-    import re as _re
-    out = _row(_card())
-    assert _re.findall(r"\*\*(Tests|API|Details):\*\*", out) == ["Tests", "API", "Details"]
-
-
-def test_a_gif_on_a_non_animated_page_is_flagged():
-    """The format rule runs both ways: a png on effects was caught, a gif on drivers was
-    not, so half the convention went unenforced."""
-    import check_docgen
-    gif = ('### Thing 💫 · kind\n\n<img src="../../assets/x.gif" alt="x">\n\n'
-           'Short.\n\n- `a` — one.\n')
-    card = list(_cards(gif))[0]
-    assert card["img_src"].endswith(".gif")
-    assert "moonmodules/light/drivers.md" not in check_docgen.ANIMATED_PAGES
-
-
-def test_a_card_with_no_image_is_reported():
-    """Every card leads with a picture, and the rule must FIRE on one that does not: the
-    assertions beside this one read _cards() only, which is the data rather than the rule."""
-    import check_docgen
-    findings = check_docgen._card_rules("moonmodules/light/drivers.md",
-                                        list(_cards(_card()))[0])
-    assert any("no image" in why for _, why in findings)
-
-
-def test_a_summary_page_row_needs_no_image():
-    """The image rule is a CATALOG rule: a reader picks an effect by looking at it, where a
-    summary row names a base class with no card in the UI to capture. The exemption is scoped
-    to that one rule, so an over-long description on the same page is still reported."""
-    import check_docgen
-    page = sorted(check_docgen.PREVIEWLESS_PAGES)[0]
-    assert page not in check_docgen.ANIMATED_PAGES
-    # Silent on the missing image...
-    plain = list(_cards(_card()))[0]
-    assert not any("no image" in why for _, why in check_docgen._card_rules(page, plain))
-    # ...and still loud on everything else the card rules measure.
-    fat = list(_cards(_card(desc="x" * (MAX_DESC + 50))))[0]
-    assert any("description" in why for _, why in check_docgen._card_rules(page, fat))
-
-
-def test_the_image_format_rule_fires_both_ways():
-    """A png on an animated page and a gif on a static one are each half the convention,
-    and a rule that only caught one left the other unenforced for four pages."""
-    import check_docgen
-    animated = sorted(check_docgen.ANIMATED_PAGES)[0]
-    png = ('### Thing 💫 · kind\n\n<img src="../../assets/x.png" alt="x">\n\n'
-           'Short.\n\n- `a`: one.\n')
-    gif = ('### Thing 💫 · kind\n\n<img src="../../assets/x.gif" alt="x">\n\n'
-           'Short.\n\n- `a`: one.\n')
-    on_animated = check_docgen._card_rules(animated, list(_cards(png))[0])
-    assert any("image is png" in why for _, why in on_animated)
-    on_static = check_docgen._card_rules("moonmodules/light/drivers.md",
-                                         list(_cards(gif))[0])
-    assert any("image is gif" in why for _, why in on_static)
-    # And silent the right way round: a gif on the animated page, a png on the static one.
-    assert not any("image is" in why for _, why
-                   in check_docgen._card_rules(animated, list(_cards(gif))[0]))
-    assert not any("image is" in why for _, why
-                   in check_docgen._card_rules("moonmodules/light/drivers.md",
-                                               list(_cards(png))[0]))
-
-
-def test_an_effect_card_needs_a_gif_not_a_png():
-    """Effects, modifiers and layouts show MOTION: a still frame of a moving effect says
-    almost nothing about it. Everything else is cards and controls, where a png is
-    sharper and smaller."""
-    import check_docgen
-    png = ('### Thing 💫 · 2D\n\n<img src="../../assets/x.png" alt="x">\n\nShort.\n\n- `a` — one.\n')
-    issues = check_docgen._structure(png, "moonmodules/light/effects.md")
-    # _structure covers placement; the format rule lives with the per-card checks, so
-    # exercise it the way _violations does.
-    card = list(_cards(png))[0]
-    assert card["img_src"].endswith(".png")
-    assert "moonmodules/light/effects.md" in check_docgen.ANIMATED_PAGES
-    assert "moonmodules/light/drivers.md" not in check_docgen.ANIMATED_PAGES
-
-
-def test_the_image_source_is_captured_for_the_format_rule():
-    gif = ('### Thing 💫 · 2D\n\n<img src="../../assets/x.gif" alt="x">\n\nShort.\n\n- `a` — one.\n')
-    assert list(_cards(gif))[0]["img_src"].endswith(".gif")
-
-
-def test_the_second_column_carries_only_tests_api_and_details():
-    """Three doors, always the same three, in the same place. They are followed often
-    enough to earn a standing position. A how-to, an explanation or a sibling module is a
-    link the DESCRIPTION makes in a sentence, where the reader meets it in context instead
-    of as a bare label under the controls."""
-    import check_docgen
-    assert check_docgen.SECOND_COLUMN_LINKS == ("Tests:", "API:", "Details:")
-    page = ('### Thing 💫 · kind\n\n<img src="../../assets/x.png" alt="x">\n\nShort.\n\n'
-            '- `a` — one.\n[Tests](../../reference/tests/unit-tests.md#thing)\n'
-            'Detail: [technical](moxygen/Thing.md)\n')
-    assert check_docgen._rendered_links("p.md", page) == []
-
-
-def test_a_third_link_in_the_second_column_is_flagged():
-    """The rule has to FIRE, or it is indistinguishable from a check that reads nothing.
-    Renders a row, then asserts an extra label in cell 2 is caught."""
-    import check_docgen, mkdocs_hooks
-    real = mkdocs_hooks._emit_row
-
-    def patched(b, names):
-        row = real(b, names)
-        cells = row.strip("| ").split(" | ")
-        cells[1] += '<span class="mm-links">**More:** [x](#x)</span>'
-        return "| " + " | ".join(cells) + " |"
-
-    mkdocs_hooks._emit_row = patched
-    try:
-        page = ('### Thing 💫 · kind\n\nShort.\n\n- `a` — one.\n')
-        issues = check_docgen._rendered_links("p.md", page)
-    finally:
-        mkdocs_hooks._emit_row = real
-    assert issues and "More:" in issues[0][1]
-
-
-# ---- details sections ----
-
-def test_a_wide_details_table_is_flagged():
-    """A details section continues the card, so it is for the same reader. Past four
-    columns a table stops being scannable and starts being a spec sheet."""
-    import check_docgen
-    page = (_card() + "\n## Thing, details\n\n"
-            "| a | b | c | d | e |\n|---|---|---|---|---|\n| 1 | 2 | 3 | 4 | 5 |\n")
-    issues = check_docgen._details_tables("p.md", page)
-    assert issues and "5 columns" in issues[0][1]
-
-
-def test_a_details_table_cell_carrying_an_essay_is_flagged():
-    """The widest cell is where implementation prose hides: one Notes cell reached 991
-    characters of GDMA chains and ISR refills, which belongs on the API page."""
-    import check_docgen
-    page = (_card() + "\n## Thing, details\n\n"
-            "| a | b |\n|---|---|\n| 1 | " + "z" * 400 + " |\n")
-    issues = check_docgen._details_tables("p.md", page)
-    assert issues and "prose in a grid" in issues[0][1]
-
-
-def test_a_narrow_details_table_is_accepted():
-    import check_docgen
-    page = (_card() + "\n## Thing, details\n\n"
-            "| a | b |\n|---|---|\n| 1 | short enough |\n")
-    assert check_docgen._details_tables("p.md", page) == []
-
-
-def test_a_table_outside_a_details_section_is_not_judged():
-    """The rule is about details sections. A table in the page intro or in a card is a
-    different thing with its own reasons."""
-    import check_docgen
-    page = "| a | b | c | d | e |\n|---|---|---|---|---|\n| 1 | 2 | 3 | 4 | 5 |\n" + _card()
-    assert check_docgen._details_tables("p.md", page) == []
-
-
-def test_a_card_without_an_image_is_flagged():
-    """Every card leads with its picture: a row that starts with a name against blank
-    space reads as a gap rather than as a module that happens to be invisible."""
-    import check_docgen
-    cards = list(_cards(_card()))
-    assert cards[0]["img"] is False
-    page_with = ('### Thing 💫 · kind\n\n<img src="../../assets/x.png" alt="x">\n\n'
-                 'Short.\n\n- `a` — one.\n')
-    assert list(_cards(page_with))[0]["img"] is True
-
-
-def test_links_share_the_controls_cell():
-    """Not their own column: stacked under the controls they cost no page width."""
-    page = ('### Thing 💫 · kind\n\nShort.\n\n- `a` — one.\n'
-            'Detail: [technical](moxygen/Thing.md)\n')
-    row = [l for l in _row(page).split("\n") if l.startswith("| ") and "Module |" not in l
-           and not l.startswith("|--")][0]
-    cells = row.strip("| ").split(" | ")
-    assert "mm-param" in cells[1] and "mm-links" in cells[1]
-
-
-def test_the_card_name_leads_the_first_cell():
-    """The name first, the preview under it: a reader scanning the table is looking for a
-    name, and a picture above it pushes that down the row. The image stays in this column
-    rather than its own, which is what kept a long description from rendering as a ribbon."""
-    page = ('### Thing 💫 · kind\n\n<img src="../../assets/x.png" alt="x">\n\nShort.\n\n- `a`: one.\n')
-    row = [l for l in _row(page).split("\n") if l.startswith("| ") and "Module |" not in l
-           and not l.startswith("|--")][0]
-    cells = row.strip("| ").split(" | ")
-    assert cells[0].index("mm-name") < cells[0].index("mm-preview")
-
-
-def test_the_catalog_pages_actually_yield_cards():
-    """A check that reads NOTHING reports a clean run. Emptying split_blocks makes every
-    rule pass on zero cards, which is indistinguishable from a tree with nothing wrong in
-    it, so the count itself is pinned: these pages have cards, and a change that stops
-    finding them fails here rather than going quiet."""
-    import check_docgen
-    from pathlib import Path as _P
-    total = 0
-    for rel in check_docgen._pages():
-        path = ROOT / "docs" / rel
-        if path.exists():
-            total += len(list(_cards(path.read_text(encoding="utf-8"))))
-    assert total > 100, f"only {total} cards found across the catalog pages"
-
-
-def test_split_blocks_is_the_shared_boundary_rule():
-    """check_specs and check_docgen both ask the build where a card starts and ends. One
-    rule, so a page cannot be split two ways by two readers."""
-    import mkdocs_hooks
-    page = ("### One 💫 · kind\n\nA.\n\n- `a` — one.\n\n"
-            "### Two 💫 · kind\n\nB.\n\n## One, details\n\nprose\n")
-    blocks = list(mkdocs_hooks.split_blocks(page))
-    assert [t.split()[0] for t, _, _ in blocks] == ["One", "Two"]
-    # The details section closes the second block rather than joining it.
-    _t, start, end = blocks[1]
-    assert "prose" not in "\n".join(page.split("\n")[start:end])
-
-
 # ---- the header `///` budget ----
 
 def _hdr(text: str):
@@ -541,7 +138,7 @@ def _hdr(text: str):
 
 
 def test_a_class_comment_past_ten_lines_is_flagged():
-    """The class `///` is the module's summary, not its manual: cut it, and only a fact the code does not say goes after `@moreinfo`."""
+    """The class `///` is the module's summary, not its manual: cut it, and only a fact the code does not say goes after `@technical`."""
     doc = "\n".join(f"/// line {i}" for i in range(12))
     issues = _hdr(doc + "\nclass Foo : public Bar {")
     assert issues and "class comment 12 lines" in issues[0][1]
@@ -563,9 +160,9 @@ def test_a_one_line_member_comment_is_accepted():
     assert not [i for i in _hdr("#include <x.h>\n\nvoid g();\n\n/// one\nvoid doThing();") if "member comment" in i[1]]
 
 
-def test_a_header_leads_with_a_defgroup_block():
-    """A header of free functions opens with `@defgroup`, so its page says what the file is for."""
-    src = "#pragma once\n\n/// @defgroup g Thing\n/// What it is.\nvoid doThing();"
+def test_a_header_of_free_functions_leads_with_its_own_block():
+    """A header of free functions opens with a `///` block saying what the file is for."""
+    src = "#pragma once\n\n/// What it is.\n\nvoid doThing();"
     assert not [i for i in _hdr(src) if "file" in i[1]]
 
 
@@ -592,7 +189,7 @@ def test_a_header_with_no_lead_comment_is_flagged():
 def test_an_xref_to_a_real_heading_resolves():
     """`@xref{anchor}` names a heading on the same generated page, by its MkDocs slug."""
     src = ("#pragma once\n/// Lead.\n/// See @xref{terminology|Terminology}.\n///\n"
-           "/// @moreinfo\n///\n/// ## Terminology\n///\n/// Words.\nclass Foo {};")
+           "/// @technical\n///\n/// ## Terminology\n///\n/// Words.\nclass Foo {};")
     assert not [i for i in _hdr(src) if "@xref" in i[1]]
 
 
@@ -602,18 +199,18 @@ def test_an_xref_naming_no_heading_is_flagged():
     That is the whole reason to check it here: the cross-reference vanishes from the page and
     nothing else reports the loss."""
     src = ("#pragma once\n/// Lead.\n/// See @xref{glossary|Glossary}.\n///\n"
-           "/// @moreinfo\n///\n/// ## Terminology\n///\n/// Words.\nclass Foo {};")
+           "/// @technical\n///\n/// ## Terminology\n///\n/// Words.\nclass Foo {};")
     assert [i for i in _hdr(src) if "names no heading" in i[1]]
 
 
-def test_a_moreinfo_section_past_ten_lines_is_flagged():
+def test_a_technical_section_past_ten_lines_is_flagged():
     """The cap is PER SECTION, not per appendix.
 
     A whole-appendix budget punishes a file for having several distinct topics, and the cheapest
     way to satisfy it is to delete a section rather than tighten the prose. Each `## ` section is
     asked to be disciplined instead, so a file may carry as many as it genuinely has."""
     body = "".join(f"/// line {i}\n" for i in range(11))
-    src = ("#pragma once\n/// @defgroup g G\n/// Lead.\n///\n/// @moreinfo\n///\n"
+    src = ("#pragma once\n/// Lead.\n///\n/// @technical\n///\n"
            "/// ## Topic\n///\n" + body + "class Foo {};")
     assert [i for i in _hdr(src) if "appendix section 11 lines" in i[1]]
 
@@ -624,47 +221,47 @@ def test_a_fenced_block_does_not_count_toward_the_section_cap():
     A protocol listing is as long as the thing it describes, so counting its lines would ask the
     author to delete wire format to fit a prose budget."""
     fence = "///\n".join(f"/// [0x{i:02x}][count][stride]\n" for i in range(12))
-    src = ("#pragma once\n/// @defgroup g G\n/// Lead.\n///\n/// @moreinfo\n///\n"
+    src = ("#pragma once\n/// Lead.\n///\n/// @technical\n///\n"
            "/// ## Wire format\n///\n/// ```text\n" + fence + "/// ```\nclass Foo {};")
     assert not [i for i in _hdr(src) if "appendix section" in i[1]]
 
 
-def test_two_short_moreinfo_sections_are_accepted():
+def test_two_short_technical_sections_are_accepted():
     """Sixteen lines across two sections is fine; one section of eleven is not."""
     a = "".join(f"/// a{i}\n" for i in range(8))
     b = "".join(f"/// b{i}\n" for i in range(8))
-    src = ("#pragma once\n/// @defgroup g G\n/// Lead.\n///\n/// @moreinfo\n///\n"
+    src = ("#pragma once\n/// Lead.\n///\n/// @technical\n///\n"
            "/// ## A\n///\n" + a + "///\n/// ## B\n///\n" + b + "class Foo {};")
     assert not [i for i in _hdr(src) if "appendix section" in i[1]]
 
 
-def test_a_moreinfo_on_a_member_is_flagged():
-    """`@moreinfo` is an appendix, and only a file or class lead carries one.
+def test_a_technical_on_a_member_is_flagged():
+    """`@technical` is an appendix, and only a file or class lead carries one.
 
     Relaxing this put a four-line block on every function in a swept header, which cost 230 lines
     to undo. A member gets one line, because the page shows that line as its summary."""
-    src = ("#pragma once\n/// @defgroup g G\n/// Lead.\n\n"
-           "/// Doc.\n///\n/// @moreinfo detail\nvoid doThing();")
-    assert [i for i in _hdr(src) if "@moreinfo on a member" in i[1]]
+    src = ("#pragma once\n/// Lead.\n\n"
+           "/// Doc.\n///\n/// @technical detail\nvoid doThing();")
+    assert [i for i in _hdr(src) if "@technical on a member" in i[1]]
 
 
-def test_a_moreinfo_on_a_struct_is_accepted():
+def test_a_technical_on_a_struct_is_accepted():
     """A struct comment is a lead, so it carries an appendix like a class does."""
-    src = "#pragma once\n/// Doc.\n///\n/// @moreinfo detail\nstruct S { int a; };"
-    assert not [i for i in _hdr(src) if "@moreinfo on a member" in i[1]]
+    src = "#pragma once\n/// Doc.\n///\n/// @technical detail\nstruct S { int a; };"
+    assert not [i for i in _hdr(src) if "@technical on a member" in i[1]]
 
 
-def test_a_moreinfo_does_not_exempt_a_member_comment():
-    """`@moreinfo` is the CLASS comment's appendix. A member gets one line, whatever it holds.
+def test_a_technical_does_not_exempt_a_member_comment():
+    """`@technical` is the CLASS comment's appendix. A member gets one line, whatever it holds.
 
     Relaxing this let a four-line block stand on every function in a swept header. The budget is
     one line because the generated page shows that line as the summary; depth belongs on the
     class comment or the module's page."""
     src = ("#include <x.h>\n\nvoid g();\n\n"
-               "/// one\n///\n/// @moreinfo a detail\n/// and another\nvoid doThing();")
+               "/// one\n///\n/// @technical a detail\n/// and another\nvoid doThing();")
     issues = [i for i in _hdr(src) if "member comment" in i[1]]
-    # TWO, not four: the blank `///` and the `@moreinfo` marker are structure, and the cap counts
-    # the prose. What the test pins is that `@moreinfo` buys a member no exemption at all.
+    # TWO, not four: the blank `///` and the `@technical` marker are structure, and the cap counts
+    # the prose. What the test pins is that `@technical` buys a member no exemption at all.
     assert issues and "member comment 2 lines" in issues[0][1]
 
 
@@ -713,13 +310,13 @@ def test_several_short_sentences_on_one_line_are_not_flagged():
     assert not [i for i in issues if "doc sentence" in i[1]]
 
 
-def test_an_undivided_moreinfo_appendix_is_flagged():
+def test_an_undivided_technical_appendix_is_flagged():
     """An appendix with no `## ` heading is one section, so the per-section cap catches it whole.
 
     This was a 20-line whole-appendix cap. Counting per section instead lets a file carry as many
     topics as it genuinely has, while still refusing a single undivided wall of prose."""
     body = "\n".join(f"/// deep {i}" for i in range(25))
-    issues = _hdr("/// @moreinfo\n" + body + "\nclass Foo {")
+    issues = _hdr("/// @technical\n" + body + "\nclass Foo {")
     assert any("appendix section 25 lines" in why for _, why in issues)
 
 
@@ -731,6 +328,14 @@ def test_an_undocumented_public_member_is_flagged():
     whys = [why for _, why in issues]
     assert "public variable has no ///" in whys
     assert "public function has no ///" in whys
+
+
+def test_a_function_carrying_an_attribute_macro_is_still_seen():
+    """A capitals macro after the parameter list, such as `MM_NONBLOCKING`, hid 25 public functions from the rule."""
+    for decl in ("void tick() MM_NONBLOCKING override {}", "uint16_t count() const MM_NONBLOCKING;",
+                 "void tick1s() MM_NONBLOCKING final;", "virtual void set(int v) = 0;"):
+        whys = [why for _, why in _hdr(f"class Foo {{\npublic:\n  {decl}\n}};")]
+        assert "public function has no ///" in whys, decl
 
 
 def test_a_documented_public_member_is_accepted():
@@ -906,7 +511,7 @@ def test_a_cpp_is_asked_for_no_member_docs():
 def test_one_rule_set_applies_to_both_kinds_of_file():
     """A `.cpp` follows the same rules as a `.h`; only the SEVERITY differs. Three rules were
     scoped away from implementation files on reasons that did not hold: a `.cpp` carries a file
-    lead with its own `@moreinfo` appendix, declares classes, and is read as source like any
+    lead with its own `@technical` appendix, declares classes, and is read as source like any
     other file. Scoping them back out is how the two columns drift apart again."""
     import check_docgen
     src = ("#include <x.h>\n"
@@ -952,7 +557,7 @@ def test_a_lead_is_measured_as_a_block_so_chopping_does_not_satisfy_it():
     import check_docgen
     # Twelve lines of 240 characters: every LINE is inside the cap, the run is not.
     lead = "\n".join("/// " + "x" * 236 for _ in range(12))
-    src = "/// @defgroup g G\n" + lead + "\n/// @{\nvoid f();\n/// @}\n"
+    src = lead + "\n\nvoid f();\n"
     whys = [w for _, w in check_docgen._header_rules("src/core/x.h", src)]
     assert any("lead" in w and "chars" in w for w in whys), whys
     assert not any("doc line" in w for w in whys), \
@@ -993,16 +598,16 @@ def test_the_ratchet_refuses_a_rule_that_rose_against_the_committed_report(monke
     assert counts is None or not any(k.startswith("`") for k in counts), counts
 
 
-def test_the_appendix_is_measured_from_moreinfo_to_the_end_of_its_run():
-    """The appendix is what a file holds outside its code: every `///` line after `@moreinfo`, up to the
+def test_the_appendix_is_measured_from_technical_to_the_end_of_its_run():
+    """The appendix is what a file holds outside its code: every `///` line after `@technical`, up to the
     first line that is not `///`. A lead without one measures zero, so a file with no appendix is not counted."""
     import check_docgen
-    text = ("/// Lead.\n///\n/// @moreinfo\n///\n/// ## Why\n///\n/// One fact.\n"
+    text = ("/// Lead.\n///\n/// @technical\n///\n/// ## Why\n///\n/// One fact.\n"
             "#include <x>\n/// A member comment, not appendix.\nint x;\n")
     assert check_docgen._appendix_lines(text) == 4
     assert check_docgen._appendix_lines("/// Lead only.\nint x;\n") == 0
     # A marker after the summary text opens the appendix too, as it does for the lead rules.
-    assert check_docgen._appendix_lines("/// Lead. @moreinfo\n/// ## Why\n/// One fact.\nint x;\n") == 2
+    assert check_docgen._appendix_lines("/// Lead. @technical\n/// ## Why\n/// One fact.\nint x;\n") == 2
 
 
 def test_the_ratchet_refuses_an_appendix_that_grew(monkeypatch):
@@ -1082,9 +687,9 @@ def test_a_local_struct_in_an_allman_function_is_not_a_member():
     fields asked for a `///` they do not owe. Both brace styles are pinned, and a genuine
     member after the function still reports, so the exclusion cannot swallow a real finding."""
     import check_docgen
-    body = ("/// @defgroup g G\n/// @{\n/// doc\nint f()%s\n"
+    body = ("/// doc\nint f()%s\n"
             "    struct Local { int x; };\n    return sizeof(Local);\n}\n"
-            "struct S {\n    int shouldBeFlagged;\n};\n/// @}\n")
+            "struct S {\n    int shouldBeFlagged;\n};\n")
     for brace in ("\n{", " {"):
         whys = [w for k, w in check_docgen._header_rules("src/core/x.h", body % brace)]
         assert whys == ["public variable has no ///"], (brace, whys)
@@ -1126,96 +731,6 @@ def test_a_provenance_marker_above_the_lead_is_not_the_lead():
     assert whys(bare), "a marker must not stand in for a missing lead"
 
 
-def test_a_defgroup_is_asked_for_only_where_a_lone_class_already_leads():
-    """Two lead shapes generate a page, and which is right follows from what the header holds. A
-    lone class IS its page, so a group around it is a second lead saying the same thing twice.
-
-    Counting what is TOP-LEVEL is the whole rule, and several shapes defeated a naive count, so
-    each is pinned: an Allman brace belongs to the declaration above it; a brace inside a string
-    literal is text and must not raise the depth; and one line may open two namespaces.
-
-    A TEMPLATE class is exempt outright. Its `template <...>` line sits between the comment and
-    the class, so the comment cannot attach to the class at all and a group is the only lead
-    shape that reaches the page. Reported, the rule would push such a header back into the shape
-    that loses its documentation. A header of free declarations keeps its group, and a nested type never makes a
-    header a multi-type one."""
-    import check_docgen
-    def whys(src):
-        return [w for _, w in check_docgen._header_rules("src/core/x.h", src) if "@defgroup on" in w]
-    G = "/// @defgroup g G\n/// @{\n/// A lead.\n"
-    MEM = "public:\n    /// Go.\n    void go();\n};\n/// @}\n"
-
-    assert whys(G + "class Thing {\n" + MEM), "a lone class needs no group"
-    assert not whys(G + "template <class T>\nclass Thing {\n" + MEM), \
-        "a template class keeps its group: the template line stops a class comment attaching"
-    assert whys("namespace mm\n{\n" + G + "class Thing\n{\n" + MEM + "}\n"), \
-        "an Allman brace belongs to the declaration above it"
-    assert whys("namespace mm { namespace detail {\n" + G + "class Thing {\n" + MEM + "}}\n"), \
-        "one line may open two namespaces"
-    assert whys(G + 'class Thing {\npublic:\n    /// Go.\n'
-                '    void go() { const char* s = "{"; }\n};\n/// @}\n'), \
-        "a brace in a string literal is text, not scope"
-    assert whys(G + "class Thing {\npublic:\n    /// Go.\n    void go();\n"
-                "private:\n    struct H { int n; };\n};\n/// @}\n"), \
-        "a nested struct is not a second page-level type"
-
-    quiet = ("/// The class.\nclass Thing {\n" + MEM)
-    for free in ("inline void f();", "template <class T>\ninline void f(T t);",
-                 "int f()\n{\n    return 0;\n}", "int f() {\n    return 0;\n}"):
-        assert not whys(G + free + "\n" + quiet), (free, "a free declaration justifies the group")
-
-    lone = G + "class Thing {\n" + MEM
-    assert [w for _, w in check_docgen._header_rules("src/core/x.cpp", lone) if "@defgroup on" in w], \
-        "an implementation file leads the same way: a group around its lone class is still a " \
-        "second lead saying the same thing twice"
-
-
-def test_two_headers_claiming_one_group_id_are_reported(tmp_path, monkeypatch):
-    """Doxygen MERGES two groups sharing an id, so one header's page absorbs the other's and the
-    loser vanishes from the site. It fails silently both ways: the surviving page looks complete
-    and the missing one is simply absent. A core parser and a light-domain one both named their
-    group `PinList` that way, and only a dangling link in the strict build caught it. An
-    implementation file counts too — Doxygen reads it all the same — and is reported against
-    rather than the header, since the header owns the page."""
-    import check_docgen
-    from pathlib import Path
-    (tmp_path / "a.h").write_text("/// @defgroup Shared A\n/// @{\n/// A.\n/// @}\n", encoding="utf-8")
-    (tmp_path / "b.h").write_text("/// @defgroup Shared B\n/// @{\n/// B.\n/// @}\n", encoding="utf-8")
-    (tmp_path / "c.h").write_text("/// @defgroup Own C\n/// @{\n/// C.\n/// @}\n", encoding="utf-8")
-    (tmp_path / "c.cpp").write_text("/// @defgroup Own C\n/// @{\n/// C.\n/// @}\n", encoding="utf-8")
-    monkeypatch.setattr(check_docgen, "ROOT", tmp_path)
-    monkeypatch.setattr(check_docgen, "_headers",
-                        lambda: [Path(n) for n in ("a.h", "b.h", "c.h", "c.cpp")])
-    found = {key: why for key, why in check_docgen._duplicate_group_ids()}
-    assert any(k.startswith("b.h") for k in found), "the second header to claim an id is reported"
-    assert not any(k.startswith("a.h") for k in found), "the first keeps the id"
-    assert any(k.startswith("c.cpp") for k in found), "a .cpp re-declaring its header's id merges"
-    assert not any(k.startswith("c.h") for k in found), "the header owns the page"
-
-
-def test_a_group_that_documents_nothing_is_reported():
-    """A group is a label, not an entity, so `gen_api` infers its page from where its MEMBERS
-    sit. A `@}` that closes before the first declaration wraps only the comment: the group holds
-    nothing, resolves to no header, and the whole page is skipped — lead, appendix and members —
-    with nothing reported, because the header still looks documented and the unreachable-page
-    check only fires on a page that exists. Two headers shipped that way, their appendices
-    unreachable. A group closing after what it documents is the working shape."""
-    import check_docgen
-    def whys(src, rel="src/core/x.h"):
-        return [w for _, w in check_docgen._header_rules(rel, src) if "documents anything" in w]
-
-    LEAD = "/// @defgroup g G\n/// @{\n/// A lead.\n"
-    assert whys(LEAD + "/// @}\n\nnamespace mm {\n/// A thing.\ninline void f();\n}\n"), \
-        "a group closing before the namespace holds nothing"
-    assert not whys("namespace mm {\n" + LEAD + "/// A thing.\ninline void f();\n/// @}\n}\n"), \
-        "a group closing after its declarations is the working shape"
-    assert not whys(LEAD + "/// @}\n"), "a header with no declaration at all is not this fault"
-    assert whys(LEAD + "/// @}\n\nnamespace mm {\ninline void f();\n}\n",
-                rel="src/core/x.cpp"), \
-        "an implementation file carries groups too, so a group closing before its first " \
-        "declaration loses the same appendix there"
-
-
 def test_an_xref_that_cannot_render_is_reported():
     """`@xref{anchor|label}` renders to a same-page link, and the generator resolves `[a-z0-9-]+`
     only. An underscore therefore never becomes a link: the marker survives Doxygen untouched and
@@ -1228,9 +743,9 @@ def test_an_xref_that_cannot_render_is_reported():
     def whys(src):
         return [w for _, w in check_docgen._header_rules("src/core/x.h", src) if "xref" in w]
 
-    HEAD = ("/// @defgroup g G\n/// @{\n/// A lead.\n///\n/// @moreinfo\n///\n"
+    HEAD = ("/// A lead.\n///\n/// @technical\n///\n"
             "/// ## A real heading\n///\n")
-    TAIL = "inline void f();\n/// @}\n"
+    TAIL = "inline void f();\n"
     assert any("renders as raw text" in w
                for w in whys(HEAD + "/// See @xref{some_anchor|this}.\n" + TAIL)), \
         "an underscore cannot render, so it must be reported"
@@ -1242,23 +757,6 @@ def test_an_xref_that_cannot_render_is_reported():
     # lands in the captured anchor and must not be read as part of the slug.
     assert not whys(HEAD + "/// See @xref{a-real-heading\\|this}.\n" + TAIL), \
         "an escaped pipe is a valid reference"
-
-
-def test_an_unclosed_group_scope_is_reported():
-    """`@defgroup` opens a scope with `@{` and Doxygen runs it to `@}`. Left open, every
-    declaration after the lead is absorbed into the group and the generated page is silently
-    reshaped: three headers shipped that way in one sweep because nothing counted the pair. An
-    orphan `@}` is the same bug from the other side, which is what a conversion away from a group
-    leaves behind."""
-    import check_docgen
-    def whys(src, rel="src/core/x.h"):
-        return [w for _, w in check_docgen._header_rules(rel, src) if "group scope" in w]
-
-    assert whys("/// @defgroup g G\n/// @{\n/// A lead.\ninline void f();\n")
-    assert whys("/// A lead.\ninline void f();\n/// @}\n")
-    assert not whys("/// @defgroup g G\n/// @{\n/// A lead.\ninline void f();\n/// @}\n")
-    assert whys("/// @defgroup g G\n/// @{\n/// A lead.\ninline void f();\n",
-                rel="src/core/x.cpp"), "an unbalanced scope is a defect in either kind of file"
 
 
 def test_a_cpp_may_open_with_a_plain_comment_but_must_open_with_one():
@@ -1277,7 +775,7 @@ def test_a_cpp_may_open_with_a_plain_comment_but_must_open_with_one():
 def test_a_cpp_is_asked_for_no_member_docs_of_either_kind():
     """Functions go the same way as variables, for the same reason: what the rule matched in a
     `.cpp` was the constructor or destructor of a file-local RAII struct — `~WinsockInit`,
-    `Lock`, `ParkGuard` — none of them public API, each already explained by the struct's own
+    `Lock`, `ParkGuard`: none of them public API, each already explained by the struct's own
     comment. A header keeps both halves, where a declaration really is the public surface."""
     import check_docgen
     src = ("struct State {\n"
@@ -1299,16 +797,15 @@ def test_a_fenced_block_is_not_read_as_wrapped_prose():
     full stop, which is exactly what the no-wrap rule looks for. The same exemption the appendix
     section cap already makes, and the one the standards state."""
     import check_docgen
-    src = ("/// @defgroup g A group\n"
+    src = (""
            "/// A lead line.\n"
            "///\n"
            "/// ```\n"
            "/// div 3  26.67 MHz  zero 300 ns   strict spec, but strands scramble\n"
            "/// div 4  20.00 MHz  zero 400 ns   the reliability point\n"
            "/// ```\n"
-           "/// @{\n"
-           "void f();\n"
-           "/// @}\n")
+           ""
+           "void f();\n")
     whys = [w for _, w in check_docgen._header_rules("src/core/x.h", src) if "hard wrap" in w]
     assert not whys, whys
 
@@ -1317,7 +814,7 @@ def test_prose_after_a_closed_fence_is_still_checked():
     """The exemption tracks the fence STATE rather than switching off at the first one, so a
     wrapped sentence below a closed block is caught as it always was."""
     import check_docgen
-    src = ("/// @defgroup g A group\n"
+    src = (""
            "/// A lead line.\n"
            "///\n"
            "/// ```\n"
@@ -1326,16 +823,15 @@ def test_prose_after_a_closed_fence_is_still_checked():
            "///\n"
            "/// This sentence is carried\n"
            "/// onto the next line.\n"
-           "/// @{\n"
-           "void f();\n"
-           "/// @}\n")
+           ""
+           "void f();\n")
     whys = [w for _, w in check_docgen._header_rules("src/core/x.h", src) if "hard wrap" in w]
     assert whys, whys
 
 
 def test_one_comment_cap_holds_in_both_kinds_of_file():
     """A `//` run gets one line wherever it sits. Depth is not forbidden but HOMED: a header
-    carries it in an `@moreinfo` appendix and an implementation file carries it in the same
+    carries it in an `@technical` appendix and an implementation file carries it in the same
     appendix on its own file lead, so the escape hatch exists in both. A larger cap in a `.cpp`
     was an attempt to home depth inline, which leaves the reasoning beside one call rather than
     where a reader goes looking for it."""
@@ -1528,20 +1024,8 @@ def test_the_scan_includes_tests():
     assert [p for p in check_docgen._headers() if p.as_posix().startswith("test/")]
 
 
-def test_the_real_pages_obey_the_structure_rules():
-    """The tree itself, as the control: the synthetic cases above prove the rules fire,
-    and this proves they are satisfied where it counts. Structure must hold everywhere,
-    with no tolerated list to fall back on."""
-    import check_docgen
-    for rel in check_docgen._pages():
-        path = ROOT / "docs" / rel
-        if path.exists():
-            assert _structure(path.read_text(encoding="utf-8"), rel) == [], rel
-
-
-def test_a_test_hook_needs_no_doc_and_stays_off_the_page():
-    """A test hook is named `...ForTest`, which Doxygen excludes from every page, so a `///` on it
-    has no reader. The exemption covers functions, a hook type's constructor and its destructor,
+def test_a_test_hook_needs_no_doc():
+    """A test hook is named `...ForTest`, which says what it is, so a `///` on it adds nothing. The exemption covers functions, a hook type's constructor and its destructor,
     and stops there: an ordinary undocumented member beside them is still reported."""
     src = ("class Foo {\npublic:\n"
            "  void injectForTest();\n"
@@ -1552,69 +1036,190 @@ def test_a_test_hook_needs_no_doc_and_stays_off_the_page():
            "  void other();\n};")
     flagged = [i for i in _hdr(src) if "has no ///" in i[1]]
     assert len(flagged) == 1, flagged   # only `other`
-    import gen_api
-    assert "EXCLUDE_SYMBOLS = *ForTest" in gen_api._doxyfile(["src/core/x.h"], "/tmp/xml")
-
-
-def test_a_private_nested_type_gets_no_page_however_well_documented(tmp_path):
-    """A type declared under `private:` is implementation detail, so a doc comment on it must not
-    publish it: the fields of DevicesModule's private Device struct once rendered as API. A public
-    nested type with a comment keeps its page."""
-    import gen_api
-    def compound(kind, name, inners="", brief=""):
-        return (f'<doxygen><compounddef kind="{kind}"><compoundname>{name}</compoundname>{inners}'
-                f'<briefdescription><para>{brief}</para></briefdescription>'
-                f'<location file="src/core/x.h"/></compounddef></doxygen>')
-    (tmp_path / "classmm_1_1Outer.xml").write_text(compound(
-        "class", "mm::Outer",
-        '<innerclass prot="private">mm::Outer::Hidden</innerclass>'
-        '<innerclass prot="public">mm::Outer::Shown</innerclass>', "the outer class"))
-    (tmp_path / "structmm_1_1Outer_1_1Hidden.xml").write_text(compound("struct", "mm::Outer::Hidden", brief="documented"))
-    (tmp_path / "structmm_1_1Outer_1_1Shown.xml").write_text(compound("struct", "mm::Outer::Shown", brief="documented"))
-    pages = gen_api._class_to_header(tmp_path)
-    assert "mm-Outer" in pages and "mm-Outer-Shown" in pages
-    assert "mm-Outer-Hidden" not in pages
-
-
-def test_a_type_nested_inside_a_private_one_gets_no_page(tmp_path):
-    """Public inside a private nested type is still out of reach of every caller, so its comment must not publish it either."""
-    import gen_api
-    def compound(kind, name, inners="", brief=""):
-        return (f'<doxygen><compounddef kind="{kind}"><compoundname>{name}</compoundname>{inners}'
-                f'<briefdescription><para>{brief}</para></briefdescription>'
-                f'<location file="src/core/x.h"/></compounddef></doxygen>')
-    (tmp_path / "classmm_1_1Outer.xml").write_text(compound(
-        "class", "mm::Outer", '<innerclass prot="private">mm::Outer::Hidden</innerclass>', "the outer class"))
-    (tmp_path / "structmm_1_1Outer_1_1Hidden.xml").write_text(compound(
-        "struct", "mm::Outer::Hidden", '<innerclass prot="public">mm::Outer::Hidden::Deeper</innerclass>', "documented"))
-    (tmp_path / "structmm_1_1Outer_1_1Hidden_1_1Deeper.xml").write_text(compound(
-        "struct", "mm::Outer::Hidden::Deeper", brief="documented too"))
-    pages = gen_api._class_to_header(tmp_path)
-    assert "mm-Outer" in pages
-    assert "mm-Outer-Hidden" not in pages and "mm-Outer-Hidden-Deeper" not in pages
 
 
 # ---- appendix sections nothing refers to ----
 
-_APPENDIX = ["/// The thing.", "///", "/// @moreinfo", "///", "/// ## Why it waits",
+_APPENDIX = ["/// The thing.", "///", "/// @technical", "///", "/// ## Why it waits",
              "///", "/// Because.", "///", "/// ## The wire layout", "///", "/// Bytes."]
 
 
 def test_an_appendix_section_nothing_refers_to_is_a_finding():
     from check_docgen import _unreferenced_in
-    found = _unreferenced_in("src/core/x.h", _APPENDIX, set())
-    assert [k for k, _ in found] == ["src/core/x.h::@moreinfo Why it waits", "src/core/x.h::@moreinfo The wire layout"]
+    found = _unreferenced_in("src/core/x.h", _APPENDIX)
+    assert [k for k, _ in found] == ["src/core/x.h::@technical Why it waits", "src/core/x.h::@technical The wire layout"]
 
 
-def test_an_xref_or_a_page_link_reaches_a_section():
+def test_an_xref_in_the_file_reaches_a_section():
     from check_docgen import _unreferenced_in
     lines = _APPENDIX + ["/// See @xref{why-it-waits}."]
-    found = _unreferenced_in("src/core/x.h", lines, {("x", "the-wire-layout")})
-    assert found == []
+    assert [k for k, _ in _unreferenced_in("src/core/x.h", lines)] == ["src/core/x.h::@technical The wire layout"]
 
 
 def test_a_heading_inside_a_fenced_example_is_no_section():
     from check_docgen import _unreferenced_in
-    lines = ["/// The thing.", "///", "/// @moreinfo", "///", "/// ## Real", "///", "/// ```text",
+    lines = ["/// The thing.", "///", "/// @technical", "///", "/// ## Real", "///", "/// ```text",
              "/// ## not a section", "/// ```"]
-    assert [k for k, _ in _unreferenced_in("src/core/x.h", lines, set())] == ["src/core/x.h::@moreinfo Real"]
+    assert [k for k, _ in _unreferenced_in("src/core/x.h", lines)] == ["src/core/x.h::@technical Real"]
+
+
+def test_without_llvm_the_help_freshness_is_reported_rather_than_ending_the_run(monkeypatch):
+    """A contributor without LLVM still gets the whole report, with one failing line naming the check it could not make."""
+    import check_docgen
+    import gen_help
+    monkeypatch.setattr(gen_help, "stale", lambda: (_ for _ in ()).throw(SystemExit("clang not found")))
+    findings = check_docgen._help_freshness()
+    assert findings == [("docs/help/help.json", "help.json stale unchecked: clang not found")]
+    assert check_docgen._blocks(*findings[0])
+
+
+def test_a_control_guide_repeating_its_line_is_reported_and_one_adding_to_it_is_not():
+    import check_docgen
+    help_file = {"modules": {"DemoEffect": {"source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/DemoEffect.h", "controls": {
+        "persistence": {"line": "How long light survives in the flow, as a half-life.", "more": "How long light survives once it is in the flow, as a half-life."},
+        "fit": {"line": "Keep the aspect with bands or cropped, or stretch it to the grid.", "more": "**fit** shows the whole picture, with bands where its aspect leaves the grid empty."},
+        "formation": {"line": "How the heads relate: fan, mirror, chase, cross or unison.", "more": "How the heads relate. With fan the beams open like a hand."}}}}}
+    findings = check_docgen._guide_repeats(help_file)
+    assert [f[1].split("`")[1] for f in findings] == ["persistence", "formation"]   # the guide saying the line, and opening with part of it
+
+
+def test_the_app_help_fits_a_glance_per_control_per_section_and_in_total():
+    """A control's longer help shows inline under it, a guide section under the arrow: each is capped in words, and so is the whole, so tables and steps go to a how-to page."""
+    long = " ".join(["word"] * 70)
+    help_file = {"catalogs": {"light/demo.md": {}},
+                 "modules": {"DemoDriver": {"doc": "light/demo.md#demo", "source": "https://x/blob/main/src/light/DemoDriver.h",
+                                            "summary": "", "controls": {"pins": {"line": "The pins.", "more": long}},
+                                            "guide": [{"title": "Wiring", "text": long}, {"title": "Tips", "text": "Short."}]},
+                             "OtherModule": {"doc": "core/other.md#other", "controls": {"x": {"more": long}}}}}
+    import check_docgen
+    found = check_docgen._help_size(help_file)
+    assert ("src/light/DemoDriver.h", "app help too long: `pins`'s guide 70 words > 40") in found
+    assert ("src/light/DemoDriver.h", "app help too long: guide 'Wiring' 70 words > 60") in found
+    assert not any("Tips" in msg or "> 250" in msg for _, msg in found)   # 141 words in all
+    help_file["modules"]["DemoDriver"]["summary"] = long + " " + long
+    assert any(msg.startswith("app help too long: 281 words > 250") for _, msg in check_docgen._help_size(help_file))
+    assert not any("other" in src for src, _ in found)   # a page still written by hand is not measured
+    help_file["modules"]["DemoDriver"]["summary"] = ""
+    help_file["modules"]["DemoDriver"]["guide"] = [{"title": "Wiring", "text": long}, {"title": "Wiring", "text": long}]
+    # Two sections sharing a title each count, toward the total too.
+    assert sum("guide 'Wiring'" in msg for _, msg in check_docgen._help_size(help_file)) == 2
+
+
+def test_a_control_is_explained_on_its_member_never_in_the_module_guide():
+    import check_docgen
+    help_file = {"modules": {"DemoDriver": {"source": "https://x/blob/main/src/light/DemoDriver.h", "controls": {"pins": {"line": "The pins."}},
+                                            "guide": [{"title": "pins", "text": "Wire them."}, {"title": "Wiring", "text": "Short."}]}}}
+    assert check_docgen._guide_names_control(help_file) == [
+        ("src/light/DemoDriver.h", "module guide explains a control `pins`: move it to the member's `/// @guide` line")]
+
+
+def test_every_module_and_every_control_has_the_line_the_app_shows():
+    import check_docgen
+    help_file = {"modules": {"DemoDriver": {"source": "https://x/blob/main/src/light/DemoDriver.h", "line": "Drives a demo.",
+                                            "controls": {"pins": {"line": "The pins."}, "bare": {"line": ""}}},
+                             "Silent": {"source": "https://x/blob/main/src/light/Silent.h"}}}
+    assert check_docgen._help_lines(help_file) == [
+        ("src/light/DemoDriver.h", "help line missing: control `bare` has no `///` on its member or `add…` line"),
+        ("src/light/Silent.h", "help line missing: `Silent` has no class `///`")]
+
+
+def test_a_tag_emoji_groups_at_least_two_modules_or_scripts():
+    """A tag is a filter chip, so one carrier groups nothing; a script sharing it counts, and ⚡️ matches ⚡ whatever its variation selector."""
+    import check_docgen
+    help_file = {"modules": {"Fire": {"source": "https://x/blob/main/src/light/Fire.h", "tags": "⚡️🎯"},
+                             "Noise": {"source": "https://x/blob/main/src/light/Noise.h", "tags": "⚡🌊"}}}
+    assert check_docgen._tag_groups(help_file, {"moonlive/effects/aim.mle": "🎯"}) == [
+        ("src/light/Noise.h", "tag emoji on one module: 🌊 groups nothing; share one from the legend or drop it")]
+
+
+
+def _catalog(page: str, **module) -> dict:
+    """A help file holding one module on catalog `page`, as gen_help writes it."""
+    entry = {"source": "https://x/blob/main/src/light/Demo.h", "doc": f"{page}#demo", "controls": {}}
+    entry.update(module)
+    return {"catalogs": {page: {}}, "modules": {"DemoEffect": entry}}
+
+
+def test_a_catalog_card_leads_with_its_picture_and_a_moving_one_is_a_gif():
+    """Effects, modifiers and layouts show motion as a gif, the other catalogs a png, and a card without a picture is reported."""
+    import check_docgen
+    whys = lambda h: [w for _, w in check_docgen._help_cards(h)]
+    assert any(w.startswith("no image") for w in whys(_catalog("light/effects.md")))
+    assert any(w.startswith("image is png, not a gif") for w in whys(_catalog("light/effects.md", image="a.png")))
+    assert any(w.startswith("image is gif, not a png") for w in whys(_catalog("light/drivers.md", image="a.gif")))
+    assert whys(_catalog("light/effects.md", image="a.gif")) == []
+    assert whys(_catalog("light/supporting.md")) == []   # a summary page's rows describe machinery with no card to capture
+
+
+def test_a_control_line_too_wide_for_its_card_is_reported_tighter_on_a_visual_catalog():
+    import check_docgen
+    line = "x" * 80
+    controls = {"speed": {"line": line}}
+    assert any(w.startswith("one control") for _, w in check_docgen._help_cards(_catalog("light/effects.md", image="a.gif", controls=controls)))
+    assert not any(w.startswith("one control") for _, w in check_docgen._help_cards(_catalog("light/drivers.md", image="a.png", controls=controls)))
+
+
+def test_a_control_stating_its_default_or_range_is_reported():
+    """The reset button shows a control's default and the slider its range, so a line stating either restates the UI and drifts when the code changes. A name in backticks is not read: an option called `default` is the option's name."""
+    import check_docgen
+    controls = {"fps": {"line": "Frames per second (default 24, 1 to 25)."}, "size": {"line": "Square edge in lights (1–64)."}, "level": {"line": "The level, 0-255."},
+                "device": {"line": "The input, `default` following the system."}, "name": {"line": "What to call it, up to 15 characters."},
+                "speed": {"line": "How fast it turns."}, "chip": {"line": "A WS2812-2020 strip."}}
+    findings = check_docgen._help_cards(_catalog("light/drivers.md", image="a.png", controls=controls))
+    restating = [why for _, why in findings if why.startswith("control restates the UI")]
+    assert len(restating) == 1 and restating[0].endswith(": fps, size, level, name")
+
+
+def test_the_class_introducing_a_catalog_is_no_card_and_needs_no_picture():
+    import check_docgen
+    help_file = _catalog("core/services.md")
+    help_file["catalogs"]["core/services.md"] = {"base": "DemoEffect"}
+    assert check_docgen._help_cards(help_file) == []
+
+
+def test_a_module_off_the_catalogs_has_no_card_to_measure():
+    import check_docgen
+    help_file = _catalog("light/effects.md")
+    help_file["catalogs"] = {}
+    assert check_docgen._help_cards(help_file) == []
+
+
+def _notes(src: str, rel: str = "src/core/x.h") -> list:
+    import check_docgen
+    return [k.partition("::")[2] for k, w in check_docgen._header_rules(rel, src) if w.startswith(check_docgen._NOTE_ON_DECL_RULE)]
+
+
+def test_a_note_on_a_declaration_is_reported_whatever_its_access():
+    """A `//` above a declaration, or above its `///`, reaches no reader: the help, the docs and the hover read `///` only."""
+    src = ("/// Lead.\nclass Foo {\npublic:\n"
+           "    // why it is virtual\n    /// What it returns.\n    virtual int a() const;\n"
+           "    // only a note\n    int b = 0;\n"
+           "private:\n    // a private note\n    int c_ = 0;\n};\n")
+    assert _notes(src) == ["a", "b", "c_"]
+
+
+def test_a_declaration_with_one_doc_line_a_banner_or_a_body_note_is_clean():
+    """A banner separated by a blank line groups members rather than commenting one, and `//` inside a body is a note on a line of code."""
+    src = ("/// Lead.\nclass Foo {\npublic:\n"
+           "    // ---- Pins ----\n\n    /// The data pin.\n    int pin = 0;\n"
+           "    /// Run it.\n    void run() {\n        // why this order\n        int x = 0;\n    }\n};\n")
+    assert _notes(src) == []
+    assert _notes("/// Lead.\n\n// --8<-- [start:k]\n/// A constant.\nconstexpr int kMax = 4;\n") == []   # a docs snippet marker
+
+
+def test_a_note_on_a_file_scope_declaration_is_reported_and_an_implementation_file_is_not_measured():
+    src = "/// Lead.\n\n// a free function's note\ninline int twice(int v) { return 2 * v; }\n\n/// A constant.\nconstexpr int kMax = 4;\n"
+    assert _notes(src) == ["twice"]
+    assert _notes(src, "src/core/x.cpp") == []
+
+
+def test_a_template_line_and_a_provenance_marker_add_no_second_or_false_finding():
+    """The note above `template <class T>` is reported once, at the declaration below it, and an SPDX tag is provenance, no comment."""
+    assert _notes("/// Lead.\n\n// why\ntemplate <class T>\nclass Foo {};\n") == ["Foo"]
+    assert _notes("// SPDX-License-Identifier: MIT\n/// What Foo is.\nclass Foo {};\n") == []
+
+
+def test_a_run_flush_against_a_declaration_is_its_comment_not_the_file_lead():
+    import check_docgen
+    assert check_docgen._lead_start("#pragma once\nnamespace mm {\n\n/// The file.\n\nint f();\n".split("\n")) == 3
+    assert check_docgen._lead_start("#pragma once\nnamespace mm {\n\n/// What f does.\nint f();\n".split("\n")) is None

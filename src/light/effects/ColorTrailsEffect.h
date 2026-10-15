@@ -4,37 +4,16 @@
 
 namespace mm {
 
-/// Effect: color emitters carried by a flow made of two noise profiles, one per axis.
+/// Emitters pouring color into a flow that carries and folds it.
 /// @card ColorTrailsEffect.gif
 ///
-/// The flow is separable, which is the whole idea.
-/// A velocity field costs one vector per cell; this is one noise value per row and per column.
-/// Each row shifts horizontally and each column vertically, and the two shears compose.
-/// The picture swirls and folds with no solver behind it.
+/// There is no velocity field: one noise value shifts each row sideways, one shifts each column, and the two shears compose into a swirling current. A large grid is steered by a few hundred numbers, which is why it runs where a solver does not. Compare with @ref FluidEffect: the solver when the medium is the subject, this when the color is.
 ///
-/// Credit: Stefan Petrick, whose concept this is, and Jeff (4wheeljive), whose ColorTrails it follows.
+/// @attribution Stefan Petrick, 4wheeljive
 ///
-/// @moreinfo
+/// @technical
 ///
-/// ## The cheap end of the transport family
-///
-/// `FluidEffect` runs a real Stam solver at roughly twenty passes over the grid, and this is two.
-/// On a large panel that is the difference between an effect that runs and one that does not.
-/// Reach for the solver when the medium is the subject, and for this when carried color is.
-/// Both tiers are Jeff's own arrangement: his FlowFields repo holds them behind one dispatch table.
-///
-/// ## Four power functions
-///
-/// `inoise16` fills the profiles, `draw::advect16` carries the plane, `draw::decay16` fades it.
-/// The plane is 16-bit: a value multiplied by slightly less than one dies early or never fades at 8.
-///
-/// ## Two differences from the original
-///
-/// His advection is two passes over a temporary, so the y-shear reads an already-sheared row.
-/// Ours fuses them from the undisplaced source: sequential composition against simultaneous.
-/// He also floors the per-line shift at 0.3, where a low `flow` here can reach a cardinal slide.
-///
-/// Source: https://github.com/4wheeljive/FlowFields/blob/main/src/flows/flow_noise.h
+/// `inoise16` fills the profiles, `draw::advect16` carries a 16-bit plane and `draw::decay16` fades it, since a value multiplied by slightly less than one dies early or never fades at 8 bits. Both shears read the undisplaced source in one fused pass.
 class ColorTrailsEffect : public EffectBase {
 public:
     /// Catalog tags for the visual catalog.
@@ -49,22 +28,22 @@ public:
     uint8_t speed       = 60;
     /// How far a row or column is pushed: the shear amount.
     uint8_t flow        = 128;
-    /// How fast the profiles themselves drift.
+    /// How fast the flow itself drifts and reverses.
     uint8_t flowSpeed   = 128;
-    /// The profiles' spatial frequency: few broad bands, or many fine ones.
+    /// The profiles' spatial frequency: a few broad bands or many fine ones.
     uint8_t scale       = 85;
     /// How long color survives, as a half-life.
     uint8_t persistence = 60;
     /// How fast the emitters walk the palette.
     uint8_t colorSpeed  = 128;
-    /// Orbit radius, and the Lissajous figure's reach.
+    /// The orbit's radius and the Lissajous figure's reach.
     uint8_t size        = 128;
-    /// Which emitters are drawn.
+    /// All three emitters, or one at a time to see what each adds.
     uint8_t mode        = static_cast<uint8_t>(Mode::All);
 
     /// Which wind carries the color. `Radial` runs from geometry, so it costs no field and no state.
     enum class Flow : uint8_t { Noise = 0, Radial, RadialIn };
-    /// The selected wind.
+    /// The field carrying them: Noise, Radial out or Radial in.
     uint8_t flowType = static_cast<uint8_t>(Flow::Noise);
 
     /// Publish the emitters, the flow, the palette walk and the tail's half-life.
@@ -97,6 +76,7 @@ public:
         front_ = true;
     }
 
+    /// Walk both clocks, shear the trail plane in one backward sample, and color it from the palette.
     void tick() MM_NONBLOCKING override {
         if (!plane_ || !scratch_ || !xProf_ || !yProf_) return;
         const lengthType w = width(), h = height(), d = depth();
@@ -132,7 +112,7 @@ public:
                                vy = static_cast<draw::pos_t>(xp[x]);
                            }, draw::Edge::Wrap);
         } else {
-            // Radial: the normalized offset from the center, signed for a fountain or a drain. Clamp,
+            // Radial: the normalized offset from the center, signed for a fountain or a drain.
             const int32_t cx = w / 2, cy = h / 2;
             const int32_t reach = (static_cast<int32_t>(flow) * draw::kSubOne) / 24;
             const int32_t sign = (f == Flow::Radial) ? 1 : -1;
@@ -177,7 +157,7 @@ private:
         const int32_t yBreath = 205 + (static_cast<int32_t>(sin16(static_cast<uint16_t>(mPhase * 5u + 21845u))) * 102) / 32768;
         const int32_t xReach = (reach * xBreath) / 256;
         const int32_t yReach = (reach * yBreath) / 256;
-        // Detuned by Stefan's own ratios: equal rates lock the profiles and slide a diagonal.
+        // Detuned rates: equal ones lock the profiles and slide a diagonal.
         const uint32_t cells = static_cast<uint32_t>(scale) * 24u;
         const uint32_t cellsY = (cells * 32u) / 33u;
         const uint32_t phaseY = (phase * 172u) / 173u;

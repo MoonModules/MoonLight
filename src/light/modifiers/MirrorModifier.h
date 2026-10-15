@@ -4,39 +4,26 @@
 
 namespace mm {
 
-/// Modifier folding each box axis onto itself (mirror).
+/// Folds the far half of the box back onto the near half, mirroring the image across its center on each axis you choose.
 /// @card MirrorModifier.gif
 ///
-/// @moreinfo
+/// In 2D one quadrant shows in all four, in 3D one octant in all eight.
 ///
-/// Folds the far half of the logical box back onto the near half per axis.
-/// The image is mirrored across the box center.
-/// Which axes are enabled decides whether a quadrant reflects into three, or an octant into seven.
-/// Halving the box, rounding up, then folding each far-half coordinate back gives a many-to-one mapping.
-/// The mirrored physical lights share one logical source, so the fan-out costs nothing under the fold.
+/// @technical
 ///
-/// ## How an axis folds
-///
-/// Per axis the logical extent halves, rounding up, so an odd extent keeps its center column unpaired.
-/// A physical coordinate at or past that half-extent then reflects back onto the near half.
-/// An even extent maps its far edge to the first logical column.
-/// An odd one makes its unpaired center the last logical column, so the far edge maps to the second.
-///
-/// Prior art: MoonLight's Mirror modifier, with the same halving, the same reflection and the same per-axis flags.
-/// Written fresh against our fold interface, the box stashed for the const fold as the base class documents.
-/// Author: MoonLight, https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Modifiers/M_MoonLight.h
+/// Per axis the logical extent halves, rounding up, so an odd extent keeps its center column unpaired, and a coordinate at or past that half reflects back.
 class MirrorModifier : public ModifierBase {
 public:
-    /// The catalog tags this modifier carries.
-    const char* tags() const override { return "💫"; }  // MoonLight origin
+    /// The catalog tags: 💫, a MoonLight origin.
+    const char* tags() const override { return "💫"; }
     /// MirrorX/Y/Z: each axis is independently foldable.
     Dim dimensions() const override { return Dim::D3; }
 
-    /// Whether this axis mirrors, which is a no-op on an axis the layout does not use.
+    /// Mirror across the center along x.
     bool mirrorX = true;
-    /// Whether y is mirrored.
+    /// Mirror across the center along y.
     bool mirrorY = true;
-    /// Whether z is mirrored.
+    /// Mirror across the center along z.
     bool mirrorZ = true;
 
     /// The controls a user sets on the card.

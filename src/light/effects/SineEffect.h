@@ -5,13 +5,11 @@
 
 namespace mm {
 
-// Author: MoonLight (Sinus, AI-generated), https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h
-/// Effect of a moving sine wave across the layer.
+/// Red, green and blue each follow a sine along one axis at a third of a turn apart: a glowing, scrolling color box.
 /// @card SineEffect.gif
 ///
-/// Red, green and blue each follow a sine along one axis, a third of a turn apart.
-/// So the box glows through shifting colors that scroll with time.
 /// A flat layout holds its depth term constant, which reads as a red and green wash.
+///
 class SineEffect : public EffectBase {
 public:
     /// Catalog tags for the visual catalog.

@@ -1,14 +1,16 @@
 /// MoonBase: the second boot image.
 ///
-/// A 4 MB board has room for one application, not two. Its partition table carries this small image in the `factory` slot instead of a second copy of the firmware.
-/// When the application must be replaced, the device reboots here. MoonBase owns the board, writes the new firmware into the application slot it is not itself running from, and hands control back.
+/// A 4 MB board has room for one application, so its `factory` slot holds this small image. To replace the application, the device reboots here, writes the new firmware to the other slot and hands control back.
 ///
-/// @moreinfo
+/// @attribution MycilaSafeBoot, Tasmota
+///
+/// @technical
 ///
 /// ## Why it shares no code with the application
 ///
-/// Everything here is written directly against ESP-IDF. It shares no code with the application on purpose: the app's platform layer pulls in RMT, I2S, PSRAM and the JIT, which measured 788 KB with an empty entry point.
-/// This file plus its sdkconfig measures around a quarter of the flash instead. The other half of the budget is in ../sdkconfig.defaults, which is part of the design.
+/// It is written against ESP-IDF alone, sharing no code with the application. The app's platform layer (RMT, I2S, PSRAM, the JIT) measured 788 KB with an empty entry point; this file and its sdkconfig take about a quarter.
+///
+/// The rest of the budget is ../sdkconfig.defaults, which is part of the design.
 ///
 /// ## The boot flow
 ///

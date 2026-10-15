@@ -5,11 +5,9 @@
 
 namespace mm {
 
-/// @defgroup Sha1 SHA-1 for the WebSocket handshake
-/// @{
 /// A minimal RFC 3174 implementation, used only where RFC 6455 mandates it.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// This is not a general-purpose crypto primitive.
 /// SHA-1 is broken for security, and it appears here solely because the WebSocket standard requires it for the accept-key derivation.
@@ -67,5 +65,4 @@ inline void sha1(const uint8_t* data, size_t len, uint8_t out[20]) {
     store32(out + 12, h3); store32(out + 16, h4);
 }
 
-/// @}
 } // namespace mm

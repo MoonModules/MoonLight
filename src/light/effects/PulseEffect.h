@@ -4,45 +4,22 @@
 
 namespace mm {
 
-/// Expanding shells from a drifting origin, one per beat, alive with or without sound.
+/// Shells expand from a drifting origin, one per beat: a pair of fronts on a strip, a ring on a panel, a sphere in a volume.
 /// @card PulseEffect.gif
 ///
-/// A pulse is a thin shell that grows from a point and dims as it travels.
-/// The same shell is a wave on a strip, a ring on a panel and a sphere in a volume.
-/// A shell is a distance, and every layout has distances.
-/// Between sounds the shells keep arriving on the idle clock, so a silent room still moves.
+/// Sound fires a shell and its pitch colors it, and an idle clock keeps them arriving in a silent room.
 ///
-/// @moreinfo
+/// Compare with @ref BeatRipplesEffect, which simulates water on a plane, where this one draws a moving front that carries it into 1D and 3D.
 ///
-/// ## Why this is the default effect
+/// @guide
 ///
-/// A first boot shows three things at once: the lights work, the device runs, and it hears the room.
-/// A dense field shows the first and hides the other two, since every light is already busy.
-/// A shell leaves most of the layout dark, so one beat is unmistakable, and the drifting origin proves the device runs before any sound arrives.
+/// ## At boot
 ///
-/// ## One shell, three dimensions
+/// It is the effect a fresh device starts with: one beat is unmistakable, and the drifting origin shows the device running before any sound arrives.
 ///
-/// The radius is a Euclidean distance over whatever axes the layout has, so the code branches on nothing.
-/// A 300-light strip has one axis, where a shell becomes a pair of fronts running outward from the origin.
-/// A panel gives a ring and a volume gives a sphere, from the same three subtractions.
+/// @technical
 ///
-/// ## One set of defaults fits every layout
-///
-/// Both the travel and the shell's width are shares of the layout's own diagonal rather than counts of lights.
-/// A fixed lights-a-second speed crosses a 16x16 panel in half a second and a 300-light strip in seven, so one set of defaults cannot suit both.
-/// As a share, a shell takes the same time to cross whatever it is on, and roughly three are alive at any moment on every geometry.
-///
-/// ## The square root is paid per shell, not per light
-///
-/// Comparing a radius against a distance and comparing their squares decide the same thing, so the shell test runs in squared space.
-/// The root is then taken only for a light that some shell already contains, which is a few percent of the grid.
-/// That matters on an in-order pipeline, where a 16-iteration root is 16 branch stalls a light rather than a speculated handful.
-///
-/// ## What drives a pulse, and what will drive it later
-///
-/// Three inputs decide everything: when a pulse fires, where it starts, and what color it takes.
-/// Audio fills all three today, where an onset fires it, the drift places it, and the dominant frequency colors it.
-/// A sensor added later fills the same three, which is why `emit` takes exactly those arguments.
+/// The radius is a Euclidean distance over whatever axes the layout has. Travel and shell width are shares of the layout's diagonal, so one set of defaults fits a 16x16 panel and a 300-light strip alike. The shell test runs in squared space, and the root is taken only for a light some shell contains.
 class PulseEffect : public EffectBase {
 public:
     /// Catalog tags: a MoonLight original that reacts to sound.
@@ -50,15 +27,15 @@ public:
     /// A shell is a distance, which every layout has, so all three axes are used.
     Dim dimensions() const override { return Dim::D3; }
 
-    /// Pulses per minute while nothing is heard, where 0 waits for sound alone.
+    /// Pulses a minute while nothing is heard; 0 waits for sound alone.
     uint8_t bpm = 40;
-    /// How fast a shell crosses the layout, whatever its size, where 255 crosses it in a second.
+    /// How fast a shell crosses the layout, at any layout size.
     uint8_t speed = 60;
-    /// The shell's width as a share of the layout, so it stays a shell at any size.
+    /// The shell's width, as a share of the layout rather than in lights.
     uint8_t thickness = 40;
-    /// How strongly sound fires a pulse, where 0 leaves the idle clock alone in charge.
+    /// How strongly sound fires a pulse; 0 ignores it.
     uint8_t audioGain = 200;
-    /// How far the origin wanders from the center, where 0 pins it there.
+    /// How far the origin wanders from the center; 0 pins it there.
     uint8_t drift = 120;
 
     /// Publish the rhythm, the shell's shape, and how much the room drives it.
@@ -106,7 +83,7 @@ public:
         const int32_t reach = maxRadius(w, h, d);
         const Palette& pal = *Palettes::active();
 
-        // Shares of `reach` rather than counts of lights: @xref{one-set-of-defaults-fits-every-layout}.
+        // Shares of `reach` rather than counts of lights.
         const int32_t half = 1 + (reach * thickness) / 1024;   // at least 1, so a shell is never empty
         const int32_t crossMs = (256 * 1000) / (speed + 1);    // to cross the whole layout, at any size
 
@@ -130,7 +107,7 @@ public:
         for (lengthType y = 0; y < h; y++)
         for (lengthType x = 0; x < w; x++) {
             const int32_t dx = x - origin.x, dy = y - origin.y, dz = z - origin.z;
-            // Squared, so the root below is paid only inside a shell: @xref{the-square-root-is-paid-per-shell-not-per-light}.
+            // Squared, so the root below is paid only inside a shell.
             const int32_t distSq = dx * dx + dy * dy + dz * dz;
 
             int32_t lit = 0;
@@ -164,7 +141,7 @@ private:
     };
     /// Enough for a fast passage to overlap, few enough that the inner loop stays cheap.
     static constexpr uint8_t kPulses = 6;
-    /// How long the wake takes to halve, which is what a per-frame fade of 40 came to at 60 fps.
+    /// How long the wake takes to halve.
     static constexpr uint32_t kWakeHalfLifeMs = 70;
 
     Pulse    pulses_[kPulses];

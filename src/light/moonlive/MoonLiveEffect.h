@@ -31,27 +31,28 @@ inline constexpr const char* kEffectPick[3] = {kScriptDir, kEffectExt, kEffectTe
 
 }  // namespace moonlive
 
-/// The thin binding between the MoonLive engine and a first-class `EffectBase`.
+/// An effect written as text on the running device, compiled to native code on the next tick.
+/// @card MoonLiveEffect.gif
 ///
-/// @moreinfo
+/// Pick a script from the library or write your own, and it renders at the speed of a compiled effect. Every control the script declares appears on the card and is editable live without a recompile. The language is [MoonLive](https://moonmodules.org/MoonLight/moonmodules/light/moonlive.html).
 ///
-/// The effect names a script file, `prepare` compiles it, and `tick` runs the emitted native code over this effect's own buffer.
-/// A source edit recompiles live, and a parse error shows in the module status while the layer renders dark.
+/// @attribution Yves Bazin
+///
+/// @technical
+///
+/// The effect names a script file, `prepare` compiles it, and `tick` runs the emitted native code over this effect's own buffer. A source edit recompiles live, and a parse error shows in the module status while the layer renders dark.
 class MoonLiveEffect : public EffectBase {
 public:
-    // 📝 marks a script declaring none of its own, which is all a module can say about one.
-    /// The tags the script declares, or the scripted-module mark when it declares none.
+    /// The tags the script declares, or 📝 for one declaring none, which is all a module can say about it.
     const char* tags() const override {
         const char* t = script_.tags();
         return t ? t : "📝";
     }
 
-    // The layer extrudes on this, so a script declaring 1 paints a column and the framework fills.
-    /// The axes this script paints, which a silent script leaves at two.
+    /// The axes this script paints, which a silent script leaves at two, and which the layer extrudes on.
     Dim dimensions() const override { return script_.dimensions(); }
 
-    // Each control binds by reference to its arena slot, so a slider write needs no recompile.
-    /// Publish the script name, and every control the script declares.
+    /// Publish the script name, and every control the script declares, each bound by reference to its arena slot so a slider write needs no recompile.
     void defineControls() override {
         // The script name rather than its text, so a module costs bytes instead of a kilobyte.
         controls_.addFilePath("script", script_.buffer(), script_.bufferSize(),
@@ -60,8 +61,7 @@ public:
         script_.publishDeclaredControls(controls_);
     }
 
-    // Only the script name rebuilds: a scripted control updates an arena byte the next tick reads.
-    /// Whether a control change needs the prepare sweep.
+    /// Whether a control change needs the prepare sweep: only the script name does, as a scripted control updates an arena byte the next tick reads.
     bool affectsPrepare(const char* controlName) const override {
         return std::strcmp(controlName, "script") == 0;
     }
@@ -69,8 +69,7 @@ public:
     /// The script's controls appear once prepare has compiled it.
     bool declaresControlsAtPrepare() const override { return true; }
 
-    // A failed compile leaves tick a no-op, so the effect renders dark and the device keeps running.
-    /// Compile the script if the file changed, then surface whatever it declares.
+    /// Compile the script if the file changed, then surface whatever it declares; a failed compile leaves tick a no-op, so the effect renders dark.
     void prepare() override {
         // The next tick is the first, so the idle interval is not handed to the flow and the decay.
         tickStarted_ = false;
@@ -83,6 +82,7 @@ public:
         rebuildControls();
     }
 
+    /// Hand the script its grid size, canvas and fade sink, and run it for one frame.
     void tick() MM_NONBLOCKING override {
         // The emitter writes three channels at a stride, so a sub-RGB layout renders dark instead.
         const auto cpl = channelsPerLight();
@@ -162,13 +162,12 @@ public:
     void setScript(const char* name) { script_.setName(name); }
 
 private:
-    // Full width: saturating to a byte made a 768-wide wall report 255.
+    /// Write a system variable at full width, since saturating to a byte made a 768-wide wall report 255.
     void writeSysVar(uint8_t offset, uint32_t value) {
         moonlive::writeSysVarSlot(script_.engine().controlSlot(offset), value);
     }
 
-    // A compile frees the last script's pool and trail first, so its compile has their memory; two 16-bit planes are 96 KB on a 20-cube.
-    /// Free the pool and trail before a compile, and attach pool(n) and trail(1) for its defineControls run, or detach them.
+    /// Free the pool and trail before a compile, so it has their memory (two 16-bit planes are 96 KB on a 20-cube). Then attach pool(n) and trail(1) for its defineControls run, or detach them.
     static void attachSizers(void* ctx, moonlive::DefinePhase phase) {
         auto* self = static_cast<MoonLiveEffect*>(ctx);
         if (phase == moonlive::DefinePhase::Compiling) {
@@ -190,12 +189,10 @@ private:
         }, ctx);
     }
 
-    // A fresh card starts with no script and renders nothing until one is named.
-    moonlive::MoonLiveScript script_;
+    moonlive::MoonLiveScript script_;   ///< Which `.mle` script runs, picked from the library and edited here.
     moonlive::MoonLiveParticles particles_{*this};
-    // Two, because advection reads one and writes the other rather than sampling moved pixels.
-    ScratchBuffer<uint16_t> trailA_{*this};
-    ScratchBuffer<uint16_t> trailB_{*this};
+    ScratchBuffer<uint16_t> trailA_{*this};   ///< the trail planes, two since advection reads one and writes the other
+    ScratchBuffer<uint16_t> trailB_{*this};   ///< the second trail plane
     ScratchBuffer<uint8_t>  trailCarry_{*this};   ///< the dither's per-channel error
     bool                    trailFront_ = true;
     uint32_t                frameCount_ = 0;   ///< the counter fieldRate reads
@@ -204,8 +201,7 @@ private:
     bool                    tickStarted_ = false;   ///< has a frame been timed yet
     lengthType              trailW_ = 0, trailH_ = 0, trailD_ = 0;  ///< the shape the planes hold
 
-    // Through draw::blit16 like the compiled effects, which is the divergence blit16 exists to end.
-    /// Blit the trail plane onto the layer.
+    /// Blit the trail plane onto the layer through draw::blit16, like the compiled effects.
     void blitTrail() {
         const lengthType w = width(), h = height(), d = depth();
         if (!trailA_ || !trailB_) return;

@@ -274,15 +274,6 @@
       ]
     },
     {
-      "id": "update_module_docs",
-      "tab": "repo",
-      "group": "docs",
-      "label": "Update Module Docs",
-      "speed": "slow",
-      "help": "update_module_docs",
-      "script": "docs/update_module_docs.py"
-    },
-    {
       "id": "build_docs",
       "tab": "repo",
       "group": "docs",

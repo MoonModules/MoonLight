@@ -1,9 +1,8 @@
-/// @defgroup platform_esp32 The ESP32 platform layer core
 /// The system primitives, the network, and the sockets.
 ///
 /// Time, allocation, restart and chip information; ethernet, the two wireless modes and discovery; the three socket kinds.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## What lives in sibling files, and what does not
 ///

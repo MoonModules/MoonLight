@@ -8,54 +8,41 @@
 #include <cstdio>
 #include <cstring>
 
-/// @defgroup JsonSink Writing JSON
-/// @{
 /// Writes a document with no fixed size ceiling, in one of three modes, so a module tree of any size serializes correctly.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## The three modes
 ///
-/// A socket mode flushes a small staging buffer to a connection as it fills, so a whole response never lives in memory at once.
-/// The stage is taken from the heap by the socket mode alone, so a sink in the other modes costs its caller's stack a few words.
-/// Without a stage, each append goes to the connection as it comes, slower and still whole.
+/// A socket mode flushes a small heap-staged buffer to a connection as it fills, so a whole response never lives in memory at once. Without a stage, each append goes to the connection as it comes, slower and still whole.
+///
 /// A buffer mode collects into a heap block that grows on demand, for a caller that needs the assembled document and its length up front.
+///
 /// A fixed mode writes into a caller-owned slice and raises an overflow flag rather than truncating silently or growing, which the save path wants.
 ///
 /// ## Growth steps down when doubling is refused
 ///
-/// Doubling is the right default, giving amortized constant-time appends, but both buffers are live across the copy.
-/// So growing a large block asks for half again as much CONTIGUOUS memory at once, and a device serving a big document has the free bytes without the block.
-/// The allocation then failed, every later append was dropped, and the device shipped a truncated document that looked complete.
+/// Doubling gives amortized constant-time appends, but both buffers are live across the copy. Growing a large block asks for as much again as CONTIGUOUS memory, which a fragmented heap often lacks.
 ///
-/// A refused doubling therefore steps down toward the minimum rather than giving up: slower to grow, and it fits where doubling cannot.
-/// Measured on the bench, both classic boards cut their document at a power of two, losing eight to eleven kilobytes of the tree.
-///
-/// The step is a QUARTER of the current capacity rather than the bare minimum.
-/// Backing off to just enough serves one append and grows again on the next character, which copies quadratically and thrashes the fragmented heap that refused the doubling.
+/// A refused doubling steps down toward the minimum rather than giving up. The step is a quarter of the capacity: backing off to the bare minimum grows again on the next character, copying quadratically.
 ///
 /// ## Overflow is a flag, never a silent truncation
 ///
-/// Once tripped, later appends do nothing, so a caller sees one consistent state.
-/// A caller that ships the buffer anyway sends a truncated document, indistinguishable from a whole one at the far end.
-/// The receiver parses it, throws, and drops the tail.
+/// Once tripped, later appends do nothing, so a caller sees one consistent state. A caller that ships the buffer anyway sends a truncated document, indistinguishable from a whole one at the far end.
 ///
 /// The fixed mode never allocates, its capacity being the caller's slice on purpose, since an allocation there would succeed even when the slice is too small.
 ///
 /// ## The number writer takes a double, and firmware must not call it
 ///
-/// Its only caller is the test runner's bridge, which stores numerics that way so it does not lose precision parsing fixtures.
-/// A double runs in software emulation on one architecture, far slower than the single-precision type, so production paths use the typed serializers instead.
+/// Its only caller is the test runner's bridge, which stores numerics that way to keep precision parsing fixtures. A double runs in software emulation on one architecture, so production paths use the typed serializers instead.
 namespace mm {
 
 class JsonSink {
 public:
-    // Socket mode.
     /// Socket mode: a staging buffer flushes to the connection as it fills.
     explicit JsonSink(platform::TcpConnection& conn)
         : conn_(&conn), stage_(static_cast<char*>(platform::alloc(STAGE_SIZE))) {}
 
-    // Buffer mode — collects into a growable heap buffer.
     /// Buffer mode: bytes collect in a block this owns.
     JsonSink() = default;
 
@@ -175,8 +162,7 @@ public:
         append("\"");
     }
 
-    // Socket mode: flush staged bytes to the socket. Call once at the end.
-    /// Push whatever is staged to the connection, in socket mode.
+    /// Push whatever is staged to the connection, in socket mode; call it once at the end.
     void flush() { flushStage(); }
 
     /// The collected document and its length, terminated; in fixed mode this is the caller's own buffer.
@@ -196,8 +182,7 @@ public:
         return out;
     }
 
-    // Fixed-buffer mode only: did any append run out of capacity?
-    /// Whether a write was refused, which makes the document incomplete.
+    /// Whether a write was refused for want of capacity, which makes the document incomplete.
     bool overflowed() const { return overflowed_; }
 
     /// Which single option a palette call wants, the default meaning the whole set: it rides here because the callback takes only a sink, the one channel into the light domain.
@@ -263,7 +248,5 @@ inline void jsonEscape(const char* in, char* out, size_t outMax) {
     }
     out[oi] = 0;
 }
-
-/// @}
 
 } // namespace mm

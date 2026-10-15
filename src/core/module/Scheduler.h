@@ -10,30 +10,25 @@ namespace mm {
 
 /// The domain-neutral orchestrator: it owns the top-level modules, boots them, and drives every tick.
 ///
-/// It also carries the tree-walk utilities, so deleting a subtree and uniquifying a name live once.
-/// The bodies are in Scheduler.cpp, and the boot phases are documented there.
+/// It also carries the tree-walk utilities, so deleting a subtree and uniquifying a name live once; the bodies and the boot phases are in Scheduler.cpp.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## Three cadences cover every module
 ///
-/// `tick` is the hot path, paced here by yielding between iterations, and two slower ticks follow it.
-/// Every top-level module ticks inline in one loop, and each drives its own children.
-/// Effects animate off a synchronized clock, so their speed holds at any frame rate.
+/// `tick` is the hot path, paced by yielding between iterations, with two slower ticks after it. Each top-level module ticks inline and drives its children, and effects animate off one clock, so their speed holds at any frame rate.
 ///
 /// ## Rebuilding derived state
 ///
-/// A rebuild walks the tree, rebuilding buffers, mappings and any compiled script.
-/// `prepareTree` does it immediately and `requestPrepareTree` at the next frame boundary.
-/// Prefer the request: the immediate walk runs compiled code on the calling task's stack.
-/// Each walk ends by setting the controls a script declared as it compiled, which a state document named before they existed.
+/// A rebuild walks the tree, rebuilding buffers, mappings and compiled scripts. Prefer `requestPrepareTree`, at the next frame boundary, to `prepareTree`, which runs compiled code on the calling task's stack.
+///
+/// Each walk ends by setting the controls a script declared as it compiled.
 ///
 /// ## Driving one control from anywhere
 ///
-/// `setControl` names a module and a control, and applies the whole control-change reaction.
-/// It parses, rebuilds the control list, fires the hook, marks dirty, and rebuilds the tree.
-/// `getControlWide` reads at the control's own width, and `getControl` converts that to a byte.
-/// Clamping suits a surface and breaks arithmetic, so an input mapping reads the wide one.
+/// `setControl` names a module and a control, and applies the whole control-change reaction: it parses, rebuilds the control list, fires the hook, marks dirty, and rebuilds the tree.
+///
+/// `getControlWide` reads at the control's own width and `getControl` converts that to a byte. Clamping suits a surface and breaks arithmetic, so an input mapping reads the wide one.
 class Scheduler {
 public:
     /// The persistence hook's type, kept as a function pointer so Scheduler needs no include.
@@ -129,7 +124,7 @@ private:
     static inline Scheduler* instance_ = nullptr;
     std::array<MoonModule*, 32> modules_{};
     uint8_t moduleCount_ = 0;
-    // Atomic because a lost request means a script edit silently never applies.
+    /// A rebuild request, atomic because a lost request means a script edit silently never applies.
     std::atomic<bool> prepareRequested_{false};
     LoadAllFn loadAllHook_ = nullptr;
     NoteDirtyFn noteDirtyHook_ = nullptr;
@@ -142,8 +137,7 @@ private:
     uint32_t lastTimingUpdate_ = 0;  ///< when that window opened
 };
 
-// The Drivers master-state reads, whose absent-control defaults live here once per consumer.
-/// Whether the lights are on, defaulting to on where the control is absent.
+/// Whether the lights are on, defaulting to on where the control is absent; a Drivers master-state read, whose default lives here once per consumer.
 inline bool driversOn(Scheduler* s) {
     MoonModule* d = s ? s->firstByName("Drivers") : nullptr;
     return d ? d->readBool("on", true) : true;   // absent → on

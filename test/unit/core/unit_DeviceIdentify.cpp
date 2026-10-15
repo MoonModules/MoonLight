@@ -3,7 +3,7 @@
 ///
 /// Pins the plugin classification: each plugin claims the presence port and types a datagram it receives.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## How a packet reaches a verdict
 ///

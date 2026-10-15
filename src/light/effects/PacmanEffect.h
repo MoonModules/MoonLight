@@ -1,5 +1,4 @@
 #pragma once
-// Author: MoonLight original
 
 #include "core/util/math16.h"      // BeatPhase: the chomp / shuffle clock
 #include "core/util/math8.h"       // Random8: fixed-seed spawn variation, golden-reproducible
@@ -14,7 +13,7 @@ namespace pacart {
 enum : uint8_t { kClear = 0, kBody = 1, kEye = 2, kPupil = 3, kDark = 4 };
 inline constexpr uint8_t kPaletteCount = 5;
 
-// Pacman, 11x11 in 4 chomp frames, facing right since flipX serves leftward travel.
+/// Pacman, 11x11 in 4 chomp frames, facing right since flipX serves leftward travel.
 inline constexpr uint8_t W = 11, H = 11, F = 4;
 inline constexpr uint8_t kPac[] = {
     // frame 0: mouth wide
@@ -68,7 +67,7 @@ inline constexpr uint8_t kPac[] = {
 };
 static_assert(sizeof(kPac) == static_cast<size_t>(W) * H * F, "pacman: 4 frames of 11x11");
 
-// A ghost, 11x11 in 2 skirt frames, which is the arcade original's whole walk animation.
+/// A ghost, 11x11 in 2 skirt frames, which is the arcade original's whole walk animation.
 inline constexpr uint8_t GW = 11, GH = 11, GF = 2;
 inline constexpr uint8_t kGhost[] = {
     // frame 0: skirt down-up-down
@@ -100,19 +99,16 @@ static_assert(sizeof(kGhost) == static_cast<size_t>(GW) * GH * GF, "ghost: 2 fra
 
 }  // namespace pacart
 
-/// Effect: Pacman and the ghosts cross the wall, chomping.
+/// The arcade cast crossing a light wall: Pacman chomps along while the ghosts drift past, wrapping around the edges forever.
 /// @card PacmanEffect.gif
 ///
-/// The characters move independently and do not yet notice each other.
-/// Inspired by Namco's Pac-Man, with the pixel art drawn fresh at a size of its own.
+/// The characters travel independently, each on its own path. Pacman keeps his yellow, and the ghosts take their colors from the active palette.
 ///
-/// @moreinfo
+/// @attribution Pac-Man
 ///
-/// ## The construction, and what comes next
+/// @technical
 ///
-/// Movement is a `particles::Pool` entry per character, and appearance is `draw::sprite`.
-/// The chomp and the ghosts' shuffle share one BeatPhase, offset so the cast never pulses together.
-/// The maze, the pellets and the chase are the next iteration, built on these shapes and lanes.
+/// Movement is a `particles::Pool` entry per character, and appearance is `draw::sprite`. The chomp and the ghosts' shuffle share one BeatPhase, offset so the cast never pulses together.
 class PacmanEffect : public EffectBase {
 public:
     /// The pool size: both count controls at their maxima.
@@ -123,15 +119,15 @@ public:
     /// A wall needs a width and a height, so it is a 2D effect.
     Dim dimensions() const override { return Dim::D2; }
 
-    /// How many Pacmen cross the wall.
+    /// How many Pacmen cross the wall, up to four.
     uint8_t pacmen = 1;
-    /// How many ghosts cross it, the arcade cast being four.
+    /// How many ghosts cross the wall, the arcade cast being four.
     uint8_t ghosts = 4;
-    /// How fast the cast travels, in body lengths a second.
+    /// Travel rate in sprite widths, the same on any grid.
     uint8_t speed  = 96;
-    /// Pixels per art pixel, where 0 scales with the grid.
+    /// Sprite magnification, scaled with the grid at zero.
     uint8_t spriteSize = 0;
-    /// Move to the music, each sprite on its own band, holding still in silence.
+    /// Each sprite follows its own band, so the scene breathes.
     bool audioReactive = false;
 
     /// Publish both counts, the speed, the sprite scale and the audio switch.

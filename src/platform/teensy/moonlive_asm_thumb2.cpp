@@ -5,7 +5,6 @@
 
 #if defined(__ARM_ARCH_7EM__)   // the Thumb-2 assembler is only built for ARMv7E-M targets (Teensy 4.1)
 
-/// @defgroup moonlive_asm_thumb2_impl MoonLive Thumb-2 encodings
 /// Named instructions for the Cortex-M7, each checked against arm-none-eabi-as by check_encodings.py.
 ///
 /// An encoder returns a 32-bit instruction the way the ARM manual prints it, first halfword in the top half, and branch offsets are back-patched against bound labels.

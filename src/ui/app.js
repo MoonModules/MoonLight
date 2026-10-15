@@ -5,8 +5,11 @@
 // default; entry-point is the WS init at the bottom: no ordering surprises.
 import { installPicker } from "/install-picker.js";
 import { preview } from "/preview3d.js";
+import { encodeGif } from "/gif.js";
 import { isNewer, parse } from "/semver.js";
 import { applyMigrations, collectFiles, restoreDirs, diffRestore } from "/migrate.js";
+import { moduleHelp, controlHelp, ROLE_EMOJI, DIM_EMOJI, SCRIPTED_EMOJI, COMPILED_EMOJI, EMOJI_LABEL,
+         emojiTagsFor, emojiChipRow, chipsMatch } from "/help.js";
 
 // Sections (top to bottom):
 //   1. State + storage
@@ -227,6 +230,7 @@ function connectWs() {
             // without a `modules` array, or it would clobber `state` and blank the module view.
             if (!Array.isArray(data.modules)) return;
             state = data;
+            if (helpPending) loadHelp();
             relayMoonCloudOutbox();
             // Defer the DOM rebuild while the user is mid-interaction: rebuilding under an open dropdown makes it unselectable. The state is stored above, so updateValues() still shows fresh values, and renderIfDeferred draws the structure once the edit ends.
             if (userIsEditing()) {
@@ -334,6 +338,15 @@ window.addEventListener("pagehide", () => {
 
 async function init() {
     applyTheme(theme);
+    // Before anything renders: help the user turned on shapes the first cards, and nothing is fetched until they agreed.
+    const helpSource = new URLSearchParams(location.search).get("help");
+    try {
+        if (helpSource === "local") localStorage.setItem(LS_HELP_SOURCE, "local");
+        else if (helpSource === "published") localStorage.removeItem(LS_HELP_SOURCE);
+    } catch { /* storage blocked: the published help */ }
+    const helpOn = lsRead(LS_HELP_SHOWN, "0") === "1" && lsRead(LS_HELP_CONSENT, "") === "1";
+    if (helpOn) loadHelp();
+    applyHelpShown(helpOn);
     setupStatusBarButtons();
     setupUpdateBadge();
     setupCardsResize();
@@ -1033,18 +1046,7 @@ function buildNavFooter() {
             // doesn't include the name field.
             const devName = (systemJson && systemJson.deviceName)
                 || location.hostname || "device";
-            const fname = `MoonLight-diag-${devName}-${Date.now()}.json`;
-            const a = document.createElement("a");
-            const blobUrl = URL.createObjectURL(blob);
-            a.href = blobUrl;
-            a.download = fname;
-            a.click();
-            // Defer the revoke so the browser has time to start the download.
-            // Revoking immediately after click() is technically race-safe on
-            // recent Chrome / Firefox (the click navigation is synchronous)
-            // but Safari has been observed dropping downloads under a fast
-            // revoke. A few seconds is the canonical workaround.
-            setTimeout(() => URL.revokeObjectURL(blobUrl), 4000);
+            saveBlob(blob, `MoonLight-diag-${devName}-${Date.now()}.json`);
         } catch (e) {
             alert(`Diagnostic capture failed: ${e && e.message ? e.message : e}`);
         }
@@ -1489,10 +1491,15 @@ function carryingInterface() {
     return (net?.controls || []).find(c => c.name === "mode")?.value || "";
 }
 
+// The device's name as the System card sets it, or undefined before the state names it.
+function deviceName() {
+    return (allModules().find(m => m.type === "SystemModule")?.controls || []).find(c => c.name === "deviceName")?.value;
+}
+
 // Ask before an edit takes the device away from the open page, naming where it will be.
 function confirmAddressMove(to) {
     if (to === undefined) return Promise.resolve(true);
-    const name = (allModules().find(m => m.type === "SystemModule")?.controls || []).find(c => c.name === "deviceName")?.value;
+    const name = deviceName();
     const url = to ? `http://${to}/` : (name ? `http://${name}.local/` : "");
     const where = document.createElement("span");
     where.append(to ? "The device will be at " : "The device takes a new address from the router; reach it at ");
@@ -2128,32 +2135,11 @@ function createCard(mod, depth) {
         title.appendChild(assignBtn);
     }
 
-    // Help link → the module's spec page on the rendered docs site, far right of
-    // the row. docPath comes from /api/types (relative to docs/moonmodules/, e.g.
-    // "core/services.md#audio" or "light/effects.md#fire"); omitted if none.
-    // The site is Material for MkDocs at moonmodules.org/MoonLight/ (flat URLs, so
-    // foo.md → foo.html; the MkDocs heading slugs match these #anchors), reached
-    // via the same /MoonLight/ subpath the installer uses. Convert only the `.md`
-    // extension that sits right before the optional `#anchor` (suffix-anchored),
-    // so a docPath that ever contained ".md" mid-string wouldn't be mangled.
-    const docPath = docPathForType(mod.type);
-    if (docPath) {
-        const help = document.createElement("a");
-        help.className = "card-help";
-        help.textContent = "?";
-        help.title = "Open module documentation";
-        help.target = "_blank";
-        help.rel = "noopener";
-        const htmlPath = docPath.replace(/\.md(#.*)?$/, ".html$1");
-        help.href = "https://moonmodules.org/MoonLight/moonmodules/" + htmlPath;
-        title.appendChild(help);
-    }
-
     // `{ }` → this card as a state document: the one JSON a preset holds, PATCH /api/state takes and the gallery shares, so it copies into any of them.
-    // On EVERY card, unlike ✎/× (user-editable children only) and ? (types with a doc page): any card's state is worth sharing or keeping.
+    // On EVERY card, unlike ✎/× (user-editable children only): any card's state is worth sharing or keeping.
     const api = document.createElement("a");
     api.className = "card-api";
-    // A glyph, not a word: braces read as JSON at a glance and match the ?/× glyph style.
+    // A glyph, not a word: braces read as JSON at a glance and match the ✎/× glyph style.
     api.textContent = "{ }";
     api.title = "This card as JSON: copy it, save it as a preset, or open its diagnostics";
     // Relative, so it follows whatever host the UI is served from; the link itself opens the document for a middle-click.
@@ -2162,6 +2148,9 @@ function createCard(mod, depth) {
     title.appendChild(api);
 
     card.appendChild(title);
+    const help = helpFor(mod.type);
+    // The help's Docs link leads to the module's card on the docs site; docPath comes from /api/types.
+    if (help && help.line) card.appendChild(moduleHelp(help, docPathForType(mod.type)));
 
     // -- Controls --
     // Child-hosting modules deeper in the tree (Effects, Layer, Drivers, Layouts)
@@ -2816,6 +2805,81 @@ function docPathForType(moduleType) {
     return (t && t.docPath) ? t.docPath : "";
 }
 
+// ---- Help: each module's own documentation, which the browser fetches, so the flash holds none ----
+//
+// help.json is generated from the module headers (moondeck/docs/gen_help.py). Each release carries its own copy, mirrored on Pages beside its binaries, so a device reads the help of the firmware it runs; the docs site's copy serves a release Pages does not mirror. The Pages host sends `access-control-allow-origin: *`, so a page served by a device may read either. A device's page is plain HTTP, which has no Cache API, so the last copy lives in localStorage and shows at once, offline included; the fetch then revalidates it with the ETag Pages sends.
+const HELP_URL = "https://moonmodules.org/MoonLight/help/help.json";
+const HELP_URL_RELEASE = (tag) => `https://moonmodules.org/MoonLight/install/releases/${tag}/MoonLight-help.json`;
+// TEMPORARY, until the docs deploy publishes help.json after this branch merges: the same file read from the branch on GitHub, tried when the published one is missing. It goes with the merge.
+const HELP_URL_BRANCH = "https://raw.githubusercontent.com/MoonModules/MoonLight/next-iteration/docs/help/help.json";
+const LS_HELP = "mm_help";            // the last help.json fetched with its address, as {url, text}
+// While developing help: `?help=local` reads the file gen_help last wrote, which preview_installer serves on this machine, and `?help=published` returns to the docs site. A fixed address, so a shared link cannot point the help anywhere else.
+const HELP_URL_LOCAL = "http://localhost:8421/help/help.json";
+const LS_HELP_SOURCE = "mm_helpSource";   // "local" while developing help, else absent
+const LS_HELP_SHOWN = "mm_helpShown"; // "1" shows the help, from the ⓘ in the status bar; off by default
+const LS_HELP_CONSENT = "mm_helpConsent"; // "1" once the user agreed to download help; nothing is fetched before
+let helpModules = {};
+let helpPending = false;   // help was asked for before the first state arrived, so the fetch waits for the firmware's version
+
+// The cached copy at once, offline included, then a fetch that revalidates it; called only after the user agreed, since the request shows the docs site's host this browser's address.
+function loadHelp() {
+    const local = lsRead(LS_HELP_SOURCE, "") === "local";
+    const fw = state ? deviceFirmwareInfo() : null;
+    const release = fw ? HELP_URL_RELEASE(releaseTagOf(fw.version)) : null;
+    // A cached release copy shows only for the release this device runs, so an update or an offline device never shows another firmware's controls; the site's and the branch's copies serve any.
+    let cached = null;
+    try { cached = local ? null : JSON.parse(lsRead(LS_HELP, "null")); } catch { cached = null; }
+    if (cached && cached.url !== release && cached.url !== HELP_URL && cached.url !== HELP_URL_BRANCH) cached = null;
+    try { helpModules = cached ? JSON.parse(cached.text).modules || {} : {}; } catch { helpModules = {}; }
+    if (Object.keys(helpModules).length && state && !userIsEditing()) renderCards();
+    helpPending = !local && !state;
+    if (helpPending) return;
+    const get = (url) => fetch(url, {cache: "no-cache"}).then(r => r.ok ? r.text().then(text => ({url, text})) : Promise.reject(r.status));
+    // A state that names no version reads the site's copy.
+    const published = () => (release ? get(release) : Promise.reject()).catch(() => get(HELP_URL));
+    (local ? get(HELP_URL_LOCAL).catch(() => get(HELP_URL)) : published()).catch(() => get(HELP_URL_BRANCH)).then(got => {
+        if (cached && got.url === cached.url && got.text === cached.text) return;
+        helpModules = JSON.parse(got.text).modules || {};
+        if (!local) try { localStorage.setItem(LS_HELP, JSON.stringify(got)); } catch { /* full storage: the help still shows this session */ }
+        if (state && !userIsEditing()) renderCards();
+    }).catch(() => {});   // offline, as on the device's own access point: the cache, or no help
+}
+
+// The ⓘ in the status bar: the first time it turns help on it asks, since help comes from the docs site rather than the device, and only a yes downloads it.
+// A help link opens in a popup window, so the app stays where it was; a phone shows the popup as a tab, and a blocked popup falls back to the link's own new tab. The window opens blank, has its opener cut, then goes to the page, so the page cannot navigate the app (reverse tabnabbing).
+function openHelpLink(ev) {
+    const a = ev.target.closest?.(".card-helpbox a[href], .control-helper a[href]");
+    if (!a || ev.button !== 0 || ev.metaKey || ev.ctrlKey || ev.shiftKey || ev.altKey) return;
+    const w = window.open("", "mm-help", "width=960,height=720");
+    if (!w) return;
+    ev.preventDefault();
+    try { w.opener = null; } catch { /* a reused window on another site, cut when it was opened */ }
+    w.location.href = a.href;
+    w.focus();
+}
+
+function toggleHelp() {
+    const on = document.body.classList.contains("help-hidden");
+    if (on && lsRead(LS_HELP_CONSENT, "") !== "1") {
+        if (!confirm("Help is downloaded from the MoonLight docs site, hosted by GitHub, which sees this browser's address. Download the help?")) return;
+        try { localStorage.setItem(LS_HELP_CONSENT, "1"); } catch { /* not remembered: asked again next time */ }
+    }
+    try { localStorage.setItem(LS_HELP_SHOWN, on ? "1" : "0"); } catch { /* not remembered */ }
+    applyHelpShown(on);
+    if (on && !Object.keys(helpModules).length) loadHelp();
+}
+
+// Show or hide every help line at once: one class on <body>, so a field being edited is untouched. The button keeps its name, "Help", and says on or off through aria-pressed, as a toggle button does.
+function applyHelpShown(shown) {
+    document.body.classList.toggle("help-hidden", !shown);
+    const btn = document.getElementById("help-toggle");
+    if (btn) { btn.setAttribute("aria-pressed", String(shown)); btn.title = shown ? "Hide help" : "Show help"; }
+}
+
+function helpFor(moduleType) {
+    return helpModules[moduleType] || null;
+}
+
 // Curated emoji string for a live module: its role emoji plus the type's
 // `tags` from /api/types, deduplicated, in role-first order. "" if the type
 // isn't loaded yet. Used on the card title and in the type picker.
@@ -3438,6 +3502,8 @@ function createControl(moduleName, moduleType, ctrl, writeTo = (name, value) => 
 
     // The key the edit cooldown stamps, so a list rebuild puts back a value still being typed; a list's own row fields keep theirs.
     for (const el of row.querySelectorAll("input, select, textarea")) if (!el.dataset.dragkey) el.dataset.dragkey = key;
+    const help = helpFor(moduleType);
+    controlHelp(row, help && help.controls ? help.controls[ctrl.name] : null);
     return row;
 }
 
@@ -5289,25 +5355,6 @@ function paletteGradientCss(colors) {
     return stops.length ? `linear-gradient(to right, ${stops.join(",")})` : "none";
 }
 
-// Role → emoji, derived here rather than duplicated in every module's tags(): one home in the UI
-// saves repeating the same character in ~90 module headers and a few bytes per type in /api/types.
-// The dimensional chip comes from the type's `dim` the same way (DIM_EMOJI below), and both are
-// merged with the module's own tags() in emojiTagsFor().
-//
-// What each emoji MEANS is documented once, for the people who read the chips:
-// docs/tutorials/how-moonlight-works.md, "The emoji on every card". Re-listing the vocabulary here
-// is how this comment came to name four emoji no module carries any more.
-const ROLE_EMOJI = {
-    effect:     "🔥",
-    driver:     "☸️",
-    modifier:   "💎",
-    layout:     "🚥",
-    layer:      "🥞",
-    effects:    "🥞",   // the container a preset captures; same pancake as the Layers it holds
-    service:    "🛰️",
-    generic:    "⚙️",
-};
-
 // Role → hue, the color half of the same vocabulary ROLE_EMOJI carries. Four capturable roles get a
 // distinct hue so a preset pad says what it covers before its name is read. Hues (not full colors) so
 // one value drives the face, the border and the glow at different mixes, and so several roles can be
@@ -5324,107 +5371,6 @@ const ROLE_HUE = {
 function roleHue(roles) {
     const hues = (roles || []).map(r => ROLE_HUE[r]).filter(h => h != null);
     return hues.length === 1 ? String(hues[0]) : null;
-}
-
-// Dim int → emoji. Effects, layouts and modifiers all carry `dim` (1/2/3); everything else has 0
-// and contribute nothing here. Same MoonLight key. Keeps emojiTagsFor() the
-// single place that assembles the chip set per type.
-const DIM_EMOJI = {
-    1: "📏",
-    2: "🟦",
-    3: "🧊",
-};
-
-// Split a string into grapheme clusters so multi-codepoint emoji (e.g. 🌫️,
-// which is base char + variation selector) stay whole. Falls back to a plain
-// code-point split if Intl.Segmenter is unavailable.
-const _graphemeSeg = (typeof Intl !== "undefined" && Intl.Segmenter)
-    ? new Intl.Segmenter(undefined, {granularity: "grapheme"})
-    : null;
-function graphemes(s) {
-    if (!s) return [];
-    if (_graphemeSeg) return [..._graphemeSeg.segment(s)].map(seg => seg.segment);
-    return [...s];
-}
-
-// All emoji for a type: role first, then dimensional (effects only), then each
-// curated tag emoji from tags(). Deduplicated, order preserved.
-// A script is marked; a compiled module is not. Two chips in the picker filter on this, and the
-// compiled one matches by ABSENCE, so adding it costs no tag on ninety existing modules.
-const SCRIPTED_EMOJI = "\u{1F4DD}";      // 📝 the module runs a MoonLive script
-// Not the gear: that is already the `generic` role's emoji, and reusing it drew the chip twice.
-const COMPILED_EMOJI = "\u{1F4E6}";      // 📦 chip only: never a tag any module carries
-
-// The POWER-FUNCTION tags: which kernels an effect is built on, rather than where it came from or
-// what it listens to. They are ordered LAST and kept together so they read as one group on a card
-// and sit adjacent in the picker's chip row, which is what makes "show me the fluid effects" a
-// glanceable filter rather than a hunt through a mixed string. A separator character is not used:
-// every chip is one grapheme, so a separator would become a chip of its own.
-// What an effect LISTENS to. Their own group in the picker: "show me the effects that react to
-// music" is the question a chip row is for, and the two notes answer it together.
-const AUDIO_EMOJI = ["\u{1F3B5}", "\u{1F3B6}"];   // volume, frequency
-
-const KERNEL_EMOJI = ["🖌️", "✨", "🌊", "💨", "🌫️", "🎡"];   // same order the legend lists them in
-
-// What each chip MEANS, as a tooltip. The chips are a filter, so a reader who does not yet know the
-// vocabulary has to guess what narrows the list; the title makes each one self-describing without
-// spending any screen space. Wording follows the legend that documents them for people reading a
-// card: docs/tutorials/how-moonlight-works.md, "The emoji on every card".
-const EMOJI_LABEL = {
-    // what the module IS
-    "\u{1F525}": "effect",
-    "\u2638\uFE0F": "driver",
-    "\u{1F48E}": "modifier",
-    "\u{1F6A5}": "layout",
-    "\u{1F95E}": "layer",
-    "\u{1F6F0}\uFE0F": "service",
-    "\u2699\uFE0F": "generic",
-    [SCRIPTED_EMOJI]: "runs a MoonLive script",
-    [COMPILED_EMOJI]: "compiled into the firmware",
-    // the shape it works in
-    "\u{1F4CF}": "1D: a line",
-    "\u{1F7E6}": "2D: a picture",
-    "\u{1F9CA}": "3D: a volume",
-    // where it came from
-    "\u{1F4AB}": "MoonLight",
-    "\u{1F319}": "MoonModules",
-    "\u{1F419}": "WLED",
-    "\u26A1\uFE0F": "FastLED",
-    "\u{1F985}": "a named contributor",
-    // what it listens to and what it does
-    "\u{1F3B5}": "reacts to volume: how loud the room is",
-    "\u{1F3B6}": "reacts to frequency: which notes are playing",
-    "\u{1F4E1}": "takes its picture from the network",
-    "\u{1F5BC}\uFE0F": "samples the Picture service's picture",
-    "\u{1F39E}\uFE0F": "plays a recorded show from a file",
-    "\u{1F3AF}": "aims moving heads",
-    "\u{1F47E}": "pixel art: games and sprites",
-    "\u{1F9EC}": "a simulation: cells evolving off their own last frame",
-    "\u{1F4F9}": "motion-tracking aware",
-    // the power functions, shown together at the end of a row
-    "\u{1F58C}\uFE0F": "power function: a shader, every pixel computed from its position",
-    "\u2728": "power function: particles, born, moved by forces, and dying",
-    "\u{1F30A}": "power function: a fluid working out its own motion",
-    "\u{1F4A8}": "power function: transport, light carried and fading rather than redrawn",
-    "\u{1F32B}\uFE0F": "power function: a noise field, the cloud and smoke family",
-    "\u{1F3A1}": "power function: polar, composed around a center",
-};
-
-function emojiTagsFor(t) {
-    const out = [];
-    const kernels = [];
-    const seen = new Set();
-    const push = (ch) => {
-        if (!ch || seen.has(ch)) return;
-        seen.add(ch);
-        (KERNEL_EMOJI.includes(ch) ? kernels : out).push(ch);
-    };
-    push(ROLE_EMOJI[t.role]);
-    push(DIM_EMOJI[t.dim]);
-    for (const ch of graphemes(t.tags || "")) push(ch);
-    // Kernel chips in a fixed order, so two effects on the same kernels show the same run.
-    kernels.sort((a, b) => KERNEL_EMOJI.indexOf(a) - KERNEL_EMOJI.indexOf(b));
-    return out.concat(kernels);
 }
 
 // The type picker serves two modes:
@@ -5659,9 +5605,7 @@ function openPicker(anchorEl, opts) {
 
     // Emoji chip filter row: every distinct emoji across the role-filtered types.
     // Toggling chips narrows the list (AND: a type must carry all active chips).
-    const activeChips = new Set();
-    const chipRow = document.createElement("div");
-    chipRow.className = "type-picker-chips";
+    let activeChips = new Set();
     const chipSeen = new Set();
     const present = [];
     for (const t of filtered) {
@@ -5675,49 +5619,7 @@ function openPicker(anchorEl, opts) {
     if (chipSeen.has(SCRIPTED_EMOJI) && filtered.some(t => !emojiTagsFor(t).includes(SCRIPTED_EMOJI))) {
         present.push(COMPILED_EMOJI);
     }
-    // Grouped rather than in first-seen order, so the row reads as the legend does: the scripted
-    // marker, then what a module IS (role, then dimension), then where it came from, then what it
-    // can do. A chip whose category is unknown falls in the last group rather than vanishing, so a
-    // new emoji is visible before anyone remembers to classify it.
-    const CHIP_GROUPS = [
-        [SCRIPTED_EMOJI, COMPILED_EMOJI],                // what a row IS: scripted or compiled
-        Object.values(ROLE_EMOJI),                       // type
-        Object.values(DIM_EMOJI),                        // dimension
-        ["\u{1F4AB}", "\u{1F319}", "\u{1F419}", "\u26A1\uFE0F"],   // origin
-        AUDIO_EMOJI,                                     // what it listens to
-        KERNEL_EMOJI,                                    // which power functions it is built on
-    ];
-    const groups = CHIP_GROUPS.map(g => present.filter(e => g.includes(e)));
-    const classified = new Set(CHIP_GROUPS.flat());
-    groups.push(present.filter(e => !classified.has(e)));   // capabilities and anything new
-
-    let first = true;
-    for (const group of groups) {
-        if (!group.length) continue;
-        // A separator between groups, never leading or trailing: it marks a boundary, and a
-        // boundary with nothing on one side is just a mark.
-        if (!first) {
-            const sep = document.createElement("span");
-            sep.className = "type-picker-chip-sep";
-            sep.setAttribute("aria-hidden", "true");
-            chipRow.appendChild(sep);
-        }
-        first = false;
-        for (const emoji of group) {
-            const chip = document.createElement("button");
-            chip.className = "type-picker-chip";
-            chip.textContent = emoji;
-            const label = EMOJI_LABEL[emoji];
-            if (label) { chip.title = label; chip.setAttribute("aria-label", label); }
-            chip.addEventListener("click", () => {
-                if (activeChips.has(emoji)) { activeChips.delete(emoji); chip.classList.remove("active"); }
-                else { activeChips.add(emoji); chip.classList.add("active"); }
-                refresh();
-            });
-            chipRow.appendChild(chip);
-        }
-    }
-    if (present.length > 0) picker.appendChild(chipRow);
+    if (present.length > 0) picker.appendChild(emojiChipRow(present, (a) => { activeChips = a; refresh(); }));
 
     const list = document.createElement("div");
     list.className = "type-picker-list";
@@ -5750,16 +5652,7 @@ function openPicker(anchorEl, opts) {
                 const disp = (t.displayName || t.name).toLowerCase();
                 if (!raw.includes(q) && !disp.includes(q)) return false;
             }
-            if (activeChips.size > 0) {
-                const has = new Set(emojiTagsFor(t));
-                for (const chip of activeChips) {
-                    // The compiled chip matches what carries NO scripted marker, since a compiled
-                    // module has no tag of its own: the two kind chips are each other's opposite.
-                    const ok = chip === COMPILED_EMOJI ? !has.has(SCRIPTED_EMOJI) : has.has(chip);
-                    if (!ok) return false;
-                }
-            }
-            return true;
+            return chipsMatch(emojiTagsFor(t), activeChips);
         });
     }
 
@@ -6005,6 +5898,63 @@ function attachDragHandlers(card, mod) {
     });
 }
 
+// The browser saves a file the page made: the anchor is attached for Firefox, and the URL is revoked late, since Safari drops a download whose URL goes at once.
+function saveBlob(blob, name) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+}
+
+// Three seconds of the preview as a GIF the browser saves, to show a preset in the gallery: the browser records what it already draws, and the device does nothing new.
+async function recordPreviewGif(btn) {
+    const WIDTH = 240, FPS = 10, SECONDS = 3;
+    const frames = [];
+    const shot = document.createElement("canvas");
+    let ctx = null, last = 0, giveUp = 0;
+    btn.disabled = true;
+    btn.classList.add("recording");
+    try {
+        try {
+            await new Promise((done, fail) => {
+                // A hidden or idle preview draws nothing, so the recording ends with what it has.
+                giveUp = setTimeout(done, (SECONDS + 5) * 1000);
+                // A capture that throws ends the recording rather than the preview's own render.
+                preview.onDrawn(canvas => {
+                    try {
+                        const now = performance.now();
+                        if (frames.length >= FPS * SECONDS || now - last < 1000 / FPS || !canvas.width || !canvas.height) return;
+                        last = now;
+                        if (!ctx) {
+                            shot.width = WIDTH;
+                            shot.height = Math.max(1, Math.round(WIDTH * canvas.height / canvas.width));
+                            ctx = shot.getContext("2d", { willReadFrequently: true });
+                        }
+                        ctx.drawImage(canvas, 0, 0, shot.width, shot.height);
+                        frames.push(ctx.getImageData(0, 0, shot.width, shot.height).data);
+                        if (frames.length >= FPS * SECONDS) done();
+                    } catch (e) { fail(e); }
+                });
+            });
+        } finally {
+            clearTimeout(giveUp);
+            preview.onDrawn(null);
+        }
+        if (frames.length < 2) { alert("Nothing to record: open the preview while the lights run."); return; }
+        const name = deviceName() || "MoonLight";
+        saveBlob(new Blob([encodeGif(frames, shot.width, shot.height, Math.round(100 / FPS))], { type: "image/gif" }), `${name}-preview.gif`);
+    } catch (e) {
+        alert(`The recording failed: ${e.message || e}`);
+    } finally {
+        btn.disabled = false;
+        btn.classList.remove("recording");
+    }
+}
+
 // ---------------------------------------------------------------------------
 // 8. Status bar wiring
 // ---------------------------------------------------------------------------
@@ -6013,6 +5963,8 @@ function setupStatusBarButtons() {
     document.getElementById("preview-reset")?.addEventListener("click", () => {
         preview.resetCamera();
     });
+    const recordBtn = document.getElementById("preview-record");
+    recordBtn?.addEventListener("click", () => recordPreviewGif(recordBtn));
 
     // Reboot: press once to arm, again to confirm: see armPressTwice. The glyph
     // stays (no armedText); only the title changes.
@@ -6020,6 +5972,8 @@ function setupStatusBarButtons() {
     if (rebootBtn) {
         armPressTwice(rebootBtn, rebootDevice, {armedTitle: "Click again to reboot"});
     }
+    document.getElementById("help-toggle")?.addEventListener("click", toggleHelp);
+    document.addEventListener("click", openHelpLink);
     document.getElementById("theme-toggle")?.addEventListener("click", () => {
         theme = (theme === "dark") ? "light" : "dark";
         localStorage.setItem(LS_THEME, theme);
@@ -6836,12 +6790,12 @@ function galleryIndex() {
 let galleryOpen = false;   // kept across re-renders, so a pad click does not fold it shut
 let galleryStatus = "";    // the last outcome, kept across the re-render an install causes
 
-/// A preset that applies without asking: a look (Effects only) or a palette (Drivers setting its palette and nothing else), since pins and geometry belong to one rig.
+/// A preset that applies without asking: a look (Effects), a palette (Drivers setting its palette and nothing else), or a look with its palette, since pins and geometry belong to one rig.
 function galleryAppliesUnasked(doc) {
     if (!doc || typeof doc !== "object" || Array.isArray(doc)) return false;
     const keys = Object.keys(doc).filter(k => !k.startsWith("$"));   // a `$` key is the file's own, such as its pad
-    if (keys.length === 1 && keys[0] === "Effects") return true;
-    if (keys.length !== 1 || keys[0] !== "Drivers") return false;
+    if (!keys.length || !keys.every(k => k === "Effects" || k === "Drivers")) return false;
+    if (!keys.includes("Drivers")) return true;
     const set = Object.keys(doc.Drivers || {});
     return set.length > 0 && set.every(k => k === "palette" || k === "paletteScript");
 }
@@ -7761,17 +7715,8 @@ async function fmBackupConfig() {
         capturedAt: new Date().toISOString(), origin: location.origin,
         device, firmware, build, files,
     };
-    // The diagnostics-download tail: Blob, objectURL, a[download], revoke late (Safari races
-    // an immediate revoke against the save dialog).
     const blob = new Blob([JSON.stringify(bundle, null, 1)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `MoonLight-config-${device}-${new Date().toISOString().slice(0, 10)}.json`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 4000);
+    saveBlob(blob, `MoonLight-config-${device}-${new Date().toISOString().slice(0, 10)}.json`);
     if (skipped.length) {
         alert("Backed up. Skipped (not text, the bundle carries text only):\n" + skipped.join("\n"));
     }
@@ -8399,7 +8344,7 @@ function buildPaletteControl(row, key, def, moduleName, ctrl) {
     // (browsers ignore a gradient background on <option>, and the macOS popup is OS-drawn),
     // so this is a custom dropdown: a trigger button (selected swatch + name + caret) that
     // toggles a list of styled rows, each a gradient swatch + name. The value still rides as
-    // the option index. Prior art: MoonLight's palette control (same native-select limit).
+    // the option index.
     const opts = ctrl.options || [];
     const selected = Math.max(0, paletteIndex(ctrl.value, opts));
     const wrap = document.createElement("div");

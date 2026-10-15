@@ -1,6 +1,6 @@
 /// Registers every module type the firmware can build, so a preset, a scenario or the type picker can name any of them.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## Why the registry is its own translation unit
 ///
@@ -20,7 +20,7 @@
 ///
 /// Panel receiver cards need a gigabit link, and no capability macro separates the boards that have one. So the firmware catalogue names the variants that get it, and everything else saves the flash.
 ///
-/// HUB75 is a GPIO panel rather than a receiver card, so it gates on LCD_CAM or Parlio silicon like every other LED driver, not on `MM_PANEL_CARDS`, which most S3 builds leave out.
+/// HUB75 is a GPIO panel, not a receiver card, so it gates on LCD_CAM or Parlio silicon like every other LED driver, not on `MM_PANEL_CARDS`.
 ///
 /// ## Why the quiesce-render hook is a function pointer
 ///
@@ -178,7 +178,7 @@
 #include "core/services/Services.h"
 #include "core/services/AudioService.h"
 #include "core/services/PictureService.h"
-#include "core/services/OscModule.h"
+#include "core/services/OscService.h"
 #include "core/system/I2cBusModule.h"
 #include "core/system/TasksModule.h"
 #include "core/system/PinsModule.h"
@@ -355,13 +355,13 @@ void mm::registerModuleTypes() {
     defined(MM_GPIO_DMA_LEDS) || MM_LINKS_ALL_LED_DRIVERS
     mm::ModuleFactory::registerType<mm::ParallelLedDriver>("ParallelLedDriver", "light/drivers.md#parallelled");
 #endif
-    mm::ModuleFactory::registerType<mm::HttpServerModule>("HttpServerModule", "core/system.md");
+    mm::ModuleFactory::registerType<mm::HttpServerModule>("HttpServerModule", "core/system.md#httpserver");
     mm::ModuleFactory::registerType<mm::SystemModule>("SystemModule", "core/system.md#system");
     mm::ModuleFactory::registerType<mm::ControlModule>("ControlModule", "core/system.md#control");
-    mm::ModuleFactory::registerType<mm::Services>("Services", "core/services.md#services");
+    mm::ModuleFactory::registerType<mm::Services>("Services", "core/services.md");
     mm::ModuleFactory::registerType<mm::AudioService>("AudioService", "core/services.md#audio");
     mm::ModuleFactory::registerType<mm::PictureService>("PictureService", "core/services.md#picture");
-    mm::ModuleFactory::registerType<mm::OscModule>("OscModule", "core/services.md#osc");
+    mm::ModuleFactory::registerType<mm::OscService>("OscService", "core/services.md#osc");
     mm::ModuleFactory::registerType<mm::I2cBusModule>("I2cBusModule", "core/system.md#i2c-bus");
     mm::ModuleFactory::registerType<mm::TasksModule>("TasksModule", "core/system.md#tasks");
     mm::ModuleFactory::registerType<mm::PinsModule>("PinsModule", "core/system.md#pins");

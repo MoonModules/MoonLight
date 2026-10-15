@@ -1,10 +1,8 @@
 #pragma once
 
-/// @defgroup math16 The 16-bit fixed-point tier
-/// @{
 /// The numeric vocabulary every effect and script writes against.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## Why a 16-bit tier alongside the 8-bit one
 ///
@@ -402,5 +400,4 @@ inline uint32_t halfLifeKeep(uint32_t dtMs, uint32_t halfLifeMs) MM_NONBLOCKING 
     return (65536u - drop) >> whole;
 }
 
-/// @}
 }  // namespace mm

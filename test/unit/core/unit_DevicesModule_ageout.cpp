@@ -2,7 +2,7 @@
 ///
 /// Pins the age-out: a device whose presence packets stop arriving is dropped once its window passes.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## Two windows, because a restored row has not been heard
 ///

@@ -1,9 +1,8 @@
-/// @defgroup platform_esp32_rmt RMT WS2812 output
 /// The peripheral half of the symbol-based LED driver.
 ///
 /// The driver above applies correction and hands down the wire bytes; this file owns the channel, the bit expansion, transmit and wait, and the receive side the loopback test uses.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## The wire-byte path
 ///

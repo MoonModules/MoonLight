@@ -6,15 +6,10 @@
 
 namespace mm {
 
-// Author: MoonLight original, on the predecessor's Scrolling Text, https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h
-/// Effect rendering a scrolling multi-line string in a bitmap font.
+/// Renders a multi-line string in a bitmap font, static by default or as a wrapping marquee.
 /// @card TextEffect.gif
 ///
-/// The text is static by default, laid out from the top left and clipped at the grid's edge.
-/// `scroll` marches the whole block leftward as a marquee instead, wrapping as it goes.
-/// Each newline drops a row, so several lines render at once.
-///
-/// Prior art: MoonLight's Scrolling Text, whose font set and scroll this carries.
+/// Static text is laid out top-left, each newline dropping one font height, and clipped where it runs off the grid. Turn on `scroll` to march the whole block leftward as a marquee. Text color comes from the active palette.
 class TextEffect : public EffectBase {
 public:
     /// Catalog tags: MoonLight origin.
@@ -22,15 +17,15 @@ public:
     /// Draws on the z=0 plane, which extrude fills through a volume.
     Dim dimensions() const override { return Dim::D2; }
 
-    /// The string to show, where the text area preserves its newlines.
+    /// The string to show; each line renders on its own row.
     char    text_[128] = "MoonLight";
-    /// March the block leftward as a marquee rather than holding it still.
+    /// Off is static, on a horizontal marquee.
     bool    scroll = false;
-    /// Which bitmap font renders it.
+    /// Glyph size: 4x6 compact, 6x8 larger.
     uint8_t font   = 1;
-    /// How fast the marquee runs, when scrolling.
+    /// Marquee speed, used when `scroll` is on.
     uint8_t speed  = 30;
-    /// The palette index the text takes, mid-palette since some palettes start black.
+    /// Palette index for the text color.
     uint8_t hue    = 128;
 
     /// Publish the string, the scroll, the font and the color.

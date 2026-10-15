@@ -9,30 +9,44 @@
 
 namespace mm {
 
-/// Output driver: publishes the rendered frame as an NDI video source. It reaches OBS, Resolume, TouchDesigner or any other receiver, on this machine or another.
-///
-/// NDI rather than Spout or Syphon because one implementation covers every desktop platform, discovers by name, and crosses machines. At LED-wall pixel counts the latency difference sits far below one frame, so coverage decides.
-///
-/// Prior art: the NDI protocol and SDK are NewTek and Vizrt's. This is our own code against the documented C API.
-///
-/// @moreinfo
-///
-/// ## Desktop only
-///
-/// The NDI runtime is a closed binary built only for Intel and ARM. No ESP32 can load one, and there is no source to port. A board reaches the same receivers over the pixel protocols.
-///
-/// ## The runtime is the user's
-///
-/// MoonLight is GPL-3.0 and the runtime is proprietary, so it is never bundled or linked. The platform layer resolves it on demand. A machine without it runs normally and says so in the status, and no NDI type appears in this header.
-///
+/// Publishes the layer as an NDI video source that OBS, Resolume, TouchDesigner or any NDI receiver finds by name on the network.
 /// @card NdiDriver.png
+///
+/// The grid becomes the frame, one light per pixel, output correction applied, so a receiver sees what the wall sees. Where @ref PreviewDriver draws the lights for a person, this hands the same frame to a production tool.
+///
+/// Desktop only, as no NDI runtime exists for the ESP32 chips. A board reaches the same tools over Art-Net, sACN or DDP with @ref NetworkSendDriver, and takes them in with @ref NetworkReceiveEffect.
+///
+/// @attribution NDI, Delphium
+///
+/// @guide
+///
+/// ## The NDI runtime
+///
+/// You install it yourself; without it the driver says so and nothing else changes. The steps: [installing the NDI runtime](https://moonmodules.org/MoonLight/how-to/watching-the-output.html#installing-the-ndi-runtime).
+///
+/// ## Receivers
+///
+/// To see the output you need a receiver. NDI Video Monitor, part of NDI Tools, is the simplest; OBS gains an NDI Source through the DistroAV plugin. MoonLight appears under the name in `sourceName`, or the device's own name when that is blank.
+///
+/// ## Status line
+///
+/// | It says | It means |
+/// |---|---|
+/// | `NDI runtime not installed` | Install it, per the how-to page |
+/// | `could not create the NDI source` | The runtime is there but refused, usually a name clash with another source |
+/// | `sending <w>x<h> at <n> fps` | Live; look for it in your receiver |
+///
+/// @technical
+///
+/// **Why NDI.** One implementation covers every desktop platform, discovers by name and crosses machines, where Spout and Syphon do not. At LED-wall pixel counts the latency difference sits far below one frame.
+///
+/// **The runtime is the user's.** MoonLight is GPL-3.0 and the runtime is a proprietary closed binary, so it is never bundled or linked. The platform layer resolves it on demand, and no NDI type appears in this header.
 class NdiDriver : public DriverBase {
 public:
     /// The catalog tag this driver carries.
     static constexpr const char* kTags = "🖥️";
 
-    // The registration is what puts these buffers in the memory report.
-    /// Bind the two scratch buffers to this module, so their memory is accounted for.
+    /// Bind the two scratch buffers to this module, so their registration puts their memory in the report.
     NdiDriver() : rgb_(*this), corrScratch_(*this) {}
 
     /// The catalog tags shown on this driver's card.
@@ -93,6 +107,7 @@ public:
         if (open_) { platform::ndiSenderClose(); open_ = false; }
     }
 
+    /// Send a corrected frame to the NDI receivers, at most `fps` times a second.
     void tick() MM_NONBLOCKING override {
         if (!open_ || fps == 0 || !sourceBuffer_ || !sourceBuffer_->data()) return;
 
@@ -137,9 +152,9 @@ public:
                                static_cast<uint16_t>(height_), fps);
     }
 
-    /// The name a receiver lists this source under; blank uses the device's own.
+    /// The name a receiver lists; blank uses the device's own.
     char    sourceName[32] = "";
-    /// The frame-rate ceiling, declared in each frame; the link may deliver fewer.
+    /// Frame-rate ceiling, declared in every frame.
     uint8_t fps            = 30;
 
 private:
@@ -148,8 +163,8 @@ private:
     lengthType     height_ = 0;
     bool           open_   = false;
     uint32_t       lastSendMs_ = 0;
-    ScratchBuffer<uint8_t> rgb_;          // tight RGB staging, sized in prepare()
-    ScratchBuffer<uint8_t> corrScratch_;  // one corrected light, when the wiring is wider than RGB
+    ScratchBuffer<uint8_t> rgb_;          ///< tight RGB staging, sized in prepare()
+    ScratchBuffer<uint8_t> corrScratch_;  ///< one corrected light, when the wiring is wider than RGB
     char           statusBuf_[64]{};
 };
 

@@ -4,26 +4,16 @@
 
 namespace mm {
 
-/// Audio-reactive effect: blurred dots positioned by frequency band.
+/// Audio-reactive blurred dots: one frequency band per frame lights a dot, then the whole frame is blurred for soft trails.
 /// @card BlurzEffect.gif
-/// Author: Andrew Tuline (WLED-SR), with enhancements by @softhack007, via the predecessor, https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_WLED.h
 ///
-/// Each frame lights one dot colored by a band's magnitude, then blurs the whole strip.
-/// The dot bleeds into a soft smear that drifts and fades.
-/// A band cursor advances each frame, so the color cycles through the spectrum over sixteen.
+/// The dot's position maps to that band, or to the major-peak frequency with `freqMap`. `geqScanner` sweeps the dot steadily across the strip, and with neither the dot jumps to a random position.
 ///
-/// Prior art: WLED's Blurz, by way of MoonLight.
+/// @attribution Andrew Tuline, softhack007
 ///
-/// @moreinfo
+/// @technical
 ///
-/// ## Where the dot lands is the lever
-///
-/// With `freqMap` its position tracks the dominant frequency, so the spectrum scrolls with pitch.
-/// With `geqScanner` it sweeps steadily across the strip instead.
-/// With neither it jumps to a random position each frame, which is the classic look.
-///
-/// The effect is a strip in spirit, declared 2D so it spans a panel as a flat run of pixels.
-/// The dot and the blur work over the whole pixel count either way.
+/// The effect is a strip in spirit, declared 2D so it spans a panel as a flat run of pixels. The dot and the blur work over the whole pixel count either way.
 class BlurzEffect : public EffectBase {
 public:
     /// Catalog tags: WLED lineage, audio-reactive.
@@ -31,14 +21,13 @@ public:
     /// A flat run of pixels, spanning a panel as readily as a strip.
     Dim dimensions() const override { return Dim::D2; }
 
-    // Defaults match WLED and MoonLight: fast enough that each dot stays distinct rather than washing.
-    /// How fast the trail fades each frame.
+    /// Background decay per frame.
     uint8_t fadeRate   = 48;
-    /// How far the blur spreads each dot into its halo.
+    /// Blur strength applied each frame.
     uint8_t blur       = 127;
-    /// Position the dot by the dominant frequency rather than scanning or jumping.
+    /// Place the dot by the major-peak frequency, not by scanning.
     bool    freqMap    = false;
-    /// Sweep the dot steadily rather than jumping it, when `freqMap` is off.
+    /// Scan the dot across the strip in a GEQ-like sweep.
     bool    geqScanner = false;
 
     /// Publish the trail, the blur and the two positioning modes.

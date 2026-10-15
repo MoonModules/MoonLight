@@ -1,6 +1,6 @@
 /// Drives the MQTT client: the socket lifecycle, the topic tree, Home Assistant discovery and the inbound command routing.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## The topic identity is the MAC
 ///

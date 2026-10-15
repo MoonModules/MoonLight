@@ -6,8 +6,6 @@
 
 namespace mm::rtpmidi {
 
-/// @defgroup RtpMidi RTP-MIDI and AppleMIDI packets
-/// @{
 /// MIDI over a network as RFC 6295 lays it out, with the session packets of Apple's Network MIDI; the session itself is `RtpMidiSession`.
 /// A session packet starts with 0xFFFF and two ASCII letters naming it, and any other datagram is an RTP packet carrying MIDI.
 
@@ -261,5 +259,4 @@ bool forEachMessage(const uint8_t* p, size_t len, uint32_t& ssrc, F&& f) {
     return true;
 }
 
-/// @}
 }  // namespace mm::rtpmidi

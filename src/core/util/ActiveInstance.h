@@ -2,14 +2,12 @@
 
 namespace mm {
 
-/// @defgroup ActiveInstance The one-active-instance election
-/// @{
 /// The one-active-instance election, as a member a module declares and claims.
 ///
 /// Several instances of a type may exist, two microphones say, but exactly one is the one a consumer reaches.
 /// The four moves that used to be hand-copied all live here: claim, vacate if mine, vacate on destruction, and a survivor reclaiming an emptied seat.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## The claim is idempotent, so a reclaim is just another claim
 ///
@@ -27,6 +25,7 @@ namespace mm {
 /// It is therefore safe in any order of construction, claim, vacate and destruction.
 ///
 /// Copying and moving are deleted, the seat being tied to one instance by reference: relocating it would dangle, exactly as for the sibling scratch buffer.
+
 template <class T>
 class ActiveInstance {
 public:
@@ -57,5 +56,4 @@ private:
     static inline T* seat_ = nullptr;   // one seat per T
 };
 
-/// @}
 } // namespace mm

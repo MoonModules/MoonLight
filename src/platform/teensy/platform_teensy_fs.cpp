@@ -1,5 +1,3 @@
-/// @defgroup platform_teensy_fs Files on the Teensy 4.1
-/// @{
 /// The filesystem seam: settings in LittleFS on the top of program flash, and the built-in microSD socket under `/sd`, each path routed to the store that holds it.
 
 #include "platform/platform.h"
@@ -340,5 +338,3 @@ size_t firmwarePartition() { return kFlashBytes - kReservedBytes - kFsBytes; }
 size_t flashChipSize() { return kFlashBytes; }
 
 }  // namespace mm::platform
-
-/// @}

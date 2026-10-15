@@ -10,9 +10,9 @@ namespace mm {
 
 /// Output driver: parallel 8-or-16-lane WS2812B over the ESP-IDF esp_lcd i80 bus, the scale path on all three i80-capable ESP32 families. RMT gives a chip 4-8 channels; this gives 8-16 lanes for the wall time of one. The shared body lives in ParallelLedDriver and the wire format in ParallelSlots.h.
 ///
-/// Prior art: Adafruit's LCD_CAM discovery, hpwit's I2SClockless lineage, FastLED's S3 driver. Architecture studied and never copied, on IDF's esp_lcd rather than the raw registers.
+/// @attribution Adafruit, hpwit, FastLED
 ///
-/// @moreinfo
+/// @technical
 ///
 /// **One API, two peripherals.** ESP-IDF exposes one public i80 API and routes it to whatever the
 /// silicon has: LCD_CAM on the S3, P4 and S31, and the I2S peripheral on the classic, its only route past 8 lanes. They are mutually exclusive per chip, so `lanesAvailable()` reads whichever lane count is non-zero. Named for the bus, since two peripherals serve it.
@@ -25,25 +25,19 @@ class I80Peripheral : public LedPeripheral {
 public:
     // Unset until the user sets them; the S3 N16R8 bench is pins "1,2,4,5,6,7,8,9", rx 12.
 
-    // WR is also a '595's shift clock, so in shift mode this pin is wired to the expander.
-    /// The i80 bus's write strobe; the pixel clock the peripheral mandates. See the driver page.
+    /// The i80 bus's write strobe, the pixel clock the peripheral mandates; in shift mode it is also the '595's shift clock, so it is wired to the expander. See the driver page.
     int8_t clockPin = platform::i2sLanes > 0 ? -1 : 10;
-    // Never unset: esp_lcd toggles DC in software every transfer, and that aborts on a bare pad.
     /// The i80 bus's data/command select; unused by WS2812 but mandated by the peripheral.
     int8_t dcPin    = platform::i2sLanes > 0 ? 33 : 11;
 
     // --- LedPeripheral descriptors ---
 
-    /// The number of i80 lanes this chip provides (0 = no i80 bus on this chip); the orchestrator's
-    // The two are mutually exclusive per chip, so the sum picks whichever backend exists.
-    /// i80 lanes this chip provides, 0 meaning not this chip.
+    /// The number of i80 lanes this chip provides, 0 meaning no i80 bus here; the two backends are mutually exclusive per chip, so the sum picks whichever exists.
     uint8_t lanesAvailable() const MM_NONBLOCKING override { return platform::lcdLanes + platform::i2sLanes; }
-    // The BUS rounds to 8 or 16; the pin count itself is free.
-    /// Whether the bus width must round to a power of two. On i80 it must.
+    /// Whether the bus width must round to a power of two, which on i80 it must; the bus rounds to 8 or 16 while the pin count itself is free.
     bool powerOfTwoBus() const override { return true; }
 
-    // The classic's I2S DMA is internal-RAM only, and a failing alloc busy-waits to a reset.
-    /// The largest frame whole-frame DMA can carry, 0 meaning no bound.
+    /// The largest frame whole-frame DMA can carry, 0 meaning no bound; the classic's I2S DMA is internal-RAM only, and a failing alloc busy-waits to a reset.
     size_t dmaBudgetBytes() const override {
         if constexpr (platform::i2sLanes > 0) {
             const size_t block = platform::maxInternalAllocBlock();
@@ -55,17 +49,14 @@ public:
         }
     }
 
-    // No 1-lane private bus here, so the loopback frame is encoded at the operational width.
-    /// Whether the loopback needs the full operational bus width. On i80 it does.
+    /// Whether the loopback needs the full operational bus width, which on i80 it does, as there is no 1-lane private bus.
     bool loopbackFullWidth() const override { return true; }
-    // LcdCam is shared with MoonI80, which is why those two conflict.
-    /// The peripheral block this backend claims, for the sibling guard.
+    /// The peripheral block this backend claims, for the sibling guard; LcdCam is shared with MoonI80, which is why those two conflict.
     LedHwBlock hwBlock() const override {
         if constexpr (platform::i2sLanes > 0) return LedHwBlock::I2s;
         else return LedHwBlock::LcdCam;
     }
-    // This bus drives I2S instance 1, leaving instance 0 (the only PDM one) for audio.
-    /// Whether the shared peripheral instance this bus needs is free right now.
+    /// Whether the shared peripheral instance this bus needs is free right now; this bus drives I2S instance 1, leaving instance 0, the only PDM one, for audio.
     bool busContentionCleared() const override {
         if constexpr (platform::i2sLanes > 0) return platform::i80Ws2812SharedBusFree();
         else return false;
@@ -79,8 +70,7 @@ public:
                                        : "LCD-IDF: bus init failed, check pins / memory";
     }
 
-    // The "ghost pin": spare lanes park on WR, which is already driven and already wired.
-    /// The GPIO spare lanes park on, overriding the interface default.
+    /// The GPIO spare lanes park on, overriding the interface default: the "ghost pin" WR, which is already driven and already wired.
     uint16_t clockPinForBus() const override {
         return clockPin < 0 ? platform::kBusPinUnset : static_cast<uint16_t>(clockPin);
     }
@@ -88,15 +78,14 @@ public:
     /// Bind the sacrificial WR (clockPin) and DC pins the i80 peripheral mandates.
     void addBusControls(ControlList& controls) override {
         controls.addPin("clockPin", clockPin);
-        controls.addPin("dcPin", dcPin);
+        controls.addPin("dcPin", dcPin);   // never unset: esp_lcd toggles DC in software every transfer, and that aborts on a bare pad
     }
     /// Whether changing `name` needs the bus rebuilt: clockPin and dcPin do.
     bool busControlTriggersBuild(const char* name) const override {
         return std::strcmp(name, "clockPin") == 0 || std::strcmp(name, "dcPin") == 0;
     }
 
-    // The ERROR path, not validateBusPins' warnings: a broken bus is not a warn-and-run.
-    /// Why the bus pins are fatally wrong, or null when they are usable.
+    /// Why the bus pins are fatally wrong, or null when they are usable. It is the error path, not validateBusPins' warnings, as a broken bus is not a warn-and-run.
     const char* validateBusFatal() const override {
         // An unguarded -1 becomes 65535 in busInit's cast and slips IDF's own `>= 0` test.
         if (platform::i2sLanes == 0 && clockPin < 0)
@@ -127,8 +116,7 @@ public:
         return nullptr;
     }
 
-    // A WARNING: parking WR or DC on an unused lane is valid; only a driven lane shows garbage.
-    /// Which data lane collides with WR or DC, as a warning, or null when the set is clear.
+    /// Which data lane collides with WR or DC, as a warning, or null when the set is clear. Parking WR or DC on an unused lane is valid, and only a driven lane shows garbage.
     const char* validateBusPins(const uint16_t* lanes, uint8_t n) const override {
         for (uint8_t i = 0; i < n; i++) {
             // clockPin/dcPin are int8_t (-1 = unset); only a real GPIO can collide.
@@ -140,20 +128,17 @@ public:
         return nullptr;
     }
 
-    // Only LCD_CAM reaches PSRAM, and the x8 expander frame is 154 KB: the classic cannot.
-    /// Whether a 74HCT595 pin expander can ride this bus.
+    /// Whether a 74HCT595 pin expander can ride this bus; only LCD_CAM reaches PSRAM, and the x8 expander frame is 154 KB, which the classic cannot hold.
     bool supportsPinExpander() const override { return platform::hasLcdCam; }
 
-    // In shift mode the orchestrator appends the latch to the pin list, since it is a bus lane.
-    /// Create the i80 bus and its DMA buffers for `frameBytes` on the current lanes.
+    /// Create the i80 bus and its DMA buffers for `frameBytes` on the current lanes. In shift mode the orchestrator appends the latch to the pin list, as it is a bus lane.
     bool busInit(size_t frameBytes, bool wantSecondBuffer) override {
         return platform::i80Ws2812Init(i80_, owner_->busPinList(), owner_->busPinCount(),
                                        clockPinForBus(),
                                        dcPin < 0 ? platform::kBusPinUnset : static_cast<uint16_t>(dcPin),
                                        frameBytes, wantSecondBuffer, owner_->busClockMultiplier());
     }
-    // Buffer 1 is null in single-buffer mode; both are busCapacity bytes.
-    /// DMA buffer `i` (0 or 1) the orchestrator encodes into.
+    /// DMA buffer `i` (0 or 1) the orchestrator encodes into; buffer 1 is null in single-buffer mode, and both are busCapacity bytes.
     uint8_t* busBuffer(uint8_t i) override        { return platform::i80Ws2812Buffer(i80_, i); }
     /// The per-buffer byte capacity (fixed at bus creation; both buffers equal).
     size_t   busCapacity() const override         { return platform::i80Ws2812BufferCapacity(i80_); }
@@ -166,8 +151,7 @@ public:
     /// Tear down the i80 bus and its DMA buffer.
     void     busDeinit() override                 { platform::i80Ws2812Deinit(i80_); }
 
-    // All 8 data GPIOs must be valid, so the loopback rebuilds the full bus and uses lane 0.
-    /// Run the loopback self-test on a full-width private bus.
+    /// Run the loopback self-test on a full-width private bus; all 8 data GPIOs must be valid, so it rebuilds the full bus and uses lane 0.
     platform::RmtLoopbackResult busLoopback(const uint8_t* frame, size_t frameBytes,
                                             size_t dataBytes, uint8_t rowBits) override {
         // Built from the same pin list and pclk, so the test transmits what the render loop does.
@@ -193,7 +177,7 @@ private:
     mutable char refusal_[96] = {};   // one refusal message, formatted by the const validators
 };
 
-// The label names the PERIPHERAL a user can look up, and `-IDF` says esp_lcd drives it.
+/// The peripheral picker label: it names the PERIPHERAL a user can look up, and `-IDF` says esp_lcd drives it.
 inline constexpr const char* kI80Label = (platform::i2sLanes > 0) ? "I2S-IDF" : "LCD-IDF";
 inline const bool kI80PeripheralRegistered =
     ParallelLedDriver::registerPeripheral(kI80Label, []() -> LedPeripheral* { return new I80Peripheral(); });

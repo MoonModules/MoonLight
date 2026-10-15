@@ -17,7 +17,7 @@ enum EthPhyType {
 
 /// How a board wires its Ethernet, set at runtime from the catalog; -1 leaves a field unused.
 ///
-/// @moreinfo The RMII fields serve the internal EMAC and the SPI fields a W5500, with each platform's default seeding an un-provisioned board.
+/// @technical The RMII fields serve the internal EMAC and the SPI fields a W5500, with each platform's default seeding an un-provisioned board.
 /// The RMII data lines are absent because no board varies them: they are fixed in silicon or already defaulted by the SDK.
 struct EthPinConfig {
     int phyType;          ///< which EthPhyType

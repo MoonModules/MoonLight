@@ -1,4 +1,3 @@
-/// @defgroup platform_esp32_usb_midi USB MIDI host
 /// The USB MIDI seam: one class-compliant desk on the chip's own USB port, the board being the host.
 /// Two blocking tasks own the host stack, as in Espressif's examples, and the render thread reaches them only through two queues of USB-MIDI packets.
 

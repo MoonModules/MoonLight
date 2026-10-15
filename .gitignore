@@ -136,11 +136,6 @@ __pycache__/
 # (the CLI generate_test_docs.py can still write them locally, but they are not committed).
 /docs/reference/tests/*.md
 
-# Generated per-module technical pages — Doxygen+moxygen from each `.h`, built into
-# the site by moondeck/docs/mkdocs_hooks.py (via gen_api.py). Regenerated every build.
-/docs/moonmodules/core/moxygen/
-/docs/moonmodules/light/moxygen/
-/docs/moonmodules/platform/moxygen/
 
 # Read-only hardware snapshots (flash/NVS dumps pulled off reverse-engineered boards).
 # Root-anchored + dir-scoped, like /build/ above: a bare `.snapshots` would also swallow any

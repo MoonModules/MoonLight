@@ -12,30 +12,25 @@
 namespace mm {
 
 /// A list of ADC pins, each driving a control with a value rather than an event.
-///
-/// The continuous twin of the button service, which drives the same controls from a contact.
 /// @card AnalogService.png
 ///
-/// @moreinfo
+/// The continuous twin of Button, which drives the same controls from a contact. An expression pedal is the shape it is built around.
 ///
-/// ## An expression pedal is the shape
+/// @guide
 ///
-/// A pedal's travel is never the full sweep: it rests high and tops out below full scale.
-/// A raw reading mapped straight through would give a control that never reaches either end.
-/// So a row names the travel that matters, and carries an invert for a pot wired backwards.
+/// ## Calibrating a pedal
 ///
-/// ## It writes the surface, not a driver
+/// Each row maps the travel between its two raw counts onto the target's own range, so one setup works on any target. A Select with five options takes 0 to 4, and a bool takes on and off. Watch the live raw and value readouts while moving the pedal to each end.
 ///
-/// A row names its target and goes through the same primitive every transport uses.
-/// Pointing one at the surface lets the assignment change without touching the pedal.
+/// ## Targets
 ///
-/// ## Smoothed here, not in the platform
+/// A row pointed at a pad does nothing, since a pedal held at 40% has no sensible reading as a preset. Reversed bounds mean inverted. Scripts reach the same pins with `adcRead(pin)` and `adcMax()`, the path for a sensor whose mapping is a condition rather than a range.
 ///
-/// An ADC pin jitters by a few counts even at rest, and a pot adds its own noise.
-/// Jitter is a property of what is wired, which only this module knows.
-/// So the seam reports raw counts and the filter lives here, as an average a user can change.
-/// A deadband on top of it is what stops a resting pedal writing at all.
-/// Polled at 50 Hz, which follows a foot comfortably.
+/// @technical
+///
+/// **Travel.** A pedal rests high and tops out below full scale, so a row names the travel that matters. It also carries an invert for a pot wired backwards. Calibrating sets whichever end was reached first, so reversed bounds are valid.
+///
+/// **Smoothing.** An ADC pin jitters by a few counts at rest, so the seam reports raw counts. The filter lives here as an average a user can change, and a deadband stops a resting pedal writing at all.
 class AnalogService : public MoonModule, public ListSource {
 public:
     /// A service, so the container accepts it as a child.
@@ -47,6 +42,7 @@ public:
         controls_.addControl("smoothing", smoothing_, 1, 100);
         // In target units, without which every tick would write a value one different.
         controls_.addControl("deadband", deadband_, 0, 32);
+        /// The pins, each with its raw travel, an invert and a target.
         controls_.addList("inputs", *this);
         MoonModule::defineControls();
     }
@@ -213,7 +209,7 @@ private:
         return nullptr;
     }
 
-    /// Read one row, filter it, map it, and write its target when the value actually moved.
+    /// Read one row, filter it, map it, and write its target when the value moved.
     void pollRow(Row& r) MM_NONBLOCKING {
         if (r.pin < 0) return;
         uint16_t raw = 0;
@@ -265,8 +261,11 @@ private:
     Row      rows_[kMaxRows];
     uint8_t  count_ = 0;
     uint32_t nextId_ = 1;
-    uint8_t  smoothing_ = 30;    ///< percent: a moderate filter that still feels immediate
-    uint8_t  deadband_ = 1;      ///< target units: enough to silence a resting pedal's jitter
+    /// How hard the running average pulls toward each reading, as a percentage.
+    uint8_t  smoothing_ = 30;
+    /// How far the value must move before the control is written.
+    /// @guide Without it a resting pedal rewrites its target fifty times a second.
+    uint8_t  deadband_ = 1;
     char     statusBuf_[64] = {};
 };
 

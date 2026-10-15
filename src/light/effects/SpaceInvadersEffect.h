@@ -1,5 +1,4 @@
 #pragma once
-// Author: MoonLight original (Space Invaders, Taito 1978, is the inspiration)
 
 #include "core/services/AudioService.h"   // latestFrame: the beat the march steps on
 #include "core/util/math16.h"
@@ -15,7 +14,7 @@ namespace invart {
 enum : uint8_t { kClear = 0, kBody = 1, kDark = 2, kEye = 3 };
 inline constexpr uint8_t kPaletteCount = 4;
 
-// The squid, top rank: 8x8, and the arcade's own two frames are what the march looks like.
+/// The squid, top rank: 8x8, and the arcade's own two frames are what the march looks like.
 inline constexpr uint8_t W = 8, H = 8, F = 2;
 inline constexpr uint8_t kSquid[] = {
     // frame 0: tentacles out
@@ -39,7 +38,7 @@ inline constexpr uint8_t kSquid[] = {
 };
 static_assert(sizeof(kSquid) == static_cast<size_t>(W) * H * F, "squid: 2 frames of 8x8");
 
-// The crab (middle ranks): 11x8, the widest of the three, arms up and arms down.
+/// The crab (middle ranks): 11x8, the widest of the three, arms up and arms down.
 inline constexpr uint8_t CW = 11, CH = 8, CF = 2;
 inline constexpr uint8_t kCrab[] = {
     // frame 0: arms up
@@ -63,7 +62,7 @@ inline constexpr uint8_t kCrab[] = {
 };
 static_assert(sizeof(kCrab) == static_cast<size_t>(CW) * CH * CF, "crab: 2 frames of 11x8");
 
-// The octopus (bottom ranks): 12x8, the squat one worth the fewest points and seen the longest.
+/// The octopus (bottom ranks): 12x8, the squat one worth the fewest points and seen the longest.
 inline constexpr uint8_t OW = 12, OH = 8, OF = 2;
 inline constexpr uint8_t kOcto[] = {
     // frame 0: legs apart
@@ -87,7 +86,7 @@ inline constexpr uint8_t kOcto[] = {
 };
 static_assert(sizeof(kOcto) == static_cast<size_t>(OW) * OH * OF, "octopus: 2 frames of 12x8");
 
-// The cannon: 13x8, one frame. It does not animate; it moves.
+/// The cannon: 13x8, one frame. It does not animate; it moves.
 inline constexpr uint8_t GW = 13, GH = 8, GF = 1;
 inline constexpr uint8_t kCannon[] = {
     0,0,0,0,0,0,1,0,0,0,0,0,0,
@@ -103,21 +102,26 @@ static_assert(sizeof(kCannon) == static_cast<size_t>(GW) * GH * GF, "cannon: one
 
 }  // namespace invart
 
-/// Effect: Space Invaders in attract mode, marching and firing on its own.
+/// The 1978 formation marching down the wall: five ranks stepping sideways in the two-frame wiggle, dropping a row and reversing at each wall.
 /// @card SpaceInvadersEffect.gif
 ///
-/// The arcade's attract mode is the model: a game playing itself is what reads across a room.
-/// The cannon tracks and fires on its own, the ranks march and drop, and a hit thins the formation.
-/// `player` and `fire` are the cannon as controls, held through `PlayerSeat`.
+/// The march speeds up as the ranks thin, which is the defining mechanic.
 ///
-/// @moreinfo
+/// The game plays itself in attract mode, and `player` and `fire` hand the cannon to a person. The invaders take their body color from the active palette.
+///
+/// @attribution Space Invaders
+///
+/// @guide
+///
+/// ## The game
+///
+/// Invaders fire down and the cannon fires back. A formation that lands, or a board cleared of invaders, resets the board.
+///
+/// @technical
 ///
 /// ## The march is the signature
 ///
-/// In the arcade the formation speeds up as the ranks thin.
-/// The machine stepped every invader once per frame, so fewer invaders meant a shorter loop.
-/// That accident of 1978 hardware became the game's defining tension.
-/// Our loop has no such limit, so `stepInterval` reproduces the relationship deliberately.
+/// The arcade stepped every invader once per frame, so fewer invaders meant a shorter loop and a faster march. Our loop has no such limit, so `stepInterval` reproduces the relationship deliberately.
 class SpaceInvadersEffect : public EffectBase {
 public:
     /// Catalog tags: the audio glyph applies when `audioReactive` is set.
@@ -125,18 +129,18 @@ public:
     /// A formation needs a floor and a height, so it is a 2D effect.
     Dim dimensions() const override { return Dim::D2; }
 
-    /// Steps per minute with a full formation. Thinning ranks raise it from here.
+    /// March beats per minute, two steps a beat, faster as ranks thin.
     uint8_t marchBpm = 60;
-    /// Pixels the formation slides per step.
+    /// How far a step moves the formation sideways, in pixels.
     uint8_t stepX = 2;
-    /// Rows the formation drops when it reaches an edge.
+    /// How far a wall turn drops the formation, in pixels.
     uint8_t dropY = 3;
-    /// Pixels per art pixel. A 64-wide panel wants 1, and a wall can afford 2.
+    /// Magnification per art pixel: 1 on a matrix, 2 or more on a wall.
     uint8_t size = 1;
 
-    /// March on the beat and fire on a transient. Silence holds the invasion still.
+    /// The formation steps on the beat, and silence holds it still.
     bool audioReactive = false;
-    /// The cannon's position, left to right; follows the game until an input writes it.
+    /// The cannon, for a fader or an input; idle, the game plays it.
     uint8_t player = 0;
 
     /// Publish the tempo, the step and drop distances, the sprite scale and the audio switch.
@@ -149,7 +153,7 @@ public:
         // Live state a fader, a button or an input drives, never written to flash.
         controls_.addControl("player", player, 0, 255);
         controls_.setLive(controls_.count() - 1);
-        // A button: a press is the event, so nothing stays set to clear.
+        /// Fires the cannon, one shot in the air at a time.
         controls_.addButton("fire");
     }
 
@@ -207,7 +211,7 @@ public:
     }
 
 private:
-    // The arcade's own layout: one rank of squids, two of crabs, two of octopuses.
+    /// The arcade's own layout: one rank of squids, two of crabs, two of octopuses.
     static constexpr uint8_t kCols = 8;
     static constexpr uint8_t kRows = 5;
     static constexpr uint8_t kShots = 6;
@@ -288,7 +292,7 @@ private:
         return false;
     }
 
-    // Cell size comes from the widest sprite, so the ranks line up however their art differs.
+    /// Cell size comes from the widest sprite, so the ranks line up however their art differs.
     uint8_t cell() const { return static_cast<uint8_t>((invart::OW + 2) * scale()); }
     uint8_t rowPitch() const { return static_cast<uint8_t>((invart::OH + 2) * scale()); }
     uint8_t scale() const { return size == 0 ? 1 : size; }
@@ -345,9 +349,7 @@ private:
         draw::sprite(cv, s, 0, static_cast<lengthType>(cannonX_), py, sc);
     }
 
-    // A shot is three numbers rather than a particle: it flies straight, needing no forces or drag.
-
-    /// Fly every live shot one step, and test the rising ones against the formation.
+    /// Fly every live shot one step, and test the rising ones against the formation. A shot is three numbers rather than a particle, flying straight with no forces or drag.
     void moveShots() {
         for (uint8_t i = 0; i < kShots; i++) {
             if (shotTtl_[i] == 0) continue;
@@ -448,7 +450,7 @@ private:
     int16_t  ox_ = 0, oy_ = 0;
     int8_t   dir_ = 1;
     uint8_t  frame_ = 0;
-    uint32_t lastPhase_ = 0;   // the full counter: a narrower copy stops matching past 255 beats
+    uint32_t lastPhase_ = 0;   ///< the full counter: a narrower copy stops matching past 255 beats
     int16_t  cannonX_ = 0;
     int16_t  shotX_[kShots] = {}, shotY_[kShots] = {};
     int8_t   shotDir_[kShots] = {};

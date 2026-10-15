@@ -4,25 +4,19 @@
 
 namespace mm {
 
-/// Layout of a walk-in cube built from five LED-curtain faces.
-/// Author: MoonLight, https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Layouts/L_MoonLight.h
+/// A walk-in cube of five LED curtains: front, back, top, left and right, open at the bottom.
+/// @card HumanSizedCubeLayout.gif
 ///
-/// @moreinfo
+/// Each face is a curtain the size of the box's side, for a room-scale cube a person stands inside.
 ///
-/// A human-sized LED cube built from five hanging "curtain" faces of a width×height×depth box: front (z=0), back (z=depth+1), above (y=0), left (x=0) and right (x=width+1).
-/// Each face is a flat matrix of lights.
-/// The offsets inset the four side and top curtains by one cell, so they hang just outside the front and back planes.
-/// The front sits at zero and the back one past the depth, with the wrap-around curtains bridging them.
-/// The bottom face is left open (a person stands inside), so only five of the six faces are emitted.
+/// @attribution troyhacks
 ///
-/// Prior art: MoonLight's HumanSizedCubeLayout (Node "Human Sized Cube", tags 🚥).
-/// The geometry is reproduced exactly: the five face loops, their nested axis order, and every offset match the source's own emit sequence.
-/// The emitted coordinates and their wiring order are therefore identical.
-/// MoonLight's per-curtain pin calls are dropped, since a MoonLight layout emits coordinates only and the driver owns pins.
-/// Its sixth face is dropped too, being disabled in the source itself.
+/// @technical
+///
+/// The front sits at z 0 and the back at depth + 1; the top, left and right curtains hang one cell outside them, bridging the two.
 class HumanSizedCubeLayout : public LayoutBase {
 public:
-    /// Verbatim MoonLight defaults and ranges: a 10×10×10 cube, each edge 1..20.
+    /// The cube's extent on x.
     uint8_t width  = 10;
     /// The cube's extent on y.
     uint8_t height = 10;
@@ -36,7 +30,7 @@ public:
         controls_.addControl("depth",  depth,  1, 20);
     }
 
-    /// The catalog tags this layout carries.
+    /// The catalog tags: 💫, a MoonLight origin.
     const char* tags() const override { return "💫"; }
     /// How many axes this layout places lights on.
     Dim dimensions() const override { return Dim::D3; }
@@ -46,8 +40,7 @@ public:
         // The five face areas summed, widened first so an oversized cube clamps.
         const uint32_t w = width, h = height, d = depth;
         uint32_t n = 2u * w * h + w * d + 2u * d * h;
-        constexpr uint32_t kMax = std::numeric_limits<nrOfLightsType>::max();
-        return static_cast<nrOfLightsType>(n > kMax ? kMax : n);
+        return clampedCount(n);
     }
 
     /// Emit every light's coordinate, in wiring order.
@@ -57,20 +50,20 @@ public:
 
         // One loop per face, in the source's own order, so an index lands on the same cell.
 
-        // front: z = 0  — for x { for y }
+        // front: z = 0: for x { for y }
         for (lengthType x = 0; x < width && idx < limit; x++)
             for (lengthType y = 0; y < height && idx < limit; y++)
                 sink.pixel(static_cast<nrOfLightsType>(idx++),
                    static_cast<lengthType>(x + 1), static_cast<lengthType>(y + 1), 0);
 
-        // back: z = depth+1  — for x { for y }
+        // back: z = depth+1: for x { for y }
         for (lengthType x = 0; x < width && idx < limit; x++)
             for (lengthType y = 0; y < height && idx < limit; y++)
                 sink.pixel(static_cast<nrOfLightsType>(idx++),
                    static_cast<lengthType>(x + 1), static_cast<lengthType>(y + 1),
                    static_cast<lengthType>(depth + 1));
 
-        // above: y = 0  — for x { for z }
+        // above: y = 0: for x { for z }
         for (lengthType x = 0; x < width && idx < limit; x++)
             for (lengthType z = 0; z < depth && idx < limit; z++)
                 sink.pixel(static_cast<nrOfLightsType>(idx++),
@@ -78,13 +71,13 @@ public:
 
         // The bottom face is deliberately absent: the cube is open there.
 
-        // left: x = 0  — for z { for y }
+        // left: x = 0: for z { for y }
         for (lengthType z = 0; z < depth && idx < limit; z++)
             for (lengthType y = 0; y < height && idx < limit; y++)
                 sink.pixel(static_cast<nrOfLightsType>(idx++),
                    0, static_cast<lengthType>(y + 1), static_cast<lengthType>(z + 1));
 
-        // right: x = width+1  — for z { for y }
+        // right: x = width+1: for z { for y }
         for (lengthType z = 0; z < depth && idx < limit; z++)
             for (lengthType y = 0; y < height && idx < limit; y++)
                 sink.pixel(static_cast<nrOfLightsType>(idx++),

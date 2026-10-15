@@ -3,23 +3,20 @@
 #include <cstdint>
 
 
-/// @defgroup fonts Bitmap console fonts
-/// @{
 /// The glyph data `draw::text` blits: one byte per glyph row, aligned to the high bit, a set bit being a lit pixel.
 ///
 /// Two sizes ship, a compact 4x6 and a larger 6x8, and more are pure data to add.
 ///
-/// @moreinfo
+/// @attribution raster-fonts
+///
+/// @technical
 ///
 /// ## The layout
 ///
 /// Glyphs are the 95 printable ASCII characters, stored row-major, so a glyph's rows begin at its index times the height.
 /// The high bits of each byte are the columns, left to right.
 ///
-/// ## Prior art
-///
-/// The public [raster-fonts set](https://github.com/idispatch/raster-fonts), the same bitmap console fonts WLED and MoonLight ship.
-/// Carried as data; the blitter is ours.
+/// The glyphs are carried as data from the public raster-fonts set, and the blitter is ours.
 namespace mm::fonts {
 
 struct Font { const uint8_t* rows; uint8_t width; uint8_t height; };  // rows: 95*height bytes
@@ -229,7 +226,5 @@ static_assert(sizeof(kFont6x8_rows) == 95 * 8, "kFont6x8: 95 printable ASCII gly
 /// The available fonts, in the order the TextEffect's font select lists them.
 inline constexpr Font kAll[] = { kFont4x6, kFont6x8 };
 inline constexpr uint8_t kCount = sizeof(kAll) / sizeof(kAll[0]);
-
-/// @}
 
 }  // namespace mm::fonts

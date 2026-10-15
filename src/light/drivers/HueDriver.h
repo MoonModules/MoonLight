@@ -11,30 +11,20 @@
 
 namespace mm {
 
-/// Output driver: sends the buffer to Philips Hue bulbs as pixels, so a small grid runs any effect. It reads its window of the shared buffer and pushes each light's color to the bridge, the same shape as NetworkSendDriver, over the Hue v1 HTTP API rather than UDP.
-///
-/// It is HTTP rather than a wire protocol, so the rate is bounded by connection churn. Each PUT opens a fresh connection. That gives smooth ambient color, not real time.
-///
-/// Prior art: the Hue v1 CLIP API public documentation; the effect-as-output mapping is our own.
-///
-/// @moreinfo
-///
-/// ## The wire contract
-///
-/// Plain HTTP, no TLS, bench-confirmed on a BSB002 bridge:
-///
-/// ```text
-///     POST /api                          pair, once the link button is pressed
-///     GET  /api/<key>/lights             the lights, keyed by bridge id
-///     GET  /api/<key>/groups             the rooms, each listing its lights
-///     PUT  /api/<key>/lights/<id>/state  on, brightness, hue, saturation, transition
-/// ```
-///
-/// ## Which lights are driven
-///
-/// Only color-capable, reachable lights, narrowed further by the room and light selectors. The shared output Correction applies as it does on the LED drivers, so brightness reaches the Hue lights too.
-///
+/// Drives Philips Hue bulbs as pixels: each color bulb in the driver's window becomes one pixel, pushed to the bridge over its HTTP API.
 /// @card HueDriver.png
+///
+/// The same shape as @ref NetworkSendDriver, over HTTP rather than UDP. One command goes to the bridge every half second, so it gives smooth ambient color, not strobing. Up to 32 bulbs, a LAN's worth, which bounds the driver's memory.
+///
+/// @attribution Philips Hue
+///
+/// @technical
+///
+/// **Pacing.** Each PUT opens a fresh connection, and one bounded PUT goes out per 500 ms: faster piles up TIME_WAIT sockets. That gives smooth ambient color, not real time.
+///
+/// **Wire.** Plain HTTP, no TLS, bench-confirmed on a BSB002 bridge: `POST /api` pairs, `GET /api/<key>/lights` and `/groups` list the lights and rooms, and `PUT /api/<key>/lights/<id>/state` sets one.
+///
+/// **Lights.** Only color-capable, reachable lights, narrowed by the room and light selectors. The shared output Correction applies as on the LED drivers, so brightness reaches the Hue lights too.
 class HueDriver : public DriverBase {
 public:
     /// Default to the RGB profile: this driver reads the output back as RGB to make an HSV.
@@ -42,7 +32,7 @@ public:
 
     /// The bridge's LAN IP, entered in the UI (4 octets).
     uint8_t  bridgeIp[4] = {};
-    /// The Hue username/app key: filled by the Pair button, then persisted.
+    /// The Hue app key, filled by `pair`; a password, so masked and kept out of documents.
     char     appKey[48] = {};
 
     /// Hue converts to HSV, RGB-fixed, so there is no correction UI to show.
@@ -51,8 +41,9 @@ public:
     /// Bind the bridge address, the pairing button, the room and light filters, and the window.
     void defineDriverControls() override {
         controls_.addIPv4("bridgeIp", bridgeIp);
-        controls_.addPassword("appKey", appKey, sizeof(appKey));   // a bridge credential: obfuscated on the page, left out of every document
-        controls_.addButton("pair");                            // link-button pairing
+        controls_.addPassword("appKey", appKey, sizeof(appKey));
+        /// Press it, then the bridge's link button within about 30 s to claim a key.
+        controls_.addButton("pair");
         // Rebuilt in place into stable member buffers, so they reflect the current room.
         buildRoomOptions();
         buildLightOptions();
@@ -87,8 +78,7 @@ public:
         DriverBase::onControlChanged(controlName);
     }
 
-    // A synchronous round trip every tick would stall the single-threaded render loop.
-    /// Do at most one bounded PUT, and only once the rate-limit interval has elapsed.
+    /// Do at most one bounded PUT, and only once the rate-limit interval has elapsed, since a synchronous round trip every tick would stall the render loop.
     void tick() MM_NONBLOCKING override {
         if (pairTicksLeft_ > 0) return;            // pairing owns the bridge during its window
         if (!appKey[0] || !haveBridge() || lightCount_ == 0) return;
@@ -134,8 +124,7 @@ public:
     /// The same count as the read-only control / bridge field; 0 before any fetch.
     int8_t colorCountForTest() const { return colorCount_; }
 
-    // Parse the lights FIRST: room membership resolves against the known color lights.
-    /// Test seam: parse a real groups body through the room extractor.
+    /// Test seam: parse a real groups body through the room extractor, after the lights, since room membership resolves against the known color lights.
     void parseGroupsForTest(const char* json) { parseGroups(json); rebuildDriven(); }
     /// Count of kept Rooms (bridge groups with type=="Room").
     uint8_t roomCountForTest() const { return roomCount_; }
@@ -188,8 +177,7 @@ private:
     int8_t   colorCount_ = 0;
     /// fetchLights has run, so the list is trustworthy.
     bool     sawLights_ = false;
-    // Heap, not inline, so an unconfigured driver pays nothing and the object stays small.
-    /// Friendly light names for the dropdown, allocated lazily on the first parse.
+    /// Friendly light names for the dropdown, on the heap so an unconfigured driver pays nothing, allocated lazily on the first parse.
     char*    lightNames_ = nullptr;
     /// Friendly room names, same shape: `kMaxRooms × kNameLen`, indexed by roomNameAt().
     char*    roomNames_  = nullptr;
@@ -215,9 +203,9 @@ private:
     /// fetchGroups has run, so the room list is trustworthy.
     bool     sawGroups_ = false;
 
-    /// Room filter (a Select index, persisted as uint8): 0 = "All", else roomName_[room_-1].
+    /// All rooms, or the one whose lights are driven.
     uint8_t  room_ = 0;
-    /// Light filter: 0 = "All", else the n-th light of the current option list.
+    /// Narrows the driven lights to one light of that room; 0 is All.
     uint8_t  light_ = 0;
     /// Color-light array indices driven, after the room+light filter.
     uint8_t  drivenIdx_[kMaxLights] = {};
@@ -260,8 +248,7 @@ private:
         return false;
     }
 
-    // Span-bounded, so one light's name cannot match the first name elsewhere in the response.
-    /// Read a string value from within one JSON object span.
+    /// Read a string value from within one JSON object span, so one light's name cannot match the first name elsewhere in the response.
     static void parseStringIn(const char* begin, const char* end, const char* key, char* out, size_t cap) {
         if (cap == 0) return;
         out[0] = 0;
@@ -348,8 +335,7 @@ private:
         return len > 0 && body[len - 1] == '}';
     }
 
-    // The range bound is the point: an oversized id would narrow into a DIFFERENT valid light.
-    /// The bridge id a quoted JSON key opens with, or 0 when it is not an id.
+    /// The bridge id a quoted JSON key opens with, or 0 when it is not an id. The range bound matters, since an oversized id would narrow into a different valid light.
     static uint16_t parseId(const char* s) {
         // Digits only: accepting a sign would let a malformed response address a REAL light.
         if (!s || *s < '0' || *s > '9') return 0;
@@ -393,8 +379,7 @@ private:
         dev->upsertHueBridge(bridgeIp, name, static_cast<uint8_t>(colorCount_));
     }
 
-    // A forward scan, not the recursive reader: the response exceeds its node arena.
-    /// Extract the color-capable, reachable light ids from a lights body.
+    /// Extract the color-capable, reachable light ids from a lights body, by a forward scan since the response exceeds the recursive reader's node arena.
     void parseLights(const char* resp) {
         ensureNameBuffers();
         lightCount_ = 0;
@@ -452,8 +437,7 @@ private:
         }
     }
 
-    // Rooms only: zones, light groups and entertainment areas are dropped.
-    /// Extract the rooms from a groups body, each with its name and member lights.
+    /// Extract the rooms from a groups body, each with its name and member lights; zones, light groups and entertainment areas are dropped.
     void parseGroups(const char* resp) {
         ensureNameBuffers();
         roomCount_ = 0;
@@ -486,8 +470,7 @@ private:
         sawGroups_ = true;
     }
 
-    // Bounded to this room's own array, so a later zone's list cannot bleed in.
-    /// Resolve a room's light array into a membership bitmask over the color lights.
+    /// Resolve a room's light array into a membership bitmask over the color lights, bounded to its own array so a later zone's list cannot bleed in.
     uint32_t roomMaskFor(const char* begin, const char* end) const {
         const char* s = begin;
         const size_t kl = std::strlen("\"lights\":[");
@@ -506,8 +489,7 @@ private:
         return mask;
     }
 
-    // One source of truth for both the dropdown and the driven set, so they cannot disagree.
-    /// The color-light indices the current room selection exposes, and how many.
+    /// The color-light indices the current room selection exposes, and how many: one source of truth for the dropdown and the driven set.
     uint8_t roomColorLights(uint8_t (&out)[kMaxLights]) const {
         uint8_t n = 0;
         if (room_ == 0 || room_ > roomCount_) {              // "All" (or a stale index) → every color light
@@ -551,8 +533,7 @@ private:
         if (pushCursor_ >= drivenLightCount_) pushCursor_ = 0;
     }
 
-    // At most one lap per call, so an all-unchanged frame costs no PUT and returns fast.
-    /// Push at most one changed light, round-robining the cursor across successive calls.
+    /// Push at most one changed light, round-robining the cursor across successive calls, so an all-unchanged frame costs no PUT.
     void pushOneChangedLight() {
         if (!sourceBuffer_ || !sourceBuffer_->data()) return;
         nrOfLightsType winStart, winLen;

@@ -1,6 +1,4 @@
-/// @defgroup filesystem_impl Filesystem implementation
 /// The persistence engine: writes control values to `/.config/*.json` and restores them on boot. Public surface and class layout live in FilesystemModule.h.
-/// @{
 #include "core/util/format.h"   // formatTo: nonblocking formatting into a fixed buffer
 #include "core/system/FilesystemModule.h"
 
@@ -339,5 +337,3 @@ bool FilesystemModule::pathFor(MoonModule* m, char* out, size_t n) {
 }
 
 } // namespace mm
-
-/// @}

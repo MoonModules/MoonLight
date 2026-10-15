@@ -9,7 +9,7 @@ namespace mm {
 
 /// The table mapping each logical light to the physical lights it drives: one, none or many, with no table at all on the sequential identity fast path.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## Four mapping kinds
 ///
@@ -33,8 +33,7 @@ public:
     MappingLUT(const MappingLUT&) = delete;
     MappingLUT& operator=(const MappingLUT&) = delete;
 
-    // A power of two, so the page split is a shift and a mask: Xtensa has no hardware divide.
-    /// How many destinations one page holds, sized to fit a fragmented heap.
+    /// How many destinations one page holds, sized to fit a fragmented heap. A power of two, so the page split is a shift and a mask: Xtensa has no hardware divide.
     static constexpr nrOfLightsType kPageEntries = 4096;
     /// The shift that turns a destination index into a page number.
     static constexpr nrOfLightsType kPageShift = 12;
@@ -51,8 +50,7 @@ public:
         logicalCount_ = count;
     }
 
-    // Three tiers: a single block, then pages, then refusal when the heap cannot hold it.
-    /// Allocate the table, returning false only when memory genuinely cannot hold it.
+    /// Allocate the table in three tiers: a single block, then pages, then refusal; false only when memory genuinely cannot hold it.
     bool build(nrOfLightsType logicalCount, nrOfLightsType maxDestinations) {
         free();
         identity_ = false;
@@ -120,8 +118,7 @@ public:
     /// How many physical destinations the table holds in total.
     nrOfLightsType destinationCount() const { return destinationCount_; }
 
-    // True lets blendMap plain-copy, around four times faster than the additive path.
-    /// Whether each physical destination is written by at most one logical light.
+    /// Whether each physical destination is written by at most one logical light, which lets blendMap plain-copy, around four times faster than the additive path.
     bool overwrites() const { return overwrites_; }
     /// Declare whether destinations are distinct, which chooses the copy or additive blend.
     void setOverwrites(bool v) { overwrites_ = v; }
@@ -171,7 +168,7 @@ public:
 
 private:
 
-    // Tier the destinations allocation, false only on tier 3. @xref{paged-destinations}
+    /// Tier the destinations allocation, false only on tier 3. @xref{paged-destinations}
     bool allocateDestinations(size_t destBytes, nrOfLightsType maxDestinations) {
         if (destBytes == 0) { paged_ = false; return true; }  // nothing to map
 

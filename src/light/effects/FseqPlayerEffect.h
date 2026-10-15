@@ -5,18 +5,17 @@
 
 namespace mm {
 
-/// Effect: an FSEQ show played from a file, xLights' and Falcon Player's frame-by-frame channel data.
+/// An FSEQ show played from a file: the frame-by-frame channel data xLights and Falcon Player write.
+/// @card FseqPlayerEffect.gif The reference sweep fseq_play writes, the show an FSEQ player plays
 ///
-/// FSEQ is mapped by the sender, so its frames land in the channel-data sink as a sender-mapped Network Receive stream does, one copy alone on its layer.
+/// A show, uncompressed FSEQ v2, lands where a sender-mapped @ref NetworkReceiveEffect stream does, so alone on its layer it reaches the lights in one copy on any layout. Reading the file is the next step, and its status says so.
 ///
-/// It reads uncompressed v2 as FPP's FSEQ_Sequence_File_Format.txt lays it out, and `moondeck/run/fseq_play.py` writes reference files.
-///
-/// It reads no file yet and says so: the reading lands in prepare, which opens the file and sizes the sink, and in tick, which writes the clock's frame.
+/// @attribution FPP
 class FseqPlayerEffect : public EffectBase {
 public:
     /// Catalog tags: a recorded show, played back.
-    const char* tags() const override { return "🎞️"; }
-    /// The show to play, a path on flash or SD.
+    const char* tags() const override { return "🖼️"; }
+    /// The show's path, an `.fseq` file on flash or under `/sd`.
     char file[64] = "";
     /// Start again at the end.
     bool loop = true;

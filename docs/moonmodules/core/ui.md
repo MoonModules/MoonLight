@@ -1,7 +1,7 @@
 # Web UI
 
-The MoonLight web UI as shipped, the render layer over the MoonModule tree. This page is the UI's own implementation spec (status bar, cards, control rendering, styling, the no-rebuild update contract). The **high-level architecture**, hand-maintained files, MoonModule-driven rendering, the light-domain plug-in points, lives in [MoonCore, the web UI](../../explanation/architecture/mooncore.md#web-ui); the **backend contract** it consumes (every `/api/*` endpoint, the `/ws` frame shape, the control descriptors) is owned by [HttpServerModule](moxygen/HttpServerModule.md); the **emoji legend** the cards and picker render is [the tag emoji legend](../../explanation/architecture/index.md#tag-emoji-legend).
-This page covers only what those don't: the browser-side rendering behavior.
+The MoonLight web UI as shipped, the render layer over the MoonModule tree, and its implementation spec: status bar, cards, control rendering, styling, and the in-place update contract. The **high-level architecture**, hand-maintained files, MoonModule-driven rendering, the light-domain plug-in points, lives in [MoonCore, the web UI](../../explanation/architecture/mooncore.md#web-ui); the **backend contract** it consumes (every `/api/*` endpoint, the `/ws` frame shape, the control descriptors) is owned by [HttpServerModule](system.md#httpserver); the **emoji legend** the cards and picker render is [the tag emoji legend](../../explanation/architecture/index.md#tag-emoji-legend).
+What remains is the browser-side rendering behavior.
 
 ## Interaction principles
 
@@ -10,7 +10,7 @@ This page covers only what those don't: the browser-side rendering behavior.
 - **No write-back races.** A `dragTs[moduleId:key]` cooldown of 1 s stops an incoming WS push from
   overwriting a control the user is actively manipulating.
 - **No DOM rebuilds on state updates.** The initial render builds the tree; state updates patch values
-  in place via `querySelector` by `data-mid` / `data-key` (see [§ no-rebuild contract](#state-updates-the-no-rebuild-contract)).
+  in place via `querySelector` by `data-mid` / `data-key` (see [§ patched in place](#state-updates-patched-in-place)).
 
 ## Layout
 
@@ -36,6 +36,7 @@ This page covers only what those don't: the browser-side rendering behavior.
   canvas is **not** capped, it spans the full content width.
 - Preview canvas is sticky just below the status bar and shrinks 0 % → 50 % as the user scrolls
   0 → 300 px.
+- The preview bar's ⏺ records three seconds of the canvas as a GIF the browser saves, encoded by `gif.js` (GIF89a with a median-cut palette), for a preset's gallery preview.
 
 ## Status bar
 
@@ -51,7 +52,8 @@ Fixed top, 44 px, left-to-right:
    exponential backoff from 200 ms to a 5 s ceiling on close, and a page reload covers the rare half-dead socket.
 7. **Reboot button (⏻)**, red border via `data-crashed="true"` when `SystemModule.bootReason` is
    PANIC / INT_WDT / TASK_WDT / BROWNOUT. Press-twice to confirm: the first click arms it (solid red), a second sends `POST /api/reboot`. Disarms after 3 s or on pointer-leave, no `confirm()` popup.
-8. **Theme toggle (☀/🌙)**, flips `[data-theme]` on `<body>`; preference in `localStorage['mm_theme']`.
+8. **Help toggle (ⓘ)**, off by default: shows or hides every help line by flipping `body.help-hidden`, dimmed while off. The first time it turns help on it asks before downloading `help.json` from the docs site, and a yes is kept in `mm_helpConsent`; the choice is kept in `mm_helpShown`.
+9. **Theme toggle (☀/🌙)**, flips `[data-theme]` on `<body>`; preference in `localStorage['mm_theme']`.
 
 ## Side navigation
 
@@ -75,7 +77,7 @@ Each MoonModule renders as a card, with **child cards nested inside their parent
 
 ```text
 ┌─ card ──────────────────────────────────┐
-│ [name] [emoji]  [timing · 🧠 mem]  [enabled toggle]  [✎ × ☰]  [? help] [{ } api] │
+│ [name] [emoji]  [timing · 🧠 mem]  [enabled toggle]  [✎ × ☰]  [{ } api] │
 │ [control rows, one per control]        │
 │ ┌─ child card ────────────────────────┐ │
 │ │ …                                   │ │
@@ -87,13 +89,12 @@ Each MoonModule renders as a card, with **child cards nested inside their parent
 - The parent's own controls render **above** its children; `+ add child` renders **below** them.
   Child cards live in a `.card-children` wrapper appended into the parent card's DOM node (not flat siblings); `renderModuleTree` recurses into the parent card, not into `main`.
 - **`{ }`** opens `GET /api/modules/{name}` in a new tab, that one module's live JSON, for issue
-  reports (see [Log an issue](../../how-to/logging-an-issue.md)). On EVERY card, unlike `✎`/`×` (user-editable children only) and `?` (types that have a doc page).
+  reports (see [Log an issue](../../how-to/logging-an-issue.md)). On EVERY card, unlike `✎`/`×` (user-editable children only).
 - **Enabled toggle** in the right-hand action cluster mirrors `MoonModule::enabled()`, a styled
   `<button>` (transparent + muted border, 26×26); state shown by the glyph alone (accent **✓** on, muted **○** off; `data-checked` + `aria-pressed`). Toggling fires `onEnabled()`; the Scheduler skips disabled modules whose `respectsEnabled()` returns true (default).
 - **Emoji tags** next to the name show the same set the type picker uses: role + dimensional (both
   UI-derived) + the curated `tags()` from `/api/types`. Identical identity across card and picker; the assignments are [the tag emoji legend](../../explanation/architecture/index.md#tag-emoji-legend).
-- **Help link (?)** at the far right of the title row opens the module's doc page in a new tab. The
-  path comes from `docPath` in `/api/types` (engine-provided, relative to `docs/moonmodules/`); omitted when the type declares none.
+- **Help** under the title, from `help.json`, which the browser fetches from the docs site and keeps in `mm_help`, so the firmware carries none of it. Each release carries its own copy, so the help names the controls the running firmware has; a release absent from the Pages mirror reads the site's copy. A cached copy shows only for the release it came from. The module's line and summary show; a tap opens its guide, picture, attribution and links to the docs, the source and the tests. The Docs link opens the module's card on the docs site, from `docPath` in `/api/types`. Each control with a line shows it under the field, and a ▸ before the line opens its longer help where it has one. Help is off until the ⓘ in the status bar turns it on. The first time it asks before downloading, since the file comes from the docs site rather than the device. While developing help, `?help=local` reads the file `gen_help` last wrote, which `preview_installer` serves on `localhost:8421`, and `?help=published` returns to the docs site.
 - **Stats line**: `🕒 <timing>` then `🧠 <static>[ + <dynamic>]`. Timing is a tick time
   (µs under 1 ms, ms above), omitted when the module has no measured loop time. Memory is the C++ object size (`classSize`); the `+ <dynamic>` part (`dynamicBytes`, heap) shows only when the module allocated heap. The line shows from expert mode up, and holding it peeks at the rate on every card, the password field's gesture: a tick time inverts to a figure that reads as a frame rate and is not one, so the rate is a press away rather than a mode the cards sit in.
 - **Reorder is drag-and-drop** (HTML5 DnD) on the whole card, desktop and mobile. A drag starting on
@@ -106,7 +107,7 @@ Each MoonModule renders as a card, with **child cards nested inside their parent
 
 ## Control types
 
-Auto-rendered by `controls[].type`, adding a MoonModule with these types needs no UI change. (The descriptors themselves, and their storage shape, are [Control](moxygen/Control.md) / [coding-standards § store values in their native shape](../../contributing/coding-standards.md); this table is how each *renders*.)
+Auto-rendered by `controls[].type`, adding a MoonModule with these types needs no UI change. (The descriptors themselves, and their storage shape, are [Control](../../../src/core/module/Control.h) / [coding-standards § store values in their native shape](../../contributing/coding-standards.md); this table is how each *renders*.)
 
 | Type | Element | Interaction | Debounce |
 |---|---|---|---|
@@ -173,9 +174,9 @@ The UI dedicates a binary slot on its WebSocket, separate from the JSON state up
 - WebGL clear color `(0, 0, 0, 0)`, a transparent canvas blends into either theme with no per-frame
   color work.
 
-The light-domain renderer (WebGL point cloud, the `0x03`/`0x02` frame format, orbit camera, downsampling) is [MoonCore, the web UI](../../explanation/architecture/mooncore.md#web-ui) / [PreviewDriver](../light/moxygen/PreviewDriver.md).
+The light-domain renderer (WebGL point cloud, the `0x03`/`0x02` frame format, orbit camera, downsampling) is [MoonCore, the web UI](../../explanation/architecture/mooncore.md#web-ui) / [PreviewDriver](../light/drivers.md#preview).
 
-## State updates, the no-rebuild contract
+## State updates, patched in place
 
 When a WS state message arrives, a full state answering a subscription or a patch after it, for each module in the payload:
 - If `controls.deviceName` exists, update the status-bar device name and `document.title`.
@@ -189,7 +190,7 @@ card-render closure holding a `mod` reference goes stale within ~1 s. Any "which
 
 ## Communication client behavior
 
-The endpoints, the `/ws` frame shape, and the streaming state sink are owned by [HttpServerModule](moxygen/HttpServerModule.md); `/api/control` is `{module, control, value}`. The
+The endpoints, the `/ws` frame shape, and the streaming state sink are owned by [HttpServerModule](system.md#httpserver); `/api/control` is `{module, control, value}`. The
 **browser-side** socket behavior the server doesn't dictate:
 
 - URL `ws://<host>/ws` (same port as HTTP). On open the page sends `{"subscribe":[…]}`; the server answers with a full state, then a patch of what changed in the subscribed modules each second.
@@ -203,9 +204,17 @@ The endpoints, the `/ws` frame shape, and the streaming state sink are owned by 
 ```text
 mm_selectedRoot     id of the currently-selected root module    (string)
 mm_theme            "dark" | "light"                            (default: "dark")
+mm_selectedTabs     the open tab per container                  ({ container: child })
+mm_expanded         modules whose "controls" disclosure is open ([name, …])
+mm_textareaSizes    user-dragged textarea heights               ({ "module:control": px })
+mm_cardsWidth       dragged width of the docked card column     (px)
+mm_help             the last help.json fetched and its address  ({url, text})
+mm_helpShown        "1" | "0": help lines shown or hidden       (default: "0")
+mm_helpConsent      "1" once the user agreed to download help   (default: absent, nothing fetched)
+mm_helpSource       "local" while developing help                (default: absent, the docs site)
 ```
 
-No other client state persists; reorder, control values, etc. all live on the device.
+The rest, reorder, control values and the like, lives on the device.
 
 ## Source
 

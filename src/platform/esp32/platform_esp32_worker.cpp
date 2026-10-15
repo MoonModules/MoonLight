@@ -1,10 +1,9 @@
-/// @defgroup platform_esp32_worker The pinned worker task and its wake
 /// The one seam behind the multicore split, so no task-system type escapes this layer.
 ///
 /// A pinned task with a direct notification is the textbook lock-free wake for one producer and one consumer, and the documented lightweight replacement for a binary semaphore.
 /// The render split is the first user and the asynchronous send wants the identical primitive, which is why it lives here rather than in either.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## The watchdog subscription is per task
 ///

@@ -4,27 +4,14 @@
 
 namespace mm {
 
-/// Effect: the spectrum as ripples, one sector per band, radius as time, a shockwave per beat.
+/// The spectrum as ripples: each band owns a sector around the center, mirrored left and right with the bass at top and bottom.
 /// @card RadialSpectrumEffect.gif
 ///
-/// Each band owns a sector around the center, mirrored left and right.
-/// Sound is born at the center and travels outward, so the radius is time.
-/// A ring's length is that band's recent history, which makes this a radial spectrogram.
+/// Sound is born at the center and travels outward, so the radius is time and a ring's length is that band's recent history. On a cube the ripples are expanding shells. `polarTable`, `polarTable16` and `mapping` set the polar address and its shape.
 ///
-/// @moreinfo
+/// @technical
 ///
-/// ## Nothing is transported
-///
-/// The effect keeps a short history of band frames, one entry per ring, and every light reads it.
-/// A light's angle picks its band and its radius picks its age.
-/// That is two table reads a light, which is cheaper than drawing bars.
-/// It is volumetric for free: under the spherical mapping a cube's rings become shells.
-///
-/// ## It doubles as the diagnostic
-///
-/// Every sector is one band, so a stuck band shows as a sector that never moves or never dims.
-/// `smooth` switches between the raw bands and the meter ballistic, which is the useful comparison.
-/// `beat` adds the onset detector's hits as a white shockwave traveling out with the ripples.
+/// Nothing is transported: a short history of band frames holds one entry per ring. A light's angle picks its band and its radius its age, two table reads a light.
 class RadialSpectrumEffect : public EffectBase {
 public:
     /// Catalog tags for the visual catalog.
@@ -40,14 +27,14 @@ public:
     uint8_t persistence = 128;
     /// Read the meter ballistic rather than the raw bands.
     bool    smooth      = false;
-    /// Add a white shockwave on every detected onset.
+    /// A white shockwave born at the center on every onset.
     bool    beat        = true;
-    /// The polar address, and which mapping a cube takes.
+    /// The polar address: the table, its precision, and the mapping a cube takes.
     PolarLut::Controls polar;
 
     /// Publish the ripple's speed and reach, the source, the shockwave and the address.
     void defineControls() override {
-        controls_.addControl("speed", speed, 5, 100);   // higher is faster, as everywhere else
+        controls_.addControl("speed", speed, 5, 100);
         controls_.addControl("persistence", persistence, 0, 255);
         controls_.addControl("smooth", smooth);
         controls_.addControl("beat", beat);

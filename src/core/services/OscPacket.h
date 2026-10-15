@@ -8,11 +8,9 @@
 
 #include "core/util/ControlSurface.h"   // SurfaceControl: the banks the addresses name
 
-/// @defgroup OscPacket The OSC 1.0 wire format
-/// @{
 /// The one place the layout lives, with the constants and an inline parse.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// This follows the same convention the Art-Net and audio-sync packets do, pinned by a golden byte vector so it cannot drift from the spec.
 /// The OSC module receives with it, and nothing sends yet.
@@ -222,5 +220,4 @@ inline uint8_t toByte(const Message& m) {
     return static_cast<uint8_t>(m.i <= 0 ? 0 : (m.i >= 255 ? 255 : m.i));
 }
 
-/// @}
 } // namespace mm::osc

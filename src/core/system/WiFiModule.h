@@ -16,8 +16,19 @@ namespace mm {
 
 /// The WiFi station: the networks the device knows, in the order it prefers them, and the radio's settings.
 ///
-/// A Network child: the network module runs the cascade, and this one holds what joining WiFi needs.
 /// @card WiFiModule.png
+///
+/// A child of Network, which runs the cascade; it holds what joining WiFi needs. Joining is connect-first, as on a phone: tap a network in range, type its password, Connect.
+///
+/// @guide
+///
+/// ## The order of joining
+///
+/// The device tries the known networks in priority order, ten seconds each to join, and opens its access point after the last. Networks a scan in the last five minutes did not see go to the end of that order. Each network keeps its own IP settings.
+///
+/// ## Connecting
+///
+/// Connect joins a network at once. A network picked from those in range is saved only once it joined, and "incorrect password" says why when it did not.
 class WiFiModule : public MoonModule, public ListSource {
 public:
     /// No networks known yet.
@@ -46,9 +57,13 @@ public:
             controls_.addReadOnly("address", handoff_->address, sizeof(handoff_->address));
             controls_.addReadOnly("localName", handoff_->localName, sizeof(handoff_->localName));
         }
+        /// Look for the networks in range.
+        /// @guide A scan takes the radio off-channel for a few seconds, which drops incoming lights while connected. The device scans by itself only when its access point opens.
         controls_.addButton("scan");
         controls_.addReadOnly("scanned", scannedStr_, sizeof(scannedStr_));
         controls_.addList("available", available_);
+        /// The networks it joins, in priority order.
+        /// @guide Each has its name, password and IP settings. A Static setting that cannot work joins by DHCP, with the reason on its row. Editing the addressing of the network the page arrives through asks first.
         controls_.addList("known", *this);
         // Meaningful only while associated, so hidden elsewhere rather than showing zero.
         controls_.addReadOnlyInt("rssi", rssi_, "dBm");
@@ -458,6 +473,7 @@ private:
     }
 
     // The scan: its networks on the heap only while there are some, and the join the card asked for.
+
     static constexpr uint8_t kMaxFound = 16;
     platform::WifiNetwork* found_ = nullptr;
     uint8_t  foundCount_ = 0;
@@ -468,6 +484,7 @@ private:
     bool     scanning_ = false;
     uint32_t scanStartedMs_ = 0;
     static constexpr uint32_t kScanTimeoutMs = 15000;   ///< a scan takes two to five seconds
+    /// How long ago the last scan finished.
     char     scannedStr_[24] = {};
     JoinRequest* request_ = nullptr;   ///< on the heap only while a join waits
     uint32_t requestSeq_ = 0;          ///< counts the requests, so the network module tells a replaced one from the one it started
@@ -477,8 +494,11 @@ private:
     uint8_t  joinedIp_[4] = {};
     /// The links to the device on its new network, on the heap only while the access point is held after a join from it.
     struct Handoff {
-        char address[24];     ///< http://255.255.255.255/
-        char localName[40];   ///< http://, a 23-character device name, .local/
+        /// Where to reach the device on its new network, by address.
+        /// @guide It shows after a join from the access point. Open the link in a browser, since a phone's sign-in screen has no address bar.
+        char address[24];
+        /// The same, by the `.local` name.
+        char localName[40];
     };
     Handoff* handoff_ = nullptr;
     const char* deviceName_ = nullptr;   ///< the system module's, which outlives this one
@@ -591,10 +611,16 @@ private:
             return w.requestJoin(n.ssid, mine ? w.pendingPassword_ : "", 0);
         }
     };
+    /// The networks in range; Connect joins one now.
+    /// @guide Tap a network, type its password, Connect. A join from the access point shows the device's `.local` link on the row first, since the phone often lands back on its own network.
     Available available_{*this};
 
-    int8_t  rssi_ = 0;          ///< the signal strength, stored directly rather than formatted
-    int8_t  txPower_ = 0;       ///< the radio's current power
+    /// The signal strength of the joined network.
+    int8_t  rssi_ = 0;
+    /// The power the radio transmits at now.
+    int8_t  txPower_ = 0;
+    /// Caps the radio's transmit power, for a board that browns out.
+    /// @guide 0 lifts the cap. Lower it when the board resets as the radio sends.
     int16_t txPowerSetting_ = 0;
     bool    radioOn_ = false;   ///< whether the radio is up, which shows the power readings
     bool    connected_ = false; ///< whether the station is associated, which shows the signal

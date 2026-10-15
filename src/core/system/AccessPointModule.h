@@ -12,14 +12,24 @@
 
 namespace mm {
 
-/// The device's own WiFi network: when it opens, and the phones on it.
-///
-/// It is named `MM-` and four MAC digits rather than after the device. The first known network's password protects it.
-///
-/// Switched on four times in a row, each within a few seconds, it opens for that boot without a password, whatever `opens` says; that boot runs in safe mode. That is the way back to a device whose router changed, with every setting kept.
-///
-/// A Network child: the network module opens and closes it, and this one holds how it appears and answers its DNS.
+/// The device's own WiFi network, at `4.3.2.1`: joining it opens the UI by itself, as a sign-in screen.
 /// @card AccessPointModule.png
+///
+/// A child of Network, which opens and closes it; `http://4.3.2.1` reaches the UI as well.
+///
+/// The first known WiFi network's password protects it, so it is open only on a first setup or with an open home network. Its clients receive no stored password or config file.
+///
+/// @guide
+///
+/// ## Getting back in
+///
+/// Switch the device on and off four times, each within a few seconds, and it opens for that boot without a password, whatever its setting says. That boot runs in safe mode: the way back to a device whose router changed, with every setting kept.
+///
+/// ## After a join from the access point
+///
+/// A join asked for from a phone keeps the access point up beside the new network for two minutes, and the WiFi card shows the device's links.
+///
+/// Joining moves the radio to the router's channel, which knocks the phone off, so open a link in the browser: the sign-in screen has no address bar.
 class AccessPointModule : public MoonModule {
 public:
     /// When the access point opens, in WLED's words.
@@ -53,10 +63,13 @@ public:
     /// Declare when it opens, how it appears, and who is on it.
     void defineControls() override {
         MoonModule::defineControls();
+        /// When it opens: on failure, always, or first setup only.
+        /// @guide A join in progress holds it back, since one radio serves both; first setup stays open until a network or Ethernet is set.
         controls_.addSelect("opens", opens_, kOpensOptions, 3);
         name();   // filled before it is bound
         controls_.addReadOnly("name", name_, sizeof(name_));
         // Meaningful only while it runs, so hidden elsewhere rather than showing zero.
+        /// The devices on it.
         controls_.addReadOnlyInt("clients", clients_, "");
         controls_.setHidden(controls_.count() - 1, !running_);
     }
@@ -76,8 +89,7 @@ public:
         return n >= 8 && n <= 63 ? firstKnownNetwork : "";
     }
 
-    // Anonymous, as such networks usually are, so the air does not say whose device it is; the device's own name stays on its home network.
-    /// The name it broadcasts: `MM-` and the last four digits of the MAC, the same for the app and MoonBase.
+    /// The name it broadcasts: `MM-` and the last four digits of the MAC, the same for the app and MoonBase. Anonymous, so the air does not say whose device it is.
     const char* name() const {
         if (!name_[0]) {
             uint8_t mac[6];
@@ -121,7 +133,7 @@ public:
     /// Whether the DNS responder is answering, for a host test.
     bool answeringDns() const { return dnsBuf_ != nullptr; }
 
-    /// Answer the DNS queries waiting, a few per tick so a flood cannot stall the frame.
+    /// Answer the DNS queries waiting with `4.3.2.1` for every name, a few per tick so a flood cannot stall the frame.
     void tick20ms() MM_NONBLOCKING override {
         MoonModule::tick20ms();
         if (!dnsBuf_) return;
@@ -139,14 +151,15 @@ public:
 private:
     static constexpr const char* kOpensOptions[] = {"on failure", "always", "first setup only"};
 
-    // None after switching, since switching proves a hand on the device, and the owner of a changed router may have forgotten the old password.
-    /// The password this boot carries.
+    /// The password this boot carries: none after switching, since switching proves a hand on the device and the owner of a changed router may have forgotten the old password.
     const char* password(const char* firstKnownNetwork) const { return switched_ ? "" : passwordFor(firstKnownNetwork); }
 
     uint8_t opens_ = 0;
     bool    switched_ = false;   ///< this boot opened it by switching on and off
     int8_t  clients_ = 0;
-    mutable char name_[8] = {};   ///< filled on first use from the MAC
+    /// The network name: `MM-` and four MAC digits.
+    /// @guide Anonymous, so the air does not say whose device it is.
+    mutable char name_[8] = {};
     bool    running_ = false;
 
     platform::UdpSocket dns_;

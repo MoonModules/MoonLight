@@ -4,32 +4,16 @@
 
 namespace mm {
 
-/// Effect: bright dots thrown into a flowing medium, leaving tails the flow carries and bends.
+/// Dots thrown into a moving medium, leaving tails the flow carries and bends.
 /// @card TrailsEffect.gif
 ///
-/// An emitter draws bright points, `draw::advect16` carries the plane, `draw::decay16` dims it.
-/// Run every frame, that loop is what a trail is.
-/// The tail is last frame's dots moved and dimmed, so the flow's shape is visible in it.
+/// Nothing draws a tail: it is the previous frames' dots, transported along a velocity field and dimmed, which is why the flow's shape is visible in it. On a cube each depth slice gets its own flow.
 ///
-/// Prior art: 4wheeljive's FlowFields from a Stefan Petrick concept, and Stam's backward advection.
+/// @attribution 4wheeljive, Stefan Petrick, Jos Stam
 ///
-/// @moreinfo
+/// @technical
 ///
-/// ## The plane is 16-bit, and that is the point
-///
-/// A trail is a value multiplied by slightly less than one, hundreds of times a second.
-/// At 8 bits that truncates to nothing, or rounds back up and the effect turns solid.
-/// `draw::decay` carries the measurements.
-/// So the plane is wider than the layer it writes to and narrows once on the way out.
-/// The precision belongs in the accumulator rather than in the frame buffer.
-///
-/// ## Cost and the volume
-///
-/// One advect, a bilinear sample per light, plus one noise sample per light for the flow.
-/// The flow rule dominates.
-/// On a cube each slice gets its own flow, sampled at that slice's depth.
-/// Light travels within a slice: `advect16` yields vx and vy, so a trail stays in its plane.
-/// Transport through the volume needs a trilinear sampler and a vz, which is its own change.
+/// The trail plane is 16-bit: a tail is a value multiplied by slightly less than one, hundreds of times a second. At 8 bits that truncates to nothing, or rounds back up and turns solid. The plane narrows once on the way out to the layer.
 class TrailsEffect : public EffectBase {
 public:
     /// Catalog tags: this effect is the power-function showcase.
@@ -48,7 +32,7 @@ public:
 
     /// How fast the medium moves, and with it every tail.
     uint8_t speed      = 40;
-    /// Emitter density: the count scales with the grid.
+    /// How many emitters are throwing light in.
     uint8_t dots       = 3;
     /// The flow field's cell size. Low gives broad sweeps, high gives eddies.
     uint8_t scale      = 30;
@@ -84,6 +68,7 @@ public:
         started_ = false;      // the next tick is the first: it has no previous frame to measure
     }
 
+    /// Move the trail plane along the flow, add the emitters, and draw it.
     void tick() MM_NONBLOCKING override {
         if (!plane_ || !scratch_) return;               // a zero grid, or an allocation that failed
         const lengthType w = width(), h = height(), d = depth();

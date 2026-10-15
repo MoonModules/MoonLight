@@ -147,7 +147,7 @@ def owned_files() -> list:
 def clones():
     """Every clone jscpd finds among the files we own, as the parsed report, or None when the run produced nothing, which is a broken run rather than a clean tree.
 
-    jscpd comes through npx, the dependency the docs build already has for moxygen.
+    jscpd comes through npx, which a developer machine with Node has.
     """
     npx = shutil.which("npx")
     if not npx:

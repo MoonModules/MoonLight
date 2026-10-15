@@ -18,7 +18,7 @@ enum class LedHwBlock : uint8_t { None = 0, LcdCam, I2s, Parlio, GpioDma };
 ///
 /// Not a hot-path boundary: every method here is called per frame or per reinit, never per light. The per-light encode writes into the raw buffer and never calls back into the peripheral.
 ///
-/// Prior art: the Strategy pattern, in the same shape this project's other pluggable seams take.
+/// It is the Strategy pattern, in the shape this project's other pluggable seams take.
 class LedPeripheral {
 public:
     /// Virtual, since the orchestrator owns every backend through this interface.
@@ -28,6 +28,7 @@ public:
     void attach(ParallelLedDriver* owner) { owner_ = owner; }
 
     // --- Static descriptors: per-peripheral constants the orchestrator reads through the interface ---
+
     /// Parallel lanes this peripheral's silicon provides on the current chip (0 = not this chip).
     virtual uint8_t lanesAvailable() const MM_NONBLOCKING = 0;
     /// Can this peripheral host the 74HCT595 pin expander? (Needs a DMA that reaches PSRAM.)
@@ -97,8 +98,7 @@ public:
     virtual const char* validateBusPins(const uint16_t* /*lanes*/, uint8_t /*n*/) const { return nullptr; }
     /// The GPIO the bus parks spare lanes on, reached only where the bus rounds wider.
     virtual uint16_t clockPinForBus() const { return 0; }
-    // False keeps a spare lane off the pin map, so it cannot drive a pad another peripheral owns.
-    /// Whether a spare bus lane must be parked on a real GPIO.
+    /// Whether a spare bus lane must be parked on a real GPIO; false keeps it off the pin map, so it cannot drive a pad another peripheral owns.
     virtual bool spareLanesNeedPad() const { return true; }
     /// The whole-frame DMA byte budget; 0 means no bound, as on a PSRAM-capable peripheral.
     virtual size_t dmaBudgetBytes() const { return 0; }

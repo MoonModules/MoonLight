@@ -1,10 +1,9 @@
 #include "core/moonlive/moonlive_emit.h"
 #include <cstring>
 
-/// @defgroup moonlive_emit_x86_64 MoonLive x86-64 fill routines
 /// The fill routines as native machine code for Windows, Linux and Intel macOS.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## Two branches, one instruction set
 ///

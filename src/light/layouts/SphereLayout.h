@@ -4,25 +4,19 @@
 
 namespace mm {
 
-/// Layout mapping LEDs onto a sphere surface.
-/// Author: MoonLight, https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Layouts/L_MoonLight.h
+/// Lights on the surface of a hollow sphere: a shell one light thick, nothing inside.
+/// @card SphereLayout.gif
 ///
-/// @moreinfo
+/// @technical
 ///
-/// A hollow sphere: lights sit on the surface only (a one-light-thick shell), not the interior.
-/// Lattice layout, every light is at an integer (x,y,z) in a (2r+1)^3 bounding box, centerd at (r,r,r).
-/// A lattice point is on the shell when its distance from the center rounds to `radius`, i.e. it falls in the half-open band [radius-0.5, radius+0.5).
-/// The same band predicate drives both lightCount() (count) and placeLights() (emit), so they never disagree.
-///
-/// Distances are compared squared, so there is no square root or float per light.
-/// The hot-path discipline applies here even though layout iteration is cold, because the same pattern then reads uniformly across the codebase.
+/// A lattice point is on the shell when its distance from the center rounds to the radius, the half-open band [radius − 0.5, radius + 0.5). Distances compare squared, so no light costs a square root.
 class SphereLayout : public LayoutBase {
 public:
-    /// The catalog tags this layout carries.
+    /// The catalog tags: 💫, a MoonLight origin.
     const char* tags() const override { return "💫"; }
     /// How many axes this layout places lights on.
     Dim dimensions() const override { return Dim::D3; }
-    /// The shell's radius in light-units, its maximum keeping the lattice scan bounded.
+    /// The shell's radius, in lights.
     lengthType radius = 4;
 
     /// The controls a user sets on the card.
@@ -32,7 +26,7 @@ public:
 
     /// How many lights the current settings place.
     nrOfLightsType lightCount() const override {
-        /// Recomputed only on a radius change, and cheap beside rendering.
+        // Recomputed only on a radius change, and cheap beside rendering.
         nrOfLightsType n = 0;
         forEachShellPoint([](void*, nrOfLightsType, lengthType, lengthType, lengthType) {}, nullptr, &n);
         return n;
@@ -44,7 +38,7 @@ public:
     }
 
 private:
-    // Walk the bounding lattice once, so the count and the emit share one predicate.
+    /// Walk the bounding lattice once, so the count and the emit share one predicate.
     void forEachShellPoint(CoordCallback cb, void* ctx, nrOfLightsType* count) const {
         const int32_t r = radius;
         // A half-open band, compared in squared integer space by scaling the whole inequality.

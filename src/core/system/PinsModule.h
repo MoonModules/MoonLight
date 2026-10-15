@@ -14,30 +14,28 @@
 
 namespace mm {
 
-/// The device's pin ownership map: which module owns each GPIO, for what, and whether it is safe.
+/// A read-only map of which module owns each GPIO, for what role, and whether the pin is safe for it.
+/// @card PinsModule.png
 ///
-/// It is keyed by physical GPIO, the way an OS device manager or a board template is.
-/// A fixed System module, wired by code, and read-only.
-/// Header-only: a small read-only diagnostic over the live tree and one platform seam.
+/// It is keyed by physical GPIO, the way an OS device manager or a board template is. It walks the live tree for every claimed pin, holds no state, and flags double claims.
 ///
-/// @moreinfo
+/// @guide
 ///
-/// ## What it collects
+/// ## Reading the map
 ///
-/// It walks the live tree for every claimed pin, both pin controls and driver lane lists.
-/// Each claim carries a severity flag and the live state read off the pad.
-/// A disabled module's pins drop out, so the map reflects release-on-disable.
+/// A row shows the GPIO, its owner and role, and the live direction, level and drive.
 ///
-/// Each row is one GPIO with its owner and role.
-/// A GPIO claimed twice shows the first owner and lists every claimant in the detail.
-/// It surfaces rather than arbitrates, the controls already being the registry.
+/// A row takes a colored edge when unsafe: red for a reserved or double-claimed pin, yellow for a driven role on a strap.
 ///
-/// ## Why it only observes
+/// The [GPIO usage reference](https://moonmodules.org/MoonLight/reference/hardware/gpio-usage.html) lists the pins per chip.
 ///
-/// MoonLight's equivalent is a central manager owning a table and assigning pins.
-/// This inverts that: each module owns its pins, and one module observes them.
-/// What is borrowed is the per-pin report rather than the ownership.
-/// The role is derived from the control name, with no central vocabulary.
+/// @technical
+///
+/// **What it collects.** Both pin controls and driver lane lists. Each claim carries a severity flag and the live state read off the pad. A disabled module's pins drop out.
+///
+/// A GPIO claimed twice shows the first owner and lists every claimant in the detail. It surfaces rather than arbitrates, the controls already being the registry.
+///
+/// **Why it only observes.** The usual design is a central pin manager. This inverts it: each module owns its pins and one module observes them, the role derived from the control name. Header-only: one platform seam.
 class PinsModule : public MoonModule {
 public:
     /// Declare the one list of claimed pins.
@@ -56,13 +54,12 @@ private:
     /// The map itself, a source over a fixed snapshot, keeping every claim so conflicts show.
     struct PinListSource : ListSource {
         bool persistsList() const override { return false; }   // the pin map is rebuilt from the tree
-        // Enough for any realistic board, and a diagnostic stops adding rather than allocating.
+        /// Claims kept, enough for any realistic board; a diagnostic stops adding rather than allocating.
         static constexpr uint8_t kMaxClaims = 64;
         /// One control's claim on one pin, with everything the row needs copied in.
         struct Claim {
             uint8_t gpio;         ///< the physical GPIO, which keys the row
-            // Copied, since a delete frees the module and the UI serializes right after one.
-            char owner[16];       ///< the owning module's name
+            char owner[16];       ///< the owning module's name, copied since a delete frees the module and the UI serializes right after one
             char role[14];        ///< the derived role, per claim so lanes do not collapse
             const char* severity; ///< a static label, or null when the claim is safe
             const char* reason;   ///< why it is flagged, shown when the row expands
@@ -239,8 +236,7 @@ private:
             }
         }
 
-        /// Grade one claim against the pin's capability, setting its severity and its reason.
-        // Reserved or invalid is an error; a driven role on a strap is a warning.
+        /// Grade one claim against the pin's capability, setting its severity and its reason: reserved or invalid is an error, a driven role on a strap a warning.
         static void gradeClaim(Claim& c, bool isOutput) {
             const platform::GpioCapability cap = platform::gpioCapability(c.gpio);
             if (!cap.validGpio)      { c.severity = "error"; c.reason = "invalid GPIO: not a pin on this chip"; return; }
@@ -273,6 +269,7 @@ private:
         }
     };
 
+    /// A row per claimed GPIO.
     PinListSource pins_;
 };
 

@@ -1,5 +1,4 @@
 #pragma once
-// Author: MoonLight original
 
 #include "core/util/math16.h"      // BeatPhase: the shared wing-flap clock
 #include "core/util/math8.h"       // Random8: fixed-seed spawn variation, golden-reproducible
@@ -10,7 +9,7 @@ namespace mm {
 
 namespace toasterart {
 
-/// The shared palette: 0 is transparent, then chrome greys, slot dark, wing grey and toast browns.
+/// The shared palette: 0 is transparent, then chrome grays, slot dark, wing gray and toast browns.
 inline constexpr RGB kPalette[] = {
     {0, 0, 0},        // 0: transparent key (never read)
     {188, 192, 200},  // 1: chrome body
@@ -85,19 +84,16 @@ inline constexpr draw::sprites::Sprite kToastSprite{kToast, kPalette, TW, TH, 1,
 
 }  // namespace toasterart
 
-/// Effect: chrome toasters with flapping wings and toast drift diagonally across the dark.
+/// The classic screensaver on a light wall: chrome toasters with flapping wings and slices of toast drift diagonally across the dark, forever.
 /// @card FlyingToastersEffect.gif
 ///
-/// Inspired by After Dark's Flying Toasters, at Frank's suggestion of sprite support.
-/// The art is drawn fresh here, since the original is Berkeley Systems' and was famously litigated.
+/// The wing flap carries a per-toaster offset, so the flock never falls into sync. The sprites carry their own colors (chrome, wing, crust), so the global palette does not apply. Needs a grid at least the toaster's size (12×9).
 ///
-/// @moreinfo
+/// @attribution troyhacks, After Dark
 ///
-/// ## The construction
+/// @technical
 ///
-/// Movement is `particles::Pool` at a constant diagonal velocity, respawning as it wraps.
-/// Appearance is the stateless `draw::sprite`.
-/// The wing flap is one BeatPhase, offset per toaster so the flock never syncs.
+/// Movement is `particles::Pool` at a constant diagonal velocity, respawning as it wraps, and appearance is the stateless `draw::sprite`. The wing flap is one BeatPhase, offset per toaster.
 class FlyingToastersEffect : public EffectBase {
 public:
     /// The pool size: both count controls at their maxima.
@@ -112,11 +108,11 @@ public:
     uint8_t toasters = 5;
     /// How many slices of toast fly with them.
     uint8_t toast    = 3;
-    /// How fast the flock drifts.
+    /// Drift rate in sprite-widths, the same on any grid.
     uint8_t speed    = 96;
-    /// Pixels per art pixel, where 0 scales with the grid.
+    /// Integer magnification for toasters and toast; 0 is auto.
     uint8_t spriteSize = 0;
-    /// Move to the music, each sprite on its own band, holding still in silence.
+    /// Each sprite follows its own band, so the scene breathes.
     bool audioReactive = false;
 
     /// Publish both counts, the drift, the sprite scale and the audio switch.

@@ -9,10 +9,10 @@
 
 namespace mm {
 
-/// Lights whose channels are each a pin, pulsed by the chip's PWM: a bulb, an analog strip, a constant-current controller.
+/// Lights whose channels are each a pin, pulsed by the chip's PWM: a bulb, an analog RGB, RGBW or RGBCCT strip, a QuinLED An-Penta controller, on any ESP32's LEDC.
+/// @card PwmLightDriver.png
 ///
-/// `pins` lists one GPIO per output channel and the fixture profile names each channel, so the light count is the pins divided by the profile's channels.
-/// `bits` sets the resolution, and the pulse rate follows from it: the timer's clock divided by the steps, shown as `frequency`.
+/// The fixture profile names what each pin carries, so the light count is the pins divided by the profile's channels. One timer serves the driver and each pin takes one channel, up to 16 on the classic ESP32 and 6 on the C3. The channels' pulses start spread over the period, so full white never switches all at once.
 class PwmLightDriver : public DriverBase {
 public:
     /// One pin per channel of a plain RGB light, until the profile says otherwise; the curve reaches the timer in 16 bits, so a dim fade keeps its steps.
@@ -24,8 +24,11 @@ public:
     /// The most pins one driver drives, the classic ESP32's channel count.
     static constexpr uint8_t kMaxPins = 16;
 
-    char pins[64] = "";              ///< one GPIO per output channel, in the profile's channel order
-    uint8_t bits = 12;               ///< the duty resolution, 4,096 steps at 19,531 Hz, QuinLED's recommended rate
+    /// One GPIO per output channel, in the fixture's channel order.
+    char pins[64] = "";
+    /// PWM resolution, which sets the pulse rate.
+    /// @guide Each bit more halves the pulse rate: 12 bits pulse at 19531 Hz, QuinLED's recommendation, and 16 at 1220 Hz. More bits fade smoother, fewer band less on camera. The C3 and S3 reach 14.
+    uint8_t bits = 12;
 
     /// The fewest bits, about 39 kHz: a faster pulse only trades dim steps away.
     static constexpr uint8_t kMinBits = 11;
@@ -40,7 +43,8 @@ public:
         const uint8_t maxBits = chipBits < kMaxBits ? chipBits : kMaxBits;
         controls_.addControl("bits", bits, kMinBits, maxBits > kMinBits ? maxBits : kMinBits);
         controls_.setNumberField(controls_.count() - 1);   // typed, since a bit count is a number to read rather than a position
-        controls_.addReadOnly("frequency", frequency_, sizeof(frequency_));   // read against a fixture's datasheet
+        /// The pulse rate the resolution gives, to read against a fixture's datasheet.
+        controls_.addReadOnly("frequency", frequency_, sizeof(frequency_));
     }
 
     /// The pins, the resolution and the window re-lay the outputs.
@@ -117,7 +121,7 @@ private:
     char attachErr_[64] = "";
     char frequency_[16] = "";
 
-    // Scaled from 16 bits to the resolution and rounded, so 65535 is fully on and a lit value never rounds to dark.
+    /// Write one output's duty, scaled from 16 bits to the resolution and rounded, so 65535 is fully on and a lit value never rounds to dark.
     void write(uint8_t output, uint16_t value) MM_NONBLOCKING {
         uint32_t duty = static_cast<uint32_t>((uint64_t{value} * maxDuty_ + 32767) / 65535);
         if (duty == 0 && value) duty = 1;
@@ -126,7 +130,7 @@ private:
         platform::pwmWrite(channels_[output], duty);
     }
 
-    // Each channel's pulse starts a share of the period later than the one before, so full white does not switch every channel at once.
+    /// Start the timer and attach a channel per pin, each pulse starting a share of the period later than the one before.
     void layOut(uint8_t n) {
         stop();
         pinCount_ = n;
@@ -146,7 +150,7 @@ private:
         group();
     }
 
-    // The pins as whole lights of the profile's channels; the ones past the last whole light go dark.
+    /// Group the pins as whole lights of the profile's channels; the ones past the last whole light go dark.
     void group() {
         const uint8_t outCh = correction_.outChannels;
         lights_ = outCh ? static_cast<uint8_t>(pinCount_ / outCh) : 0;
@@ -156,6 +160,7 @@ private:
         if (!partial && lights_ > 0) setDrivingInfo(lights_, lights_, outCh);
     }
 
+    /// Stop the timer and its channels.
     void stop() {
         if (timer_ >= 0) platform::pwmStop(timer_);
         timer_ = -1;

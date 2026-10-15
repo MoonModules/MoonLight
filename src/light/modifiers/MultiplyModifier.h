@@ -4,38 +4,32 @@
 
 namespace mm {
 
-/// Modifier tiling the image across the box, optionally mirrored.
-/// @card MultiplyModifier.png
+/// Tiles the image across the box, a number of times per axis, and can mirror every other tile into a kaleidoscope.
+/// @card MultiplyModifier.gif
 ///
-/// @moreinfo
+/// Two tiles with mirroring on is a plain mirror.
 ///
-/// Tiles the logical image across the physical box `multiply` times per axis, optionally mirroring alternate tiles.
-/// The logical box is the physical box divided by the per-axis multiplier.
-/// Under the fold build the fan-out is free: every physical light folds (`pos % logicalSize`) onto its logical cell.
-/// The N physical lights of N tiles all land on the same logical light, N:1 emerges, no fan-out list.
-/// With multiply 2 + mirror on, an axis folds in half, the classic kaleidoscope mirror (this subsumes a standalone Mirror: it's just multiply 2 + mirror true).
+/// @technical
 ///
-/// Prior art: MoonLight's Multiply modifier (M_MoonLight.h), same tile+mirror fold (`position % modifierSize`, odd tiles reflected).
-/// We expose per-axis mirror bools (3) instead of MoonLight's single mirror flag, and per-axis multipliers, so X/Y/Z can fold and tile independently.
-/// Author: MoonLight, https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Modifiers/M_MoonLight.h
+/// The logical box is the physical box divided by each axis's factor, and every light folds onto its logical cell with a modulo. Light past the last whole tile is dropped.
 class MultiplyModifier : public ModifierBase {
 public:
-    /// The catalog tags this modifier carries.
-    const char* tags() const override { return "💫"; }  // MoonLight origin
+    /// The catalog tags: 💫, a MoonLight origin.
+    const char* tags() const override { return "💫"; }
     /// Tiles on all three axes; on a 2D grid the z factor is simply 1.
     Dim dimensions() const override { return Dim::D3; }
 
-    /// How many times the box repeats on this axis, one meaning no multiplication.
+    /// Tiles along x, one meaning none.
     uint8_t multiplyX = 2;
-    /// Along y.
+    /// Tiles along y, one meaning none.
     uint8_t multiplyY = 2;
-    /// Along z.
+    /// Tiles along z, one meaning none.
     uint8_t multiplyZ = 2;
-    /// Whether alternate tiles reflect on this axis, giving a kaleidoscope.
+    /// Reflect every other tile along x.
     bool mirrorX = true;
-    /// Along y.
+    /// Reflect every other tile along y.
     bool mirrorY = true;
-    /// Along z.
+    /// Reflect every other tile along z.
     bool mirrorZ = true;
 
     /// The controls a user sets on the card.
@@ -78,14 +72,14 @@ private:
     /// Pixels the tiles actually cover (tile*mult); the leftover edge is dropped.
     Coord3D covered_;
 
-    // The control clamped to the axis extent, so it never divides by zero or blanks a layer.
+    /// The control clamped to the axis extent, so it never divides by zero or blanks a layer.
     static lengthType eff(uint8_t mult, lengthType extent) {
         lengthType m = mult ? mult : 1;
         if (extent > 0 && m > extent) m = extent;
         return m;
     }
 
-    // Fold a coordinate into one tile, reflecting the odd ones when mirroring.
+    /// Fold a coordinate into one tile, reflecting the odd ones when mirroring.
     static lengthType foldAxis(lengthType p, lengthType logical, bool mirror) {
         if (logical <= 0) return p;
         const lengthType tile   = static_cast<lengthType>(p / logical);

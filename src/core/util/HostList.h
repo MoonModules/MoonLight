@@ -7,11 +7,9 @@
 
 namespace mm {
 
-/// @defgroup HostList Parsing a list of hosts
-/// @{
 /// One human-typed text control turned into the hosts a service sends to: addresses, names, or both.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## Why a list rather than one host per service
 ///
@@ -150,5 +148,4 @@ inline const char* parseHostList(const char* s, Host* out, uint8_t maxHosts, uin
     }
 }
 
-/// @}
 }  // namespace mm

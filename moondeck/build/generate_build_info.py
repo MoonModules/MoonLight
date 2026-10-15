@@ -48,11 +48,9 @@ build = build_id()
 
 content = f'''#pragma once
 
-/// @defgroup build_info Compile-time identity
-/// @{{
 /// Every fact about which binary this is, as the build system knew it.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// This header is generated from `library.json` by `moondeck/build/generate_build_info.py`, so an edit belongs in that script rather than here.
 ///
@@ -122,8 +120,6 @@ constexpr const char* kFirmwareName = MM_FIRMWARE_NAME;
 constexpr const char* kRelease      = MM_RELEASE;
 
 }} // namespace mm
-
-/// @}}
 '''
 
 # Force UTF-8 on both read and write: Python's default on Windows is cp1252,

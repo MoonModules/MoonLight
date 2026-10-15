@@ -7,15 +7,15 @@
 #include <cstdint>
 #include <cstddef>
 
-/// @defgroup moonlive_asm_thumb2 MoonLive Thumb-2 assembler
-/// @{
 /// The Teensy 4.1 backend: ARMv7E-M Thumb-2 for the Cortex-M7, written against the same named-instruction interface as the other backends.
 ///
 /// Wide encodings throughout, with no IT blocks and no literal pools: a constant is a MOVW/MOVT pair and a conditional branch is a compare plus a wide branch.
+///
 /// r0-r6, r8-r11 and lr hold values: every register a routine saving r4-r11 and lr may use, less r7, the Thumb frame pointer, and r12, the one scratch.
 ///
 /// The AAPCS passes the fifth argument, the control arena, on the stack. The prologue loads it into r4 once r4 is saved, and a script-to-script call pushes it the same way.
-/// A host call is MOVW/MOVT into r12 then BLX r12: the emitted code in OCRAM sits beyond BL's 16 MB reach of the built-ins in flash or ITCM. The C function pointer already carries the Thumb bit.
+///
+/// A host call is MOVW/MOVT into r12, then BLX r12, since the code in OCRAM lies beyond BL's 16 MB reach of the built-ins. The C function pointer already carries the Thumb bit.
 
 namespace mm::moonlive {
 
@@ -54,6 +54,7 @@ public:
     bool overflowed() const { return overflow_; }
 
     // --- the call frame ---
+
     /// Save r4-r11 and lr, open `slots` frame slots, and load the stack-passed fifth argument into r4.
     void prologue(uint8_t slots);
     /// Write a register into a frame slot.
@@ -122,9 +123,9 @@ public:
     void retValue(Reg a);
 
 private:
-    // The buffer's size, fixed for this object's life but chosen per script.
+    /// The buffer's size, fixed for this object's life but chosen per script.
     const size_t kCap;
-    // Sized in core so the backends cannot drift apart.
+    /// Label and fixup capacity, sized in core so the backends cannot drift apart.
     static constexpr uint8_t kMaxLabels = kAsmLabels;
     static constexpr uint8_t kMaxFixups = kAsmFixups;
 
@@ -134,16 +135,16 @@ private:
     /// A wide conditional branch to `l`, the condition already set by a compare.
     void branchCond(uint8_t cond, Label l);
     void cmp(Reg a, Reg b);
-    // A pending label reference; the kind matters, BL and B<cond>.W scattering the offset differently.
+    /// A pending label reference; the kind matters, BL and B<cond>.W scattering the offset differently.
     enum class FixKind : uint8_t { Branch, Call };
     void addFixup(size_t at, Label label, FixKind kind);
 
-    // Heap, as every backend's buffer is, so no task's stack carries it.
+    /// The code buffer, on the heap as every backend's is, so no task's stack carries it.
     uint8_t* buf_;
     bool     owned_;   ///< true when we allocated the buffer and free it
     size_t   len_ = 0;
     bool     overflow_ = false;
-    // Bytes from the frame pointer to the caller's sp, 0 before a prologue, so a teardown cannot disagree with its setup.
+    /// Bytes from the frame pointer to the caller's sp, 0 before a prologue, so a teardown cannot disagree with its setup.
     uint16_t frameBytes_ = 0;
 
     CodePos  labelPos_[kMaxLabels];
@@ -154,7 +155,5 @@ private:
 
     void patchBranches();
 };
-
-/// @}
 
 }  // namespace mm::moonlive

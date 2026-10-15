@@ -95,7 +95,7 @@ add_executable(mm_tests
     unit/core/unit_HostList.cpp
     unit/core/unit_Addressing.cpp
     unit/core/unit_HostResolver.cpp
-    unit/core/unit_OscModule.cpp
+    unit/core/unit_OscService.cpp
     unit/core/unit_Scheduler_unique_names.cpp
     unit/core/unit_MoonStatsModule.cpp
     unit/core/unit_MoonTalkModule.cpp
@@ -139,6 +139,7 @@ add_executable(mm_tests
     unit/light/unit_GEQ3DEffect.cpp
     unit/light/unit_GEQEffect.cpp
     unit/light/unit_GridBlacksLayout.cpp
+    unit/light/unit_LayoutComposition.cpp
     unit/light/unit_LissajousEffect.cpp
     unit/light/unit_MirrorModifier.cpp
     unit/light/unit_NoiseMeterEffect.cpp

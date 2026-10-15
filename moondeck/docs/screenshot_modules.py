@@ -1236,7 +1236,6 @@ def main() -> int:
             print(f"  {name}: {reason}")
     if captured:
         print("\nNext steps:")
-        print("  Add module screenshots: uv run moondeck/docs/update_module_docs.py")
         if "ui_overview" in captured:
             print("  Add UI overview to docs/explanation/architecture/index.md # Web UI section:")
             print("  ![UI overview](assets/ui/ui_overview.png)")

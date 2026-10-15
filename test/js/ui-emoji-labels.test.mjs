@@ -7,42 +7,14 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import { execSync } from "node:child_process";
-
-const APP = new URL("../../src/ui/app.js", import.meta.url).pathname;
-const src = readFileSync(APP, "utf8");
-
-/// app.js is a browser script rather than a module, so the vocabularies are lifted out of it by
-/// name and evaluated. Reading the source is the point: a test that redeclared the tables would
-/// pass while the shipped ones drifted.
-function tableFrom(name) {
-    const i = src.indexOf(`const ${name}`);
-    assert.ok(i >= 0, `${name} not found in app.js`);
-    const j = src.indexOf("\n};", i);
-    return src.slice(i, j + 3);
-}
-function constFrom(name) {
-    const i = src.indexOf(`const ${name}`);
-    assert.ok(i >= 0, `${name} not found in app.js`);
-    // To the statement's semicolon, not to the end of the line: these declarations carry a
-    // trailing comment, and cutting at the newline truncates the value itself.
-    return src.slice(i, src.indexOf(";", i) + 1);
-}
-
-const SCRIPTED_EMOJI = "\u{1F4DD}";
-const COMPILED_EMOJI = "\u{1F4E6}";
-const EMOJI_LABEL = new Function("SCRIPTED_EMOJI", "COMPILED_EMOJI",
-    tableFrom("EMOJI_LABEL") + "; return EMOJI_LABEL;")(SCRIPTED_EMOJI, COMPILED_EMOJI);
+// Imported, not redeclared: a test that kept its own tables would pass while the shipped ones drifted.
+import { EMOJI_LABEL, ROLE_EMOJI, DIM_EMOJI, KERNEL_EMOJI, SCRIPTED_EMOJI, COMPILED_EMOJI } from "../../src/ui/help.js";
 
 const seg = new Intl.Segmenter(undefined, { granularity: "grapheme" });
 const emojiIn = (s) => [...seg.segment(s)].map(g => g.segment).filter(g => g.trim());
 
 test("every emoji the interface generates has a tooltip", () => {
-    const ROLE_EMOJI = new Function(tableFrom("ROLE_EMOJI") + "; return ROLE_EMOJI;")();
-    const DIM_EMOJI = new Function(tableFrom("DIM_EMOJI") + "; return DIM_EMOJI;")();
-    const KERNEL_EMOJI = new Function(constFrom("KERNEL_EMOJI") + "; return KERNEL_EMOJI;")();
-
     const shown = [...Object.values(ROLE_EMOJI), ...Object.values(DIM_EMOJI),
                    ...KERNEL_EMOJI, SCRIPTED_EMOJI, COMPILED_EMOJI];
     const missing = shown.filter(e => !EMOJI_LABEL[e]);

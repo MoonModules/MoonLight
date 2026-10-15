@@ -162,38 +162,39 @@ check, so it is not in the gate table until those are swept. It does two things 
 
 ### check_docgen
 
-Report every place the generated documentation breaks the shape the standards define, and refuse a new one. Two surfaces, one check: the catalog pages that render as card tables, and the `///` comments that become the technical pages beside them.
+Report every break of the shape the standards define, and refuse a new one, in help.json and in the headers' `///` comments.
+
+It also regenerates `docs/help/help.json` to prove the committed one is fresh, which needs LLVM, the one [gen_help](#gen_help) uses. Without it the report still runs and names the freshness as unchecked, which fails the gate.
 
 ```bash
 uv run moondeck/check/check_docgen.py
 ```
 
-Reads the pages the docs build renders as card tables and reports, per card:
+Reads help.json and reports, per catalog card:
 
-- the sizes: 600 characters of description and 100 for any one control, 400 and 80 on the visual catalogs
-- a missing image, or the wrong format for its page
-- a details section placed above a card, or named for a card that does not exist
-- a details table past 4 columns, or a cell past 300 characters
-- any link in the second column that is not Tests, API or Details
+- a missing picture, or the wrong format for its page
+- a control line past 100 characters, 80 on the visual catalogs, or one stating its default or range
+- a missing help line, a guide repeating its control, a module guide explaining a control, help past the app's word caps, and a tag emoji only one module carries
 
 And per file, over every `.h` and `.cpp` under `src/`, `test/`, `esp32/main`, `moonbase/main` and `moondeck/moonlive`, excluding the two vendored trees and the bundled test framework:
 
-- a class comment past 10 lines, or any `## ` section of its `@moreinfo` appendix past 10
+- a class comment past 10 lines, or any `## ` section of its `@technical` appendix past 10
 - a member comment past one line
 - one sentence in a comment past 30 words
 - a public function or variable with no `///` at all
+- a `//` note on a declaration, which belongs in its `///` or inside a body
 
 **A finding in a file that generates a page is an error; one in an implementation file is a warning.** A header and a catalog page are published, so a defect there ships and fails the gate. A `.cpp` publishes nothing: its comments are a note to the next reader, worth fixing without stopping a commit. Both are counted and both are reported. The split stages the sweep rather than ranking the two kinds of comment, so it goes and everything blocks once the warning column reaches zero.
 
 Every run writes [docs/reference/metrics/docgen.md](../docs/reference/metrics/docgen.md), the tracked state of the sweep: errors and warnings per rule and per page, then the files ranked within each area. Current state only, so its git history is the trend, the same shape repo-health.md uses. Every erroring file also carries its own findings in full, since an error blocks a commit and its reader needs to know what to fix; warnings stay counted rather than listed, which keeps the page a report rather than a log. The file is the artifact to read, because stdout scrolls away and truncates.
 
-**A ratchet, not a snapshot.** The committed `docs/reference/metrics/docgen.md` is the baseline: the run rewrites the file, then compares what it found against the copy in `HEAD`. An error fails the run, and so does any rule whose warning count ROSE, the total included, and so does the total of `///` lines after `@moreinfo`. Warnings are staged work, and staged work that grows is not a sweep. The appendix total catches the other way to fake a sweep: warnings that fall because their comments moved into an appendix rather than being cut. A rise names the changed files whose appendix grew.
+**A ratchet, not a snapshot.** The committed `docs/reference/metrics/docgen.md` is the baseline: the run rewrites the file, then compares what it found against the copy in `HEAD`. An error fails the run, and so does any rule whose warning count ROSE, the total included, and so does the total of `///` lines after `@technical`. Warnings are staged work, and staged work that grows is not a sweep. The appendix total catches the other way to fake a sweep: warnings that fall because their comments moved into an appendix rather than being cut. A rise names the changed files whose appendix grew.
 
 The comparison is per rule as well as on the total, because each hides a different move. A total alone hides one rule paying for another: splitting an over-wide line lowers the width count and raises the block count, which is the trade the block cap exists to refuse. Per rule alone misses a rule sitting under its own baseline while the total climbs. A rule whose limit itself changed is the one case where a rise is right, and the commit message is where that is said.
 
 **There is no tolerated list.** The limits are the limits, and the check is red until the tree meets them. A grandfather list was tried and removed: while one exists, the cheapest way to make the check green is to add to it, which is how the comment budget eroded in the first place.
 
-The rules are in [documentation-standards.md](../docs/contributing/documentation-standards.md#the-card), and the check itself is pinned by `test/python/test_check_docgen.py`: every rule is tested firing on a page built to break it, because a regex that silently stopped matching would report a clean run.
+The rules are in [documentation-standards.md](../docs/contributing/documentation-standards.md#the-card), and `test/python/test_check_docgen.py` pins the check. Every rule is tested firing on input built to break it, because a regex that silently stopped matching would report a clean run.
 
 ### check_esp32_built
 
@@ -457,7 +458,7 @@ declaration. The report gives the matrix:
   attribute       133      183      923    10%
 
   950 declarations carry only a `//` where the rule asks for `///`; 2089 carry no comment at all.
-  Public surface: 503 of 2558 documented (19%) — the part doxygen publishes.
+  Public surface: 503 of 2558 documented (19%), the public API.
 ```
 
 Three columns because there are three states, each with a different fix: `///` is documented;
@@ -483,7 +484,7 @@ attribute 3 converts to the ideals below.
 | `DOC DEVIATION` | Signed % difference from the ideal doc size — **class 130 words, method and attribute 40**. `0%` is ideal, `-100%` is absent, and over-documenting is unbounded. Not a "ratio": a ratio is a bare quotient (2.3×), this is a deviation from a target. |
 | `DOC WORDS` | Raw `///` word count — the number the deviation is derived from, so it sits beside it. |
 | `DEV WORDS` | Raw `//` word count. **No deviation column**, because zero is the ideal: measuring against "one line" made the best case (no note at all) read as `-100%`, i.e. worst. |
-| `VIS` | `pub` or `priv`. Doxygen publishes only public members, so an undocumented public method is an **API gap** while a private one is a maintenance note. Both are reported — a bloated comment is bloat either way, and clangd's hover shows both kinds to whoever maintains the code — but the reader can weigh them. |
+| `VIS` | `pub` or `priv`. The header documents the public API, so an undocumented public method is an **API gap** while a private one is a maintenance note. Both are reported: a bloated comment is bloat either way, and clangd's hover shows both kinds to whoever maintains the code, and the reader can weigh them. |
 
 The `Public surface: N of M documented` line is the number the doc site reflects. It differs
 sharply from the overall figure: `HueDriver` reads 40% public against 13% overall, because 52 of
@@ -816,26 +817,22 @@ Connects to a running MoonLight server, builds a minimal pipeline scaffold (Layo
 - `moondeck_desktop.png`, `moondeck_esp32.png`, `moondeck_live.png` — MoonDeck tab screenshots (requires MoonDeck running on port 8420)
 - `installer.png` — web installer preview (requires `preview_installer` running on port 8421)
 
-Without `--force`, existing screenshots are skipped — only missing files are captured. Run with `--force` to re-capture everything (e.g. after a UI change).
+Without `--force`, existing screenshots are skipped, so only missing files are captured. Run with `--force` to re-capture everything (e.g. after a UI change).
 
-GIF capture uses ffmpeg (install with `brew install ffmpeg`). Each GIF is assembled from frames captured via Playwright — the WebGL canvas is read via `page.screenshot(clip=...)` rather than `canvas.toDataURL()` to work correctly in headless mode.
+GIF capture uses ffmpeg (install with `brew install ffmpeg`). Each GIF is assembled from frames captured via Playwright: the WebGL canvas is read via `page.screenshot(clip=...)` rather than `canvas.toDataURL()` to work correctly in headless mode.
 
-After capture, run `update_module_docs` to insert the references into the module spec files.
+A module's card picture is the `@card` file its header names, so a capture that keeps the file name needs no other edit.
 
-### update_module_docs
+### gen_help
 
-Insert screenshot and GIF references into `docs/moonmodules/**/*.md` files.
+Generate `help.json`, the help the app shows per module and per control, from the module headers.
 
 ```bash
-uv run moondeck/docs/update_module_docs.py            # update all
-uv run moondeck/docs/update_module_docs.py --dry-run  # preview without writing
+uv run moondeck/docs/gen_help.py                 # writes docs/help/help.json
+uv run moondeck/docs/gen_help.py --ref v6.1.0 --out <dir>/help.json   # source and test links at that tag
 ```
 
-For each `.md` file, if `docs/assets/<type-folder>/<TypeName>.png` exists and the file doesn't already contain a screenshot reference, inserts the image after the first heading. If a matching `<TypeName>.gif` also exists, inserts the GIF reference on the next line. Safe to re-run — skips files that already have all references.
-
-Also inserts MoonDeck tab screenshots and the installer screenshot into `moondeck/MoonDeck.md` and `README.md` at fixed anchor points (defined in the `EXTRA_SHOTS` list in the script).
-
-Reports unreferenced screenshots — any PNG or GIF in `docs/assets/` not mentioned anywhere in `docs/` or `moondeck/`.
+libclang reads `src/module_types.cpp` with its include paths, so it needs LLVM (the one `check_clang_query` uses) but no build. The file is committed: the docs deploy publishes it, the docs build draws the cards of migrated modules from it, and `check_docgen` fails when it is stale. A module whose catalog card still has a body is read from the card; a card cut to its heading is read from the header. The run lists every control with no help, and every attribution naming someone [the attribution catalog](../docs/reference/attributions.md) does not list yet. To see a regenerated file in the app, run [preview_installer](#preview_installer), which serves it live on `localhost:8421`, and open the app once with `?help=local`; `?help=published` returns to the docs site.
 
 ### build_docs
 
@@ -845,6 +842,7 @@ Reports unreferenced screenshots — any PNG or GIF in `docs/assets/` not mentio
 uv run moondeck/docs/build_docs.py --serve     # what the button runs → http://localhost:8422/MoonLight/ (auto-reload)
 uv run moondeck/docs/build_docs.py            # one-shot build to site/ (CI parity; no server)
 uv run moondeck/docs/build_docs.py --strict    # promote every warning to an error (local anchor audit)
+uv run moondeck/docs/build_docs.py --serve --host 0.0.0.0   # reachable from a phone or tablet on the network
 ```
 
 The preview binds **:8422** — the [Installer Preview](#preview_installer) owns :8421 and MoonDeck :8420, so all three servers run at once. Config is `mkdocs.yml`; deps (`mkdocs-material`) are declared inline in the script, so `uv run` provisions them on first use. The two test-inventory pages and each effect/modifier's inline test list are generated from the test files at build time (`moondeck/docs/mkdocs_hooks.py`), so they're never committed and can't drift; `history/` and `backlog/` are built but kept off the nav. Warnings for links to repo files outside `docs/` (rewritten to GitHub URLs) and pre-existing stale anchors are expected — the build still succeeds.

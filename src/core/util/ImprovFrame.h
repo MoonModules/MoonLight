@@ -1,10 +1,8 @@
 #pragma once
 
-/// @defgroup ImprovFrame Improv-WiFi serial framing
-/// @{
 /// The wire framing for Improv-WiFi provisioning, in pure C++ with no ESP-IDF or network headers.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## The wire format
 ///
@@ -169,5 +167,4 @@ inline size_t buildImprovFrame(ImprovFrameType type,
     return p + 1;
 }
 
-/// @}
 } // namespace mm

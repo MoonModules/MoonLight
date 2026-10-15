@@ -5,29 +5,14 @@
 
 namespace mm {
 
-/// Audio-reactive effect: sawtooth bands driven by the frequency spectrum.
+/// Audio-reactive sawtooth waves: each column maps to a frequency band whose loudness drives a per-band oscillator speed.
 /// @card FreqSawsEffect.gif
-/// Author: @TroyHacks (MoonLight / WLED MoonModules), https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h
 ///
-/// One vertical saw per band, each running at a rate its own loudness drives.
-/// A band's speed rises instantly to a loud hit and decays slowly once the sound stops.
-/// So a struck band keeps sawing for a while, and a quiet one winds down.
+/// Louder bands sweep their sawtooth up the column faster. A band's speed rises instantly to a loud hit and decays slowly once the sound stops. A struck band keeps sawing for a while, and a quiet one winds down.
 ///
-/// Prior art: MoonLight's FreqSaws, whose physics and three position methods this reproduces.
+/// @technical
 ///
-/// @moreinfo
-///
-/// ## Three ways to place the saw
-///
-/// Chaos reads the position straight off the beat, so the saw teleports as the rate changes.
-/// Chaos fix carries a per-band offset, so a rate change continues from where the saw already was.
-/// BandPhases integrates a per-band accumulator each frame, so it advances with no jump at all.
-///
-/// ## The physics run once a tick
-///
-/// The band loop caches each band's position, and the column loop only reads that cache.
-/// So a band spanning many columns integrates once a frame rather than once a column.
-/// `invert` mirrors every other column for a woven look, and `keepOn` keeps a decayed band drawn.
+/// The band loop caches each band's position and the column loop only reads that cache, so a band spanning many columns integrates once a frame.
 class FreqSawsEffect : public EffectBase {
 public:
     /// Catalog tags: MoonLight origin, audio-reactive.
@@ -35,22 +20,22 @@ public:
     /// Writes the z=0 slice, which extrude fills through a volume.
     Dim dimensions() const override { return Dim::D2; }
 
-    // Defaults match MoonLight's own FreqSaws.
-    /// The per-frame fade, which is the motion trail.
+    /// Background decay per frame, which is the motion trail.
     uint8_t fade      = 4;
-    /// How much a band's loudness gains into its target speed.
+    /// How fast a band's speed ramps up with its magnitude.
     uint8_t increaser = 211;
-    /// How fast a silent band decays, where 0 leaves it running.
+    /// How fast a silent band's speed decays.
     uint8_t decreaser = 18;
-    /// The top rate a fully sped band reaches.
+    /// Ceiling on a band's oscillation speed.
     uint8_t bpmMax    = 198;
-    /// Mirror every other column, for a woven look.
+    /// Flip alternate columns vertically, for a woven look.
     bool    invert    = false;
-    /// Keep drawing a band whose speed has decayed to nothing.
+    /// Keep oscillating even when a band is silent.
     bool    keepOn    = false;
     /// The position methods, in option order.
     enum Method : uint8_t { kMethodChaos, kMethodChaosFix, kMethodBandPhases, kMethodCount };
-    /// Which of the three position methods places the saw.
+    /// The phase model that places the saw.
+    /// @guide `Chaos` reads the position off the beat, so the saw teleports as the rate changes. `Chaos fix` carries a per-band offset, so a rate change continues smoothly. `BandPhases` integrates an accumulator, so the saw never jumps.
     uint8_t method    = kMethodBandPhases;
 
     /// Publish the trail, the band physics and the position method.
@@ -168,8 +153,7 @@ private:
         lastTime = 0;
     }
 
-    // Per band rather than per light, so these stay inline.
-    uint16_t bandSpeed[NUM_GEQ_CHANNELS]   = {};   ///< each band's current run-rate
+    uint16_t bandSpeed[NUM_GEQ_CHANNELS]   = {};   ///< each band's current run-rate, per band rather than per light so inline
     uint16_t bandPhase[NUM_GEQ_CHANNELS]   = {};   ///< the BandPhases accumulator
     uint8_t  lastBpm[NUM_GEQ_CHANNELS]     = {};   ///< the Chaos fix method's previous rate
     uint8_t  phaseOffset[NUM_GEQ_CHANNELS] = {};   ///< and its carried offset

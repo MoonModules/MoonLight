@@ -2,7 +2,7 @@
 ///
 /// The same JSON files run against a live system through `moondeck/scenario/run_live_scenario.py`, so one scenario serves both tiers.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## Why the parser decodes escapes
 ///

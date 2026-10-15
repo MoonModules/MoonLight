@@ -5,22 +5,12 @@
 
 namespace mm {
 
-/// Interference effect: overlaid moving waves distorting the field.
+/// Two interfering sine waves beat against each other into a moire color field.
 /// @card DistortionWavesEffect.gif
-/// Author: ldirko & blazoncek (WLED port), https://editor.soulmatelights.com/gallery/1089-distorsion-waves , via the predecessor, https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_WLED.h
 ///
-/// Two sine waves whose summed value drives the hue, giving a flowing moire field.
-/// They run at independent frequencies and slightly different time rates, so they beat.
+/// The waves run at independent frequencies and slightly different time rates, and their summed value indexes the active palette.
 ///
-/// Prior art: WLED's Distortion Waves, by way of MoonLight.
-///
-/// @moreinfo
-///
-/// ## Integer throughout
-///
-/// Angles are bytes and the sines return bytes, which the effect averages into a hue.
-/// The vertical wave's time runs about 1.3 times the horizontal, approximated in integers.
-/// That hue then indexes the active palette, where the source swept hue directly.
+/// @attribution ldirko, blazoncek
 class DistortionWavesEffect : public EffectBase {
 public:
     /// Catalog tags: WLED origin.
@@ -28,11 +18,11 @@ public:
     /// A plane, which extrude lifts through a volume.
     Dim dimensions() const override { return Dim::D2; }
 
-    /// The horizontal wave's frequency.
+    /// Horizontal wave frequency.
     uint8_t freq_x = 3;
-    /// The vertical wave's frequency.
+    /// Vertical wave frequency.
     uint8_t freq_y = 3;
-    /// How fast the field moves, where 0 freezes it.
+    /// Animation rate; 0 freezes it.
     uint8_t speed = 50;
 
     /// Publish both wave frequencies and the speed.

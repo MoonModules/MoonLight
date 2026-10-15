@@ -1,9 +1,8 @@
-/// @defgroup platform_esp32_ota Over-the-air updates
 /// Fetch firmware from a URL and write it to the next update partition.
 ///
 /// The file owns its task shape privately; the rest of the layer reaches it through one declared symbol.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## Writing the wrong image is the unrecoverable direction
 ///

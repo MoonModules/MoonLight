@@ -37,30 +37,24 @@ inline constexpr const char* kServicePick[3] = {kScriptDir, kServiceExt, kServic
 
 }  // namespace moonlive
 
-/// A scripted service: the input twin of a scripted effect, and the flexible half of input.
-///
-/// The compiled services are lists of mappings, wrong for anything with a condition in it.
-/// A script holds the edge state a row cannot, and decides between outcomes.
-/// So a sensor nobody wrote a module for needs a datasheet and eight lines, not a release.
+/// A MoonLive script that reads hardware and drives controls, the input twin of a scripted effect.
 /// @card MoonLiveService.png
 ///
-/// @moreinfo
+/// A mapping row is right for a button and wrong for anything with a condition in it. A script holds state and chooses between outcomes, so a sensor nobody wrote a module for needs a datasheet and eight lines, not a release.
 ///
-/// ## The same relationship effects already have
+/// @guide
 ///
-/// A compiled effect and a scripted one are interchangeable, and so are the input services.
-/// The engine is identical, so a script author already knows the language.
-/// Factory-registered like the others: added under the container, then pointed at a file.
+/// ## Writing the script
 ///
-/// ## It runs on the slow tick
+/// Everything the script declares appears as a control on the card, and a slider move lands without a recompile. A compile error shows on the status line, and the service does nothing until it is fixed. A script runs on the 50 Hz poll rather than the render tick, so a heavy one costs its own tick.
 ///
-/// A contact closes for tens of milliseconds and a sensor answers at its own rate.
-/// The render rate would sample thousands of times to learn the same thing.
-/// It also means a heavy script costs its own tick rather than stuttering the lights.
+/// @technical
 ///
-/// What it reaches: the pins for hardware, and the control surface for output.
-/// That is the two-step model the mapping rows use, so a script drives the surface alone.
-/// A script therefore cannot rewrite a driver's pins by naming it.
+/// **Same as effects.** A compiled effect and a scripted one are interchangeable, and so are the input services. The engine is identical, and the service is added under the container, then pointed at a file.
+///
+/// **Slow tick.** A contact closes for tens of milliseconds, so the render rate would sample thousands of times for one fact. A heavy script costs its own tick rather than stuttering the lights.
+///
+/// **Reach.** A script reaches the pins for hardware and the control surface for output, as the mapping rows do. It cannot rewrite a driver's pins by naming it.
 class MoonLiveService : public MoonModule {
 public:
     /// A service, so the container accepts it as a child.
@@ -68,7 +62,8 @@ public:
 
     /// Declare the script's name, then whatever controls the script itself declared.
     void defineControls() override {
-        // The name, not the text: that lives in a file, so a module costs bytes not a kilobyte.
+        /// Which `.mls` file to run, picked from the script library.
+        /// @guide Naming a different file recompiles it live. The name is stored, not the text, so a module costs bytes.
         controls_.addFilePath("script", script_.buffer(), script_.bufferSize(),
                               moonlive::kServicePick);
         // Each bound to its live slot, so a slider move lands with no recompile.

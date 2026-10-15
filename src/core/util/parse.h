@@ -3,11 +3,9 @@
 /// @module parse
 /// @also JsonUtil, MqttModule, HueDriver
 
-/// @defgroup parse Reading a number from text
-/// @{
 /// The inverse of format.h: the integer a string starts with, from a JSON value, an MQTT payload or a query parameter alike.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## Overflow needs both checks
 ///
@@ -30,5 +28,3 @@ namespace mm {
 int parseIntStr(const char* s, int fallback = 0);
 
 }  // namespace mm
-
-/// @}

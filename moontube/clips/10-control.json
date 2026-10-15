@@ -134,7 +134,7 @@
     {
       "action": "add_module",
       "parent": "Services",
-      "type": "OscModule",
+      "type": "OscService",
       "as": "osc",
       "caption": "O S C is the clearest example: the protocol lighting desks and touch surfaces speak. It is off until you turn it on, because the port takes writes without a password.",
       "speech": 14.9
@@ -143,7 +143,7 @@
       "action": "click",
       "caption": "Listening now, on port nine thousand. An address like slash m m slash fader slash one reaches that fader directly.",
       "speech": 11.6,
-      "selector": "[data-module=\"OscModule\"] .control-row[data-key=\"listen\"] label.switch"
+      "selector": "[data-module=\"OscService\"] .control-row[data-key=\"listen\"] label.switch"
     },
     {
       "action": "start_process",

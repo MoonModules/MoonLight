@@ -72,9 +72,11 @@ TEST_CASE("NoiseMeterEffect fills the column from the floor upward") {
 
     layer.applyState();
 
-    // Run frames until the meter rises, then assert the bottom-up invariant on the tallest lit column.
+    // Run frames until the meter rises, then assert the bottom-up invariant on the tallest lit column. The test drives the clock, 50 ms a frame, so the simulated song reaches its beats on any machine rather than only on one fast enough.
+    struct FrozenClock { ~FrozenClock() { mm::platform::setTestNowMs(0); } } restoreClock;
     bool sawFill = false;
     for (int i = 0; i < 64; i++) {
+        mm::platform::setTestNowMs(1000 + static_cast<uint32_t>(i) * 50);
         audio.tick();
         layer.tick();
         // Floor is buffer row H-1 (drawY = sizeY-1-y, y=0 draws there first).

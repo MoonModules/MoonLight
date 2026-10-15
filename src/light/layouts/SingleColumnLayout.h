@@ -5,28 +5,23 @@
 
 namespace mm {
 
-/// Layout of one vertical LED column (1D).
-/// Author: MoonLight, https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Layouts/L_MoonLight.h
+/// A vertical line of lights at a fixed x, the 1D column.
+/// @card SingleColumnLayout.gif
 ///
-/// @moreinfo
-///
-/// A vertical line of lights at a fixed x, running along y.
-/// The geometry is reproduced exactly: the source emits one light per y across the height, forward or reversed.
-///
-/// MoonLight's pin and wiring controls are dropped, since a MoonLight layout emits coordinates only and the driver owns pins.
+/// @attribution Limpkin
 class SingleColumnLayout : public LayoutBase {
 public:
-    /// The catalog tags this layout carries.
+    /// The catalog tags: 💫, a MoonLight origin.
     const char* tags() const override { return "💫"; }
     /// How many axes this layout places lights on.
     Dim dimensions() const override { return Dim::D1; }
-    /// Geometry controls mirror MoonLight's defaults and ranges 1:1.
-    uint8_t  start_y = 0;          // "starting Y", 0..255
+    /// The row the column starts at.
+    uint8_t  start_y = 0;
     /// How many lights the column holds.
     uint16_t height = 30;
-    /// Which column it occupies.
+    /// The column's x.
     uint16_t xposition = 0;
-    /// Whether index 0 is the top.
+    /// Wire it top to bottom rather than bottom to top.
     bool     reversed_order = false;
 
     /// The controls a user sets on the card.
@@ -40,27 +35,17 @@ public:
     /// How many lights the current settings place.
     nrOfLightsType lightCount() const override {
         // One light per y step. Clamp to the index type max, as GridLayout does.
-        constexpr uint32_t kMax = std::numeric_limits<nrOfLightsType>::max();
         const uint32_t n = static_cast<uint32_t>(height);
-        return static_cast<nrOfLightsType>(n > kMax ? kMax : n);
+        return clampedCount(n);
     }
 
     /// Emit every light's coordinate, in wiring order.
     void placeLights(const CoordSink& sink) const override {
-        // Only the y walk direction depends on the reversed flag; the clamped count bounds it.
-        const uint32_t limit = lightCount();
-        const lengthType x = static_cast<lengthType>(xposition);
-        uint32_t idx = 0;
-        if (reversed_order) {
-            for (int32_t y = static_cast<int32_t>(start_y) + static_cast<int32_t>(height) - 1;
-                 y >= static_cast<int32_t>(start_y) && idx < limit; y--) {
-                sink.pixel(static_cast<nrOfLightsType>(idx++), x, static_cast<lengthType>(y), 0);
-            }
-        } else {
-            for (int32_t y = static_cast<int32_t>(start_y);
-                 y < static_cast<int32_t>(start_y) + static_cast<int32_t>(height) && idx < limit; y++) {
-                sink.pixel(static_cast<nrOfLightsType>(idx++), x, static_cast<lengthType>(y), 0);
-            }
+        LightEmitter e{&sink, lightCount()};
+        // Only the y walk direction depends on the reversed flag.
+        for (int32_t i = 0; i < height; i++) {
+            const int32_t y = reversed_order ? start_y + height - 1 - i : start_y + i;
+            if (!e.pixel(static_cast<lengthType>(xposition), static_cast<lengthType>(y), 0)) return;
         }
     }
 };

@@ -1,9 +1,8 @@
-/// @defgroup platform_esp32_parlio Parallel IO WS2812 output
 /// The peripheral half of the parallel driver on the P4.
 ///
 /// The driver above shares its encoder with the other parallel backend, one bus byte per slot; this file owns the transmit unit, the buffer, transmit and wait.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## The same one-transfer design, on a simpler peripheral
 ///

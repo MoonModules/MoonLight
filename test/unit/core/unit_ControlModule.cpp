@@ -5,7 +5,7 @@
 
 #include "doctest.h"
 #include "core/services/MidiService.h"
-#include "core/services/OscModule.h"
+#include "core/services/OscService.h"
 
 #include <algorithm>
 #include <array>
@@ -1735,7 +1735,7 @@ TEST_CASE("an APC40's top-left pad applies the first preset, and its pads show w
 
 namespace {
 /// An OSC module whose datagrams are kept rather than sent, so the test is the network.
-struct WiredOsc : mm::OscModule {
+struct WiredOsc : mm::OscService {
     struct Sent { uint8_t ip[4]; std::vector<uint8_t> pkt; };
     std::vector<Sent> out;
     /// The addresses sent, in order, so a test reads what went where.

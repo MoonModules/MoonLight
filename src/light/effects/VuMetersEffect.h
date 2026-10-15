@@ -4,25 +4,18 @@
 
 namespace mm {
 
-/// Effect: sixteen VU needles with real mass, one per band, with peak-hold and a red zone.
+/// Sixteen needles, one per band, each with real mass.
 /// @card VuMetersEffect.gif
 ///
-/// What makes a VU meter beautiful is the needle's mass rather than the dial.
-/// A physical meter is a spring and a damper, so the needle overshoots a peak and settles back.
-/// That overshoot is why a mechanical meter reads as alive where a bar graph reads as a readout.
+/// What makes a VU meter beautiful is the needle: it overshoots a peak, swings back and settles. That is why a mechanical meter reads as alive where a bar graph reads as a readout.
 ///
-/// Prior art: IEC 60268-17, which specifies 300 ms to 99% with 1 to 1.5% overshoot.
+/// The bass needles are heavier than the treble ones, so the low end swings and the high end flickers.
 ///
-/// @moreinfo
+/// @attribution IEC 60268-17
 ///
-/// ## Each band drives a damped harmonic oscillator
+/// @technical
 ///
-/// `damping` sets the overshoot: high is a critically damped studio meter, low a loose needle.
-/// The bass needles are heavier than the treble ones, as on a real multi-meter bridge.
-/// So the low end swings where the high end flickers.
-///
-/// Each needle sweeps its own arc in its own cell, with a red zone past three quarters.
-/// A peak marker holds the highest reading and falls slowly, which is the standard meter's other half.
+/// Each band drives a damped harmonic oscillator, a spring and a damper; IEC 60268-17 specifies 300 ms to 99% with 1 to 1.5% overshoot.
 class VuMetersEffect : public EffectBase {
 public:
     /// Catalog tags for the visual catalog.
@@ -30,7 +23,7 @@ public:
     /// A plane of dials, where a cube gets one bank per slice.
     Dim dimensions() const override { return Dim::D3; }
 
-    /// How much the needle overshoots: low swings, high is critically damped.
+    /// How much the needle overshoots: low swings, high settles.
     uint8_t damping   = 150;
     /// How quickly the needle chases the signal at all.
     uint8_t response  = 120;

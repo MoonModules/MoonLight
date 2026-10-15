@@ -10,7 +10,7 @@ Open the **File Manager** panel and press **Backup (⤓)**.
 
 The browser downloads one `.json` bundle named for the device and the date. It walks the whole filesystem, so it holds the configuration of every module, your saved [presets](presets.md), and your MoonLive scripts.
 
-**Keep the file private. It contains the WiFi password.**
+**Keep the file private. It contains the WiFi password.** Through the access point the configuration files are left out of the bundle.
 
 Every file is byte-verified against the directory listing as it is read, with three outcomes. A file shorter than listed aborts the backup, because silent truncation is worse than no backup at all. A file longer than listed is binary rather than text, so it is skipped and named. A file that cannot be read is skipped and named too.
 

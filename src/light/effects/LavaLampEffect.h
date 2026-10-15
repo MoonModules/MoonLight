@@ -5,12 +5,12 @@
 
 namespace mm {
 
-// Author: MoonLight original (metaball lava lamp)
-/// Lava-lamp effect: slow rising and merging palette blobs.
+/// Three slow metaball blobs that rise and merge, colored by the active palette.
 /// @card LavaLampEffect.gif
 ///
-/// Three slow blobs whose summed field indexes the palette, so the lamp takes its colors.
-/// MetaballsEffect runs the same field fast and in HSV instead.
+/// The blobs' summed field indexes the palette, so the lamp takes its colors and a palette dark at its low end keeps the gaps dark. Its sibling @ref MetaballsEffect runs the same field fast and in HSV.
+///
+/// @attribution David Jupijn
 class LavaLampEffect : public EffectBase {
 public:
     /// Catalog tags: MoonLight origin, David Jupijn and Rising Step.
@@ -21,11 +21,11 @@ public:
     /// How many blobs share the lamp.
     static constexpr uint8_t NUM_BLOBS = 3;
 
-    /// How fast they drift.
+    /// How fast the blobs drift.
     uint8_t bpm = 8;
-    /// How large each blob's field reaches.
+    /// Blob influence radius.
     uint8_t radius = 36;
-    /// How strongly the summed field reads, which is what merges the blobs.
+    /// Field gain into the palette, which is what merges the blobs.
     uint8_t intensity = 200;
 
     /// Publish the drift, the blob size and the field's strength.

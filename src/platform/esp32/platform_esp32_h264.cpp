@@ -1,10 +1,9 @@
-/// @defgroup platform_esp32_h264 Live streaming on the P4
 /// The platform half of the encoder seam.
 ///
 /// Where a desktop hands the whole job to an external encoder, this chip does all three parts itself.
 /// The hardware encoder, our own muxer, and a segment ring served straight out of memory.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## No filesystem in the path
 ///

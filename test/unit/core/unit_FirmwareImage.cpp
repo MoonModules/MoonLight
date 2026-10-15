@@ -1,6 +1,6 @@
 /// Reading a firmware image's own header, which is what stands between a mistyped URL and a board with no recovery image.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// The MoonBase update ERASES the factory partition before it can know whether a stream is any good, so everything that can reject an image is decided from its first chunk.
 /// These tests are that decision.

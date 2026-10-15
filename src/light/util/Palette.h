@@ -9,11 +9,9 @@
 
 namespace mm {
 
-/// @defgroup palette Color palettes
-/// @{
 /// Sixteen evenly-spaced entries a wheel index reads by interpolating between the two that bracket it.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## Gradients expand once
 ///
@@ -154,8 +152,7 @@ inline constexpr uint8_t kYelblu[]      = {0,0,0,0, 42,0,0,45, 84,0,0,255, 127,4
 inline constexpr uint8_t kYelmag[]      = {0,4,1,70, 31,55,1,30, 63,255,4,7, 95,59,2,29, 127,11,3,50, 159,39,8,60, 191,112,19,40, 223,78,11,39, 255,29,8,59};   // rgi_15
 inline constexpr uint8_t kYellowout[]   = {0,0,1,255, 63,0,55,255, 127,0,255,255, 191,42,255,45, 255,255,0,0};
 
-// A built-in is a gradient ({stops,len}) or the special "rainbow" (generated via hsvToRgb).
-/// A built-in palette: its name, its gradient, and the tags the picker filters on.
+/// A built-in palette: its name, its gradient ({stops,len}) or the special "rainbow" generated via hsvToRgb, and the tags the picker filters on.
 ///
 /// `tags` describes what the palette LOOKS LIKE (warm or cold, one hue or many, calm or loud); an untagged palette stays findable by name and swatch.
 struct Builtin { const char* name; const uint8_t* stops; size_t len; bool rainbow;
@@ -383,7 +380,5 @@ inline void paletteNames(JsonSink& sink) {
 inline uint8_t paletteCount() {
     return static_cast<uint8_t>(palettes::kCount + LivePalettes::count());
 }
-
-/// @}
 
 }  // namespace mm

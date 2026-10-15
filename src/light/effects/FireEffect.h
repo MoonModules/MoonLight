@@ -4,23 +4,22 @@
 
 namespace mm {
 
-/// Fire2012-style heat field: sparks at the base rise and cool as they go.
+/// A Fire2012-style heat field: sparks at the base rise and cool through the active palette, coldest at its low end.
 /// @card FireEffect.gif
-/// Author: Mark Kriegsman's Fire2012 (FastLED); MoonLight adapts MatrixFireFast by toggledbits, https://github.com/toggledbits/MatrixFireFast
 ///
-/// A cell's heat is its palette index, cold at the low end and hottest at the high.
-/// So the Lava palette gives the classic look, and Ocean or Forest turn the flame blue or green.
-/// The spark count scales with width, so a wide base lights across its whole length.
+/// The spark count scales with the width. The flame color comes from the active palette: the Lava palette (black, red, orange, yellow, white) gives the classic fire. An Ocean or Forest palette turns the flame blue or green.
+///
+/// @attribution Mark Kriegsman, toggledbits, David Jupijn
 class FireEffect : public EffectBase {
 public:
-    /// Catalog tags: FastLED origin, David Jupijn and Rising Step.
+    /// Catalog tags: FastLED origin, David Jupijn, a simulation.
     const char* tags() const override { return "⚡️🦅🧬"; }
     /// Iterates y and x, so the heat buffer covers the z=0 plane and extrude fills a volume.
     Dim dimensions() const override { return Dim::D2; }
 
-    /// How fast a cell loses heat as it rises.
+    /// How fast heat dissipates as it rises; higher is shorter flames.
     uint8_t cooling = 55;
-    /// How often the base throws a new spark.
+    /// Chance of a new spark at the base each frame; higher is livelier.
     uint8_t sparking = 120;
 
     /// Publish the cooling rate and the spark rate.

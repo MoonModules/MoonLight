@@ -1,9 +1,8 @@
-/// @defgroup platform_esp32_i2s Microphone input and the transform
 /// The peripheral half of the audio feature: two seams and nothing else.
 ///
 /// The module above does the level maths, the windowing and the band mapping; this file reads samples off the channel and runs the transform.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## What the microphone is
 ///

@@ -13,31 +13,28 @@
 
 namespace mm {
 
-/// A domain-neutral diagnostic showing what runs where: the tasks, and the modules inside each.
+/// A read-only diagnostic showing what runs where: the tasks, and the modules inside each.
+/// @card TasksModule.png
 ///
-/// It is the observability foundation for core-affinity work.
-/// You cannot optimize which module runs on which core until you can see it.
-/// Header-only: its only platform reach is one seam.
-/// A fixed System module, wired by code, and read-only.
+/// You cannot optimize which module runs on which core until you can see it. Each task has its modules nested beneath it. The list is empty on the desktop.
 ///
-/// @moreinfo
+/// @guide
 ///
-/// ## One nested list
+/// ## Reading a task row
 ///
-/// Each row is a task, carrying its name, state, core, priority and stack mark.
-/// A CPU percentage appears only in a profiling build.
-/// Expanding a row reveals the modules in that task, each with its live cost.
-/// Those figures are the modules' own self-report, so the cost view is free.
-/// Two read-only fields name the task on each core.
+/// A row shows the task's name, state, core, priority and the minimum free stack seen. Expand it for its modules, each as `Name · Nus · NB · Nheap`, and a closing `∑ modules` line that cross-checks them against the tick.
 ///
-/// ## Why the nesting is ours
+/// A `cpu` percentage appears only in a profiling build, since the run-time counter costs about 5% of the tick.
 ///
-/// The scheduler runs many modules cooperatively inside one render task.
-/// In a normal RTOS a task is the unit, so nesting modules under one is specific to this design.
-/// Today every module runs in that task, so its detail is the whole module list.
-/// The structure is ready for a future split across tasks.
+/// @technical
 ///
-/// Prior art: MoonLight's flat task table, the textbook RTOS introspection pattern.
+/// **One nested list.** Each row is a task with its name, state, core, priority and stack mark. Expanding it reveals the modules in that task with their live cost.
+///
+/// Those figures are the modules' own self-report, so the cost view is free. Two read-only fields name the task on each core.
+///
+/// **Why the nesting is ours.** The scheduler runs many modules cooperatively inside one render task, whereas in a normal RTOS a task is the unit. Every module runs in that task, and the nesting allows a split.
+///
+/// The task table is the textbook RTOS introspection pattern. Header-only: its only platform reach is one seam.
 class TasksModule : public MoonModule {
 public:
     /// Declare the task list and the two per-core readouts.
@@ -150,9 +147,12 @@ private:
         }
     };
 
-    TaskListSource tasks_;   ///< the task table behind the list control
-    char core0_[16] = {};    ///< what executes on the first core
-    char core1_[16] = {};    ///< what executes on the second, empty on a single-core chip
+    /// A row per FreeRTOS task.
+    TaskListSource tasks_;
+    /// What executes on the first core.
+    char core0_[16] = {};
+    /// What executes on the second core, empty on a single-core chip.
+    char core1_[16] = {};
 };
 
 } // namespace mm

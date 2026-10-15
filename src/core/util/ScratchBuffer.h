@@ -3,13 +3,11 @@
 #include <cstddef>
 #include <cstdint>
 
-/// @defgroup ScratchBuffer A module's working memory
-/// @{
 /// One owned allocation with a typed view, so a module sizes its working memory once rather than per frame.
 ///
 /// A module declares one as a member and calls resize; the destructor, the accounting and the null guard come with it.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## One copy of the logic, however many element types
 ///
@@ -69,5 +67,4 @@ public:
     const T& operator[](std::size_t i) const { return data()[i]; }
 };
 
-/// @}
 } // namespace mm

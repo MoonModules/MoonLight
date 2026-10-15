@@ -11,11 +11,9 @@
 
 namespace mm {
 
-/// @defgroup Correction The per-light output transform
-/// @{
 /// Brightness, channel reorder and white derivation, resolved once and applied per channel.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// A light's wire format is a `ChannelRole` array, resolved from the fixture-profile library into a `Correction` at rebuild time. The curated orders are seeded rows in that library rather than an enum here.
 
@@ -32,12 +30,10 @@ struct Correction {
     /// Marks a role this light does not carry.
     static constexpr uint8_t kAbsent = 255;   // color role not carried by this light
 
-    // Linear is a REQUIREMENT, not a fallback: correcting twice darkens as the square.
-    /// The perceptual curve the output LUT is filled through.
+    /// The perceptual curve the output LUT is filled through; Linear is a requirement, not a fallback, since correcting twice darkens as the square.
     enum class Curve : uint8_t { Cie = 0, Gamma22, Gamma28, Linear };
 
-    // The constants are load-bearing: they place the toe so the two segments meet in slope.
-    /// CIE 1931 lightness, inverted: a control position to a luminance fraction.
+    /// CIE 1931 lightness, inverted: a control position to a luminance fraction; the constants place the toe so the two segments meet in slope.
     static float cieLuminance(float control255) MM_NONBLOCKING {
         const float L = control255 * 100.0f / 255.0f;
         return (L <= 8.0f) ? (L / 903.3f)
@@ -52,30 +48,24 @@ struct Correction {
     bool wide = false;
     /// Which curve the brightness rebuild fills through; a driver's setting, not a global one.
     Curve curve = Curve::Cie;
-    // The output-byte position of each color role, recomputed from the role array.
-    /// Output byte position of the red role.
+    /// Output byte position of the red role; each color role's position is recomputed from the role array.
     uint8_t offRed = 1;
     /// Output byte position of the green role.
     uint8_t offGreen = 0;
     /// Output byte position of the blue role.
     uint8_t offBlue = 2;
     uint8_t offWhite = kAbsent;     // derived white at this offset (kAbsent = light has no white)
-    // Warm white has a real achromatic basis; amber and UV are eyeball approximations, honestly so.
-    /// Output byte positions of the extra emitters beside cold white.
+    /// Output byte positions of the extra emitters beside cold white; warm white has a real achromatic basis, amber and UV are eyeball approximations.
     uint8_t offWarmWhite = kAbsent;
-    // Held wide open but always WRITTEN: brightness is already in the colors, and 0 is dark.
-    /// Output byte position of the fixture's master dimmer.
+    /// Output byte position of the fixture's master dimmer, held wide open but always written: brightness is already in the colors, and 0 is dark.
     uint8_t offDimmer = kAbsent;
-    // Never scaled by brightness: dimming the rig would otherwise swing every head toward zero.
-    /// Output byte positions of the fixture's motion channels.
+    /// Output byte positions of the fixture's motion channels, never scaled by brightness: dimming the rig would otherwise swing every head toward zero.
     uint8_t offPan = kAbsent, offTilt = kAbsent, offZoom = kAbsent;
     /// Output byte positions of the rotate and gobo channels.
     uint8_t offRotate = kAbsent, offGobo = kAbsent;
-    // Resolved once at rebuild, so the hot path never scans five offsets to find them absent.
-    /// Whether this fixture carries any motion channel.
+    /// Whether this fixture carries any motion channel, resolved once at rebuild so the hot path never scans five offsets.
     bool hasMotion = false;
-    // Plain rather than atomic: byte-sized so a read cannot tear, and one frame late costs nothing.
-    /// Hold the rig's aim, so motion stops reaching the wire and a fixture keeps its position.
+    /// Hold the rig's aim, so motion stops reaching the wire and a fixture keeps its position; a plain byte, since one frame late costs nothing.
     bool motionHeld = false;
     /// Output byte position of the amber role.
     uint8_t offYellow = kAbsent;
@@ -90,8 +80,7 @@ struct Correction {
     uint8_t outChannels = 3;        // bytes emitted per light (= channelsPerLight of the wiring)
     WhiteMode whiteMode = WhiteMode::Min;   // how white is synthesized from RGB (white lights only)
 
-    // ORDER is the whole design: brightness is a linear pre-scale and the curve is applied LAST.
-    /// Refresh the brightness LUT alone, leaving the channel offsets untouched.
+    /// Refresh the brightness LUT alone, leaving the channel offsets untouched; order is the design: brightness is a linear pre-scale and the curve is applied last.
     void rebuildBrightness(uint8_t brightness) MM_NONBLOCKING {
         for (int v = 0; v < 256; v++) {
             const float out = shape(static_cast<float>(v) * brightness / 255.0f);   // scale first, then curve
@@ -115,8 +104,7 @@ struct Correction {
         return linear;
     }
 
-    // A non-zero input never lands on black, or a fade-out snaps off partway down.
-    /// Round a curved value to an integer of at most `top`, keeping a lit input above zero.
+    /// Round a curved value to an integer of at most `top`, keeping a lit input above zero so a fade-out does not snap off partway down.
     static int quantize(float out, int top, bool lit) MM_NONBLOCKING {
         int q = static_cast<int>(out + 0.5f);
         if (q <= 0 && lit) q = 1;
@@ -129,8 +117,7 @@ struct Correction {
         return false;
     }
 
-    // Cold path: a role at channel i sets that offset to i, and one not present stays absent.
-    /// Refresh the LUT and derive every channel offset from the light's role array.
+    /// Refresh the LUT and derive each channel offset from the role array (cold path): a role at channel i sets offset i, an absent role stays absent.
     void rebuild(uint8_t brightness, const ChannelRole* roles, uint8_t nChannels) {
         // The offset each role sets, in ChannelRole order; None sets nothing.
         static constexpr uint8_t Correction::* kOffsetOf[] = {
@@ -159,8 +146,7 @@ struct Correction {
     /// Hot path, wide drivers only: the same transform through the 16-bit table, one value per channel; needs `lut16`.
     inline void applyWide(const uint8_t* src, uint16_t* out, uint8_t srcChannels) const { applyThrough(lut16, src, out, srcChannels); }
 
-    // A REMAP, not a copy: the layer's packed slots become the fixture's own offsets.
-    /// The transform through a curve table of either width, so the 8-bit and 16-bit outputs share every line.
+    /// The transform through a curve table of either width, so the 8-bit and 16-bit outputs share every line. A remap, not a copy: the layer's packed slots become the fixture's own offsets.
     template <typename T>
     inline void applyThrough(const T* lut, const uint8_t* src, T* out, uint8_t srcChannels) const {
         constexpr T kFull = static_cast<T>(~T{0});   // 255 or 65535
@@ -214,8 +200,7 @@ struct Correction {
         if constexpr (sizeof(T) == 1) { if (hasFine) applyFine(r, g, b, w, out); }
     }
 
-    // The 16-bit channels rewrite their coarse byte from the same table, so high and low bytes are one value.
-    /// Hot path, 16-bit profiles only: each color channel with a fine role as its high and low byte, and a fine dimmer wide open.
+    /// Hot path, 16-bit profiles only: each color channel with a fine role as its high and low byte from the same table, and a fine dimmer wide open.
     void applyFine(uint8_t r, uint8_t g, uint8_t b, uint8_t w, uint8_t* out) const {
         if (offDimmerFine != kAbsent) out[offDimmerFine] = 255;   // wide open is 65535, not 65280
         const uint8_t value[5] = {r, g, b, w, w};   // both whites carry the white component, 0 when none is synthesized
@@ -231,5 +216,4 @@ struct Correction {
     }
 };
 
-/// @}
 } // namespace mm

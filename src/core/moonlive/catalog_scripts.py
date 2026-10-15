@@ -99,13 +99,11 @@ def main() -> int:
 
     parts = [
         "#pragma once\n\n",
-        "/// @defgroup script_catalog The factory script catalog\n",
-        "/// @{\n",
         "/// The names of every script a device knows about.\n",
         "///\n",
         "/// Generated from `moonlive/` by `catalog_scripts.cmake`: do not edit, rebuild to update.\n",
         "///\n",
-        "/// @moreinfo\n",
+        "/// @technical\n",
         "///\n",
         "/// A device carries names only and the UI fetches a script's text on first pick, so flash scales with the script count and the filesystem holds only what is used.\n",
         "///\n",
@@ -137,7 +135,6 @@ def main() -> int:
 
     total = sum(len(v) for v in by_role.values())
     parts.append(f"constexpr size_t kCatalogCount = {total};   ///< every factory script, all roles\n\n")
-    parts.append("/// @}\n")
     parts.append("} // namespace mm::moonlive\n")
 
     # UTF-8 EXPLICITLY, on every read and write in this file: a script's tags() is emoji, and

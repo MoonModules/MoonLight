@@ -5,14 +5,12 @@
 #include "core/moonlive/MoonLiveIr.h"
 #include "core/moonlive/moonlive_emit.h"   // RegBudget, the one thing a backend tells the allocator
 
-/// @defgroup moonlive_spill MoonLive register allocation
-/// @{
 /// Linear scan with spilling, after Poletto and Sarkar.
 ///
 /// A program naming more live values than the target has registers is rewritten to park the overflow in the call frame.
 /// So a script's complexity is a memory question rather than a register-count one.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## Why it lives in core, once
 ///
@@ -22,10 +20,7 @@
 
 namespace mm::moonlive {
 
-// A program that already fits is left byte-identical, and `slotsUsed` counts locals either way.
-/// Rewrite `ir` so no op names a register the target lacks, parking the overflow in frame slots.
+/// Rewrite `ir` so no op names a register the target lacks, parking the overflow in frame slots. A program that already fits is left byte-identical, and `slotsUsed` counts locals either way.
 bool spillToBudget(IrProgram& ir, const RegBudget& budget, uint8_t& slotsUsed);
-
-/// @}
 
 }  // namespace mm::moonlive

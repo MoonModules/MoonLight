@@ -4,13 +4,13 @@
 #include "light/powerfunctions/draw.h"       // pos_t, Canvas, the 2D SDF family
 #include "light/util/Palette.h"
 
-/// @defgroup shader The shader vocabulary
-/// @{
 /// The small set of operations every per-pixel shader is written out of, in fixed point.
 ///
 /// A shader is one function that runs per pixel and returns a color, given that pixel's position and the time.
 ///
-/// @moreinfo
+/// @attribution GLSL, Iñigo Quilez
+///
+/// @technical
 ///
 /// ## A shared vocabulary
 ///
@@ -23,9 +23,7 @@
 /// A value is a fraction of one, a distance is in sub-pixel units, and a color index is a byte because palettes are.
 /// The 8-bit forms stay for genuinely 8-bit domains.
 ///
-/// ## Prior art
-///
-/// The GLSL built-in function set, deliberately under the standard names, and Iñigo Quilez's articles on distance functions and their operators.
+/// The functions keep GLSL's built-in names.
 
 namespace mm::shader {
 
@@ -216,7 +214,5 @@ inline void each(const draw::Canvas& cv, angle16 t, ShadeFn fn) {
         }
     }
 }
-
-/// @}
 
 }  // namespace mm::shader

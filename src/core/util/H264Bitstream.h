@@ -1,7 +1,7 @@
 #pragma once
 /// Reading an Annex B H.264 stream: where its NAL units and its frames begin.
 /// Domain-neutral, because both the light domain's RTP packetiser and the platform layer's encoder reader answer the same question of the same bytes.
-/// @moreinfo
+/// @technical
 /// ## Where one frame ends and the next begins
 /// An Annex B stream carries no frame delimiter, so the boundary is inferred from the slice header.
 /// `first_mb_in_slice` is the first exp-Golomb value in it, and a leading 1 bit encodes zero, which marks the first slice of a picture.

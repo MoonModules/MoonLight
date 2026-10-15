@@ -4,31 +4,23 @@
 
 namespace mm {
 
-/// Modifier expanding a 1D effect into concentric circular rings.
+/// Expands a 1D effect into concentric circular rings: its position along the strip becomes the radius, so a gradient draws nested circles.
+/// @card CircleModifier.gif
 ///
-/// @moreinfo
+/// The round sibling of @ref BlockModifier, which draws square rings.
 ///
-/// Maps a 1D strip onto concentric circular rings: every physical light folds to its Euclidean distance from the box center, so a linear index becomes a radius.
-/// The logical box collapses to a single column of `radius+1` cells (x=1, z=1), which an effect then paints as rings.
-/// A static (build-time) remap, the fold is baked into the Layer's mapping LUT once per rebuild, nothing runs per frame.
+/// @attribution Euclidean distance
 ///
-/// The geometry is reproduced exactly: each axis offset from the box center is taken in integers, their Euclidean distance in float, and the coordinate becomes that distance alone.
+/// @technical
 ///
-/// The logical size is the incoming box run through the same fold, turning its far corner into a distance, then grown by one on every axis.
-///
-/// Prior art: MoonLight's Circle modifier (M_MoonLight.h), same center-offset + Euclidean-distance fold and the same +1-per-axis size bump.
-/// MoonLight tags it 💎; the 💫 here marks the MoonLight origin per MoonLight convention.
-/// Written fresh against our ModifierBase fold interface (modifyLogicalSize / modifyLogical) rather than MoonLight's modifySize / modifyPosition Node API.
-/// Author: MoonLight, https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Modifiers/M_MoonLight.h
+/// The logical box is one column of radius plus one cells, which an effect paints as rings.
 class CircleModifier : public ModifierBase {
 public:
-    /// The catalog tags this modifier carries.
-    const char* tags() const override { return "💫"; } // MoonLight origin
+    /// The catalog tags: 💫, a MoonLight origin.
+    const char* tags() const override { return "💫"; }
 
     /// Two-dimensional: it only ever produces a distance, so it works in the x and y plane.
     Dim dimensions() const override { return Dim::D2; }
-
-    // No controls: the center is always the box middle and the distance always Euclidean.
 
     /// Resize the logical box this modifier presents to the effect.
     void modifyLogicalSize(Coord3D& size) override {
@@ -56,7 +48,7 @@ private:
     /// The box seen at build time, stashed for the fold.
     Coord3D modifierSize_;
 
-    // Fold a coordinate to its distance from the center, on the cold path so float is fine.
+    /// Fold a coordinate to its distance from the center, on the cold path so float is fine.
     void fold(Coord3D& position) const {
         // The offset from the center, by integer division on the box size.
         const int dx = position.x - modifierSize_.x / 2;

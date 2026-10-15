@@ -1,10 +1,9 @@
-/// @defgroup platform_esp32_moon_i80 MoonI80: parallel WS2812 over LCD_CAM
 /// Parallel WS2812 output over the S3 and P4 LCD_CAM i80 peripheral, sequenced by our own DMA.
 ///
 /// This file owns the peripheral alone: the registers, the GDMA channel and its descriptor chain, the frame buffers, transmit and wait.
 /// The driver above it does the domain work, and the esp_lcd sibling beside it is the behavioral reference this matches function for function.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## Why this exists next to the esp_lcd backend
 ///

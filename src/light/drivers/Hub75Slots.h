@@ -5,14 +5,11 @@
 
 namespace mm {
 
-/// @defgroup Hub75Slots HUB75 scan encoder: the bit-plane wire format
-/// @{
+/// HUB75 encode: the contract between the driver and a port, named for the wire unit it builds (one pixel clock is one SLOT). A pure data transform with no platform include; sibling of ParallelSlots.h.
 ///
-/// HUB75 encode: the contract between the driver and a HUB75 port, named for the wire unit it builds.
-/// One pixel clock is one SLOT. Sibling of ParallelSlots.h, which does the same job for WS2812.
-/// A pure data transform with no platform include, so unit_Hub75Slots.cpp pins it without an ESP32.
+/// @attribution mrcodetastic, hzeller, ESPHome
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## The wire layout
 ///
@@ -29,27 +26,19 @@ namespace mm {
 ///
 /// ## The address lags the data by one row
 ///
-/// A panel lights where output-enable, the addressed row and the latched row meet, and the latch holds the row last strobed.
-/// So row r's words name row r - 1, the latch word moves the address to r in the dark, and row 0's words name the last row.
+/// A panel lights where output-enable, the addressed row and the latched row meet, and the latch holds the row last strobed. So row r's words name row r - 1, the latch word moves the address to r in the dark, and row 0's words name the last row.
 ///
 /// ## Brightness is time
 ///
-/// A panel's chips only switch a column on or off, so plane p lights 2^p as long as plane 0, and brightness shortens every plane's window rather than scaling values.
+/// A panel's chips only switch a column on or off, so plane p lights 2^p as long as plane 0 and brightness shortens every plane's window.
+///
 /// Below about a quarter brightness, the lowest plane of a 64-column row rounds to nothing.
 ///
 /// ## The bus word
 ///
-/// Address, latch and OE share the color bits' word, since the panel wants them at once; `Hub75Layout` names each line's bit.
-/// OE is active low and a peripheral idles its lines low, so the OE bit means lit and the platform inverts the pin.
-///
-/// ## Prior art
-///
-/// mrcodetastic/ESP32-HUB75-MatrixPanel-DMA, hzeller/rpi-rgb-led-matrix and ESPHome's hub75.
+/// Address, latch and OE share the color bits' word, since the panel wants them at once; `Hub75Layout` names each line's bit. OE is active low and a peripheral idles its lines low, so the OE bit means lit and the platform inverts the pin.
 
-/// Which bus bit each HUB75 line occupies. The peripheral drives one 16-bit bus word per slot.
-/// Every line is a bit position rather than a GPIO here, and the platform layer maps bit to GPIO.
-///
-/// Defaults are the conventional order and cost nothing to override. A board that wires the panel differently changes these, and the encoder is unchanged.
+/// Which bus bit each HUB75 line occupies in the 16-bit bus word per slot; the platform layer maps bit to GPIO. Defaults are the conventional order, and a board that wires the panel differently overrides them.
 struct Hub75Layout {
     /// Color bits for the upper half-panel.
     uint8_t r1 = 0, g1 = 1, b1 = 2;
@@ -65,8 +54,7 @@ struct Hub75Layout {
 
 /// The geometry one encode needs. `scanRate` is the panel's own and is NOT derivable from the height. Two panels of identical dimensions can scan differently, which is why it is a control rather than a calculation.
 struct Hub75Geometry {
-    // Sixteen rather than eight: the control lines live at bits 8-14 (Hub75Layout).
-    /// Bytes on the wire per pixel clock: one 16-bit bus word.
+    /// Bytes on the wire per pixel clock: one 16-bit bus word, sixteen rather than eight since the control lines live at bits 8-14.
     static constexpr size_t kBytesPerSlot = 2;
 
     /// Panel width in pixels.
@@ -80,16 +68,13 @@ struct Hub75Geometry {
     /// How long each plane is lit, 0 to 255 of its full window: the global brightness, as time.
     uint8_t  brightness = 255;
 
-    // The panel's scanRate IS that count: a 1/16 panel steps 16 addresses whatever its height.
-    /// Address steps one plane walks.
+    /// Address steps one plane walks: the panel's scanRate, so a 1/16 panel steps 16 addresses whatever its height.
     uint16_t scanRows() const { return scanRate; }
 
-    // FOUR on a 64-row 1/16 panel: encoding only the first pair leaves three quarters dark.
-    /// Rows driven per address step.
+    /// Rows driven per address step: four on a 64-row 1/16 panel, since encoding only the first pair leaves three quarters dark.
     uint16_t rowsPerScan() const { return scanRate ? height / scanRate : 0; }
 
-    // Each step drives an upper and a lower row together, so an odd count leaves one unpaired.
-    /// Is this geometry encodable?
+    /// Is this geometry encodable? Each step drives an upper and a lower row together, so an odd count leaves one unpaired.
     bool valid() const {
         if (width == 0 || height == 0) return false;
         // At 64 columns plane 0 of 6 still lights 2 words; a deeper plane rounds to nothing until planes repeat (backlog).
@@ -98,20 +83,17 @@ struct Hub75Geometry {
         return rowsPerScan() % 2 == 0;
     }
 
-    // Each plane stored ONCE: storing plane p 2^p times is a megabyte for one 64x64 panel.
-    /// Slots one encoded frame occupies.
+    /// Slots one encoded frame occupies, each plane stored once since storing plane p 2^p times is a megabyte for one 64x64 panel.
     size_t frameSlots() const {
         const uint16_t pairs = rowsPerScan() / 2;   // color passes per address step
         return static_cast<size_t>(bitDepth) * scanRows() * width * pairs;
     }
 
-    // The one home for the size: the platform asks rather than recomputing it.
-    /// Bytes one encoded frame occupies.
+    /// Bytes one encoded frame occupies: the one home for the size, which the platform asks for rather than recomputing.
     size_t frameBytes() const { return frameSlots() * kBytesPerSlot; }
 };
 
-// Returns bytes written, or 0 on an unusable geometry: a half-encoded frame is worse than a dark one.
-/// Encode one rendered RGB frame into a HUB75 bit-plane buffer.
+/// Encode one rendered RGB frame into a HUB75 bit-plane buffer; returns bytes written, or 0 on an unusable geometry since a half-encoded frame is worse than a dark one.
 inline size_t hub75Encode(const uint8_t* rgb, uint8_t* out,
                           const Hub75Geometry& geo, const Hub75Layout& lay = {}) {
     if (!rgb || !out) return 0;
@@ -175,7 +157,5 @@ inline size_t hub75Encode(const uint8_t* rgb, uint8_t* out,
     // The frame ends on the last row's latch word, dark, and row 0's data words name that last row: the loop closes with every row lit once.
     return w;
 }
-
-/// @}
 
 }  // namespace mm

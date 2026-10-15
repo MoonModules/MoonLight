@@ -5,12 +5,11 @@
 
 #if defined(__XTENSA__)   // the Xtensa assembler is only built for Xtensa targets
 
-/// @defgroup moonlive_asm_xtensa_impl MoonLive Xtensa encodings
 /// Named instructions encoded once, composed by the shared lowering.
 ///
 /// Encodings are verified against the assembler rather than transcribed from a disassembly.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## The conventions this encoder assumes
 ///

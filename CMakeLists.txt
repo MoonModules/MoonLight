@@ -251,10 +251,13 @@ add_custom_target(build_info_gen ALL
 # (no semicolons on the command line — those would either get split by `make`
 # on POSIX hosts or land as literals in the value on MSBuild) and let
 # embed_ui.cmake assemble the `<uv> run python` list internally.
+# Every UI file, by glob, so a file added to src/ui re-embeds without a second edit here: the hand-kept list had already missed migrate.js, semver.js and preview-adapt.js.
+file(GLOB UI_SOURCES CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/src/ui/*.js ${CMAKE_SOURCE_DIR}/src/ui/*.html
+     ${CMAKE_SOURCE_DIR}/src/ui/*.css ${CMAKE_SOURCE_DIR}/src/ui/*.png ${CMAKE_SOURCE_DIR}/src/ui/vendor/*.js)
 add_custom_command(
     OUTPUT ${CMAKE_SOURCE_DIR}/src/ui/ui_embedded.h
     COMMAND ${CMAKE_COMMAND} -DUI_DIR=${CMAKE_SOURCE_DIR}/src/ui -DOUT=${CMAKE_SOURCE_DIR}/src/ui/ui_embedded.h -DUV_EXECUTABLE=${UV_EXECUTABLE} -P ${CMAKE_SOURCE_DIR}/src/ui/embed_ui.cmake
-    DEPENDS ${CMAKE_SOURCE_DIR}/src/ui/index.html ${CMAKE_SOURCE_DIR}/src/ui/app.js ${CMAKE_SOURCE_DIR}/src/ui/style.css ${CMAKE_SOURCE_DIR}/src/ui/install-picker.js ${CMAKE_SOURCE_DIR}/src/ui/vendor/prism.js ${CMAKE_SOURCE_DIR}/src/ui/preview3d.js ${CMAKE_SOURCE_DIR}/src/ui/moonmodules-logo.png ${CMAKE_SOURCE_DIR}/src/ui/embed_ui.cmake
+    DEPENDS ${UI_SOURCES} ${CMAKE_SOURCE_DIR}/src/ui/embed_ui.cmake
     COMMENT "Embedding UI files"
 )
 add_custom_target(ui_embed DEPENDS ${CMAKE_SOURCE_DIR}/src/ui/ui_embedded.h)

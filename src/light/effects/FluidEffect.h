@@ -5,30 +5,20 @@
 
 namespace mm {
 
-/// Effect: dye poured into a simulated fluid, carried by the flow the medium itself works out.
-/// Prior art: Stam 1999, "Stable Fluids".
+/// Light poured into a simulated medium and carried by it.
 /// @card FluidEffect.gif
 ///
-/// `Fluid` solves the medium, and `light/fluid.h` says why that algorithm and why Q16.16.
-/// Jets pour velocity and dye together, so light enters where the medium is being pushed.
-/// `draw::advect16` then carries the dye along the finished field and `draw::decay16` fades it.
+/// Every other flow here is a function of position and time. This one is state, so a jet fired now changes where everything downstream goes for seconds afterwards. On a cube every depth slice is its own medium, so the slices differ. Sized for the desktop and the P4; an S3 runs it on a small grid.
 ///
-/// @moreinfo
+/// @attribution Jos Stam
 ///
-/// ## Cost is the honest problem
+/// @technical
 ///
-/// The solver is several passes over the grid a frame, and the pressure solve is `iterations` of them.
-/// So this is a desktop and P4 effect, and an S3 runs it on a small grid.
-/// The numbers per target are in performance.md rather than promised here.
-///
-/// ## The dye plane is 16-bit
-///
-/// A value multiplied by slightly less than one, many times a second, has nowhere to go at 8 bits.
-/// That is the same reason Trails carries a wide plane, and the two share the idiom.
+/// `Fluid` solves the medium, and `light/powerfunctions/fluid.h` says why that algorithm and why Q16.16. The dye plane is 16-bit because a value multiplied by slightly less than one, many times a second, has nowhere to go at 8 bits.
 class FluidEffect : public EffectBase {
 public:
     /// Catalog tags: this effect is the power-function showcase.
-    const char* tags() const override { return "💫🖌️🌊💨"; }
+    const char* tags() const override { return "💫🖌️💨"; }
     /// Volumetric: a medium per slice, with the jets wandering in z.
     Dim dimensions() const override { return Dim::D3; }
 
@@ -38,11 +28,11 @@ public:
 
     /// How many places light is poured in.
     uint8_t jets        = 2;
-    /// How hard each jet pushes.
+    /// How hard each jet pushes the medium.
     uint8_t force       = 120;
-    /// How fast the jets sweep, which is what rolls up vortices.
+    /// How fast the jets sweep, which is what stirs vortices.
     uint8_t swirl       = 90;
-    /// How much the medium drags on itself.
+    /// How much the medium drags on itself; high is syrup, low smoke.
     uint8_t viscosity   = 20;
     /// How long dye survives, as a half-life.
     uint8_t persistence = 150;

@@ -4,20 +4,18 @@
 
 namespace mm {
 
-/// Effect: a wave surface where every detected beat drops a stone, rippling and interfering.
+/// Every beat is a stone dropped in water.
 /// @card BeatRipplesEffect.gif
 ///
-/// The surface is a real wave simulation, the classic two-buffer scheme: ripples pass through each other, reflect off the walls and interfere, and a detected onset drops a stone.
+/// A real wave simulation, which gives what a drawn expanding circle cannot: ripples pass through each other, reflect off the walls and interfere into standing patterns. The loudest band decides where the stone lands, a bass hit near the center and a treble hit out at the rim, and its strength sets how deep.
 ///
-/// Prior art: Gomez 2000, the water effect the demoscene settled on.
+/// @attribution Gomez
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## The wave equation, and rendering by slope
 ///
 /// Each cell's next height is its four neighbors averaged and doubled, minus its previous height, damped; the field renders by slope, so crests read as bright lines.
-///
-/// The loudest band picks where a stone lands, bass near the center and treble at the rim; a cube takes the plane extruded, as the equation is 2D.
 class BeatRipplesEffect : public EffectBase {
 public:
     /// Catalog tags for the visual catalog.
@@ -29,7 +27,7 @@ public:
     uint8_t damping   = 200;
     /// How deep a beat's stone falls.
     uint8_t drop      = 180;
-    /// Idle drops, for when there is no music at all.
+    /// Idle drops when there is no music, so the surface is alive in silence.
     uint8_t rain      = 30;
     /// How strongly the slope lights the surface.
     uint8_t shine     = 150;

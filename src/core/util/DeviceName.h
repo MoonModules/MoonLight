@@ -7,8 +7,6 @@
 
 namespace mm {
 
-/// @defgroup DeviceName A device's name until someone sets one
-/// @{
 /// `MM-` and the last two bytes of the base MAC, shared by the app and MoonBase, so a board's access point carries the name it has in MoonLight.
 
 /// Write the default name for `mac` into `out`, which holds at least 8 bytes.
@@ -21,5 +19,4 @@ inline void defaultDeviceName(const uint8_t mac[6], char* out, size_t len) MM_NO
     out[7] = 0;
 }
 
-/// @}
 }  // namespace mm

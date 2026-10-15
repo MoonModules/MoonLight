@@ -13,31 +13,30 @@
 
 namespace mm {
 
-/// An infrared receiver that decodes a remote and drives other modules' controls.
-///
-/// The same shape as the button service, which drives the same controls from a switch.
-/// A row is the binding, so twenty keys are twenty rows, each pointing where you want.
+/// An infrared receiver whose learned remote keys drive other modules' controls.
 /// @card InfraredService.png
 ///
-/// @moreinfo
+/// A row is the binding, so a remote with twenty keys has twenty rows. A remote press and an OSC message are indistinguishable to whatever they drive.
 ///
-/// ## Learned, not shipped
+/// @attribution NEC
 ///
-/// No firmware can carry a code table for every remote in the world.
-/// So a binding is taught: arm a row, and the next decoded code binds to it.
-/// The first version carried five compiled actions, which made our opinion the user's ceiling.
+/// @guide
 ///
-/// A fresh service starts empty, so the first use is to add a row and learn a key.
-/// Shipping defaults would need the catalog to express a row, which no operation does yet.
+/// ## Learning a key
 ///
-/// ## How a press acts
+/// Add a row, press its learn button, then press the remote key: the next code received binds to that row. Learning a key another row holds moves the binding. Pick what the row drives from its target, and whether a press toggles it or nudges it by a value. The status line reports each step.
 ///
-/// Through the one control-set primitive every transport uses.
-/// So a remote press and a message are indistinguishable to whatever they drive.
-/// Pointing a row at the control surface puts the remote where every transport reaches it.
+/// ## Checking a key
 ///
-/// Prior art: consumer remotes use the NEC protocol, which the chip's own peripheral decodes.
-/// That decode lives behind the platform seam.
+/// The status line says "set pin to receive" until a receiver pin is entered, and shows the code of a key no row holds. On some boards the receiver shares its pin with another peripheral through a board switch.
+///
+/// @technical
+///
+/// **Learned, not shipped.** No firmware can carry a code table for every remote, so a binding is taught: arm a row and the next decoded code binds to it.
+///
+/// A fresh service starts empty, since shipping defaults would need the catalog to express a row, which no operation does yet.
+///
+/// A row acts through the one control-set primitive every transport uses. Consumer remotes speak the NEC protocol, which the chip's own peripheral decodes behind the platform seam.
 class InfraredService : public MoonModule, public ListSource {
 public:
     /// A service, so the container accepts it as a child.
@@ -46,6 +45,8 @@ public:
     /// Declare the receiver pin and the list of learned rows.
     void defineControls() override {
         controls_.addPin("pin", pin_);
+        /// The learned codes, each row binding one remote key to a control.
+        /// @guide A `set` row is not offered, since a remote reports a press with no release.
         controls_.addList("codes", *this);
         MoonModule::defineControls();
     }
@@ -262,7 +263,8 @@ private:
     /// Codes one device binds, with room for a full handset.
     static constexpr uint8_t kMaxRows = 24;
 
-    int8_t   pin_ = -1;              ///< receiver GPIO, -1 until a board or user sets it
+    /// The receiver's GPIO, unset until a board or user enters it.
+    int8_t   pin_ = -1;
     uint8_t  offSurface_ = 0;        ///< rows the last restore unassigned, reported until the next one
     Row      rows_[kMaxRows];
     uint8_t  count_ = 0;

@@ -146,7 +146,7 @@ So the binding overrides the same hooks any compiled module does; the only diffe
 
 ### 3.4 The host binding — script ⇄ MoonModule (decision 7, the value-add)
 
-Rather than a flat name→pointer registry (the host-binding shape surveyed engines share), MoonLight uses a **MoonModule-aware `MoonLiveHost`** that exposes the producer/consumer data the script needs, by reference, no copy — the same pull pattern effects already use (`EffectBase::buffer()/width()/elapsed()`, [Layer.h:499-504](../../src/light/layers/Layer.h)):
+Rather than a flat name→pointer registry (the host-binding shape surveyed engines share), MoonLight uses a **MoonModule-aware `MoonLiveHost`** that exposes the producer/consumer data the script needs, by reference, no copy — the same pull pattern effects already use (`EffectBase::buffer()/width()/elapsed()`, [Layer.h:499-504](../../moonmodules/light/supporting.md#layer)):
 
 - **Buffer + geometry** — `width()`, `height()`, `depth()`, `channelsPerLight()`, `nrOfLights()`, `elapsed()`, and pixel writers `setRGB(i,c)` / `setRGBXY(x,y,c)` / `setRGBXYZ(x,y,z,c)` (the MoonLight tutorial's exact surface). These compile to direct loads/stores against `layer_->buffer()` — the **identity-mapping fast path** preserved (the script writes the real buffer, no intermediate copy).
 - **Controls** — the script's declared variables (§3.5) bind by reference so a UI control edit updates the running script live.
@@ -427,7 +427,7 @@ Credits also live in the bottom-up's *Prior art & credits* and the digest [frien
 
 ### Public credit — to lift into `docs/moonmodules/core/MoonLive.md` when the module spec is written
 
-The credits above are the analysis's internal record. The block below is the **user-facing** version for the eventual `MoonLive.md` "Prior art" section. Drop it in when MoonLive ships; matches the house style of the other modules' Prior-art sections (e.g. AudioService.md, [MoonI80Peripheral.md](../../moonmodules/light/moxygen/MoonI80Peripheral.md)).
+The credits above are the analysis's internal record. The block below is the **user-facing** version for the eventual `MoonLive.md` "Prior art" section. Drop it in when MoonLive ships; matches the house style of the other modules' Prior-art sections (e.g. AudioService.md, [MoonI80Peripheral.md](../../../src/light/drivers/MoonI80Peripheral.h)).
 
 > MoonLive's native-codegen approach — compile a small C-like language straight to machine code and call it as a function, so a live-authored effect runs at near hand-written speed — was pioneered by **Yves Bazin (hpwit)** in **[ESPLiveScript](https://github.com/hpwit/ESPLiveScript)**: a from-scratch tokenizer, parser, and Xtensa code generator that drives a 12,288-LED panel at ~85 fps where interpreted languages (Lua, Gravity) managed 3–10. That result is what makes "go native, not interpreted" the right call, and ESPLiveScript is the reference MoonLive is built against — studied closely, credited, and written fresh against MoonLight's architecture, never copied, per [*Industry standards, our own code*](../../CLAUDE.md#principles). MoonLive carries the idea forward where ESPLiveScript stops: a multi-ISA backend behind an IR seam (Xtensa, then RISC-V / ARM / desktop) and a binding that makes a script a first-class MoonModule.
 >

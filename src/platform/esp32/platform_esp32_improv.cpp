@@ -1,9 +1,8 @@
-/// @defgroup platform_esp32_improv The serial provisioning listener
 /// The serial and native-USB command dispatch.
 ///
 /// Self-contained: it owns its state privately and reaches the rest of the layer only through declared accessors.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## It runs on every target, wireless or not
 ///

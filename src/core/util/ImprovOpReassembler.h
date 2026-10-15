@@ -9,7 +9,7 @@ namespace mm {
 
 /// The state machine that joins chunked Improv op frames back into one op-JSON buffer.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## Where it sits
 ///

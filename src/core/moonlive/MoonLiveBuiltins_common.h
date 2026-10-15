@@ -12,19 +12,15 @@
 #include <cstdio>
 #include <initializer_list>   // the same-type builtins register from a braced list
 
-/// @defgroup moonlive_builtins_common MoonLive neutral builtins
-/// @{
 /// The domain-neutral half of the script vocabulary: arithmetic, waveforms, noise, randomness and print.
 ///
 /// None of it is about light, so none of it belongs to the light domain.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## Why it left the light header
 ///
-/// It lived there because that was the only vocabulary there was.
-/// When the service table arrived it had to reach into the light header for `print` and `addControl`, which is core depending on a domain.
-/// That is the wrong direction, and the reason a service script could not call `sin` while an effect could, for no reason either could explain.
+/// A service script needs `print`, `addControl` and `sin` as an effect does, and a vocabulary in the light header would make core depend on a domain.
 ///
 /// ## What stays on the light side
 ///
@@ -63,8 +59,7 @@ extern "C" inline uint32_t mm_ml_mod(const uintptr_t* args, uint32_t, const uint
     return static_cast<uint32_t>(a % b);
 }
 
-// A zero divisor saturates toward the numerator's sign, so a ripple's center reads as its peak.
-/// The signed quotient, which the `/` operator lowers to.
+/// The signed quotient, which the `/` operator lowers to; a zero divisor saturates toward the numerator's sign, so a ripple's center reads as its peak.
 extern "C" inline uint32_t mm_ml_div(const uintptr_t* args, uint32_t, const uint8_t*) {
     const int32_t a = static_cast<int32_t>(uint32_t(args[0]));
     const int32_t b = static_cast<int32_t>(uint32_t(args[1]));
@@ -75,8 +70,7 @@ extern "C" inline uint32_t mm_ml_div(const uintptr_t* args, uint32_t, const uint
     return static_cast<uint32_t>(a / b);
 }
 
-// The numerator widens in int64, since a register shift wraps past |128.0| and froze two shaders.
-/// The Q16.16 quotient, which `/` lowers to when both sides are fixed.
+/// The Q16.16 quotient, which `/` lowers to when both sides are fixed; the numerator widens in int64, since a register shift wraps past |128.0|.
 extern "C" inline uint32_t mm_ml_fdiv(const uintptr_t* args, uint32_t, const uint8_t*) {
     const int32_t a = static_cast<int32_t>(uint32_t(args[0]));
     const int32_t b = static_cast<int32_t>(uint32_t(args[1]));
@@ -116,8 +110,7 @@ extern "C" inline uint32_t mm_ml_cos(const uintptr_t* args, uint32_t, const uint
     return static_cast<uint32_t>(cos16(static_cast<angle16>(angle)) + 32768);
 }
 
-// A builtin because a full turn is 65536, one past the largest number a script can write.
-/// The angle step dividing one revolution into n parts.
+/// The angle step dividing one revolution into n parts; a builtin because a full turn is 65536, one past the largest number a script can write.
 extern "C" inline uint32_t mm_ml_turn(const uintptr_t* args, uint32_t, const uint8_t*) {
     const uint32_t n = uint32_t(args[0]);
     return n ? 65536u / n : 0u;
@@ -141,8 +134,7 @@ extern "C" inline uint32_t mm_ml_print(const uintptr_t* args, uint32_t, const ui
     return v;
 }
 
-// A builtin has no receiver, so the binding installs one for the run.
-/// Where a running `defineControls()` sends each `addControl`.
+/// Where a running `defineControls()` sends each `addControl`; a builtin has no receiver, so the binding installs one for the run.
 using AddControlFn = void (*)(void* ctx, const char* name, uint8_t offset,
                               int32_t lo, int32_t hi, CtrlType type, const char* options);
 /// The control sink one thread's run installed.
@@ -151,7 +143,7 @@ struct AddControlSink { AddControlFn fn = nullptr; void* ctx = nullptr; };
 namespace detail {
 /// One thread's control sink, in the slot it claims.
 struct ControlSlot { std::atomic<uintptr_t> owner{0}; AddControlSink sink; };
-// constinit rather than a function-local static, whose thread-safe guard is a lock.
+/// The control-sink slots, constinit rather than a function-local static, whose thread-safe guard is a lock.
 inline constinit ControlSlot gControlSlots[2]{};
 }  // namespace detail
 
@@ -162,8 +154,7 @@ inline const AddControlSink& addControlSink() {
     return s ? s->sink : none;
 }
 
-// False when the table is full, which the caller must not treat as an installed sink.
-/// Point addControl at a consumer for one defineControls run; nullptr to detach.
+/// Point addControl at a consumer for one defineControls run, nullptr to detach; false when the table is full, which the caller must not treat as an installed sink.
 inline bool setAddControlSink(AddControlFn fn, void* ctx) {
     detail::ControlSlot* s = ownedThreadSlot(detail::gControlSlots, fn != nullptr);
     if (!s) return false;
@@ -172,8 +163,7 @@ inline bool setAddControlSink(AddControlFn fn, void* ctx) {
     return true;
 }
 
-// The compiler packs args[1]: the low byte is the arena offset, the next the type.
-/// Surface a member as a control within a range; its declared type decides the kind.
+/// Surface a member as a control within a range. Its declared type decides the kind, and the compiler packs args[1] as the arena offset in the low byte and the type in the next.
 extern "C" inline uint32_t mm_ml_addControl(const uintptr_t* args, uint32_t, const uint8_t*) {
     // The name points into the compiled program's string pool, which outlives the run.
     const char* name = reinterpret_cast<const char*>(args[0]);
@@ -204,8 +194,7 @@ extern "C" inline uint32_t mm_ml_addSelect(const uintptr_t* args, uint32_t, cons
     return 0;
 }
 
-// Signed, and each works on fixed values too, since Q16.16 keeps the order and the sign of a whole number.
-/// The magnitude of a value, widened so the most negative int does not overflow.
+/// The magnitude of a value, widened so the most negative int does not overflow; abs, min, max and clamp are signed and work on fixed values too.
 extern "C" inline uint32_t mm_ml_abs(const uintptr_t* args, uint32_t, const uint8_t*) {
     const int64_t v = signedArg(args[0]);
     return static_cast<uint32_t>(v < 0 ? -v : v);
@@ -226,8 +215,7 @@ extern "C" inline uint32_t mm_ml_clamp(const uintptr_t* args, uint32_t, const ui
     return static_cast<uint32_t>(v < lo ? lo : (v > hi ? hi : v));
 }
 
-// Both vocabularies call this first and then add their own, so a name means one thing everywhere.
-/// Register the neutral builtins into whatever table asks.
+/// Register the neutral builtins into whatever table asks; both vocabularies call this first and then add their own, so a name means one thing everywhere.
 inline void addCommonBuiltins(BuiltinTable& t) {
     // mod/div: the operators a script cannot spell, since `%` and `/` are not in the grammar.
     t.add({"mod", 2, /*returns*/ true, BuiltinKind::Call, &mm_ml_mod, {}});
@@ -264,19 +252,16 @@ inline void addCommonBuiltins(BuiltinTable& t) {
     }
 }
 
-// Run once after a successful compile, where a compiled module's defineControls() sits.
-/// The entry a binding runs so the controls a script declares exist.
+/// The entry a binding runs once after a successful compile, so the controls a script declares exist.
 inline constexpr const char* kEntryDefineControls = "defineControls";
 
-// Before the compile, so the last program's buffers are gone before the next one needs memory.
-/// The moments a binding is told about: a compile starting, and the defineControls run that sizes the new program's buffers.
+/// The moments a binding is told about: a compile starting, which frees the last program's buffers first, and the defineControls run that sizes the new ones.
 enum class DefinePhase : uint8_t { Compiling, Attach, Detach };
 
 /// What a binding does at each of those moments, for the sizing its own builtins ask for.
 using DefineHook = void (*)(void* ctx, DefinePhase phase);
 
-// Re-runnable like its compiled counterpart, since the declared list is cleared first.
-/// Run a script's defineControls, so the controls it declares exist.
+/// Run a script's defineControls, so the controls it declares exist; re-runnable, since the declared list is cleared first.
 inline void runDefineControls(MoonLive& engine, DefineHook hook = nullptr, void* hookCtx = nullptr) {
     if (!engine.hasEntry(kEntryDefineControls)) return;   // nothing to clear and nothing to run
     // Install before clearing, since a clear-then-run with the table full would drop every control.
@@ -292,7 +277,5 @@ inline void runDefineControls(MoonLive& engine, DefineHook hook = nullptr, void*
     if (hook) hook(hookCtx, DefinePhase::Detach);
     setAddControlSink(nullptr, nullptr);
 }
-
-/// @}
 
 }  // namespace mm::moonlive

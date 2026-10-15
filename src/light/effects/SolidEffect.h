@@ -4,26 +4,20 @@
 
 namespace mm {
 
-/// Effect that fills the whole layer with one palette color.
+/// A flat fill with five color modes: a plain RGB(W) color, the palette spread across the lights, one RMS-averaged palette color, or the palette banded along rows or columns.
 /// @card SolidEffect.gif
 ///
-/// Five color modes: a flat color, the palette across the lights, its RMS average, or banded.
-/// Brightness scales the flat and spread results.
+/// Brightness scales every mode except Palette avg.
 ///
-/// Prior art: MoonLight's Solid, whose modes and shuffle this reproduces.
-///
-/// @moreinfo
+/// @technical
 ///
 /// ## The band modes
 ///
-/// A `minRGB` floor drops near-black palette entries, so a dark gradient still bands visibly.
-/// `randomColors` shuffles the survivors with a fixed generator, so the order is reproducible.
-/// The flat color's own members go unused in every palette mode.
+/// A `minRGB` floor drops near-black palette entries, so a dark gradient still bands visibly. `randomColors` shuffles the survivors with a fixed generator, so the order is reproducible.
 ///
 /// ## White is written only where the light has it
 ///
-/// The optional white channel is written when the layer carries a fourth, and ignored otherwise.
-/// Every palette mode clears it, since those modes carry no white source of their own.
+/// The white channel is written when the layer carries a fourth, and ignored otherwise. Every palette mode clears it, since those modes carry no white source of their own.
 class SolidEffect : public EffectBase {
 public:
     /// Catalog tags: MoonLight origin.
@@ -31,7 +25,6 @@ public:
     /// D3: the band modes write every axis, which keeps their orientation right in a volume.
     Dim dimensions() const override { return Dim::D3; }
 
-    // Defaults match MoonLight's own Solid.
     /// The flat color's red channel.
     uint8_t red = 182;
     /// Its green channel.
@@ -40,7 +33,7 @@ public:
     uint8_t blue = 98;
     /// Its white channel, written only where the light carries one.
     uint8_t white = 0;
-    /// Scales the flat and palette-spread results.
+    /// Scales the color in every mode except Palette avg.
     uint8_t brightness = 255;
     /// Which of the five color modes fills the layer.
     uint8_t colorMode = kColorFlat;

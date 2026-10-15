@@ -1,36 +1,23 @@
 #pragma once
 
 #include "light/layouts/LayoutBase.h"
+#include "light/layouts/RingLayout.h"   // the rings each lamp is made of
 
 namespace mm {
 
-/// Layout mapping automotive light-strip coordinates.
+/// A pair of car headlights: concentric rings of lights placed like a car's front lamps.
 /// @card CarLightsLayout.gif
-/// Author: Eric Marciniak (Discord), custom car-lights fixture, reconstructed for MoonLight
 ///
-/// @moreinfo
+/// Nested rings of 1, 8, 12, 16 and 24 lights form each lamp, with a ring of 32 more on the outer two. Side strips join them, in a fixed arrangement drawn with @ref RingLayout geometry.
 ///
-/// A stylised pair of car headlights: four concentric-ring "lamps" (inner/outer left, inner/outer right) plus two side strips joined by 90° arcs, all scaled by a single `scale` control.
-/// A 2D layout emitting each LED's (x, y, 0) in physical wiring order.
+/// @attribution Eric Marciniak, Polar coordinates
 ///
-/// Prior art: MoonLight's CarLightsLayout (Node "Car Lights", tags 🚥; ewowi/MoonLight, src light layout nodes).
-/// MoonLight builds this by instantiating a RingLayout object and calling its onLayout() repeatedly with different ringCenter / nrOfLEDs / angle settings.
-/// Every ring and both strips' coordinates are reproduced here EXACTLY, in the same wiring order. tags 💫 marks the MoonLight lineage.
+/// @technical
 ///
-/// ## What had to be reconstructed
-///
-/// RECONSTRUCTED: MoonLight's RingLayout is a standalone module, it has no onLayout()/addLight() and derives its ring center INTERNALLY from nrOfLEDs.
-/// It cannot be driven the way MoonLight drives its RingLayout (which takes an EXTERNALLY set ringCenter per headlight).
-/// The ring-emitting trig is therefore inlined below, reproducing the source's own ring placement verbatim.
-/// That covers its radius, its placement angle, its partial-arc inclusion filter and its integer truncation of each coordinate.
-/// The external-ringCenter form is the one CarLights needs, which is why we don't delegate to RingLayout.h.
-///
-/// Float trig runs on the cold build path (placeLights / lightCount, called from a rebuild), never the hot render loop, so it's allowed here.
-/// MoonLight's pin/wiring plumbing (nextPin / doNextPin) is dropped, a MoonLight layout emits coordinates only; the driver owns pins.
+/// Every ring, the lamps' and the strips' quarter arcs alike, is a @ref RingLayout object with its center set. A lamp is drawn by the same layout a user adds as a Ring.
 class CarLightsLayout : public LayoutBase {
 public:
-    // MoonLight's default and range, its inactive spoke controls dropped.
-    /// The spacing multiplier out from each center, 1 to 10.
+    /// The overall size: the spacing out from each lamp's center.
     uint8_t scale = 2;
 
     /// The controls a user sets on the card.
@@ -38,183 +25,65 @@ public:
         controls_.addControl("scale", scale, 1, 10);
     }
 
-    /// The catalog tags this layout carries.
+    /// The catalog tags: 💫, a MoonLight origin.
     const char* tags() const override { return "💫"; }
     /// How many axes this layout places lights on.
     Dim dimensions() const override { return Dim::D2; }
 
     /// How many lights the current settings place.
     nrOfLightsType lightCount() const override {
-        /// The same walk as the emit, so a partial arc's count can never disagree.
-        nrOfLightsType n = 0;
-        walk([](void*, nrOfLightsType, lengthType, lengthType, lengthType) {}, nullptr, &n);
-        return n;
+        // The same walk as the emit, so a partial arc's count cannot disagree.
+        LightEmitter e;
+        walk(e);
+        return static_cast<nrOfLightsType>(e.idx);
     }
 
     /// Emit every light's coordinate, in wiring order.
     void placeLights(const CoordSink& sink) const override {
-        walk(sink.cb, sink.ctx, nullptr);
+        LightEmitter e{&sink};
+        walk(e);
     }
 
 private:
-    // MoonLight: getRadius(n) = n / TWO_PI.
-    static float getRadius(uint8_t n) {
-        return static_cast<float>(n) / (2.0f * std::numbers::pi_v<float>);
-    }
-
-    // Threaded through the build so each ring and strip appends after the previous one.
-    struct Emit {
-        CoordCallback cb;
-        void* ctx;
-        nrOfLightsType idx;
-        // Truncating to int is what matches MoonLight's own coordinate rounding.
-        void add(float x, float y) {
-            if (cb) cb(ctx, idx,
-                       static_cast<lengthType>(static_cast<int>(x)),
-                       static_cast<lengthType>(static_cast<int>(y)),
-                       0);
-            idx++;
-        }
-        void add(lengthType x, lengthType y) {
-            if (cb) cb(ctx, idx, x, y, 0);
-            idx++;
-        }
-    };
-
-    // One ring's included lights, in ring order, about an externally supplied center.
-    void emitRing(Emit& e, lengthType cx, lengthType cy, uint8_t nrOfLEDs,
-                  uint16_t angleFirst, uint16_t rotation, bool clockwise) const {
-        if (nrOfLEDs == 0) return;
-
-        const float PI_F     = std::numbers::pi_v<float>;
-        const float TWO_PI_F = 2.0f * PI_F;
-        const float radius   = getRadius(nrOfLEDs);
-
-        for (int i = 0; i < nrOfLEDs; i++) {
-            float x = scale * static_cast<float>(cx);
-            float y = scale * static_cast<float>(cy);
-
-            // Angle of this LED (for the partial-arc inclusion test).
-            const float ledAngle =
-                fmodf(angleFirst + (static_cast<float>(i) / nrOfLEDs) * 360.0f, 360.0f);
-
-            // Placement angle for the actual position.
-            const float angleRad =
-                PI_F + (TWO_PI_F * i) / nrOfLEDs + TWO_PI_F * angleFirst / 360.0f;
-
-            if (nrOfLEDs != 1) {
-                x -= scale * sinf(angleRad) * radius;
-                y += scale * cosf(angleRad) * radius;
+    /// The one home for the geometry: every lamp's rings, then both strips with their arcs, in wiring order.
+    void walk(LightEmitter& e) const {
+        constexpr lengthType kLeft = 9;   // the margin every part is placed from
+        RingLayout ring;   // one ring at a time: its public settings set, then placed as the next part
+        ring.scale = scale;
+        // Each lamp is concentric rings about its own center, starting at 90 degrees: the inner lamps five rings, the outer six.
+        struct Lamp { lengthType cx, cy; uint8_t rings; };
+        constexpr uint8_t kRingSizes[] = {1, 8, 12, 16, 24, 32};
+        constexpr Lamp kLamps[] = {{kLeft + 11, 8, 5}, {kLeft, 6, 6}, {kLeft + 25, 8, 5}, {kLeft + 36, 6, 6}};
+        ring.angleFirst = 90;
+        for (const Lamp& lamp : kLamps) {
+            ring.centerX = lamp.cx;
+            ring.centerY = lamp.cy;
+            for (uint8_t r = 0; r < lamp.rings; r++) {
+                ring.nrOfLEDs = kRingSizes[r];
+                e.place(ring);
             }
-
-            /// Partial-circle inclusion test (MoonLight, verbatim logic).
-            bool includeLED = false;
-            if (rotation < 1 || rotation >= 360) {
-                includeLED = true;  // full circle
-            } else {
-                float endAngle;
-                if (clockwise) {
-                    endAngle = fmodf(angleFirst + rotation, 360.0f);
-                } else {
-                    endAngle = fmodf(angleFirst - rotation + 360.0f, 360.0f);
-                }
-
-                if (clockwise) {
-                    if (endAngle >= angleFirst) {
-                        // No wrap: angleFirst=180, rotation=90, endAngle=270
-                        includeLED = (ledAngle >= angleFirst && ledAngle <= endAngle);
-                    } else {
-                        // Wraps around 0: angleFirst=270, rotation=180, endAngle=90
-                        includeLED = (ledAngle >= angleFirst || ledAngle <= endAngle);
-                    }
-                } else {
-                    if (endAngle <= angleFirst) {
-                        // No wrap: angleFirst=180, rotation=90, endAngle=90
-                        includeLED = (ledAngle <= angleFirst && ledAngle >= endAngle);
-                    } else {
-                        // Wraps around 0: angleFirst=90, rotation=180, endAngle=270
-                        includeLED = (ledAngle <= angleFirst || ledAngle >= endAngle);
-                    }
-                }
-            }
-
-            if (includeLED) e.add(x, y);
-        }
-    }
-
-    // The one home for the geometry: every ring and both strips, in wiring order.
-    void walk(CoordCallback cb, void* ctx, nrOfLightsType* count) const {
-        Emit e{cb, ctx, 0};
-
-        const lengthType leftMargin = 9;  // MoonLight: uint8_t leftMargin = 9;
-
-        // --- Headlights: angleFirst=90, rotation=360, clockwise (defaults) ---
-        constexpr uint16_t kFirst = 90;
-        constexpr uint16_t kFull  = 360;
-        constexpr bool     kCW    = true;
-
-        // inner light left, center {leftMargin + 11, 8}
-        emitRing(e, leftMargin + 11, 8,  1, kFirst, kFull, kCW);
-        emitRing(e, leftMargin + 11, 8,  8, kFirst, kFull, kCW);
-        emitRing(e, leftMargin + 11, 8, 12, kFirst, kFull, kCW);
-        emitRing(e, leftMargin + 11, 8, 16, kFirst, kFull, kCW);
-        emitRing(e, leftMargin + 11, 8, 24, kFirst, kFull, kCW);
-
-        // outer light left, center {leftMargin, 6}
-        emitRing(e, leftMargin, 6,  1, kFirst, kFull, kCW);
-        emitRing(e, leftMargin, 6,  8, kFirst, kFull, kCW);
-        emitRing(e, leftMargin, 6, 12, kFirst, kFull, kCW);
-        emitRing(e, leftMargin, 6, 16, kFirst, kFull, kCW);
-        emitRing(e, leftMargin, 6, 24, kFirst, kFull, kCW);
-        emitRing(e, leftMargin, 6, 32, kFirst, kFull, kCW);
-
-        // (MoonLight nextPin() here — dropped)
-
-        // inner light right, center {leftMargin + 25, 8}
-        emitRing(e, leftMargin + 25, 8,  1, kFirst, kFull, kCW);
-        emitRing(e, leftMargin + 25, 8,  8, kFirst, kFull, kCW);
-        emitRing(e, leftMargin + 25, 8, 12, kFirst, kFull, kCW);
-        emitRing(e, leftMargin + 25, 8, 16, kFirst, kFull, kCW);
-        emitRing(e, leftMargin + 25, 8, 24, kFirst, kFull, kCW);
-
-        // outer light right, center {leftMargin + 36, 6}
-        emitRing(e, leftMargin + 36, 6,  1, kFirst, kFull, kCW);
-        emitRing(e, leftMargin + 36, 6,  8, kFirst, kFull, kCW);
-        emitRing(e, leftMargin + 36, 6, 12, kFirst, kFull, kCW);
-        emitRing(e, leftMargin + 36, 6, 16, kFirst, kFull, kCW);
-        emitRing(e, leftMargin + 36, 6, 24, kFirst, kFull, kCW);
-        emitRing(e, leftMargin + 36, 6, 32, kFirst, kFull, kCW);
-
-        // (MoonLight nextPin() here — dropped)
-
-        // The left strip, walked from its high-x end back.
-        for (int x = (leftMargin + 16) * scale; x >= leftMargin * scale; x--) {
-            e.add(static_cast<lengthType>(x), static_cast<lengthType>(15 * scale));
-        }
-        // 52-LED arc, center {leftMargin, 6}, angleFirst=180, rotation=90, clockwise
-        emitRing(e, leftMargin, 6, 52, 180, 90, true);
-        // for (y = 5; y >= 1; y--) addLight({0, y*scale})
-        for (int y = 5; y >= 1; y--) {
-            e.add(static_cast<lengthType>(0), static_cast<lengthType>(y * scale));
         }
 
-        // (MoonLight nextPin() here — dropped)
+        // Each strip is a straight run, then a quarter of a 52-light ring from 180 degrees, then an upright.
+        ring.nrOfLEDs = 52;
+        ring.angleFirst = 180;
+        ring.rotation = 90;
+        for (int x = (kLeft + 16) * scale; x >= kLeft * scale; x--)
+            e.pixel(static_cast<lengthType>(x), static_cast<lengthType>(15 * scale), 0);
+        ring.centerX = kLeft;
+        ring.centerY = 6;
+        e.place(ring);
+        for (int y = 5; y >= 1; y--)
+            e.pixel(0, static_cast<lengthType>(y * scale), 0);
 
-        // The right strip, walked outward.
-        for (int x = (leftMargin + 19) * scale; x <= (leftMargin + 35) * scale; x++) {
-            e.add(static_cast<lengthType>(x), static_cast<lengthType>(15 * scale));
-        }
-        // 52-LED arc, center {leftMargin + 36, 6}, angleFirst=180, rotation=90, counter-clockwise
-        emitRing(e, leftMargin + 36, 6, 52, 180, 90, false);
-        // for (y = 5; y >= 1; y--) addLight({(leftMargin+44)*scale, y*scale})
-        for (int y = 5; y >= 1; y--) {
-            e.add(static_cast<lengthType>((leftMargin + 44) * scale),
-                  static_cast<lengthType>(y * scale));
-        }
-
-        // (MoonLight nextPin() here — dropped)
-
-        if (count) *count = e.idx;
+        // The right strip walks outward, and its arc turns counter-clockwise.
+        for (int x = (kLeft + 19) * scale; x <= (kLeft + 35) * scale; x++)
+            e.pixel(static_cast<lengthType>(x), static_cast<lengthType>(15 * scale), 0);
+        ring.centerX = kLeft + 36;
+        ring.clockwise = false;
+        e.place(ring);
+        for (int y = 5; y >= 1; y--)
+            e.pixel(static_cast<lengthType>((kLeft + 44) * scale), static_cast<lengthType>(y * scale), 0);
     }
 };
 

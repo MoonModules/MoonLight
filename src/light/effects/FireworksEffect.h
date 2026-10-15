@@ -6,28 +6,16 @@
 
 namespace mm {
 
-/// Effect: shells that rise, stall, and burst into falling sparks.
+/// Shells rise, stall, and burst into sparks that arc over and fall.
 /// @card FireworksEffect.gif
 ///
-/// The particle kernel end to end, where every stage of a firework is one kernel call.
-/// The effect itself decides only when to launch and in what color.
+/// Nothing schedules the apex: the shell decelerates under gravity and bursts when its vertical velocity crosses zero, so a faster launch bursts higher without a second control. The physics runs on elapsed time, so a shell and its sparks follow the same arc at any frame rate.
 ///
-/// Prior art: the WLED Particle System's firework family, where the physics here is the kernel's.
+/// @attribution Damian Schneider, Particle system
 ///
-/// @moreinfo
+/// @technical
 ///
-/// ## Nothing schedules the apex
-///
-/// A shell is spawned with upward velocity, and gravity acts on it every frame.
-/// The burst fires when its vertical velocity crosses zero, so the physics decides where.
-/// That is why a faster launch bursts higher without a second control.
-///
-/// ## Each stage is a kernel call
-///
-/// `spawn` launches, `gravity` slows the rise, and `angleEmit` bursts a ring where it stalled.
-/// Gravity and drag then shape the fall, and `age` fades a spark as it dies.
-/// Trails come from the Layer's own decay rather than a second one hidden in the pool.
-/// Cost is one pass per force over a pool the effect sizes itself, plus a splat per live spark.
+/// Every stage is one particle kernel call: `spawn` launches, `gravity` slows the rise, `angleEmit` bursts a ring where it stalled, and `age` fades a spark. Trails come from the Layer's own decay rather than a second one in the pool.
 class FireworksEffect : public EffectBase {
 public:
     /// Catalog tags: this effect is the power-function showcase.
@@ -39,7 +27,7 @@ public:
     uint8_t launchRate = 30;
     /// How hard a shell is thrown, and so how high it bursts.
     uint8_t launchSpeed = 150;
-    /// How fast everything falls.
+    /// How fast everything falls, per 60 Hz of simulated time.
     uint8_t gravity = 6;
     /// How many sparks each burst throws.
     uint8_t sparks = 20;
@@ -145,7 +133,8 @@ private:
 
     /// The spark pool's size, which the default burst count sits well inside.
     static constexpr uint16_t kPool = 120;
-    static constexpr uint32_t kSeed = 0xF17E;   ///< fixed, so two devices launch alike
+    /// Fixed, so two devices launch alike.
+    static constexpr uint32_t kSeed = 0xF17E;
 
     ScratchBuffer<draw::pos_t> x_{*this}, y_{*this}, vx_{*this}, vy_{*this};
     ScratchBuffer<uint16_t> ttl_{*this};   ///< wide, for a life beyond 255 frames
@@ -153,7 +142,7 @@ private:
     particles::Pool pool_;                 ///< the view over those arrays
     particles::FrameTime time_{60};        ///< the reference rate the controls are written against
 
-    // The shell keeps its own state, since bursting is not something the pool models.
+    /// The shell keeps its own state, since bursting is not something the pool models.
     draw::pos_t shellX_ = 0, shellY_ = 0, shellVx_ = 0, shellVy_ = 0;
     uint8_t shellHue_ = 0;       ///< the color its burst will take
     bool shellLive_ = false;     ///< whether a shell is currently rising

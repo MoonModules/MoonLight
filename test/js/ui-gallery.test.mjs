@@ -26,13 +26,16 @@ const g = new Function(`
              galleryMatches, gallerySorted, galleryPage, galleryPath };
 `)();
 
-test("a look or a palette applies unasked, and pins or geometry ask first", () => {
+test("a look, a palette or a look with its palette applies unasked, and pins or geometry ask first", () => {
     assert.ok(g.galleryAppliesUnasked({ Effects: { Layer: {} } }));
     assert.ok(g.galleryAppliesUnasked({ $slot: 3, Effects: {} }));
     assert.ok(g.galleryAppliesUnasked({ Drivers: { palette: "Ocean" } }));
     assert.ok(!g.galleryAppliesUnasked({ Drivers: { palette: "Ocean", brightness: 40 } }));
     assert.ok(!g.galleryAppliesUnasked({ Layouts: { Grid: {} } }));
-    assert.ok(!g.galleryAppliesUnasked({ Effects: {}, Drivers: { palette: "Ocean" } }));
+    assert.ok(g.galleryAppliesUnasked({ Effects: {}, Drivers: { palette: "spectrum.mlp" } }));
+    assert.ok(!g.galleryAppliesUnasked({ Effects: {}, Drivers: { palette: "Ocean", brightness: 40 } }));
+    assert.ok(!g.galleryAppliesUnasked({ Effects: {}, Layouts: {} }));
+    assert.ok(!g.galleryAppliesUnasked({}));
     assert.ok(!g.galleryAppliesUnasked([1, 2]));
 });
 

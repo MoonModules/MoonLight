@@ -94,7 +94,7 @@ Starting an output prints on UART0, which a classic board shares with Improv, an
 Every other driver (`RmtLedDriver`, `LcdLedDriver`, `ParlioLedDriver`, `NetworkSendDriver`) is added per board through its `state` document, under the `Drivers` container.
 So a device carries only the outputs its board has, rather than every driver the chip can run.
 The default LED driver per chip: **classic ESP32 → `RmtLedDriver`**, **S3 → `RmtLedDriver`**, **P4 → `ParlioLedDriver`** (1–8 lanes).
-On the S3, LCD needs the full 8-lane bus (see the [LcdLedDriver spec](../moonmodules/light/moxygen/LcdLedDriver.md)), and 1..8-pin LCD is a future extension.
+On the S3, LCD needs the full 8-lane bus (see [the parallel LED driver](../docs/moonmodules/light/drivers.md#parallelled)), and 1..8-pin LCD is a future extension.
 
 The `RmtLed` `controls` block presets the loopback self-test pins, so a bench operator flips the `loopbackTest` switch with no re-typing.
 **`loopbackTxPin` and `loopbackRxPin` are the test jumper (tx→rx), separate from the operational `pins`.** On the S3 the strip runs on `pins`=18 while the loopback transmits on 13 and captures on 12.
@@ -135,7 +135,7 @@ Each top-level container is sent as its own document (the largest is 236 bytes, 
 A bare board whose LED or mic pins the *user* wires omits them; the user adds the module and sets the pins manually later.
 Inject nothing you don't know.
 This is the MCU/Board/Device provenance rule from [MoonInstaller, config provenance](../docs/explanation/architecture/mooninstaller.md#config-provenance-mcu-devicemodel): default a pin only at the level that fixes it.
-The `MM testbench S3` entry above adds an `AudioService` with the verified INMP441 mic pins (WS=4/SD=5/SCK=6, matching the bench wiring in [`AudioService.h`](../../src/core/services/AudioService.h)).
+The `MM testbench S3` entry above adds an `AudioService` with the verified INMP441 mic pins (WS=4/SD=5/SCK=6, matching the bench wiring in [`AudioService.h`](../docs/moonmodules/core/services.md#audio)).
 It also adds an `RmtLedDriver` (LEDs on `pins`=18, loopback jumper tx=13→rx=12), a known-hardware Device on the maintainer's desk, so the inject is testable end-to-end.
 The `ESP32-16MB` sibling adds `RmtLedDriver` (LEDs=18, loopback tx=4/rx=5); the `P4` sibling adds `ParlioLedDriver` (LEDs=20–27, loopback tx=33/rx=32).
 Only the S3 has a mic wired.

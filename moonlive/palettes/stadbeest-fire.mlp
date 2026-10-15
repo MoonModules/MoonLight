@@ -5,7 +5,7 @@ class StadBeestFire {
   byte flicker = 60;
   int flash = 0;
 
-  string tags() { return "🎨🔥🎶"; }
+  string tags() { return "🎨🎶"; }
 
   void defineControls() {
     addControl("sensitivity", sensitivity, 0, 255); // how much louder music heats the fire; 0 ignores the music

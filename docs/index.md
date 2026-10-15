@@ -56,7 +56,7 @@ One source tree drives ESP32, Teensy, Raspberry Pi, macOS, Windows and Linux.
 
     Measured frame rates per device, how the project works, why the code is ours, and who inspired what.
 
-    [Performance](reference/performance.md) · [Why our own code](explanation/why-we-write-our-own.md) · [Security](explanation/security.md) · [How we work](https://github.com/MoonModules/MoonLight#how-we-work) · [Credits](https://github.com/MoonModules/MoonLight#credits)
+    [Performance](reference/performance.md) · [Why our own code](explanation/why-we-write-our-own.md) · [Security](explanation/security.md) · [How we work](https://github.com/MoonModules/MoonLight#how-we-work) · [Attributions](reference/attributions.md)
 
 </div>
 

@@ -4,7 +4,7 @@ The rules that bind every change. What the system is: [README.md](README.md). Ho
 
 A high-performance system driving large LED installations and DMX fixtures. One source tree drives ESP32, Teensy, Raspberry Pi, macOS, Windows and Linux.
 
-**Read on every task**: this file. **Read when the task touches them**: the architecture, the two standards pages, and the spec of the module being changed. Everything else is linked from where it applies.
+**Read on every task**: this file. **Read when the task touches them**: the architecture, the two standards pages, and the header of the module being changed. Everything else is linked from where it applies.
 
 ## Principles
 
@@ -130,7 +130,7 @@ flowchart TB
 
 Keep each commit under ~100 changed files: CodeRabbit reviews the files a pushed commit changes, and past that the commit silently loses a review layer. A mechanical sweep (em-dashes, a metrics refresh) is a commit of its own, apart from behavioral fixes, so both stay reviewable.
 
-**A contributed pull request is one topic, about 400 changed lines and ten files at most**, tests included. Generated files (metrics, images, scenario observations) are a category of their own, outside the count. Past a few hundred lines a review stops catching defects (the SmartBear and Cisco review study; Google's guide on small changes), and the product owner reviews every line. Every pull request is based on main. The one exception is a step of a larger topic, which lands as its own pull request and may build on the step below it. A stacked pull request from a fork shows its parents, so it is reviewed once the one below it merges.
+**A contributed pull request is one topic, max 400 changed lines and ten files**, tests included. Generated files (metrics, images, scenario observations) are a category of their own, outside the count. Past a few hundred lines a review stops catching defects (the SmartBear and Cisco review study; Google's guide on small changes), and the product owner reviews every line. Every pull request is based on main. The one exception is a step of a larger topic, which lands as its own pull request and may build on the step below it. A stacked pull request from a fork shows its parents, so it is reviewed once the one below it merges.
 
 ### Build and test
 
@@ -173,7 +173,7 @@ New behavior is pinned before it ships: a unit test for module logic, a scenario
 
 ### Document
 
-Docs land with the code: the module's spec and catalog card describe what shipped, a breaking change gets its [MIGRATING](docs/reference/MIGRATING.md) entry, and a shipped backlog item or spec draft is deleted. The merge gate verifies this happened. How the writing looks and how much of it there is: [documentation-standards.md](docs/contributing/documentation-standards.md), which is the one home for all of it.
+Docs land with the code: the module's header describes what shipped, a breaking change gets its [MIGRATING](docs/reference/MIGRATING.md) entry, and a shipped backlog item or spec draft is deleted. The merge gate verifies this happened. How the writing looks and how much of it there is: [documentation-standards.md](docs/contributing/documentation-standards.md), which is the one home for all of it.
 
 ### Commit
 

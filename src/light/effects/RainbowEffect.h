@@ -4,11 +4,12 @@
 
 namespace mm {
 
-/// Palette-cycling diagonal rainbow effect, and the default the tests reach for.
+/// A diagonal animated rainbow: the always-visible default and test effect.
 /// @card RainbowEffect.gif
-/// Author: FastLED rainbow (Mark Kriegsman), via the predecessor, https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_FastLED.h
 ///
 /// A pixel's hue comes from its own x plus y, walked by the clock, so the bands run diagonally.
+///
+/// @attribution Mark Kriegsman
 class RainbowEffect : public EffectBase {
 public:
     /// Catalog tags: FastLED origin.
@@ -16,7 +17,7 @@ public:
     /// Writes the z=0 slice, which extrude duplicates through a volume.
     Dim dimensions() const override { return Dim::D2; }
 
-    /// How fast the rainbow cycles, where a whole one a second reads too fast.
+    /// Animation BPM: one full hue cycle per beat.
     uint8_t speed = 20;
 
     /// Publish the cycle speed.

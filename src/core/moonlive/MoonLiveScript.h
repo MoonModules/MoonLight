@@ -12,22 +12,18 @@ namespace mm::moonlive {
 ///
 /// The rule it exists to state once: if the file changed, recompile. That is all `sync()` is.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## Held by value
 ///
-/// The three scripted modules derive from three sibling bases under MoonModule.
-/// A shared base would need virtual inheritance and change the layout of every module.
+/// The three scripted modules derive from three sibling bases under MoonModule, since a shared base would need virtual inheritance and change the layout of every module.
 ///
 /// ## One answer to one question
 ///
-/// The three bindings each grew their own bookkeeping around that rule and drifted apart.
-/// An effect had no content hash, so editing a script changed nothing until it was renamed.
-/// A layout cleared its hash only on a name change, and only a modifier re-read the file.
+/// The three bindings share one bookkeeping around that rule, so editing a script recompiles every kind the same way.
 class MoonLiveScript {
 public:
-    // Sized from the worst line the code can produce, which the status-fits test recomputes.
-    /// The longest status this module reports, with its offset suffix.
+    /// The longest status this module reports, with its offset suffix, sized from the worst line the code can produce.
     static constexpr size_t kMaxStatus = 112;
     /// What the status says when the user's copy is hiding a shipped one.
     static constexpr const char* kShadowMark = "edited copy";
@@ -40,8 +36,7 @@ public:
     /// The text the last sync wrote to its owner's status, so the owner can tell its own message from another's.
     const char* statusText() const { return statusBuf_; }
 
-    // True means a new program was installed, which a modifier turns into a Layer rebuild.
-    /// Re-read the file and recompile when its content hash moved.
+    /// Re-read the file and recompile when its content hash moved, returning true when a new program was installed, which a modifier turns into a Layer rebuild.
     bool sync(const SysVarTable& sysvars, MoonModule& owner, const BuiltinTable& builtins) {
         // Cheapest question first, since this runs on every prepare sweep and must not compile.
         uint32_t fileHash = 0;
@@ -108,8 +103,7 @@ public:
         return true;
     }
 
-    // A control write lands here directly, which is why sync() re-derives from the file.
-    /// The name buffer the `script` control binds to.
+    /// The name buffer the `script` control binds to, written directly by a control write, which is why sync() re-derives from the file.
     char*  buffer() { return name_; }
     /// How many bytes the name buffer holds.
     size_t bufferSize() const { return sizeof(name_); }
@@ -123,17 +117,15 @@ public:
         invalidate();
     }
 
-    // D2 is the fallback, so a script that stays silent behaves exactly as it always did.
     /// The dimensionality the script declared, or D2 when it declared none.
     Dim dimensions() const { return dim_; }
 
-    // Points into the engine's string pool, so it is valid until the next compile replaces it.
-    /// The emoji the script declared, or null when it declared none.
+    /// The emoji the script declared, or null when it declared none, valid until the next compile replaces the engine's string pool.
     const char* tags() const { return tags_; }
 
-    // Subtracting rather than zeroing, so a binding may own other memory the owner still counts.
     /// Hand back what this script reported, called after the engine is freed.
     void releaseReporting(MoonModule& owner) {
+        // Subtracting rather than zeroing, so a binding may own other memory the owner still counts.
         const size_t held = owner.dynamicBytes();
         owner.setDynamicBytes(held > reportedBytes_ ? held - reportedBytes_ : 0);
         reportedBytes_ = 0;
@@ -149,7 +141,6 @@ public:
         failedScript_[0] = '\0';
     }
 
-    // One home, since all three bindings publish identically.
     /// Publish every control the script declared, bound by reference to its live arena slot.
     void publishDeclaredControls(ControlList& controls) {
         uint8_t n = 0;
@@ -193,8 +184,7 @@ public:
     bool ok() const { return engine_.ok(); }
 
 private:
-    // A script declaring neither keeps the binding's defaults, as every older script does.
-    /// Read what the script says it is, by running the function it wrote.
+    /// Read what the script says it is, by running the function it wrote; a script declaring neither keeps the binding's defaults.
     void readIdentity() {
         dim_ = Dim::D2;
         tags_ = nullptr;
@@ -209,19 +199,18 @@ private:
     /// What the compiled script declared, cached so no call lands on the tick path.
     Dim         dim_  = Dim::D2;
     const char* tags_ = nullptr;
-    // Asked once per status line, so the success and failure branches cannot drift apart.
-    /// Which shadow note the status should carry, or null when this is the only copy.
+    /// Which shadow note the status should carry, or null when this is the only copy, asked once per status line so the success and failure branches agree.
     const char* shadowMark() const {
         if (!moonlive::scriptShadowsFactory(name_)) return nullptr;
         return moonlive::scriptFactoryMovedOn(name_) ? kStaleMark : kShadowMark;
     }
 
     char     statusBuf_[kMaxStatus] = {};
-    // Empty on a fresh card, reporting "no script" until one is named.
+    /// The script file this module runs, empty on a fresh card, which reports "no script" until one is named.
     char     name_[kMaxScriptName + 1] = "";
     uint32_t compiledHash_ = 0;
     bool     haveCompiled_ = false;   // 0 is a valid hash, so "is anything compiled" is its own flag
-    // Name and content both, so a script fixed in place under the same name is retried.
+    /// Whether the last compile failed, latched by name and content both so a script fixed in place under the same name is retried.
     bool     compileFailed_ = false;
     bool     failedReadable_ = false;   // was there a file at all when it failed?
     uint32_t failedHash_ = 0;

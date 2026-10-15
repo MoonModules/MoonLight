@@ -82,7 +82,7 @@ public:
         }
     };
 
-    // Run one lookup pass on the calling thread, as the task would.
+    /// Run one lookup pass on the calling thread, as the task would.
     static void passForTest() { pass(self()); }
 
 private:

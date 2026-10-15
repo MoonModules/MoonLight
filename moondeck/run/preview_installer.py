@@ -380,6 +380,12 @@ def main() -> int:
             self.send_header("Cache-Control", "no-store")
             super().end_headers()
 
+        # The help as gen_help last wrote it, read on each request rather than staged, so a device UI opened with `?help=local` shows a regenerated file on its next reload.
+        def translate_path(self, path):
+            if path.split("?", 1)[0] == "/help/help.json":
+                return str(ROOT / "docs" / "help" / "help.json")
+            return super().translate_path(path)
+
     handler = CorsHandler
 
     class QuietTCPServer(socketserver.ThreadingTCPServer):

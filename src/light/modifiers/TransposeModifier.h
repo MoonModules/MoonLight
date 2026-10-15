@@ -4,38 +4,32 @@
 
 namespace mm {
 
-/// Modifier swapping a pair of box axes.
+/// Swaps a pair of axes and can flip each one, so the image rotates or mirrors without the effect redrawing.
+/// @card TransposeModifier.gif
 ///
-/// @moreinfo
+/// @attribution Transpose
 ///
-/// Swaps a pair of axes of the logical box and every coordinate folded through it, then optionally inverts (flips) each axis.
-/// Enable XY to swap the x and y axes (a matrix transpose, rows become columns), XZ or YZ likewise.
-/// The swaps apply in that order, so enabling several composes them.
-/// The inverse-X/Y/Z bools flip a coordinate within the (already-transposed) box: x → size.x - 1 - x, so the axis reads back-to-front.
-/// A static, build-time remap, no per-frame work.
+/// @technical
 ///
-/// Prior art: MoonLight's Transpose modifier (M_MoonLight.h), same pairwise axis swap on both the box and the coordinate, plus per-axis inverse.
-/// The inverse reads the box AFTER the swaps (MoonLight's modifyPosition reads the transposed `layer->size`), reproduced here by inverting against the stashed box.
-/// Written fresh against our fold interface.
-/// Author: MoonLight, https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Modifiers/M_MoonLight.h
+/// The swaps apply to the box and to every coordinate in the order XY, XZ, YZ, so enabling several composes them; XY alone is the matrix transpose. The flips run after the swaps, against the already transposed box.
 class TransposeModifier : public ModifierBase {
 public:
-    /// The catalog tags this modifier carries.
-    const char* tags() const override { return "💫"; }  // MoonLight origin
+    /// The catalog tags: 💫, a MoonLight origin.
+    const char* tags() const override { return "💫"; }
     /// TransposeXY/XZ/YZ: it can swap any pair.
     Dim dimensions() const override { return Dim::D3; }
 
-    /// Pairwise axis swaps. XY on by default (the common 2D transpose).
+    /// Swap x and y, rows becoming columns.
     bool transposeXY = true;
-    /// Whether x and z swap.
+    /// Swap x and z.
     bool transposeXZ = false;
-    /// Whether y and z swap.
+    /// Swap y and z.
     bool transposeYZ = false;
-    /// Flip each axis within the transposed box (back-to-front).
+    /// Flip x after the swaps, so it reads back to front.
     bool inverseX = false;
-    /// Whether y is inverted after the swap.
+    /// Flip y after the swaps.
     bool inverseY = false;
-    /// Whether z is inverted after the swap.
+    /// Flip z after the swaps.
     bool inverseZ = false;
 
     /// The controls a user sets on the card.

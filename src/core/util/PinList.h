@@ -6,11 +6,9 @@
 
 namespace mm {
 
-/// @defgroup CorePinList Parsing a comma-separated GPIO list
-/// @{
 /// One text control such as `18,17,16` turned into the pins a driver claims.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## Why this lives in core
 ///
@@ -72,5 +70,4 @@ inline const char* parsePinList(const char* s, uint16_t* out, uint8_t maxPins, u
     }
 }
 
-/// @}
 } // namespace mm

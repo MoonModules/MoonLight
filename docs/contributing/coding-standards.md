@@ -35,7 +35,7 @@ Use project typedefs (`lengthType`, `nrOfLightsType`) consistently so types matc
 ## Growing the codebase
 
 - **Consider extending before creating.** When adding a feature, check whether an existing module extends cleanly; a new file is fine if genuinely cleaner, but justify it.
-- **Reference, don't copy.** Prior art (friend repos, datasheets, our own prototype branches) holds proven approaches: study it, take the ideas, write our own code, never copy or trace the structure. Credits live in the [friend-repo digests](../friend-repos/index.md) and per-module prior-art sections.
+- **Reference, don't copy.** Prior art (friend repos, datasheets, our own prototype branches) holds proven approaches: study it, take the ideas, write our own code, never copy or trace the structure. Credits live in the [friend-repo digests](../friend-repos/index.md) and in each module's `@attribution`, listed in [the attribution catalog](../reference/attributions.md).
 
 ## Values and types
 

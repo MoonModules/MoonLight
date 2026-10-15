@@ -30,6 +30,12 @@ For a device still on old firmware (no Backup button yet), the [installer page](
 
 ## Unreleased
 
+### Rings 241 places a few lights one unit over
+
+**Action: *nothing*.**
+
+Every ring is now drawn by one ring geometry, the Ring layout's. So the Rings 241 disc places a few lights one unit from where they were, 7 of 241 on the default disc. Its count and wiring order are unchanged.
+
 ### A `/ws` client subscribes to the state it reads
 
 **Action: *nothing* for the web interface and the WLED app; a script reading `/ws` sends one message.**

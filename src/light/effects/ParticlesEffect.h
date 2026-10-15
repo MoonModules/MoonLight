@@ -5,20 +5,16 @@
 
 namespace mm {
 
-/// Particle-system effect with spawned, moving points.
+/// A swarm of drifting particles with persistent fading trails.
 /// @card ParticlesEffect.gif
-/// Author: WildCats08 / @Brandon502 (MoonLight), https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_MoonLight.h
 ///
 /// Points drift, bounce off the walls and leave a fading trail behind them.
-/// The physics belong to `particles::Pool`, and what stays here is the drift rate and the hue map.
 ///
-/// @moreinfo
+/// @attribution Brandon502, Particle system, David Jupijn
 ///
-/// ## Both carries exist for the same reason
+/// @technical
 ///
-/// The fade and the motion each spend a fraction of a reference frame per tick.
-/// At a high frame rate that fraction truncates to zero, so the remainder accumulates instead.
-/// Without it a fade of 240 never decays and the trail turns solid, and a slow `speed` never moves.
+/// The physics belong to `particles::Pool`. The fade and the motion each spend a fraction of a reference frame per tick, which truncates to zero at a high frame rate, so the remainder accumulates instead.
 class ParticlesEffect : public EffectBase {
 public:
     /// Catalog tags: MoonLight origin, David Jupijn and Rising Step.
@@ -29,13 +25,13 @@ public:
     /// The pool's size, of which `count` are alive at a time.
     static constexpr uint8_t MAX_PARTICLES = 64;
 
-    /// How many particles are alive.
+    /// How many particles drift.
     uint8_t count = 32;
-    /// How fast they drift.
+    /// The drift velocity.
     uint8_t speed = 80;
-    /// How much of the trail each reference frame keeps.
+    /// How long the trails persist, higher is longer tails.
     uint8_t fade = 240;
-    /// Walks every particle's color around the palette.
+    /// Rotates every particle's hue.
     uint8_t hue_shift = 0;
 
     /// Publish the population, the drift, the trail and the palette shift.
@@ -124,7 +120,7 @@ public:
     }
 
 private:
-    // The state lives in the kernel's pool rather than a private struct.
+    /// The state lives in the kernel's pool rather than a private struct.
     ScratchBuffer<draw::pos_t> px_{*this}, py_{*this}, vx_{*this}, vy_{*this};
     ScratchBuffer<uint16_t> ttl_{*this};    ///< which slots are alive
     ScratchBuffer<uint8_t> hue_{*this};     ///< each particle's palette entry

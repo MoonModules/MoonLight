@@ -1,7 +1,6 @@
-/// @defgroup platform_desktop_audio Desktop audio capture
 /// The vendored single-header backend, compiled exactly once here.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## Why it is vendored
 ///

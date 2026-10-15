@@ -1,4 +1,3 @@
-/// @defgroup platform_teensy_gpio_dma GPIO-DMA WS2812 output
 /// The peripheral half of the parallel driver on the Teensy 4.1.
 ///
 /// QTimer4 paces one eDMA channel through the crossbar, and each request writes the next slot of the frame, widened to a port word, into `GPIO1_DR`.

@@ -3,7 +3,7 @@
 ///
 /// Drives AudioService's WLED audio-sync socket lifecycle through the public tick(), the entry the scheduler calls on a device.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## What it covers
 ///

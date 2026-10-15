@@ -6,7 +6,7 @@ namespace mm {
 
 /// The whole contract between the audio analysis and the effects that react to it.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## Where a frame comes from
 ///

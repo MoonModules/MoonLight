@@ -1,12 +1,10 @@
 #pragma once
 
-/// @defgroup script_catalog The factory script catalog
-/// @{
 /// The names of every script a device knows about.
 ///
 /// Generated from `moonlive/` by `catalog_scripts.cmake`: do not edit, rebuild to update.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// A device carries names only and the UI fetches a script's text on first pick, so flash scales with the script count and the filesystem holds only what is used.
 ///
@@ -262,12 +260,11 @@ constexpr const char* kPaletteCatalogTags[] = {
     "🎨",
     "🎨",
     "🎨🎶",
-    "🎨🔥🎶",
+    "🎨🎶",
     "🎨",
 };
 constexpr const char* kPaletteFolder = "palettes";   ///< its directory upstream
 
 constexpr size_t kCatalogCount = 64;   ///< every factory script, all roles
 
-/// @}
 } // namespace mm::moonlive

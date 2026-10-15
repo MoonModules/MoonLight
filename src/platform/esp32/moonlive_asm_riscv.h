@@ -7,20 +7,15 @@
 #include <cstdint>
 #include <cstddef>
 
-/// @defgroup moonlive_asm_riscv MoonLive RISC-V assembler
-/// @{
 /// The ESP32-P4 backend, written against the same named-instruction interface as the other two.
 ///
-/// Fixed four-byte instructions and a standard call ABI make it the simplest of the three.
-/// Every register maps into the caller-saved set, so a call saves the live pool explicitly, and branch displacements are back-patched against bound labels.
+/// Fixed four-byte instructions and a standard call ABI make it the simplest of the three. Every register maps into the caller-saved set, so a call saves the live pool explicitly, and branch displacements are back-patched against bound labels.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## Fourteen registers
 ///
-/// That is what the caller-saved set alone provides, and a nested loop needs more than the twelve every backend started with.
-/// It briefly reached eighteen by mapping callee-saved registers too, on the reasoning that the routine saves what it uses.
-/// It does not, having no prologue, so it would have returned with four of them clobbered.
+/// That is what the caller-saved set alone provides, and a nested loop needs more than twelve. Callee-saved registers stay out: the routine has no prologue to save them, so it would return with them clobbered.
 ///
 /// ## Slots address from the frame pointer
 ///
@@ -70,6 +65,7 @@ public:
     bool overflowed() const { return overflow_; }
 
     // --- the call frame ---
+
     /// Open a frame for `slots` spilled values; no slots emits nothing, so a plain script pays none.
     void prologue(uint8_t slots = 0);
     /// Write a register into a spill slot.
@@ -140,25 +136,25 @@ public:
     void ret();
 
 private:
-    // The buffer's size, fixed for this object's life but chosen per script.
+    /// The buffer's size, fixed for this object's life but chosen per script.
     const size_t kCap;
-    // Sized in core so the three backends cannot drift apart.
+    /// Label and fixup capacity, sized in core so the three backends cannot drift apart.
     static constexpr uint8_t kMaxLabels = kAsmLabels;
     static constexpr uint8_t kMaxFixups = kAsmFixups;
 
     void emit32(uint32_t w);
     /// One conditional branch, as an inverted short branch over a jump, which is why every one takes two words.
     void branchRelaxed(uint8_t rs1, uint8_t rs2, uint8_t f3, Label l);
-    // A pending label reference; the kind matters, a branch and a jump using different fields.
+    /// A pending label reference; the kind matters, a branch and a jump using different fields.
     enum class FixKind : uint8_t { Branch, Jal };
     void addFixup(size_t at, Label label, FixKind kind = FixKind::Branch);
 
-    // Heap rather than a member array, which put 2 KB on the stack and overflowed a classic ESP32.
+    /// Code buffer on the heap, as a member array would put 2 KB on the stack and overflow a classic ESP32.
     uint8_t* buf_;
     bool     owned_;   ///< true when we allocated the buffer and free it
     size_t   len_ = 0;
     bool     overflow_ = false;
-    // Frame size, 0 without a prologue, so a teardown cannot disagree with its setup about the stack.
+    /// Frame size, 0 without a prologue, so a teardown cannot disagree with its setup about the stack.
     uint16_t frameBytes_ = 0;
 
     CodePos  labelPos_[kMaxLabels];
@@ -169,7 +165,5 @@ private:
 
     void patchBranches();
 };
-
-/// @}
 
 }  // namespace mm::moonlive

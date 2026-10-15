@@ -25,7 +25,7 @@ These go to GitHub under [its privacy statement](https://docs.github.com/en/site
 
 ## Your browser's local storage
 
-The web interface stores a few conveniences in your browser: a cached update-check result, the release you last selected. This never leaves your browser and holds nothing personal.
+The web interface keeps a few conveniences in your browser: a cached update check, your last selected release, and the last help file with your consent to fetch it. This never leaves your browser and holds nothing personal.
 
 ## What you can switch on
 
@@ -42,6 +42,8 @@ Whatever the feature, now or later, these rules hold.
 **These never leave your network, whatever is switched on**: the passwords and keys you entered (WiFi, MQTT, any service you connected), the addresses of things on your own network, and the contents of files on the device.
 
 **You can turn it off again at any time.** Nothing further is sent, and what was already published stays published: a message on a public board cannot be recalled, and a report already counted cannot be withdrawn. So the honest advice is the simple one: leave it off if you are unsure, turn it on when you want to take part, and turn it off if you change your mind.
+
+**The help** is off until you turn it on with the ⓘ in the status bar, which asks the first time. Then your browser fetches one public file, the module help, from this documentation site, hosted by GitHub, and keeps it for offline use. It sends nothing about your installation.
 
 **MoonCloud** is the name for anything MoonLight does with a server we run, and it is one self-contained part of the software rather than something woven through it. It sits on its own card, its members are the only code that talks to a server of ours, and nothing else in MoonLight goes through it. So this is not a promise about scattered behavior you would have to take on trust: it is one place, and you can switch off what is in it.
 
@@ -72,7 +74,7 @@ An MQTT broker, Home Assistant, Art-Net or E1.31 consoles: MoonLight speaks to t
 
 ## Changes to this policy
 
-**A new feature that transmits anything is documented here before it ships, and asks for its own consent.** We may later offer to collect things this policy does not describe today, such as which effects are used or automatic crash reports. Each would be a separate opt-in choice, described here first, and switched off until you turn it on.
+**A new feature that transmits anything is documented here before it ships, and asks for its own consent.** We may later offer to collect things this policy does not describe, such as which effects are used or automatic crash reports. Each would be a separate opt-in choice, described here first, and switched off until you turn it on.
 
 Revisions are made in the open: the policy lives in the [project repository](https://github.com/MoonModules/MoonLight/blob/main/docs/legal/privacy-policy.md), so every change is a commit you can read.
 

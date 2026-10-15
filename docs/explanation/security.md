@@ -36,9 +36,9 @@ Passwords live in plain text in the device's `/.config` files, where the firmwar
 
 A client on the device's own access point (subnet 4.3.2.0/24) sees every password empty, and its requests for `/.config` files are refused. While such a client is connected, every client gets the state with passwords empty. This keeps the home network's password from a visitor who joins the access point to set the device up.
 
-The access point uses the first known WiFi network's password, so it is as private as that network. The rule, the `opens` setting and the power-cycle gesture that opens it for one boot without a password: [the access point](../moonmodules/core/system.md#access-point-details).
+The access point uses the first known WiFi network's password, so it is as private as that network. The rule, the `opens` setting and the power-cycle gesture that opens it for one boot without a password: [the access point](../moonmodules/core/system.md#access-point).
 
-A [backup](../how-to/backup-and-restore.md) holds every file, `/.config` included, so it carries the WiFi passwords in plain text. A state document and a [preset](../moonmodules/core/system.md#what-a-preset-holds) carry no secret, and applying one keeps the stored secrets.
+A [backup](../how-to/backup-and-restore.md) holds every file, `/.config` included, so it carries the WiFi passwords in plain text. A state document and a [preset](../how-to/presets.md#what-a-preset-holds) carry no secret, and applying one keeps the stored secrets.
 
 ## Firmware
 
@@ -60,7 +60,7 @@ Safe mode, factory reset and the access point's one-boot open gesture are recove
 
 ## What leaves the device
 
-Nothing leaves the device until the user switches a [MoonCloud](mooncloud.md) member on, each with its own consent. What each member sends and what the server keeps: [privacy policy](../legal/privacy-policy.md). MoonTalk's public message board has no accounts, so a message is as public as its text.
+Nothing leaves the device until the user switches a [MoonCloud](mooncloud.md) member on, each with its own consent. What each member sends and what the server keeps: [privacy policy](../legal/privacy-policy.md). MoonTalk's public message board has no accounts, so a message is as public as its text. The browser's own requests, such as the update check and the help, are listed in the same policy.
 
 ## Source
 

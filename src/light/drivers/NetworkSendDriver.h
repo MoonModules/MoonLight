@@ -17,26 +17,38 @@
 
 namespace mm {
 
-/// Output driver: streams the buffer over UDP, one driver carrying three industry protocols selected by a control. Byte layouts live beside the receiver, so the two sides cannot drift.
+/// Streams the buffer over UDP as Art-Net, E1.31 or DDP, its packets paced so receivers keep up, to Falcon and Advatek controllers, xLights and LedFx.
+/// @card NetworkSendDriver.png
 ///
-/// One driver feeds many receivers, each taking a contiguous run of the window under its own address. A wall of tubes is one driver, the twin of one LED driver fanning out to several lanes, and unicast is the default.
+/// One driver feeds many receivers, each taking a contiguous run of the window under its own address. A wall of tubes is one driver, the twin of one LED driver fanning out to several lanes.
 ///
-/// Prior art: MoonLight's D_NetworkOut, and the Art-Net 4, E1.31 and DDP specifications.
+/// @attribution Art-Net, E1.31, DDP, troyhacks
 ///
-/// @moreinfo
+/// @guide
 ///
-/// ## Why unicast is the default
+/// ## Mixed fixtures
 ///
-/// Art-Net 4 requires unicast, broadcast surviving as legacy: a receiver parses every broadcast packet before dropping the universes it lacks, which starved an ESP32 near fifteen universes.
-/// Unicast duplicates nothing when each node owns its own slice, and a failed send drops only that packet, so one dark tube stalls nothing.
+/// A chain of mixed fixtures needs one driver per fixture type, each with its own `start`, `count` and `fixture`, the richest motion fixture first.
+///
+/// | driver | window | fixtures |
+/// |---|---|---|
+/// | A | `start 0`, `count 2` | the two big pan/tilt/zoom heads |
+/// | B | `start 2`, `count 4` | four smaller pan/tilt heads |
+/// | C | `start 6`, `count 10` | ten RGBW pars |
+///
+/// @technical
+///
+/// **Wire formats.** Byte layouts live beside the receiver, so the two sides cannot drift. DDP's larger chunk is the fast path, since per-packet cost dominates wire time.
+///
+/// **Unicast.** A receiver parses every broadcast packet before dropping the universes it lacks, which starved an ESP32 near fifteen universes. A failed unicast send drops only that packet, so one dark tube stalls nothing.
 ///
 /// ## Paced packets, sent from a task
 ///
-/// A burst loses packets at an access point and at a wire-speed receiver, so `packet_gap` spaces them, the textbook traffic shaping. Over WiFi that received 96% where a burst lost a third.
-/// Waiting would stall the driver stage, so the tick hands the frame to a task, as an LED driver hands its frame to DMA, and skips frames meanwhile.
-/// A full transmit queue gets a backoff rather than more buffers. A gap of 0, a board without tasks, or an unwired correction sends the burst from the tick.
+/// A burst loses packets at an access point and at a wire-speed receiver, so `packet_gap` spaces them. The tick hands the frame to a task and skips frames meanwhile; a gap of 0 or a board without tasks sends the burst from the tick.
 ///
-/// @card NetworkSendDriver.png
+/// **Mixed fixtures.** `lightsPerHost` splits a window between receivers that share one fixture profile, so differing fixtures need a driver each. Motion slots come from the first driver with a motion profile, so the richest fixture leads.
+///
+/// **Motion.** Every light carries the motion bytes, so a mixed rig's buffer is as wide as its widest fixture. An effect's `setPan` reaches every light in its layer, so use separate Layers when heads should move independently.
 class NetworkSendDriver : public DriverBase {
 public:
     /// Default to the RGB profile: network fixtures are RGB by convention, unlike the strips.
@@ -60,8 +72,7 @@ public:
         {"unicast", "broadcast"}, {"unicast", "multicast"}, {"unicast", "unicast"},
     };
 
-    // The universe is IN the address, which lets a snooping switch filter in hardware.
-    /// The sACN multicast group for a universe.
+    /// The sACN multicast group for a universe: the universe is in the address, which lets a snooping switch filter in hardware.
     static void e131MulticastAddr(uint16_t universe, uint8_t out[4]) {
         out[0] = 239; out[1] = 255;
         out[2] = static_cast<uint8_t>(universe >> 8);
@@ -71,21 +82,22 @@ public:
 
     /// How many receivers one driver can feed: a wall of tubes, not a subnet scan.
     static constexpr uint8_t kMaxDestinations = 32;
-    /// Receiver addresses or names, comma-separated; the list order is the fan-out order.
+    /// Receiver addresses or names, in fan-out order; blank idles.
+    /// @guide A name resolves in the background, `.local` by mDNS and anything else by DNS. It sends nothing until it first resolves, keeps its last address while it stops answering, and the status names the ones still waiting.
     char hosts[64] = {};
-    /// Lights per host; blank splits the window evenly, as an LED driver's list does.
+    /// Lights per receiver; blank splits evenly, one number to all, a list each.
     char lightsPerHost[64] = {};
-    /// How the packets travel, an index into the protocol's own modes.
+    /// How packets travel: unicast, Art-Net broadcast or E1.31 multicast.
+    /// @guide Art-Net 4 requires unicast; broadcast loads every host. E1.31 `multicast` needs [IGMP snooping](https://moonmodules.org/MoonLight/explanation/architecture/moonlight.html#multicast-and-igmp-snooping), and the status says when it is dropped.
     uint8_t addressing = 0;
-    // Per-packet cost dominates wire time, so the larger DDP chunk is the fast path.
-    /// The wire protocol, which selects both the packet layout and the chunking.
+    /// The wire protocol: Art-Net, E1.31 or DDP; the port follows.
     uint8_t protocol = 0;
-    // Emitted verbatim, with no hidden one-based adjust, so both ends must agree.
-    /// The first universe the slice maps onto.
+    /// The first universe, emitted verbatim with no one-based adjust; DDP ignores it.
     uint16_t universeStart = 0;
-    /// Send-rate ceiling (Hz); tick() rate-limits to this so a fast render tick doesn't flood the LAN.
+    /// Frame-rate limit, so a fast render tick does not flood the LAN.
     uint8_t fps = 50;
-    /// Microseconds between a frame's packets, shortened so a frame fits its `fps` period; 0 sends the frame as one burst. @xref{paced-packets-sent-from-a-task}
+    /// Microseconds between a frame's packets; 0 sends a burst.
+    /// @guide The pause lets a receiver keep up, @xref{paced-packets-sent-from-a-task|sent from a task} so the render loop never waits.
     uint16_t packetGap = 500;
 
     /// Bind the protocol, the destinations, the universe offset, the window and the rate cap.
@@ -152,8 +164,7 @@ public:
         resizeCorrected();
     }
 
-    // All the parsing happens HERE, so tick is a bare walk of two small arrays.
-    /// Open the socket, resolve the destinations and their window slices, and size the buffer.
+    /// Open the socket, resolve the destinations and their window slices, and size the buffer; all parsing happens here, so tick is a bare walk of two small arrays.
     void prepare() override {
         stopSendTask();          // the task reads the destinations and the corrected buffer, both rebuilt below
         socket_.open();          // idempotent: no-op if already open
@@ -255,8 +266,6 @@ public:
         sendFrame<false>(data, totalBytes, bytesPerLight, 0);
     }
 
-    // The packet builds and their inverse parses are shared with the receiver, defined once.
-
     /// Test-only accessor for the corrected buffer, pinning the no-allocation contract.
     const Buffer& correctedBuffer() const { return corrected_; }
 
@@ -306,7 +315,6 @@ private:
     /// The light-count warning prepare found, restored once the names resolve.
     const char* prepareWarn_ = nullptr;
 
-    // Every write to the frame state is a read-modify-write, since a module lives in PSRAM, as TryLock explains.
     static constexpr uint8_t kFrameIdle = 0;      ///< the tick may correct the next frame
     static constexpr uint8_t kFrameReady = 1;     ///< a corrected frame waits for the task
     static constexpr uint8_t kFrameSending = 2;   ///< the task is sending it
@@ -314,12 +322,12 @@ private:
     static constexpr uint32_t kRetryBackoffUs = 500;    ///< the wait before each of them
     /// The task that paces a frame's packets, running while `packetGap` is above 0.
     platform::WorkerTask sendTask_;
-    /// Who owns the corrected buffer: the tick while idle, the task while ready or sending.
+    /// Who owns the corrected buffer: the tick while idle, the task while ready or sending; every write is a read-modify-write, since a module lives in PSRAM, as TryLock explains.
     std::atomic<uint8_t> frameState_{kFrameIdle};
     /// Set to end the send task, read before each paced packet.
     std::atomic<bool> sendStop_{false};
-    /// One packet being built, a member so the send task's stack stays small; the tick and the task never send at once.
-    uint8_t packet_[DDP_HEADER_SIZE + DDP_MAX_PAYLOAD] = {};   // 1450 B covers all three protocols
+    /// One packet being built, 1450 B covering all three protocols, a member so the send task's stack stays small; the tick and the task never send at once.
+    uint8_t packet_[DDP_HEADER_SIZE + DDP_MAX_PAYLOAD] = {};
     /// The frame the tick hands over: where its bytes are, how many, and their stride.
     struct Frame { const uint8_t* data; size_t totalBytes; uint8_t bytesPerLight; } frame_ = {nullptr, 0, 0};
 
@@ -338,7 +346,7 @@ private:
         }
     }
 
-    // Core 1, beside the receive task; a board that cannot start it sends from the tick, unpaced.
+    /// Start the paced send task on core 1, beside the receive task; a board that cannot start it sends from the tick, unpaced.
     void startSendTask() {
         if (sendTask_.impl) return;
         sendStop_.store(false, std::memory_order_release);

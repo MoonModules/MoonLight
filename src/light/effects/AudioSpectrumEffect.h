@@ -4,23 +4,16 @@
 
 namespace mm {
 
-/// Audio-reactive effect: colors the layer from the 16-band FFT spectrum.
+/// The 16 mic frequency bands spread across X, each column lit bottom-up by its magnitude.
 /// @card AudioSpectrumEffect.gif
-/// Author: MoonLight original, on the WLED-SR GEQ / spectrum-analyzer concept (Andrew Tuline), via the predecessor, https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_WLED.h
 ///
-/// The classic equalizer display: sixteen bands across x, each column lit from the bottom up.
-/// The bands scale to any width, so a wide grid gives each several columns and a narrow one samples.
+/// The classic equalizer display. The bands scale to any width, so a wide grid gives each several columns and a narrow one samples. On a grid at least three rows tall, the bottom row becomes a horizontal level bar and the spectrum bars sit above it. On a single row the bars collapse to per-column brightness.
 ///
-/// @moreinfo
+/// @attribution Andrew Tuline
 ///
-/// ## The bottom row is a level meter
+/// @technical
 ///
-/// On a grid at least three rows tall, the bottom row becomes a horizontal level bar.
-/// The spectrum bars then sit above it, and a shorter grid gives its whole height to them.
-/// On a single row the bars collapse to per-column brightness instead.
-///
-/// This effect is the audio test instrument, so it shows the raw level rather than a smoothed one.
-/// The smoothed value lags by tens of milliseconds, which is the calm look every other effect wants.
+/// This effect is the audio test instrument, so it shows the raw level rather than a smoothed one, which lags by tens of milliseconds.
 class AudioSpectrumEffect : public EffectBase {
 public:
     /// Catalog tags for the visual catalog.
@@ -31,7 +24,7 @@ public:
     /// The coloring choices, in option order.
     enum ColorMode : uint8_t { kColorHeight, kColorPerBand, kColorModeCount };
 
-    /// Color by height for the VU look, or per band, which reads as a spectrum at a glance.
+    /// Bars colored by height, the VU look, or per band, a rainbow.
     uint8_t colorMode = kColorPerBand;
 
     /// Publish the coloring choice.

@@ -1,7 +1,5 @@
 #pragma once
 
-/// @defgroup platform_config_teensy Teensy 4.1 platform configuration
-/// @{
 /// What a Teensy 4.1 offers: one Cortex-M7 at 600 MHz, 1 MB of RAM, no WiFi, no RTOS; a feature without its seam compiles out as on a desktop.
 
 #include <cstdint>
@@ -110,8 +108,6 @@ constexpr bool previewsSdPresets = false;
 
 /// The bits a call to emitted code adds to its address. Thumb state: a Cortex-M7 runs only Thumb code, and a call address carries it in bit 0.
 constexpr uintptr_t codeAddressBits = 1;
-
-/// @}
 
 } // namespace mm::platform
 

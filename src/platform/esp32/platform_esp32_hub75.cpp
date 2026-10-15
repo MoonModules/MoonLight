@@ -1,9 +1,8 @@
-/// @defgroup platform_esp32_hub75 HUB75 panel output
 /// The peripheral half of the panel driver: the bus, the frame buffer, and the continuous scan.
 ///
 /// The driver above applies correction and encodes the rendered frame into bit planes; no domain logic lives here.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## The output is continuous, not one-shot
 ///

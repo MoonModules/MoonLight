@@ -5,13 +5,11 @@
 
 namespace mm {
 
-/// @defgroup e131_packet E1.31 wire format
-/// @{
-/// The one place the streaming-ACN layout lives, shared by the sender and the receiver.
+/// The E1.31 (streaming-ACN) wire format, in one place, shared by the sender and the receiver.
 ///
 /// A unit test round-trips build against parse, and the shape follows ArtNet's: constants plus two free functions.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## Three nested layers
 ///
@@ -90,7 +88,5 @@ inline bool parseE131Packet(const uint8_t* pkt, size_t len, uint16_t& universeOu
     dataLenOut = dataLen;
     return true;
 }
-
-/// @}
 
 } // namespace mm

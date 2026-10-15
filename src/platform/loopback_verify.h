@@ -7,11 +7,9 @@
 
 namespace mm::platform::detail {
 
-/// @defgroup loopback_verify Loopback bit verification
-/// @{
 /// The bit check every WS2812 loopback shares: each captured pulse decoded and compared with what was sent.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## The first pulse of a frame is short behind an expander
 ///
@@ -88,5 +86,4 @@ inline LoopbackBitStats verifyLoopbackBits(const uint32_t* symbols, size_t bits,
     return s;
 }
 
-/// @}
 }  // namespace mm::platform::detail

@@ -5,12 +5,12 @@
 
 namespace mm {
 
-// Author: classic plasma, FastLED / WLED lineage
-/// Plasma effect: summed sine waves forming rolling blobs.
+/// Summed sine waves on orthogonal and diagonal axes make large rolling blobs, in 3D on volumetric layouts.
 /// @card PlasmaEffect.gif
 ///
-/// Four sines summed per pixel, or five in a volume, with their average picking the palette index.
-/// A larger scale means a smaller per-pixel step, so the blobs grow bigger and calmer.
+/// Four sines are summed per pixel, or five in a volume, with their average picking the palette index. A larger scale means a smaller per-pixel step, so the blobs grow bigger and calmer.
+///
+/// @attribution FastLED, WLED, David Jupijn
 class PlasmaEffect : public EffectBase {
 public:
     /// Catalog tags: MoonLight origin, David Jupijn and Rising Step.
@@ -20,11 +20,11 @@ public:
 
     /// How fast the field rolls.
     uint8_t bpm = 30;
-    /// The blobs' size along x, where larger is calmer.
+    /// Blob size along x; larger is bigger and calmer.
     uint8_t scale_x = 48;
-    /// Their size along y, which the depth axis reuses.
+    /// Blob size along y, which the depth axis reuses.
     uint8_t scale_y = 48;
-    /// Walks the whole field around the palette.
+    /// Rotates the palette index.
     uint8_t hue_shift = 0;
 
     /// Publish the roll speed, both scales and the palette shift.

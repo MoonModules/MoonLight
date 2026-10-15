@@ -5,26 +5,16 @@
 
 namespace mm {
 
-/// Audio-reactive 3D graphic-equalizer effect.
+/// A 3D-perspective graphic equalizer: audio bands rise as bars with faked depth.
 /// @card GEQ3DEffect.gif
-/// Author: @TroyHacks (MoonModules, GPLv3), https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Nodes/Effects/E_MoonModules.h
 ///
-/// The 16 bands rise as bars on a 2D grid, drawn with faked depth.
-/// GEQEffect in this folder draws the same data flat instead.
+/// Side and top lines run toward a "projector" vanishing point that sweeps left and right, shortened by `depth`. Bands left of it paint right-to-left and bands right of it left-to-right, with per-face darkening and optional `borders`. @ref GEQEffect draws the same data flat.
 ///
-/// Prior art: MoonLight's GEQ3D, descended from the WLED-MM effect.
+/// @attribution troyhacks
 ///
-/// @moreinfo
+/// @technical
 ///
-/// ## The projector is the vanishing point
-///
-/// Each bar's side and top faces are lines running from the bar toward a sweeping projector.
-/// `depth` shortens each line so it stops partway, and that converging foreshortening is the look.
-/// The projector sweeps left and right, and each band is painted away from it.
-/// So the perspective always points away from the moving vanishing point.
-/// The front faces fill flat, and a border optionally outlines each bar.
-///
-/// MoonLight's anti-alias toggle is dropped, since `draw::line` is a crisp Bresenham.
+/// The converging foreshortening of the lines is the look, so the perspective always points away from the moving vanishing point. The lines are crisp Bresenham, so there is no anti-alias toggle.
 class GEQ3DEffect : public EffectBase {
 public:
     /// Catalog tags: MoonModules origin, audio-reactive.
@@ -32,11 +22,11 @@ public:
     /// The perspective is faked on a plane, so this is a 2D effect.
     Dim dimensions() const override { return Dim::D2; }
 
-    /// The projector's sweep rate, timed in BPM so every device agrees on its position.
+    /// How fast the projector sweeps, the same position on every device.
     uint8_t speed     = 2;
     /// How strongly a bar's front face fills.
     uint8_t frontFill = 228;
-    /// The row the vanishing point sits on.
+    /// The row the vanishing point (the projector) sits on.
     uint8_t horizon   = 0;
     /// How far the side and top lines reach toward the projector.
     uint8_t depth     = 176;
@@ -197,7 +187,6 @@ public:
 private:
     /// The larger of two, kept local so the loops above read like the source they follow.
     static int MAXi(int a, int b) { return a > b ? a : b; }
-    // The `depth` control hides the inherited grid-depth accessor, so qualify that one where used.
 };
 
 } // namespace mm

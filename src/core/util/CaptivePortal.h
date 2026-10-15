@@ -1,7 +1,5 @@
 #pragma once
 
-/// @defgroup CaptivePortal What makes a phone joining the access point open the UI
-/// @{
 /// The two pieces a captive portal is made of, as pure functions the desktop tests: a DNS reply (RFC 1035) and the HTTP redirect decision.
 
 #include <cstddef>
@@ -62,8 +60,7 @@ inline size_t dnsReply(uint8_t* msg, size_t len, size_t cap, const uint8_t ip[4]
 /// Whether a connection reached this device at `localIp`, its access point's own address.
 inline bool throughAccessPoint(const uint8_t localIp[4]) { return std::memcmp(localIp, kAddress, 4) == 0; }
 
-// The stack takes a packet for any of the device's addresses on any interface, so only a client's own address says it is on the access point.
-/// Whether a client at `peerIp` is on the access point, whose DHCP alone hands out addresses in its /24.
+/// Whether a client at `peerIp` is on the access point, whose DHCP alone hands out addresses in its /24. The stack takes a packet for any of the device's addresses on any interface, so only a client's own address says so.
 inline bool fromAccessPoint(const uint8_t peerIp[4]) { return std::memcmp(peerIp, kAddress, 3) == 0; }
 
 /// Whether a request at `localIp` for `host` and `path` is sent to the UI: a page asked for through the access point under another name. The API answers as itself.
@@ -77,5 +74,3 @@ inline bool redirects(const uint8_t localIp[4], const char* host, const char* pa
 }
 
 }  // namespace mm::captive
-
-/// @}
