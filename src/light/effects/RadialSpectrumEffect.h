@@ -9,7 +9,7 @@ namespace mm {
 ///
 /// Sound is born at the center and travels outward, so the radius is time and a ring's length is that band's recent history. On a cube the ripples are expanding shells. `polarTable`, `polarTable16` and `mapping` set the polar address and its shape.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// Nothing is transported: a short history of band frames holds one entry per ring. A light's angle picks its band and its radius its age, two table reads a light.
 class RadialSpectrumEffect : public EffectBase {

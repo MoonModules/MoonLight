@@ -1086,7 +1086,7 @@ MISO on GPIO 0 is deliberate and sound: GPIO 0 is a strapping pin, and a W5500 l
 
 It concentrates, which is what makes it approachable. `HttpServerModule.cpp` alone holds 100 and the top ten files hold 312, over half; the other 82 files average under four each.
 
-**Where the depth goes is the blocker.** Of the 92 files only 19 already carry an `@moreinfo` appendix. 68 have a `///` lead with no appendix and 5 have neither, so most files need the appendix written before a single block can move.
+**Where the depth goes is the blocker.** Of the 92 files only 19 already carry an `@technical` appendix. 68 have a `///` lead with no appendix and 5 have neither, so most files need the appendix written before a single block can move.
 
 **The fix is not to split them.** Chopping one comment into two shorter lines leaves the text identical and satisfies nothing, which is why the cap counts a block rather than a line. Each one is depth that belongs in the file lead's appendix with an `@xref` back, or prose that says less.
 

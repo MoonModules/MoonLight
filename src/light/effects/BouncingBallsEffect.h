@@ -12,7 +12,7 @@ namespace mm {
 ///
 /// @attribution Andrew Tuline
 ///
-/// @moreinfo
+/// @technical
 ///
 /// A ball's height is the projectile equation evaluated against its own clock, so the trajectory does not drift as a frame-step integration would; only `impactVelocity` and `lastBounceTime` carry between frames.
 class BouncingBallsEffect : public EffectBase {

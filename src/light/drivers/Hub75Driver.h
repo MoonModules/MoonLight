@@ -24,7 +24,7 @@ namespace mm {
 ///
 /// A receiving card (@ref PanelCardDriver) earns its place above roughly 16,384 pixels; below that this driver is the small end of the split. [The HUB75 how-to](https://moonmodules.org/MoonLight/how-to/hub75-panels.html#which-of-the-two-paths) has the choice.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// **Continuous output.** A HUB75 panel is lit only while clocked, so the platform arms one scan and re-sends the buffer forever. The driver writes the next frame into it between scans, so tick() transmits nothing. The wire format is Hub75Slots.h.
 ///
@@ -312,7 +312,7 @@ private:
         bool editable;   // false on a published map: those lines are soldered
     };
 
-    // The platform names the chip; inferring it from GPIO counts was a guess dressed as a test.
+    /// Whether this chip is an S3, as the platform names it; likewise for P4 and S31, since inferring the chip from GPIO counts is a guess dressed as a test.
     static bool chipIsS3()  { return platform::isEsp32S3; }
     static bool chipIsP4()  { return platform::isEsp32P4; }
     static bool chipIsS31() { return platform::isEsp32S31; }

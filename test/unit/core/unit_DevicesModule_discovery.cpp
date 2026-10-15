@@ -3,7 +3,7 @@
 ///
 /// Drives the whole UDP discovery pipeline on the host, from a synthetic presence packet to the device list it produces.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## The seat is claimed only while enabled
 ///

@@ -5,11 +5,9 @@
 
 namespace mm {
 
-/// @defgroup ddp_packet DDP wire format
-/// @{
 /// The one place the Distributed Display Protocol layout lives, shared by the sender and the receiver.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## The high-throughput choice
 ///
@@ -63,7 +61,5 @@ inline bool parseDdpPacket(const uint8_t* pkt, size_t len, uint32_t& offsetOut,
     if (pushOut) *pushOut = (pkt[0] & DDP_FLAG_PUSH) != 0;
     return true;
 }
-
-/// @}
 
 } // namespace mm

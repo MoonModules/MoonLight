@@ -11,7 +11,7 @@ namespace mm {
 ///
 /// @attribution Stefan Petrick, 4wheeljive
 ///
-/// @moreinfo
+/// @technical
 ///
 /// `inoise16` fills the profiles, `draw::advect16` carries a 16-bit plane and `draw::decay16` fades it, since a value multiplied by slightly less than one dies early or never fades at 8 bits. Both shears read the undisplaced source in one fused pass.
 class ColorTrailsEffect : public EffectBase {

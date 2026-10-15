@@ -117,7 +117,7 @@ static_assert(sizeof(kCannon) == static_cast<size_t>(GW) * GH * GF, "cannon: one
 ///
 /// Invaders fire down and the cannon fires back. A formation that lands, or a board cleared of invaders, resets the board.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## The march is the signature
 ///

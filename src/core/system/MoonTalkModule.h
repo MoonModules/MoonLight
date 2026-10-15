@@ -26,7 +26,7 @@ namespace mm {
 ///
 /// Everything sent is public and permanent: no private message, no recipient, no delete. There is no authentication, so a sender id can be fabricated by hand.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// Two consents govern it: one allows posting, the other shares the device name. The second is off by default, a name saying more than an identifier does; without it a message carries the first characters of the installation id.
 ///
@@ -38,7 +38,7 @@ public:
         controls_.clear();
         controls_.addControl("consent", consent_);
         controls_.addControl("shareName", shareName_);
-        controls_.addText("message", message_, sizeof(message_));
+        controls_.addText("message", message_, sizeof(message_));   // sized to the server's own limit plus a terminator, rather than under it
         /// Publish the message and clear the box.
         /// @guide Enter in the message field sends too. The box keeps its text when the server is unreachable.
         controls_.addButton("send");
@@ -138,7 +138,6 @@ private:
     /// @guide A device name identifies a person rather than a machine. Without it your messages carry the first 8 characters of your installation id, which groups them without naming you.
     bool shareName_ = false;
     /// What to say; typing changes nothing on its own.
-    // Sized to the server's own limit plus a terminator, rather than under it.
     char message_[281] = {};
 };
 

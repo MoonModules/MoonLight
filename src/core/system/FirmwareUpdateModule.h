@@ -9,11 +9,9 @@
 #include <cstdio>
 #include <cstring>
 
-/// @defgroup FirmwareUpdateModule Installing a firmware image
-/// @{
 /// The install's live progress, shared by every path that can start one.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// The status and byte counters are inline globals rather than module state: the flash route and the platform's own task both write them, and both must see one instance.
 ///
@@ -64,7 +62,7 @@ inline bool otaInFlight() {
 ///
 /// When MoonBase's version differs from the app's, the card warns and the top bar shows `⬆ MoonBase`; installing the matching one from its tab clears it.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// **What the controls describe.** The version is pure semver, so the channel is derivable. The build carries the git id first, since that answers which code is on a board. With two images, a selector says which the rest describe.
 ///
@@ -240,5 +238,4 @@ private:
     bool     wasInstallingMoonBase_ = false;   ///< edge-detects the end of a MoonBase install
 };
 
-/// @}
 } // namespace mm

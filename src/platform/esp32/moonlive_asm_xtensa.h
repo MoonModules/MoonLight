@@ -7,25 +7,19 @@
 #include <cstdint>
 #include <cstddef>
 
-/// @defgroup moonlive_asm_xtensa MoonLive Xtensa assembler
-/// @{
 /// The classic ESP32 and S3 backend, written against the same named-instruction interface as the host one.
 ///
-/// Only the encodings and the windowed ABI differ: the emitted routine opens with `entry` and returns with `retw.n`, the host arguments arriving in a2 upward.
-/// Branch displacements are back-patched, so no offset is hand-computed.
+/// Only the encodings and the windowed ABI differ: the emitted routine opens with `entry` and returns with `retw.n`, the host arguments arriving in a2 upward. Branch displacements are back-patched, so no offset is hand-computed.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## The window is the return path
 ///
-/// Ten registers map to a2 upward, and the top of the window is not a general register.
-/// A routine opened with `entry` returns through `retw.n`, which reads the caller's linkage from the window's top.
-/// Using those as registers corrupted that linkage and returned to a garbage address the moment a scripted layout ran.
+/// Ten registers map to a2 upward, and the top of the window is not a general register. A routine opened with `entry` returns through `retw.n`, which reads the caller's linkage from there.
 ///
 /// ## Entry alignment, twice over
 ///
-/// The entry instruction must sit on a four-byte boundary, and a call encodes its target in four-byte units, so an unaligned callee cannot be expressed at all.
-/// Instructions here are two or three bytes, so a function following another lands anywhere and needs the pad.
+/// The entry instruction sits on a four-byte boundary, and a call encodes its target in four-byte units. Instructions are two or three bytes, so a function following another lands anywhere and needs the pad.
 ///
 /// ## Why the buffer is heap
 ///
@@ -75,6 +69,7 @@ public:
     bool overflowed() const { return overflow_; }
 
     // --- the call frame ---
+
     /// Open the routine's frame, widened to carry `slots` spilled values; must be the first instruction.
     void prologue(uint8_t slots = 0);
     /// Write a register into a spill slot.
@@ -143,9 +138,9 @@ public:
     void retValue(Reg a);
 
 private:
-    // The buffer's size, fixed for this object's life but chosen per script.
+    /// The buffer's size, fixed for this object's life but chosen per script.
     const size_t kCap;
-    // Sized in core so the three backends cannot drift apart.
+    /// Label and fixup capacity, sized in core so the three backends cannot drift apart.
     static constexpr uint8_t kMaxLabels = kAsmLabels;
     static constexpr uint8_t kMaxFixups = kAsmFixups;
 
@@ -154,13 +149,13 @@ private:
     void emit2(uint16_t w);
     /// Wide (24-bit) instruction.
     void emit3(uint32_t w);
-    // A pending label reference; the kind matters, a call's displacement being scaled and a jump's not.
+    /// A pending label reference; the kind matters, a call's displacement being scaled and a jump's not.
     enum class FixKind : uint8_t { Jump, Call };
     struct Fixup { CodePos at; Label label; FixKind kind = FixKind::Jump; };
     /// Enqueue a fixup (bounds-checked).
     void addFixup(size_t at, Label label, FixKind kind = FixKind::Jump);
 
-    // Heap rather than a member array, which put 2 KB on the stack and overflowed a classic ESP32.
+    /// Code buffer on the heap, as a member array would put 2 KB on the stack and overflow a classic ESP32.
     uint8_t* buf_;
     bool     owned_;   ///< true when we allocated the buffer and free it
     size_t   len_ = 0;
@@ -171,11 +166,9 @@ private:
     Fixup    fixups_[kMaxFixups];
     uint8_t  fixupCount_ = 0;
 
-    // A conditional branch emitted as an inverted condition over a jump, which reaches far enough.
+    /// A conditional branch emitted as an inverted condition over a jump, which reaches far enough.
     void branchRelaxed(uint8_t condNibble, Reg a, Reg b, Label l);
     void patchBranches();
 };
-
-/// @}
 
 }  // namespace mm::moonlive

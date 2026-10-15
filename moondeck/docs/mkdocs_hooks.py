@@ -154,10 +154,6 @@ def _help_file() -> dict:
     return _help_cache["file"]
 
 
-# A deck hides what the build wrote inside it until its script mounts; a reader without JavaScript sees it.
-_NOSCRIPT = "<noscript><style>.mm-deck > * { display: revert !important; }</style></noscript>"
-
-
 def generated_catalog(src_uri: str, intro: str | None = None) -> str | None:
     """A catalog page drawn from help.json. The intro is the page's own markdown when it has one, else the class comment its modules share; the deck holds each module as plain markdown, which search indexes and a reader without JavaScript reads until the deck script replaces it, and each module's guide is its details section."""
     page = src_uri.removeprefix("moonmodules/")
@@ -169,7 +165,7 @@ def generated_catalog(src_uri: str, intro: str | None = None) -> str | None:
                    if (m.get("doc") == page or m.get("doc", "").startswith(page + "#")) and t != cat.get("base")),
                   key=lambda tm: display_name(tm[0]).lower())
     out = [intro.rstrip(), ""] if intro is not None else _class_intro(cat, src_uri)
-    out += [_NOSCRIPT, "", f'<div class="mm-deck" data-page="{page}" markdown="1">', ""]
+    out += [f'<div class="mm-deck" data-page="{page}" markdown="1">', ""]
     for t, m in mods:
         out += _module_markdown(t, m, src_uri)
     out += ["</div>", ""]
@@ -390,7 +386,7 @@ def deck_around_table(markdown: str) -> str:
     if start is None:
         return markdown
     end = next((i for i in range(start, len(lines)) if not lines[i].startswith("|")), len(lines))
-    return "\n".join(lines[:start] + [_NOSCRIPT, "", '<div class="mm-deck" markdown="1">', ""] + lines[start:end] + ["", "</div>"] + lines[end:])
+    return "\n".join(lines[:start] + ['<div class="mm-deck" markdown="1">', ""] + lines[start:end] + ["", "</div>"] + lines[end:])
 
 
 def attributed_by(markdown: str) -> str:

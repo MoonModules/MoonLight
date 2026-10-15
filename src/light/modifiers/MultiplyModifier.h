@@ -9,7 +9,7 @@ namespace mm {
 ///
 /// Two tiles with mirroring on is a plain mirror.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// The logical box is the physical box divided by each axis's factor, and every light folds onto its logical cell with a modulo. Light past the last whole tile is dropped.
 class MultiplyModifier : public ModifierBase {

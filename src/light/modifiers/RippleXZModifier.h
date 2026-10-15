@@ -9,7 +9,7 @@ namespace mm {
 ///
 /// @attribution troyhacks
 ///
-/// @moreinfo
+/// @technical
 ///
 /// With `shrink` on, each axis chosen flattens to one slice and every coordinate on it folds to zero. The effect is painted once and shown on every slice of that axis.
 class RippleXZModifier : public ModifierBase {

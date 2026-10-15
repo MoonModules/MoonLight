@@ -11,7 +11,7 @@ namespace mm {
 ///
 /// @attribution Chebyshev distance
 ///
-/// @moreinfo
+/// @technical
 ///
 /// Each light folds to its Chebyshev distance from the box center, max(|dx|, |dy|), which is why the rings are axis-aligned squares; z is not part of the distance.
 ///

@@ -10,11 +10,9 @@
 
 namespace mm {
 
-/// @defgroup AudioLevel Sound-level analysis for one block of samples
-/// @{
 /// The loudness path: a block of microphone samples in, one level byte out.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// This is pure domain maths with no platform header, so it is host-tested without a device.
 /// The platform owns only the read that produces the samples, the same host-testable shape the RMT and slot encoders take.
@@ -72,6 +70,7 @@ namespace mm {
 ///
 /// The sample format is 24-bit signed data left-justified in a 32-bit slot, so the magnitude lives in the top bits.
 /// An arithmetic shift lands it in an integer, and the accumulation is 64-bit so a full block cannot overflow.
+
 /// The display window in dB: where it starts and how wide it is. One home for the two knobs.
 inline float windowFloorDb(uint16_t noiseFloor) { return 60.0f + static_cast<float>(noiseFloor) * 0.5f; }
 inline float windowSpanDb(uint16_t gain)        { return static_cast<float>(255 - gain) * 0.25f + 4.0f; }
@@ -194,5 +193,4 @@ inline void computeLevel(const int32_t* samples, size_t n,
     frame.level = rms <= 1 ? 0 : static_cast<uint8_t>(clamped * 255.0f + 0.5f);
 }
 
-/// @}
 } // namespace mm

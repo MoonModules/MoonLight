@@ -3,11 +3,9 @@
 /// @module format
 /// @also SystemModule, NetworkModule, AudioService
 
-/// @defgroup format Formatting on the render path
-/// @{
 /// Formatting into a fixed buffer, from a function the hot-path check can see through.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## What the promise rests on
 ///
@@ -56,7 +54,5 @@ inline int formatTo(char* buf, size_t size, const char* fmt, ...) MM_NONBLOCKING
     va_end(ap);
     return n;
 }
-
-/// @}
 
 }  // namespace mm

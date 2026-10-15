@@ -1,10 +1,8 @@
 #pragma once
 
-/// @defgroup host_bus The host-bus contract
-/// @{
 /// What every parallel peripheral must do off-device, asserted once and called per type.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// Four DMA peripherals do one job off-device, holding a frame, so the desktop backs them all with one heap buffer and the assertions are written once.
 ///
@@ -156,5 +154,4 @@ inline void checkHostBusDoubleBuffer() {
     CHECK(peripheral.busBuffer(1) == nullptr);
 }
 
-/// @}
 }  // namespace mm::test

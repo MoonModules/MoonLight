@@ -12,7 +12,7 @@ namespace mm {
 ///
 /// @attribution Breakout
 ///
-/// @moreinfo
+/// @technical
 ///
 /// `player` is the paddle as a control, held through `PlayerSeat`: a person writing it takes the paddle, and idle, the game plays it again.
 class BreakoutEffect : public EffectBase {

@@ -30,7 +30,7 @@ namespace mm {
 ///
 /// The status line says "set pin to receive" until a receiver pin is entered, and shows the code of a key no row holds. On some boards the receiver shares its pin with another peripheral through a board switch.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// **Learned, not shipped.** No firmware can carry a code table for every remote, so a binding is taught: arm a row and the next decoded code binds to it.
 ///

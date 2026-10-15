@@ -31,7 +31,7 @@ namespace mm {
 ///
 /// There is no ffmpeg: the chip's H.264 block encodes. It takes even dimensions from 80x80 to 1920x2032; an odd wall has its scale doubled, a larger wall is refused.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// **Division of labor.** The driver packs the corrected frame and hands it over with the geometry, rate and bitrate. The platform turns that into H.264, and on the ESP32-P4 MpegTs.h muxes the transport stream.
 ///

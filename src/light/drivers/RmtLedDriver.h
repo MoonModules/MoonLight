@@ -16,7 +16,7 @@ namespace mm {
 ///
 /// @attribution hpwit, WLED, FastLED
 ///
-/// @moreinfo
+/// @technical
 ///
 /// **Wire contract.** One-wire NRZ at 800 kHz: each bit is a 1.25 µs cell, high then low, the high duration encoding the bit, MSB-first. A frame latches on 300 µs of idle-low. Timings convert to RMT ticks from the granted resolution, never hard-coded.
 ///

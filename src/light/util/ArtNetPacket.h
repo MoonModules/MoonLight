@@ -5,13 +5,11 @@
 
 namespace mm {
 
-/// @defgroup artnet_packet ArtNet wire format
-/// @{
 /// The one place the ArtNet packet layouts live, so a sender and a receiver cannot drift apart.
 ///
 /// A unit test round-trips build against parse, and the header sits above both subfolders because the protocol is neutral between them.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## The data packet
 ///
@@ -106,7 +104,5 @@ inline size_t buildArtPollReply(uint8_t* outBuf, const uint8_t ip[4],
     std::memcpy(outBuf + 201, mac, 6);
     return ARTNET_POLL_REPLY_SIZE;
 }
-
-/// @}
 
 } // namespace mm

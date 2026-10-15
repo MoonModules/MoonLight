@@ -7,7 +7,7 @@ namespace mm {
 /// Lights on the surface of a hollow sphere: a shell one light thick, nothing inside.
 /// @card SphereLayout.gif
 ///
-/// @moreinfo
+/// @technical
 ///
 /// A lattice point is on the shell when its distance from the center rounds to the radius, the half-open band [radius − 0.5, radius + 0.5). Distances compare squared, so no light costs a square root.
 class SphereLayout : public LayoutBase {

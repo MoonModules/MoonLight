@@ -6,9 +6,6 @@
 
 namespace mm {
 
-/// @defgroup ParallelSlots WS2812 slot encoder: the transpose and the 3-slot wire format
-/// @{
-///
 /// WS2812 encode for parallel buses: the contract between a parallel driver and its peripheral.
 /// It is named for the wire unit it builds, one pixel-clock slot being one bus word.
 /// The peripheral sets that word's width, and both the i80 and Parlio buses use it.
@@ -16,7 +13,7 @@ namespace mm {
 ///
 /// @attribution hpwit, Adafruit, FastLED
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## The three slots
 ///
@@ -95,6 +92,7 @@ namespace mm {
 /// So it uses the branch-free delta-swap from Hacker's Delight rather than a per-bit gather loop.
 /// Same result, no table, far fewer operations.
 ///
+
 /// The 8 by 8 bit-transpose on the packed representation, which keeps it in registers.
 inline uint64_t MM_RAMFUNC transposeBits8x8(uint64_t x) {
     uint64_t t;
@@ -123,8 +121,7 @@ inline void MM_RAMFUNC transposeLanes8x8(const uint8_t* in, uint8_t* out) {
     for (int c = 0; c < 8; c++) out[c] = static_cast<uint8_t>(x >> (8 * c));
 }
 
-// Two independent 8-lane passes, so it reuses the same butterfly and adds no new constants.
-/// Transpose 16 lane bytes into 8 bit-plane halfwords, for a 16-bit bus.
+/// Transpose 16 lane bytes into 8 bit-plane halfwords, for a 16-bit bus, as two independent 8-lane passes that reuse the same butterfly and add no new constants.
 inline void MM_RAMFUNC transposeLanes16x8(const uint8_t* in, uint16_t* out) {
     uint8_t lo[8], hi[8];
     transposeLanes8x8(in,     lo);   // lanes 0..7  → low byte of each plane
@@ -252,8 +249,7 @@ inline void MM_RAMFUNC prefillWs2812ShiftConstants(uint64_t activeMask, uint8_t 
     }
 }
 
-// Identical output to the whole-slot encoder, provided the prefill ran with the same mask.
-/// The per-light data encode, writing ONLY the data word of each slot.
+/// The per-light data encode, writing ONLY the data word of each slot; the output is identical to the whole-slot encoder's, provided the prefill ran with the same mask.
 template <class Slot>
 inline void MM_RAMFUNC encodeWs2812ShiftData(const uint8_t* wire, uint64_t activeMask, uint8_t physPins,
                                   uint8_t latchBit, uint8_t outPerPin, uint8_t channels, Slot* out) {
@@ -304,7 +300,5 @@ inline void MM_RAMFUNC encodeWs2812ShiftData(const uint8_t* wire, uint64_t activ
         }
     }
 }
-
-/// @}
 
 } // namespace mm

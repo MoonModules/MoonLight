@@ -12,7 +12,7 @@ namespace mm {
 ///
 /// @attribution IEC 60268-17, WLED
 ///
-/// @moreinfo
+/// @technical
 ///
 /// The ballistics live in the shared `smoothFollow` and `peakHold`, so any effect wanting a meter gets the same feel, and `draw::bar` draws the columns. The band-to-column mapping follows WLED's GEQ.
 class SpectrumEffect : public EffectBase {

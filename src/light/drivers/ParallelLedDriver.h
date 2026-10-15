@@ -25,7 +25,7 @@ namespace mm {
 ///
 /// Start with `i80`. Choose `MoonI80` for frames too big for memory or a pin expander, `Parlio` on a P4, `GPIO-DMA` on a Teensy 4.1. [The LED driver how-to](https://moonmodules.org/MoonLight/how-to/led-drivers.html#which-one) has the chips, limits and wiring.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// **Peripherals.** The peripherals are I80Peripheral.h, MoonI80Peripheral.h, ParlioPeripheral.h and GpioDmaPeripheral.h, each behind LedPeripheral.h. A slot is one WS2812 bit on the wire, and a row is one light across every strand.
 ///

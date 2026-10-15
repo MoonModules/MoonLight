@@ -3,7 +3,6 @@
 
 #include <cstring>
 
-/// @defgroup moonlive_asm_arm64 MoonLive arm64 assembler
 /// Each named instruction encoded once, composed by the shared lowering.
 ///
 /// Branch displacements are resolved against bound labels, so no offset is ever computed by hand.

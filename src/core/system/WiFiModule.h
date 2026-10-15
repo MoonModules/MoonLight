@@ -473,6 +473,7 @@ private:
     }
 
     // The scan: its networks on the heap only while there are some, and the join the card asked for.
+
     static constexpr uint8_t kMaxFound = 16;
     platform::WifiNetwork* found_ = nullptr;
     uint8_t  foundCount_ = 0;

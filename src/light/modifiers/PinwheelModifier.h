@@ -12,7 +12,7 @@ namespace mm {
 ///
 /// @attribution Brandon502, Polar coordinates
 ///
-/// @moreinfo
+/// @technical
 ///
 /// A polar fold: atan2 bins each light's angle about the center into a petal (x), and in 2D or more its radius becomes the position along the petal (y). Swirl shears the angle by the radius, giving a spiral.
 ///

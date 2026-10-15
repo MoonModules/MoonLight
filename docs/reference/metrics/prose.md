@@ -9,12 +9,12 @@ This number is the debt behind that gate, and it RATCHETS: a rise fails the chec
 docgen.md does. A comment is prose wherever it lives, so a `//` in the web interface and a
 `#` in a script are counted beside a `///` in a header.
 
-**2576 finding(s)** across 342 file(s).
+**2572 finding(s)** across 340 file(s).
 
 | rule | findings |
 |---|---|
-| `MoonLight.EmDash` | 1267 |
-| `MoonLight.Weasel` | 637 |
+| `MoonLight.EmDash` | 1264 |
+| `MoonLight.Weasel` | 636 |
 | `MoonLight.SentenceLength` | 394 |
 | `MoonLight.Temporal` | 197 |
 | `MoonLight.Spelling` | 42 |

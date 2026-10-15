@@ -1,7 +1,5 @@
 #pragma once
 
-/// @defgroup TeensyImage Vetting a Teensy 4 image
-/// @{
 /// The checks an uploaded image passes before it may overwrite a Teensy's only program: a Teensy 4 image, a MoonLight one, and for the firmware the board runs.
 ///
 /// A wrong image leaves the board offline until a USB flash, so the checks are pure byte reads, which a host test drives with synthetic and real images.
@@ -58,5 +56,3 @@ inline bool teensyImageRefused(const uint8_t* staged, uint32_t bytes, const char
 }
 
 }  // namespace mm::firmware
-
-/// @}

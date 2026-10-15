@@ -12,7 +12,7 @@ namespace mm {
 ///
 /// @attribution Andrew Tuline
 ///
-/// @moreinfo
+/// @technical
 ///
 /// The phase stays wide and only the final oscillator argument narrows to a byte. That one truncation closes the figure, so keeping it exact keeps the shape exact.
 class LissajousEffect : public EffectBase {

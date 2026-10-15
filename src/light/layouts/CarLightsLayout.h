@@ -12,7 +12,7 @@ namespace mm {
 ///
 /// @attribution Eric Marciniak, Polar coordinates
 ///
-/// @moreinfo
+/// @technical
 ///
 /// Every ring, the lamps' and the strips' quarter arcs alike, is a @ref RingLayout object with its center set. A lamp is drawn by the same layout a user adds as a Ring.
 class CarLightsLayout : public LayoutBase {

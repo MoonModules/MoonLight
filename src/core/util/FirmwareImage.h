@@ -1,10 +1,8 @@
 #pragma once
 
-/// @defgroup FirmwareImage Reading an ESP32 image header
-/// @{
 /// What an ESP32 firmware image says about itself, read without ESP-IDF.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## Why the layout is redefined here
 ///
@@ -136,5 +134,4 @@ inline const char* moonBaseRejection(const ImageInfo& info, ChipId chip) {
     return nullptr;
 }
 
-/// @}
 } // namespace mm::firmware

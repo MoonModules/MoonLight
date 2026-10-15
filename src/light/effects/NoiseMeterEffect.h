@@ -11,7 +11,7 @@ namespace mm {
 ///
 /// @attribution Andrew Tuline, Perlin noise
 ///
-/// @moreinfo
+/// @technical
 ///
 /// Each lit row samples a field that scrolls on its own phases and is modulated by the level. Nothing varies along x, so the effect writes the x=0 column and extrude fans it across.
 class NoiseMeterEffect : public EffectBase {

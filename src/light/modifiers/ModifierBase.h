@@ -19,7 +19,7 @@ namespace mm {
 ///
 /// A modifier folds coordinates rather than drawing, so it uses little of the shared [power functions](https://moonmodules.org/MoonLight/moonmodules/light/power-functions.html). Each card's emoji are its tags, as the [tag emoji legend](https://moonmodules.org/MoonLight/explanation/architecture/index.html#tag-emoji-legend) explains.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// A layer builds its mapping by folding every physical light through each enabled modifier, and the whole chain collapses into one table, so the per-frame render stays a single lookup.
 ///

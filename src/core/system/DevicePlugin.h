@@ -6,11 +6,9 @@
 #include <cstdio>
 #include <cstring>
 
-/// @defgroup DevicePlugin The device-interop plugin seam
-/// @{
 /// How a foreign lighting or IoT system hooks into MoonLight's device discovery.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// `DevicesModule` owns the device model and the UDP discovery listener and stays domain-neutral, while each plugin teaches it to recognize one ecosystem from a presence broadcast.
 /// That is the adapter pattern, the same shape the list-source seam and the factory's register-by-name use.
@@ -107,5 +105,4 @@ public:
     }
 };
 
-/// @}
 }  // namespace mm

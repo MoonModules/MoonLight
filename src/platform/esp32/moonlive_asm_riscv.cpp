@@ -5,7 +5,6 @@
 
 #if defined(__riscv)   // the RISC-V assembler is only built for RISC-V targets (ESP32-P4)
 
-/// @defgroup moonlive_asm_riscv_impl MoonLive RISC-V encodings
 /// Named instructions for the 32-bit variant, verified against the assembler.
 ///
 /// Fixed-width little-endian instructions on the standard calling convention, with branch offsets back-patched.

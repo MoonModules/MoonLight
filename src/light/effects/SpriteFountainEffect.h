@@ -16,7 +16,7 @@ namespace mm {
 ///
 /// Colors come from the active palette, one per sprite, held for its whole flight.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## The `hue` byte carries the sprite kind
 ///

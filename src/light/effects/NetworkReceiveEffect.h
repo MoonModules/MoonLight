@@ -21,7 +21,7 @@ namespace mm {
 ///
 /// @attribution Art-Net, E1.31, DDP, troyhacks
 ///
-/// @moreinfo
+/// @technical
 ///
 /// Sender mapping is one copy alone on its layer, else two mappings, as the status shows. It binds Art-Net 6454, E1.31 5568 and DDP 4048, and an ArtPoll gets an ArtPollReply so controllers list the device.
 class NetworkReceiveEffect : public EffectBase {

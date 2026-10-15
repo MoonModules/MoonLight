@@ -1,12 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 
-/// @defgroup MoonStats Consent, and the once-per-install trigger
-/// @{
-///
 /// It owns what decides whether a report is built, building none itself and sending none. Consent is the gate, and declining is silent: no connection opens and no identifier is computed.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// The trigger is a version comparison rather than a timer: the reported version persists, so a reboot sends nothing and an upgrade sends one. An empty value means a fresh install and a different one an upgrade, with no identifier involved.
 ///
@@ -203,7 +200,7 @@ inline void buildMoonStatsReport(JsonSink& sink,
 ///
 /// The [privacy policy](https://moonmodules.org/MoonLight/legal/privacy-policy.html) states what is promised.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// A unit test asserts that the report leaks no device name, address, credential or typed text.
 class MoonStatsModule : public MoonModule {
@@ -433,7 +430,5 @@ private:
     /// The version running now.
     char runningVersion_[32] = {};
 };
-
-/// @}
 
 }  // namespace mm

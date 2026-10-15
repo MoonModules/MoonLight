@@ -39,7 +39,7 @@ namespace mm {
 ///
 /// A WS2811 orders its colors as its maker wired it, so try `RGB`, then the other five orders. The TM1814 and TM1914 need a settings preamble that a profile cannot describe.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// A driver stores a profile's stable id and resolves it into its own Correction, so reordering other profiles disturbs no reference. The render loop never reads this module. Without room for the 512-byte 16-bit table a channel stays 8-bit.
 ///
@@ -50,8 +50,7 @@ namespace mm {
 /// **The editable-list primitive.** The first consumer of `EditableListSource`. The whole add, delete, reorder and edit surface is reused rather than rebuilt. The per-row fields are the name, the channel count, and one role picker per channel.
 class FixtureProfilesModule : public MoonModule, public ListSource {
 public:
-    // A deleted library could never be re-added, and every driver resolves its profile through it.
-    /// Not user-editable: every driver resolves its profile through this one boot-wired library.
+    /// Not user-editable: every driver resolves its profile through this one boot-wired library, and a deleted one could never be re-added.
     bool userEditable() const override { return false; }
 
     /// How many profile rows a device can hold.
@@ -75,8 +74,7 @@ public:
         return 0;   // a dangling id renders at the first profile; rebuildCorrection falls back to it too
     }
 
-    // Any channel apply() synthesizes from RGB counts, since one control governs them all.
-    /// Whether the profile carries a channel the white mode would synthesize.
+    /// Whether the profile carries a channel the white mode would synthesize; any channel apply() synthesizes from RGB counts, since one control governs them all.
     bool profileHasSynthChannel(uint32_t id) const {
         const Profile* p = find(id);
         if (!p) return false;
@@ -105,8 +103,7 @@ public:
         return true;
     }
 
-    // Claimed at CONSTRUCTION: a driver resolves the library while building its own controls.
-    /// Claim the singleton seat at construction, before any driver builds its selector.
+    /// Claim the singleton seat at construction, before any driver builds its selector, since a driver resolves the library while building its own controls.
     FixtureProfilesModule() { seat_.claim(); }
     /// Free the role pool, which lives as long as the library rather than between prepare and release.
     ~FixtureProfilesModule() override { platform::free(pool_); }
@@ -134,10 +131,10 @@ public:
     }
 
     // --- ListSource (editable) ---------------------------------------------------------
+
     /// How many profile rows the list holds.
     uint8_t listRowCount() const override { return count_; }
 
-    // This row IS the persisted form, so it must carry the profile's full wiring.
     /// Write one row, which is also the persisted form, so it carries the full wiring.
     void writeListRow(JsonSink& sink, uint8_t row) const override {
         const Profile& p = profiles_[row];
@@ -153,8 +150,7 @@ public:
         sink.append("}");
     }
 
-    // Emitted ONCE per list: inlining would repeat the same array hundreds of times per push.
-    /// Emit the shared channel-role option set every row's selectors reference.
+    /// Emit the shared channel-role option set every row's selectors reference, once per list, since inlining would repeat the array hundreds of times per push.
     void writeListOptionSets(JsonSink& sink) const override {
         sink.append("\"channelRole\":[");
         for (uint8_t o = 0; o < kChannelRoleCount; o++)
@@ -288,8 +284,8 @@ private:
     Profile   profiles_[kMaxProfiles] = {};
     uint8_t  count_ = 0;
     uint32_t nextId_ = 1;
-    // Configuration, like the rows above, so it survives release(); a ScratchBuffer would be freed there with every profile's wiring.
-    uint8_t* pool_ = nullptr;   // Σ channelCount role bytes, packed in profile order
+    /// The role bytes of every profile, packed in profile order; configuration like the rows, so it survives release() where a ScratchBuffer would be freed with every profile's wiring.
+    uint8_t* pool_ = nullptr;
     uint32_t poolBytes_ = 0;    // the pool's size, the bound a re-pack copies within
     char     statusBuf_[24] = {};
     ActiveInstance<FixtureProfilesModule> seat_{*this};
@@ -302,7 +298,7 @@ private:
         for (uint8_t i = 0; i < count_; i++) if (profiles_[i].id == id) return i;
         return -1;
     }
-    // The built-ins never move, so the locked count is also the first custom row's index.
+    /// How many built-ins the list holds; they never move, so it is also the first custom row's index.
     uint8_t lockedCount() const {
         uint8_t n = 0;
         while (n < count_ && profiles_[n].locked) n++;
@@ -337,8 +333,7 @@ private:
         return true;
     }
 
-    // After every saved id is known, so a row saved without one cannot take an id a later row holds.
-    /// Give each restored row saved without an id a fresh one.
+    /// Give each restored row saved without an id a fresh one, after every saved id is known, so it cannot take an id a later row holds.
     void assignMissingIds() {
         for (uint8_t i = 0; i < count_; i++)
             if (profiles_[i].id == 0) profiles_[i].id = nextId_++;
@@ -355,8 +350,7 @@ private:
         if (p.id >= nextId_) nextId_ = p.id + 1;   // never reissue a persisted id
     }
 
-    // Clamped: a corrupt file can carry a byte the UI mis-renders and the Correction drops.
-    /// Read one persisted row's roles into its slice of the pool, an absent or invalid one as None.
+    /// Read one persisted row's roles into its slice of the pool, an absent or invalid one as None. It is clamped, since a corrupt file can carry a byte the UI mis-renders and the Correction drops.
     void restoreRoles(const mm::json::JsonDoc& doc, const mm::json::JsonNode* row, const Profile& p) {
         const mm::json::JsonNode* roles = mm::json::member(doc, row, "roles");
         uint8_t* dst = roleAtMut(p);
@@ -367,7 +361,7 @@ private:
         }
     }
 
-    // A new pool in profile order, each profile's surviving roles copied across, then swapped in.
+    /// Build a new pool in profile order, copy each profile's surviving roles across, then swap it in.
     void rebuildPool() {
         uint32_t newOff[kMaxProfiles] = {};
         uint32_t total = 0;
@@ -386,8 +380,7 @@ private:
         }
     }
 
-    // Tracked explicitly rather than inferred: channelCount may already hold the new value.
-    /// Copy each profile's surviving roles from the current pool into `fresh` at its new offset.
+    /// Copy each profile's surviving roles from the current pool into `fresh` at its new offset; the old size is tracked explicitly, as channelCount may already hold the new value.
     void copySurvivingRoles(uint8_t* fresh, const uint32_t* newOff) const {
         if (!pool_) return;
         for (uint8_t i = 0; i < count_; i++) {
@@ -399,7 +392,7 @@ private:
         }
     }
 
-    // Preserves the existing role picks; new channels default to R, G, B, W then None.
+    /// Set a profile's channel count, preserving the existing role picks; new channels default to R, G, B, W then None.
     void setChannelCount(Profile& p, uint8_t n) {
         const uint8_t was = p.channelCount;
         p.channelCount = n;
@@ -409,8 +402,7 @@ private:
             r[c] = c < 4 ? static_cast<uint8_t>(c + 1) : 0;   // 1=R,2=G,3=B,4=W, then None
     }
 
-    // Data, not code, so a profile of any width seeds directly: only real orders are listed.
-    /// Add each built-in the list lacks, by name, and order the built-in block as this table does, so a new built-in reaches a saved list too.
+    /// Add each built-in the list lacks, by name, and order the built-in block as this table does, so a new built-in reaches a saved list too. Data, not code: only real orders are listed.
     void seedBuiltins() {
         uint8_t shipped = 0;
         const Builtin* table = builtins(shipped);
@@ -484,8 +476,7 @@ private:
         return kBuiltins;
     }
 
-    // At the end of the built-in block, which sortBuiltins then puts in order.
-    /// Add a built-in the list lacks, above the custom rows.
+    /// Add a built-in the list lacks, above the custom rows, at the end of the built-in block, which sortBuiltins then puts in order.
     void insertBuiltin(const Builtin& b) {
         const uint8_t at = lockedCount();
         for (uint8_t j = count_; j > at; j--) profiles_[j] = profiles_[j - 1];
@@ -501,8 +492,7 @@ private:
         for (uint8_t c = 0; c < b.channelCount; c++) dst[c] = static_cast<uint8_t>(b.roles[c]);
     }
 
-    // A user cannot move a built-in, so the block always reads in the shipped order: an insertion sort, stable and in place.
-    /// Order the built-in block as `table` does; a built-in an older firmware shipped sorts after the rest.
+    /// Order the built-in block as `table` does; a built-in an older firmware shipped sorts after the rest. A stable insertion sort in place, since a user cannot move a built-in.
     void sortBuiltins(const Builtin* table, uint8_t shipped) {
         const auto rank = [&](const Profile& p) {
             for (uint8_t k = 0; k < shipped; k++) if (std::strcmp(p.name, table[k].name) == 0) return k;

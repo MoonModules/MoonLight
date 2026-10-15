@@ -28,7 +28,7 @@ namespace mm {
 ///
 /// Every driver under it reads its own slice of that buffer, as the [drivers catalog](https://moonmodules.org/MoonLight/moonmodules/light/drivers.html) shows.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## The shared output buffer
 ///
@@ -37,16 +37,14 @@ namespace mm {
 /// Two or more enabled layers composite in Effects order, bottom to top. Drivers owns that because only it sees both the stack order and the output buffer.
 class Drivers : public MoonModule, public LightOutput {
 public:
-    // Drivers only, so the picker is not buried under every generic system module.
-    /// Which child roles the "+ add" picker offers under Drivers.
+    /// Which child roles the "+ add" picker offers under Drivers, so it is not buried under every generic system module.
     const char* acceptsChildRoles() const override { return "driver"; }
 
     /// The live light-pipeline summary.
     const LightSummary& summary() const override { return summary_; }
     /// The built-in palette nearest a color wheel's hue and saturation.
     uint8_t nearestPalette(uint16_t hue, uint8_t sat) const override { return Palettes::nearestForHue(hue, sat); }
-    // A script computes its entries only while it runs, so a scripted index reads the active palette, which is the one a caller asks about.
-    /// A palette's representative hue and saturation, built-in or scripted.
+    /// A palette's representative hue and saturation, built-in or scripted; a scripted index reads the active palette, which is the one a caller asks about.
     void paletteHueSat(uint8_t index, uint16_t& hue, uint16_t& sat) const override {
         if (LivePalettes::isLive(index)) Palettes::hueSatOf(*Palettes::active(), hue, sat);
         else Palettes::representativeHueSat(index, hue, sat);
@@ -57,8 +55,7 @@ public:
     void writePaletteNames(JsonSink& sink) const override { mm::paletteNames(sink); }
     using LightOutput::nearestPalette;   // the RGB form, beside the override
 
-    // Each seat REFERENCES this object's members, so leaving one published dangles a live reader.
-    /// Release the children, then vacate every static seat this container published.
+    /// Release the children, then vacate every static seat this container published, since each seat references this object's members.
     void release() override {
         // BEFORE the children release: the worker ticks them, so it must stop before they free.
         stopEncodeTask();
@@ -71,8 +68,7 @@ public:
         MoonModule::release();
     }
 
-    // A destructor cannot be skipped, where an explicit release() can.
-    /// Stop the worker and free the palette script, for a tree torn down without release().
+    /// Stop the worker and free the palette script, for a tree torn down without release(); a destructor runs where release() may not.
     ~Drivers() override {
         stopEncodeTask();
         MoonLivePalette::clearActiveInstance(&paletteScriptModule_);
@@ -80,8 +76,7 @@ public:
         paletteScriptModule_.release();
     }
 
-    // A driver walks the whole tree, so freeing ANY node while core 1 runs is a use-after-free.
-    /// Stop the core-1 worker so a structural tree mutation can free nodes safely.
+    /// Stop the core-1 worker so a structural tree mutation can free nodes safely, since a driver walks the whole tree.
     void quiesceRenderSplit() {
         stopEncodeTask();
         renderSplitActive_ = false;
@@ -89,8 +84,7 @@ public:
     /// Reach the live Drivers (the one that owns the encode worker) to quiesce it around a mutation.
     static Drivers* active() { return ActiveInstance<Drivers>::active(); }
 
-    // Callable BEFORE prepare, which is the point: Effects sizes its buffer first.
-    /// Where this rig's fixtures keep their motion channels, as LAYER slots.
+    /// Where this rig's fixtures keep their motion channels, as LAYER slots, callable before prepare so Effects sizes its buffer first.
     void publishFixtureChannels() {
         const FixtureChannels fc = fixtureChannels();
         if (effects_) {
@@ -148,8 +142,7 @@ public:
         paletteScriptModule_.prepare(*this);
     }
 
-    // Released rather than only detached, so neither the program nor its status outlives the choice.
-    /// Stop the palette script, or it would keep overwriting the gradient every frame.
+    /// Stop and release the palette script, so neither the program nor its status outlives the choice. Otherwise it keeps overwriting the gradient every frame.
     void detachPaletteScript() {
         MoonLivePalette::setActiveInstance(nullptr);
         paletteScriptModule_.release();
@@ -158,8 +151,7 @@ public:
         if (status() == paletteScriptModule_.statusText()) clearStatus();
     }
 
-    // The names live in a member array because the seam holds POINTERS, so a local would dangle.
-    /// List every factory palette at its place in the catalog, held or not, then the user's own `.mlp` files, and publish them to the picker.
+    /// List every factory palette at its place in the catalog, held or not, then the user's own `.mlp` files, and publish them to the picker. The names live in member arrays, as the seam holds pointers.
     void refreshLivePalettes() {
         livePalettesScanned_ = true;   // every scan counts, whichever caller ran it
         liveCount_ = 0;
@@ -220,7 +212,7 @@ public:
         return std::strncmp(dir, path, p) == 0 && (dir[p] == '/' || path[p - 1] == '/');
     }
 
-    // One device, one picker: static, so the published list outlives any instance, a probe's included.
+    /// The scripted palette names: static, so the one published list outlives any instance, a probe's included.
     static inline char        liveNames_[LivePalettes::kMax][moonlive::kMaxScriptName + 1] = {};
     static inline const char* livePtrs_[LivePalettes::kMax] = {};
     static inline const char* liveTags_[LivePalettes::kMax] = {};
@@ -235,14 +227,12 @@ public:
     const Buffer* source_ = nullptr;            ///< the frame the drivers read, which the rise waits to see lit
     uint32_t    softStartAt_ = 0;               ///< when they started rising
 
-    // Reached through a static seam, because the layers sample the palette before this ticks.
     /// The scripted palette's file, which `palette` picks.
     char paletteScript_[moonlive::kMaxScriptName + 1] = {};
     /// The engine that runs the selected scripted palette, one per Drivers.
     MoonLivePalette paletteScriptModule_;
 
-    // Binding the container is self-healing; setLayer below pins one, for a test rig.
-    /// Bind the Effects container; the source Layer re-resolves on every prepareTree.
+    /// Bind the Effects container, which is self-healing: the source Layer re-resolves on every prepareTree.
     void setEffects(Effects* layers) {
         effects_ = layers;
         if (effects_) layer_ = effects_->activeLayer();
@@ -253,8 +243,7 @@ public:
         layer_ = layer;
     }
 
-    // Keeping `on` and `brightness` independent means "off" never clobbers the chosen level.
-    /// The brightness the LUT is built from: 0 when powered off, else the set level, rising through the soft start.
+    /// The brightness the LUT is built from: 0 when powered off, else the set level, rising through the soft start; `on` stays independent, so off never clobbers the level.
     uint8_t effectiveBrightness() const MM_NONBLOCKING {
         if (!on || dark_) return 0;
         if (!softStarting_) return brightness;
@@ -263,12 +252,11 @@ public:
         return up < kSoftStartMs ? static_cast<uint8_t>(brightness * up / kSoftStartMs) : brightness;
     }
 
-    // A supply that cannot hold the set level then fails within the minute the boot record counts, where safe mode catches it.
-    /// How long the lights take to rise to their brightness after the device boots.
+    /// How long the lights take to rise to their brightness after the device boots, so a supply that cannot hold the level fails within the boot record's minute.
     static constexpr uint32_t kSoftStartMs = 5000;
 
-    // `on=false` is a blackout between cues and a park between sets; duration separates them.
     /// How long a powered-off rig keeps tracking before its heads go still, in seconds.
+    /// @guide A short hold is a blackout between cues, a long one a park between sets.
     uint8_t motionHold = 30;
     static constexpr uint8_t kMotionHoldNever = 0;   ///< 0: keep tracking, the desk behavior
 
@@ -314,8 +302,7 @@ public:
         MoonModule::defineControls();  // cascade to driver children (each owns its fixture/whiteMode)
     }
 
-    // Re-baking a LUT needs no pipeline realloc, which keeps the brightness slider fluent.
-    /// React to a control change: re-bake the LUTs, resolve a palette, drive the relay.
+    /// React to a control change: re-bake the LUTs (no pipeline realloc, so the slider stays fluent), resolve a palette, drive the relay.
     void onControlChanged(const char* controlName) override {
         if (std::strcmp(controlName, "palette") == 0) {
             if (LivePalettes::isLive(palette)) {
@@ -357,8 +344,7 @@ public:
         }
     }
 
-    // Brightness 0 opens it too: a slider at 0 is how a WLED-style client says "off".
-    /// Drive the power relay: closed while `on` and brightness is above zero, open otherwise.
+    /// Drive the power relay: closed while `on` and brightness is above zero, open otherwise, so a WLED-style slider at 0 reads as off.
     void applyRelay() {
         const bool closed = on && brightness > 0;
         // Each call judges the list afresh, so a warning a mid-edit list left goes once the list is fixed or cleared.
@@ -410,14 +396,12 @@ public:
     /// Whether the status is a relay warning, so fixing the list clears it and nothing else.
     bool showingRelayProblem_ = false;
 
-    // `multicore` alone is structural: it decides the handoff buffer and the core-1 task.
-    /// Which controls route through the prepare sweep rather than the cheap correction tier.
+    /// Which controls route through the prepare sweep rather than the cheap correction tier: `multicore` alone, as it decides the handoff buffer and the core-1 task.
     bool affectsPrepare(const char* name) const override {
         return std::strcmp(name, "multicore") == 0;
     }
 
-    // The PEAK over the second, not one sample: a lone sample reads ~0 even when core 0 idles.
-    /// Refresh the read-only `renderWait` KPI once a second, off the hot path.
+    /// Refresh the read-only `renderWait` KPI once a second, off the hot path, from the peak over the second, since one sample reads ~0 even when core 0 idles.
     void tick1s() MM_NONBLOCKING override {
         if (renderSplitActive_) mm::formatTo(renderWaitStr_, sizeof(renderWaitStr_), "%u µs",
                                               static_cast<unsigned>(renderWaitPeakUs_));
@@ -457,8 +441,7 @@ public:
         return false;
     }
 
-    // The hold changes what is TRANSMITTED, so it writes the flag rather than rebuilding.
-    /// Count the rig's time powered off, and park it once the hold expires.
+    /// Count the rig's time powered off, and park it once the hold expires; the hold changes what is transmitted, so it writes the flag rather than rebuilding.
     void updateMotionHold() MM_NONBLOCKING {
         // Read from each driver's ALREADY-RESOLVED correction: re-resolving costs a LUT per child.
         bool movable = false;
@@ -484,8 +467,7 @@ public:
         }
     }
 
-    // Through prepare() instead, an RMT teardown would blank the strip for a tick.
-    /// Re-resolve every driver's correction without re-preparing the tree.
+    /// Re-resolve every driver's correction without re-preparing the tree, since prepare() would tear down an RMT and blank the strip for a tick.
     void rebuildAllCorrections() {
         for (uint8_t i = 0; i < childCount(); i++) {
             if (child(i)->role() != ModuleRole::Driver) continue;
@@ -624,12 +606,10 @@ public:
             blendMap(srcLayer->buffer(), outputBuffer_, srcLayer->lut(), srcLayer->channelsPerLight());
     }
 
-    // This container picks the SIDE; core's one tickChildren loop still applies the rule.
-    /// Tick the children that are not drivers, which core 1 never touches.
+    /// Tick the children that are not drivers, which core 1 never touches; this container picks the side and core's tickChildren applies the rule.
     void tickNonDriverChildren() { tickChildren(&MoonModule::tick, RoleFilter::Except, ModuleRole::Driver); }
 
-    // Core calls this before every structural mutation, which is what makes a live delete safe.
-    /// Bring core 1 to a stop, tearing the worker down if it will not come back.
+    /// Bring core 1 to a stop, tearing the worker down if it will not come back; core calls it before every structural mutation, which makes a live delete safe.
     void quiesce() override { if (!quiesceEncode()) stopEncodeTask(); }
 
 private:
@@ -637,16 +617,15 @@ private:
     Layer* layer_ = nullptr;
     Buffer outputBuffer_;
 
-    // The RAII vacate is the same dangling-static guard the mic and registry seats use.
+    /// The live summary and the seats that publish this container. The RAII vacate is the same dangling-static guard the mic and registry seats use.
     LightSummary summary_;
     ActiveInstance<Drivers> seat_{*this};
     ActiveInstance<LightOutput> outputSeat_{*this};
 
-    // The boundary is one shared buffer: core 0 waits on encodeDone_ before overwriting it.
+    /// The core-1 encode worker; the boundary is one shared buffer, and core 0 waits on encodeDone_ before overwriting it.
     platform::WorkerTask encodeTask_{};
     std::atomic<bool> encodeDone_{true};   // core 1 sets true when its encode finishes; core 0 waits it
-    std::atomic<bool> encodeStop_{false};  // stop flag the worker fn observes via a woken waitNotify
-                                           // atomic, not volatile: volatile is no thread primitive
+    std::atomic<bool> encodeStop_{false};  // stop flag the worker observes via a woken waitNotify; atomic, not volatile, which is no thread primitive
     bool renderSplitActive_ = false;   // the split is engaged (task spawned, boundary in effect)
     bool wiredLast_ = false;   ///< the last frame went out as a wiring-order copy, so the output already holds it
     bool encodeStalled_ = false;       // a stall warning is showing, so recovery can clear it
@@ -656,8 +635,7 @@ private:
     /// @guide Near zero means render and output overlap well. A large value means core 0 idles on a slow output stage.
     char renderWaitStr_[32] = {};
 
-    // One rule, no per-driver opt-out: the whole output stage lives on core 1 while it is on.
-    /// The core-1 body: wait for a notify, tick every driver, signal done.
+    /// The core-1 body: wait for a notify, tick every driver, signal done. One rule with no per-driver opt-out: the whole output stage lives on core 1 while it is on.
     void runEncodeLoop() {
         // The subscription is per-task: feeding another task's is rejected and floods the log.
         platform::taskWdtSubscribe();
@@ -673,8 +651,8 @@ private:
     }
     static void encodeTrampoline(void* self) { static_cast<Drivers*>(self)->runEncodeLoop(); }
 
-    // The timeout is the robustness floor: a wedged worker disengages the split, slower but lit.
-    static constexpr uint32_t kQuiesceTimeoutMs = 500;   // ≫ any real encode (~50 ms at 16K lights)
+    /// How long to wait for a wedged worker before disengaging the split, slower but lit; far above any real encode (~50 ms at 16K lights).
+    static constexpr uint32_t kQuiesceTimeoutMs = 500;
     bool quiesceEncode() {
         if (!renderSplitActive_) return true;
         const uint32_t deadline = platform::millis() + kQuiesceTimeoutMs;
@@ -695,8 +673,7 @@ private:
         return true;
     }
 
-    // With no driver there is nothing for core 1 to do, so no task and no buffer.
-    /// Whether any enabled driver child exists, which is what the split engages for.
+    /// Whether any enabled driver child exists, which is what the split engages for; with none there is nothing for core 1 to do, so no task and no buffer.
     bool anyDriver() const {
         for (uint8_t i = 0; i < childCount(); i++) {
             MoonModule* c = child(i);
@@ -710,16 +687,13 @@ private:
 public:
     /// True while the render and encode split is engaged, for diagnostics and tests.
     bool renderSplitActive() const { return renderSplitActive_; }
-    // A large value means core 0 idles, which is what a second handoff buffer would recover.
-    /// The worst core-0 wait at the frame boundary in the current one-second window, in µs.
+    /// The worst core-0 wait at the frame boundary in the current one-second window, in µs; a large value means core 0 idles, which a second handoff buffer would recover.
     uint32_t renderWaitPeakUs() const { return renderWaitPeakUs_; }
-    // A test needs the boundary WITHOUT the fallback inline tick that follows a timeout.
-    /// Test-only: the frame-boundary wait alone; false means it timed out and disengaged.
+    /// Test-only: the frame-boundary wait alone, without the fallback inline tick that follows a timeout; false means it timed out and disengaged.
     bool quiesceEncodeForTest() { return quiesceEncode(); }
 
 private:
-    // PRIVATE: an outside caller could stop the task while renderSplitActive_ stayed true.
-    /// Spawn the core-1 encode task, degrading to inline when it cannot be created.
+    /// Spawn the core-1 encode task, degrading to inline when it cannot be created; private, so the task never changes while renderSplitActive_ disagrees.
     void startEncodeTask() {
         if (!renderSplitActive_ || encodeTask_.impl) return;
         encodeStop_.store(false, std::memory_order_release);

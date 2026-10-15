@@ -11,14 +11,12 @@
 #include <cstdlib>
 #include <cstring>
 
-/// @defgroup InputMapping What a physical input does
-/// @{
 /// The binding table behind every input service: a row says what one input does to one control.
 ///
 /// Shared by button, infrared and every later transport, because the half that differs between them is only how the event is detected.
 /// What happens next is identical, so it lives here once rather than in each module.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## The target is the surface
 ///
@@ -379,5 +377,4 @@ inline void reportOffSurface(MoonModule& service, char* buf, size_t len, unsigne
     service.setStatus(buf, MoonModule::Severity::Warning);
 }
 
-/// @}
 }  // namespace mm

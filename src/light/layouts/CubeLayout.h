@@ -11,7 +11,7 @@ namespace mm {
 ///
 /// @attribution Boustrophedon
 ///
-/// @moreinfo
+/// @technical
 ///
 /// A per-axis snake reverses that axis on odd passes of its enclosing loop, keyed on the loop's counter, the physical pass number.
 class CubeLayout : public LayoutBase {

@@ -11,7 +11,7 @@ namespace mm {
 ///
 /// @attribution 4wheeljive, Stefan Petrick, Jos Stam
 ///
-/// @moreinfo
+/// @technical
 ///
 /// The trail plane is 16-bit: a tail is a value multiplied by slightly less than one, hundreds of times a second. At 8 bits that truncates to nothing, or rounds back up and turns solid. The plane narrows once on the way out to the layer.
 class TrailsEffect : public EffectBase {

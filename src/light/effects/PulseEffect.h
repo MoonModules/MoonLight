@@ -17,7 +17,7 @@ namespace mm {
 ///
 /// It is the effect a fresh device starts with: one beat is unmistakable, and the drifting origin shows the device running before any sound arrives.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// The radius is a Euclidean distance over whatever axes the layout has. Travel and shell width are shares of the layout's diagonal, so one set of defaults fits a 16x16 panel and a 300-light strip alike. The shell test runs in squared space, and the root is taken only for a light some shell contains.
 class PulseEffect : public EffectBase {

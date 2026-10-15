@@ -10,7 +10,7 @@ namespace mm {
 ///
 /// @attribution Conical spiral
 ///
-/// @moreinfo
+/// @technical
 ///
 /// The radius falls linearly to zero at the top while the winding rate stays the base's, one light per unit of its circumference. So the spiral packs tightly near the base and opens toward the tip.
 class SpiralLayout : public LayoutBase {

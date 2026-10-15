@@ -91,7 +91,7 @@ inline constexpr draw::sprites::Sprite kToastSprite{kToast, kPalette, TW, TH, 1,
 ///
 /// @attribution troyhacks, After Dark
 ///
-/// @moreinfo
+/// @technical
 ///
 /// Movement is `particles::Pool` at a constant diagonal velocity, respawning as it wraps, and appearance is the stateless `draw::sprite`. The wing flap is one BeatPhase, offset per toaster.
 class FlyingToastersEffect : public EffectBase {

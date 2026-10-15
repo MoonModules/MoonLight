@@ -26,7 +26,7 @@ namespace mm {
 ///
 /// A `cpu` percentage appears only in a profiling build, since the run-time counter costs about 5% of the tick.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// **One nested list.** Each row is a task with its name, state, core, priority and stack mark. Expanding it reveals the modules in that task with their live cost.
 ///

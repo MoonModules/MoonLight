@@ -10,7 +10,7 @@ namespace mm {
 ///
 /// Louder bands sweep their sawtooth up the column faster. A band's speed rises instantly to a loud hit and decays slowly once the sound stops. A struck band keeps sawing for a while, and a quiet one winds down.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// The band loop caches each band's position and the column loop only reads that cache, so a band spanning many columns integrates once a frame.
 class FreqSawsEffect : public EffectBase {

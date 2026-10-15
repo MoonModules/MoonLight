@@ -13,7 +13,7 @@ namespace mm {
 ///
 /// @attribution IEC 60268-17
 ///
-/// @moreinfo
+/// @technical
 ///
 /// Each band drives a damped harmonic oscillator, a spring and a damper; IEC 60268-17 specifies 300 ms to 99% with 1 to 1.5% overshoot.
 class VuMetersEffect : public EffectBase {

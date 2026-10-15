@@ -11,7 +11,7 @@ namespace mm {
 ///
 /// @attribution Stefan Petrick, Iñigo Quilez
 ///
-/// @moreinfo
+/// @technical
 ///
 /// The reciprocal grows without bound toward the center, so the texture compresses to a vanishing point, and adding time to it pulls the wall toward the viewer. The divide is the expensive part of the per-pixel cost.
 class TunnelEffect : public EffectBase {

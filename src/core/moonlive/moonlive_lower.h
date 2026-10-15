@@ -7,13 +7,11 @@
 #include <cstring>
 #include <new>       // placement new: the assembler lives on the heap
 
-/// @defgroup moonlive_lower MoonLive lowering
-/// @{
 /// IR to machine bytes: the one lowering, written once for every backend.
 ///
 /// Walking the IR is not a per-target algorithm, so the walk lives here and each backend supplies its assembler.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## What core decides
 ///
@@ -34,18 +32,15 @@
 
 namespace mm::moonlive {
 
-// Zero means the program cannot be encoded: degrade, never miscompile.
-/// Lower `ir` into `out` using assembler `A`, returning the byte count.
+/// Lower `ir` into `out` using assembler `A`, returning the byte count, or 0 when the program cannot be encoded: degrade, never miscompile.
 template <typename A>
 size_t lowerWith(IrProgram& ir, uint8_t* out, size_t cap, const RegBudget* squeeze,
                  uint8_t regCount) {
-    // Deduced from the assembler, and renamed because its own `Reg` is in scope here.
-    using RegId = typename A::RegType;
+    using RegId = typename A::RegType;   // deduced from the assembler, and renamed because its own `Reg` is in scope here
     // From the instance, since a <utility> include nests a second `std` in the tests' namespace.
     auto reg = [](VReg v) { return static_cast<RegId>(v); };
 
-    // Two shared temporaries plus the host-argument reload, unconditional for the depth guard.
-    constexpr uint8_t kSharedScratch = 2;
+    constexpr uint8_t kSharedScratch = 2;   // two shared temporaries plus the host-argument reload, unconditional for the depth guard
     const uint8_t scratchTotal = kSharedScratch + 1;
     lowerRefusal() = LowerRefusal::None;
     if (!out || cap == 0) return 0;   // unreachable from compileSource, which refuses this first
@@ -60,7 +55,7 @@ size_t lowerWith(IrProgram& ir, uint8_t* out, size_t cap, const RegBudget* squee
     const RegId sAddr = static_cast<RegId>(ir.vregsUsed);       // per-channel address (both ops)
     const RegId sCtr  = static_cast<RegId>(ir.vregsUsed + 1);   // FillElems loop counter
 
-    // On the heap, since its label and fixup tables would put about 1 KB on the stack of every task that compiles.
+    /// The assembler held in a heap block, since its label and fixup tables would put about 1 KB on the stack of every task that compiles.
     struct HeapAsm {
         A* p;   ///< the assembler, built in place in its heap block
         /// Destroy it and return its block, on every exit from the lowering.
@@ -319,7 +314,5 @@ size_t lowerWith(IrProgram& ir, uint8_t* out, size_t cap, const RegBudget* squee
     if (a.size() > cap) { lowerRefusal() = LowerRefusal::OverCap; return 0; }
     return a.size();   // already in `out`: the assembler emitted there
 }
-
-/// @}
 
 }  // namespace mm::moonlive

@@ -38,7 +38,7 @@ inline constexpr const char* kEffectPick[3] = {kScriptDir, kEffectExt, kEffectTe
 ///
 /// @attribution Yves Bazin
 ///
-/// @moreinfo
+/// @technical
 ///
 /// The effect names a script file, `prepare` compiles it, and `tick` runs the emitted native code over this effect's own buffer. A source edit recompiles live, and a parse error shows in the module status while the layer renders dark.
 class MoonLiveEffect : public EffectBase {

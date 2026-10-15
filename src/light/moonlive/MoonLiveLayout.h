@@ -51,7 +51,7 @@ inline constexpr const char* kLayoutPick[3] = {kScriptDir, kLayoutExt, kLayoutTe
 ///
 /// `addLight(x, y, z)` places the next light, in call order. `t` is always 0 and `width`, `height` and `depth` read 0, since a layout is upstream of the grid. Name your own size controls, such as `cols` and `rows`. [The MoonLive guide](https://moonmodules.org/MoonLight/moonmodules/light/moonlive.html#system-variables) lists the vocabulary.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// A layout script places every light itself in a loop, unlike a modifier the Layer calls per light. `addLight` binds to a counter on the sizing pass and to the sink on the walk.
 class MoonLiveLayout : public LayoutBase {

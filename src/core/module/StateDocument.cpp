@@ -1,6 +1,4 @@
-/// @defgroup state_document_impl State document implementation
 /// The walk that applies a document to the tree, one member at a time in document order. Public surface lives in StateDocument.h.
-/// @{
 #include "core/module/StateDocument.h"
 
 #include "core/module/MoonModule.h"
@@ -824,5 +822,3 @@ void applyDeferredControls(Scheduler& scheduler) {
 }
 
 }  // namespace mm
-
-/// @}

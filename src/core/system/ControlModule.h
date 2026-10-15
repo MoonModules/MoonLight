@@ -39,7 +39,7 @@ namespace mm {
 ///
 /// Only effects presets reach Home Assistant, so a hub never rewires pins or geometry. [The how-to](https://moonmodules.org/MoonLight/how-to/home-automation.html#presets-in-home-assistant) has the setup.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## The three banks read as one desk
 ///
@@ -146,8 +146,7 @@ public:
         return false;
     }
 
-    // A network surface asks for this rather than resendTo, since a burst of datagrams is what WiFi drops.
-    /// Push every value to one attached surface, one per tick20ms, starting over if a resend is already running.
+    /// Push every value to one attached surface, one per tick20ms, starting over if one is running. A network surface asks for this rather than resendTo, since a burst of datagrams is what WiFi drops.
     void resendPaced(ControlSurface* s) {
         for (uint8_t i = 0; i < surfaceCount_; i++)
             if (surfaces_[i] == s) resendNext_[i] = 0;
@@ -550,8 +549,7 @@ public:
         return nullptr;
     }
 
-    // As a desk's plug-in mode maps the selected plug-in onto its strips; the first slot of each bank stays the device's own.
-    /// Map the focused effect's controls, in the order it declares them, onto every slot from the second on that nobody assigned by hand.
+    /// Map the focused effect's controls, in the order it declares them, onto every slot from the second on that nobody assigned by hand, as a desk's plug-in mode does. The first slot of each bank stays the device's own.
     void refreshAutomap() {
         char (*banks[3])[kTargetLen] = {autoSwitches_, autoFaders_, autoEncoders_};
         uint8_t next[3] = {};

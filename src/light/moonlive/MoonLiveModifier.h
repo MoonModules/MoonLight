@@ -45,7 +45,7 @@ inline constexpr const char* kModifierPick[3] = {kScriptDir, kModifierExt, kModi
 ///
 /// A script drives the per-light hook, so a transform keeping the box its size works; one halving it, as the built-in Mirror does, needs the compiled modifier. A script that fails to compile shows the parse error, and coordinates pass through.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// The engine is domain-neutral: an effect script writes a color per light and a modifier a position, both three values stored at an index.
 ///

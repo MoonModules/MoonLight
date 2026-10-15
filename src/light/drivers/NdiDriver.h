@@ -36,7 +36,7 @@ namespace mm {
 /// | `could not create the NDI source` | The runtime is there but refused, usually a name clash with another source |
 /// | `sending <w>x<h> at <n> fps` | Live; look for it in your receiver |
 ///
-/// @moreinfo
+/// @technical
 ///
 /// **Why NDI.** One implementation covers every desktop platform, discovers by name and crosses machines, where Spout and Syphon do not. At LED-wall pixel counts the latency difference sits far below one frame.
 ///

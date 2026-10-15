@@ -12,7 +12,7 @@ namespace mm {
 ///
 /// @attribution troyhacks
 ///
-/// @moreinfo
+/// @technical
 ///
 /// The converging foreshortening of the lines is the look, so the perspective always points away from the moving vanishing point. The lines are crisp Bresenham, so there is no anti-alias toggle.
 class GEQ3DEffect : public EffectBase {

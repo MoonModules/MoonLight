@@ -13,7 +13,7 @@ using CreateModuleFn = MoonModule*(*)();
 ///
 /// Storage grows on demand rather than reserving a fixed cap, which once held a kilobyte of internal memory empty.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## What a registration captures
 ///

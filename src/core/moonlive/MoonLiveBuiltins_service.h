@@ -10,29 +10,24 @@
 #include <cstdio>
 #include <cstring>
 
-/// @defgroup moonlive_builtins_service MoonLive service builtins
-/// @{
 /// The service vocabulary: reading hardware and driving controls, rather than painting lights.
 ///
 /// It lives in core because an input is domain-neutral, and a service must run on a device with no lights configured at all.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## Its own table
 ///
-/// A service has no canvas, so a table offering pixel writes or coordinates would promise what it cannot keep.
-/// It gets the two things that make it a service instead: it reads a pin and it writes a control.
+/// A service has no canvas, so a table offering pixel writes or coordinates would promise what it cannot keep. It gets the two things that make it a service instead: it reads a pin and it writes a control.
 
 namespace mm::moonlive {
 
-// A contact closes for tens of milliseconds, so a slow script costs its own tick, not the lights.
-/// The moment a service runs: the 50 Hz poll, rather than the render frame.
+/// The moment a service runs: the 50 Hz poll, not the render frame, because a contact closes for tens of milliseconds and a slow script then costs its own tick.
 inline constexpr const char* kEntryTick20ms = "tick20ms";
 
 // --- The host functions -------------------------------------------------------------------------
 
-// Pulled up on first use, and debouncing is the script's: it knows what is wired.
-/// Read a pin, as 0 or 1.
+/// Read a pin as 0 or 1, pulled up on first use; debouncing is the script's, since it knows what is wired.
 extern "C" inline uint32_t mm_service_gpioRead(const uintptr_t* args, uint32_t, const uint8_t*) {
     const uint32_t pin = static_cast<uint32_t>(args[0]);
     if (pin > 48) return 0;                      // out of range on every supported chip
@@ -46,16 +41,14 @@ extern "C" inline uint32_t mm_service_gpioRead(const uintptr_t* args, uint32_t, 
     return platform::gpioRead(static_cast<uint8_t>(pin)) ? 1u : 0u;
 }
 
-// Returns 0 rather than failing silently on a pin with no output driver, which a script cannot see.
-/// Drive a pin, reporting whether the write took.
+/// Drive a pin, returning 0 on a pin with no output driver, which a script cannot see otherwise.
 extern "C" inline uint32_t mm_service_gpioWrite(const uintptr_t* args, uint32_t, const uint8_t*) {
     const uint32_t pin = static_cast<uint32_t>(args[0]);
     if (pin > 48) return 0;
     return platform::gpioWrite(static_cast<uint8_t>(pin), args[1] != 0) ? 1u : 0u;
 }
 
-// Raw counts, with `adcMax()` for full scale, so a script normalizes without knowing the chip.
-/// Read a pin's ADC count, or 0 where it has none.
+/// Read a pin's raw ADC count, or 0 where it has none; `adcMax()` gives full scale, so a script normalizes without knowing the chip.
 extern "C" inline uint32_t mm_service_adcRead(const uintptr_t* args, uint32_t, const uint8_t*) {
     const uint32_t pin = static_cast<uint32_t>(args[0]);
     if (pin > 48) return 0;
@@ -64,8 +57,7 @@ extern "C" inline uint32_t mm_service_adcRead(const uintptr_t* args, uint32_t, c
     return raw;
 }
 
-// A raw count is not a fixed fraction of full scale, so scaling it by hand misleads.
-/// Read a pin's voltage in millivolts, or 0 where the chip carries no calibration.
+/// Read a pin's voltage in millivolts, or 0 where the chip carries no calibration, since a raw count is not a fixed fraction of full scale.
 extern "C" inline uint32_t mm_service_adcMv(const uintptr_t* args, uint32_t, const uint8_t*) {
     const uint32_t pin = static_cast<uint32_t>(args[0]);
     if (pin > 48) return 0;
@@ -74,14 +66,12 @@ extern "C" inline uint32_t mm_service_adcMv(const uintptr_t* args, uint32_t, con
     return mv;
 }
 
-// So a script scales against the chip it runs on rather than a number typed into its source.
-/// The full-scale count `adcRead` reports on this platform.
+/// The full-scale count `adcRead` reports on this platform, so a script scales against the chip it runs on.
 extern "C" inline uint32_t mm_service_adcMax(const uintptr_t*, uint32_t, const uint8_t*) {
     return platform::adcMaxCount();
 }
 
-// The control module alone, so a script cannot rewrite a pin list by naming it.
-/// Write a control, reporting whether the write took.
+/// Write a control of the control module alone, so a script cannot rewrite a pin list by naming it; returns whether the write took.
 extern "C" inline uint32_t mm_service_setControl(const uintptr_t* args, uint32_t, const uint8_t*) {
     const char* name = reinterpret_cast<const char*>(args[0]);
     if (!name || !name[0]) return 0;
@@ -97,8 +87,7 @@ extern "C" inline uint32_t mm_service_setControl(const uintptr_t* args, uint32_t
 
 // --- The tables ---------------------------------------------------------------------------------
 
-// No `width` or `height`: a service has no grid, and a variable always reading zero is a trap.
-/// A service script's system variables, which is elapsed milliseconds alone.
+/// A service script's system variables, which is elapsed milliseconds alone: a service has no grid, and a variable always reading zero is a trap.
 inline SysVarTable serviceSysVars() {
     SysVarTable t;
     t.add({"t", SysVarKind::Arg, kArg3});
@@ -129,7 +118,5 @@ inline const BuiltinTable& serviceBuiltins() {
     }();
     return table;
 }
-
-/// @}
 
 }  // namespace mm::moonlive

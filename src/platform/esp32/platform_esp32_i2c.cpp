@@ -1,9 +1,8 @@
-/// @defgroup platform_esp32_i2c The board's I2C bus
 /// One master bus per board, opened by its owner and shared by every device on it, with the standard i2cdetect scan.
 ///
 /// Domain-neutral: an audio codec, a sensor or a display attaches to the same bus rather than opening its own.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## One owner, many devices
 ///

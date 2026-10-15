@@ -12,13 +12,11 @@ namespace mm::moonlive {
 
 /// Compiling a script to native code and running it over a host-supplied buffer.
 ///
-/// @moreinfo
+/// @technical
 ///
-/// A compile turns a program into native code and places it in executable memory, and a run calls it.
-/// The path is emit, allocate, call, write, and it is the same on Xtensa, RISC-V and the host.
+/// A compile turns a program into native code in executable memory and a run calls it, the same path (emit, allocate, call, write) on Xtensa, RISC-V and the host.
 ///
-/// The engine is domain-neutral by construction: it includes the compiler and platform seams and never a light type.
-/// The binding is what wraps it as a MoonModule.
+/// The engine is domain-neutral by construction: it includes the compiler and platform seams and never a light type, and the binding wraps it as a MoonModule.
 class MoonLive {
 public:
     /// An engine with nothing compiled, until a compile call fills it.
@@ -26,17 +24,14 @@ public:
     /// Release the exec block and the control arena.
     ~MoonLive() { free(); }
 
-    // Owns a heap-backed exec block, so copying would duplicate ownership and double-free.
-    /// Never copied: each scripted module holds its own engine.
+    /// Never copied: each scripted module holds its own engine, which owns a heap-backed exec block that a copy would double-free.
     MoonLive(const MoonLive&) = delete;
     MoonLive& operator=(const MoonLive&) = delete;
 
-    // A failure leaves the engine not ok() with an error(), so the caller degrades.
-    /// Compile a fixed-color program direct from the emitter.
+    /// Compile a fixed-color program direct from the emitter; a failure leaves the engine not ok() with an error(), so the caller degrades.
     bool compile(uint8_t r, uint8_t g, uint8_t b);
 
-    // A parse or codegen error leaves error() pointing at the diagnostic the editor shows.
-    /// Compile source text, resolving calls against the host's registered builtins.
+    /// Compile source text, resolving calls against the host's registered builtins; an error leaves error() pointing at the diagnostic the editor shows.
     bool compile(const char* source, const BuiltinTable& table, const SysVarTable& sysvars);
 
     /// Compile the animated routine, whose color derives from the per-frame `t`.
@@ -51,8 +46,7 @@ public:
     /// Whether a program is compiled and callable.
     bool ok() const { return fn_ != nullptr || anim_ != nullptr || ctrl_ != nullptr; }
 
-    // Every function sits in the one emitted block, so any number costs one allocation.
-    /// The compiled function named `name`, or null when the script defined none.
+    /// The compiled function named `name`, or null when the script defined none; every function sits in the one emitted block, so any number costs one allocation.
     CtrlFn entry(const char* name) const {
         const uint8_t* p = entryCode(name);
         return asFunction<CtrlFn>(p);
@@ -66,8 +60,7 @@ public:
         return RetType::Void;
     }
 
-    // Emitted code has no C++ type and is called through two, so each caller reads the address.
-    /// The address of a named entry point, with no signature attached.
+    /// The address of a named entry point, with no signature attached, since emitted code has no C++ type and is called through two.
     const uint8_t* entryCode(const char* name) const {
         if (!code_ || !name) return nullptr;
         for (uint8_t i = 0; i < entryCount_; i++) {
@@ -85,15 +78,12 @@ public:
     /// The diagnostic from the last compile, or an empty string.
     const char* error() const { return error_; }
 
-    // The editor turns it into a line to mark, which the parser already knows.
-    /// Where the last compile failed, as a character offset into the source.
+    /// Where the last compile failed, as a character offset into the source, which the editor turns into a line to mark.
     uint16_t errorPos() const { return errorPos_; }
-    // Zero is a valid offset, so the value cannot also stand for "no position".
-    /// Whether `errorPos` means anything, which only a parse failure gives.
+    /// Whether `errorPos` means anything, which only a parse failure gives, since zero is a valid offset and cannot also mean "no position".
     bool     hasErrorPos() const { return hasErrorPos_; }
 
-    // The hot path: a buffer too small to hold RGB is left untouched rather than overrun.
-    /// Run the entry point called `name`, or the whole program when `name` is null.
+    /// Run the entry point called `name`, or the whole program when `name` is null; the hot path leaves a buffer too small to hold RGB untouched rather than overrun.
     void run(uint8_t* buf, uint32_t nLights, uint8_t cpl, uint32_t t,
              const char* name = nullptr) const {
         if (!buf || nLights == 0 || cpl < 3) return;
@@ -109,8 +99,7 @@ public:
         else if (anim_) anim_(buf, nLights, cpl, t);          // hand-encoded animated fill
     }
 
-    // `fallback` rather than 0, since "did not say" and "said 0" are different answers.
-    /// Run the entry point called `name` and return its answer, or `fallback` when it has none.
+    /// Run the entry point called `name` and return its answer, or `fallback` when it has none, which differs from 0 as "did not say" differs from "said 0".
     uintptr_t runValue(const char* name, RetType want, uintptr_t fallback = 0,
                        uint8_t* buf = nullptr, uint32_t nLights = 0, uint8_t cpl = 0,
                        uint32_t t = 0) const {
@@ -125,8 +114,7 @@ public:
         return f(buf, nLights, cpl, t, ctrlArena_);
     }
 
-    // One home for the byte order, which the engine, the seeding pass and the binding share.
-    /// Read a member's 4-byte slot, little-endian.
+    /// Read a member's 4-byte slot, little-endian, the one home for the byte order the engine, the seeding pass and the binding share.
     int32_t readSlot(uint8_t offset) const {
         if (!ctrlArena_ || offset + 4 > kArenaBytes) return 0;
         return int32_t(uint32_t(ctrlArena_[offset]) | (uint32_t(ctrlArena_[offset + 1]) << 8) |
@@ -143,8 +131,7 @@ public:
         ctrlArena_[offset + 3] = uint8_t((u >> 24) & 0xff);
     }
 
-    // `name` must outlive the engine, pointing into the string pool the compiler interned it into.
-    /// Append a control the running `defineControls()` declared; with `options`, "a|b|c", it is a dropdown of those names.
+    /// Append a control the running `defineControls()` declared; with `options`, "a|b|c", it is a dropdown of those names, and `name` must outlive the engine.
     void addDeclaredControl(const char* name, uint8_t offset, int32_t lo, int32_t hi,
                             CtrlType type = CtrlType::Int, const char* options = nullptr) {
         if (controlCount_ >= kMaxCtrls || !name || offset >= kArenaBytes) return;
@@ -186,22 +173,18 @@ public:
     /// Release the exec block and the control arena.
     void free();
 
-    // A bound control pointer stays valid and keeps the live value the user set.
-    /// Drop the compiled code, keeping the control arena.
+    /// Drop the compiled code, keeping the control arena, so a bound control pointer stays valid and keeps the live value the user set.
     void freeCode();
 
-    // What a script author asks, where `heapBytes` answers what the module takes from the heap.
-    /// How many bytes of machine code the current program is.
+    /// How many bytes of machine code the current program is, which a script author asks, where `heapBytes` answers what the module takes from the heap.
     size_t codeLen() const { return codeLen_; }
     /// The allocated exec-block size, which is the heap held.
     size_t codeCap() const { return codeCap_; }
 
-    // The string pool is an inline member, so it is already counted in the module's own sizeof.
-    /// Every heap byte this engine holds: the exec block plus the control arena.
+    /// Every heap byte this engine holds: the exec block plus the control arena, without the inline string pool the module's own sizeof counts.
     size_t heapBytes() const { return codeCap_ + (ctrlArena_ ? kArenaBytes : 0); }
 
-    // One budget rather than five, since the others follow from code size. Shown past half full.
-    /// Write the program's size and the one budget it is closest to exhausting into `out`.
+    /// Write the program's size and the one budget it is closest to exhausting into `out`, shown past half full, one budget since the others follow from code size.
     void describe(char* out, size_t cap) const {
         if (!out || !cap) return;
         if (!codeLen_) { out[0] = '\0'; return; }
@@ -225,13 +208,11 @@ public:
 
     /// The controls the last compile declared, which the binding turns into real module controls.
     const DeclaredControl* declaredControls(uint8_t& count) const { count = controlCount_; return controls_; }
-    // The arena never moves, so a bound pointer stays valid across every recompile.
-    /// The live byte at an arena offset, or null for an offset the arena does not hold.
+    /// The live byte at an arena offset, or null for an offset the arena does not hold, valid across every recompile since the arena never moves.
     uint8_t* controlSlot(uint8_t offset) { return (ctrlArena_ && offset < kArenaBytes) ? &ctrlArena_[offset] : nullptr; }
 
 private:
-    // Copied rather than split in place, since the string pool is the program's and a recompile reuses it.
-    /// Split a dropdown's "a|b|c" into names this engine keeps; false when they do not fit.
+    /// Split a dropdown's "a|b|c" into names this engine keeps, copied rather than split in place since a recompile reuses the string pool; false when they do not fit.
     bool splitOptions(const char* text) {
         const uint8_t len0 = selectLen_, count0 = selectCount_;
         const char* p = text;
@@ -258,21 +239,20 @@ private:
     const char* selectPtrs_[kSelectOptions] = {};
     uint8_t     selectLen_ = 0, selectCount_ = 0;
 
-    // Returns the block, or null on failure with error_ set.
+    /// Place the staged code in executable memory, returning the block, or null on failure with error_ set.
     void* place(const uint8_t* staged, size_t len);
 
-    // Grows without moving, so a bound pointer survives a recompile and keeps its live value.
+    /// Size the control arena for the declared controls, growing without moving so a bound pointer survives a recompile and keeps its live value.
     bool ensureArena(const DeclaredControl* decls, uint8_t count);
-    // Identity is offset plus name, since declaration position shifts when a member is inserted.
+    /// Name bytes kept per seeded member: identity is offset plus name, since declaration position shifts when a member is inserted.
     static constexpr uint8_t kSeedNameLen = 12;
-    // Type and count ride along, since a member's identity is its whole shape rather than its name.
+    /// A member seeded from the previous compile; type and count ride along, since a member's identity is its whole shape rather than its name.
     struct SeededMember {
         uint8_t  offset = 0;
         CtrlType type   = CtrlType::Int;
         uint8_t  count  = 1;
         char     name[kSeedNameLen] = {};
     };
-    // A static_assert ties the two together: a mask that outgrew its budget aliased silently.
     static_assert(kCtrlBytes <= 64, "seeded_ is a 64-bit mask, one bit per script arena byte");
     uint64_t     seeded_ = 0;
     SeededMember seededName_[kMaxCtrls] = {};
@@ -288,7 +268,7 @@ private:
     uint16_t    errorPos_ = 0;
     bool        hasErrorPos_ = false;
 
-    // Names owned here, since a CompileResult's point into source the caller frees at once.
+    /// The entry points, with names owned here since a CompileResult's point into source the caller frees at once.
     EntryPoint entries_[kMaxEntryPoints] = {};
     char       entryNames_[kMaxEntryPoints][kMaxEntryName + 1] = {};
     uint8_t    entryCount_ = 0;
@@ -296,9 +276,9 @@ private:
     uint8_t* ctrlArena_ = nullptr;   // live control + system-variable bytes (platform::alloc, kArenaBytes, fixed)
     uint8_t  controlCount_ = 0;      // controls the current program declared
     DeclaredControl controls_[kMaxCtrls] = {};   // the declared-control metadata for the binding
-    // Copied, so the engine outlives the source text it was built from.
+    /// The string pool, copied so the engine outlives the source text it was built from.
     char strings_[CompileResult::kStringPool] = {};
-    // How much of the pool the current program uses, for the card's headroom readout.
+    /// How much of the pool the current program uses, for the card's headroom readout.
     uint16_t stringLen_ = 0;
 };
 

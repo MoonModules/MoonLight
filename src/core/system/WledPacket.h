@@ -10,7 +10,7 @@ namespace mm {
 ///
 /// @attribution WLED, Moustachauve
 ///
-/// @moreinfo
+/// @technical
 ///
 /// It goes to the broadcast address on UDP 65506, and it is discovery rather than sync.
 /// A WLED that receives one lists the sender rather than mirroring its state; sync and control are a separate protocol on a port WLED never shares.

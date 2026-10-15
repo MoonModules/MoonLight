@@ -34,7 +34,7 @@ CLASS_COMMENT = """/// A wave surface where every beat drops a stone.
 ///
 /// How often an idle drop falls.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## The wave equation
 ///
@@ -72,7 +72,7 @@ def test_each_guide_section_is_help_with_its_heading_as_title():
     assert guide[1]["text"] == "How often an idle drop falls."
 
 
-def test_moreinfo_is_for_developers_and_stays_out_of_the_help():
+def test_technical_is_for_developers_and_stays_out_of_the_help():
     h = gen_help.class_help(CLASS_COMMENT)
     assert "wave equation" not in str(h)
 
@@ -390,7 +390,7 @@ def test_a_module_reads_as_plain_markdown_under_its_deck():
 def test_the_attribution_table_is_wrapped_in_a_deck_the_page_never_writes():
     import mkdocs_hooks
     out = mkdocs_hooks.deck_around_table("# T\n\nIntro.\n\n| Name |\n|---|\n| A |\n\nAfter.")
-    assert out == ("# T\n\nIntro.\n\n" + mkdocs_hooks._NOSCRIPT + '\n\n<div class="mm-deck" markdown="1">\n\n| Name |\n|---|\n| A |\n\n</div>\n\nAfter.')
+    assert out == '# T\n\nIntro.\n\n<div class="mm-deck" markdown="1">\n\n| Name |\n|---|\n| A |\n\n</div>\n\nAfter.'
 
 
 def test_a_source_file_outside_the_modules_credits_by_its_attribution_line():
@@ -426,7 +426,7 @@ def test_a_catalog_whose_page_is_gone_is_generated_from_the_help(monkeypatch):
                                                "guide": [{"title": "Tips", "text": "Use it."}]}}}
     monkeypatch.setitem(mkdocs_hooks._help_cache, "file", help_file)
     md = mkdocs_hooks.generated_catalog("moonmodules/light/demo.md")
-    assert md.startswith("# Demos\n\nWhat a demo is.\n\nOne.\n\nTwo.\n\n<noscript>")   # the plain list shows only without JavaScript
+    assert md.startswith('# Demos\n\nWhat a demo is.\n\nOne.\n\nTwo.\n\n<div class="mm-deck"')
     assert '<div class="mm-deck" data-page="light/demo.md" markdown="1">' in md
     assert md.index("**Zeta**") < md.index("</div>") < md.index("## Alpha, details")   # the cards in the deck, the details after it
     assert md.index('<a id="alpha"></a>') < md.index('<a id="zeta"></a>')
@@ -443,7 +443,7 @@ def test_a_written_catalog_page_is_the_intro_its_deck_follows_and_its_intro_clas
                              "AlphaService": {"doc": "core/demo.md#alpha", "line": "A."}}}
     monkeypatch.setitem(mkdocs_hooks._help_cache, "file", help_file)
     md = mkdocs_hooks.generated_catalog("moonmodules/core/demo.md", "# Demos\n\nWritten intro.\n")
-    assert md.startswith("# Demos\n\nWritten intro.\n\n<noscript>")
+    assert md.startswith('# Demos\n\nWritten intro.\n\n<div class="mm-deck"')
     assert '<a id="alpha"></a>' in md and '<a id="demos"></a>' not in md
 
 

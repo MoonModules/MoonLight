@@ -11,7 +11,7 @@ namespace mm {
 ///
 /// @attribution Gomez
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## The wave equation, and rendering by slope
 ///

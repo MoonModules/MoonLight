@@ -9,7 +9,7 @@ namespace mm {
 ///
 /// Brightness scales every mode except Palette avg.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## The band modes
 ///

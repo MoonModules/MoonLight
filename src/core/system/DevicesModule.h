@@ -33,7 +33,7 @@ namespace mm {
 ///
 /// A network that drops multicast is detected, and the status says so ([IGMP snooping](https://moonmodules.org/MoonLight/explanation/architecture/moonlight.html#multicast-and-igmp-snooping)).
 ///
-/// @moreinfo
+/// @technical
 ///
 /// **Discovery is passive.** Each device announces a presence packet on the multicast group and the broadcast address WLED listens on, and this listens for both. A device appears when heard and ages out when it stops; there is no sweep.
 ///
@@ -251,7 +251,7 @@ private:
     /// How many broadcast copies in a row, with no multicast one between them, prove the group does not arrive.
     static constexpr uint8_t  kEvidence = 3;
 
-    // Order matters: ours is first, so a peer's marked packet is typed before the fallback.
+    /// The device plugins in claim order: ours is first, so a peer's marked packet is typed before the fallback.
     MmPlugin   mmPlugin_;
     WledPlugin wledPlugin_;
     static constexpr uint8_t kPluginCount = 2;

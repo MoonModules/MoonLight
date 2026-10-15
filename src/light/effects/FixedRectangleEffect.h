@@ -11,7 +11,7 @@ namespace mm {
 ///
 /// @attribution limpkin
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## The checkerboard follows the box's longer side
 ///

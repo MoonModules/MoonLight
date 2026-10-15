@@ -9,7 +9,7 @@ namespace mm {
 ///
 /// @attribution Polar coordinates
 ///
-/// @moreinfo
+/// @technical
 ///
 /// Angles are a byte, 256 to the turn, read through the sin8 and cos8 table, so the placement is integer-only.
 class WheelLayout : public LayoutBase {

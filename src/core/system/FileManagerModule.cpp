@@ -1,6 +1,4 @@
-/// @defgroup file_manager_impl File Manager implementation
 /// The device's filesystem browser, whose surface is the UI tree panel rather than a control list. Public surface and class layout live in FileManagerModule.h.
-/// @{
 #include "core/system/FileManagerModule.h"
 
 #include "core/system/FilesystemModule.h"   // instance()->lastSavedStr() for the "last saved" readout
@@ -47,5 +45,3 @@ void FileManagerModule::setup() {
 // Creating and deleting are HttpServerModule's /api/dir routes, which carry the path in the request, so this module holds no op state; parseFilePath is the one path guard.
 
 } // namespace mm
-
-/// @}

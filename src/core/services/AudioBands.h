@@ -10,11 +10,9 @@
 
 namespace mm {
 
-/// @defgroup AudioBands Frequency analysis for one block of samples
-/// @{
 /// The FFT post-processing: magnitude bins in, sixteen band bytes and a dominant peak out.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// This is pure domain maths with no platform header, the FFT kernel itself being the one seam.
 /// It is host-tested by feeding a synthesised sine through the window, the desktop's own transform and the band grouping.
@@ -295,5 +293,4 @@ inline void magnitudesToBands(const float* mag, size_t nMag, uint32_t sampleRate
     }
 }
 
-/// @}
 } // namespace mm

@@ -1,10 +1,8 @@
 #pragma once
 
-/// @defgroup correction_presets Building a correction from a named order
-/// @{
 /// A test-only convenience for the curated color orders.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// Test-only convenience for building a Correction from a named color order (RGB/GRB/BGR/RGBW/GRBW).
 /// The PRODUCTION Correction has one rebuild, rebuild(brightness, ChannelRole* roles, nChannels), because the real wirings come from the FixtureProfiles library as role arrays. The curated-order enum + a rebuild(brightness, preset) overload used to live in Correction.h purely so tests could write `corr.rebuild(255, GRB)` tersely without hand-building a role array.
@@ -18,7 +16,7 @@ namespace mm::test {
 /// The curated wire orders a test drives, mapped to role arrays in one place below.
 enum class PresetOrder : uint8_t { RGB, GRB, BGR, RGBW, GRBW };
 
-// Fill a Correction from a named order at `brightness`, via the production role-array rebuild.
+/// Fill a Correction from a named order at `brightness`, via the production role-array rebuild.
 inline void rebuildFromPreset(mm::Correction& c, uint8_t brightness, PresetOrder order) {
     using R = mm::ChannelRole;
     // Linear: the ordering and white-maths tests are not about the curve, which has its own.
@@ -32,5 +30,4 @@ inline void rebuildFromPreset(mm::Correction& c, uint8_t brightness, PresetOrder
     }
 }
 
-/// @}
 }  // namespace mm::test

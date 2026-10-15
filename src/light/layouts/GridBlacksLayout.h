@@ -12,7 +12,7 @@ namespace mm {
 ///
 /// @attribution Boustrophedon
 ///
-/// @moreinfo
+/// @technical
 ///
 /// A @ref GridLayout object places the lights, and the gap is decided on the true column, so a dark column stays dark whichever way a serpentine strip enters the row.
 ///

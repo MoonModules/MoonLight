@@ -7,25 +7,25 @@
 
 namespace mm {
 
-/// @defgroup wled_audio_sync WLED audio-sync wire format
-/// @{
 /// The one place this packet layout lives, built to broadcast our analyzed audio and parsed to drive effects from a peer's.
 ///
 /// The contract is fixed upstream, so the bytes must be exact, and a unit test round-trips against a golden vector.
 ///
 /// @attribution NetMindz
 ///
-/// @moreinfo
+/// @technical
 ///
 /// **The packet.** Forty-four bytes, hand-serialized rather than trusted to struct packing: a header, two little-endian float levels and a peak flag, sixteen bands clamped to 254, then the dominant bin. Padding goes out zero.
 ///
-/// **The network.** Both directions use multicast group 239.0.0.1 on port 11988, never broadcast or a custom port. See [IGMP snooping](https://moonmodules.org/MoonLight/explanation/architecture/moonlight.html#multicast-and-igmp-snooping).
+/// **The network.** The WLED-compatible default is multicast group 239.0.0.1 on port 11988; AudioService also sends unicast to listed boards and takes another `syncPort`, which WLED does not hear.
+///
+/// See [IGMP snooping](https://moonmodules.org/MoonLight/explanation/architecture/moonlight.html#multicast-and-igmp-snooping).
 ///
 /// **Units.** The wire carries the upstream's magnitudes, about 0 to 4096, and the frame keeps ours, so they convert here by 16, the divisor its own effects apply. A received magnitude clamps to 255.
 
 constexpr uint16_t WLED_SYNC_PORT = 11988;
 constexpr size_t   WLED_SYNC_PACKET_SIZE = 44;
-// 6 chars incl NUL: "00002". v1 packets use "00001" (83 bytes): legacy, ignored.
+/// The v2 sync header, 6 chars including the NUL; v1 packets use "00001" (83 bytes), which is legacy and ignored.
 constexpr char     WLED_SYNC_HEADER[6] = "00002";
 constexpr size_t   WLED_SYNC_NUM_BANDS = 16;   // == AudioFrame bands + WLED NUM_GEQ_CHANNELS
 
@@ -74,7 +74,5 @@ inline bool parseWledAudioSync(const uint8_t* pkt, size_t len, AudioFrame& out) 
     out.peakHz  = wledFloatToU16(wledGetFloatLE(pkt + 40));
     return true;
 }
-
-/// @}
 
 } // namespace mm

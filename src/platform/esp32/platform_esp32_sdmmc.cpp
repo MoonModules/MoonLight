@@ -1,9 +1,8 @@
-/// @defgroup platform_esp32_sdmmc SD card mount and the `/sd` backend
 /// The microSD mount sequence and the file API behind every `/sd`-prefixed `fsXxx` call.
 ///
 /// Dispatch from the shared `fsXxx` surface lives in platform_esp32_fs.cpp; this file owns only the card itself.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## The pins are a runtime argument, not a board constant
 ///
@@ -30,7 +29,6 @@
 /// File access below is raw FatFs (`f_open`/`f_read`/`f_write`), not stdio through the VFS mount, to drop stdio's share of the flash cost.
 ///
 /// `esp_vfs_fat_sdmmc_mount` assigns the FatFs drive number and never returns it, so drive 0 is assumed: nothing else in this firmware registers a FatFs volume, LittleFS being a separate component.
-/// @{
 
 #include "platform_esp32_sdmmc.h"
 
@@ -631,5 +629,3 @@ bool sdCardWriteStreamClose(void*, bool) { return false; }
 #endif  // MM_HAS_SDMMC
 
 } // namespace mm::platform
-
-/// @}

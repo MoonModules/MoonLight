@@ -89,8 +89,7 @@ public:
         return n >= 8 && n <= 63 ? firstKnownNetwork : "";
     }
 
-    // Anonymous, as such networks usually are, so the air does not say whose device it is; the device's own name stays on its home network.
-    /// The name it broadcasts: `MM-` and the last four digits of the MAC, the same for the app and MoonBase.
+    /// The name it broadcasts: `MM-` and the last four digits of the MAC, the same for the app and MoonBase. Anonymous, so the air does not say whose device it is.
     const char* name() const {
         if (!name_[0]) {
             uint8_t mac[6];
@@ -152,8 +151,7 @@ public:
 private:
     static constexpr const char* kOpensOptions[] = {"on failure", "always", "first setup only"};
 
-    // None after switching, since switching proves a hand on the device, and the owner of a changed router may have forgotten the old password.
-    /// The password this boot carries.
+    /// The password this boot carries: none after switching, since switching proves a hand on the device and the owner of a changed router may have forgotten the old password.
     const char* password(const char* firstKnownNetwork) const { return switched_ ? "" : passwordFor(firstKnownNetwork); }
 
     uint8_t opens_ = 0;

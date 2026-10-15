@@ -1,9 +1,8 @@
-/// @defgroup platform_esp32_fs LittleFS mount and the filesystem seam
 /// The partition mount and the file API on an ESP32.
 ///
 /// The file owns its private state and the path translation; the rest of the layer reaches it only through the declared symbols.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## Two partition labels, tried in order
 ///

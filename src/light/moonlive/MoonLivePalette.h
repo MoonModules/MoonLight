@@ -32,24 +32,21 @@ inline constexpr const char* kPalettePick[3] = {kScriptDir, kPaletteExt, kPalett
 
 /// A palette authored as code rather than stored as data.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// This is the fifth binding, and the one shape the other four do not have: it writes sixteen entries once per frame, and every effect in that frame samples them.
 ///
 /// ## Why a palette is worth computing
 ///
-/// A stop list is frozen the moment it is saved, where a palette that is code can follow the music, drift, or be computed.
-/// The audio builtins are already in the shared table, so `audioBand` in a palette costs nothing to expose, and it is the case that justifies the design.
+/// A stop list is frozen the moment it is saved, where a palette that is code can follow the music, drift, or be computed. The audio builtins are already in the shared table, so `audioBand` costs nothing to expose.
 ///
 /// ## Why it is cheap enough to run per frame
 ///
-/// Cost is independent of rig size: a sixteen-iteration loop whatever the wall is.
-/// It fills a scratch palette and assigns the 48 bytes once, so an effect sees either the previous palette or the new one and never a mixture.
+/// Cost is independent of rig size: a sixteen-iteration loop. It fills a scratch palette and assigns the 48 bytes once, so an effect sees either the previous palette or the new one and never a mixture.
 ///
 /// ## Why a broken script keeps the last good palette
 ///
-/// The other bindings degrade to dark, which is honest when the script is the picture.
-/// Here the effects still run, so a black palette would blame them for a fault that is not theirs.
+/// The other bindings degrade to dark, which is honest when the script is the picture. Here the effects still run, so a black palette would blame them for a fault that is not theirs.
 class MoonLivePalette {
 public:
     /// Point the palette at a script. The next prepare() compiles it.
@@ -77,8 +74,7 @@ public:
         script_.invalidate();
     }
 
-    // `t` is the elapsed milliseconds every other binding is handed, so `beat` means one thing.
-    /// Run the script for this frame and install the result, returning false when nothing ran.
+    /// Run the script for this frame and install the result, returning false when nothing ran; `t` is the elapsed milliseconds every other binding is handed, so `beat` means one thing.
     bool tick(uint32_t nowMs) MM_NONBLOCKING {
         if (!script_.ok()) return false;
         if (!script_.engine().hasEntry(moonlive::kEntryTick)) return false;
@@ -98,13 +94,11 @@ public:
         return true;
     }
 
-    // A static seam because Drivers owns the script but ticks after the effects that sample it.
-    /// The palette script the frame should run, or nullptr.
+    /// The palette script the frame should run, or nullptr; a static seam because Drivers owns the script but ticks after the effects that sample it.
     static MoonLivePalette* active() { return active_; }
     /// Publish the palette script the frame should run.
     static void setActiveInstance(MoonLivePalette* p) { active_ = p; }
-    // Takes the caller's own instance, so a departing owner cannot unpublish somebody else's.
-    /// Detach, for an owner whose storage is about to go away.
+    /// Detach, for an owner whose storage is about to go away; it takes the caller's own instance, so a departing owner cannot unpublish somebody else's.
     static void clearActiveInstance(const MoonLivePalette* p) { if (active_ == p) active_ = nullptr; }
 
     /// Run the active palette script, if there is one. Called once per frame before the layers.

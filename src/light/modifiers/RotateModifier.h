@@ -9,7 +9,7 @@ namespace mm {
 ///
 /// @attribution Brandon502, Rotation matrix
 ///
-/// @moreinfo
+/// @technical
 ///
 /// The one dynamic modifier: it overrides modifyLive, so the Layer applies it every frame for a smooth turn rather than a stepped rebuild.
 ///

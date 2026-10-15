@@ -11,7 +11,7 @@ namespace mm {
 ///
 /// One head sweeping a sine is a demo, and a rig of them is a show. Pan and tilt sweep at different rates, so a beam traces a path rather than a line, and one control changes the rig's whole character without touching speed or range. A fixture chain is one-dimensional, so lay the rig out as a **1 x N** grid.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// Two sines at different rates trace a Lissajous path. It closes into a loop when the rates share a small ratio and drifts when they do not, which keeps a long show from looking like a metronome. Everything is written through EffectBase's role setters, which no-op on an absent channel, so on an LED strip this effect paints its color pattern and moves nothing.
 class MovingHeadEffect : public EffectBase {

@@ -13,7 +13,7 @@ namespace mm {
 ///
 /// @attribution Brandon502, Daniel Shiffman
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## Depth drives brightness, and the fade draws the streak
 ///

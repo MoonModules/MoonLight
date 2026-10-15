@@ -211,8 +211,7 @@ private:
         return true;
     }
 
-    // The APC40 runs in Alternate Ableton Live mode, set by `hello`, so every light is the host's to set.
-    /// An APC40's message for one surface control: an activator's light, a knob's ring, a preset pad's color.
+    /// An APC40's message for one surface control: an activator's light, a knob's ring, a preset pad's color. It runs in Alternate Ableton Live mode, set by `hello`, so every light is the host's to set.
     static bool apcMessage(SurfaceControl kind, uint8_t index, uint8_t value, uint8_t m[3], uint8_t& slot) {
         if (kind == SurfaceControl::Switch && index < ControlModule::kSwitchCount) {
             m[0] = static_cast<uint8_t>((value ? 0x90 : 0x80) | index); m[1] = kApcActivatorNote; m[2] = value ? 0x7F : 0x00;
@@ -230,8 +229,7 @@ private:
         return true;
     }
 
-    // The APC40 counts its pads from the bottom-left, where the Control card counts from the top-left.
-    /// The note of the pad on preset cell `pad`.
+    /// The note of the pad on preset cell `pad`; the APC40 counts its pads from the bottom-left, where the Control card counts from the top-left.
     static uint8_t apcNoteOfPad(uint8_t pad) {
         return static_cast<uint8_t>((kApcRows - 1 - pad / kApcCols) * kApcCols + pad % kApcCols);
     }
@@ -404,8 +402,7 @@ private:
         session_.reset();
     }
 
-    // Bonjour's name for an RTP-MIDI session, the record a Mac's Audio MIDI Setup and another device's lookup find.
-    /// Announce the session while it waits to be invited: a shared desk, or a desk on the network with no host to invite.
+    /// Announce the session as Bonjour's RTP-MIDI record, which a Mac's Audio MIDI Setup finds. It waits to be invited: a shared desk, or a desk on the network with no host to invite.
     void advertise() {
         const bool want = session_ && (sharing() || !hostName_[0]);
         if (want) platform::mdnsAdvertise("_apple-midi", "_udp", port);

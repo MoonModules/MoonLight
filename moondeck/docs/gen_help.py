@@ -37,7 +37,7 @@ CATALOGS = {"light/modifiers.md": ("Modifiers", "ModifierBase"), "light/layouts.
             "light/supporting.md": ("Supporting", None), "core/system.md": ("System", None),
             "core/services.md": ("Services", "Services")}
 
-_MARKER_RE = re.compile(r"^(@guide|@moreinfo)\s*$", re.MULTILINE)
+_MARKER_RE = re.compile(r"^(@guide|@technical)\s*$", re.MULTILINE)
 _XREF_RE = re.compile(r"@xref\{([a-z0-9-]+)(?:\|([^}]+))?\}")
 _LINK_RE = re.compile(r"(\]\(|src=\")(?!https?://|#)([^)\"\s]+)")
 _ANCHOR_LINK_RE = re.compile(r"(\]\()#([^)]+)\)")
@@ -96,7 +96,7 @@ def block_tags(lead: str) -> tuple[str, dict]:
 
 
 def class_help(raw: str | None) -> dict:
-    """A class comment as help levels: the first paragraph is the line, the rest of the lead the summary, each block tag its field, and each `## ` section after `@guide` a guide section. The `@moreinfo` sections are written for developers and stay in the header, which the help links as its source."""
+    """A class comment as help levels: the first paragraph is the line, the rest of the lead the summary, each block tag its field, and each `## ` section after `@guide` a guide section. The `@technical` sections are written for developers and stay in the header, which the help links as its source."""
     parts = _MARKER_RE.split(comment_text(raw))
     lead, appendices = parts[0], dict(zip(parts[1::2], parts[2::2]))
     prose, fields = block_tags(lead)

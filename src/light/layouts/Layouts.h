@@ -25,7 +25,7 @@ namespace mm {
 ///
 /// It reports the total light count and the physical bounding box. A dense grid's count equals its box volume, so a smaller count signals a sparse layout.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## The container owns coordinate iteration
 ///

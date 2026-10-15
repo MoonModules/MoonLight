@@ -5,8 +5,6 @@
 
 #include "platform/nonblocking.h"   // settings fingerprints run on tick1s
 
-/// @defgroup fnv A 32-bit fingerprint of a few bytes
-/// @{
 /// FNV-1a, the textbook small hash, for noticing that settings or a value changed; it is not cryptographic.
 
 namespace mm {
@@ -35,5 +33,3 @@ inline uint32_t fnv1a(const void* data, size_t len) {
 }
 
 }  // namespace mm
-
-/// @}

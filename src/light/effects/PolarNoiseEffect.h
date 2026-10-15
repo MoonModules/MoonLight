@@ -21,7 +21,7 @@ namespace mm {
 ///
 /// The table at full precision, 4 bytes a pixel.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// Three power functions compose it: `PolarLut` addresses the grid by angle and radius. `warp8` displaces the sample coordinate by a second field. `kaleido` folds the angle into mirrored wedges. The polar address never changes between frames, and computing it per pixel measured 39% of a frame on an S3.
 class PolarNoiseEffect : public EffectBase {

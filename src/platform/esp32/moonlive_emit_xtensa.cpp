@@ -3,13 +3,12 @@
 
 #include <cstring>
 
-/// @defgroup moonlive_emit_xtensa MoonLive Xtensa fill routines
 /// The fill routines as native machine code for the classic ESP32 and the S3.
 ///
 /// The engine copies the bytes into instruction RAM and calls them through a function pointer, which is the path a bench run validates.
 /// One instruction set per file, self-guarding: the file is always compiled and its body disappears elsewhere.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## Every byte array is copied, never transcribed
 ///

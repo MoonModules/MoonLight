@@ -13,7 +13,7 @@ namespace mm {
 ///
 /// Allocated once outside the hot path and reused each frame.
 /// A layer and a driver group each own one when memory allows, and share one when it is tight.
-/// @moreinfo
+/// @technical
 ///
 /// ## Any channel layout fits
 ///

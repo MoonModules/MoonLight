@@ -7,20 +7,15 @@
 #include <cstdint>
 #include <cstddef>
 
-/// @defgroup moonlive_asm_host MoonLive host assembler
-/// @{
 /// The desktop backend: a named-instruction assembler for arm64 and x86-64, in the textbook MacroAssembler shape.
 ///
-/// It appends one instruction at a time and back-patches label offsets, so the lowering composes a multi-op statement without hand-computing a branch displacement.
-/// This header is the neutral surface, and the per-ISA encodings live beside it in the implementation.
+/// It appends one instruction at a time and back-patches label offsets, so a multi-op statement needs no hand-computed branch displacement. This header is the neutral surface; the per-ISA encodings live in the implementation.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## One buffer, borrowed
 ///
-/// The emitter writes into the caller's staging buffer rather than a twin of its own.
-/// Allocating a second buffer held two code caps at once, and on a classic ESP32 fragmented to a 24 KB largest block that allocation failed.
-/// The compile then reported a script too large for a script that compiles fine.
+/// The emitter writes into the caller's staging buffer, not a twin of its own. A second buffer would hold two code caps at once, and on a classic ESP32 fragmented to a 24 KB largest block that allocation fails.
 ///
 /// ## Sized per script
 ///
@@ -62,6 +57,7 @@ public:
     HostAssembler& operator=(const HostAssembler&) = delete;
 
     // --- buffer ---
+
     /// Resolve every fixup against its bound label; call it once, after the last instruction.
     void finalize() { patchBranches(); }
     /// Pad to the alignment a function entry needs, which on both host architectures is nothing.
@@ -77,8 +73,8 @@ public:
     void emitBytes(const uint8_t* p, size_t n);
 
     // --- labels ---
-    // One definition for both host ISAs, since a table running out is the same failure as a full code buffer.
-    /// A fresh label, to be bound once and branched to any number of times.
+
+    /// A fresh label, to be bound once and branched to any number of times; one definition serves both host ISAs, as a full table fails like a full code buffer.
     Label newLabel() {
         if (labelCount_ == 0) for (auto& p : labelPos_) p = kUnbound;
         if (labelCount_ >= kMaxLabels) { overflow_ = true; return 0; }
@@ -90,6 +86,7 @@ public:
     void bind(Label l) { if (len_ >= kUnbound) overflow_ = true; else if (l < kMaxLabels) labelPos_[l] = static_cast<CodePos>(len_); }
 
     // --- the call frame ---
+
     /// Open a frame with room for `slots` spilled values, parking a frame pointer at its base.
     void prologue(uint8_t slots);
     /// Tear the frame down, then ret.
@@ -106,6 +103,7 @@ public:
     static constexpr uint8_t kMaxSpillSlots = kTotalSlots;   // what the frame below can address
 
     // --- instructions, with register and immediate operands ---
+
     /// A full-width address into a register (ConstPtr).
     void movPtr(Reg d, const void* p);
     /// d = imm.
@@ -144,8 +142,7 @@ public:
     void movReg(Reg d, Reg a);
     /// if a == 0 goto l.
     void branchIfZero(Reg a, Label l);
-    // Fused compare-and-branch: naming the operation lets one lowering serve all three backends.
-    /// if (unsigned)a >= b goto l.
+    /// if (unsigned)a >= b goto l, a fused compare-and-branch so one lowering serves all three backends.
     void branchGeU(Reg a, Reg b, Label l);
     /// if (signed)a >= b goto l.
     void branchGeS(Reg a, Reg b, Label l);
@@ -159,26 +156,24 @@ public:
     void ret();
 
 private:
-    // The flags pair those branches are built from: private, having no counterpart on the others.
-    /// flags = a - b.
+    /// flags = a - b; the flags pair those branches are built from, private as the other backends have no counterpart.
     void cmp(Reg a, Reg b);
     /// if flags satisfy c goto l (after cmp).
     void branchIf(Cond c, Label l);
-    // The buffer's size, fixed for this object's life but chosen per script.
+    /// The buffer's size, fixed for this object's life but chosen per script.
     const size_t kCap;
-    // Sized in core so the three backends cannot drift apart.
+    /// Sized in core so the three backends cannot drift apart.
     static constexpr uint8_t kMaxLabels = kAsmLabels;
     static constexpr uint8_t kMaxFixups = kAsmFixups;
 
     /// Append one 32-bit instruction, arm64 only: an x64 instruction is variable-length, so those encoders call emitBytes.
     void emit32(uint32_t w);
-                                         // are variable-length and call emitBytes directly)
 #if (defined(__x86_64__) || defined(_M_X64)) && !defined(MM_MOONLIVE_FORCE_NO_HOST_JIT)
-    // The four indexed memory ops share one encoder, declared only where it is defined.
+    /// The four indexed memory ops share one encoder, declared only where it is defined.
     void emitIndexed(const uint8_t* opcode, size_t opLen, bool prefix66, bool forceRex,
                      uint8_t reg, uint8_t base, uint8_t index);
 #endif
-    // A pending label reference; the kind matters, a call and a branch using different fields.
+    /// A pending label reference; the kind matters, a call and a branch using different fields.
     enum class FixKind : uint8_t { Branch, Call };
     struct Fixup { CodePos at; Label label; FixKind kind = FixKind::Branch; };
     /// Bounds-checked.
@@ -187,15 +182,15 @@ private:
         fixups_[fixupCount_++] = {static_cast<CodePos>(at), label, kind};
     }
 
-    // Heap rather than a member array, which put 2 KB on the stack and overflowed a classic ESP32.
+    /// Code buffer on the heap, as a member array would put 2 KB on the stack and overflow a classic ESP32.
     uint8_t* buf_;
     bool     owned_;   ///< true when we allocated the buffer and free it
     size_t   len_ = 0;
     bool     overflow_ = false;
-    // Frame size, 0 without a prologue, so a teardown cannot disagree with its setup about the stack.
+    /// Frame size, 0 without a prologue, so a teardown cannot disagree with its setup about the stack.
     uint16_t frameBytes_ = 0;
 
-    // Label positions (kUnbound before binding) and pending branch fixups.
+    /// Label positions (kUnbound before binding) and pending branch fixups.
     CodePos  labelPos_[kMaxLabels];
     uint8_t  labelCount_ = 0;
     Fixup    fixups_[kMaxFixups];
@@ -204,7 +199,5 @@ private:
     /// Resolve all fixups against bound labels.
     void patchBranches();
 };
-
-/// @}
 
 }  // namespace mm::moonlive

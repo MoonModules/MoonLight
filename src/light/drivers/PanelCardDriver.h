@@ -21,7 +21,7 @@ namespace mm {
 ///
 /// The cards need 1000 Mbps for wire time, not bandwidth: they latch on the sync frame, so a whole frame must arrive inside the inter-frame window. At 100 Mbit expect tearing or wrong rows; the driver warns but still sends ([how-to](https://moonmodules.org/MoonLight/how-to/panel-cards.html#the-one-hardware-fact-that-decides-everything)).
 ///
-/// @moreinfo
+/// @technical
 ///
 /// **Wire.** No IP, port or DHCP is involved, so it works on a link that never got a lease. A row wider than 497 pixels goes out as several packets. The byte layout is ColorLight5A75Packet.h.
 ///

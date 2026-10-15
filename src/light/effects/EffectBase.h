@@ -17,7 +17,7 @@ class Layer; // forward declaration, defined in light/layers/Layer.h and include
 ///
 /// Each card's emoji are its tags, as the [tag emoji legend](https://moonmodules.org/MoonLight/explanation/architecture/index.html#tag-emoji-legend) explains, and its dimension is its native axes: a Layer extrudes a lower-dimensional effect onto a bigger grid.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## Writing an effect
 ///

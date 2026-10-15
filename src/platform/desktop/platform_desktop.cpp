@@ -1,9 +1,8 @@
-/// @defgroup platform_desktop The desktop platform layer
 /// Every platform seam on macOS, Windows and Linux, so the desktop build runs what a device runs.
 ///
 /// Where a host has the facility it is real: sockets, the filesystem, executable memory, raw frames. Where it has no silicon the seam is backed by ordinary memory instead of refused, which is what keeps the drivers above testable off device.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## A host bus is real memory, not a refusal
 ///

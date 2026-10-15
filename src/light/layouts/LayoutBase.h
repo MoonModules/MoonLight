@@ -16,8 +16,7 @@ namespace mm {
 /// The per-light function a `CoordSink` carries, taking a physical index and a position.
 using CoordCallback = void(*)(void* ctx, nrOfLightsType idx, lengthType x, lengthType y, lengthType z);
 
-// The builder/visitor-sink shape, one named method per kind, avoiding a boolean parameter.
-/// The sink a layout emits its positions into, with one method per kind of pixel.
+/// The sink a layout emits its positions into, with one named method per kind of pixel in the builder and visitor shape, avoiding a boolean parameter.
 struct CoordSink {
     /// The lit-pixel handler, which every layout reaches.
     CoordCallback cb;
@@ -71,7 +70,7 @@ struct LightEmitter {
 ///
 /// Each card's emoji are its tags, as the [tag emoji legend](https://moonmodules.org/MoonLight/explanation/architecture/index.html#tag-emoji-legend) explains.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// A concrete layout implements `lightCount` and `placeLights` directly. Every layout control changes the light count, so any change rebuilds the pipeline.
 ///

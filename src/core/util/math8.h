@@ -4,26 +4,21 @@
 
 #include <cstdint>
 
-/// @defgroup math8 The 8-bit fixed-point tier
-/// @{
 /// Integer trig, beat timing, saturating arithmetic and a fast generator.
 ///
 /// @attribution FastLED, Mark Kriegsman
 ///
-/// @moreinfo
+/// @technical
 ///
-/// This is the recognizable surface an embedded or LED developer already knows, under the same names, written fresh against our own architecture.
-/// It carries the ideas, the names and the textbook algorithms of FastLED's lib8tion, and the code is ours.
+/// This is the recognizable surface an embedded or LED developer already knows, under the same names, written against our own architecture. It carries the ideas, the names and the textbook algorithms of FastLED's lib8tion, in our code.
 ///
 /// It is all integer and table-backed where that pays, with no float and no heap, so it is safe in the render loop.
-/// The time-dependent helpers take the current time as a parameter rather than reading a clock, which keeps the time source at the domain edge instead of buried in core.
-/// A timebase shifts the phase origin, so an effect wanting its oscillation to start at a chosen moment passes that moment.
+///
+/// The time-dependent helpers take the current time as a parameter, which keeps the time source at the domain edge. A timebase shifts the phase origin, so an effect wanting its oscillation to start at a chosen moment passes that moment.
 ///
 /// ## Why the range map divides rather than shifts
 ///
-/// The input's top must reach the range's top exactly.
-/// An earlier form scaled by a power of two, which made the top unreachable and collapsed a one-step span: a bar height of one could never be reached.
-/// Dividing by the full byte range fixes it, and the span is held wide so the widest case cannot wrap.
+/// The input's top must reach the range's top exactly. Scaling by a power of two makes the top unreachable and collapses a one-step span. So the map divides by the full byte range and holds the span wide, and the widest case cannot wrap.
 
 namespace mm {
 
@@ -56,7 +51,7 @@ constexpr uint8_t triwave8(uint8_t i) {
                    : static_cast<uint8_t>((255 - i) * 2);
 }
 
-// Fast octant atan2: angle of (x, y) as 0..255 around the full circle (x, y in int16 range).
+/// Fast octant atan2: the angle of (x, y) as 0..255 around the full circle, with x and y in int16 range.
 constexpr uint8_t atan2_8(int16_t y, int16_t x) {
     uint8_t r = 0;
     if (y < 0) { y = static_cast<int16_t>(-y); r = 0x80; }
@@ -67,7 +62,7 @@ constexpr uint8_t atan2_8(int16_t y, int16_t x) {
     return static_cast<uint8_t>(r + offset + b);
 }
 
-// Octagonal distance approximation: |Δ| without a sqrt (max + half-min — the cheap 8-bit norm).
+/// Octagonal distance approximation of |Δ| without a sqrt: the larger delta plus half the smaller, the cheap 8-bit norm.
 constexpr uint8_t dist8(int16_t dx, int16_t dy) {
     int16_t ax = dx < 0 ? static_cast<int16_t>(-dx) : dx;
     int16_t ay = dy < 0 ? static_cast<int16_t>(-dy) : dy;
@@ -92,7 +87,7 @@ constexpr uint8_t map8(uint8_t in, uint8_t rangeStart, uint8_t rangeEnd) {
     return static_cast<uint8_t>(rangeStart + (static_cast<uint16_t>(in) * span) / 255u);
 }
 
-// beat8: a 0..255 sawtooth completing `bpm` cycles per minute, measured from `timebase`.
+/// A 0..255 sawtooth completing `bpm` cycles per minute, measured from `timebase`.
 constexpr uint8_t beat8(uint8_t bpm, uint32_t ms, uint32_t timebase = 0) {
     if (bpm == 0) return 0;
     const uint32_t period = 60000u / bpm;
@@ -110,7 +105,7 @@ constexpr uint8_t beatsin8(uint8_t bpm, uint32_t ms, uint8_t low = 0, uint8_t hi
     return static_cast<uint8_t>(low + scale8(s, range));
 }
 
-// beatsin16: 16-bit range version, for positions across a wide grid.
+/// The 16-bit range version of the sine beat, for positions across a wide grid.
 constexpr uint16_t beatsin16(uint8_t bpm, uint32_t ms, uint16_t low = 0, uint16_t high = 65535,
                              uint32_t timebase = 0, uint8_t phase = 0) {
     const uint8_t beat = static_cast<uint8_t>(beat8(bpm, ms, timebase) + phase);
@@ -129,13 +124,11 @@ public:
     constexpr uint8_t next8() { return static_cast<uint8_t>(advance() >> 24); }
     /// The next two bytes.
     constexpr uint16_t next16() { return static_cast<uint16_t>(advance() >> 16); }
-    // 0..bound-1 (bound>0): scale the 16-bit draw to avoid modulo bias on small bounds.
-    /// The next value below a bound, or between two.
+    /// The next value in 0..bound-1, scaling the 16-bit draw to avoid modulo bias on small bounds.
     constexpr uint8_t below(uint8_t bound) {
         return bound ? static_cast<uint8_t>((static_cast<uint32_t>(next16()) * bound) >> 16) : 0;
     }
-    // min..max-1 (FastLED's random8(min,max)): an offset draw over the half-open range.
-    /// The next value below a bound, or between two.
+    /// The next value in min..max-1, an offset draw over the half-open range.
     constexpr uint8_t below(uint8_t min, uint8_t max) {
         return max > min ? static_cast<uint8_t>(min + below(static_cast<uint8_t>(max - min))) : min;
     }
@@ -149,5 +142,4 @@ private:
     uint32_t state_;
 };
 
-/// @}
 }  // namespace mm

@@ -12,7 +12,7 @@ namespace mm {
 ///
 /// @attribution Boustrophedon
 ///
-/// @moreinfo
+/// @technical
 ///
 /// Both walks are @ref PanelLayout objects: one over the grid of panels, and at each cell one offset by its tile. The panels tile edge to edge into one matrix.
 class PanelsLayout : public LayoutBase {

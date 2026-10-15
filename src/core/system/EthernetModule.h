@@ -25,7 +25,7 @@ namespace mm {
 ///
 /// Changing the addressing of the interface the page reaches the device through asks first, naming where the device will be.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## Why one preset defaults to itself
 ///
@@ -87,7 +87,7 @@ public:
             controls_.setHidden(controls_.count() - 1, !editable || (!isRmii && !isRgmii));
             controls_.addPin("ethMdioGpio", ethMdioGpio_);
             controls_.setHidden(controls_.count() - 1, !editable || (!isRmii && !isRgmii));
-            controls_.addPin("ethClockGpio", ethClockGpio_);
+            controls_.addPin("ethClockGpio", ethClockGpio_);   // mirrored so it can be published: the controls are the registry the pin map reads
             controls_.setHidden(controls_.count() - 1, !editable || !isRmii);
             // A direction, so a toggle rather than a range.
             controls_.addControl("ethClockExtIn", ethClockExtIn_);
@@ -220,8 +220,7 @@ public:
     static constexpr EthChip kThisChip{platform::hasEthernet, platform::hasEthW5500, platform::isEsp32P4, platform::isEsp32S31,
                                        platform::ethPhyIsFixed};
 
-    // A preset carries a pin map as well as a PHY, so one the chip cannot wire persists pins reaching nothing.
-    /// Whether a board preset with PHY `type` belongs on `chip`: Custom everywhere, and every board on the desktop, which drives none and previews them all.
+    /// Whether a board preset with PHY `type` belongs on `chip`: Custom everywhere, and every board on the desktop, which drives none and previews them all. A pin map persists with the preset, so one the chip cannot wire is excluded.
     static constexpr bool presetFits(int8_t type, EthChip chip = kThisChip) {
         if (type == 0 || !chip.drivesEthernet) return true;
         if (chip.fixed) return false;        // the build chose the interface, so no board wiring applies
@@ -246,7 +245,7 @@ private:
         showingIpProblem_ = why != nullptr;
     }
 
-    // The order must match the platform's own enum, since the control stores an index.
+    /// The PHY type names, in the platform's own enum order, since the control stores an index.
     static constexpr const char* ethTypeOptions_[] = {"None", "LAN8720", "IP101", "W5500", "YT8531"};
 
     /// The PHY chip, seeded per chip and overridden by the catalog.
@@ -260,7 +259,6 @@ private:
     int8_t  ethMdioGpio_   = static_cast<int8_t>(platform::ethConfigDefault.mdioGpio);
     /// The PHY's reset pin.
     int8_t  ethRstGpio_    = static_cast<int8_t>(platform::ethConfigDefault.rstGpio);
-    // Mirrored so they can be published: the controls are the registry the pin map reads.
     /// The RMII reference clock pin.
     int8_t  ethClockGpio_  = static_cast<int8_t>(platform::ethConfigDefault.rmiiClockGpio);
     /// Whether the clock comes into the chip rather than out of it.
@@ -275,13 +273,13 @@ private:
     int8_t  ethSpiCs_      = static_cast<int8_t>(platform::ethConfigDefault.spiCs);
     /// The W5500 interrupt pin.
     int8_t  ethSpiIrq_     = static_cast<int8_t>(platform::ethConfigDefault.spiIrq);
-    // The signature last applied, with a flag for "never" since any value is a valid hash.
+    /// The signature last applied, with a flag for "never" since any value is a valid hash.
     uint32_t appliedEthSig_ = 0;
     bool ethSigApplied_ = false;
-    // What the driver is running, which the fixed-pin report must read.
+    /// What the driver is running, which the fixed-pin report must read.
     uint8_t appliedEthType_ = static_cast<uint8_t>(platform::ethNone);
 
-    // One board's Ethernet wiring, the fields matching EthPinConfig; -1 leaves a line unused.
+    /// One board's Ethernet wiring, the fields matching EthPinConfig; -1 leaves a line unused.
     struct EthPreset {
         const char* label;
         int8_t type;          // an EthPhyType
@@ -293,7 +291,7 @@ private:
         bool   editable;      // false on a soldered map: those lines are not the user's to set
     };
 
-    // The presets this module knows, each a wiring that boards follow rather than one product; Custom keeps whatever is in the fields, for a hand-wired board.
+    /// The presets this module knows, each a wiring that boards follow rather than one product; Custom keeps whatever is in the fields, for a hand-wired board.
     static constexpr EthPreset kEthPresets[] = {
         // The LAN8720 reference wiring most classic boards follow, which is also the chip default.
         {"Classic RMII",            1,  0, 23, 18,  5, 17, false, -1, -1, -1, -1, -1, false},
@@ -313,7 +311,7 @@ private:
     const char* ethPresetOptions_[kEthPresetCount] = {};
     uint8_t ethPresetIndex_[kEthPresetCount] = {};
     uint8_t ethPresetCount_ = 0;
-    // Never a valid row, so the first build applies whatever the selection resolved to: @xref{why-one-preset-defaults-to-itself}.
+    /// Never a valid row, so the first build applies whatever the selection resolved to: @xref{why-one-preset-defaults-to-itself}.
     static constexpr uint8_t kEthPresetNone = 0xFF;
     uint8_t ethPresetApplied_ = kEthPresetNone;
 
@@ -363,8 +361,7 @@ private:
         return kEthPresets[ethPresetIndex_[ethPresetSel_]].editable;
     }
 
-    // Custom writes nothing, so switching to it after an edit keeps the edit.
-    /// Write the chosen preset's map into the pin controls.
+    /// Write the chosen preset's map into the pin controls; Custom writes nothing, so switching to it after an edit keeps the edit.
     void applyEthPreset() {
         if (ethPresetSel_ >= ethPresetCount_) return;
         const EthPreset& p = kEthPresets[ethPresetIndex_[ethPresetSel_]];
@@ -383,8 +380,7 @@ private:
         ethSpiIrq_     = p.irq;
     }
 
-    // The board a set of pins came from, so a provisioned device opens on its own name.
-    /// The preset whose map these pin values already are, or Custom when none matches.
+    /// The preset whose map these pin values already are, or Custom when none matches, so a provisioned device opens on its own name.
     void seedEthPresetFromPins() {
         for (uint8_t k = 0; k < ethPresetCount_; k++) {
             const EthPreset& p = kEthPresets[ethPresetIndex_[k]];

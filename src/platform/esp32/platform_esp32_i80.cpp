@@ -1,9 +1,8 @@
-/// @defgroup platform_esp32_i80 Parallel WS2812 over the SDK's i80 bus
 /// The peripheral half of the whole-frame parallel driver.
 ///
 /// The driver above applies correction and encodes every light into the frame buffer; this file owns the bus, the buffer, transmit and wait.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## One transfer, no refill deadline
 ///

@@ -11,7 +11,7 @@ namespace mm {
 ///
 /// @attribution Euclidean distance
 ///
-/// @moreinfo
+/// @technical
 ///
 /// The logical box is one column of radius plus one cells, which an effect paints as rings.
 class CircleModifier : public ModifierBase {

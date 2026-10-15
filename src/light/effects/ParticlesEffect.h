@@ -12,7 +12,7 @@ namespace mm {
 ///
 /// @attribution Brandon502, Particle system, David Jupijn
 ///
-/// @moreinfo
+/// @technical
 ///
 /// The physics belong to `particles::Pool`. The fade and the motion each spend a fraction of a reference frame per tick, which truncates to zero at a high frame rate, so the remainder accumulates instead.
 class ParticlesEffect : public EffectBase {

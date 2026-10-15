@@ -29,7 +29,7 @@ namespace mm {
 ///
 /// The [GPIO usage reference](https://moonmodules.org/MoonLight/reference/hardware/gpio-usage.html) lists the pins per chip.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// **What it collects.** Both pin controls and driver lane lists. Each claim carries a severity flag and the live state read off the pad. A disabled module's pins drop out.
 ///
@@ -54,13 +54,12 @@ private:
     /// The map itself, a source over a fixed snapshot, keeping every claim so conflicts show.
     struct PinListSource : ListSource {
         bool persistsList() const override { return false; }   // the pin map is rebuilt from the tree
-        // Enough for any realistic board, and a diagnostic stops adding rather than allocating.
+        /// Claims kept, enough for any realistic board; a diagnostic stops adding rather than allocating.
         static constexpr uint8_t kMaxClaims = 64;
         /// One control's claim on one pin, with everything the row needs copied in.
         struct Claim {
             uint8_t gpio;         ///< the physical GPIO, which keys the row
-            // Copied, since a delete frees the module and the UI serializes right after one.
-            char owner[16];       ///< the owning module's name
+            char owner[16];       ///< the owning module's name, copied since a delete frees the module and the UI serializes right after one
             char role[14];        ///< the derived role, per claim so lanes do not collapse
             const char* severity; ///< a static label, or null when the claim is safe
             const char* reason;   ///< why it is flagged, shown when the row expands
@@ -237,8 +236,7 @@ private:
             }
         }
 
-        /// Grade one claim against the pin's capability, setting its severity and its reason.
-        // Reserved or invalid is an error; a driven role on a strap is a warning.
+        /// Grade one claim against the pin's capability, setting its severity and its reason: reserved or invalid is an error, a driven role on a strap a warning.
         static void gradeClaim(Claim& c, bool isOutput) {
             const platform::GpioCapability cap = platform::gpioCapability(c.gpio);
             if (!cap.validGpio)      { c.severity = "error"; c.reason = "invalid GPIO: not a pin on this chip"; return; }

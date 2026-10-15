@@ -2,11 +2,9 @@
 
 #include <cstdint>
 
-/// @defgroup DeviceIdentify What kind a discovered device is
-/// @{
 /// The device-kind enum and its wire labels, the small vocabulary discovery shares.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// It is shared by the devices module, the interop plugins, persistence and the UI list.
 /// A plugin classifies a device straight from its presence packet, so the classification logic lives with each plugin and this header carries only the vocabulary.
@@ -27,5 +25,4 @@ inline const char* devTypeStr(DevType t) {
     return "generic";
 }
 
-/// @}
 }  // namespace mm

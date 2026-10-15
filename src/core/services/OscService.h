@@ -32,7 +32,7 @@ namespace mm {
 ///
 /// The addresses are a public contract, so a layout built on them keeps working. Send `/mm/hello` and the device sends every value again. [The how-to](https://moonmodules.org/MoonLight/how-to/control-surface.html#the-osc-addresses) lists them.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## Feedback
 ///

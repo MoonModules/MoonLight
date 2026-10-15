@@ -2,11 +2,9 @@
 
 #include <cstdint>
 
-/// @defgroup noise Gradient noise
-/// @{
 /// A smooth, deterministic pseudo-random field: the staple organic-motion source for effects.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// The value varies smoothly across space, so neighboring coordinates give similar results, unlike a raw hash.
 /// Sample it across a grid for clouds, plasma or fire-like fields, and scroll a coordinate to animate.
@@ -244,17 +242,17 @@ constexpr int32_t fbmWiden(int32_t v, int32_t mid, uint8_t octaves) {
 
 }  // namespace noise
 
-// 1D gradient noise: x is a 16.0 fixed coordinate (high byte = cell, low byte = position).
+/// 1D gradient noise: x is a 16.0 fixed coordinate (high byte = cell, low byte = position).
 constexpr uint8_t inoise8(uint32_t x) {
     return static_cast<uint8_t>(noise::out<noise::Tier8, 1>(noise::raw<noise::Tier8, 1>(x, 0, 0)));
 }
 
-// 2D gradient noise over the 4 cell corners.
+/// 2D gradient noise over the 4 cell corners.
 constexpr uint8_t inoise8(uint32_t x, uint32_t y) {
     return static_cast<uint8_t>(noise::out<noise::Tier8, 2>(noise::raw<noise::Tier8, 2>(x, y, 0)));
 }
 
-// 3D gradient noise over the 8 cube corners.
+/// 3D gradient noise over the 8 cube corners.
 constexpr uint8_t inoise8(uint32_t x, uint32_t y, uint32_t z) {
     return static_cast<uint8_t>(noise::out<noise::Tier8, 3>(noise::raw<noise::Tier8, 3>(x, y, z)));
 }
@@ -426,5 +424,4 @@ inline void curl16(uint32_t x, uint32_t y, int32_t strength, int32_t& vx, int32_
     curl16(x, y, 0u, strength, vx, vy, eps);
 }
 
-/// @}
 }  // namespace mm

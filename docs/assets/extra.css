@@ -68,8 +68,8 @@
 
 /* The row of cards: scroll-snapped, centered, with room for the fan's lean and sink. */
 .mm-deck { --mm-card-scale: 1; isolation: isolate; }   /* the fan's z-index orders cards among themselves, never above the page's menu */
-/* What the build writes inside a deck is for search and for readers without JavaScript; a browser running the deck shows only the deck, so the page opens without the plain list first. The page's <noscript> shows it again. */
-.md-typeset .mm-deck:not(.mm-deck-ready) > * { display: none; }   /* scoped under .md-typeset to outrank Material's own table display */
+/* What the build writes inside a deck is for search and for readers without JavaScript. The deck script marks the page before it mounts, so a browser running it shows only the deck, and a script that never loads leaves the plain list readable. */
+.mm-deck-js .md-typeset .mm-deck:not(.mm-deck-ready) > * { display: none; }   /* only once the deck script runs, and outranking Material's own table display */
 .mm-deck-size { width: 6rem; accent-color: var(--md-accent-fg-color); }
 /* The row spans the window, its width and side padding set by help-deck.js align() from the visible width, so no page scroll appears beside a scrollbar. */
 .mm-deck-row {

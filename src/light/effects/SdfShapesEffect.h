@@ -12,7 +12,7 @@ namespace mm {
 ///
 /// @attribution Iñigo Quilez
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## What one number buys
 ///

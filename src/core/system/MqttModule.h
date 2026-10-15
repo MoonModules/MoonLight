@@ -26,7 +26,7 @@ namespace mm {
 ///
 /// The status line says why. Give the broker computer's LAN address, never 127.0.0.1, and let port 1883 through its firewall.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// **The client is our own.** MQTT 3.1.1 is small and standard, so the wire format lives in a tested header and this module owns the socket lifecycle. The topic prefix derives from a stable hardware id, so a rename never repoints topics.
 ///
@@ -102,8 +102,7 @@ private:
     /// Subscribe to the hub's own command topic.
     void subscribeHaSet();
 
-    // A second discovery component in the light's shape, behind the same gate.
-    /// Build the discovery topic for the update entity.
+    /// Build the discovery topic for the update entity, a second discovery component in the light's shape behind the same gate.
     void buildUpdateDiscoveryTopic(char* out, size_t cap) const;
     /// Announce the update entity, or retract it.
     void publishUpdateDiscovery(bool announce);
@@ -119,7 +118,7 @@ private:
     uint32_t lastPresetsRev_ = 0;   ///< the preset revision last announced
     char lastLook_[32] = "";        ///< the look last published, part of the change gate
 
-    // constexpr so the compiler can prove the buffer bounds a runtime pointer would not.
+    /// The topic root, constexpr so the compiler can prove the buffer bounds a runtime pointer would not.
     static constexpr const char kPrefixRoot[] = "MoonLight";
     /// Derived from the root rather than counted from it, so a renamed root cannot silently truncate every topic.
     static constexpr size_t kPrefixLen = sizeof(kPrefixRoot) + 1 + 6;
@@ -153,7 +152,7 @@ private:
     uint32_t nameSig_        = 0;         ///< detects a rename while connected
     uint16_t nextPacketId_   = 1;         ///< the next id to hand out
 
-    // The last published state, so a publish only emits on a change.
+    /// The last published state, so a publish only emits on a change.
     bool    lastOn_    = false;
     uint8_t lastBri_   = 0;
     uint8_t lastPalette_ = 0xFF;          ///< a sentinel forcing the first publish
@@ -161,7 +160,7 @@ private:
 
     bool     lastConnectFailed_ = false;  ///< widens the backoff, a bad hostname costing a lookup
 
-    // Allocated only while discovery publishes, so a device that never enables it pays nothing.
+    /// Allocated only while discovery publishes, so a device that never enables it pays nothing.
     static constexpr size_t kDiscoveryPayloadBase = 320;
     static constexpr size_t kDiscoveryBufBase     = 448;
     static_assert(kDiscoveryDynamicBytes == kDiscoveryPayloadBase + kDiscoveryBufBase,
@@ -179,14 +178,14 @@ private:
     /// Free both, which release and turning discovery off both do.
     void freeDiscoveryBuffers();
 
-    // Test-only, and null in production.
+    /// Test-only send capture buffer, null in production.
     uint8_t* sendCapture_    = nullptr;
     size_t   sendCaptureCap_ = 0;
     size_t   sendCaptureLen_ = 0;
 
     static constexpr uint16_t kKeepaliveSec = 30;          ///< how often to ping
     static constexpr uint32_t kReconnectBackoffMs = 5000;  ///< after a clean disconnect
-    // Harder after a failure, since a bad hostname re-runs a blocking lookup each try.
+    /// Reconnect backoff after a failure, longer since a bad hostname re-runs a blocking lookup each try.
     static constexpr uint32_t kFailedBackoffMs    = 30000;
     static constexpr uint32_t kConnectTimeoutMs = 8000;    ///< the whole connect handshake
 };

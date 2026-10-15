@@ -1,9 +1,8 @@
-/// @defgroup http_server_impl HTTP server implementation
 /// The request handlers behind HttpServerModule, and the compatibility shims they serve.
 ///
 /// Public surface and class layout live in HttpServerModule.h, so implementation edits do not cascade-recompile every TU including the header.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## Why a drained body needs two timeouts
 ///
@@ -34,7 +33,6 @@
 /// The `wifi` block feeds HA's diagnostic sensors, and an Ethernet device has no AP, so `info.wifi` (optional in python-wled) is omitted.
 ///
 /// Omitting it makes HA create no WiFi sensors, as a real WLED on Ethernet does, instead of greyed-out zero rows.
-/// @{
 
 #include "core/system/HttpServerModule.h"
 
@@ -3035,5 +3033,3 @@ size_t HttpServerModule::drainChunkBytes() const {
 }
 
 } // namespace mm
-
-/// @}

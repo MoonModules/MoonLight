@@ -21,7 +21,7 @@ namespace mm {
 ///
 /// The scan names each answering address by the module driving it, as `0x18 Audio (ES8311)`. A claimed address that stays silent reads `no answer`: check the wiring and the device's power.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// **One bus, many devices.** Two drivers each opening a bus on the same port collide, so the bus is opened here and the devices attach to it. Moving it to other pins releases what is attached first, and each device attaches again.
 ///
@@ -32,7 +32,7 @@ public:
 
     /// Declare the two bus pins, the scan button and the result readout.
     void defineControls() override {
-        controls_.addPin("sda", sda_);
+        controls_.addPin("sda", sda_);   // unused (-1) by default, so a board without a bus claims no GPIO in the pin map
         controls_.addPin("scl", scl_);
         /// Probe the bus now.
         controls_.addButton("scan");
@@ -65,22 +65,20 @@ public:
     }
 
 private:
-    // Unused by default, so a board without a bus claims no GPIO in the pin map.
     /// The bus data pin; a board's catalog entry sets it.
     int8_t sda_ = -1;
     /// The bus clock pin; a board's catalog entry sets it.
     int8_t scl_ = -1;
     /// Each address found, named by the module driving it, cut off cleanly past about three.
     char resultStr_[64] = "";
-    // The bus is the board's one, so only the instance that opened it closes it; a type probe released unprepared leaves the live bus alone.
-    bool open_ = false;          ///< this instance opened the bus
+    bool open_ = false;          ///< this instance opened the bus, the board's one, so only it closes it and a type probe released unprepared leaves the live bus alone
 
     /// Close the bus if this instance opened it.
     void close() {
         if (open_) platform::i2cBusClose();
         open_ = false;
     }
-    // It backs the scan's status, which must outlive the call that sets it.
+    /// The scan's status text, which must outlive the call that sets it.
     char statusBuf_[24] = "idle";
 
     /// A device a module reports on the bus, with that module's name.

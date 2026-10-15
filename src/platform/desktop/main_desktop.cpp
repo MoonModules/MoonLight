@@ -1,4 +1,3 @@
-/// @defgroup main_desktop The desktop entry point
 /// The process wrapper: signal handling, the exit path, and the call into the firmware.
 ///
 /// Everything a host gives a program and a device does not, kept here so the firmware itself is the same code on both.

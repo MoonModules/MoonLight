@@ -10,7 +10,7 @@ namespace mm {
 ///
 /// @attribution Polar coordinates
 ///
-/// @moreinfo
+/// @technical
 ///
 /// Every ring is a @ref RingLayout object about the disc's shared center.
 class Rings241Layout : public LayoutBase {

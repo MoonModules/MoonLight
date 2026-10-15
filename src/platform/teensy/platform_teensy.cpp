@@ -1,5 +1,3 @@
-/// @defgroup platform_teensy The Teensy 4.1 platform layer
-/// @{
 /// The platform seam on PJRC's Teensy 4 core: one core, no RTOS, settings in LittleFS on program flash, Ethernet through the on-board PHY or a W5500.
 
 #include "platform/platform.h"
@@ -773,5 +771,3 @@ size_t usbMidiRead(uint8_t (*)[4], size_t) { return 0; }
 bool usbMidiWrite(const uint8_t (*)[4], size_t) { return false; }
 
 }  // namespace mm::platform
-
-/// @}

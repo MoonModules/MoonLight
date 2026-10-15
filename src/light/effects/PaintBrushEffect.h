@@ -11,7 +11,7 @@ namespace mm {
 ///
 /// @attribution troyhacks
 ///
-/// @moreinfo
+/// @technical
 ///
 /// Each line takes one band, and its Euclidean span scaled by that band becomes the shorten amount. The lines are crisp, since `draw::line` has no anti-aliased form.
 class PaintBrushEffect : public EffectBase {

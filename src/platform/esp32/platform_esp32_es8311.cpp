@@ -1,9 +1,8 @@
-/// @defgroup platform_esp32_es8311 The audio codec bring-up
 /// The control half of the microphone path on boards whose part is analog behind a codec.
 ///
 /// The read itself stays with the other audio seam; this file only brings the codec up so it streams its converter onto the bus that read then drains.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## The domain code is unchanged
 ///

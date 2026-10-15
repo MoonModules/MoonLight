@@ -11,7 +11,7 @@ namespace mm {
 ///
 /// @attribution MONSOONO
 ///
-/// @moreinfo
+/// @technical
 ///
 /// The micro mutator divides the spatial term, so it sets the pattern's spatial frequency. The macro mutator multiplies the cross term instead, which warps the field, and a steadily advancing hue base scrolls it through the palette.
 class PraxisEffect : public EffectBase {

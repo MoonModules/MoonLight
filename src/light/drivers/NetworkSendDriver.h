@@ -36,7 +36,7 @@ namespace mm {
 /// | B | `start 2`, `count 4` | four smaller pan/tilt heads |
 /// | C | `start 6`, `count 10` | ten RGBW pars |
 ///
-/// @moreinfo
+/// @technical
 ///
 /// **Wire formats.** Byte layouts live beside the receiver, so the two sides cannot drift. DDP's larger chunk is the fast path, since per-packet cost dominates wire time.
 ///
@@ -346,7 +346,7 @@ private:
         }
     }
 
-    // Core 1, beside the receive task; a board that cannot start it sends from the tick, unpaced.
+    /// Start the paced send task on core 1, beside the receive task; a board that cannot start it sends from the tick, unpaced.
     void startSendTask() {
         if (sendTask_.impl) return;
         sendStop_.store(false, std::memory_order_release);

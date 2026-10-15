@@ -6,7 +6,7 @@ namespace mm {
 
 /// A non-blocking latch guarding a resource two threads reach, in this codebase the sender one core drains while another streams into it.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## Only try-acquire, never a blocking lock
 ///

@@ -1,6 +1,4 @@
-/// @defgroup sd_card_impl SD Card implementation
 /// The microSD slot's pins, mount and format button; the files it holds are browsed through the File Manager's existing routes, not a surface of this module's own. Public surface and class layout live in SdCardService.h.
-/// @{
 #include "core/services/SdCardService.h"
 
 #include "platform/platform.h"   // sdMount/sdUnmount/sdFormat/sdCardUsed/sdCardTotal, hasSdCard
@@ -229,5 +227,3 @@ platform::SdPinConfig SdCardService::pinConfig() const {
 // mkdir/delete/read/write are the File Manager's existing HTTP endpoints, against paths under /sd; this module holds no op state and persists nothing itself.
 
 } // namespace mm
-
-/// @}

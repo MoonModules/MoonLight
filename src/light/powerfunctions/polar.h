@@ -14,7 +14,7 @@ namespace mm {
 ///
 /// A radial effect addresses the grid by angle and radius, which turns its motion around the center.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## The address is a constant
 ///

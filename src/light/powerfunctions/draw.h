@@ -11,15 +11,13 @@
 #include <algorithm>             // std::reverse: in-place rotation for a wrapping scroll
 #include <cstring>               // std::memmove/memcpy/memset: the scroll's run moves
 
-/// @defgroup draw Geometry draw primitives
-/// @{
 /// Bounds-clipped, integer-only drawing from 1D through 3D over the flat light buffer.
 ///
 /// The Bresenham walk and the clipping live here once, so an effect calls `line` rather than re-rolling it.
 ///
 /// @attribution Bresenham, Xiaolin Wu
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## Why the box is clipped
 ///
@@ -1252,7 +1250,5 @@ inline void flowSpiral(lengthType x, lengthType y, lengthType cx, lengthType cy,
     vx = rx + tx;
     vy = ry + ty;
 }
-
-/// @}
 
 }  // namespace mm::draw

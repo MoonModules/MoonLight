@@ -16,7 +16,7 @@ namespace mm {
 /// The device's identity and vitals: its name, how long it has run, and the memory and tick it renders at.
 /// @card SystemModule.png
 ///
-/// The name is the one the network sees, behind mDNS `<name>.local`, the access point SSID and the DHCP hostname. The readings are in @xref{what-it-reports|More info}.
+/// The name is the one the network sees, behind mDNS `<name>.local`, the access point SSID and the DHCP hostname. The readings are described under @xref{what-it-reports|What it reports} in the header.
 ///
 /// @guide
 ///
@@ -24,7 +24,7 @@ namespace mm {
 ///
 /// Two failed boots in a row start the next boot with the LEDs off, no MoonLive script and at most 1,024 lights. A failed boot is a crash, a brownout, or a power loss within a minute of starting. Every boot raises the lights over five seconds.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## What it reports
 ///
@@ -272,6 +272,7 @@ private:
     char     firmwareVariant_[24] = {};
 
     // Dynamic (updated in tick1s)
+
     /// Time since boot.
     char uptimeStr_[16] = {};
     /// Frames rendered per second.
@@ -286,6 +287,7 @@ private:
     uint32_t psramUsedVal_ = 0;
 
     // Static (set in setup)
+
     uint32_t totalInternalVal_ = 0;
     uint32_t totalHeapVal_ = 0;
     /// The flash chip size.

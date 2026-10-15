@@ -13,7 +13,7 @@ namespace mm {
 ///
 /// @attribution Damian Schneider, Particle system
 ///
-/// @moreinfo
+/// @technical
 ///
 /// Every stage is one particle kernel call: `spawn` launches, `gravity` slows the rise, `angleEmit` bursts a ring where it stalled, and `age` fades a spark. Trails come from the Layer's own decay rather than a second one in the pool.
 class FireworksEffect : public EffectBase {

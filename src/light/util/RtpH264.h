@@ -41,7 +41,7 @@ inline bool nextNal(const uint8_t* buf, size_t len, size_t* at, size_t* nalLen) 
 }
 
 /// Packetises one access unit into caller-owned datagram buffers, reporting each as it is written.
-/// @moreinfo
+/// @technical
 /// ## One NAL is one packet while it fits
 /// A NAL under the MTU rides alone, its own header byte becoming the packet's first payload byte.
 /// An oversized NAL splits into FU-A fragments carrying a two-byte indicator and header, the first setting S and the last E, every one repeating the original's type and reference bits.

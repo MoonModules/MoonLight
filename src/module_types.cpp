@@ -1,6 +1,6 @@
 /// Registers every module type the firmware can build, so a preset, a scenario or the type picker can name any of them.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## Why the registry is its own translation unit
 ///

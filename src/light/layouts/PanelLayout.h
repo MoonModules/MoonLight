@@ -11,7 +11,7 @@ namespace mm {
 ///
 /// @attribution Boustrophedon
 ///
-/// @moreinfo
+/// @technical
 ///
 /// The outer walk never snakes; the inner one reverses on an odd outer value when snake is on, as a grid's serpentine does.
 class PanelLayout : public LayoutBase {

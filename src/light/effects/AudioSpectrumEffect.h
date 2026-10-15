@@ -11,7 +11,7 @@ namespace mm {
 ///
 /// @attribution Andrew Tuline
 ///
-/// @moreinfo
+/// @technical
 ///
 /// This effect is the audio test instrument, so it shows the raw level rather than a smoothed one, which lags by tens of milliseconds.
 class AudioSpectrumEffect : public EffectBase {

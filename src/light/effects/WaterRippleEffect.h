@@ -12,7 +12,7 @@ namespace mm {
 ///
 /// @attribution Hugo Elias
 ///
-/// @moreinfo
+/// @technical
 ///
 /// The next height is the four neighbors averaged, minus the previous height, damped toward zero, so the ripple is emergent rather than drawn. Two int16 buffers scale with the fixture, so a large wall is worth checking against the memory budget; `hashInt` places drops, so two devices agree.
 class WaterRippleEffect : public EffectBase {

@@ -24,7 +24,7 @@ namespace mm {
 ///
 /// The score shows at the top once the grid is at least 32 by 18, and the first side to 11 starts a new game.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// The sprite ball is a member of the shared cast in SpriteCast.h, so a Pacman crossing the court runs the same code path as the fountain throwing one.
 class PongEffect : public EffectBase {

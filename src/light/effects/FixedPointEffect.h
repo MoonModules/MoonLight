@@ -12,7 +12,7 @@ namespace mm {
 ///
 /// @attribution Sutaburosu
 ///
-/// @moreinfo
+/// @technical
 ///
 /// The shapes come from the sub-pixel family in `draw.h`, `disc`, `ring`, `strokeLine` and `line`, which work in the 24.8 `pos_t` the whole draw layer speaks. Nothing here computes coverage itself.
 class FixedPointEffect : public EffectBase {

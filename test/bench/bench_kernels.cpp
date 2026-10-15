@@ -5,7 +5,7 @@
 /// That bound is meaningless without the number it is measured against, so this target records it, before the swap, and every later kernel adds a row.
 /// Host timings, not ESP32 cycles: the S3 is 20-40x slower per core (performance.md, the `collide` measurement) and the ratio between two rows is what transfers, not the absolute figure.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## Method
 ///

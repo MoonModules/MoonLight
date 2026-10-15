@@ -36,7 +36,7 @@ namespace mm {
 ///
 /// H.264 emits a frame once it has the whole frame, and a decoder holds one more, so tens of milliseconds stay. RTSP removes HLS's segment buffering, the seconds.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// **One encoder.** HLS muxes the encoder's output into segments where this packetizes the same NALs into RTP. A second `encoderStart` would silently reconfigure the first driver's stream, so the second driver reports the encoder in use.
 ///

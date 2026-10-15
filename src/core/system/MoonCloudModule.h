@@ -19,7 +19,7 @@ namespace mm {
 ///
 /// It holds no settings of its own. Each thing it does is a child with its own consent: @ref MoonStatsModule reports the install and @ref MoonTalkModule is a message board. A user who wants one has not agreed to the other.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## The browser relay, on a board without HTTPS
 ///
@@ -58,15 +58,13 @@ public:
         MoonModule::defineControls();
     }
 
-    // A restored settings file carries the last acknowledged id, which a new request must never match.
-    /// Number the next request after the last one acknowledged, which the settings restored.
+    /// Number the next request after the last one acknowledged, which the settings restored, so a new request never matches it.
     void setup() override {
         lastId_ = acked_;
         MoonModule::setup();
     }
 
-    // Only for the waiting request's id, so a late acknowledgement of an earlier one leaves a newer one waiting.
-    /// Empty the outbox once the page has delivered the request waiting in it.
+    /// Empty the outbox once the page has delivered the request waiting in it. Only the waiting request's id counts, so a late acknowledgement of an earlier one leaves a newer one waiting.
     void onControlChanged(const char* name) override {
         if (outbox_ && outbox_[0] && name && std::strcmp(name, "outbox sent") == 0 && acked_ == pendingId_) {
             outbox_[0] = 0;
@@ -100,9 +98,9 @@ public:
     }
 
 private:
-    // Compiled in rather than configurable; this name because a custom domain's CA is absent.
+    /// The stats host, compiled in rather than configurable, on this name because a custom domain's CA is absent.
     static constexpr const char* kHost = "mooncloud-stats.moonmodules.workers.dev";
-    // One request: a usage report is well under this, and a talk message is capped at 280 characters.
+    /// The outbox size for one request: a usage report is well under it, and a talk message is capped at 280 characters.
     static constexpr uint16_t kOutboxBytes = 2048;
     /// The request waiting for the open page to post it.
     char* outbox_ = nullptr;
@@ -113,10 +111,7 @@ private:
 };
 
 
-/// @defgroup MoonCloudIdentity The installation id, a salted hash of the MAC
-/// @{
-///
-/// Pseudonymous, and salted apart from the MQTT and Home Assistant ids.
+/// The installation id, a salted hash of the MAC: pseudonymous, and salted apart from the MQTT and Home Assistant ids.
 
 /// Characters written by `installationId`, excluding the terminator.
 inline constexpr size_t kInstallationIdChars = 32;
@@ -138,7 +133,5 @@ inline void installationId(char* out) {
 
     sha256Hex(buf, sizeof(buf), out, kInstallationIdChars / 2);
 }
-
-/// @}
 
 }  // namespace mm

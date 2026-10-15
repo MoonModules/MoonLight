@@ -9,7 +9,7 @@ namespace mm {
 ///
 /// @attribution troyhacks
 ///
-/// @moreinfo
+/// @technical
 ///
 /// A gourd is a five-sided body, front, back, left, right and bottom, plus a middle light, at a fixed position in a 3D grid.
 class TorontoBarGourdsLayout : public LayoutBase {

@@ -14,7 +14,7 @@ namespace mm {
 ///
 /// @attribution FastLED, Mark Kriegsman
 ///
-/// @moreinfo
+/// @technical
 ///
 /// It hosts one live child at a time, created from the registry and parented to this Layer. The child runs the normal lifecycle against this Layer's buffer, extents and clock. The child's own controls stay at their defaults.
 class DemoReelEffect : public EffectBase {

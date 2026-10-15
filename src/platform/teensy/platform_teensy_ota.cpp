@@ -1,8 +1,6 @@
-/// @defgroup platform_teensy_ota Firmware updates on the Teensy 4.1
-/// @{
 /// An uploaded flat image is staged in the free program flash above the running one, and checked. At the next reboot a routine running from RAM copies it over the program.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## One slot, so the copy waits for the reboot
 ///
@@ -193,5 +191,3 @@ bool otaMoonBaseSize(uint32_t*, uint32_t*) { return false; }
 void moonbaseClearStagedUrl() {}
 
 }  // namespace mm::platform
-
-/// @}

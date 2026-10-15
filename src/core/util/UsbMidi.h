@@ -5,8 +5,6 @@
 
 namespace mm::usbmidi {
 
-/// @defgroup UsbMidi USB-MIDI event packets
-/// @{
 /// MIDI over USB travels in 4-byte event packets, as the USB MIDI 1.0 class lays them out.
 /// The first byte holds the cable in its high nibble and the Code Index Number (CIN) in its low one; the other three carry the message, padded with zeros.
 
@@ -52,5 +50,4 @@ inline size_t encode(const uint8_t* msg, size_t len, uint8_t (*out)[4], size_t m
     return msg[0] == 0xF0 ? encodeSysex(msg, len, out, max) : encodeChannel(msg, len, out, max);
 }
 
-/// @}
 }  // namespace mm::usbmidi

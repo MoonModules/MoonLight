@@ -9,7 +9,7 @@ namespace mm {
 ///
 /// Beyond 0 and 100 the window slides partly or wholly out of view.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// The crop node of any compositor: the logical box shrinks to the window, and each light folds into window space by subtracting the start. A light outside the window is dropped.
 ///

@@ -11,7 +11,7 @@ namespace mm {
 ///
 /// @attribution troyhacks
 ///
-/// @moreinfo
+/// @technical
 ///
 /// The front sits at z 0 and the back at depth + 1; the top, left and right curtains hang one cell outside them, bridging the two.
 class HumanSizedCubeLayout : public LayoutBase {

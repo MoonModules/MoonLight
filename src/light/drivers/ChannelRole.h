@@ -4,11 +4,9 @@
 
 namespace mm {
 
-/// @defgroup ChannelRole What one output channel of a light carries
-/// @{
 /// The shared vocabulary naming each channel's role, so a wiring description and the writers that drive it cannot drift.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// A light is a run of channels, and this names the role of each: the color roles a strip or panel needs, and the fixture roles a moving head adds.
 /// Two sides use it.
@@ -45,5 +43,4 @@ inline constexpr uint8_t kChannelRoleCount =
 static_assert(kChannelRoleCount == static_cast<uint8_t>(ChannelRole::DimmerFine) + 1,
               "kChannelRoleOptions must have one string per ChannelRole value (index-aligned)");
 
-/// @}
 } // namespace mm

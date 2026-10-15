@@ -12,7 +12,7 @@ namespace mm {
 ///
 /// @attribution Jos Stam
 ///
-/// @moreinfo
+/// @technical
 ///
 /// `Fluid` solves the medium, and `light/powerfunctions/fluid.h` says why that algorithm and why Q16.16. The dye plane is 16-bit because a value multiplied by slightly less than one, many times a second, has nowhere to go at 8 bits.
 class FluidEffect : public EffectBase {

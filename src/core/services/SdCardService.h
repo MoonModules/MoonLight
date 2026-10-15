@@ -26,7 +26,7 @@ namespace mm {
 ///
 /// Reads hold, but a write over about 50 KB can stop the card until a power cycle. A card mounted that way says so on its status.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## The pins are runtime configuration, like AudioService's mic
 ///

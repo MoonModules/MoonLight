@@ -1,10 +1,9 @@
 #include "core/moonlive/moonlive_emit.h"
 #include "core/moonlive/MoonLiveIr.h"
 
-/// @defgroup moonlive_asm_noarch MoonLive lowering, no assembler
 /// The third case beside the arm64 and x86-64 backends: an architecture we have none for.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## Two ways to land here
 ///

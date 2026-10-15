@@ -10,7 +10,7 @@ namespace mm {
 ///
 /// Six selectable shapes: sawtooth, triangle, sine, square, sin3 and noise. Each column plots one point of a moving wave, so the lit points trace a scrolling curve.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// The waveform sets a y, so its shape lives on height and width is the travel axis: a scrolling curve needs a grid more than one light wide and tall.
 class WaveEffect : public EffectBase {

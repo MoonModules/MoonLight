@@ -2,8 +2,6 @@
 
 #include <cstdint>
 
-/// @defgroup StateDocument Applying part of the device's state as one JSON document
-/// @{
 /// A state document mirrors the module tree, keyed by module name, and applies as a JSON Merge Patch (RFC 7386); its rules are in integrating.md § Setting everything at once.
 
 #include <cstddef>
@@ -56,5 +54,3 @@ bool isFlatConfig(const char* text);
 void applyDeferredControls(Scheduler& scheduler);
 
 }  // namespace mm
-
-/// @}

@@ -17,7 +17,7 @@ class Scheduler;
 ///
 /// It is always loaded and runs first, so its load hook fires before any other module sets up. File Manager browses the stored files.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## One state document per module, applied at load
 ///

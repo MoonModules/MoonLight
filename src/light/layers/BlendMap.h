@@ -7,11 +7,9 @@
 
 namespace mm {
 
-/// @defgroup BlendMap Composing a layer into the frame
-/// @{
 /// The one pass that reads a layer's logical buffer and writes it, mapped and blended, into the physical frame.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// The pass runs once per enabled layer each frame, driven by the Drivers container, which reads each layer's own `blendMode` and `opacity` controls along with the stack order.
 ///
@@ -85,8 +83,7 @@ struct Darken     { uint8_t operator()(uint8_t s, uint8_t d) const { return s < 
 struct Lighten    { uint8_t operator()(uint8_t s, uint8_t d) const { return s > d ? s : d; } };
 /// The distance between the channels.
 struct Difference { uint8_t operator()(uint8_t s, uint8_t d) const { return s > d ? static_cast<uint8_t>(s - d) : static_cast<uint8_t>(d - s); } };
-// The product is rounded rather than floored, since doubling a floored product doubles its error; this stays in 0 to 255 for every pair.
-/// The sum less twice the product.
+/// The sum less twice the product, which is rounded rather than floored since doubling a floored product doubles its error; it stays in 0 to 255 for every pair.
 struct Exclusion  { uint8_t operator()(uint8_t s, uint8_t d) const { return static_cast<uint8_t>(s + d - 2 * div255(static_cast<uint16_t>(s * d + 127))); } };
 }  // namespace blendfn
 
@@ -150,8 +147,7 @@ inline void blendThrough(const Buffer& src, Buffer& dst, const MappingLUT& lut, 
 }
 }  // namespace detail
 
-// One instance per function, so each mode gets its own tight loop and none checks the mode per light.
-/// Blend `src` into `dst` by `B`, then mix with the backdrop by `opacity`, through the LUT when there is one.
+/// Blend `src` into `dst` by `B`, then mix with the backdrop by `opacity`, through the LUT when there is one. One instance per function, so each mode gets its own tight loop and none checks the mode per light.
 template <class B>
 inline void blendSeparable(const Buffer& src, Buffer& dst, const MappingLUT& lut, uint8_t channelsPerLight,
                            uint8_t opacity, B blend) {
@@ -194,5 +190,4 @@ inline void blendMap(const Buffer& src, Buffer& dst, const MappingLUT& lut,
     }
 }
 
-/// @}
 } // namespace mm

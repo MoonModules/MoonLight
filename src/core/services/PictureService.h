@@ -176,6 +176,7 @@ private:
     }
 
     // The bands, each one call: a box, the black shoulders, the gray and black steps, the bars, the lines, the gratings, the gray ramp, the lower box.
+
     static RGB bw(bool black) { return black ? RGB{0, 0, 0} : RGB{255, 255, 255}; }
     static RGB topBox(float s, float t) { return bw(s > 0.30f && s < 0.70f && t > 0.04f); }
     static RGB shoulders(float s, float) { return bw(s < 0.30f || s > 0.75f); }

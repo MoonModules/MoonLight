@@ -8,13 +8,11 @@
 
 namespace mm::particles {
 
-/// @defgroup particles The particle kernel
-/// @{
 /// One home for things that move under forces and get drawn.
 ///
 /// @attribution Damian Schneider, Bill Reeves, Semi-implicit Euler
 ///
-/// @moreinfo
+/// @technical
 ///
 /// Its vocabulary of emitters, forces and walls over one pool follows the WLED Particle System, written fresh in fixed point.
 
@@ -431,7 +429,5 @@ struct Pool {
         return n;
     }
 };
-
-/// @}
 
 }  // namespace mm::particles

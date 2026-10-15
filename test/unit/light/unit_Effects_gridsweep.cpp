@@ -8,9 +8,7 @@
 ///
 /// Do NOT "improve" this by calling fx->tick() directly on the zero grid. That asserts a contract no effect makes, and it fails: GEQ3DEffect divides by width() (imap over a zero range) and takes SIGFPE. The single Layer gate is what makes that safe.
 ///
-/// Per-effect tests pin this one effect at a time, which means a NEW effect is covered only if its author remembers to write that case. This sweep asks the factory for every registered effect instead, so the floor is enforced for effects that do not exist yet: register an effect, and it is swept the moment it lands.
-///
-/// Reading a failure: the CHECK message names the effect and the grid it died on. "Died" here means it crashed the runner, an effect that draws nothing on a zero grid is correct (a clean no-op is the specified behavior), so the assertion is about surviving and leaving a well-formed buffer, not about pixels.
+/// Per-effect tests cover a new effect only if its author writes that case. This sweep asks the factory for every registered effect, so an effect is swept the moment it lands. A failure names the effect and the grid.
 
 #include "doctest.h"
 #include "light/layouts/Layouts.h"

@@ -11,7 +11,7 @@ namespace mm {
 ///
 /// @attribution Limpkin
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## The color leads the step
 ///

@@ -103,7 +103,7 @@ static_assert(sizeof(kTiny) == static_cast<size_t>(TW) * TH, "tiny: one 6x4 fram
 ///
 /// @attribution After Dark
 ///
-/// @moreinfo
+/// @technical
 ///
 /// Movement is `particles::Pool` and appearance is `draw::sprite`, as FlyingToasters does. A Sprite points at its palette rather than owning one, so each fish is drawn through a palette this effect fills from the active one.
 class FishTankEffect : public EffectBase {

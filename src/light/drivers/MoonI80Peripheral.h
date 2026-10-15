@@ -13,7 +13,7 @@ namespace mm {
 ///
 /// @attribution hpwit
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## Why our own DMA driver
 ///
@@ -33,7 +33,6 @@ public:
     /// WR, the pixel clock, needed only by a 74HCT595 expander and unrouted otherwise.
     int8_t clockPin = 10;
 
-    // Whole-frame stays as the A/B reference, not as a fallback the ring degrades into.
     /// Stream the frame as a ring of small internal buffers, or send it whole from one block.
     bool useRing = true;
 
@@ -43,18 +42,15 @@ public:
     /// Lights per DMA buffer: the ring's grain, and the RAM against interrupt-rate lever.
     uint8_t ringRows = platform::kRingRowsDefault;
 
-    // Depth buys jitter absorption, so only the AVERAGE refill must beat the slice deadline.
     /// How many buffers the DMA circulates; more depth costs more internal DMA RAM.
     uint8_t ringBufs = platform::kRingBufsDefault;
 
     /// Inter-buffer zero-pad in µs, buying refill deadline at a linear frame-time cost.
     uint8_t ringPadUs = 0;
 
-    // Turn this OFF if any panel scrambles: a loaded '595 cannot always sample that fast.
-    /// Overclock the '595 shift clock from 20 MHz to 26.67 MHz, for short-wired rigs.
+    /// Overclock the '595 shift clock from 20 MHz to 26.67 MHz, for short-wired rigs; turn it off if any panel scrambles.
     bool shiftOverclock = false;
 
-    // Public like every control's backing member: the framework reads it by pointer.
     /// Backing store for the read-only `ringDbg` control, the ring's one-line instrument.
     char ringDbgStr_[176] = "—";
 
@@ -62,8 +58,7 @@ public:
 
     /// LCD_CAM lanes on this chip; 0 leaves the driver inert through the orchestrator's guards.
     uint8_t lanesAvailable() const MM_NONBLOCKING override { return platform::lcdLanes; }
-    // The PIN count stays free: the orchestrator rounds the bus up and parks spare lanes on WR.
-    /// The i80 bus width is 8 or 16, which is a hardware fact of the peripheral.
+    /// The i80 bus width is 8 or 16, a hardware fact of the peripheral. The pin count stays free, as the orchestrator rounds the bus up and parks spare lanes on WR.
     bool powerOfTwoBus() const override { return true; }
     /// The loopback carries its pattern on lane 0 of a full-width bus, not a private one.
     bool loopbackFullWidth() const override { return true; }
@@ -88,14 +83,13 @@ public:
         controls.setHidden(controls.count() - 1, !owner_->pinExpanderMode());
     }
 
-    // A separate hook so clockPin and latchPin stay together as one wiring pair in the UI.
-    /// Bind the output path, the ring's geometry and its instrument.
+    /// Bind the output path, the ring's geometry and its instrument, in a separate hook so clockPin and latchPin stay together as one wiring pair in the UI.
     void addRingControls(ControlList& controls) override {
         // Placed below the wiring pair it belongs to; the fix for '595 corruption is OFF.
         controls.addControl("shiftOverclock", shiftOverclock);
         controls.setHidden(controls.count() - 1, !owner_->pinExpanderMode());
         controls.setAdvanced(controls.count() - 1);   // a '595 clock tuning knob: expert only
-        // This picks the PATH; ringSnapshot tunes how the ring reads its source. They compose.
+        // This picks the PATH; ringSnapshot tunes how the ring reads its source. They compose. Whole-frame stays as the A/B reference, not a fallback the ring degrades into.
         controls.addControl("useRing", useRing);
         controls.setHidden(controls.count() - 1, !owner_->pinExpanderMode());
         // Lives on the orchestrator; the control binds it here through the reference accessor.
@@ -108,7 +102,7 @@ public:
         controls.addControl("ringRows", ringRows, 1, 64);
         controls.setHidden(controls.count() - 1, !wantsRing());
         controls.setAdvanced(controls.count() - 1);
-        controls.addControl("ringBufs", ringBufs, platform::kRingBufsMin, platform::kRingBufsMax);
+        controls.addControl("ringBufs", ringBufs, platform::kRingBufsMin, platform::kRingBufsMax);   // depth buys jitter absorption, so only the average refill must beat the slice deadline
         controls.setHidden(controls.count() - 1, !wantsRing());
         controls.setAdvanced(controls.count() - 1);
         controls.addControl("ringPadUs", ringPadUs, 0, platform::kRingPadMaxUs);
@@ -169,8 +163,7 @@ public:
             || std::strcmp(name, "shiftOverclock") == 0; // the peripheral clock is set at bus (re)build
     }
 
-    // In direct mode WR never leaves the peripheral, so a shared GPIO is harmless there.
-    /// Refuse a bus configuration that cannot work, naming the reason.
+    /// Refuse a bus configuration that cannot work, naming the reason; in direct mode WR never leaves the peripheral, so a shared GPIO is harmless there.
     const char* validateBusFatal() const override {
         if (owner_->pinExpanderMode()) {
             // Unset would route WR to GPIO 65535, so reject it before busInit reaches the pad.
@@ -220,8 +213,7 @@ public:
                                                ringRows, ringBufs, useRing);
     }
 
-    // No auto-router: a silent fallback made the ACTIVE path invisible. The switch says what runs.
-    /// Whether reinit should build a ring for this config rather than the whole-frame path.
+    /// Whether reinit should build a ring for this config rather than the whole-frame path. A silent fallback would hide the active path, so the switch says what runs.
     bool wantsRing() const override {
         if (!owner_->pinExpanderMode()) return false;   // direct mode never rings (drives PSRAM fine)
         return useRing;
@@ -254,8 +246,7 @@ public:
         if (ok) ensureSnapHelper();
         return ok;
     }
-    // Ring buffers are independent, so the prime fork-joins across both cores when the split runs.
-    /// Send one frame: prime the pool, fire the DMA, let the end-of-buffer ISR refill behind it.
+    /// Send one frame: prime the pool, fire the DMA, let the end-of-buffer ISR refill behind it. The ring buffers are independent, so the prime fork-joins across both cores when the split runs.
     bool busTransmitRing() override {
         if (snapHelperReady() && ringBufs >= 2) {
             // Each prime waits out the previous wire end, so neither half repaints a draining buffer.
@@ -277,8 +268,7 @@ public:
     /// Whether the bus came up as a ring, reporting what the platform built rather than asked.
     bool busIsRing() const MM_NONBLOCKING override { return platform::moonI80Ws2812IsRing(bus_); }
 
-    // Constants FIRST, then data: a recycled buffer holds a different slice each time it drains.
-    /// The platform's encode seam: recover `this` and encode one slice into the ring buffer.
+    /// The platform's encode seam: recover `this` and encode one slice into the ring buffer, constants first, since a recycled buffer holds a different slice each time it drains.
     static void MM_RAMFUNC ringEncodeTrampoline(void* user, uint8_t* dst, uint32_t firstRow, uint32_t rowCount,
                                                 bool closeFrame, bool needsPrefill) {
         auto* self = static_cast<MoonI80Peripheral*>(user);
@@ -329,8 +319,7 @@ public:
         platform::notifyTask(snapHelper_);
     }
 
-    // A timeout latches the helper broken and runs serially, so a wedged worker degrades.
-    /// Block until the helper's half is primed; the fence that makes the fork-join safe.
+    /// Block until the helper's half is primed; the fence that makes the fork-join safe. A timeout latches the helper broken and runs serially, so a wedged worker degrades.
     void helperJoin() {
         if (!snapHelper_.impl) return;
         // A degraded kick already did the work serially, so there is nothing to wait for.
@@ -404,7 +393,7 @@ private:
     int8_t lastClockPin_ = -1;
 };
 
-// Registered once at static-init; the one ParallelLedDriver drives it via the `peripheral` control.
+/// Registers the peripheral once at static-init; the one ParallelLedDriver drives it via the `peripheral` control.
 inline const bool kMoonI80PeripheralRegistered =
     ParallelLedDriver::registerPeripheral("LCD-MM", []() -> LedPeripheral* { return new MoonI80Peripheral(); });
 

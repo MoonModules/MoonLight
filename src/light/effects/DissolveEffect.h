@@ -10,7 +10,7 @@ namespace mm {
 ///
 /// The transition needs no per-pixel state and no shuffled index list, so two devices rendering the same frame dissolve identically without exchanging anything.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// Each pixel asks a hash of its own position for a threshold and compares it against the progress. So the order is a function of position: a stream generator advances per call and drifts, and this cannot.
 class DissolveEffect : public EffectBase {

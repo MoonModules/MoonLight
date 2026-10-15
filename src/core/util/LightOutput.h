@@ -9,28 +9,25 @@ namespace mm {
 
 class JsonSink;
 
-/// @defgroup LightOutput The light output, as core sees it
-/// @{
 /// What the domain-neutral transports read from the light domain: the device's shape, and its palettes as colors.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## Core declares, light implements
 ///
-/// The light domain's `Drivers` container implements `LightOutput` and claims its seat from prepare, and the WLED shim, MQTT and MoonStats read through it.
-/// So core reaches the light pipeline without including a light header: the dependency points inward, as the architecture's dependency rule asks.
-/// On a device with no light output the seat is empty, and every reader degrades to the all-zero summary and palette 0.
+/// The light domain's `Drivers` container implements `LightOutput` and claims its seat from prepare, and the WLED shim, MQTT and MoonStats read through it. Core reaches the light pipeline without including a light header.
+///
+/// With no light output the seat is empty, and every reader degrades to the all-zero summary and palette 0.
 ///
 /// ## The summary is plain data
 ///
-/// `LightSummary` is a flat struct of small integers, overwritten in place on each rebuild, the same pull pattern as `AudioFrame`.
-/// `lightCount` is a `uint32_t` to hold any count on any board, the light-side `nrOfLightsType` being a `uint16_t` without PSRAM and a `uint32_t` with it.
+/// `LightSummary` is a flat struct of small integers, overwritten in place on each rebuild, the same pull pattern as `AudioFrame`. `lightCount` is a `uint32_t` to hold any count on any board.
+///
 /// A new field means the producer fills it in one place and every consumer that wants it reads it, with no new seam.
 ///
 /// ## Palettes as colors
 ///
-/// A color wheel (Home Assistant, HomeKit through MQTT, the WLED app) picks a palette by color.
-/// Matching happens in hue and saturation, so the interface carries those two, and the RGB forms are conversions on top.
+/// A color wheel (Home Assistant, HomeKit through MQTT, the WLED app) picks a palette by color. Matching happens in hue and saturation, so the interface carries those two, and the RGB forms are conversions on top.
 
 /// A small plain-data summary of the light pipeline's output.
 struct LightSummary {
@@ -52,8 +49,7 @@ public:
     /// Every palette name as JSON strings, comma-separated, in picker order.
     virtual void writePaletteNames(JsonSink& sink) const = 0;
 
-    // Full value, so brightness stays the caller's concern and nothing dims twice.
-    /// A palette's representative color.
+    /// A palette's representative color at full value, so brightness stays the caller's concern and nothing dims twice.
     RGB paletteRgb(uint8_t index) const {
         uint16_t hue = 0, sat = 0;
         paletteHueSat(index, hue, sat);
@@ -79,7 +75,5 @@ inline const LightSummary& lightSummary() {
     const LightOutput* out = LightOutput::active();
     return out ? out->summary() : kNone;
 }
-
-/// @}
 
 }  // namespace mm

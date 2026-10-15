@@ -1,9 +1,7 @@
 #pragma once
-/// @defgroup SpriteCast The shared sprite cast
-/// @{
 /// Every pixel-art character the effects share, behind one draw call.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// Four effects own their art, each a plain header of pixels. The fountain throws a random species and Pong can use one as its ball, so that shared choice lives here while the pixels stay with the effect that introduced them.
 
@@ -145,5 +143,4 @@ inline constexpr uint8_t kMaxW = 16;
 inline constexpr uint8_t kMaxH = 11;
 
 }  // namespace spritecast
-/// @}
 }  // namespace mm

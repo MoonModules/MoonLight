@@ -30,7 +30,7 @@ inline bool addressCounts(const uint8_t ip[4], bool buildHasWiFi, const uint8_t*
 /// Brings the device onto the LAN before the HTTP and WebSocket servers start, trying Ethernet, then WiFi, then its own access point.
 /// @card NetworkModule.png
 ///
-/// Network holds the cascade, its mode and mDNS; each interface's settings are on its own card: Ethernet, WiFi and the access point. A desktop builds the same cards over stubs. The order is in @xref{the-cascade|More info}.
+/// Network holds the cascade, its mode and mDNS; each interface's settings are on its own card: Ethernet, WiFi and the access point. A desktop builds the same cards over stubs. The order is described under @xref{the-cascade|The cascade} in the header.
 ///
 /// @guide
 ///
@@ -40,7 +40,7 @@ inline bool addressCounts(const uint8_t ip[4], bool buildHasWiFi, const uint8_t*
 ///
 /// A DHCP server that appears later still wins.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## The cascade
 ///
@@ -438,8 +438,7 @@ private:
         return false;
     }
 
-    // A pinned address stays on the station until DHCP is restored, so a DHCP network joined after a Static one came up on the Static one's address.
-    /// Start joining `ssid` with the addressing of the network `staId_` names, Static or DHCP, so no earlier network's setting carries over.
+    /// Start joining `ssid` with the addressing of the network `staId_` names, Static or DHCP, so no earlier network's setting carries over. A pinned address stays on the station until DHCP is restored.
     bool joinNetwork(const char* ssid, const char* password) {
         if (!platform::wifiStaInit(ssid, password)) return false;
         wifi_->ipAt(staIndex()).applyLive(platform::NetIface::Sta);
@@ -507,26 +506,26 @@ private:
     uint32_t apHoldFrom_ = 0;    ///< when a join asked for from the access point started, 0 when none holds it open
     /// How long the access point stays after a join asked for from it, so the phone follows to the new address.
     static constexpr uint32_t kHandoffMs = 120000;
-    // Kept set so the warning outranks the fallback's connected line, until the cable is out.
+    /// Kept set so the warning outranks the fallback's connected line, until the cable is out.
     bool ethDegraded_ = false;
-    // When the link last came up, so a re-plugged cable gets the same window as first boot.
+    /// When the link last came up, so a re-plugged cable gets the same window as first boot.
     uint32_t ethLinkUpAt_ = 0;
     bool mdnsRunning_ = false;   ///< whether the local-name service is advertising
-    // The name last advertised, so a live rename is noticed and re-registered.
+    /// The name last advertised, so a live rename is noticed and re-registered.
     char lastMdnsName_[24] = {};
 
     /// The `<name>.local` hostname, on IPv4 and IPv6.
     bool mdnsEnabled_ = true;
-    // The storage behind the inherited status slot, which holds only a pointer into it.
+    /// The storage behind the inherited status slot, which holds only a pointer into it.
     char statusBuf_[80] = {};   // 62 needed by the longest line, the link-local one: a 15-character address, a 23-character device name and .local
 
     /// The interface in use.
     char modeStr_[20] = {};
 
-    // The platform takes quarter-decibels, and the applied value detects a change.
-    int16_t appliedTxPowerSetting_ = -1;   ///< negative until the first apply
+    /// The applied TX power setting, negative until the first apply; the platform takes quarter-decibels, and this value detects a change.
+    int16_t appliedTxPowerSetting_ = -1;
 
-    // The joined network's IP settings as last applied, so an edit to them re-applies live.
+    /// The joined network's IP settings as last applied, so an edit to them re-applies live.
     IpApplied appliedStaIp_;
 
     /// Apply an edit to the joined network's IP settings live while WiFi carries the device.
@@ -622,8 +621,7 @@ private:
         restartMdns();
     }
 
-    // The one way to stop it: a stop that left mdnsRunning_ set kept syncMdns from ever advertising again, so a device lost its .local name after any network change.
-    /// Stop advertising now and on the next connected tick again: every change of interface, an access point opening or closing, a join or a dropped link, goes through here.
+    /// Stop advertising now and on the next connected tick again: every interface change, access point open or close, join or dropped link goes through here. Leaving mdnsRunning_ set blocks advertising for good.
     void restartMdns() {
         if (!mdnsRunning_) return;
         platform::mdnsStop();

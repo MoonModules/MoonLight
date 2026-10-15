@@ -182,7 +182,7 @@ Two comment styles, two jobs:
 /// Palette-cycling diagonal rainbow.       ← shows in the help + on hover
 class RainbowEffect : public EffectBase {
 public:
-    /// One hue cycle per `speed` beats.   ← the control's help in the app
+    /// Hue cycles per minute.   ← the control's help in the app
     uint8_t speed = 20;
 
     void tick() override {

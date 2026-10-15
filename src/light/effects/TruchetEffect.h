@@ -13,7 +13,7 @@ namespace mm {
 ///
 /// @attribution Sébastien Truchet
 ///
-/// @moreinfo
+/// @technical
 ///
 /// One function of position and time, evaluated per pixel. Its `repeat` folds the plane into one tile, and `hashInt` on the cell index turns it, so two devices agree on tile (7, 3). A smoothstep across the distance to an arc stops a curve reading as a staircase.
 class TruchetEffect : public EffectBase {

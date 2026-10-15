@@ -18,7 +18,7 @@ namespace mm {
 ///
 /// `fieldScale` and `fieldRate` make the field cheaper, smaller or less often computed. That costs detail, not smoothness, since the flow still carries the cloud every frame.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// The cost is one curl per light per frame, and one fbm per light at whatever the two levers ask for. The curl flow is divergence-free, so nothing piles up.
 class NebulaEffect : public EffectBase {

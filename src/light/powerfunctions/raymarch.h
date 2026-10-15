@@ -4,15 +4,13 @@
 
 #include <cmath>
 
-/// @defgroup raymarch Raymarching
-/// @{
 /// Rendering a 3D scene by walking a ray through a distance field.
 ///
 /// A scene is described as a function saying how far the nearest surface is from any point, so geometry emerges from arithmetic rather than being stored.
 ///
 /// @attribution John Hart, Iñigo Quilez
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## Sphere tracing
 ///
@@ -138,7 +136,7 @@ inline uint8_t diffuse(Vec3 normal, Vec3 lightDir, uint8_t ambient = 38) {
 
 /// A camera: where it stands, what it looks at, and how wide it sees.
 ///
-/// @moreinfo Building a pixel's ray is what every effect would otherwise re-derive, and getting it wrong puts a scene half off-screen.
+/// @technical Building a pixel's ray is what every effect would otherwise re-derive, and getting it wrong puts a scene half off-screen.
 struct Camera {
     Vec3  position{0, 1, -3};
     Vec3  target{0, 0, 0};
@@ -161,8 +159,6 @@ struct Camera {
         return normalise(right * u + up * v + fwd * focal);
     }
 };
-
-/// @}
 
 }  // namespace mm::raymarch
 

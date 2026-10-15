@@ -14,7 +14,7 @@ namespace mm {
 ///
 /// @attribution Andrew Tuline, Aircoookie, blazoncek
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## The per-column state machine
 ///

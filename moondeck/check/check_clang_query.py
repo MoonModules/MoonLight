@@ -212,14 +212,14 @@ _SCOPE = {
 # right at ten times the ideal, because it IS the driver's spec.
 _IDEAL_DOC_WORDS = {"class": 130, "method": 40, "attribute": 40, "other": 40}
 
-# `@moreinfo` ends the part being measured: everything before it is the lead a reader takes in first, and everything after is the deep-dive reference, so only the lead is measured.
+# `@technical` ends the part being measured: everything before it is the lead a reader takes in first, and everything after is the deep-dive reference, so only the lead is measured.
 # Counting the whole block punished the very structure the directive exists to encourage:
-# NetworkSendDriver read +407% as one blob, and +48% once its 469 More-info words were separated
+# NetworkSendDriver read +407% as one blob, and +48% once its 469 appendix words were separated
 # from its 193-word lead.
 #
 # Matched on the AST node, not the source text: clang parses the directive into
-# `InlineCommandComment ... Name="moreinfo"`, so the split point is stated rather than guessed at.
-_MOREINFO_NODE = re.compile(r'InlineCommandComment.*Name="moreinfo"')
+# `InlineCommandComment ... Name="technical"`, so the split point is stated rather than guessed at.
+_TECHNICAL_NODE = re.compile(r'InlineCommandComment.*Name="technical"')
 
 # The `//` side deliberately has NO ideal, because zero IS the ideal: a developer note stacked on
 # a declaration is usually a thought that belongs in the code below it. Measuring it as
@@ -732,9 +732,9 @@ def collect_comments(out):
             begin = int(fc["pstart"] or fc["start"] or owner["line"])
             body = ""
             for sub in lines[k + 1:]:
-                # `@moreinfo` ends the LEAD description; everything after it is relocated below
+                # `@technical` ends the LEAD description; everything after it is relocated below
                 # the member lists at render time and is not what the ideal measures.
-                if _MOREINFO_NODE.search(sub):
+                if _TECHNICAL_NODE.search(sub):
                     break
                 tc = _TEXTCOMMENT.search(sub)
                 if tc:

@@ -14,7 +14,7 @@ namespace mm {
 ///
 /// Each layer renders independently into its own buffer, over the physical topology the shared `Layouts` describes.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// **Why a container.** Multi-layer composition needs one place that walks every layer in order. With a single child this is a pass-through, matching the one-layer pipeline exactly.
 ///
@@ -24,8 +24,7 @@ public:
     /// The child role this container accepts, which is layers alone.
     const char* acceptsChildRoles() const override { return "layer"; }
 
-    // Idempotent, so adding a layer child is followed by calling this again.
-    /// Wire the shared `Layouts` into every child layer, so each can size its buffer.
+    /// Wire the shared `Layouts` into every child layer, so each can size its buffer; idempotent, so adding a layer child is followed by calling it again.
     void setLayouts(Layouts* l) {
         layouts_ = l;
         for (uint8_t i = 0; i < childCount(); i++) {
@@ -46,8 +45,7 @@ public:
         setLayouts(layouts_);
     }
 
-    // Role-filtered: a stray child ticked here would run at the wrong depth in the tree.
-    /// Tick every enabled layer child, in container order.
+    /// Tick every enabled layer child, in container order; role-filtered, since a stray child ticked here would run at the wrong depth.
     void tick() MM_NONBLOCKING override {
         // First, so every layer this frame samples the same entries: Drivers ticks too late for it.
         MoonLivePalette::tickActive(platform::millis());
@@ -61,8 +59,7 @@ public:
         }
     }
 
-    // Falls back to a disabled layer, so geometry stays queryable while everything is off.
-    /// The first enabled layer, which `Drivers` reads for the physical dimensions.
+    /// The first enabled layer, which `Drivers` reads for the physical dimensions; falls back to a disabled layer so geometry stays queryable while everything is off.
     Layer* activeLayer() const {
         MoonModule* fallback = nullptr;
         for (uint8_t i = 0; i < childCount(); i++) {
@@ -74,8 +71,7 @@ public:
         return static_cast<Layer*>(fallback);  // nullptr if no Layer children
     }
 
-    // Output selection uses this one: a disabled layer's buffer would keep emitting its last frame.
-    /// The first enabled layer, or null when none is enabled.
+    /// The first enabled layer, or null when none is enabled; output selection uses this one since a disabled layer's buffer would keep emitting its last frame.
     Layer* firstEnabledLayer() const {
         for (uint8_t i = 0; i < childCount(); i++) {
             MoonModule* c = child(i);
@@ -95,8 +91,7 @@ public:
         return n;
     }
 
-    // The callback's second argument marks the bottom layer, which clears the buffer.
-    /// Walk the enabled layers in composition order, bottom to top.
+    /// Walk the enabled layers in composition order, bottom to top; the callback's second argument marks the bottom layer, which clears the buffer.
     template <typename Fn>
     void forEachEnabledLayer(Fn cb) const {
         bool first = true;

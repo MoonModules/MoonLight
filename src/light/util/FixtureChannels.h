@@ -8,7 +8,7 @@ namespace mm {
 
 /// Where a fixture's non-color channels live inside one light.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// A light is `channelsPerLight` bytes wide, and that width is a runtime value: 3 for RGB, 4 for RGBW, 11 for a mini moving head, 25 for a bigger one.
 /// The pipeline does not care which, since a wider light simply has more bytes and a driver that cannot use them ignores them.

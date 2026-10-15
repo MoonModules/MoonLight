@@ -11,7 +11,7 @@ namespace mm {
 ///
 /// @attribution Brandon502
 ///
-/// @moreinfo
+/// @technical
 ///
 /// Without a per-cell mapping mask every in-bounds voxel counts as mapped, so the projection uses the extent less one, floored at 1.
 class RubiksCubeEffect : public EffectBase {
@@ -201,8 +201,7 @@ private:
             if (width >= SIZE) rotateFace(top, !clockwise);
         }
 
-        // Every in-bounds voxel takes the color of the outer face it sits nearest.
-        /// Paint every surface voxel in the color of its nearest face.
+        /// Paint every surface voxel in the color of its nearest face: every in-bounds voxel takes the color of the outer face it sits nearest.
         void drawCube(const draw::Canvas& cv, lengthType sx, lengthType sy, lengthType sz,
                       const std::array<RGB, 6>& COLOR_MAP) const {
             // Surface voxels only, so without this wipe the old pose's stickers accrete.

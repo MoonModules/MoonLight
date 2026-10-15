@@ -21,7 +21,7 @@ namespace mm {
 ///
 /// With `infinite` on, a board that dies out, repeats itself or thins below a twentieth gets a new R-pentomino or glider dropped in, so the show keeps going. Off, it pauses a moment and starts a fresh game, as `startingLifeDensity` fills it.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// The board fingerprints itself with crc16 at three periods: every 16 generations catches oscillators, every lcm(h,w)*4 spaceships, and six times that cube gliders. A repeat, a die-out, a density floor or a random nudge respawns or resets it.
 class GameOfLifeEffect : public EffectBase {

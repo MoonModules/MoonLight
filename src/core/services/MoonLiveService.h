@@ -48,7 +48,7 @@ inline constexpr const char* kServicePick[3] = {kScriptDir, kServiceExt, kServic
 ///
 /// Everything the script declares appears as a control on the card, and a slider move lands without a recompile. A compile error shows on the status line, and the service does nothing until it is fixed. A script runs on the 50 Hz poll rather than the render tick, so a heavy one costs its own tick.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// **Same as effects.** A compiled effect and a scripted one are interchangeable, and so are the input services. The engine is identical, and the service is added under the container, then pointed at a file.
 ///

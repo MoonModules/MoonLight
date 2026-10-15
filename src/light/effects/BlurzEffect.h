@@ -11,7 +11,7 @@ namespace mm {
 ///
 /// @attribution Andrew Tuline, softhack007
 ///
-/// @moreinfo
+/// @technical
 ///
 /// The effect is a strip in spirit, declared 2D so it spans a panel as a flat run of pixels. The dot and the blur work over the whole pixel count either way.
 class BlurzEffect : public EffectBase {

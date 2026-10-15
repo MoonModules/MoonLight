@@ -1,6 +1,5 @@
 #include "core/moonlive/moonlive_emit.h"
 
-/// @defgroup moonlive_emit_noarch MoonLive fill routines, no backend
 /// The third case beside the arm64 and x86-64 emitters: a host we have no machine code for.
 ///
 /// The assembler beside it says when this is reached.

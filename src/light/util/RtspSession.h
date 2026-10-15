@@ -1,6 +1,6 @@
 #pragma once
 /// The RTSP control conversation, RFC 2326: one client's request becomes one response and a state move.
-/// @moreinfo
+/// @technical
 /// ## An alternative is judged whole
 /// RFC 2326 lets a client offer several transports in one Transport header, comma separated and in preference order.
 /// Each carries its own parameters, so a scan finding the protocol in one and the port in another accepts a combination the client never offered.

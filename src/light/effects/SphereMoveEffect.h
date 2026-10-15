@@ -9,7 +9,7 @@ namespace mm {
 ///
 /// The shell sweeps the volume on a Lissajous path, breathing as it goes. Every voxel inside the one-unit shell lights from the palette, jittered so it shimmers.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// The distance test is a square root per voxel, and the time base is float throughout, so the sweep and the breathing integrate continuously. Dividing in integers first quantizes both into visible steps.
 class SphereMoveEffect : public EffectBase {

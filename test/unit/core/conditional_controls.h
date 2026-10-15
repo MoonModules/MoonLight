@@ -1,8 +1,6 @@
-/// @defgroup conditional_controls Testing a conditional control
-/// @{
 /// Shared helpers for a control whose visibility depends on another's value.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// Shared helpers for testing CONDITIONAL CONTROLS: controls whose UI visibility (the `hidden` flag) depends on another control's value. Used by every module that has them (NetworkModule's static-IP fields, RmtLedDriver's loopbackRxPin).
 ///
@@ -32,13 +30,13 @@ inline int controlIndex(mm::MoonModule& m, const char* name) {
     return -1;
 }
 
-// True if `name` is bound AND not hidden (i.e. the UI would render it).
+/// True if `name` is bound AND not hidden, so the UI would render it.
 inline bool isVisible(mm::MoonModule& m, const char* name) {
     int i = controlIndex(m, name);
     return i >= 0 && !m.controls()[static_cast<uint8_t>(i)].hidden;
 }
 
-// True if `name` is bound but hidden.
+/// True if `name` is bound but hidden.
 inline bool isHidden(mm::MoonModule& m, const char* name) {
     int i = controlIndex(m, name);
     return i >= 0 && m.controls()[static_cast<uint8_t>(i)].hidden;
@@ -74,5 +72,4 @@ inline void checkConditionalControl(mm::MoonModule& m, const char* dependent,
     CHECK(isVisible(m, dependent) == !visibleWhenTrue);
 }
 
-/// @}
 } // namespace mm::test

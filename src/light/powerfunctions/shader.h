@@ -4,15 +4,13 @@
 #include "light/powerfunctions/draw.h"       // pos_t, Canvas, the 2D SDF family
 #include "light/util/Palette.h"
 
-/// @defgroup shader The shader vocabulary
-/// @{
 /// The small set of operations every per-pixel shader is written out of, in fixed point.
 ///
 /// A shader is one function that runs per pixel and returns a color, given that pixel's position and the time.
 ///
 /// @attribution GLSL, Iñigo Quilez
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## A shared vocabulary
 ///
@@ -216,7 +214,5 @@ inline void each(const draw::Canvas& cv, angle16 t, ShadeFn fn) {
         }
     }
 }
-
-/// @}
 
 }  // namespace mm::shader

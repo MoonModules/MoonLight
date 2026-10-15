@@ -9,7 +9,7 @@ namespace mm {
 ///
 /// @attribution Transpose
 ///
-/// @moreinfo
+/// @technical
 ///
 /// The swaps apply to the box and to every coordinate in the order XY, XZ, YZ, so enabling several composes them; XY alone is the matrix transpose. The flips run after the swaps, against the already transposed box.
 class TransposeModifier : public ModifierBase {

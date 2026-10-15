@@ -1,10 +1,8 @@
 #pragma once
 
-/// @defgroup platform_config_desktop Desktop platform configuration
-/// @{
 /// What the host build claims to be: generous memory, every driver linked, no real silicon, with @xref{the-lane-counts-are-not-zero|lanes to drive} and @xref{types-exist-even-where-the-feature-does-not|every seam's types}.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## The lane counts are not zero
 ///
@@ -126,8 +124,6 @@ constexpr uintptr_t codeAddressBits = 0;
 constexpr bool hasSdCard = true;
 /// True: no slot is wired, so SdCardService offers every board preset, for the tests to exercise them.
 constexpr bool previewsSdPresets = true;
-
-/// @}
 
 } // namespace mm::platform
 

@@ -5,11 +5,9 @@
 
 namespace mm {
 
-/// @defgroup RmtSymbol The ESP32 RMT bit-shape word
-/// @{
 /// Domain logic with no ESP header, so the bit shapes are host-testable without an ESP32.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// The platform owns only the peripheral that expands wire bytes with these shapes, through `rmtWs2812SetBitTiming`.
 ///
@@ -37,5 +35,4 @@ constexpr uint32_t makeRmtSymbol(uint16_t dur0, uint8_t lvl0,
          | (static_cast<uint32_t>(lvl1 & 1) << 31);
 }
 
-/// @}
 } // namespace mm

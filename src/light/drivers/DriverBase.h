@@ -23,23 +23,19 @@ namespace mm {
 /// Each reads its own slice of the @ref Drivers container's buffer through the shared window controls. A physical output corrects it through the shared correction controls, while @ref PreviewDriver shows it as it is. A card's emoji are its [tags](https://moonmodules.org/MoonLight/explanation/architecture/index.html#tag-emoji-legend).
 class DriverBase : public MoonModule {
 public:
-    // The OWNER must release before destroying: a base destructor cannot prevent the vptr race.
     /// This module's role, which is what the container filters its children by.
     ModuleRole role() const MM_NONBLOCKING override { return ModuleRole::Driver; }
-    // A driver keeps running dark at first, since LEDs left without data hold their last frame and keep drawing its current.
-    /// Held from this many failed boots in a row, for a crash in the driver itself that dark frames do not stop.
+    /// Held from this many failed boots in a row, for a crash in the driver itself. Dark frames come first, since LEDs left without data hold their last frame and keep drawing current.
     static constexpr uint8_t kHeldAfter = 4;
     /// Held once safe mode has failed to stop the boots with dark frames.
     bool heldInSafeMode() const override { return MoonModule::failedBoots() >= kHeldAfter; }
     /// Point the driver at the buffer it reads its slice from.
     virtual void setSourceBuffer(Buffer* buf) = 0;
 
-    // Virtual rather than RTTI: ESP32 builds compile without it, so the guard never casts.
-    /// The hardware block this driver claims, so two drivers cannot corrupt one peripheral.
+    /// The hardware block this driver claims, so two drivers cannot corrupt one peripheral; virtual rather than RTTI, which ESP32 builds compile without.
     virtual LedHwBlock hwBlock() const { return LedHwBlock::None; }
 
-    // A driver overrides defineDriverControls, not this, so the placement is never re-implemented.
-    /// Lead every driver card with the correction block, then the driver's own controls.
+    /// Lead every driver card with the correction block, then the driver's own controls; a driver overrides defineDriverControls, so the placement is never re-implemented.
     void defineControls() final {
         if (hasCorrectionControls()) defineCorrectionControls();
         defineDriverControls();
@@ -50,8 +46,7 @@ public:
 
     /// Whether this driver exposes the correction controls, which a raw-RGB sink opts out of.
     virtual bool hasCorrectionControls() const { return true; }
-    // The ACTIVE layer for dimension queries, not a wiring constraint on how many layers feed it.
-    /// Set the Layer this driver reads its dimensions from.
+    /// Set the Layer this driver reads its dimensions from: the active one, not a wiring constraint on how many layers feed it.
     void setLayer(Layer* layer) { layer_ = layer; }
 
     /// The first light of the configured window.
@@ -69,8 +64,7 @@ public:
     /// The active Layer, which is null when none is wired, so a driver must tolerate that.
     Layer* layer() const { return layer_; }
 
-    // The multiply happens once here, so the hot path stays one LUT lookup per channel.
-    /// Rebuild this driver's correction, baking global times local brightness into one LUT.
+    /// Rebuild this driver's correction, baking global times local brightness into one LUT, so the hot path stays one lookup per channel.
     void rebuildCorrection(uint8_t globalBrightness) {
         // Applied unconditionally, so brightness works even before the fixture-profile library is up.
         const uint8_t tableBrightness = adoptBrightness(globalBrightness);
@@ -106,8 +100,7 @@ public:
         MoonModule::onControlChanged(name);
     }
 
-    // The correction alone rather than a prepare, which would reinitialize the output and blank it for a tick.
-    /// Re-resolve the fixture profile when the profile library's rows change.
+    /// Re-resolve the fixture profile when the profile library's rows change, through the correction alone, since a prepare would reinitialize the output and blank it for a tick.
     void onListChanged(const MoonModule& owner) override {
         if (&owner == static_cast<const MoonModule*>(FixtureProfilesModule::active()))
             rebuildCorrection(lastGlobalBrightness_);
@@ -116,23 +109,21 @@ public:
     /// Notified when the output channel count may have changed without a structural rebuild.
     virtual void onCorrectionChanged() {}
 
-    // A brightness change re-bakes the table, which the encode reads live, and never resizes the frame.
-    /// Whether the output channel count changed since the last time a driver asked, so it re-lays its frame only then.
+    /// Whether the output channel count changed since the last time a driver asked, so it re-lays its frame only then. A brightness change re-bakes the table and never resizes the frame.
     bool outChannelsChanged() {
         if (correction_.outChannels == laidOutChannels_) return false;
         laidOutChannels_ = correction_.outChannels;
         return true;
     }
 
-    // HUB75 does: its panel shows a level only as time, so scaling values would cost levels.
-    /// Whether this driver dims by how long it lights rather than by scaling the values it sends.
+    /// Whether this driver dims by how long it lights rather than by scaling the values it sends, as HUB75 does: its panel shows a level only as time.
     virtual bool dimsByTime() const MM_NONBLOCKING { return false; }
     /// Global times local brightness, as last rebuilt, for a driver that dims by time.
     uint8_t effectiveBrightness() const { return effectiveBrightness_; }
     /// Rebake only the brightness table for a level that moves every tick, the soft start, leaving the resolved profile as it is.
     void rampBrightness(uint8_t globalBrightness) MM_NONBLOCKING { correction_.rebuildBrightness(adoptBrightness(globalBrightness)); }
 
-    /// Clear every shared status string, so a stopped driver leaves nothing behind.
+    /// Clear every shared status string, so a stopped driver leaves nothing behind; the owner calls it before destroying the driver, since a base destructor cannot prevent the vptr race.
     void release() override {
         freeWire();          // the shared correction scratch: owned here, so no driver re-frees it
         correction_.lut16 = nullptr;   // the table goes with the module's scratch buffers below
@@ -148,8 +139,7 @@ public:
     /// The resolved correction, read-only, since the driver owns and rebuilds it.
     const Correction& correction() const { return correction_; }
 
-    // The ONE correction field a container sets: everything else is derived and would be overwritten.
-    /// Park or release this driver's motion.
+    /// Park or release this driver's motion; the one correction field a container sets, as everything else is derived and would be overwritten.
     void setMotionHeld(bool held) { correction_.motionHeld = held; }
     /// Whether this driver's motion is currently parked.
     bool motionHeld() const { return correction_.motionHeld; }
@@ -157,12 +147,11 @@ public:
 protected:
     Layer* layer_ = nullptr;
 
-    // The size differs per driver, so the caller passes the byte count; the lifecycle lives here.
+    /// The correction scratch; the size differs per driver, so the caller passes the byte count and the lifecycle lives here.
     uint8_t* wire_ = nullptr;
     size_t   wireCap_ = 0;   // bytes the allocation returned (0 when it failed)
 
-    // Internal RAM first: this is the encoder's hottest data, written and read back per light.
-    /// Grow the correction scratch to at least `bytes`, keeping a big-enough existing block.
+    /// Grow the correction scratch to at least `bytes`, keeping a big-enough existing block, in internal RAM first as the encoder's hottest data.
     void ensureWire(size_t bytes) {
         if (wire_ && wireCap_ >= bytes) return;
         freeWire();
@@ -176,11 +165,11 @@ protected:
         if (wire_) { platform::free(wire_); wire_ = nullptr; wireCap_ = 0; publishHeapBytes(); }
     }
 
-    // One hook rather than setDynamicBytes at every alloc site, where one omission drifts the readout.
+    /// The heap bytes this driver holds; one hook rather than setDynamicBytes at every alloc site, where one omission drifts the readout.
     virtual size_t driverHeapBytes() const { return wireCap_; }
     void publishHeapBytes() { setDynamicBytes(driverHeapBytes()); }
 
-    // The wiring comes from a named profile by stable id; the render loop never reads the library.
+    /// The resolved correction: the wiring comes from a named profile by stable id, and the render loop never reads the library.
     Correction correction_;
     ScratchBuffer<uint16_t> lut16_{*this};   // the correction's 16-bit table, allocated the first time it is wanted
     uint32_t profileId_ = 0;          // stable id into the FixtureProfiles library (0 → resolve to default)
@@ -241,7 +230,7 @@ private:
         // A driver that dims by on-time keeps full values in its table, so the colors keep every level.
         return dimsByTime() ? 255 : effectiveBrightness_;
     }
-    // Borrowed pointers into the library's own name storage, which outlives the control list.
+    /// Borrowed pointers into the library's own name storage, which outlives the control list.
     const char* fixtureOptions_[FixtureProfilesModule::kMaxProfiles] = {};
     uint8_t fixtureOptionCount_ = 0;
     void buildFixtureOptions() {
@@ -266,8 +255,7 @@ private:
         if (profileId_ == 0) profileId_ = lib.defaultId();
     }
 
-    // An older config saved the name beside a row number that a longer library moved, so the name wins; read for one release.
-    /// Adopt the profile an older config named in `fixtureRef`, select its row, and empty the field so a save writes only `fixture`.
+    /// Adopt the profile an older config named in `fixtureRef`, select its row, and empty the field so a save writes only `fixture`. The name wins over the saved row, which a longer library moved.
     void adoptLegacyName(const FixtureProfilesModule& lib) {
         if (!fixtureRef_[0]) return;
         if (const uint32_t id = profileNamed(lib, fixtureRef_)) {
@@ -286,7 +274,6 @@ private:
 
 protected:
 
-    // Each driver names its own slice, rather than the buffer being split by driver order.
     static constexpr uint16_t kWindowAll = 65535;  ///< count default: clamped to buffer length = all lights
     /// The first light of the shared buffer this driver reads.
     uint16_t start_ = 0;
@@ -316,14 +303,14 @@ protected:
                      : static_cast<nrOfLightsType>(count_);
     }
 
-    // Both follow the same rule: clear the status only when it is the one this driver set.
+    /// The status verdicts this driver set; each is cleared only when the status still shows the one this driver set.
     const char* configErr_ = nullptr;
     const char* configWarn_ = nullptr;
     char* failBuf_ = nullptr;
-    // 64: the widest verdict is the loopback's worst case, which a narrower buffer clips.
+    /// The status buffer size: the widest verdict is the loopback's worst case, which a narrower buffer clips.
     static constexpr size_t kFailBufLen = 64;
 
-    // Remembered, so clearConfigErr can later retract exactly this one.
+    /// Show an error status and remember it, so clearConfigErr can later retract exactly this one.
     void setConfigErr(const char* err) {
         configErr_ = err;
         setStatus(err, Severity::Error);
@@ -335,7 +322,7 @@ protected:
         }
     }
 
-    // Called unconditionally each parse, so the warning tracks the live state.
+    /// Show a warning, or retract the earlier one when null; called unconditionally each parse, so the warning tracks the live state.
     void setConfigWarn(const char* warn) {
         if (warn) {
             configWarn_ = warn;
@@ -346,7 +333,7 @@ protected:
         }
     }
 
-    // Null on an allocation failure, where the caller falls back to a literal status.
+    /// The status buffer, allocated on first use; null on an allocation failure, where the caller falls back to a literal status.
     char* failBufEnsure() {
         if (!failBuf_) failBuf_ = static_cast<char*>(platform::alloc(kFailBufLen));
         return failBuf_;
@@ -359,7 +346,7 @@ protected:
         }
     }
 
-    // Set LAST, so an error or warning from earlier in the same parse still wins.
+    /// Show how many lights are driven, set last so an error or warning from earlier in the same parse still wins.
     void setDrivingInfo(unsigned driven, unsigned total, unsigned channels = 1,
                         const char* mode = nullptr) {
         if (char* buf = failBufEnsure()) {

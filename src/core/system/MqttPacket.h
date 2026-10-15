@@ -1,12 +1,10 @@
 #pragma once
 
-/// @defgroup MqttPacket MQTT 3.1.1 wire framing
-/// @{
 /// The framing and the handful of control packets a client light needs, in pure C++.
 ///
 /// @attribution MQTT
 ///
-/// @moreinfo
+/// @technical
 ///
 /// There are no ESP-IDF or network dependencies here, deliberately, so the packet maths is host-unit-tested against golden byte vectors exactly as the Improv framing is.
 /// The live socket lifecycle, its connect, keepalive and reconnect, lives in `MqttModule`; this is only the bytes.
@@ -311,5 +309,4 @@ private:
     char     topicBuf_[128] = {};
 };
 
-/// @}
 } // namespace mm

@@ -4,7 +4,7 @@
 ///
 /// @attribution MycilaSafeBoot, Tasmota
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## Why it shares no code with the application
 ///

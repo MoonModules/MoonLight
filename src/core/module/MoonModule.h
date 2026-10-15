@@ -37,11 +37,12 @@ inline const char* roleName(ModuleRole role) {
 ///
 /// It is the one deliberate hierarchy, so the UI renders any module with no per-module UI code: @xref{parent-and-child}. The base is the smallest possible, since dozens load at once without PSRAM: @xref{enabled-and-self-reporting}.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## The lifecycle
 ///
 /// `setup` and `release` bracket a module's life, with three tick rates between them. `defineControls` declares the controls and `prepare` builds derived state, so every change applies live.
+///
 /// Controls bind by reference, so persisted values land before any setup runs.
 ///
 /// ## Parent and child
@@ -53,8 +54,7 @@ inline const char* roleName(ModuleRole role) {
 /// Every module carries an enabled flag, and each decides what disabled means: a system module ignores it, so the user cannot lock themselves out. Each module reports its instance size, heap and tick time.
 class MoonModule {
 public:
-    // noexcept, so a failed allocation yields nullptr rather than a constructor running on null.
-    /// Allocate in PSRAM where the platform offers it.
+    /// Allocate in PSRAM where the platform offers it; noexcept, so a failed allocation yields nullptr rather than a constructor running on null.
     void* operator new(size_t size) noexcept { return platform::alloc(size); }
     /// Return the allocation above.
     void operator delete(void* ptr) noexcept { platform::free(ptr); }
@@ -483,9 +483,9 @@ protected:
     /// Which children a tick covers: every one, only a role, or every role but one.
     enum class RoleFilter : uint8_t { All, Only, Except };
     /// Tick the selected children through the one enabled gate and timing loop core owns.
-    // The annotation rides the pointer type, so an unannotated method stays a compile error.
     void tickChildren(void (MoonModule::*fn)() MM_NONBLOCKING, RoleFilter filter = RoleFilter::All,
                       ModuleRole role = ModuleRole::Generic) MM_NONBLOCKING {
+        // The annotation rides the pointer type, so an unannotated method stays a compile error.
         for (uint8_t i = 0; i < childCount_; i++) {
             MoonModule* c = children_[i];
             if (filter == RoleFilter::Only   && c->role() != role) continue;
@@ -518,7 +518,7 @@ private:
     uint32_t tickTimeUs_ = 0;
     uint32_t accumUs_ = 0;
 
-    // One function pointer for the whole process, as with the persistence hook.
+    /// The process-wide hooks the transport installs, one function pointer each, as with the persistence hook.
     static inline SchemaChangedFn schemaChangedHook_ = nullptr;
     static inline ValuesChangedFn valuesChangedHook_ = nullptr;
     static inline QuiesceRenderFn quiesceRenderHook_ = nullptr;

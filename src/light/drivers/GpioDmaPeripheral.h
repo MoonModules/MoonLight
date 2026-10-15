@@ -50,8 +50,7 @@ public:
     size_t busHeapBytes() override { return platform::gpioDmaWs2812HeapBytes(bus_); }
     /// Start the transfer of the first `bytes` of the frame buffer.
     bool busTransmit(uint8_t i, size_t bytes) override { return i == 0 && platform::gpioDmaWs2812Transmit(bus_, bytes, waitMs_); }
-    // The DMA reads the widened copy, so the frame buffer is free the moment the transfer starts.
-    /// Report the frame buffer free and keep the driver's budget: the wait for the wire happens in the next transmit, after the encode it overlapped.
+    /// Report the frame buffer free, since the DMA reads the widened copy, and keep the driver's budget. The wait for the wire happens in the next transmit, after the encode it overlapped.
     bool busWait(uint8_t /*i*/, uint32_t ms) override { waitMs_ = ms; return true; }
     /// The most recent transfer's wire time (us): the WS2812 output floor.
     uint32_t busLastTransmitUs() const override { return platform::gpioDmaWs2812LastTransmitUs(bus_); }

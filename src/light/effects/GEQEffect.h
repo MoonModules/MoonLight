@@ -12,7 +12,7 @@ namespace mm {
 ///
 /// @attribution Andrew Tuline, softhack007
 ///
-/// @moreinfo
+/// @technical
 ///
 /// A per-column tracker remembers the tallest the bar reached, drawn as a dot once the bar falls below it.
 class GEQEffect : public EffectBase {

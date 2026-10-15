@@ -13,7 +13,7 @@ namespace mm {
 ///
 /// @attribution Demoscene
 ///
-/// @moreinfo
+/// @technical
 ///
 /// The shape is a point table, a cube's eight corners plus its six face centers; a different shape is a different table. Every step is a shared power function.
 class VectorBallsEffect : public EffectBase {

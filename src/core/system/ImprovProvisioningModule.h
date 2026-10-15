@@ -30,7 +30,7 @@ namespace mm {
 ///
 /// Without a serial link, the device's own access point serves the network instead.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// This module is the status surface, the protocol living in the platform layer.
 ///
@@ -124,8 +124,7 @@ private:
     /// The provisioning state.
     char statusStr_[64] = "listening";
 
-    // Published with a release, which the acquire above pairs with across cores.
-    char pendingSsid_[33] = {};              ///< the network to join
+    char pendingSsid_[33] = {};              ///< the network to join, published with a release that the acquire above pairs with across cores
     char pendingPassword_[64] = {};          ///< wiped once handed on
     std::atomic<bool> pendingCredentials_{false};   ///< set when both are ready
 

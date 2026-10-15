@@ -11,7 +11,7 @@ namespace mm {
 ///
 /// @attribution Fisher-Yates shuffle
 ///
-/// @moreinfo
+/// @technical
 ///
 /// Each beat bumps a generation that rebuilds the Layer's mapping, the path a control change takes, a one-frame hitch at most once a second. The permutation lives in a member sized to the box; a failed allocation leaves the mapping as it is.
 ///

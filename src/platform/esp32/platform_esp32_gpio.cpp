@@ -1,9 +1,8 @@
-/// @defgroup platform_esp32_gpio Pin capability introspection
 /// What the pin ownership map above is built from, combining two sources.
 ///
 /// No chip type escapes this file: the module gets a plain capability.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## Two sources, because one of the questions has no query
 ///

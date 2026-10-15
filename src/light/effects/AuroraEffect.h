@@ -11,7 +11,7 @@ namespace mm {
 ///
 /// @attribution Stefan Petrick
 ///
-/// @moreinfo
+/// @technical
 ///
 /// `PolarLut` addresses the field around the center, `OscillatorBank` keeps the layers' phases related, and `fbm8` over gradient noise is the field. One fbm runs per layer per pixel.
 class AuroraEffect : public EffectBase {

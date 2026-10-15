@@ -5,6 +5,9 @@ import { helpMarkdown, safeUrl, moduleHelp, controlHelp, emojiTagsFor, emojiChip
 
 const HELP = new URL("../help/help.json", import.meta.url);
 
+// The script is running, so the plain list under each deck can hide until its deck mounts.
+document.documentElement.classList.add("mm-deck-js");
+
 // The attribution kinds, in the legend's order, each its chip's tooltip.
 const KIND_LABEL = {
     "\u{1F9D1}": "a person",

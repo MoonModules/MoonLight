@@ -32,7 +32,7 @@ namespace mm {
 ///
 /// The connection is the cause, not the device: frames are dropped rather than queued, so the wall itself is never held up. Lower `targetFps` to keep full detail at a slower rate.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// **Point list.** The preview sends a point list, not a dense grid: positions once at mapping time, channels per frame. The browser posts the standing request it wants, in @xref{the-wire-format}; no request means no work.
 ///

@@ -8,7 +8,7 @@ namespace mm {
 /// Parallel vertical tubes, each a column of lights, standing side by side.
 /// @card TubesLayout.gif
 ///
-/// @moreinfo
+/// @technical
 ///
 /// Each tube is a @ref SingleColumnLayout object, placed tube by tube.
 class TubesLayout : public LayoutBase {

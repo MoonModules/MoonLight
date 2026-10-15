@@ -31,7 +31,7 @@ namespace mm {
 ///
 /// The status shows the logical box the effects render into. A mirror modifier folds a 128 by 128 layout into a 64 by 64 box. A warning replaces it when the layer does not fit in memory.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// **What it owns.** A buffer sized to the logical box, a `MappingLUT` onto physical positions, and two child lists.
 ///
@@ -53,8 +53,7 @@ public:
     ~Layer() override { if (liveScratch_) platform::free(liveScratch_); }
 
 
-    // Index order is fixed by kBlendModeOptions, so a persisted preset keeps its meaning.
-    /// The blend modes, in option order.
+    /// The blend modes, in option order, which kBlendModeOptions fixes so a persisted preset keeps its meaning.
     enum BlendMode : uint8_t { kBlendAlpha, kBlendAdditive, kBlendMultiply, kBlendScreen, kBlendDarken, kBlendLighten,
                                kBlendDifference, kBlendExclusion, kBlendModeCount };
     /// How this layer combines with the layers below it.
@@ -74,8 +73,7 @@ public:
         MoonModule::defineControls();
     }
 
-    // In BlendMode order, so an index and its op cannot drift apart; at class scope, as a function-local static would keep the render path from proving itself nonblocking.
-    /// The `BlendMap` op each `blendMode` selects.
+    /// The `BlendMap` op each `blendMode` selects, in BlendMode order so an index and its op cannot drift; class scope keeps the render path provably nonblocking.
     static constexpr BlendOp kBlendOps[kBlendModeCount] = {BlendOp::Alpha, BlendOp::Additive, BlendOp::Multiply, BlendOp::Screen,
                                                            BlendOp::Darken, BlendOp::Lighten, BlendOp::Difference,
                                                            BlendOp::Exclusion};
@@ -86,12 +84,10 @@ public:
     void setLayouts(Layouts* lg) { layouts_ = lg; }
     /// The active `Layouts`, for a consumer that needs per-light coordinates.
     Layouts* layouts() const { return layouts_; }
-    // Rejecting zero at the one entry point lets every effect and draw primitive assume cpl >= 1.
-    /// Set channels per light: 3 for RGB, 4 for RGBW, more for a fixture profile.
+    /// Set channels per light: 3 for RGB, 4 for RGBW, more for a fixture profile; zero is rejected so every effect can assume cpl >= 1.
     void setChannelsPerLight(uint8_t cpl) { if (cpl > 0) channelsPerLight_ = cpl; }
 
-    // Every offset is absent by default, so setPan() is a no-op on a plain LED strip.
-    /// Set where this layer's fixtures keep their motion channels.
+    /// Set where this layer's fixtures keep their motion channels; every offset is absent by default, so setPan() is a no-op on a plain LED strip.
     void setFixtureChannels(const FixtureChannels& fc) { fixture_ = fc; }
     /// Where this layer's fixtures keep their motion channels.
     const FixtureChannels& fixtureChannels() const { return fixture_; }
@@ -197,8 +193,7 @@ public:
         if (hasGrid && hasLive_) { applyLivePass(); bufferGen_++; }
     }
 
-    // Allocating here is what lets the render path only copy, never allocate.
-    /// Size the live-pass snapshot to the current buffer, or free it when nothing is live.
+    /// Size the live-pass snapshot to the current buffer, or free it when nothing is live, so the render path only copies and never allocates.
     void ensureLiveScratch() {
         const size_t bytes = hasLive_ ? buffer_.bytes() : 0;
         if (bytes == liveScratchBytes_ && (bytes != 0) == (liveScratch_ != nullptr)) return;
@@ -209,8 +204,7 @@ public:
         if (liveScratch_) liveScratchBytes_ = bytes;  // alloc-fail → applyLivePass no-ops, static frame shows
     }
 
-    // A backward gather, the textbook reason image warping samples backward: no destination tears.
-    /// Remap the buffer through the live modifiers, once per frame.
+    /// Remap the buffer through the live modifiers, once per frame, by a backward gather so no destination tears.
     void applyLivePass() {
         uint8_t* buf = buffer_.data();
         if (!buf || !liveScratch_) return;   // scratch is sized on the cold path (ensureLiveScratch)
@@ -244,8 +238,7 @@ public:
         }
     }
 
-    // Real work happens only when the effect declares fewer axes than the layout has.
-    /// Copy the effect's written slice across the axes it does not iterate.
+    /// Copy the effect's written slice across the axes it does not iterate; real work only when the effect declares fewer axes than the layout has.
     void extrude(Dim effectDim) {
         if (effectDim == Dim::D3) return;
         uint8_t* buf = buffer_.data();
@@ -279,7 +272,6 @@ public:
     /// The mapping from logical cells to physical light positions.
     const MappingLUT& lut() const { return lut_; }
 
-    // Effects see logical dimensions
     /// The logical box width, which is what effects iterate.
     lengthType width() const { return width_; }
     /// The logical box height.
@@ -291,12 +283,10 @@ public:
     /// Milliseconds at the start of this frame, the clock every effect animates against.
     uint32_t elapsed() const { return elapsed_; }
 
-    // Every amount is a rate, without exception: an effect wanting the buffer blank calls draw::fill.
-    /// Ask for a fade of `amt`/255 per reference frame, collected as the gentlest across effects.
+    /// Ask for a fade of `amt`/255 per reference frame, collected as the gentlest across effects; every amount is a rate, so a blank buffer is draw::fill.
     void fadeToBlackBy(uint8_t amt) { fadeBy_ = fadeBy_ ? (amt < fadeBy_ ? amt : fadeBy_) : amt; }
 
-    // Every new writer of buffer_ bumps it too, the discipline the fade already follows.
-    /// How many times anything has written the shared buffer, so a holder knows it is untouched.
+    /// How many times anything has written the shared buffer, so a holder knows it is untouched; every new writer of buffer_ bumps it.
     uint32_t bufferGen() const { return bufferGen_; }
 
     /// How many physical lights the mapping covers.
@@ -304,8 +294,7 @@ public:
         return layouts_ ? layouts_->totalLightCount() : 0;
     }
 
-    // A driver describing the LED shape reads these rather than caching a startup value.
-    /// The physical box width, before any modifier reshapes it.
+    /// The physical box width, before any modifier reshapes it; a driver reads it rather than caching a startup value.
     lengthType physicalWidth() const { return physicalWidth_; }
     /// The physical box height.
     lengthType physicalHeight() const { return physicalHeight_; }
@@ -359,8 +348,7 @@ public:
     /// Whether a mapping was wanted but could not be built, so the layer degraded to identity.
     bool lutSkipped() const { return lutSkipped_; }
 
-    // Precondition: the physical dimensions are set, so this is called from prepare.
-    /// Fold the box through the static modifiers and build the mapping, on the cold path.
+    /// Fold the box through the static modifiers and build the mapping, on the cold path, once the physical dimensions are set.
     void rebuildLUT() {
         lutSkipped_ = false;
         clearStatus();  // re-evaluated below if a degrade path is taken
@@ -410,11 +398,10 @@ public:
         allocateBuffer(logicalCount);
     }
 
-    // Sentinel: a box cell that is not a real light (no driver index).
+    /// A box cell that is not a real light has no driver index.
     static constexpr nrOfLightsType kNoDriver = static_cast<nrOfLightsType>(-1);
 
-    // Measured over the same coords the build walks, so the coords stay the single source.
-    /// Whether the layout emits lights in box order, which is what validates the dense fast path.
+    /// Whether the layout emits lights in box order, which validates the dense fast path; measured over the coords the build walks.
     bool isNaturalOrder() const {
         struct Ctx { lengthType w, h; bool ok; };
         Ctx ctx{physicalWidth_, physicalHeight_, true};
@@ -429,7 +416,7 @@ public:
         return ctx.ok;
     }
 
-    // A counting-sort CSR build: folding scatters, while setMapping demands sequential writes.
+    /// Build the folded mapping as a counting-sort CSR, since folding scatters while setMapping demands sequential writes.
     bool buildFoldedLUT(const Coord3D& logical,
                         nrOfLightsType logicalCount, nrOfLightsType driverCount) {
         if (logicalCount == 0 || driverCount == 0) { lut_.setIdentity(0); return true; }
@@ -522,15 +509,13 @@ public:
         return true;
     }
 
-    // Cells in a box (the flat light count). 0 on any 0-extent axis.
-    /// How many cells a box holds.
+    /// How many cells a box holds (the flat light count); 0 on any 0-extent axis.
     static nrOfLightsType cellCount(const Coord3D& box) {
         return static_cast<nrOfLightsType>(box.x) * static_cast<nrOfLightsType>(box.y) *
                static_cast<nrOfLightsType>(box.z);
     }
 
-    // A zero-width logical box would blank the layer, leaving no source for any effect.
-    /// Hold a folded box inside its legal bounds, so a modifier cannot size it away.
+    /// Hold a folded box inside its legal bounds, so a modifier cannot size it away: a zero-width box would blank the layer.
     void clampLogical(Coord3D& logical) const {
         if (physicalWidth_  > 0 && logical.x < 1) logical.x = 1;
         if (physicalHeight_ > 0 && logical.y < 1) logical.y = 1;
@@ -564,7 +549,7 @@ private:
     uint8_t* liveScratch_ = nullptr;    // snapshot for the live pass; allocated only when hasLive_
     size_t   liveScratchBytes_ = 0;
 
-    // Check if heap can afford an allocation (returns true if unlimited or enough budget)
+    /// Whether the heap can afford an allocation: true when unlimited or the budget suffices.
     static bool canAllocate(size_t bytesNeeded) {
         size_t availableHeap = platform::freeHeap();
         if (availableHeap == 0) return true; // desktop: unlimited
@@ -623,6 +608,7 @@ private:
 };
 
 // EffectBase accessor implementations
+
 inline Layer* EffectBase::layer() const { return static_cast<Layer*>(parent()); }
 inline uint8_t* EffectBase::buffer() { return layer()->buffer().data(); }
 inline lengthType EffectBase::width() const { return layer()->width(); }
@@ -630,8 +616,7 @@ inline lengthType EffectBase::height() const { return layer()->height(); }
 inline lengthType EffectBase::depth() const { return layer()->depth(); }
 inline uint8_t EffectBase::channelsPerLight() const { return layer()->channelsPerLight(); }
 
-// Never scaled by brightness, and a missing channel makes the write a no-op.
-/// Write one non-color channel of light `index`, such as pan or tilt.
+/// Write one non-color channel of light `index`, such as pan or tilt; never scaled by brightness, and a missing channel makes the write a no-op.
 inline void effectSetChannel(Layer* l, nrOfLightsType index, uint8_t offset, uint8_t value) {
     if (offset == FixtureChannels::kAbsent || !l) return;
     const uint8_t cpl = l->channelsPerLight();

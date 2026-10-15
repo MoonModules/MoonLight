@@ -9,7 +9,7 @@ namespace mm {
 ///
 /// In 2D one quadrant shows in all four, in 3D one octant in all eight.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// Per axis the logical extent halves, rounding up, so an odd extent keeps its center column unpaired, and a coordinate at or past that half reflects back.
 class MirrorModifier : public ModifierBase {

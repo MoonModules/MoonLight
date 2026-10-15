@@ -106,7 +106,7 @@ static_assert(sizeof(kGhost) == static_cast<size_t>(GW) * GH * GF, "ghost: 2 fra
 ///
 /// @attribution Pac-Man
 ///
-/// @moreinfo
+/// @technical
 ///
 /// Movement is a `particles::Pool` entry per character, and appearance is `draw::sprite`. The chomp and the ghosts' shuffle share one BeatPhase, offset so the cast never pulses together.
 class PacmanEffect : public EffectBase {

@@ -11,7 +11,7 @@ namespace mm {
 ///
 /// The trails spiral away from themselves, like a camera pointed at its own monitor. Feedback is not a primitive: once the grid can be read as a texture (`sampleWrap`), the whole family of trails, zoom blur and smear is a few lines.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// This is the clearest use of the gather half of draw.h, where `sampleWrap` reads with wrapping; the cost is one bilinear sample a pixel plus a scratch copy.
 class EchoEffect : public EffectBase {

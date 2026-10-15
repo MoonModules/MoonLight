@@ -29,7 +29,7 @@ sys.path.insert(0, str(ROOT / "moondeck" / "docs"))
 MAX_CONTROL = 100         # characters of any ONE control line, its name included
 MAX_CONTROL_VISUAL = 80   # ... on the visual catalogs
 # A control's line says what it does. Its default is the reset button's and its range the slider's, so a line stating either restates the UI, and drifts from the code when either changes. Words in backticks are names, such as an option called `default`, and are not read.
-_RESTATES_RE = re.compile(r"\bdefaults?\b|-?\d+(?:\.\d+)?\s*(?:–|to)\s*-?\d+|\bup to \S*\d", re.IGNORECASE)
+_RESTATES_RE = re.compile(r"\bdefaults?\b|(?<![\w.])-?\d+(?:\.\d+)?\s*(?:–|-|to)\s*-?\d+|\bup to \S*\d", re.IGNORECASE)
 
 # Every card carries an image. Effects, modifiers and layouts show MOTION, so theirs is a .gif; the rest are cards and controls, sharper and smaller as a .png. From the hook, the one home that screenshot_modules shares.
 import mkdocs_hooks as _hooks  # noqa: E402
@@ -41,7 +41,7 @@ PREVIEWLESS_PAGES = _hooks.PREVIEWLESS_PAGES
 #
 # A card is read across a row; a member comment is read beside the thing it describes,
 # and the generated page shows its first sentence as the summary. So the budget is one
-# line: cut first, and only a fact neither the code nor the spec says goes after `@moreinfo`.
+# line: cut first, and only a fact neither the code nor the spec says goes after `@technical`.
 # The word cap is 30: a sentence is one thought and past twenty it is
 # usually two, but that is writing advice, and a gate stops a commit only on a real
 # ramble. Measured over the tree, 20 fired on the median sentence and 30 leaves the
@@ -63,7 +63,7 @@ HEADER_SUFFIXES = ("*.h", "*.cpp")
 # directory named for it, and holding a hundred findings nobody here will ever fix.
 HEADER_EXEMPT = ("src/platform/desktop/vendor/", "src/ui/vendor/", "test/doctest.h")
 MAX_CLASS_DOC = 10      # lines of `///` directly above `class X`
-MAX_MOREINFO_SECTION = 10  # lines of ONE `## ` section inside the `@moreinfo` appendix
+MAX_TECHNICAL_SECTION = 10  # lines of ONE `## ` section inside the `@technical` appendix
 MAX_MEMBER_DOC = 1      # lines of a `///` run that is NOT a class comment
 MAX_DOC_WORDS = 30      # words in one sentence of a comment, `///` or `//`
 # Characters of one `//` line, whatever it holds. The word budget governs a sentence and the
@@ -117,13 +117,15 @@ _GUIDE_NAMES_CONTROL_RULE = "module guide explains a control"
 _HELP_LINE_RULE = "help line missing"
 # A tag emoji is a filter chip, so one only a single module or script carries groups nothing.
 _TAG_GROUP_RULE = "tag emoji on one module"
+# A declaration's comment is its `///`, which the help, the docs and the IDE hover read; a `//` above it reaches none of them, so a note there is either the declaration's doc or a line of the body.
+_NOTE_ON_DECL_RULE = "// on a declaration"
 MAX_MORE_WORDS = 40      # a control's longer help, its `@guide` section titled with the control
 MAX_GUIDE_WORDS = 60     # any other `@guide` section
 MAX_HELP_WORDS = 250     # the summary, the guide and every control's longer help together
 # A paragraph spread over several lines: one topic is one paragraph and one line, cut to fit the cap rather than split. Staged as the line cap is, a new rule over comments written before it.
 _SPLIT_PARAGRAPH_RULE = "split paragraph"
 # One line, in every file. Depth is not forbidden, it is HOMED: a header carries it in an
-# `@moreinfo` appendix (212 do) and an implementation file carries it in the same appendix on its
+# `@technical` appendix (212 do) and an implementation file carries it in the same appendix on its
 # own file lead. A cap of 8 in a `.cpp` was an attempt to give depth a home inline, which leaves
 # the reasoning beside one call rather than where a reader looks for it.
 MAX_CODE_COMMENT = 1
@@ -176,7 +178,7 @@ def _blocks(key: str, why: str = "") -> bool:
 
 # No hard wrap: a sentence continued on the next `///` line. The one-line budget above already
 # forbids this on a header's member or code comment, so it bites where a block is ALLOWED to be
-# multi-line: the class comment, the `@moreinfo` appendix, and any multi-line run in a `.cpp`.
+# multi-line: the class comment, the `@technical` appendix, and any multi-line run in a `.cpp`.
 # Same reason markdown forbids it: let the editor soft-wrap, so a one-word edit is a one-word
 # diff rather than a reflowed paragraph.
 _WRAP_SKIP = ("##", "@", "-", "*", "|", "```", ">")
@@ -213,13 +215,13 @@ def _is_structural(body: str) -> bool:
 # truncate to a word that names nothing, and the two details-table rules share theirs.
 _RULE_NAMES = (
     "public function has no", "public variable has no",
-    "file opens with //", "file lead missing", "@moreinfo on a member", "@xref",
+    "file opens with //", "file lead missing", "@technical on a member", "@xref",
     "code comment", "comment line", "doc line", "lead",
     "unreferenced appendix section", "appendix section",
     "class comment", "member comment", "no image", "image is", "one control",
     "doc sentence", "hard wrap", "split paragraph", _STALE_HELP_RULE,
     _RESTATES_RULE, _GUIDE_REPEATS_RULE, _HELP_SIZE_RULE, _GUIDE_NAMES_CONTROL_RULE, _HELP_LINE_RULE,
-    _TAG_GROUP_RULE,
+    _TAG_GROUP_RULE, _NOTE_ON_DECL_RULE,
 )
 
 
@@ -242,7 +244,7 @@ _RULE_LABELS = {
     "lead": "over-long leads",
     "appendix section": "over-long appendix sections",
     "unreferenced appendix section": "appendix sections nothing refers to",
-    "@moreinfo on a member": "@moreinfo on a member",
+    "@technical on a member": "@technical on a member",
     "@xref": "unresolved @xref",
     "no image": "cards with no image",
     "image is": "wrong image format",
@@ -253,6 +255,7 @@ _RULE_LABELS = {
     _GUIDE_NAMES_CONTROL_RULE: "controls explained in the module guide",
     _HELP_LINE_RULE: "missing help lines",
     _TAG_GROUP_RULE: "tag emoji on one module",
+    _NOTE_ON_DECL_RULE: "// notes on declarations",
 }
 
 
@@ -300,7 +303,7 @@ def _tracked_files():
 
 
 def _appendix_lines(text: str) -> int:
-    """How many `///` lines follow an `@moreinfo` in one file: the depth its comments hold outside the code."""
+    """How many `///` lines follow an `@technical` in one file: the depth its comments hold outside the code."""
     n, inside = 0, False
     for line in text.split("\n"):
         s = line.strip()
@@ -308,7 +311,7 @@ def _appendix_lines(text: str) -> int:
             inside = False
         elif inside:
             n += 1
-        elif "@moreinfo" in s:   # anywhere on the line, as _header_rules reads it
+        elif "@technical" in s:   # anywhere on the line, as _header_rules reads it
             inside = True
     return n
 
@@ -390,7 +393,7 @@ def _wrap_rule(rel: str, lines: list, k: int, end: int, start: int = 0):
     """A sentence carried onto the next comment line, or a paragraph spread over several lines.
 
     A function rather than a loop body, because two callers need it: a member or class run,
-    and a `@defgroup` file lead. Every file, header or implementation: the reason is the DIFF,
+    and a file lead. Every file, header or implementation: the reason is the DIFF,
     since a sentence split across lines reflows every one of them when a word changes.
 
     One topic is one paragraph, and a paragraph is one line, which markdown joins anyway and a
@@ -493,12 +496,7 @@ def _declared_name(decl: str, start: int) -> str:
 _CLASS_RE = re.compile(r"^(class|struct)\s+\w+")
 # A forward declaration names a type defined elsewhere, so it documents nothing and is not a lead.
 _FWD_DECL_RE = re.compile(r"^(class|struct)\s+\w+\s*;")
-# A quoted string's braces are text, not scope: `const char* s = "{";` must not raise the depth.
-_STRING_LIT_RE = re.compile(r'"(?:[^"\\]|\\.)*"' + r"|'(?:[^'\\]|\\.)*'")
-# A free constant or function at file scope: what a `@defgroup` exists to gather under one lead.
-# The trailing form accepts a signature that ENDS at the parameter list, because an Allman brace
-# sits on the next line: without that a header written in that style reads as having no free
-# functions at all, and the single-class rule below would flag its legitimate group.
+# A free constant or function at file scope. The trailing form accepts a signature that ENDS at the parameter list, because an Allman brace sits on the next line.
 _TOP_DECL_RE = re.compile(r"^(inline|constexpr|extern|template|using|typedef)\b|"
                           r"^[\w:<>,\s\*&]+\s+\w+\s*\([^)]*\)\s*(const)?\s*[;{]?\s*$")
 # What may follow a parameter list: the qualifiers, and an attribute macro such as `MM_NONBLOCKING`, which is all capitals.
@@ -578,8 +576,8 @@ def _file_lead_rule(rel: str, lines: list[str], out: list) -> None:
     """A header opens with `///`, so its generated page says what the file is for.
 
     Two shapes qualify, because two kinds of header exist. A header of free functions or constants
-    leads with `@defgroup`. A single-class header leads with the class comment, which IS the file's
-    documentation and already generates the page's summary. Anything else, including the `//` block
+    leads with a `///` block saying what the file is for. A single-class header leads with the class
+    comment, which IS the file's documentation. Anything else, including the `//` block
     four platform headers used to open with, generates nothing: Doxygen reads `//` as a note to the
     next reader of the source, not as documentation.
     """
@@ -594,11 +592,11 @@ def _file_lead_rule(rel: str, lines: list[str], out: list) -> None:
             continue
         # The first comment in the file, whatever it is.
         if st.startswith("///"):
-            return                      # a `///` lead: @defgroup or a class comment, both fine
+            return                      # a `///` lead: the file's own or a class comment, both fine
         if st.startswith("//"):
             # Every file leads with `///`, header or not. A lead is the one comment written for
             # someone who has not read the file yet, and `///` is what carries it onto a page and
-            # what lets an `@moreinfo` appendix hang off it: spelled `//` the same words reach
+            # what lets an `@technical` appendix hang off it: spelled `//` the same words reach
             # nobody but the next person to scroll past them. 216 implementation files still lead
             # with `//`, which is the sweep this states rather than an exemption.
             out.append((f"{rel}::line {i + 1}",
@@ -613,148 +611,57 @@ def _file_lead_rule(rel: str, lines: list[str], out: list) -> None:
         return
 
 
-def _redundant_defgroup_rule(rel: str, lines: list[str], out: list) -> None:
-    """A single-class header leads with the class comment, not with a `@defgroup`.
-
-    Two lead shapes generate a page, and which one is right follows from what the header holds.
-    A header of free functions, constants or several peer types needs a `@defgroup`, because no
-    one declaration speaks for the file. A header declaring ONE type has that type's comment as
-    its page already, so a group around it is a second lead saying the same thing in a second
-    place: the generated page then carries the group's summary and the class's, and an editor has
-    two homes to keep in step.
-
-    Counting what is top-level is the whole rule, and four shapes each defeated a naive count:
-
-    - `template <class T>` above a class is PART of that class, not a free declaration. Read as
-      one, every single-class template header was permanently exempt, which is the rule's own
-      headline case.
-    - A brace on its own line, Allman style, belongs to the declaration above it. Counted where
-      it sits, a class after `namespace mm` + `{` read as nested and vanished.
-    - A brace inside a string literal is text. `const char* s = "{";` raised the depth forever,
-      so every later declaration read as nested.
-    - `namespace a { namespace b {` is one line opening two scopes, so skipping the whole line
-      let its contents read as top-level.
-
-    Nested types do not count either, being implementation detail rather than anything the page
-    documents.
-    """
-
-    grp = next((i for i, l in enumerate(lines) if l.strip().startswith("/// @defgroup")), None)
-    if grp is None:
-        return
-    depth = 0
-    top_level_types = 0
-    others = 0
-    pending_template = False
-    templated_type = False              # the single top-level type is a template
-    ns_debt = 0                         # namespace braces still to arrive, Allman style
-    for ln in lines:
-        st = ln.strip()
-        if st.startswith(("//", "/*", "*", "#")):
-            continue
-        # A string literal's braces are text, so they are removed before any brace is counted.
-        bare = _STRING_LIT_RE.sub("", ln)
-        if depth == 0:
-            if _CLASS_RE.match(st):
-                top_level_types += 1
-                # Whether THIS class carried a template line, which is what the exemption
-                # below turns on. A template elsewhere in the file says nothing about it.
-                if pending_template:
-                    templated_type = True
-                pending_template = False
-            elif st.startswith("template"):
-                # Whether it introduces a type or a free function is decided by the NEXT
-                # declaration, so it is held rather than counted here.
-                pending_template = True
-            elif st.startswith("enum class"):
-                others += 1
-            elif _TOP_DECL_RE.match(st):
-                others += 1             # a free function or constant, template or not
-                pending_template = False
-        # A namespace is not what nests a type, so its own braces do not count. A line may open
-        # two (`namespace a { namespace b {`), and one may open on the NEXT line, so the count
-        # is by keyword rather than by line: each `namespace` seen owes one brace to skip.
-        opens = bare.count("{")
-        closes = bare.count("}")
-        ns_open = len(re.findall(r"\bnamespace\b", bare))
-        if ns_open:
-            skipped = min(ns_open, opens)
-            opens -= skipped
-            ns_debt += ns_open - skipped
-        elif ns_debt and opens:
-            take = min(ns_debt, opens)   # an Allman namespace brace, landing a line later
-            opens -= take
-            ns_debt -= take
-        depth += opens - closes
-        depth = max(depth, 0)
-    # A TEMPLATE class is the exception: its `template <...>` line sits between the comment and
-    # the class, so the comment cannot attach to the class at all and a group is the only lead
-    # shape left. Reported here, the rule would push a header back into the shape that loses it.
-    # The test is on THAT class, not on the file: a single-class header with an unrelated
-    # template helper further down still has a class comment the page can lead with.
-    if top_level_types == 1 and others == 0 and not templated_type:
-        out.append((f"{rel}::line {grp + 1}",
-                    "@defgroup on a single-class header: the class comment is already the page's lead"))
-
-
 def _appendix_marker(line: str) -> bool:
-    """Whether a line opens an appendix: `@guide`, the sections written for users that the app shows as a module's help, or `@moreinfo`, the ones written for developers. Both end the lead, sit only on a lead and cap each `## ` section; only `@moreinfo` counts toward the ratcheted total, since a guide section is help moved out of a card rather than depth moved out of the code."""
+    """Whether a line opens an appendix: `@guide`, the sections written for users that the app shows as a module's help, or `@technical`, the ones written for developers. Both end the lead, sit only on a lead and cap each `## ` section; only `@technical` counts toward the ratcheted total, since a guide section is help moved out of a card rather than depth moved out of the code."""
     # `@guide` alone on its line opens the module's guide; on a member it starts the control's longer help, which is no appendix.
-    return "@moreinfo" in line or re.fullmatch(r"\s*(///)?\s*@guide\s*", line) is not None
+    return "@technical" in line or re.fullmatch(r"\s*(///)?\s*@guide\s*", line) is not None
 
 
-def _moreinfo_placement_rule(rel: str, lines: list[str], out: list) -> None:
-    """`@moreinfo` and `@guide` are appendices, and only a lead carries one.
+def _technical_placement_rule(rel: str, lines: list[str], out: list) -> None:
+    """`@technical` and `@guide` are appendices, and only a lead carries one.
 
     The file lead and each class or struct comment may have one; a member may not, because a member
-    gets a single line and the generated page shows that line as its summary. An `@moreinfo` on a
+    gets a single line and the generated page shows that line as its summary. An `@technical` on a
     member is depth in the wrong place, and relaxing the member budget to allow it put a four-line
     block on every function in a swept header.
     """
     for start, end, nxt in _doc_runs(lines):
         if not any(_appendix_marker(lines[k]) for k in range(start, end)):
             continue
-        # A bare `///` run at the TOP of the file is a lead too. The `@defgroup` spelling is how a
-        # header gathers free declarations under one page, and a file that needs no group still
-        # opens with prose saying what it is for: read as a member comment that block gets one
-        # line, so every such lead reported its own length as a finding. What makes a lead is its
-        # POSITION, not the marker it happens to carry.
-        is_lead = any("@defgroup" in lines[k] for k in range(start, end)) or (
-            start == _first_content_line(lines))
-        if is_lead:
+        if start == _lead_start(lines):
             continue                    # the file lead
         if _CLASS_RE.match(nxt):
             continue                    # a class or struct comment
         out.append((f"{rel}::{_declared_key(nxt, start)}",
-                    "@moreinfo on a member: the appendix belongs on the file or class lead"))
+                    "@technical on a member: the appendix belongs on the file or class lead"))
 
 
-def _first_content_line(lines: list[str]) -> int:
-    """The index of the first line that is neither blank nor a preprocessor or block-comment line.
-
-    What a file lead sits on. Include lines and pragmas may precede a lead, so a `///` run opening
-    at this index is the file's own comment rather than one documenting a declaration.
-    """
-    for i, ln in enumerate(lines):
-        st = ln.strip()
-        if not st or st.startswith(("#", "/*", "*")):
+def _lead_start(lines: list[str]) -> int | None:
+    """Where the file's lead sits: the first `///` run, when nothing but includes, namespaces, forward declarations and `//` notes precede it, and no declaration follows it directly. What makes a lead is its position."""
+    for start, end, nxt in _doc_runs(lines):
+        # A block of tags alone, such as the test inventory's `/// @module`, is metadata rather than the lead.
+        if all(re.sub(r"^\s*///\s*", "", lines[k]).startswith("@") for k in range(start, end)):
             continue
-        return i
-    return 0
+        before = [ln.strip() for ln in lines[:start]]
+        code = [st for st in before if st and not st.startswith(("#", "//", "/*", "*", "namespace", "using", "extern", "{"))
+                and not _FWD_DECL_RE.match(st)]
+        # Flush against a declaration, the run is that declaration's comment, as clang reads it.
+        return None if code or not (not nxt or nxt.startswith(("#", "{", "namespace", "//"))) else start
+    return None
 
 
 def _header_rules(rel: str, text: str):
     """The comment budget, on one header.
 
     Counted rather than judged, so the constants at the top of this file ARE the rules and
-    this docstring names no number of its own. A class comment and each `@moreinfo` `## `
+    this docstring names no number of its own. A class comment and each `@technical` `## `
     section have a line budget; any other `///` run has one line; a sentence has a word
     budget; a `//` run has one line in a header and an essay's worth in a `.cpp`; and every
     public member of a header carries a `///`. The budgets cut and the last one adds, pulling
     against each other so the result is a short line on everything rather than an essay on a
     few things.
 
-    A file also opens with `///`, `@moreinfo` sits only on a lead, and every `@xref` resolves
+    A file also opens with `///`, `@technical` sits only on a lead, and every `@xref` resolves
     to a heading in its own file.
 
     `//` carries the same budget as `///` IN A HEADER, because without that the `///` cap moves
@@ -764,20 +671,12 @@ def _header_rules(rel: str, text: str):
     """
     out = []
     lines = text.split("\n")
+    lead = _lead_start(lines)
 
     for start, end, nxt in _doc_runs(lines):
         n = end - start
-        # A run that opens a @defgroup documents the FILE, not a member: it precedes an include,
-        # a constant or nothing at all, so the one-line member budget measured the whole block and
-        # reported a 45-line finding on every such header. It is a lead comment, so it is held to
-        # the class budget and splits at @moreinfo the same way.
-        # A bare `///` run at the TOP of the file is a lead too, and gets the lead budget. The
-        # `@defgroup` spelling is how a header gathers free declarations under one page; a file
-        # needing no group still opens with prose saying what it is for. Read as a member comment
-        # that block gets ONE line, so each such lead reported its own length as a finding: what
-        # makes a lead is its POSITION, not the marker it carries.
-        if (any("@defgroup" in lines[k] for k in range(start, end))
-                or start == _first_content_line(lines)):
+        # The file lead documents the FILE, not a member, so it is held to the class budget and splits at @technical the same way; read as a member comment it would get one line.
+        if start == lead:
             head = next((k for k in range(start, end) if _appendix_marker(lines[k])), end)
             n = head - start
             if n > MAX_CLASS_DOC:
@@ -790,8 +689,7 @@ def _header_rules(rel: str, text: str):
             if chars > MAX_RUN_CHARS:
                 out.append((f"{rel}::line {start + 1}",
                             f"lead {chars} chars > {MAX_RUN_CHARS}"))
-            # The word cap applies here too: a file-level block is prose a reader sees on the
-            # generated page, and skipping the check exempted every `@defgroup` header from it.
+            # The word cap applies here too: the file lead is prose a reader sees.
             for k in range(start, end):
                 for sentence in _sentences(re.sub(r"^\s*///\s*", "", lines[k]).strip()):
                     if len(sentence.split()) > MAX_DOC_WORDS:
@@ -806,7 +704,7 @@ def _header_rules(rel: str, text: str):
                 out += _wrap_rule(rel, lines, k, end, start)
             continue
         if _CLASS_RE.match(nxt):
-            # The LEAD only: the run ends at @moreinfo, whose own lines are the appendix and
+            # The LEAD only: the run ends at @technical, whose own lines are the appendix and
             # are measured per section below. Counting both here would put the documented
             # budget (10 lead, then 10 per appendix section) out of reach of any header.
             head = next((k for k in range(start, end) if _appendix_marker(lines[k])), end)
@@ -814,7 +712,7 @@ def _header_rules(rel: str, text: str):
             if n > MAX_CLASS_DOC:
                 out.append((f"{rel}::{nxt.split()[1].rstrip('{:')}",
                             f"class comment {n} lines > {MAX_CLASS_DOC}"))
-            # The run cap reaches HERE too. Applied only to the `@defgroup` branch it missed the
+            # The run cap reaches HERE too. Applied only to the file lead it missed the
             # block it was written for: nine lines of 359 characters is 3231, over the cap, with
             # every line inside the lead cap and every sentence inside the word budget.
             chars = sum(len(re.sub(r"^\s*///\s?", "", lines[k])) for k in range(start, head))
@@ -822,7 +720,7 @@ def _header_rules(rel: str, text: str):
                 out.append((f"{rel}::line {start + 1}",
                             f"lead {chars} chars > {MAX_RUN_CHARS}"))
         else:
-            # Both kinds of file: a `.cpp` carries a file lead with its own `@moreinfo` appendix exactly as a header does.
+            # Both kinds of file: a `.cpp` carries a file lead with its own `@technical` appendix exactly as a header does.
             #
             # Structure discounts here exactly as it does on the `//` cap. Without that, one
             # marker exempted a bulleted list and the other did not, so the same six lines were
@@ -858,21 +756,17 @@ def _header_rules(rel: str, text: str):
                             f"doc line {width} chars > {cap}"))
             out += _wrap_rule(rel, lines, k, end, start)
 
-    # A file OPENS with `///`, so the generated page says what the file is for. The lead is a
-    # `@defgroup` block in a header of free functions, or the class comment in a single-class
+    # A file OPENS with `///`, so the page says what the file is for. The lead is the file's
+    # own `///` block in a header of free functions, or the class comment in a single-class
     # header, where the class IS the file. Without one the page is a bare member list: 222 headers
     # were in that state, and four of the six platform headers opened with `//`, which Doxygen
     # drops entirely.
     _file_lead_rule(rel, lines, out)
 
-    # Which lead shape is right follows from what the header holds: a `@defgroup` gathers free
-    # declarations or peer types, where a lone class already IS the page and needs no second lead.
-    _redundant_defgroup_rule(rel, lines, out)
-
-    # `@moreinfo` is an APPENDIX, and a page has one per documented entity: the file lead and each
-    # class or struct comment. A member gets one line (MAX_MEMBER_DOC), so an `@moreinfo` on one is
+    # `@technical` is an APPENDIX, and a page has one per documented entity: the file lead and each
+    # class or struct comment. A member gets one line (MAX_MEMBER_DOC), so an `@technical` on one is
     # depth in the wrong place: it belongs in the file lead's appendix or on the module's page.
-    _moreinfo_placement_rule(rel, lines, out)
+    _technical_placement_rule(rel, lines, out)
 
     # An `@xref{anchor}` names a heading on the SAME generated page. When the heading is renamed
     # the link resolves to nothing, and `_strip_unresolved_anchor_links` drops it silently: the
@@ -903,15 +797,15 @@ def _header_rules(rel: str, text: str):
             if fenced:
                 continue
             if text.startswith("## "):
-                if count > MAX_MOREINFO_SECTION:
-                    out.append((f"{rel}::@moreinfo {section}",
-                                f"appendix section {count} lines > {MAX_MOREINFO_SECTION}"))
+                if count > MAX_TECHNICAL_SECTION:
+                    out.append((f"{rel}::@technical {section}",
+                                f"appendix section {count} lines > {MAX_TECHNICAL_SECTION}"))
                 section, count = text[3:].strip(), 0
             elif text:
                 count += 1
-        if count > MAX_MOREINFO_SECTION:
-            out.append((f"{rel}::@moreinfo {section}",
-                        f"appendix section {count} lines > {MAX_MOREINFO_SECTION}"))
+        if count > MAX_TECHNICAL_SECTION:
+            out.append((f"{rel}::@technical {section}",
+                        f"appendix section {count} lines > {MAX_TECHNICAL_SECTION}"))
 
     # `//` carries the same budget as `///` in a HEADER, or the `///` cap only MOVES text:
     # re-spelling a fifty-line member comment as `//` satisfies every other rule and leaves the
@@ -1004,6 +898,10 @@ def _header_rules(rel: str, text: str):
         depth += opens - closes
         if fn_depth is not None and depth < fn_depth:
             fn_depth = None                      # the function body closed
+        # A declaration at file scope carries one comment kind too: a free function, a constant, a type.
+        if (not frames and fn_depth is None and _generates_a_page(rel) and not st.startswith(("template", "extern"))
+                and (_TOP_DECL_RE.match(st) or _CLASS_RE.match(st) or st.startswith("enum "))):
+            out += _note_on_declaration(rel, lines, i, st)
         if (not frames and fn_depth is None and opens and not _CLASS_RE.match(st)
                 and not st.startswith(("namespace", "extern", "//", "/*", "*", "#"))
                 and "(" in st):
@@ -1033,7 +931,13 @@ def _header_rules(rel: str, text: str):
         if st.startswith(("private:", "protected:")):
             public = False
             continue
-        if not public or not st or st.startswith(("//", "/*", "*", "#")):
+        if not st or st.startswith(("//", "/*", "*", "#")):
+            continue
+        # Any access: a private member's comment shows on hover as a public one's does.
+        if (before == class_depth and not in_local and _generates_a_page(rel)
+                and not st.startswith(("return", "if", "for", "while", "}", "friend "))):
+            out += _note_on_declaration(rel, lines, i, st)
+        if not public:
             continue
         # `before` is the depth the line STARTS at: a member sits exactly in the body.
         # `friend` grants access to another type; it declares no member and reaches no
@@ -1072,6 +976,21 @@ def _header_rules(rel: str, text: str):
     return out
 
 
+def _note_on_declaration(rel: str, lines: list[str], i: int, st: str) -> list:
+    """A `//` among the comment lines directly above declaration line `i`, past any `template` line: one finding, since the declaration's comment is its `///`."""
+    j = i - 1
+    while j >= 0 and lines[j].lstrip().startswith("template"):
+        j -= 1
+    while j >= 0 and lines[j].lstrip().startswith("//"):
+        # A snippet marker, `// --8<--`, is machine-read by the docs build, and an SPDX tag or an `// Author:` line is provenance: none is a comment on the declaration.
+        if lines[j].lstrip().startswith(("// --8<--", "// SPDX-", "// Author:")):
+            break
+        if not lines[j].lstrip().startswith("///"):
+            return [(f"{rel}::{_declared_name(st, i)}", f"{_NOTE_ON_DECL_RULE}: make it the declaration's `///`, or move it into the body")]
+        j -= 1
+    return []
+
+
 def _help_cards(help_file: dict) -> list:
     """Each catalog card that misses its picture or shows the wrong kind, and each control line that runs too long or restates its default or range."""
     out = []
@@ -1103,10 +1022,10 @@ def _help_cards(help_file: dict) -> list:
 
 
 def _appendix_sections(lines: list[str]) -> list[str]:
-    """The `## ` headings of a file's `@moreinfo` appendices, in order, skipping fenced examples as the section budget does."""
+    """The `## ` headings of a file's `@technical` appendices, in order, skipping fenced examples as the section budget does."""
     out = []
     for i, ln in enumerate(lines):
-        if "@moreinfo" not in ln:
+        if "@technical" not in ln:
             continue
         fenced = False
         for m in lines[i + 1:]:
@@ -1135,7 +1054,7 @@ def _unreferenced_sections():
 def _unreferenced_in(rel: str, lines: list[str]) -> list:
     """One file's appendix sections that none of its own `@xref`s reach."""
     xrefs = {m.group(1).strip().rstrip("\\") for ln in lines for m in re.finditer(r"@xref\{([^}|]+)", ln)}
-    return [(f"{rel}::@moreinfo {section}", f"{_UNREFERENCED_RULE}: no @xref reaches it")
+    return [(f"{rel}::@technical {section}", f"{_UNREFERENCED_RULE}: no @xref reaches it")
             for section in _appendix_sections(lines) if _slugify_heading(section) not in xrefs]
 
 
@@ -1402,7 +1321,7 @@ def _write_report(found, appendix=None) -> None:
            "the trend is this file's git history. The list only shrinks.", "",
            f"**{len(errs)} error(s)** and **{len(warns)} warning(s)** "
            f"across {len(by_page)} page(s).", "",
-           *([f"**{appendix} appendix line(s)** after `@moreinfo`. This only falls as well: a cleanup "
+           *([f"**{appendix} appendix line(s)** after `@technical`. This only falls as well: a cleanup "
               "cuts first, and moves only what neither the code, the test name nor the spec says.", ""]
              if appendix is not None else []),
            "An error is in a file that generates a documentation page, a header or a catalog page, "

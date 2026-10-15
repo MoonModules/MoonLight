@@ -12,7 +12,7 @@ namespace mm {
 ///
 /// @attribution Mark Kriegsman
 ///
-/// @moreinfo
+/// @technical
 ///
 /// Drift scrolls the sample coordinates and spends the third axis on depth, so volumetric slices differ. Morph spends that axis on time, so every slice of a volume shows the same field.
 class NoiseEffect : public EffectBase {

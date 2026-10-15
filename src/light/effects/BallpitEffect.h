@@ -13,7 +13,7 @@ namespace mm {
 ///
 /// @attribution Damian Schneider
 ///
-/// @moreinfo
+/// @technical
 ///
 /// Collisions are the one non-linear part of the particle kernel, so the pool is small. `collide` runs once a frame before the move, and nearly every pair rejects on one axis alone.
 class BallpitEffect : public EffectBase {

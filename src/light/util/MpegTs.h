@@ -18,14 +18,12 @@ static constexpr uint16_t kPidVideo = 0x0100;
 /// The 90 kHz clock every TS timestamp is counted in (ISO/IEC 13818-1).
 static constexpr uint32_t kClockHz = 90000;
 
-/// The continuity counters, which belong to the STREAM rather than to any one write. MPEG-TS requires each PID's counter to advance by one per packet without interruption, across frames and across segment boundaries alike.
-/// A player treats any gap as lost packets. The caller keeps one of these for the whole stream and hands it to every Writer.
+/// The continuity counters, which belong to the STREAM rather than to any one write. MPEG-TS requires each PID's counter to advance by one per packet across frames and segments, and a player treats any gap as lost packets.
 struct Continuity {
     uint8_t pat = 0, pmt = 0, video = 0;   ///< the continuity counter each stream carries
 };
 
-/// Writes packets into a caller-owned buffer, reporting overflow rather than growing.
-/// A segment buffer is a fixed PSRAM slot on the P4, and a muxer that allocates would be the one thing in the hot path doing so.
+/// Writes packets into a caller-owned buffer, reporting overflow rather than growing. A segment buffer is a fixed PSRAM slot on the P4, and a muxer that allocates would be the one thing in the hot path doing so.
 class Writer {
 public:
     /// `cc` must outlive the Writer and be the SAME object for every write in a stream.
@@ -111,7 +109,7 @@ public:
     }
 
 private:
-    // PAT: one program (number 1) whose map lives on kPidPmt.
+    /// PAT: one program (number 1) whose map lives on kPidPmt.
     static constexpr uint8_t patPayload[] = {
         0x00,                    // table id: program association
         0xB0, 0x0D,              // section syntax indicator + length 13
@@ -123,7 +121,7 @@ private:
         0xF0, 0x00,              // -> kPidPmt (0x1000)
         0x00, 0x00, 0x00, 0x00,  // CRC, filled in by writeTable
     };
-    // PMT: one elementary stream, type 0x1B (H.264), which is also the PCR PID.
+    /// PMT: one elementary stream, type 0x1B (H.264), which is also the PCR PID.
     static constexpr uint8_t pmtPayload[] = {
         0x02,                    // table id: program map
         0xB0, 0x12,              // section syntax indicator + length 18

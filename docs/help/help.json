@@ -81,7 +81,8 @@
      "line": "The scripted palette's file, which `palette` picks."
     },
     "motionHold": {
-     "line": "How long a powered-off rig keeps tracking before its heads go still, in seconds."
+     "line": "How long a powered-off rig keeps tracking before its heads go still, in seconds.",
+     "more": "A short hold is a blackout between cues, a long one a park between sets."
     },
     "multicore": {
      "line": "Run the output stage on the second core.",
@@ -3479,7 +3480,7 @@
   },
   "SystemModule": {
    "line": "The device's identity and vitals: its name, how long it has run, and the memory and tick it renders at.",
-   "summary": "The name is the one the network sees, behind mDNS `<name>.local`, the access point SSID and the DHCP hostname. The readings are in More info.",
+   "summary": "The name is the one the network sees, behind mDNS `<name>.local`, the access point SSID and the DHCP hostname. The readings are described under What it reports in the header.",
    "guide": [
     {
      "title": "Safe mode",
@@ -4364,7 +4365,7 @@
   },
   "NetworkModule": {
    "line": "Brings the device onto the LAN before the HTTP and WebSocket servers start, trying Ethernet, then WiFi, then its own access point.",
-   "summary": "Network holds the cascade, its mode and mDNS; each interface's settings are on its own card: Ethernet, WiFi and the access point. A desktop builds the same cards over stubs. The order is in More info.",
+   "summary": "Network holds the cascade, its mode and mDNS; each interface's settings are on its own card: Ethernet, WiFi and the access point. A desktop builds the same cards over stubs. The order is described under The cascade in the header.",
    "guide": [
     {
      "title": "A direct cable to a computer",

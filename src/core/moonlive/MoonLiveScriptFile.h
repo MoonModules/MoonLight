@@ -9,13 +9,11 @@
 #include <cstdio>
 #include <cstring>
 
-/// @defgroup moonlive_script_file MoonLive script files
-/// @{
 /// Where scripts live and how a file name states its role.
 ///
 /// One language, five extensions: the engine stays role-blind and the extension alone decides which picker offers a file.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## Two directories
 ///
@@ -23,24 +21,20 @@
 
 namespace mm::moonlive {
 
-// A module stores a name, not a path, so it cannot reach outside this folder.
-/// Where a user's scripts live, which the UI writes and the loader prefers.
+/// Where a user's scripts live, which the UI writes and the loader prefers; a module stores a name, not a path, so it cannot reach outside this folder.
 inline constexpr const char* kScriptDir = "/moonlive";
 
-// The split is the revert mechanism: @xref{two-directories}.
-/// Where the factory scripts land, which the picker offers and the UI downloads on first use.
+/// Where the factory scripts land, which the picker offers and the UI downloads on first use; the split is the revert mechanism: @xref{two-directories}.
 inline constexpr const char* kFactoryScriptDir = "/.moonlive";
 
-// The engine stays role-blind, so the extension alone decides which picker offers a file.
-/// A script's role, carried in its file name: one language, five extensions.
+/// A script's role, carried in its file name: one language, five extensions, and the extension alone decides which picker offers a file.
 inline constexpr const char* kEffectExt   = ".mle";
 inline constexpr const char* kLayoutExt   = ".mll";
 inline constexpr const char* kModifierExt = ".mlm";
 inline constexpr const char* kServiceExt  = ".mls";
 inline constexpr const char* kPaletteExt  = ".mlp";
 
-// One definition, because two copies drifted and the linker picked whichever it liked.
-/// Whether `ext` is one of the script extensions.
+/// Whether `ext` is one of the script extensions, defined once for every caller.
 inline bool isScriptExt(const char* ext) {
     if (!ext) return false;
     return std::strcmp(ext, kEffectExt) == 0 || std::strcmp(ext, kLayoutExt) == 0 ||
@@ -48,8 +42,7 @@ inline bool isScriptExt(const char* ext) {
            std::strcmp(ext, kPaletteExt) == 0;
 }
 
-// The catalog is the only list of shipped names, so a second copy would drift.
-/// Whether `name` is one of the scripts the firmware ships.
+/// Whether `name` is one of the scripts the firmware ships, read from the catalog, the only list of shipped names.
 inline bool isFactoryScript(const char* name) {
     if (!name || !*name) return false;
     const char* ext = std::strrchr(name, '.');
@@ -67,20 +60,16 @@ inline bool isFactoryScript(const char* name) {
     return false;
 }
 
-// A bound rather than a language limit, so a stray large file cannot exhaust a small device.
-/// The largest script the loader reads into RAM at once.
+/// The largest script the loader reads into RAM at once: a bound so a stray large file cannot exhaust a small device.
 inline constexpr long kScriptFileMax = 16384;
 
-// The bindings size their control buffer from this, so an accepted name is always holdable.
-/// Longest script name accepted, and the bound on the path buffer below.
+/// Longest script name accepted, and the bound on the path buffer below; the bindings size their control buffer from it.
 inline constexpr size_t kMaxScriptName = 40;
 
-// A caller needing to know whether this changed keeps 4 bytes rather than a copy of the source.
-/// FNV-1a over the script text.
+/// FNV-1a over the script text, so a caller detecting a change keeps 4 bytes rather than a copy of the source.
 inline uint32_t scriptHash(const char* s, size_t len) { return fnv1a(s, len); }
 
-// One resolver, or a fork compiles from one directory and hashes from the other.
-/// Where `name` lives: the user's copy when there is one, else the factory copy.
+/// Where `name` lives: the user's copy when there is one, else the factory copy; one resolver, so a fork never compiles from one directory and hashes from the other.
 inline bool resolveScript(const char* name, char* out, size_t outLen) {
     std::snprintf(out, outLen, "%s/%s", kScriptDir, name);
     if (platform::fsSize(out) >= 0) return true;
@@ -91,8 +80,7 @@ inline bool resolveScript(const char* name, char* out, size_t outLen) {
     return true;
 }
 
-// A sidecar, since a provenance line inside user-facing text would be edited away.
-/// Where the lineage hash of a forked script is kept.
+/// Where the lineage hash of a forked script is kept, in a sidecar since a provenance line inside user-facing text would be edited away.
 inline void scriptLineagePath(const char* name, char* out, size_t outLen) {
     std::snprintf(out, outLen, "%s/.%s.from", kScriptDir, name);
 }
@@ -107,8 +95,7 @@ inline bool noteScriptLineage(const char* name, uint32_t hash) {
     return n > 0 && platform::fsWriteAtomic(path, text, static_cast<size_t>(n));
 }
 
-// Absent lineage means "cannot say", never "unchanged".
-/// The hash a fork was made from, or false when none was recorded.
+/// The hash a fork was made from, or false when none was recorded, which means "cannot say", never "unchanged".
 inline bool scriptLineage(const char* name, uint32_t& out) {
     if (!name || !name[0]) return false;
     char path[128];
@@ -123,8 +110,7 @@ inline bool scriptLineage(const char* name, uint32_t& out) {
     return true;
 }
 
-// Takes the written path rather than a name, so no caller works out whether a write was a fork.
-/// Record lineage for a file as it is written, when it forks a script the firmware also ships.
+/// Record lineage for a file as it is written, when it forks a script the firmware also ships. It takes the written path so no caller works out whether a write was a fork.
 inline void noteForkedFrom(const char* path) {
     if (!path) return;
     char prefix[64];
@@ -158,8 +144,7 @@ inline void noteForkedFrom(const char* path) {
     platform::free(text);
 }
 
-// False without lineage, since claiming an update on a guess would send someone to discard work.
-/// Whether the shipped copy has changed since the user forked it.
+/// Whether the shipped copy has changed since the user forked it; false without lineage, since claiming an update on a guess would send someone to discard work.
 inline bool scriptFactoryMovedOn(const char* name) {
     uint32_t from = 0;
     if (!scriptLineage(name, from)) return false;
@@ -183,8 +168,7 @@ inline bool scriptShadowsFactory(const char* name) {
     return platform::fsSize(path) >= 0;
 }
 
-// One read, skipping the parse, the codegen and the exec-block allocation after it.
-/// The hash of `name`'s current text, without compiling it.
+/// The hash of `name`'s current text, without compiling it: one read, skipping the parse, the codegen and the exec-block allocation.
 inline bool scriptFileHash(const char* name, uint32_t& out) {
     if (!name || !name[0]) return false;
     char path[96];
@@ -252,7 +236,5 @@ inline bool compileScriptFile(MoonLive& engine, const char* name,
     platform::free(text);
     return ok;
 }
-
-/// @}
 
 }  // namespace mm::moonlive

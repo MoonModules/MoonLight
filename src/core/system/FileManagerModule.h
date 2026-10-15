@@ -28,7 +28,7 @@ namespace mm {
 ///
 /// Backup downloads the device's files as one `.json` bundle, and Restore uploads one back. Keep the bundle private: it contains the WiFi password. [The how-to](https://moonmodules.org/MoonLight/how-to/backup-and-restore.html) walks through both.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// **Browsing lives in the UI.** The tree is a client-side lazy tree, each folder loading its own children on first expand. Expansion is UI state, so the module exposes only the operations and keeps recursion and paging out of core state.
 ///

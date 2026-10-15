@@ -3,15 +3,13 @@
 #include <cstdint>
 
 
-/// @defgroup fonts Bitmap console fonts
-/// @{
 /// The glyph data `draw::text` blits: one byte per glyph row, aligned to the high bit, a set bit being a lit pixel.
 ///
 /// Two sizes ship, a compact 4x6 and a larger 6x8, and more are pure data to add.
 ///
 /// @attribution raster-fonts
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## The layout
 ///
@@ -228,7 +226,5 @@ static_assert(sizeof(kFont6x8_rows) == 95 * 8, "kFont6x8: 95 printable ASCII gly
 /// The available fonts, in the order the TextEffect's font select lists them.
 inline constexpr Font kAll[] = { kFont4x6, kFont6x8 };
 inline constexpr uint8_t kCount = sizeof(kAll) / sizeof(kAll[0]);
-
-/// @}
 
 }  // namespace mm::fonts

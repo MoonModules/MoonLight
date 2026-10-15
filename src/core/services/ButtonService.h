@@ -25,7 +25,7 @@ namespace mm {
 ///
 /// A switch to ground with the internal pull-up is active low, the usual wiring. A switch feeding 3V3 is active high. The live pressed readout shows a button working before it is bound.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// **Momentary or latching.** A toggle row flips its target on each press and ignores the release; a set row writes while held and clears on release, which a pedal needs. Only a set row acts on the release, or a toggle would fire twice per push.
 ///

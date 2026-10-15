@@ -1,10 +1,8 @@
 #pragma once
 
-/// @defgroup platform_config_esp32 ESP32 platform configuration
-/// @{
 /// What each ESP32 chip can do, derived from @xref{capabilities-not-chip-names|the SDK's own capability flags} wherever possible, with @xref{the-i80-gate-names-lcd-cams-own-mode|the i80 gate} and @xref{fixed-pads-are-published|the fixed pads} the exceptions.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## Capabilities, not chip names
 ///
@@ -16,8 +14,7 @@
 ///
 /// ## Fixed pads are published
 ///
-/// The EMAC's data pads are silicon's choice, so one list serves both the driver init and the pin map.
-/// A pad nobody declares reads as free while the MAC drives it: an LED lane on GPIO 10 corrupted every frame sent, with the link still reporting 1 Gb.
+/// The EMAC's data pads are silicon's choice, so one list serves both the driver init and the pin map. A pad nobody declares reads as free while the MAC drives it, so an LED lane there corrupts every frame while the link reports 1 Gb.
 ///
 /// ## An image without the room turns it off
 ///
@@ -71,9 +68,8 @@ constexpr bool isTeensy41 = false;
 
 /// One pad the EMAC's data interface owns: the signal it carries, and the GPIO silicon fixed it to.
 ///
-/// @moreinfo Neither RGMII on the S31 nor RMII on the P4 is configurable, so these are reported as fixed pins rather than published as controls.
-/// One list serves both the driver init and the pin map, which keeps the MAC's wiring and the map's label from drifting apart.
-/// A pad nobody declares reads as free while the MAC drives it: an LED lane on GPIO 10 corrupted every frame sent, with the link still reporting 1 Gb.
+/// @technical Neither RGMII on the S31 nor RMII on the P4 is configurable, so these are reported as fixed pins, not controls.
+/// One list serves the driver init and the pin map, so the MAC's wiring and the map's label cannot drift apart. A pad nobody declares reads as free while the MAC drives it, so an LED lane there corrupts every frame while the link reports 1 Gb.
 struct EthFixedPad { const char* name; uint8_t gpio; };
 #ifdef CONFIG_IDF_TARGET_ESP32S31
 constexpr EthFixedPad ethFixedPads[] = {
@@ -83,15 +79,15 @@ constexpr EthFixedPad ethFixedPads[] = {
 };
 constexpr uint8_t ethFixedPadCount = 12;
 #elif defined(CONFIG_IDF_TARGET_ESP32P4)
-// P4 RMII data lines; the management pair stays a routable control.
 constexpr EthFixedPad ethFixedPads[] = {
+    // P4 RMII data lines; the management pair stays a routable control.
     {"ethTxEn", 49}, {"ethTxd0", 34}, {"ethTxd1", 35},
     {"ethCrsDv", 28}, {"ethRxd0", 29}, {"ethRxd1", 30},
 };
 constexpr uint8_t ethFixedPadCount = 6;
 #elif defined(CONFIG_IDF_TARGET_ESP32)
-// Classic RMII: one pad choice per signal, so these are the pins rather than a default.
 constexpr EthFixedPad ethFixedPads[] = {
+    // Classic RMII: one pad choice per signal, so these are the pins rather than a default.
     {"ethTxEn", 21}, {"ethTxd0", 19}, {"ethTxd1", 22},
     {"ethCrsDv", 27}, {"ethRxd0", 25}, {"ethRxd1", 26},
 };
@@ -106,8 +102,7 @@ constexpr uint8_t ethFixedPadCount = 6;
 static_assert(ethFixedPadCount == sizeof(ethFixedPads) / sizeof(ethFixedPads[0]),
               "the count gates every loop over this list: a mismatch reads past the end");
 #else
-// Nothing fixed to publish here. A single dummy entry, a zero-size array being an extension MSVC refuses.
-constexpr EthFixedPad ethFixedPads[] = {{"", 0}};
+constexpr EthFixedPad ethFixedPads[] = {{"", 0}};   // nothing fixed to publish: a single dummy entry, a zero-size array being an extension MSVC refuses
 constexpr uint8_t ethFixedPadCount = 0;
 #endif
 
@@ -125,7 +120,7 @@ constexpr uint8_t lcdLanes = 16;
 constexpr uint8_t lcdLanes = 0;
 #endif
 
-// Separate from the lane count because the host reports lanes while having no such silicon.
+/// Separate from the lane count because the host reports lanes while having no such silicon.
 constexpr bool hasLcdCam = (lcdLanes > 0);
 
 // Lanes over Parlio, which takes the GPIOs directly and runs any count from 1 to 16.
@@ -160,7 +155,7 @@ constexpr bool hasWiFi = false;
 constexpr bool hasWiFi = true;
 #endif
 
-// The P4's WiFi runs on a co-processor behind an identical API, so only its read-out needs this flag.
+/// The P4's WiFi runs on a co-processor behind an identical API, so only its read-out needs this flag.
 constexpr bool hasWifiCoprocessor = isEsp32P4 && hasWiFi;
 
 // Only a variant whose SDK fragment enables the EMAC carries Ethernet; the rest get stubs.
@@ -170,7 +165,7 @@ constexpr bool hasEthernet = false;
 constexpr bool hasEthernet = true;
 #endif
 
-// True when the firmware carries an IP stack at all, which is what UDP interop gates on.
+/// True when the firmware carries an IP stack at all, which is what UDP interop gates on.
 constexpr bool hasNetwork = hasWiFi || hasEthernet;
 
 /// False: the controls follow the hardware, so a board without Ethernet shows nothing to configure.
@@ -190,7 +185,7 @@ constexpr bool ethPhyIsFixed = false;
 #define MM_HEAVY_COMPUTE 0
 #endif
 
-// Headroom for a per-pixel float algorithm, from the SDK's FPU capability rather than a chip list.
+/// Headroom for a per-pixel float algorithm, from the SDK's FPU capability rather than a chip list.
 constexpr bool hasHeavyCompute = MM_HEAVY_COMPUTE;
 
 /// False: one MAC per chip, so a raw sender has nothing to choose and the control would do nothing.
@@ -226,7 +221,7 @@ constexpr bool hasEthW5500 = false;
 #endif
 
 
-// The per-chip default, so a board with no catalog entry still comes up on its usual wiring.
+/// The per-chip default, so a board with no catalog entry still comes up on its usual wiring.
 constexpr EthPinConfig ethConfigDefault =
 #ifdef CONFIG_ETH_USE_OPENETH
     // The emulator's MAC has no pins and no PHY to address, so every field is unset.
@@ -266,8 +261,6 @@ constexpr bool hasSdCard = false;
 #endif
 /// False: SdCardService offers only the board presets this chip can wire.
 constexpr bool previewsSdPresets = false;
-
-/// @}
 
 } // namespace mm::platform
 

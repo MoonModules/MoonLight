@@ -36,7 +36,7 @@ namespace mm {
 ///
 /// Microphone wiring, setting the levels and capturing what a machine plays are in [the how-to](https://moonmodules.org/MoonLight/how-to/audio-input.html).
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## The modes run simple to advanced
 ///
@@ -70,8 +70,6 @@ public:
 
     /// A service, so the container accepts it as a child.
     ModuleRole role() const MM_NONBLOCKING override { return ModuleRole::Service; }
-
-    // It respects the enabled flag, unlike a free diagnostic:
 
     /// The capture input, `default` following the system setting.
     uint8_t device = 0;
@@ -123,8 +121,7 @@ public:
     /// Who sets the display window: the two sliders, or the learner.
     /// @guide Automatic maps each band's own range onto the window, so treble reads level with bass.
     uint8_t  levels = kLevelsAutomatic;
-    // Both act on the learned per-band range, already normalized per rig, so one value serves.
-    /// How much of a band's deviation to correct, short of the ratios that pump.
+    /// How much of a band's deviation to correct, short of the ratios that pump; it and the lift cap act on the learned per-band range, already normalized per rig.
     static constexpr uint8_t kRatio = 4;
     /// How far a band may be lifted, so a silent one is never amplified into its own noise.
     static constexpr uint8_t kMaxGainDb = 24;
@@ -291,8 +288,7 @@ public:
     /// The latest analyzed frame, always valid, so a consumer without a mic reads silence.
     const AudioFrame* audioFrame() const { return &frame_; }
 
-    // Read-only views of the socket lifecycle, so a test can assert it through the public tick.
-    /// Whether the sync socket is open.
+    /// Whether the sync socket is open, a read-only view of the socket lifecycle so a test can assert it through the public tick.
     bool syncOpenForTest() const { return syncOpen_; }
 
     /// Whether a mic diagnosis is outstanding, which suppresses the sync line while it is.
@@ -484,7 +480,7 @@ public:
     }
 
 private:
-    // The one-active-mic election:
+    /// The one-active-mic election.
     ActiveInstance<AudioService> micSeat_{*this};
 
     platform::AudioMicHandle mic_;
@@ -493,7 +489,7 @@ private:
     size_t filled_ = 0;         // samples accumulated toward the next full block
     DcBlocker dc_;              // ~40 Hz high-pass, continuous across blocks
 
-    // Fixed hot-path scratch, sized once, never reallocated.
+    /// Fixed hot-path scratch, sized once, never reallocated.
     int32_t samples_[kBlock] = {};
     float windowed_[kBlock] = {};
     float mag_[kMag] = {};
@@ -507,16 +503,15 @@ private:
     char peakStr_[12] = {};
     uint8_t levelPeak_ = 0;   // peak frame_.level across the current 1 s display window (UI only)
 
-    // Mic-health tallies over the 1 s window (see the read path + tick1s diagnosis).
+    /// Mic-health tallies over the 1 s window (see the read path and the tick1s diagnosis).
     uint32_t micSamples1s_ = 0;
     uint32_t micNonzero1s_ = 0;
     bool     micStatusStale_ = false;
 
-    // WLED audio sync (core/util/WLEDAudioSyncPacket.h). One socket, bound only in Send/Receive.
+    /// The WLED audio sync socket (core/util/WLEDAudioSyncPacket.h): one, bound only in Send/Receive.
     platform::UdpSocket syncSock_;
     uint32_t lastSyncSend_ = 0;      // millis of the last send (send throttle)
-    uint32_t syncSendCount_ = 0;         // sends made; test-visible so the throttle can be observed
-                                         // (NOT a wire field: byte 17 is WLED's reserved2)
+    uint32_t syncSendCount_ = 0;         // sends made; test-visible so the throttle can be observed, NOT a wire field (byte 17 is WLED's reserved2)
     bool     syncPeakLatched_ = false;   // a beat seen since the last transmit (WLED's udpSamplePeak)
     uint32_t lastPeakMs_ = 0;            // when that beat was, for the refractory window
     uint32_t lastSyncRecv_ = 0;      // millis of the last received packet (receive auto-blend)
@@ -712,9 +707,9 @@ private:
     }
 
     static constexpr uint16_t kSyncPeakMargin = 8;   // level over smoothed = a beat (samplePeak hint)
-    // WLED gates its own peak detection on `millis() - timeOfPeak > 80`, so one loud passage.
+    /// Minimum gap between latched beats, matching WLED's own gate of `millis() - timeOfPeak > 80`, so one loud passage reports one beat.
     static constexpr uint32_t kSyncPeakRefractoryMs = 80;
-    // The IP MULTICAST ADDRESS WLED audio sync uses:
+    /// The IP multicast address WLED audio sync uses.
     static constexpr uint8_t kSyncMulticastAddr_[4] = {239, 0, 0, 1};
 
     /// How many boards a unicast audio send reaches.

@@ -23,7 +23,7 @@ namespace mm {
 ///
 /// It is compiled only for a chip with a hardware FPU, so a classic ESP32 does not offer it.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// The tracing, the primitives, the normal, the camera and the lighting live in `raymarch.h`. This effect is a scene of two spheres and a floor plus a choice of colors.
 class RaymarchEffect : public EffectBase {

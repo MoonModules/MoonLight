@@ -18,7 +18,7 @@ namespace mm {
 ///
 /// @attribution Philips Hue
 ///
-/// @moreinfo
+/// @technical
 ///
 /// **Pacing.** Each PUT opens a fresh connection, and one bounded PUT goes out per 500 ms: faster piles up TIME_WAIT sockets. That gives smooth ambient color, not real time.
 ///

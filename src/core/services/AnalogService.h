@@ -26,7 +26,7 @@ namespace mm {
 ///
 /// A row pointed at a pad does nothing, since a pedal held at 40% has no sensible reading as a preset. Reversed bounds mean inverted. Scripts reach the same pins with `adcRead(pin)` and `adcMax()`, the path for a sensor whose mapping is a condition rather than a range.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// **Travel.** A pedal rests high and tops out below full scale, so a row names the travel that matters. It also carries an invert for a pot wired backwards. Calibrating sets whichever end was reached first, so reversed bounds are valid.
 ///

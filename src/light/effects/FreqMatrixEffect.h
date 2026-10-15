@@ -12,7 +12,7 @@ namespace mm {
 ///
 /// @attribution Andrew Tuline
 ///
-/// @moreinfo
+/// @technical
 ///
 /// The column is the shift register: each pass reads pixel y-1 into pixel y and writes the new color at y=0, so no history buffer is needed. The volume is a 0..255 integer, so WLED's 0.25 threshold is 64 and its 256.0 divisor is 2560.
 class FreqMatrixEffect : public EffectBase {

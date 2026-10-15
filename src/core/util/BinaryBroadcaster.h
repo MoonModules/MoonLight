@@ -7,7 +7,7 @@ namespace mm {
 
 /// A sink a producer sends bytes to, without depending on the HTTP server that carries them.
 ///
-/// @moreinfo
+/// @technical
 ///
 /// ## Who implements it and who holds it
 ///
