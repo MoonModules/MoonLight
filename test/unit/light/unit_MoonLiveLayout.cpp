@@ -7,6 +7,7 @@
 
 #include "doctest.h"
 #include "MoonLiveScriptFixture.h"
+#include "moonlive_script_files.h"
 #include "../core/moonlive_script_wrap.h"
 #include "light/moonlive/MoonLiveLayout.h"
 #include "light/moonlive/MoonLiveModifier.h"   // the cycle-break case below drives a modifier
@@ -19,6 +20,12 @@
 
 #include <cstring>
 #include <cstdio>
+#include <filesystem>
+#include <fstream>
+#include <set>
+#include <sstream>
+#include <string>
+#include <utility>
 #include <vector>
 #include <thread>
 
@@ -43,6 +50,37 @@ std::vector<Coord3D> place(const char* script) {
         },
         nullptr, &out};
     l.placeLights(sink);
+    return out;
+}
+
+/// The shipped backlight layout run at one wiring, collecting what it places; the wiring is the JSON a device would apply, since the script declares its own controls.
+std::vector<Coord3D> placeBacklight(const char* wiring) {
+    const std::string src = readText(scriptRoot() / "layouts" / "backlight.mll");
+    REQUIRE_FALSE(src.empty());
+
+    MoonLiveLayout l;
+    l.defineControls();
+    l.setScript(mmWriteScript(src.c_str()));
+    l.prepare();
+    auto& cs = l.controls();
+    for (uint8_t i = 0; i < cs.count(); i++)
+        if (cs[i].name) applyControlValue(cs[i], wiring, cs[i].name, ApplyPolicy::Clamp);
+    l.prepare();   // the controls size the walk, so the layout is rebuilt against them
+
+    std::vector<Coord3D> out;
+    CoordSink sink{
+        [](void* ctx, nrOfLightsType, lengthType x, lengthType y, lengthType z) {
+            static_cast<std::vector<Coord3D>*>(ctx)->push_back({x, y, z});
+        },
+        nullptr, &out};
+    l.placeLights(sink);
+    return out;
+}
+
+/// The distinct cells a walk visits, for the shape-is-invariant checks below.
+std::set<std::pair<int, int>> cellsOf(const std::vector<Coord3D>& p) {
+    std::set<std::pair<int, int>> out;
+    for (const auto& c : p) out.insert({c.x, c.y});
     return out;
 }
 }  // namespace
@@ -930,6 +968,121 @@ TEST_CASE("the loader accepts any role extension, and nothing else") {
     l.setScript("notascript.txt");
     l.prepare();
     CHECK(std::string(l.status()).find("must end in") != std::string::npos);
+}
+
+
+// --- The shipped backlight layout: its controls choose an ORDER, not a shape ------------------
+
+TEST_CASE("backlight.mll: each edge contributes its own count, each corner once") {
+    const auto p = placeBacklight("{\"wallCols\":60,\"wallRows\":34,\"top\":60,\"right\":34,\"bottom\":60,\"left\":34}");
+    CHECK(p.size() == 184);   // 59 + 33 + 59 + 33: every edge one short of its own count, the corners shared
+
+    const auto cells = cellsOf(p);
+    CHECK(cells.size() == p.size());   // no cell twice, so no corner counted by both its sides
+    // On the edges and filling the box: a light off the perimeter would light the wall's middle.
+    for (const auto& c : p) {
+        CHECK(c.z == 0);
+        CHECK((c.x == 0 || c.x == 59 || c.y == 0 || c.y == 33));
+    }
+    CHECK(cells.count({0, 0}) == 1);
+    CHECK(cells.count({59, 0}) == 1);
+    CHECK(cells.count({59, 33}) == 1);
+    CHECK(cells.count({0, 33}) == 1);
+}
+
+// Written out, not compared to each other: "the eight differ" passes on a walk visiting the right cells in the wrong order. A 4x3 wall is ten lights, so each wiring is one line.
+TEST_CASE("backlight.mll: each wiring starts at its corner and runs its own way round") {
+    struct Wiring { int corner; int reverse; const char* walk; };
+    // Coordinates as "xy", clockwise meaning x rising along the top, as the canonical walk does.
+    const Wiring cases[8] = {
+        {0, 0, "00 10 20 30 31 32 22 12 02 01"},   // top-left, forward: the shipped default
+        {0, 1, "00 01 02 12 22 32 31 30 20 10"},   // and the same corner reversed
+        {1, 0, "30 31 32 22 12 02 01 00 10 20"},
+        {1, 1, "30 20 10 00 01 02 12 22 32 31"},
+        {2, 0, "32 22 12 02 01 00 10 20 30 31"},
+        {2, 1, "32 31 30 20 10 00 01 02 12 22"},
+        {3, 0, "02 01 00 10 20 30 31 32 22 12"},
+        {3, 1, "02 12 22 32 31 30 20 10 00 01"},
+    };
+    for (const auto& c : cases) {
+        char wiring[160];
+        std::snprintf(wiring, sizeof(wiring),
+                      "{\"wallCols\":4,\"wallRows\":3,\"top\":4,\"right\":3,\"bottom\":4,\"left\":3,"
+                      "\"startCorner\":%d,\"reverse\":%d}", c.corner, c.reverse);
+        const auto p = placeBacklight(wiring);
+        REQUIRE(p.size() == 10);
+        std::string got;
+        for (const auto& k : p) {
+            if (!got.empty()) got += ' ';
+            got += static_cast<char>('0' + k.x);
+            got += static_cast<char>('0' + k.y);
+        }
+        CHECK(got == std::string(c.walk));
+    }
+}
+
+TEST_CASE("backlight.mll: offset slides the strand along itself, whichever way it runs") {
+    const auto at0 = placeBacklight("{\"wallCols\":60,\"wallRows\":34,\"top\":60,\"right\":34,\"bottom\":60,\"left\":34}");
+    const auto at2 = placeBacklight("{\"wallCols\":60,\"wallRows\":34,\"top\":60,\"right\":34,\"bottom\":60,\"left\":34,\"position\":2}");
+    REQUIRE(at0.size() == at2.size());
+    CHECK(cellsOf(at0) == cellsOf(at2));
+
+    // A ROTATION by two: light i of the offset walk is light i+2 of the plain one.
+    for (size_t i = 0; i < at0.size(); i++) {
+        const auto& expect = at0[(i + 2) % at0.size()];
+        CHECK(at2[i].x == expect.x);
+        CHECK(at2[i].y == expect.y);
+    }
+
+    // Along the STRAND, so a reversed one moves the other way round the frame. Counted clockwise regardless, an offset would send a reversed strand backwards past its own corner.
+    const auto ccw0 = placeBacklight("{\"wallCols\":4,\"wallRows\":3,\"top\":4,\"right\":3,\"bottom\":4,\"left\":3,\"reverse\":1}");
+    const auto ccw2 = placeBacklight("{\"wallCols\":4,\"wallRows\":3,\"top\":4,\"right\":3,\"bottom\":4,\"left\":3,\"reverse\":1,\"position\":2}");
+    REQUIRE(ccw0.size() == 10);
+    REQUIRE(ccw2.size() == 10);
+    for (size_t i = 0; i < ccw0.size(); i++) {
+        const auto& expect = ccw0[(i + 2) % ccw0.size()];
+        CHECK(ccw2[i].x == expect.x);
+        CHECK(ccw2[i].y == expect.y);
+    }
+}
+
+// Hyperion's gap: the lights a strand does not have. A length and a place in the strand, not a dark edge, so the stretch a TV stand covers can sit mid-edge.
+TEST_CASE("backlight.mll: a gap removes a run of lights and leaves the rest where they were") {
+    const char* full = "{\"wallCols\":8,\"wallRows\":6,\"top\":8,\"right\":4,\"bottom\":8,\"left\":4}";
+    const char* gapped = "{\"wallCols\":8,\"wallRows\":6,\"top\":8,\"right\":4,\"bottom\":8,\"left\":4,"
+                         "\"gapStart\":11,\"gapLength\":3}";
+    const auto whole = placeBacklight(full);
+    const auto p = placeBacklight(gapped);
+    REQUIRE(whole.size() == 20);
+    REQUIRE(p.size() == 17);   // the three it does not have
+
+    std::string got;
+    for (const auto& k : p) {
+        if (!got.empty()) got += ' ';
+        got += static_cast<char>('0' + k.x);
+        got += static_cast<char>('0' + k.y);
+    }
+    // The bottom loses its middle three; every other light sits exactly where it did.
+    CHECK(got == std::string("00 10 20 30 40 50 60 70 71 73 75 35 25 15 05 04 02"));
+
+    // A gap REMOVES, it does not move: each remaining cell is one the whole strand also had.
+    const auto had = cellsOf(whole);
+    for (const auto& k : p) CHECK(had.count({k.x, k.y}) == 1);
+}
+
+// A strand with fewer lights than the edge has pixels gets them spread along it, so one script serves a 30-light strip on a 128-pixel wall. The corners still land on the box.
+TEST_CASE("backlight.mll: a strand coarser than the wall still spans its edges") {
+    const auto p = placeBacklight("{\"wallCols\":128,\"wallRows\":128,\"top\":30,\"right\":20,\"bottom\":30,\"left\":20}");
+    CHECK(p.size() == 2 * 29 + 2 * 19);
+
+    int maxX = 0, maxY = 0;
+    for (const auto& c : p) {
+        maxX = c.x > maxX ? c.x : maxX;
+        maxY = c.y > maxY ? c.y : maxY;
+    }
+    // The bounding box stays the wall's, so the strip sits on its edge pixels rather than inside them.
+    CHECK(maxX == 127);
+    CHECK(maxY == 127);
 }
 
 #endif  // MM_MOONLIVE_HAS_HOST_JIT: the script must COMPILE for the count to mean anything.
