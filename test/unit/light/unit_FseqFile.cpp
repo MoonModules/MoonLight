@@ -112,11 +112,11 @@ TEST_CASE("an unknown major version is refused") {
     CHECK(parseHeader(buf.data(), buf.size(), hdr) == ParseError::UnsupportedVersion);
 }
 
-TEST_CASE("zstd compression is its own error, not a generic failure") {
-    // Type 1 is zstd: no decoder exists in this build, so it is reported distinctly from a malformed file.
+TEST_CASE("zstd compression parses cleanly, same as zlib: usability is the caller's call") {
+    // Type 1 is zstd: a recognized value, so it parses clean regardless of whether this build can decode it.
     const auto buf = makeV2(32, 100, 10, 25, /*compressionType=*/1, 0, {});
     FseqHeader hdr;
-    CHECK(parseHeader(buf.data(), buf.size(), hdr) == ParseError::UnsupportedCompression);
+    CHECK(parseHeader(buf.data(), buf.size(), hdr) == ParseError::None);
     CHECK(hdr.compressionType == CompressionType::Zstd);
 }
 

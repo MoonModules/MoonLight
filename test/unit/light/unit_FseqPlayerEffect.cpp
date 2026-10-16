@@ -39,6 +39,21 @@ std::vector<uint8_t> makeFseqV1Bytes(uint32_t channelCount, uint32_t frameCount,
     return b;
 }
 
+// A v2 header declaring zstd (type 1) compression, no blocks and no sparse ranges: enough for loadTrack's capability check to see a recognized, declared-zstd header before any decode is attempted.
+std::vector<uint8_t> makeFseqV2ZstdBytes(uint32_t channelCount, uint32_t frameCount, uint8_t stepTimeMs = 25) {
+    std::vector<uint8_t> b(32, 0);
+    std::memcpy(b.data(), "PSEQ", 4);
+    b[4] = 32; b[5] = 0;       // channelDataOffset = 32
+    b[6] = 0; b[7] = 2;        // minor=0, major=2
+    for (int i = 0; i < 4; i++) b[10 + i] = static_cast<uint8_t>(channelCount >> (8 * i));
+    for (int i = 0; i < 4; i++) b[14 + i] = static_cast<uint8_t>(frameCount >> (8 * i));
+    b[18] = stepTimeMs;
+    b[20] = 1;   // compressionType: zstd
+    b[21] = 0;   // compressionBlockCount
+    b[22] = 0;   // sparseRangeCount
+    return b;
+}
+
 // A fresh temp dir as the flash root for one test, the same fixture shape unit_HttpServerModule_sdcard.cpp uses.
 // Also mounts a card there by default, since this effect treats it as just another folder.
 // Pass false to exercise the flash root alone, with no second mount at all.
@@ -94,6 +109,16 @@ void twoTrackPlaylist(SdFixture& sd, FseqPlayerEffect& e, uint32_t& id1, uint32_
     e.addListRow(id2);
 }
 
+// Adds a row, presses play, and asserts the transport stayed Stopped with a real status, the shape every "play fails" test shares; the caller checks its own reason.
+std::string tryPlayAndExpectRejection(FseqPlayerEffect& e) {
+    uint32_t id = 0;
+    e.addListRow(id);
+    e.onControlChanged("play");
+    CHECK(e.stateForTest() == FseqPlayerEffect::PlayState::Stopped);
+    REQUIRE(e.status() != nullptr);
+    return std::string(e.status());
+}
+
 } // namespace
 
 // Pins the independence the product owner asked for directly: no SD-specific check or status, ever.
@@ -124,13 +149,8 @@ TEST_CASE("playing a flash-found file is refused with its own status, not attemp
     Scene s;
     auto& e = s.effect;
     e.setup();
-    uint32_t id = 0;
-    REQUIRE(e.addListRow(id));
-
-    e.onControlChanged("play");
-    CHECK(e.stateForTest() == FseqPlayerEffect::PlayState::Stopped);
-    REQUIRE(e.status() != nullptr);
-    CHECK(std::string(e.status()).rfind("flash playback disabled", 0) == 0);
+    const std::string status = tryPlayAndExpectRejection(e);
+    CHECK(status.rfind("flash playback disabled", 0) == 0);
 }
 
 TEST_CASE("setup with a mounted but empty card scans cleanly to an empty playlist") {
@@ -293,13 +313,19 @@ TEST_CASE("play with an empty playlist does nothing") {
 TEST_CASE("play with no real file to open fails gracefully rather than pretending to start") {
     Scene s;
     auto& e = s.effect;
-    uint32_t id = 0;
-    e.addListRow(id);
-    e.onControlChanged("play");
-    // The row's file is empty: loadTrack's open fails, so playback never actually starts.
-    CHECK(e.stateForTest() == FseqPlayerEffect::PlayState::Stopped);
-    REQUIRE(e.status() != nullptr);
+    tryPlayAndExpectRejection(e);   // the row's file is empty: loadTrack's open fails
     CHECK(e.severity() == MoonModule::Severity::Error);
+}
+
+// Every desktop build has platform::hasZstd false, so this exercises loadTrack's real capability-rejection branch, not a stub-only check: the header parses clean, and rejection happens on usability, not on parsing.
+TEST_CASE("a declared-zstd file is refused with its own status when this build has no zstd decoder") {
+    SdFixture sd;
+    sd.writeFseq("/sd/show.fseq", makeFseqV2ZstdBytes(10, 3));
+    Scene s;
+    auto& e = s.effect;
+    e.setup();
+    const std::string status = tryPlayAndExpectRejection(e);
+    CHECK(status == "zstd FSEQ needs this build's zstd option enabled");
 }
 
 TEST_CASE("pause only takes effect while playing") {

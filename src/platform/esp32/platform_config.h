@@ -262,6 +262,13 @@ constexpr bool hasSdCard = false;
 /// False: SdCardService offers only the board presets this chip can wire.
 constexpr bool previewsSdPresets = false;
 
+/// No chip gate: zstd is software-only, so the Kconfig flag alone decides.
+#if defined(CONFIG_MM_FSEQ_ZSTD)
+constexpr bool hasZstd = true;
+#else
+constexpr bool hasZstd = false;
+#endif
+
 } // namespace mm::platform
 
 // Always 0 here: a device uses its own per-ISA backends, validated on hardware rather than by host tests.

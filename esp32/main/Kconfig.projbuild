@@ -64,4 +64,16 @@ menu "MoonLight"
             Compiles the FatFs SD card backend, on every chip with an SD host and
             more than 4 MB of flash: the 4 MB layout's fragment sets it off.
 
+    config MM_FSEQ_ZSTD
+        bool "zstd-compressed FSEQ playback"
+        default n
+        help
+            Pulls a zstd decoder so FseqPlayerEffect can play FSEQ v2 files whose
+            compression blocks are zstd (type 1), not just zlib. OFF by default
+            everywhere: the decoder adds about 43KB of flash (measured on an
+            esp32p4rev1-eth build) and real heap per open block, far above the
+            zlib path's zero-flash-cost ROM call. Worth it on a board with
+            flash and PSRAM to spare, such as the ESP32-P4; a board already
+            tight on heap should leave this off.
+
 endmenu

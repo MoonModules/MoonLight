@@ -105,6 +105,8 @@ constexpr bool hasImprov = true;
 constexpr bool hasSdCard = true;
 /// False: SdCardService offers only the socket this board wires.
 constexpr bool previewsSdPresets = false;
+/// No decoder linked on Teensy; see src/platform/esp32/platform_config.h for the real gate.
+constexpr bool hasZstd = false;
 
 /// The bits a call to emitted code adds to its address. Thumb state: a Cortex-M7 runs only Thumb code, and a call address carries it in bit 0.
 constexpr uintptr_t codeAddressBits = 1;

@@ -42,6 +42,7 @@ EXEMPT = (
     "docs/reference/tests/",        # generated from test comments (fix the test, not the page)
     "docs/moonmodules/",  # partly generated technical pages
     "src/platform/desktop/vendor/",   # upstream single-header code (miniaudio): not our prose
+    "src/platform/esp32/vendor/",     # upstream single-file code (zstd): not our prose either
     "src/ui/vendor/",                 # upstream browser code (Prism): not our prose either
     "moondeck/check/check_prose.py",  # the detector: its rule table spells the very patterns
     "docs/contributing/documentation-standards.md",  # the RULE: it must quote an em-dash and "analyse" to ban them

@@ -151,10 +151,10 @@
           "tick_us": {
             "p50": 6,
             "p95": 6,
-            "min": 6,
+            "min": 5,
             "max": 6,
-            "n": 2,
-            "samples": [6, 6]
+            "n": 6,
+            "samples": [6, 6, 5, 5, 6, 6]
           },
           "last_updated": "2026-10-16"
         }
@@ -278,10 +278,10 @@
           "tick_us": {
             "p50": 7,
             "p95": 7,
-            "min": 7,
+            "min": 6,
             "max": 7,
-            "n": 2,
-            "samples": [7, 7]
+            "n": 6,
+            "samples": [7, 7, 6, 7, 7, 7]
           },
           "last_updated": "2026-10-16"
         }
@@ -396,12 +396,12 @@
         },
         "desktop-linux": {
           "tick_us": {
-            "p50": 6,
+            "p50": 7,
             "p95": 7,
             "min": 6,
             "max": 7,
-            "n": 2,
-            "samples": [7, 6]
+            "n": 6,
+            "samples": [7, 6, 6, 7, 7, 7]
           },
           "last_updated": "2026-10-16"
         }
@@ -516,11 +516,11 @@
         "desktop-linux": {
           "tick_us": {
             "p50": 6,
-            "p95": 6,
+            "p95": 7,
             "min": 6,
-            "max": 6,
-            "n": 2,
-            "samples": [6, 6]
+            "max": 7,
+            "n": 6,
+            "samples": [6, 6, 6, 6, 7, 6]
           },
           "last_updated": "2026-10-16"
         }
@@ -640,12 +640,12 @@
         },
         "desktop-linux": {
           "tick_us": {
-            "p50": 7,
+            "p50": 8,
             "p95": 8,
             "min": 7,
             "max": 8,
-            "n": 2,
-            "samples": [8, 7]
+            "n": 6,
+            "samples": [8, 7, 7, 8, 8, 8]
           },
           "last_updated": "2026-10-16"
         }
@@ -768,11 +768,11 @@
         "desktop-linux": {
           "tick_us": {
             "p50": 6,
-            "p95": 6,
+            "p95": 7,
             "min": 6,
-            "max": 6,
-            "n": 2,
-            "samples": [6, 6]
+            "max": 7,
+            "n": 6,
+            "samples": [6, 6, 6, 6, 7, 7]
           },
           "last_updated": "2026-10-16"
         }
@@ -894,10 +894,10 @@
           "tick_us": {
             "p50": 6,
             "p95": 6,
-            "min": 6,
+            "min": 5,
             "max": 6,
-            "n": 2,
-            "samples": [6, 6]
+            "n": 6,
+            "samples": [6, 6, 5, 6, 6, 6]
           },
           "last_updated": "2026-10-16"
         }

@@ -21,10 +21,8 @@
 /// ## Compression
 ///
 /// A v2 file may compress channel data per-frame.
-/// Type 2 (zlib) is decodable via the ESP32 ROM's `tinfl_decompress` (miniz) at zero flash cost.
-/// A caller owns the live decompressor state across frames; this parser only reports which type a file claims.
-/// Type 1 (zstd) has no decoder anywhere in this build.
-/// It is reported as its own error rather than lumped in with a generic "unsupported": the fix is a new dependency, not a bug.
+/// `parseHeader` reports the type a file declares, zlib (2) or zstd (1) alike; whether a build can decode it is the caller's judgment, not this file's.
+/// A caller owns the live decompressor state across frames; this parser never touches it.
 ///
 /// ## Sparse ranges
 ///
@@ -69,7 +67,7 @@ enum class ParseError : uint8_t {
     None,
     BadMagic,                 ///< first 4 bytes are not "PSEQ"/"FSEQ"
     UnsupportedVersion,       ///< major version is neither 1 nor 2
-    UnsupportedCompression,   ///< zstd (type 1): no decoder exists in this build, not a malformed file
+    UnsupportedCompression,   ///< the compression-type byte names no recognized value, not a malformed file
     TooManySparseRanges,      ///< non-fatal: the table was clipped to kMaxSparseRanges and parsed anyway
     Truncated,                ///< buffer ends before a field/table this header claims to have
 };
@@ -94,7 +92,7 @@ struct FseqHeader {
     uint32_t channelCount = 0;           ///< bytes per frame (sum of sparse-range counts, if any)
     uint32_t frameCount = 0;             ///< total frames in the file
     uint8_t  stepTimeMs = 0;             ///< milliseconds per frame, the player's tick pacing
-    CompressionType compressionType = CompressionType::None;   ///< None, Zlib (supported), or Zstd (not yet)
+    CompressionType compressionType = CompressionType::None;   ///< None, Zlib or Zstd, as declared; usability is the caller's call
     uint8_t  compressionBlockCount = 0;  ///< v2 only; used to locate the sparse range table, not for seeking
     uint8_t  sparseRangeCount = 0;       ///< entries actually populated in sparseRanges (<= kMaxSparseRanges)
     SparseRange sparseRanges[kMaxSparseRanges] = {};   ///< the sparse range table, if sparseRangeCount > 0
@@ -139,11 +137,11 @@ inline ParseError parseV2Tail(const uint8_t* buf, size_t len, FseqHeader& out) {
 
     switch (compressionByte) {
         case 0: out.compressionType = CompressionType::None; break;
+        case 1: out.compressionType = CompressionType::Zstd; break;
         case 2: out.compressionType = CompressionType::Zlib; break;
-        default: out.compressionType = CompressionType::Zstd; break;   // 1, or any reserved value
+        default: return ParseError::UnsupportedCompression;   // a genuinely reserved byte value
     }
 
-    if (out.compressionType == CompressionType::Zstd) return ParseError::UnsupportedCompression;
     if (sparseCountRaw > kMaxSparseRanges) return ParseError::TooManySparseRanges;
     return ParseError::None;
 }

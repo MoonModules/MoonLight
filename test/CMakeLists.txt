@@ -18,6 +18,7 @@ add_executable(mm_tests
     unit/core/unit_noise.cpp
     unit/core/unit_fields.cpp
     unit/core/unit_crc.cpp
+    unit/core/unit_ZstdFrameHeader.cpp
     unit/core/unit_AudioService_codec.cpp
     unit/core/unit_PictureService.cpp
     unit/core/unit_I2cBusModule.cpp

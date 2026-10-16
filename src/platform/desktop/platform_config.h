@@ -124,6 +124,8 @@ constexpr uintptr_t codeAddressBits = 0;
 constexpr bool hasSdCard = true;
 /// True: no slot is wired, so SdCardService offers every board preset, for the tests to exercise them.
 constexpr bool previewsSdPresets = true;
+/// No decoder linked on desktop; see src/platform/esp32/platform_config.h for the real gate.
+constexpr bool hasZstd = false;
 
 } // namespace mm::platform
 

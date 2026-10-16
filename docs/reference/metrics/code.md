@@ -59,7 +59,7 @@ The next function worth simplifying is at the top of each file's list.
 
 | File | Findings | Worst |
 |---|---:|---|
-| `src/platform/desktop/platform_desktop.cpp` | 44 | `platform::getMacAddress, line 1426`, large stack frame 5240 |
+| `src/platform/desktop/platform_desktop.cpp` | 44 | `platform::getMacAddress, line 1429`, large stack frame 5240 |
 | `src/ui/migrate.js` | 44 | `line 31: 'OscService'`, module type in the UI 1 |
 | `src/core/moonlive/MoonLiveCompiler.cpp` | 41 | `moonlive::Parser::parseDecl`, complex function 54 |
 | `src/core/system/HttpServerModule.cpp` | 41 | `HttpServerModule::handleConnection`, complex function 114 |
@@ -107,7 +107,7 @@ The next function worth simplifying is at the top of each file's list.
 | `src/light/drivers/PanelCardDriver.h` | 9 | `lines 188-196, also in src/light/drivers/NetworkSendDriver.h:236`, duplicated block 9 |
 | `src/platform/esp32/platform_esp32_i80.cpp` | 9 | `platform::createState`, complex function 27 |
 | `test/unit/light/unit_ParallelLedDriver_swap.cpp` | 9 | `lines 176-184, also in test/unit/light/unit_ParallelLedDriver_swap.cpp:112`, duplicated block 9 |
-| `src/core/system/WiFiModule.h` | 8 | `lines 367-374, also in src/light/effects/FseqPlayerEffect.h:253`, duplicated block 8 |
+| `src/core/system/WiFiModule.h` | 8 | `lines 367-374, also in src/light/effects/FseqPlayerEffect.h:262`, duplicated block 8 |
 | `src/light/effects/FixedPointEffect.h` | 8 | `FixedPointEffect::drawBoids`, complex function 19 |
 | `src/light/effects/FlyingToastersEffect.h` | 8 | `lines 59-68, also in src/light/effects/FlyingToastersEffect.h:39`, duplicated block 10 |
 | `src/light/effects/SpaceInvadersEffect.h` | 8 | `lines 438-446, also in src/light/effects/SpriteCast.h:54`, duplicated block 9 |
@@ -128,7 +128,7 @@ The next function worth simplifying is at the top of each file's list.
 | `test/unit/light/unit_PlasmaEffect.cpp` | 7 | `lines 24-39, also in test/unit/light/unit_MetaballsEffect.cpp:22`, duplicated block 16 |
 | `src/core/system/FirmwareUpdateModule.h` | 6 | `FirmwareUpdateModule in 13 files`, name spread 13 |
 | `src/core/util/JsonSink.h` | 6 | `JsonSink::writeJsonString`, deeply nested 8 |
-| `src/light/drivers/FixtureProfilesModule.h` | 6 | `lines 254-259, also in src/light/effects/FseqPlayerEffect.h:253`, duplicated block 6 |
+| `src/light/drivers/FixtureProfilesModule.h` | 6 | `lines 254-259, also in src/light/effects/FseqPlayerEffect.h:262`, duplicated block 6 |
 | `src/light/drivers/NetworkSendDriver.h` | 6 | `lines 236-244, also in src/light/drivers/PanelCardDriver.h:188`, duplicated block 9 |
 | `src/platform/desktop/moonlive_asm_x86_64.cpp` | 6 | `lines 556-563, also in src/platform/desktop/moonlive_asm_x86_64.cpp:514`, duplicated block 8 |
 | `src/platform/esp32/platform_esp32_improv.cpp` | 6 | `platform::improvTask`, complex function 22 |
@@ -149,7 +149,7 @@ The next function worth simplifying is at the top of each file's list.
 | `src/core/util/noise.h` | 5 | `lines 302-308, also in src/core/util/noise.h:286`, duplicated block 7 |
 | `src/light/drivers/PinList.h` | 5 | `assignCounts`, complex function 30 |
 | `src/light/effects/FluidEffect.h` | 5 | `FluidEffect::data`, deeply nested 5 |
-| `src/light/effects/FseqPlayerEffect.h` | 5 | `lines 253-260, also in src/core/system/WiFiModule.h:367`, duplicated block 8 |
+| `src/light/effects/FseqPlayerEffect.h` | 5 | `lines 262-269, also in src/core/system/WiFiModule.h:367`, duplicated block 8 |
 | `src/light/effects/SpiralEffect.h` | 5 | `lines 79-90, also in src/light/effects/MetaballsEffect.h:72`, duplicated block 12 |
 | `src/light/effects/TunnelEffect.h` | 5 | `lines 86-96, also in src/light/effects/PolarNoiseEffect.h:98`, duplicated block 11 |
 | `src/platform/desktop/main_desktop.cpp` | 5 | `main`, deeply nested 5 |
@@ -181,7 +181,7 @@ The next function worth simplifying is at the top of each file's list.
 | `test/unit/light/unit_BlurzEffect.cpp` | 4 | `lines 137-155, also in test/unit/light/unit_GEQEffect.cpp:159`, duplicated block 19 |
 | `test/unit/light/unit_BouncingBallsEffect.cpp` | 4 | `lines 75-88, also in test/unit/light/unit_RubiksCubeEffect.cpp:103`, duplicated block 14 |
 | `test/unit/light/unit_FixedRectangleEffect.cpp` | 4 | `lines 90-103, also in test/unit/light/unit_SolidEffect.cpp:9`, duplicated block 14 |
-| `test/unit/light/unit_FseqPlayerEffect.cpp` | 4 | `lines 413-421, also in test/unit/light/unit_FseqPlayerEffect.cpp:181`, duplicated block 9 |
+| `test/unit/light/unit_FseqPlayerEffect.cpp` | 4 | `lines 459-467, also in test/unit/light/unit_FseqPlayerEffect.cpp:220`, duplicated block 9 |
 | `test/unit/light/unit_Layer_extrude.cpp` | 4 | `lines 155-168, also in test/unit/light/unit_Layer_extrude.cpp:124`, duplicated block 14 |
 | `test/unit/light/unit_Layer_live_modifier.cpp` | 4 | `lines 96-105, also in test/unit/light/unit_RainbowEffect.cpp:69`, duplicated block 10 |
 | `test/unit/light/unit_NetworkSendDriver_no_alloc_in_loop.cpp` | 4 | `lines 49-59, also in test/unit/light/unit_NetworkSendDriver_no_alloc_in_loop.cpp:18`, duplicated block 11 |
@@ -216,7 +216,7 @@ The next function worth simplifying is at the top of each file's list.
 | `test/unit/light/unit_RmtLedDriver_pins.cpp` | 3 | `lines 17-28, also in test/unit/light/unit_RmtLedDriver_lifecycle.cpp:19`, duplicated block 12 |
 | `test/unit/light/unit_Splat.cpp` | 3 | `lines 6-20, also in test/unit/light/unit_Scroll.cpp:6`, duplicated block 15 |
 | `test/unit/light/unit_TetrixEffect.cpp` | 3 | `lines 20-29, also in test/unit/light/unit_BreakoutEffect.cpp:18`, duplicated block 10 |
-| `moondeck/check/check_prose.py` | 2 | `lines 220-231, also in moondeck/check/check_prose.py:200`, duplicated block 12 |
+| `moondeck/check/check_prose.py` | 2 | `lines 221-232, also in moondeck/check/check_prose.py:201`, duplicated block 12 |
 | `moondeck/ci/package_desktop.py` | 2 | `lines 387-395, also in moondeck/ci/package_desktop.py:117`, duplicated block 9 |
 | `moondeck/docs/generate_test_docs.py` | 2 | `lines 327-335, also in moondeck/docs/generate_test_docs.py:57`, duplicated block 9 |
 | `moondeck/moontube/reset_device.py` | 2 | `lines 241-246, also in moondeck/moontube/reset_device.py:219`, duplicated block 6 |
@@ -348,7 +348,7 @@ The next function worth simplifying is at the top of each file's list.
 | `src/platform/esp32/platform_esp32_sdmmc.cpp` | 1 | `platform::mountCard`, complex function 13 |
 | `src/platform/esp32/platform_esp32_tasks.cpp` | 1 | `platform::taskSnapshot`, complex function 12 |
 | `src/platform/esp32/platform_esp32_usb_midi.cpp` | 1 | `lines 253-259, also in src/platform/teensy/platform_teensy.cpp:767`, duplicated block 7 |
-| `src/platform/platform.h` | 1 | `platform.h`, large file 1451 |
+| `src/platform/platform.h` | 1 | `platform.h`, large file 1454 |
 | `src/platform/teensy/platform_teensy_gpio_dma.cpp` | 1 | `lines 310-315, also in src/platform/esp32/platform_esp32_parlio.cpp:286`, duplicated block 6 |
 | `src/platform/teensy/platform_teensy_improv.cpp` | 1 | `platform::improvProvisioningInit`, long parameter list 9 |
 | `src/ui/install-picker.js` | 1 | `install-picker.js`, large file 1048 |

@@ -70,11 +70,11 @@ namespace mm {
 /// A stopped transport owns its background by going black every tick, rather than leaving whatever the previous effect painted.
 /// A paused transport re-blits the same decoded frame every tick rather than holding a stale buffer, so a buffer cleared elsewhere self-heals.
 ///
-/// ## Compression: zlib yes, zstd not yet
+/// ## Compression: zlib always, zstd behind its own build flag
 ///
 /// An FSEQ v2 file may compress each block of frames independently, which is what lets a block decompress without the ones before it.
 /// Zlib (type 2) decodes through the ESP32 ROM's `tinfl_decompress` (`platform::zlibInflateAll`) at zero flash cost.
-/// Zstd (type 1) has no decoder anywhere in this build, reported as its own status since the fix is a new dependency, not a bug.
+/// Zstd (type 1) decodes through `platform::zstdInflateAll`, gated on `platform::hasZstd` (`CONFIG_MM_FSEQ_ZSTD`); off this build reports its own status rather than attempting the open.
 /// A block's compressed byte count varies by storage and content, so `loadNextBlock` names its own cost rather than reading as a cheap one-liner.
 ///
 /// ## The scan is depth-bounded recursion over a heap-per-level buffer
@@ -571,12 +571,18 @@ private:
         switch (err) {
             case fseq::ParseError::BadMagic:               errMsg = "not an FSEQ file"; break;
             case fseq::ParseError::UnsupportedVersion:     errMsg = "unsupported FSEQ version"; break;
-            case fseq::ParseError::UnsupportedCompression: errMsg = "compressed (zstd) FSEQ not supported yet"; break;
+            case fseq::ParseError::UnsupportedCompression: errMsg = "unrecognized FSEQ compression type"; break;
             case fseq::ParseError::Truncated:              errMsg = "FSEQ header truncated or unreadable"; break;
             default: break;   // None, or TooManySparseRanges (non-fatal, handled below)
         }
         if (errMsg) {
             setStatus(errMsg, Severity::Error);
+            state_ = PlayState::Stopped;
+            frameIndex_ = 0;
+            return false;
+        }
+        if (hdr.compressionType == fseq::CompressionType::Zstd && !platform::hasZstd) {
+            setStatus("zstd FSEQ needs this build's zstd option enabled", Severity::Error);
             state_ = PlayState::Stopped;
             frameIndex_ = 0;
             return false;
@@ -602,7 +608,7 @@ private:
     /// Decode frame `frameIndex_` into `frameBuf_`: the one blocking file read `tick20ms` makes, bounded to one frame or compression block.
     bool decodeCurrentFrame() {
         const uint8_t* rawFrame;
-        if (header_.compressionType == fseq::CompressionType::Zlib) {
+        if (header_.compressionType == fseq::CompressionType::Zlib || header_.compressionType == fseq::CompressionType::Zstd) {
             rawFrame = frameFromCompressedBlock(frameIndex_);
             if (!rawFrame) {
                 setStatus("file read failed mid-file", Severity::Error);
@@ -671,9 +677,10 @@ private:
         blockBuf_.resize(decompLen);
         if (!blockBuf_) return false;
         size_t outLen = 0;
-        if (!platform::zlibInflateAll(compBuf_.data(), blockByteLen, blockBuf_.data(), decompLen, outLen) ||
-            outLen != decompLen)
-            return false;
+        const bool ok = header_.compressionType == fseq::CompressionType::Zstd
+            ? platform::zstdInflateAll(compBuf_.data(), blockByteLen, blockBuf_.data(), decompLen, outLen)
+            : platform::zlibInflateAll(compBuf_.data(), blockByteLen, blockBuf_.data(), decompLen, outLen);
+        if (!ok || outLen != decompLen) return false;
 
         currentBlockFirstFrame_ = blockFirstFrame;
         currentBlockFrameCount_ = blockFrameCount;

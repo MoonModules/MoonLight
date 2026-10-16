@@ -342,6 +342,9 @@ inline bool fsWriteStream(const char* path, FsWriteSrc src, void* user) {
 /// Inflate one self-contained zlib block in one call; `outLen` is set only on success. Backed by the ESP32 ROM's `tinfl_decompress` at zero flash cost; no decoder is linked on desktop.
 bool zlibInflateAll(const uint8_t* src, size_t srcLen, uint8_t* dst, size_t dstCap, size_t& outLen);
 
+/// Inflate one headerless zstd block of known size `dstCap` in one call; `outLen` is set only on success; needs `CONFIG_MM_FSEQ_ZSTD`, false elsewhere.
+bool zstdInflateAll(const uint8_t* src, size_t srcLen, uint8_t* dst, size_t dstCap, size_t& outLen);
+
 // A second, independent mount (microSD, FAT) sharing the fsXxx surface above through its own `/sd` path prefix; inert wherever hasSdCard is false.
 
 /// Whether `path` names the filesystem's root: "" or "/", the two forms a listing of the root arrives as.
