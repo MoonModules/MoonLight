@@ -59,6 +59,7 @@
 #if SOC_SDMMC_IO_POWER_EXTERNAL
 #include "sd_pwr_ctrl_by_on_chip_ldo.h"
 #endif
+#include "miniz.h"   // tinfl_decompress_mem_to_mem: zlibInflateAll's ROM-resident decoder
 #endif
 
 namespace mm::platform {
@@ -599,7 +600,17 @@ bool sdCardWriteStreamClose(void* handle, bool commit) {
     return ok;
 }
 
+/// The only real decoder this call ever reaches, since FseqPlayerEffect (its sole caller) is itself gated on `hasSdCard`.
+bool zlibInflateAll(const uint8_t* src, size_t srcLen, uint8_t* dst, size_t dstCap, size_t& outLen) {
+    const size_t n = tinfl_decompress_mem_to_mem(dst, dstCap, src, srcLen, TINFL_FLAG_PARSE_ZLIB_HEADER);
+    if (n == TINFL_DECOMPRESS_MEM_TO_MEM_FAILED) return false;
+    outLen = n;
+    return true;
+}
+
 #else  // !MM_HAS_SDMMC: every symbol below is inert so a board with no SDMMC host still links.
+
+bool zlibInflateAll(const uint8_t*, size_t, uint8_t*, size_t, size_t&) { return false; }
 
 bool sdCardMounted() { return false; }
 bool sdCardPresent() { return false; }
