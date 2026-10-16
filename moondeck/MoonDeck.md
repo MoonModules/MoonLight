@@ -156,9 +156,7 @@ Verify that prose a change ADDS follows the coding standards: no em-dashes, US s
 uv run moondeck/check/check_prose.py
 ```
 
-Reads the added lines of the branch diff and the working tree, so pre-existing prose a rename
-merely touched is out of scope. Run by hand: the tree still holds instances that predate the
-check, so it is not in the gate table until those are swept. It does two things beyond that report. An ERROR on a line the change added fails it. It also writes [prose.md](../docs/reference/metrics/prose.md), the whole tree's findings by rule, which ratchets against the committed copy exactly as docgen.md does.
+Reads the added lines of the branch diff and the working tree, so pre-existing prose a rename merely touched is out of scope. A commit check on every diff ([CLAUDE.md § Commit](../CLAUDE.md#commit)). It does two things beyond that report. An ERROR on a line the change added fails it. It also writes [prose.md](../docs/reference/metrics/prose.md), the whole tree's findings by rule, which ratchets against the committed copy exactly as docgen.md does.
 
 ### check_docgen
 
@@ -863,11 +861,9 @@ uv run moondeck/scenario/run_live_scenario.py --name scenario_Network_hardware_r
 uv run moondeck/scenario/run_live_scenario.py --name scenario_perf_light,scenario_Fluid_solver      # several, comma-separated
 uv run moondeck/scenario/run_live_scenario.py --host MM-Bench.local --network Home --name scenario_AccessPoint_first_setup_from_its_own_network   # first setup, this computer as the phone
 uv run moondeck/scenario/run_live_scenario.py --host 192.168.1.158 --board sender=192.168.1.156 --name scenario_NetworkReceive_two_boards   # two boards: the sender board sends
-uv run moondeck/scenario/run_live_scenario.py --update-baseline                  # save baseline
-uv run moondeck/scenario/run_live_scenario.py --compare-baseline                 # detect regressions
 ```
 
-Executes scenario steps (apply_state documents, set_control, measure) via the REST API. Collects per-step FPS and heap measurements. Compares against stored baselines to detect performance regressions. Use the dropdown to run a single scenario or leave it on **all** to run the full suite.
+Executes scenario steps (apply_state documents, set_control, measure) via the REST API. Collects per-step FPS and heap measurements and checks each against the step's per-target contract. Use the dropdown to run a single scenario or leave it on **all** to run the full suite.
 
 A run leaves the device as it found it. Modules a scenario cleared come back, a replaced module is swapped back to its type under its own name, and every control it wrote is put back, `enabled` included. Passwords are the exception, because the device returns them obfuscated.
 

@@ -37,6 +37,7 @@ from _test_metadata import (  # noqa: E402
 )
 from generate_test_docs import render_unit_tests, render_scenarios  # noqa: E402
 from gen_help import ATTRIBUTIONS, catalog_rows, display_name  # noqa: E402
+from gen_moonwalk import build as build_moonwalk  # noqa: E402
 
 
 # ---- source-link rewrite: docs link OUT to repo files the site can't host ----
@@ -59,7 +60,7 @@ def _blob_base() -> str:
 _BLOB_BASE = _blob_base()
 
 # Repo top-level dirs/files a doc may link into but the site doesn't host.
-_OUT_OF_DOCS = ("src/", "moondeck/", "test/", "esp32/", "mooninstaller/",
+_OUT_OF_DOCS = ("src/", "moondeck/", "test/", "esp32/", "mooninstaller/", "moonwalk/",
                 ".github/", "CLAUDE.md", "README.md", "library.json", "CMakeLists.txt",
                 ".clang-tidy", ".clangd")
 
@@ -264,6 +265,8 @@ def on_files(files, config):
         if not (ROOT / "docs" / "moonmodules" / page).exists():
             _add(f"moonmodules/{page}", generated_catalog(f"moonmodules/{page}"))
     _add("reference/tests/scenario-tests.md", render_scenarios(collect_scenario_files()))
+    # MoonWalk's journey map, from the stage files under moonwalk/; an invalid file fails the build.
+    _add("moonwalk/moonwalk.json", json.dumps(build_moonwalk(), ensure_ascii=False))
 
     return files
 

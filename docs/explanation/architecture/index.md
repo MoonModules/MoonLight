@@ -30,11 +30,15 @@ flowchart LR
     inst["<b>MoonInstaller</b> · <i>firmware, deviceModel, board</i>"]
     cloud["<b>MoonCloud</b> · <i>opt-in stats and talk</i>"]
     deck["<b>MoonDeck</b> · <i>the developer console</i>"]
+    tube["<b>MoonTube</b> · <i>clips that are UI tests</i>"]
+    walk["<b>MoonWalk</b> · <i>every process on one map</i>"]
 
     core -.-> base
     core -.-> inst
     core -.-> cloud
     core -.-> deck
+    core -.-> tube
+    core -.-> walk
 
     classDef po fill:#2d3561,stroke:#7b88c9,color:#fff
     classDef agent fill:#3d2d61,stroke:#a07bc9,color:#fff
@@ -43,7 +47,7 @@ flowchart LR
     class mm po
     class core,light agent
     class live check
-    class base,inst,cloud,deck gate
+    class base,inst,cloud,deck,tube,walk gate
 ```
 
 | Part | What it decides |
@@ -56,6 +60,8 @@ flowchart LR
 | [MoonInstaller](mooninstaller.md) | Firmware, deviceModel and board: three words for three different things |
 | [MoonCloud](mooncloud.md) | The opt-in server side, and the only server a device talks to |
 | [MoonDeck](moondeck.md) | One script per task, two front ends |
+| [MoonTube](../../../moondeck/moontube/moontube.md) | One run file per clip: performed as a UI test, filmed as a documentation video |
+| [MoonWalk](../../moonwalk.md) | Every process, from a first reader to a release, described once and drawn on one map |
 
 ## Core and light domain
 

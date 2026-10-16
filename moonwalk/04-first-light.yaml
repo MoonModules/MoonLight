@@ -1,0 +1,70 @@
+# yaml-language-server: $schema=moonwalk.schema.json
+stage: First light
+summary: The first look at the interface and the first show on the lights.
+processes:
+  - id: first-look
+    title: First look at the interface
+    actor: user
+    goal: Know what every card is before changing anything.
+    systems: [MoonCore, MoonLight]
+    page: tutorials/how-moonlight-works.md
+  - id: first-light-show
+    title: Build a first light show
+    actor: user
+    goal: A chosen layout, two effects, a modifier, a blended layer and a driver, persisted.
+    systems: [MoonLight]
+    dependsOn: [install-desktop]
+    page: tutorials/first-light-show.md
+    intro: |
+      Everything happens in the device's own web interface, live: nothing is compiled, saved and applied, or rebooted. A bare board or the desktop works the whole way through, since the 3D preview is what you watch.
+    steps:
+      - id: open-layouts
+        say: Open Layouts. A fresh device has a Grid.
+        when: { open: { module: Layouts } }
+      - id: grid-width
+        say: Set the Grid's width to 16.
+        when: { set: { module: Grid, control: width, value: 16 } }
+        then:
+          - { module: Grid, control: width, equals: 16 }
+      - id: grid-height
+        say: Set the Grid's height to 16. The preview reshapes as you type.
+        when: { set: { module: Grid, control: height, value: 16 } }
+        then:
+          - { module: Grid, control: height, equals: 16 }
+        detail: |
+          Every effect asks the layout how many lights there are and where each one sits, so this one card decides what the rest of the pipeline paints on. A strip that zig-zags along its rows wants serpentine on.
+      - id: add-balls
+        say: Open Effects and add Bouncing Balls under the Layer.
+        when: { add: { module: Layer, type: BouncingBallsEffect, name: BouncingBalls } }
+        then:
+          - { module: BouncingBalls, exists: true }
+      - id: more-balls
+        say: Change numBalls while it runs.
+        when: { set: { module: BouncingBalls, control: numBalls, value: 8 } }
+        detail: |
+          An effect is a function run once per frame that reads its controls each time, so the lights follow the slider.
+      - id: add-ripples
+        say: Add Ripples beside it, in the same Layer.
+        when: { add: { module: Layer, type: RipplesEffect, name: Ripples } }
+        then:
+          - { module: Ripples, exists: true }
+        detail: |
+          Two effects in one Layer share one buffer, each writing over the one before. Blending happens between layers, through a Layer's blendMode and opacity.
+      - id: add-mirror
+        say: Add a Mirror modifier under the Layer. The effect stays, its coordinates fold.
+        when: { add: { module: Layer, type: MirrorModifier, name: Mirror } }
+        then:
+          - { module: Mirror, exists: true }
+      - id: brightness
+        say: Open Drivers and set brightness low, 20 is plenty on a bench.
+        when: { set: { module: Drivers, control: brightness, value: 20 } }
+        then:
+          - { module: Drivers, control: brightness, equals: 20 }
+      - id: driver
+        say: Add the driver for your hardware, or keep the Preview that feeds the 3D view.
+        when: { manual: "An RmtLedDriver on a pin, a NetworkSendDriver for Art-Net, E1.31 or DDP, or nothing for the preview alone." }
+      - id: keep
+        say: Nothing to save, controls persist a couple of seconds after the last change.
+        when: { manual: "Reboot the device to prove it: the tree comes back as you left it." }
+    outro: |
+      A layout, a layer with two effects and a modifier, and a driver: the whole pipeline, the same on twelve lights or twelve thousand.

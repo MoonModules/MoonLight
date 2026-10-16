@@ -2,6 +2,7 @@
   "name": "scenario_WiFi_known_networks_fall_back_in_order",
   "module": "WiFiModule",
   "mode": "mutate",
+  "live_only": true,
   "also": [
     "NetworkModule"
   ],

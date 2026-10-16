@@ -2,6 +2,7 @@
   "name": "scenario_AccessPoint_protected_and_always_on",
   "module": "AccessPointModule",
   "mode": "mutate",
+  "live_only": true,
   "also": [
     "NetworkModule"
   ],

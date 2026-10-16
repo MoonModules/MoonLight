@@ -1,0 +1,67 @@
+# yaml-language-server: $schema=moonwalk.schema.json
+stage: Install
+summary: MoonLight on a board, a computer, a Linux box or a container.
+processes:
+  - id: install-esp32
+    title: Install MoonLight on an ESP32 from the browser
+    actor: user
+    goal: A blank board runs MoonLight, is on the network, and carries its model's defaults.
+    systems: [MoonInstaller, MoonCore]
+    page: gettingstarted.md
+  - id: install-desktop
+    title: Install MoonLight on a desktop
+    actor: user
+    goal: MoonLight runs on the computer at http://localhost:8080/.
+    systems: [MoonCore]
+    page: how-to/installing-to-desktop.md
+    inputs:
+      type: object
+      properties:
+        platform: { type: string, enum: [windows, macos, linux], description: "Which computer runs MoonLight?" }
+    intro: |
+      MoonLight does not need an ESP32: the same code runs as an ordinary application, rendering effects, serving the web interface and driving lights over the network. Only the download and the first run differ per platform.
+    steps:
+      - id: download
+        say: Open the web installer, set Install to "This computer", and press Download.
+        when: { open: { url: "https://moonmodules.org/MoonLight/install/" } }
+      - id: keep
+        say: When the browser warns about the download, keep it anyway.
+        given: [{ input: platform, equals: windows }]
+        when: { manual: "In the browser's Downloads panel, choose Keep anyway." }
+        detail: |
+          The warning is about the missing code-signing certificate, not the contents: every build is a new file with no reputation yet.
+      - id: setup
+        say: Run the setup and press Install.
+        given: [{ input: platform, equals: windows }]
+        when: { manual: "Double-click the downloaded setup and press Install." }
+      - id: start
+        say: Start MoonLight from the Start menu.
+        given: [{ input: platform, equals: windows }]
+        when: { manual: "Type MoonLight in the Start menu and open it." }
+      - id: open-mac
+        say: Open the .dmg, drag MoonLight to Applications, then right-click it and choose Open, once.
+        given: [{ input: platform, equals: macos }]
+        when: { manual: "Gatekeeper asks once, since the build is signed but not notarized." }
+      - id: install-deb
+        say: Install the .deb, which puts moonlight on your PATH, and run it.
+        given: [{ input: platform, equals: linux }]
+        when: { run: { command: "sudo apt install ./moonlight_X.Y.Z_<arch>.deb && moonlight" } }
+      - id: open-ui
+        say: The browser opens the interface at localhost:8080.
+        when: { open: { url: "http://localhost:8080/" } }
+        then:
+          - { status: 200 }
+    outro: |
+      Next: build your first light show on it.
+  - id: run-linux-board
+    title: Run MoonLight on a Linux board, kept running
+    actor: user
+    goal: An always-on Pi or NanoPi runs MoonLight after every reboot.
+    systems: [MoonCore]
+    page: how-to/installing-on-linux.md
+  - id: run-docker
+    title: Run MoonLight in a container
+    actor: user
+    goal: MoonLight runs in Docker with its state on a volume.
+    systems: [MoonCore]
+    page: how-to/building.md

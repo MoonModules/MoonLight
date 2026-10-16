@@ -1,0 +1,26 @@
+# yaml-language-server: $schema=moonwalk.schema.json
+stage: Review and merge
+summary: A branch reviewed, checked and merged into main.
+processes:
+  - id: contribute-pr
+    title: Contribute a pull request
+    actor: contributor
+    goal: One topic, at most 400 changed lines and ten files, based on main.
+    page: contributing/principles-and-process.md
+  - id: ci-on-pr
+    title: CI on a pull request
+    actor: ci
+    goal: Every pull request builds and tests on every platform.
+    dependsOn: [contribute-pr]
+  - id: review-finding
+    title: Handle a review finding
+    actor: agent
+    goal: Every finding is verified against the code, then fixed or skipped with a reason.
+    page: contributing/principles-and-process.md
+  - id: pre-merge
+    title: Run pre-merge, then merge
+    actor: product-owner
+    goal: The branch's checks and judgment gates pass, and the product owner merges.
+    systems: [MoonDeck]
+    dependsOn: [commit, ci-on-pr]
+    page: contributing/principles-and-process.md

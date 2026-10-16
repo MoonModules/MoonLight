@@ -1,6 +1,6 @@
 # Log an issue
 
-Something not working? Tell us. You do not need to diagnose it, describe what you saw, and hand us the state of the device it happened on. The **`{ }`** link on every module card gives you that in one click, and it is the single most useful thing you can attach.
+Something not working? Tell us. You do not need to diagnose it, describe what you saw, and hand us the state of the device it happened on. The **`{ }`** link on every module card leads you there in two clicks, and it is the single most useful thing you can attach.
 
 👉 **[Open an issue on GitHub](https://github.com/MoonModules/MoonLight/issues)**
 
@@ -42,9 +42,8 @@ Actual behavior:
 
 **How to get it:**
 
-1. Find the card that misbehaved, the effect that went dark, the driver that
-   isn't lighting, the network card that won't connect
-2. Click the **`{ }`** link at the end of its title row
+1. Find the card that misbehaved, the effect that went dark, the driver that isn't lighting, the network card that won't connect
+2. Click the **`{ }`** link at the end of its title row, then **diagnostics** in the popup that opens
 3. Select all in the new tab (Ctrl/Cmd+A), copy, and paste it into the issue
 
 **Which cards to include:**

@@ -238,7 +238,8 @@ def collect_desktop():
 
     specs = ROOT / "moondeck" / "check" / "check_specs.py"
     if specs.exists():
-        out, rc = run([sys.executable, str(specs)])
+        # Through uv, so the check gets its own declared dependencies; this script's interpreter carries only pyserial.
+        out, rc = run(["uv", "run", str(specs)], timeout=120)
         kpi["specs_check"] = "PASS" if rc == 0 else "FAIL"
         for line in out.splitlines():
             if "Spec check:" in line:

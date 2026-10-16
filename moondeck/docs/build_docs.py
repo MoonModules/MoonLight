@@ -4,6 +4,7 @@
 # dependencies = [
 #     "mkdocs-material>=9.5",
 #     "pymdown-extensions>=10",
+#     "jsonschema>=4",
 # ]
 # ///
 """Build (or serve) the MoonLight docs site with MkDocs Material.

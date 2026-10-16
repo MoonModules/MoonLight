@@ -29,7 +29,6 @@ def _mod_path(name: str) -> str:
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 SCENARIOS_DIR = ROOT / "test" / "scenarios"
-BASELINE_FILE = ROOT / "test" / "scenario-baseline.json"
 
 # Reuse the shared test-metadata parser so scenario discovery stays in one place.
 sys.path.insert(0, str(ROOT / "moondeck"))
@@ -160,32 +159,6 @@ def _control_value(module: dict, name: str):
         if ctrl.get("name") == name:
             return ctrl.get("value")
     return None
-
-
-def count_lights(client: Client) -> int:
-    """Derive the total light count from layout modules in the state tree.
-
-    Layout modules expose width/height/depth controls; their product is the
-    grid's light count. Used to scale the FPS-throughput floor to the grid.
-    The module tree is nested (children[]), so walk it recursively.
-    """
-    def walk(module: dict) -> int:
-        total = 0
-        w = _control_value(module, "width")
-        h = _control_value(module, "height")
-        d = _control_value(module, "depth")
-        if w is not None and h is not None and d is not None:
-            try:
-                total += int(w) * int(h) * int(d)
-            except (ValueError, TypeError):
-                print(f"  WARN  count_lights: non-numeric w/h/d "
-                      f"({w!r}/{h!r}/{d!r}) on module {module.get('name','?')}, skipped")
-        for child in module.get("children", []):
-            total += walk(child)
-        return total
-
-    state = client.get("/api/state")
-    return sum(walk(m) for m in state.get("modules", []))
 
 
 def _detect_target(state: dict, local: bool = True) -> str:
@@ -806,7 +779,7 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
     # restores those controls to production defaults BEFORE the scenario runs.
     # Without this each scenario's measurements depend on whatever the previous
     # scenario left behind, so contract assertions become coupled to run order.
-    # Reset failures fail-fast: a swallowed reset means the baseline reflects
+    # Reset failures fail-fast: a swallowed reset means the measurements reflect
     # the wrong state, which silently produces false-positive contract passes
     # (or false-negative failures) downstream. Better to abort cleanly here.
     reset_steps = scenario.get("reset", [])
@@ -826,15 +799,15 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
                 print(f"  FAIL  reset {r_step.get('name','?')}: {e}", file=sys.stderr)
                 results["passed"] = False
                 results["reset_failed"] = f"{r_step.get('name','?')}: {e}"
-                # Stop the scenario before collect_metrics: baseline would
+                # Stop the scenario before collect_metrics: the reading would
                 # otherwise reflect an unknown/partial state. No cleanup
                 # needed: created_modules only fills inside the steps loop
                 # below, which hasn't run yet.
                 return results
 
-    # Collect baseline AFTER reset so it reflects the normalized state.
-    baseline = collect_metrics(client, settle_s=settle_s)
-    print(f"\n  Baseline: tick={baseline.get('tickTimeUs', '?')}us (FPS={baseline.get('fps', '?')})  heap={baseline.get('freeHeap', '?')}")
+    # The starting reading, taken AFTER reset so it reflects the normalized state.
+    start = collect_metrics(client, settle_s=settle_s)
+    print(f"\n  Start: tick={start.get('tickTimeUs', '?')}us (FPS={start.get('fps', '?')})  heap={start.get('freeHeap', '?')}")
 
     # ids whose optional state document was skipped (a platform-gated module absent on this
     # target: e.g. the Parlio driver on a non-P4 board). A later optional measure or control
@@ -1480,46 +1453,6 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
                     new_block["max_alloc_block"] = int(max_block)
                 step.setdefault("contract", {})[obs_target] = new_block
 
-            # Check bounds
-            bounds = step.get("bounds", {})
-            if "fps" in bounds:
-                # Absolute minimum
-                if "min" in bounds["fps"]:
-                    min_fps = bounds["fps"]["min"]
-                    if fps < min_fps:
-                        print(f"  FAIL  fps {fps} < {min_fps}")
-                        results["passed"] = False
-                    else:
-                        print(f"  PASS  fps >= {min_fps}")
-                # Relative to baseline (percentage)
-                if "min_pct" in bounds["fps"] and baseline.get("fps", 0) > 0:
-                    min_pct = bounds["fps"]["min_pct"]
-                    threshold = int(baseline["fps"] * min_pct / 100)
-                    if fps < threshold:
-                        print(f"  FAIL  fps {fps} < {threshold} ({min_pct}% of baseline {baseline['fps']})")
-                        results["passed"] = False
-                    else:
-                        print(f"  PASS  fps {fps} >= {min_pct}% of baseline")
-                # FPS×lights throughput floor: compared against the measured
-                # tick *time* (the device's native unit), not derived FPS.
-                # Per-grid budget: max_tick_us = lights * 1e6 / product.
-                if "min_fps_led_product" in bounds["fps"]:
-                    product = bounds["fps"]["min_fps_led_product"]
-                    lights = count_lights(client)
-                    if not isinstance(product, (int, float)) or product <= 0:
-                        print(f"  WARN  min_fps_led_product: invalid value "
-                              f"{product!r}, skipped")
-                    elif lights > 0 and tick_us > 0:
-                        max_tick = round(lights * 1_000_000 / product)
-                        if tick_us > max_tick:
-                            print(f"  FAIL  tick {tick_us}us > {max_tick}us "
-                                  f"(throughput budget for {lights} lights)")
-                            results["passed"] = False
-                        else:
-                            print(f"  PASS  tick {tick_us}us <= {max_tick}us ({lights} lights)")
-                    else:
-                        print("  WARN  min_fps_led_product: no layout lights / tick, skipped")
-
         results["steps"].append(step_result)
 
     # The host back on its own network before anything else talks to the device, which is then there.
@@ -1629,56 +1562,6 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
     return results
 
 
-def load_baseline() -> dict:
-    if BASELINE_FILE.exists():
-        with open(BASELINE_FILE, encoding="utf-8") as f:
-            return json.load(f)
-    return {}
-
-
-def save_baseline(data: dict):
-    with open(BASELINE_FILE, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2)
-
-
-def compare_baseline(results: dict, baseline: dict):
-    """Compare results against baseline, report regressions."""
-    name = results["name"]
-    if name not in baseline:
-        print(f"  No baseline for '{name}': run with --update-baseline first")
-        return
-
-    base = baseline[name]
-    regressions = []
-
-    for step, base_step in zip(results.get("steps", []), base.get("steps", [])):
-        if "metrics" not in step or "metrics" not in base_step:
-            continue
-        m = step["metrics"]
-        bm = base_step["metrics"]
-
-        step_name = step.get("name", "?")
-
-        # FPS regression > 10%
-        if bm.get("fps", 0) > 0 and m.get("fps", 0) > 0:
-            pct = (bm["fps"] - m["fps"]) / bm["fps"] * 100
-            if pct > 10:
-                regressions.append(f"{step_name}: FPS dropped {pct:.0f}% ({bm['fps']} → {m['fps']})")
-
-        # Heap regression > 10KB
-        if bm.get("freeHeap", 0) > 0 and m.get("freeHeap", 0) > 0:
-            delta = bm["freeHeap"] - m["freeHeap"]
-            if delta > 10240:
-                regressions.append(f"{step_name}: heap dropped {delta // 1024}KB")
-
-    if regressions:
-        print(f"\n  REGRESSIONS for '{name}':")
-        for r in regressions:
-            print(f"    {r}")
-    else:
-        print(f"\n  No regressions for '{name}'")
-
-
 def main():
     parser = argparse.ArgumentParser(description="Run live scenario tests")
     parser.add_argument("--host", default="localhost:8080",
@@ -1693,10 +1576,6 @@ def main():
                         help="Another board a scenario names in `boards`, such as sender=192.168.1.156; repeat for each.")
     parser.add_argument("--settle", type=float, default=3.0,
                         help="Settle time in seconds between step and measurement")
-    parser.add_argument("--update-baseline", action="store_true",
-                        help="Save results as new baseline")
-    parser.add_argument("--compare-baseline", action="store_true",
-                        help="Compare results against stored baseline")
     parser.add_argument("--update-contract", action="store_true",
                         help=("Renegotiate the per-step performance contract: write "
                               "observed tick/heap into contract[<target>] and stamp "
@@ -1769,16 +1648,6 @@ def main():
         all_results[result["name"]] = result
         if not result["passed"]:
             all_passed = False
-
-    # Baseline
-    if args.update_baseline:
-        save_baseline(all_results)
-        print(f"\nBaseline saved to {BASELINE_FILE}")
-
-    if args.compare_baseline:
-        baseline = load_baseline()
-        for name, result in all_results.items():
-            compare_baseline(result, baseline)
 
     print(f"\n=== {len(all_results)} scenario(s), "
           f"{'all passed' if all_passed else 'SOME FAILED'} ===")

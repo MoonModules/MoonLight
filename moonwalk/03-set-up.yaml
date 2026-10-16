@@ -1,0 +1,11 @@
+# yaml-language-server: $schema=moonwalk.schema.json
+stage: Set up
+summary: The installed device joins the network and knows what it is.
+processes:
+  - id: join-access-point
+    title: Join a device through its own access point
+    actor: user
+    goal: A device with no network becomes reachable and learns the WiFi.
+    systems: [MoonCore]
+    dependsOn: [install-esp32]
+    page: gettingstarted.md

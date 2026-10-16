@@ -84,7 +84,7 @@ def parse_unit_file(path: Path) -> dict:
 
 def parse_scenario_file(path: Path) -> dict:
     """Return top-level metadata + step list. Each step is a dict (not a tuple)
-    carrying every field the generator surfaces: name, description, op, bounds,
+    carrying every field the generator surfaces: name, description, op,
     contract per target, observed per target. Older callers that only need the
     path or top-level keys are unaffected (new keys are additive)."""
     data = json.loads(path.read_text(encoding="utf-8"))
@@ -95,7 +95,6 @@ def parse_scenario_file(path: Path) -> dict:
             "description": step.get("description"),
             "op": step.get("op", ""),
             "measure": bool(step.get("measure")),
-            "bounds": step.get("bounds") or {},
             "contract": step.get("contract") or {},
             "observed": step.get("observed") or {},
         })

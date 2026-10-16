@@ -21,7 +21,7 @@ The card checks for both channels and tells you when one is newer, and a stable 
 
 ## On a device that carries MoonBase
 
-Some variants carry [MoonBase](../explanation/architecture/moonbase.md), a small recovery image in the factory slot. The 4 MB classic, `esp32-16mb` and the S3-Zero use it today.
+Some variants carry [MoonBase](../explanation/architecture/moonbase.md), a small recovery image in the factory slot. `esp32`, `esp32-eth`, `esp32-wrover`, `esp32-pico`, `esp32-16mb`, `esp32s3-zero` and `esp32c3` use it.
 
 The card looks slightly different there. It gains an **image** selector, choosing whether the version shown and the install performed apply to the app or to MoonBase itself, and a **Restart in MoonBase** button.
 

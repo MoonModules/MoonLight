@@ -152,7 +152,7 @@ Learning one card teaches you all of them. Each carries the same five buttons in
 
 <video src="assets/moontube/03-second-look.webm" autoplay loop muted controls playsinline width="720" title="The five buttons on every card, each pressed: power, replace, delete, help and the card's own JSON"></video>
 
-⏻ turns a module off, ✎ swaps it for another type, × deletes it, and ? opens that module's page in the documentation. { } opens the card's own JSON, which is what to paste into an issue when something misbehaves.
+⏻ turns a module off, ✎ swaps it for another type, and × deletes it. { } opens the card as JSON, to copy, to save as a preset, or to open its diagnostics, which is what to paste into an issue when something misbehaves.
 
 ### The system modules
 

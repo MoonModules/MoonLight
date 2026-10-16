@@ -283,22 +283,6 @@ def _fmt_at_range(at) -> str:
     return str(at)
 
 
-def _format_bounds(b: dict) -> list[str]:
-    """One bullet per bound expressed in the JSON."""
-    out: list[str] = []
-    fps = b.get("fps") or {}
-    if "min" in fps:
-        out.append(f"FPS ≥ {fps['min']} (absolute)")
-    if "min_pct" in fps:
-        out.append(f"FPS ≥ {fps['min_pct']}% of baseline")
-    if "min_fps_led_product" in fps:
-        out.append(f"FPS × lights ≥ {fps['min_fps_led_product']:,}")
-    heap = b.get("heap") or {}
-    if "max_delta_bytes" in heap:
-        out.append(f"heap growth ≤ {heap['max_delta_bytes']}B vs previous measure step")
-    return out
-
-
 def render_scenarios(files: list[dict]) -> str:
     by_module: dict[str, list[dict]] = defaultdict(list)
     for f in files:
@@ -313,7 +297,7 @@ def render_scenarios(files: list[dict]) -> str:
         "Auto-generated from `test/scenarios/{core,light}/scenario_*.json` by "
         "`moondeck/docs/generate_test_docs.py`. **Do not edit by hand**: "
         "update the JSON file's top-level fields and per-step `description` "
-        "/ `bounds` / `contract` / `observed` instead, then regenerate."
+        "/ `contract` / `observed` instead, then regenerate."
     )
     lines.append("")
     lines.append(
@@ -371,12 +355,6 @@ def render_scenarios(files: list[dict]) -> str:
                         lines.append(f"- {': '.join(bits)}")
                     lines.append("")
                     prep_buffer = []
-                bounds = _format_bounds(step["bounds"])
-                if bounds:
-                    lines.append("**Bounds**:")
-                    for b in bounds:
-                        lines.append(f"- {b}")
-                    lines.append("")
                 lines.extend(_format_perf_table(step))
             # Trailing prep steps after the last measurement (rare) get their
             # own collapsed bullet list under a "Trailing setup" header.

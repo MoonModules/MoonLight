@@ -1,0 +1,144 @@
+# yaml-language-server: $schema=moonwalk.schema.json
+stage: Contribute
+summary: From a picked topic to a measured, reviewed commit.
+processes:
+  - id: pick-spec-plan
+    title: Pick, spec and plan a topic
+    actor: product-owner
+    goal: A module, effect, driver or capability has an approved plan before code.
+    systems: [MoonWalk]
+    page: contributing/principles-and-process.md
+  - id: branch
+    title: Branch and work on it
+    actor: product-owner
+    goal: Feature work lands on a branch the product owner created, and main stays releasable.
+    dependsOn: [pick-spec-plan]
+  - id: setup-editor
+    title: Set up the editor and the serial drivers
+    actor: contributor
+    goal: A working toolchain and editor on the contributor's machine.
+    systems: [MoonDeck]
+    page: how-to/building.md
+  - id: bump-idf
+    title: Bump the ESP-IDF pin
+    actor: contributor
+    goal: Every ESP32 target builds on the new IDF, locally and in CI.
+    systems: [MoonDeck]
+    page: how-to/building.md
+  - id: desktop-build-test
+    title: Build, run and test on the desktop
+    actor: contributor
+    goal: A change is proven on the host before any board build.
+    systems: [MoonDeck]
+    dependsOn: [branch]
+    page: how-to/building.md
+  - id: esp32-build-flash
+    title: Build, flash and monitor an ESP32
+    actor: contributor
+    goal: A bench board runs the change the desktop could not prove.
+    systems: [MoonDeck]
+    dependsOn: [desktop-build-test]
+    page: how-to/building.md
+  - id: ota-board
+    title: Update a running board over the network
+    actor: contributor
+    goal: New firmware on a board with no cable.
+    systems: [MoonDeck, MoonBase]
+    page: how-to/building.md
+  - id: provision-board
+    title: Provision a freshly flashed board
+    actor: contributor
+    goal: A flashed board joins WiFi, carries its name and its device model's module tree.
+    systems: [MoonDeck]
+  - id: teensy
+    title: Build, flash and monitor a Teensy
+    actor: contributor
+    goal: A Teensy 4.1 runs the change.
+    systems: [MoonDeck]
+    page: how-to/building.md
+  - id: iterate-moonlive
+    title: Iterate a MoonLive script on a board
+    actor: agent
+    goal: A script is edited and judged on the device before it lands in the repo.
+    systems: [MoonLive]
+  - id: add-test
+    title: Add a test, and pin a bug
+    actor: contributor
+    goal: New behavior and every fixed defect are pinned by a test.
+    systems: [MoonDeck]
+    page: reference/testing.md
+  - id: run-scenario
+    title: Run a scenario in-process on the desktop
+    actor: contributor
+    goal: One scenario replays against a scheduler inside the test binary and records what each step costs.
+    systems: [MoonDeck]
+    page: reference/testing.md
+  - id: run-live-scenario
+    title: Run a scenario against a live device
+    actor: contributor
+    goal: The same scenario over REST against a running desktop or board, leaving the device as found.
+    systems: [MoonDeck]
+    page: reference/testing.md
+  - id: live-verification
+    title: Run a live verification on boards
+    actor: contributor
+    goal: The bench boards confirm what the desktop cannot measure.
+    systems: [MoonDeck]
+    page: reference/testing.md
+  - id: renegotiate-contract
+    title: Renegotiate a performance contract
+    actor: contributor
+    goal: A scenario's contract moves with a stated reason.
+    systems: [MoonDeck]
+    page: reference/testing.md
+  - id: perform-clip
+    title: Perform a clip as a UI test
+    actor: contributor
+    goal: The UI does what every published clip shows.
+    systems: [MoonTube]
+    page: reference/testing.md
+  - id: film-clip
+    title: Record a MoonTube clip
+    actor: product-owner
+    goal: A narrated clip under docs/assets/moontube, cut into a series.
+    systems: [MoonTube]
+  - id: document
+    title: Document a change
+    actor: contributor
+    goal: The module's header and the docs describe what shipped.
+    page: contributing/documentation-standards.md
+  - id: commit
+    title: Run pre-commit, then commit
+    actor: product-owner
+    goal: A reviewed, measured commit.
+    systems: [MoonDeck]
+    dependsOn: [desktop-build-test, document]
+    page: contributing/principles-and-process.md
+    intro: |
+      The product owner initiates every commit and reviews every line; the agent runs the checks the diff triggers and reports.
+    steps:
+      - id: say-pre-commit
+        say: The product owner says "run pre-commit".
+        when: { manual: "The words start one run of the checks; scope freezes there." }
+      - id: checks
+        say: Run the checks the diff triggers, as CLAUDE.md lists them.
+        actor: agent
+        when: { read: { page: contributing/principles-and-process.md, section: Commit } }
+        detail: |
+          The gate list keeps its one home in CLAUDE.md until step 7 of the plan moves each check here as a step with its `changed` trigger.
+      - id: report
+        say: Report one line per check, PASS, FAIL or SKIP with its reason, and stop.
+        actor: agent
+        when: { manual: "A failure is reported, not fixed and rerun." }
+      - id: stage
+        say: The product owner stages what they reviewed.
+        when: { manual: "Staged means read. The agent never stages or unstages." }
+      - id: say-commit-now
+        say: The product owner says "commit now".
+        when: { manual: "The words cover the staged diff only." }
+      - id: commit
+        say: The agent commits the staged diff.
+        actor: agent
+        when: { run: { command: "git commit" } }
+        detail: |
+          Any later edit voids the words. The message carries the performance line and the account line from collect_kpi.py --commit.

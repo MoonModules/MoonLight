@@ -100,6 +100,9 @@ extra_css:
 extra_javascript:
   - path: assets/help-deck.js
     type: module
+  # MoonWalk's journey map (assets/moonwalk.js): its button on every page, and the map on moonwalk.md.
+  - path: assets/moonwalk.js
+    type: module
 
 # Build-time hooks (moondeck/docs/mkdocs_hooks.py): generate the test-inventory pages
 # from the test files (never committed → can't drift), render each catalog page's
@@ -141,6 +144,7 @@ nav:
   # outside MkDocs, so the root URL is a contract rather than a layout choice.
   - Getting started:
       - Install & first light: gettingstarted.md
+      - MoonWalk: moonwalk.md
       # The web installer is a separate app deployed at /install/ (staged verbatim by the
       # release workflow, not built by MkDocs). A full URL (not a site-relative path) so
       # MkDocs treats it as the external resource it is.

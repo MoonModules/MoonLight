@@ -1,0 +1,35 @@
+# yaml-language-server: $schema=moonwalk.schema.json
+stage: Everyday use
+summary: Looks, the gallery, hands-on control and the smart home.
+processes:
+  - id: presets
+    title: Save, edit and apply a preset
+    actor: user
+    goal: A look, geometry, hardware or service setup recalled with one click.
+    systems: [MoonCore]
+    page: how-to/presets.md
+  - id: gallery-install
+    title: Install a preset or script from the gallery
+    actor: user
+    goal: Something shared lands on a pad or in /moonlive.
+    systems: [MoonCore, MoonLive]
+    page: how-to/presets.md
+  - id: gallery-share
+    title: Share a preset in the gallery, with a moving preview
+    actor: user
+    goal: An entry in MoonLight-Gallery with a GIF.
+    systems: [MoonCore]
+    dependsOn: [presets]
+    page: how-to/presets.md
+  - id: control-surface
+    title: Connect a control surface
+    actor: user
+    goal: Faders under the hands drive the Control card and follow it back.
+    systems: [MoonCore]
+    page: how-to/control-surface.md
+  - id: smart-home
+    title: Bring the device into a smart home
+    actor: user
+    goal: On/off, brightness and color from Home Assistant, Apple Home or Homebridge.
+    systems: [MoonCore]
+    page: how-to/home-automation.md

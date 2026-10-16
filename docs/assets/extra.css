@@ -145,3 +145,16 @@
 .mm-deck-compact .md-typeset .mm-pcard p, .md-typeset .mm-deck-compact .mm-pcard p { -webkit-line-clamp: 2; }
 /* A screenshot of a module's controls shows whole, scaled into the frame; an animation fills it. */
 .mm-pcard-front img[src$=".png"] { object-fit: contain; }
+/* MoonWalk's journey map (assets/moonwalk.js): the controls, the canvas, and the panel beside it, which moves below on a narrow screen. */
+.mm-map { display: grid; grid-template-columns: 1fr 20rem; grid-template-rows: auto 75vh; gap: 0.5rem; }
+.mm-map-bar { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; font-size: 0.75rem; }
+.mm-map-bar input[type="search"] { flex: 1 1 12rem; }
+.mm-map-bar input[type="search"], .mm-map-bar select, .mm-map-bar button { border: 1px solid var(--md-default-fg-color--lightest); background: var(--md-default-bg-color); color: inherit; border-radius: 4px; padding: 4px 8px; font: inherit; }
+.mm-map-canvas { border: 1px solid var(--md-default-fg-color--lightest); border-radius: 6px; min-height: 0; }
+.mm-map-panel { overflow: auto; font-size: 0.75rem; border: 1px solid var(--md-default-fg-color--lightest); border-radius: 6px; padding: 0 0.75rem; }
+.md-typeset .mm-map-panel h3 { margin-top: 0.75rem; }
+.mm-map-meta { color: var(--md-default-fg-color--light); }
+.mm-map-chips { flex-basis: 100%; display: flex; flex-wrap: wrap; gap: 4px; }
+.mm-map-chip { border: 1px solid var(--md-default-fg-color--lightest); background: var(--md-default-bg-color); color: inherit; border-radius: 999px; padding: 2px 10px; font: inherit; cursor: pointer; }
+.mm-map-chip.on { border-color: var(--md-accent-fg-color); background: var(--md-accent-fg-color--transparent); }
+@media (max-width: 760px) { .mm-map { grid-template-columns: 1fr; grid-template-rows: auto 60vh auto; } }

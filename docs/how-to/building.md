@@ -131,8 +131,7 @@ networking. Discovery and the broadcast or multicast output modes do not cross a
 **Several instances** run side by side with no conflict: each container has its own port space, so
 they all listen on 8080 internally with different published ports, and each generates its own identity so they are distinguishable on the network. CPU is the practical limit rather than memory (measured at ~5 MB and about one core each, since the desktop build renders as fast as it is allowed); cap it with `cpus:` in compose when running a fleet.
 
-**amd64 only** for now: the release ships no arm64 Linux binary. On an Apple-silicon Mac or an ARM
-server the compose file's `platform: linux/amd64` runs it under emulation, which works but is slower than native.
+**amd64 and arm64**: the release builds a package for each, and the build picks the host's own, so an Apple-silicon Mac or an ARM server runs it natively.
 
 ## ESP32
 
@@ -168,7 +167,7 @@ uv run moondeck/build/flash_esp32.py --firmware esp32 --port /dev/tty.usbserial-
 uv run moondeck/run/monitor_esp32.py --port /dev/tty.usbserial-XXXX
 ```
 
-On the variants that opt into it (`esp32`, `esp32-16mb`, `esp32-wrover`, `esp32-eth`, `esp32s3-zero`, and `qemu`, which is emulated rather than installable) the build also produces
+On the variants that opt into it (`esp32`, `esp32-eth`, `esp32-wrover`, `esp32-pico`, `esp32-16mb`, `esp32s3-zero`, `esp32c3`, and `qemu`, which is emulated rather than installable) the build also produces
 **MoonBase**, the second boot image ([MoonBase](../explanation/architecture/moonbase.md)),
 and `flash_esp32.py` writes the corrected layout in one pass: app in the big `ota_0` slot, MoonBase in `factory`, and an otadata that boots the app directly. A device on the older dual-OTA table adopts this layout only through such a full serial flash, OTA never rewrites the partition table.
 
@@ -297,8 +296,7 @@ The Ethernet PHY type and pin map are runtime config, not baked into the build: 
 
 A board already on the network is updated over HTTP, with no cable. Which route to use depends on whether the variant carries [MoonBase](../explanation/architecture/moonbase.md): a board cannot rewrite the partition it is executing from, so on a MoonBase variant the app hands over to MoonBase and MoonBase does the writing.
 
-**On a MoonBase variant** (`esp32`, `esp32-16mb`, `esp32s3-zero`, and any variant `build_esp32.py`
-builds MoonBase alongside), it is two requests:
+**On a MoonBase variant** (the list above), it is two requests:
 
 ```sh
 # 1. the app reboots into MoonBase, with nothing staged. Back in ~4 seconds.
