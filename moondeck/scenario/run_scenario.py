@@ -180,9 +180,6 @@ def _run_one(path: Path, update_contract: bool, update_reason: str | None,
 
     Symmetric with the live runner's behaviour — observations persist always,
     contracts only when renegotiated."""
-    # `skip_on` is the runner's rule, not this wrapper's: mm_scenarios reads the same field and
-    # returns SKIPPED for it. A copy here returned 0 instead, so a skipped scenario was counted as a
-    # pass and the binary's own skip path was never reached.
     # Capture + tee: stream to stdout while collecting MEASURE lines.
     # Pin the runner's filesystem root into the build tree. The runner performs real writes, and
     # its default root is the OS per-user data directory unless the working directory happens to be

@@ -1,0 +1,35 @@
+# yaml-language-server: $schema=moonwalk.schema.json
+stage: Advanced use
+summary: Scripts, panels, drivers, many devices and the API.
+processes:
+  - id: first-script
+    title: Write a first MoonLive script
+    actor: user
+    goal: An effect typed in the browser runs compiled on the device with its own control.
+    systems: [MoonLive]
+    dependsOn: [first-light-show]
+    page: tutorials/first-script.md
+  - id: panel-cards
+    title: Drive LED panels through a receiving card
+    actor: user
+    goal: A ColorLight wall lit from an ESP32 or a desktop.
+    systems: [MoonLight]
+    page: how-to/panel-cards.md
+  - id: driver-setup
+    title: Set up a driver or service for the hardware
+    actor: user
+    goal: The right LED driver, HUB75 panel, audio input or video output, with its few fixed settings.
+    systems: [MoonLight]
+    page: how-to/led-drivers.md
+  - id: multi-device
+    title: Run a multi-device installation
+    actor: user
+    goal: Several devices act as one piece, with shared controls and one beat.
+    systems: [MoonCore, MoonLight]
+    page: how-to/multi-board-installation.md
+  - id: http-api
+    title: Script against the HTTP API
+    actor: user
+    goal: Add a module, set a control, apply a document and find the device over HTTP.
+    systems: [MoonCore]
+    page: reference/integrating.md

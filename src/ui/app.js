@@ -8,7 +8,7 @@ import { preview } from "/preview3d.js";
 import { encodeGif } from "/gif.js";
 import { isNewer, parse } from "/semver.js";
 import { applyMigrations, collectFiles, restoreDirs, diffRestore } from "/migrate.js";
-import { moduleHelp, controlHelp, ROLE_EMOJI, DIM_EMOJI, SCRIPTED_EMOJI, COMPILED_EMOJI, EMOJI_LABEL,
+import { moduleHelp, controlHelp, walkLinks, ROLE_EMOJI, DIM_EMOJI, SCRIPTED_EMOJI, COMPILED_EMOJI, EMOJI_LABEL,
          emojiTagsFor, emojiChipRow, chipsMatch } from "/help.js";
 
 // Sections (top to bottom):
@@ -143,7 +143,9 @@ function setupCardsResize() {
 }
 
 function lsRead(key, defaultVal) {
-    const v = localStorage.getItem(key);
+    // Blocked storage (a private window, a policy) reads as unset rather than throwing, for every caller.
+    let v = null;
+    try { v = localStorage.getItem(key); } catch { /* the default */ }
     return v !== null ? v : defaultVal;
 }
 
@@ -217,6 +219,7 @@ function connectWs() {
                 if (state && Array.isArray(state.modules)) {
                     applyStatePatch(data.patch);
                     updateValues();
+                    walker?.update(state);
                     relayMoonCloudOutbox();
                     // A targetFps slider move arrives as a PATCH, and the preview controller aims
                     // at whatever it last heard: without this, the advertised detail/smoothness
@@ -240,6 +243,7 @@ function connectWs() {
             } else {
                 renderStructure();
             }
+            walker?.update(state);   // after the render, so a step that moves on shows a card this state added
             if (data.resync) answerStateWaiters(data.resync);
         } catch {
             // ignore malformed messages
@@ -341,9 +345,21 @@ async function init() {
     // Before anything renders: help the user turned on shapes the first cards, and nothing is fetched until they agreed.
     const helpSource = new URLSearchParams(location.search).get("help");
     try {
-        if (helpSource === "local") localStorage.setItem(LS_HELP_SOURCE, "local");
+        // The local source runs MoonWalk's script from this computer's preview server inside the device's page, and a link switches it on, so it asks once, when the link arrives, and the yes is the stored source.
+        if (helpSource === "local" && lsRead(LS_HELP_SOURCE, "") !== "local"
+            && confirm("Help and MoonWalk's script will load from this computer's preview server (localhost:8421) and run inside this device's page, with access to the device. Load them from there?"))
+            localStorage.setItem(LS_HELP_SOURCE, "local");
         else if (helpSource === "published") localStorage.removeItem(LS_HELP_SOURCE);
     } catch { /* storage blocked: the published help */ }
+    // What the installer vouches for in the device link (`?walked=install`): kept until MoonWalk opens and records it in its own marks.
+    const walked = new URLSearchParams(location.search).get("walked");
+    if (walked) {
+        const ids = walked.split(",").filter((id) => /^[a-z0-9-]+$/.test(id));
+        safeLocalSet(LS_WALKED, JSON.stringify([...new Set([...walkedIds(), ...ids])]));
+        const url = new URL(location.href);
+        url.searchParams.delete("walked");
+        history.replaceState(null, "", url.pathname + url.search);
+    }
     const helpOn = lsRead(LS_HELP_SHOWN, "0") === "1" && lsRead(LS_HELP_CONSENT, "") === "1";
     if (helpOn) loadHelp();
     applyHelpShown(helpOn);
@@ -1074,6 +1090,16 @@ function selectModule(name) {
     closeNavDrawer();
 }
 
+// Select every tab on the way to a module, and return its root, the page that shows it.
+function revealModule(name) {
+    for (let parent = findParentOf(name); parent; parent = findParentOf(name)) {
+        selectedTabs[parent.name] = name;
+        name = parent.name;
+    }
+    safeLocalSet(LS_TABS, JSON.stringify(selectedTabs));
+    return name;
+}
+
 /// Restore the root the user was last on, once the tree is known.
 ///
 /// Called where the full state arrives, before the render that reads the selection: without it renderCards falls back to the first root, and a refresh lands on Control instead of the Layer or File Manager the user left open.
@@ -1083,13 +1109,7 @@ function restoreSelectedRoot() {
     // A link naming a module opens it, each tab on the way selected: the captive portal sends a phone to `?open=WiFi`, where setup continues.
     const wanted = new URLSearchParams(location.search).get("open");
     if (wanted && state && Array.isArray(state.modules) && findModule(wanted)) {
-        let name = wanted;
-        for (let parent = findParentOf(name); parent; parent = findParentOf(name)) {
-            selectedTabs[parent.name] = name;
-            name = parent.name;
-        }
-        safeLocalSet(LS_TABS, JSON.stringify(selectedTabs));
-        selectedModule = name;
+        selectedModule = revealModule(wanted);
         history.replaceState(null, "", location.pathname);   // a refresh then shows what the user chose since
         return;
     }
@@ -2150,7 +2170,7 @@ function createCard(mod, depth) {
     card.appendChild(title);
     const help = helpFor(mod.type);
     // The help's Docs link leads to the module's card on the docs site; docPath comes from /api/types.
-    if (help && help.line) card.appendChild(moduleHelp(help, docPathForType(mod.type)));
+    if (help && help.line) card.appendChild(moduleHelp(help, docPathForType(mod.type), walkLinks(walkIndex, mod.type, null, WALK_PAGE)));
 
     // -- Controls --
     // Child-hosting modules deeper in the tree (Effects, Layer, Drivers, Layouts)
@@ -2832,6 +2852,7 @@ function loadHelp() {
     if (Object.keys(helpModules).length && state && !userIsEditing()) renderCards();
     helpPending = !local && !state;
     if (helpPending) return;
+    loadWalkIndex(local);
     const get = (url) => fetch(url, {cache: "no-cache"}).then(r => r.ok ? r.text().then(text => ({url, text})) : Promise.reject(r.status));
     // A state that names no version reads the site's copy.
     const published = () => (release ? get(release) : Promise.reject()).catch(() => get(HELP_URL));
@@ -2848,6 +2869,8 @@ function loadHelp() {
 function openHelpLink(ev) {
     const a = ev.target.closest?.(".card-helpbox a[href], .control-helper a[href]");
     if (!a || ev.button !== 0 || ev.metaKey || ev.ctrlKey || ev.shiftKey || ev.altKey) return;
+    // A MoonWalk link opens the map here, at its step, beside the card it came from.
+    if (a.dataset.walk) { ev.preventDefault(); openWalk(a.dataset.walk); return; }
     const w = window.open("", "mm-help", "width=960,height=720");
     if (!w) return;
     ev.preventDefault();
@@ -2856,12 +2879,17 @@ function openHelpLink(ev) {
     w.focus();
 }
 
+// One consent for everything the help and MoonWalk download, from the docs site and from cdnjs for the map's graph library, since each shows its host this browser's address.
+function docsSiteConsent() {
+    if (lsRead(LS_HELP_CONSENT, "") === "1") return true;
+    if (!confirm("Help and MoonWalk are downloaded from the MoonLight docs site, hosted by GitHub, and the map's graph library from cdnjs, run by Cloudflare. Both see this browser's address. Download them?")) return false;
+    try { localStorage.setItem(LS_HELP_CONSENT, "1"); } catch { /* not remembered: asked again next time */ }
+    return true;
+}
+
 function toggleHelp() {
     const on = document.body.classList.contains("help-hidden");
-    if (on && lsRead(LS_HELP_CONSENT, "") !== "1") {
-        if (!confirm("Help is downloaded from the MoonLight docs site, hosted by GitHub, which sees this browser's address. Download the help?")) return;
-        try { localStorage.setItem(LS_HELP_CONSENT, "1"); } catch { /* not remembered: asked again next time */ }
-    }
+    if (on && !docsSiteConsent()) return;
     try { localStorage.setItem(LS_HELP_SHOWN, on ? "1" : "0"); } catch { /* not remembered */ }
     applyHelpShown(on);
     if (on && !Object.keys(helpModules).length) loadHelp();
@@ -2872,6 +2900,88 @@ function applyHelpShown(shown) {
     document.body.classList.toggle("help-hidden", !shown);
     const btn = document.getElementById("help-toggle");
     if (btn) { btn.setAttribute("aria-pressed", String(shown)); btn.title = shown ? "Hide help" : "Show help"; }
+}
+
+// ---- MoonWalk: every process on one map, with what this device has done and what comes next ----
+//
+// The map is the docs site's own moonwalk.js, so the flash carries none of it. The app hands it this device's whole state, which the app's own subscription holds only for the cards in view, and the cards in view, where the map opens. `?help=local` reads the local copy through preview_installer, as the help does.
+const WALK_URL = "https://moonmodules.org/MoonLight/assets/moonwalk.js";
+const WALK_URL_LOCAL = "http://localhost:8421/assets/moonwalk.js";
+const LS_WALKED = "mm_walked";   // processes the installer vouched for, until MoonWalk records them
+const WALK_MODEL_URL = "https://moonmodules.org/MoonLight/moonwalk/moonwalk.json";
+const WALK_MODEL_URL_LOCAL = "http://localhost:8421/moonwalk/moonwalk.json";
+const WALK_PAGE = "https://moonmodules.org/MoonLight/moonwalk.html";
+let walkIndex = null;   // moonwalk.json once help is on: which processes a module type and a control take part in
+let walker = null;      // the process MoonWalk's bar follows, which each state change moves on
+
+// A MoonWalk step's target, the element the bar floats under: the first module of its type's control row, else its card. With `reveal`, its page and tabs are selected first, and it scrolls into view highlighted.
+function showTarget(type, control, reveal) {
+    const mod = allModules().find(m => m.type === type);
+    if (!mod) return null;   // a release without this module: the bar still says what to do
+    if (reveal) selectModule(revealModule(mod.name));
+    const card = queryByName(`.card[data-module="${cssEscape(mod.name)}"]`, "data-module", mod.name);
+    if (!card) return null;
+    const collapse = card.querySelector("details.card-controls-collapse");
+    if (reveal && collapse) collapse.open = true;
+    const target = (control && card.querySelector(`.control-row[data-control="${cssEscape(control)}"]`)) || card;
+    if (!reveal) return target;
+    target.scrollIntoView({ block: "center", behavior: "smooth" });
+    target.classList.remove("walk-target");
+    void target.offsetWidth;   // restart the highlight when the same target is shown again
+    target.classList.add("walk-target");
+    return target;
+}
+
+// The help's links into MoonWalk come from moonwalk.json, fetched with the help under its consent and kept by the browser's own cache; offline, the help shows without them.
+function loadWalkIndex(local) {
+    fetch(local ? WALK_MODEL_URL_LOCAL : WALK_MODEL_URL).then(r => r.ok ? r.json() : Promise.reject(r.status)).then(model => {
+        walkIndex = model;
+        if (state && !userIsEditing()) renderCards();
+    }).catch(() => {});
+}
+
+function walkedIds() {
+    try { return JSON.parse(lsRead(LS_WALKED, "[]")); } catch { return []; }
+}
+
+// Open the map, at `at` (`process` or `process/step`) when a help link names one. Show me on a step closes it and hands the process to the bar.
+async function openWalk(at) {
+    walker?.stop();
+    walker = null;
+    if (!docsSiteConsent()) return;
+    const dlg = document.createElement("dialog");
+    dlg.className = "walk-dialog";
+    const head = document.createElement("div");
+    head.className = "walk-head";
+    const title = document.createElement("h3");
+    title.textContent = "MoonWalk";
+    const close = document.createElement("button");
+    close.className = "fm-tool";
+    close.textContent = "Close";
+    close.addEventListener("click", () => dlg.close());
+    head.append(title, close);
+    const host = document.createElement("div");
+    host.className = "walk-body";
+    dlg.append(head, host);
+    let stop = null;   // the map's teardown, once it has drawn
+    dlg.addEventListener("close", () => { stop?.(); dlg.remove(); }, { once: true });
+    document.body.appendChild(dlg);
+    dlg.showModal();
+    // The cards in view: the selected root and everything under it, by type, the key a process's steps target.
+    const types = [];
+    const collect = (m) => { if (!m) return; types.push(m.type); (m.children || []).forEach(collect); };
+    collect(selectedModule ? findModule(selectedModule) : null);
+    try {
+        const local = lsRead(LS_HELP_SOURCE, "") === "local";
+        const [walk, deviceState] = await Promise.all([import(local ? WALK_URL_LOCAL : WALK_URL), fetch("/api/state").then(r => r.json())]);
+        stop = await walk.drawMap(host, { state: deviceState, modules: types, open: at, done: walkedIds(), actor: "user", newTab: true,
+            show: showTarget, reopen: openWalk, onFollow: (w) => { walker = w; dlg.close(); w.update(state); } });
+        // The map recorded the installer's vouch once it drew; a map that could not load leaves it for the next open.
+        if (typeof stop === "function") try { localStorage.removeItem(LS_WALKED); } catch { /* recorded twice next time, which is harmless */ }
+        if (!dlg.open) stop?.();   // closed while it was still loading
+    } catch (e) {
+        host.textContent = `MoonWalk could not load: ${e.message}`;   // offline, as on the device's own access point
+    }
 }
 
 function helpFor(moduleType) {
@@ -2922,6 +3032,7 @@ function controlRendersGenerically(mod, ctrl) {
 function createControl(moduleName, moduleType, ctrl, writeTo = (name, value) => sendControl(moduleName, name, value)) {
     const row = document.createElement("div");
     row.className = "control-row";
+    row.dataset.control = ctrl.name;   // the address a MoonWalk step points at, whatever the control's type
     // Expert-only controls (only reachable here when expert mode is on: see controlRendersGenerically)
     // get a distinct treatment so they read as a different tier: a left accent stripe + muted label.
     // One class per tier, because the glyph says WHICH mode reveals it: a reader in expert mode
@@ -3501,7 +3612,7 @@ function createControl(moduleName, moduleType, ctrl, writeTo = (name, value) => 
     // The key the edit cooldown stamps, so a list rebuild puts back a value still being typed; a list's own row fields keep theirs.
     for (const el of row.querySelectorAll("input, select, textarea")) if (!el.dataset.dragkey) el.dataset.dragkey = key;
     const help = helpFor(moduleType);
-    controlHelp(row, help && help.controls ? help.controls[ctrl.name] : null);
+    controlHelp(row, help && help.controls ? help.controls[ctrl.name] : null, walkLinks(walkIndex, moduleType, ctrl.name, WALK_PAGE));
     return row;
 }
 
@@ -5971,6 +6082,7 @@ function setupStatusBarButtons() {
         armPressTwice(rebootBtn, rebootDevice, {armedTitle: "Click again to reboot"});
     }
     document.getElementById("help-toggle")?.addEventListener("click", toggleHelp);
+    document.getElementById("walk-open")?.addEventListener("click", () => openWalk());
     document.addEventListener("click", openHelpLink);
     document.getElementById("theme-toggle")?.addEventListener("click", () => {
         theme = (theme === "dark") ? "light" : "dark";

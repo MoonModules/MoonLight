@@ -94,7 +94,7 @@
       "chip": "esp32p4",
       "eth_only": false,
       "ships": true,
-      "description": "Waveshare ESP32-P4-NANO: Ethernet + WiFi via the on-board ESP32-C6 over SDIO (esp_hosted), for P4 revisions 0.x/1.x ONLY. Boots and associates as of IDF v6.1-rc1 with CONFIG_PM_SLEEP_CLK_ICG_ENABLE=n, which sidesteps esp-idf #18759 (sleep_clock_icg_startup_init failing ESP_ERR_NO_MEM and aborting cpu_start)."
+      "description": "Waveshare ESP32-P4-NANO: Ethernet + WiFi via the on-board ESP32-C6 over SDIO (esp_hosted), for P4 revisions 0.x/1.x ONLY. Ethernet works; WiFi over the C6 associates on some boots and not on others."
     },
     {
       "name": "esp32p4rev3-eth",

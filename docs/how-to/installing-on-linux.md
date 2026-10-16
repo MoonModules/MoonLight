@@ -2,9 +2,9 @@
 
 MoonLight runs as an ordinary Linux application: the same effect pipeline, web UI and network drivers as on a board, with a real CPU behind them. A small always-on machine makes a good installation controller, whether a server, a Raspberry Pi or a NanoPi.
 
-Deploying is covered here. Building and developing on Linux is in [building.md](../how-to/building.md).
+Deploying is covered here. Building and developing on Linux are [MoonWalk's contributor processes](../moonwalk.md#desktop-build-test).
 
-> Windows, with screenshots: [Installing MoonLight on a desktop](installing-to-desktop.md). Flashing a board: [Install & first light](../gettingstarted.md).
+> Windows, with screenshots: [Install MoonLight](../moonwalk.md#install). Flashing a board: [Install & first light](../gettingstarted.md).
 
 ## Which route applies to your machine
 
@@ -75,7 +75,7 @@ ping raspberrypi.local          # or NanoPi-R28S.local
 arp -a                          # everything the network has seen
 ```
 
-Your router's client list is the fallback when mDNS does not resolve. A name that never resolves means the board has no mDNS responder: Raspberry Pi OS ships one, a minimal Debian or FriendlyELEC image often does not, so `.local` fails while the IP answers. Log in by IP and fix it below.
+Your router's client list is the fallback when mDNS does not resolve. A name that never resolves means the board has no mDNS responder, so `.local` fails while the IP answers. Raspberry Pi OS ships one; a minimal Debian or FriendlyELEC image often does not. Log in by IP and fix it below.
 
 ### 3. Log in
 
@@ -85,7 +85,7 @@ ssh pi@NanoPi-R28S              # FriendlyELEC Debian: user pi, password pi
 ssh pi@192.168.1.156            # by address, when neither name resolves
 ```
 
-**A wall of `setlocale: LC_CTYPE: cannot change locale (UTF-8)` warnings on login is harmless.** macOS sends its own `LC_CTYPE` to the board, which has no locale by that name, and bash repeats the warning per startup file. It fires before anything you run. Silence it on the board:
+**A wall of `setlocale: LC_CTYPE: cannot change locale (UTF-8)` warnings on login is harmless.** macOS sends its own `LC_CTYPE` to the board, which has no locale by that name. Bash repeats the warning per startup file. It fires before anything you run. Silence it on the board:
 
 ```sh
 sudo apt install -y locales && sudo locale-gen en_US.UTF-8
@@ -193,9 +193,33 @@ docker run -d --name moonlight --network host \
 
 Open `http://<machine>:8080`. `--restart unless-stopped` is what brings it back after a reboot, so Docker replaces the systemd unit above rather than needing one of its own.
 
-**Use `--network host`.** The web UI and unicast fixture output work through ordinary port mapping (`-p 8080:8080`), but mDNS discovery is multicast and Art-Net's broadcast mode is too, and neither crosses a bridge network. Host networking is what lets a container find boards and be found by them. Verified on a NanoPi R28S driving a ColorLight card.
+**Use `--network host`.** The web UI and unicast fixture output work through ordinary port mapping (`-p 8080:8080`). mDNS discovery and Art-Net's broadcast mode are multicast, and neither crosses a bridge network. Host networking is what lets a container find boards and be found by them. Verified on a NanoPi R28S driving a ColorLight card.
 
 **The volume is the configuration.** `/data` holds everything you set up; without it, every `docker rm` starts you over.
+
+`:latest` follows the rolling prerelease, the same build the installer offers; a version tag such as `:6.0.0` pins one. The release workflow builds each image from the `.deb` that release ships, so the image and the package are the same build.
+
+| | |
+|---|---|
+| **Config** | `/data/MoonLight/.config/` in the volume (`XDG_DATA_HOME=/data`) |
+| **Identity** | `/data/MoonLight/.config/identity`, written on the first run |
+| **Logs** | standard output, so `docker logs` |
+| **Output** | Art-Net UDP 6454, DDP 4048, E1.31 5568, all outbound |
+| **Capabilities** | none: it binds its port as an ordinary process |
+
+**Several instances** run side by side: each container has its own ports and writes its own identity, so they are told apart on the network. CPU is the limit rather than memory, about one core each, since the desktop build renders as fast as it may; cap it with `cpus:` when running a fleet.
+
+### From a source checkout, with Compose
+
+The repository's `docker-compose.yml` builds the image from the checkout and publishes the interface on port 8081, so it never meets a native install on 8080:
+
+```sh
+docker compose up -d      # then open http://localhost:8081/
+docker compose logs -f
+docker compose down       # stops it; the volume and your config stay
+```
+
+It passes `--no-browser`, since a container has no browser to open. To update after pulling new code, `docker compose build --pull && docker compose up -d`; for a published `image:` it is `docker compose pull && docker compose up -d`. Only `docker compose down -v` deletes the volume. Discovery and broadcast output need `network_mode: host`, which has no port mapping, so pass `--port 8081` in `command:` there.
 
 ### When the container exits at once
 
@@ -239,10 +263,10 @@ Docker widens the target from "a Debian-family board" to "anything that runs con
 - **A router or firewall appliance** running OpenWrt or OPNsense with Docker: plausible where the device has the RAM, and the overlay-root note above is likely to apply.
 - **Kubernetes**: one pod, one volume. Multicast needs an L2 CNI rather than the default bridge.
 
-The realistic limits are architecture and memory, not the kind of device. It needs 64-bit, arm64 or amd64, because no 32-bit image is published. Memory is rarely the binding constraint: a container rendering a 16x16 grid measures 4.5 MB on a NanoPi, and a large installation grows that by its buffers rather than by a fixed overhead. A coffee machine is not out of the question if it meets both and runs Docker, though the fixtures would have to come to it.
+The realistic limits are architecture and memory, not the kind of device. It needs 64-bit, arm64 or amd64, because no 32-bit image is published. Memory is rarely the binding constraint: a container rendering a 16x16 grid measures 4.5 MB on a NanoPi. A large installation grows that by its buffers rather than by a fixed overhead. A coffee machine is not out of the question if it meets both and runs Docker, though the fixtures would have to come to it.
 
 ## Where to go next
 
 - [Install & first light](../gettingstarted.md): the same program on an ESP32.
 - [How MoonLight works](../tutorials/how-moonlight-works.md): layouts, layers, effects and drivers.
-- [building.md](../how-to/building.md): building, testing and packaging in depth.
+- [Build, run and test on the desktop](../moonwalk.md#desktop-build-test): building, testing and packaging from source.

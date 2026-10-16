@@ -46,14 +46,12 @@ Fixed top, 44 px, left-to-right:
 2. **MoonLight logo**, 28 px PNG from `/moonmodules-logo.png`; the same image is the page favicon.
 3. **Brand wordmark**, "MoonLight".
 4. **Device name**, from the `System.deviceName` control.
-5. **System stats**, `uptime · NN K free` (uptime `Xd Yh Zm Ws`, free heap KB), read from the
-   SystemModule controls in the WS state push; no separate polling endpoint.
-6. **WebSocket dot**, green = connected, gray = disconnected. The socket auto-reconnects with
-   exponential backoff from 200 ms to a 5 s ceiling on close, and a page reload covers the rare half-dead socket.
-7. **Reboot button (⏻)**, red border via `data-crashed="true"` when `SystemModule.bootReason` is
-   PANIC / INT_WDT / TASK_WDT / BROWNOUT. Press-twice to confirm: the first click arms it (solid red), a second sends `POST /api/reboot`. Disarms after 3 s or on pointer-leave, no `confirm()` popup.
+5. **System stats**, `uptime · NN K free` (uptime `Xd Yh Zm Ws`, free heap KB), read from the SystemModule controls in the WS state push; no separate polling endpoint.
+6. **WebSocket dot**, green = connected, gray = disconnected. The socket auto-reconnects with exponential backoff from 200 ms to a 5 s ceiling on close, and a page reload covers the rare half-dead socket.
+7. **Reboot button (⏻)**, red border via `data-crashed="true"` when `SystemModule.bootReason` is PANIC / INT_WDT / TASK_WDT / BROWNOUT. Press-twice to confirm: the first click arms it (solid red), a second sends `POST /api/reboot`. Disarms after 3 s or on pointer-leave, no `confirm()` popup.
 8. **Help toggle (ⓘ)**, off by default: shows or hides every help line by flipping `body.help-hidden`, dimmed while off. The first time it turns help on it asks before downloading `help.json` from the docs site, and a yes is kept in `mm_helpConsent`; the choice is kept in `mm_helpShown`.
-9. **Theme toggle (☀/🌙)**, flips `[data-theme]` on `<body>`; preference in `localStorage['mm_theme']`.
+9. **MoonWalk (🗺️)**: opens [MoonWalk](../../moonwalk.md), the map of every process, in a resizable dialog, on the reader's choices: Here, the processes touching the card in view, and Next, the next ones to do. The map and its script come from the docs site, and its graph library from cdnjs, under the help's consent, which names both hosts; and the device's whole state from `GET /api/state` marks done what it shows done. A `?walked=` list in the address, the installer's link after an install, records the processes it vouches for. With help on, a module's help lists the processes it takes part in and a control's more the step that sets it; a tap opens the map at that step. A step that points at a card has **Show me**: the map closes, the card comes into view with its control outlined, and a bar holds the current step, moving on when the device's state shows it done and reopening the map on a tap.
+10. **Theme toggle (☀/🌙)**, flips `[data-theme]` on `<body>`; preference in `localStorage['mm_theme']`.
 
 ## Side navigation
 
@@ -88,8 +86,7 @@ Each MoonModule renders as a card, with **child cards nested inside their parent
 
 - The parent's own controls render **above** its children; `+ add child` renders **below** them.
   Child cards live in a `.card-children` wrapper appended into the parent card's DOM node (not flat siblings); `renderModuleTree` recurses into the parent card, not into `main`.
-- **`{ }`** opens `GET /api/modules/{name}` in a new tab, that one module's live JSON, for issue
-  reports (see [Log an issue](../../how-to/logging-an-issue.md)). On EVERY card, unlike `✎`/`×` (user-editable children only).
+- **`{ }`** opens a popup holding the card as a state document, with **copy**, **save as preset** where a preset module exists, and **diagnostics**, which opens `GET /api/modules/{name}` in a new tab, that module's live JSON for issue reports (see [Log an issue](../../how-to/logging-an-issue.md)). On EVERY card, unlike `✎`/`×` (user-editable children only).
 - **Enabled toggle** in the right-hand action cluster mirrors `MoonModule::enabled()`, a styled
   `<button>` (transparent + muted border, 26×26); state shown by the glyph alone (accent **✓** on, muted **○** off; `data-checked` + `aria-pressed`). Toggling fires `onEnabled()`; the Scheduler skips disabled modules whose `respectsEnabled()` returns true (default).
 - **Emoji tags** next to the name show the same set the type picker uses: role + dimensional (both

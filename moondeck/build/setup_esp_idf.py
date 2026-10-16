@@ -36,7 +36,7 @@ def _checkout_pinned(idf_path: Path) -> bool:
     """Move the installed IDF onto PINNED_IDF_COMMIT (checkout + submodule sync).
 
     Returns True on success. The pinned commit must already be fetched (the dev
-    cloned the right branch per docs/how-to/building.md); this only moves HEAD onto it
+    cloned the right branch per the esp32-build-flash process in moonwalk/09-contribute.yaml); this only moves HEAD onto it
     and re-syncs submodules — it does not fetch or clone.
     """
     co = subprocess.run(["git", "checkout", PINNED_IDF_COMMIT], cwd=str(idf_path))

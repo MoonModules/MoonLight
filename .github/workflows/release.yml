@@ -1,12 +1,9 @@
 name: Release
 
-# Tag-triggered release pipeline. Builds 4 ESP32 firmwares + 2 desktop binaries
-# in parallel, generates 4 ESP Web Tools manifests, attaches everything to the
-# GitHub release, and deploys the installer page to GitHub Pages.
+# The release pipeline. Builds every shipped ESP32 firmware (the matrix from mooninstaller/firmwares.json), the Teensy firmware and the desktop packages (macOS arm64, Windows x64, Linux x64 and arm64) in parallel, writes an ESP Web Tools manifest per firmware, attaches everything to the GitHub release, publishes the container image, and deploys the installer page to GitHub Pages.
 #
 # Two triggers produce a release:
-#   - push to main (src/esp32/CMakeLists.txt changed) → tags/publishes as `latest`
-#     (a moving prerelease, always the newest build from main)
+#   - push to main touching a path below → tags/publishes as `latest` (a moving prerelease, always the newest build from main)
 #   - push of a vX.Y.Z tag → stable/RC release
 #
 # Manual replay: workflow_dispatch with an existing tag, useful for retries
@@ -179,15 +176,7 @@ jobs:
       - name: Build firmware
         uses: espressif/esp-idf-ci-action@v1
         with:
-          # Match the local development IDF (v6.1-rc1, commit 44f0c59f).
-          # The project uses v6-era APIs — `esp_eth_phy_new_generic`, the new
-          # mDNS component manager, `int clock_gpio` in the EMAC config (v5.x
-          # had a strongly-typed enum). v5.4 fails to compile platform_esp32.cpp.
-          # `v6.1-rc1` is the espressif/idf Docker tag pinned to the same
-          # tagged pre-release the local pin uses — fixed and signed (not the
-          # rolling `release-v6.1` branch tag), so CI and local build the exact
-          # same tree. This tracks the v6.1 line toward GA; re-pin to the `v6.1`
-          # tag once it ships (a deliberate re-test pass, see docs/how-to/building.md).
+          # The espressif/idf Docker tag of the local pin (PINNED_IDF_COMMIT in build_esp32.py), a fixed release tag rather than the rolling `release-v6.1`, so CI and local build the same tree; v5.x lacks the v6 APIs platform_esp32.cpp uses, and moving the pin is a re-test pass (the bump-idf process in moonwalk/09-contribute.yaml).
           esp_idf_version: v6.1
           # The IDF target is the firmware's declared chip, carried by the matrix from firmwares.json.
           target: ${{ matrix.chip }}

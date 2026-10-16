@@ -582,3 +582,22 @@ button#watch-ports.watching {
     color: #d6ffe6;
 }
 button#watch-ports.watching:hover { border-color: #2e9e63; color: #d6ffe6; }
+
+/* The MoonWalk button looks like a tab without being one, so the tab switcher leaves it alone. */
+.walk-open { background: transparent; border: 1px solid #0f3460; color: #a0a0b0; padding: 6px 16px; border-radius: 4px; cursor: pointer; font-size: 13px; }
+.walk-open:hover { background: #0f3460; color: #fff; }
+
+/* MoonWalk's map in MoonDeck's own dialog, resized from its corner; MoonDeck's colors mapped onto the docs theme's variables the map reads. */
+.walk-dialog {
+    width: min(960px, 92vw); height: min(640px, 85vh); min-width: min(420px, 92vw); min-height: 360px; max-width: 98vw; max-height: 96vh;
+    margin: auto;   /* centered as a modal dialog is by default, which the page's `* { margin: 0 }` reset undoes */
+    resize: both; overflow: hidden; padding: 12px 14px; border: 1px solid #0f3460; border-radius: 10px; background: #16213e; color: #e0e0e0;
+    --md-default-fg-color: #e0e0e0; --md-default-bg-color: #16213e; --md-accent-fg-color: #e94560;
+    --md-default-fg-color--lightest: #0f3460; --md-default-fg-color--light: #8892b0;
+}
+.walk-dialog[open] { display: flex; flex-direction: column; }
+.walk-dialog::backdrop { background: rgba(0,0,0,0.5); }
+.walk-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.walk-head h3 { margin: 0; font-size: 1rem; }
+.walk-body { flex: 1; min-height: 0; }
+.walk-dialog .mm-map { height: 100%; grid-template-rows: auto 1fr; --mw-panel: 20rem; }

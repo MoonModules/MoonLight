@@ -4,7 +4,7 @@ An effect you write yourself, typed into the browser, running as native machine 
 
 This is MoonLive. The reference for the language is [MoonLive](../moonmodules/light/moonlive.md), and what follows is the shortest path to seeing your own code drive real lights.
 
-You need a device with lights or the 3D preview, and [a light show already running](first-light-show.md) so there is something to replace.
+You need a device with lights or the 3D preview, and [a light show already running](../moonwalk.md#first-light-show) so there is something to replace.
 
 ## 1. Add a scripted effect
 

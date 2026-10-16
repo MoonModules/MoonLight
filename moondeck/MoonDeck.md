@@ -1,10 +1,10 @@
 # MoonDeck Script Reference
 
-MoonDeck is MoonLight's browser-based developer console: one page that builds, flashes, runs, tests, monitors, and checks the project across every target, and discovers and drives devices on the network. Every action it offers is a thin wrapper around a script under `moondeck/`, so the CLI (`uv run moondeck/<group>/<name>.py`) and MoonDeck run exactly the same code: agents typically use the CLI, humans use MoonDeck. For what MoonDeck *is* and where it sits in the workflow see [docs/how-to/building.md § MoonDeck](../docs/how-to/building.md#moondeck--the-dev-console). What follows is the per-script reference.
+MoonDeck is MoonLight's browser-based developer console. One page builds, flashes, runs, tests, monitors and checks the project across every target, and discovers and drives devices on the network. Every action it offers is a thin wrapper around a script under `moondeck/`, so the CLI (`uv run moondeck/<group>/<name>.py`) and MoonDeck run exactly the same code. Agents typically use the CLI, humans MoonDeck. For what MoonDeck *is* and where it sits in the workflow see [the MoonDeck architecture page](../docs/explanation/architecture/moondeck.md). What follows is the per-script reference.
 
 Launch it with `uv run moondeck/moondeck.py` and open <http://localhost:8420>. The console has five tabs. **Repo**, where MoonDeck opens, holds the tests, checks, tools and docs.
 **Desktop**, **ESP32** and **Teensy** build, run or flash, and monitor a target, and **Live** discovers networked devices and runs against them.
-A network bar and per-device deviceModel pickers sit above them. Script definitions live in `moondeck/moondeck_config.json` (committed); runtime state (selected network, devices, ports) persists in `moondeck/moondeck.json` (gitignored).
+A network bar and per-device deviceModel pickers sit above them. The 🗺️ MoonWalk button in the header opens the map of every process on the contributor's stages. Each step that runs a script shows whether the change needs it, whether its pass still holds and how long it took, from `GET /api/gates`. The change is against HEAD for a commit, `?base=main` for a merge's branch, and `?every=1` takes every step, as a release does. **Run** names the step, and MoonDeck reads its call from the process file, so a request can never add arguments of its own. A pass holds while the paths the step covers are unchanged since it ran, the tree each run saw recorded in `build/moondeck-logs/walk-runs.json`; the rule is `moondeck/docs/walk_status.py`. Script definitions live in `moondeck/moondeck_config.json` (committed); runtime state (selected network, devices, ports) persists in `moondeck/moondeck.json` (gitignored).
 
 Below: the UI behaviors common to every card, described once, then one section per script grouped by the tab it appears on. Each section gives the equivalent CLI invocation, so the page doubles as the command reference for running anything without the browser.
 
@@ -14,7 +14,7 @@ Below: the UI behaviors common to every card, described once, then one section p
 - **Last-run log** — the **📄** button replays that script's last run in the log pane. It appears **only on cards that have actually run** (and shows up the moment a first run finishes, no reload needed), so its absence is informative too: a card with no 📄 is one nobody has used yet. Every run is teed to `build/moondeck-logs/<id>.log` as it streams (not buffered to the end, so a run you Stop still leaves what it printed), which answers "what did this do last time" after a page reload or a switch to another card — the case a live-only stream cannot. One file per script, overwritten each run: a last-run record, not a history. Gitignored, being derived state.
 - **Run count** — every run ends `[exit code: 0] [run #7]`, counting that script's runs in `build/moondeck-logs/run-counts.json`. Two identical reports are otherwise indistinguishable, so the number answers "did this actually re-run since the fix, or am I reading the same output again?". Derived like the logs: deleting `build/` resets it, and a missing or corrupt file costs the count, never the run.
 - **Run/Stop toggle** for long-running scripts (Run desktop, Monitor ESP32).
-- **Duration hint** — every card shows how long it takes: ⚡ about a second, ⏱️ a few seconds up to ~30, 🐌 more than 30 seconds (a build, a flash, a gate list, clang-tidy). All three are shown rather than only the extremes, so a blank badge reads as "nobody set a speed on this card" instead of being confused with medium. Set per script as `"speed": "instant" | "medium" | "slow"` in `moondeck_config.json`. This is a *label*, not a timeout — nothing enforces it, so a script that grows slower needs its flag updated by hand. Separate from `long_running`, which controls the Run/Stop toggle rather than expected duration.
+- **Duration**: every card shows how long it takes, measured rather than declared. It is the longest of its recent passing runs, kept in `moondeck/durations.json`, the last five per call, so a clean build counts among incremental ones. Every MoonDeck that runs a card writes to that file. The committed copy is the bench's: a contributor's pull request leaves it out, and CI warns when one does not. Past 45 seconds it carries 🐌, where the measured runs split between checks and builds. A card never measured shows `⏱️ ?` until its first passing run; a server left running (`long_running`) shows none. The file is committed so every reader compares on one machine, and a contributor's pull request leaves it out, as it does the other generated files.
 - **Group headers** in the sidebar (setup, build, flash, run, test, check, scenario).
 - **Destructive-action confirm** — scripts flagged `destructive: true` (e.g. Erase Flash) pop a native confirm dialog before running.
 - **Tab persistence** — selected tab survives page refresh.
@@ -148,6 +148,16 @@ uv run moondeck/check/check_specs.py
 
 Scans `src/` for MoonModule `.h` files and checks each has a `docs/moonmodules/*.md` page whose control names / source facts still agree with the header. The always-run commit gate (fast, <1s) — catches `.h` ↔ doc drift even on doc-only commits.
 
+### check_taglines
+
+Verify that every front page states what MoonLight runs on in the same words.
+
+```bash
+uv run moondeck/check/check_taglines.py
+```
+
+The front pages are `README.md`, `docs/index.md` and `CLAUDE.md`, listed in the script; a new front page joins that list the day it is written.
+
 ### check_prose
 
 Verify that prose a change ADDS follows the coding standards: no em-dashes, US spelling.
@@ -156,9 +166,7 @@ Verify that prose a change ADDS follows the coding standards: no em-dashes, US s
 uv run moondeck/check/check_prose.py
 ```
 
-Reads the added lines of the branch diff and the working tree, so pre-existing prose a rename
-merely touched is out of scope. Run by hand: the tree still holds instances that predate the
-check, so it is not in the gate table until those are swept. It does two things beyond that report. An ERROR on a line the change added fails it. It also writes [prose.md](../docs/reference/metrics/prose.md), the whole tree's findings by rule, which ratchets against the committed copy exactly as docgen.md does.
+Reads the added lines of the branch diff and the working tree, so pre-existing prose a rename merely touched is out of scope. A commit check on every diff ([CLAUDE.md § Commit](../CLAUDE.md#commit)). It does two things beyond that report. An ERROR on a line the change added fails it. It also writes [prose.md](../docs/reference/metrics/prose.md), the whole tree's findings by rule, which ratchets against the committed copy exactly as docgen.md does.
 
 ### check_docgen
 
@@ -863,11 +871,9 @@ uv run moondeck/scenario/run_live_scenario.py --name scenario_Network_hardware_r
 uv run moondeck/scenario/run_live_scenario.py --name scenario_perf_light,scenario_Fluid_solver      # several, comma-separated
 uv run moondeck/scenario/run_live_scenario.py --host MM-Bench.local --network Home --name scenario_AccessPoint_first_setup_from_its_own_network   # first setup, this computer as the phone
 uv run moondeck/scenario/run_live_scenario.py --host 192.168.1.158 --board sender=192.168.1.156 --name scenario_NetworkReceive_two_boards   # two boards: the sender board sends
-uv run moondeck/scenario/run_live_scenario.py --update-baseline                  # save baseline
-uv run moondeck/scenario/run_live_scenario.py --compare-baseline                 # detect regressions
 ```
 
-Executes scenario steps (apply_state documents, set_control, measure) via the REST API. Collects per-step FPS and heap measurements. Compares against stored baselines to detect performance regressions. Use the dropdown to run a single scenario or leave it on **all** to run the full suite.
+Executes scenario steps (apply_state documents, set_control, measure) via the REST API. Collects per-step FPS and heap measurements and checks each against the step's per-target contract. Use the dropdown to run a single scenario or leave it on **all** to run the full suite.
 
 A run leaves the device as it found it. Modules a scenario cleared come back, a replaced module is swapped back to its type under its own name, and every control it wrote is put back, `enabled` included. Passwords are the exception, because the device returns them obfuscated.
 

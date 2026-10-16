@@ -242,15 +242,8 @@ window.addEventListener("message", (e) => {
 // Script cards
 // ---------------------------------------------------------------------------
 
-// How long a script takes, as one emoji before the buttons — so you can tell at a glance
-// whether clicking costs a second or a coffee. `speed` comes from moondeck_config.json.
-// All three tiers are shown: a blank would be ambiguous between "medium" and "nobody set a
-// speed on this card", and only a visible badge makes a missing one obvious.
-const SPEED_BADGE = {
-    instant: { icon: "⚡", title: "Instant — runs in about a second" },
-    medium:  { icon: "⏱️", title: "Medium — a few seconds up to about 30" },
-    slow:    { icon: "🐌", title: "Slow — takes more than 30 seconds" },
-};
+// How long a script takes, measured: the longest of its recent passing runs on the bench (moondeck/durations.json), so you can tell at a glance whether clicking costs a second or a coffee. A slow one carries the snail. A card never measured says so, and a server left running has no duration.
+const took = (s) => s < 60 ? `${Math.round(s)}s` : `${Math.floor(s / 60)}m${String(Math.round(s % 60)).padStart(2, "0")}s`;
 
 // Replay a script's stored last run into the log pane. Shared by the button rendered at load
 // and the one created when a first run completes.
@@ -275,9 +268,10 @@ async function showLastRun(script) {
     }
 }
 
-function speedBadge(speed) {
-    const b = SPEED_BADGE[speed];
-    return b ? `<span class="speed-badge" title="${b.title}">${b.icon}</span>` : "";
+function speedBadge(script) {
+    if (script.long_running) return "";
+    if (script.seconds == null) return `<span class="speed-badge" title="Not measured yet: its first passing run measures it">⏱️ ?</span>`;
+    return `<span class="speed-badge" title="The longest of its recent passing runs${script.slow ? ", slow" : ""}">${script.slow ? "🐌" : "⏱️"} ${took(script.seconds)}</span>`;
 }
 
 // Build a module-filter row: <select> with "all modules" + every test module,
@@ -414,7 +408,7 @@ function renderScripts() {
                 <div class="card-row">
                     <span class="status-dot" data-id="${script.id}"></span>
                     <span class="label">${script.label}</span>
-                    ${speedBadge(script.speed)}
+                    ${speedBadge(script)}
                     ${script.hasLog ? `<button class="log-btn" title="Show this script's last run" aria-label="Show this script's last run">📄</button>` : ""}
                     <button class="help-btn" title="Help">?</button>
                     <button class="run-btn" data-id="${script.id}">Run</button>
@@ -1598,3 +1592,43 @@ document.getElementById("clear-log").addEventListener("click", () => {
 // ---------------------------------------------------------------------------
 
 init();
+
+// MoonWalk: the map of every process, opened on the contributor's stages, with each script step's status from /api/gates: what the change needs, which passes still hold, and how long each took. The map is the docs site's moonwalk.js, served here from the repo.
+async function openWalk() {
+    const dlg = document.createElement("dialog");
+    dlg.className = "walk-dialog";
+    const head = document.createElement("div");
+    head.className = "walk-head";
+    const title = document.createElement("h3");
+    title.textContent = "MoonWalk";
+    const close = document.createElement("button");
+    close.className = "walk-open";
+    close.textContent = "Close";
+    close.addEventListener("click", () => dlg.close());
+    head.append(title, close);
+    const host = document.createElement("div");
+    host.className = "walk-body";
+    dlg.append(head, host);
+    let stop = null;   // the map's teardown, once it has drawn
+    dlg.addEventListener("close", () => { stop?.(); dlg.remove(); }, { once: true });
+    document.body.appendChild(dlg);
+    dlg.showModal();
+    try {
+        const [walk, gates] = await Promise.all([import("/assets/moonwalk.js"), fetch("/api/gates").then((r) => r.json())]);
+        if (gates.error) throw new Error(gates.error);
+        // Run on a step gives way to MoonDeck, as Show me gives way to the app: the card's page, its log pane, and exactly the step's call.
+        const run = (step) => {
+            const script = scripts.find((s) => s.id === step.card);
+            const btn = document.querySelector(`.run-btn[data-id="${step.card}"]`);
+            if (!script || !btn) return;
+            document.querySelector(`.tab[data-tab="${script.tab}"]`)?.click();
+            dlg.close();
+            runScriptOnce(script, btn, { step: `${step.process}/${step.id}` });   // the server reads the step's call from the process file
+        };
+        stop = await walk.drawMap(host, { steps: gates.processes, run, here: ["contribute", "merge", "release"], actor: "contributor", newTab: true });
+        if (!dlg.open) stop?.();
+    } catch (e) {
+        host.textContent = `MoonWalk could not load: ${e.message}`;
+    }
+}
+document.getElementById("walk-open")?.addEventListener("click", openWalk);

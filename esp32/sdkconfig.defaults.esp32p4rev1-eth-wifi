@@ -9,7 +9,7 @@
 # The P4 has no native radio. WiFi comes from the C6 reached over SDIO, presented
 # to the P4 as the standard esp_wifi_* API by the esp_wifi_remote + esp_hosted
 # managed components (pulled P4-only via the `rules` gate in main/idf_component.yml).
-# This is a DELIBERATE v6.0-floor exception (see docs/building.md § ESP-IDF version).
+# This is a DELIBERATE v6.0-floor exception (see docs/reference/build-system.md § ESP-IDF version).
 # No bring-up code is needed in the firmware: esp_hosted self-initialises at boot
 # via a constructor and connects to the C6 on its own. ensureWifiInit() in
 # src/platform/esp32/platform_esp32.cpp explicitly does NOT call esp_hosted_init /

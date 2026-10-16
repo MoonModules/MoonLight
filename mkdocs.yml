@@ -91,6 +91,12 @@ markdown_extensions:
 
 plugins:
   - search
+  # A page MoonWalk took over keeps its address: each old URL forwards to its process in the live view, so links from the installer, the README and the help still land.
+  - redirects:
+      redirect_maps:
+        tutorials/first-light-show.md: moonwalk.md#first-light-show
+        how-to/installing-to-desktop.md: moonwalk.md#install
+        how-to/building.md: moonwalk.md#desktop-build-test
 
 # The site's styles: colored headings, the card deck, the clips.
 extra_css:
@@ -99,6 +105,9 @@ extra_css:
 # The card deck (assets/help-deck.js), a module that mounts on any page holding a .mm-deck.
 extra_javascript:
   - path: assets/help-deck.js
+    type: module
+  # MoonWalk's journey map (assets/moonwalk.js): its button on every page, and the map on moonwalk.md.
+  - path: assets/moonwalk.js
     type: module
 
 # Build-time hooks (moondeck/docs/mkdocs_hooks.py): generate the test-inventory pages
@@ -141,6 +150,7 @@ nav:
   # outside MkDocs, so the root URL is a contract rather than a layout choice.
   - Getting started:
       - Install & first light: gettingstarted.md
+      - MoonWalk: moonwalk.md
       # The web installer is a separate app deployed at /install/ (staged verbatim by the
       # release workflow, not built by MkDocs). A full URL (not a site-relative path) so
       # MkDocs treats it as the external resource it is.
@@ -162,7 +172,6 @@ nav:
   # putting MoonLight on a machine is a task somebody already has, not a lesson.
   - Tutorials:
       - How MoonLight works: tutorials/how-moonlight-works.md
-      - Build your first light show: tutorials/first-light-show.md
       - Write your first script: tutorials/first-script.md
       - Making beautiful effects: tutorials/generative-effects.md
       - Build your own MoonModules: tutorials/build-your-own-moonmodules.md
@@ -171,9 +180,7 @@ nav:
   # Grouped by what the reader is trying to DO: get it running, wire the output, connect it
   # to something, keep it working.
   - How-to guides:
-      - Installing on a desktop: how-to/installing-to-desktop.md
       - Running on a Linux machine: how-to/installing-on-linux.md
-      - Building, running, flashing: how-to/building.md
       - Adding a picture or channel-data source: how-to/adding-a-stream-source.md
       - Driving LED panels with a receiving card: how-to/panel-cards.md
       - Wiring a microphone or capturing audio: how-to/audio-input.md

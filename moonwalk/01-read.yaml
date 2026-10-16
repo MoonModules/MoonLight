@@ -1,0 +1,10 @@
+# yaml-language-server: $schema=moonwalk.schema.json
+stage: Read
+summary: Learn what MoonLight is and find the help, in the docs and in the app.
+processes:
+  - id: know-moonlight
+    title: Get to know MoonLight
+    actor: user
+    goal: You know what MoonLight does, and whether it suits your lights.
+    systems: [MoonLight]
+    page: index.md

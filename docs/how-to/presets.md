@@ -8,7 +8,7 @@ They live on the Control card as a grid of 64 pads. Click one to apply it.
 
 ## Save one
 
-Right-click a pad, or press and hold it on a touchscreen. The pad editor opens.
+Click an empty pad, or right-click a full one, or press and hold it on a touchscreen. The pad editor opens.
 
 Type a name, choose which container it saves, and press **save current state here**. The name, pad and source in the editor are input for the next save, not configuration, so none of them is written to flash.
 

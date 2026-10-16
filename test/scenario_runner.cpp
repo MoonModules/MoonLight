@@ -18,7 +18,7 @@
 ///
 /// ## Why the target key is always the host desktop
 ///
-/// The per-step `expected[<target>]` lookup needs a target key, and the in-process runner builds for the host only.
+/// The per-step `contract[<target>]` lookup needs a target key, and the in-process runner builds for the host only.
 /// There is no cross-compiled scenario_runner, so the key is always `desktop-<host-os>`, matching the `run_live_scenario.py` convention.
 ///
 /// ## How a scenario value reaches a control
@@ -39,19 +39,12 @@
 /// Effects finds the top-level Layouts and Drivers the top-level Effects, so a fixture names no wiring.
 /// No broadcaster is wired, the harness has no WS server, so the preview's sendFrame and sendCoordTable early-return while the light-extraction work still runs for honest tick measurement.
 ///
-/// ## Why skip_on exists
-///
-/// A scenario-level `skip_on` allowlist names host targets that lack a capability the scenario exercises.
-/// Today that is the MoonLive scenarios opting out on desktop-windows and desktop-linux, because the desktop JIT is arm64-only. An x86_64 host renders dark, so the scenario's "buffer non-zero" check fails for a platform-capability reason it is the wrong vehicle to assert.
-/// An absent or empty `skip_on` runs everywhere, the existing default.
-/// It is the field `run_scenario.py` honours, and keeping the C++ runner in step stops KPI collection, which calls mm_scenarios directly, from counting a skipped scenario as a failure.
-///
 /// ## The construct and mutate modes
 ///
 /// The `mode` field says what shape the scenario expects the world to be in; see docs/reference/testing.md § Scenario modes.
 /// A construct scenario builds the pipeline from an empty scheduler and runs in-process only. A live device's main.cpp owns the top-level shape, and only the in-process runner can provide an empty scheduler.
 /// A mutate scenario assumes a wired pipeline. In-process creates its `top` containers and replays the embedded `fixture` array first, steps in the same shape as `steps`, then the steps. Live runs the steps directly against whatever is wired.
-/// A mutate scenario without a fixture can still run live, the device being its own fixture, but cannot run in-process.
+/// A scenario whose subject exists only on a device says so with `"live_only": true`, the one rule that keeps a scenario out of this runner. A mutate scenario with neither `top` nor `fixture` that does not say so fails, since in-process it would assert nothing.
 /// The default is construct, for back-compatibility with the scenarios that pre-date the field and build their pipelines explicitly.
 /// Bespoke convention: the construct and mutate split, plus fixture and reset, is MoonLight-specific rather than borrowed from an off-the-shelf BDD framework.
 /// It exists because the same JSON serves an in-process runner that owns the scheduler and a live runner that does not, main.cpp doing that there.
@@ -91,8 +84,6 @@
 /// `"measure": true` is the explicit flag, used alongside a set_control to measure after a mutation.
 /// `op: "measure"` is the implicit-measure shape, a snapshot step with no other side effects, so scenarios can interleave snapshots without faking a control write.
 /// The measurement block honours both.
-/// A `bounds.fps.min_pct` is relative to a live baseline, used by the WiFi-versus-Eth scenarios, and only the live runner has a baseline to compare against.
-/// In-process cannot enforce it, so it logs a clear skip and users see why the bound was not applied instead of it silently becoming "FPS > 0".
 ///
 /// ## What the heap numbers mean
 ///
@@ -100,7 +91,6 @@
 /// On desktop `freeHeap()` returns 0, meaning unlimited, and the value renders as 0, which the runner treats as "no heap assertion".
 /// `(step: ±N)` is the signed step delta from the pre-step heap to the post-measurement heap, useful for diagnosing which step consumed memory but not what the contract asserts on.
 /// It is kept for human-readable diagnostics.
-/// A heap-delta bound fails a step that grew the heap by more than `max_delta_bytes` against the previous measurement, which catches a leak or an unintended alloc.
 ///
 /// ## Why the block size is internal RAM only
 ///
@@ -342,7 +332,7 @@ static std::string readFile(const char* path) {
 
 
 
-// Target key for the per-step expected[<target>] lookup: @xref{why-the-target-key-is-always-the-host-desktop}.
+// Target key for the per-step contract[<target>] lookup: @xref{why-the-target-key-is-always-the-host-desktop}.
 static const char* hostTarget() {
 #if defined(__APPLE__)
     return "desktop-macos";
@@ -487,14 +477,10 @@ static int runScenario(const char* path) {
     std::printf("%s\n", scenario["description"].c_str());
     std::printf("Target: %s\n\n", hostTarget());
 
-    // Honour a scenario-level `skip_on` allowlist of host targets: @xref{why-skip-on-exists}.
-    if (scenario.has("skip_on")) {
-        for (auto& t : scenario["skip_on"].arr) {
-            if (t.str == hostTarget()) {
-                std::printf("  SKIP (skip_on %s)\n---\nSKIPPED\n", hostTarget());
-                return kSkipped;
-            }
-        }
+    // The one rule that keeps a scenario out of this runner: @xref{the-construct-and-mutate-modes}.
+    if (scenario.has("live_only") && scenario["live_only"].boolean) {
+        std::printf("  SKIP (live_only)\n");
+        return kSkipped;
     }
 
     // The mode field says what shape the scenario expects the world to be in, defaulting to construct: @xref{the-construct-and-mutate-modes}.
@@ -505,18 +491,12 @@ static int runScenario(const char* path) {
         const bool fixture = scenario.has("fixture") && !scenario["fixture"].arr.empty();
         const bool tops = scenario.has("top") && !scenario["top"].arr.empty();
         if (!fixture && !tops) {
-            std::printf("  SKIP (mutate scenario with no fixture or top: runs live only)\n");
-            return kSkipped;
+            std::printf("  FAIL: mutate scenario with no fixture or top asserts nothing in-process; mark it \"live_only\": true\n");
+            return 1;
         }
     } else if (mode != "construct") {
         std::printf("  FAIL: unknown mode: %s (expected construct or mutate)\n", mode.c_str());
         return 1;
-    }
-
-    // Legacy tier flag: live_only still honoured for any scenario that uses it. Newer scenarios should prefer mode=mutate (with/without fixture) instead.
-    if (scenario.has("live_only") && scenario["live_only"].boolean) {
-        std::printf("  SKIP (live_only)\n");
-        return kSkipped;
     }
 
     ScenarioContext ctx;
@@ -812,37 +792,16 @@ static int runScenario(const char* path) {
         } else if (std::strcmp(op, "measure") == 0) {
             // Pure measurement step with no side effects: @xref{why-a-measure-step-has-two-spellings}.
             std::printf("  ...   %s\n", name);
+        } else {
+            // A live-tier op (expect_http, host_wifi) or a misspelt one: said, as the live runner says an op it does not know, rather than passed in silence.
+            std::printf("  SKIP  %s (op not run in-process: %s)\n", name, op);
         }
 
-        // Per-step measurement: warmup, measure, bounded assertions: @xref{why-a-measure-step-has-two-spellings}.
+        // Per-step measurement: warmup, measure, contract assertions: @xref{why-a-measure-step-has-two-spellings}.
         const bool isMeasure = (step.has("measure") && step["measure"].boolean)
                             || std::strcmp(op, "measure") == 0;
         if (isMeasure) {
             ensureStarted();
-            double fpsBound = 0;
-            double fpsLedProduct = 0;
-            if (step.has("bounds") && step["bounds"].has("fps")) {
-                if (step["bounds"]["fps"].has("min"))
-                    fpsBound = step["bounds"]["fps"]["min"].num;
-                else if (step["bounds"]["fps"].has("min_pct")) {
-                    // min_pct needs a live baseline, so log a clear skip: @xref{why-a-measure-step-has-two-spellings}.
-                    double pct = step["bounds"]["fps"]["min_pct"].num;
-                    std::printf("  WARN  %s: bounds.fps.min_pct=%g requires a live "
-                                "baseline; in-process runner cannot enforce: skipped\n",
-                                name, pct);
-                    fpsBound = 0;
-                }
-                if (step["bounds"]["fps"].has("min_fps_led_product"))
-                    fpsLedProduct = step["bounds"]["fps"]["min_fps_led_product"].num;
-            }
-            long maxHeapDelta = 0;
-            bool hasHeapBound = false;
-            if (step.has("bounds") && step["bounds"].has("heap") &&
-                step["bounds"]["heap"].has("max_delta_bytes")) {
-                maxHeapDelta = static_cast<long>(step["bounds"]["heap"]["max_delta_bytes"].num);
-                hasHeapBound = true;
-            }
-
             for (int i = 0; i < WARMUP_FRAMES; i++) ctx.scheduler.tick();
             size_t heapBeforeMeasure = mm::platform::freeHeap();
             uint32_t startUs = mm::platform::micros();
@@ -887,31 +846,6 @@ static int runScenario(const char* path) {
                         lights, static_cast<unsigned>(heapAfterMeasure), stepDelta,
                         static_cast<unsigned>(maxBlock));
             (void)heapBeforeMeasure;  // tracked through stepDelta above
-
-            // FPS bound (when set)
-            if (fpsBound > 0) {
-                char msg[96];
-                std::snprintf(msg, sizeof(msg), "%s fps >= %.0f", name, fpsBound);
-                result.check(fps >= static_cast<float>(fpsBound), msg);
-            }
-            // FPS×lights throughput floor, compared against the measured tick
-            // *time* (native unit), not derived FPS.
-            if (fpsLedProduct > 0 && lights > 0) {
-                double maxTickUs = lights * 1000000.0 / fpsLedProduct;
-                char msg[128];
-                std::snprintf(msg, sizeof(msg),
-                              "%s tick <= %.0fus (%u lights, throughput floor)",
-                              name, maxTickUs, lights);
-                result.check(static_cast<double>(tickTimeUs) <= maxTickUs, msg);
-            }
-            // Heap-delta bound, which catches a leak or an unintended alloc: @xref{what-the-heap-numbers-mean}.
-            if (hasHeapBound && heapBefore > 0) {
-                char msg[128];
-                std::snprintf(msg, sizeof(msg),
-                              "%s heap step delta %+ld <= %ld bytes",
-                              name, stepDelta, maxHeapDelta);
-                result.check(stepDelta <= maxHeapDelta, msg);
-            }
 
             // Per-step performance contract, optional and shared with the live runner: @xref{the-performance-contract}.
             if (step.has("contract") && step["contract"].has(hostTarget())) {

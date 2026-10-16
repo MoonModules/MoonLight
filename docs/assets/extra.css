@@ -142,6 +142,7 @@
 }
 .mm-deck-spread .mm-pcard:hover .mm-pcard-face { border-color: var(--md-accent-fg-color); }
 /* A compact card has room for two lines of its description, ended with an ellipsis. */
+.mm-walk-js .mm-walk-text { display: none; }   /* MoonWalk's plain text, there for search and readers without JavaScript, gives way to the live view */
 .mm-deck-compact .md-typeset .mm-pcard p, .md-typeset .mm-deck-compact .mm-pcard p { -webkit-line-clamp: 2; }
 /* A screenshot of a module's controls shows whole, scaled into the frame; an animation fills it. */
 .mm-pcard-front img[src$=".png"] { object-fit: contain; }

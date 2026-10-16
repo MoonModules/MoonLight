@@ -1,0 +1,99 @@
+# yaml-language-server: $schema=moonwalk.schema.json
+stage: Review and merge
+summary: A branch reviewed, checked and merged into main.
+processes:
+  - id: contribute-pr
+    title: Contribute a pull request
+    actor: contributor
+    goal: One topic, at most 400 changed lines and ten files, based on main, its checks passed.
+    page: contributing/principles-and-process.md
+    intro: |
+      What a review would otherwise ask, met before the pull request opens: four outside pull requests each spent a review round on these points.
+    steps:
+      - id: base
+        section: Prepare the branch
+        say: Base the branch on current main, with only its own commits.
+        when: { run: { command: "git fetch upstream && git rebase upstream/main" } }
+      - id: size
+        say: Keep it to one topic, at most 400 changed lines and ten files, tests included.
+        when: { run: { command: "git diff --stat upstream/main...HEAD" } }
+        detail: |
+          Generated files are outside the count. A larger topic lands as steps, each its own pull request.
+      - id: checks
+        say: Run the commit checks the branch triggers.
+        when: { process: commit }
+      - id: generated
+        say: Leave the generated files out.
+        when: { manual: "docs/reference/metrics/, moondeck/durations.json and a scenario's observation blocks are measured on your machine." }
+        detail: |
+          The merge regenerates them on ours, so your machine's numbers never overwrite the trend. CI warns when a pull request from a fork changes one.
+      - id: open
+        section: Open it
+        say: Push and open the pull request against main, allowing edits by maintainers.
+        when: { run: { command: "gh pr create --base main" } }
+        detail: |
+          With edits allowed, a maintainer makes the mechanical fixes, a dropped generated file or a platform stub, rather than asking for another round.
+      - id: ci
+        say: CI builds and tests it on every platform.
+        when: { process: ci-on-pr }
+      - id: findings
+        say: Answer every review finding.
+        when: { process: review-finding }
+  - id: ci-on-pr
+    title: CI on a pull request
+    actor: ci
+    goal: Every pull request builds and tests on every platform.
+    dependsOn: [contribute-pr]
+  - id: review-finding
+    title: Handle a review finding
+    actor: agent
+    goal: Every finding is verified against the code, then fixed or skipped with a reason.
+    page: contributing/principles-and-process.md
+  - id: pre-merge
+    title: Run pre-merge, then merge
+    actor: product-owner
+    goal: The branch's checks and judgment gates pass, and the product owner merges.
+    systems: [MoonDeck]
+    dependsOn: [commit, ci-on-pr]
+    page: contributing/principles-and-process.md
+    intro: |
+      The same checks as a commit, over the whole branch, then the judgment no script makes. The gate list is written out before any of it runs, judgment gates included, since a judgment gate stays silent until someone asks.
+    steps:
+      - id: reviewer
+        section: Review
+        say: The Reviewer reads the branch diff, before the checks.
+        actor: agent
+        when: { run: { command: "git diff main...HEAD" } }
+        detail: |
+          Its scope: boundaries, bespoke conventions, unnecessary abstractions, duplication, the hot path, spec conformance and bloat, and whether every setting names the user who needs it.
+      - id: feedback
+        say: Every review finding is addressed, the external review's and the Reviewer's.
+        when: { process: review-finding }
+      - id: checks
+        section: Checks
+        say: Run the commit checks over the branch diff, which catches what a green series of commits hides.
+        actor: contributor
+        when: { process: commit }
+      - id: gcc
+        say: Build with GCC when CI failed on something clang builds cleanly.
+        actor: contributor
+        when: { run: { script: moondeck/build/build_desktop.py, args: "--gcc --tests" } }
+        detail: |
+          GCC catches a class clang misses (`-Wstringop-truncation`, no transitive standard headers), and CI compiles with it on every pull request. Reproducing it locally is worth the minutes only once CI has something to reproduce.
+      - id: docs-in-sync
+        section: Judgment
+        say: The docs describe what the branch ships.
+        when: { manual: "A module's header, its MIGRATING entry, a shipped backlog item or draft deleted." }
+      - id: title
+        say: The pull request's title and description match the branch, read from its commits.
+        when: { run: { command: "git log main..HEAD" } }
+      - id: perf
+        say: Take a performance snapshot when the tick path changed.
+        when: { manual: "Compare the tick matrix with main's." }
+      - id: readme
+        say: Update the README when building, flashing or the first run changed.
+        when: { read: { page: index.md } }
+      - id: merge
+        section: Merge
+        say: The product owner pushes and merges.
+        when: { manual: "Never an agent." }

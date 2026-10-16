@@ -11,13 +11,7 @@
 services:
   moonlight:
     build: .
-    # The released binary is amd64 only, so this line is REQUIRED on an arm64 host (an Apple-silicon
-    # Mac, an ARM server). Without it compose builds for the host's own architecture and the
-    # container dies with "rosetta error: failed to open elf" the moment it starts. It is harmless
-    # on an amd64 host, where it is what would have happened anyway. It goes when the release grows
-    # an arm64 Linux build.
-    platform: linux/amd64
-    # Or, once images are published, drop `build:` and use one of these instead:
+    # Or drop `build:` and use a published image, which carries amd64 and arm64:
     #   image: ghcr.io/moonmodules/moonlight:latest    # the rolling prerelease
     #   image: ghcr.io/moonmodules/moonlight:6.0.0     # a fixed version
     container_name: moonlight

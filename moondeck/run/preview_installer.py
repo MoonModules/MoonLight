@@ -49,6 +49,8 @@ ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(ROOT / "moondeck" / "build"))
 from build_esp32 import APP_BIN, FIRMWARES, MOONBASE_BIN  # noqa: E402
 import build_teensy  # noqa: E402
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "docs"))
+from gen_moonwalk import regenerate  # noqa: E402
 INSTALL_DIR = ROOT / "mooninstaller"
 ASSETS_BOARDS_DIR = ROOT / "docs" / "assets" / "boards"
 PICKER_JS = ROOT / "src" / "ui" / "install-picker.js"
@@ -380,10 +382,20 @@ def main() -> int:
             self.send_header("Cache-Control", "no-store")
             super().end_headers()
 
-        # The help as gen_help last wrote it, read on each request rather than staged, so a device UI opened with `?help=local` shows a regenerated file on its next reload.
+        # The help as gen_help last wrote it, and MoonWalk's map as the stage files are now, each read on request rather than staged, so a device UI opened with `?help=local` shows an edit on its next reload.
         def translate_path(self, path):
-            if path.split("?", 1)[0] == "/help/help.json":
+            route = path.split("?", 1)[0]
+            if route == "/help/help.json":
                 return str(ROOT / "docs" / "help" / "help.json")
+            if route == "/assets/moonwalk.js":
+                return str(ROOT / "docs" / "assets" / "moonwalk.js")
+            if route == "/assets/help.js":
+                return str(ROOT / "src" / "ui" / "help.js")   # the renderer moonwalk.js imports, as the docs site serves it
+            if route == "/moonwalk/moonwalk.json":
+                # Generated now; a failed run leaves no file, which answers 404, its error in this server's log.
+                out = Path(STAGE_DIR) / "moonwalk" / "moonwalk.json"
+                regenerate(out)
+                return str(out)
             return super().translate_path(path)
 
     handler = CorsHandler

@@ -36,6 +36,7 @@ Five hard limits, all found by hitting them:
 | distinct members | **16** ✅ | `kMaxCtrls`, same file |
 | branch labels | **96** in the IR, **255** labels and **255** fixups in the assembler, counted across the whole script (an `if` or `for` takes up to 2, and each `||`, `!` and `!=` one more) | `kIrLabels`, `kAsmLabels`, `kAsmFixups`, `MoonLiveIr.h` |
 | frame slots | **32**, shared by live variables, loop counters and staged call arguments ✅ | `kMaxLocals`, `MoonLiveIr.h` |
+| native code | **16 KB** per script, the same on every chip; the RISC-V backend emits the most, and the largest script is at 13.7 KB there | `kCodeCap`, `MoonLiveBuiltins.h`; see § The code cap, per platform |
 | ~~numeric types~~ | ~~`uint8_t`, `uint16_t`, `int16_t`~~ → **`int`, `byte`, `bool`, `fixed`, `string`** ✅ | still no float: `fixed` is Q16.16 |
 | ~~builtin table~~ | ~~16, and 16 used~~ → **96** ✅ | `BuiltinTable::kMax`, raised, with an overflow assert |
 
@@ -47,6 +48,12 @@ The frame-slot budget was hit writing `aurora.mle` (2026-09-04), the first two-l
 compiles only after folding intermediates back into the expressions that use them, which is the
 readability the language exists to give. Factoring the loop body into a helper would relieve it,
 once helpers can take arguments and return values (§ 6). See § 8b.
+
+### The code cap, per platform (backlog, 2026-10-16)
+
+Measured across all 53 shipped scripts with `moondeck/moonlive/disasm.py` (asked on Discord by hpwit, author of ESPLiveScript): compiled bytes per source byte run Thumb-2 1.4x, Xtensa 1.7x, arm64 2.2x, RISC-V 2.8x. The largest script, `stadbeest-sauron.mle` (135 lines, 5.7 KB of source), compiles to 7.8 KB on Xtensa and 13.7 KB on RISC-V, so a script about 20% bigger is refused on a C3 or a P4.
+
+A script's code meets three ceilings and the lowest wins: `kCodeCap`, the staging the compiler reserves per token (`codeCapFor`, capped at `kCodeCap`), and the executable memory `allocExec` finds. Only the last is the hardware: IRAM on a classic ESP32 holds tens of KB, while a P4's 768 KB of internal memory is executable and a desktop's is unbounded. The fix is the code cap as a per-platform value from the platform layer: 16 KB on a classic ESP32 and a C3, 32 KB on an S3, 64 KB on a P4 and the desktop. Pinned by a test that a script past 16 KB compiles on a platform whose cap allows it and is refused with a clear message where it does not. The members, frame slots, entry points and labels are separate budgets, costing memory per script on every chip, so they stay until a script needs more.
 
 ## What a simulation effect gives up today
 
