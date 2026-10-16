@@ -9,3 +9,37 @@ processes:
     systems: [MoonInstaller]
     dependsOn: [pre-merge]
     page: contributing/principles-and-process.md
+    intro: |
+      The event where the binary ships, so every check runs over the tagged tree, whatever it triggers, and every shipped firmware builds.
+    steps:
+      - id: checks
+        section: Checks
+        say: Run every commit check over the tagged tree, triggers ignored.
+        actor: contributor
+        when: { process: commit }
+      - id: merge-checks
+        say: Run the merge gates on the tagged commit.
+        when: { process: pre-merge }
+      - id: firmwares
+        say: Build every shipped ESP32 firmware.
+        actor: contributor
+        when: { manual: "build_esp32.py --firmware <name>, once per shipped variant." }
+        detail: |
+          The shipped variants are the registry's rows marked `ships` in `moondeck/build/firmwares.py`. One build at a time: the variants share their managed components, so two at once corrupt each other.
+      - id: hardware
+        section: Judgment
+        say: Test it on real hardware.
+        when: { manual: "The product owner's eyes are the measurement." }
+      - id: blockers
+        say: No release blocker is open, and the release's own criteria are met.
+        when: { manual: "The issues labeled as blocking this release." }
+      - id: notes
+        say: Write the release notes.
+        when: { manual: "What a user notices, from the commits since the last tag." }
+      - id: smoke
+        say: On a major or minor bump, smoke-test every platform.
+        when: { manual: "Install and run it on each desktop OS and a board per chip family." }
+      - id: tag
+        section: Ship
+        say: Tag the release; the release workflow builds, publishes and deploys the site.
+        when: { run: { command: "git tag vX.Y.Z && git push --tags" } }

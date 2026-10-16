@@ -98,7 +98,7 @@ Neither a Confluence nor a Jira. Confluence is a wiki, and the docs site is ours
 
 The skeleton stands and the content has barely started. Today the stage files are 19.7 KB of YAML, the schema 11.7 KB, `moonwalk.json` 27 KB (7 KB gzipped, what a browser downloads) and `moonwalk.js` 22 KB, with Cytoscape's 374 KB from the CDN; the firmware carries none of it.
 
-At full scope the stage files reach about 350 to 450 KB. That is content moving rather than growing: the procedural docs are 379 KB, two thirds of it steps and their detail; the scenario and clip steps 158 KB as JSON, overlapping and terser as YAML; CLAUDE.md's process part 18 KB; and the duplicates collapse, up to 13 copies of one process. The repo shrinks, which step 11 measures.
+At full scope the stage files reach about 350 to 450 KB. That is content moving rather than growing: the procedural docs are 379 KB, two thirds of it steps and their detail; the scenario and clip steps 158 KB as JSON, overlapping and terser as YAML; CLAUDE.md's process part 18 KB; and the duplicates collapse, up to 13 copies of one process. The repo shrinks, which step 10 measures.
 
 `moonwalk.json` reaches about 500 KB (120 KB gzipped) if it carries the prose, too heavy for an app that only draws the map. Split, it keeps what the map and the device read (ids, titles, `say`, `when`, `then`, dependencies) at about 150 KB (35 KB gzipped), and the prose stays in the docs build that renders the pages. `moonwalk.js` grows to about 30 to 40 KB with the app's live view. At about 1,500 steps, with the system view's duplicates near 2,500 nodes, the map draws a process's steps only when zoomed into it.
 
@@ -136,7 +136,7 @@ Little would differ, because the order is the textbook one. The help is the refe
 MoonWalk offers the next process rather than the whole list, so it needs to know what is done. Three sources, in order:
 
 - **The device's own state** is the first record. A step is done when its `then` holds on the device now: a WiFi with an SSID is set up, an Effects card holding an effect has had its first light. The app reads `/api/state` and evaluates the expectations in `moonwalk.json`, so nothing is logged, and a step done by hand, by the installer or through MoonWalk counts the same. **The next process** is the first one not done whose `dependsOn` all are, the frontier of the dependency graph in topological order (Kahn's algorithm), so a device with its WiFi set up never offers setting it up. The website cannot read a device, since an https page cannot call an http address, so the device's state reaches the map only through the app. That is why the app hosts the map as well.
-- **The browser** keeps what the state cannot show and the reader marks: a page read. It is `localStorage`, already in use: the reader's done marks (`mm_moonwalk_done`), the map's split (`mm_moonwalk_split`), the reader's choices such as their platform (`mm_moonwalk_inputs`), and on a device what the installer vouched for until the map records it (`mm_walked`). No cookies: they would travel with every request to the device for nothing.
+- **The browser** keeps what the state cannot show and the reader marks: a page read. It is `localStorage`, already in use: the reader's done marks (`mm_moonwalk_done`), the map's split (`mm_moonwalk_split`), the reader's view of it, actor, columns and hide done (`mm_moonwalk_view`), the reader's choices such as their platform (`mm_moonwalk_inputs`), and on a device what the installer vouched for until the map records it (`mm_walked`). No cookies: they would travel with every request to the device for nothing.
 - **Browser storage stays on its origin**, the scheme, host and port together. The docs site and the installer share one on Pages, so the installer's vouch shows on the site's map. Each device, the desktop app on `localhost:8080` and MoonDeck on `localhost:8420` are origins of their own. Cookies are scoped by host rather than port, so `localhost` ones would reach both local servers, but never a device, and a device's plain-http page cannot read the site's storage at all.
 - **What crosses origins is carried.** The textbook carriers, from lightest to durable:
     - **The address**: the installer's link carries `?walked=install` to the device's map (step 6). It suits a handover at one moment.
@@ -174,13 +174,22 @@ MoonWalk in the repo is the definition: what the processes are. GitHub holds the
     - ✅ **From the help to MoonWalk.** Beside Docs, Source and Tests, a module's help lists the processes that use it, and a control's more names the step that sets it, from a `byControl` index beside `byModule`. A tap opens MoonWalk at that step, in the app and on the site's card decks alike. In the app the links show only when help is on, under the help's one consent.
     - ✅ **From MoonWalk to the help, followed live.** The onboarding checklist's construct (Shopify's setup guide, Intercom's checklists): the full view on request, and while the user works, one line with the current step. A step with a target has **Show me**: the map closes, the app selects the step's card, scrolls to its control and highlights it, and a bar holds *Step 3 of 11: Set the Grid's width*, where the card's own help line does the explaining. On each state patch the bar checks the step's `then` again and moves on when it holds; a step the state cannot see has **Done**, and a tap on the bar reopens the map at that step. The bar lives in `moonwalk.js`; the app hands it its state and a way to show a card. The bar floats under the step's control as a coach mark does, at the bottom when the step has none in view. A step the device already shows done is ticked in the map and has no Show me, and an expectation can be a range, JSON Schema's `minimum` and `maximum`, as "brightness low" is. A pane docked beside the app was the alternative: on a phone it covers the card it points at, and the map does not fit a strip.
     - ✅ **The pilot** is the first light show, walked step by step on a fresh desktop and on the board: its grid and Bouncing Balls steps ask for a visible change, since the defaults already meet 16 and 8. It is the one process whose targets are all modules and controls. A device on an older release can lack a control a step names: its link does not show and Show me finds nothing.
-9. **One process through the other runners.** The process step 5 renders runs through the rest: the scenario runner performs its steps as a test, MoonTube films them, and an agent follows them.
-10. **The developer process.** The commit, merge and release gates become process files: each check a step with its trigger, the diff touching a path, its MoonDeck script and its expectation. CLAUDE.md keeps the principles and roles and links the process, so the gate list has one home that agents and the product owner both follow.
-    - **The gates are the contributor's process, whoever contributes.** Anyone who commits or opens a pull request runs them, the product owner too, who commits in the contributor role; the product owner's own part is the review, the merge and the release. CLAUDE.md's Roles and The Process are reviewed with this in mind. Four outside pull requests (#134, #140, #144, #145) each cost a review round on the same points, based on main, one topic within the size, the local checks, every platform building, so they become the process's steps, which a contributor meets before opening a pull request rather than in the review.
-    - **Generated files stay out of a contributor's pull request.** The metrics and the scenarios' observation blocks are measured on the contributor's machine, and the merge regenerates them on ours. A step in the process, and a CI warning when a fork's pull request touches `docs/reference/metrics/` or a scenario's observations.
-    - **Maintainer edits.** When a branch allows them, the maintainer makes the mechanical fixes, a dropped generated file or a platform stub, rather than asking for another round.
-11. **The mapping.** Each artifact from step 1 mapped onto the model: what becomes a process file, what is generated from one, and what goes. It ends with the number of copies removed.
-12. **The migration**, process by process, each old copy deleted as its process file takes over, so the docs and the tests stay complete throughout. Before the step closes, every process, the migrated ones and those already in MoonWalk, gets step 7's read as its reader meets it. It includes every page named for an activity, building, testing, integrating, troubleshooting and the how-tos, which become pages generated from their process; what on them is reference rather than steps moves to a reference page.
+9. ✅ **The developer process.** Done 2026-10-16, judged by the product owner: the commit, merge and release gates and a contributor's pull request are processes, MoonDeck shows what a change needs, what still holds and how long each step takes, and runs a step from the map; `building.md` is gone. CLAUDE.md's part, its gate diagrams and the roles, is step 12's. The commit, merge and release gates become process files: each check a step with its trigger, the diff touching a path, its MoonDeck script and its expectation. CLAUDE.md keeps the principles and roles and links the process, so the gate list has one home that agents and the product owner both follow.
+    - ✅ **Each check is a step**: `when: run` its MoonDeck script, `given: {changed: [paths]}` its trigger, done when its last run passed. The commit, merge and release gates are one process each. CLAUDE.md's three gate diagrams go in step 12, once the product owner has compared them with the finished process files, and it then links the processes the map draws.
+    - ✅ **MoonWalk decides, MoonDeck serves; no runner script.** MoonDeck lists scripts and runs the one asked; it orchestrates nothing. MoonWalk's processes with their conditional steps are the glue to the individual scripts, so a generic `gates.py` running every step stays out: it would be a second orchestrator. Each step still runs from its own MoonDeck card or its own command, as today.
+    - ✅ **One computation, two readers: an endpoint.** The rule "which steps does this diff need, and which passes are still fresh" lives once, in Python beside `gen_moonwalk.py` (`walk_status.py`): the steps' `changed` triggers matched against `git diff --name-only`, freshness from the run logs. MoonDeck serves its answer at `GET /api/gates` (`?base=main` for a merge, `?every=1` for a release), per process and per step its script and arguments, triggered or not, fresh or not, and its duration; the map draws it and an agent reads it with one `curl`. The product owner and the agent see the same list, where reading the diff themselves would put the rule in the map's JavaScript and again in every agent. It reports and runs nothing.
+    - ✅ **Fresh while its files are unchanged, decided per step.** A run records the state of the files it saw as a git tree id, the working tree written through a temporary index (`git add -A`, `git write-tree`) so the real index stays untouched, in MoonDeck's run record, `build/moondeck-logs/walk-runs.json`, keyed by the call that ran. A pass counts while `git diff --quiet <tree> -- <the step's trigger paths>` holds: the build system's up-to-date check and the spec's second pilot lesson, a run proves a step only while it is fresh. A fix to `app.js` leaves the docs build ticked and the JS tests to run again, which is CLAUDE.md's rule that a fixed failure reruns that one check, now shown rather than remembered. The scripts stay as they are: the decision is made per step, before a script is called. Test impact analysis, which test covers which source (Bazel's test selection, pytest-testmon), stays out as the overcomplicated version; where a finer selection exists, as `run_scenario --module`, a step names it in its arguments.
+    - ✅ **Durations measured, not declared.** No `slow` flag: a run on our bench records each script's duration into one committed file, as a scenario run writes its observation blocks, and every reader uses those values, so a step has a duration from its first day and fast or slow compares on one machine. A contributor's runs do not update it, as generated files stay out of a contributor's pull request. The line for slow is set from the measurements, where the gap between seconds and minutes falls, rather than from today's 🐢 marks; a slow step the diff triggers is listed with its command and waits to be asked, CLAUDE.md's "ask before running anything slow" and the product owner's go for an ESP32 build. Built: MoonDeck keeps each call's last five passing runs in `moondeck/durations.json`, seeded from the logs; the line for slow is 45 seconds, where the runs split (checks within about 30 s, builds, sweeps and flashes from a minute); the cards' declared `speed` went from all 52, and a card or a step shows the longest recent run, 🐌 past the line.
+    - ✅ **Help for MoonDeck and the installer stays out of `help.json`**, a decision rather than work: each card's **?** already shows its script's section of `MoonDeck.md` through `/api/help`. That file is the firmware's help per module type, downloaded by a device's app, and MoonDeck's scripts would grow it for readers who never run MoonDeck. A MoonDeck card's help is its script's section in `MoonDeck.md`, the one home per script, rendered by the same `help.js`; the installer's help is its install process in MoonWalk and each device's description in `firmwares.json`.
+    - ✅ **`building.md` goes in this step.** Done: the page is gone, its address forwarding to the desktop process. New processes hold its steps, *Set up a computer to build MoonLight* with a platform choice, *Set up the editor*, *Package the desktop build* and *Install the USB-serial driver on Windows* in the Install stage, beside the filled-in ESP32, IDF bump, network update and Teensy processes. Its facts and the ESP-IDF policy moved to `reference/build-system.md`, the reasoning for our own scripts and the tour clip to the MoonDeck explanation, and the Compose route to the Linux page's Docker section. Its procedures become processes in Contribute, each `run` step holding the call it makes with its arguments, so the gates and the build steps share one home rather than two until step 12: the MoonDeck introduction, desktop build and run, the prerequisites, the editor, packaging and Docker, the ESP32 toolchain, the Windows USB drivers, the IDF bump, flashing over USB and the network, Teensy and the pre-compilation steps. Its facts move to `reference/build-system.md`, every script's full options stay in `MoonDeck.md`, and its 26 inbound links take their new targets, the old address forwarding through `mkdocs-redirects`.
+    - ✅ **Run, step by step, from the map in MoonDeck.** A `run` step in the process view has **Run**, the way an app step has Show me: MoonDeck runs that one script with that step's arguments, its output streams in MoonDeck's console, and a pass ticks the step fresh. The reader clicks step after step and nothing chains them, so MoonWalk guides and MoonDeck executes. A slow step's button shows its measured duration, and the click is the go-ahead. `/api/run` takes a step's arguments beside a card's fixed ones. On the docs site, which cannot start a script on the reader's computer, a step shows its command with a copy button. MoonDeck is the à la carte menu, every script in any order; MoonWalk the set menu, the courses in order for one occasion, a first build or a commit; one kitchen cooks both.
+    - ✅ **The map shows the checks this diff needs.** It draws the endpoint's answer: a step the diff does not trigger grays out, as an option not chosen does, a step whose last pass is fresh is ticked, and each shows its duration: the pre-commit progress, live on the map.
+    - ✅ **The gates are the contributor's process, whoever contributes.** Done in the processes: `commit` and `contribute-pr` have the contributor as their actor, and the four pull requests' review points are `contribute-pr`'s steps; CLAUDE.md's Roles and The Process are reviewed in step 12. Anyone who commits or opens a pull request runs them, the product owner too, who commits in the contributor role; the product owner's own part is the review, the merge and the release. CLAUDE.md's Roles and The Process are reviewed with this in mind. Four outside pull requests (#134, #140, #144, #145) each cost a review round on the same points, based on main, one topic within the size, the local checks, every platform building, so they become the process's steps, which a contributor meets before opening a pull request rather than in the review.
+    - ✅ **Generated files stay out of a contributor's pull request.** The metrics, the scenarios' observation blocks and `moondeck/durations.json` are measured on the contributor's machine, and the merge regenerates them on ours. A step in `contribute-pr`, and a CI warning, `.github/workflows/generated-files.yml`, when a fork's pull request changes a metric, `moondeck/durations.json` or an existing scenario.
+    - ✅ **Maintainer edits.** When a branch allows them, the maintainer makes the mechanical fixes, a dropped generated file or a platform stub, rather than asking for another round.
+10. **The mapping.** Each artifact from step 1 mapped onto the model: what becomes a process file, what is generated from one, and what goes. The docs pages are mapped already in the appendix below, so this step adds the artifacts that are not pages, CLAUDE.md, MoonDeck.md, the clips, the scenarios, the workflows and the agents' memory, to the same table, and ends with the number of copies removed.
+11. **One process through the other runners.** The process step 5 renders runs through the rest: the scenario runner performs its steps as a test, MoonTube films them, and an agent follows them.
+12. **The migration**, process by process, each old copy deleted as its process file takes over, so the docs and the tests stay complete throughout. Before the step closes, every process, the migrated ones and those already in MoonWalk, gets step 7's read as its reader meets it. CLAUDE.md's commit, merge and release diagrams are compared with step 9's process files and replaced by links to them, and its Roles and The Process reviewed with the gates as the contributor's process. It includes every page named for an activity, building, testing, integrating, troubleshooting and the how-tos, which become pages generated from their process; what on them is reference rather than steps moves to a reference page.
 13. **The REST API in OpenAPI**, before step 12 reaches integrating and the processes made of API calls. The device's routes described in OpenAPI 3.1, checked against the server's routes in a test, so a step names an operation and integrating's reference is generated.
 14. **Executions on GitHub.** A process file is the definition and one run of it is an instance, the split workflow engines make. GitHub keeps the instances; the definition stays in the repo as the one copy. Steps come in two kinds:
     - **Volatile steps** act on a device or in the app, such as a user choosing an effect. Nothing records them, since nothing outside the device changes.
@@ -198,7 +207,7 @@ MoonWalk in the repo is the definition: what the processes are. GitHub holds the
 
 ## To decide
 
-- The process of step 9, the first through every runner, and whether it is the one step 5 renders.
+- The process of step 11, the first through every runner, and whether it is the one step 5 renders.
 - `moonwalk.json` carries the prose (decided in step 5): the live view renders from it, on the site and on a device.
 
 ## Appendix: the site's pages and MoonWalk
@@ -229,7 +238,7 @@ What happens to each page of the site once MoonWalk is complete (step 12). **Rep
 | `how-to/logging-an-issue.md` | Replaced | Also the source of the generated issue form (step 19) |
 | `how-to/troubleshooting.md` | Replaced | A decision tree, as branches |
 | `how-to/adding-a-stream-source.md` | Replaced | A contributor's process |
-| `how-to/building.md` | Partly | Build, flash, update, Docker, Teensy and the IDF bump become processes; the ports, pins and firmware facts move to `reference/build-system.md` |
+| `how-to/building.md` | Replaced ✅ (step 9) | Build, flash, update, Docker, Teensy, the toolchains and the IDF bump become processes whose steps hold each call with its arguments; the settings folder, ports, pins, variants and the pinned IDF move to `reference/build-system.md`; every script's full options stay in `MoonDeck.md` |
 | `how-to/audio-input.md` | Partly | Setup becomes a process; the microphone and codec table stays as reference |
 | `how-to/led-drivers.md` | Partly | Choosing a driver is reference; setting one up is a process |
 | `how-to/led-signal-integrity.md` | Partly | The diagnosis becomes branches; the electrical background stays as explanation |
@@ -238,7 +247,7 @@ What happens to each page of the site once MoonWalk is complete (step 12). **Rep
 | `how-to/faq.md` | Partly | The questions stay; an answer that is a procedure links its process |
 | `reference/integrating.md` | Partly | The HTTP recipes become API processes; the routes become the OpenAPI reference (step 13) |
 | `reference/testing.md` | Partly | Adding a test and running scenarios become processes; the strategy and the inventories stay |
-| `contributing/principles-and-process.md` | Partly | The gates become the developer process (step 10); the principles and roles stay |
+| `contributing/principles-and-process.md` | Partly | The gates become the developer process (step 9); the principles and roles stay |
 | `contributing/coding-standards.md` | Stays | The rules |
 | `contributing/documentation-standards.md` | Stays | The rules; it gains the stage files' authoring rules |
 | `explanation/architecture/*.md` (9 pages) | Stays | The architecture, MoonWalk's systems |
@@ -250,4 +259,99 @@ What happens to each page of the site once MoonWalk is complete (step 12). **Rep
 | `legal/privacy-policy.md` | Stays | It gains the MoonCloud member's entry (step 18) |
 | `friend-repos/*.md` | Stays | Digests of other projects |
 
-**Count**: of the 72 written pages, 18 are replaced (two already), 10 partly, and the rest stay. Every tutorial and how-to the reader follows is in MoonWalk, and what stays is what a reader looks up.
+**Count**: of the 72 written pages, 18 are replaced (three already), 10 partly, and the rest stay. Every tutorial and how-to the reader follows is in MoonWalk, and what stays is what a reader looks up.
+
+## Appendix: beyond the pages (step 10)
+
+The artifacts that are not pages, in the same columns. Two words join the three above: **Runs**, an executable that performs a process's steps and stays a file (a scenario, a clip, a workflow: step 11 points it at its process, nothing is deleted), and **Generated**, written from a process file. A memory file **Goes** when a process file or CLAUDE.md already holds its rule, and **Stays** when it is a bench fact or a lesson rather than a step.
+
+### CLAUDE.md and MoonDeck
+
+| Artifact | MoonWalk | Remark |
+|---|---|---|
+| CLAUDE.md Principles, Roles, Working rhythm | Stays | The rules and the actors; step 12 reads Roles and The Process against `commit` and `contribute-pr` |
+| CLAUDE.md § Main and branch | Partly | `pick-spec-plan` and `branch` are stubs; their steps come from this section, the diagram becomes a link (step 12) |
+| CLAUDE.md § Build and test | Replaced | `desktop-build-test` and `esp32-build-flash` hold it; the diagram goes in step 12 |
+| CLAUDE.md § Document | Partly | `document` is a stub; its three lines become its steps |
+| CLAUDE.md § Commit | Replaced | `commit` holds 20 steps; "run pre-commit", "once per request", "restart" and the commit message become its intro and outro, the diagram a link (step 12) |
+| CLAUDE.md § Handling review findings | Replaced | `review-finding` is a stub; this paragraph is its step list |
+| CLAUDE.md § Merge, § Release | Replaced | `pre-merge` (9 steps), `release` (8); `release_version` and `wled_migration_test`, in MoonDeck.md only, join `release` as steps |
+| CLAUDE.md § Documentation | Stays | Where the docs live and what `docs/work/` is |
+| MoonDeck.md § UI Features, one section per script | Stays | The console's reference and the one home per script, which a card's **?** shows |
+| MoonDeck.md § live_scenario, § ui_clip, § run_network_live | Partly | The option tables stay; the sequence prose repeats `moontube.md` and goes once `film-clip` and `perform-clip` have steps |
+| `moondeck_config.json` | Stays | The à la carte menu, with no process and no `speed` since step 9 |
+| `moondeck/durations.json`, `build/moondeck-logs/walk-runs.json` | Generated ✅ | Measured by MoonDeck's runs; the first is committed, the second is local |
+
+### MoonTube, the scenarios and GitHub
+
+| Artifact | MoonWalk | Remark |
+|---|---|---|
+| Clips `01-install-esp32`, `01-install-desktop` | Runs | `install`; the ESP32 clip is embedded in its `plug-in` step ✅, the desktop clip only on `gettingstarted.md` |
+| Clips `02-first-look-*`, `03-second-look` | Runs | `first-look`, a stub whose steps are these clips' `open_card` sequence |
+| Clips `05-layouts`, `06-layers` | Runs | `first-light-show`, which embeds both ✅ |
+| Clips `07-drivers-*`, `09-services` | Runs | `driver-setup`, a stub; reached today only through `@video` in `DriverBase.h` and `Services.h` |
+| Clip `08-moonlive-effects` | Runs | `first-script`, a stub; its typed script differs from the page's |
+| Clip `10-control` | Runs | `control-surface` and `presets`, both stubs |
+| Clips `04-scenario-testing`, `11-moondeck` | Runs | `run-live-scenario` (a stub) and `build-setup`; `11-moondeck` moved to the MoonDeck explanation ✅ |
+| `moontube/projects/*.json` | Generated | Edit lists; their copy of every clip title comes from the process titles once a clip runs a process (step 11) |
+| `moontube.md`, `reset_device.py` | Stays | The clip format and the boot state; the boot state's prose copy in `moontube.md` goes, the code is the home |
+| Scenarios, a setting applies and survives a reboot (10) | Runs | Each is the `then` of a step: identity and firmware for `first-look`, presets, drivers, layouts and palettes for `first-light-show`, audio for `driver-setup`, files for `backup-restore`, MoonCloud for `turn-help-on` |
+| Scenarios, the pipeline mutates while rendering (6) | Runs | `first-light-show`; `Layers_stack_and_blend_live` is the one clip `04` films, the candidate for step 11 |
+| Scenarios, first setup from the device's own network (5) | Runs | `join-access-point` ✅ and `update-firmware`; the only complete copy of the access-point route |
+| Scenarios, presets (1); what a configuration costs (8); lights between boards (2 plus two scripts) | Runs | `presets`; `live-verification`; `multi-device`, the one family with two shapes |
+| The scenario runners, `testing.md` § Scenario file shape | Stays | The runners and the format's one home |
+| `reference/tests/*.md` | Generated ✅ | By `generate_test_docs.py` |
+| `test.yml`, `prose.yml` | Runs | `ci-on-pr`, a stub whose steps are their jobs; `prose.yml` still announces check_prose's deletion while `commit.prose` runs it always |
+| `release.yml` | Runs | `release.tag` names it ✅ |
+| `generated-files.yml` | Runs ✅ | The CI half of `contribute-pr.generated` |
+| `codeql.yml`, `.coderabbit.yaml`, `SECURITY.md` | Stays | Never a gate; review configuration; `report-vulnerability`'s two steps |
+| Pull request and issue templates, `CONTRIBUTING.md` (none exist) | Generated | From `contribute-pr` and `log-issue` (steps 14 and 19), or README § Contributing links the map |
+
+### The agents' memory (46 of 168 files cited)
+
+| Memory | MoonWalk | Remark |
+|---|---|---|
+| The desktop loop: run via MoonDeck, `--tests` skips the app, two test binaries, checks through MoonDeck | Goes | `desktop-build-test` details and CLAUDE.md's "the script is the contract" |
+| The ESP32 gate and builds: three variants, the local gate's gap, shared managed components, the catalog regenerating | Goes | `commit.esp32-fresh` and `esp32-build-flash` details |
+| The bench: ports drift, opening a port resets the board, the P4 reset, the device registry | Goes | `esp32-build-flash.flash` and `.monitor` details |
+| Network updates and provisioning: the 4 MB OTA, provisioning in two steps, the access-point phase as one script | Goes | `ota-board` gains its first step (install MoonBase from the app), `provision-board` its steps |
+| The IDF and Teensy: a stale `IDF_PATH`, submodules on a switch, the sdkconfig cache, the SD lessons | Goes | `bump-idf` and `teensy` details; the SD lessons go to `lessons.md` |
+| Committing: "commit now" voided by an edit, staged means reviewed, the gate list, docgen's report, real numbers, never `git stash` | Goes | `commit.stage` and `.commit`; the map shows the gate list now, so "never surface it" contradicts step 9 |
+| Pull requests and merging: CodeRabbit per commit, GCC before a new test, the fork's push target, judgment gates, findings, a test failing against its bug | Goes | `contribute-pr`, `pre-merge`, `review-finding` and `add-test` steps; where a memory disagrees with CLAUDE.md, CLAUDE.md wins |
+| Writing: generated test docs, catalog pages and H3, no hard wraps, no em-dashes, prose and the principles, no attribution in external text | Goes | Documentation-standards holds them, which `document` links |
+| `moontube-keep-flag`; MoonLive's two script folders and iterating on the board | Goes | `film-clip.record`; `iterate-moonlive`, whose only source they are |
+| A path, a shell lesson, flaky tests, a bench preference, a firmware fact, a board rule, a rebuild lesson | Stays | Facts and lessons rather than steps; the flaky list belongs in the backlog |
+
+### Corrections to the page table
+
+- `how-to/hold-to-play.md`, `tutorials/build-your-own-moonmodules.md` and `how-to/adding-a-stream-source.md` are marked Replaced, but no stage file holds a process for them yet; they need ids before step 12 reaches them.
+- `how-to/updating-firmware.md` maps to the user's `update-firmware` while `ota-board` already holds the curl steps: two processes with one goal.
+- `reference/testing.md`: its live and UI scenario sections and its hardware results are procedure and dated facts, so more of it moves than "Partly" says.
+- `contributing/principles-and-process.md` embeds CLAUDE.md, so its row is CLAUDE.md's.
+- `installing-on-linux.md` § Docker and `install`'s Docker steps are two homes until that page is replaced.
+
+### Copies removed
+
+A copy is a written step list in a prose home: a page, CLAUDE.md, MoonDeck.md, a code comment or a memory file. Runners and the app's own text are not copies.
+
+| | Gone (steps 2 to 9) | To remove |
+|---|---:|---:|
+| The user's processes | 7 | 24 |
+| The contributor's processes | 4 | 61 |
+| **Total** | **11** | **85** |
+
+The 85 are 46 memory files, 8 CLAUDE.md sections (step 12) and 31 page sections. Written more than once today, the process file counted: esp32-build-flash (12 homes, mostly memory), commit (8), desktop-build-test and document (7), pre-merge (6), install and update-firmware (5), join-access-point, diagnose-lights, pick-spec-plan, release and review-finding (4), and eleven more with two or three. Twenty processes have one home already. The disagreeing copies the inventory found are fixed rather than removed: `ctest` and the gate numbering in `testing.md`, the `{ }` popup, restore timing, the MoonBase variant list, arm64 Docker, and the workflow headers.
+
+### One step shape
+
+The two vocabularies share their intent, as the inventory found: a scenario's `set_control`, `apply_state` and `expect_*`, and a clip's `open_card`, `add_module`, `set_number` and `delete_module` are a MoonWalk step's `set`, `apply`, `then`, `open`, `add` and `delete`, on the module and control the help keys by. What they do not share is each runner's surface: a clip's speech timing and raw selectors, a scenario's measurements and observation blocks, reboots and HTTP checks. Model-based testing's split of an abstract test case and its adapter answers it: the process file holds the step, Given, When and Then, and a runner's file names the process and adds its own fields per step id. One home for the step, one per runner for what only it needs; step 11 builds it.
+
+### Open questions
+
+1. Do `update-firmware` (the Firmware card) and `ota-board` (curl) become one process with a choice, as the two installs did in step 7?
+2. Do `hold-to-play`, `write-module` and `add-stream-source` get their process ids now?
+3. Is a memory file marked Goes deleted as each process file lands, or once the product owner has read the process file?
+4. Are the pull request template and a `CONTRIBUTING.md` generated from `contribute-pr`, or does README § Contributing link the map?
+5. Do `run_network_live.py` and `run_network_roundtrip.py` stay scripts, or does the step vocabulary learn a loop?
+6. Who posts `@coderabbitai review`, and is it a step of `contribute-pr.open` or of `pre-merge.reviewer`?
+

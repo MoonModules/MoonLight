@@ -25,7 +25,7 @@ These go to GitHub under [its privacy statement](https://docs.github.com/en/site
 
 ## Your browser's local storage
 
-The web interface keeps a few conveniences in your browser: a cached update check, your last selected release, and the last help file with your consent to fetch it. This never leaves your browser and holds nothing personal.
+The web interface keeps a few conveniences in your browser: a cached update check, your last selected release, and the last help file with your consent to fetch it. MoonWalk keeps your marks, choices and view there too. This never leaves your browser and holds nothing personal.
 
 ## What you can switch on
 

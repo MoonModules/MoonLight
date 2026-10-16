@@ -134,7 +134,7 @@ Keep each commit under ~100 changed files: CodeRabbit reviews the files a pushed
 
 ### Build and test
 
-Implement against [the architecture](docs/explanation/architecture/index.md) and [coding-standards.md](docs/contributing/coding-standards.md). Everything build, flash, run and monitor: [building.md](docs/how-to/building.md). Per-script reference: [MoonDeck.md](moondeck/MoonDeck.md).
+Implement against [the architecture](docs/explanation/architecture/index.md) and [coding-standards.md](docs/contributing/coding-standards.md). Everything build, flash, run and monitor: [the contributor processes in MoonWalk](docs/moonwalk.md#desktop-build-test). Per-script reference: [MoonDeck.md](moondeck/MoonDeck.md).
 
 ```mermaid
 flowchart LR

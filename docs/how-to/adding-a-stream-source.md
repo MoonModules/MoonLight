@@ -4,7 +4,7 @@ A new way for frames to reach the lights, from a capture device, a file format o
 Every source is one of two families, and each family has one place where its frames land.
 So a source is small: it fetches frames and hands them over, and everything after that is already written and tested.
 
-> This assumes the desktop build and tests run: see [Building, running, flashing](building.md). A source is proven on the desktop before a board sees it.
+> This assumes the desktop build and tests run: see [Build, run and test on the desktop](../moonwalk.md#desktop-build-test). A source is proven on the desktop before a board sees it.
 
 ---
 

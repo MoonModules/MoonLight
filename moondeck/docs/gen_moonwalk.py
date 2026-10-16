@@ -31,11 +31,11 @@ _PART_RE = re.compile(r"^\| \[(Moon\w+)\]\(", re.MULTILINE)
 
 # Which runner can perform an action, derived here rather than written on each step: the model's table of actions.
 RUNNERS = {
-    "open": ["tour", "film", "docs"], "set": ["test", "tour", "film", "docs"],
-    "add": ["test", "tour", "film", "docs"], "replace": ["test", "tour", "film", "docs"],
-    "delete": ["test", "tour", "film", "docs"], "clear": ["test", "tour", "film", "docs"],
+    "open": ["app", "film", "docs"], "set": ["test", "app", "film", "docs"],
+    "add": ["test", "app", "film", "docs"], "replace": ["test", "app", "film", "docs"],
+    "delete": ["test", "app", "film", "docs"], "clear": ["test", "app", "film", "docs"],
     "apply": ["test", "docs"], "call": ["test", "docs"], "run": ["agent", "ci", "docs"],
-    "read": ["docs", "tour"], "process": ["test", "tour", "film", "docs", "agent", "ci"], "manual": ["docs", "tour"],
+    "read": ["docs", "app"], "process": ["test", "app", "film", "docs", "agent", "ci"], "manual": ["docs", "app"],
 }
 
 
@@ -161,6 +161,8 @@ def build(root: Path = MOONWALK) -> dict:
             # A control's steps are the ones that set it or expect a value of it, under the key `Type.control`.
             for key in dict.fromkeys(f"{t['module']}.{t['control']}" for t in targets + s.get("then", []) if "control" in t):
                 by_control.setdefault(key, []).append(f"{pid}/{s['id']}")
+            if verb == "run" and isinstance(arg, dict) and "script" in arg and not (ROOT / arg["script"]).is_file():
+                errors.append(f"{pid}/{s['id']}: runs no script: {arg['script']}")
             if verb == "process" and arg not in processes:
                 errors.append(f"{pid}/{s['id']}: runs no process: {arg}")
             for b in s.get("onSuccess", []) + s.get("onFailure", []):

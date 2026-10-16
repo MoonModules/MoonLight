@@ -2,7 +2,7 @@
 
 The agreed-up-front **architecture contract**: what MoonLight is designed to be. A design described here is committed, meaning this is the intended behavior and code is written toward it, rather than optional or undecided.
 
-Coding conventions live in [coding-standards.md](../../contributing/coding-standards.md); how to build and run lives in [building.md](../../how-to/building.md); what is tested lives in [testing.md](../../reference/testing.md).
+Coding conventions live in [coding-standards.md](../../contributing/coding-standards.md); how to build and run lives in [MoonWalk's contributor processes](../../moonwalk.md#desktop-build-test); what is tested lives in [testing.md](../../reference/testing.md).
 
 ## The problem
 

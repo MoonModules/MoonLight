@@ -2,7 +2,7 @@
 
 MoonLight runs as an ordinary Linux application: the same effect pipeline, web UI and network drivers as on a board, with a real CPU behind them. A small always-on machine makes a good installation controller, whether a server, a Raspberry Pi or a NanoPi.
 
-Deploying is covered here. Building and developing on Linux is in [building.md](../how-to/building.md).
+Deploying is covered here. Building and developing on Linux are [MoonWalk's contributor processes](../moonwalk.md#desktop-build-test).
 
 > Windows, with screenshots: [Install MoonLight](../moonwalk.md#install). Flashing a board: [Install & first light](../gettingstarted.md).
 
@@ -197,6 +197,30 @@ Open `http://<machine>:8080`. `--restart unless-stopped` is what brings it back 
 
 **The volume is the configuration.** `/data` holds everything you set up; without it, every `docker rm` starts you over.
 
+`:latest` follows the rolling prerelease, the same build the installer offers; a version tag such as `:6.0.0` pins one. The release workflow builds each image from the `.deb` that release ships, so the image and the package are the same build.
+
+| | |
+|---|---|
+| **Config** | `/data/MoonLight/.config/` in the volume (`XDG_DATA_HOME=/data`) |
+| **Identity** | `/data/MoonLight/.config/identity`, written on the first run |
+| **Logs** | standard output, so `docker logs` |
+| **Output** | Art-Net UDP 6454, DDP 4048, E1.31 5568, all outbound |
+| **Capabilities** | none: it binds its port as an ordinary process |
+
+**Several instances** run side by side: each container has its own ports and writes its own identity, so they are told apart on the network. CPU is the limit rather than memory, about one core each, since the desktop build renders as fast as it may; cap it with `cpus:` when running a fleet.
+
+### From a source checkout, with Compose
+
+The repository's `docker-compose.yml` builds the image from the checkout and publishes the interface on port 8081, so it never meets a native install on 8080:
+
+```sh
+docker compose up -d      # then open http://localhost:8081/
+docker compose logs -f
+docker compose down       # stops it; the volume and your config stay
+```
+
+It passes `--no-browser`, since a container has no browser to open. To update after pulling new code, `docker compose build --pull && docker compose up -d`; for a published `image:` it is `docker compose pull && docker compose up -d`. Only `docker compose down -v` deletes the volume. Discovery and broadcast output need `network_mode: host`, which has no port mapping, so pass `--port 8081` in `command:` there.
+
 ### When the container exits at once
 
 **`failed to mount ... fstype: overlay ... invalid argument`** means the machine's root filesystem is itself an overlay, which several board and NAS systems use, and Docker's default `overlay2` driver cannot stack one on another. Check with `findmnt -no FSTYPE /`; if it says `overlay`, switch drivers:
@@ -245,4 +269,4 @@ The realistic limits are architecture and memory, not the kind of device. It nee
 
 - [Install & first light](../gettingstarted.md): the same program on an ESP32.
 - [How MoonLight works](../tutorials/how-moonlight-works.md): layouts, layers, effects and drivers.
-- [building.md](../how-to/building.md): building, testing and packaging in depth.
+- [Build, run and test on the desktop](../moonwalk.md#desktop-build-test): building, testing and packaging from source.

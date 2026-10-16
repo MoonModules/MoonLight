@@ -6,6 +6,7 @@ const MODEL = new URL("moonwalk/moonwalk.json", ROOT);
 // Cytoscape.js, the graph library: compound nodes give the three levels, and it never enters the firmware.
 const CYTOSCAPE = "https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.30.4/cytoscape.min.js";
 const LS_DONE = "mm_moonwalk_done";   // the processes this reader marked done, which the state cannot show on a website
+const LS_VIEW = "mm_moonwalk_view";   // the reader's view of the map: actor, columns and hide done, kept per host
 const LS_SPLIT = "mm_moonwalk_split";   // the reader's share for the text beside the map, once they drag it
 const LS_INPUTS = "mm_moonwalk_inputs";   // the reader's choices, such as their platform, kept per input name
 
@@ -49,6 +50,10 @@ const STYLES = `
 .mm-map-view h4 { margin: 1.2em 0 0.4em; }
 .mm-map-view video, .mm-map-view img { max-width: 100%; border-radius: 6px; }
 .mm-map-step { margin: 0.8em 0 0.3em; font-weight: bold; color: var(--mw-accent); }   /* the line a step on the map scrolls to */
+.mm-map-skip { opacity: 0.5; }
+.mm-map-call { display: flex; gap: 0.5em; align-items: center; margin: 0.2em 0 0.4em; }
+.mm-map-call code { flex: 1; min-width: 0; overflow-x: auto; white-space: nowrap; font-size: 0.9em; padding: 2px 6px; border-radius: 4px; background: var(--mw-line); }
+.mm-map-note { font-weight: normal; color: var(--mw-muted); font-size: 0.9em; }
 .mm-map-show { margin-left: 0.5em; font-weight: normal; border: 1px solid var(--mw-line); background: var(--mw-bg); color: inherit; border-radius: 4px; padding: 1px 8px; font-size: 0.75rem; cursor: pointer; }
 .mm-walk-bar { --mw-line: var(--md-default-fg-color--lightest, #8884); --mw-accent: var(--md-accent-fg-color, #526cfe);
   position: fixed; left: 50%; bottom: 1rem; transform: translateX(-50%); z-index: 1000; display: flex; gap: 0.5rem; align-items: center; max-width: calc(100vw - 2rem);
@@ -177,7 +182,7 @@ function style(root) {
         { selector: "node[kind='step']", style: { shape: "round-rectangle", width: 260, height: 28, "text-max-width": 250, "font-size": 10, "background-color": fg, "background-opacity": 0.06, "border-width": 2, "border-color": (n) => actor[n.data("actor")] || fg, "min-zoomed-font-size": 9 } },
         { selector: "edge", style: { width: 1.5, "line-color": fg, "line-opacity": 0.35, "curve-style": "bezier", "target-arrow-shape": "triangle", "target-arrow-color": fg, "arrow-scale": 0.8 } },
         { selector: "edge[kind='next']", style: { width: 1, "line-style": "dotted", "target-arrow-shape": "none" } },
-        { selector: "node.mm-off", style: { opacity: 0.25 } },
+        { selector: "node.mm-off, node.mm-skip", style: { opacity: 0.25 } },
         { selector: "node.mm-here", style: { "border-color": accent, "border-width": 3, "background-color": accent, "background-opacity": 0.25 } },
         { selector: ".done", style: { opacity: 0.4 } },
         { selector: ".faded", style: { opacity: 0.08 } },
@@ -241,16 +246,18 @@ export function doneOnDevice(model, stateDoc) {
     return done;
 }
 
-// The processes a contributor's runs show done: every step that runs a script has a last run that passed, and there is at least one. `runs` is what MoonDeck reports, each run its script, its arguments and whether it passed.
-export function doneByRuns(model, runs) {
-    const passed = new Set((runs || []).filter((r) => r.passed).map((r) => `${r.script} ${r.args || ""}`.trim()));
+// The processes a contributor's runs show done: every step the change triggers has a pass that still holds, and there is at least one. `steps` is what MoonDeck's /api/gates reports per process, each step triggered or not and fresh or not.
+export function doneBySteps(steps) {
     const done = new Set();
-    for (const [pid, p] of Object.entries(model.processes)) {
-        const scripted = (p.steps || []).map((s) => s.when?.run).filter((r) => r?.script);
-        if (scripted.length && scripted.every((r) => passed.has(`${r.script} ${r.args || ""}`.trim()))) done.add(pid);
+    for (const [pid, list] of Object.entries(steps || {})) {
+        const needed = list.filter((s) => s.triggered);
+        if (needed.length && needed.every((s) => s.fresh)) done.add(pid);
     }
     return done;
 }
+
+// A run's duration as a reader takes it in: `42s`, `3m05s`.
+const took = (seconds) => seconds == null ? "" : seconds < 60 ? `${Math.round(seconds)}s` : `${Math.floor(seconds / 60)}m${String(Math.round(seconds % 60)).padStart(2, "0")}s`;
 
 // A process followed in the host while the user performs it, the onboarding checklist's construct: one bar holding the current step, which the host's state moves on and a tap turns back into the map. The bar floats under the step's target as a coach mark does, above it when there is no room below, and at the bottom of the screen when the step has none in view. The host passes `show(type, control, reveal)`, which returns the target's element and with `reveal` brings it into view first, and `reopen(at)`, which opens the map at `process/step`. Returns `update(stateDoc)`, which the host calls on each state change, and `stop()`.
 export function follow(model, pid, stepId, { show, reopen }) {
@@ -341,6 +348,41 @@ function stepNote(s, p) {
     return notes.length ? ` (${notes.join("; ")})` : "";
 }
 
+// A step's call as a reader types it: a MoonDeck script with its arguments, or a command; null for a step that runs nothing.
+export function commandOf(step) {
+    const r = step.when?.run;
+    if (!r) return null;
+    return r.script ? `uv run ${r.script}${r.args ? ` ${r.args}` : ""}` : r.command || null;
+}
+
+// The call as code with a button that copies it. Where the browser keeps the clipboard from an insecure page, as on a device's own http address, the button selects the text for a manual copy.
+function callLine(cmd) {
+    const row = control("div", { className: "mm-map-call" });
+    const code = control("code", {}, cmd);
+    const copy = control("button", { type: "button", className: "mm-map-show", title: "Copy the command" }, "Copy");
+    copy.addEventListener("click", async () => {
+        try {
+            await navigator.clipboard.writeText(cmd);
+            copy.textContent = "Copied";
+            setTimeout(() => { copy.textContent = "Copy"; }, 1500);
+        } catch {
+            const range = document.createRange();
+            range.selectNodeContents(code);
+            getSelection().removeAllRanges();
+            getSelection().addRange(range);
+        }
+    });
+    row.append(code, copy);
+    return row;
+}
+
+// What to do for a step: its call to copy, or the manual step's own words.
+function howTo(s) {
+    const cmd = commandOf(s);
+    if (cmd) return callLine(cmd);
+    return s.when?.manual ? control("p", { className: "mm-map-note" }, s.when.manual) : null;
+}
+
 // Whether a process carries its own prose, so the view shows it whole rather than linking a page.
 const hasProse = (p) => Boolean(p.intro || p.outro || (p.steps || []).some((s) => s.detail));
 
@@ -385,16 +427,31 @@ function showPanel(panel, model, pid, done, onDone, host = {}) {
             // A step and its detail are one block, the part of the text that belongs to the step on the map.
             const block = control("div");
             block.dataset.step = s.id;
-            const line = control("p", { className: "mm-map-step" }, s.say + stepNote(s, p));
+            // The instruction in the step's color, what it waits on as a quiet aside after it.
+            const line = control("p", { className: "mm-map-step" }, s.say);
+            if (stepNote(s, p)) line.append(control("span", { className: "mm-map-note" }, stepNote(s, p)));
             // In a host that can show a card, a step with a target follows from here: the map gives way to the app and the bar.
             // A step the device already shows done is ticked, as a checklist ticks a finished item, and has nothing to show.
+            const run = host.steps?.[pid]?.find((r) => r.id === s.id);
             if (host.types && stepHolds(s, host.state, host.types) === true) line.append(control("span", { className: "mm-map-meta" }, " \u2714 done"));
-            else if (host.follow && targetOf(s)) {
+            else if (run) {
+                // A script step: not needed for this change, passed and still holding, or to run, with how long it took last time.
+                if (!run.triggered) { block.classList.add("mm-map-skip"); line.append(control("span", { className: "mm-map-note" }, " not needed for this change")); }
+                else if (run.fresh) line.append(control("span", { className: "mm-map-meta" }, " \u2714 passed"));
+                else if (run.running) line.append(control("span", { className: "mm-map-meta" }, " running"));
+                else if (host.run && run.card) {
+                    const b = control("button", { type: "button", className: "mm-map-show", title: run.seconds == null ? "Not measured yet" : `Up to ${took(run.seconds)} in its recent runs${run.slow ? ", slow: running it is a choice" : ""}` }, run.seconds == null ? "Run" : `Run \u00b7 ${run.slow ? "\u{1F40C} " : ""}${took(run.seconds)}`);
+                    b.addEventListener("click", () => host.run(run));
+                    line.append(b);
+                }
+            } else if (host.follow && targetOf(s)) {
                 const b = control("button", { type: "button", className: "mm-map-show" }, "Show me");
                 b.addEventListener("click", () => host.follow(pid, s.id));
                 line.append(b);
             }
             block.append(line);
+            const how = howTo(s);
+            if (how) block.append(how);
             if (s.detail) { const d = control("div"); d.innerHTML = host.helpMarkdown(s.detail); block.append(d); }
             view.append(block);
         }
@@ -408,7 +465,13 @@ function showPanel(panel, model, pid, done, onDone, host = {}) {
         }
         if (p.steps?.length) {
             const ol = control("ol");
-            for (const s of p.steps) { const li = control("li", {}, s.say + stepNote(s, p)); li.dataset.step = s.id; ol.append(li); }
+            for (const s of p.steps) {
+                const li = control("li", {}, s.say + stepNote(s, p));
+                li.dataset.step = s.id;
+                const how = howTo(s);
+                if (how) li.append(how);
+                ol.append(li);
+            }
             panel.append(ol);
         }
     }
@@ -473,7 +536,7 @@ function dragSplit(host, split, panel) {
     });
 }
 
-// Draw the map into `host`, and return its teardown. A host passes what it knows: `state` (a device's /api/state document), `runs` (MoonDeck's last runs, each `{script, args, passed}`), `modules` (the types of the cards in view), `here` (the processes or stages it is about, by id), `open` (a process or `process/step` to open at), `show`, `reopen` and `onFollow` (a host that can show a card: Show me hands it the followed process, see follow), `choices` (a choice's option the host knows, by input name), `done` (processes it vouches for, kept as marks), `actor` (the reader it starts filtered to) and `newTab` (pages open beside the host rather than over it).
+// Draw the map into `host`, and return its teardown. A host passes what it knows: `state` (a device's /api/state document), `steps` (MoonDeck's /api/gates per process: each script step triggered, fresh, its seconds and its card), `run` (MoonDeck's: runs one such step), `modules` (the types of the cards in view), `here` (the processes or stages it is about, by id), `open` (a process or `process/step` to open at), `show`, `reopen` and `onFollow` (a host that can show a card: Show me hands it the followed process, see follow), `choices` (a choice's option the host knows, by input name), `done` (processes it vouches for, kept as marks), `actor` (the reader it starts filtered to) and `newTab` (pages open beside the host rather than over it).
 export async function drawMap(host, opts = {}) {
     if (host.dataset.mounted) return;
     host.dataset.mounted = "1";
@@ -483,13 +546,20 @@ export async function drawMap(host, opts = {}) {
     const search = control("input", { type: "search", placeholder: "Search processes, steps, modules" });
     const actor = control("select");
     actor.append(control("option", { value: "" }, "Every actor"), ...ACTORS.map((a) => control("option", { value: a }, a)));
-    actor.value = opts.actor || "";
+    // The reader's own view comes back as they left it; the host's actor is the first visit's.
+    let view = {};
+    try { view = JSON.parse(localStorage.getItem(LS_VIEW) || "{}") || {}; } catch { /* the defaults */ }
+    const keepView = () => { try { localStorage.setItem(LS_VIEW, JSON.stringify({ actor: actor.value, by: by.value, hide: hide.checked })); } catch { /* kept for this visit only */ } };
+    actor.value = "actor" in view && ["", ...ACTORS].includes(view.actor) ? view.actor : opts.actor || "";
     const hide = control("input", { type: "checkbox" });
+    hide.checked = Boolean(view.hide);
     const hideLabel = control("label");
     hideLabel.append(hide, " Hide done");
     const by = control("select", { title: "Columns" });
     by.append(control("option", { value: "stage" }, "Columns: stage"), control("option", { value: "system" }, "Columns: system"));
-    const all = control("button", { type: "button" }, "Whole map");
+    if (view.by === "system") by.value = "system";
+    for (const c of [actor, by, hide]) c.addEventListener("change", keepView);
+    const all = control("button", { type: "button", title: "Zoom to the processes the filters show" }, "Fit selection");
     const chips = control("div", { className: "mm-map-chips" });
     bar.append(search, actor, by, hideLabel, all, chips);
     const canvas = control("div", { className: "mm-map-canvas" });
@@ -514,12 +584,14 @@ export async function drawMap(host, opts = {}) {
     const { helpMarkdown } = await import("./help.js");
     // Done is the device's state and the reader's marks together; the device's part is not the reader's to unmark.
     // What the host can see done: a device's state, or a contributor's passing runs in MoonDeck.
-    const device = new Set([...(opts.state ? doneOnDevice(model, opts.state) : []), ...(opts.runs ? doneByRuns(model, opts.runs) : [])]);
+    const device = new Set([...(opts.state ? doneOnDevice(model, opts.state) : []), ...doneBySteps(opts.steps)]);
     if (opts.done?.length) markDone(opts.done);
     const marks = readDone();
     const done = new Set([...marks, ...device]);
     const host_ = { device, newTab: opts.newTab, root: host, helpMarkdown, choices: opts.choices, doneBy: opts.state ? "Done on this device" : "Done: its scripts last passed" };
     host_.state = opts.state;
+    host_.steps = opts.steps;
+    if (opts.run) host_.run = opts.run;
     host_.types = opts.state ? typesOf(opts.state) : null;   // indexed once, for every step the panel ticks
     if (opts.show) host_.follow = (pid, stepId) => opts.onFollow?.(follow(model, pid, stepId, opts));
     // On the site the open process is the page's address, so a link, a search result or a bookmark opens it; in the app the address is the app's own.
@@ -555,6 +627,11 @@ export async function drawMap(host, opts = {}) {
                 if (show) visible.merge(nodes.filter((n) => n.data("kind") === "process"));
             }
         });
+        // A script step the change does not need grays out, and one whose pass still holds is done, over its process's own mark.
+        cy.nodes("[kind='step']").forEach((n) => {
+            const r = opts.steps?.[n.data("pid")]?.find((x) => n.id().endsWith(`/${x.id}`));
+            if (r) n.toggleClass("mm-skip", !r.triggered).toggleClass("done", r.fresh);
+        });
         return visible;
     }
     // Fit to a set, but never closer than 1.2, and keep the set centered when the cap applies.
@@ -566,7 +643,7 @@ export async function drawMap(host, opts = {}) {
 
     search.addEventListener("input", () => fit(search.value.trim() ? apply() : (apply(), cy.collection())));
     hide.addEventListener("change", () => apply());
-    all.addEventListener("click", () => fit(cy.collection()));
+    all.addEventListener("click", () => fit(apply()));   // what the actor, the chips, the search and hide done leave; nothing left fits the whole map
     by.addEventListener("change", () => {
         cy.elements().remove();
         cy.add(elements(model, by.value));

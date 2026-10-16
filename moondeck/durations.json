@@ -1,0 +1,65 @@
+{
+ "moondeck/build/build_desktop.py": [
+  1.9
+ ],
+ "moondeck/build/build_desktop.py --tests": [
+  30.1
+ ],
+ "moondeck/check/check_clang_query.py": [
+  23.5
+ ],
+ "moondeck/check/check_code.py": [
+  22.2
+ ],
+ "moondeck/check/check_devices.py": [
+  0.1
+ ],
+ "moondeck/check/check_docgen.py": [
+  1.4,
+  14.9,
+  14.3
+ ],
+ "moondeck/check/check_firmwares.py": [
+  0.1,
+  0.1,
+  0.1,
+  0.1
+ ],
+ "moondeck/check/check_nonblocking.py": [
+  252.0
+ ],
+ "moondeck/check/check_prose.py": [
+  4.0,
+  4.3,
+  4.2,
+  4.5
+ ],
+ "moondeck/check/check_specs.py": [
+  1.0,
+  1.2,
+  1.0,
+  1.0
+ ],
+ "moondeck/check/check_taglines.py": [
+  0.1
+ ],
+ "moondeck/docs/build_docs.py --strict": [
+  5.1,
+  5.4
+ ],
+ "moondeck/scenario/run_scenario.py": [
+  62.0
+ ],
+ "moondeck/test/test_desktop.py": [
+  9.4
+ ],
+ "moondeck/test/test_host.py --js": [
+  4.3,
+  4.3
+ ],
+ "moondeck/test/test_host.py --python": [
+  9.6,
+  9.3,
+  10.3
+ ]
+}

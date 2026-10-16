@@ -33,7 +33,7 @@ processes:
         given: [{ input: platform, equals: ESP32 }]
         when: { manual: "USB Port, then Pick a port: the entry that appeared when you plugged in." }
         detail: |
-          **Windows says "No serial ports available"?** Windows ships no driver for the USB-serial chips most boards use (CH340, CP2102). A one-time install fixes it: [the drivers](how-to/building.md#windows-usb-serial-drivers). **A Mac lists no ESP32?** In System Settings, Privacy & Security, let new accessories ask to connect, then plug the board in again and allow it.
+          **Windows says "No serial ports available"?** Windows ships no driver for the USB-serial chips most boards use (CH340, CP2102). A one-time install fixes it: [Install the USB-serial driver on Windows](moonwalk.md#windows-serial-drivers). **A Mac lists no ESP32?** In System Settings, Privacy & Security, let new accessories ask to connect, then plug the board in again and allow it.
       - id: pick-device
         say: Pick your device from the Device picker, and leave Release and Firmware at their suggestions.
         given: [{ input: platform, equals: ESP32 }]
@@ -216,6 +216,46 @@ processes:
       - **[How MoonLight works](tutorials/how-moonlight-works.md)**: the interface, and the Layouts, Effects and Drivers model.
       - **[Driving LED panels with a receiving card](how-to/panel-cards.md)**: turn this desktop into the sending card for an LED wall.
       - **[Keep it running on a Linux board](how-to/installing-on-linux.md)**: a Pi or a NanoPi that starts MoonLight on every boot.
+  - id: windows-serial-drivers
+    title: Install the USB-serial driver on Windows
+    actor: user
+    goal: A board plugged into a Windows computer gets a COM port the installer and MoonDeck can see.
+    intro: |
+      Windows ships no driver for the two USB-serial chips almost every ESP32 board uses, WCH's CH340 and Silicon Labs' CP2102. macOS and Linux do, so a board that works on a Mac can show up on Windows with no COM port at all. Both the installer's port picker and MoonDeck's then come up empty. It is the operating system, once per computer.
+    steps:
+      - id: recognize
+        say: Recognize it, a board with no COM port after you plug it in.
+        when: { manual: "The installer's picker says No serial ports available; Device Manager shows the board under Other devices with a yellow triangle." }
+        detail: |
+          In PowerShell, `Get-PnpDevice | Where-Object InstanceId -match "VID_10C4|VID_1A86"` lists the board with `Status: Error`.
+      - id: which
+        say: Find which driver it needs, from the vendor ID in its InstanceId.
+        when: { manual: "VID_1A86 is a CH340, VID_10C4 a CP2102, VID_0403 an FTDI." }
+        detail: |
+          | VID | Chip | Common boards | Driver |
+          |---|---|---|---|
+          | `1A86` | WCH CH340, CH341 | LOLIN D32, NodeMCU-ESP32 clones, some Olimex | WCH's CH341SER; Windows Update usually brings it, after `pnputil /scan-devices` from an elevated PowerShell |
+          | `10C4` | Silicon Labs CP2102, CP2102N | ESP32-S3 DevKitC, ESP32-S31 CoreBoard, newer kits | the [Silicon Labs Universal driver](https://www.silabs.com/documents/public/software/CP210x_Universal_Windows_Driver.zip), which Windows Update rarely has |
+          | `0403` | FTDI FT2232, FT230X | some Olimex Gateways, older WROVER kits | Windows Update installs it |
+      - id: install
+        say: Install it, from an elevated PowerShell.
+        when: { run: { command: "pnputil /add-driver $env:TEMP\\cp210x_driver\\silabser.inf /install" } }
+        detail: |
+          For the CP210x, download and unpack the Universal driver first:
+
+          ```
+          Invoke-WebRequest "https://www.silabs.com/documents/public/software/CP210x_Universal_Windows_Driver.zip" -OutFile "$env:TEMP\cp210x_driver.zip"
+          Expand-Archive "$env:TEMP\cp210x_driver.zip" "$env:TEMP\cp210x_driver" -Force
+          ```
+
+          A few seconds later the board appears as `Silicon Labs CP210x USB to UART Bridge (COM…)`, and both pickers list it without a restart.
+      - id: still-nothing
+        say: Still nothing? Clear a stale port, refresh a wedged driver, or try another cable.
+        when: { manual: "Each is a known cause, cheapest last." }
+        detail: |
+          - **A stale COM port** from an earlier attempt, visible in Device Manager under *Show hidden devices*, can block a new one: remove it with `pnputil /remove-device "USB\VID_…"`, elevated, and plug in again.
+          - **A wedged CH340 driver** shows `Status: Unknown` though installed: `pnputil /delete-driver oem*.inf /uninstall /force` for the WCH driver, plug in again, and let Windows Update fetch a fresh one.
+          - **A charge-only cable** carries power without data and enumerates for a moment, then vanishes. Try a cable you know carries data, in a rear USB 2 port.
   - id: run-linux-board
     title: Keep MoonLight running on a Linux board
     actor: user

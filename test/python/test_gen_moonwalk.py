@@ -30,7 +30,7 @@ def test_the_repo_stage_files_build_into_one_map():
 def test_a_step_runs_in_the_runners_its_action_allows():
     steps = {s["id"]: s for s in gen_moonwalk.build()["processes"]["first-light-show"]["steps"]}
     assert "test" in steps["grid-width"]["runners"]
-    assert steps["keep"]["runners"] == ["docs", "tour"]
+    assert steps["keep"]["runners"] == ["docs", "app"]
 
 
 def test_a_dependency_on_a_missing_process_is_refused(tmp_path):
@@ -60,10 +60,13 @@ def test_a_process_id_is_unique_across_stages(tmp_path):
         gen_moonwalk.build(tmp_path)
 
 
-def test_a_step_is_done_by_the_process_actor_unless_it_names_its_own():
-    steps = {s["id"]: s for s in gen_moonwalk.build()["processes"]["commit"]["steps"]}
-    assert steps["checks"]["actor"] == "agent"
-    assert steps["stage"]["actor"] == "product-owner"
+def test_a_step_is_done_by_the_process_actor_unless_it_names_its_own(tmp_path):
+    root = stage(tmp_path, "stage: T\nprocesses:\n  - id: a\n    title: A\n    actor: contributor\n    goal: G\n    steps:\n"
+                           "      - {id: own, say: Check., actor: agent, when: {manual: Check}}\n"
+                           "      - {id: inherited, say: Stage., when: {manual: Stage}}\n")
+    steps = {s["id"]: s for s in gen_moonwalk.build(root)["processes"]["a"]["steps"]}
+    assert steps["own"]["actor"] == "agent"
+    assert steps["inherited"]["actor"] == "contributor"
 
 
 CHOICE = ("stage: T\nprocesses:\n  - id: a\n    title: A\n    actor: user\n    goal: G\n"
@@ -127,6 +130,13 @@ def test_an_expectation_is_a_value_or_a_range_never_both(tmp_path):
     gen_moonwalk.build(stage(tmp_path, head + step.format(e="maximum: 20")))
     with pytest.raises(ValueError, match="then/0"):
         gen_moonwalk.build(stage(tmp_path, head + step.format(e="equals: 20, maximum: 20")))
+
+
+def test_a_step_runs_a_script_that_exists_or_it_is_refused(tmp_path):
+    head = "stage: T\nprocesses:\n  - id: a\n    title: A\n    actor: contributor\n    goal: G\n    steps:\n"
+    gen_moonwalk.build(stage(tmp_path, head + "      - {id: s, say: Check., when: {run: {script: moondeck/check/check_specs.py}}}\n"))
+    with pytest.raises(ValueError, match="runs no script: moondeck/check/check_spcs.py"):
+        gen_moonwalk.build(stage(tmp_path, head + "      - {id: s, say: Check., when: {run: {script: moondeck/check/check_spcs.py}}}\n"))
 
 
 def test_the_module_index_is_keyed_by_type_and_names_the_type_a_step_adds():

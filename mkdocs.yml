@@ -96,6 +96,7 @@ plugins:
       redirect_maps:
         tutorials/first-light-show.md: moonwalk.md#first-light-show
         how-to/installing-to-desktop.md: moonwalk.md#install
+        how-to/building.md: moonwalk.md#desktop-build-test
 
 # The site's styles: colored headings, the card deck, the clips.
 extra_css:
@@ -180,7 +181,6 @@ nav:
   # to something, keep it working.
   - How-to guides:
       - Running on a Linux machine: how-to/installing-on-linux.md
-      - Building, running, flashing: how-to/building.md
       - Adding a picture or channel-data source: how-to/adding-a-stream-source.md
       - Driving LED panels with a receiving card: how-to/panel-cards.md
       - Wiring a microphone or capturing audio: how-to/audio-input.md

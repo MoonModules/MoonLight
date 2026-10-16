@@ -44,8 +44,8 @@ A symptom rather than a question belongs in [Troubleshooting](troubleshooting.md
 ## Developing
 
 - **What is MoonDeck, and do I need it?** A browser console that builds, flashes, runs, tests and checks the project, and drives the boards on your bench. Everything it offers is a script under `moondeck/`, so the CLI and the console run the same code and neither is required. See [MoonDeck](../explanation/architecture/moondeck.md).
-- **Why not PlatformIO or pioarduino?** The ESP32 build is ESP-IDF-native, tracking IDF pre-releases against a pinned commit for chips like the P4 and S31, and the hot-path drivers use the vendor APIs directly. The tooling also covers far more than compile-upload-monitor. See [Building](building.md#moondeck-the-dev-console).
-- **How do I start?** `uv run moondeck/moondeck.py`, then open <http://localhost:8420>. Build and run the desktop first: it needs no board and proves the toolchain. See [Building](building.md).
+- **Why not PlatformIO or pioarduino?** The ESP32 build is ESP-IDF-native, tracking the IDF against a pinned commit for chips like the P4 and S31. The hot-path drivers use the vendor APIs directly. The tooling also covers far more than compile-upload-monitor. See [why our own scripts](../explanation/architecture/moondeck.md#why-our-own-scripts).
+- **How do I start?** `uv run moondeck/moondeck.py`, then open <http://localhost:8420>. Build and run the desktop first: it needs no board and proves the toolchain. See [Build, run and test on the desktop](../moonwalk.md#desktop-build-test).
 
 ## Still stuck
 

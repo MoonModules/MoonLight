@@ -79,7 +79,7 @@ def check_idf_pin(idf_path: Path) -> None:
           file=sys.stderr)
     print("Fix: re-run `uv run moondeck/build/setup_esp_idf.py` (it will offer "
           "to check out the pinned commit + resync submodules + reinstall "
-          "toolchains). See docs/how-to/building.md § ESP-IDF version for the "
+          "toolchains). See docs/reference/build-system.md § ESP-IDF version for the "
           "manual command if you'd rather do it by hand.", file=sys.stderr)
     print("Or pass --skip-idf-pin-check to build anyway (deliberate migration "
           "to a newer IDF release; re-tests then update PINNED_IDF_COMMIT).",

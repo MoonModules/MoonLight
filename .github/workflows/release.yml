@@ -176,7 +176,7 @@ jobs:
       - name: Build firmware
         uses: espressif/esp-idf-ci-action@v1
         with:
-          # The espressif/idf Docker tag of the local pin (PINNED_IDF_COMMIT in build_esp32.py), a fixed release tag rather than the rolling `release-v6.1`, so CI and local build the same tree; v5.x lacks the v6 APIs platform_esp32.cpp uses, and moving the pin is a re-test pass (docs/how-to/building.md).
+          # The espressif/idf Docker tag of the local pin (PINNED_IDF_COMMIT in build_esp32.py), a fixed release tag rather than the rolling `release-v6.1`, so CI and local build the same tree; v5.x lacks the v6 APIs platform_esp32.cpp uses, and moving the pin is a re-test pass (the bump-idf process in moonwalk/09-contribute.yaml).
           esp_idf_version: v6.1
           # The IDF target is the firmware's declared chip, carried by the matrix from firmwares.json.
           target: ${{ matrix.chip }}

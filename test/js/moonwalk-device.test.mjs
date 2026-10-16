@@ -3,7 +3,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { doneOnDevice, nextOf, choicesOf, applies, stepHolds, targetOf, advance } from "../../docs/assets/moonwalk.js";
+import { doneOnDevice, nextOf, choicesOf, applies, stepHolds, targetOf, advance, commandOf } from "../../docs/assets/moonwalk.js";
 
 const model = {
     stages: [{ id: "install", processes: ["install"] }, { id: "light", processes: ["grid", "effect", "status-only"] }],
@@ -87,18 +87,14 @@ test("a host vouching for a process keeps it with the reader's own marks", async
     delete globalThis.localStorage;
 });
 
-test("a contributor's process is done when every script it runs last passed", async () => {
-    const { doneByRuns } = await import("../../docs/assets/moonwalk.js");
-    const model = { processes: {
-        loop: { steps: [{ id: "b", when: { run: { script: "moondeck/build/build_desktop.py" } } }, { id: "t", when: { run: { script: "moondeck/build/build_desktop.py", args: "--tests" } } }] },
-        talk: { steps: [{ id: "m", when: { manual: "Agree on the plan." } }] },
-    } };
-    const runs = (testsPass) => [
-        { script: "moondeck/build/build_desktop.py", args: "", passed: true },
-        { script: "moondeck/build/build_desktop.py", args: "--tests", passed: testsPass },
-    ];
-    assert.deepEqual([...doneByRuns(model, runs(true))], ["loop"]);   // a process with no scripts is never done by runs
-    assert.deepEqual([...doneByRuns(model, runs(false))], []);        // the same script with other arguments is another run
+test("a contributor's process is done when every step the change needs has a pass that still holds", async () => {
+    const { doneBySteps } = await import("../../docs/assets/moonwalk.js");
+    const steps = (testsFresh) => ({
+        loop: [{ id: "b", triggered: true, fresh: true }, { id: "t", triggered: true, fresh: testsFresh }, { id: "docs", triggered: false, fresh: false }],
+        idle: [{ id: "x", triggered: false, fresh: false }],
+    });
+    assert.deepEqual([...doneBySteps(steps(true))], ["loop"]);   // a step the change does not need waits for nothing; a process needing none is not done by runs
+    assert.deepEqual([...doneBySteps(steps(false))], []);
 });
 
 test("a step can name several options, and shows for any of them", () => {
@@ -129,4 +125,15 @@ test("the bar moves past every step the state shows done and stops at the first 
     assert.equal(advance(steps, 1, device(8)), 1);    // the width is not set yet
     assert.equal(advance(steps, 1, device(16)), 2);   // set: on to looking, which waits for the reader
     assert.equal(advance(steps, 0, device(16)), 0);   // opening a card is the reader's Done, even with the width already set
+});
+
+test("a step's call reads as a reader types it: a script through uv with its arguments, or the command itself", () => {
+    assert.equal(commandOf({ when: { run: { script: "moondeck/build/build_desktop.py", args: "--tests" } } }), "uv run moondeck/build/build_desktop.py --tests");
+    assert.equal(commandOf({ when: { run: { script: "moondeck/check/check_specs.py" } } }), "uv run moondeck/check/check_specs.py");
+    assert.equal(commandOf({ when: { run: { command: "gh pr create --base main" } } }), "gh pr create --base main");
+    assert.equal(commandOf({ when: { manual: "Stage." } }), null);
+});
+
+test("a step a change triggers still shows on the site, which knows no change: only a reader's choice hides a step", () => {
+    assert.equal(applies({ id: "build", given: [{ changed: ["src/**"] }] }, {}), true);
 });

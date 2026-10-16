@@ -144,7 +144,7 @@ The developer console: one page that builds, flashes, runs, tests and monitors a
 
 ![MoonDeck, the dev console](docs/assets/ui/moondeck_desktop.png)
 
-Architecture: [MoonDeck](docs/explanation/architecture/moondeck.md) · Use it: [MoonDeck](moondeck/MoonDeck.md) · [building.md](docs/how-to/building.md)
+Architecture: [MoonDeck](docs/explanation/architecture/moondeck.md) · Use it: [MoonDeck](moondeck/MoonDeck.md) · [Build processes](docs/moonwalk.md#desktop-build-test)
 
 ## Performance
 
@@ -176,7 +176,7 @@ Per-grid and per-device tables, free-heap figures, and why WiFi costs what it do
 uv run moondeck/moondeck.py
 ```
 
-Open `http://localhost:8420` to build, run, test, flash and discover devices. Full setup and every target: [building.md](docs/how-to/building.md).
+Open `http://localhost:8420` to build, run, test, flash and discover devices. Full setup and every target: [the build processes](docs/moonwalk.md#build-setup).
 
 ## Documentation
 
@@ -184,7 +184,7 @@ Open `http://localhost:8420` to build, run, test, flash and discover devices. Fu
 |----------|--------------|
 | [Getting started](docs/gettingstarted.md) | Blank board to running light show |
 | [the architecture](docs/explanation/architecture/index.md) | How the system is put together |
-| [building.md](docs/how-to/building.md) | Build and flash for every target |
+| [MoonWalk](docs/moonwalk.md#build-setup) | Build and flash for every target, step by step |
 | [moonmodules/](docs/moonmodules/) | One page per module: [core](docs/moonmodules/core/) and [light](docs/moonmodules/light/) |
 | [performance.md](docs/reference/performance.md) | Timing and memory per platform |
 | [testing.md](docs/reference/testing.md) | What the tests cover |

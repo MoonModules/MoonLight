@@ -31,7 +31,7 @@ Click **USB Port → Pick a port…**. Your browser shows a small list of connec
 ![Selecting the USB port](assets/gettingstarted/01-02-select-port.png)
 
 **Windows users, dialog says "No serial ports available"?** Windows doesn't ship drivers for the USB-serial chips most ESP32 boards use (WCH CH340, Silicon Labs CP2102).
-A one-time install fixes it for every future flash: the steps and the download link are in [building.md § Windows: USB-serial drivers](how-to/building.md#windows-usb-serial-drivers).
+A one-time install fixes it for every future flash: the steps and the download link are in [Install the USB-serial driver on Windows](moonwalk.md#windows-serial-drivers).
 macOS and Linux ship these drivers built in.
 
 **Mac users, no ESP32 in the list?** A recent Mac asks whether a new USB accessory may connect, and a board that was refused stays blocked.
@@ -277,6 +277,6 @@ It's useful for trying an idea before you wire anything, or for developing effec
 
 - **Understand the pipeline**, how layouts, layers, effects, modifiers and drivers fit together: [architecture overview](explanation/architecture/moonlight.md#the-pipeline).
 - **Manage several devices, build, and flash from one console** with MoonDeck, our developer tool: [MoonDeck guide](../moondeck/MoonDeck.md).
-- **Build from source** or target Teensy / Raspberry Pi: [building.md](how-to/building.md).
+- **Build from source** or target Teensy / Raspberry Pi: [Set up a computer to build MoonLight](moonwalk.md#build-setup).
 
 Stuck, or something didn't work? Open an [issue](https://github.com/MoonModules/MoonLight/issues), and tell us what device you used and where it stopped.
