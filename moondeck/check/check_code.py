@@ -46,11 +46,11 @@ MAX_FRAME = 512
 # The four containers main.cpp pins as the tree's roots, which the UI's tabs are built from: naming them is the UI's contract rather than knowledge of a module.
 UI_CONTRACT = {"Layouts", "Effects", "Drivers", "Services"}
 
-# Firmware C++ only: src/ui is JavaScript served to the browser, and the vendor header is upstream's. -ENS adds the nesting depth column.
-LIZARD_ARGS = ["src/", "-l", "cpp", "-x", "src/ui/*", "-x", "src/platform/desktop/vendor/*", "-ENS"]
+# Firmware C++ only: src/ui is JavaScript served to the browser, and the vendor files are upstream's. -ENS adds the nesting depth column.
+LIZARD_ARGS = ["src/", "-l", "cpp", "-x", "src/ui/*", "-x", "src/platform/desktop/vendor/*", "-x", "src/platform/esp32/vendor/*", "-ENS"]
 # Every code file we own, which the file-length and duplication rules both read; vendored and generated files are not ours to shrink.
 FILE_GLOBS = ("src/**/*.h", "src/**/*.cpp", "src/**/*.js", "moondeck/**/*.py", "mooninstaller/*.js", "test/**/*.cpp", "test/**/*.py", "test/**/*.mjs")
-FILE_EXCLUDE = ("src/platform/desktop/vendor/", "src/ui/vendor/", "test/doctest.h")
+FILE_EXCLUDE = ("src/platform/desktop/vendor/", "src/platform/esp32/vendor/", "src/ui/vendor/", "test/doctest.h")
 
 HOT_PATH = "blocking call on the render path"
 PLATFORM = "platform code outside src/platform"

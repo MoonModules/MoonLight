@@ -27,6 +27,8 @@ idf_component_register(
         "../../src/platform/esp32/moonlive_asm_riscv.cpp"
         "../../src/platform/esp32/platform_esp32_fs.cpp"
         "../../src/platform/esp32/platform_esp32_sdmmc.cpp"
+        "../../src/platform/esp32/platform_esp32_zstd.cpp"
+        "../../src/platform/esp32/vendor/zstddeclib.c"
     "../../src/platform/esp32/platform_esp32_h264.cpp"
         "../../src/platform/esp32/platform_esp32_ota.cpp"
         "../../src/platform/esp32/platform_esp32_improv.cpp"

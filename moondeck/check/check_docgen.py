@@ -61,7 +61,7 @@ HEADER_SUFFIXES = ("*.h", "*.cpp")
 # Upstream code, vendored rather than written here, spelled exactly as check_prose.py spells it.
 # `test/doctest.h` is the single-header doctest release: vendored the same way, just not under a
 # directory named for it, and holding a hundred findings nobody here will ever fix.
-HEADER_EXEMPT = ("src/platform/desktop/vendor/", "src/ui/vendor/", "test/doctest.h")
+HEADER_EXEMPT = ("src/platform/desktop/vendor/", "src/platform/esp32/vendor/", "src/ui/vendor/", "test/doctest.h")
 MAX_CLASS_DOC = 10      # lines of `///` directly above `class X`
 MAX_TECHNICAL_SECTION = 10  # lines of ONE `## ` section inside the `@technical` appendix
 MAX_MEMBER_DOC = 1      # lines of a `///` run that is NOT a class comment

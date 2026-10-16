@@ -18,6 +18,7 @@ add_executable(mm_tests
     unit/core/unit_noise.cpp
     unit/core/unit_fields.cpp
     unit/core/unit_crc.cpp
+    unit/core/unit_ZstdFrameHeader.cpp
     unit/core/unit_AudioService_codec.cpp
     unit/core/unit_PictureService.cpp
     unit/core/unit_I2cBusModule.cpp
@@ -136,6 +137,8 @@ add_executable(mm_tests
     unit/light/unit_FixedRectangleEffect.cpp
     unit/light/unit_FreqMatrixEffect.cpp
     unit/light/unit_FreqSawsEffect.cpp
+    unit/light/unit_FseqFile.cpp
+    unit/light/unit_FseqPlayerEffect.cpp
     unit/light/unit_GEQ3DEffect.cpp
     unit/light/unit_GEQEffect.cpp
     unit/light/unit_GridBlacksLayout.cpp

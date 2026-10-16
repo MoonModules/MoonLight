@@ -161,6 +161,17 @@
             "samples": [244768]
           },
           "last_updated": "2026-10-11"
+        },
+        "desktop-linux": {
+          "tick_us": {
+            "p50": 5,
+            "p95": 6,
+            "min": 5,
+            "max": 6,
+            "n": 6,
+            "samples": [5, 6, 5, 5, 6, 6]
+          },
+          "last_updated": "2026-10-16"
         }
       }
     },
@@ -270,6 +281,17 @@
             "samples": [238592]
           },
           "last_updated": "2026-10-11"
+        },
+        "desktop-linux": {
+          "tick_us": {
+            "p50": 15,
+            "p95": 17,
+            "min": 15,
+            "max": 17,
+            "n": 6,
+            "samples": [15, 16, 15, 15, 17, 17]
+          },
+          "last_updated": "2026-10-16"
         }
       }
     },
@@ -386,6 +408,17 @@
             "samples": [232744]
           },
           "last_updated": "2026-10-11"
+        },
+        "desktop-linux": {
+          "tick_us": {
+            "p50": 6,
+            "p95": 6,
+            "min": 5,
+            "max": 6,
+            "n": 6,
+            "samples": [6, 6, 5, 5, 6, 6]
+          },
+          "last_updated": "2026-10-16"
         }
       }
     },

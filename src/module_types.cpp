@@ -63,7 +63,6 @@
 #include "light/effects/FixedPointEffect.h"
 #include "light/effects/MovingHeadEffect.h"
 #include "light/effects/PacmanEffect.h"
-#include "light/effects/FseqPlayerEffect.h"
 #include "light/effects/PictureEffect.h"
 #include "light/effects/PlasmaEffect.h"
 #include "light/effects/PulseEffect.h"
@@ -121,6 +120,7 @@
 #include "light/effects/TetrixEffect.h"
 #include "light/effects/TextEffect.h"
 #include "light/effects/FreqSawsEffect.h"
+#include "light/effects/FseqPlayerEffect.h"
 #include "light/effects/BlurzEffect.h"
 #include "light/effects/FreqMatrixEffect.h"
 #include "light/effects/GEQEffect.h"
@@ -251,6 +251,7 @@ void mm::registerModuleTypes() {
     mm::ModuleFactory::registerType<mm::FixedRectangleEffect>("FixedRectangleEffect", "light/effects.md#fixedrectangle");
     mm::ModuleFactory::registerType<mm::FreqMatrixEffect>("FreqMatrixEffect", "light/effects.md#freqmatrix");
     mm::ModuleFactory::registerType<mm::FreqSawsEffect>("FreqSawsEffect", "light/effects.md#freqsaws");
+    mm::ModuleFactory::registerType<mm::FseqPlayerEffect>("FseqPlayerEffect", "light/effects.md#fseqplayer");
     mm::ModuleFactory::registerType<mm::GameOfLifeEffect>("GameOfLifeEffect", "light/effects.md#gameoflife");
     mm::ModuleFactory::registerType<mm::GEQEffect>("GEQEffect", "light/effects.md#geq");
     mm::ModuleFactory::registerType<mm::GEQ3DEffect>("GEQ3DEffect", "light/effects.md#geq3d");
@@ -264,7 +265,6 @@ void mm::registerModuleTypes() {
     mm::ModuleFactory::registerType<mm::NoiseMeterEffect>("NoiseMeterEffect", "light/effects.md#noisemeter");
     mm::ModuleFactory::registerType<mm::PaintBrushEffect>("PaintBrushEffect", "light/effects.md#paintbrush");
     mm::ModuleFactory::registerType<mm::ParticlesEffect>("ParticlesEffect", "light/effects.md#particles");
-    mm::ModuleFactory::registerType<mm::FseqPlayerEffect>("FseqPlayerEffect", "light/effects.md#fseqplayer");
     mm::ModuleFactory::registerType<mm::PictureEffect>("PictureEffect", "light/effects.md#picture");
     mm::ModuleFactory::registerType<mm::PlasmaEffect>("PlasmaEffect", "light/effects.md#plasma");
     mm::ModuleFactory::registerType<mm::PraxisEffect>("PraxisEffect", "light/effects.md#praxis");
