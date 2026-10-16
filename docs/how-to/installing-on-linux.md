@@ -4,7 +4,7 @@ MoonLight runs as an ordinary Linux application: the same effect pipeline, web U
 
 Deploying is covered here. Building and developing on Linux is in [building.md](../how-to/building.md).
 
-> Windows, with screenshots: [Install MoonLight on a desktop](../moonwalk.md#install-desktop). Flashing a board: [Install & first light](../gettingstarted.md).
+> Windows, with screenshots: [Install MoonLight](../moonwalk.md#install). Flashing a board: [Install & first light](../gettingstarted.md).
 
 ## Which route applies to your machine
 

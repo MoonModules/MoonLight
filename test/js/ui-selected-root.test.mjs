@@ -19,6 +19,7 @@ function restoreWithTabs({ modules, saved, already = null, search = "" }) {
         let selectedModule = selectedModuleIn;
         ${fnSource("findModule")}
         ${fnSource("findParentOf")}
+        ${fnSource("revealModule")}
         ${fnSource("restoreSelectedRoot")}
         restoreSelectedRoot();
         return selectedModule;`);

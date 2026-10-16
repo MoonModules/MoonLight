@@ -3,13 +3,13 @@ stage: Maintain
 summary: Updates, moves, backups and finding faults.
 processes:
   - id: update-firmware
-    title: Update the firmware over the air, and recover from MoonBase
+    title: Update MoonLight, and recover when an update fails
     actor: user
     goal: A newer MoonLight on a running device with its settings kept, and a way back when it fails.
     systems: [MoonBase, MoonInstaller]
     page: how-to/updating-firmware.md
   - id: migrate-wled
-    title: Migrate a WLED device to MoonLight over the air
+    title: Move a WLED device to MoonLight, without a cable
     actor: user
     goal: A bulb moves to MoonLight without a cable.
     systems: [MoonBase]
@@ -23,6 +23,6 @@ processes:
   - id: diagnose-lights
     title: Diagnose dark or flickering lights
     actor: user
-    goal: Find which half is at fault before touching hardware.
+    goal: You know whether the lights or the setup are at fault, before touching hardware.
     systems: [MoonLight]
     page: how-to/troubleshooting.md

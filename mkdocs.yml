@@ -95,7 +95,7 @@ plugins:
   - redirects:
       redirect_maps:
         tutorials/first-light-show.md: moonwalk.md#first-light-show
-        how-to/installing-to-desktop.md: moonwalk.md#install-desktop
+        how-to/installing-to-desktop.md: moonwalk.md#install
 
 # The site's styles: colored headings, the card deck, the clips.
 extra_css:

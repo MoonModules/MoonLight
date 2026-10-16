@@ -1598,3 +1598,33 @@ document.getElementById("clear-log").addEventListener("click", () => {
 // ---------------------------------------------------------------------------
 
 init();
+
+// MoonWalk: the map of every process, opened on the contributor's stages, with what MoonDeck's own last runs show done. The map is the docs site's moonwalk.js, served here from the repo.
+async function openWalk() {
+    const dlg = document.createElement("dialog");
+    dlg.className = "walk-dialog";
+    const head = document.createElement("div");
+    head.className = "walk-head";
+    const title = document.createElement("h3");
+    title.textContent = "MoonWalk";
+    const close = document.createElement("button");
+    close.className = "walk-open";
+    close.textContent = "Close";
+    close.addEventListener("click", () => dlg.close());
+    head.append(title, close);
+    const host = document.createElement("div");
+    host.className = "walk-body";
+    dlg.append(head, host);
+    let stop = null;   // the map's teardown, once it has drawn
+    dlg.addEventListener("close", () => { stop?.(); dlg.remove(); }, { once: true });
+    document.body.appendChild(dlg);
+    dlg.showModal();
+    try {
+        const [walk, { runs }] = await Promise.all([import("/assets/moonwalk.js"), fetch("/api/runs").then((r) => r.json())]);
+        stop = await walk.drawMap(host, { runs, here: ["contribute", "merge", "release"], actor: "contributor", newTab: true });
+        if (!dlg.open) stop?.();
+    } catch (e) {
+        host.textContent = `MoonWalk could not load: ${e.message}`;
+    }
+}
+document.getElementById("walk-open")?.addEventListener("click", openWalk);

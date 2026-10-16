@@ -22,3 +22,13 @@ def test_a_build_reading_the_ui_header_depends_on_the_ui_files():
 
 def test_a_build_without_the_ui_header_gains_nothing():
     assert check.with_ui({"src/main.cpp"}) == {"src/main.cpp"}
+
+
+def test_a_recipe_without_the_ui_list_stops_the_check(tmp_path, monkeypatch):
+    recipe = tmp_path / "embed_ui.cmake"
+    recipe.write_text("# no list here\n", encoding="utf-8")
+    monkeypatch.setattr(check, "UI_RECIPE", recipe)
+    monkeypatch.setattr(check, "ROOT", tmp_path)
+    import pytest
+    with pytest.raises(SystemExit, match="no set\\(UI_FILES"):
+        check.ui_inputs()

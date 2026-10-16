@@ -24,6 +24,53 @@ import { TEENSY_FAMILY, requestHalfKay, requestTeensySerial } from "./teensy-wri
 import * as deviceSupport from "./install-picker-devices.js";
 import { BACKUP_SNIPPET } from "./backup-snippet.js";
 
+// MoonWalk: the docs site's map of every process, the script beside the installer on Pages and on the installer preview. It shows every way to install before one starts, and learns afterwards what the install did.
+const WALK = new URL("../assets/moonwalk.js", import.meta.url).href;
+const WALKED = ["install"];   // what a successful install vouches for
+
+async function openWalk() {
+  const dlg = document.createElement("dialog");
+  dlg.className = "walk-dialog";
+  const head = document.createElement("div");
+  head.className = "walk-head";
+  const title = document.createElement("h3");
+  title.textContent = "MoonWalk";
+  const close = document.createElement("button");
+  close.type = "button";
+  close.className = "secondary";
+  close.textContent = "Close";
+  close.addEventListener("click", () => dlg.close());
+  head.append(title, close);
+  const host = document.createElement("div");
+  host.className = "walk-body";
+  dlg.append(head, host);
+  let stop = null;   // the map's teardown, once it has drawn
+  dlg.addEventListener("close", () => { stop?.(); dlg.remove(); }, { once: true });
+  document.body.appendChild(dlg);
+  dlg.showModal();
+  try {
+    const walk = await import(WALK);
+    // An installer installs a board, so the install opens on its ESP32 path.
+    stop = await walk.drawMap(host, { here: ["install"], choices: { platform: "ESP32" }, actor: "user", newTab: true });
+    if (!dlg.open) stop?.();
+  } catch (e) {
+    host.textContent = `MoonWalk could not load: ${e.message}`;
+  }
+}
+document.getElementById("walk-open")?.addEventListener("click", openWalk);
+
+// Vouch for what an install did: kept on this site, whose docs map shares it, and best effort, since a map that cannot load must not get in an install's way.
+function vouch(ids) {
+  import(WALK).then((walk) => walk.markDone(ids)).catch(() => {});
+}
+
+// The device's address with what the install did, so the device's own map learns it on the first open.
+function withWalked(url) {
+  const u = new URL(url);
+  u.searchParams.set("walked", WALKED.join(","));
+  return u.href;
+}
+
 // Windows-only hints (was a separate inline <script> in <head>): reveal .windows-only
 // rows when the UA is Windows.
 // The backup card: the bookmarklet IS the snippet (a javascript: href), the copy button the
@@ -659,12 +706,13 @@ document.addEventListener('DOMContentLoaded', () => {
       // so a malformed boot-log value can't become a javascript:/data: link.
       const a = document.getElementById("done-url");
       a.textContent = url;
-      if (isHttpUrl(url)) a.href = url; else a.removeAttribute("href");
+      if (isHttpUrl(url)) a.href = withWalked(url); else a.removeAttribute("href");
+      vouch(WALKED);
       const aMdns = document.getElementById("done-url-mdns");
       if (mdns) {
         const mdnsUrl = `http://${mdns}/`;
         aMdns.textContent = mdnsUrl;
-        if (isHttpUrl(mdnsUrl)) aMdns.href = mdnsUrl; else aMdns.removeAttribute("href");
+        if (isHttpUrl(mdnsUrl)) aMdns.href = withWalked(mdnsUrl); else aMdns.removeAttribute("href");
         aMdns.hidden = false;
       } else {
         aMdns.hidden = true;

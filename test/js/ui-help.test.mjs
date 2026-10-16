@@ -4,7 +4,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { helpMarkdown, safeUrl, chipsMatch, typeDisplayName, COMPILED_EMOJI, SCRIPTED_EMOJI } from "../../src/ui/help.js";
+import { helpMarkdown, safeUrl, chipsMatch, typeDisplayName, walkLinks, COMPILED_EMOJI, SCRIPTED_EMOJI } from "../../src/ui/help.js";
 
 test("code, bold and absolute links render", () => {
     assert.equal(helpMarkdown("An `.fseq` file, **fit** or [the docs](https://moonmodules.org/MoonLight/)"),
@@ -94,11 +94,11 @@ test("a yes is kept, so help downloads and the question is not asked again", () 
     assert.equal(later.w.loads, 1);
 });
 
-function linkWorld({ inHelp = true, blocked = false, meta = false } = {}) {
-    const w = { opened: [], prevented: false, popup: { opener: "app", location: {}, focused: false, focus() { this.focused = true; } } };
-    const open = new Function("window", fnSource("openHelpLink") + "\nreturn openHelpLink;")(
-        { open: (...args) => { w.opened.push(args); return blocked ? null : w.popup; } });
-    open({ target: { closest: () => (inHelp ? { href: "https://en.wikipedia.org/wiki/Chebyshev_distance" } : null) },
+function linkWorld({ inHelp = true, blocked = false, meta = false, walk = undefined } = {}) {
+    const w = { opened: [], walked: [], prevented: false, popup: { opener: "app", location: {}, focused: false, focus() { this.focused = true; } } };
+    const open = new Function("window", "openWalk", fnSource("openHelpLink") + "\nreturn openHelpLink;")(
+        { open: (...args) => { w.opened.push(args); return blocked ? null : w.popup; } }, (at) => w.walked.push(at));
+    open({ target: { closest: () => (inHelp ? { href: "https://en.wikipedia.org/wiki/Chebyshev_distance", dataset: { walk } } : null) },
            button: 0, metaKey: meta, preventDefault: () => { w.prevented = true; } });
     return w;
 }
@@ -115,6 +115,13 @@ test("a help link opens in one named popup with its opener cut, so the app stays
 test("a blocked popup leaves the link to open its own tab", () => {
     const w = linkWorld({ blocked: true });
     assert.equal(w.prevented, false);
+});
+
+test("a MoonWalk link in the help opens the map in the app at its step, not a popup", () => {
+    const w = linkWorld({ walk: "first-light-show/grid-width" });
+    assert.deepEqual(w.walked, ["first-light-show/grid-width"]);
+    assert.equal(w.opened.length, 0);
+    assert.equal(w.prevented, true);
 });
 
 test("a link outside the help, or a modified click, is left to the browser", () => {
@@ -146,4 +153,35 @@ test("a fenced block keeps its text as written, escaped and unformatted", () => 
 
 test("a fenced block with a blank line inside stays one block", () => {
     assert.equal(helpMarkdown("Run:\n\n```\nfirst\n\nsecond\n```"), "Run:<br><br><pre><code>first\n\nsecond</code></pre>");
+});
+
+test("a NUL in the text cannot pose as a code block", () => {
+    assert.equal(helpMarkdown("a\u00000\u0000b"), "a0b");
+});
+
+const walk = {
+    processes: { show: { title: "Build your first light show" }, wifi: { title: "Join your WiFi" } },
+    byModule: { GridLayout: ["show/grid-width", "show/grid-height"], Ghost: ["gone/s"] },
+    byControl: { "GridLayout.width": ["show/grid-width"] },
+};
+const PAGE = "https://moonmodules.org/MoonLight/moonwalk.html";
+
+test("a module's help lists each MoonWalk process it takes part in once, opening at its first step", () => {
+    assert.deepEqual(walkLinks(walk, "GridLayout", null, PAGE),
+        [{ label: "MoonWalk: Build your first light show", href: `${PAGE}#show/grid-width`, ref: "show/grid-width" }]);
+});
+
+test("a control's help names the step that sets it", () => {
+    assert.deepEqual(walkLinks(walk, "GridLayout", "height", PAGE), []);
+    assert.equal(walkLinks(walk, "GridLayout", "width", PAGE)[0].ref, "show/grid-width");
+});
+
+test("a walk link's address is the host's page with the ids encoded, so the file cannot choose where it leads", () => {
+    const odd = { processes: { 'x"><img': { title: "T" } }, byModule: { M: ['x"><img/s?#'] } };
+    assert.equal(walkLinks(odd, "M", null, PAGE)[0].href, `${PAGE}#x%22%3E%3Cimg/s%3F%23`);
+});
+
+test("without MoonWalk's index, or for a process the index lacks, the help shows no link", () => {
+    assert.deepEqual(walkLinks(null, "GridLayout", null, PAGE), []);
+    assert.deepEqual(walkLinks(walk, "Ghost", null, PAGE), []);
 });

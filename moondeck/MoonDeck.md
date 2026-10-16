@@ -4,7 +4,7 @@ MoonDeck is MoonLight's browser-based developer console: one page that builds, f
 
 Launch it with `uv run moondeck/moondeck.py` and open <http://localhost:8420>. The console has five tabs. **Repo**, where MoonDeck opens, holds the tests, checks, tools and docs.
 **Desktop**, **ESP32** and **Teensy** build, run or flash, and monitor a target, and **Live** discovers networked devices and runs against them.
-A network bar and per-device deviceModel pickers sit above them. Script definitions live in `moondeck/moondeck_config.json` (committed); runtime state (selected network, devices, ports) persists in `moondeck/moondeck.json` (gitignored).
+A network bar and per-device deviceModel pickers sit above them. The 🗺️ MoonWalk button in the header opens the map of every process on the contributor's stages. It marks a process done when every script its steps run last passed here, read from MoonDeck's own run logs (`GET /api/runs`). Script definitions live in `moondeck/moondeck_config.json` (committed); runtime state (selected network, devices, ports) persists in `moondeck/moondeck.json` (gitignored).
 
 Below: the UI behaviors common to every card, described once, then one section per script grouped by the tab it appears on. Each section gives the equivalent CLI invocation, so the page doubles as the command reference for running anything without the browser.
 

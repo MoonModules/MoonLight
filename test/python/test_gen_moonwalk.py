@@ -56,7 +56,7 @@ def test_a_file_that_is_not_yaml_names_itself(tmp_path):
 def test_a_process_id_is_unique_across_stages(tmp_path):
     shutil.copy(ROOT / "moonwalk" / "01-read.yaml", tmp_path / "01-read.yaml")
     shutil.copy(ROOT / "moonwalk" / "01-read.yaml", tmp_path / "02-again.yaml")
-    with pytest.raises(ValueError, match="turn-help-on is also in stage read"):
+    with pytest.raises(ValueError, match="know-moonlight is also in stage read"):
         gen_moonwalk.build(tmp_path)
 
 
@@ -100,15 +100,45 @@ def test_a_system_is_one_the_architecture_names(tmp_path):
 
 def test_a_step_adds_the_systems_its_action_implies():
     processes = gen_moonwalk.build()["processes"]
-    assert processes["install-desktop"]["systems"] == ["MoonCore", "MoonInstaller"]   # declared MoonCore, the installer's address adds MoonInstaller, in the architecture's order
+    assert processes["install"]["systems"] == ["MoonCore", "MoonInstaller"]   # in the architecture's order, whatever order they are declared in
     assert "MoonDeck" in processes["commit"]["systems"]
 
 
 def test_a_misspelt_expectation_key_is_refused_rather_than_never_checked(tmp_path):
     root = stage(tmp_path, "stage: T\nprocesses:\n  - id: a\n    title: A\n    actor: user\n    goal: G\n    steps:\n"
-                           "      - {id: s, say: Set it., when: {set: {module: Grid, control: width, value: 16}}, then: [{module: Grid, control: width, equal: 16}]}\n")
+                           "      - {id: s, say: Set it., when: {set: {module: GridLayout, control: width, value: 16}}, then: [{module: GridLayout, control: width, equal: 16}]}\n")
     with pytest.raises(ValueError, match="then/0"):
         gen_moonwalk.build(root)
+
+
+def test_a_step_names_a_module_type_and_control_the_help_knows_or_it_is_refused(tmp_path):
+    step = "      - {{id: s, say: Set it., when: {{set: {{module: {m}, control: {c}, value: 16}}}}}}\n"
+    head = "stage: T\nprocesses:\n  - id: a\n    title: A\n    actor: user\n    goal: G\n    steps:\n"
+    with pytest.raises(ValueError, match="no module type Grid in help.json"):   # the instance's name is not the key
+        gen_moonwalk.build(stage(tmp_path, head + step.format(m="Grid", c="width")))
+    with pytest.raises(ValueError, match="GridLayout has no control widht in help.json"):
+        gen_moonwalk.build(stage(tmp_path, head + step.format(m="GridLayout", c="widht")))
+
+
+def test_an_expectation_is_a_value_or_a_range_never_both(tmp_path):
+    head = "stage: T\nprocesses:\n  - id: a\n    title: A\n    actor: user\n    goal: G\n    steps:\n"
+    step = "      - {{id: s, say: Set it., when: {{set: {{module: Drivers, control: brightness, value: 20}}}}, then: [{{module: Drivers, control: brightness, {e}}}]}}\n"
+    gen_moonwalk.build(stage(tmp_path, head + step.format(e="minimum: 1, maximum: 20")))
+    gen_moonwalk.build(stage(tmp_path, head + step.format(e="maximum: 20")))
+    with pytest.raises(ValueError, match="then/0"):
+        gen_moonwalk.build(stage(tmp_path, head + step.format(e="equals: 20, maximum: 20")))
+
+
+def test_the_module_index_is_keyed_by_type_and_names_the_type_a_step_adds():
+    by_module = gen_moonwalk.build()["byModule"]
+    assert "first-light-show/grid-width" in by_module["GridLayout"]
+    assert "first-light-show/add-balls" in by_module["BouncingBallsEffect"] and "first-light-show/add-balls" in by_module["Layer"]
+
+
+def test_a_control_lists_the_steps_that_set_it_or_expect_its_value():
+    by_control = gen_moonwalk.build()["byControl"]
+    assert by_control["GridLayout.width"] == ["first-light-show/grid-width"]   # set
+    assert by_control["WiFiModule.known"] == ["join-access-point/pick"]          # expected, set by hand in the WiFi card
 
 
 def test_the_prose_is_plain_text_under_the_map_with_the_process_id_as_its_address():
@@ -136,7 +166,24 @@ def test_every_page_a_process_names_exists(tmp_path):
 
 def test_a_choice_shows_once_per_section_and_names_its_option_in_the_plain_text():
     text = gen_moonwalk.render_text(gen_moonwalk.build())
-    desktop = text[text.index("{#install-desktop}"):]
+    desktop = text[text.index("{#install}"):]
     assert desktop.count("Where your settings live") == 1   # three options, one heading
     assert "**Windows: Double-click the file you kept and press Install.**" in desktop
     assert "**macOS: Open the .dmg" in desktop
+
+
+def test_a_key_written_twice_is_refused_rather_than_the_last_kept(tmp_path):
+    root = stage(tmp_path, "stage: T\nprocesses:\n  - id: a\n    title: A\n    title: B\n    actor: user\n    goal: G\n")
+    with pytest.raises(ValueError, match="duplicate key 'title'"):
+        gen_moonwalk.build(root)
+
+
+def test_a_process_entry_that_is_not_a_mapping_is_reported_not_crashed_on(tmp_path):
+    root = stage(tmp_path, "stage: T\nprocesses:\n  - just a string\n")
+    with pytest.raises(ValueError, match="01-test.yaml"):
+        gen_moonwalk.build(root)
+
+
+def test_a_step_for_several_options_names_them_all_in_the_plain_text():
+    text = gen_moonwalk.render_text(gen_moonwalk.build())
+    assert "**Windows, macOS, Linux: Set Install to This computer, and press Download.**" in text

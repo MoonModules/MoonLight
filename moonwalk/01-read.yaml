@@ -2,9 +2,9 @@
 stage: Read
 summary: Learn what MoonLight is and find the help, in the docs and in the app.
 processes:
-  - id: turn-help-on
-    title: Turn help on in the app
+  - id: know-moonlight
+    title: Get to know MoonLight
     actor: user
-    goal: A help line shows under every module and control.
-    systems: [MoonCore]
-    page: moonmodules/core/ui.md
+    goal: You know what MoonLight does, and whether it suits your lights.
+    systems: [MoonLight]
+    page: index.md

@@ -1,8 +1,8 @@
 {
-  "commit": "e7212ca0",
+  "commit": "2438e6e6",
   "flash": {
-    "esp32s3-n16r8": 2459232,
-    "esp32": 2264560,
+    "esp32s3-n16r8": 2461536,
+    "esp32": 2266864,
     "esp32p4rev1-eth": 2399936,
     "esp32p4rev1-eth-wifi": 2623840,
     "esp32s3-n8r8": 2437792,
@@ -11,14 +11,14 @@
     "esp32-eth": 1681040,
     "esp32-wrover": 1843760,
     "qemu": 1383648,
-    "esp32p4rev3-eth": 2406800,
+    "esp32p4rev3-eth": 2409120,
     "esp32s3-zero": 2224816,
     "esp32-pico": 2107168,
-    "desktop-macos": 2382872,
+    "desktop-macos": 2399384,
     "desktop-windows": 1925120,
     "esp32c3": 2335072,
     "desktop-linux": 2548000,
-    "esp32s3-n32r16": 2482128,
+    "esp32s3-n32r16": 2484400,
     "teensy41": 1271788
   },
   "measured": {
@@ -781,8 +781,8 @@
       }
     },
     "desktop-macos": {
-      "tick_us": 7,
-      "fps": 142857,
+      "tick_us": 8,
+      "fps": 125000,
       "scenario_p50": {
         "Effects_pipeline_builds_and_renders": {
           "p50": 7,
@@ -825,9 +825,9 @@
     "core": 30208,
     "light": 30550,
     "platform": 21533,
-    "ui": 12845,
-    "test": 68627,
-    "moondeck": 30563
+    "ui": 12934,
+    "test": 68741,
+    "moondeck": 30712
   },
   "comments": {
     "core": {
@@ -843,16 +843,16 @@
       "ratio": 0.212
     },
     "ui": {
-      "lines": 3470,
-      "ratio": 0.286
+      "lines": 3482,
+      "ratio": 0.285
     },
     "test": {
       "lines": 7175,
       "ratio": 0.121
     },
     "moondeck": {
-      "lines": 4545,
-      "ratio": 0.17
+      "lines": 4554,
+      "ratio": 0.169
     }
   },
   "tests": {
@@ -861,7 +861,7 @@
   },
   "docs": {
     "md_files": 164,
-    "md_lines": 32173,
+    "md_lines": 32188,
     "plans_files": 52,
     "backlog_lines": 3415,
     "lessons_lines": 532,

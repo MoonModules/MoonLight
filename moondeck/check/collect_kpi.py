@@ -239,7 +239,10 @@ def collect_desktop():
     specs = ROOT / "moondeck" / "check" / "check_specs.py"
     if specs.exists():
         # Through uv, so the check gets its own declared dependencies; this script's interpreter carries only pyserial.
-        out, rc = run(["uv", "run", str(specs)], timeout=120)
+        try:
+            out, rc = run(["uv", "run", str(specs)], timeout=120)
+        except (FileNotFoundError, subprocess.TimeoutExpired) as e:
+            out, rc = str(e), 1   # no uv, or a stuck check: recorded as a FAIL, and the KPIs still collect
         kpi["specs_check"] = "PASS" if rc == 0 else "FAIL"
         for line in out.splitlines():
             if "Spec check:" in line:

@@ -16,12 +16,15 @@ import argparse
 import copy
 import json
 import re
+import subprocess
 import sys
+import threading
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 MOONWALK = ROOT / "moonwalk"
 SCHEMA = MOONWALK / "moonwalk.schema.json"
+HELP = ROOT / "docs" / "help" / "help.json"
 # The systems' one home is the architecture's Part table, so a process names them as that table does and no second list exists.
 ARCHITECTURE = ROOT / "docs" / "explanation" / "architecture" / "index.md"
 _PART_RE = re.compile(r"^\| \[(Moon\w+)\]\(", re.MULTILINE)
@@ -61,8 +64,22 @@ def page_url(page: str) -> str:
     return page[:-3] + ".html" if page.endswith(".md") else page
 
 
+def _strict_loader(yaml):
+    """A YAML loader that refuses a key written twice in one mapping, where the safe loader keeps the last silently."""
+    class Strict(yaml.SafeLoader):
+        def construct_mapping(self, node, deep=False):
+            seen = set()
+            for key_node, _ in node.value:
+                key = self.construct_object(key_node, deep=deep)
+                if key in seen:
+                    raise yaml.constructor.ConstructorError(None, None, f"duplicate key {key!r}", key_node.start_mark)
+                seen.add(key)
+            return super().construct_mapping(node, deep)
+    return Strict
+
+
 def build(root: Path = MOONWALK) -> dict:
-    """Read and check every stage file, and return the map: stages in backbone order, processes by id, and the indexes by page and by module."""
+    """Read and check every stage file, and return the map: stages in backbone order, processes by id, and the indexes by page, by module type and by control."""
     # Imported here rather than at the top, so the checks that import the docs hooks, and with them this module, need neither package.
     import jsonschema
     import yaml
@@ -72,7 +89,7 @@ def build(root: Path = MOONWALK) -> dict:
     stages, processes = [], {}
     for path in sorted(root.glob("[0-9][0-9]-*.yaml")):
         try:
-            doc = yaml.safe_load(path.read_text(encoding="utf-8"))
+            doc = yaml.load(path.read_text(encoding="utf-8"), Loader=_strict_loader(yaml))
         except yaml.YAMLError as e:
             errors.append(f"{path.name}: {e}")
             continue
@@ -80,9 +97,11 @@ def build(root: Path = MOONWALK) -> dict:
         if not isinstance(doc, dict) or not isinstance(doc.get("processes"), list):
             continue
         stage_id = path.stem[3:]
+        # An entry that is no process with an id is the schema's to report; the rest of the file is still read.
+        valid = [p for p in doc["processes"] if isinstance(p, dict) and isinstance(p.get("id"), str)]
         stages.append({"id": stage_id, "title": doc.get("stage", stage_id), "summary": doc.get("summary", ""),
-                       "processes": [p.get("id") for p in doc["processes"]]})
-        for p in doc["processes"]:
+                       "processes": [p["id"] for p in valid]})
+        for p in valid:
             if p.get("id") in processes:
                 errors.append(f"{path.name}: process id {p['id']} is also in stage {processes[p['id']]['stage']}")
             processes[p.get("id")] = {**p, "stage": stage_id}
@@ -91,8 +110,11 @@ def build(root: Path = MOONWALK) -> dict:
     if errors:
         raise ValueError("process files:\n  " + "\n  ".join(errors))
     known = systems()
+    # A step names modules by type, the key the help uses, so every type and control it names is checked against the help the same build publishes.
+    help_types = json.loads(HELP.read_text(encoding="utf-8"))["modules"]
     by_page: dict[str, list[str]] = {}
     by_module: dict[str, list[str]] = {}
+    by_control: dict[str, list[str]] = {}
     for pid, p in processes.items():
         for dep in p.get("dependsOn", []):
             if dep not in processes:
@@ -122,10 +144,23 @@ def build(root: Path = MOONWALK) -> dict:
                 if isinstance(g, dict) and "input" in g:
                     if g["input"] not in inputs:
                         errors.append(f"{pid}/{s['id']}: given names no input of the process: {g['input']}")
-                    elif g.get("equals") not in inputs[g["input"]].get("enum", []):
-                        errors.append(f"{pid}/{s['id']}: {g['input']} has no option {g.get('equals')}")
-            if isinstance(arg, dict) and "module" in arg:
-                by_module.setdefault(arg["module"], []).append(f"{pid}/{s['id']}")
+                    else:
+                        for option in g.get("in", [g.get("equals")]):
+                            if option not in inputs[g["input"]].get("enum", []):
+                                errors.append(f"{pid}/{s['id']}: {g['input']} has no option {option}")
+            targets = [arg] if isinstance(arg, dict) else []
+            for t in targets + [e for e in s.get("then", []) if "module" in e]:
+                for type_ in [t[k] for k in ("module", "type") if k in t]:
+                    if type_ not in help_types:
+                        errors.append(f"{pid}/{s['id']}: no module type {type_} in help.json")
+                if "control" in t and t["module"] in help_types and t["control"] not in help_types[t["module"]].get("controls", {}):
+                    errors.append(f"{pid}/{s['id']}: {t['module']} has no control {t['control']} in help.json")
+            for t in targets:
+                for type_ in dict.fromkeys(t[k] for k in ("module", "type") if k in t):
+                    by_module.setdefault(type_, []).append(f"{pid}/{s['id']}")
+            # A control's steps are the ones that set it or expect a value of it, under the key `Type.control`.
+            for key in dict.fromkeys(f"{t['module']}.{t['control']}" for t in targets + s.get("then", []) if "control" in t):
+                by_control.setdefault(key, []).append(f"{pid}/{s['id']}")
             if verb == "process" and arg not in processes:
                 errors.append(f"{pid}/{s['id']}: runs no process: {arg}")
             for b in s.get("onSuccess", []) + s.get("onFailure", []):
@@ -134,7 +169,7 @@ def build(root: Path = MOONWALK) -> dict:
 
     if errors:
         raise ValueError("process files:\n  " + "\n  ".join(errors))
-    return {"stages": stages, "systems": known, "processes": processes, "byPage": by_page, "byModule": by_module}
+    return {"stages": stages, "systems": known, "processes": processes, "byPage": by_page, "byModule": by_module, "byControl": by_control}
 
 
 # A link or a picture in a process's prose, written relative to docs/ as the MoonWalk page holds it.
@@ -161,14 +196,14 @@ def absolute_links(model: dict) -> dict:
 
 
 def render_text(model: dict) -> str:
-    """Every process that carries its prose, as plain Markdown under the MoonWalk page: what the site's search indexes and a reader without JavaScript reads, until moonwalk.js draws the live view. Each heading's id is the process id, the address the view opens at."""
+    """Every process, with its prose where it has some, as plain Markdown under the MoonWalk page: what the site's search indexes and a reader without JavaScript reads, until moonwalk.js draws the live view. Each heading's id is the process id, the address the view opens at."""
     out: list[str] = []
+    # Every heading in the prose sits one level under its process's, as the view renders it under the section.
+    prose = lambda text: re.sub(r"^(#+) ", r"#\1 ", text.strip(), flags=re.MULTILINE) + "\n"
     for p in model["processes"].values():
-        if not any(_prose_fields(p)):
-            continue
-        # Every heading in the prose sits one level under its process's, as the view renders it under the section.
-        prose = lambda text: re.sub(r"^(#+) ", r"#\1 ", text.strip(), flags=re.MULTILINE) + "\n"
+        # Every process has its heading and goal here, so any process is linkable by its id, as the view opens it.
         out.append(f"## {p['title']} {{#{p['id']}}}\n")
+        out.append(f"*{p['goal']}*\n")
         if p.get("intro"):
             out.append(prose(p["intro"]))
         chapter, section = 0, None
@@ -177,7 +212,7 @@ def render_text(model: dict) -> str:
             if s.get("section") and s["section"] != section:
                 chapter, section = chapter + 1, s["section"]
                 out.append(f"### {chapter}. {section}\n")
-            option = next((g["equals"] for g in s.get("given", []) if isinstance(g, dict) and "input" in g), None)
+            option = next((g.get("equals") or ", ".join(g["in"]) for g in s.get("given", []) if isinstance(g, dict) and "input" in g), None)
             out.append(f"**{option + ': ' if option else ''}{s['say']}**\n")
             if s.get("detail"):
                 out.append(prose(s["detail"]))
@@ -186,6 +221,26 @@ def render_text(model: dict) -> str:
     # A clip written as a picture plays as a video on the page, as the view plays it.
     text = "\n".join(out)
     return _MEDIA_RE.sub(lambda m: f'<video src="{m.group(2)}" controls playsinline width="720" title="{m.group(1)}"></video>', text)
+
+
+_REGENERATING = threading.Lock()   # the local servers answer requests on threads
+
+
+def regenerate(out: Path) -> bool:
+    """Write moonwalk.json to `out` as the stage files are now, for a local server answering a request: generated into a temporary file and swapped in only on success, one run at a time, so a failed run leaves no stale map behind and two requests never interleave. Run through uv, so the caller needs none of this generator's packages."""
+    out.parent.mkdir(parents=True, exist_ok=True)
+    tmp = out.with_suffix(".tmp")
+    with _REGENERATING:
+        try:
+            ok = subprocess.run(["uv", "run", str(Path(__file__)), "--out", str(tmp)], check=False).returncode == 0
+        except OSError:
+            ok = False
+        if not ok:
+            tmp.unlink(missing_ok=True)
+            out.unlink(missing_ok=True)
+            return False
+        tmp.replace(out)
+    return True
 
 
 def main() -> int:

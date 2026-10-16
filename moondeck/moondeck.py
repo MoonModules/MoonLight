@@ -4,6 +4,7 @@
 import http.server
 import json
 import os
+import re
 import signal
 import subprocess
 import sys
@@ -113,6 +114,28 @@ def load_scripts():
 
 _scripts_data = load_scripts()
 SCRIPTS = _scripts_data["scripts"]
+
+sys.path.insert(0, str(SCRIPTS_DIR / "docs"))
+from gen_moonwalk import regenerate as regenerate_moonwalk  # noqa: E402  the one home of regenerating MoonWalk's map on request
+WALK_JSON = ROOT / "build" / "moonwalk" / "moonwalk.json"
+
+
+def last_runs(log_dir: Path = None) -> list:
+    """Each script's last run as MoonWalk reads it: the script and the arguments that ran, from the `# args:` line its log opens with, and whether it passed, from the exit code it ends with."""
+    runs = []
+    for s in SCRIPTS:
+        log = (log_dir or LOG_DIR) / f"{s['id']}.log"
+        if not log.exists():
+            continue
+        text = log.read_text(encoding="utf-8", errors="replace")
+        codes = re.findall(r"\[exit code: (-?\d+)\]", text[-400:])
+        if not codes:
+            continue   # still running, or cut off before its result
+        ran = re.search(r"^# args: (.*)$", text[:2000], re.MULTILINE)
+        if not ran:
+            continue   # a log from before the line was written: what ran is unknown, so it vouches for nothing
+        runs.append({"script": f"moondeck/{s['script']}", "args": ran.group(1).strip(), "passed": codes[-1] == "0"})
+    return runs
 FIRMWARES = _load_firmwares()
 
 
@@ -817,8 +840,23 @@ def _free_port(port: int):
                 subprocess.run(["taskkill", "/F", "/PID", str(pid)], capture_output=True)
             else:
                 os.kill(pid, signal.SIGTERM)
+    # A signal does not end a process at once, and binding before it has let go of the port fails with "Address already in use". Wait for each to exit, up to five seconds.
+    deadline = time.monotonic() + 5
+    while not _IS_WIN and time.monotonic() < deadline and any(_alive(pid) for pid in pids if pid != os.getpid()):
+        time.sleep(0.1)
     if pids:
         print(f"Freed port {port} from a prior instance (pid {', '.join(map(str, pids))}).")
+
+
+def _alive(pid: int) -> bool:
+    """Whether a process still exists, by the signal-zero probe that checks without signalling."""
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True   # it exists, under another user
+    return True
 
 
 def kill_script(script_id: str):
@@ -1404,8 +1442,29 @@ class MoonDeckHandler(http.server.BaseHTTPRequestHandler):
         elif self.path.startswith("/firmware/") and self.path.endswith(".bin"):
             self._serve_firmware_bin()
 
+        # MoonWalk: the scripts' last runs, the map as the stage files are now, and the help's renderer the map imports.
+        elif self.path == "/api/runs":
+            self._send_json({"runs": last_runs()})
+        elif self.path.split("?", 1)[0] == "/moonwalk/moonwalk.json":
+            if regenerate_moonwalk(WALK_JSON):
+                self._send_file(WALK_JSON, "application/json")
+            else:
+                self.send_error(500, "gen_moonwalk failed; its error is in this console")
+        elif self.path.split("?", 1)[0] == "/assets/help.js":
+            self._send_file(ROOT / "src" / "ui" / "help.js", "application/javascript")
+
         else:
             self._serve_static()
+
+    def _send_file(self, path, content_type, data=None):
+        """One file, whole, with its type, revalidated on every load as every file MoonDeck serves is."""
+        data = path.read_bytes() if data is None else data
+        self.send_response(200)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(len(data)))
+        self.send_header("Cache-Control", "no-cache")
+        self.end_headers()
+        self.wfile.write(data)
 
     def do_POST(self):
         if self.path.startswith("/api/run/"):
@@ -1796,6 +1855,7 @@ class MoonDeckHandler(http.server.BaseHTTPRequestHandler):
             # streamed proc doesn't orphan it.
             proc._mm_read_stream = read_stream
             proc._mm_master_fd = master_fd
+            proc._mm_args = " ".join(cmd[3:])   # what ran after `uv run <script>`, the key MoonWalk matches a step by
             with _lock:
                 _running[script_id] = proc
             self._send_json({"status": "started", "pid": proc.pid})
@@ -1837,6 +1897,7 @@ class MoonDeckHandler(http.server.BaseHTTPRequestHandler):
             # Timezone-aware: a bare local timestamp is ambiguous when the log is read from
             # another machine or after a DST change.
             log.write(f"# {script_id} — {datetime.now().astimezone().isoformat(timespec='seconds')}\n")
+            log.write(f"# args: {getattr(proc, '_mm_args', '')}\n")
 
         try:
             while True:
@@ -2655,12 +2716,7 @@ document.addEventListener("click", function(e) {{
         # index.html carries a {{VERSION}} placeholder filled at serve time.
         if path == "index.html":
             data = data.replace(b"{{VERSION}}", APP_VERSION.encode())
-        self.send_response(200)
-        self.send_header("Content-Type", content_type)
-        self.send_header("Content-Length", str(len(data)))
-        self.send_header("Cache-Control", "no-cache")
-        self.end_headers()
-        self.wfile.write(data)
+        self._send_file(file_path, content_type, data)
 
 
 # ---------------------------------------------------------------------------

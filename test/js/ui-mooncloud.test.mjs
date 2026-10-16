@@ -97,9 +97,9 @@ test("a card that cannot reach MoonCloud says so", () => {
     // network, versus wait for someone to post.
     // Both readers must reject a non-ok response rather than folding it into a null body: `r.ok ?
     // r.json() : null` was the shape that made a 500 indistinguishable from an empty board.
-    const rejects = app.match(/r\.ok \? r\.json\(\) : Promise\.reject/g) || [];
-    assert.equal(rejects.length, 2,
-                 "both /api/stats and /api/talk must treat a non-ok status as a failure");
+    const reader = (path) => new RegExp(`fetch\\([^)]*${path}[^;]*r\\.ok \\? r\\.json\\(\\) : Promise\\.reject`);
+    for (const path of ["/api/stats", "/api/talk"])
+        assert.match(app, reader(path), `${path} must treat a non-ok status as a failure`);
 
     // And neither may swallow the failure silently.
     assert.ok(!app.includes("/* no section: the card is complete without it */"),

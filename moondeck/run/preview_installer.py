@@ -49,6 +49,8 @@ ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(ROOT / "moondeck" / "build"))
 from build_esp32 import APP_BIN, FIRMWARES, MOONBASE_BIN  # noqa: E402
 import build_teensy  # noqa: E402
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "docs"))
+from gen_moonwalk import regenerate  # noqa: E402
 INSTALL_DIR = ROOT / "mooninstaller"
 ASSETS_BOARDS_DIR = ROOT / "docs" / "assets" / "boards"
 PICKER_JS = ROOT / "src" / "ui" / "install-picker.js"
@@ -390,9 +392,9 @@ def main() -> int:
             if route == "/assets/help.js":
                 return str(ROOT / "src" / "ui" / "help.js")   # the renderer moonwalk.js imports, as the docs site serves it
             if route == "/moonwalk/moonwalk.json":
+                # Generated now; a failed run leaves no file, which answers 404, its error in this server's log.
                 out = Path(STAGE_DIR) / "moonwalk" / "moonwalk.json"
-                out.parent.mkdir(parents=True, exist_ok=True)
-                subprocess.run(["uv", "run", str(ROOT / "moondeck" / "docs" / "gen_moonwalk.py"), "--out", str(out)], check=False)
+                regenerate(out)
                 return str(out)
             return super().translate_path(path)
 

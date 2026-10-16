@@ -6,6 +6,7 @@ End users land here, pick a channel + device, click Install.
 The browser flashes the device over USB (Web Serial → ESP32) and runs Improv-Serial provisioning.
 It then pushes the picked device model's config over the **same serial port** as state documents (**"Improv = REST over serial"**: `APPLY_OP` frames, one per top-level container).
 One orchestrator does all of it, with no ESP Web Tools dependency.
+The MoonWalk button opens the map of every process at the ways to install. A successful install marks "Install MoonLight" done in the docs site's map, which shares the origin on Pages. The device's own map learns it too, through `?walked=install` on the device link.
 Pushing over serial rather than HTTP is what makes the deployed HTTPS installer work.
 A browser blocks an HTTPS page from POSTing to a plain-`http://` device (mixed content), and serial bypasses the network entirely.
 

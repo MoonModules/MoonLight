@@ -41,7 +41,7 @@ export function helpMarkdown(text) {
     const esc = String(text).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
     // A fenced code block is lifted out before the text splits into paragraphs, so a blank line inside it stays code; it keeps its text as written, already escaped, with no inline formatting.
     const code = [];
-    const held = esc.trim().replace(/^```[a-z]*\n([\s\S]*?)\n```$/gm, (_, body) => `\u0000${code.push(body) - 1}\u0000`);
+    const held = esc.replace(/\u0000/g, "").trim().replace(/^```[a-z]*\n([\s\S]*?)\n```$/gm, (_, body) => `\u0000${code.push(body) - 1}\u0000`);
     // Trimmed, so the text's last line is a block like any other.
     return held.split(/\n\n+/).map(p => /^\u0000(\d+)\u0000$/.test(p) ? `<pre><code>${code[+p.slice(1, -1)]}</code></pre>` : block(p)).join("<br><br>");
 }
@@ -56,8 +56,25 @@ export function docUrl(docPath) {
     return "https://moonmodules.org/MoonLight/moonmodules/" + docPath.replace(/\.md(#.*)?$/, ".html$1");
 }
 
-// A module's help, progressive disclosure: the line and the summary always show, the guide and the rest open on a tap, and the picture loads only then.
-export function moduleHelp(help, docPath) {
+// The MoonWalk processes a module or one of its controls takes part in, as links: `index` is moonwalk.json's byModule and byControl with its processes, `page` the MoonWalk page the host knows. A link carries its step as `ref`, `process/step`, for a host that opens MoonWalk in place, and its address opens the page at that step.
+export function walkLinks(index, type, control, page) {
+    const refs = (control ? index?.byControl?.[`${type}.${control}`] : index?.byModule?.[type]) || [];
+    // A module lists each process once, at its first step; a control names the step itself.
+    const firsts = new Map();
+    for (const ref of refs) { const pid = ref.split("/")[0]; if (!firsts.has(pid)) firsts.set(pid, ref); }
+    return [...firsts].filter(([pid]) => index.processes?.[pid])
+        .map(([pid, ref]) => ({ label: `MoonWalk: ${index.processes[pid].title}`, href: `${page}#${ref.split("/").map(encodeURIComponent).join("/")}`, ref }));
+}
+
+// A walk link as an element, its step on `data-walk`. Its address is the host's own page with the ids encoded after the #, so nothing from the file chooses where it leads.
+function walkAnchor(w) {
+    const a = document.createElement("a");
+    a.href = w.href; a.target = "_blank"; a.rel = "noopener"; a.textContent = w.label; a.dataset.walk = w.ref;
+    return a;
+}
+
+// A module's help, progressive disclosure: the line and the summary always show, the guide and the rest open on a tap, and the picture loads only then. `walks` are walkLinks' links, listed after the source and the tests.
+export function moduleHelp(help, docPath, walks = []) {
     const box = document.createElement("details");
     box.className = "card-helpbox";
     // The line and the summary always show; the arrow opens the guide, the picture, the attribution and the links.
@@ -89,24 +106,30 @@ export function moduleHelp(help, docPath) {
         a.href = href; a.target = "_blank"; a.rel = "noopener"; a.textContent = label;
         links.appendChild(a);
     }
+    for (const a of walks.map(walkAnchor)) {
+        if (links.childNodes.length) links.append(" · ");
+        links.appendChild(a);
+    }
     if (links.childNodes.length) body.appendChild(links);
     box.appendChild(body);
     box.addEventListener("toggle", () => { if (box.open && img && !img.src) img.src = image; });
     return box;
 }
 
-// A control's help as Material's helper text, a line under the field rather than a hover tooltip, which fails on touch; any more opens from the line.
-export function controlHelp(row, help) {
+// A control's help as Material's helper text, a line under the field rather than a hover tooltip, which fails on touch; any more opens from the line, the MoonWalk steps that set the control with it.
+export function controlHelp(row, help, walks = []) {
     if (!help || !help.line) return;
     let el;
-    if (help.more) {
+    const anchors = walks.map(walkAnchor);
+    if (help.more || anchors.length) {
         el = document.createElement("details");
         const s = document.createElement("summary");
         s.innerHTML = helpMarkdown(help.line);
         el.appendChild(s);
         const d = document.createElement("div");
         d.className = "control-helper-more";
-        d.innerHTML = helpMarkdown(help.more);
+        d.innerHTML = help.more ? helpMarkdown(help.more) : "";
+        for (const a of anchors) { if (d.childNodes.length) d.append(" · "); d.appendChild(a); }
         el.appendChild(d);
     } else {
         el = document.createElement("div");

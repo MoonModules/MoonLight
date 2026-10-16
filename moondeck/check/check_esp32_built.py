@@ -97,7 +97,10 @@ UI_RECIPE = ROOT / "src" / "ui" / "embed_ui.cmake"
 def ui_inputs() -> set:
     """The UI files the embedded header is generated from, as embed_ui.cmake's UI_FILES lists them."""
     m = re.search(r"set\(UI_FILES ([^)]*)\)", UI_RECIPE.read_text(encoding="utf-8"))
-    return {f"src/ui/{name}" for name in m.group(1).split()} if m else set()
+    # A recipe this check cannot read would leave the UI unwatched again, so it stops rather than passing.
+    if not m:
+        raise SystemExit(f"{UI_RECIPE.relative_to(ROOT)}: no set(UI_FILES ...) to read the UI's files from")
+    return {f"src/ui/{name}" for name in m.group(1).split()}
 
 
 def with_ui(deps: set) -> set:

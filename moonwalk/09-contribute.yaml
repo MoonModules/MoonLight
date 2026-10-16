@@ -32,6 +32,29 @@ processes:
     systems: [MoonDeck]
     dependsOn: [branch]
     page: how-to/building.md
+    intro: |
+      Desktop first, always: anything the desktop can prove, the user interface, the logic and the tests, is proven there rather than through a multi-minute compile and a flash. Each step is one MoonDeck script, and MoonDeck marks the process done when every step's last run passed. The rules stay in CLAUDE.md until the developer process moves them here.
+    steps:
+      - id: build
+        say: Build the desktop firmware, with zero warnings.
+        actor: agent
+        when: { run: { script: moondeck/build/build_desktop.py } }
+      - id: run
+        say: Run it; a second run replaces the instance already running.
+        actor: agent
+        when: { run: { script: moondeck/run/run_desktop.py } }
+      - id: build-tests
+        say: Build the unit tests and the scenario runner.
+        actor: agent
+        when: { run: { script: moondeck/build/build_desktop.py, args: "--tests" } }
+      - id: test
+        say: Run the unit tests.
+        actor: agent
+        when: { run: { script: moondeck/test/test_desktop.py } }
+      - id: scenarios
+        say: Replay the scenarios in-process.
+        actor: agent
+        when: { run: { script: moondeck/scenario/run_scenario.py } }
   - id: esp32-build-flash
     title: Build, flash and monitor an ESP32
     actor: contributor
@@ -44,17 +67,20 @@ processes:
     actor: contributor
     goal: New firmware on a board with no cable.
     systems: [MoonDeck, MoonBase]
+    dependsOn: [esp32-build-flash]
     page: how-to/building.md
   - id: provision-board
     title: Provision a freshly flashed board
     actor: contributor
     goal: A flashed board joins WiFi, carries its name and its device model's module tree.
     systems: [MoonDeck]
+    dependsOn: [esp32-build-flash]
   - id: teensy
     title: Build, flash and monitor a Teensy
     actor: contributor
     goal: A Teensy 4.1 runs the change.
     systems: [MoonDeck]
+    dependsOn: [desktop-build-test]
     page: how-to/building.md
   - id: iterate-moonlive
     title: Iterate a MoonLive script on a board
@@ -125,7 +151,7 @@ processes:
         actor: agent
         when: { read: { page: contributing/principles-and-process.md, section: Commit } }
         detail: |
-          The gate list keeps its one home in CLAUDE.md until step 9 of the plan moves each check here as a step with its `changed` trigger.
+          The gate list keeps its one home in CLAUDE.md until step 10 of the plan moves each check here as a step with its `changed` trigger.
       - id: report
         say: Report one line per check, PASS, FAIL or SKIP with its reason, and stop.
         actor: agent

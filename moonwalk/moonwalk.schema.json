@@ -193,7 +193,7 @@
           "maxProperties": 1,
           "properties": {
             "module": {
-              "type": "string"
+              "$ref": "#/$defs/moduleType"
             },
             "view": {
               "type": "string"
@@ -213,7 +213,7 @@
           "additionalProperties": false,
           "properties": {
             "module": {
-              "type": "string"
+              "$ref": "#/$defs/moduleType"
             },
             "control": {
               "type": "string"
@@ -230,12 +230,9 @@
           "additionalProperties": false,
           "properties": {
             "module": {
-              "type": "string"
+              "$ref": "#/$defs/moduleType"
             },
             "type": {
-              "type": "string"
-            },
-            "name": {
               "type": "string"
             }
           }
@@ -249,7 +246,7 @@
           "additionalProperties": false,
           "properties": {
             "module": {
-              "type": "string"
+              "$ref": "#/$defs/moduleType"
             },
             "type": {
               "type": "string"
@@ -330,6 +327,10 @@
         }
       }
     },
+    "moduleType": {
+      "type": "string",
+      "description": "A module type, the key help.json uses, such as GridLayout; the build checks it, and a control named beside it, against help.json."
+    },
     "moduleOnly": {
       "type": "object",
       "required": [
@@ -338,7 +339,7 @@
       "additionalProperties": false,
       "properties": {
         "module": {
-          "type": "string"
+          "$ref": "#/$defs/moduleType"
         }
       }
     },
@@ -352,18 +353,64 @@
           ],
           "properties": {
             "module": {
-              "type": "string"
+              "$ref": "#/$defs/moduleType"
             },
             "control": {
               "type": "string"
             },
             "equals": {},
-            "notEquals": {}
+            "notEquals": {},
+            "minimum": {
+              "type": "number"
+            },
+            "maximum": {
+              "type": "number"
+            }
           },
-          "minProperties": 3,
-          "maxProperties": 3,
+          "oneOf": [
+            {
+              "required": [
+                "equals"
+              ],
+              "maxProperties": 3
+            },
+            {
+              "required": [
+                "notEquals"
+              ],
+              "maxProperties": 3
+            },
+            {
+              "anyOf": [
+                {
+                  "required": [
+                    "minimum"
+                  ]
+                },
+                {
+                  "required": [
+                    "maximum"
+                  ]
+                }
+              ],
+              "not": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "equals"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "notEquals"
+                    ]
+                  }
+                ]
+              }
+            }
+          ],
           "additionalProperties": false,
-          "description": "A control's value; a list's value is its number of rows."
+          "description": "A control's value: equal to a value, not equal to one, or within a range whose minimum and maximum, JSON Schema's inclusive bounds, may each be left open. A list's value is its number of rows."
         },
         {
           "required": [
@@ -372,7 +419,7 @@
           ],
           "properties": {
             "module": {
-              "type": "string"
+              "$ref": "#/$defs/moduleType"
             },
             "exists": {
               "type": "boolean"
@@ -476,10 +523,10 @@
           }
         },
         {
+          "description": "The reader's choice: the step shows for one option (`equals`) or for several (`in`).",
           "type": "object",
           "required": [
-            "input",
-            "equals"
+            "input"
           ],
           "additionalProperties": false,
           "properties": {
@@ -488,8 +535,27 @@
             },
             "equals": {
               "type": "string"
+            },
+            "in": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "minItems": 2
             }
-          }
+          },
+          "oneOf": [
+            {
+              "required": [
+                "equals"
+              ]
+            },
+            {
+              "required": [
+                "in"
+              ]
+            }
+          ]
         }
       ]
     }

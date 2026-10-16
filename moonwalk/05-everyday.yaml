@@ -7,6 +7,7 @@ processes:
     actor: user
     goal: A look, geometry, hardware or service setup recalled with one click.
     systems: [MoonCore]
+    dependsOn: [first-light-show]
     page: how-to/presets.md
   - id: gallery-install
     title: Install a preset or script from the gallery

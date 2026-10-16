@@ -1,6 +1,6 @@
 # Privacy policy
 
-**Last updated: 2026-09-10**
+**Last updated: 2026-10-16**
 
 Covers the MoonLight software (firmware, desktop application and the web interface they serve), the [web installer](https://moonmodules.org/MoonLight/install/), and this documentation site.
 
@@ -43,7 +43,7 @@ Whatever the feature, now or later, these rules hold.
 
 **You can turn it off again at any time.** Nothing further is sent, and what was already published stays published: a message on a public board cannot be recalled, and a report already counted cannot be withdrawn. So the honest advice is the simple one: leave it off if you are unsure, turn it on when you want to take part, and turn it off if you change your mind.
 
-**The help and MoonWalk** are off until you turn one on, with the ⓘ or the 🗺️ in the status bar, which asks the first time. Then your browser fetches public files. The module help and the MoonWalk map come from this documentation site, hosted by GitHub, and the map's graph library from cdnjs, run by Cloudflare. Both see your browser's address, as any website you open does. The help is kept for offline use. MoonWalk reads your device's state in your own browser to show what is done; it sends nothing about your installation.
+**The help and MoonWalk** are off until you turn one on, with the ⓘ or the 🗺️ in the status bar, which asks the first time. Then your browser fetches public files. The module help and the MoonWalk map come from this documentation site, hosted by GitHub, and the map's graph library from cdnjs, run by Cloudflare. Both see your browser's address, as any website you open does. The help is kept for offline use. MoonWalk reads your device's state in your own browser to show what is done; it sends nothing about your installation. Your browser also keeps, for itself, what you marked done in MoonWalk, how you split the map and its text, and your choices such as your platform. None of it leaves the browser.
 
 **MoonCloud** is the name for anything MoonLight does with a server we run, and it is one self-contained part of the software rather than something woven through it. It sits on its own card, its members are the only code that talks to a server of ours, and nothing else in MoonLight goes through it. So this is not a promise about scattered behavior you would have to take on trust: it is one place, and you can switch off what is in it.
 
