@@ -2856,12 +2856,17 @@ function openHelpLink(ev) {
     w.focus();
 }
 
+// One consent for everything the help and MoonWalk download, from the docs site and from cdnjs for the map's graph library, since each shows its host this browser's address.
+function docsSiteConsent() {
+    if (lsRead(LS_HELP_CONSENT, "") === "1") return true;
+    if (!confirm("Help and MoonWalk are downloaded from the MoonLight docs site, hosted by GitHub, and the map's graph library from cdnjs, run by Cloudflare. Both see this browser's address. Download them?")) return false;
+    try { localStorage.setItem(LS_HELP_CONSENT, "1"); } catch { /* not remembered: asked again next time */ }
+    return true;
+}
+
 function toggleHelp() {
     const on = document.body.classList.contains("help-hidden");
-    if (on && lsRead(LS_HELP_CONSENT, "") !== "1") {
-        if (!confirm("Help is downloaded from the MoonLight docs site, hosted by GitHub, which sees this browser's address. Download the help?")) return;
-        try { localStorage.setItem(LS_HELP_CONSENT, "1"); } catch { /* not remembered: asked again next time */ }
-    }
+    if (on && !docsSiteConsent()) return;
     try { localStorage.setItem(LS_HELP_SHOWN, on ? "1" : "0"); } catch { /* not remembered */ }
     applyHelpShown(on);
     if (on && !Object.keys(helpModules).length) loadHelp();
@@ -2872,6 +2877,46 @@ function applyHelpShown(shown) {
     document.body.classList.toggle("help-hidden", !shown);
     const btn = document.getElementById("help-toggle");
     if (btn) { btn.setAttribute("aria-pressed", String(shown)); btn.title = shown ? "Hide help" : "Show help"; }
+}
+
+// ---- MoonWalk: every process on one map, with what this device has done and what comes next ----
+//
+// The map is the docs site's own moonwalk.js, so the flash carries none of it. The app hands it this device's whole state, which the app's own subscription holds only for the cards in view, and the cards in view, where the map opens. `?help=local` reads the local copy through preview_installer, as the help does.
+const WALK_URL = "https://moonmodules.org/MoonLight/assets/moonwalk.js";
+const WALK_URL_LOCAL = "http://localhost:8421/assets/moonwalk.js";
+
+async function openWalk() {
+    if (!docsSiteConsent()) return;
+    const dlg = document.createElement("dialog");
+    dlg.className = "walk-dialog";
+    const head = document.createElement("div");
+    head.className = "walk-head";
+    const title = document.createElement("h3");
+    title.textContent = "MoonWalk";
+    const close = document.createElement("button");
+    close.className = "fm-tool";
+    close.textContent = "Close";
+    close.addEventListener("click", () => dlg.close());
+    head.append(title, close);
+    const host = document.createElement("div");
+    host.className = "walk-body";
+    dlg.append(head, host);
+    let stop = null;   // the map's teardown, once it has drawn
+    dlg.addEventListener("close", () => { stop?.(); dlg.remove(); }, { once: true });
+    document.body.appendChild(dlg);
+    dlg.showModal();
+    // The cards in view: the selected root and everything under it, the names a process's steps target.
+    const names = [];
+    const collect = (m) => { if (!m) return; names.push(m.name); (m.children || []).forEach(collect); };
+    collect(selectedModule ? findModule(selectedModule) : null);
+    try {
+        const local = lsRead(LS_HELP_SOURCE, "") === "local";
+        const [walk, deviceState] = await Promise.all([import(local ? WALK_URL_LOCAL : WALK_URL), fetch("/api/state").then(r => r.json())]);
+        stop = await walk.drawMap(host, { state: deviceState, modules: names, actor: "user", newTab: true });
+        if (!dlg.open) stop?.();   // closed while it was still loading
+    } catch (e) {
+        host.textContent = `MoonWalk could not load: ${e.message}`;   // offline, as on the device's own access point
+    }
 }
 
 function helpFor(moduleType) {
@@ -5971,6 +6016,7 @@ function setupStatusBarButtons() {
         armPressTwice(rebootBtn, rebootDevice, {armedTitle: "Click again to reboot"});
     }
     document.getElementById("help-toggle")?.addEventListener("click", toggleHelp);
+    document.getElementById("walk-open")?.addEventListener("click", openWalk);
     document.addEventListener("click", openHelpLink);
     document.getElementById("theme-toggle")?.addEventListener("click", () => {
         theme = (theme === "dark") ? "light" : "dark";

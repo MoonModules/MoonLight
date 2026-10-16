@@ -53,7 +53,8 @@ Fixed top, 44 px, left-to-right:
 7. **Reboot button (⏻)**, red border via `data-crashed="true"` when `SystemModule.bootReason` is
    PANIC / INT_WDT / TASK_WDT / BROWNOUT. Press-twice to confirm: the first click arms it (solid red), a second sends `POST /api/reboot`. Disarms after 3 s or on pointer-leave, no `confirm()` popup.
 8. **Help toggle (ⓘ)**, off by default: shows or hides every help line by flipping `body.help-hidden`, dimmed while off. The first time it turns help on it asks before downloading `help.json` from the docs site, and a yes is kept in `mm_helpConsent`; the choice is kept in `mm_helpShown`.
-9. **Theme toggle (☀/🌙)**, flips `[data-theme]` on `<body>`; preference in `localStorage['mm_theme']`.
+9. **MoonWalk (🗺️)**: opens [MoonWalk](../../moonwalk.md), the map of every process, in a resizable dialog, on the reader's choices: Here, the processes touching the card in view, and Next, the next ones to do. The map and its script come from the docs site, and its graph library from cdnjs, under the help's consent, which names both hosts; and the device's whole state from `GET /api/state` marks done what it shows done.
+10. **Theme toggle (☀/🌙)**, flips `[data-theme]` on `<body>`; preference in `localStorage['mm_theme']`.
 
 ## Side navigation
 

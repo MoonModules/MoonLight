@@ -91,6 +91,11 @@ markdown_extensions:
 
 plugins:
   - search
+  # A page MoonWalk took over keeps its address: each old URL forwards to its process in the live view, so links from the installer, the README and the help still land.
+  - redirects:
+      redirect_maps:
+        tutorials/first-light-show.md: moonwalk.md#first-light-show
+        how-to/installing-to-desktop.md: moonwalk.md#install-desktop
 
 # The site's styles: colored headings, the card deck, the clips.
 extra_css:
@@ -166,7 +171,6 @@ nav:
   # putting MoonLight on a machine is a task somebody already has, not a lesson.
   - Tutorials:
       - How MoonLight works: tutorials/how-moonlight-works.md
-      - Build your first light show: tutorials/first-light-show.md
       - Write your first script: tutorials/first-script.md
       - Making beautiful effects: tutorials/generative-effects.md
       - Build your own MoonModules: tutorials/build-your-own-moonmodules.md
@@ -175,7 +179,6 @@ nav:
   # Grouped by what the reader is trying to DO: get it running, wire the output, connect it
   # to something, keep it working.
   - How-to guides:
-      - Installing on a desktop: how-to/installing-to-desktop.md
       - Running on a Linux machine: how-to/installing-on-linux.md
       - Building, running, flashing: how-to/building.md
       - Adding a picture or channel-data source: how-to/adding-a-stream-source.md

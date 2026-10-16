@@ -380,10 +380,20 @@ def main() -> int:
             self.send_header("Cache-Control", "no-store")
             super().end_headers()
 
-        # The help as gen_help last wrote it, read on each request rather than staged, so a device UI opened with `?help=local` shows a regenerated file on its next reload.
+        # The help as gen_help last wrote it, and MoonWalk's map as the stage files are now, each read on request rather than staged, so a device UI opened with `?help=local` shows an edit on its next reload.
         def translate_path(self, path):
-            if path.split("?", 1)[0] == "/help/help.json":
+            route = path.split("?", 1)[0]
+            if route == "/help/help.json":
                 return str(ROOT / "docs" / "help" / "help.json")
+            if route == "/assets/moonwalk.js":
+                return str(ROOT / "docs" / "assets" / "moonwalk.js")
+            if route == "/assets/help.js":
+                return str(ROOT / "src" / "ui" / "help.js")   # the renderer moonwalk.js imports, as the docs site serves it
+            if route == "/moonwalk/moonwalk.json":
+                out = Path(STAGE_DIR) / "moonwalk" / "moonwalk.json"
+                out.parent.mkdir(parents=True, exist_ok=True)
+                subprocess.run(["uv", "run", str(ROOT / "moondeck" / "docs" / "gen_moonwalk.py"), "--out", str(out)], check=False)
+                return str(out)
             return super().translate_path(path)
 
     handler = CorsHandler

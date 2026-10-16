@@ -79,7 +79,7 @@ processes:
   | `add`, `replace` | parent module, type | test, tour, film, docs |
   | `delete`, `clear` | module | test, tour, film, docs |
   | `apply` | a state document | test, docs |
-  | `call` | an HTTP method and path, an OpenAPI operation once step 4 lands | test, docs |
+  | `call` | an HTTP method and path, an OpenAPI operation once step 12 lands | test, docs |
   | `run` | a MoonDeck script with its arguments, or a shell command | agent, CI, docs |
   | `read` | a docs page or a section of one | docs, tour |
   | `process` | another process, run as a subprocess | all |
@@ -89,10 +89,20 @@ processes:
 - **`then`**: expectations, the step's success criteria. A control's value (`equals`, `notEquals`, the shape `expect_control` has), a module that exists, an HTTP status, a file's content. The same expectation is a test's assertion, the tour's "done, next", and the "already done" check below.
 - **`onSuccess`, `onFailure`**: Arazzo's branches, `goto` a step, `end` or `retry`, on what the device shows. Troubleshooting's decision tree is written this way.
 
-**A choice is an input.** What the reader picks, such as the platform, is a process's `inputs`, a JSON Schema as Arazzo's workflow inputs are, and a step runs only for the option its `given` names. The docs render the options as tabs, the tour asks once, and the app fills in what it knows already, such as running on a desktop.
+**A choice is an input.** What the reader picks, such as the platform, is a process's `inputs`, a JSON Schema as Arazzo's workflow inputs are, and a step runs only for the option its `given` names. The view shows the options as a row of buttons above the steps, defaulting to the reader's own platform, and the plain text names each step's option in bold; the tour asks once, and the app fills in what it knows already, such as running on a desktop.
 - **`detail`**: Markdown for the generated page only.
+- **`section`**: opens a numbered section of the generated page with this heading, as a tutorial groups its steps into chapters.
 
 Targets use the keys `help.json` uses, a module's type or instance name and a control's name, so the reverse index into the help is a lookup.
+
+## What the device pilot taught (2026-10-16)
+
+Step 4 put the map in the app (🗺️ in the status bar), with done read from the device's state. On the desktop bench:
+
+1. **Done from the state works where a process says what done looks like.** Two of 48 processes carry an expectation the device can answer, joining the WiFi (a known network) and the first light show (a grid, three modules, a brightness), so a device says little yet. It grows as steps gain their `then`, which the migration (step 11) brings.
+2. **A list counts as its rows**, so "a network is known" is `{ module: WiFi, control: known, notEquals: 0 }`. Compared as text, an empty list read as done.
+3. **The running app proves the install, and nothing says so.** The next list offers installing MoonLight to the device showing it. Decided: the installer vouches for what it installed (step 6 of the plan), since it knows the platform for certain, where a running device cannot tell a desktop from a Linux board or a container. A board run confirmed the rest: on a Waveshare ESP32-S3-RGB-Matrix the map marked joining its WiFi done from the board's own state.
+4. **One consent covers the help and MoonWalk**, since both come from the docs site, and `?help=local` reads the local map through the installer preview, as it reads the local help.
 
 ## Systems
 
@@ -102,7 +112,7 @@ A process names the MoonLight systems it touches, `systems: [MoonInstaller, Moon
 
 **A step is done when its `then` holds now.** The app reads its own state, so "WiFi is set up" is done the moment `WiFi.ssid` is not empty, however it got there: through the tour, the installer or by hand. This is the onboarding checklist's textbook rule, completion observed rather than recorded, and it needs no storage. A process is done when its last step is.
 
-What the state cannot show, a page read or a tour finished, is marked by the reader and kept in the browser: `localStorage` on the docs site and in the app, as the help's cache already is. Recorded processes, a commit gate or a release, are done on GitHub (step 11).
+What the state cannot show, a page read or a tour finished, is marked by the reader and kept in the browser: `localStorage` on the docs site and in the app, as the help's cache already is. Recorded processes, a commit gate or a release, are done on GitHub (step 13).
 
 The website cannot read a device (an https page cannot call a device's http address), so there only the reader's marks count.
 
@@ -112,8 +122,8 @@ The website cannot read a device (an https page cannot call a device's http addr
 - **One map, two hosts**: `moonwalk.js` draws `moonwalk.json` with **Cytoscape.js** (MIT, from cdnjs, about 430 KB, so it never enters the firmware). Compound nodes give the three levels: a stage holds its processes, a process holds its steps. The layout is the story map's grid, stages as columns and processes stacked in `dependsOn` order, computed in a few lines rather than by a layout library.
   - **Semantic zoom**: zoomed out shows stages and process titles, zooming in shows the steps and their `say`.
   - **Search and filters**: text over titles, steps and targets; actor; system; hide what is done. Filters by runner (tested, filmed, has a tour) wait for the runners' adapters.
-  - **Where you are**: the website's map opens with `?focus=` the current page, through the page index; the app's opens on the processes that touch the open card's module, through the module index.
-- **The docs pages**: each process with a `page` renders that page from `intro`, the steps with their `detail`, and `outro`, plus a Mermaid flowchart of its branches, which the docs already render. The page's reference parts that are not steps (a table of ports, a test strategy) stay on a reference page and are linked.
+  - **Where you are**: the map opens on the reader's choices, **Here** and **Next**, with the map fitted to them. Here is the processes touching the card in view in the app (the module index) or the page the reader came from on the site (the page index); Next is the next to do. Neither lists what is done. A link naming one process (`?focus=commit`) opens that process.
+- **The process view**: `moonwalk.js` renders a process whole in the map's panel, with the help's renderer: its intro, its steps in their numbered sections with their detail and clips, a choice as a row of options, and its outro. One view on the site and in the app, at `moonwalk.html#<process>`; a page MoonWalk takes over forwards there. The MoonWalk page carries every process's prose as plain text for search and readers without JavaScript, hidden once the view draws. The parts of a page that are reference rather than steps (a table of ports, a test strategy) stay on a reference page and are linked.
 
 ## What it removes
 

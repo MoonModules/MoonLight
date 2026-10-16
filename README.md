@@ -164,7 +164,7 @@ Per-grid and per-device tables, free-heap figures, and why WiFi costs what it do
 
 **ESP32**: open the [web installer](https://moonmodules.org/MoonLight/install/) in Chrome or Edge ([MoonInstaller](#mooninstaller)). It walks you through device, firmware, flashing and network setup.
 
-**Desktop**: download your build from the [releases page](https://github.com/MoonModules/MoonLight/releases), then open `http://localhost:8080/`. Step by step with screenshots: [Installing MoonLight on a desktop](docs/how-to/installing-to-desktop.md).
+**Desktop**: download your build from the [releases page](https://github.com/MoonModules/MoonLight/releases), then open `http://localhost:8080/`. Step by step with screenshots: [Install MoonLight on a desktop](https://moonmodules.org/MoonLight/moonwalk.html#install-desktop).
 
 - **macOS arm64**: `.dmg`, drag to Applications. Ad-hoc signed, so right-click and Open the first time.
 - **Windows x64**: `-setup.exe` installs for your user without an admin prompt. Unsigned, so SmartScreen asks once.

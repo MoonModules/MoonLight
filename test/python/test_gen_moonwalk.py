@@ -24,7 +24,7 @@ def test_the_repo_stage_files_build_into_one_map():
     model = gen_moonwalk.build()
     assert [s["id"] for s in model["stages"]][:2] == ["read", "install"]
     assert model["processes"]["first-light-show"]["stage"] == "first-light"
-    assert "first-light-show" in model["byPage"]["tutorials/first-light-show.html"]
+    assert "run-linux-board" in model["byPage"]["how-to/installing-on-linux.html"]
 
 
 def test_a_step_runs_in_the_runners_its_action_allows():
@@ -109,3 +109,34 @@ def test_a_misspelt_expectation_key_is_refused_rather_than_never_checked(tmp_pat
                            "      - {id: s, say: Set it., when: {set: {module: Grid, control: width, value: 16}}, then: [{module: Grid, control: width, equal: 16}]}\n")
     with pytest.raises(ValueError, match="then/0"):
         gen_moonwalk.build(root)
+
+
+def test_the_prose_is_plain_text_under_the_map_with_the_process_id_as_its_address():
+    text = gen_moonwalk.render_text(gen_moonwalk.build())
+    assert "## Build your first light show {#first-light-show}" in text
+    assert "### 1. Say where the lights are" in text and "### 5. Keep it" in text
+    assert text.index("**Open Layouts. A fresh device has a Grid.**") < text.index("A grid is the shape most rigs start as")   # the instruction, then its detail
+    assert '<video src="assets/moontube/05-layouts.webm"' in text   # a clip plays on the page too
+    assert "\n### What you built" in text and "\n## What you built" not in text   # the outro sits under its process
+
+
+def test_the_map_carries_its_links_absolute_for_a_device_page():
+    model = gen_moonwalk.absolute_links(gen_moonwalk.build())
+    intro = model["processes"]["first-light-show"]["intro"]
+    assert "(https://moonmodules.org/MoonLight/tutorials/how-moonlight-works.html)" in intro
+    detail = {s["id"]: s for s in model["processes"]["first-light-show"]["steps"]}["grid-height"]["detail"]
+    assert "(https://moonmodules.org/MoonLight/assets/moontube/05-layouts.webm)" in detail
+
+
+def test_every_page_a_process_names_exists(tmp_path):
+    root = stage(tmp_path, "stage: T\nprocesses:\n  - {id: a, title: A, actor: user, goal: G, page: nowhere.md}\n")
+    with pytest.raises(ValueError, match="page does not exist: docs/nowhere.md"):
+        gen_moonwalk.build(root)
+
+
+def test_a_choice_shows_once_per_section_and_names_its_option_in_the_plain_text():
+    text = gen_moonwalk.render_text(gen_moonwalk.build())
+    desktop = text[text.index("{#install-desktop}"):]
+    assert desktop.count("Where your settings live") == 1   # three options, one heading
+    assert "**Windows: Double-click the file you kept and press Install.**" in desktop
+    assert "**macOS: Open the .dmg" in desktop

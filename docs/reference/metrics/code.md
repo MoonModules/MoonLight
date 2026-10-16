@@ -63,7 +63,7 @@ The next function worth simplifying is at the top of each file's list.
 | `src/ui/migrate.js` | 44 | `line 31: 'OscService'`, module type in the UI 1 |
 | `src/core/moonlive/MoonLiveCompiler.cpp` | 41 | `moonlive::Parser::parseDecl`, complex function 54 |
 | `src/platform/desktop/platform_desktop.cpp` | 40 | `platform::spawnEncoderProcess`, complex function 58 |
-| `src/ui/app.js` | 35 | `app.js`, large file 9142 |
+| `src/ui/app.js` | 35 | `app.js`, large file 9188 |
 | `src/core/system/MqttModule.cpp` | 31 | `MqttModule::routePublish`, complex function 29 |
 | `src/light/drivers/ParallelLedDriver.h` | 27 | `ParallelLedDriver::reinit`, complex function 36 |
 | `src/light/drivers/PreviewDriver.h` | 27 | `PreviewDriver::buildCoordTable`, complex function 37 |
@@ -214,11 +214,11 @@ The next function worth simplifying is at the top of each file's list.
 | `test/unit/light/unit_RmtLedDriver_pins.cpp` | 3 | `lines 17-28, also in test/unit/light/unit_RmtLedDriver_lifecycle.cpp:19`, duplicated block 12 |
 | `test/unit/light/unit_Splat.cpp` | 3 | `lines 6-20, also in test/unit/light/unit_Scroll.cpp:6`, duplicated block 15 |
 | `test/unit/light/unit_TetrixEffect.cpp` | 3 | `lines 20-29, also in test/unit/light/unit_BreakoutEffect.cpp:18`, duplicated block 10 |
-| `moondeck/check/check_prose.py` | 2 | `lines 220-231, also in moondeck/check/check_prose.py:200`, duplicated block 12 |
+| `moondeck/check/check_prose.py` | 2 | `lines 221-232, also in moondeck/check/check_prose.py:201`, duplicated block 12 |
 | `moondeck/ci/package_desktop.py` | 2 | `lines 387-395, also in moondeck/ci/package_desktop.py:117`, duplicated block 9 |
 | `moondeck/docs/generate_test_docs.py` | 2 | `lines 311-319, also in moondeck/docs/generate_test_docs.py:57`, duplicated block 9 |
 | `moondeck/moontube/reset_device.py` | 2 | `lines 241-246, also in moondeck/moontube/reset_device.py:219`, duplicated block 6 |
-| `moondeck/scenario/run_scenario.py` | 2 | `lines 33-39, also in moondeck/docs/build_docs.py:44`, duplicated block 7 |
+| `moondeck/scenario/run_scenario.py` | 2 | `lines 33-39, also in moondeck/docs/build_docs.py:45`, duplicated block 7 |
 | `src/core/moonlive/MoonLiveBuiltins.h` | 2 | `lines 233-244, also in src/core/moonlive/MoonLiveBuiltins.h:146`, duplicated block 12 |
 | `src/core/services/MidiService.h` | 2 | `MidiService::serveShare in tick20ms`, blocking call on the render path 1 |
 | `src/core/services/SdCardService.cpp` | 2 | `SdCardService::finishFormat in tick1s`, blocking call on the render path 1 |
@@ -282,7 +282,7 @@ The next function worth simplifying is at the top of each file's list.
 | `moondeck/check/check_footprint.py` | 1 | `lines 31-41, also in moondeck/check/check_nonblocking.py:30`, duplicated block 11 |
 | `moondeck/check/check_nonblocking.py` | 1 | `lines 30-40, also in moondeck/check/check_footprint.py:31`, duplicated block 11 |
 | `moondeck/ci/verify_version.py` | 1 | `lines 39-45, also in moondeck/scenario/run_scenario.py:33`, duplicated block 7 |
-| `moondeck/docs/build_docs.py` | 1 | `lines 44-50, also in moondeck/scenario/run_scenario.py:33`, duplicated block 7 |
+| `moondeck/docs/build_docs.py` | 1 | `lines 45-51, also in moondeck/scenario/run_scenario.py:33`, duplicated block 7 |
 | `moondeck/docs/screenshot_modules.py` | 1 | `screenshot_modules.py`, large file 1247 |
 | `moondeck/moondeck.py` | 1 | `moondeck.py`, large file 2696 |
 | `moondeck/moontube/mtmeasure.py` | 1 | `lines 42-49, also in moondeck/moontube/mtnarrate.py:91`, duplicated block 8 |
@@ -329,7 +329,7 @@ The next function worth simplifying is at the top of each file's list.
 | `src/light/layers/Effects.h` | 1 | `Effects in 55 files`, name spread 55 |
 | `src/light/layouts/CarLightsLayout.h` | 1 | `lines 31-47, also in src/light/layouts/RingLayout.h:42`, duplicated block 17 |
 | `src/light/layouts/HumanSizedCubeLayout.h` | 1 | `HumanSizedCubeLayout::placeLights`, complex function 21 |
-| `src/light/layouts/Layouts.h` | 1 | `Layouts in 97 files`, name spread 97 |
+| `src/light/layouts/Layouts.h` | 1 | `Layouts in 99 files`, name spread 99 |
 | `src/light/layouts/PanelLayout.h` | 1 | `lines 40-53, also in src/light/layouts/PanelsLayout.h:59`, duplicated block 14 |
 | `src/light/layouts/PanelsLayout.h` | 1 | `lines 59-72, also in src/light/layouts/PanelLayout.h:40`, duplicated block 14 |
 | `src/light/layouts/RingLayout.h` | 1 | `lines 42-58, also in src/light/layouts/CarLightsLayout.h:31`, duplicated block 17 |

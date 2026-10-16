@@ -37,7 +37,7 @@ from _test_metadata import (  # noqa: E402
 )
 from generate_test_docs import render_unit_tests, render_scenarios  # noqa: E402
 from gen_help import ATTRIBUTIONS, catalog_rows, display_name  # noqa: E402
-from gen_moonwalk import build as build_moonwalk  # noqa: E402
+from gen_moonwalk import build as build_moonwalk, absolute_links, render_text as moonwalk_text  # noqa: E402
 
 
 # ---- source-link rewrite: docs link OUT to repo files the site can't host ----
@@ -58,6 +58,12 @@ def _blob_base() -> str:
 
 
 _BLOB_BASE = _blob_base()
+
+
+def _repo_url(path: str) -> str:
+    """A repo path on GitHub: a folder under /tree/, as GitHub names it, a file under /blob/."""
+    base = _BLOB_BASE.replace("/blob/", "/tree/", 1) if (ROOT / path.split("#", 1)[0]).is_dir() else _BLOB_BASE
+    return f"{base}/{path}"
 
 # Repo top-level dirs/files a doc may link into but the site doesn't host.
 _OUT_OF_DOCS = ("src/", "moondeck/", "test/", "esp32/", "mooninstaller/", "moonwalk/",
@@ -93,7 +99,7 @@ def _rewrite_out_of_docs_links(markdown: str, src_uri: str) -> str:
         # Resolve against the page dir to a repo-relative path (the correct case).
         target = os.path.normpath(str(page_dir / rel)).replace(os.sep, "/")
         if target.startswith(_OUT_OF_DOCS) and not target.startswith("docs/"):
-            return f"]({_BLOB_BASE}/{target}{frag})"
+            return f"]({_repo_url(target)}{frag})"
         # Fallback for links authored relative to the REPO ROOT (common in the
         # transient docs/work/ notes, written before their file sat
         # this deep under docs/): strip leading `../` and see if the remainder is
@@ -103,7 +109,7 @@ def _rewrite_out_of_docs_links(markdown: str, src_uri: str) -> str:
         # written root-relative) — both 404 in-site, so send them to the GitHub blob.
         stripped = re.sub(r'^(?:\.\./)+', '', rel)
         if stripped.startswith(_ROOT_REL_PREFIXES):
-            return f"]({_BLOB_BASE}/{stripped}{frag})"
+            return f"]({_repo_url(stripped)}{frag})"
         return m.group(0)  # in-docs link (incl. ../ into another docs page) — leave it
 
     return _OUT_LINK_RE.sub(_sub, markdown)
@@ -265,8 +271,8 @@ def on_files(files, config):
         if not (ROOT / "docs" / "moonmodules" / page).exists():
             _add(f"moonmodules/{page}", generated_catalog(f"moonmodules/{page}"))
     _add("reference/tests/scenario-tests.md", render_scenarios(collect_scenario_files()))
-    # MoonWalk's journey map, from the stage files under moonwalk/; an invalid file fails the build.
-    _add("moonwalk/moonwalk.json", json.dumps(build_moonwalk(), ensure_ascii=False))
+    # MoonWalk's journey map, from the stage files under moonwalk/, with its prose's links absolute since the view renders it on a device's page too; an invalid file fails the build.
+    _add("moonwalk/moonwalk.json", json.dumps(absolute_links(build_moonwalk()), ensure_ascii=False))
 
     return files
 
@@ -433,6 +439,9 @@ def attributed_by(markdown: str) -> str:
 
 def on_page_markdown(markdown, page, config, files):
     """Repoint out-of-docs source links to GitHub blob URLs, follow a written catalog page with its deck, and give the attribution catalog its pictures and the modules naming each entry."""
+    # The MoonWalk page carries every process's prose as plain text, which search indexes and a reader without JavaScript reads; moonwalk.js hides it once the live view draws. Appended first, so its links leaving docs/ are rewritten like the page's own.
+    if page.file.src_uri == "moonwalk.md":
+        markdown += '\n<div class="mm-walk-text" markdown>\n\n' + moonwalk_text(build_moonwalk()) + '\n</div>\n'
     markdown = _rewrite_out_of_docs_links(markdown, page.file.src_uri)
     # A written catalog page is the intro its generated deck follows.
     if page.file.abs_src_path and Path(page.file.abs_src_path).exists():

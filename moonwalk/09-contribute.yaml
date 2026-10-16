@@ -125,7 +125,7 @@ processes:
         actor: agent
         when: { read: { page: contributing/principles-and-process.md, section: Commit } }
         detail: |
-          The gate list keeps its one home in CLAUDE.md until step 7 of the plan moves each check here as a step with its `changed` trigger.
+          The gate list keeps its one home in CLAUDE.md until step 9 of the plan moves each check here as a step with its `changed` trigger.
       - id: report
         say: Report one line per check, PASS, FAIL or SKIP with its reason, and stop.
         actor: agent

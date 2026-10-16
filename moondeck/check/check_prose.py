@@ -32,7 +32,7 @@ from pathlib import Path
 # .mle/.mll/.mlm are MoonLive scripts: shipped, opened in the device's own editor, and read by
 # every user who learns the language, so they are the most user-facing prose in the repo.
 SUFFIXES = (".h", ".hpp", ".c", ".cpp", ".inc", ".md", ".py", ".js", ".css", ".html",
-            ".mle", ".mll", ".mlm")
+            ".mle", ".mll", ".mlm", ".yaml")
 
 # Paths exempt, with the reason each earns it.
 EXEMPT = (
@@ -68,7 +68,7 @@ from _ratchet import committed as committed_report, risen as risen_against  # no
 
 # What the whole-tree report covers. The gate itself reads every suffix in SUFFIXES; these are the
 # trees whose prose is OURS, which is the same question EXEMPT answers for the diff.
-REPORT_ROOTS = ("src/", "moondeck/", "mooninstaller/", "test/", "docs/", "CLAUDE.md", "README.md")
+REPORT_ROOTS = ("src/", "moondeck/", "mooninstaller/", "test/", "docs/", "moonwalk/", "CLAUDE.md", "README.md")
 
 
 def committed_counts():
@@ -194,7 +194,8 @@ def main():
     for path, lines in by_path.items():
         # Vale parses by extension; a .h or .py is fed as plain text so comment prose is checked
         # without a code-aware parser pretending the whole file is a program.
-        ext = ".md" if path.endswith(".md") else ".txt"
+        # A MoonWalk stage file's prose is Markdown, the pages generated from it, so it is read as a page.
+        ext = ".md" if path.endswith((".md", ".yaml")) else ".txt"
         r = subprocess.run(["vale", "--output=JSON", "--no-exit", "--ext=" + ext,
                             "--path=" + path],
                            input="\n\n".join(dict.fromkeys(lines)), capture_output=True, text=True)

@@ -56,13 +56,13 @@ test("a link or picture from the file must be https and stay inside its attribut
     assert.equal(safeUrl(undefined), null);
 });
 
-// toggleHelp out of app.js, with the browser around it stubbed: what it asks, stores and fetches.
+// toggleHelp out of app.js, with the consent it shares with MoonWalk, and the browser around them stubbed: what it asks, stores and fetches.
 import { fnSource } from "./app-source.mjs";
 function toggleWorld({ consent = "", answer = false } = {}) {
     const store = { mm_helpConsent: consent };
     const w = { asked: 0, loads: 0, shown: null, hidden: true };
     const toggle = new Function("document", "localStorage", "confirm", "lsRead", "applyHelpShown", "loadHelp", "helpModules",
-        "const LS_HELP_CONSENT = 'mm_helpConsent', LS_HELP_SHOWN = 'mm_helpShown';\n" + fnSource("toggleHelp") + "\nreturn toggleHelp;")(
+        "const LS_HELP_CONSENT = 'mm_helpConsent', LS_HELP_SHOWN = 'mm_helpShown';\n" + fnSource("docsSiteConsent") + "\n" + fnSource("toggleHelp") + "\nreturn toggleHelp;")(
         { body: { classList: { contains: () => w.hidden } } },
         { setItem: (k, v) => { store[k] = v; } },
         () => { w.asked++; return answer; },
@@ -120,4 +120,30 @@ test("a blocked popup leaves the link to open its own tab", () => {
 test("a link outside the help, or a modified click, is left to the browser", () => {
     assert.equal(linkWorld({ inHelp: false }).opened.length, 0);
     assert.equal(linkWorld({ meta: true }).opened.length, 0);
+});
+
+test("a list renders as one, its items formatted", () => {
+    assert.equal(helpMarkdown("- **Pin**: a strip\n- *Network*: Art-Net"), "<ul><li><strong>Pin</strong>: a strip</li><li><em>Network</em>: Art-Net</li></ul>");
+});
+
+test("a heading renders one level under the view's own", () => {
+    assert.equal(helpMarkdown("## What you built\n\nA layout."), "<h4>What you built</h4><br><br>A layout.");
+});
+
+test("a clip on its own line plays, a picture shows, and anything not https stays text", () => {
+    assert.equal(helpMarkdown("![A grid](https://moonmodules.org/a.webm)"), '<video src="https://moonmodules.org/a.webm" controls playsinline title="A grid"></video>');
+    assert.equal(helpMarkdown("![A card](https://moonmodules.org/a.png)"), '<img src="https://moonmodules.org/a.png" alt="A card">');
+    assert.equal(helpMarkdown("![x](javascript:alert(1))"), "![x](javascript:alert(1))");
+});
+
+test("a clip that ends the text still plays", () => {
+    assert.equal(helpMarkdown("Watch it.\n\n![A wall](https://moonmodules.org/b.webm)\n"), 'Watch it.<br><br><video src="https://moonmodules.org/b.webm" controls playsinline title="A wall"></video>');
+});
+
+test("a fenced block keeps its text as written, escaped and unformatted", () => {
+    assert.equal(helpMarkdown("```\nxattr -dr **x** <app>\n```"), "<pre><code>xattr -dr **x** &lt;app&gt;</code></pre>");
+});
+
+test("a fenced block with a blank line inside stays one block", () => {
+    assert.equal(helpMarkdown("Run:\n\n```\nfirst\n\nsecond\n```"), "Run:<br><br><pre><code>first\n\nsecond</code></pre>");
 });

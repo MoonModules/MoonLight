@@ -108,7 +108,7 @@
         },
         "page": {
           "type": "string",
-          "description": "The docs page this process is written up on, relative to docs/; the migration (step 10) generates it from the process."
+          "description": "The docs page this process is written up on, relative to docs/. When the page's own file is gone, the docs build generates it from the processes naming it."
         },
         "intro": {
           "$ref": "#/$defs/markdown"
@@ -135,6 +135,10 @@
       "properties": {
         "id": {
           "$ref": "#/$defs/id"
+        },
+        "section": {
+          "type": "string",
+          "description": "Opens a numbered section of the generated page with this heading, as a tutorial groups its steps into chapters."
         },
         "say": {
           "type": "string",
@@ -358,7 +362,8 @@
           },
           "minProperties": 3,
           "maxProperties": 3,
-          "additionalProperties": false
+          "additionalProperties": false,
+          "description": "A control's value; a list's value is its number of rows."
         },
         {
           "required": [

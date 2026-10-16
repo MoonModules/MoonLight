@@ -9,62 +9,112 @@ processes:
     systems: [MoonCore, MoonLight]
     page: tutorials/how-moonlight-works.md
   - id: first-light-show
-    title: Build a first light show
+    title: Build your first light show
     actor: user
     goal: A chosen layout, two effects, a modifier, a blended layer and a driver, persisted.
     systems: [MoonLight]
-    dependsOn: [install-desktop]
-    page: tutorials/first-light-show.md
+    dependsOn: [first-look]
     intro: |
-      Everything happens in the device's own web interface, live: nothing is compiled, saved and applied, or rebooted. A bare board or the desktop works the whole way through, since the 3D preview is what you watch.
+      You have lights running and you know [what the cards are](tutorials/how-moonlight-works.md). Now you build something deliberately instead of accepting the defaults. It is a shape you chose, an effect on top of it, a second effect blended into the first, and the whole thing going out to real lights.
+
+      Everything here happens in the device's own web interface, live. Nothing is compiled, nothing is saved and applied, nothing reboots. You change a number and the lights change while you are still holding the mouse.
+
+      You need a device with MoonLight on it and some lights attached, real or previewed. A bare board with no strip works the whole way through: the 3D preview is what you will be watching anyway.
     steps:
       - id: open-layouts
+        section: Say where the lights are
         say: Open Layouts. A fresh device has a Grid.
         when: { open: { module: Layouts } }
+        detail: |
+          A grid is the shape most rigs start as: a width, a height and a depth of evenly spaced points.
       - id: grid-width
         say: Set the Grid's width to 16.
         when: { set: { module: Grid, control: width, value: 16 } }
         then:
           - { module: Grid, control: width, equals: 16 }
       - id: grid-height
-        say: Set the Grid's height to 16. The preview reshapes as you type.
+        say: Set the Grid's height to 16. The preview reshapes as you type, and the light count under the card follows.
         when: { set: { module: Grid, control: height, value: 16 } }
         then:
           - { module: Grid, control: height, equals: 16 }
         detail: |
-          Every effect asks the layout how many lights there are and where each one sits, so this one card decides what the rest of the pipeline paints on. A strip that zig-zags along its rows wants serpentine on.
+          ![Resizing a grid while it renders, then the other layout shapes the same effect paints into.](assets/moontube/05-layouts.webm)
+
+          That number is the whole point of a layout. Every effect downstream asks the layout how many lights there are and where each one sits, so this one card decides what the rest of the pipeline is painting on. Nothing else in the tree stores a size, which is why changing it here never leaves something stale behind.
+
+          If your strip zig-zags back and forth along the rows, turn on **serpentine**. Watch a running effect while you toggle it: a wrong setting shows up as every other row drawn backwards, which is unmistakable once seen.
       - id: add-balls
-        say: Open Effects and add Bouncing Balls under the Layer.
+        section: Paint something on it
+        say: Open Effects, press + add module under the Layer and pick Bouncing Balls.
         when: { add: { module: Layer, type: BouncingBallsEffect, name: BouncingBalls } }
         then:
           - { module: BouncingBalls, exists: true }
+        detail: |
+          Bouncing Balls is a good first choice: it has motion you can read at a glance, so the controls show their effect immediately.
       - id: more-balls
-        say: Change numBalls while it runs.
+        say: Change numBalls while it runs, then grav.
         when: { set: { module: BouncingBalls, control: numBalls, value: 8 } }
         detail: |
-          An effect is a function run once per frame that reads its controls each time, so the lights follow the slider.
+          The lights respond as the slider moves. An effect is not a rendered animation the device plays back: it is a function run once per frame, reading its controls each time.
       - id: add-ripples
-        say: Add Ripples beside it, in the same Layer.
+        say: Press + add module again and add Ripples beside the first.
         when: { add: { module: Layer, type: RipplesEffect, name: Ripples } }
         then:
           - { module: Ripples, exists: true }
         detail: |
-          Two effects in one Layer share one buffer, each writing over the one before. Blending happens between layers, through a Layer's blendMode and opacity.
+          Both now run into the same Layer, in order, each writing over what the one before it left. That is useful when the second effect draws sparsely (sparks over a wash), and it is not blending: two effects in one Layer share one buffer.
+      - id: add-layer
+        say: Press + add module on the Effects card to add a second Layer, and give it its own effect.
+        when: { add: { module: Effects, type: Layer } }
+        detail: |
+          Blending happens between layers. The Layer card carries a **blendMode** and an **opacity**, and the drivers composite the layers bottom to top. Lowering the top layer's opacity tints what is underneath instead of replacing it.
+
+          This is the same model an image editor uses, and it is worth a minute of play. Layers compose; you are not picking one effect from a list.
       - id: add-mirror
-        say: Add a Mirror modifier under the Layer. The effect stays, its coordinates fold.
+        section: Reshape it, leaving the effect alone
+        say: Under the Layer, add a Mirror modifier.
         when: { add: { module: Layer, type: MirrorModifier, name: Mirror } }
         then:
           - { module: Mirror, exists: true }
+        detail: |
+          The effect did not change. The modifier sits between the effect and the lights and folds the coordinates on the way through. A pattern that ran across the whole grid now runs across half and reflects.
+
+          That separation is why a modifier is worth having at all. Mirror, rotate and multiply are things you want on *any* effect, and writing them into each effect would be the same code many times over.
+
+          All of it on one wall, start to finish: an effect in a layer, with its controls driven while it runs. Then a modifier reshaping it, and a second layer doing the same and blending over the first.
+
+          ![An effect, a modifier, and a second layer blended over the first.](assets/moontube/06-layers.webm)
       - id: brightness
+        section: Send it somewhere real
         say: Open Drivers and set brightness low, 20 is plenty on a bench.
         when: { set: { module: Drivers, control: brightness, value: 20 } }
         then:
           - { module: Drivers, control: brightness, equals: 20 }
+        detail: |
+          A full-brightness panel at arm's length is genuinely unpleasant.
       - id: driver
-        say: Add the driver for your hardware, or keep the Preview that feeds the 3D view.
+        say: Add the driver for your hardware.
         when: { manual: "An RmtLedDriver on a pin, a NetworkSendDriver for Art-Net, E1.31 or DDP, or nothing for the preview alone." }
+        detail: |
+          - **LED strip on a pin**: add an **RmtLedDriver** (or a **ParallelLedDriver** for many strands at once) and set **pins** to the GPIO your data line is soldered to. Then match the light count to the layout.
+          - **Over the network**: add a **NetworkSendDriver** for Art-Net, E1.31/sACN or DDP, and give it the destination address.
+          - **Nothing attached**: the **Preview** driver is already there. That is what has been feeding the 3D view all along.
+
+          The driver is the only part of the tree that knows about wires. Everything upstream of it produced colors for positions. That is why the same show runs out a GPIO pin, across the network to a panel card, and into your browser at once.
       - id: keep
-        say: Nothing to save, controls persist a couple of seconds after the last change.
+        section: Keep it
+        say: Nothing to save, everything you did is already persisted.
         when: { manual: "Reboot the device to prove it: the tree comes back as you left it." }
+        detail: |
+          Controls save themselves a couple of seconds after the last change. Once that save lands a power cut costs you nothing; pull the plug mid-turn of a knob and you lose the last second or two of fiddling.
+
+          Reboot the device if you want to prove it. The tree comes back as you left it.
     outro: |
-      A layout, a layer with two effects and a modifier, and a driver: the whole pipeline, the same on twelve lights or twelve thousand.
+      ## What you built
+
+      A layout, a layer with two effects and a modifier, and a driver. That is the whole pipeline, and it is the same pipeline whether it is driving twelve lights on a desk or twelve thousand on a wall.
+
+      Two directions from here, and they go to different places:
+
+      - **[Making beautiful effects](tutorials/generative-effects.md)** is about the effects themselves: why noise looks organic and how a field turns into something worth watching.
+      - **[Build your own MoonModules](tutorials/build-your-own-moonmodules.md)** is about writing one in C++ when the catalog does not have what you want.

@@ -1,10 +1,31 @@
 // How a module describes itself, its help and its emoji, shared by the app and the docs site's card deck so both show the same; it imports nothing, as the site serves it beside its own scripts.
 
-// Inline markdown as HTML: everything escaped first, then code, bold and absolute links, so text from the file cannot become markup.
+// Inline markdown as HTML: everything escaped first, then code, bold, italics and absolute links, so text from the file cannot become markup.
 const inline = s => s
     .replace(/`([^`]+)`/g, "<code>$1</code>")
     .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+    .replace(/\*([^*\s][^*]*)\*/g, "<em>$1</em>")
     .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+
+// The block forms MoonWalk's prose adds to the help's paragraphs and tables: a list, a heading (one level under the view's own), and a picture or a clip on a paragraph of its own. Only an https address becomes a source.
+const isList = p => p.split("\n").every(l => /^- /.test(l));
+const list = p => `<ul>${p.split("\n").map(l => `<li>${inline(l.slice(2))}</li>`).join("")}</ul>`;
+const HEADING = /^(#{2,4}) (.+)$/;
+const MEDIA = /^!\[([^\]]*)\]\((https:\/\/[^)\s"]+)\)$/;
+function media(alt, src) {
+    return /\.(webm|mp4)$/.test(src)
+        ? `<video src="${src}" controls playsinline title="${alt}"></video>`
+        : `<img src="${src}" alt="${alt}">`;
+}
+function block(p) {
+    if (isTable(p)) return table(p);
+    if (isList(p)) return list(p);
+    const h = p.match(HEADING);
+    if (h) return `<h${h[1].length + 2}>${inline(h[2])}</h${h[1].length + 2}>`;
+    const m = p.match(MEDIA);
+    if (m) return media(m[1], m[2]);
+    return inline(p);
+}
 
 // A GitHub-flavored markdown table, a paragraph whose every line is a `| … |` row: the first row heads it and the `|---|` row below it is dropped.
 const isTable = p => p.split("\n").every(l => /^\|.*\|$/.test(l.trim()));
@@ -18,7 +39,11 @@ function table(p) {
 
 export function helpMarkdown(text) {
     const esc = String(text).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-    return esc.split(/\n\n+/).map(p => isTable(p) ? table(p) : inline(p)).join("<br><br>");
+    // A fenced code block is lifted out before the text splits into paragraphs, so a blank line inside it stays code; it keeps its text as written, already escaped, with no inline formatting.
+    const code = [];
+    const held = esc.trim().replace(/^```[a-z]*\n([\s\S]*?)\n```$/gm, (_, body) => `\u0000${code.push(body) - 1}\u0000`);
+    // Trimmed, so the text's last line is a block like any other.
+    return held.split(/\n\n+/).map(p => /^\u0000(\d+)\u0000$/.test(p) ? `<pre><code>${code[+p.slice(1, -1)]}</code></pre>` : block(p)).join("<br><br>");
 }
 
 // A URL taken from help.json, only when it is https and cannot leave its attribute; anything else is no link at all.

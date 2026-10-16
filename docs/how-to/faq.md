@@ -7,14 +7,14 @@ A symptom rather than a question belongs in [Troubleshooting](troubleshooting.md
 ## Installing
 
 - **Which firmware does my board take?** The web installer picks it from the board you choose. See [Install and first light](../gettingstarted.md).
-- **Can I run it without a board?** Yes, on macOS, Linux and Windows. See [Installing to desktop](installing-to-desktop.md).
+- **Can I run it without a board?** Yes, on macOS, Linux and Windows. See [Install MoonLight on a desktop](../moonwalk.md#install-desktop).
 - **Which hardware do the heavy effects want?** The ones computing a field per light cost CPU, so a desktop or a small always-on machine runs them where a microcontroller cannot. See [Installing on Linux](installing-on-linux.md).
 - **How do I update?** Over the air from the Firmware card, or by URL. See [Updating firmware](updating-firmware.md).
 
 ## First light
 
 - **Where do I set the number of lights?** On a Layout, not on the driver. See [Layouts](../moonmodules/light/layouts.md).
-- **Where do I add an effect?** Expand a Layer under Effects, then **add module**: a layer is what composites effects and holds the blend mode. See [Build your first light show](../tutorials/first-light-show.md).
+- **Where do I add an effect?** Expand a Layer under Effects, then **add module**: a layer is what composites effects and holds the blend mode. See [Build your first light show](../moonwalk.md#first-light-show).
 - **Nothing lights up.** See [Troubleshooting](troubleshooting.md#the-lights-are-dark).
 
 ## The interface

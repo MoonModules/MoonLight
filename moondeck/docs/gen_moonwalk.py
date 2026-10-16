@@ -13,6 +13,7 @@ Usage:
 """
 
 import argparse
+import copy
 import json
 import re
 import sys
@@ -136,6 +137,57 @@ def build(root: Path = MOONWALK) -> dict:
     return {"stages": stages, "systems": known, "processes": processes, "byPage": by_page, "byModule": by_module}
 
 
+# A link or a picture in a process's prose, written relative to docs/ as the MoonWalk page holds it.
+_PROSE_LINK_RE = re.compile(r"(\]\()(?!https?://|#)([^)\s]+)\)")
+_MEDIA_RE = re.compile(r"^!\[([^\]]*)\]\(([^)\s]+\.(?:webm|mp4))\)$", re.MULTILINE)
+PROSE = ("intro", "outro")
+
+
+def _prose_fields(p: dict):
+    """Every prose field of a process, as (holder, key): its intro and outro, and each step's detail."""
+    yield from ((p, k) for k in PROSE if p.get(k))
+    yield from ((s, "detail") for s in p.get("steps", []) if s.get("detail"))
+
+
+def absolute_links(model: dict) -> dict:
+    """The model with every relative link in its prose made absolute on the docs site, since the view renders it on a device's page as well as the site's."""
+    from gen_help import site_url   # imported here, so reading the stage files needs nothing gen_help needs
+    page = ROOT / "docs" / "moonwalk.md"
+    out = copy.deepcopy(model)
+    for p in out["processes"].values():
+        for holder, key in _prose_fields(p):
+            holder[key] = _PROSE_LINK_RE.sub(lambda m: f"{m.group(1)}{site_url(m.group(2), page)})", holder[key])
+    return out
+
+
+def render_text(model: dict) -> str:
+    """Every process that carries its prose, as plain Markdown under the MoonWalk page: what the site's search indexes and a reader without JavaScript reads, until moonwalk.js draws the live view. Each heading's id is the process id, the address the view opens at."""
+    out: list[str] = []
+    for p in model["processes"].values():
+        if not any(_prose_fields(p)):
+            continue
+        # Every heading in the prose sits one level under its process's, as the view renders it under the section.
+        prose = lambda text: re.sub(r"^(#+) ", r"#\1 ", text.strip(), flags=re.MULTILINE) + "\n"
+        out.append(f"## {p['title']} {{#{p['id']}}}\n")
+        if p.get("intro"):
+            out.append(prose(p["intro"]))
+        chapter, section = 0, None
+        for s in p.get("steps", []):
+            # A heading once per section, since each option of a choice may open the same one; a step for one option names it.
+            if s.get("section") and s["section"] != section:
+                chapter, section = chapter + 1, s["section"]
+                out.append(f"### {chapter}. {section}\n")
+            option = next((g["equals"] for g in s.get("given", []) if isinstance(g, dict) and "input" in g), None)
+            out.append(f"**{option + ': ' if option else ''}{s['say']}**\n")
+            if s.get("detail"):
+                out.append(prose(s["detail"]))
+        if p.get("outro"):
+            out.append(prose(p["outro"]))
+    # A clip written as a picture plays as a video on the page, as the view plays it.
+    text = "\n".join(out)
+    return _MEDIA_RE.sub(lambda m: f'<video src="{m.group(2)}" controls playsinline width="720" title="{m.group(1)}"></video>', text)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--out", type=Path, help="write moonwalk.json here")
@@ -148,7 +200,7 @@ def main() -> int:
     steps = sum(len(p.get("steps", [])) for p in model["processes"].values())
     print(f"gen_moonwalk: {len(model['stages'])} stages, {len(model['processes'])} processes, {steps} steps")
     if args.out:
-        args.out.write_text(json.dumps(model, ensure_ascii=False), encoding="utf-8")
+        args.out.write_text(json.dumps(absolute_links(model), ensure_ascii=False), encoding="utf-8")
     return 0
 
 
