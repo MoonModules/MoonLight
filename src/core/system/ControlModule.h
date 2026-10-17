@@ -970,8 +970,11 @@ private:
         char* body = readFile(path);
         if (!body) return;
         json::JsonDoc doc;
-        if (json::parse(body, doc) && doc.rootNode()->type == json::JsonType::Object)
-            for (const json::JsonNode* m = doc.node(doc.rootNode()->firstChild); m; m = doc.node(m->next)) readRootKey(p, *m);
+        if (json::parse(body, doc)) {
+            const json::JsonNode* root = doc.rootNode();
+            if (root && root->type == json::JsonType::Object)
+                for (const json::JsonNode* m = doc.node(root->firstChild); m; m = doc.node(m->next)) readRootKey(p, *m);
+        }
         platform::free(body);
     }
 

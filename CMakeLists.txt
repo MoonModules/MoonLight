@@ -77,10 +77,22 @@ else()
     # A version test rather than a flag probe, deliberately: the flags all EXIST here, it is
     # their judgement that is wrong, so CheckCXXCompilerFlag would happily confirm them.
     if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 16)
-        add_compile_options(-Wno-error=null-dereference
-                            -Wno-error=restrict
+        add_compile_options(-Wno-error=restrict
                             -Wno-error=stringop-overflow
                             -Wno-error=format-truncation)
+    endif()
+
+    # -Wnull-dereference also fires on GCC 16.2.1, past the version bound above, but only for one
+    # real class of site: a plain `this->member_` read inlined through a lambda/callback chain
+    # (MoonModule::enabled()'s `enabled_ && !held_`, reached through several tests' std::function
+    # plumbing) where GCC's analysis loses track of `this` and can't prove it non-null. There is no
+    # source fix for that shape (testing `this == nullptr` in a member function is not meaningful),
+    # so it stays unconditional for GCC pending a version where it is confirmed to stop. Two other
+    # sites GCC flagged under the same warning turned out to be real, provably-safe `rootNode()`
+    # calls gated on a prior `json::parse()` success and are fixed directly instead (StateDocument.cpp,
+    # ControlModule.h::readHeader) — this exception covers only the this-across-a-thunk shape now.
+    if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+        add_compile_options(-Wno-error=null-dereference)
     endif()
 
     # Hot-path discipline, enforced by the compiler. MM_NONBLOCKING marks tick/tick20ms/tick1s
