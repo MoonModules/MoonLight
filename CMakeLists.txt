@@ -112,6 +112,15 @@ else()
         add_compile_options(-Wno-error=maybe-uninitialized)
     endif()
 
+    # Vendored doctest.h always includes <ciso646> on Clang, unconditionally, to detect libc++ via
+    # _LIBCPP_VERSION (doctest's own long-standing quirk: github.com/doctest/doctest/issues/126, #356).
+    # A Clang new enough to deprecate that pre-C++20 header turns its #warning into a build failure
+    # under -Werror. Third-party header code we don't own, so this stays unconditional rather than
+    # version-gated, matching the MSVC C5285 suppression above for the same vendored file.
+    if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+        add_compile_options("-Wno-error=#warnings")   # quoted: a bare # starts a CMake comment, truncating the rest of the file
+    endif()
+
     # Hot-path discipline, enforced by the compiler. MM_NONBLOCKING marks tick/tick20ms/tick1s
     # (platform.h); -Wfunction-effects then checks TRANSITIVELY that nothing they reach
     # allocates or blocks, through the whole call graph. Clang 20+ only; the flag does not
