@@ -104,6 +104,14 @@ else()
         add_compile_options(-Wno-error=array-bounds=)
     endif()
 
+    # -Wmaybe-uninitialized fires on GCC 16.2.1 too: unit_Hub75Driver_pins.cpp reads out[i] only
+    # for i < n (n itself checked == 14 just above), but GCC 16.2.1 flags out[14]/out[15] anyway,
+    # past the loop's own dynamic bound — a `fixedPins(out, 16)` return value it isn't correlating
+    # with the loop condition after inlining, not a real read of memory the loop never reaches.
+    if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+        add_compile_options(-Wno-error=maybe-uninitialized)
+    endif()
+
     # Hot-path discipline, enforced by the compiler. MM_NONBLOCKING marks tick/tick20ms/tick1s
     # (platform.h); -Wfunction-effects then checks TRANSITIVELY that nothing they reach
     # allocates or blocks, through the whole call graph. Clang 20+ only; the flag does not
