@@ -95,6 +95,15 @@ else()
         add_compile_options(-Wno-error=null-dereference)
     endif()
 
+    # -Warray-bounds= fires on GCC 16.2.1 too: MoonModule::setName's std::memcpy(name_, n, len)
+    # is bound-checked (len < sizeof(name_), a real fixed array) before the call, but GCC 16.2.1,
+    # inlining it through several unit tests' DOCTEST_ANON_FUNCs, deduces a 0-byte region for
+    # name_ at some of those call sites and reports offset 0 as out of [0, 0] bounds — a false
+    # positive from the same aggressive-inlining-loses-the-real-size class as the others here.
+    if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+        add_compile_options(-Wno-error=array-bounds=)
+    endif()
+
     # Hot-path discipline, enforced by the compiler. MM_NONBLOCKING marks tick/tick20ms/tick1s
     # (platform.h); -Wfunction-effects then checks TRANSITIVELY that nothing they reach
     # allocates or blocks, through the whole call graph. Clang 20+ only; the flag does not
