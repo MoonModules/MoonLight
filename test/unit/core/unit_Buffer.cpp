@@ -17,7 +17,7 @@ TEST_CASE("Buffer allocate and accessors") {
 // clear() zeroes every byte in the allocated range.
 TEST_CASE("Buffer clear zeros data") {
     mm::Buffer buf;
-    buf.allocate(10, 3);
+    REQUIRE(buf.allocate(10, 3));
     // Write some data
     buf.data()[0] = 0xFF;
     buf.data()[15] = 0xAB;
