@@ -1,4 +1,4 @@
-    {"layouts/backlight.mll", 0x45cad59768d0942aull},
+    {"layouts/backlight.mll", 0x8fb9b3dac83279edull},
     {"layouts/diagonal.mll", 0x8d903da3498de21aull},
     {"layouts/grid.mll", 0x19ba4f6c02fbec77ull},
     {"layouts/lattice.mll", 0xbf932d2667cc1e2bull},
