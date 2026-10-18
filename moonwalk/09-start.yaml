@@ -1,0 +1,89 @@
+# yaml-language-server: $schema=moonwalk.schema.json
+stage: Start
+summary: A picked topic on its own branch, on a computer set up to build it.
+processes:
+  - id: pick-spec-plan
+    title: Pick, spec and plan a topic
+    actor: product-owner
+    goal: A module, effect, driver or capability has an approved plan before code.
+    systems: [MoonWalk]
+    page: contributing/principles-and-process.md
+  - id: branch
+    title: Branch and work on it
+    actor: product-owner
+    goal: Feature work lands on a branch the product owner created, and main stays releasable.
+    dependsOn: [pick-spec-plan]
+  - id: build-setup
+    title: Set up a computer to build MoonLight
+    actor: contributor
+    goal: uv, CMake 3.20 or newer and a C++20 compiler on the machine, once.
+    systems: [MoonDeck]
+    inputs:
+      type: object
+      properties:
+        platform: { type: string, enum: [macOS, Linux, Windows], description: "Which computer?" }
+    steps:
+      - id: mac
+        say: Install the command line tools, CMake and uv.
+        given: [{ input: platform, equals: macOS }]
+        when: { run: { command: "xcode-select --install && brew install cmake uv" } }
+      - id: linux
+        say: Install CMake, a compiler and uv.
+        given: [{ input: platform, equals: Linux }]
+        when: { manual: "GCC 12 or Clang 15 from your distribution, and uv from astral's installer. sudo apt install cmake g++, then curl -LsSf https://astral.sh/uv/install.sh | sh" }
+      - id: windows
+        say: Install CMake and the Visual Studio Build Tools.
+        given: [{ input: platform, equals: Windows }]
+        when: { run: { command: "winget install Kitware.CMake; winget install Microsoft.VisualStudio.2022.BuildTools --override \"--passive --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended\"" } }
+        detail: |
+          Visual Studio 2022 with the MSVC v143 workload and the Windows 11 SDK, from an elevated terminal.
+
+          Build and test from a **Developer PowerShell for VS 2022**, so `cl.exe` and the SDK are on `PATH`. Install uv from astral's installer as well.
+      - id: moondeck
+        say: Start MoonDeck and open it in the browser.
+        when: { run: { command: "uv run moondeck/moondeck.py" } }
+        detail: |
+          It serves at `http://localhost:8420`. Every step below is one of its cards, and the same scripts run from a terminal.
+  - id: setup-editor
+    title: Set up the editor
+    actor: contributor
+    goal: Diagnostics appear as you type, from the same `.clang-tidy` CI uses.
+    systems: [MoonDeck]
+    dependsOn: [build-setup]
+    steps:
+      - id: clangd
+        say: Install clangd, and turn off IntelliSense.
+        when: { manual: "llvm-vs-code-extensions.vscode-clangd; the two together report every diagnostic twice, and disagree." }
+        detail: |
+          Nothing else to configure: `.clangd` points at the compilation database, and any build refreshes it, since `CMakeLists.txt` sets `CMAKE_EXPORT_COMPILE_COMMANDS`. clangd skips the checks it counts as slow, so CI stays the authority.
+      - id: build-once
+        say: Build the desktop once.
+        when: { run: { script: moondeck/build/build_desktop.py } }
+        detail: |
+          It writes the compilation database clangd reads.
+
+          **Every file reports `'cstdint' file not found`?** The build directory was configured with another compiler than clangd uses. `.clangd`'s `--query-driver` covers the usual ones; add a new toolchain there.
+  - id: bump-idf
+    title: Bump the ESP-IDF pin
+    actor: contributor
+    goal: Every ESP32 target builds on the new IDF, locally and in CI.
+    systems: [MoonDeck]
+    intro: |
+      A pin move is a deliberate re-test pass, never a routine pull. What the pin is and why: [ESP-IDF version](reference/build-system.md#esp-idf-version).
+    steps:
+      - id: pins
+        say: Move the pin in both places.
+        when: { manual: "They are setup_esp_idf.py, and the Docker tag and its cache key in the release workflow. PINNED_IDF_COMMIT and PINNED_IDF_VERSION; esp_idf_version in .github/workflows/release.yml." }
+      - id: checkout
+        say: Check out the new tag and rerun setup.
+        when: { run: { script: moondeck/build/setup_esp_idf.py } }
+        detail: |
+          Check it out with its submodules.
+
+          Check out with `--recursive`: a different IDF commit without its submodules builds against the old ones.
+      - id: build-all
+        say: Build every ESP32 firmware, one at a time.
+        when: { manual: "build_esp32.py --firmware <name>, once per variant." }
+      - id: retest
+        say: Re-test each chip family, then commit.
+        when: { manual: "Use a board of each family. A classic, an S3, an S31 and a P4, with the device scenarios." }

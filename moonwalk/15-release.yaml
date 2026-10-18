@@ -14,9 +14,11 @@ processes:
     steps:
       - id: checks
         section: Checks
-        say: Run every commit check over the tagged tree, triggers ignored.
+        say: Run every commit check, triggers ignored.
         actor: contributor
         when: { process: commit }
+        detail: |
+          Run them over the tagged tree.
       - id: merge-checks
         say: Run the merge gates on the tagged commit.
         when: { process: pre-merge }
@@ -31,15 +33,17 @@ processes:
         say: Test it on real hardware.
         when: { manual: "The product owner's eyes are the measurement." }
       - id: blockers
-        say: No release blocker is open, and the release's own criteria are met.
-        when: { manual: "The issues labeled as blocking this release." }
+        say: Close every release blocker.
+        when: { manual: "Meet the release's own criteria too. The issues labeled as blocking this release." }
       - id: notes
         say: Write the release notes.
         when: { manual: "What a user notices, from the commits since the last tag." }
       - id: smoke
-        say: On a major or minor bump, smoke-test every platform.
-        when: { manual: "Install and run it on each desktop OS and a board per chip family." }
+        say: Smoke-test every platform on a minor bump.
+        when: { manual: "A major bump too. Install and run it on each desktop OS and a board per chip family." }
       - id: tag
         section: Ship
-        say: Tag the release; the release workflow builds, publishes and deploys the site.
+        say: Tag the release.
         when: { run: { command: "git tag vX.Y.Z && git push --tags" } }
+        detail: |
+          The release workflow builds, publishes and deploys the site. A `vX.Y.Z-rcN` tag publishes a GitHub release flagged pre-release, offered to readers who pick the pre-release channel; everyone else stays on stable.

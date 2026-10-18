@@ -1,29 +1,8 @@
-# Save and recall presets
+# Presets
 
-A preset is a saved state you can bring back with one click: a look you liked, a geometry you wired, a hardware setup you got right.
-
-They live on the Control card as a grid of 64 pads. Click one to apply it.
+A preset is a saved state brought back with one click: a look you liked, a geometry you wired, a hardware setup you got right. They live on the Control card as a grid of 64 pads. Saving, applying and changing one: [Save, edit and apply a preset](../moonwalk.md#presets). The gallery: [install from it](../moonwalk.md#gallery-install) and [share in it](../moonwalk.md#gallery-share).
 
 > **Two different things are called a preset.** The pads on the Control card are what people usually mean, and what follows is about those. The **fixture profile** under Drivers names which channel carries red or pan: see [FixtureProfiles](../moonmodules/light/supporting.md#fixtureprofiles).
-
-## Save one
-
-Click an empty pad, or right-click a full one, or press and hold it on a touchscreen. The pad editor opens.
-
-Type a name, choose which container it saves, and press **save current state here**. The name, pad and source in the editor are input for the next save, not configuration, so none of them is written to flash.
-
-Any card saves itself as well: press its `{ }` button, name the preset, and press **save as preset**. It lands on the first free pad and holds that card alone, so applying it puts back that card and leaves its neighbors running.
-
-## Edit, rename or delete one
-
-A click applies a pad; everything else starts from the same editor. Right-click a pad that holds a preset, or press and hold it on a touchscreen. A pad's tooltip says the same.
-
-- **Change what it holds:** apply it, change what you want on the cards, then open its editor and press **save current state over it**. The radio buttons choose which container the new contents carry.
-- **Rename it:** edit **name** in the editor. The new name applies on Enter or when you leave the field.
-- **Delete it:** press **delete preset** in the editor. The pad empties.
-- **Move it:** drag it onto another pad, which swaps the two, or onto an empty one.
-
-Each preset is also a file, `/.config/presets/<name>.json`, so the File Manager edits or deletes it directly, and the pad follows the file.
 
 ## What a preset holds
 
@@ -48,35 +27,15 @@ A secret stays out of a document, so a preset never carries a password. A preset
 
 ## Applying one
 
-Click the pad. The look, geometry or setup replaces what was there.
-
 **A saved container is a restore, not an overlay.** It carries `"$patch": "replace"`, so a preset carrying more modules than the device has adds them, and one describing fewer removes what it omits. That is what makes a pad reliable: what you saved is what comes back, rather than what you saved merged with whatever drifted since.
 
 **One active preset per container**, so a layout preset and a look stay lit together. Applying a new look replaces only the look, and a palette preset holds the Drivers pad next to it. A pad is tinted by its container: layout blue, effects violet, driver green, service amber.
 
 A restore changes the module tree, which pauses rendering while it runs, so a large preset stalls the lights for a moment. Every removal runs before any creation, so a module can move between layers under its own name.
 
-## From the gallery
-
-The **Gallery** under the pads shows what people shared in [MoonLight-Gallery](https://github.com/MoonModules/MoonLight-Gallery) as pages of thumbnails, most liked or newest first. Your browser fetches it, so the device needs no internet of its own, and an entry shows as soon as it is accepted.
-
-Search covers the name, the description and the author, and a chip per kind narrows the list to presets or one kind of script. Click a thumbnail to open the entry: its moving preview plays with the whole description, and prev and next step through what the search shows.
-
-- **add to a pad** puts a preset on the first free pad, with any script it needs that the device lacks, from the gallery or from the scripts MoonLight ships.
-- **try now** applies it the same way without keeping it on a pad.
-- **install** puts a script into `/moonlive`.
-
-A look, a palette, or a look with its palette applies at once. A preset that also sets pins or geometry asks first, since those belong to the author's rig.
-
-An entry made on a newer MoonLight than yours says so: update first.
-
-To share one, press a card's `{ }` button, copy the JSON, and open an issue in the gallery as its [Sharing your own](https://github.com/MoonModules/MoonLight-Gallery#sharing-your-own) describes.
-
-For its moving preview, apply the preset and press ⏺ on the preview bar. Your browser records three seconds of the preview and saves them as a GIF to attach to the issue; the device does no extra work.
-
 ## Arranging the pads
 
-Drag a pad to move it. A pad is a **position, not a list entry**: slot 14 stays slot 14 whether or not anything sits in it, and deleting slot 3 does not shuffle slot 4 into its place.
+A pad is a **position, not a list entry**: slot 14 stays slot 14 whether or not anything sits in it, and deleting slot 3 does not shuffle slot 4 into its place.
 
 The order persists, stamped into each preset's own file, so a preset folder copied to another device brings its layout along.
 

@@ -3,7 +3,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { doneOnDevice, nextOf, choicesOf, applies, stepHolds, targetOf, advance, commandOf } from "../../docs/assets/moonwalk.js";
+import { doneOnDevice, nextOf, choicesOf, applies, stepHolds, targetOf, advance, commandOf, took } from "../../docs/assets/moonwalk.js";
 
 const model = {
     stages: [{ id: "install", processes: ["install"] }, { id: "light", processes: ["grid", "effect", "status-only"] }],
@@ -136,4 +136,11 @@ test("a step's call reads as a reader types it: a script through uv with its arg
 
 test("a step a change triggers still shows on the site, which knows no change: only a reader's choice hides a step", () => {
     assert.equal(applies({ id: "build", given: [{ changed: ["src/**"] }] }, {}), true);
+});
+
+test("a duration rounds before it splits into minutes, so it never reads 60 seconds", () => {
+    assert.equal(took(119.6), "2m00s");
+    assert.equal(took(59.6), "1m00s");
+    assert.equal(took(42.2), "42s");
+    assert.equal(took(null), "");
 });

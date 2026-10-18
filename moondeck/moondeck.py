@@ -1486,6 +1486,13 @@ class MoonDeckHandler(http.server.BaseHTTPRequestHandler):
                 self._send_file(WALK_JSON, "application/json")
             else:
                 self.send_error(500, "gen_moonwalk failed; its error is in this console")
+        elif re.fullmatch(r"/moonwalk/text/[a-z0-9-]+\.json", self.path.split("?", 1)[0]):
+            # A process's prose, written beside the map by the run that answered the map's request.
+            text = WALK_JSON.parent / "text" / self.path.split("?", 1)[0].rsplit("/", 1)[1]
+            if text.exists():
+                self._send_file(text, "application/json")
+            else:
+                self.send_error(404)
         elif self.path.split("?", 1)[0] == "/assets/help.js":
             self._send_file(ROOT / "src" / "ui" / "help.js", "application/javascript")
 

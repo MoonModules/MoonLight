@@ -2,18 +2,33 @@
 
 Start from the symptom. Each entry says what to check first and where the detailed page is, because the fastest fix is usually eliminating the innocent half rather than guessing at the guilty one.
 
+## A first run on a computer or in a container
+
+| Symptom | Look at |
+|---|---|
+| The download is flagged and will not open | Keeping it, on Windows: the choice hides behind the **`⋯`** and the **Delete** dropdown. See [Windows flags the download](#windows-flags-the-download). |
+| A blue **"Windows protected your PC"** appears when you run it | The file reached you without the download prompt. Click **More info**, then **Run anyway**. |
+| It opened and closed immediately | Run it from a terminal so the error stays on screen. |
+| The browser shows nothing at `localhost:8080` | Check the console window is still open: closing it stops MoonLight. If another program uses port 8080, start with `--port 8081`. |
+| Another machine cannot reach it | Use the `HTTP server ->` address from the log, not `localhost`. Windows Firewall prompts on first run; allow it on your private network. |
+| Settings do not survive a restart | The log says `cannot use ... persistence disabled` and names the directory it tried. |
+| The installer fails saying a file is in use | A copy of MoonLight is running that it could not stop. Close its console window and run the setup again. |
+| The container exits at once | [When the container exits at once](installing-on-linux.md#when-the-container-exits-at-once): usually an overlay root filesystem. |
+
+## Windows flags the download
+
+Microsoft Defender SmartScreen judges a download by its **reputation**, built from how many people downloaded that exact file from a publisher it recognizes. MoonLight is not code-signed and every build is a new file, so its reputation is always zero and **every new build** gets the warning. It is about the certificate, not the contents; code signing is on the backlog.
+
+Occasionally Defender removes the file outright, naming something like `Trojan:Win32/Wacatac.C!ml`. The `!ml` suffix means a **machine-learning guess**, not a match against known malware: an unsigned, zero-reputation executable that opens audio capture devices fits a pattern the model weighs. The contents are checkable rather than a matter of trust. The binary is compiled from this repository's source in public CI, and the one vendored file behind the audio support (`miniaudio.h`) is byte-identical to its upstream release.
+
+- **The download fails** with *"Couldn't download - Download error"*: Defender stops it mid-transfer and there is no file to rescue. [Install from the zip](../moonwalk.md#install-windows-zip), a different file with a different fingerprint.
+- **The file landed and was quarantined**: delete it in **Windows Security → Virus & threat protection → Protection history**, then download again from the [releases page](https://github.com/MoonModules/MoonLight/releases). Restoring it there works too, for a file you downloaded yourself moments before.
+
+Either way the durable route is reporting it as a false positive at [microsoft.com/wdsi/filesubmission](https://www.microsoft.com/wdsi/filesubmission). Microsoft typically clears these within days, for everyone.
+
 ## The lights are dark
 
-**Check the preview first.** If the 3D preview shows the effect running, the pipeline is fine and the problem is downstream: the driver, the wiring, or the power. If the preview is also dark, it is upstream: the layout, the effect, or the brightness.
-
-Then, in order:
-
-- **Brightness** on the Drivers card. Zero is dark and looks identical to broken.
-- **Is a driver added at all?** A fresh device previews without one. Real lights need a driver naming the pin or the destination.
-- **Does the light count match?** A layout of 256 and a driver of 16 lights the first sixteen and nothing else.
-- **Module status.** A card with a problem says so on itself. A red line names the failure.
-
-A scripted effect that fails to compile renders dark deliberately and shows the parse error on its card: see [when the compile fails](../tutorials/first-script.md#when-the-compile-fails).
+Work through [Diagnose dark or flickering lights](../moonwalk.md#diagnose-lights): the preview first, since it says which half to look at, then the brightness, the driver, the light count and each card's status.
 
 ## Stray pixels, or wrong colors on lights that should be off
 
@@ -33,7 +48,7 @@ The strip zig-zags and the layout does not know. Turn on **serpentine** on the G
 
 ## The device is missing from the network
 
-- **It never joined.** An unprovisioned device opens its own access point named `MM-XXXX`. Join it: the WiFi card opens by itself as a sign-in screen, or at `http://4.3.2.1`, to set the credentials.
+- **It never joined.** An unprovisioned device opens its own access point named `MM-XXXX`: [join your WiFi through it](../moonwalk.md#join-access-point).
 - **It lost its network and its access point stays closed** (`opens` is `first setup only`). Switch it on and off four times, each within a few seconds: its access point opens for that boot without a password, and every setting stays. Join it and set the new network on the WiFi card. To start again from scratch, **factory reset** on the System card deletes every setting.
 - **It joined but you cannot find it.** Try the IP from your router's client list before the `.local` name: mDNS fails on plenty of networks that route fine. A device with no mDNS responder is reachable by address all along.
 - **It was working and stopped.** Check the device is powered and the access point is not sitting between two networks. A repeater on one radio halves its throughput and drops the client side under load.
@@ -46,7 +61,7 @@ The device drops preview frames rather than blocking the render loop, so this co
 
 ## An update failed
 
-The device stays in [MoonBase](updating-firmware.md#when-the-device-boots-into-moonbase) rather than pretending to have worked, and its page offers you a retry. You cannot brick a device this way: MoonBase is never overwritten by an app update.
+The device stays in [MoonBase](../moonwalk.md#update-firmware) rather than pretending to have worked, and its page offers you a retry. You cannot brick a device this way: MoonBase is never overwritten by an app update.
 
 ## The device rebooted on its own
 

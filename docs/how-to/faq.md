@@ -6,10 +6,10 @@ A symptom rather than a question belongs in [Troubleshooting](troubleshooting.md
 
 ## Installing
 
-- **Which firmware does my board take?** The web installer picks it from the board you choose. See [Install and first light](../gettingstarted.md).
+- **Which firmware does my board take?** The web installer picks it from the board you choose. See [Install MoonLight](../moonwalk.md#install).
 - **Can I run it without a board?** Yes, on macOS, Linux and Windows. See [Install MoonLight](../moonwalk.md#install).
 - **Which hardware do the heavy effects want?** The ones computing a field per light cost CPU, so a desktop or a small always-on machine runs them where a microcontroller cannot. See [Installing on Linux](installing-on-linux.md).
-- **How do I update?** Over the air from the Firmware card, or by URL. See [Updating firmware](updating-firmware.md).
+- **How do I update?** Over the air from the Firmware card, or by URL. See [Update MoonLight](../moonwalk.md#update-firmware).
 
 ## First light
 

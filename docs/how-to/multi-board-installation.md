@@ -15,9 +15,7 @@ A handful of small computers run it together on MoonLight, free lighting softwar
 
 ---
 
-An installation is several MoonLight devices that act as one piece: one creature, one sculpture, one room.
-The worked example is the StadBeest, whose legs, eyes and mouth run on devices of their own.
-Each section names a choice that makes it work; borrow what fits your own piece.
+This is the case study of one multi-device installation. The steps for your own are in [Run a multi-device installation](../moonwalk.md#multi-device); the StadBeest shows how one installation made each choice, with its legs, eyes and mouth on devices of their own.
 
 > **Start simple.** The StadBeest shows most of what MoonLight can do in one piece, so it can look overwhelmingly complex.
 > An installation needs far less to act as one piece:
@@ -28,7 +26,7 @@ Each section names a choice that makes it work; borrow what fits your own piece.
 >
 > Start with the first, see it run, and add the next step only when you miss it. The autopilot, the desk, the looks and the mouth came last, one at a time.
 
-> New here? Start with **[Install & first light](../gettingstarted.md)** and **[your first script](../tutorials/first-script.md)**. What follows assumes devices that run MoonLight on one network.
+> New here? Start with **[Install MoonLight](../moonwalk.md#install)** and **[your first script](../tutorials/first-script.md)**. What follows assumes devices that run MoonLight on one network.
 
 ---
 
@@ -145,24 +143,9 @@ The full code: [`stadbeest-walk.mle`](https://github.com/MoonModules/MoonLight/b
 
 ---
 
-## 3. Iterate on the device
+## 3. One surface layout for every device
 
-A script is a file, so the fastest loop is to edit it where it runs.
-
-1. Write it to the device: `curl -X POST -H "Expect:" --data-binary @walk.mle "http://<device>/api/file?path=/moonlive/stadbeest-walk.mle"`.
-2. Read the effect's status on its card or in `/api/state`: a compile error shows there with its position.
-3. Judge it on the real lights, then change one thing.
-
-A file in `/moonlive` shadows the factory script of the same name, so the device runs your copy until you delete it ([scripts on a device](../reference/integrating.md)).
-A script that does not compile leaves its effect dark, so keep the last working version at hand and upload it back before you walk away.
-
----
-
-## 4. One surface layout for every device
-
-Each device's [Control](../moonmodules/core/system.md#control) card is a desk of eight faders, eight encoders and eight switches.
-The first slot of each bank is the device's own.
-From the second on the desk follows the look that runs: automap puts that effect's controls on the slots in the order it declares them.
+The first slot of each bank on a [Control](../moonmodules/core/system.md#control) card is the device's own; from the second on, automap puts the running look's controls on the slots in declaration order.
 
 <img src="../assets/how-to/multi-board/control-card.png" width="300" alt="The legs device's Control card: each slot labeled after the control it drives, such as pulse, bpm, swing, lift and run">
 
@@ -189,11 +172,10 @@ A slot assigned by hand keeps its target, which is how the look switches and the
 A slot holds the value of the control it drives, so `fader2` at 33 means `bpm` 33.
 Each look is an effect of its own on every device, named after its script without the `stadbeest-` prefix, and `switch3` to `switch5` turn them on and off through their `enabled`.
 So one switch changes the look on the legs and on both eyes at once, and the desk follows it.
-Assign a slot by hand from the Control card.
 
 ---
 
-## 5. Linking the devices with OSC
+## 4. Linking the devices with OSC
 
 The [OSC](../moonmodules/core/services.md#osc) service mirrors a surface to the network, which is all the linking an installation needs.
 
@@ -220,7 +202,7 @@ flowchart LR
     class desk,bridge side
 ```
 
-The leader owns the state, and the eyes take it over OSC. The desk is the leader's own, over the network rather than a cable: [a MIDI bridge](#8-driving-it-by-hand-an-akai-apc40-mkii).
+The leader owns the state, and the eyes take it over OSC. The desk is the leader's own, over the network rather than a cable: [a MIDI bridge](#7-driving-it-by-hand-an-akai-apc40-mkii).
 
 <img src="../assets/how-to/multi-board/osc-leader-card.png" width="300" alt="The leader's OSC card: listen, feedback on, multicast, group 239.255.77.78, feedbackPort 9001"> <img src="../assets/how-to/multi-board/osc-follower-card.png" width="300" alt="A follower's OSC card: listen on port 9001, feedback off">
 
@@ -231,26 +213,17 @@ Every slot that changes on the leader, from its card, a preset, a script or a de
 A follower joins the group, writes each message onto its own slot N, and its assignments carry the value to its own controls.
 The leader's preset pad states go out on an address of their own, which a follower ignores, so its own presets stay untouched.
 
-Three details matter:
-
-- The followers listen on 9001 and the leader on 9000, so the leader never hears its own feedback, and a follower never answers back.
-- A follower takes a value when the leader's slot changes, and the leader sends every slot again every 30 seconds. A value lost on WiFi, or a follower that rebooted, is repaired within that time.
-- WiFi multicast drops packets that arrive in a burst, so the leader sends that refresh one slot at a time.
-  A writer on the leader spreads its own changes the same way.
-
 ---
 
-## 6. One source of music
+## 5. One source of music
 
-Every device runs the [Audio](../moonmodules/core/services.md#audio) service in receive mode, and one machine sends WLED audio sync to all of them.
-That machine is a device with a microphone, or a computer running MoonLight that captures what it plays.
 One source means one beat: the legs step, the eyes dart and every flash lands on the same moment.
 
-Here the source is an [ESP32-S31 CoreBoard](../reference/hardware/esp32-s31-coreboard.md) listening with its on-board microphone, wired by Ethernet to the installation's router: [the network](#10-the-network).
+Every device runs the [Audio](../moonmodules/core/services.md#audio) service in receive mode. The source is an [ESP32-S31 CoreBoard](../reference/hardware/esp32-s31-coreboard.md) listening with its on-board microphone, wired by Ethernet to the installation's router: [the network](#8-the-network).
 
 ---
 
-## 7. Running unattended
+## 6. Running unattended
 
 A [MoonLiveService](../moonmodules/core/services.md#moonliveservice) on the leader runs [`stadbeest-autopilot.mls`](https://github.com/MoonModules/MoonLight/blob/main/moonlive/services/stadbeest-autopilot.mls), which plays the beast through a whole museum night without anyone at the desk.
 
@@ -269,7 +242,7 @@ A [MoonLiveService](../moonmodules/core/services.md#moonliveservice) on the lead
 
 ---
 
-## 8. Driving it by hand: an Akai APC40 mkII
+## 7. Driving it by hand: an Akai APC40 mkII
 
 A desk on the leader moves the whole installation, since its changes go out over OSC like any other.
 The StadBeest takes an [Akai APC40 mkII](../reference/hardware/control-surfaces.md#akai-apc40-mkii): faders, knobs and buttons for the shared slots, and a pad per preset.
@@ -324,18 +297,7 @@ An APC40 mkII takes its power from USB, which this board's port does not supply,
 
 ---
 
-## 9. Updating devices you cannot reach
-
-Devices inside a sculpture are hard to reach with a cable, so update them over the network and check before you send.
-
-- Compare the new image's size with the `partition` total on the device's Firmware card.
-- A device with two app slots takes `POST /api/firmware/upload` directly.
-- A device with 4 MB of flash has one app slot. `POST /api/firmware/moonbase` restarts it into MoonBase, its recovery image, which takes the upload and restarts into the new firmware ([updating firmware](updating-firmware.md)).
-- Update one device, see it run, then the next.
-
----
-
-## 10. The network
+## 8. The network
 
 The StadBeest brings its own network: a GL.iNet Slate AX (GL-AXT1800) travel router.
 Every device joins its WiFi, and the audio source is wired to it by Ethernet, so the beast runs the same at every venue.
@@ -369,8 +331,6 @@ Two router settings keep it steady:
   The leader's MIDI `host` is the bridge's address, and a host setting also takes a name, but a name resolves by mDNS, which is multicast again.
 
 A device that stops hearing a group joins it again after 3 seconds of silence, so a network that drops multicast now and then recovers on its own.
-For a stream on a network you do not control, unicast is the reliable choice: each copy is acknowledged and retried, where multicast goes out unacknowledged at the slowest rate.
-Set the source's Audio `addressing` to `unicast` with the devices in `hosts`; the same holds for Art-Net, E1.31 and DDP from [Network Send](../moonmodules/light/drivers.md#networksend).
 
 ---
 

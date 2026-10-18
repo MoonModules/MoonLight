@@ -29,7 +29,7 @@ def test_the_repo_stage_files_build_into_one_map():
 
 def test_a_step_runs_in_the_runners_its_action_allows():
     steps = {s["id"]: s for s in gen_moonwalk.build()["processes"]["first-light-show"]["steps"]}
-    assert "test" in steps["grid-width"]["runners"]
+    assert "test" in steps["brightness"]["runners"]   # a set can be performed by a test
     assert steps["keep"]["runners"] == ["docs", "app"]
 
 
@@ -141,30 +141,30 @@ def test_a_step_runs_a_script_that_exists_or_it_is_refused(tmp_path):
 
 def test_the_module_index_is_keyed_by_type_and_names_the_type_a_step_adds():
     by_module = gen_moonwalk.build()["byModule"]
-    assert "first-light-show/grid-width" in by_module["GridLayout"]
-    assert "first-light-show/add-balls" in by_module["BouncingBallsEffect"] and "first-light-show/add-balls" in by_module["Layer"]
+    assert "first-light-show/grid-size" in by_module["GridLayout"]
+    assert "first-light-show/add-effect" in by_module["Layer"]
 
 
 def test_a_control_lists_the_steps_that_set_it_or_expect_its_value():
     by_control = gen_moonwalk.build()["byControl"]
-    assert by_control["GridLayout.width"] == ["first-light-show/grid-width"]   # set
+    assert by_control["Drivers.brightness"] == ["first-light-show/brightness"]   # set
     assert by_control["WiFiModule.known"] == ["join-access-point/pick"]          # expected, set by hand in the WiFi card
 
 
 def test_the_prose_is_plain_text_under_the_map_with_the_process_id_as_its_address():
     text = gen_moonwalk.render_text(gen_moonwalk.build())
-    assert "## Build your first light show {#first-light-show}" in text
-    assert "### 1. Say where the lights are" in text and "### 5. Keep it" in text
-    assert text.index("**Open Layouts. A fresh device has a Grid.**") < text.index("A grid is the shape most rigs start as")   # the instruction, then its detail
+    assert "## Show an effect on your lights {#first-light-show}" in text
+    assert "### 1. Say where your lights are" in text and "### 4. Keep it" in text
+    assert text.index("**Open Layouts.**") < text.index("A grid is a width, a height and a depth")   # the instruction, then its detail
     assert '<video src="assets/moontube/05-layouts.webm"' in text   # a clip plays on the page too
-    assert "\n### What you built" in text and "\n## What you built" not in text   # the outro sits under its process
+    assert "\n### Where to go next" in text and "\n## Where to go next" not in text   # the outro sits under its process
 
 
 def test_the_map_carries_its_links_absolute_for_a_device_page():
     model = gen_moonwalk.absolute_links(gen_moonwalk.build())
     intro = model["processes"]["first-light-show"]["intro"]
     assert "(https://moonmodules.org/MoonLight/tutorials/how-moonlight-works.html)" in intro
-    detail = {s["id"]: s for s in model["processes"]["first-light-show"]["steps"]}["grid-height"]["detail"]
+    detail = {s["id"]: s for s in model["processes"]["first-light-show"]["steps"]}["grid-size"]["detail"]
     assert "(https://moonmodules.org/MoonLight/assets/moontube/05-layouts.webm)" in detail
 
 
@@ -176,10 +176,11 @@ def test_every_page_a_process_names_exists(tmp_path):
 
 def test_a_choice_shows_once_per_section_and_names_its_option_in_the_plain_text():
     text = gen_moonwalk.render_text(gen_moonwalk.build())
-    desktop = text[text.index("{#install}"):]
+    desktop = text[text.index("{#install}"):text.index("{#install-windows-zip}")]
     assert desktop.count("Where your settings live") == 1   # three options, one heading
     assert "**Windows: Double-click the file you kept and press Install.**" in desktop
-    assert "**macOS: Open the .dmg" in desktop
+    assert "**macOS: Drag MoonLight to Applications, then open it.**" in desktop
+    assert desktop.count(". Updating\n") == 1   # a step per platform, one heading
 
 
 def test_a_key_written_twice_is_refused_rather_than_the_last_kept(tmp_path):
@@ -197,3 +198,68 @@ def test_a_process_entry_that_is_not_a_mapping_is_reported_not_crashed_on(tmp_pa
 def test_a_step_for_several_options_names_them_all_in_the_plain_text():
     text = gen_moonwalk.render_text(gen_moonwalk.build())
     assert "**Windows, macOS, Linux: Set Install to This computer, and press Download.**" in text
+
+
+def one_step(say: str, detail: str = "") -> str:
+    """A stage file with one process of one step saying this, with this detail."""
+    return ("stage: T\nprocesses:\n  - id: a\n    title: A\n    actor: user\n    goal: G\n"
+            f"    steps:\n      - id: s\n        say: {say}\n        when: {{manual: Do it}}\n        detail: {detail or 'D'}\n")
+
+
+def test_a_step_instruction_over_eight_words_is_refused(tmp_path):
+    with pytest.raises(ValueError, match="a/s: say is one action in at most 8 words"):
+        gen_moonwalk.build(stage(tmp_path, one_step("Power the device on and wait until its light turns blue.")))
+
+
+def test_a_step_instruction_of_two_sentences_is_refused_since_the_result_goes_in_its_note(tmp_path):
+    with pytest.raises(ValueError, match="a/s: say is one action"):
+        gen_moonwalk.build(stage(tmp_path, one_step("Power on the device. It opens MM-XXXX.")))
+
+
+def test_a_detail_over_its_limit_is_a_warning_rather_than_a_refusal(tmp_path):
+    processes = gen_moonwalk.build(stage(tmp_path, one_step("Open it.", "word " * 121)))["processes"]
+    assert gen_moonwalk.size_warnings(processes) == [("test", "a: step s's detail 121 words > 120")]
+
+
+def test_an_image_is_seen_rather_than_read_and_a_link_counts_its_text_only():
+    assert gen_moonwalk._words("![A long description of the picture](assets/x.png) See [the page](how-to/a-long-path.md).") == 3
+
+
+def test_a_process_with_a_choice_is_measured_per_reader_rather_than_as_the_sum_of_its_options(tmp_path):
+    long = "word " * 110
+    steps = "".join(f"      - {{id: s{i}, say: Do it., given: [{{input: platform, equals: {o}}}], when: {{manual: Do it}}, detail: {long}}}\n"
+                    for i, o in enumerate(["windows", "macos"] * 3))
+    body = ("stage: T\nprocesses:\n  - id: a\n    title: A\n    actor: user\n    goal: G\n"
+            "    inputs: {type: object, properties: {platform: {type: string, enum: [windows, macos]}}}\n    steps:\n" + steps)
+    processes = gen_moonwalk.build(stage(tmp_path, body))["processes"]
+    assert gen_moonwalk._reader_totals(processes["a"]) == {"windows": 336, "macos": 336}
+    assert gen_moonwalk.size_warnings(processes) == []
+
+
+def test_a_process_with_more_steps_than_a_reader_follows_is_a_warning_to_fold_them(tmp_path):
+    steps = "".join(f"      - {{id: s{i}, say: Do it., when: {{manual: Do it}}}}\n" for i in range(11))
+    body = "stage: T\nprocesses:\n  - id: a\n    title: A\n    actor: user\n    goal: G\n    steps:\n" + steps
+    processes = gen_moonwalk.build(stage(tmp_path, body))["processes"]
+    assert gen_moonwalk.size_warnings(processes) == [("test", "a: 11 steps > 10; fold steps into a subprocess")]
+
+
+def test_a_stage_with_more_processes_than_a_column_holds_is_a_warning_to_split_it(tmp_path):
+    body = "stage: T\nprocesses:\n" + "".join(f"  - {{id: p{i}, title: P, actor: user, goal: G}}\n" for i in range(9))
+    processes = gen_moonwalk.build(stage(tmp_path, body))["processes"]
+    assert gen_moonwalk.size_warnings(processes) == [("test", "9 processes > 8; split the stage")]
+
+
+def test_the_map_leaves_a_process_prose_to_its_own_file_fetched_when_the_view_opens():
+    walk, texts = gen_moonwalk.split_text(gen_moonwalk.build())
+    install = walk["processes"]["install"]
+    assert install["text"] is True and "intro" not in install and all("detail" not in s for s in install["steps"])
+    assert texts["install"]["intro"] and texts["install"]["details"]["keep"]
+    assert "text" not in walk["processes"]["run-linux-board"] and "run-linux-board" not in texts   # a process with no prose of its own links its page
+
+
+def test_writing_the_map_replaces_the_prose_of_a_process_that_is_gone(tmp_path):
+    (tmp_path / "text").mkdir()
+    (tmp_path / "text" / "removed.json").write_text("{}", encoding="utf-8")
+    gen_moonwalk.write(gen_moonwalk.build(), tmp_path / "moonwalk.json")
+    assert not (tmp_path / "text" / "removed.json").exists()
+    assert (tmp_path / "text" / "install.json").exists() and "intro" not in (tmp_path / "moonwalk.json").read_text(encoding="utf-8")

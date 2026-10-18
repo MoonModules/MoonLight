@@ -1,10 +1,11 @@
 #!/usr/bin/env -S uv run --script
 # /// script
-# dependencies = ["markdown", "libclang"]
+# dependencies = ["markdown", "libclang", "pyyaml>=6", "jsonschema>=4"]
 # ///
 # `libclang` because the help file the app reads is generated from the headers, and this check
 # regenerates it to prove the committed one matches.
 # `markdown` because the docs hooks it imports slug a heading with Python-Markdown's own function.
+# `pyyaml` and `jsonschema` because MoonWalk's processes are held to their word limits here too, read through gen_moonwalk.
 """The documentation the build GENERATES, held to the standards that describe it.
 
 The header is the one source: its `///` comments are the technical reference, read in place, and `gen_help` compiles them into help.json, which the app's help and the docs site's card decks both read. So this check holds the header comments to the comment rules, and the help they compile to to the help rules: a line for every module and control, the app's word caps, and a card that leads with its picture. Prose is NOT here: em-dashes, spelling and weasel words are Vale's.
@@ -106,6 +107,8 @@ _UNREFERENCED_RULE = "unreferenced appendix section"
 # word change, which costs a reviewer the same in a `.cpp` as in a header.
 _HARD_WRAP_RULE = "hard wrap"
 _STALE_HELP_RULE = "help.json stale"
+_PROCESS_SIZE_RULE = "process over its caps"
+_MOONWALK_BUILD_RULE = "MoonWalk does not build"   # a stage file the generator refuses: an error, since the map and the site fail with it
 _RESTATES_RULE = "control restates the UI"
 # A control's longer help, its `@guide` section, adds what its line cannot hold: what each option does, a consequence, a reason. Words shared with the line show a repeat mechanically.
 _GUIDE_REPEATS_RULE = "guide repeats its control"
@@ -167,11 +170,11 @@ def _blocks(key: str, why: str = "") -> bool:
     everywhere too, being the diff rather than the page, and a rule met everywhere is a rule that
     should hold everywhere.
     """
-    if why.startswith((_HARD_WRAP_RULE, _STALE_HELP_RULE)):
+    if why.startswith((_HARD_WRAP_RULE, _STALE_HELP_RULE, _MOONWALK_BUILD_RULE)):
         return True
     if why.startswith(_LINE_LENGTH_RULES) and "chars >" in why:
         return False
-    if why.startswith((_UNREFERENCED_RULE, _SPLIT_PARAGRAPH_RULE)):
+    if why.startswith((_UNREFERENCED_RULE, _SPLIT_PARAGRAPH_RULE, _PROCESS_SIZE_RULE)):
         return False
     return _generates_a_page(key.partition("::")[0])
 
@@ -221,7 +224,7 @@ _RULE_NAMES = (
     "class comment", "member comment", "no image", "image is", "one control",
     "doc sentence", "hard wrap", "split paragraph", _STALE_HELP_RULE,
     _RESTATES_RULE, _GUIDE_REPEATS_RULE, _HELP_SIZE_RULE, _GUIDE_NAMES_CONTROL_RULE, _HELP_LINE_RULE,
-    _TAG_GROUP_RULE, _NOTE_ON_DECL_RULE,
+    _TAG_GROUP_RULE, _NOTE_ON_DECL_RULE, _PROCESS_SIZE_RULE,
 )
 
 
@@ -256,6 +259,7 @@ _RULE_LABELS = {
     _HELP_LINE_RULE: "missing help lines",
     _TAG_GROUP_RULE: "tag emoji on one module",
     _NOTE_ON_DECL_RULE: "// notes on declarations",
+    _PROCESS_SIZE_RULE: "processes over their caps",
 }
 
 
@@ -1204,12 +1208,28 @@ def _help_size(help_file: dict) -> list:
         out += [(source, f"{_HELP_SIZE_RULE}: guide '{t}' {n} words > {MAX_GUIDE_WORDS}") for t, n in sections if n > MAX_GUIDE_WORDS]
         total = words(m.get("summary", "")) + sum(mores.values()) + sum(n for _, n in sections)
         if total > MAX_HELP_WORDS:
-            out.append((source, f"{_HELP_SIZE_RULE}: {total} words > {MAX_HELP_WORDS}; move tables, steps and reasons to a how-to page"))
+            out.append((source, f"{_HELP_SIZE_RULE}: {total} words > {MAX_HELP_WORDS}; move steps to a process, tables to reference and reasons to an explanation"))
+    return out
+
+
+def _process_sizes():
+    """MoonWalk's processes over their word limits, keyed by the stage file that holds each: the same shape rules the help's cards meet, for the how-tos."""
+    import gen_moonwalk
+    try:
+        model = gen_moonwalk.build()
+    except ValueError as e:
+        return [("moonwalk/", f"{_MOONWALK_BUILD_RULE}: {e}")]   # the generator names each file and its fault
+    files = {s["id"]: f"moonwalk/{s['file']}" for s in model["stages"]}
+    out = [(files[stage], f"{_PROCESS_SIZE_RULE}: {why}") for stage, why in gen_moonwalk.size_warnings(model["processes"])]
+    kb = gen_moonwalk.download_kb(model)
+    if kb > gen_moonwalk.MAX_DOWNLOAD_KB:
+        out.append(("docs/assets/moonwalk.js", f"{_PROCESS_SIZE_RULE}: the map and its renderer download {kb} KB gzipped > {gen_moonwalk.MAX_DOWNLOAD_KB}; the map carries less"))
     return out
 
 
 def _violations():
     out = _help_freshness()
+    out.extend(_process_sizes())
     out.extend(_guide_repeats(_hooks._help_file()))
     out.extend(_help_size(_hooks._help_file()))
     out.extend(_guide_names_control(_hooks._help_file()))
@@ -1453,7 +1473,7 @@ def _report(entries, heading: str) -> None:
         rows = by_page[page]
         print(f"\n  {page}  ({len(rows)})")
         for title, why in sorted(rows):
-            print(f"    {title}: {why}")
+            print(f"    {title}: {why}" if title else f"    {why}")   # a finding on a whole file names no section
 
 
 def _committed_counts():

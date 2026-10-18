@@ -4,7 +4,7 @@ Drive large LED installations and DMX fixtures. One source tree drives ESP32, Te
 
 ![A 128x128 light wall rendering the ColorTrails effect](docs/assets/light/effects/ColorTrailsEffect.gif)
 
-**Flash an ESP32 from your browser and see lights in under a minute:** open the [web installer](https://moonmodules.org/MoonLight/install/) in Chrome or Edge, plug in your device, and follow it. No toolchain, no recompile. The [Getting started guide](docs/gettingstarted.md) takes you from a blank board to a running light show.
+**Flash an ESP32 from your browser and see lights in under a minute:** open the [web installer](https://moonmodules.org/MoonLight/install/) in Chrome or Edge, plug in your device, and follow it. No toolchain, no recompile. [Install MoonLight](docs/moonwalk.md#install) takes you from a blank board to a running device, and [Show an effect on your lights](docs/moonwalk.md#first-light-show) from there to a light show.
 
 No hardware handy? The [desktop build](https://github.com/MoonModules/MoonLight/releases/latest) runs the same UI and effect pipeline on macOS, Windows and Linux, driving fixtures over Art-Net, DDP or E1.31.
 
@@ -136,7 +136,7 @@ The browser installer: it picks your device, flashes the matching firmware, and 
 
 ![The installer picking a device](docs/assets/ui/installer.png)
 
-Architecture: [MoonInstaller](docs/explanation/architecture/mooninstaller.md) · Use it: [Web installer](https://moonmodules.org/MoonLight/install/) · [Getting started](docs/gettingstarted.md) · [source](mooninstaller/README.md)
+Architecture: [MoonInstaller](docs/explanation/architecture/mooninstaller.md) · Use it: [Web installer](https://moonmodules.org/MoonLight/install/) · [Install MoonLight](docs/moonwalk.md#install) · [source](mooninstaller/README.md)
 
 ### MoonDeck
 
@@ -164,11 +164,7 @@ Per-grid and per-device tables, free-heap figures, and why WiFi costs what it do
 
 **ESP32**: open the [web installer](https://moonmodules.org/MoonLight/install/) in Chrome or Edge ([MoonInstaller](#mooninstaller)). It walks you through device, firmware, flashing and network setup.
 
-**Desktop**: download your build from the [releases page](https://github.com/MoonModules/MoonLight/releases), then open `http://localhost:8080/`. Step by step with screenshots: [Install MoonLight](https://moonmodules.org/MoonLight/moonwalk.html#install), with your platform picked.
-
-- **macOS arm64**: `.dmg`, drag to Applications. Ad-hoc signed, so right-click and Open the first time.
-- **Windows x64**: `-setup.exe` installs for your user without an admin prompt. Unsigned, so SmartScreen asks once.
-- **Linux x64 and arm64**: `.tar.gz`, or `.deb` on Debian, Ubuntu and Raspberry Pi OS. The arm64 build covers a Raspberry Pi, a NanoPi and most 64-bit boards.
+**Desktop**: download your build from the [releases page](https://github.com/MoonModules/MoonLight/releases), then open `http://localhost:8080/`. Step by step for macOS, Windows, Linux and Docker, with screenshots: [Install MoonLight](https://moonmodules.org/MoonLight/moonwalk.html#install), with your platform picked.
 
 **From source**: you need [uv](https://docs.astral.sh/uv/), CMake 3.20+ and a C++20 compiler, plus ESP-IDF v6.x for ESP32. Then launch [MoonDeck](#moondeck):
 
@@ -182,7 +178,7 @@ Open `http://localhost:8420` to build, run, test, flash and discover devices. Fu
 
 | Document | What's in it |
 |----------|--------------|
-| [Getting started](docs/gettingstarted.md) | Blank board to running light show |
+| [Install MoonLight](docs/moonwalk.md#install) | Blank board to a running device |
 | [the architecture](docs/explanation/architecture/index.md) | How the system is put together |
 | [MoonWalk](docs/moonwalk.md#build-setup) | Build and flash for every target, step by step |
 | [moonmodules/](docs/moonmodules/) | One page per module: [core](docs/moonmodules/core/) and [light](docs/moonmodules/light/) |

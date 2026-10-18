@@ -1,99 +1,93 @@
 # yaml-language-server: $schema=moonwalk.schema.json
 stage: First light
-summary: The first look at the interface and the first show on the lights.
+summary: A device checked, and an effect on its lights.
 processes:
   - id: first-look
-    title: First look at the interface
+    title: Check your device
     actor: user
-    goal: You know what every card is, before changing anything.
-    systems: [MoonCore, MoonLight]
+    goal: You know your device runs well, its name, its firmware and its network, before changing anything.
+    systems: [MoonCore]
     dependsOn: [install]
-    page: tutorials/how-moonlight-works.md
+    intro: |
+      The top of the list is the device's own: read-outs and connection settings, and the first place to look when something seems off. What every card is and how they fit together is [How MoonLight works](tutorials/how-moonlight-works.md).
+    steps:
+      - id: system
+        section: The device
+        say: Open System.
+        when: { open: { module: SystemModule } }
+        detail: |
+          It shows the device's name, its model, uptime, frame rate and memory.
+
+          ![The System module](assets/gettingstarted/02-05-UI-System.png)
+
+          A device with a microphone also shows its **Audio** service, which is how audio-reactive effects hear the music.
+      - id: firmware
+        say: Open Firmware.
+        when: { open: { module: FirmwareUpdateModule } }
+        detail: |
+          It shows the build the device runs, and its Install button updates it over the network.
+
+          ![The Firmware module](assets/gettingstarted/02-06-UI-Firmware.png)
+
+          Coming from an older build? Skim the [migration notes](reference/MIGRATING.md) first: most updates need nothing, and a breaking change lists the one action it costs.
+      - id: network
+        section: The network
+        say: Open Network.
+        when: { open: { module: NetworkModule } }
+        detail: |
+          It shows the connection, its signal and the address others reach the device at.
+
+          ![The Network module](assets/gettingstarted/02-07-UI-Network.png)
+
+          **Devices** under it lists the other MoonLight devices on the same network, so several of them find each other.
   - id: first-light-show
-    title: Build your first light show
+    title: Show an effect on your lights
     actor: user
-    goal: Your own layout, effects and a modifier running on your lights, saved as you go.
+    goal: Your lights show an effect, on a layout that matches them, kept as you go.
     systems: [MoonLight]
     dependsOn: [first-look]
     intro: |
-      You have lights running and you know [what the cards are](tutorials/how-moonlight-works.md). Now you build something deliberately instead of accepting the defaults. It is a shape you chose, an effect on top of it, a second effect blended into the first, and the whole thing going out to real lights.
+      A layout that matches your lights, an effect on it, and the result sent out to them. What the cards are and how they fit together is [How MoonLight works](tutorials/how-moonlight-works.md).
 
-      Everything here happens in the device's own web interface, live. Nothing is compiled, nothing is saved and applied, nothing reboots. You change a number and the lights change while you are still holding the mouse.
-
-      You need a device with MoonLight on it and some lights attached, real or previewed. A bare board with no strip works the whole way through: the 3D preview is what you will be watching anyway.
+      It all happens live in the device's web interface: nothing compiles, saves or reboots. A board with no lights attached works too, since the 3D preview shows the same.
     steps:
       - id: open-layouts
-        section: Say where the lights are
-        say: Open Layouts. A fresh device has a Grid.
+        section: Say where your lights are
+        say: Open Layouts.
         when: { open: { module: Layouts } }
         detail: |
-          A grid is the shape most rigs start as: a width, a height and a depth of evenly spaced points.
-      - id: grid-width
-        say: Set the Grid's width to 32.
-        when: { set: { module: GridLayout, control: width, value: 32 } }
-        then:
-          - { module: GridLayout, control: width, equals: 32 }
-      - id: grid-height
-        say: Set the Grid's height to 8, a wide strip. The preview reshapes as you type, and the light count under the card follows.
-        when: { set: { module: GridLayout, control: height, value: 8 } }
-        then:
-          - { module: GridLayout, control: height, equals: 8 }
+          A fresh device has a Grid. A grid is a width, a height and a depth of evenly spaced points, the shape most rigs start as. A ring, a cube or a shape of your own is a different layout card in the same place.
+      - id: grid-size
+        say: Size the Grid to your lights.
+        when: { open: { module: GridLayout } }
         detail: |
+          Set its width and height.
+
+          A 16×16 panel is width 16 and height 16; a strip of 60 is width 60 and height 1. The preview reshapes as you type, and the light count under the card follows.
+
+          If your strip zig-zags back and forth along the rows, turn on **serpentine**. A wrong setting shows up as every other row drawn backwards.
+
           ![Resizing a grid while it renders, then the other layout shapes the same effect paints into.](assets/moontube/05-layouts.webm)
-
-          That number is the whole point of a layout. Every effect downstream asks the layout how many lights there are and where each one sits, so this one card decides what the rest of the pipeline is painting on. Nothing else in the tree stores a size, which is why changing it here never leaves something stale behind.
-
-          If your strip zig-zags back and forth along the rows, turn on **serpentine**. Watch a running effect while you toggle it: a wrong setting shows up as every other row drawn backwards, which is unmistakable once seen.
-      - id: add-balls
+      - id: add-effect
         section: Paint something on it
-        say: Open Effects, press + add module under the Layer and pick Bouncing Balls.
-        when: { add: { module: Layer, type: BouncingBallsEffect } }
-        then:
-          - { module: BouncingBallsEffect, exists: true }
+        say: Add an effect under the Layer.
+        when: { open: { module: Layer } }
         detail: |
-          Bouncing Balls is a good first choice: it has motion you can read at a glance, so the controls show their effect immediately.
-      - id: more-balls
-        say: Set numBalls to 3 while it runs, then try grav.
-        when: { set: { module: BouncingBallsEffect, control: numBalls, value: 3 } }
-        then:
-          - { module: BouncingBallsEffect, control: numBalls, equals: 3 }
-        detail: |
-          The lights respond as the slider moves. An effect is not a rendered animation the device plays back: it is a function run once per frame, reading its controls each time.
-      - id: add-ripples
-        say: Press + add module again and add Ripples beside the first.
-        when: { add: { module: Layer, type: RipplesEffect } }
-        then:
-          - { module: RipplesEffect, exists: true }
-        detail: |
-          Both now run into the same Layer, in order, each writing over what the one before it left. That is useful when the second effect draws sparsely (sparks over a wash), and it is not blending: two effects in one Layer share one buffer.
-      - id: add-layer
-        say: Press + add module on the Effects card to add a second Layer, and give it its own effect.
-        when: { add: { module: Effects, type: Layer } }
-        detail: |
-          Blending happens between layers. The Layer card carries a **blendMode** and an **opacity**, and the drivers composite the layers bottom to top. Lowering the top layer's opacity tints what is underneath instead of replacing it.
+          Open Effects, press + add module under the Layer and pick one.
 
-          This is the same model an image editor uses, and it is worth a minute of play. Layers compose; you are not picking one effect from a list.
-      - id: add-mirror
-        section: Reshape it, leaving the effect alone
-        say: Under the Layer, add a Mirror modifier.
-        when: { add: { module: Layer, type: MirrorModifier } }
-        then:
-          - { module: MirrorModifier, exists: true }
-        detail: |
-          The effect did not change. The modifier sits between the effect and the lights and folds the coordinates on the way through. A pattern that ran across the whole grid now runs across half and reflects.
-
-          That separation is why a modifier is worth having at all. Mirror, rotate and multiply are things you want on *any* effect, and writing them into each effect would be the same code many times over.
-
-          All of it on one wall, start to finish: an effect in a layer, with its controls driven while it runs. Then a modifier reshaping it, and a second layer doing the same and blending over the first.
-
-          ![An effect, a modifier, and a second layer blended over the first.](assets/moontube/06-layers.webm)
+          The picker filters by the emoji on each card; one with visible motion, such as Bouncing Balls or Ripples, shows its controls' effect at once.
+      - id: adjust
+        say: Adjust its controls while it runs.
+        when: { manual: "Keep going until it looks the way you want. Each control's line under it says what it does, with help on." }
       - id: brightness
-        section: Send it somewhere real
-        say: Open Drivers and set brightness low, 20 is plenty on a bench.
+        section: Send it to your lights
+        say: Set brightness low in Drivers.
         when: { set: { module: Drivers, control: brightness, value: 20 } }
         then:
           - { module: Drivers, control: brightness, minimum: 1, maximum: 20 }
         detail: |
+          20 is plenty on a bench.
+
           A full-brightness panel at arm's length is genuinely unpleasant.
       - id: driver
         say: Add the driver for your hardware.
@@ -101,24 +95,17 @@ processes:
         detail: |
           - **LED strip on a pin**: add an **RmtLedDriver** (or a **ParallelLedDriver** for many strands at once) and set **pins** to the GPIO your data line is soldered to. Then match the light count to the layout.
           - **Over the network**: add a **NetworkSendDriver** for Art-Net, E1.31/sACN or DDP, and give it the destination address.
-          - **Nothing attached**: the **Preview** driver is already there. That is what has been feeding the 3D view all along.
-
-          The driver is the only part of the tree that knows about wires. Everything upstream of it produced colors for positions. That is why the same show runs out a GPIO pin, across the network to a panel card, and into your browser at once.
+          - **Nothing attached**: the **Preview** driver is already there, and it feeds the 3D view.
       - id: keep
         section: Keep it
-        say: Nothing to save, everything you did is already persisted.
-        when: { manual: "Reboot the device to prove it: the tree comes back as you left it." }
+        say: Check it survives a reboot.
+        when: { manual: "Nothing to save: everything you did is already persisted. Reboot the device to prove it: the tree comes back as you left it." }
         detail: |
-          Controls save themselves a couple of seconds after the last change. Once that save lands a power cut costs you nothing; pull the plug mid-turn of a knob and you lose the last second or two of fiddling.
-
-          Reboot the device if you want to prove it. The tree comes back as you left it.
+          Controls save themselves a couple of seconds after the last change, so a power cut costs at most the last second or two of fiddling.
     outro: |
-      ## What you built
+      ## Where to go next
 
-      A layout, a layer with two effects and a modifier, and a driver. That is the whole pipeline, and it is the same pipeline whether it is driving twelve lights on a desk or twelve thousand on a wall.
-
-      Two directions from here, and they go to different places:
-
+      - **Stack effects, blend layers and reshape with a modifier**: [How MoonLight works](tutorials/how-moonlight-works.md#3-the-light-pipeline) explains each, and its clips show them.
       - **[Making beautiful effects](tutorials/generative-effects.md)** is about the effects themselves: why noise looks organic and how a field turns into something worth watching.
       - **[Build your own MoonModules](tutorials/build-your-own-moonmodules.md)** is about writing one in C++ when the catalog does not have what you want.
   - id: turn-help-on

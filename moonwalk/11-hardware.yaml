@@ -1,0 +1,113 @@
+# yaml-language-server: $schema=moonwalk.schema.json
+stage: Run on hardware
+summary: The change built, flashed and running on a board or a Teensy.
+processes:
+  - id: esp32-build-flash
+    title: Build, flash and monitor an ESP32
+    actor: contributor
+    goal: A bench board runs the change the desktop could not prove.
+    systems: [MoonDeck]
+    dependsOn: [desktop-build-test]
+    intro: |
+      ESP-IDF directly, not the Arduino framework, at the pinned [ESP-IDF version](reference/build-system.md#esp-idf-version). The firmware variants and their keys: [Firmware variants](reference/build-system.md#firmware-variants).
+    inputs:
+      type: object
+      properties:
+        platform: { type: string, enum: [macOS, Linux, Windows], description: "Which computer?" }
+    steps:
+      - id: clone
+        section: Once per machine
+        say: Clone ESP-IDF into ~/esp/esp-idf.
+        given: [{ input: platform, in: [macOS, Linux] }]
+        when: { run: { command: "git clone --depth 1 --branch v6.1 https://github.com/espressif/esp-idf.git ~/esp/esp-idf" } }
+        detail: |
+          It takes about 2 GB, where the scripts look first.
+      - id: clone-windows
+        say: Turn on long paths, then clone ESP-IDF.
+        given: [{ input: platform, equals: Windows }]
+        when: { run: { command: "git config --global core.longpaths true; git clone --depth 1 --branch v6.1 https://github.com/espressif/esp-idf.git \"$env:USERPROFILE\\esp\\esp-idf\"" } }
+        detail: |
+          Clone it into your profile's esp folder.
+
+          The IDF's tooling nests deeply, and without long paths the clone trips Windows' 260-character limit.
+      - id: setup
+        say: Set up the IDF's environment and toolchains.
+        when: { run: { script: moondeck/build/setup_esp_idf.py } }
+        detail: |
+          It takes about 1.5 GB more.
+
+          It runs the upstream installer for the host, `install.sh` or `install.bat`; on Windows that takes about five minutes on a fast link. It also offers to move a drifted checkout onto the pin. The ESP32-S31, a preview target, needs its RISC-V toolchain fetched once more: `cd ~/esp/esp-idf && ./install.sh esp32s31`.
+      - id: build
+        section: Each change
+        say: Build the firmware for your board.
+        when: { run: { script: moondeck/build/build_esp32.py, args: "--firmware esp32" } }
+        detail: |
+          Pick the variant for your board in MoonDeck's Firmware menu, or pass its key. A MoonBase variant also builds MoonBase: [MoonBase and the partition layout](reference/build-system.md#moonbase-and-the-partition-layout).
+      - id: flash
+        say: Flash it over USB.
+        when: { manual: "flash_esp32.py --firmware <name> --port <port>, or the Flash card with the port picked." }
+        detail: |
+          On Windows the port is a `COM` name, and no port at all means a missing driver: [Install the USB-serial driver on Windows](moonwalk.md#windows-serial-drivers). The web installer flashes the same images, the S31 included.
+      - id: monitor
+        say: Watch its log over USB.
+        when: { manual: "monitor_esp32.py --port <port>, or the Monitor card." }
+  - id: ota-board
+    title: Update a running board over the network
+    actor: contributor
+    goal: New firmware on a board with no cable.
+    systems: [MoonDeck, MoonBase]
+    dependsOn: [esp32-build-flash]
+    intro: |
+      A board cannot rewrite the partition it runs from, so on a variant with [MoonBase](explanation/architecture/moonbase.md) the app hands over to MoonBase, which does the writing. A partition-table change still needs a cable: [MoonBase and the partition layout](reference/build-system.md#moonbase-and-the-partition-layout).
+    inputs:
+      type: object
+      properties:
+        moonbase: { type: string, enum: [With MoonBase, Without MoonBase], description: "Does the board's variant carry MoonBase?" }
+    steps:
+      - id: to-moonbase
+        say: Reboot the app into MoonBase.
+        given: [{ input: moonbase, equals: With MoonBase }]
+        when: { run: { command: "curl -X POST http://<device>/api/firmware/moonbase" } }
+        detail: |
+          It is back in about four seconds.
+      - id: upload
+        say: Send the app image.
+        when: { run: { command: "curl --http1.1 -H \"Expect:\" --data-binary @build/esp32-<firmware>/MoonLight.bin http://<device>/api/firmware/upload" } }
+        detail: |
+          The request ends with no HTTP status (curl reports 000): the device reboots into the new image as the write completes. That is success. Without MoonBase the app takes the image itself on the same route.
+
+          **413** means the request reached the app rather than MoonBase, which did not take over; `GET /moonbase` tells them apart. **`incomplete request body`** means the body did not arrive in time: send with `--http1.1 -H "Expect:"`, so it starts without waiting for a `100 Continue`. On a weak WiFi link a pushed image can abort; install by URL instead, `POST /api/firmware/url` with the address of a [served image](../moondeck/MoonDeck.md#serve_firmware) as `{"url": ...}`, and the board downloads it itself.
+      - id: confirm
+        say: Read the new build back.
+        when: { run: { command: "curl -s http://<device>/api/modules/Firmware" } }
+        detail: |
+          The `build` control names the commit and the date.
+  - id: provision-board
+    title: Provision a freshly flashed board
+    actor: contributor
+    goal: A flashed board joins WiFi, carries its name and its device model's module tree.
+    systems: [MoonDeck]
+    dependsOn: [esp32-build-flash]
+  - id: teensy
+    title: Build, flash and monitor a Teensy
+    actor: contributor
+    goal: A Teensy 4.1 runs the change.
+    systems: [MoonDeck]
+    dependsOn: [desktop-build-test]
+    intro: |
+      One firmware, `teensy41`, uses the board's own Ethernet, or a W5500 module on the 4.1-NE, which has none, found at boot. Pins, wiring and power: [the Teensy 4.1 page](reference/hardware/teensy-4-1.md).
+    steps:
+      - id: setup
+        say: Fetch the SDK into ~/teensy, once.
+        when: { run: { script: moondeck/build/setup_teensy.py } }
+      - id: build
+        say: Build it, to build/teensy41/MoonLight.hex.
+        when: { run: { script: moondeck/build/build_teensy.py } }
+      - id: flash
+        say: Flash it over USB, with no button press.
+        when: { run: { script: moondeck/build/flash_teensy.py } }
+      - id: monitor
+        say: Watch its log over USB serial.
+        when: { run: { script: moondeck/run/monitor_teensy.py } }
+        detail: |
+          Settings live in 1 MB of the program flash and survive a flash and a network update. A running board also updates over the network, the `.bin` uploaded on the Firmware card or to `/api/firmware/upload`. Each release carries the image as `firmware-teensy41-v<version>.hex` for PJRC's Teensy app or `teensy_loader_cli`, and as a `.bin` for the network update and the web installer.

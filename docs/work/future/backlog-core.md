@@ -1,4 +1,4 @@
-# Backlog — core
+# Backlog: core
 
 Forward-looking to-build items for the **core / infrastructure** domain (`src/core/`, `src/platform/`, build, CI, network, persistence, UI). The light-domain counterpart is [backlog-light.md](backlog-light.md); items that genuinely span both are in [backlog-mixed.md](backlog-mixed.md). Index + overview: [README.md](index.md). Completed items are removed.
 
@@ -111,7 +111,7 @@ Two ways out, and the choice is the question. Implement the route in the applica
 abort flag the OTA task polls between chunks, the shape MoonBase already uses. Or hide the button
 where it cannot act, which is honest but leaves a long download uninterruptible. The first is the
 better system and the larger change; the second is a few lines. Found while writing
-[Updating firmware](../../how-to/updating-firmware.md), which deliberately does not mention Cancel:
+[Update MoonLight](../../moonwalk.md#update-firmware), which deliberately does not mention Cancel:
 documenting a button that half-works is worse than leaving it undocumented until it is one thing or
 the other.
 
@@ -127,6 +127,11 @@ The fix is the deterministic UDP seam plus `platform::setTestNowMs`, the same pa
 timing test here uses: feed the packet, advance the clock explicitly, assert. Raised by CodeRabbit
 on PR #96 and deliberately not taken in that pass: it is pre-existing rather than part of that
 diff, and swapping a test's transport is a change that wants its own verification.
+
+## A catalog entry extends another (2026-10-18)
+
+A shield is a carrier board plus its own pins, as a Serg shield is a D1-Mini32 with more wired. An optional `extends: "<entry name>"` in the [device catalog](../../../mooninstaller/README.md#the-device-catalog) lets an entry take another's `state`: levels nest (MCU, carrier, device), a child overrides its parent at the same module and control, and modules merge by name.
+**Build it** at the first two entries that share a base, as a pass in the installer and MoonDeck before they send the document, with `check_devices` resolving it too.
 
 ## A slot whose target is gone sends 0 to its followers (2026-10-08)
 
@@ -1216,7 +1221,7 @@ The as-is state of each item is the table in [build-system.md § The v6 ecosyste
 
 ### ESP-IDF version pinning (pending)
 
-The build IDF is `v6.1-dev-399-gd1b91b79b5`, a dev-branch snapshot (2025-11-05) ahead of the v6.0 stable but on the unreleased v6.1 line. The version facts (what v6.0 vs v6.1 changed, the release schedule, the 30-month support policy, how to check for a newer tag) live in [build-system.md § ESP-IDF version](../../reference/build-system.md#esp-idf-version); this entry tracks only the **open decisions** the doc doesn't make. Being on a dev branch already cost us once, the missing `ESP_ROM_ELF_DIR` in the post-build gdbinit step (fixed in `build_esp32.py`). **Partly landed:** `setup_esp_idf.py` carries `PINNED_IDF_COMMIT`/`PINNED_IDF_VERSION` and **warns on drift** (installed HEAD vs pinned), it can't `checkout` for you (it doesn't own the clone), but a silent `git pull` or a stray shallow clone is now visible. **Still to do:** (a) a MoonDeck UI banner / status dot surfacing the same drift (the CLI warning only shows during Setup), and (b) the migrate-or-stay call, stay on the pinned commit (chosen for now: it's what all targets incl. P4 were validated against), or move to `v6.1` stable (skipping v6.0, since v6.1 is close); migration is a full re-validation pass across classic/S3/P4, a deliberate task, not a pull. Until then: don't `git pull` the IDF. **Schedule note:** the v6.1-stable target of 2026-07-31 is unlikely to hold, v6.0 slipped ~1 month (planned 2026-02-27, shipped late March), and Espressif minors historically slip 2-6 weeks on the *final* even when betas land on time. So migrate **to the event** (v6.1 stable actually tagging on the releases page), not to the calendar date. `v6.0` stable is the lower-risk fallback if the dev-branch warts (`ESP_ROM_ELF_DIR`, API-churn risk) get worse before v6.1 lands.
+The build pins ESP-IDF `v6.1` GA, commit `fff9895c`. `setup_esp_idf.py` holds it in `PINNED_IDF_COMMIT` and `PINNED_IDF_VERSION`, warns when the installed tree differs, and offers to check the pin out (`--no-checkout` keeps it a warning). The version facts, the v6.0 floor, the support policy and how to check for a newer tag, live in [build-system.md § ESP-IDF version](../../reference/build-system.md#esp-idf-version); moving the pin is the `bump-idf` process. **Still to do:** a MoonDeck banner or status dot surfacing the same drift, since the warning shows only while `setup_esp_idf.py` runs. **History:** until the move to GA on 2026-09-29 the build ran `v6.1-dev-399-gd1b91b79b5`, a dev-branch snapshot, which cost the missing `ESP_ROM_ELF_DIR` in the post-build gdbinit step (fixed in `build_esp32.py`); the move waited for v6.1 to tag rather than for its calendar date.
 
 ### Clock sync — a shared monotonic clock across devices (committed design, unwired)
 

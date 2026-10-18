@@ -37,7 +37,7 @@ from _test_metadata import (  # noqa: E402
 )
 from generate_test_docs import render_unit_tests, render_scenarios  # noqa: E402
 from gen_help import ATTRIBUTIONS, catalog_rows, display_name  # noqa: E402
-from gen_moonwalk import build as build_moonwalk, absolute_links, render_text as moonwalk_text  # noqa: E402
+from gen_moonwalk import build as build_moonwalk, absolute_links, render_text as moonwalk_text, split_text as split_moonwalk  # noqa: E402
 
 
 # ---- source-link rewrite: docs link OUT to repo files the site can't host ----
@@ -271,8 +271,11 @@ def on_files(files, config):
         if not (ROOT / "docs" / "moonmodules" / page).exists():
             _add(f"moonmodules/{page}", generated_catalog(f"moonmodules/{page}"))
     _add("reference/tests/scenario-tests.md", render_scenarios(collect_scenario_files()))
-    # MoonWalk's journey map, from the stage files under moonwalk/, with its prose's links absolute since the view renders it on a device's page too; an invalid file fails the build.
-    _add("moonwalk/moonwalk.json", json.dumps(absolute_links(build_moonwalk()), ensure_ascii=False))
+    # MoonWalk's journey map, from the stage files under moonwalk/, and each process's prose beside it, which the view fetches when the process opens; links absolute, since the view renders them on a device's page too. An invalid file fails the build.
+    walk, texts = split_moonwalk(absolute_links(build_moonwalk()))
+    _add("moonwalk/moonwalk.json", json.dumps(walk, ensure_ascii=False))
+    for pid, text in texts.items():
+        _add(f"moonwalk/text/{pid}.json", json.dumps(text, ensure_ascii=False))
 
     return files
 

@@ -1,0 +1,45 @@
+# yaml-language-server: $schema=moonwalk.schema.json
+stage: Test
+summary: The change pinned by tests, scenarios, live runs and clips.
+processes:
+  - id: add-test
+    title: Add a test, and pin a bug
+    actor: contributor
+    goal: New behavior and every fixed defect are pinned by a test.
+    systems: [MoonDeck]
+    page: reference/testing.md
+  - id: run-scenario
+    title: Run a scenario in-process on the desktop
+    actor: contributor
+    goal: One scenario replays against a scheduler inside the test binary and records what each step costs.
+    systems: [MoonDeck]
+    page: reference/testing.md
+  - id: run-live-scenario
+    title: Run a scenario against a live device
+    actor: contributor
+    goal: The same scenario over REST against a running desktop or board, leaving the device as found.
+    systems: [MoonDeck]
+    page: reference/testing.md
+  - id: live-verification
+    title: Run a live verification on boards
+    actor: contributor
+    goal: The bench boards confirm what the desktop cannot measure.
+    systems: [MoonDeck]
+    page: reference/testing.md
+  - id: renegotiate-contract
+    title: Renegotiate a performance contract
+    actor: contributor
+    goal: A scenario's contract moves with a stated reason.
+    systems: [MoonDeck]
+    page: reference/testing.md
+  - id: perform-clip
+    title: Perform a clip as a UI test
+    actor: contributor
+    goal: The UI does what every published clip shows.
+    systems: [MoonTube]
+    page: reference/testing.md
+  - id: film-clip
+    title: Record a MoonTube clip
+    actor: product-owner
+    goal: A narrated clip under docs/assets/moontube, cut into a series.
+    systems: [MoonTube]

@@ -1,24 +1,20 @@
 #!/usr/bin/env python3
+# /// script
+# requires-python = ">=3.10"
+# dependencies = ["jsonschema>=4"]
+# ///
 """Validate the installer device catalog (mooninstaller/deviceModels.json).
 
-The catalog is hand-maintained data consumed identically by three clients (the
-web installer, the device UI's ?deviceModel= inject, and MoonDeck), so a typo drifts
-silently: a broken image path, a device name that no longer matches its
-System.deviceModel value, a driver pin list on an entry that has no driver. This is the
-catalog's counterpart to check_specs.py for module docs: a fast, dependency-free
-gate that pins the invariants the clients assume.
+The catalog is hand-maintained data three clients read alike, the web installer, the device UI's ?deviceModel= inject and MoonDeck, so a typo drifts silently: a broken image path, a name that no longer matches its System.deviceModel, a driver pin list on an entry with no driver. This is the catalog's counterpart to check_specs.py: a fast gate pinning what the clients assume.
 
-Invariants checked per entry:
-  - required fields present (name, chip, firmwares, state)
-  - firmwares is a non-empty list of non-empty strings (entry[0] is the default)
+The catalog's shape, its fields, their types and their vocabularies, is mooninstaller/deviceModels.schema.json, validated first. What a schema cannot know is checked here, per entry:
+  - the name is unique
   - chip is a family of the firmware registry, and every firmware is a registry firmware for that family
-  - image (if set) is a local assets/deviceModels/ path that resolves on disk
-  - url (if set) is an absolute http(s) link
+  - image (if set) resolves on disk
   - every state root is a top-level module the device boots with
   - the state's System.deviceModel value equals the entry `name`
   - every child module `type` in the state is factory-registered
   - a driver's `pins` control only appears on a light driver (a *LedDriver or PwmLightDriver)
-  - supported/planned (if set) are string arrays drawn from the known vocabulary
 
 Exit 1 on any error, mirroring check_specs.py.
 """
@@ -32,30 +28,13 @@ ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(ROOT / "moondeck" / "build"))
 from firmwares import FIRMWARES, TARGET_TO_FAMILY, chip_family  # noqa: E402
 CATALOG = ROOT / "mooninstaller" / "deviceModels.json"
+SCHEMA = ROOT / "mooninstaller" / "deviceModels.schema.json"
 MODULE_TYPES_CPP = ROOT / "src" / "module_types.cpp"
 MAIN_CPP = ROOT / "src" / "main.cpp"
 ETHERNET_MODULE = ROOT / "src" / "core" / "system" / "EthernetModule.h"
 SD_CARD_MODULE = ROOT / "src" / "core" / "services" / "SdCardService.h"
 PLATFORM_CONFIG = ROOT / "src" / "platform" / "esp32" / "platform_config.h"
 DOCS = ROOT / "docs"
-
-# The device stores the injected deviceModel in SystemModule's deviceModel_[32] buffer (31 usable
-# chars + NUL); a longer catalog name is truncated on-device and stops matching. Keep in step with
-# that buffer in src/core/system/SystemModule.h.
-DEVICE_MODEL_MAX = 31
-
-# Capability vocabulary. supported = what a module drives; keep this list in lockstep with the modules that actually exist.
-# planned = peripherals with no module yet (the backlog seed), open-ended by design, so it is NOT whitelisted, only type-checked.
-# Adding a new supported capability means a module backs it.
-SUPPORTED_VOCAB = {"LEDs", "WiFi", "Ethernet", "Audio", "IR", "MQTT", "Hue", "MIDI", "Buttons", "I2C", "Relay", "SD card"}
-
-# Flash bauds a board may pin via `flashBaud`: the standard esptool rates. The default
-# differs by audience: the CLI / MoonDeck path defaults FAST (921600: DIY bench, modern
-# bridge), the web installer defaults SAFE (460800: unknown walk-up hardware). A board
-# sets `flashBaud` to override its resolved default in either direction: down for a flaky
-# bridge (the LOLIN's CH340), up where a slow default needs raising. Keep in step with
-# flash_esp32.py (_catalog_flash_baud) and install-orchestrator.js.
-FLASH_BAUDS = {115200, 230400, 460800, 921600}
 
 
 def preset_labels(header, table):
@@ -158,8 +137,16 @@ def main():
         print(f"Device check: cannot read {CATALOG.relative_to(ROOT)}: {e}")
         sys.exit(1)
 
+    # Imported here rather than at the top, so check_code, which imports this module's readers, needs no schema package.
+    import jsonschema
+    validator = jsonschema.Draft202012Validator(json.loads(SCHEMA.read_text(encoding="utf-8")))
+    for err in validator.iter_errors(catalog):
+        path = list(err.absolute_path)
+        entry = catalog[path[0]] if path and isinstance(catalog, list) else None
+        who = f'"{entry["name"]}"' if isinstance(entry, dict) and isinstance(entry.get("name"), str) else f"entry {path[0]}" if path else "the catalog"
+        errors.append(f"{who}: {'/'.join(map(str, path[1:])) or 'entry'}: {err.message}")
     if not isinstance(catalog, list):
-        print("Device check: deviceModels.json must be a JSON array")
+        print("\n".join(errors))
         sys.exit(1)
 
     factory_types = registered_types()
@@ -174,47 +161,16 @@ def main():
             where = f'"{e["name"]}"'
 
         if not isinstance(e, dict):
-            errors.append(f"{where}: not a JSON object")
-            continue
-
-        # --- required fields ---
-        for field in ("name", "chip", "firmwares", "state"):
-            if field not in e:
-                errors.append(f"{where}: missing required field '{field}'")
+            continue   # the schema reported it
 
         name = e.get("name")
         if name in names_seen:
             errors.append(f"{where}: duplicate device name")
         names_seen.add(name)
-        # The name is injected into the device's SystemModule.deviceModel control, whose buffer is
-        # deviceModel_[32] (31 chars + NUL). A longer name is silently truncated on-device, so it no
-        # longer matches the catalog, so MoonDeck then can't map it back and shows a duplicate
-        # "(unknown)" entry. Cap the source data so it always round-trips whole.
-        if isinstance(name, str) and len(name) > DEVICE_MODEL_MAX:
-            errors.append(f"{where}: name is {len(name)} chars; max {DEVICE_MODEL_MAX} "
-                          f"(SystemModule.deviceModel_[32] truncates longer names on-device)")
-
-        # --- firmwares (firmwares[0] is the default the picker pre-selects) ---
-        fws = e.get("firmwares")
-        if not isinstance(fws, list):
-            errors.append(f"{where}: firmwares must be a list, got {type(fws).__name__}")
-        elif not fws:
-            errors.append(f"{where}: firmwares must be a non-empty list (entry[0] is the default)")
-        else:
-            non_str = [f for f in fws if not isinstance(f, str)]
-            if non_str:
-                errors.append(f"{where}: firmwares entries must be strings, got "
-                              f"{[type(f).__name__ for f in non_str]}")
-            elif any(not f for f in fws):
-                errors.append(f"{where}: firmwares entries must be non-empty strings")
-            elif any(f != f.strip() or not f.strip() for f in fws):
-                # Whitespace-only or padded keys (" ", "esp32 ") silently miss the
-                # exact firmware-key match downstream (picker, dedup, manifest names).
-                errors.append(f"{where}: firmwares entries must not be whitespace-only "
-                              f"or have leading/trailing whitespace")
 
         # --- chip: the family the installer detects and the manifests name, and the one every firmware installs onto ---
         chip = e.get("chip")
+        fws = e.get("firmwares")
         families = set(TARGET_TO_FAMILY.values())
         # A string first: a list or an object is unhashable, and the set membership test would raise rather than report.
         if "chip" in e and (not isinstance(chip, str) or chip not in families):
@@ -226,49 +182,14 @@ def main():
                 elif isinstance(fw, str) and chip_family(fw) != chip:
                     errors.append(f"{where}: firmware {fw!r} installs onto {chip_family(fw)}, not {chip}")
 
-        # --- flashBaud (optional): a board opts into a faster flash baud only when
-        #     its USB bridge is verified to sustain it (flash_esp32.py reads this). ---
-        baud = e.get("flashBaud")
-        # `bool` is an int subclass and `1.0 in {int}` is True, so guard the type
-        # explicitly: a float/bool flashBaud would stringify wrong for esptool.
-        if baud is not None and (type(baud) is not int or baud not in FLASH_BAUDS):
-            errors.append(f"{where}: flashBaud must be one of {sorted(FLASH_BAUDS)}, got {baud!r}")
-
-        # --- image resolves on disk + is a local path ---
         img = e.get("image")
-        if img is not None:
-            if not isinstance(img, str) or not img.startswith("assets/deviceModels/"):
-                errors.append(f"{where}: image must be a local 'assets/deviceModels/...' path, got {img!r}")
-            elif not (DOCS / img).exists():
-                errors.append(f"{where}: image '{img}' does not exist on disk")
+        if isinstance(img, str) and img.startswith("assets/deviceModels/") and not (DOCS / img).exists():
+            errors.append(f"{where}: image '{img}' does not exist on disk")
 
-        # --- url is an absolute http(s) link ---
-        url = e.get("url")
-        if url is not None and not (isinstance(url, str) and url.startswith(("http://", "https://"))):
-            errors.append(f"{where}: url must be an absolute http(s) link, got {url!r}")
-
-        # --- capability fields ---
-        for cap_field, whitelist in (("supported", SUPPORTED_VOCAB), ("planned", None)):
-            caps = e.get(cap_field)
-            if caps is None:
-                continue
-            if not isinstance(caps, list) or not all(isinstance(c, str) for c in caps):
-                errors.append(f"{where}: {cap_field} must be a list of strings")
-                continue
-            if whitelist is not None:
-                for c in caps:
-                    if c not in whitelist:
-                        errors.append(f"{where}: supported capability '{c}' is not in the "
-                                      f"known vocabulary {sorted(whitelist)}: add a module first")
-
-        # --- state: the document PATCH /api/state takes; root members are top-level modules,
-        #     an object member with a `type` is a child module, scalars and arrays are controls ---
+        # --- state: the document PATCH /api/state takes; its shape is the schema's, its modules are checked against the firmware here ---
         state = e.get("state")
         if not isinstance(state, dict):
-            # `state` is required (presence checked above); a wrong *type* is a
-            # schema violation, not something to skip silently.
-            errors.append(f"{where}: state must be an object, got {type(state).__name__}")
-            continue
+            continue   # the schema reported it
         mods = []                        # [{type, id, controls}] in document order, roots first
         def _walk(path, node, mtype):
             controls = {}
@@ -276,23 +197,16 @@ def main():
             for k, v in node.items():
                 if k in ("type", "$patch"):
                     continue
-                if isinstance(v, dict):
-                    if isinstance(v.get("type"), str) and v["type"]:
-                        kids.append((k, v))
-                    else:
-                        errors.append(f"{where}: state member '{path}.{k}' is an object without a 'type' "
-                                      f"(a child module needs one)")
-                else:
+                if isinstance(v, dict) and isinstance(v.get("type"), str) and v["type"]:
+                    kids.append((k, v))
+                elif not isinstance(v, dict):
                     controls[k] = v
-            if "$patch" in node and node["$patch"] != "replace":
-                errors.append(f"{where}: state member '{path}' has $patch {node['$patch']!r}; only 'replace' is used")
             mods.append({"type": mtype, "id": path, "controls": controls})
             for k, v in kids:
                 _walk(f"{path}.{k}", v, v["type"])
         for root, node in state.items():
             if not isinstance(node, dict):
-                errors.append(f"{where}: state root '{root}' is not an object")
-                continue
+                continue   # the schema reported it
             if top_names and root not in top_names:
                 errors.append(f"{where}: state root '{root}' is not a top-level module (known: {sorted(top_names)})")
                 continue

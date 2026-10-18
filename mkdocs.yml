@@ -45,7 +45,7 @@ theme:
     accent: deep purple
   features:
     - navigation.instant   # SPA-style nav, no full reload
-    - navigation.tracking  # URL reflects the active anchor
+    # The address keeps the anchor a link opened, since MoonWalk reads it as the process to show; scroll tracking would rewrite it.
     - navigation.top       # back-to-top button
     # The ten top-level groups ride in a bar UNDER THE HEADER rather than stacking down the left
     # edge. Expanded in the sidebar they ran past a screen height, so the reader scrolled a menu to
@@ -97,6 +97,8 @@ plugins:
         tutorials/first-light-show.md: moonwalk.md#first-light-show
         how-to/installing-to-desktop.md: moonwalk.md#install
         how-to/building.md: moonwalk.md#desktop-build-test
+        gettingstarted.md: moonwalk.md#install
+        how-to/updating-firmware.md: moonwalk.md#update-firmware
 
 # The site's styles: colored headings, the card deck, the clips.
 extra_css:
@@ -145,11 +147,8 @@ validation:
 # internal and deliberately absent from the published site.
 nav:
   - Home: index.md
-  # A top-level tab, and the FILE stays at docs/gettingstarted.md: the web installer's Help
-  # link is a hard-coded https://moonmodules.org/MoonLight/gettingstarted.html, shipped
-  # outside MkDocs, so the root URL is a contract rather than a layout choice.
+  # A top-level tab. Installers already shipped link gettingstarted.html for help, a contract the redirect above keeps.
   - Getting started:
-      - Install & first light: gettingstarted.md
       - MoonWalk: moonwalk.md
       # The web installer is a separate app deployed at /install/ (staged verbatim by the
       # release workflow, not built by MkDocs). A full URL (not a site-relative path) so
@@ -190,10 +189,9 @@ nav:
       - LED signal integrity: how-to/led-signal-integrity.md
       - Connecting a control surface: how-to/control-surface.md
       - Playing an effect while a button is held: how-to/hold-to-play.md
-      - Building a multi-device installation: how-to/multi-board-installation.md
+      - The StadBeest, a multi-device installation: how-to/multi-board-installation.md
       - Home automation: how-to/home-automation.md
-      - Save and recall presets: how-to/presets.md
-      - Updating firmware: how-to/updating-firmware.md
+      - Presets: how-to/presets.md
       - Migrating over the air: how-to/migrating-over-the-air.md
       - Back up and restore: how-to/backup-and-restore.md
       - Troubleshooting: how-to/troubleshooting.md

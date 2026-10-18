@@ -3,7 +3,9 @@
 A button that shows an effect for as long as it is held, and drops back to a standby effect when it is let go.
 A magician's quick-change tricks, a foot pedal on a stage, a "press for sparkle" button on a sculpture: each is the same setup, done with configuration only.
 
-> New here? Start with **[Install & first light](../gettingstarted.md)**. What follows assumes MoonLight is running and the buttons are wired to GPIOs.
+The steps are the process [Play an effect while a button is held](../moonwalk.md#hold-to-play); below are the mechanism and the same setup as one state document for the API.
+
+> New here? Start with **[Install MoonLight](../moonwalk.md#install)**. What follows assumes MoonLight is running and the buttons are wired to GPIOs.
 
 ---
 

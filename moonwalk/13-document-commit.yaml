@@ -1,0 +1,130 @@
+# yaml-language-server: $schema=moonwalk.schema.json
+stage: Document and commit
+summary: The change documented, checked and committed.
+processes:
+  - id: document
+    title: Document a change
+    actor: contributor
+    goal: The module's header and the docs describe what shipped.
+    page: contributing/documentation-standards.md
+  - id: commit
+    title: Run the commit checks, then commit
+    actor: contributor
+    goal: A commit whose every check the change triggers passed, reviewed and measured.
+    systems: [MoonDeck]
+    dependsOn: [desktop-build-test, document]
+    page: contributing/principles-and-process.md
+    intro: |
+      Each check runs when the change touches its paths, and once: a pass counts until the files it covers change again. The product owner commits in this role too.
+    steps:
+      - id: specs
+        section: Every change
+        say: Check the specs.
+        when: { run: { script: moondeck/check/check_specs.py } }
+      - id: prose
+        say: Check the prose of the added lines.
+        when: { run: { script: moondeck/check/check_prose.py } }
+        detail: |
+          It also writes its report to the tree, a record the commit carries.
+      - id: docs
+        section: Documentation
+        say: Build the docs, strict.
+        given: [{ changed: ["**/*.md", mkdocs.yml, moonwalk/**] }]
+        when: { run: { script: moondeck/docs/build_docs.py, args: "--strict" } }
+      - id: docgen
+        say: Check the headers' documentation.
+        given: [{ changed: ["**/*.md", src/**, test/**] }]
+        when: { run: { script: moondeck/check/check_docgen.py } }
+        detail: |
+          It holds the documentation to its ratchet.
+      - id: taglines
+        say: Check the front pages agree on the platforms.
+        given: [{ changed: [README.md, docs/index.md, CLAUDE.md] }]
+        when: { run: { script: moondeck/check/check_taglines.py } }
+      - id: code
+        section: Code
+        say: Check the code's boundaries and complexity.
+        given: [{ changed: [src/**, test/**, "!test/js/**", "!test/python/**"] }]
+        when: { run: { script: moondeck/check/check_code.py } }
+      - id: build-desktop
+        say: Build the desktop firmware, with zero warnings.
+        given: [{ changed: [src/**, test/**, "!test/js/**", "!test/python/**"] }]
+        when: { run: { script: moondeck/build/build_desktop.py } }
+      - id: build-tests
+        say: Build the unit tests and the scenario runner.
+        given: [{ changed: [src/**, test/**, "!test/js/**", "!test/python/**"] }]
+        when: { run: { script: moondeck/build/build_desktop.py, args: "--tests" } }
+      - id: test-desktop
+        say: Run the unit tests.
+        given: [{ changed: [src/**, test/**, "!test/js/**", "!test/python/**"] }]
+        when: { run: { script: moondeck/test/test_desktop.py } }
+      - id: scenarios
+        say: Run the scenarios the change touches.
+        given: [{ changed: [src/**, test/**, "!test/js/**", "!test/python/**"] }]
+        when: { run: { script: moondeck/scenario/run_scenario.py } }
+        detail: |
+          Select by `--module` or `--name` rather than refreshing every scenario. A run writes its observation blocks back into the scenario files.
+      - id: esp32-fresh
+        say: Check the classic firmware is up to date.
+        given: [{ changed: [src/**, "!src/platform/desktop/**", moonbase/**] }]
+        when: { run: { script: moondeck/check/check_esp32_built.py, args: "--firmware esp32" } }
+        detail: |
+          It and its MoonBase must be newer than their sources; rebuild them on the product owner's go when they are not.
+
+          One firmware per chip family is the gate: this one, the S3's and the P4's. A stale one is rebuilt with `build_esp32.py --firmware <name>`, one at a time, since the variants share their managed components. The check compares the binary against every source in a tenth of a second and catches the edit that was never compiled.
+      - id: esp32-fresh-s3
+        say: The same for the S3 firmware.
+        given: [{ changed: [src/**, "!src/platform/desktop/**"] }]
+        when: { run: { script: moondeck/check/check_esp32_built.py, args: "--firmware esp32s3-n16r8" } }
+      - id: esp32-fresh-p4
+        say: The same for the P4 firmware.
+        given: [{ changed: [src/**, "!src/platform/desktop/**"] }]
+        when: { run: { script: moondeck/check/check_esp32_built.py, args: "--firmware esp32p4rev3-eth" } }
+      - id: no-jit
+        say: Build the desktop without the MoonLive backend.
+        given: [{ changed: [src/core/moonlive/**] }]
+        when: { run: { script: moondeck/build/build_desktop.py, args: "--no-jit" } }
+        detail: |
+          It catches a helper left unused outside its guard, fatal under GCC while clang stays silent.
+      - id: kpi
+        say: Record the repo's health.
+        given: [{ changed: [src/**, test/**, "!test/js/**", "!test/python/**"] }]
+        when: { run: { script: moondeck/check/collect_kpi.py, args: "--commit" } }
+        detail: |
+          Put its deltas in the commit message.
+
+          Flash and DRAM per target, binary size, the tick matrix, line counts and complexity. It runs when the code changes, since its timings drift with the host.
+      - id: js
+        section: The web pages
+        say: Run the JavaScript tests.
+        given: [{ changed: [src/ui/**, mooninstaller/**, docs/assets/**, test/js/**] }]
+        when: { run: { script: moondeck/test/test_host.py, args: "--js" } }
+      - id: devices
+        say: Check the installer's device catalog.
+        given: [{ changed: [src/ui/**, mooninstaller/**] }]
+        when: { run: { script: moondeck/check/check_devices.py } }
+      - id: python
+        section: The scripts
+        say: Run the Python tests.
+        given: [{ changed: [moondeck/**, moonlive/**, moonwalk/**, test/python/**, "docs/moonmodules/**/*.md"] }]
+        when: { run: { script: moondeck/test/test_host.py, args: "--python" } }
+      - id: firmwares
+        say: Check the firmware list.
+        given: [{ changed: [moondeck/**, moonlive/**] }]
+        when: { run: { script: moondeck/check/check_firmwares.py } }
+      - id: improv
+        section: With a board attached
+        say: Provision a board over Improv, end to end.
+        given: [{ changed: ["src/**/*Improv*", "src/platform/*/platform_*_improv.cpp", mooninstaller/improv-frame.js, mooninstaller/install-orchestrator.js, "moondeck/build/improv_*.py"] }]
+        when: { manual: "improv_smoke_test.py --port <the board's port>, or its card with the port picked." }
+        detail: |
+          Recommended rather than required, since it needs a board on USB; a skip names its reason.
+      - id: stage
+        section: Commit
+        say: Read the diff and stage what you reviewed.
+        when: { manual: "Staged means read." }
+      - id: commit
+        say: Commit, with the deltas the health check printed.
+        when: { run: { command: "git commit" } }
+        detail: |
+          The message carries the performance line and the account line from `collect_kpi.py --commit`.

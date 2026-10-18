@@ -4,7 +4,7 @@ MoonLight runs as an ordinary Linux application: the same effect pipeline, web U
 
 Deploying is covered here. Building and developing on Linux are [MoonWalk's contributor processes](../moonwalk.md#desktop-build-test).
 
-> Windows, with screenshots: [Install MoonLight](../moonwalk.md#install). Flashing a board: [Install & first light](../gettingstarted.md).
+> Windows, with screenshots: [Install MoonLight](../moonwalk.md#install). Flashing a board: the same process with ESP32 picked.
 
 ## Which route applies to your machine
 
@@ -25,32 +25,7 @@ Both architectures get a released binary, so the route below is the same one and
 
 ## Install the package
 
-The [releases page](https://github.com/MoonModules/MoonLight/releases/latest) carries one `.deb` per architecture: `_amd64.deb` for `x86_64`, `_arm64.deb` for `aarch64`.
-
-On a machine with a browser, download it and install:
-
-```sh
-sudo apt install ./moonlight_X.Y.Z_arm64.deb
-MoonLight
-```
-
-On a headless board, fetch it over ssh instead. This picks the right file for the architecture it runs on, so the same two lines work on a Pi, a NanoPi and a server:
-
-```sh
-arch=$(dpkg --print-architecture)
-url=$(curl -fsSL https://api.github.com/repos/MoonModules/MoonLight/releases/tags/latest \
-      | grep -o "https://[^\"]*_${arch}\.deb" | head -1)
-curl -fsSL -o moonlight.deb "$url" && sudo apt install -y ./moonlight.deb
-MoonLight
-```
-
-`latest` is the rolling build from `main`, which is what the web installer offers too. For the newest tagged release, replace `tags/latest` with `latest` in that URL.
-
-Open `http://<machine>:8080`. A `.tar.gz` to unpack anywhere is on the same page.
-
-**A package built for the wrong architecture refuses to install**, which is the failure you want: `apt` rejects it by name rather than installing something that cannot run.
-
-The arm64 build targets glibc 2.35, so it installs on Raspberry Pi OS Bookworm, Debian 12 and 13, Ubuntu 22.04 and later. On something older, build from source below.
+Install the `.deb` as [Install MoonLight](../moonwalk.md#install) describes with Linux picked: its step holds the two lines that fetch the right file over ssh on a headless board. The package needs glibc 2.35, so Raspberry Pi OS Bookworm, Debian 12 and 13, and Ubuntu 22.04 and later. apt refuses a package for the wrong architecture by name rather than installing something that cannot run. Then open `http://<machine>:8080`. On something older than that floor, build from source below.
 
 ## Build from source
 
@@ -183,15 +158,7 @@ MoonLight writes to disk only when settings change, so the card is a fine home f
 
 ## Docker
 
-The same program, installed as a container rather than a package. One published image carries amd64 and arm64, so a board and a server pull the same tag and each gets native instructions.
-
-```sh
-docker run -d --name moonlight --network host \
-  -v moonlight-data:/data --restart unless-stopped \
-  ghcr.io/moonmodules/moonlight:latest
-```
-
-Open `http://<machine>:8080`. `--restart unless-stopped` is what brings it back after a reboot, so Docker replaces the systemd unit above rather than needing one of its own.
+The same program, installed as a container rather than a package: start it as [Install MoonLight](../moonwalk.md#install) describes with Docker picked. One published image carries amd64 and arm64, so a board and a server pull the same tag and each gets native instructions. `--restart unless-stopped` brings it back after a reboot, so Docker replaces the systemd unit above rather than needing one of its own.
 
 **Use `--network host`.** The web UI and unicast fixture output work through ordinary port mapping (`-p 8080:8080`). mDNS discovery and Art-Net's broadcast mode are multicast, and neither crosses a bridge network. Host networking is what lets a container find boards and be found by them. Verified on a NanoPi R28S driving a ColorLight card.
 
@@ -267,6 +234,6 @@ The realistic limits are architecture and memory, not the kind of device. It nee
 
 ## Where to go next
 
-- [Install & first light](../gettingstarted.md): the same program on an ESP32.
+- [Install MoonLight](../moonwalk.md#install): the same program on an ESP32.
 - [How MoonLight works](../tutorials/how-moonlight-works.md): layouts, layers, effects and drivers.
 - [Build, run and test on the desktop](../moonwalk.md#desktop-build-test): building, testing and packaging from source.

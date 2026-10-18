@@ -23,9 +23,23 @@ function keepInput(name, value) {
     try { localStorage.setItem(LS_INPUTS, JSON.stringify({ ...readInputs(), [name]: value })); } catch { /* kept for this view only */ }
 }
 
+// A process's choices as the reader sees them: their own pick first, then what the host knows (the installer knows it installs a board), then the reader's operating system.
+function chosenOf(p, presets = {}) {
+    const chosen = {};
+    const inputs = Object.entries(p.inputs?.properties || {});
+    const keptAll = inputs.length ? readInputs() : {};   // read once per call, since the map asks for every step on each layout
+    for (const [name, spec] of inputs) {
+        const options = spec.enum || [];
+        const kept = keptAll[name];
+        chosen[name] = options.includes(kept) ? kept : options.includes(presets[name]) ? presets[name] : ownPlatform(options) || options[0];
+    }
+    return chosen;
+}
+
 // Whether a step applies to the reader's choices: every `given` naming an input must match its chosen option, one (`equals`) or one of several (`in`).
 export const applies = (s, chosen) => (s.given || []).every((g) => !g.input || (g.in ? g.in.includes(chosen[g.input]) : chosen[g.input] === g.equals));
-const ACTORS = ["user", "contributor", "product-owner", "agent", "ci"];
+const ACTOR_COLOR = { user: "#2e7d32", contributor: "#1565c0", "product-owner": "#6a1b9a", agent: "#ef6c00", ci: "#546e7a" };   // who does a step, one color on the map and in the text
+const ACTORS = Object.keys(ACTOR_COLOR);
 const COL = 340, PROC_H = 64, STEP_H = 36, GAP = 28;
 
 // The map's styles, injected once, since the app has no copy of the site's stylesheet. Its colors are the docs theme's variables, which a host that is not the site maps its own colors onto, else fixed ones.
@@ -37,7 +51,7 @@ const STYLES = `
 .mm-map-bar input[type="search"], .mm-map-bar select, .mm-map-bar button, .mm-map-chip { border: 1px solid var(--mw-line); background: var(--mw-bg); color: inherit; border-radius: 4px; padding: 4px 8px; font: inherit; }
 .mm-map-canvas, .mm-map-panel { border: 1px solid var(--mw-line); border-radius: 6px; min-height: 0; }
 .mm-map-panel { overflow: auto; font-size: 0.75rem; padding: 0 0.75rem; }
-.mm-map-panel h3 { margin-top: 0.75rem; color: var(--mw-accent); }   /* the process's title, in the color of its steps */
+.mm-map-panel h3 { margin-top: 0.75rem; color: var(--mw-accent); }   /* the process's title, in the accent color */
 .mm-map-meta { color: var(--mw-muted); }
 .mm-map-chips { flex-basis: 100%; display: flex; flex-wrap: wrap; gap: 4px; }
 .mm-map-chip { border-radius: 999px; padding: 2px 10px; cursor: pointer; }
@@ -49,8 +63,8 @@ const STYLES = `
 .mm-map-view { line-height: 1.5; }   /* the panel's size, the host's secondary text */
 .mm-map-view h4 { margin: 1.2em 0 0.4em; }
 .mm-map-view video, .mm-map-view img { max-width: 100%; border-radius: 6px; }
-.mm-map-step { margin: 0.8em 0 0.3em; font-weight: bold; color: var(--mw-accent); }   /* the line a step on the map scrolls to */
-.mm-map-skip { opacity: 0.5; }
+.mm-map-step { margin: 0.8em 0 0.3em; padding: 0.3em 0.6em; font-weight: bold; border: 2px solid var(--mw-actor, var(--mw-muted)); border-radius: 6px; background: color-mix(in srgb, currentColor 6%, transparent); }   /* the line a step on the map scrolls to, drawn as its box there */
+.mm-map-off { opacity: 0.45; }
 .mm-map-call { display: flex; gap: 0.5em; align-items: center; margin: 0.2em 0 0.4em; }
 .mm-map-call code { flex: 1; min-width: 0; overflow-x: auto; white-space: nowrap; font-size: 0.9em; padding: 2px 6px; border-radius: 4px; background: var(--mw-line); }
 .mm-map-note { font-weight: normal; color: var(--mw-muted); font-size: 0.9em; }
@@ -132,14 +146,15 @@ function columns(model, by) {
 }
 
 // The story map's grid: a column each, its processes stacked, a process's steps inside it, one below the other. Every node carries its process id, since in the system view one process has several.
-function elements(model, by) {
+// The map's nodes and their places. `keep(pid, step)` leaves a step out, and the steps below move up, so hiding leaves no hole.
+function elements(model, by, keep = () => true) {
     const out = [];
     columns(model, by).forEach((column, x) => {
         out.push({ data: { id: `col:${column.id}`, label: column.title, kind: "stage" } });
         let y = 0;
         for (const pid of column.processes) {
             const p = model.processes[pid];
-            const steps = p.steps || [];
+            const steps = (p.steps || []).filter((s) => keep(pid, s));
             const nid = `${column.id}::${pid}`;
             out.push({ data: { id: nid, pid, parent: `col:${column.id}`, label: p.title, kind: "process", actor: p.actor, stepped: steps.length > 0 },
                        position: { x: x * COL, y } });
@@ -173,13 +188,12 @@ function style(root) {
     const fg = themeColor(root, "--md-default-fg-color", "#222");
     const bg = themeColor(root, "--md-default-bg-color", "#fff");
     const accent = themeColor(root, "--md-accent-fg-color", "#526cfe");
-    const actor = { user: "#2e7d32", contributor: "#1565c0", "product-owner": "#6a1b9a", agent: "#ef6c00", ci: "#546e7a" };
     return [
         { selector: "node", style: { label: "data(label)", color: fg, "font-size": 12, "text-wrap": "wrap", "text-valign": "center", "text-halign": "center", "min-zoomed-font-size": 7 } },
         { selector: "node[kind='stage']", style: { shape: "round-rectangle", "background-color": fg, "background-opacity": 0.04, "border-width": 1, "border-color": fg, "border-opacity": 0.2, "text-valign": "top", "font-size": 22, "font-weight": "bold", padding: 24, "min-zoomed-font-size": 4 } },
-        { selector: "node[kind='process']", style: { shape: "round-rectangle", width: 280, height: 44, "text-max-width": 260, "background-color": bg, "border-width": 3, "border-color": (n) => actor[n.data("actor")] || fg } },
+        { selector: "node[kind='process']", style: { shape: "round-rectangle", width: 280, height: 44, "text-max-width": 260, "background-color": bg, "border-width": 3, "border-color": (n) => ACTOR_COLOR[n.data("actor")] || fg } },
         { selector: "node[kind='process'][?stepped]", style: { "text-valign": "top", "font-weight": "bold", padding: 10 } },
-        { selector: "node[kind='step']", style: { shape: "round-rectangle", width: 260, height: 28, "text-max-width": 250, "font-size": 10, "background-color": fg, "background-opacity": 0.06, "border-width": 2, "border-color": (n) => actor[n.data("actor")] || fg, "min-zoomed-font-size": 9 } },
+        { selector: "node[kind='step']", style: { shape: "round-rectangle", width: 260, height: 28, "text-max-width": 250, "font-size": 10, "background-color": fg, "background-opacity": 0.06, "border-width": 2, "border-color": (n) => ACTOR_COLOR[n.data("actor")] || fg, "min-zoomed-font-size": 9 } },
         { selector: "edge", style: { width: 1.5, "line-color": fg, "line-opacity": 0.35, "curve-style": "bezier", "target-arrow-shape": "triangle", "target-arrow-color": fg, "arrow-scale": 0.8 } },
         { selector: "edge[kind='next']", style: { width: 1, "line-style": "dotted", "target-arrow-shape": "none" } },
         { selector: "node.mm-off, node.mm-skip", style: { opacity: 0.25 } },
@@ -257,7 +271,11 @@ export function doneBySteps(steps) {
 }
 
 // A run's duration as a reader takes it in: `42s`, `3m05s`.
-const took = (seconds) => seconds == null ? "" : seconds < 60 ? `${Math.round(seconds)}s` : `${Math.floor(seconds / 60)}m${String(Math.round(seconds % 60)).padStart(2, "0")}s`;
+export const took = (seconds) => {
+    if (seconds == null) return "";
+    const s = Math.round(seconds);   // rounded first, so 119.6 reads 2m00s rather than 1m60s
+    return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m${String(s % 60).padStart(2, "0")}s`;
+};
 
 // A process followed in the host while the user performs it, the onboarding checklist's construct: one bar holding the current step, which the host's state moves on and a tap turns back into the map. The bar floats under the step's target as a coach mark does, above it when there is no room below, and at the bottom of the screen when the step has none in view. The host passes `show(type, control, reveal)`, which returns the target's element and with `reveal` brings it into view first, and `reopen(at)`, which opens the map at `process/step`. Returns `update(stateDoc)`, which the host calls on each state change, and `stop()`.
 export function follow(model, pid, stepId, { show, reopen }) {
@@ -383,12 +401,35 @@ function howTo(s) {
     return s.when?.manual ? control("p", { className: "mm-map-note" }, s.when.manual) : null;
 }
 
-// Whether a process carries its own prose, so the view shows it whole rather than linking a page.
-const hasProse = (p) => Boolean(p.intro || p.outro || (p.steps || []).some((s) => s.detail));
+// Whether a process carries its own prose, so the view shows it whole rather than linking a page: in the map already, or marked `text` and fetched when the view opens.
+const hasProse = (p) => Boolean(p.text || p.intro || p.outro || (p.steps || []).some((s) => s.detail));
+
+// A process's prose, its intro, outro and step details, fetched once when its view first opens and merged into the map's process, so the map a page loads stays small.
+const texts = new Map();
+function withText(pid, p) {
+    if (!texts.has(pid)) {
+        texts.set(pid, fetch(new URL(`moonwalk/text/${pid}.json`, ROOT)).then((r) => {
+            if (!r.ok) throw new Error(`answered ${r.status}`);
+            return r.json();
+        }).then((t) => {
+            Object.assign(p, { intro: t.intro, outro: t.outro });
+            for (const s of p.steps || []) if (t.details?.[s.id]) s.detail = t.details[s.id];
+            delete p.text;
+        }).catch((e) => { texts.delete(pid); throw e; }));   // a failed fetch is tried again on the next open
+    }
+    return texts.get(pid);
+}
 
 // The process view: a process with its prose reads whole in the panel, widened for reading, its intro, its steps in their numbered sections, each with its detail, and its outro; one without prose shows its steps and links its page.
 function showPanel(panel, model, pid, done, onDone, host = {}) {
     const p = model.processes[pid];
+    if (p?.text) {
+        // Drawn once its prose has arrived, unless the reader opened another process meanwhile.
+        panel.dataset.opening = pid;
+        return withText(pid, p).then(() => { if (panel.dataset.opening === pid) showPanel(panel, model, pid, done, onDone, host); },
+            (e) => { if (panel.dataset.opening === pid) panel.replaceChildren(control("p", { className: "mm-map-note" }, `${p.title}: its text could not load (${e.message}).`)); });
+    }
+    panel.dataset.opening = pid;
     panel.replaceChildren();
     host.root?.classList.toggle("mm-map-reading", Boolean(p && hasProse(p)));
     if (!p) return;
@@ -404,39 +445,49 @@ function showPanel(panel, model, pid, done, onDone, host = {}) {
         const md = (text) => { const d = control("div"); d.innerHTML = host.helpMarkdown(text); view.append(d); };
         if (p.intro) md(p.intro);   // the intro first, which says what the choice below is for
         // A choice the process offers, such as the platform, as a row of options above the steps: only the chosen option's steps show.
-        const chosen = {};
+        const chosen = chosenOf(p, host.choices);
         for (const [name, spec] of Object.entries(p.inputs?.properties || {})) {
             const options = spec.enum || [];
-            // The reader's own pick first, then what the host knows (the installer knows it installs a board), then the reader's operating system.
-            const preset = host.choices?.[name];
-            chosen[name] = options.includes(readInputs()[name]) ? readInputs()[name] : options.includes(preset) ? preset : ownPlatform(options) || options[0];
             const row = control("div", { className: "mm-map-chips" });
             row.append(control("span", { className: "mm-map-meta" }, (spec.description || name) + " "));
             for (const o of options) {
                 const b = control("button", { type: "button", className: "mm-map-chip" + (o === chosen[name] ? " on" : "") }, o);
-                b.addEventListener("click", () => { keepInput(name, o); showPanel(panel, model, pid, done, onDone, host); });
+                b.addEventListener("click", () => { keepInput(name, o); if (host.hideOff) host.relayout?.(); showPanel(panel, model, pid, done, onDone, host); });
                 row.append(b);
             }
             view.append(row);
         }
         host.offChoice?.(p, chosen);   // the map grays out the steps of the options not chosen
+        // A step that does not apply, for another choice or not needed for this change, is grayed as on the map, or left out when the reader hides them.
+        const steps = p.steps || [];
+        const runOf = (s) => host.steps?.[pid]?.find((r) => r.id === s.id);
+        const off = steps.map((s) => !applies(s, chosen) || runOf(s)?.triggered === false);
+        let current = null;
+        const sectionOf = steps.map((s) => (current = s.section || current));
+        const live = new Set(sectionOf.filter((sec, i) => sec && !off[i]));
         let chapter = 0, section = null;
-        for (const s of (p.steps || []).filter((s) => applies(s, chosen))) {
-            // A heading once per section, numbered by the sections the choice leaves, since each option may open the same one.
-            if (s.section && s.section !== section) { section = s.section; view.append(control("h4", {}, `${++chapter}. ${section}`)); }
+        steps.forEach((s, i) => {
+            if (off[i] && host.hideOff) return;
+            // A heading once per section, numbered by the sections with a step that applies; one whose steps are all grayed is grayed with them.
+            if (sectionOf[i] && sectionOf[i] !== section) {
+                section = sectionOf[i];
+                view.append(live.has(section) ? control("h4", {}, `${++chapter}. ${section}`) : control("h4", { className: "mm-map-off" }, section));
+            }
             // A step and its detail are one block, the part of the text that belongs to the step on the map.
             const block = control("div");
             block.dataset.step = s.id;
-            // The instruction in the step's color, what it waits on as a quiet aside after it.
+            if (off[i]) block.classList.add("mm-map-off");
+            // The instruction in its box from the map, bordered in its actor's color, what it waits on as a quiet aside after it.
             const line = control("p", { className: "mm-map-step" }, s.say);
+            if (ACTOR_COLOR[s.actor]) line.style.setProperty("--mw-actor", ACTOR_COLOR[s.actor]);
             if (stepNote(s, p)) line.append(control("span", { className: "mm-map-note" }, stepNote(s, p)));
             // In a host that can show a card, a step with a target follows from here: the map gives way to the app and the bar.
             // A step the device already shows done is ticked, as a checklist ticks a finished item, and has nothing to show.
-            const run = host.steps?.[pid]?.find((r) => r.id === s.id);
+            const run = runOf(s);
             if (host.types && stepHolds(s, host.state, host.types) === true) line.append(control("span", { className: "mm-map-meta" }, " \u2714 done"));
             else if (run) {
                 // A script step: not needed for this change, passed and still holding, or to run, with how long it took last time.
-                if (!run.triggered) { block.classList.add("mm-map-skip"); line.append(control("span", { className: "mm-map-note" }, " not needed for this change")); }
+                if (!run.triggered) line.append(control("span", { className: "mm-map-note" }, " not needed for this change"));
                 else if (run.fresh) line.append(control("span", { className: "mm-map-meta" }, " \u2714 passed"));
                 else if (run.running) line.append(control("span", { className: "mm-map-meta" }, " running"));
                 else if (host.run && run.card) {
@@ -454,7 +505,7 @@ function showPanel(panel, model, pid, done, onDone, host = {}) {
             if (how) block.append(how);
             if (s.detail) { const d = control("div"); d.innerHTML = host.helpMarkdown(s.detail); block.append(d); }
             view.append(block);
-        }
+        });
         if (p.outro) md(p.outro);
         panel.append(view);
     } else {
@@ -549,19 +600,24 @@ export async function drawMap(host, opts = {}) {
     // The reader's own view comes back as they left it; the host's actor is the first visit's.
     let view = {};
     try { view = JSON.parse(localStorage.getItem(LS_VIEW) || "{}") || {}; } catch { /* the defaults */ }
-    const keepView = () => { try { localStorage.setItem(LS_VIEW, JSON.stringify({ actor: actor.value, by: by.value, hide: hide.checked })); } catch { /* kept for this visit only */ } };
+    const keepView = () => { try { localStorage.setItem(LS_VIEW, JSON.stringify({ actor: actor.value, by: by.value, hide: hide.checked, hideOff: hideOff.checked })); } catch { /* kept for this visit only */ } };
     actor.value = "actor" in view && ["", ...ACTORS].includes(view.actor) ? view.actor : opts.actor || "";
     const hide = control("input", { type: "checkbox" });
     hide.checked = Boolean(view.hide);
+    // Steps for another choice, or not needed for this change: grayed in the text as on the map, or left out of the text.
+    const hideOff = control("input", { type: "checkbox" });
+    hideOff.checked = Boolean(view.hideOff);
+    const hideOffLabel = control("label", { title: "Steps for another choice, or not needed for this change" });
+    hideOffLabel.append(hideOff, " Hide steps that don't apply");
     const hideLabel = control("label");
     hideLabel.append(hide, " Hide done");
     const by = control("select", { title: "Columns" });
     by.append(control("option", { value: "stage" }, "Columns: stage"), control("option", { value: "system" }, "Columns: system"));
     if (view.by === "system") by.value = "system";
-    for (const c of [actor, by, hide]) c.addEventListener("change", keepView);
+    for (const c of [actor, by, hide, hideOff]) c.addEventListener("change", keepView);
     const all = control("button", { type: "button", title: "Zoom to the processes the filters show" }, "Fit selection");
     const chips = control("div", { className: "mm-map-chips" });
-    bar.append(search, actor, by, hideLabel, all, chips);
+    bar.append(search, actor, by, hideLabel, hideOffLabel, all, chips);
     const canvas = control("div", { className: "mm-map-canvas" });
     const panel = control("aside", { className: "mm-map-panel" });
     const split = control("div", { className: "mm-map-split", tabIndex: 0, title: "Drag to share the space between the map and the text" });
@@ -590,6 +646,8 @@ export async function drawMap(host, opts = {}) {
     const done = new Set([...marks, ...device]);
     const host_ = { device, newTab: opts.newTab, root: host, helpMarkdown, choices: opts.choices, doneBy: opts.state ? "Done on this device" : "Done: its scripts last passed" };
     host_.state = opts.state;
+    host_.hideOff = hideOff.checked;
+    hideOff.addEventListener("change", () => { host_.hideOff = hideOff.checked; host_.relayout?.(); if (host_.current) showPanel(panel, model, host_.current, done, mark, host_); });
     host_.steps = opts.steps;
     if (opts.run) host_.run = opts.run;
     host_.types = opts.state ? typesOf(opts.state) : null;   // indexed once, for every step the panel ticks
@@ -608,8 +666,22 @@ export async function drawMap(host, opts = {}) {
         });
         chips.append(chip);
     }
-    const cy = window.cytoscape({ container: canvas, elements: elements(model, by.value), style: style(host), layout: { name: "preset" }, minZoom: 0.05, maxZoom: 3 });
+    // A step that does not apply, for the reader's choice or not needed for this change, leaves the layout when the reader hides them.
+    const keepStep = (pid, s) => !hideOff.checked || (applies(s, chosenOf(model.processes[pid], opts.choices)) && opts.steps?.[pid]?.find((r) => r.id === s.id)?.triggered !== false);
+    const cy = window.cytoscape({ container: canvas, elements: elements(model, by.value, keepStep), style: style(host), layout: { name: "preset" }, minZoom: 0.05, maxZoom: 3, autoungrabify: true });   // the layout is the model's order, so a block taps but never drags
     const nodesOf = (pid) => cy.nodes().filter((n) => n.data("pid") === pid);
+    // A drag that starts on a block pans the map, as one on the background does; a tap without moving still opens the block.
+    let dragFrom = null, dragged = 0;
+    cy.on("tapstart", "node", (ev) => { dragFrom = ev.renderedPosition; dragged = 0; });
+    cy.on("tapdrag", (ev) => {
+        if (!dragFrom) return;
+        const at = ev.renderedPosition;
+        dragged += Math.abs(at.x - dragFrom.x) + Math.abs(at.y - dragFrom.y);
+        cy.panBy({ x: at.x - dragFrom.x, y: at.y - dragFrom.y });
+        dragFrom = at;
+    });
+    const tapped = () => dragged < 6;   // a pan that ends on a block is no tap on it
+    cy.on("tapend", () => { dragFrom = null; });
     // The canvas follows its host, a resized dialog in the app or a narrower window on the site.
     const resize = new ResizeObserver(() => cy.resize());
     resize.observe(canvas);
@@ -644,11 +716,17 @@ export async function drawMap(host, opts = {}) {
     search.addEventListener("input", () => fit(search.value.trim() ? apply() : (apply(), cy.collection())));
     hide.addEventListener("change", () => apply());
     all.addEventListener("click", () => fit(apply()));   // what the actor, the chips, the search and hide done leave; nothing left fits the whole map
-    by.addEventListener("change", () => {
+    // The layout again, for the columns, the reader's choices or the steps they hide.
+    const relayout = () => {
         cy.elements().remove();
-        cy.add(elements(model, by.value));
-        fit(picked.size || search.value.trim() ? apply() : (apply(), cy.collection()));
-    });
+        cy.add(elements(model, by.value, keepStep));
+        const shown = apply();
+        // The open process stays in view; otherwise what the filters leave, or the whole map.
+        const open = host_.current ? nodesOf(host_.current).filter((n) => n.data("kind") === "process") : cy.collection();
+        if (open.length) { open.select(); fit(open.union(open.children())); } else fit(picked.size || search.value.trim() ? shown : cy.collection());
+    };
+    host_.relayout = relayout;
+    by.addEventListener("change", relayout);
     // The step being read: the first step block in the text's view lights its node on the map, and the map follows it when it is off screen.
     const reading = (pid, stepId) => {
         cy.nodes(".mm-here").removeClass("mm-here");
@@ -675,8 +753,8 @@ export async function drawMap(host, opts = {}) {
         n.toggleClass("mm-off", Boolean(s) && !applies(s, chosen));
     });
     // A step tapped on the map opens its process and scrolls the text to the step.
-    const toStep = (pid, stepId) => {
-        if (host_.current !== pid) showPanel(panel, model, pid, done, mark, host_);
+    const toStep = async (pid, stepId) => {
+        if (host_.current !== pid) await showPanel(panel, model, pid, done, mark, host_);   // a process's text may still be on its way
         // The text alone scrolls, since scrollIntoView would move the page around the map as well.
         const block = panel.querySelector(`[data-step="${CSS.escape(stepId)}"]`);
         if (block) panel.scrollTo({ top: block.getBoundingClientRect().top - panel.getBoundingClientRect().top + panel.scrollTop, behavior: "smooth" });
@@ -695,8 +773,8 @@ export async function drawMap(host, opts = {}) {
         showPanel(panel, model, pid, done, mark, host_);
         fit(target.union(target.children()));
     };
-    cy.on("tap", "node[kind='process']", (ev) => { remember(ev.target.data("pid")); showPanel(panel, model, ev.target.data("pid"), done, mark, host_); });
-    cy.on("tap", "node[kind='step']", (ev) => { const pid = ev.target.data("pid"); remember(pid); toStep(pid, ev.target.id().split("/").pop()); });
+    cy.on("tap", "node[kind='process']", (ev) => { if (!tapped()) return; remember(ev.target.data("pid")); showPanel(panel, model, ev.target.data("pid"), done, mark, host_); });
+    cy.on("tap", "node[kind='step']", (ev) => { if (!tapped()) return; const pid = ev.target.data("pid"); remember(pid); toStep(pid, ev.target.id().split("/").pop()); });
 
     // Where the reader is: the processes touching the cards in view, or the page they came from. A link naming one process opens it; anything else opens on the choices.
     const focus = new URLSearchParams(location.search).get("focus") || "";
@@ -723,7 +801,8 @@ export async function drawMap(host, opts = {}) {
     actor.addEventListener("change", () => { apply(); if (!host_.current) choose(); });
     apply();
     // What the host or the address names, a process or one of its steps, opens; anything else opens on the choices.
-    const [asked, step] = (opts.open || decodeURIComponent(location.hash.slice(1)) || focus).split("/");
+    // A redirect from a page MoonWalk took over keeps that page's anchor after the process's, so only the first part counts.
+    const [asked, step] = (opts.open || decodeURIComponent(location.hash.slice(1)).split("#")[0] || focus).split("/");
     if (model.processes[asked]) { open(asked); if (step) toStep(asked, step); }
     else choose();
     // What a host calls when it closes the map: Cytoscape's window listeners and both observers go with it.

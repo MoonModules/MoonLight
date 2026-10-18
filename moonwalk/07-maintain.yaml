@@ -7,7 +7,44 @@ processes:
     actor: user
     goal: A newer MoonLight on a running device with its settings kept, and a way back when it fails.
     systems: [MoonBase, MoonInstaller]
-    page: how-to/updating-firmware.md
+    intro: |
+      A newer MoonLight on a running device, over the network with no cable. Your settings stay: an update replaces the program, not the configuration, and costs one reboot. How a board with MoonBase installs safely: [MoonBase](explanation/architecture/moonbase.md).
+    steps:
+      - id: backup
+        say: Back up a rig you care about.
+        when: { process: backup-restore }
+        detail: |
+          The Firmware card leaves the configuration alone; a variant change or an erase does not.
+      - id: open
+        section: Install it
+        say: Open Firmware.
+        when: { open: { module: FirmwareUpdateModule } }
+        detail: |
+          It shows the version, the build and its partition, and says when a newer release exists. A stable release always wins; only a device on a `-dev` build is offered `latest`. On a board with MoonBase, its **image** selector picks the app or MoonBase itself.
+      - id: install
+        say: Pick the release and install it.
+        when: { manual: "The card reports the download and the write, then the device reboots into it on its own." }
+        detail: |
+          `latest` is the rolling build from `main`; a tagged release moves slower, for a rig that has to keep working. The image matches the device's variant: an `esp32s3-n16r8` image on a classic ESP32 refuses to boot. Through MoonBase, the device reboots into MoonBase, which writes the app and reboots back, all behind one overlay.
+      - id: moonbase-self
+        say: Install MoonBase when the card asks.
+        when: { manual: "The card warns when MoonBase does not match the app. Pick MoonBase as the image and install it the same way." }
+        detail: |
+          The device first checks it is a MoonBase image for this chip. During the write the device holds no recovery image, but the app keeps running, so a failure is answered by trying again.
+      - id: boot-app
+        section: When it boots into MoonBase
+        say: Press Boot the app first.
+        when: { manual: "MoonBase's page means the app did not start or an update was interrupted. It boots only an image that validates." }
+        detail: |
+          Not on your network? MoonBase opens the device's `MM-XXXX` access point, protected by your WiFi's password once it knows one. Joining it opens MoonBase's page, also at **4.3.2.1**.
+      - id: retry
+        say: Or install from a file or a URL.
+        when: { manual: "From a file takes a firmware-....bin you downloaded; From a URL fetches and installs in one step." }
+        detail: |
+          The [releases page](https://github.com/MoonModules/MoonLight/releases) has one file per firmware variant, named for it, and a link to each to paste. A URL crosses into MoonBase through a fixed slot of 255 characters, and a longer one is refused rather than truncated.
+      - id: usb
+        say: Reinstall over USB when nothing boots.
+        when: { process: install }
   - id: migrate-wled
     title: Move a WLED device to MoonLight, without a cable
     actor: user
@@ -20,9 +57,77 @@ processes:
     goal: Every setting in one file, put back on the same or another device.
     systems: [MoonCore, MoonInstaller]
     page: how-to/backup-and-restore.md
+    inputs:
+      type: object
+      properties:
+        target: { type: string, enum: [This device, Another device, An erased device], description: "Where does the backup go back?" }
+    intro: |
+      Every setting a device holds, in one file on your computer. Worth taking before an update, before rewiring, and once a rig works the way you want. What a backup holds and how a restore applies: [Backup and restore](how-to/backup-and-restore.md).
+    steps:
+      - id: backup
+        section: Take a backup
+        say: Press Backup in the File Manager.
+        when: { open: { module: FileManagerModule } }
+        detail: |
+          The browser downloads one `.json` bundle named for the device and the date: every module's configuration, your presets and your MoonLive scripts. **Keep it private: it holds the WiFi password.** Through the access point the configuration files stay out of it.
+
+          A device too old for the button has the same backup as a bookmarklet on the [installer page](https://moonmodules.org/MoonLight/install/).
+      - id: join
+        section: Put it back
+        say: Join the erased device's own network.
+        given: [{ input: target, equals: An erased device }]
+        when: { process: join-access-point }
+        detail: |
+          Restore there: the bundle carries your WiFi, so after the restart the device comes back on your network by itself.
+      - id: restore
+        say: Press Restore, choose the bundle, confirm twice.
+        when: { open: { module: FileManagerModule } }
+        detail: |
+          The second press is deliberate: restoring overwrites the device's files.
+      - id: report
+        say: Read the report.
+        when: { manual: "It lists what was renamed and mapped, the values to review, and what this firmware lacks." }
+      - id: restart
+        say: Restart when the dialog offers it.
+        when: { manual: "The network settings and the web server's port apply at boot; the rest applied as each file landed." }
+      - id: pins
+        say: Check the pins and rename the clone.
+        given: [{ input: target, equals: Another device }]
+        when: { open: { module: SystemModule } }
+        detail: |
+          The backup carries the old board's pins: a board wired differently shows wrong lights, which look like a broken effect. The [device name](explanation/architecture/mooncore.md#device-name-one-identity-every-network-name-derives-from-it) comes across too, so give the clone its own.
   - id: diagnose-lights
     title: Diagnose dark or flickering lights
     actor: user
     goal: You know whether the lights or the setup are at fault, before touching hardware.
     systems: [MoonLight]
     page: how-to/troubleshooting.md
+    intro: |
+      The preview says which half to look at. Other symptoms, from wrong colors to a device off the network: [Troubleshooting](how-to/troubleshooting.md).
+    steps:
+      - id: preview
+        say: Check the preview shows the effect.
+        when: { manual: "Running: the pipeline is fine, so look downstream at the driver, the wiring or the power. Dark too: look upstream at the layout, the effect or the brightness." }
+      - id: brightness
+        say: Raise the brightness on Drivers.
+        when: { open: { module: Drivers } }
+        detail: |
+          Zero is dark and looks the same as broken.
+      - id: driver
+        say: Check a driver names your pin.
+        when: { open: { module: Drivers } }
+        detail: |
+          A fresh device previews without one. Real lights need a driver naming the pin or the destination: [Set up a driver](moonwalk.md#driver-setup).
+      - id: count
+        say: Match the driver's light count to the layout.
+        when: { manual: "A layout of 256 and a driver of 16 lights the first sixteen and nothing else." }
+      - id: status
+        say: Read each card's status line.
+        when: { manual: "A card with a problem says so on itself, in red." }
+        detail: |
+          A scripted effect that fails to compile renders dark on purpose and shows the error on its card: [when the compile fails](tutorials/first-script.md#when-the-compile-fails).
+      - id: signal
+        say: Check the signal for stray or flickering pixels.
+        when: { read: { page: how-to/led-signal-integrity.md } }
+        detail: |
+          On a 3.3 V board driving 5 V LEDs this is electrical far more often than firmware.

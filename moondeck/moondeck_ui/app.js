@@ -243,7 +243,7 @@ window.addEventListener("message", (e) => {
 // ---------------------------------------------------------------------------
 
 // How long a script takes, measured: the longest of its recent passing runs on the bench (moondeck/durations.json), so you can tell at a glance whether clicking costs a second or a coffee. A slow one carries the snail. A card never measured says so, and a server left running has no duration.
-const took = (s) => s < 60 ? `${Math.round(s)}s` : `${Math.floor(s / 60)}m${String(Math.round(s % 60)).padStart(2, "0")}s`;
+const took = (seconds) => { const s = Math.round(seconds); return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m${String(s % 60).padStart(2, "0")}s`; };   // rounded first, so 119.6 reads 2m00s rather than 1m60s
 
 // Replay a script's stored last run into the log pane. Shared by the button rendered at load
 // and the one created when a first run completes.
@@ -1625,7 +1625,7 @@ async function openWalk() {
             dlg.close();
             runScriptOnce(script, btn, { step: `${step.process}/${step.id}` });   // the server reads the step's call from the process file
         };
-        stop = await walk.drawMap(host, { steps: gates.processes, run, here: ["contribute", "merge", "release"], actor: "contributor", newTab: true });
+        stop = await walk.drawMap(host, { steps: gates.processes, run, here: ["start", "develop", "hardware", "test", "document-commit", "merge", "release"], actor: "contributor", newTab: true });
         if (!dlg.open) stop?.();
     } catch (e) {
         host.textContent = `MoonWalk could not load: ${e.message}`;

@@ -1,0 +1,125 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "The device catalog",
+  "description": "Every device model the web installer and MoonDeck offer, one entry per piece of hardware with the state document that sets it up. The rules a schema cannot hold are in README.md; check_devices.py validates against this file and adds them.",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "required": [
+      "name",
+      "chip",
+      "firmwares",
+      "state"
+    ],
+    "additionalProperties": false,
+    "properties": {
+      "name": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 31,
+        "description": "The identifier and the label the picker shows, equal to state.System.deviceModel. At most 31 characters, the device's deviceModel buffer, so it comes back whole."
+      },
+      "chip": {
+        "type": "string",
+        "description": "The MCU family, for the picker's chip filter: one of the families moondeck/build/firmwares.py names."
+      },
+      "firmwares": {
+        "type": "array",
+        "minItems": 1,
+        "items": {
+          "type": "string",
+          "pattern": "^\\S+$"
+        },
+        "description": "The firmware variants this hardware runs, each in moondeck/build/firmwares.py; the first is the one the picker selects."
+      },
+      "state": {
+        "type": "object",
+        "additionalProperties": {
+          "$ref": "#/$defs/module"
+        },
+        "description": "The state document that sets the device up, the one PATCH /api/state takes. A root key is a top-level module, whose type is not written; a member with a type is a child module, keyed by its name; scalars and arrays are controls."
+      },
+      "image": {
+        "type": "string",
+        "pattern": "^assets/deviceModels/",
+        "description": "The board's picture, our own copy under docs/assets/deviceModels/, named <firmware>-<board> with the chip written dashed."
+      },
+      "description": {
+        "type": "string",
+        "description": "One sentence on what the board is, shown in the picker's details."
+      },
+      "url": {
+        "type": "string",
+        "pattern": "^https?://",
+        "description": "The vendor's product page."
+      },
+      "supported": {
+        "type": "array",
+        "items": {
+          "enum": [
+            "LEDs",
+            "WiFi",
+            "Ethernet",
+            "Audio",
+            "IR",
+            "MQTT",
+            "Hue",
+            "MIDI",
+            "Buttons",
+            "I2C",
+            "Relay",
+            "SD card"
+          ]
+        },
+        "description": "What the firmware drives on this board, shown as solid chips. A new word here needs a module that drives it."
+      },
+      "planned": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "What the board has and no module drives yet, shown as dashed chips."
+      },
+      "flashBaud": {
+        "type": "integer",
+        "enum": [
+          115200,
+          230400,
+          460800,
+          921600
+        ],
+        "description": "The flash baud rate, for a board whose USB bridge needs one other than the default: 921600 from MoonDeck and the command line, 460800 from the web installer."
+      }
+    }
+  },
+  "$defs": {
+    "module": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "minLength": 1
+        },
+        "$patch": {
+          "const": "replace",
+          "description": "Its children become the entry's only ones, at this level."
+        }
+      },
+      "additionalProperties": {
+        "if": {
+          "type": "object"
+        },
+        "then": {
+          "$ref": "#/$defs/child"
+        },
+        "description": "An object is a child module; anything else is a control."
+      }
+    },
+    "child": {
+      "$ref": "#/$defs/module",
+      "required": [
+        "type"
+      ]
+    }
+  }
+}

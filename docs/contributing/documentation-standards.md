@@ -14,7 +14,7 @@ A reader enters at the top and stops as soon as they have enough. A writer puts 
 flowchart TB
     entry["<b>README.md</b> · <b>index.md</b><br/><i>what it is, what to do next</i>"]
 
-    tut["<b>tutorial</b><br/>gettingstarted.md · tutorials/<br/><i>a lesson to follow</i>"]
+    tut["<b>tutorial</b><br/>tutorials/<br/><i>a lesson to follow</i>"]
     how["<b>how-to</b><br/>how-to/<br/><i>one task you already have</i>"]
     exp["<b>explanation</b><br/>explanation/<br/><i>why it is shaped this way</i>"]
     ref["<b>reference</b><br/>reference/ · moonmodules/<br/><i>facts, fast</i>"]
@@ -119,7 +119,7 @@ Every page serves one of four reader needs, and only one. This is [Diátaxis](ht
 
 | | Doing | Understanding |
 |---|---|---|
-| **Learning** | **Tutorial**: a lesson to follow. `gettingstarted.md`, `tutorials/`. | **Explanation**: why it is shaped this way. `explanation/`. |
+| **Learning** | **Tutorial**: a lesson to follow. `tutorials/`, and MoonTube's clips. | **Explanation**: why it is shaped this way. `explanation/`. |
 | **Working** | **How-to**: one task you already have. `how-to/`. | **Reference**: facts, fast. `reference/`, the catalog rows, the headers. |
 
 **The folder under `docs/` is the type.** A page's path says which cell it sits in. So `how-to/installing-on-linux.md` is a how-to by location, and a reader never has to be told. The nav labels stay reader-facing ("Understanding MoonLight" over "Explanation"), because the type is a writer's tool.

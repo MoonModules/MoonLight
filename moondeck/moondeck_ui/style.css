@@ -589,7 +589,7 @@ button#watch-ports.watching:hover { border-color: #2e9e63; color: #d6ffe6; }
 
 /* MoonWalk's map in MoonDeck's own dialog, resized from its corner; MoonDeck's colors mapped onto the docs theme's variables the map reads. */
 .walk-dialog {
-    width: min(960px, 92vw); height: min(640px, 85vh); min-width: min(420px, 92vw); min-height: 360px; max-width: 98vw; max-height: 96vh;
+    width: min(960px, 92vw); height: min(640px, 85vh); min-width: min(420px, 92vw); min-height: min(360px, 96vh); max-width: 98vw; max-height: 96vh;
     margin: auto;   /* centered as a modal dialog is by default, which the page's `* { margin: 0 }` reset undoes */
     resize: both; overflow: hidden; padding: 12px 14px; border: 1px solid #0f3460; border-radius: 10px; background: #16213e; color: #e0e0e0;
     --md-default-fg-color: #e0e0e0; --md-default-bg-color: #16213e; --md-accent-fg-color: #e94560;

@@ -12,12 +12,16 @@ processes:
     steps:
       - id: base
         section: Prepare the branch
-        say: Base the branch on current main, with only its own commits.
+        say: Base the branch on current main.
         when: { run: { command: "git fetch upstream && git rebase upstream/main" } }
+        detail: |
+          It carries only its own commits.
       - id: size
-        say: Keep it to one topic, at most 400 changed lines and ten files, tests included.
+        say: Keep it to one small topic.
         when: { run: { command: "git diff --stat upstream/main...HEAD" } }
         detail: |
+          At most 400 changed lines and ten files, tests included.
+
           Generated files are outside the count. A larger topic lands as steps, each its own pull request.
       - id: checks
         say: Run the commit checks the branch triggers.
@@ -29,9 +33,11 @@ processes:
           The merge regenerates them on ours, so your machine's numbers never overwrite the trend. CI warns when a pull request from a fork changes one.
       - id: open
         section: Open it
-        say: Push and open the pull request against main, allowing edits by maintainers.
+        say: Open the pull request against main.
         when: { run: { command: "gh pr create --base main" } }
         detail: |
+          Push first, and allow edits by maintainers.
+
           With edits allowed, a maintainer makes the mechanical fixes, a dropped generated file or a platform stub, rather than asking for another round.
       - id: ci
         say: CI builds and tests it on every platform.
@@ -61,38 +67,48 @@ processes:
     steps:
       - id: reviewer
         section: Review
-        say: The Reviewer reads the branch diff, before the checks.
+        say: Have the Reviewer read the branch.
         actor: agent
         when: { run: { command: "git diff main...HEAD" } }
         detail: |
+          The Reviewer reads before the checks run.
+
           Its scope: boundaries, bespoke conventions, unnecessary abstractions, duplication, the hot path, spec conformance and bloat, and whether every setting names the user who needs it.
       - id: feedback
-        say: Every review finding is addressed, the external review's and the Reviewer's.
+        say: Address every review finding.
         when: { process: review-finding }
+        detail: |
+          The external review's and the Reviewer's alike.
       - id: checks
         section: Checks
-        say: Run the commit checks over the branch diff, which catches what a green series of commits hides.
+        say: Run the commit checks over the branch.
         actor: contributor
         when: { process: commit }
+        detail: |
+          They catch what a green series of commits hides.
       - id: gcc
-        say: Build with GCC when CI failed on something clang builds cleanly.
+        say: Build with GCC when CI asks.
         actor: contributor
         when: { run: { script: moondeck/build/build_desktop.py, args: "--gcc --tests" } }
         detail: |
+          CI asks when it failed on something clang builds cleanly.
+
           GCC catches a class clang misses (`-Wstringop-truncation`, no transitive standard headers), and CI compiles with it on every pull request. Reproducing it locally is worth the minutes only once CI has something to reproduce.
       - id: docs-in-sync
         section: Judgment
         say: The docs describe what the branch ships.
         when: { manual: "A module's header, its MIGRATING entry, a shipped backlog item or draft deleted." }
       - id: title
-        say: The pull request's title and description match the branch, read from its commits.
+        say: Match the title and description to the commits.
         when: { run: { command: "git log main..HEAD" } }
       - id: perf
-        say: Take a performance snapshot when the tick path changed.
-        when: { manual: "Compare the tick matrix with main's." }
+        say: Take a performance snapshot.
+        when: { manual: "Take it when the tick path changed. Compare the tick matrix with main's." }
       - id: readme
-        say: Update the README when building, flashing or the first run changed.
+        say: Update the README when setup changed.
         when: { read: { page: index.md } }
+        detail: |
+          Setup means building, flashing or the first run.
       - id: merge
         section: Merge
         say: The product owner pushes and merges.

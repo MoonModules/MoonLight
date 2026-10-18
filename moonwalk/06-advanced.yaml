@@ -3,30 +3,323 @@ stage: Advanced use
 summary: Scripts, panels, drivers, many devices and the API.
 processes:
   - id: first-script
-    title: Write a first MoonLive script
+    title: Write a MoonLive effect
     actor: user
-    goal: An effect typed in the browser runs compiled on the device with its own control.
+    goal: Your own effect, typed in the browser, runs compiled on the device with the controls you give it.
     systems: [MoonLive]
     dependsOn: [first-light-show]
-    page: tutorials/first-script.md
+    intro: |
+      No toolchain, no rebuild, no reflash and no reboot: a script saved in the browser compiles on the device and runs as native code seconds later. The language is [MoonLive](moonmodules/light/moonlive.md); a guided first script, four lines growing into a pattern, is the [first-script tutorial](tutorials/first-script.md).
+    steps:
+      - id: add
+        section: Add it
+        say: Add MoonLive under the Layer.
+        when: { add: { module: Layer, type: MoonLiveEffect } }
+        then:
+          - { module: MoonLiveEffect, exists: true }
+        detail: |
+          Open Effects and press + add module under the Layer.
+
+          It renders nothing until it has a script, so a new one never starts as somebody else's code.
+      - id: name
+        say: Name the script, ending in .mle.
+        when: { open: { module: MoonLiveEffect } }
+        detail: |
+          Type it in its script box; the card opens an editor.
+      - id: write
+        section: Write it
+        say: Write the effect and save it.
+        when: { manual: "It is a class with a tick() that paints; save with Ctrl/Cmd+S or by clicking away. fill() paints every light the same; setRGB(i, r, g, b) paints light i of lightCount." }
+        detail: |
+          Saving recompiles and swaps the effect in live; a half-typed line compiles only when you save.
+      - id: controls
+        say: Give it controls.
+        when: { manual: "Each is a member with an addControl in defineControls(), and appears on the card as a slider. addControl(\"speed\", speed, 1, 120) for a byte speed." }
+        detail: |
+          A script's control is a real control, the same kind a compiled effect declares: it persists across a reboot and answers over the API.
+      - id: errors
+        section: When it fails
+        say: Fix it when it does not compile.
+        when: { manual: "The card shows the error, and the device keeps running. Fix it and save again; the effect comes back." }
   - id: panel-cards
     title: Drive LED panels through a receiving card
     actor: user
     goal: A ColorLight wall lit from an ESP32 or a desktop.
     systems: [MoonLight]
     page: how-to/panel-cards.md
+    inputs:
+      type: object
+      properties:
+        where:
+          type: string
+          enum: [ESP32, Windows, Linux, macOS]
+          description: Where does MoonLight run?
+    intro: |
+      MoonLight takes the sending card's place: it renders the effect and sends the frames to the receiving card over raw Ethernet, with no PC and no sending card. Gigabit matters for wire time, not bandwidth: [why](how-to/panel-cards.md#the-one-hardware-fact-that-decides-everything).
+    steps:
+      - id: ledvision
+        say: Set the panels up in LEDVision.
+        when: { process: panel-card-ledvision }
+        detail: |
+          The card must know its panels before MoonLight sends anything. A test pattern from LEDVision fills the wall correctly when this is done.
+      - id: wire
+        say: Wire the controller, card and panels.
+        when: { manual: "Cat5e or Cat6 from the controller to the card's input port, HUB75 ribbons from the card to the panels, 5 V to the panels and the card." }
+        detail: |
+          The card's second RJ45 port daisy-chains to the next cabinet. Size the supply from the panels' own datasheet: a sagging 5 V rail shows as flicker, color shifts or resets. A P4 or S3 is 100 Mbit and wants a gigabit switch between it and the card; an S31 connects straight. [Boards](how-to/panel-cards.md#3-pick-a-board).
+      - id: flash
+        say: Flash an S31, P4 or S3 board.
+        given: [{ input: where, equals: ESP32 }]
+        when: { process: install }
+        detail: |
+          Pick `esp32s31`, `esp32p4rev1-eth-wifi` or `esp32s3-n16r8`. The panel link carries no IP, so WiFi serves the UI; a P4 needs the `-eth-wifi` variant. A classic ESP32 build has no PanelCard driver.
+      - id: npcap
+        section: Allow raw Ethernet
+        say: Install Npcap.
+        given: [{ input: where, equals: Windows }]
+        when: { open: { url: "https://npcap.com/" } }
+        detail: |
+          Windows has no built-in way to send a raw Ethernet frame. MoonLight loads Npcap at run time, so it runs without it, but cannot bind an interface. If binding fails, check whether the installer's "Restrict Npcap driver's access to Administrators only" was selected, and run MoonLight as Administrator.
+      - id: setcap
+        section: Allow raw Ethernet
+        say: Grant the raw-socket capability.
+        given: [{ input: where, equals: Linux }]
+        when: { run: { command: "sudo setcap cap_net_raw+ep ./MoonLight" } }
+        detail: |
+          Raw frames go out over `AF_PACKET`, which needs `CAP_NET_RAW`. Running as root works too.
+      - id: bpf
+        section: Allow raw Ethernet
+        say: Run MoonLight with sudo.
+        given: [{ input: where, equals: macOS }]
+        when: { manual: "The BPF devices are root-only by default. Wireshark's ChmodBPF helper grants your user access at boot instead." }
+      - id: layout
+        section: Describe the wall
+        say: Add a Grid layout.
+        when: { add: { module: Layouts, type: GridLayout } }
+        detail: |
+          Set its width and height to the wall, so two 128x64 panels stacked make a 128x128 grid. The driver reads only the wall's size and sends rows; panel order was settled on the card. [Why, and when the Panels layout fits](how-to/panel-cards.md#4-describe-the-wall).
+      - id: effect
+        say: Pick an effect.
+        when: { open: { module: Effects } }
+        detail: |
+          An empty layer sends valid black frames, so there must be something to send.
+      - id: driver
+        section: Add the driver
+        say: Add the PanelCard driver.
+        when: { add: { module: Drivers, type: PanelCardDriver } }
+        detail: |
+          A classic-ESP32 build does not offer it. Leave `fps` at 40 and `start` and `count` at their defaults unless one picture is split across controllers.
+      - id: format
+        say: Set format to ColorLight 5A-75.
+        when: { set: { module: PanelCardDriver, control: format, value: "ColorLight 5A-75" } }
+        detail: |
+          The 5A-75B and 5A-75E use the same wire format. Set `firmware` to match the card: `v12 and older` is the default and fits a downgraded card, `v13 and newer` a stock one. [Card firmware](how-to/panel-cards.md#7-card-firmware-and-the-flicker).
+      - id: interface
+        say: Set interface to your adapter.
+        given: [{ input: where, in: [Windows, Linux, macOS] }]
+        when: { manual: "Type en0 on macOS, eth0 on Linux, or any part of the adapter name on Windows, such as Realtek." }
+        detail: |
+          Linux wants the kernel name exactly (`eth0`, `enp3s0`; `ip link` lists them), macOS the BSD name (`en0`, `en7`; `ifconfig` lists them). Windows matches your text against the adapter description, case-insensitive. A string that matches no adapter reports `no ethernet link`. An ESP32 has one MAC, so it ignores the control.
+      - id: brightness
+        say: Turn up both brightness controls.
+        when: { manual: "Raise the global brightness on the Drivers card and the PanelCard's localBrightness. Either one left low leaves the wall dark." }
+      - id: status
+        say: Read the status line.
+        when: { manual: "It reads a link speed and a packet rate, such as 1000 Mbit - 5200 packets/s." }
+        detail: |
+          A `100 Mbit` warning still sends, fine for a small wall. `no ethernet link` means cable, card power or the wrong port. Panels dark with a healthy status: [when it does not light up](how-to/panel-cards.md#8-when-it-does-not-light-up).
+    outro: |
+      The card owns panel order and the picture is MoonLight's. A card on firmware v13 flickers with network activity, whichever sender drives it: [downgrade it](moonwalk.md#panel-card-downgrade).
+  - id: panel-card-ledvision
+    title: Set the panels up in LEDVision
+    actor: user
+    goal: The receiving card knows its panels, and a LEDVision test pattern fills the wall correctly.
+    systems: [MoonLight]
+    page: how-to/panel-cards.md
+    intro: |
+      The card stores its panel size, count and driver IC, written once with ColorLight's LEDVision on Windows. MoonLight then needs no panel wiring settings. Use an 8.x build: this project's wall runs 8.8, and a video walkthrough uses 8.5. Labels move between versions, so treat the shape as right and the wording as approximate.
+    steps:
+      - id: connect
+        say: Connect the card and power it.
+        when: { manual: "Cable the card to the machine's Ethernet port, and power the panels and the card." }
+      - id: download
+        say: Download and open LEDVision.
+        when: { open: { url: "https://en.colorlightinside.com/product/download/380" } }
+        detail: |
+          Go to the receiving-card setup, usually under `Settings`. Some versions ask for a password, commonly `168`.
+      - id: panel
+        say: Load the panel definition.
+        when: { manual: "Pick your panel from the built-in module list, or load the .rcfgx or .rcvx file your supplier provided." }
+        detail: |
+          The supplier's file is the reliable route for a panel that is not a well-known model.
+      - id: cabinet
+        say: Set the cabinet size.
+        when: { manual: "Enter how many pixels one card drives, across and down." }
+      - id: arrangement
+        say: Set the panel arrangement.
+        when: { manual: "Choose how the HUB75 ribbons chain and which physical panel is first." }
+        detail: |
+          This makes the card, not MoonLight, responsible for panel order. Every other row mirrored, or panels in the wrong places, is fixed here.
+      - id: send
+        say: Send to the receiving card, then save.
+        when: { manual: "Saving is a separate action from sending in most versions. Skipping it makes the wall come back wrong after a power cycle." }
+      - id: test
+        say: Run a LEDVision test pattern.
+        when: { manual: "It fills the wall correctly. This separates configured panels from a working sender." }
+    outro: |
+      A video of the whole card setup, driven from FPP instead of MoonLight: [Setting up a Colorlight Card with FPP v6.3 and LED Vision 8.5](https://www.youtube.com/watch?v=L4lHbwUszAs).
+  - id: panel-card-downgrade
+    title: Clear the v13 flicker from a ColorLight card
+    actor: user
+    goal: A card on the older firmware, steady during network activity.
+    systems: [MoonLight]
+    page: how-to/panel-cards.md
+    intro: |
+      A card on firmware v13 with v8.x hardware flickers in time with network activity, under every sender, and no sending-side setting avoids it. Flicker that grows with brightness is power instead, and a downgrade changes nothing there. Use LEDUpgrade 4.0 with firmware 11.09, which ships in its preset list. [Why this pairing](how-to/panel-cards.md#7-card-firmware-and-the-flicker).
+    steps:
+      - id: connect
+        say: Connect the card directly to the machine.
+        when: { manual: "No switch in between. On Windows, a USB gigabit Ethernet dongle is the known way through when a built-in port is held by Hyper-V's virtual switch." }
+      - id: close
+        say: Close everything else that talks to the card.
+        when: { manual: "Close MoonLight and LEDVision. A card being streamed at will not answer, and two ColorLight tools at once interfere." }
+      - id: download
+        say: Open LEDUpgrade 4.0.
+        when: { open: { url: "https://en.colorlightinside.com/product/download/383" } }
+        detail: |
+          Version 5.0 ships no pre-v12 firmware, so it cannot do this downgrade.
+      - id: adapter
+        say: Choose your network adapter.
+        when: { manual: "Set Send Mode to the network-card mode, pick the adapter, then restart LEDUpgrade. It binds the adapter at startup." }
+      - id: detect
+        say: Detect Receiver Cards.
+        when: { manual: "It reports something like 5A 13.17 (v8.0): firmware 13.17 on v8.0 hardware." }
+      - id: readback
+        say: Read back the firmware.
+        when: { manual: "Press Readback Firmware to back up what is on the card." }
+      - id: upgrade
+        say: Upgrade to normal-11.09.
+        when: { manual: "Upgrade Firmware, preset, 4in1, normal, then normal-11.09." }
+        detail: |
+          Stay in the `normal` series: `PWM` and `shixin` are for other driver ICs. 11.09 is the newest build before the defect; 11.08 was reported strobing white.
+      - id: cycle
+        say: Power-cycle the card.
+        when: { manual: "The card keeps running the old firmware until you do." }
+      - id: match
+        section: Tell MoonLight
+        say: Leave firmware on v12 and older.
+        when: { manual: "A stock v13 card takes v13 and newer. A downgraded card left on it gets a second sync, aborts each refresh, and updates once every few seconds." }
   - id: driver-setup
     title: Set up a driver or service for the hardware
     actor: user
     goal: The right LED driver, HUB75 panel, audio input or video output, with its few fixed settings.
     systems: [MoonLight]
     page: how-to/led-drivers.md
+    inputs:
+      type: object
+      properties:
+        driver:
+          type: string
+          enum: [RmtLedDriver, ParallelLedDriver]
+          description: Which LED driver do you add?
+    intro: |
+      An addressable strip (WS2812B, SK6812, WS2811) goes out through one driver on the Drivers card. Which driver fits, where each runs and what limits apply: [Choosing and wiring an LED driver](how-to/led-drivers.md).
+    steps:
+      - id: open
+        say: Open Drivers.
+        when: { open: { module: Drivers } }
+      - id: add
+        say: Add the driver for your strands.
+        when: { add: { module: Drivers, type: RmtLedDriver } }
+        given: [{ input: driver, equals: RmtLedDriver }]
+        detail: |
+          RMT LED is the simple default for a few strands on any ESP32.
+      - id: add-parallel
+        say: Add the driver for your strands.
+        when: { add: { module: Drivers, type: ParallelLedDriver } }
+        given: [{ input: driver, equals: ParallelLedDriver }]
+        detail: |
+          Parallel LED drives many strands. Pick its `peripheral` from the table on the page; start with `i80`.
+      - id: pins
+        say: Enter the data pins.
+        when: { manual: "Type the GPIOs in pins, one per strand, separated by commas." }
+      - id: count
+        say: Enter the lights per strand.
+        when: { manual: "Type the count for each pin in ledsPerPin; a strand holds at most 2,048 lights." }
+      - id: brightness
+        say: Set the brightness.
+        when: { manual: "Move localBrightness; the strip follows on the next frame." }
+      - id: test
+        section: Test the wire
+        say: Turn on the loopback test.
+        when: { manual: "Switch loopbackTest on (developer view), jumper a data GPIO to loopbackRxPin and read the verdict in the status field." }
+        detail: |
+          A PASS means the chip and the peripheral are clean, so flicker that remains is [signal integrity](how-to/led-signal-integrity.md). Through a 74HCT595 the jumper comes from a register output, behind a level shifter: see the page.
+    outro: |
+      A 12 V WS2811 in low-speed mode needs the `400kHz WS2811` timing on RMT LED. Other hardware has its own pages: [HUB75 panels](how-to/hub75-panels.md), [audio input](how-to/audio-input.md) and [watching the output](how-to/watching-the-output.md).
   - id: multi-device
     title: Run a multi-device installation
     actor: user
     goal: Several devices act as one piece, with shared controls and one beat.
     systems: [MoonCore, MoonLight]
     page: how-to/multi-board-installation.md
+    intro: |
+      An installation is several MoonLight devices that act as one piece. Start with one device and one effect, add a second that hears the same music, and add the link only when you miss it. The worked example is [the StadBeest](how-to/multi-board-installation.md).
+    steps:
+      - id: network
+        section: Prepare
+        say: Put every device on one network.
+        when: { open: { module: NetworkModule } }
+        detail: |
+          Give the devices an address reservation each, so addresses stay put. Turn IGMP snooping off on the router: a router that snoops without asking again forgets group members, and audio or OSC then drops out every few seconds. For a network you do not control, set `addressing` to `unicast` and list the devices in `hosts`, since unicast is acknowledged and retried.
+      - id: layout
+        say: Give each part its own device and layout.
+        when: { open: { module: Layouts } }
+        detail: |
+          Size the layout to the part. A part then keeps its own frame rate, effect and brightness limits, and a failing device takes down one part.
+      - id: effect
+        say: Run an effect written for that layout.
+        when: { add: { module: Layer, type: MoonLiveEffect } }
+        detail: |
+          Edit a script where it runs: `curl -X POST -H "Expect:" --data-binary @walk.mle "http://<device>/api/file?path=/moonlive/walk.mle"`, read its status on the card, judge it on the lights, change one thing. A file in `/moonlive` shadows the factory script of that name. A script that does not compile leaves its effect dark.
+      - id: surface
+        section: Link the devices
+        say: Declare the same controls first in every effect.
+        when: { open: { module: ControlModule } }
+        detail: |
+          Each [Control](moonmodules/core/system.md#control) card is a desk of eight faders, eight encoders and eight switches. Automap puts an effect's controls on the slots in declaration order, so `bpm`, `sensitivity` and `pulse` declared first mean the same slot on every device. Assign a slot by hand to keep its target.
+      - id: leader
+        say: Turn on OSC feedback on a leader.
+        when: { open: { module: OscService } }
+        detail: |
+          Set `feedback` on, `addressing` multicast, `group` the default `239.255.77.78`, `feedbackPort` 9001. Every slot that changes on the leader goes out as `/mm/fader/N`, `/mm/encoder/N` or `/mm/switch/N`. The leader listens on 9000, so it never hears its own feedback.
+      - id: followers
+        say: Make the other devices followers.
+        when: { open: { module: OscService } }
+        detail: |
+          On each, set `listen` on, `port` to the leader's `feedbackPort`, and `feedback` off. A follower writes each message onto its own slot N. The leader repeats every slot every 30 seconds, one at a time, so a value lost on WiFi or a follower that rebooted is repaired within that time.
+      - id: music
+        section: Add the music
+        say: Send one source of music to all devices.
+        when: { open: { module: AudioService } }
+        detail: |
+          Set every device's Audio to receive and let one machine send WLED audio sync: a device with a microphone, or a computer running MoonLight. One source means one beat. Effects that read `audioPeakHz()` at the beat look the same way on every device without a message between them.
+      - id: unattended
+        say: Add a script service on the leader.
+        when: { add: { module: Services, type: MoonLiveService } }
+        detail: |
+          A script service writes the shared slots with `setControl("fader2", value)`, as a person moves a fader, one slot at a time with a pause between writes so no burst reaches the network. Put its `run` switch on a slot, so off hands the installation back to people and desks.
+      - id: desk
+        say: Plug a desk into the leader.
+        when: { open: { module: MidiService } }
+        detail: |
+          A desk on the leader moves every device, since its changes go out over OSC. Use [a control surface](how-to/control-surface.md) in the browser, or put the desk on a small bridge device with `source` USB and `share` on, and set the leader's `source` to network with the bridge as `host`.
+      - id: update
+        section: Keep it running
+        say: Update devices one at a time.
+        when: { process: update-firmware }
+        detail: |
+          Compare the image size with the `partition` total on the Firmware card first. A device with two app slots takes `POST /api/firmware/upload`. A 4 MB device has one app slot, so `POST /api/firmware/moonbase` restarts it into MoonBase, which takes the upload. See it run before the next.
   - id: http-api
     title: Script against the HTTP API
     actor: user

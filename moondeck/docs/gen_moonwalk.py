@@ -14,6 +14,7 @@ Usage:
 
 import argparse
 import copy
+import gzip
 import json
 import re
 import subprocess
@@ -25,6 +26,18 @@ ROOT = Path(__file__).resolve().parent.parent.parent
 MOONWALK = ROOT / "moonwalk"
 SCHEMA = MOONWALK / "moonwalk.schema.json"
 HELP = ROOT / "docs" / "help" / "help.json"
+
+# How long each part of a process may be, the procedure style guides' rule (one action per step, verb first) and Diátaxis' (a how-to holds steps, not reference or explanation). The short fields are errors; the long ones warn in check_docgen's report and may only fall.
+MAX_SAY_WORDS = 8        # a step's instruction: one action, read at a glance on the map and in the bar
+MAX_TITLE_WORDS = 10     # a process's title: a map block and a link
+MAX_GOAL_WORDS = 25      # its goal: one sentence, the outcome
+MAX_DETAIL_WORDS = 120   # a step's detail: what the reader needs at that step; the rest links to its kind of page
+MAX_FRAME_WORDS = 150    # an intro or an outro: context, not content
+MAX_PROCESS_WORDS = 600  # a whole process as one reader reads it: past it, it is two processes or it holds reference
+MAX_READER_STEPS = 10    # a process's steps as one reader meets them: past it, steps fold into a subprocess, as procedure guides split a long task
+MAX_STAGE_PROCESSES = 8  # a stage's processes, one column of the map: past it, the stage is two stages
+MAX_DOWNLOAD_KB = 40     # the map and its renderer, gzipped, as a page or the app fetches them: past it, the details load on demand
+RENDERER = ROOT / "docs" / "assets" / "moonwalk.js"
 # The systems' one home is the architecture's Part table, so a process names them as that table does and no second list exists.
 ARCHITECTURE = ROOT / "docs" / "explanation" / "architecture" / "index.md"
 _PART_RE = re.compile(r"^\| \[(Moon\w+)\]\(", re.MULTILINE)
@@ -64,6 +77,110 @@ def page_url(page: str) -> str:
     return page[:-3] + ".html" if page.endswith(".md") else page
 
 
+def _words(text) -> int:
+    """The words a reader reads: an image is seen rather than read, and a link's target is not shown."""
+    return len(re.sub(r"\]\([^)]*\)", "]", re.sub(r"!\[[^\]]*\]\([^)]*\)", "", text or "")).split())
+
+
+def _one_sentence(text: str) -> bool:
+    """Whether text is one sentence: no sentence end before its last character."""
+    return not re.search(r"[.!?]\s+[A-Z]", (text or "").strip())
+
+
+def shape_errors(processes: dict) -> list:
+    """The short fields over their limits: a step's instruction, a title and a goal."""
+    errors = []
+    for pid, p in processes.items():
+        if _words(p.get("title")) > MAX_TITLE_WORDS:
+            errors.append(f"{pid}: title over {MAX_TITLE_WORDS} words")
+        if _words(p.get("goal")) > MAX_GOAL_WORDS or not _one_sentence(p.get("goal", "")):
+            errors.append(f"{pid}: goal over {MAX_GOAL_WORDS} words or more than one sentence")
+        for st in p.get("steps", []):
+            if _words(st.get("say")) > MAX_SAY_WORDS or not _one_sentence(st.get("say", "")):
+                errors.append(f"{pid}/{st.get('id')}: say is one action in at most {MAX_SAY_WORDS} words; the rest goes in its note or detail")
+    return errors
+
+
+def split_text(model: dict) -> tuple:
+    """The map without its prose, and each process's prose by id: a page loads the map, and a process's intro, outro and details when its view opens. A process with prose is marked `text`, so the view knows to fetch it."""
+    m = copy.deepcopy(model)
+    texts = {}
+    for pid, p in m["processes"].items():
+        t = {k: p.pop(k) for k in ("intro", "outro") if k in p}
+        details = {s["id"]: s.pop("detail") for s in p.get("steps", []) if "detail" in s}
+        if details:
+            t["details"] = details
+        if t:
+            texts[pid] = t
+            p["text"] = True
+    return m, texts
+
+
+def write(model: dict, out: Path) -> None:
+    """The map at `out` and each process's prose beside it, under text/<process>.json, with links absolute since the view renders them on a device's page too."""
+    m, texts = split_text(absolute_links(model))
+    folder = out.parent / "text"
+    folder.mkdir(parents=True, exist_ok=True)
+    # Each file swapped in whole and the stale ones removed after, so a reader fetching a text during a rewrite never meets a gap.
+    for pid, t in texts.items():
+        tmp = folder / f"{pid}.json.tmp"
+        tmp.write_text(json.dumps(t, ensure_ascii=False), encoding="utf-8")
+        tmp.replace(folder / f"{pid}.json")
+    for old in folder.glob("*.json"):
+        if old.stem not in texts:
+            old.unlink()
+    out.write_text(json.dumps(m, ensure_ascii=False), encoding="utf-8")
+
+
+def download_kb(model: dict) -> int:
+    """What a reader downloads to see MoonWalk, in KB: the map as --out writes it, without its prose, and the renderer, each gzipped as a server sends them."""
+    sizes = [len(gzip.compress(json.dumps(split_text(absolute_links(model))[0], ensure_ascii=False).encode("utf-8"))), len(gzip.compress(RENDERER.read_bytes()))]
+    return round(sum(sizes) / 1024)
+
+
+def _readers(p: dict) -> dict:
+    """The steps one reader meets, per option of the process's choice, or once, keyed "", without one."""
+    steps = p.get("steps", [])
+    inputs = p.get("inputs", {}).get("properties", {})
+    if not inputs:
+        return {"": steps}
+    name, spec = next(iter(inputs.items()))
+    def applies(st, option):
+        return all(not (isinstance(g, dict) and g.get("input") == name) or (option in g["in"] if "in" in g else g.get("equals") == option)
+                   for g in st.get("given", []))
+    return {o: [st for st in steps if applies(st, o)] for o in spec.get("enum", [])}
+
+
+def _reader_totals(p: dict) -> dict:
+    """The words one reader reads, per option: the process's intro and outro, and the steps they meet."""
+    frame = _words(p.get("intro")) + _words(p.get("outro"))
+    return {o: frame + sum(_words(st.get("say")) + _words(st.get("detail")) for st in steps) for o, steps in _readers(p).items()}
+
+
+def size_warnings(processes: dict) -> list:
+    """What is over its cap, as (stage, message): a stage's processes, a process's steps and words, a step's detail, an intro or outro."""
+    out = []
+    stages = {}
+    for pid, p in processes.items():
+        stages.setdefault(p["stage"], []).append(pid)
+    out += [(stage, f"{len(pids)} processes > {MAX_STAGE_PROCESSES}; split the stage") for stage, pids in stages.items() if len(pids) > MAX_STAGE_PROCESSES]
+    for pid, p in processes.items():
+        for field in ("intro", "outro"):
+            if _words(p.get(field)) > MAX_FRAME_WORDS:
+                out.append((p["stage"], f"{pid}: {field} {_words(p.get(field))} words > {MAX_FRAME_WORDS}"))
+        for st in p.get("steps", []):
+            if _words(st.get("detail")) > MAX_DETAIL_WORDS:
+                out.append((p["stage"], f"{pid}: step {st.get('id')}'s detail {_words(st.get('detail'))} words > {MAX_DETAIL_WORDS}"))
+        # What one reader meets: the steps for their choice, so a process with six platforms is measured per platform rather than as their sum.
+        for option, steps in _readers(p).items():
+            if len(steps) > MAX_READER_STEPS:
+                out.append((p["stage"], f"{pid}: {len(steps)} steps > {MAX_READER_STEPS}{f' for {option}' if option else ''}; fold steps into a subprocess"))
+        for option, total in _reader_totals(p).items():
+            if total > MAX_PROCESS_WORDS:
+                out.append((p["stage"], f"{pid}: {total} words > {MAX_PROCESS_WORDS}{f' for {option}' if option else ''}; split it, or move reference and explanation to their pages"))
+    return out
+
+
 def _strict_loader(yaml):
     """A YAML loader that refuses a key written twice in one mapping, where the safe loader keeps the last silently."""
     class Strict(yaml.SafeLoader):
@@ -99,7 +216,7 @@ def build(root: Path = MOONWALK) -> dict:
         stage_id = path.stem[3:]
         # An entry that is no process with an id is the schema's to report; the rest of the file is still read.
         valid = [p for p in doc["processes"] if isinstance(p, dict) and isinstance(p.get("id"), str)]
-        stages.append({"id": stage_id, "title": doc.get("stage", stage_id), "summary": doc.get("summary", ""),
+        stages.append({"id": stage_id, "file": path.name, "title": doc.get("stage", stage_id), "summary": doc.get("summary", ""),
                        "processes": [p["id"] for p in valid]})
         for p in valid:
             if p.get("id") in processes:
@@ -169,6 +286,7 @@ def build(root: Path = MOONWALK) -> dict:
                 if b.get("type") == "goto" and b.get("stepId") not in step_ids:
                     errors.append(f"{pid}/{s['id']}: goto names no step: {b.get('stepId')}")
 
+    errors += shape_errors(processes)
     if errors:
         raise ValueError("process files:\n  " + "\n  ".join(errors))
     return {"stages": stages, "systems": known, "processes": processes, "byPage": by_page, "byModule": by_module, "byControl": by_control}
@@ -229,7 +347,7 @@ _REGENERATING = threading.Lock()   # the local servers answer requests on thread
 
 
 def regenerate(out: Path) -> bool:
-    """Write moonwalk.json to `out` as the stage files are now, for a local server answering a request: generated into a temporary file and swapped in only on success, one run at a time, so a failed run leaves no stale map behind and two requests never interleave. Run through uv, so the caller needs none of this generator's packages."""
+    """Write moonwalk.json to `out` as the stage files are now, with each process's prose beside it, for a local server answering a request: generated into a temporary file and swapped in only on success, one run at a time, so a failed run leaves no stale map behind and two requests never interleave. Run through uv, so the caller needs none of this generator's packages."""
     out.parent.mkdir(parents=True, exist_ok=True)
     tmp = out.with_suffix(".tmp")
     with _REGENERATING:
@@ -247,7 +365,7 @@ def regenerate(out: Path) -> bool:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("--out", type=Path, help="write moonwalk.json here")
+    ap.add_argument("--out", type=Path, help="write moonwalk.json here, and each process's prose under text/ beside it")
     args = ap.parse_args()
     try:
         model = build()
@@ -257,7 +375,7 @@ def main() -> int:
     steps = sum(len(p.get("steps", [])) for p in model["processes"].values())
     print(f"gen_moonwalk: {len(model['stages'])} stages, {len(model['processes'])} processes, {steps} steps")
     if args.out:
-        args.out.write_text(json.dumps(absolute_links(model), ensure_ascii=False), encoding="utf-8")
+        write(model, args.out)
     return 0
 
 

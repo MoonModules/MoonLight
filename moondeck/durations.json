@@ -12,14 +12,25 @@
   22.2
  ],
  "moondeck/check/check_devices.py": [
-  0.1
+  0.1,
+  0.2,
+  0.4,
+  0.2,
+  0.4
  ],
  "moondeck/check/check_docgen.py": [
-  1.4,
+  15.0,
+  14.5,
   14.9,
-  14.3
+  15.9,
+  16.5
+ ],
+ "moondeck/check/check_esp32_built.py --firmware esp32": [
+  5.8,
+  5.1
  ],
  "moondeck/check/check_firmwares.py": [
+  0.1,
   0.1,
   0.1,
   0.1,
@@ -29,23 +40,29 @@
   252.0
  ],
  "moondeck/check/check_prose.py": [
-  4.0,
-  4.3,
-  4.2,
-  4.5
+  5.4,
+  5.3,
+  4.4,
+  4.9,
+  4.6
  ],
  "moondeck/check/check_specs.py": [
   1.0,
   1.2,
-  1.0,
-  1.0
+  1.1,
+  1.1,
+  1.1
  ],
  "moondeck/check/check_taglines.py": [
+  0.1,
   0.1
  ],
  "moondeck/docs/build_docs.py --strict": [
-  5.1,
-  5.4
+  6.2,
+  5.9,
+  5.9,
+  6.0,
+  5.0
  ],
  "moondeck/scenario/run_scenario.py": [
   62.0
@@ -54,12 +71,17 @@
   9.4
  ],
  "moondeck/test/test_host.py --js": [
-  4.3,
-  4.3
+  4.5,
+  4.4,
+  4.5,
+  4.4,
+  4.8
  ],
  "moondeck/test/test_host.py --python": [
-  9.6,
-  9.3,
-  10.3
+  11.1,
+  11.1,
+  11.7,
+  12.8,
+  11.1
  ]
 }

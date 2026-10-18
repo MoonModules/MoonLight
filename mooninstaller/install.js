@@ -645,6 +645,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function handleSuccess({ url, mdns, device, applyDefaults = true, defaultsApplied = false, viaHttp, alreadyOnline, ethOnlyNoLink }) {
+      vouch(WALKED);   // every successful install counts, the Ethernet one waiting for its cable and the one without an address included
       disarmUnloadGuard();
       // Clear the amber notice styling from any prior install in this session — only the
       // eth-only-no-link branch re-adds it, so every other outcome shows the plain note.
@@ -707,7 +708,6 @@ document.addEventListener('DOMContentLoaded', () => {
       const a = document.getElementById("done-url");
       a.textContent = url;
       if (isHttpUrl(url)) a.href = withWalked(url); else a.removeAttribute("href");
-      vouch(WALKED);
       const aMdns = document.getElementById("done-url-mdns");
       if (mdns) {
         const mdnsUrl = `http://${mdns}/`;

@@ -20,7 +20,7 @@ Below: the UI behaviors common to every card, described once, then one section p
 - **Tab persistence** — selected tab survives page refresh.
 - **Process detection** — on page load, checks if MoonLight or idf.py is already running and shows Stop button.
 - **Network bar** (top of the sidebar): switch between known networks. Each network holds its own device list, last-used serial port, and WiFi credentials (consumed by Improv). On startup, MoonDeck auto-selects the network whose subnet matches the host's current LAN — moving the laptop between networks usually requires no clicks. Manual override (the dropdown) pins the selection until the pinned network's subnet stops matching the host. Add / Rename buttons next to the dropdown manage the catalog. State persisted in `moondeck/moondeck.json` under `networks` + `active_network`.
-- **Device-model picker** on each device row: dropdown of device models from [mooninstaller/deviceModels.json](../mooninstaller/deviceModels.json), the same catalog the web installer uses. When the device's firmware uniquely identifies one deviceModel (e.g. `esp32-eth` → Olimex Gateway), MoonDeck auto-deduces and mirrors the value to the device's `deviceModel` control on [SystemModule](../docs/moonmodules/core/SystemModule.md) via `PATCH /api/state` on next discover. For firmwares with no unique deviceModel (`esp32` runs on multiple), the user picks; MoonDeck pushes that value too. A device-reported deviceModel not in the catalog still shows up as `<key> (unknown)` so the value survives. MoonDeck's picker is a **text dropdown for an already-running device**, distinct from the web installer's flash-time *picture* deviceModel picker; both read the same catalog, but MoonDeck doesn't need the per-deviceModel `image`/`url` fields (those are installer-picker UX). Selecting a deviceModel pushes its full catalog config: each entry carries a `state` document (the [catalog schema](../mooninstaller/README.md)), so MoonDeck sends it in one `PATCH /api/state`; see `_push_device` in [moondeck.py](moondeck.py).
+- **Device-model picker** on each device row: dropdown of device models from [mooninstaller/deviceModels.json](../mooninstaller/deviceModels.json), the same catalog the web installer uses. When the device's firmware uniquely identifies one deviceModel (e.g. `esp32-eth` → Olimex Gateway), MoonDeck auto-deduces and mirrors the value to the device's `deviceModel` control on [SystemModule](../docs/moonmodules/core/SystemModule.md) via `PATCH /api/state` on next discover. For firmwares with no unique deviceModel (`esp32` runs on multiple), the user picks; MoonDeck pushes that value too. A device-reported deviceModel not in the catalog still shows up as `<key> (unknown)` so the value survives. MoonDeck's picker is a **text dropdown for an already-running device**, distinct from the web installer's flash-time *picture* deviceModel picker; both read the same catalog, but MoonDeck doesn't need the per-deviceModel `image`/`url` fields (those are installer-picker UX). Selecting a deviceModel pushes its full catalog config: each entry carries a `state` document (the [device catalog](../mooninstaller/README.md#the-device-catalog)), so MoonDeck sends it in one `PATCH /api/state`; see `_push_device` in [moondeck.py](moondeck.py).
 ## Desktop Tab
 
 
@@ -131,10 +131,10 @@ uv run moondeck/run/preview_installer.py
 # open http://localhost:8421/ in Chrome / Edge / Opera
 ```
 
-Long-running — MoonDeck shows **Stop** while the server is up. Two modes, picked automatically:
+Long-running: MoonDeck shows **Stop** while the server is up. Two modes, picked automatically:
 
-- **Render-only.** With no app image under `build/esp32-*/`, the picker populates against the real GitHub Releases API and the dropdowns work. Clicking **Install** fails, because the local server has no `releases/` tree. Useful for iterating on HTML / CSS / JS without burning a build. Equivalent to "Recipe A" in [mooninstaller/README.md](../mooninstaller/README.md).
-- **Flash-ready.** When at least one ESP32 or Teensy build exists, the script also stages every app image it finds under `build/esp32-*/`, and every built Teensy `build/teensy41*/MoonLight.bin`, into `releases/local-dev/`. It generates matching Pages-relative manifests with the same `generate_manifest.py` the release workflow uses. The picker shows `local-dev` as the newest tag. Clicking **Install** flashes a USB-connected ESP32 or Teensy and hands off to the repository's own orchestrator UI in `install-orchestrator.js`. That does the Improv-Serial provisioning and the APPLY_OP push of the device model's modules and controls, in place of ESP Web Tools. End-to-end, same code paths as the public installer. This is the developer's test ground for the install flow before deploying to GitHub Pages: Web Serial works on `http://localhost` without the secure-origin requirement that gates the public site.
+- **Render-only.** With no app image under `build/esp32-*/`, the picker populates against the real GitHub Releases API and the dropdowns work. Clicking **Install** fails, because the local server has no `releases/` tree. Useful for iterating on HTML / CSS / JS without burning a build.
+- **Flash-ready.** When at least one ESP32 or Teensy build exists, the script also stages every app image it finds under `build/esp32-*/`, and every built Teensy `build/teensy41*/MoonLight.bin`, under `releases/latest/` as version `local-dev`. It generates matching Pages-relative manifests with the same `generate_manifest.py` the release workflow uses. Clicking **Install** on `latest` flashes a USB-connected ESP32 or Teensy and hands off to the repository's own orchestrator UI in `install-orchestrator.js`. That does the Improv-Serial provisioning and the APPLY_OP push of the device model's modules and controls, in place of ESP Web Tools. End-to-end, same code paths as the public installer. This is the developer's test ground for the install flow before deploying to GitHub Pages: Web Serial works on `http://localhost` without the secure-origin requirement that gates the public site.
 
 Add `?nocache=1` to the URL to bypass the picker's 5-minute sessionStorage cache while editing.
 
@@ -146,7 +146,7 @@ Verify every implemented MoonModule has a matching, up-to-date spec.
 uv run moondeck/check/check_specs.py
 ```
 
-Scans `src/` for MoonModule `.h` files and checks each has a `docs/moonmodules/*.md` page whose control names / source facts still agree with the header. The always-run commit gate (fast, <1s) — catches `.h` ↔ doc drift even on doc-only commits.
+Scans `src/` for MoonModule `.h` files and checks each has a `docs/moonmodules/*.md` page whose control names / source facts still agree with the header. The always-run commit gate (fast, <1s): it catches `.h` ↔ doc drift even on doc-only commits.
 
 ### check_taglines
 
@@ -222,7 +222,7 @@ Validate the installer device-model catalog (`mooninstaller/deviceModels.json`).
 uv run moondeck/check/check_devices.py
 ```
 
-Checks each entry's required fields, that `firmwares` is a non-empty list, every `image` resolves on disk, the `System.deviceModel` control equals the entry name, module `type`s are factory-registered, `pins` controls live only on `*LedDriver` modules, and `flashBaud` (if set) is a standard esptool rate. The catalog's counterpart to `check_specs` for module docs.
+First the shape, against `mooninstaller/deviceModels.schema.json`: the fields, their types and vocabularies, and `flashBaud`'s standard rates. Then what a schema cannot know: every firmware is in the registry for its chip, and every `image` resolves on disk. The `System.deviceModel` control equals the entry name, module `type`s are factory-registered, and `pins` controls live only on light drivers. The catalog's counterpart to `check_specs` for module docs.
 
 ### check_firmwares
 
