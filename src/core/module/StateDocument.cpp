@@ -648,7 +648,7 @@ StateDocumentResult applyStateDocument(Scheduler& scheduler, const char* text, S
     JsonDoc doc;
     if (!json::parse(text, doc)) { r.ok = false; r.error = doc.outOfMemory ? "out of memory" : "malformed JSON"; return r; }
     const JsonNode* root = doc.rootNode();
-    if (root->type != JsonType::Object) { r.ok = false; r.error = "a document is a JSON object"; return r; }
+    if (!root || root->type != JsonType::Object) { r.ok = false; r.error = "a document is a JSON object"; return r; }
 
     Applier a{scheduler, doc, r, source};
     for (int pass = 0; pass < 3 && a.runPass(pass, root); pass++) {}
@@ -702,6 +702,7 @@ namespace {
 // The flat file's values directly under `prefix`, each as `,"key":value`.
 void writeFlatValues(JsonSink& out, const JsonDoc& doc, const char* prefix) {
     const JsonNode* root = doc.rootNode();
+    if (!root) return;
     const size_t pl = std::strlen(prefix);
     for (const JsonNode* n = doc.node(root->firstChild); n; n = doc.node(n->next)) {
         if (std::strncmp(n->key, prefix, pl) != 0) continue;
