@@ -78,6 +78,17 @@ std::vector<Coord3D> placeBacklight(const char* wiring) {
 }
 
 /// The distinct cells a walk visits, for the shape-is-invariant checks below.
+// A walk written as "xy" cells in strand order, so an expected order reads as one line.
+std::string walkOf(const std::vector<Coord3D>& p) {
+    std::string got;
+    for (const auto& k : p) {
+        if (!got.empty()) got += ' ';
+        got += static_cast<char>('0' + k.x);
+        got += static_cast<char>('0' + k.y);
+    }
+    return got;
+}
+
 std::set<std::pair<int, int>> cellsOf(const std::vector<Coord3D>& p) {
     std::set<std::pair<int, int>> out;
     for (const auto& c : p) out.insert({c.x, c.y});
@@ -983,6 +994,7 @@ TEST_CASE("backlight.mll: each edge contributes its own count, each corner once"
     for (const auto& c : p) {
         CHECK(c.z == 0);
         CHECK((c.x == 0 || c.x == 59 || c.y == 0 || c.y == 33));
+        CHECK((c.x >= 0 && c.x < 60 && c.y >= 0 && c.y < 34));   // on the wall too: (60, 0) is on an edge's line but off the wall
     }
     CHECK(cells.count({0, 0}) == 1);
     CHECK(cells.count({59, 0}) == 1);
@@ -1011,13 +1023,7 @@ TEST_CASE("backlight.mll: each wiring starts at its corner and runs its own way 
                       "\"startCorner\":%d,\"reverse\":%d}", c.corner, c.reverse);
         const auto p = placeBacklight(wiring);
         REQUIRE(p.size() == 10);
-        std::string got;
-        for (const auto& k : p) {
-            if (!got.empty()) got += ' ';
-            got += static_cast<char>('0' + k.x);
-            got += static_cast<char>('0' + k.y);
-        }
-        CHECK(got == std::string(c.walk));
+        CHECK(walkOf(p) == std::string(c.walk));
     }
 }
 
@@ -1056,18 +1062,37 @@ TEST_CASE("backlight.mll: a gap removes a run of lights and leaves the rest wher
     REQUIRE(whole.size() == 20);
     REQUIRE(p.size() == 17);   // the three it does not have
 
-    std::string got;
-    for (const auto& k : p) {
-        if (!got.empty()) got += ' ';
-        got += static_cast<char>('0' + k.x);
-        got += static_cast<char>('0' + k.y);
-    }
     // The bottom loses its middle three; every other light sits exactly where it did.
-    CHECK(got == std::string("00 10 20 30 40 50 60 70 71 73 75 35 25 15 05 04 02"));
+    CHECK(walkOf(p) == std::string("00 10 20 30 40 50 60 70 71 73 75 35 25 15 05 04 02"));
 
     // A gap REMOVES, it does not move: each remaining cell is one the whole strand also had.
     const auto had = cellsOf(whole);
     for (const auto& k : p) CHECK(had.count({k.x, k.y}) == 1);
+}
+
+// The controls allow a position past the strand's own length; it counts round the strand again, whichever way the strand runs, rather than leaving the wall.
+TEST_CASE("backlight.mll: a position past the strand's length wraps round it, reversed too") {
+    const char* wall = "{\"wallCols\":4,\"wallRows\":3,\"top\":4,\"right\":3,\"bottom\":4,\"left\":3,\"reverse\":1,\"position\":%d}";
+    char at5[160], at25[160];
+    std::snprintf(at5, sizeof(at5), wall, 5);
+    std::snprintf(at25, sizeof(at25), wall, 25);   // 25 = two rounds of 10, then 5
+    const auto p5 = placeBacklight(at5);
+    const auto p25 = placeBacklight(at25);
+    REQUIRE(p25.size() == 10);
+    CHECK(walkOf(p25) == walkOf(p5));
+    for (const auto& c : p25) CHECK((c.x >= 0 && c.x < 4 && c.y >= 0 && c.y < 3));
+}
+
+// A gap counts round from the top-left like the strand, so one starting near the end of the frame runs on past the corner onto the top edge.
+TEST_CASE("backlight.mll: a gap crossing the top-left corner skips its lights on both sides of it") {
+    // A 4x3 wall walks 00 10 20 30 31 32 22 12 02 01; a gap of two from the last light covers 01 and 00.
+    const auto p = placeBacklight("{\"wallCols\":4,\"wallRows\":3,\"top\":4,\"right\":3,\"bottom\":4,\"left\":3,\"gapStart\":9,\"gapLength\":2}");
+    CHECK(walkOf(p) == std::string("10 20 30 31 32 22 12 02"));
+}
+
+TEST_CASE("backlight.mll: a gap ending at the last light leaves the walk up to it") {
+    const auto p = placeBacklight("{\"wallCols\":4,\"wallRows\":3,\"top\":4,\"right\":3,\"bottom\":4,\"left\":3,\"gapStart\":8,\"gapLength\":2}");
+    CHECK(walkOf(p) == std::string("00 10 20 30 31 32 22 12"));
 }
 
 // A strand with fewer lights than the edge has pixels gets them spread along it, so one script serves a 30-light strip on a 128-pixel wall. The corners still land on the box.

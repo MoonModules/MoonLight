@@ -12,6 +12,9 @@ class BacklightLayout {
   byte startCorner = 0;
   int position = 0;
   byte reverse = 0;
+  int g0 = 0;
+  int gl = 0;
+  int gw = 0;
 
   int dimensions() { return 2; }
 
@@ -60,33 +63,44 @@ class BacklightLayout {
     addLight(0, wallRows - 1 - along(j, left, wallRows - 1), 0);
   }
 
-  // The gap is a stretch of the frame the strand skips, so a strand position past it sits that many
-  // lights further round. This is what keeps the walk a plain rotation with a gap in it.
+  // The gap is a stretch of the frame the strand skips, counted round from the top-left, so a
+  // strand position past it sits that many lights further round. One that runs past the top-left
+  // corner wraps onto the top edge: its part there, gw lights long, is skipped before the rest.
   int perimeterAt(int i) {
-    if (gapLength > 0 && i >= gapStart) { return i + gapLength; }
+    if (gw > 0) { return i + gw; }
+    if (gl > 0 && i >= g0) { return i + gl; }
     return i;
   }
 
-  // Where index 0 sits, per corner, in STRAND positions: the corner's place on the frame, less the
-  // gap if the gap lies before it.
+  // Index 0 sits at the start corner, in strand positions: the lights before it, or the first light
+  // past the gap when the corner falls inside it.
   int strandStart() {
     int k = 0;
     if (startCorner == 1) { k = top - 1; }
     else if (startCorner == 2) { k = top - 1 + right - 1; }
     else if (startCorner == 3) { k = top - 1 + right - 1 + bottom - 1; }
-    if (gapLength > 0 && k >= gapStart + gapLength) { return k - gapLength; }
-    if (gapLength > 0 && k >= gapStart) { return gapStart; }
+    if (gw > 0) {
+      if (k < gw || k >= g0) { return 0; }
+      return k - gw;
+    }
+    if (gl > 0 && k >= g0 + gl) { return k - gl; }
+    if (gl > 0 && k >= g0) { return g0; }
     return k;
   }
 
   void placeLights() {
     int full = top - 1 + right - 1 + bottom - 1 + left - 1;
-    int n = full - gapLength;
-    if (gapLength < 1) { n = full; }
-    if (n < 1) { return; }
+    // The gap reduced onto the frame, and at most every light but one, so any setting places lights.
+    g0 = mod(gapStart, full);
+    gl = gapLength;
+    if (gl > full - 1) { gl = full - 1; }
+    gw = g0 + gl - full;
+    if (gw < 0) { gw = 0; }
+    int n = full - gl;
     // Along the STRAND, not around the frame: on a reversed strand the entry moves the other way too.
-    int s = mod(strandStart() + position, n);
-    if (reverse == 1) { s = mod(strandStart() - position + n + n, n); }
+    int p = mod(position, n);
+    int s = mod(strandStart() + p, n);
+    if (reverse == 1) { s = mod(strandStart() - p + n, n); }
     for (int i = 0; i < n; i = i + 1) {
       if (reverse == 1) { emitAt(perimeterAt(mod(s + n - mod(i, n), n))); }
       else { emitAt(perimeterAt(mod(s + i, n))); }
