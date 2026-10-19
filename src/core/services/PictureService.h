@@ -123,12 +123,13 @@ public:
         if (source != kUsbCapture || !task_.impl) return;
         if (!lock_.tryAcquire()) return;   // the decode task is publishing: the next second reads it
         const unsigned w = frame_.width, h = frame_.height;
+        const bool one = !back_;   // the writer swaps back_ under the lock
         lock_.release();
         const platform::VideoCaptureStats st = platform::videoCaptureStats();
         const uint32_t lost = st.dropped + st.failed;
         mm::formatTo(status_, sizeof(status_), "%u x %u, %u frames, %u lost%s", w, h,
-                     static_cast<unsigned>(st.decoded), static_cast<unsigned>(lost), back_ ? "" : ", one picture");
-        setStatus(status_, lost || !back_ ? Severity::Warning : Severity::Status);
+                     static_cast<unsigned>(st.decoded), static_cast<unsigned>(lost), one ? ", one picture" : "");
+        setStatus(status_, lost || one ? Severity::Warning : Severity::Status);
     }
 
     /// What a consumer reads with no source: a class constant, since a function-local static needs a guard on first use.
@@ -251,6 +252,7 @@ private:
             setStatus(platform::videoCaptureFormatGeneration() ? "the grabber offers no mode that fits" : "no grabber attached", Severity::Warning);
             return;
         }
+        if (back_) clearStatus();   // before the task swaps back_; with one picture, prepareBuffers' warning stays until the first status line
         stop_.store(false, std::memory_order_release);
         // Core 1, beside the USB host's own tasks, so a decode never lands on the render core.
         if (!platform::spawnPinnedTask(task_, "mmPicCap", &captureTrampoline, this, 4096, 3, 1)) {
@@ -258,7 +260,6 @@ private:
             setStatus("no task for the capture", Severity::Error);
             return;
         }
-        if (back_) clearStatus();   // with one picture, prepareBuffers' warning stays until the first status line
     }
 
     /// Stop the decode and release the device, in that order, so nothing writes a picture that has moved.
