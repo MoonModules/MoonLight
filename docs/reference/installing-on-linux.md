@@ -29,130 +29,17 @@ Install the `.deb` as [Install MoonLight](../moonwalk.md#install) describes with
 
 ## Build from source
 
-For a distribution the package does not suit, an older glibc, or to develop on the board. Allow an hour the first time, most of it waiting.
-
-### 1. Write an OS image to the SD card
-
-Take a Debian-based image. For a Raspberry Pi, [Raspberry Pi OS Lite](https://www.raspberrypi.com/software/): the desktop build leaves less memory for the compile. For a NanoPi, the Debian image from the board's [FriendlyELEC wiki page](https://wiki.friendlyelec.com/wiki/index.php/NanoPi_R28S#Flashing_the_OS_to_the_microSD_card), under `01_Official images/01_SD card images`. Skip FriendlyWrt: it is router firmware with a different package manager. [Armbian](https://www.armbian.com/download/) covers many boards from one project, if it lists yours.
-
-Use an 8 GB card or larger. Write it with [Raspberry Pi Imager](https://www.raspberrypi.com/software/) or [balenaEtcher](https://etcher.balena.io/); both take the compressed download directly.
-
-On a Raspberry Pi, open Imager's settings before writing: set the username, hostname and WiFi, and enable SSH. Raspberry Pi OS ships with SSH off and no default user, so a card written without those boots to a machine you cannot reach.
-
-### 2. First boot
-
-Insert the card, connect the network cable, power on. Give it 10 to 20 minutes: the first boot resizes the filesystem and may reboot itself.
-
-Find it on the network:
-
-```sh
-ping raspberrypi.local          # or NanoPi-R28S.local
-arp -a                          # everything the network has seen
-```
-
-Your router's client list is the fallback when mDNS does not resolve. A name that never resolves means the board has no mDNS responder, so `.local` fails while the IP answers. Raspberry Pi OS ships one; a minimal Debian or FriendlyELEC image often does not. Log in by IP and fix it below.
-
-### 3. Log in
-
-```sh
-ssh <you>@<hostname>.local      # Raspberry Pi OS: the user you set in Imager
-ssh pi@NanoPi-R28S              # FriendlyELEC Debian: user pi, password pi
-ssh pi@192.168.1.156            # by address, when neither name resolves
-```
-
-**A wall of `setlocale: LC_CTYPE: cannot change locale (UTF-8)` warnings on login is harmless.** macOS sends its own `LC_CTYPE` to the board, which has no locale by that name. Bash repeats the warning per startup file. It fires before anything you run. Silence it on the board:
-
-```sh
-sudo apt install -y locales && sudo locale-gen en_US.UTF-8
-```
-
-Change a default password at once:
-
-```sh
-passwd
-```
-
-**If `.local` did not resolve**, install the mDNS responder now and the name works from the next boot:
-
-```sh
-sudo apt install -y avahi-daemon
-```
-
-Without network access, attach a keyboard and monitor and configure it there: `sudo nmtui` for WiFi and addresses, `ip ad` to see what the board has. On a NanoPi, `sudo nmtui` also configures the second port.
-
-### 4. Update the system
-
-```sh
-sudo apt update
-sudo apt upgrade -y
-```
-
-### 5. Install the prerequisites
-
-```sh
-sudo apt install -y python3-pip cmake build-essential git
-pip install uv --break-system-packages
-```
-
-`--break-system-packages` is routine on Debian 12 and later, where the system Python is marked externally managed; it affects pip's own environment only.
-
-If `uv` is then not found, add its directory to your path:
-
-```sh
-echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc && source ~/.bashrc
-```
-
-### 6. Build and run
-
-```sh
-git clone https://github.com/MoonModules/MoonLight.git
-cd MoonLight
-uv run moondeck/build/build_desktop.py
-uv run moondeck/run/run_desktop.py
-```
-
-The build takes a few minutes on a Pi 4 or a NanoPi, longer on older boards. `run_desktop.py` detaches, so the program outlives the ssh session. Open `http://<board>:8080`.
-
-That is a running system. Everything below is optional.
-
-> A board with 1 GB of RAM or less can run out of memory while compiling; the compiler is killed rather than reporting an error. Add swap: edit `/etc/dphys-swapfile` to raise `CONF_SWAPSIZE`, then `sudo dphys-swapfile swapoff && sudo dphys-swapfile setup && sudo dphys-swapfile swapon`. Editing alone changes nothing; `setup` regenerates the file.
+For a distribution the package does not suit, an older glibc, or to develop on the board. Steps: [Prepare a Linux board for MoonLight](../moonwalk.md#prepare-linux-board), which ends in building and running it.
 
 ## Keeping it running after a reboot
 
 For the package or a source build. A container does this with `--restart unless-stopped` instead, see [Docker](#docker).
 
-Give it a systemd unit at `/etc/systemd/system/moonlight.service`:
-
-```ini
-[Unit]
-Description=MoonLight
-After=network-online.target
-Wants=network-online.target
-
-[Service]
-ExecStart=/home/pi/MoonLight/build/MoonLight
-Restart=always
-RestartSec=5
-User=pi
-
-[Install]
-WantedBy=multi-user.target
-```
-
-```sh
-sudo systemctl enable --now moonlight
-systemctl status moonlight
-```
-
-`Restart=always` covers a crash as well as a reboot. Adjust `User` and the path: `/usr/bin/MoonLight` for the package, or where you built for a source build.
+Steps: [Keep MoonLight running on a Linux board](../moonwalk.md#run-linux-board), which holds the systemd unit.
 
 ## Shutting down
 
-Shut down cleanly; an SD card interrupted mid-write can corrupt the filesystem:
-
-```sh
-sudo shutdown now     # or: sudo reboot
-```
+Shut down cleanly, since an SD card interrupted mid-write can corrupt the filesystem: [Keep MoonLight running on a Linux board](../moonwalk.md#run-linux-board).
 
 MoonLight writes to disk only when settings change, so the card is a fine home for it. The risk is the operating system's own writes.
 
@@ -178,15 +65,7 @@ The same program, installed as a container rather than a package: start it as [I
 
 ### From a source checkout, with Compose
 
-The repository's `docker-compose.yml` builds the image from the checkout and publishes the interface on port 8081, so it never meets a native install on 8080:
-
-```sh
-docker compose up -d      # then open http://localhost:8081/
-docker compose logs -f
-docker compose down       # stops it; the volume and your config stay
-```
-
-It passes `--no-browser`, since a container has no browser to open. To update after pulling new code, `docker compose build --pull && docker compose up -d`; for a published `image:` it is `docker compose pull && docker compose up -d`. Only `docker compose down -v` deletes the volume. Discovery and broadcast output need `network_mode: host`, which has no port mapping, so pass `--port 8081` in `command:` there.
+The repository's `docker-compose.yml` builds the image from the checkout and publishes the interface on port 8081, so it never meets a native install on 8080. Steps: [Install MoonLight](../moonwalk.md#install) with Docker picked, under running it from a source checkout.
 
 ### When the container exits at once
 

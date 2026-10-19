@@ -3020,7 +3020,7 @@
    "guide": [
     {
      "title": "The NDI runtime",
-     "text": "You install it yourself; without it the driver says so and nothing else changes. The steps: [installing the NDI runtime](https://moonmodules.org/MoonLight/how-to/watching-the-output.html#installing-the-ndi-runtime)."
+     "text": "You install it yourself; without it the driver says so and nothing else changes. The steps: [installing the NDI runtime](https://moonmodules.org/MoonLight/reference/watching-the-output.html#installing-the-ndi-runtime)."
     },
     {
      "title": "Receivers",
@@ -3028,7 +3028,7 @@
     },
     {
      "title": "Status line",
-     "text": "| It says | It means |\n|---|---|\n| `NDI runtime not installed` | Install it, per the how-to page |\n| `could not create the NDI source` | The runtime is there but refused, usually a name clash with another source |\n| `sending <w>x<h> at <n> fps` | Live; look for it in your receiver |"
+     "text": "| It says | It means |\n|---|---|\n| `NDI runtime not installed` | Install it: [Watch the output as video](https://moonmodules.org/MoonLight/moonwalk.html#watch-output) |\n| `could not create the NDI source` | The runtime is there but refused, usually a name clash with another source |\n| `sending <w>x<h> at <n> fps` | Live; look for it in your receiver |"
     }
    ],
    "image": "https://moonmodules.org/MoonLight/assets/light/drivers/NdiDriver.png",
@@ -3070,7 +3070,7 @@
    "guide": [
     {
      "title": "ffmpeg",
-     "text": "It runs on the desktop, where you install ffmpeg yourself and then open the stream ([how-to](https://moonmodules.org/MoonLight/how-to/watching-the-output.html#installing-ffmpeg))."
+     "text": "It runs on the desktop, where you install ffmpeg yourself and then open the stream ([Watching the output](https://moonmodules.org/MoonLight/reference/watching-the-output.html#installing-ffmpeg))."
     },
     {
      "title": "On the ESP32-P4",
@@ -3125,11 +3125,11 @@
    "guide": [
     {
      "title": "Playing it",
-     "text": "Open the `url` in VLC or ffplay ([how-to](https://moonmodules.org/MoonLight/how-to/watching-the-output.html#playing-an-rtsp-stream)). The second of RTSP and HLS to start reports that the encoder is in use."
+     "text": "Open the `url` in VLC or ffplay ([Watching the output](https://moonmodules.org/MoonLight/reference/watching-the-output.html#playing-an-rtsp-stream)). The second of RTSP and HLS to start reports that the encoder is in use."
     },
     {
      "title": "One viewer at a time",
-     "text": "A new connection takes the session over, and the displaced viewer sees its connection close. A network that blocks the UDP port the viewer names leaves the stream silent ([how-to](https://moonmodules.org/MoonLight/how-to/watching-the-output.html#when-an-rtsp-stream-stays-silent))."
+     "text": "A new connection takes the session over, and the displaced viewer sees its connection close. A network that blocks the UDP port the viewer names leaves the stream silent ([Watching the output](https://moonmodules.org/MoonLight/reference/watching-the-output.html#when-an-rtsp-stream-stays-silent))."
     },
     {
      "title": "The delay that remains",
@@ -3178,7 +3178,7 @@
    "guide": [
     {
      "title": "Why 1 Gbit",
-     "text": "The cards need 1000 Mbps for wire time, not bandwidth: they latch on the sync frame, so a whole frame must arrive inside the inter-frame window. At 100 Mbit expect tearing or wrong rows; the driver warns but still sends ([how-to](https://moonmodules.org/MoonLight/how-to/panel-cards.html#the-one-hardware-fact-that-decides-everything))."
+     "text": "The cards need 1000 Mbps for wire time, not bandwidth: they latch on the sync frame, so a whole frame must arrive inside the inter-frame window. At 100 Mbit expect tearing or wrong rows; the driver warns but still sends ([Panel cards](https://moonmodules.org/MoonLight/reference/hardware/panel-cards.html#the-one-hardware-fact-that-decides-everything))."
     }
    ],
    "image": "https://moonmodules.org/MoonLight/assets/light/drivers/PanelCardDriver.png",
@@ -3204,11 +3204,11 @@
     },
     "firmware": {
      "line": "The card firmware; a wrong one and the wall barely updates.",
-     "more": "v13 and newer acts on the second copy of brightness and sync, which go out twice; v12 and older on the first ([how-to](https://moonmodules.org/MoonLight/how-to/panel-cards.html#7-card-firmware-and-the-flicker))."
+     "more": "v13 and newer acts on the second copy of brightness and sync, which go out twice; v12 and older on the first ([Panel cards](https://moonmodules.org/MoonLight/reference/hardware/panel-cards.html#7-card-firmware-and-the-flicker))."
     },
     "interface": {
      "line": "The network adapter the frames go out on.",
-     "more": "`none (capture only)` records frames without sending. Sending needs root or `CAP_NET_RAW` on Linux, BPF on macOS, Npcap on Windows ([steps](https://moonmodules.org/MoonLight/how-to/panel-cards.html#6-from-a-desktop))."
+     "more": "`none (capture only)` records frames without sending. Sending needs root or `CAP_NET_RAW` on Linux, BPF on macOS, Npcap on Windows ([steps](https://moonmodules.org/MoonLight/reference/hardware/panel-cards.html#6-from-a-desktop))."
     },
     "start": {
      "line": "The first light of the shared buffer this driver reads."
@@ -3234,7 +3234,7 @@
    "guide": [
     {
      "title": "Which of the two paths",
-     "text": "A receiving card ([PanelCard](https://moonmodules.org/MoonLight/moonmodules/light/drivers.html#panelcard)) earns its place above roughly 16,384 pixels; below that this driver is the small end of the split. [The HUB75 how-to](https://moonmodules.org/MoonLight/how-to/hub75-panels.html#which-of-the-two-paths) has the choice."
+     "text": "A receiving card ([PanelCard](https://moonmodules.org/MoonLight/moonmodules/light/drivers.html#panelcard)) earns its place above roughly 16,384 pixels; below that this driver is the small end of the split. [HUB75 panels](https://moonmodules.org/MoonLight/reference/hardware/hub75-panels.html#which-of-the-two-paths) has the choice."
     }
    ],
    "image": "https://moonmodules.org/MoonLight/assets/light/drivers/Hub75Driver.png",
@@ -3257,7 +3257,7 @@
     },
     "board": {
      "line": "The board's wiring: picking one fills the fourteen pins, Custom keeps yours.",
-     "more": "A published map hides the pin rows, which stay bound. A pin on flash or PSRAM is refused. Boards and the R1/G1/B1 naming trap: [the how-to](https://moonmodules.org/MoonLight/how-to/hub75-panels.html#which-board)."
+     "more": "A published map hides the pin rows, which stay bound. A pin on flash or PSRAM is refused. Boards and the R1/G1/B1 naming trap: [HUB75 panels](https://moonmodules.org/MoonLight/reference/hardware/hub75-panels.html#which-board)."
     },
     "peripheral": {
      "line": "The silicon block that drives the panel, LCD_CAM or Parlio, where the chip has both.",
@@ -3285,7 +3285,7 @@
   },
   "RmtLedDriver": {
    "line": "Addressable WS2812B-class LEDs on a handful of strands, clocked by the chip's RMT peripheral.",
-   "summary": "The classic choice, and the one that needs no DMA peripheral: for more than a few strands see [ParallelLed](https://moonmodules.org/MoonLight/moonmodules/light/drivers.html#parallelled). Flicker on LEDs that should be off is signal integrity rather than firmware, and [the signal integrity playbook](https://moonmodules.org/MoonLight/how-to/led-signal-integrity.html) walks the checks.",
+   "summary": "The classic choice, and the one that needs no DMA peripheral: for more than a few strands see [ParallelLed](https://moonmodules.org/MoonLight/moonmodules/light/drivers.html#parallelled). Flicker on LEDs that should be off is signal integrity rather than firmware, and [the signal integrity playbook](https://moonmodules.org/MoonLight/explanation/led-signal-integrity.html) walks the checks.",
    "attribution": "[hpwit](https://github.com/hpwit), [WLED](https://github.com/wled/WLED), [FastLED](https://github.com/FastLED/FastLED)",
    "image": "https://moonmodules.org/MoonLight/assets/light/drivers/RmtLedDriver.png",
    "controls": {
@@ -3400,7 +3400,7 @@
    "guide": [
     {
      "title": "Which peripheral",
-     "text": "Start with `i80`. Choose `MoonI80` for frames too big for memory or a pin expander, `Parlio` on a P4, `GPIO-DMA` on a Teensy 4.1. [The LED driver how-to](https://moonmodules.org/MoonLight/how-to/led-drivers.html#which-one) has the chips, limits and wiring."
+     "text": "Start with `i80`. Choose `MoonI80` for frames too big for memory or a pin expander, `Parlio` on a P4, `GPIO-DMA` on a Teensy 4.1. [LED drivers](https://moonmodules.org/MoonLight/reference/hardware/led-drivers.html#which-one) has the chips, limits and wiring."
     }
    ],
    "image": "https://moonmodules.org/MoonLight/assets/light/drivers/ParallelLedDriver.png",
@@ -3462,7 +3462,7 @@
     },
     "loopbackStrand": {
      "line": "Strand carrying the test pattern, expander mode only.",
-     "more": "Strand 0 is Q7, strand S is Q(7 - S%8): jumper it to `loopbackRxPin`. The '595 is 5 V: divide it ([how-to](https://moonmodules.org/MoonLight/how-to/led-drivers.html#testing-the-wire-with-the-loopback))."
+     "more": "Strand 0 is Q7, strand S is Q(7 - S%8): jumper it to `loopbackRxPin`. The '595 is 5 V: divide it ([LED drivers](https://moonmodules.org/MoonLight/reference/hardware/led-drivers.html#testing-the-wire-with-the-loopback))."
     },
     "loopbackIntrusive": {
      "line": "ON rides the live pipeline, OFF rebuilds a private bus."
@@ -3585,11 +3585,11 @@
     },
     {
      "title": "Presets",
-     "text": "Click a pad to apply its preset, drag to rearrange. A pad is tinted by its role: layout blue, effects violet, driver green, service amber. [The how-to](https://moonmodules.org/MoonLight/how-to/presets.html) has the rest."
+     "text": "Click a pad to apply its preset, drag to rearrange. A pad is tinted by its role: layout blue, effects violet, driver green, service amber. [Presets](https://moonmodules.org/MoonLight/reference/presets.html) has the rest."
     },
     {
      "title": "Home Assistant",
-     "text": "Only effects presets reach Home Assistant, so a hub never rewires pins or geometry. [The how-to](https://moonmodules.org/MoonLight/how-to/home-automation.html#presets-in-home-assistant) has the setup."
+     "text": "Only effects presets reach Home Assistant, so a hub never rewires pins or geometry. [Home automation](https://moonmodules.org/MoonLight/reference/home-automation.html#presets-in-home-assistant) has the setup."
     }
    ],
    "image": "https://moonmodules.org/MoonLight/assets/core/ControlModule.png",
@@ -3644,7 +3644,7 @@
     },
     {
      "title": "Wiring and capture",
-     "text": "Microphone wiring, setting the levels and capturing what a machine plays are in [the how-to](https://moonmodules.org/MoonLight/how-to/audio-input.html)."
+     "text": "Microphone wiring, setting the levels and capturing what a machine plays are in [Audio input](https://moonmodules.org/MoonLight/reference/audio-input.html)."
     }
    ],
    "image": "https://moonmodules.org/MoonLight/assets/core/AudioService.png",
@@ -3754,11 +3754,11 @@
    "guide": [
     {
      "title": "Getting a surface working",
-     "text": "Turn on listening, and on feedback so the faders follow the device. A phone or tablet needs a free app and one session file.\n\n[The how-to](https://moonmodules.org/MoonLight/how-to/control-surface.html#a-phone-or-tablet-over-osc) has the steps."
+     "text": "Turn on listening, and on feedback so the faders follow the device. A phone or tablet needs a free app and one session file.\n\n[Control a device over OSC](https://moonmodules.org/MoonLight/moonwalk.html#osc-control) has the steps."
     },
     {
      "title": "The addresses",
-     "text": "The addresses are a public contract, so a layout built on them keeps working. Send `/mm/hello` and the device sends every value again. [The how-to](https://moonmodules.org/MoonLight/how-to/control-surface.html#the-osc-addresses) lists them."
+     "text": "The addresses are a public contract, so a layout built on them keeps working. Send `/mm/hello` and the device sends every value again. [Control surfaces](https://moonmodules.org/MoonLight/reference/control-surface.html#the-osc-addresses) lists them."
     }
    ],
    "image": "https://moonmodules.org/MoonLight/assets/core/OscService.png",
@@ -3908,7 +3908,7 @@
    "guide": [
     {
      "title": "Finding the pad",
-     "text": "A browser lists a pad only once a button is pressed with the page open. Chrome and Firefox also need a secure page, which a board's own page is not until marked once.\n\n[The how-to](https://moonmodules.org/MoonLight/how-to/control-surface.html#a-midi-desk-or-a-gamepad-through-the-browser) has the steps."
+     "text": "A browser lists a pad only once a button is pressed with the page open. Chrome and Firefox also need a secure page, which a board's own page is not until marked once.\n\n[Connect a control surface](https://moonmodules.org/MoonLight/moonwalk.html#control-surface) has the steps."
     },
     {
      "title": "Learning an input",
@@ -3938,7 +3938,7 @@
    "guide": [
     {
      "title": "Where the desk plugs in",
-     "text": "The browser reads a desk on a secure page only: the desktop app's `localhost` is, a board's own page needs marking once. A desk on USB or the network works on any page.\n\n[The how-to](https://moonmodules.org/MoonLight/how-to/control-surface.html#a-midi-desk-or-a-gamepad-through-the-browser) has the steps."
+     "text": "The browser reads a desk on a secure page only: the desktop app's `localhost` is, a board's own page needs marking once. A desk on USB or the network works on any page.\n\n[Connect a control surface](https://moonmodules.org/MoonLight/moonwalk.html#control-surface) has the steps."
     },
     {
      "title": "The Akai APC40 mkII",
@@ -4080,7 +4080,7 @@
     },
     {
      "title": "Backup and restore",
-     "text": "Backup downloads the device's files as one `.json` bundle, and Restore uploads one back. Keep the bundle private: it contains the WiFi password. [The how-to](https://moonmodules.org/MoonLight/how-to/backup-and-restore.html) walks through both."
+     "text": "Backup downloads the device's files as one `.json` bundle, and Restore uploads one back. Keep the bundle private: it contains the WiFi password. [Back up and restore a device](https://moonmodules.org/MoonLight/moonwalk.html#backup-restore) walks through both."
     }
    ],
    "image": "https://moonmodules.org/MoonLight/assets/core/FileManagerModule.png",
@@ -4314,7 +4314,7 @@
    "guide": [
     {
      "title": "Which route",
-     "text": "Home Assistant finds the device over the WLED integration with no broker. Use MQTT for Homebridge, a broker-only network or another hub. [The how-to](https://moonmodules.org/MoonLight/how-to/home-automation.html#the-mqtt-topics) lists the topics."
+     "text": "Home Assistant finds the device over the WLED integration with no broker. Use MQTT for Homebridge, a broker-only network or another hub. [Home automation](https://moonmodules.org/MoonLight/reference/home-automation.html#the-mqtt-topics) lists the topics."
     },
     {
      "title": "Getting it connected",

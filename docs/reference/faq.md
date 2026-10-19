@@ -32,8 +32,8 @@ A symptom rather than a question belongs in [Troubleshooting](troubleshooting.md
 ## Drivers and panels
 
 - **Which driver do I need?** One per output kind: LEDs on pins, a panel card over Ethernet, HUB75 direct, or a network protocol. See [Drivers](../moonmodules/light/drivers.md).
-- **Which board drives a panel card?** One with gigabit Ethernet, so an S31 or a desktop. An S3 or P4 is 100 Mbit and wants a gigabit switch between it and the card. See [Panel cards](panel-cards.md#the-one-hardware-fact-that-decides-everything).
-- **My ColorLight card does almost nothing.** These cards need a 1000 Mbps link, and the driver reports the negotiated speed in its status line. See [Panel cards](panel-cards.md).
+- **Which board drives a panel card?** One with gigabit Ethernet, so an S31 or a desktop. An S3 or P4 is 100 Mbit and wants a gigabit switch between it and the card. See [Panel cards](hardware/panel-cards.md#the-one-hardware-fact-that-decides-everything).
+- **My ColorLight card does almost nothing.** These cards need a 1000 Mbps link, and the driver reports the negotiated speed in its status line. See [Panel cards](hardware/panel-cards.md).
 - **My HUB75 panel is one column out.** Set `clockEdge` to `falling`: some panel chips sample the shift clock on the other edge. See [Drivers](../moonmodules/light/drivers.md).
 - **The HLS stream lags by seconds.** HLS buffers whole segments, so the delay is the format. For a live view use [Preview](../moonmodules/light/drivers.md#preview) instead of [HLS](../moonmodules/light/drivers.md#hls).
 

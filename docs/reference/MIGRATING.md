@@ -114,7 +114,7 @@ An older MoonBase still joins the known WiFi networks and finds the Ethernet wir
 
 **Action: a script or integration that applies a preset calls the row's action instead.**
 
-`POST /api/list/Control/presets/<name>/apply` applies a preset, `<name>` being its name or its row id ([Writing](integrating.md#writing)).
+`POST /api/list/Control/presets/<name>/apply` applies a preset, `<name>` being its name or its row id ([the REST API](api.md)).
 It takes the place of the Control module's `preset` control and of the row's `activate` and `apply` fields.
 
 ### Adding a module under a name in use is refused
@@ -347,7 +347,7 @@ Nothing on the device needs changing: the root is derived from a single constant
 
 Audio is now wired at boot rather than added by hand, because the default effect reacts to sound. A device without the module showed none of that: the lights moved without answering whether anything was heard. It defaults to **simulate**, a synthesized signal, so a device demonstrates the behavior before a microphone is wired to it. A board that has a microphone selects `local audio` in its catalog entry, the way it already names its pins.
 
-The mode options are reordered to run simple to advanced: **simulate, receive network, local audio**, where the order was local, receive, simulate. The default is now the first entry rather than an index that depended on whether the platform had a network. The selection is persisted as that index, so every saved value moves: what read 0 for local audio now reads 2, and what read 2 for simulate now reads 0. [Restore](../how-to/backup-and-restore.md) carries both. A device with no network has two options rather than three, and its old `1` is ambiguous, so re-pick that one by hand.
+The mode options are reordered to run simple to advanced: **simulate, receive network, local audio**, where the order was local, receive, simulate. The default is now the first entry rather than an index that depended on whether the platform had a network. The selection is persisted as that index, so every saved value moves: what read 0 for local audio now reads 2, and what read 2 for simulate now reads 0. [Restore](backup-and-restore.md) carries both. A device with no network has two options rather than three, and its old `1` is ambiguous, so re-pick that one by hand.
 
 ## v5.0.0
 

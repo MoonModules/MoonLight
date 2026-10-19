@@ -333,6 +333,25 @@ static bool requestNamesSdPath(const char* req) {
     return HttpServerModule::parseFilePath(line, path, sizeof(path)) && platform::isSdPath(path);
 }
 
+// A module name from its path segment, percent-decoded (a space arrives as %20) up to `/` or `?`, and never '+' as a space, which keeps "A+B" reachable; its length.
+static size_t decodeModuleName(const char* name, char* out, size_t outLen) {
+    size_t i = 0;
+    for (const char* p = name; *p && *p != '/' && *p != '?' && i + 1 < outLen; p++) {
+        const int hi = *p == '%' && p[1] ? hexDigit(p[1]) : -1, lo = hi >= 0 && p[2] ? hexDigit(p[2]) : -1;
+        if (lo >= 0) { out[i++] = static_cast<char>((hi << 4) | lo); p += 2; }
+        else out[i++] = *p;
+    }
+    out[i] = 0;
+    return i;
+}
+
+// The module name a /api/modules/<name>/... route carries, decoded; false when its segment does not fit, refused rather than truncated, since a truncated name could match another module.
+static bool routeModuleName(const char* segment, char (&out)[32]) {
+    if (std::strcspn(segment, "/?") >= sizeof(out)) return false;
+    decodeModuleName(segment, out, sizeof(out));
+    return true;
+}
+
 bool HttpServerModule::handleConnection(platform::TcpConnection& conn, int patienceMs) {
     // A client on the device's own access point has not shown it knows the network's password, so it sees no stored one.
     const SecretsHidden hide(onAccessPoint(conn));
@@ -529,27 +548,11 @@ bool HttpServerModule::handleConnection(platform::TcpConnection& conn, int patie
         } else if (std::strncmp(path, "/api/list/", 10) == 0) {
             // Editable list: POST /api/list/<module>/<control> appends a new row and returns its stable id. The row's fields are then set via PATCH /api/list/.../<id>.
             handleListAddRow(conn, path + 10);
-        } else if (isMoveRoute && body) {
+        } else if ((isMoveRoute || isReplaceRoute) && body) {
             char nameBuf[32] = {};
-            size_t nameLen = pathLen - 13 - 5;  // strip "/api/modules/" prefix and "/move" suffix
-            // Reject rather than truncate: a truncated name could match a different module than the client intended.
-            if (nameLen >= sizeof(nameBuf)) {
-                sendResponse(conn, 400, "application/json", "{\"error\":\"module name too long\"}");
-            } else {
-                std::memcpy(nameBuf, path + 13, nameLen);
-                nameBuf[nameLen] = 0;
-                handleMoveModule(conn, nameBuf, body);
-            }
-        } else if (isReplaceRoute && body) {
-            char nameBuf[32] = {};
-            size_t nameLen = pathLen - 13 - 8;  // strip "/api/modules/" prefix and "/replace" suffix
-            if (nameLen >= sizeof(nameBuf)) {
-                sendResponse(conn, 400, "application/json", "{\"error\":\"module name too long\"}");
-            } else {
-                std::memcpy(nameBuf, path + 13, nameLen);
-                nameBuf[nameLen] = 0;
-                handleReplaceModule(conn, nameBuf, body);
-            }
+            if (!routeModuleName(path + 13, nameBuf)) sendResponse(conn, 400, "application/json", "{\"error\":\"module name too long\"}");
+            else if (isMoveRoute) handleMoveModule(conn, nameBuf, body);
+            else handleReplaceModule(conn, nameBuf, body);
         } else if (std::strcmp(path, "/json/state") == 0 && body) {
             // WLED-compatibility: the native WLED app POSTs {on,bri,…} here; we map it onto the Drivers brightness control.
             handleWledState(conn, body);
@@ -574,6 +577,7 @@ bool HttpServerModule::handleConnection(platform::TcpConnection& conn, int patie
         } else if (std::strcmp(path, "/api/firmware/upload") == 0 && body) {
             // OTA from an uploaded .bin body: the browser POSTs the image to the device, which streams it into the OTA partition like /api/file.
             const size_t initialLen = static_cast<size_t>(totalRead) - static_cast<size_t>(body - req);
+            if (!hasContentLen) { sendResponse(conn, 411, "application/json", "{\"error\":\"length required\"}"); return true; }   // as every upload route
             handleFirmwareUpload(conn, body, initialLen, static_cast<size_t>(contentLen));
         } else {
             sendResponse(conn, 404, "text/plain", "Not found");
@@ -597,7 +601,7 @@ bool HttpServerModule::handleConnection(platform::TcpConnection& conn, int patie
             // Editable list: DELETE /api/list/<module>/<control>/<id> removes one row.
             handleListDeleteRow(conn, path + 10);
         } else if (std::strcmp(path, "/api/dir") == 0) {
-            // File Manager: DELETE /api/dir?path=<rel> → remove a file or empty dir.
+            // File Manager: DELETE /api/dir?path=<rel> removes a file or a whole folder tree.
             handleRemoveEntry(conn, queryStart ? queryStart + 1 : "");
         } else {
             sendResponse(conn, 404, "text/plain", "Not found");
@@ -2072,7 +2076,12 @@ HttpServerModule::OpResult HttpServerModule::applyDeleteModule(const char* modul
     return opResultOf(applyStateAt(*scheduler_, *mod->parent(), body.data()), refusal);
 }
 
-void HttpServerModule::handleDeleteModule(platform::TcpConnection& conn, const char* moduleName) {
+void HttpServerModule::handleDeleteModule(platform::TcpConnection& conn, const char* path) {
+    char moduleName[32] = {};
+    if (!routeModuleName(path, moduleName)) {
+        sendResponse(conn, 400, "application/json", "{\"error\":\"module name too long\"}");
+        return;
+    }
     StateDocumentResult why;
     switch (applyDeleteModule(moduleName, &why)) {
         case OpResult::Ok: sendResponse(conn, 200, "application/json", "{\"ok\":true}"); return;
@@ -2145,17 +2154,6 @@ void HttpServerModule::handleReplaceModule(platform::TcpConnection& conn, const 
     }
 }
 
-// A module name from its path segment, percent-decoded (a space arrives as %20) up to `/` or `?`, and never '+' as a space, which keeps "A+B" reachable; its length.
-static size_t decodeModuleName(const char* name, char* out, size_t outLen) {
-    size_t i = 0;
-    for (const char* p = name; *p && *p != '/' && *p != '?' && i + 1 < outLen; p++) {
-        const int hi = *p == '%' && p[1] ? hexDigit(p[1]) : -1, lo = hi >= 0 && p[2] ? hexDigit(p[2]) : -1;
-        if (lo >= 0) { out[i++] = static_cast<char>((hi << 4) | lo); p += 2; }
-        else out[i++] = *p;
-    }
-    out[i] = 0;
-    return i;
-}
 
 void HttpServerModule::serveModule(platform::TcpConnection& conn, const char* name) {
     char decoded[24] = {};

@@ -9,15 +9,15 @@ This number is the debt behind that gate, and it RATCHETS: a rise fails the chec
 docgen.md does. A comment is prose wherever it lives, so a `//` in the web interface and a
 `#` in a script are counted beside a `///` in a header.
 
-**2383 finding(s)** across 335 file(s).
+**2317 finding(s)** across 335 file(s).
 
 | rule | findings |
 |---|---|
-| `MoonLight.EmDash` | 1179 |
-| `MoonLight.Weasel` | 618 |
-| `MoonLight.SentenceLength` | 327 |
+| `MoonLight.EmDash` | 1121 |
+| `MoonLight.Weasel` | 617 |
+| `MoonLight.SentenceLength` | 321 |
 | `MoonLight.Temporal` | 187 |
-| `MoonLight.Spelling` | 42 |
+| `MoonLight.Spelling` | 41 |
 | `MoonLight.SelfReference` | 21 |
 | `MoonLight.NegatedHeading` | 9 |
 
@@ -29,7 +29,6 @@ docgen.md does. A comment is prose wherever it lives, so a `//` in the web inter
 | `moondeck/moondeck.py` | 156 |
 | `moondeck/moondeck_ui/app.js` | 91 |
 | `mooninstaller/install-orchestrator.js` | 91 |
-| `docs/tutorials/build-your-own-moonmodules.md` | 88 |
 | `moondeck/check/check_clang_query.py` | 71 |
 | `mooninstaller/install.js` | 68 |
 | `src/ui/app.js` | 67 |
@@ -42,6 +41,7 @@ docgen.md does. A comment is prose wherever it lives, so a `//` in the web inter
 | `docs/reference/testing.md` | 34 |
 | `docs/tutorials/generative-effects.md` | 33 |
 | `docs/explanation/architecture/moonmodule.md` | 28 |
+| `docs/tutorials/build-your-own-moonmodules.md` | 28 |
 | `docs/reference/hardware/mhc-wled-esp32-p4-shield.md` | 27 |
-| `docs/how-to/home-automation.md` | 23 |
 | `moondeck/check/check_footprint.py` | 23 |
+| `moondeck/docs/screenshot_modules.py` | 20 |

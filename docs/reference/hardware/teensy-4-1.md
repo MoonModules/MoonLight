@@ -144,11 +144,7 @@ Columns 37 to 48 hold the sensors, which keeps the SPI wires near 7 cm.
 | loopback | J16 (pin 22) | J15 (pin 23), with `loopbackTxPin` 22 and `loopbackRxPin` 23 |
 | VIN, standalone only | the MB102's 5 V output | I12 (VIN), with USB unplugged |
 
-1. With everything unpowered, seat the boards, then the wires, GND first.
-2. Check whether the bottom rail is split at column 30, where its printed lines break.
-   If it is, bridge both − and + across the gap: the Teensy feeds the rail at column 26 and the W5500 draws at column 54.
-3. Keep both MB102 rail jumpers off, or the MB102 and the Teensy drive one 3.3 V net from two regulators.
-4. Plug in USB: the W5500's link LEDs light, the device boots, and the strip lights.
+Steps: [Build, flash and monitor a Teensy](../../moonwalk.md#teensy).
 
 ### With sensors
 

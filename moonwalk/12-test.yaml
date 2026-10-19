@@ -50,10 +50,10 @@ processes:
         when: { manual: "Create test/js/<topic>.test.mjs for Node's built-in runner; no package.json is needed." }
       - id: build
         say: Build the desktop tests.
-        given: [{ input: kind, in: [Module logic, Full pipeline] }]
+        given: [{ input: kind, equals: Module logic }]
         when: { run: { script: moondeck/build/build_desktop.py, args: "--tests" } }
         detail: |
-          It builds `mm_tests` and `mm_scenarios` only, not the app.
+          It builds `mm_tests` and `mm_scenarios` only, not the app. A full pipeline builds inside the scenario run.
       - id: run-unit
         say: Run the unit tests.
         given: [{ input: kind, equals: Module logic }]
@@ -136,7 +136,7 @@ processes:
       - id: find-board
         say: Find the board's address.
         given: [{ input: target, equals: Board }]
-        when: { manual: "In MoonDeck's Live tab, choose the network and press Discover, or take the address from the registry." }
+        when: { manual: "Pick the network in the sidebar's network bar, then in the Live tab press Discover and check the boards; or take the address from the registry." }
         detail: |
           The Live Scenarios card runs the selected scenario against every checked device.
       - id: run
@@ -167,8 +167,13 @@ processes:
     steps:
       - id: approval
         say: Ask the product owner before flashing.
-        when: { manual: "Build and flash only on approval, with the desktop already clean. Probe the serial ports again first, since they drift between sessions." }
-      - id: ports
+        when: { manual: "Build and flash only on approval, with the desktop already clean." }
+      - id: flash
+        say: Build and flash the board.
+        when: { process: esp32-build-flash }
+        detail: |
+          Probe the serial ports again first, since they drift between sessions.
+      - id: boards
         section: Prepare the bench
         say: Open MoonDeck's Live tab.
         when: { manual: "Select the LAN, press Discover and check the boards that should run." }

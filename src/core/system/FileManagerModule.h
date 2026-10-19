@@ -26,7 +26,7 @@ namespace mm {
 ///
 /// ## Backup and restore
 ///
-/// Backup downloads the device's files as one `.json` bundle, and Restore uploads one back. Keep the bundle private: it contains the WiFi password. [The how-to](https://moonmodules.org/MoonLight/how-to/backup-and-restore.html) walks through both.
+/// Backup downloads the device's files as one `.json` bundle, and Restore uploads one back. Keep the bundle private: it contains the WiFi password. [Back up and restore a device](https://moonmodules.org/MoonLight/moonwalk.html#backup-restore) walks through both.
 ///
 /// @technical
 ///

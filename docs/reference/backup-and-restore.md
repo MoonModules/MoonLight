@@ -27,4 +27,4 @@ The device never runs migration code. Its loader is robust by design: an absent 
 
 So the rename maps live in the browser, in [migrate.js](https://github.com/MoonModules/MoonLight/blob/main/src/ui/migrate.js), and apply to the bundle *before* it is uploaded. Each firmware release embeds the map as of that release, which is what lets any older backup restore correctly onto it with no version stamps anywhere.
 
-The breaks a map cannot express are written down instead, in [MIGRATING](../reference/MIGRATING.md).
+The breaks a map cannot express are written down instead, in [MIGRATING](MIGRATING.md).

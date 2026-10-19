@@ -20,6 +20,7 @@ import re
 import subprocess
 import sys
 import threading
+import urllib.parse
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent.parent
@@ -36,18 +37,20 @@ MAX_FRAME_WORDS = 150    # an intro or an outro: context, not content
 MAX_PROCESS_WORDS = 600  # a whole process as one reader reads it: past it, it is two processes or it holds reference
 MAX_READER_STEPS = 10    # a process's steps as one reader meets them: past it, steps fold into a subprocess, as procedure guides split a long task
 MAX_STAGE_PROCESSES = 8  # a stage's processes, one column of the map: past it, the stage is two stages
-MAX_DOWNLOAD_KB = 40     # the map and its renderer, gzipped, as a page or the app fetches them: past it, the details load on demand
+MAX_DOWNLOAD_KB = 50     # the map and its renderer, gzipped, as a page or the app fetches them: past it, the details load on demand
 RENDERER = ROOT / "docs" / "assets" / "moonwalk.js"
 # The systems' one home is the architecture's Part table, so a process names them as that table does and no second list exists.
 ARCHITECTURE = ROOT / "docs" / "explanation" / "architecture" / "index.md"
 _PART_RE = re.compile(r"^\| \[(Moon\w+)\]\(", re.MULTILINE)
+# A call step names an operation of the device's REST API by its operationId, the OpenAPI description being the API's one home.
+OPENAPI = ROOT / "docs" / "reference" / "openapi.yaml"
 
 # Which runner can perform an action, derived here rather than written on each step: the model's table of actions.
 RUNNERS = {
     "open": ["app", "film", "docs"], "set": ["test", "app", "film", "docs"],
     "add": ["test", "app", "film", "docs"], "replace": ["test", "app", "film", "docs"],
     "delete": ["test", "app", "film", "docs"], "clear": ["test", "app", "film", "docs"],
-    "apply": ["test", "docs"], "call": ["test", "docs"], "run": ["agent", "ci", "docs"],
+    "apply": ["test", "docs"], "call": ["test", "app", "docs", "agent"], "run": ["agent", "ci", "docs"],
     "read": ["docs", "app"], "process": ["test", "app", "film", "docs", "agent", "ci"], "manual": ["docs", "app"],
 }
 
@@ -55,6 +58,17 @@ RUNNERS = {
 def systems() -> list[str]:
     """The system names in the architecture's Part table, in its order."""
     return _PART_RE.findall(ARCHITECTURE.read_text(encoding="utf-8"))
+
+
+def operations() -> dict:
+    """Every operation of the REST API by its operationId: its method, its path, where each of its parameters goes, path or query, and whether its body is a file's bytes."""
+    import yaml
+    spec = yaml.safe_load(OPENAPI.read_text(encoding="utf-8"))
+    resolve = lambda prm: spec["components"]["parameters"][prm["$ref"].rsplit("/", 1)[1]] if "$ref" in prm else prm
+    return {op["operationId"]: {"method": method.upper(), "path": path,
+                                "params": {resolve(prm)["name"]: resolve(prm)["in"] for prm in item.get("parameters", []) + op.get("parameters", [])},
+                                "binary": "application/octet-stream" in op.get("requestBody", {}).get("content", {})}
+            for path, item in spec["paths"].items() for method, op in item.items() if isinstance(op, dict) and "operationId" in op}
 
 
 def implied_systems(step: dict) -> set[str]:
@@ -69,6 +83,8 @@ def implied_systems(step: dict) -> set[str]:
     module = arg.get("module", "") if isinstance(arg, dict) else ""
     if module.startswith("MoonLive"):
         found.add("MoonLive")
+    if verb == "call":
+        found.add("MoonCore")   # the device's API is MoonCore's
     return found
 
 
@@ -108,10 +124,12 @@ def shape_errors(processes: dict) -> list:
 
 
 def split_text(model: dict) -> tuple:
-    """The map without its prose, and each process's prose by id: a page loads the map, and a process's intro, outro and details when its view opens. A process with prose is marked `text`, so the view knows to fetch it."""
+    """The map without its prose, and each process's prose by id: a page loads the map, and a process's intro, outro and details when its view opens. A process with prose is marked `text`, so the view knows to fetch it. A step's runners stay with build(), which the runners that read them call, so no page downloads them."""
     m = copy.deepcopy(model)
     texts = {}
     for pid, p in m["processes"].items():
+        for s in p.get("steps", []):
+            s.pop("runners", None)
         t = {k: p.pop(k) for k in ("intro", "outro") if k in p}
         details = {s["id"]: s.pop("detail") for s in p.get("steps", []) if "detail" in s}
         if details:
@@ -122,6 +140,11 @@ def split_text(model: dict) -> tuple:
     return m, texts
 
 
+def dumps(obj) -> str:
+    """JSON as a page downloads it: compact, since only code reads it."""
+    return json.dumps(obj, ensure_ascii=False, separators=(",", ":"))
+
+
 def write(model: dict, out: Path) -> None:
     """The map at `out` and each process's prose beside it, under text/<process>.json, with links absolute since the view renders them on a device's page too."""
     m, texts = split_text(absolute_links(model))
@@ -130,17 +153,17 @@ def write(model: dict, out: Path) -> None:
     # Each file swapped in whole and the stale ones removed after, so a reader fetching a text during a rewrite never meets a gap.
     for pid, t in texts.items():
         tmp = folder / f"{pid}.json.tmp"
-        tmp.write_text(json.dumps(t, ensure_ascii=False), encoding="utf-8")
+        tmp.write_text(dumps(t), encoding="utf-8")
         tmp.replace(folder / f"{pid}.json")
     for old in folder.glob("*.json"):
         if old.stem not in texts:
             old.unlink()
-    out.write_text(json.dumps(m, ensure_ascii=False), encoding="utf-8")
+    out.write_text(dumps(m), encoding="utf-8")
 
 
 def download_kb(model: dict) -> int:
     """What a reader downloads to see MoonWalk, in KB: the map as --out writes it, without its prose, and the renderer, each gzipped as a server sends them."""
-    sizes = [len(gzip.compress(json.dumps(split_text(absolute_links(model))[0], ensure_ascii=False).encode("utf-8"))), len(gzip.compress(RENDERER.read_bytes()))]
+    sizes = [len(gzip.compress(dumps(split_text(absolute_links(model))[0]).encode("utf-8"))), len(gzip.compress(RENDERER.read_bytes()))]
     return round(sum(sizes) / 1024)
 
 
@@ -161,6 +184,40 @@ def _reader_totals(p: dict) -> dict:
     """The words one reader reads, per option: the process's intro and outro, and the steps they meet."""
     frame = _words(p.get("intro")) + _words(p.get("outro"))
     return {o: frame + sum(_words(st.get("say")) + _words(st.get("detail")) for st in steps) for o, steps in _readers(p).items()}
+
+
+def shared_runs(processes: dict) -> list:
+    """Two or more steps in a row that act the same in two processes, as (stage, message): one process both should call, as a repeated block becomes one function."""
+    # Per reader, as the caps measure: two steps a choice keeps apart are alternatives, not a run.
+    reads = {pid: list(_readers(p).values()) for pid, p in processes.items()}
+    out = []
+    pids = list(processes)
+    for i, a in enumerate(pids):
+        for b in pids[i + 1:]:
+            best, run = 0, []
+            for x in reads[a]:
+                for y in reads[b]:
+                    n, end = _longest_common_run([json.dumps(s.get("when"), sort_keys=True) for s in x], [json.dumps(s.get("when"), sort_keys=True) for s in y])
+                    if n > best:
+                        best, run = n, x[end - n:end]
+            if best >= 2:
+                out.append((processes[b]["stage"], f"{b}: {best} steps repeat {a}'s ({', '.join(s['id'] for s in run)}); make them one process both call"))
+    return out
+
+
+def _longest_common_run(x: list, y: list) -> tuple:
+    """The length of the longest run `x` and `y` share and where it ends in `x`: the textbook longest common substring."""
+    best, end = 0, 0
+    prev = [0] * (len(y) + 1)
+    for m in range(1, len(x) + 1):
+        cur = [0] * (len(y) + 1)
+        for n in range(1, len(y) + 1):
+            if x[m - 1] == y[n - 1]:
+                cur[n] = prev[n - 1] + 1
+                if cur[n] > best:
+                    best, end = cur[n], m
+        prev = cur
+    return best, end
 
 
 def size_warnings(processes: dict) -> list:
@@ -233,6 +290,7 @@ def build(root: Path = MOONWALK) -> dict:
     if errors:
         raise ValueError("process files:\n  " + "\n  ".join(errors))
     known = systems()
+    api = operations()
     # A step names modules by type, the key the help uses, so every type and control it names is checked against the help the same build publishes.
     help_types = json.loads(HELP.read_text(encoding="utf-8"))["modules"]
     by_page: dict[str, list[str]] = {}
@@ -270,7 +328,25 @@ def build(root: Path = MOONWALK) -> dict:
                 s["url"] = page_url(page) + (f"#{anchor}" if anchor else "")
             elif verb == "open" and "url" in arg and "<" not in arg["url"]:
                 s["url"] = arg["url"]
+            # A call is the operation's method and its path with the parameters filled in, linked to its entry on the REST API page.
+            elif verb == "call" and arg["operation"] not in api:
+                errors.append(f"{pid}/{s['id']}: calls no operation of the REST API: {arg['operation']}")
+            elif verb == "call":
+                op, params = api[arg["operation"]], arg.get("params", {})
+                for name in sorted(params.keys() - op["params"].keys()):
+                    errors.append(f"{pid}/{s['id']}: {arg['operation']} takes no parameter {name}")
+                for name in re.findall(r"\{(\w+)\}", op["path"]):
+                    if name not in params:
+                        errors.append(f"{pid}/{s['id']}: {arg['operation']} needs parameter {name}")
+                query = "&".join(f"{k}={_encoded(v, '/')}" for k, v in params.items() if op["params"].get(k) == "query")
+                arg["method"] = op["method"]
+                if op["binary"]:
+                    arg["binary"] = True
+                arg["path"] = re.sub(r"\{(\w+)\}", lambda m: _encoded(params.get(m.group(1), m.group(0)), ""), op["path"]) + (f"?{query}" if query else "")
+                s["url"] = page_url("reference/api.md") + f"#operation/{arg['operation']}"
             s.setdefault("actor", p.get("actor"))
+            if command_of(s):
+                s["command"] = command_of(s)   # written once here, so every host copies the same line
             for g in s.get("given", []):
                 if isinstance(g, str) and g not in processes:
                     errors.append(f"{pid}/{s['id']}: given names no process: {g}")
@@ -331,6 +407,30 @@ def absolute_links(model: dict) -> dict:
     return out
 
 
+def _encoded(value, safe: str) -> str:
+    """A parameter value percent-encoded for a URL, its `<placeholder>` parts left as written for the reader to fill in."""
+    return "".join(part if re.fullmatch(r"<[^>]+>", part) else urllib.parse.quote(part, safe=safe) for part in re.split(r"(<[^>]+>)", str(value)))
+
+
+def _quoted(text: str) -> str:
+    """Single-quoted for a POSIX shell, so the URL's ? and & and the body's braces reach curl as written."""
+    return "'" + text.replace("'", "'\\''") + "'"
+
+
+def _curl(call: dict) -> str:
+    """An API call as the curl line that sends it to the reader's device; a file's bytes go without `Expect: 100-continue`, which the device does not answer."""
+    body = f"-d {_quoted(call['body'])}" if call.get("body") else '--data-binary @<file> -H "Expect:"' if call.get("binary") else None
+    return " ".join(filter(None, ("curl", call["method"] != "GET" and f"-X {call['method']}", _quoted(f"http://<device>{call['path']}"), body)))
+
+
+def command_of(step: dict):
+    """A step's call as a reader types it, as moonwalk.js's commandOf writes it: a MoonDeck script with its arguments, a command, or an API call as the curl line that sends it; None for a step that runs nothing."""
+    run, call = step["when"].get("run"), step["when"].get("call")
+    if call:
+        return _curl(call) if "method" in call else None   # an unknown operation, already refused
+    return run and (f"uv run {run['script']}{' ' + run['args'] if run.get('args') else ''}" if "script" in run else run.get("command"))
+
+
 def render_text(model: dict) -> str:
     """Every process, with its prose where it has some, as plain Markdown under the MoonWalk page: what the site's search indexes and a reader without JavaScript reads, until moonwalk.js draws the live view. Each heading's id is the process id, the address the view opens at."""
     out: list[str] = []
@@ -352,10 +452,14 @@ def render_text(model: dict) -> str:
                 out.append(f"### {chapter}. {section}\n")
             option = next((g.get("equals") or ", ".join(g["in"]) for g in s.get("given", []) if isinstance(g, dict) and "input" in g), None)
             out.append(f"**{option + ': ' if option else ''}{s['say']}**\n")
+            if s.get("command"):
+                out.append(f"`` {s['command']} ``\n")
             # Where the step takes the reader, under its instruction: a page link names the source file, so the docs build checks it and turns it into the page's address.
             if s.get("url"):
                 web = re.match(r"https?://", s["url"])
-                out.append(f"[{s['url'][web.end():] if web else 'Read the page'}]({s['url'] if web else re.sub(r'^([^:#]+)[.]html', r'\1.md', s['url'])})\n")
+                # Redoc draws the REST API page's anchors in the browser, where the docs build cannot check them, so a call links the page alone.
+                url = s["url"].partition("#")[0] if "call" in s["when"] else s["url"]
+                out.append(f"[{url[web.end():] if web else 'Read the page'}]({url if web else re.sub(r'^([^:#]+)[.]html', r'\1.md', url)})\n")
             if s.get("detail"):
                 out.append(prose(s["detail"]))
         if p.get("outro"):

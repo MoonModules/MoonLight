@@ -1,6 +1,6 @@
 # Driving a HUB75 panel
 
-A HUB75 LED panel can be driven straight from the board's pins with the [HUB75 driver](../moonmodules/light/drivers.md#hub75), or over Ethernet through a receiving card with [Panel Card](../moonmodules/light/drivers.md#panelcard). Board, panel and settings are below, in that order.
+A HUB75 LED panel can be driven straight from the board's pins with the [HUB75 driver](../../moonmodules/light/drivers.md#hub75), or over Ethernet through a receiving card with [Panel Card](../../moonmodules/light/drivers.md#panelcard). Board, panel and settings are below, in that order.
 
 ## Which of the two paths
 
@@ -18,12 +18,14 @@ Three boards have published pin maps, which the `board` select fills in:
 - **Adafruit MatrixPortal S3.** Three of its lines sit on GPIO 35 to 37, which the octal-PSRAM images hold, so it runs the `esp32s3-zero` image.
 - **Waveshare ESP32-S3 RGB Matrix**, SKU 34422. The Waveshare ESP32-S3-Matrix is a different product, with an onboard 8x8 matrix and no HUB75 connector.
 
-A published map hides the pin rows, since those lines are soldered; they stay bound and still drive the panel. The generic per-chip sets and Custom show them. A line on a pin the chip wires to flash or PSRAM is refused before init, with the line named. Free pins per chip: [GPIO usage](../reference/hardware/gpio-usage.md).
+A published map hides the pin rows, since those lines are soldered; they stay bound and still drive the panel. The generic per-chip sets and Custom show them. A line on a pin the chip wires to flash or PSRAM is refused before init, with the line named. Free pins per chip: [GPIO usage](gpio-usage.md).
 
 !!! tip "The one naming trap"
     A panel's ribbon names its color lines R1/G1/B1 (upper half) and R2/G2/B2 (lower half). Some board docs call the same pairs R0/G0/B0 and R1/G1/B1.
 
 ## Settings the panel cannot tell you
+
+Steps: [Set up a driver or service for the hardware](../../moonwalk.md#driver-setup), its HUB75 choice.
 
 - **`scanRate`** is read off the panel's label or listing, not calculated: two panels of the same size can scan differently. A 1/32-scan panel needs the `e` line; on 1/16 that pin is free.
 - **`peripheral`** matters on a P4, which has one LCD_CAM and one Parlio: a board already driving LED strips from one needs the panel on the other.

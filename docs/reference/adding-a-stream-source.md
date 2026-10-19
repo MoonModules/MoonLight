@@ -24,20 +24,12 @@ Channel data is already per light: it is placed through the layer's mapping, or 
 
 A picture source is an option of the Picture service's `source`, in `src/core/services/PictureService.h`.
 
-1. **Add the option.** Append it to the `Source` enum and its name to the `source` select, and say whether it runs in a task of its own in `kRunsInTask`.
-2. **A still picture** draws once in `prepare()`, as the test pattern does: write into the picture `prepareBuffers` sized, and set the frame.
-3. **A moving picture** comes from a task of its own, a capture or a receiver, so the render loop never waits on a device. Start the task in `prepare()` and stop it in `release()`. For each picture:
+Steps: [Add a picture or channel-data source](../moonwalk.md#add-stream-source), the Picture choice.
 
-```cpp
-uint8_t* px = beginWrite();          // the back picture, width x height x 3 bytes, top row first
-decodeInto(px, width, height);       // your source: a decoder writes here directly, nothing is copied
-endWrite();                          // swap it to the front and bump the generation
-```
-
-That is the whole contract.
-With room for two pictures, `beginWrite` hands out the back one and `endWrite` swaps the pointers, so effects read the front picture undisturbed and never see half of one.
-Short of memory, the service keeps one picture and locks it while you write: frames may be skipped, never torn, and its status says why.
-Effects read through `PictureService::Reader`, which holds the picture still for one gather; you never touch them.
+The contract the steps rest on: `beginWrite()` hands out the back picture, `width x height x 3` bytes with the top row first, and `endWrite()` swaps it to the front and bumps the generation.
+With room for two pictures, effects read the front one undisturbed and never see half of one.
+Short of memory, the service keeps one picture and locks it while it is written: frames may be skipped, never torn, and its status says why.
+Effects read through `PictureService::Reader`, which holds the picture still for one gather.
 
 **What a picture source brings:**
 

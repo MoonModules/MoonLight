@@ -33,19 +33,7 @@ namespace ui { struct EmbeddedFile; }   // one served UI file, from the generate
 ///
 /// ## The REST API
 ///
-/// `GET /` serves `index.html` and the UI assets.
-///
-/// | Route | What it returns |
-/// |-------|-----------------|
-/// | `GET /api/state` | the full module-tree JSON: per entry a name, type, role, enabled flag, tick time, sizes, controls, and any status |
-/// | `GET /api/system` | frame rate, tick time, free heap, free internal, largest block, uptime |
-/// | `GET /api/types` | the type catalog: a stable factory name, a display name, the child roles a type accepts, and defaults from a fresh probe instance |
-///
-/// ## Mutations and the File Manager
-///
-/// A mutation is `POST /api/control`, `POST /api/modules` to create, `.../move` and `.../replace`, `POST /api/reboot`, or `DELETE /api/modules/{name}`.
-///
-/// The File Manager reads and writes through `/api/file?path=` and lists, creates and removes through `/api/dir?path=`; a card mounted at `/sd` takes the same routes.
+/// `GET /` serves `index.html` and the UI assets. Every other route, with its parameters and answers, is the OpenAPI description [the REST API](https://moonmodules.org/MoonLight/reference/api.html) renders, which a test checks against this server's routes.
 ///
 /// ## The two WebSocket channels
 ///
@@ -616,7 +604,7 @@ private:
     void sendPreflightResponse(platform::TcpConnection& conn);
     void serveFile(platform::TcpConnection& conn, const ui::EmbeddedFile& file);
 
-    /// A file body is not a control value, so the File Manager has its own vetted endpoints. @xref{mutations-and-the-file-manager}
+    /// A file body is not a control value, so the File Manager has its own vetted endpoints, `/api/file` and `/api/dir`. @xref{the-rest-api}
     void serveFileContents(platform::TcpConnection& conn, const char* query);
     /// The one streamed-file sender both file routes share: fs path, MIME, extra header lines.
     void streamFsFile(platform::TcpConnection& conn, const char* path, const char* mime,
@@ -681,7 +669,7 @@ private:
     // Module CRUD
 
     void handleAddModule(platform::TcpConnection& conn, const char* body);
-    void handleDeleteModule(platform::TcpConnection& conn, const char* moduleName);
+    void handleDeleteModule(platform::TcpConnection& conn, const char* path);
     void handleReplaceModule(platform::TcpConnection& conn, const char* moduleName, const char* body);
     void serveTypes(platform::TcpConnection& conn);
     /// The compiled-in script catalog, so the UI can offer a script the device does not hold yet.

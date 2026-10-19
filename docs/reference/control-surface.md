@@ -17,7 +17,7 @@ The steps are processes: **[Connect a control surface](../moonwalk.md#control-su
 | A phone, a tablet or another app | [OSC](#a-phone-or-tablet-over-osc) | Open Stage Control, TouchOSC, Resolume, TouchDesigner or QLC+ on the same network |
 | A MIDI desk (Mackie Control, such as the X-Touch or the QCon) or a gamepad | [The browser](#a-midi-desk-or-a-gamepad-through-the-browser) | The desk or pad plugged into the computer showing MoonLight's page |
 | One desk for boards elsewhere in the rig | [The desktop app plus OSC](#one-desk-for-several-boards) | MoonLight running on the computer the desk is plugged into |
-| A script or program of your own | [The REST API](../reference/integrating.md) | Set `Control`'s `fader1`, `switch2` or any other surface control, as every other route does |
+| A script or program of your own | [The REST API](integrating.md) | Set `Control`'s `fader1`, `switch2` or any other surface control, as every other route does |
 
 Every route lands on the same surface, so a desk, a phone and the web UI stay in step: move a fader on one and the others follow.
 
@@ -33,11 +33,7 @@ The browser reads a desk with the Web MIDI API, which Chrome, Edge and Firefox o
 
 ### A board's own page needs marking as secure, once
 
-A board's own page, such as `http://192.168.1.158`, is not a secure origin, so Chrome asks nothing and the desk or pad stays silent. Mark the address as secure once:
-
-1. Open `chrome://flags/#unsafely-treat-insecure-origin-as-secure`.
-2. Enter the board's address, such as `http://192.168.1.158`, set the flag to Enabled, and click Relaunch.
-3. Reload the board's page: Chrome now asks to use MIDI devices.
+A board's own page, such as `http://192.168.1.158`, is not a secure origin, so Chrome asks nothing and the desk or pad stays silent. Mark the address as secure once. Steps: [Connect a control surface](../moonwalk.md#control-surface).
 
 ### Making a gamepad appear
 
@@ -54,7 +50,7 @@ A stick follows the surface's convention, up and right being more, and writes it
 
 A Mackie desk's faders move the surface's faders, its knobs turn the encoders, and each channel's SELECT button flips its switch. The desk follows the surface back: motors, SELECT lights and knob rings. A hand on a fader holds its motor still, and the browser sends only what changed, so a page opened later moves the motors to where the surface already is.
 
-On an Akai APC40 mkII, track faders, track knobs and activator buttons 1 to 8 drive the surface's faders, encoders and switches. The 40 clip pads apply presets 1 to 40, the top-left pad being preset 1 as on the Control card. Activators light while their switch is on and knob rings fill like a meter. A pad is dark when empty, dim white when stored and green when applied. The faders have no motors. Chrome asks once to allow SysEx, which puts the desk in Alternate Ableton Live mode, where every light is the host's. Every message is in [the APC40 reference](../reference/hardware/control-surfaces.md#akai-apc40-mkii).
+On an Akai APC40 mkII, track faders, track knobs and activator buttons 1 to 8 drive the surface's faders, encoders and switches. The 40 clip pads apply presets 1 to 40, the top-left pad being preset 1 as on the Control card. Activators light while their switch is on and knob rings fill like a meter. A pad is dark when empty, dim white when stored and green when applied. The faders have no motors. Chrome asks once to allow SysEx, which puts the desk in Alternate Ableton Live mode, where every light is the host's. Every message is in [the APC40 reference](hardware/control-surfaces.md#akai-apc40-mkii).
 
 ---
 
@@ -86,14 +82,9 @@ Messages pass both ways unchanged. The one exception is a SysEx the desk sends, 
 
 ## One desk for several boards
 
-The desk plugs into a computer running the MoonLight desktop app, with the desk set up on `localhost` as in the browser route, and the app passes its surface on to the boards over OSC.
+The desk plugs into a computer running the MoonLight desktop app, with the desk set up on `localhost` as in the browser route, and the app passes its surface on to the boards over OSC. Every change on the desktop's surface then reaches the boards' surfaces, a self-playing game's moving paddle included.
 
-- On the desktop app, **Services → OSC** has `listen` and `feedback` on and `feedbackPort` at `9000`.
-- **A few known boards:** `addressing` `unicast`, with the boards in `hosts`: `192.168.1.139, MM-testbench-S3.local`. Every board gets its own copy, retried by WiFi.
-- **Any number of boards:** `addressing` `multicast`. Every board listening on the default `group` hears it; a second rig on the same network gives its desktop and boards another `group`.
-- On each board, **Services → OSC** has `listen` on.
-
-Every change on the desktop's surface now reaches the boards' surfaces, a self-playing game's moving paddle included.
+Steps: [Run a multi-device installation](../moonwalk.md#multi-device).
 
 ---
 
@@ -179,17 +170,7 @@ Brightness should jump. If that works and the surface does not, the problem is o
 
 ### One command, from a checkout
 
-```sh
-uv run moondeck/run/run_open_stage_control.py --host 192.168.1.42
-```
-
-It finds the app, passes the session, the address and both ports, and runs it headless as a web server, at **http://127.0.0.1:8088**, so a phone or another laptop reaches the surface at the URLs the launcher prints. On macOS that also sidesteps the quarantine dialog of an unsigned download. The session sends `/mm/hello` when the page loads, so every widget shows the device's real values straight away, and a browser refresh re-reads them.
-
-| Option | Meaning |
-|---|---|
-| `--host` / `--port` | the device and its OSC `port` (default `127.0.0.1:9000`) |
-| `--listen` | where it receives feedback, the device's `feedbackPort` (default 9001) |
-| `--ui-port` | the surface's web UI (default 8088; 8080 is MoonLight's own) |
+Steps: [Control a device from a phone or tablet over OSC](../moonwalk.md#osc-control), its checkout step; the options are in [MoonDeck.md](../../moondeck/MoonDeck.md#run_open_stage_control).
 
 ---
 
@@ -233,7 +214,7 @@ A device with `listen` on, on the leader's `feedbackPort`, takes every value the
 - **[OSC](../moonmodules/core/services.md#osc)**: every control and its help
 - **[Control card](../moonmodules/core/system.md#control)**: the surface the device owns, and what each control drives
 - **[MIDI and Gamepad services](../moonmodules/core/services.md#midi)**: the desk profiles, `source` and `share`, and the pad's rows
-- **[Control surfaces](../reference/hardware/control-surfaces.md)**: the X-Touch and QCon hardware, and Mackie Control on the wire
+- **[Control surfaces](hardware/control-surfaces.md)**: the X-Touch and QCon hardware, and Mackie Control on the wire
 
 ---
 

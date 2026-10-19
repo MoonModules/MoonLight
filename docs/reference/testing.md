@@ -132,7 +132,7 @@ A test lives under the subfolder of its **primary** `@module`'s source domain (e
 
 ### Host-side tests (Python + JS)
 
-The C++ unit and scenario suites can't reach the **Python** (MoonDeck, build scripts) or **JS** (web installer) code, so those get their own host-side unit tier. It is `test/python/` (pytest) and `test/js/` (Node's built-in runner; no `package.json`/`npm install`), both run by [test_host](../../moondeck/MoonDeck.md#test_host). Both run in `.github/workflows/test.yml` on every PR and are commit checks; which paths trigger them is [the commit process](../moonwalk.md#commit). Python test files carry their deps in a PEP-723 `# /// script` block (the repo's convention, there's no central `pyproject.toml`). Pyserial is a dep only because `improv_provision.py`'s import guard exits without it, not because the frame logic needs it.
+The C++ unit and scenario suites cover the C++ code, and the **Python** (MoonDeck, build scripts) and **JS** (web installer) code has its own host-side unit tier. It is `test/python/` (pytest) and `test/js/` (Node's built-in runner; no `package.json`/`npm install`), both run by [test_host](../../moondeck/MoonDeck.md#test_host). Both run in `.github/workflows/test.yml` on a pull request whose changed paths match that workflow's filter, and are commit checks; which paths trigger them is [the commit process](../moonwalk.md#commit). Python test files carry their deps in a PEP-723 `# /// script` block (the repo's convention, there's no central `pyproject.toml`). Pyserial is a dep only because `improv_provision.py`'s import guard exits without it, not because the frame logic needs it.
 
 #### What's covered today: the Improv frame wire format
 
@@ -264,9 +264,7 @@ Its steps fill `{network.ssid}`, `{network.password}` and `{device}` from it, so
 The runner puts the computer back on that network whatever happens.
 `"on_request": true` keeps the scenario out of a run of all of them, since it takes the computer off its network for a few minutes.
 
-```bash
-uv run moondeck/scenario/run_live_scenario.py --host MM-Bench.local --network Home --name scenario_AccessPoint_first_setup_from_its_own_network
-```
+The run: [Run a scenario against a live device](../moonwalk.md#run-live-scenario), with `--network`; the flags are in [MoonDeck.md](../../moondeck/MoonDeck.md#live_scenario).
 
 #### Several boards
 
@@ -274,9 +272,7 @@ A scenario naming `"boards": ["sender", ...]` drives those boards too, each mapp
 
 A `measure` step's `read` list names extra values to report: `"Module.control"` from the state, `"Module.tick"` for a module's tick time, or `"fps"`; `"<name>:"` in front reads another board, such as `"sender:fps"`. The run ends with one row per such step, which is what a sweep is read from.
 
-```bash
-uv run moondeck/scenario/run_live_scenario.py --host 192.168.1.158 --board sender=192.168.1.156 --name scenario_NetworkReceive_two_boards
-```
+The run passes `--board sender=<host>` per board: [MoonDeck.md](../../moondeck/MoonDeck.md#live_scenario).
 
 ### Scenario modes (construct vs mutate)
 
@@ -457,14 +453,7 @@ moondeck/moondeck.py          # serves the same data as HTML in MoonDeck views
 
 Both the markdown generator and the MoonDeck endpoints (`/api/test-modules`, `/api/unit-tests/<Module>`, `/api/scenarios/<name>`) import from `_test_metadata.py`. Adding a new metadata field (e.g. `@since`) means one edit there; both consumers pick it up.
 
-Run the generator after touching any test file:
-
-```bash
-uv run moondeck/docs/generate_test_docs.py            # writes both docs
-uv run moondeck/docs/generate_test_docs.py --check    # exits non-zero on drift (CI-friendly)
-```
-
-`--check` exits non-zero when the docs are stale, a contributor who adds a `TEST_CASE` without re-running the generator gets flagged. Run it in CI or before a commit to keep the generated docs in sync.
+The generator runs after a test file changes, as [Add a test, and pin a bug](../moonwalk.md#add-test) does. Its `--check` exits non-zero when the docs are stale, for CI.
 
 ## Unit tests
 
@@ -513,10 +502,7 @@ One live-tier test lives outside the scenario JSON schema because it spans **mul
 
 UI scenarios drive the web interface itself: a run file lists what a person does (open a card, add a module through the picker, drag a slider) and each step checks itself by reading the device back over REST.
 
-```bash
-uv run moondeck/test/test_host.py --ui                     # the whole lane
-uv run moondeck/moontube/mtvideo.py --run moontube/clips/06-layers.json
-```
+The run: [Perform a clip as a UI test](../moonwalk.md#perform-clip).
 
 The runs live in `moontube/clips/`, the engine in `moondeck/moontube/`. MoonTube sits at the root rather than under `test/`, which every other test family follows. A run file is the source of a published video as much as it is a test, and the series is what someone looks for. Tests are parameterized over the directory, so a new run file is a new test with nothing to wire up. Format and actions: [moontube.md](../../moondeck/moontube/moontube.md).
 

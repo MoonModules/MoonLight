@@ -24,7 +24,7 @@ def test_the_repo_stage_files_build_into_one_map():
     model = gen_moonwalk.build()
     assert [s["id"] for s in model["stages"]][:2] == ["install", "first-light"]
     assert model["processes"]["first-light-show"]["stage"] == "first-light"
-    assert "run-linux-board" in model["byPage"]["how-to/installing-on-linux.html"]
+    assert "run-linux-board" in model["byPage"]["reference/installing-on-linux.html"]
 
 
 def test_a_step_runs_in_the_runners_its_action_allows():
@@ -243,6 +243,17 @@ def test_a_process_with_more_steps_than_a_reader_follows_is_a_warning_to_fold_th
     assert gen_moonwalk.size_warnings(processes) == [("test", "a: 11 steps > 10; fold steps into a subprocess")]
 
 
+def test_two_steps_in_a_row_that_two_processes_share_are_a_warning_to_call_one_process(tmp_path):
+    steps = "      - {id: b, say: Build it., when: {run: {script: moondeck/build/build_desktop.py}}}\n      - {id: t, say: Test it., when: {run: {script: moondeck/test/test_desktop.py}}}\n"
+    body = "stage: T\nprocesses:\n" + "".join(f"  - id: {p}\n    title: P\n    actor: user\n    goal: G\n    steps:\n" + steps for p in ("a", "c"))
+    processes = gen_moonwalk.build(stage(tmp_path, body))["processes"]
+    assert gen_moonwalk.shared_runs(processes) == [("test", "c: 2 steps repeat a's (b, t); make them one process both call")]
+
+
+def test_a_repo_process_repeats_no_run_of_another():
+    assert gen_moonwalk.shared_runs(gen_moonwalk.build()["processes"]) == []
+
+
 def test_a_stage_with_more_processes_than_a_column_holds_is_a_warning_to_split_it(tmp_path):
     body = "stage: T\nprocesses:\n" + "".join(f"  - {{id: p{i}, title: P, actor: user, goal: G}}\n" for i in range(9))
     processes = gen_moonwalk.build(stage(tmp_path, body))["processes"]
@@ -254,7 +265,7 @@ def test_the_map_leaves_a_process_prose_to_its_own_file_fetched_when_the_view_op
     install = walk["processes"]["install"]
     assert install["text"] is True and "intro" not in install and all("detail" not in s for s in install["steps"])
     assert texts["install"]["intro"] and texts["install"]["details"]["keep"]
-    assert "text" not in walk["processes"]["run-linux-board"] and "run-linux-board" not in texts   # a process with no prose of its own links its page
+    assert "text" not in walk["processes"]["commit-web"] and "commit-web" not in texts   # a process with no prose of its own links its page
 
 
 def test_writing_the_map_replaces_the_prose_of_a_process_that_is_gone(tmp_path):
@@ -268,7 +279,7 @@ def test_writing_the_map_replaces_the_prose_of_a_process_that_is_gone(tmp_path):
 def test_a_step_that_opens_an_address_or_reads_a_page_links_there():
     steps = {s["id"]: s for p in gen_moonwalk.build()["processes"].values() for s in p.get("steps", [])}
     assert steps["open-installer"]["url"] == "https://moonmodules.org/MoonLight/install/"
-    assert steps["signal"]["url"] == "how-to/led-signal-integrity.html"
+    assert steps["migrating"]["url"] == "reference/MIGRATING.html"
 
 
 def test_a_step_reading_a_missing_page_is_refused(tmp_path):
@@ -305,8 +316,46 @@ def test_the_commit_checks_fold_into_one_subprocess_per_trigger_group_each_withi
     assert {sid: parent[sid]["when"].get("process") for sid in groups} == groups
     assert all("given" not in parent[sid] for sid in groups)   # a group triggers nothing itself: its steps' paths decide
     # Every check keeps its id, so a run record and a link keyed on it still find it.
-    ids = [s["id"] for pid in ["commit", *groups.values()] for s in processes[pid]["steps"] if "run" in s["when"]]
-    assert sorted(ids) == sorted(["specs", "prose", "commit", "docs", "docgen", "taglines", "code", "build-desktop", "build-tests", "test-desktop", "scenarios",
-                                  "esp32-fresh", "esp32-fresh-s3", "esp32-fresh-p4", "no-jit", "kpi", "js", "devices", "python", "firmwares"])
+    ids = [s["id"] for pid in ["commit", *groups.values(), "desktop-tests"] for s in processes[pid]["steps"] if "run" in s["when"]]
+    assert sorted(ids) == sorted(["specs", "prose", "commit", "docs", "docgen", "taglines", "code", "build-desktop", "build-tests", "test", "scenarios",
+                                  "esp32-fresh", "esp32-fresh-s3", "esp32-fresh-p4", "no-jit", "kpi", "js", "devices", "python", "firmwares", "improv"])
     over = [w for w in gen_moonwalk.size_warnings(processes) if w[0] == "document-commit"]
     assert over == []   # the parent, each group and the stage within their caps
+
+
+CALL = "stage: T\nprocesses:\n  - id: a\n    title: A\n    actor: user\n    goal: G\n    steps:\n      - {id: s, say: Call it., when: {call: %s}}\n"
+
+
+def test_a_call_names_an_operation_of_the_rest_api_or_it_is_refused(tmp_path):
+    with pytest.raises(ValueError, match="calls no operation of the REST API: setControls"):
+        gen_moonwalk.build(stage(tmp_path, CALL % "{operation: setControls}"))
+    with pytest.raises(ValueError, match="getModule takes no parameter module"):
+        gen_moonwalk.build(stage(tmp_path, CALL % "{operation: getModule, params: {module: Rainbow}}"))
+
+
+def test_a_call_gets_its_method_its_path_with_the_parameters_filled_in_and_its_entry_on_the_rest_api_page(tmp_path):
+    step = gen_moonwalk.build(stage(tmp_path, CALL % "{operation: getModule, params: {name: Rainbow}}"))["processes"]["a"]["steps"][0]
+    assert (step["when"]["call"]["method"], step["when"]["call"]["path"]) == ("GET", "/api/modules/Rainbow")
+    assert step["url"] == "reference/api.html#operation/getModule"
+    query = gen_moonwalk.build(stage(tmp_path, CALL % "{operation: readFile, params: {path: /moonlive/hello.mle}}"))["processes"]["a"]["steps"][0]
+    assert gen_moonwalk.command_of(query) == "curl 'http://<device>/api/file?path=/moonlive/hello.mle'"   # a query parameter rides after the path
+    upload = gen_moonwalk.build(stage(tmp_path, CALL % "{operation: writeFile, params: {path: /moonlive/hello.mle}}"))["processes"]["a"]["steps"][0]
+    assert gen_moonwalk.command_of(upload) == "curl -X POST 'http://<device>/api/file?path=/moonlive/hello.mle' --data-binary @<file> -H \"Expect:\""   # a file's bytes, as the route takes them
+
+
+def test_a_step_carries_the_line_a_reader_copies_written_once_by_the_generator(tmp_path):
+    run = "stage: T\nprocesses:\n  - id: a\n    title: A\n    actor: user\n    goal: G\n    steps:\n      - {id: s, say: Build it., when: {run: {script: moondeck/build/build_desktop.py, args: --tests}}}\n      - {id: c, say: Open a PR., when: {run: {command: gh pr create --base main}}}\n      - {id: m, say: Stage it., when: {manual: Stage.}}\n"
+    steps = {s["id"]: s for s in gen_moonwalk.build(stage(tmp_path, run))["processes"]["a"]["steps"]}
+    assert steps["s"]["command"] == "uv run moondeck/build/build_desktop.py --tests"
+    assert steps["c"]["command"] == "gh pr create --base main" and "command" not in steps["m"]
+    post = gen_moonwalk.build(stage(tmp_path, CALL % "{operation: setControl, body: '{\"value\":\"it''s\"}'}"))["processes"]["a"]["steps"][0]
+    assert post["command"] == "curl -X POST 'http://<device>/api/control' -d '{\"value\":\"it'\\''s\"}'"   # a quote in the body survives the shell
+
+
+def test_a_call_encodes_its_values_keeps_a_placeholder_and_refuses_a_missing_path_parameter(tmp_path):
+    spaced = gen_moonwalk.build(stage(tmp_path, CALL % "{operation: getModule, params: {name: Dial A}}"))["processes"]["a"]["steps"][0]
+    assert spaced["when"]["call"]["path"] == "/api/modules/Dial%20A"
+    held = gen_moonwalk.build(stage(tmp_path, CALL % "{operation: readFile, params: {path: /moonlive/<name>.mle}}"))["processes"]["a"]["steps"][0]
+    assert held["when"]["call"]["path"] == "/api/file?path=/moonlive/<name>.mle"   # the reader fills it in
+    with pytest.raises(ValueError, match="applyListRow needs parameter row"):
+        gen_moonwalk.build(stage(tmp_path, CALL % "{operation: applyListRow, params: {module: Control, control: presets}}"))

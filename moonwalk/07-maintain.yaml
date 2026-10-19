@@ -50,15 +50,15 @@ processes:
     actor: user
     goal: A bulb moves to MoonLight without a cable.
     systems: [MoonBase]
-    page: how-to/migrating-over-the-air.md
+    page: reference/migrating-over-the-air.md
     intro: |
-      The migration image, a small program that runs once, writes MoonBase and MoonLight's partition table through the old firmware's own update page, and MoonBase then installs MoonLight. It checks it can finish before it writes anything, and restarts the old firmware unchanged when it cannot. A power cut in the 50 milliseconds it rewrites the partition table, or going back to the old firmware, needs a USB cable. The migration is at your own risk: [What can stop it](how-to/migrating-over-the-air.md#what-can-stop-it).
+      The migration image, a small program that runs once, writes MoonBase and MoonLight's partition table through the old firmware's own update page, and MoonBase then installs MoonLight. It checks it can finish before it writes anything, and restarts the old firmware unchanged when it cannot. A power cut in the 50 milliseconds it rewrites the partition table, or going back to the old firmware, needs a USB cable. The migration is at your own risk: [What can stop it](reference/migrating-over-the-air.md#what-can-stop-it).
     steps:
       - id: chip
         say: Check the chip on WLED's Info page.
         when: { manual: "A migration image is built for one chip." }
         detail: |
-          An ESP32-C3 with 4 MB of flash is verified from WLED 0.15.0: [What can move](how-to/migrating-over-the-air.md#what-can-move).
+          An ESP32-C3 with 4 MB of flash is verified from WLED 0.15.0: [What can move](reference/migrating-over-the-air.md#what-can-move).
       - id: download
         say: Download the migration image for that chip.
         when: { open: { url: "https://github.com/MoonModules/MoonLight/releases" } }
@@ -89,13 +89,13 @@ processes:
     actor: user
     goal: Every setting in one file, put back on the same or another device.
     systems: [MoonCore, MoonInstaller]
-    page: how-to/backup-and-restore.md
+    page: reference/backup-and-restore.md
     inputs:
       type: object
       properties:
         target: { type: string, enum: [This device, Another device, An erased device], description: "Where does the backup go back?" }
     intro: |
-      Every setting a device holds, in one file on your computer. Worth taking before an update, before rewiring, and once a rig works the way you want. What a backup holds and how a restore applies: [Backup and restore](how-to/backup-and-restore.md).
+      Every setting a device holds, in one file on your computer. Worth taking before an update, before rewiring, and once a rig works the way you want. What a backup holds and how a restore applies: [Backup and restore](reference/backup-and-restore.md).
     steps:
       - id: backup
         section: Take a backup
@@ -140,9 +140,9 @@ processes:
     actor: user
     goal: You know whether the lights or the setup are at fault, before touching hardware.
     systems: [MoonLight]
-    page: how-to/troubleshooting.md
+    page: reference/troubleshooting.md
     intro: |
-      The preview says which half to look at. Other symptoms, from wrong colors to a device off the network: [Troubleshooting](how-to/troubleshooting.md).
+      The preview says which half to look at. Other symptoms, from wrong colors to a device off the network: [Troubleshooting](reference/troubleshooting.md).
     steps:
       - id: preview
         say: Check the preview shows the effect.
@@ -167,17 +167,28 @@ processes:
         when: { manual: "A card with a problem says so on itself, in red." }
         detail: |
           A scripted effect that fails to compile renders dark on purpose and shows the error on its card: [when the compile fails](tutorials/first-script.md#when-the-compile-fails).
-      - id: signal
-        say: Check the signal for stray or flickering pixels.
-        when: { read: { page: how-to/led-signal-integrity.md } }
+      - id: data
+        section: Check the signal for stray or flickering pixels
+        say: Check the preview buffer shows no stray color.
+        when: { manual: "The preview is the logical RGB the effect produced." }
         detail: |
-          On a 3.3 V board driving 5 V LEDs this is electrical far more often than firmware.
+          No stray color means the effect is innocent: the corruption is downstream of the buffer.
+      - id: loopback
+        say: Run the loopbackFrame self-test.
+        when: { manual: "In the developer view, switch loopbackTest on, set loopbackRxPin to the jumpered GPIO, then switch loopbackFrame on." }
+        detail: |
+          Jumper the first data pin to loopbackRxPin. A `PASS` means the RMT encode and transmit emit bit-perfect WS2812, so the GPIO is fine: [`loopbackFrame`](moonmodules/light/drivers.md#rmtled).
+      - id: txpower
+        say: Lower the WiFi TX power toward 2 dBm.
+        when: { set: { module: WiFiModule, control: txPowerSetting, value: 2 } }
+        detail: |
+          If the flicker shrinks with TX power, it is radio coupling into the data wire. Unchanged across the whole sweep from 20 dBm, it is not the radio: it is the physical data path. When all three checks come back clean, the fix is electrical: [LED signal integrity](explanation/led-signal-integrity.md).
   - id: log-issue
     title: Log an issue
     actor: user
     goal: A bug report with the device's state attached.
     systems: [MoonCore]
-    page: how-to/logging-an-issue.md
+    page: reference/logging-an-issue.md
     intro: |
       Describe what you saw and hand over the state of the device it happened on; diagnosing it is ours. Not sure it is a bug? Ask on [Discord](https://discord.gg/TC8NSUSCdV) first. A feature request needs no template and no diagnostics: describe the use case.
     steps:
@@ -195,7 +206,7 @@ processes:
         say: Copy each card's diagnostics.
         when: { manual: "The card's { }, then diagnostics; select all in the new tab and copy." }
         detail: |
-          Always System and Firmware, and the card that went wrong. The Layer card for lights, the Drivers card for pins or wiring. Wrap each in a fenced code block. [Which cards to include](how-to/logging-an-issue.md#2-attach-the-output).
+          Always System and Firmware, and the card that went wrong. The Layer card for lights, the Drivers card for pins or wiring. Wrap each in a fenced code block. [Which cards to include](reference/logging-an-issue.md#2-attach-the-output).
       - id: describe
         say: Describe the steps, the expected and the actual.
         when: { manual: "Steps to reproduce, what should happen, what happens instead." }

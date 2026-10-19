@@ -2,6 +2,8 @@
 
 Three drivers hand the lights to a video tool. NDI feeds OBS, Resolume or TouchDesigner, HLS feeds VLC, a browser or an Apple TV, and RTSP feeds VLC or `ffplay`. Each needs one install on a desktop, and then a player opens the stream.
 
+Steps: [Watch the output as video](../moonwalk.md#watch-output).
+
 ## Installing ffmpeg
 
 HLS and RTSP on a desktop encode through ffmpeg, which MoonLight never ships or links. Any 5.x or newer on the PATH works:

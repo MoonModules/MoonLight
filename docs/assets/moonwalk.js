@@ -392,11 +392,9 @@ function stepNote(s, p) {
     return notes.length ? ` (${notes.join("; ")})` : "";
 }
 
-// A step's call as a reader types it: a MoonDeck script with its arguments, or a command; null for a step that runs nothing.
+// A step's call as a reader types it, a MoonDeck script with its arguments, a command or the curl line of an API call, which the generator writes once into the map; null for a step that runs nothing.
 export function commandOf(step) {
-    const r = step.when?.run;
-    if (!r) return null;
-    return r.script ? `uv run ${r.script}${r.args ? ` ${r.args}` : ""}` : r.command || null;
+    return step.command ?? null;
 }
 
 // The call as code with a button that copies it. Where the browser keeps the clipboard from an insecure page, as on a device's own http address, the button selects the text for a manual copy.
@@ -536,8 +534,7 @@ function showPanel(panel, model, pid, done, onDone, host = {}) {
                 into.addEventListener("click", () => host.open(s.when.process));
                 block.append(into);
             }
-            const how = howTo(s) || linkOf(s, host);
-            if (how) block.append(how);
+            for (const how of [howTo(s), linkOf(s, host)]) if (how) block.append(how);   // a call shows both: the line to send and its entry on the REST API page
             if (s.detail) { const d = control("div"); d.innerHTML = host.helpMarkdown(s.detail); block.append(d); }
             view.append(block);
         });
@@ -555,8 +552,7 @@ function showPanel(panel, model, pid, done, onDone, host = {}) {
                 const li = control("li");
                 li.append(s.say, stepNote(s, p));
                 li.dataset.step = s.id;
-                const how = howTo(s) || linkOf(s, host);
-                if (how) li.append(how);
+                for (const how of [howTo(s), linkOf(s, host)]) if (how) li.append(how);
                 ol.append(li);
             }
             panel.append(ol);

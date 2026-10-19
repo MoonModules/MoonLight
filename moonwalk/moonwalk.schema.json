@@ -265,25 +265,26 @@
         },
         "call": {
           "type": "object",
+          "description": "An operation of the device's REST API, docs/reference/openapi.yaml, named by its operationId; the build checks it exists and adds its method and path.",
           "required": [
-            "method",
-            "path"
+            "operation"
           ],
           "additionalProperties": false,
           "properties": {
-            "method": {
-              "enum": [
-                "GET",
-                "POST",
-                "PATCH",
-                "PUT",
-                "DELETE"
-              ]
-            },
-            "path": {
+            "operation": {
               "type": "string"
             },
-            "body": {}
+            "params": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              },
+              "description": "Its path and query parameters by name, filled into the path."
+            },
+            "body": {
+              "type": "string",
+              "description": "The request body, written as the reader sends it."
+            }
           }
         },
         "run": {

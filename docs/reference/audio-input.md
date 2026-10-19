@@ -8,7 +8,7 @@ An `I2S` microphone has three wires: the bit clock, the word select and the data
 
 A `PDM` microphone has two wires, a clock and a data line, as the QuinLED Dig-Next-2's onboard microphone has. Set `micMode` to `PDM`: it uses `wsPin` as its clock and `sdPin` as its data, and hides the two clock pins it does not have.
 
-An ADC or codec in front of the microphone needs `mclkPin`, and a codec is chosen with `codec` and its I2C address with `codecAddr`. The [MHC-WLED ESP32-P4 shield](../reference/hardware/mhc-wled-esp32-p4-shield.md) wires its onboard PCM1808 line-in ADC this way.
+An ADC or codec in front of the microphone needs `mclkPin`, and a codec is chosen with `codec` and its I2C address with `codecAddr`. The [MHC-WLED ESP32-P4 shield](hardware/mhc-wled-esp32-p4-shield.md) wires its onboard PCM1808 line-in ADC this way.
 
 On an ESP32 the Local source idles until real GPIOs are entered. On the desktop it captures the device picked in `device` right away.
 
@@ -16,9 +16,9 @@ On an ESP32 the Local source idles until real GPIOs are entered. On the desktop 
 
 `levels` picks who sets the display window. In `automatic`, the service maps each band's own floor and peak onto the window, so a treble band reads level with a bass one. In `manual`, the `gain` slider sets the window's width.
 
-1. Set `floor`, the silence threshold, first. It depends on the part and the room.
-2. Raise it until a quiet room reads still. A learner that studies an empty room maps its noise floor onto the whole display and shows silence at full scale.
-3. In `manual`, set `gain`. The default suits a quiet MEMS microphone, so turn it down hard for a loopback device or everything clips.
+`floor` is the silence threshold, and it depends on the part and the room. A learner that studies an empty room maps its noise floor onto the whole display and shows silence at full scale. The default `gain` suits a quiet MEMS microphone, so a loopback device needs it turned down hard or everything clips.
+
+Steps: [Set up audio input](../moonwalk.md#audio-input).
 
 ## Capturing what the machine plays
 
@@ -26,11 +26,7 @@ Pick the loopback source in `device`. How to get one depends on the operating sy
 
 ### macOS
 
-macOS has no native loopback.
-
-1. Install [BlackHole](https://existential.audio/blackhole/).
-2. In Audio MIDI Setup, create a **Multi-Output Device** with your speakers first and BlackHole second, with drift correction on BlackHole.
-3. Set it as the system output. The speakers keep playing while an identical copy lands in BlackHole, which `device` captures.
+macOS has no native loopback. [BlackHole](https://existential.audio/blackhole/) with a **Multi-Output Device** from Audio MIDI Setup, speakers first and BlackHole second with drift correction on BlackHole, set as the system output, keeps the speakers playing while an identical copy lands in BlackHole, which `device` captures.
 
 The Mac's volume keys go dead on a multi-output device, so set the volume in the player.
 

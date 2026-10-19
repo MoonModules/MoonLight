@@ -1,6 +1,6 @@
 # yaml-language-server: $schema=moonwalk.schema.json
 stage: Everyday use
-summary: Looks, the gallery, hands-on control and the smart home.
+summary: Looks, the gallery and hands-on control.
 processes:
   - id: presets
     title: Save, edit and apply a preset
@@ -8,9 +8,9 @@ processes:
     goal: A look, geometry, hardware or service setup recalled with one click.
     systems: [MoonCore]
     dependsOn: [first-light-show]
-    page: how-to/presets.md
+    page: reference/presets.md
     intro: |
-      A preset is a saved state brought back with one click: a look, a geometry or a hardware setup. They live on the Control card as a grid of 64 pads. What a preset holds and how applying one behaves: [Presets](how-to/presets.md).
+      A preset is a saved state brought back with one click: a look, a geometry or a hardware setup. They live on the Control card as a grid of 64 pads. What a preset holds and how applying one behaves: [Presets](reference/presets.md).
     steps:
       - id: open
         section: Save one
@@ -39,12 +39,23 @@ processes:
           - **Its name:** edit **name**; it applies on Enter.
           - **Delete it:** press **delete preset**.
           - **Move it:** drag it onto another pad, which swaps the two.
+      - id: list-api
+        section: Over the API
+        say: List the presets a device has.
+        when: { call: { operation: listDir, params: { path: /.config/presets } } }
+        detail: |
+          A preset is a file, `/.config/presets/<name>.json`, holding the tree and its values together. The list is rebuilt from the folder, so a file written there straight appears at the next rescan: a reboot, or any save, rename or delete on the card.
+      - id: apply-api
+        say: Apply one by name.
+        when: { call: { operation: applyListRow, params: { module: Control, control: presets, row: "<name>" } } }
+        detail: |
+          As a click on its pad does: `<name>` is the pad's name.
   - id: gallery-install
     title: Install a preset or script from the gallery
     actor: user
     goal: Something shared lands on a pad or in /moonlive.
     systems: [MoonCore, MoonLive]
-    page: how-to/presets.md
+    page: reference/presets.md
     intro: |
       The Gallery under the pads shows what people shared in [MoonLight-Gallery](https://github.com/MoonModules/MoonLight-Gallery). Your browser fetches it, so the device needs no internet of its own.
     steps:
@@ -67,7 +78,7 @@ processes:
     goal: An entry in MoonLight-Gallery with a GIF.
     systems: [MoonCore]
     dependsOn: [presets]
-    page: how-to/presets.md
+    page: reference/presets.md
     steps:
       - id: copy
         say: Copy the preset's JSON from its card.
@@ -85,27 +96,39 @@ processes:
     actor: user
     goal: Faders under the hands drive the Control card and follow it back.
     systems: [MoonCore]
-    page: how-to/control-surface.md
+    page: reference/control-surface.md
     inputs:
       type: object
       properties:
-        route: { type: string, enum: [Desk or gamepad in the browser, Desk on the board's USB port, Desk on the network, Phone or tablet over OSC, Phone with WLED Native], description: "What do you control from?" }
+        route: { type: string, enum: [Desk in the browser, Gamepad in the browser, Desk on the board's USB port, Desk on the network, Phone or tablet over OSC, Phone with WLED Native], description: "What do you control from?" }
     intro: |
-      Eight switches, eight encoders, eight faders and a pad grid, each driving whatever you assign it. Every route lands on the same surface, so a desk, a phone and the web UI stay in step. Addresses, feedback and troubleshooting: [Connecting a control surface](how-to/control-surface.md).
+      Eight switches, eight encoders, eight faders and a pad grid, each driving whatever you assign it. Every route lands on the same surface, so a desk, a phone and the web UI stay in step. Addresses, feedback and troubleshooting: [Connecting a control surface](reference/control-surface.md).
     steps:
       - id: add-midi
         section: Connect it
         say: Add the Midi service.
-        given: [{ input: route, in: [Desk or gamepad in the browser, Desk on the board's USB port, Desk on the network] }]
+        given: [{ input: route, in: [Desk in the browser, Desk on the board's USB port, Desk on the network] }]
         when: { add: { module: Services, type: MidiService } }
         detail: |
-          A gamepad takes the Gamepad service instead. A Mackie desk in MC mode needs no setup; for an Akai APC40 mkII set `profile` to Akai APC40 mkII. A desk on the network takes it on the board it drives.
+          A Mackie desk in MC mode needs no setup; for an Akai APC40 mkII set `profile` to Akai APC40 mkII. A desk on the network takes it on the board it drives.
+      - id: add-gamepad
+        say: Add the Gamepad service.
+        given: [{ input: route, equals: Gamepad in the browser }]
+        when: { add: { module: Services, type: GamepadService } }
+        detail: |
+          It comes with default rows for the sticks and the A button.
       - id: plug-browser
         say: Plug the desk into this computer.
-        given: [{ input: route, equals: Desk or gamepad in the browser }]
+        given: [{ input: route, in: [Desk in the browser, Gamepad in the browser] }]
         when: { manual: "Use Chrome, Edge or Firefox, and allow MIDI devices when it asks." }
         detail: |
-          A pad shows once you press any of its buttons. Safari has no Web MIDI. A board's own page is not a secure origin, so Chrome asks nothing: [mark it as secure once](how-to/control-surface.md#a-boards-own-page-needs-marking-as-secure-once). A pad that does not appear: [making a gamepad appear](how-to/control-surface.md#making-a-gamepad-appear).
+          A pad shows once you press any of its buttons. Safari has no Web MIDI. A board's own page is not a secure origin, so Chrome asks nothing until you mark it as secure once ([why](reference/control-surface.md#a-boards-own-page-needs-marking-as-secure-once)):
+
+          1. Open `chrome://flags/#unsafely-treat-insecure-origin-as-secure`.
+          2. Enter the board's address, such as `http://192.168.1.158`, set the flag to Enabled, and click Relaunch.
+          3. Reload the board's page: Chrome now asks to use MIDI devices.
+
+          A pad that does not appear: [making a gamepad appear](reference/control-surface.md#making-a-gamepad-appear).
       - id: source-usb
         say: Set source to USB.
         given: [{ input: route, equals: Desk on the board's USB port }]
@@ -135,7 +158,7 @@ processes:
         given: [{ input: route, equals: Desk on the network }]
         when: { manual: "On that board set source to USB and turn share on." }
         detail: |
-          It then forwards the desk like a network MIDI cable. One host at a time. The host's status says why it was refused: `no desk`, `in use` or `it invites`. [One desk for many boards over OSC](how-to/control-surface.md#one-desk-for-several-boards).
+          It then forwards the desk like a network MIDI cable. One host at a time. The host's status says why it was refused: `no desk`, `in use` or `it invites`. [One desk for many boards over OSC](reference/control-surface.md#one-desk-for-several-boards).
       - id: osc
         say: Follow the OSC process.
         given: [{ input: route, equals: Phone or tablet over OSC }]
@@ -159,31 +182,33 @@ processes:
       - id: assign
         section: Assign the controls
         say: Assign the surface's controls on Control.
-        given: [{ in: [Desk or gamepad in the browser, Desk on the board's USB port, Desk on the network], input: route }]
+        given: [{ in: [Desk in the browser, Gamepad in the browser, Desk on the board's USB port, Desk on the network], input: route }]
         when: { open: { module: ControlModule } }
         detail: |
-          Assign a control such as `fader2` to a game's paddle. Move a fader on the desk and the card follows, and the reverse: motors, lights and knob rings follow the surface back. What each desk does: [What a desk does](how-to/control-surface.md#what-a-desk-does).
+          Assign a control such as `fader2` to a game's paddle. Move a fader on the desk and the card follows, and the reverse: motors, lights and knob rings follow the surface back. What each desk does: [What a desk does](reference/control-surface.md#what-a-desk-does).
     outro: |
-      The desk, the phone and the web UI stay in step. When nothing moves, see [when you see nothing](how-to/control-surface.md#when-the-surface-does-nothing).
+      The desk, the phone and the web UI stay in step. When nothing moves, see [when you see nothing](reference/control-surface.md#when-the-surface-does-nothing).
   - id: osc-control
     title: Control a device from a phone or tablet over OSC
     actor: user
     goal: Eight switches, knobs and faders on a touchscreen move the device and follow it back.
     systems: [MoonCore]
-    page: how-to/control-surface.md
+    page: reference/control-surface.md
     intro: |
-      About five minutes, with Open Stage Control and one session file. The addresses and how feedback works: [the OSC addresses](how-to/control-surface.md#the-osc-addresses).
+      About five minutes, with Open Stage Control and one session file. The addresses and how feedback works: [the OSC addresses](reference/control-surface.md#the-osc-addresses).
     steps:
       - id: ip
-        say: Read the device's IP address.
-        when: { open: { module: SystemModule } }
+        say: Read the device's address on WiFi.
+        when: { open: { module: WiFiModule } }
         detail: |
-          It is the address you typed into the browser. A desktop install talking to itself uses `127.0.0.1`.
+          Its `address` is what you typed into the browser. A desktop install talking to itself uses `127.0.0.1`.
       - id: install
         say: Install Open Stage Control.
         when: { open: { url: "https://openstagecontrol.ammd.net/" } }
         detail: |
           Free and open source, for macOS, Windows and Linux. On macOS the first launch needs a right-click and Open, once, because the download is unsigned.
+
+          From a source checkout, one command replaces this step, the session and the launcher: `uv run moondeck/run/run_open_stage_control.py --host <device-ip>` ([One command, from a checkout](reference/control-surface.md#one-command-from-a-checkout)).
       - id: session
         say: Download the session file.
         when: { open: { url: "https://github.com/MoonModules/MoonLight/releases/download/latest/MoonLight-control-surface.json" } }
@@ -213,20 +238,15 @@ processes:
         when: { manual: "On any phone or tablet on the same network open http://<computer-running-open-stage-control>:8080." }
         detail: |
           Open Stage Control serves the surface as a web page, and its console names the port. If MoonLight's own UI is on 8080 on that machine, give Open Stage Control another port in its launcher.
-      - id: repo
-        say: Run it from a checkout in one command.
-        when: { run: { script: moondeck/run/run_open_stage_control.py, args: "--host <device-ip>" } }
-        detail: |
-          It replaces the install, session and launcher steps: it finds the app, passes the session, the address and both ports, and runs headless at http://127.0.0.1:8088. Options: `--host` and `--port` (the device and its OSC `port`, default `127.0.0.1:9000`), `--listen` (the device's `feedbackPort`, default 9001), `--ui-port` (default 8088).
     outro: |
-      You still turn `listen` and `feedback` on at the device. When nothing moves: [when you see nothing](how-to/control-surface.md#when-the-surface-does-nothing).
+      You still turn `listen` and `feedback` on at the device. When nothing moves: [when you see nothing](reference/control-surface.md#when-the-surface-does-nothing).
   - id: hold-to-play
     title: Play an effect while a button is held
     actor: user
     goal: A held button shows its effect over a standby effect, and releasing it brings the standby back.
     systems: [MoonCore, MoonLight]
     dependsOn: [first-light-show]
-    page: how-to/hold-to-play.md
+    page: reference/examples/hold-to-play.md
     intro: |
       Layers stack: a Standby layer always shows, and each trick layer sits above it at opacity 0. A Control fader drives each trick's opacity, and a Button on a GPIO writes 255 to the fader while held. A foot pedal or a wired button works, an infrared remote does not (it sends no release).
     steps:
@@ -238,7 +258,9 @@ processes:
           Add a Layer named Standby with an effect, then one Layer per trick, named Trick1, Trick2 and so on, each with its effect. Up to eight tricks fit, one per Control fader.
       - id: opacity
         say: Set each trick's opacity to 0.
-        when: { manual: "Trick layers show nothing until a fader raises their opacity." }
+        when: { set: { module: Layer, control: opacity, value: 0 } }
+        detail: |
+          Trick layers show nothing until a fader raises their opacity.
       - id: faders
         say: Open Control.
         when: { open: { module: ControlModule } }
@@ -263,118 +285,3 @@ processes:
         when: { manual: "Its trick covers Standby while held; releasing returns Standby." }
     outro: |
       Wireless works too when the receiver has momentary outputs wired to GPIOs, such as a 4 or 8 channel 433 MHz module. For logic of your own, such as another standby after a trick, a [MoonLive service](moonmodules/core/services.md#moonliveservice) script drives the same controls.
-  - id: smart-home
-    title: Bring the device into a smart home
-    actor: user
-    goal: On/off, brightness and color from Home Assistant, Apple Home or Homebridge.
-    systems: [MoonCore]
-    page: how-to/home-automation.md
-    inputs:
-      type: object
-      properties:
-        platform: { type: string, enum: [Home Assistant, Homebridge, Hue lights], description: "Which platform?" }
-    intro: |
-      Home Assistant and Homebridge drive the device from their app, voice assistant and automations. Hue lights run the other way: the device drives your Hue bulbs as the pixels of an effect. The hub and broker run already; installing them, the MQTT topics and the troubleshooting: [Home automation](how-to/home-automation.md).
-    steps:
-      - id: ha-find
-        section: Adopt in Home Assistant
-        say: Look for the device in Home Assistant.
-        given: [{ input: platform, equals: Home Assistant }]
-        when: { manual: "Home Assistant finds it on its own over the WLED path." }
-        detail: |
-          It lists the device as a light with color, palette and brightness, with 💫 in its name marking it as MoonLight. This path needs no broker.
-      - id: broker
-        section: Connect the broker
-        say: Set the broker on the MQTT card.
-        given: [{ input: platform, in: [Home Assistant, Homebridge] }]
-        when: { open: { module: MqttModule } }
-        detail: |
-          Set `broker` to the broker's hostname or LAN IP, never `127.0.0.1`, which is loopback on the broker's own host. For Home Assistant's broker it is the IP its console prints. Set `port`, usually `1883`, and `username` and `password` when the broker requires them, for Home Assistant the user created for MQTT. Home Assistant needs this only for a broker-only or cross-subnet setup.
-      - id: ha-discovery
-        say: Turn haDiscovery on.
-        given: [{ input: platform, equals: Home Assistant }]
-        when: { set: { module: MqttModule, control: haDiscovery, value: true } }
-        detail: |
-          Home Assistant then creates a light entity with on/off and brightness, grayed out when the device is offline. Leave it off on the WLED path: both together list the device twice. Never hand-configure Home Assistant's generic MQTT light against `homeassistant/light/...`.
-      - id: ha-verify
-        say: Check the device's topics reach Home Assistant.
-        given: [{ input: platform, equals: Home Assistant }]
-        when: { manual: "MQTT integration, Configure, Listen to topic: MoonLight/#." }
-        detail: |
-          The device's on, brightness and hsv topics appear.
-      - id: hb-verify
-        say: Check the device's topics reach the broker.
-        given: [{ input: platform, equals: Homebridge }]
-        when: { run: { command: "mosquitto_sub -t 'MoonLight/#' -v" } }
-        detail: |
-          The device's on, brightness and hsv topics and its retained name appear. Its MAC suffix, the last 6 hex digits, is in the topics: you need it in the accessory.
-      - id: ha-homekit
-        section: Reach Apple Home
-        say: Add the HomeKit Bridge integration.
-        given: [{ input: platform, equals: Home Assistant }]
-        when: { manual: "Settings, Devices & Services, Add Integration, HomeKit Bridge." }
-        detail: |
-          Optional, to reach Apple Home. Pick **Include selected entities** and tick the MoonLight light.
-      - id: ha-pair
-        say: Scan the code in the Home app.
-        given: [{ input: platform, equals: Home Assistant }]
-        when: { manual: "Add Accessory, More options, HA HomeKit Bridge." }
-        detail: |
-          Home Assistant prints the QR code and a PIN; scan the code or enter the PIN.
-      - id: hb-plugin
-        say: Install the homebridge-mqttthing plugin.
-        given: [{ input: platform, equals: Homebridge }]
-        when: { manual: "From the Config UI Plugins screen, or with `npm i -g homebridge-mqttthing`." }
-      - id: hb-accessory
-        say: Add the lightbulb accessory to Homebridge.
-        given: [{ input: platform, equals: Homebridge }]
-        when: { read: { page: how-to/home-automation.md, section: The Homebridge accessory } }
-        detail: |
-          Add it in the Config UI Config editor or in `~/.homebridge/config.json`. Set `url` to `mqtt://<broker>:1883`, or `mqtt://127.0.0.1:1883` when Homebridge and the broker share a host. Replace `563cfe` in every topic with your MAC suffix, and match `username` and `password` to the broker or remove them.
-      - id: hb-restart
-        say: Restart Homebridge.
-        given: [{ input: platform, equals: Homebridge }]
-        when: { manual: "The accessory is listed in the Config UI." }
-      - id: hb-pair
-        say: Pair the bridge in the Home app.
-        given: [{ input: platform, equals: Homebridge }]
-        when: { manual: "Add Accessory, More options, the Homebridge bridge." }
-        detail: |
-          Use the PIN Homebridge prints on start. The device appears as a light with on/off, brightness and a color wheel that steps through palettes.
-      - id: hue-driver
-        section: Drive Hue lights
-        say: Add a Hue driver to Drivers.
-        given: [{ input: platform, equals: Hue lights }]
-        when: { add: { module: Drivers, type: HueDriver } }
-        detail: |
-          Enter the bridge's IP in `bridgeIp`. Find it in the Hue app or at [discovery.meethue.com](https://discovery.meethue.com). Hue is a rate-limited hub of about 10 commands a second, so the result is smooth ambient color, not strobing. Behavior and controls: [Drivers, Hue](moonmodules/light/drivers.md#hue).
-      - id: hue-link
-        say: Press the link button on the bridge.
-        given: [{ input: platform, equals: Hue lights }]
-        when: { manual: "It opens a 30-second pairing window." }
-      - id: hue-pair
-        say: Press pair within 30 seconds.
-        given: [{ input: platform, equals: Hue lights }]
-        when: { open: { module: HueDriver } }
-        detail: |
-          The device claims an app key, stored on the driver as `appKey`, once. The status line reads `paired, N lights`.
-      - id: hue-pick
-        say: Pick the room and light to drive.
-        given: [{ input: platform, equals: Hue lights }]
-        when: { manual: "Use the driver's room and light controls." }
-        detail: |
-          All bulbs, one room or a single light. Only reachable Extended color lights are driven: white-only bulbs, plugs and powered-off lights are skipped.
-      - id: hue-layout
-        say: Size the layout as one column of bulbs.
-        given: [{ input: platform, equals: Hue lights }]
-        when: { open: { module: Layouts } }
-        detail: |
-          Use width 1 and height equal to the number of Hue lights. Each pixel of the column maps to one bulb in order, so a 1D effect such as a rainbow or a chase reads across the bulbs.
-      - id: hue-effect
-        say: Run an effect.
-        given: [{ input: platform, equals: Hue lights }]
-        when: { manual: "Any effect on the layer drives the bulbs." }
-        detail: |
-          Global brightness and color order apply as on a strip; brightness 0 turns a bulb off.
-    outro: |
-      The topics the platforms use, presets in Home Assistant and troubleshooting: [Home automation](how-to/home-automation.md).

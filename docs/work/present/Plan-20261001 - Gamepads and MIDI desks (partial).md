@@ -183,7 +183,7 @@ The APC40 mkII is on the bench, so the Akai profile the Decided section waited f
 - Outbound: each knob's ring shows its encoder (set to the volume style once), each activator lights when its switch is on, and each pad shows its preset slot: off when empty, dim when stored, bright when active.
 - The Control module lets a surface press a preset pad and tells surfaces each pad's state, through the existing `SurfaceControl::Pad`.
 - Tests: decoding each message kind, the desk state per kind, the row flip, the mode SysEx and the pad states.
-- Docs: the MIDI section on the services page and [Connecting a control surface](../../how-to/control-surface.md).
+- Docs: the MIDI section on the services page and [Connecting a control surface](../../reference/control-surface.md).
 - Verify on the desktop app with the APC40 on the product owner's Mac in Chrome on `localhost`, then on the StadBeest, where the eyes follow over OSC.
 - Left for later: the master fader and crossfader, the device knobs, the scene pads, transport and tap tempo.
 

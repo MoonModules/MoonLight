@@ -1283,7 +1283,7 @@ Pair with `preview_installer`'s flash-ready mode (above) for a complete dev-envi
 
 ### wled_migration_test
 
-Test the over-the-air migration from WLED to MoonLight on a bench board, with a power cut at every step. [Migrating a device to MoonLight over the air](../docs/how-to/migrating-over-the-air.md) describes the migration itself. It rewrites the whole flash of the board on the port.
+Test the over-the-air migration from WLED to MoonLight on a bench board, with a power cut at every step. [Migrating a device to MoonLight over the air](../docs/reference/migrating-over-the-air.md) describes the migration itself. It rewrites the whole flash of the board on the port.
 
 ```bash
 uv run moondeck/build/build_esp32.py --firmware esp32c3 --migrate-pause 10
@@ -1334,7 +1334,7 @@ tick: 1234us (FPS: 800)  free: 0  ...
 
 One firmware for the Teensy 4.1, `teensy41`, which finds at boot whether the board has its own Ethernet or a W5500 module.
 The port is found by PJRC's USB vendor id, so the tab has no dropdowns.
-Setup once, then Build, Flash and Monitor.
+Steps: [Build, flash and monitor a Teensy](../docs/moonwalk.md#teensy).
 
 ### setup_teensy
 

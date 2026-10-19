@@ -27,7 +27,7 @@ from _test_metadata import (  # noqa: E402
 )
 from generate_test_docs import render_unit_tests, render_scenarios  # noqa: E402
 from gen_help import ATTRIBUTIONS, catalog_rows, display_name  # noqa: E402
-from gen_moonwalk import build as build_moonwalk, absolute_links, render_text as moonwalk_text, split_text as split_moonwalk  # noqa: E402
+from gen_moonwalk import build as build_moonwalk, absolute_links, dumps as moonwalk_json, render_text as moonwalk_text, split_text as split_moonwalk  # noqa: E402
 
 
 # ---- source-link rewrite: docs link OUT to repo files the site can't host ----
@@ -243,9 +243,9 @@ def on_files(files, config):
     _add("reference/tests/scenario-tests.md", render_scenarios(collect_scenario_files()))
     # MoonWalk's journey map, from the stage files under moonwalk/, and each process's prose beside it, which the view fetches when the process opens; links absolute, since the view renders them on a device's page too. An invalid file fails the build.
     walk, texts = split_moonwalk(absolute_links(_walk()))
-    _add("moonwalk/moonwalk.json", json.dumps(walk, ensure_ascii=False))
+    _add("moonwalk/moonwalk.json", moonwalk_json(walk))
     for pid, text in texts.items():
-        _add(f"moonwalk/text/{pid}.json", json.dumps(text, ensure_ascii=False))
+        _add(f"moonwalk/text/{pid}.json", moonwalk_json(text))
 
     return files
 
@@ -267,19 +267,18 @@ _OUT_OF_DOCS_HREF_RE = re.compile(
 _FIRST_H1_RE = re.compile(r"(<h1[^>]*>)(.*?)(</h1>)", re.S)
 
 
-def _rebase_repo_root_doc_links(html):
-    """Drop the leading `docs/` from links in content embedded from the repo root.
+def _rebase_repo_root_doc_links(html, src_uri):
+    """Turn the leading `docs/` of links in content embedded from the repo root into the climb from the page's own folder to the site root, `../` per folder of `src_uri`.
 
-    Runs on the rendered HTML, not the source markdown: pymdownx expands a `--8<--`
-    snippet during markdown *conversion*, so at on_page_markdown time this page is still
-    just the one-line directive and there is nothing to rewrite yet.
+    Runs on the rendered HTML, not the source markdown: pymdownx expands a `--8<--` snippet during markdown *conversion*, so at on_page_markdown time this page is still just the one-line directive and there is nothing to rewrite yet.
 
     The alternative, rewriting CLAUDE.md's own links to be docs-relative, would break them everywhere they are actually used (an agent reading the file, GitHub's own rendering) to satisfy one embedded copy. Rebasing at build time keeps the source correct at the root and correct on the site.
 
     `.md` becomes `.html` here too. MkDocs normally does that itself, but only for links whose target it resolved during validation, and these did not resolve, precisely because of the `docs/` prefix this function strips. So they arrive still pointing at the source file and would 404 on the built site. """
+    root = "../" * src_uri.count("/")
     def _fix(m):
-        path, _, anchor = m.group(1), m.group(2), m.group(3) or ""
-        return f'href="{path}.html{anchor}"' if _ else f'href="{path}{anchor}"'
+        path, md, anchor = m.group(1), m.group(2), m.group(3) or ""
+        return f'href="{root}{path}{".html" if md else ""}{anchor}"'
     html = _DOCS_PREFIXED_HREF_RE.sub(_fix, html)
     return _OUT_OF_DOCS_HREF_RE.sub(
         lambda m: f'href="{_BLOB_BASE}/{m.group(1)}{m.group(2)}{m.group(3) or ""}"', html)
@@ -311,7 +310,7 @@ def on_page_content(html, page, config, files):
     The embedded file opens with a heading that names it as a file (`# CLAUDE.md`): right at the repo root and on GitHub, wrong in a docs menu, where the reader wants the subject. Front matter `title:` fixes the nav entry and the browser tab but not the rendered H1, so it is swapped here rather than by editing the source file."""
     if page.file.src_uri not in _EMBEDS_REPO_ROOT_FILE:
         return html
-    html = _rebase_repo_root_doc_links(html)
+    html = _rebase_repo_root_doc_links(html, page.file.src_uri)
     if page.title:
         html = _FIRST_H1_RE.sub(
             lambda m: f"{m.group(1)}{page.title}{m.group(3)}", html, count=1)

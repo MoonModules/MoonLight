@@ -38,7 +38,7 @@ Those are the S3's own USB data pins, so a USB device on that port and this choi
 
 A long LED encode on core 0 starves the W5500 network stack, so the encode runs on core 1 (see [performance.md](../performance.md)).
 The strips used in practice are SK6812 RGBW.
-The board runs the StadBeest legs, 10 SK6812 RGBW strips of 144 lights (see [multi-board installation](../../how-to/multi-board-installation.md)).
+The board runs the StadBeest legs, 10 SK6812 RGBW strips of 144 lights (see [multi-board installation](../examples/multi-board-installation.md)).
 A brown-out at high brightness on the StadBeest came from the wiring resistance of its power feed.
 In a test setup fed through speaker cable too thin for the load, `power.mls` read 4.7 V at 0.5 A and 3.3 V at 18.4 A.
 

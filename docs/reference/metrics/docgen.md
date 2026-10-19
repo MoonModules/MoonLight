@@ -6,7 +6,7 @@ Every place the generated documentation breaks the shape [the standards](../../c
 
 **0 error(s)** and **3079 warning(s)** across 290 page(s).
 
-**4388 appendix line(s)** after `@technical`. This only falls as well: a cleanup cuts first, and moves only what neither the code, the test name nor the spec says.
+**4376 appendix line(s)** after `@technical`. This only falls as well: a cleanup cuts first, and moves only what neither the code, the test name nor the spec says.
 
 An error is in a file that generates a documentation page, a header or a catalog page, so the finding is a defect in what gets published and it fails the gate. A warning is worth fixing without being worth stopping a commit for: any finding in an implementation file, which publishes nothing, and the rules still staged as counts in a header too, the over-wide line and the appendix section nothing refers to. Both are counted here, because a warning nobody sees is a warning nobody fixes.
 

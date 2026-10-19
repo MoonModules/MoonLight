@@ -28,6 +28,18 @@ def set_version(version: str, path: Path = None) -> None:
     path.write_text(new, encoding="utf-8")
 
 
+OPENAPI = cv.LIBRARY_JSON.parent / "docs" / "reference" / "openapi.yaml"
+
+
+def set_api_version(version: str, path: Path = OPENAPI) -> None:
+    """Rewrite the REST API's `info.version` to the same version, so the API page names the firmware it describes."""
+    text = path.read_text(encoding="utf-8")
+    new, n = re.subn(r"^(  version: ).*$", rf"\g<1>{version}", text, count=1, flags=re.M)
+    if n != 1:
+        raise SystemExit(f"no info.version in {path}")
+    path.write_text(new, encoding="utf-8")
+
+
 def target(step: str, current: str, last: str | None) -> str:
     """The development version a step moves to: after the last release (`next`), or toward a major (`major`)."""
     core = cv.core_version(current)
@@ -43,7 +55,8 @@ def main() -> int:
     current = json.loads(cv.LIBRARY_JSON.read_text(encoding="utf-8"))["version"]
     version = target(args.step, current, cv.last_release_core())
     set_version(version)
-    print(f"library.json: {current} -> {version}. Commit it; the release tag will be v{cv.core_version(version)}.")
+    set_api_version(version)
+    print(f"library.json and openapi.yaml: {current} -> {version}. Commit both; the release tag will be v{cv.core_version(version)}.")
     return 0
 
 

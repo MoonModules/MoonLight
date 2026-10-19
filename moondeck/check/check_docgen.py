@@ -108,6 +108,7 @@ _UNREFERENCED_RULE = "unreferenced appendix section"
 _HARD_WRAP_RULE = "hard wrap"
 _STALE_HELP_RULE = "help.json stale"
 _PROCESS_SIZE_RULE = "process over its caps"
+_PROCESS_REPEAT_RULE = "steps repeated across processes"   # a run two processes share, which one process both call holds once
 _MOONWALK_BUILD_RULE = "MoonWalk does not build"   # a stage file the generator refuses: an error, since the map and the site fail with it
 _RESTATES_RULE = "control restates the UI"
 # A control's longer help, its `@guide` section, adds what its line cannot hold: what each option does, a consequence, a reason. Words shared with the line show a repeat mechanically.
@@ -174,7 +175,7 @@ def _blocks(key: str, why: str = "") -> bool:
         return True
     if why.startswith(_LINE_LENGTH_RULES) and "chars >" in why:
         return False
-    if why.startswith((_UNREFERENCED_RULE, _SPLIT_PARAGRAPH_RULE, _PROCESS_SIZE_RULE)):
+    if why.startswith((_UNREFERENCED_RULE, _SPLIT_PARAGRAPH_RULE, _PROCESS_SIZE_RULE, _PROCESS_REPEAT_RULE)):
         return False
     return _generates_a_page(key.partition("::")[0])
 
@@ -224,7 +225,7 @@ _RULE_NAMES = (
     "class comment", "member comment", "no image", "image is", "one control",
     "doc sentence", "hard wrap", "split paragraph", _STALE_HELP_RULE,
     _RESTATES_RULE, _GUIDE_REPEATS_RULE, _HELP_SIZE_RULE, _GUIDE_NAMES_CONTROL_RULE, _HELP_LINE_RULE,
-    _TAG_GROUP_RULE, _NOTE_ON_DECL_RULE, _PROCESS_SIZE_RULE,
+    _TAG_GROUP_RULE, _NOTE_ON_DECL_RULE, _PROCESS_SIZE_RULE, _PROCESS_REPEAT_RULE,
 )
 
 
@@ -260,6 +261,7 @@ _RULE_LABELS = {
     _TAG_GROUP_RULE: "tag emoji on one module",
     _NOTE_ON_DECL_RULE: "// notes on declarations",
     _PROCESS_SIZE_RULE: "processes over their caps",
+    _PROCESS_REPEAT_RULE: "steps repeated across processes",
 }
 
 
@@ -1221,6 +1223,7 @@ def _process_sizes():
         return [("moonwalk/", f"{_MOONWALK_BUILD_RULE}: {e}")]   # the generator names each file and its fault
     files = {s["id"]: f"moonwalk/{s['file']}" for s in model["stages"]}
     out = [(files[stage], f"{_PROCESS_SIZE_RULE}: {why}") for stage, why in gen_moonwalk.size_warnings(model["processes"])]
+    out += [(files[stage], f"{_PROCESS_REPEAT_RULE}: {why}") for stage, why in gen_moonwalk.shared_runs(model["processes"])]
     kb = gen_moonwalk.download_kb(model)
     if kb > gen_moonwalk.MAX_DOWNLOAD_KB:
         out.append(("docs/assets/moonwalk.js", f"{_PROCESS_SIZE_RULE}: the map and its renderer download {kb} KB gzipped > {gen_moonwalk.MAX_DOWNLOAD_KB}; the map carries less"))

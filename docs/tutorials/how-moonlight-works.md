@@ -47,7 +47,7 @@ Look at that picture again, because every card has the same parts:
 | 🧠 **112B** | How much memory it uses, live |
 | **⏻** | Turn it off without deleting it |
 | The line under the name | The module's help, once the ⓘ in the status bar turns help on |
-| **`{ }`** | Open its live state, for [issue reports](../how-to/logging-an-issue.md) |
+| **`{ }`** | Open its live state, for [issue reports](../reference/logging-an-issue.md) |
 | `status`, `width`, `height` … | The settings, one per row |
 | The **Grid** box inside | A child card, cards nest |
 | **+ add module** | Add a child here |
@@ -143,7 +143,7 @@ Move a slider and the next frame uses it. Change the WiFi credentials, add an ef
 
 **Files are the one exception, and only because typing is different.** A script you are editing is saved when you click away, press Ctrl/Cmd+S, or press Save. A half-typed line should not be compiled onto your fixture mid-word. The moment it is saved it recompiles and swaps in live, same as everything else.
 
-This is a deliberate design rule, not a convenience, and you can trust it: if something needs a reboot before it works, that is a bug worth [reporting](../how-to/logging-an-issue.md).
+This is a deliberate design rule, not a convenience, and you can trust it: if something needs a reboot before it works, that is a bug worth [reporting](../reference/logging-an-issue.md).
 
 Your settings save themselves and survive a power cycle.
 

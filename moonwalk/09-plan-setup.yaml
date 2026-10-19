@@ -8,8 +8,14 @@ processes:
     goal: A module, effect, driver or capability has an approved plan before code.
     systems: [MoonWalk]
     page: contributing/principles-and-process.md
+    inputs:
+      type: object
+      properties:
+        kind: { type: string, enum: [Feature, Restructure], description: "Does the topic add to the system, or reshape it?" }
     intro: |
-      A topic is one module, effect, driver or capability. The plan is the contract for the branch, and it becomes the pull request description. A draft may wait in `docs/work/future/` until its topic is picked.
+      A topic is one module, effect, driver or capability. The plan is the contract for the branch. A draft may wait in `docs/work/future/` until its topic is picked.
+
+      The plan becomes the pull request description and is deleted in the same pull request, the product owner's call: the code being written is not the plan being realized, since verification, including the judgment steps, is part of it.
     steps:
       - id: pick
         say: Name one module, effect, driver or capability.
@@ -23,9 +29,10 @@ processes:
       - id: end-states
         say: Name two to four end states.
         actor: agent
+        given: [{ input: kind, equals: Restructure }]
         when: { manual: "For each, write what it gains and what it loses." }
         detail: |
-          Only a restructure needs this step, which changes the shape of the system. The plan builds the one end state the product owner picks.
+          The plan builds the one end state the product owner picks.
       - id: plan
         say: Write the plan.
         actor: agent
@@ -35,11 +42,6 @@ processes:
         when: { manual: "Read it first: code starts after the approval." }
         detail: |
           Each cycle subtracts as well as adds.
-      - id: pr
-        say: Use the plan as the pull request description.
-        when: { manual: "The plan file is deleted in the same pull request." }
-        detail: |
-          Deleting the plan is the product owner's call. The code being written is not the plan being realized: verification, including the judgment steps, is part of it.
   - id: branch
     title: Branch and work on it
     actor: product-owner
@@ -52,18 +54,13 @@ processes:
         say: Create the branch for the topic.
         when: { run: { command: "git switch -c <branch-name>" } }
         detail: |
-          The product owner creates every branch, and whoever initiates a branch submits its pull request. The agent works on the branch it is given and asks when a change does not belong there.
+          The product owner creates every branch, and whoever initiates a branch submits its pull request. The agent works on the branch it is given and asks when a change does not belong there. The one exception: a small fix, already verified, goes straight to main.
       - id: work
         say: Prove the change on the desktop.
         actor: contributor
         when: { process: desktop-build-test }
         detail: |
           Keep each commit under about 100 changed files: CodeRabbit reviews the files a pushed commit changes, and past that the commit silently loses a review layer. A mechanical sweep, such as em-dashes or a metrics refresh, is a commit of its own, apart from behavioral fixes, so both stay reviewable.
-      - id: hotfix
-        say: Commit a small verified hotfix straight to main.
-        when: { manual: "Only a small fix, already verified." }
-        detail: |
-          The one exception to branching for feature work.
   - id: build-setup
     title: Set up a computer to build MoonLight
     actor: contributor
@@ -87,11 +84,11 @@ processes:
       - id: windows
         say: Install CMake and the Visual Studio Build Tools.
         given: [{ input: platform, equals: Windows }]
-        when: { run: { command: "winget install Kitware.CMake; winget install Microsoft.VisualStudio.2022.BuildTools --override \"--passive --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended\"" } }
+        when: { run: { command: "winget install Kitware.CMake; winget install astral-sh.uv; winget install Microsoft.VisualStudio.2022.BuildTools --override \"--passive --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended\"" } }
         detail: |
           Visual Studio 2022 with the MSVC v143 workload and the Windows 11 SDK, from an elevated terminal.
 
-          Build and test from a **Developer PowerShell for VS 2022**, so `cl.exe` and the SDK are on `PATH`. Install uv from astral's installer as well.
+          Build and test from a **Developer PowerShell for VS 2022**, so `cl.exe` and the SDK are on `PATH`.
       - id: moondeck
         say: Start MoonDeck.
         when: { run: { command: "uv run moondeck/moondeck.py" } }
@@ -106,7 +103,7 @@ processes:
     steps:
       - id: clangd
         say: Install the clangd extension.
-        when: { manual: "llvm-vs-code-extensions.vscode-clangd" }
+        when: { run: { command: "code --install-extension llvm-vs-code-extensions.vscode-clangd" } }
         detail: |
           Nothing else to configure: `.clangd` points at the compilation database, and any build refreshes it, since `CMakeLists.txt` sets `CMAKE_EXPORT_COMPILE_COMMANDS`. clangd skips the checks it counts as slow, so CI stays the authority.
       - id: intellisense
@@ -124,22 +121,28 @@ processes:
     actor: contributor
     goal: Every ESP32 target builds on the new IDF, locally and in CI.
     systems: [MoonDeck]
+    dependsOn: [esp32-build-flash]
     intro: |
       A pin move is a deliberate re-test pass, never a routine pull. What the pin is and why: [ESP-IDF version](reference/build-system.md#esp-idf-version).
     steps:
       - id: pins
-        say: Move the pin in both places.
-        when: { manual: "build_esp32.py's PINNED_IDF_COMMIT and PINNED_IDF_VERSION; release.yml's esp_idf_version." }
+        say: Move the pin in its three places.
+        when: { manual: "build_esp32.py's PINNED_IDF_COMMIT and PINNED_IDF_VERSION; release.yml's esp_idf_version and its cache key; build-system.md's ESP-IDF version." }
         detail: |
-          In `moondeck/build/build_esp32.py`, and in `.github/workflows/release.yml` the Docker tag `esp_idf_version` with its cache key.
+          In `moondeck/build/build_esp32.py`; in `.github/workflows/release.yml` the Docker tag `esp_idf_version` and the `esp-idf-v<version>` cache key; and the tag and commit [the build system](reference/build-system.md#esp-idf-version) names.
+      - id: fetch
+        say: Fetch the new tag into the IDF checkout.
+        when: { run: { command: "git -C ~/esp/esp-idf fetch origin tag <PINNED_IDF_VERSION>" } }
       - id: checkout
         say: Move the IDF checkout onto the new pin.
         when: { run: { script: moondeck/build/setup_esp_idf.py } }
         detail: |
-          Fetch the new tag in the IDF checkout first. Setup checks out the pinned commit and its submodules, recursively: a different IDF commit without its submodules builds against the old ones.
+          Setup checks out the pinned commit and its submodules, recursively: a different IDF commit without its submodules builds against the old ones.
       - id: build-all
         say: Build every ESP32 firmware, one at a time.
         when: { manual: "build_esp32.py --firmware <name>, once per variant." }
+        detail: |
+          One at a time: the variants share their managed components.
       - id: retest
         say: Re-test each chip family on a board.
         when: { process: live-verification }

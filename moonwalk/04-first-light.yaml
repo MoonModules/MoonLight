@@ -20,7 +20,7 @@ processes:
 
           ![The System module](assets/gettingstarted/02-05-UI-System.png)
 
-          A device with a microphone also shows its **Audio** service, which is how audio-reactive effects hear the music.
+          A device with a microphone lists an **Audio** service under Services, which is how audio-reactive effects hear the music.
       - id: firmware
         say: Open Firmware.
         when: { open: { module: FirmwareUpdateModule } }

@@ -1,8 +1,8 @@
 # Driving LED panels with a receiving card
 
-You bought a panel receiving card, most likely a **ColorLight** one, the family MoonLight supports. The steps are in [Drive LED panels through a receiving card](../moonwalk.md#panel-cards), with [Set the panels up in LEDVision](../moonwalk.md#panel-card-ledvision) and [Clear the v13 flicker](../moonwalk.md#panel-card-downgrade) beside it. Below is what those steps lean on: why the link matters, which board, what the settings mean, and what to check when the wall stays dark.
+You bought a panel receiving card, most likely a **ColorLight** one, the family MoonLight supports. The steps are in [Drive LED panels through a receiving card](../../moonwalk.md#panel-cards), with [Set the panels up in LEDVision](../../moonwalk.md#panel-card-ledvision) and [Clear the v13 flicker](../../moonwalk.md#panel-card-downgrade) beside it. Below is what those steps lean on: why the link matters, which board, what the settings mean, and what to check when the wall stays dark.
 
-> New here? Start with **[Install MoonLight](../moonwalk.md#install)**, then **[How MoonLight works](../tutorials/how-moonlight-works.md)**.
+> New here? Start with **[Install MoonLight](../../moonwalk.md#install)**, then **[How MoonLight works](../../tutorials/how-moonlight-works.md)**.
 
 ---
 
@@ -64,7 +64,7 @@ The panel-card firmware is already on for these boards. A classic-ESP32 build do
 
 The driver has **no geometry controls**. The wall's shape lives in the Layout, once, so that everything else (effects, modifiers, the preview) sees the same picture.
 
-**A plain Grid is usually all you need.** Two 128x64 panels stacked is a 128x128 grid, and that is the whole configuration. The reason it is that simple is worth knowing: the driver reads only the wall's width and height and sends the image row by row. Which physical panel a row lands on, and in what order the HUB75 ribbons chain, was already settled on the card in [LEDVision](../moonwalk.md#panel-card-ledvision). The card owns panel arrangement; MoonLight owns the picture.
+**A plain Grid is usually all you need.** Two 128x64 panels stacked is a 128x128 grid, and that is the whole configuration. The reason it is that simple is worth knowing: the driver reads only the wall's width and height and sends the image row by row. Which physical panel a row lands on, and in what order the HUB75 ribbons chain, was already settled on the card in [LEDVision](../../moonwalk.md#panel-card-ledvision). The card owns panel arrangement; MoonLight owns the picture.
 
 That is also why this needs none of the physical detail you may have filled in elsewhere. An output page that asks for scan rate, address lines and chain order is describing panels driven *directly*, where the software has to generate the HUB75 timing itself. Through a receiving card, none of that is the sender's business: the card generates the timing, and the sender hands it an image. That holds for any sender, [FPP](https://github.com/FalconChristmas/fpp) included, which reaches these cards over Ethernet exactly as MoonLight does.
 
@@ -144,7 +144,7 @@ The second row is worth taking seriously, because MoonLight sends a full frame e
 
 ### Which firmware to move to
 
-**Use [LEDUpgrade](https://en.colorlightinside.com/product/download/383) 4.0 and firmware 11.09.** 11.09 ships inside LEDUpgrade 4.0, so there is no firmware file to find. Version 5.0 ships no pre-v12 firmware, so it cannot do this downgrade. Anything before v12 clears the flicker, but 11.08 was reported strobing white, which 11.09 fixes. 11.09 is the newest build on the safe side of the defect. The steps: [Clear the v13 flicker](../moonwalk.md#panel-card-downgrade).
+**Use [LEDUpgrade](https://en.colorlightinside.com/product/download/383) 4.0 and firmware 11.09.** 11.09 ships inside LEDUpgrade 4.0, so there is no firmware file to find. Version 5.0 ships no pre-v12 firmware, so it cannot do this downgrade. Anything before v12 clears the flicker, but 11.08 was reported strobing white, which 11.09 fixes. 11.09 is the newest build on the safe side of the defect. The steps: [Clear the v13 flicker](../../moonwalk.md#panel-card-downgrade).
 
 > **On Windows, if LEDUpgrade cannot find the card.** A built-in Ethernet port can be held by something else in the stack, and Hyper-V's virtual switch is the usual culprit: it binds the adapter, so a tool that needs raw layer-2 access reaches nothing. A **USB gigabit Ethernet dongle** is the reliable way through. MoonLight's own sending works from a built-in port.
 
@@ -172,7 +172,7 @@ The mismatch is not subtle in one direction: leave a downgraded card on `v13 and
 | Image tears or rolls | Link speed ([§2](#the-one-hardware-fact-that-decides-everything)). Check the status line says 1000 Mbit. |
 | A new frame only every few seconds | `firmware` ([§7](#7-card-firmware-and-the-flicker)) is set to `v13 and newer` on a card running v12 or older. The duplicate sync latches twice and aborts the refresh. |
 | Flicker in time with network activity | The card's own v13 firmware defect ([§7](#7-card-firmware-and-the-flicker)), not the sender. Downgrade the card. |
-| Every other row or column mirrored | With a receiving card, this is the card's own panel configuration: revisit it in LEDVision ([LEDVision](../moonwalk.md#panel-card-ledvision)). The layout's `snake` / `snakeP` apply only to walls wired as a pixel strip. |
+| Every other row or column mirrored | With a receiving card, this is the card's own panel configuration: revisit it in LEDVision ([LEDVision](../../moonwalk.md#panel-card-ledvision)). The layout's `snake` / `snakeP` apply only to walls wired as a pixel strip. |
 | Panels in the wrong places | Same: the chain order is set on the card. |
 | Right image, wrong colors | `fixture` on the driver, which is where channel order and RGBW synthesis live for every driver. There is no separate color-order control here. |
 | Works on ESP32, not on desktop | Permission ([§6](#6-from-a-desktop)). The driver shows a warning that says so. |
@@ -184,6 +184,6 @@ The mismatch is not subtle in one direction: leave a downgraded card on `v13 and
 ## Where to go next
 
 - **[Setting up a Colorlight Card with FPP v6.3 and LED Vision 8.5](https://www.youtube.com/watch?v=L4lHbwUszAs)**: a video walkthrough of the card and panel side. A different sender, the same cards and the same LEDVision work.
-- **[Drivers](../moonmodules/light/drivers.md#panelcard)**: the Panel Card control reference.
-- **[Layouts](../moonmodules/light/layouts.md#panels)**: the Panels layout in full.
-- **[Effects](../moonmodules/light/effects.md)** and **[live scripting](../moonmodules/light/moonlive.md)**: a wall is a big canvas, and scripted effects are the fastest way to fill it.
+- **[Drivers](../../moonmodules/light/drivers.md#panelcard)**: the Panel Card control reference.
+- **[Layouts](../../moonmodules/light/layouts.md#panels)**: the Panels layout in full.
+- **[Effects](../../moonmodules/light/effects.md)** and **[live scripting](../../moonmodules/light/moonlive.md)**: a wall is a big canvas, and scripted effects are the fastest way to fill it.

@@ -1,6 +1,8 @@
 # Coding standards
 
-How code in this repo is written. Hard rules and process live in [CLAUDE.md](../CLAUDE.md).
+How code in this repo is written. Hard rules live in [CLAUDE.md](../CLAUDE.md), and every process in [MoonWalk](../moonwalk.md).
+
+A rule here is applied and reviewed at the [MoonWalk](../moonwalk.md) step that links it, as [one home per rule](documentation-standards.md) describes.
 
 How to build and run lives in [MoonWalk's contributor processes](../moonwalk.md#desktop-build-test), and what is tested in [testing.md](../reference/testing.md). Design rationale lives in [the architecture](../explanation/architecture/index.md).
 
@@ -17,13 +19,13 @@ Decided once, not re-derived per file.
 - **`std::span`** over pointer + length pair in function signatures. The span carries the bound; the caller can't desync.
 - **Namespace `mm`** for everything in the project. Platform code lives in `mm::platform`. Tests live in `mm` (no `mm::test`, keeps the same names visible to test code as to library code).
 - **No `using namespace` in headers.** In a `.cpp`, `using namespace mm;` is allowed at file scope. In a header it pollutes every translation unit that includes it.
-- **Include what you use, and compare strings with `strcmp`.** Clang resolves standard headers transitively and merges identical literals; GCC in CI does neither, and macOS's libc++ hides a missing `<cstdint>` that Linux's libstdc++ shows.
+- **Include what you use, and compare C strings with `strcmp`.** A file includes every header it names, and a `const char*` compares by content with `strcmp`, while a `std::string` or `std::string_view` compares with `==`. Clang resolves standard headers transitively and merges identical literals, and macOS's libc++ includes `<cstdint>` for you; GCC in CI and Linux's libstdc++ show both faults.
 
 ### Naming
 
 - **Semantic variable names.** Name variables for what they represent, beyond their type. `availableHeap` not `available`, `internalHeap` not `internal`, `lutBytes` not `bytes`. A reader should understand the variable without looking at its assignment.
 - **Prefer naming over commenting.** A comment explaining WHAT a line does is usually a naming failure: extract a function, name a constant, add an explaining variable, or rename the thing. A comment explaining WHY stays, because no name carries a constraint ("the DMA cannot read PSRAM at shift clock"). Prior art: *Clean Code* ch. 4 for the naming half, Ousterhout's *A Philosophy of Software Design* for why the why-comment is load-bearing.
-- **Prose, comments and docs follow [documentation-standards.md](documentation-standards.md).** Spelling, em-dashes, markdown wrapping, what a comment is for, and the MoonLive script comment budget live there, together with the page model they serve. `///` comments are the boundary case: the syntax rules below are ours, everything they SAY follows that page, because they generate it.
+- **Prose, comments and docs follow [documentation-standards.md](documentation-standards.md).** Spelling, em-dashes, markdown wrapping, what a comment is for, and the MoonLive script comment budget live there, together with the page model they serve. `///` comments follow that page too, their syntax and what they say, because they generate it.
 
 ### Casts
 
@@ -36,7 +38,8 @@ Use project typedefs (`lengthType`, `nrOfLightsType`) consistently so types matc
 ## Growing the codebase
 
 - **Consider extending before creating.** When adding a feature, check whether an existing module extends cleanly; a new file is fine if genuinely cleaner, but justify it.
-- **Reference, don't copy.** Prior art (friend repos, datasheets, our own prototype branches) holds proven approaches: study it, take the ideas, write our own code, never copy or trace the structure. Credits live in the [friend-repo digests](../friend-repos/index.md) and in each module's `@attribution`, listed in [the attribution catalog](../reference/attributions.md). A friend repo's contract is read from its default branch after a fetch (`git show origin/main:<path>`), the one its users will have next.
+- **A module that does not run costs flash, nothing else.** No global or static state, no function-local static (its guard is RAM too), and nothing allocated, spawned or installed at boot or at registration. Memory, tasks and peripherals are taken in `prepare()`, or when the feature is selected, and given back in `release()`. A tick returns at its first check while the feature is off. A `static constexpr` table lives in flash and is fine.
+- **Reference, don't copy.** Prior art (friend repos, datasheets, our own prototype branches) holds proven approaches: study it, take the ideas, write our own code, never copy or trace the structure. Credits live in the [friend-repo digests](../friend-repos/index.md) and in each module's `@attribution`, listed in [the attribution catalog](../reference/attributions.md). A friend repo's contract is read from its default branch after a fetch (`git remote set-head origin --auto`, then `git show origin/HEAD:<path>`), the one its users will have next.
 
 ## Values and types
 
@@ -209,7 +212,7 @@ Cut first: a branch that chooses between equals is data, a guard is an early ret
 
 ### When checks run
 
-Which checks run at which lifecycle event is defined once, in the [Commit](../CLAUDE.md#commit), [Merge](../CLAUDE.md#merge) and [Release](../CLAUDE.md#release) tables. One command per check, each with an objective path trigger, so a change runs only the checks it makes applicable. CI runs the same checks on every PR ([.github/workflows/](../.github/workflows/)).
+Which checks run at which lifecycle event is defined once, in the [commit](../moonwalk.md#commit), [pre-merge](../moonwalk.md#pre-merge) and [release](../moonwalk.md#release) processes. One command per check, each with an objective path trigger, so a change runs only the checks it makes applicable. CI runs the same checks on every PR ([.github/workflows/](../.github/workflows/)).
 
 ### Tests
 
@@ -230,7 +233,5 @@ Hard-won discipline for diagnosing hardware and infrastructure failures, distill
 - **A cross-boundary fact duplicated in code drifts silently; gate it.** A `docPath` in `main.cpp` pointing at a docs page, a firmware projection mirroring a build dict. The moment a check can resolve it against ground truth, that check is cheaper than the drift.
 - **Ask what would make a measurement read zero while the thing happens**: a symmetry, the background, a cached build. Then run it against code known to have the defect.
 - **Never pipe a build.** A pipe reports the last command's exit status, so a failed build reads as 0: redirect the output to a file and read `$?`.
-- **A destructive edit acts on fresh state.** Re-query right before a delete or an overwrite, since a listing from earlier is stale once the product owner acts in parallel. A scripted edit ends at its block's own end, asserts it matched once, and is read back with `git diff --stat`.
-
-Moved to [documentation-standards.md § Module pages](documentation-standards.md#module-pages): the two reader surfaces, the `///` rules, and how `docs/moonmodules/` mirrors `src/`. It is a documentation rule rather than a coding one, and it sits beside the prose rules it depends on.
+- **A destructive edit acts on fresh state.** Re-query right before a delete or an overwrite, since a listing from earlier is stale once the product owner acts in parallel. A scripted edit ends at its block's own end, asserts it matched once, and is read back as the full diff of the path it edited (`git diff -- <path>`).
 

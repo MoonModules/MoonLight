@@ -155,9 +155,13 @@ def status(model: dict, runs: dict, durations: dict | None = None, root: Path = 
     touched = changed_between(_git("rev-parse", f"{since_base}^{{tree}}", root=root), now, root)
     since = {}   # the paths changed since each recorded run's tree, computed once per tree
 
-    def one(pid: str, s: dict, run: dict) -> dict:
-        globs = [x for g in s.get("given", []) if isinstance(g, dict) for x in g.get("changed", [])]
-        covers = (lambda paths: any(matches(q, globs) for q in paths)) if globs else bool
+    def globs_of(s: dict) -> list:
+        return [x for g in s.get("given", []) if isinstance(g, dict) for x in g.get("changed", [])]
+
+    def one(pid: str, s: dict, run: dict, guards: tuple) -> dict:
+        # The step's own paths and every calling step's, all of which a change must touch, as a guarded call runs only when its guard holds.
+        sets = [g for g in (*guards, globs_of(s)) if g]
+        covers = (lambda paths: all(any(matches(q, g) for q in paths) for g in sets)) if sets else bool
         key = run_key(run["script"], run.get("args", ""))
         last = runs.get(key)
         fresh = False
@@ -172,7 +176,7 @@ def status(model: dict, runs: dict, durations: dict | None = None, root: Path = 
         return {"id": s["id"], "process": pid, "script": run["script"], "args": run.get("args", ""), "triggered": every or covers(touched),
                 "fresh": fresh, "seconds": seconds, "slow": seconds is not None and seconds > SLOW_SECONDS}
 
-    def steps_of(pid: str, seen: set) -> list:
+    def steps_of(pid: str, seen: set, guards: tuple = ()) -> list:
         if pid in seen or pid not in model["processes"]:
             return []
         seen.add(pid)
@@ -180,9 +184,9 @@ def status(model: dict, runs: dict, durations: dict | None = None, root: Path = 
         for s in model["processes"][pid].get("steps", []):
             when = s.get("when") or {}
             if runnable(when.get("run")):
-                out.append(one(pid, s, when["run"]))
+                out.append(one(pid, s, when["run"], guards))
             elif isinstance(when.get("process"), str):
-                out += steps_of(when["process"], seen)
+                out += steps_of(when["process"], seen, (*guards, globs_of(s)))
         return out
 
     out = {}

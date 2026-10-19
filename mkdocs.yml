@@ -99,6 +99,25 @@ plugins:
         how-to/building.md: moonwalk.md#desktop-build-test
         gettingstarted.md: moonwalk.md#install
         how-to/updating-firmware.md: moonwalk.md#update-firmware
+        # The how-to folder became MoonWalk's processes; each page's facts moved to reference/, and its old address keeps working.
+        how-to/installing-on-linux.md: reference/installing-on-linux.md
+        how-to/adding-a-stream-source.md: reference/adding-a-stream-source.md
+        how-to/audio-input.md: reference/audio-input.md
+        how-to/watching-the-output.md: reference/watching-the-output.md
+        how-to/control-surface.md: reference/control-surface.md
+        how-to/home-automation.md: reference/home-automation.md
+        how-to/presets.md: reference/presets.md
+        how-to/migrating-over-the-air.md: reference/migrating-over-the-air.md
+        how-to/backup-and-restore.md: reference/backup-and-restore.md
+        how-to/troubleshooting.md: reference/troubleshooting.md
+        how-to/faq.md: reference/faq.md
+        how-to/logging-an-issue.md: reference/logging-an-issue.md
+        how-to/panel-cards.md: reference/hardware/panel-cards.md
+        how-to/led-drivers.md: reference/hardware/led-drivers.md
+        how-to/hub75-panels.md: reference/hardware/hub75-panels.md
+        how-to/hold-to-play.md: reference/examples/hold-to-play.md
+        how-to/multi-board-installation.md: reference/examples/multi-board-installation.md
+        how-to/led-signal-integrity.md: explanation/led-signal-integrity.md
 
 # The site's styles: colored headings, the card deck, the clips.
 extra_css:
@@ -160,41 +179,16 @@ nav:
       - MoonCloud: explanation/mooncloud.md
       # Answers to what people hit on a first run, each from someone's bench. Under Getting
       # started rather than How-to, because the reader asking is on their first hour.
-      - FAQ: how-to/faq.md
-      - Log an issue: how-to/logging-an-issue.md
-  # The FOLDER under docs/ is the Diataxis type: tutorials/, how-to/, explanation/,
-  # reference/. The nav labels stay reader-facing, so the path tells a writer where a page
-  # belongs while a reader never meets the word "explanation". The rules (contributing/)
-  # and legal/ sit outside the grid on purpose — see contributing/documentation-standards.md.
+      - FAQ: reference/faq.md
+      - Log an issue: reference/logging-an-issue.md
+  # The FOLDER under docs/ is the Diataxis type: tutorials/, explanation/ and reference/, with the how-tos as MoonWalk's processes. The nav labels stay reader-facing, so the path tells a writer where a page belongs while a reader never meets the word "explanation". The rules (contributing/) and legal/ sit outside the grid on purpose: contributing/documentation-standards.md.
   # ONE learning path, in the order a reader walks it: what it is, then building a show,
-  # then making it beautiful, then writing your own. The install pages left for how-to/:
-  # putting MoonLight on a machine is a task somebody already has, not a lesson.
+  # then making it beautiful, then writing your own. Installing is a MoonWalk process: a task somebody already has, not a lesson.
   - Tutorials:
       - How MoonLight works: tutorials/how-moonlight-works.md
       - Write your first script: tutorials/first-script.md
       - Making beautiful effects: tutorials/generative-effects.md
       - Build your own MoonModules: tutorials/build-your-own-moonmodules.md
-  # Diataxis keeps how-to guides apart from tutorials: a tutorial is a lesson for someone
-  # learning, a how-to solves a task the reader already has.
-  # Grouped by what the reader is trying to DO: get it running, wire the output, connect it
-  # to something, keep it working.
-  - How-to guides:
-      - Running on a Linux machine: how-to/installing-on-linux.md
-      - Adding a picture or channel-data source: how-to/adding-a-stream-source.md
-      - Driving LED panels with a receiving card: how-to/panel-cards.md
-      - Wiring a microphone or capturing audio: how-to/audio-input.md
-      - Choosing and wiring an LED driver: how-to/led-drivers.md
-      - Driving a HUB75 panel: how-to/hub75-panels.md
-      - Watching the output as video: how-to/watching-the-output.md
-      - LED signal integrity: how-to/led-signal-integrity.md
-      - Connecting a control surface: how-to/control-surface.md
-      - Playing an effect while a button is held: how-to/hold-to-play.md
-      - The StadBeest, a multi-device installation: how-to/multi-board-installation.md
-      - Home automation: how-to/home-automation.md
-      - Presets: how-to/presets.md
-      - Migrating over the air: how-to/migrating-over-the-air.md
-      - Back up and restore: how-to/backup-and-restore.md
-      - Troubleshooting: how-to/troubleshooting.md
   - Lights:
       - Overview: moonmodules/light/index.md
       - Effects: moonmodules/light/effects.md
@@ -228,13 +222,30 @@ nav:
       - MoonDeck: explanation/architecture/moondeck.md
       - Why we write our own code: explanation/why-we-write-our-own.md
       - Security: explanation/security.md
+      - LED signal integrity: explanation/led-signal-integrity.md
   - Reference:
       # First in Reference because it answers the question a user arrives with:
       # how do I drive this from my own code rather than from the page.
       - Integrating: reference/integrating.md
+      - REST API: reference/api.md
+      # What the steps of MoonWalk's processes rest on, grouped by what the reader is doing: running it, connecting it, keeping it working.
+      - Using it:
+          - Troubleshooting: reference/troubleshooting.md
+          - Running on a Linux machine: reference/installing-on-linux.md
+          - Presets: reference/presets.md
+          - Back up and restore: reference/backup-and-restore.md
+          - Migrating over the air: reference/migrating-over-the-air.md
+          - Control surfaces: reference/control-surface.md
+          - Home automation: reference/home-automation.md
+          - Audio input: reference/audio-input.md
+          - Watching the output as video: reference/watching-the-output.md
+          - Picture and channel-data sources: reference/adding-a-stream-source.md
+      - Examples:
+          - Playing an effect while a button is held: reference/examples/hold-to-play.md
+          - The StadBeest, a multi-device installation: reference/examples/multi-board-installation.md
       - Testing strategy: reference/testing.md
       - Performance: reference/performance.md
-      # The CMake layout, moved out of the how-to: a tree to look up, not a step to follow.
+      # The CMake layout: a tree to look up, not a step to follow.
       - Build system: reference/build-system.md
       - Migrating (breaking changes): reference/MIGRATING.md
       - Attributions: reference/attributions.md
@@ -257,6 +268,9 @@ nav:
           - Small boards (RP2350, RP2040, Nordic): reference/hardware/small-boards.md
           - Light fixtures and DMX nodes: reference/hardware/light-fixtures.md
           - Control surfaces: reference/hardware/control-surfaces.md
+          - LED drivers: reference/hardware/led-drivers.md
+          - HUB75 panels: reference/hardware/hub75-panels.md
+          - Receiving cards for LED panels: reference/hardware/panel-cards.md
   # The rules bind a contributor rather than serving a reader need, so they sit outside
   # the Diataxis grid (contributing/documentation-standards.md § The hierarchy).
   - Contributing:

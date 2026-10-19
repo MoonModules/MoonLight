@@ -20,7 +20,7 @@ namespace mm {
 ///
 /// ## Which route
 ///
-/// Home Assistant finds the device over the WLED integration with no broker. Use MQTT for Homebridge, a broker-only network or another hub. [The how-to](https://moonmodules.org/MoonLight/how-to/home-automation.html#the-mqtt-topics) lists the topics.
+/// Home Assistant finds the device over the WLED integration with no broker. Use MQTT for Homebridge, a broker-only network or another hub. [Home automation](https://moonmodules.org/MoonLight/reference/home-automation.html#the-mqtt-topics) lists the topics.
 ///
 /// ## Getting it connected
 ///

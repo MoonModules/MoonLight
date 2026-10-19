@@ -1,6 +1,6 @@
 # Control surfaces: hardware reference
 
-The physical desks on the bench, and Mackie Control as it travels on the wire. A desk here drives [ControlModule](../../moonmodules/core/system.md#control)'s encoders, faders and switches, which were laid out to match this class of hardware. How to connect one: [Connecting a control surface](../../how-to/control-surface.md).
+The physical desks on the bench, and Mackie Control as it travels on the wire. A desk here drives [ControlModule](../../moonmodules/core/system.md#control)'s encoders, faders and switches, which were laid out to match this class of hardware. How to connect one: [Connecting a control surface](../control-surface.md).
 
 **None of these desks speaks OSC.** The X-Touch and the QCon are **Mackie Control** surfaces over MIDI, which MoonLight reads through its [MIDI service](../../moonmodules/core/services.md#midi).
 The APC40 mkII has a MIDI layout of its own.
@@ -44,7 +44,7 @@ A desk that waits to be invited goes in `host`; for a desk that invites the devi
 | Not supported | OSC, Ethernet |
 
 **No network port at all.** It reaches MoonLight through a computer's USB port and the browser, or straight through a board's own USB port with the MIDI service's `source` set to USB.
-A device with the MIDI service's [`share`](../../how-to/control-surface.md#sharing-a-desk-with-another-board) on puts it on the network.
+A device with the MIDI service's [`share`](../control-surface.md#sharing-a-desk-with-another-board) on puts it on the network.
 It brings its own power adapter, so a board's port needs to supply no 5 V for it.
 
 ## What Mackie Control looks like on the wire

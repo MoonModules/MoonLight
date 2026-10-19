@@ -17,9 +17,9 @@ processes:
           The header is the module's own documentation and feeds its catalog card. Write `///` comments as [Comments](contributing/documentation-standards.md#comments) says: one line above the code it explains.
       - id: page
         say: Write intent, cost and sequence on a page.
-        when: { manual: "Put it in the Diataxis folder that matches the reader: how-to, explanation or reference." }
+        when: { manual: "A task goes in a MoonWalk process under moonwalk/; a why under docs/explanation/, a fact under docs/reference/." }
         detail: |
-          A fact about intent, cost or sequence has no member to sit on. The folder under `docs/` is the page's kind, and a page serves one kind only.
+          A fact about intent, cost or sequence has no member to sit on. The folder is the type, and a page serves one kind only: [What we document](contributing/documentation-standards.md#what-we-document).
       - id: migrating
         say: Add a MIGRATING entry for a breaking change.
         when: { read: { page: reference/MIGRATING.md } }
@@ -27,7 +27,7 @@ processes:
           A break is documented rather than carried. The entry buys one way to do each thing.
       - id: delete
         say: Delete the shipped backlog item or spec draft.
-        when: { manual: "Look in docs/work/future for the item before you delete it." }
+        when: { manual: "The backlog item is under docs/work/future, the plan under docs/work/present; both leave in the pull request that ships them." }
     outro: |
       The docs build and the documentation checks run with [the commit checks](moonwalk.md#commit). The merge gate verifies the docs landed with the code.
   - id: commit
@@ -38,9 +38,9 @@ processes:
     dependsOn: [desktop-build-test, document]
     page: contributing/principles-and-process.md
     intro: |
-      The product owner initiates every event and every gate list. On "run pre-commit", run each check whose trigger the change matches, once, and report one line each, PASS, FAIL or SKIP with the reason, and stop. An applicable check skipped carries a one-line reason in the commit or pull request. A failure is reported, not fixed and rerun: a second run needs the words again.
+      The product owner initiates every event and every gate list. On "run pre-commit", run each check the change triggers, once. Report one line each, PASS, FAIL or SKIP with the reason, and stop. An applicable check skipped carries a one-line reason in the commit or pull request. A failure is reported, not fixed and rerun: a second run needs the words again.
 
-      The scope freezes at the words: a request made during a run goes to the next commit. A change made after a run re-checks only itself, on the product owner's go; "restart" reruns everything, and a cosmetic change rides on the run it followed. On a diff of about ten files across areas, or on request, run the Reviewer on the staged diff first and wait for its findings, so the checks run once, on the diff that commits. `test_host --ui` is never a gate.
+      The scope freezes at the words: a request made during a run goes to the next commit. The product owner can bring one in, such as an edit to a file already in the diff that triggers no new check. After a run, a change re-checks only itself on the product owner's go, a cosmetic one rides along, and "restart" reruns everything. On about ten files across areas, or on request, the Reviewer reads the staged diff first, so checks run once. `test_host --ui` is never a gate.
     steps:
       - id: specs
         section: Every change
@@ -68,9 +68,9 @@ processes:
         section: With a board attached
         say: Provision a board over Improv, end to end.
         given: [{ changed: ["src/**/*Improv*", "src/platform/*/platform_*_improv.cpp", mooninstaller/improv-frame.js, mooninstaller/install-orchestrator.js, "moondeck/build/improv_*.py"] }]
-        when: { manual: "improv_smoke_test.py --port <the board's port>, or its card with the port picked." }
+        when: { run: { script: moondeck/build/improv_smoke_test.py, args: "--port <port>" } }
         detail: |
-          Recommended rather than required, since it needs a board on USB; a skip names its reason.
+          Or its card with the port picked. Recommended rather than required, since it needs a board on USB; a skip names its reason.
       - id: stage
         section: Commit
         actor: product-owner
@@ -118,20 +118,10 @@ processes:
         say: Build the desktop firmware, with zero warnings.
         given: [{ changed: [src/**, test/**, "!test/js/**", "!test/python/**"] }]
         when: { run: { script: moondeck/build/build_desktop.py } }
-      - id: build-tests
-        say: Build the unit tests and the scenario runner.
+      - id: tests
+        say: Test the change on the desktop.
         given: [{ changed: [src/**, test/**, "!test/js/**", "!test/python/**"] }]
-        when: { run: { script: moondeck/build/build_desktop.py, args: "--tests" } }
-      - id: test-desktop
-        say: Run the unit tests.
-        given: [{ changed: [src/**, test/**, "!test/js/**", "!test/python/**"] }]
-        when: { run: { script: moondeck/test/test_desktop.py } }
-      - id: scenarios
-        say: Run the scenarios the change touches.
-        given: [{ changed: [src/**, test/**, "!test/js/**", "!test/python/**"] }]
-        when: { run: { script: moondeck/scenario/run_scenario.py } }
-        detail: |
-          Select what the change touched: [Run a scenario in-process](moonwalk.md#run-scenario).
+        when: { process: desktop-tests }
       - id: esp32-fresh
         say: Check the classic firmware is up to date.
         given: [{ changed: [src/**, "!src/platform/desktop/**", moonbase/**] }]

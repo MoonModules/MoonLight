@@ -34,7 +34,7 @@ namespace mm {
 ///
 /// ## Wiring and capture
 ///
-/// Microphone wiring, setting the levels and capturing what a machine plays are in [the how-to](https://moonmodules.org/MoonLight/how-to/audio-input.html).
+/// Microphone wiring, setting the levels and capturing what a machine plays are in [Audio input](https://moonmodules.org/MoonLight/reference/audio-input.html).
 ///
 /// @technical
 ///

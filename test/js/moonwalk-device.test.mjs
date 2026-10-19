@@ -144,10 +144,8 @@ test("the bar moves past every step the state shows done and stops at the first 
     assert.equal(advance(steps, 0, device(16)), 0);   // opening a card is the reader's Done, even with the width already set
 });
 
-test("a step's call reads as a reader types it: a script through uv with its arguments, or the command itself", () => {
-    assert.equal(commandOf({ when: { run: { script: "moondeck/build/build_desktop.py", args: "--tests" } } }), "uv run moondeck/build/build_desktop.py --tests");
-    assert.equal(commandOf({ when: { run: { script: "moondeck/check/check_specs.py" } } }), "uv run moondeck/check/check_specs.py");
-    assert.equal(commandOf({ when: { run: { command: "gh pr create --base main" } } }), "gh pr create --base main");
+test("a step's call copies as the line the map carries, and a step that runs nothing copies nothing", () => {
+    assert.equal(commandOf({ command: "uv run moondeck/check/check_specs.py", when: { run: { script: "moondeck/check/check_specs.py" } } }), "uv run moondeck/check/check_specs.py");
     assert.equal(commandOf({ when: { manual: "Stage." } }), null);
 });
 

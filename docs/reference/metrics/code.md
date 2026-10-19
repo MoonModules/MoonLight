@@ -192,7 +192,7 @@ The next function worth simplifying is at the top of each file's list.
 | `src/core/moonlive/moonlive_lower.h` | 3 | `moonlive::lowerWith`, complex function 85 |
 | `src/core/services/GamepadService.h` | 3 | `lines 120-142, also in src/core/services/InfraredService.h:114`, duplicated block 23 |
 | `src/core/system/AccessPointModule.h` | 3 | `platform::UdpSocket::recvFrom in tick20ms`, blocking call on the render path 1 |
-| `src/core/system/HttpServerModule.h` | 3 | `HttpServerModule in 19 files`, name spread 19 |
+| `src/core/system/HttpServerModule.h` | 3 | `HttpServerModule in 20 files`, name spread 20 |
 | `src/core/system/PinsModule.h` | 3 | `PinsModule::PinListSource::collect`, deeply nested 5 |
 | `src/core/util/HostList.h` | 3 | `parseHostList`, complex function 27 |
 | `src/core/util/math16.h` | 3 | `lines 371-376, also in src/core/util/math8.h:91`, duplicated block 6 |
@@ -278,7 +278,7 @@ The next function worth simplifying is at the top of each file's list.
 | `test/unit/light/unit_SineEffect.cpp` | 2 | `lines 22-30, also in test/unit/light/unit_DistortionWavesEffect.cpp:26`, duplicated block 9 |
 | `test/unit/light/unit_SingleColumnLayout.cpp` | 2 | `lines 12-25, also in test/unit/light/unit_GridLayout.cpp:8`, duplicated block 14 |
 | `moondeck/check/check_clang_query.py` | 1 | `check_clang_query.py`, large file 1050 |
-| `moondeck/check/check_docgen.py` | 1 | `check_docgen.py`, large file 1581 |
+| `moondeck/check/check_docgen.py` | 1 | `check_docgen.py`, large file 1584 |
 | `moondeck/check/check_footprint.py` | 1 | `lines 31-41, also in moondeck/check/check_nonblocking.py:30`, duplicated block 11 |
 | `moondeck/check/check_nonblocking.py` | 1 | `lines 30-40, also in moondeck/check/check_footprint.py:31`, duplicated block 11 |
 | `moondeck/ci/verify_version.py` | 1 | `lines 39-45, also in moondeck/scenario/run_scenario.py:33`, duplicated block 7 |

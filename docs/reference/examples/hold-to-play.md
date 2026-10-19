@@ -3,9 +3,9 @@
 A button that shows an effect for as long as it is held, and drops back to a standby effect when it is let go.
 A magician's quick-change tricks, a foot pedal on a stage, a "press for sparkle" button on a sculpture: each is the same setup, done with configuration only.
 
-The steps are the process [Play an effect while a button is held](../moonwalk.md#hold-to-play); below are the mechanism and the same setup as one state document for the API.
+The steps are the process [Play an effect while a button is held](../../moonwalk.md#hold-to-play); below are the mechanism and the same setup as one state document for the API.
 
-> New here? Start with **[Install MoonLight](../moonwalk.md#install)**. What follows assumes MoonLight is running and the buttons are wired to GPIOs.
+> New here? Start with **[Install MoonLight](../../moonwalk.md#install)**. What follows assumes MoonLight is running and the buttons are wired to GPIOs.
 
 ---
 
@@ -14,8 +14,8 @@ The steps are the process [Play an effect while a button is held](../moonwalk.md
 Three pieces, each already on every board:
 
 - **Layers stack.** A bottom layer, Standby, always shows. Above it, one layer per trick has its `opacity` at 0, so it shows nothing until its opacity rises.
-- **The [Control](../moonmodules/core/system.md#control) card's faders** each drive one control. Fader 1 drives `Trick1.opacity`, fader 2 `Trick2.opacity`, and so on.
-- **The [Button](../moonmodules/core/services.md#button) service** turns a GPIO into a surface control. A row of kind `set` writes its `value` while the button is held and 0 when it is released.
+- **The [Control](../../moonmodules/core/system.md#control) card's faders** each drive one control. Fader 1 drives `Trick1.opacity`, fader 2 `Trick2.opacity`, and so on.
+- **The [Button](../../moonmodules/core/services.md#button) service** turns a GPIO into a surface control. A row of kind `set` writes its `value` while the button is held and 0 when it is released.
 
 Held, button 1 puts 255 on fader 1, so Trick1 covers Standby. Released, fader 1 goes to 0 and Standby shows again. Every effect keeps running and stays adjustable on the fly, so nothing is timed the way a playlist is.
 
@@ -68,4 +68,4 @@ curl -X PATCH -H "Content-Type: application/json" -d @hold-to-play.json http://<
 ## Going further
 
 - **A softer change:** a `value` below 255 blends the trick over Standby instead of covering it.
-- **Logic of its own**, such as another standby after a certain trick, or a sequence on one press: a [MoonLive service](../moonmodules/core/services.md#moonliveservice) script drives the same controls.
+- **Logic of its own**, such as another standby after a certain trick, or a sequence on one press: a [MoonLive service](../../moonmodules/core/services.md#moonliveservice) script drives the same controls.

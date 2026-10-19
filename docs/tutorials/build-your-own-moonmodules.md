@@ -30,9 +30,9 @@ Effects    →  a stack of images being drawn
 Drivers   →  send the finished image to the physical LEDs
 ```
 
-An **effect** is the most creative and the easiest to write, so we start there. An effect's whole job is: **every frame, write colors into a buffer.** The buffer is just an array of bytes — 3 per LED (red, green, blue) — and the framework hands it to you already sized to the grid. You loop over the pixels and set colors. That's it.
+An **effect** is the most creative and the easiest to write, so we start there. An effect's whole job is: **every frame, write colors into a buffer.** The buffer is just an array of bytes, 3 per LED (red, green, blue), and the framework hands it to you already sized to the grid. You loop over the pixels and set colors. That's it.
 
-Everything else — allocating that buffer, figuring out where each pixel is, pushing the finished frame to real LEDs, stopping cleanly when the user turns your effect off — is done *for* you by the core.
+Everything else (allocating that buffer, figuring out where each pixel is, pushing the finished frame to real LEDs, stopping cleanly when the user turns your effect off) is done *for* you by the core.
 
 ## The mental model: core orchestrates, you fill in the blanks
 
@@ -43,29 +43,29 @@ Your module is a class with a handful of **hook functions**. You override the on
 | Hook | When the core calls it | What you put here |
 |---|---|---|
 | `defineControls()` | At startup, and whenever the control set changes | Declare your sliders/toggles (e.g. a `speed` control) |
-| `prepare()` | At boot, and whenever the grid size / config changes | *(only if you need memory)* size a `ScratchBuffer` to the grid — one line |
+| `prepare()` | At boot, and whenever the grid size / config changes | *(only if you need memory)* size a `ScratchBuffer` to the grid, one line |
 | `tick()` | **Every render tick** | Draw your colors. This is the heart of an effect. |
 | `release()` | When your module is removed or **switched off** | *(usually nothing)* the core frees your `ScratchBuffer`s for you; override only to release a non-buffer resource like a GPIO |
 
-**The core calls these — you only fill them in.** It decides when to build, when to run, and when to release. A single traffic-cop method — `applyState()` — visits every module in the tree and either **builds it** (calls `prepare()`) when it's enabled or **releases it** (calls `release()`) when it's disabled, then runs `tick()` on the enabled ones each render tick.
+**The core calls these, you only fill them in.** It decides when to build, when to run, and when to release. A single traffic-cop method, `applyState()`, visits every module in the tree and either **builds it** (calls `prepare()`) when it's enabled or **releases it** (calls `release()`) when it's disabled, then runs `tick()` on the enabled ones each render tick.
 
-> **A word on speed.** `tick()` runs on the **render tick** — as fast as the hardware can go: a few hundred frames per second on an ESP32, thousands on a desktop. This is the **hot path**, the one place where speed and memory really matter. The rule of thumb: keep `tick()` to the pixel maths, and put anything expensive-but-occasional — allocating a buffer, opening a file, parsing a config — in `prepare()`, which runs only when something changes. A lean `tick()` flies on the smallest chip.
+> **A word on speed.** `tick()` runs on the **render tick**, as fast as the hardware can go: a few hundred frames per second on an ESP32, thousands on a desktop. This is the **hot path**, the one place where speed and memory really matter. The rule of thumb: keep `tick()` to the pixel math, and put anything expensive-but-occasional (allocating a buffer, opening a file, parsing a config) in `prepare()`, which runs only when something changes. A lean `tick()` flies on the smallest chip.
 
 Two consequences that make your life easy:
 
-- **Your code assumes it's always live.** When the user switches your effect off, the core stops calling `tick()` and calls `release()` for you — so your `tick()` runs only when it should, and just draws. The "am I on?" question is the core's job, so it stays out of your code.
-- **Switching a parent off switches the children off too.** Turn off the whole Layer and every effect inside it releases automatically — the core cascades it down the tree for you.
+- **Your code assumes it's always live.** When the user switches your effect off, the core stops calling `tick()` and calls `release()` for you, so your `tick()` runs only when it should, and just draws. The "am I on?" question is the core's job, so it stays out of your code.
+- **Switching a parent off switches the children off too.** Turn off the whole Layer and every effect inside it releases automatically: the core cascades it down the tree for you.
 
 > **Why it's built this way.** Keeping the "am I on?" decision in *one* core place makes each module short and honest: it does its job and trusts the core to call it at the right time. That's the difference between a codebase you can learn in an afternoon and one that grows a thousand special cases.
 
 ## Your first effect: a moving rainbow
 
-Here is a complete, real effect — a diagonal rainbow that scrolls over time. Read it once, then we'll walk through it.
+Here is a complete, real effect: a diagonal rainbow that scrolls over time. Read it once, then we'll walk through it.
 
 ```cpp
 #pragma once
 
-#include "light/effects/EffectBase.h"   // one include: the base + draw / palette / maths helpers
+#include "light/effects/EffectBase.h"   // one include: the base + draw / palette / math helpers
 
 namespace mm {
 
@@ -73,7 +73,7 @@ namespace mm {
 class RainbowEffect : public EffectBase {
 public:
     // A control the user can drag in the UI. Plain member variable.
-    uint8_t speed = 20;   // in BPM — one hue cycle every 3 seconds
+    uint8_t speed = 20;   // in BPM: one hue cycle every 3 seconds
 
     // Declare the control so it shows up in the UI. Runs at startup.
     void defineControls() override {
@@ -86,8 +86,8 @@ public:
         Coord3D   dims = {width(), height(), depth()};   // read the grid size every frame
         uint8_t   w    = width(), h = height();
 
-        // beat8(speed, elapsed()) is a 0..255 value that rotates once per beat —
-        // the friendly wrapper over the time maths. elapsed() is milliseconds since
+        // beat8(speed, elapsed()) is a 0..255 value that rotates once per beat,
+        // the friendly wrapper over the time math. elapsed() is milliseconds since
         // the show started, so animation runs at the same speed on every device.
         uint8_t phase = beat8(speed, elapsed());
 
@@ -105,46 +105,46 @@ public:
 } // namespace mm
 ```
 
-That's the *entire* effect — just `defineControls()` and `tick()`. A simple effect that reads the shared buffer needs only those two hooks. Let's unpack the important bits.
+That's the *entire* effect: just `defineControls()` and `tick()`. A simple effect that reads the shared buffer needs only those two hooks. Let's unpack the important bits.
 
 ### One include gets you everything
 
-`#include "light/effects/EffectBase.h"` is the base header you subclass, and it bundles everything an effect needs: the render-context accessors (`buffer()`, `width()`, …) and the common helpers (`draw::*`, the palette system, the `math8` animation helpers, `RGB`). Include that one file and start writing. The other kinds follow the same convention — `light/layouts/LayoutBase.h`, `light/modifiers/ModifierBase.h`, `light/drivers/DriverBase.h`. If you reach for a helper it doesn't bundle (audio input, say), add that one extra `#include`; nothing forces the set.
+`#include "light/effects/EffectBase.h"` is the base header you subclass, and it bundles everything an effect needs: the render-context accessors (`buffer()`, `width()`, …) and the common helpers (`draw::*`, the palette system, the `math8` animation helpers, `RGB`). Include that one file and start writing. The other kinds follow the same convention, `light/layouts/LayoutBase.h`, `light/modifiers/ModifierBase.h`, `light/drivers/DriverBase.h`. If you reach for a helper it doesn't bundle (audio input, say), add that one extra `#include`; nothing forces the set.
 
 ### Reading the grid every frame
 
-Notice we call `width()` and `height()` **inside** `tick()`, and loop exactly `0..w` and `0..h`. **Read the real size every frame** — the same effect runs on an 8×8 grid, a 300-pixel strip, or a 64×64×64 cube, and the user can resize the grid live. Iterate exactly the dimensions the framework reports, and your effect "just works" everywhere.
+Notice we call `width()` and `height()` **inside** `tick()`, and loop exactly `0..w` and `0..h`. **Read the real size every frame**: the same effect runs on an 8×8 grid, a 300-pixel strip, or a 64×64×64 cube, and the user can resize the grid live. Iterate exactly the dimensions the framework reports, and your effect "just works" everywhere.
 
 > **Rule of thumb:** read `width()`/`height()`/`depth()` each frame and iterate exactly those bounds. The buffer is sized to exactly `width × height × depth × channels`, so staying within the reported dimensions keeps every write in range.
 
 ### Animating off *time*, not frames
 
-We build the moving `phase` from `elapsed()` (milliseconds since the show started), so motion tracks real time. A desktop renders thousands of frames per second and an ESP32 a few hundred; driving `phase` from `elapsed()` keeps the speed identical on both. (Driving it from a frame counter instead would tie the speed to the frame rate — fast on the desktop, slow on the chip.) `beat8(speed, elapsed())` is the ready-made helper: it returns a 0–255 value that rotates once per beat and handles the time maths and overflow internally, so you write one line. There's a small family — `beatsin8` for a value that eases in and out like a wave, `sin8`/`cos8` for integer trig — all in `core/math8.h`.
+We build the moving `phase` from `elapsed()` (milliseconds since the show started), so motion tracks real time. A desktop renders thousands of frames per second and an ESP32 a few hundred; driving `phase` from `elapsed()` keeps the speed identical on both. (Driving it from a frame counter instead would tie the speed to the frame rate: fast on the desktop, slow on the chip.) `beat8(speed, elapsed())` is the ready-made helper: it returns a 0..255 value that rotates once per beat and handles the time math and overflow internally, so you write one line. There's a small family: `beatsin8` for a value that eases in and out like a wave, `sin8`/`cos8` for integer trig: all in `core/math8.h`.
 
 ### Writing pixels by coordinate
 
-`draw::pixel(buf, dims, {x, y, z}, color)` sets one pixel at a coordinate. It works out the byte offset into the buffer for you and safely ignores a coordinate that's off the grid — so you think in `(x, y, z)`, not array indices. There are matching helpers for common jobs: `draw::fill` (whole buffer one color), `draw::line`, `draw::fade` (dim the buffer for trails), `draw::blur`. Reach for these before hand-rolling buffer arithmetic; they're in `light/draw.h`.
+`draw::pixel(buf, dims, {x, y, z}, color)` sets one pixel at a coordinate. It works out the byte offset into the buffer for you and safely ignores a coordinate that's off the grid, so you think in `(x, y, z)`, not array indices. There are matching helpers for common jobs: `draw::fill` (whole buffer one color), `draw::line`, `draw::fade` (dim the buffer for trails), `draw::blur`. Reach for these before hand-rolling buffer arithmetic; they're in `light/draw.h`.
 
 ### Controls are just member variables
 
 `speed` is an ordinary `uint8_t`. In `defineControls()` you tell the UI about it with one line, and from then on the framework keeps `speed` in sync with the on-screen slider. You read it in `tick()` like any variable. There are helpers for every common control:
 
 ```cpp
-controls_.addControl("brightness", brightness, 0, 255);   // a 0–255 slider
+controls_.addControl("brightness", brightness, 0, 255);   // a 0..255 slider
 controls_.addControl("mirror", mirror);                  // a checkbox
 controls_.addSelect("mode", mode, kModeOptions, kModeCount);   // a dropdown
 ```
 
 ### Reacting to a control change
 
-Most of the time you don't need to *react* to a control at all — you just read the member variable in `tick()`, and because the framework keeps it in sync with the slider, the next frame already reflects the new value. A `speed` change is invisible plumbing: `tick()` reads `speed`, done.
+Most of the time you don't need to *react* to a control at all, you just read the member variable in `tick()`, and because the framework keeps it in sync with the slider, the next frame already reflects the new value. A `speed` change is invisible plumbing: `tick()` reads `speed`, done.
 
-Two hooks exist for the times a change needs *work*, not just a fresh read. They're the "control-change split" — pick the one that matches how expensive the reaction is:
+Two hooks exist for the times a change needs *work*, not just a fresh read. They're the "control-change split": pick the one that matches how expensive the reaction is:
 
 | Hook | When the core calls it | Use it for |
 |---|---|---|
 | `onControlChanged(name)` | On **every** control edit, immediately | A *cheap* reaction: recompute a small lookup table, re-seed a PRNG, re-parse a short string. Runs in the UI-request context, so keep it light. |
-| `affectsPrepare(name)` | A **question** the core asks on every edit — return `true`/`false` | Say "yes" for a control whose change reshapes your **derived state** (a grid dimension, a buffer size). A `true` makes the core call your `prepare()` again, so the expensive rebuild lands there, off the hot path — not in `tick()`. |
+| `affectsPrepare(name)` | A **question** the core asks on every edit: return `true`/`false` | Say "yes" for a control whose change reshapes your **derived state** (a grid dimension, a buffer size). A `true` makes the core call your `prepare()` again, so the expensive rebuild lands there, off the hot path: not in `tick()`. |
 
 ```cpp
 // React cheaply to one specific control. `name` is the control that changed.
@@ -158,7 +158,7 @@ bool affectsPrepare(const char* name) const override {
 }
 ```
 
-The division of labour: **read a value → just use it in `tick()`; a cheap side-effect → `onControlChanged()`; a change that resizes memory or reshapes the grid → `affectsPrepare()` returns `true` and the rebuild happens in `prepare()`.** Both hooks default to "do nothing" / "no rebuild", so a simple effect (like the rainbow above) overrides neither. This split is also what makes every config change apply live with no reboot — the core routes a dimension-changing edit through the same `prepare()` sweep as a boot.
+The division of labor: **read a value → just use it in `tick()`; a cheap side-effect → `onControlChanged()`; a change that resizes memory or reshapes the grid → `affectsPrepare()` returns `true` and the rebuild happens in `prepare()`.** Both hooks default to "do nothing" / "no rebuild", so a simple effect (like the rainbow above) overrides neither. This split is also what makes every config change apply live with no reboot, the core routes a dimension-changing edit through the same `prepare()` sweep as a boot.
 
 ### Registering it so the UI can add it
 
@@ -176,7 +176,7 @@ The second argument is the doc anchor the help's Docs link opens: point it at yo
 Two comment styles, two jobs:
 
 - **`///`: documentation.** A `///` comment above the class and above each control's member feeds the app's help, and shows up on IDE hover. A `///` above a method shows on IDE hover only. Put the "what this effect is" one-liner and each control's meaning here, so a user reads them in the app.
-- **`//`: an implementation note.** A plain `//` comment explains a tricky line *to whoever is reading the source*. It stays in the code and never reaches the help, the place for "why this maths" notes that would clutter the public docs.
+- **`//`: an implementation note.** A plain `//` comment explains a tricky line *to whoever is reading the source*. It stays in the code and never reaches the help, the place for "why this math" notes that would clutter the public docs.
 
 ```cpp
 /// Palette-cycling diagonal rainbow.       ← shows in the help + on hover
@@ -196,7 +196,7 @@ Rule of thumb: if a future *user* of your module should read it, use `///`; if o
 
 ## When you need memory: `prepare()` and a `ScratchBuffer`
 
-The rainbow only wrote into the buffer the framework already gave it. Some effects need their **own** scratch memory — for example a fire effect keeps a "heat" value per pixel between frames, or a game-of-life keeps the cell grid.
+The rainbow only wrote into the buffer the framework already gave it. Some effects need their **own** scratch memory: for example a fire effect keeps a "heat" value per pixel between frames, or a game-of-life keeps the cell grid.
 
 Declare a `ScratchBuffer<T>` member, size it in `prepare()`, and use it. That's the whole job:
 
@@ -205,12 +205,12 @@ class SparkleEffect : public EffectBase {
 public:
     void prepare() override {
         // Called at boot and whenever the grid size changes. resize() reallocates only when the
-        // count changes, zero-fills the new memory, and frees on 0 — nothing else to do.
+        // count changes, zero-fills the new memory, and frees on 0, nothing else to do.
         heat_.resize(nrOfLights());   // one byte of "heat" per light
     }
 
     void tick() override {
-        if (!heat_) return;           // buffer not there (0×0 grid, or memory was tight) — skip
+        if (!heat_) return;           // buffer not there (0×0 grid, or memory was tight), skip
         for (size_t i = 0; i < heat_.count(); i++) {
             // …use heat_[i] to render sparkles…
         }
@@ -221,18 +221,18 @@ private:
 };
 ```
 
-That's the *entire* memory story — one member, one line in `prepare()`, and the `if (!heat_)` guard in `tick()`. There is **no** `release()`, no destructor, no `setDynamicBytes` call, and no `static_cast`. The `ScratchBuffer` is the core primitive that absorbs all of that:
+That's the *entire* memory story: one member, one line in `prepare()`, and the `if (!heat_)` guard in `tick()`. There is **no** `release()`, no destructor, no `setDynamicBytes` call, and no `static_cast`. The `ScratchBuffer` is the core primitive that absorbs all of that:
 
-- **It sizes and frees itself.** `heat_.resize(n)` allocates `n` elements (of the buffer's type — `uint8_t` here), reallocating only when the count actually changes and zero-filling the new block. `resize(0)` frees it.
-- **The core frees it on disable, for you.** The `{*this}` in the declaration ties the buffer to its module. When the effect is switched off (or a *parent* is disabled), the core's `release()` frees every `ScratchBuffer` the module holds — so a disabled effect holds *zero* memory, with no `release()` in your code. That's the same `applyState()` orchestration from earlier, reaching your buffer automatically.
-- **It reports its own memory.** The buffer tells the module how many bytes it holds, so the UI card's memory readout stays correct — no `setDynamicBytes` line.
+- **It sizes and frees itself.** `heat_.resize(n)` allocates `n` elements (of the buffer's type, `uint8_t` here), reallocating only when the count actually changes and zero-filling the new block. `resize(0)` frees it.
+- **The core frees it on disable, for you.** The `{*this}` in the declaration ties the buffer to its module. When the effect is switched off (or a *parent* is disabled), the core's `release()` frees every `ScratchBuffer` the module holds, so a disabled effect holds *zero* memory, with no `release()` in your code. That's the same `applyState()` orchestration from earlier, reaching your buffer automatically.
+- **It reports its own memory.** The buffer tells the module how many bytes it holds, so the UI card's memory readout stays correct, no `setDynamicBytes` line.
 - **No raw pointers, no cast.** `heat_[i]` reads/writes an element; `heat_.count()` is the element count; `if (!heat_)` asks *"am I allocated?"*. The one `static_cast` the raw allocator needs lives *inside* the primitive, never in your effect.
 
-The one line that reads like housekeeping — `if (!heat_) return;` at the top of `tick()` — checks the buffer exists before using it. It covers the rare cases where it might be absent: a 0×0 grid, or an allocation that ran short on a low-memory board. It asks *"is my buffer here?"* — the core already answers *"is my effect enabled?"* by choosing when to call `tick()`, so those two concerns stay separate.
+The one line that reads like housekeeping (`if (!heat_) return;` at the top of `tick()`) checks the buffer exists before using it. It covers the rare cases where it might be absent: a 0×0 grid, or an allocation that ran short on a low-memory board. It asks *"is my buffer here?"*; the core already answers *"is my effect enabled?"* by choosing when to call `tick()`, so those two concerns stay separate.
 
 > **Why one member does all this.** `ScratchBuffer` is a *[Complexity lives in core](../../CLAUDE.md#principles)* primitive: the allocate / free / free-on-disable / report-memory lifecycle is written once, in core, so every memory-holding effect drops to "declare a buffer and use it" instead of hand-rolling the same six lines (and getting one of them subtly wrong). You get the portable allocator (same on desktop, ESP32, Raspberry Pi), the disable-frees-memory guarantee, and the UI readout for free.
 
-For **more than one** buffer — a game-of-life keeps three planes, a starfield keeps four parallel arrays — just declare several members, each `{*this}`. Each sizes, frees, and reports independently; the module's total memory is their sum, still with no bookkeeping line:
+For **more than one** buffer: a game-of-life keeps three planes, a starfield keeps four parallel arrays: just declare several members, each `{*this}`. Each sizes, frees, and reports independently; the module's total memory is their sum, still with no bookkeeping line:
 
 ```cpp
 ScratchBuffer<uint8_t> cells_{*this};    // current generation
@@ -240,11 +240,11 @@ ScratchBuffer<uint8_t> future_{*this};   // next generation
 ScratchBuffer<uint8_t> colors_{*this};   // one color per cell
 ```
 
-The element type can be anything — a `uint8_t` heat value, a packed cell plane, or a small struct (`ScratchBuffer<Ball>`); the buffer multiplies by `sizeof(T)` for you.
+The element type can be anything, a `uint8_t` heat value, a packed cell plane, or a small struct (`ScratchBuffer<Ball>`); the buffer multiplies by `sizeof(T)` for you.
 
 ## Test your module
 
-Every module ships with a **unit test** — a short file that pins what it does, so a later change that breaks it fails the build instead of the show. It's a house rule (`ctest` must pass before work is done), and it's less work than it sounds: for an effect, a test builds a small grid, runs a frame, and checks the buffer got painted. The real `RainbowEffect` test is about ten lines of substance:
+Every module ships with a **unit test**: a short file that pins what it does, so a later change that breaks it fails the build instead of the show. It's a house rule (`ctest` must pass before work is done), and it's less work than it sounds: for an effect, a test builds a small grid, runs a frame, and checks the buffer got painted. The real `RainbowEffect` test is about ten lines of substance:
 
 ```cpp
 TEST_CASE("RainbowEffect writes non-zero RGB data to buffer") {
@@ -256,15 +256,15 @@ TEST_CASE("RainbowEffect writes non-zero RGB data to buffer") {
 }
 ```
 
-That's the whole shape: **set up a small grid, run `tick()`, assert the output is what you expect.** Good things to pin for a new effect: it paints *something* on a normal grid, it survives a 1×1 and 0×0 grid without crashing (the robustness rule), and — if it holds memory — its `dynamicBytes` drops to zero when it's disabled. When you find a bug, the fix isn't done until a test reproduces it: that's how a crash becomes a test that stops it ever coming back.
+That's the whole shape: **set up a small grid, run `tick()`, assert the output is what you expect.** Good things to pin for a new effect: it paints *something* on a normal grid, it survives a 1×1 and 0×0 grid without crashing (the robustness rule), and, if it holds memory, its `dynamicBytes` drops to zero when it's disabled. When you find a bug, the fix isn't done until a test reproduces it: that's how a crash becomes a test that stops it ever coming back.
 
-Tests live in `test/unit/light/unit_<YourEffect>.cpp` and run with `ctest`. The full strategy — the unit vs. scenario tiers, how to pick one, the live-device tier — is a topic of its own: see [docs/reference/testing.md](../reference/testing.md). For your first effect, one small "it paints and it doesn't crash" test is plenty.
+Tests live in `test/unit/light/unit_<YourEffect>.cpp`, built and run as [Add a test, and pin a bug](../moonwalk.md#add-test) shows: `uv run moondeck/test/test_desktop.py --module <YourEffect>`. The full strategy, the unit and scenario tiers, how to pick one and the live-device tier, is a topic of its own: [Testing](../reference/testing.md). For your first effect, one small "it paints and it doesn't crash" test is plenty.
 
 ## A tour of the other module kinds
 
-Effects are the on-ramp. The same "fill in the hooks, let the core orchestrate" model applies to every module — only the *hook you fill in* changes.
+Effects are the on-ramp. The same "fill in the hooks, let the core orchestrate" model applies to every module, only the *hook you fill in* changes.
 
-### Layouts — where the pixels are
+### Layouts: where the pixels are
 
 A **layout** answers one question: *for light number N, where is it in 3D space?* You override `placeLights`, which walks every light and reports its `(x, y, z)`. A grid is the classic example:
 
@@ -290,38 +290,38 @@ public:
 };
 ```
 
-The framework uses your coordinates to build the mapping that turns an effect's clean grid drawing into the physical LED order — so an effect works in clean grid coordinates while the framework maps them to the real strip order, zig-zag and all. Write a new layout (a circle, a sphere, a spiral staircase) and every existing effect immediately works on it.
+The framework uses your coordinates to build the mapping that turns an effect's clean grid drawing into the physical LED order, so an effect works in clean grid coordinates while the framework maps them to the real strip order, zig-zag and all. Write a new layout (a circle, a sphere, a spiral staircase) and every existing effect immediately works on it.
 
-### Modifiers — bend the picture
+### Modifiers: bend the picture
 
 A **modifier** sits between the effect and the LEDs and reshapes space: mirror it, mask a region, tile it, rotate it. Instead of drawing colors, a modifier transforms *coordinates*. Its main hook, `modifyLogical`, takes a light's position and folds it into a new one (or rejects it). Several modifiers can stack, and the framework collapses the whole chain into a single fast lookup so the per-frame cost stays tiny.
 
-Modifiers are the most abstract of the four, so treat them as a step up from effects — but the shape is the same class with the same lifecycle: declare controls, implement your transform hook, let the core run it.
+Modifiers are the most abstract of the four, so treat them as a step up from effects, but the shape is the same class with the same lifecycle: declare controls, implement your transform hook, let the core run it.
 
-### Drivers — talk to real hardware (advanced)
+### Drivers: talk to real hardware (advanced)
 
-A **driver** takes the finished image and pushes it out to physical LEDs — over a wire (WS2812 on a GPIO pin) or over the network (Art-Net, DDP). Drivers are the **advanced topic**: they touch real hardware, timing, and DMA, and they hold a scarce resource (a GPIO peripheral or a socket). That's exactly where the lifecycle model matters most:
+A **driver** takes the finished image and pushes it out to physical LEDs: over a wire (WS2812 on a GPIO pin) or over the network (Art-Net, DDP). Drivers are the **advanced topic**: they touch real hardware, timing, and DMA, and they hold a scarce resource (a GPIO peripheral or a socket). That's exactly where the lifecycle model matters most:
 
 - `prepare()` **acquires** the peripheral / opens the socket for the current pin config.
-- `release()` **releases** it — so when you switch a driver off, its GPIO is genuinely freed and another driver can use that pin. No reboot.
+- `release()` **releases** it, so when you switch a driver off, its GPIO is genuinely freed and another driver can use that pin. No reboot.
 
 You get all of that "release the pin on disable" behavior by implementing the same two hooks you already know from the memory example. The core's traffic cop does the rest. Writing a driver means learning the specific hardware peripheral (the RMT unit, the Parlio bus, a UDP socket), but the *module shape* is identical to your rainbow, which is the whole point.
 
 ## A suggested classroom path
 
-1. **Copy the rainbow.** Change the maths in `tick()` — make it pulse, or swap the palette lookup for a fixed color. Rebuild and add it in the UI. See it move.
+1. **Copy the rainbow.** Change the math in `tick()`: make it pulse, or swap the palette lookup for a fixed color. Rebuild and add it in the UI. See it move.
 2. **Add a control.** Give it a `brightness` slider (`addControl`) and multiply your colors by it. Watch the UI wire itself up.
-3. **Add memory.** Write an effect that keeps a per-pixel value between frames (a fading trail, a bouncing dot). Now you need `prepare()` + `release()` — practice matching them.
+3. **Add memory.** Write an effect that keeps a per-pixel value between frames (a fading trail, a bouncing dot). Now you need `prepare()` + `release()`, practice matching them.
 4. **Make it robust.** Resize the grid live to 1×1, then 0×0. Your effect must not crash. (Reading `width()`/`height()` each frame is what saves you.)
-5. **Write a test.** Add `test/unit/light/unit_MyEffect.cpp` with one case: build a small grid, run a frame, `CHECK` the buffer got painted (and doesn't crash on 0×0). Run `ctest`. That's the habit — a module and its test travel together.
+5. **Write a test.** Add `test/unit/light/unit_MyEffect.cpp` with one case: build a small grid, run a frame, `CHECK` the buffer got painted (and doesn't crash on 0×0). Run `ctest`. That's the habit, a module and its test travel together.
 6. **Write a layout.** Arrange the pixels in a circle instead of a grid, and watch your existing effects render on the new shape.
-7. **(Advanced) Read a driver.** Open `RmtLedDriver` and find its `prepare()` (acquire) and `release()` (release). You'll recognise the exact pattern from step 3 — just holding a GPIO instead of a heap buffer.
+7. **(Advanced) Read a driver.** Open `RmtLedDriver` and find its `prepare()` (acquire) and `release()` (release). You'll recognize the exact pattern from step 3, just holding a GPIO instead of a heap buffer.
 
 ## What to read next
 
-- **The effects catalog:** [docs/moonmodules/light/effects.md](../moonmodules/light/effects.md) — every shipped effect, with screenshots and controls. The best source of copy-and-tweak starting points.
+- **The effects catalog:** [docs/moonmodules/light/effects.md](../moonmodules/light/effects.md): every shipped effect, with screenshots and controls. The best source of copy-and-tweak starting points.
 - **The architecture doc:** [docs/explanation/architecture/index.md](../explanation/architecture/index.md), the render pipeline (Layouts → Effects → Layer → Effect/Modifier → Drivers) and the hot-path rules (why we avoid heap and floats inside `tick()`).
-- **Coding standards:** [docs/contributing/coding-standards.md](../contributing/coding-standards.md) — the house style (header-only light modules, `constexpr`, naming) so your module reads like the rest.
-- **The real modules:** the smallest ones make the best teachers — `RainbowEffect` (a clean loop), `GameOfLifeEffect` (the memory lifecycle), `GridLayout` (`placeLights`).
+- **Coding standards:** [docs/contributing/coding-standards.md](../contributing/coding-standards.md): the house style (header-only light modules, `constexpr`, naming) so your module reads like the rest.
+- **The real modules:** the smallest ones make the best teachers: `RainbowEffect` (a clean loop), `GameOfLifeEffect` (the memory lifecycle), `GridLayout` (`placeLights`).
 
-The recurring lesson across all of them: **keep your module about what it does.** Declare your controls, draw or transform in the hook, allocate-in-`prepare`/free-in-`release` if you hold memory — and let the core decide when any of it runs. That discipline is what keeps a large, multi-platform light engine understandable one small module at a time.
+The recurring lesson across all of them: **keep your module about what it does.** Declare your controls, draw or transform in the hook, allocate-in-`prepare`/free-in-`release` if you hold memory, and let the core decide when any of it runs. That discipline is what keeps a large, multi-platform light engine understandable one small module at a time.

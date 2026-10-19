@@ -65,7 +65,7 @@ Writing your own implementation of a known idea can land in either column, and w
 
 Credit is the fifth row, and it needs care for a mechanical reason: rewriting removes the easiest form of attribution there is. Take a dependency and the author's name appears in the manifest automatically, as a side effect of the build. Write it yourself and that disappears, even when the idea, the approach or the algorithm came straight from someone else's work. So it has to be deliberate, named where it can be checked against the source. That is the README's Credits, each module's `@attribution` in [the attribution catalog](../reference/attributions.md), and the [friend-repo digests](../friend-repos/index.md).
 
-If something here came from your work and is not credited where it should be, [open an issue](../how-to/logging-an-issue.md) or find us on [Discord](https://discord.gg/TC8NSUSCdV). We would much rather hear it directly.
+If something here came from your work and is not credited where it should be, [open an issue](../reference/logging-an-issue.md) or find us on [Discord](https://discord.gg/TC8NSUSCdV). We would much rather hear it directly.
 
 ## ESP-IDF directly, rather than Arduino
 

@@ -1,6 +1,6 @@
 # Choosing and wiring an LED driver
 
-Addressable LEDs (WS2812B, SK6812, WS2811) go out through one of two drivers: [RMT LED](../moonmodules/light/drivers.md#rmtled) for a few strands, and [Parallel LED](../moonmodules/light/drivers.md#parallelled) for many. Both read the same shared buffer, so switching between them, or between Parallel LED's peripherals, is a change on the Drivers card with no reflash. The steps to add one, set its pins, count and brightness and test the wire are the process [Set up a driver or service for the hardware](../moonwalk.md#driver-setup); the reference behind them follows.
+Addressable LEDs (WS2812B, SK6812, WS2811) go out through one of two drivers: [RMT LED](../../moonmodules/light/drivers.md#rmtled) for a few strands, and [Parallel LED](../../moonmodules/light/drivers.md#parallelled) for many. Both read the same shared buffer, so switching between them, or between Parallel LED's peripherals, is a change on the Drivers card with no reflash. The steps to add one, set its pins, count and brightness and test the wire are the process [Set up a driver or service for the hardware](../../moonwalk.md#driver-setup); the reference behind them follows.
 
 ## Which one
 
@@ -34,13 +34,13 @@ A lane is one bus data line, a strand is one chain of LEDs. Wired directly, one 
 
 ## Wiring a 74HCT595 pin expander
 
-On an S3, P4 or S31, pick `i80` or `MoonI80` as the `peripheral`, turn `pinExpander` on, and set `latchPin`. Each data pin then drives one register, and its 8 outputs drive 8 strands.
+On an S3, P4 or S31 with `i80` or `MoonI80` as the `peripheral`, `pinExpander` on and `latchPin` set, each data pin drives one register and its 8 outputs drive 8 strands.
 
 The expander buys pins, not memory: the register is serial-in, so the DMA frame grows eightfold, about 1.1 KB per light. `i80` holds the whole frame, which past about 96 lights per strand falls to PSRAM too slow for the expander's clock. `MoonI80` streams the frame and drives 128 reliably.
 
 ## Testing the wire with the loopback
 
-`loopbackTest` sends a known pattern out of a strand and reads it back through a jumper to `loopbackRxPin`, with its verdict in the status field. A `PASS` means the chip and the peripheral are clean, so flicker that remains is [signal integrity](led-signal-integrity.md).
+`loopbackTest` sends a known pattern out of a strand and reads it back through a jumper to `loopbackRxPin`, with its verdict in the status field. A `PASS` means the chip and the peripheral are clean, so flicker that remains is [signal integrity](../../explanation/led-signal-integrity.md).
 
 Wired directly, jumper a data GPIO straight to `loopbackRxPin`.
 

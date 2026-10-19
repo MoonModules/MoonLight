@@ -12,7 +12,7 @@ namespace mm {
 /// Addressable WS2812B-class LEDs on a handful of strands, clocked by the chip's RMT peripheral.
 /// @card RmtLedDriver.png
 ///
-/// The classic choice, and the one that needs no DMA peripheral: for more than a few strands see @ref ParallelLedDriver. Flicker on LEDs that should be off is signal integrity rather than firmware, and [the signal integrity playbook](https://moonmodules.org/MoonLight/how-to/led-signal-integrity.html) walks the checks.
+/// The classic choice, and the one that needs no DMA peripheral: for more than a few strands see @ref ParallelLedDriver. Flicker on LEDs that should be off is signal integrity rather than firmware, and [the signal integrity playbook](https://moonmodules.org/MoonLight/explanation/led-signal-integrity.html) walks the checks.
 ///
 /// @attribution hpwit, WLED, FastLED
 ///

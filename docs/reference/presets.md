@@ -6,7 +6,7 @@ A preset is a saved state brought back with one click: a look you liked, a geome
 
 ## What a preset holds
 
-A preset is a state document: the containers it sets, by name, with the modules and controls inside, the same document [`PATCH /api/state`](../reference/integrating.md#setting-everything-at-once) applies.
+A preset is a state document: the containers it sets, by name, with the modules and controls inside, the same document [`PATCH /api/state`](integrating.md#setting-everything-at-once) applies.
 
 Saving from a pad captures one of four containers whole, chosen as a radio button:
 

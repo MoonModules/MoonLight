@@ -34,13 +34,13 @@ Work through [Diagnose dark or flickering lights](../moonwalk.md#diagnose-lights
 
 Almost always electrical rather than firmware, on a 3.3 V board driving 5 V WS2812 directly.
 
-The diagnosis path, which eliminates the firmware before anyone reaches for a soldering iron, is [LED signal integrity](led-signal-integrity.md).
+The diagnosis path, which eliminates the firmware before anyone reaches for a soldering iron, is [LED signal integrity](../explanation/led-signal-integrity.md).
 
 ## Colors are wrong everywhere
 
 Red where you expect green usually means the channel order does not match the strip. Set it on the driver: the [fixture profile](../moonmodules/light/supporting.md#fixtureprofiles) names which channel carries which color.
 
-Whole-panel color shifts on a receiving card are a different thing, covered in [panel cards](panel-cards.md).
+Whole-panel color shifts on a receiving card are a different thing, covered in [panel cards](hardware/panel-cards.md).
 
 ## Every other row is backwards
 

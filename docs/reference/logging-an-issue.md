@@ -4,19 +4,13 @@ Something not working? Tell us. You do not need to diagnose it, describe what yo
 
 👉 **[Open an issue on GitHub](https://github.com/MoonModules/MoonLight/issues)**
 
-Not sure it's a bug, or want to talk it through first?
-**[Discord](https://discord.gg/TC8NSUSCdV)** is the right place for "is this
-supposed to work like this?".
+Not sure it's a bug, or want to talk it through first? **[Discord](https://discord.gg/TC8NSUSCdV)** is the right place for "is this supposed to work like this?".
 
 ---
 
-## Checklist
+## Steps
 
-- Search the [existing issues](https://github.com/MoonModules/MoonLight/issues)
-  first, it may already be reported, or already fixed
-- Check the Firmware card: are you on the current version?
-- For bugs, include the `{ }` output (below)
-- For feature requests, describe the use case, no template needed
+[Log an issue](../moonwalk.md#log-issue): search first, check the version, copy each card's `{ }` diagnostics, describe, open the issue. A feature request needs no template.
 
 ---
 
@@ -40,19 +34,11 @@ Actual behavior:
 
 ⚠️ **This is the most useful diagnostic data.** It is a JSON snapshot of the module's live state, its type, every control value, its status line and its timing, exactly as it was when things went wrong.
 
-**How to get it:**
-
-1. Find the card that misbehaved, the effect that went dark, the driver that isn't lighting, the network card that won't connect
-2. Click the **`{ }`** link at the end of its title row, then **diagnostics** in the popup that opens
-3. Select all in the new tab (Ctrl/Cmd+A), copy, and paste it into the issue
-
 **Which cards to include:**
 
-1. **Always: System.** Names the chip, firmware variant, build, SDK version and
-   the last boot reason, how we tell a board problem from a firmware one
+1. **Always: System.** Names the chip, firmware variant, build, SDK version and the last boot reason, how we tell a board problem from a firmware one
 2. **Always: Firmware.** The exact version and build you are running
-3. **The affected card itself**, Effects, Drivers, Layouts, Network, whichever
-   one went wrong
+3. **The affected card itself**, Effects, Drivers, Layouts, Network, whichever one went wrong
 4. **If it is about lights:** the Layer card, which carries the geometry
 5. **If it is about pins or wiring:** the Drivers card
 
