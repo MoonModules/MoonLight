@@ -178,6 +178,9 @@ TEST_CASE("playing a flash-found file decodes and blits its frames, same as an S
     const uint8_t* buf = s.layer.buffer().data();
     const size_t bytes = s.layer.buffer().count() * 3;
 
+    e.decodeOneFrameForTest();   // primes the one-tick-ahead pipeline: decodes frame 0, renders nothing yet
+    e.tick();
+
     e.decodeOneFrameForTest();   // frame 0: every byte is 0
     e.tick();
     for (size_t i = 0; i < bytes; i++) CHECK(buf[i] == 0);
@@ -266,6 +269,9 @@ TEST_CASE("playing a real file decodes and blits its frames in order") {
     const size_t bytes = static_cast<size_t>(s.layer.physicalLightCount()) * 3;
     std::vector<uint8_t> buf(bytes);
 
+    e.decodeOneFrameForTest();   // primes the one-tick-ahead pipeline: decodes frame 0, renders nothing yet
+    e.tick();
+
     e.decodeOneFrameForTest();   // frame 0: every byte is 0
     e.tick();
     e.copyWiringFrame(buf.data(), buf.size(), /*force=*/true);
@@ -281,7 +287,7 @@ TEST_CASE("playing a real file decodes and blits its frames in order") {
     e.copyWiringFrame(buf.data(), buf.size(), /*force=*/true);
     for (size_t i = 0; i < bytes; i++) CHECK(buf[i] == 2);
 
-    // Frame 3 does not exist: handleEndOfFile already ran inside the decode above (loopAll default: reloads frame 0).
+    // Frame 3 does not exist: the call above rendered frame 2 then ran handleEndOfFile (loopAll default: reloads frame 0).
     CHECK(e.frameIndexForTest() == 0);
 
     // Pause updates status too, not just state: a pre-existing gap found and fixed alongside the play-status bug above.
@@ -315,6 +321,9 @@ TEST_CASE("playing on a serpentine layout keeps the frame in wiring order") {
     REQUIRE(e.deliversWiringOrder());
     REQUIRE(layer.lut().hasLUT());         // serpentine: the mapping is not the identity
     REQUIRE(layer.wiringSource() == &e);   // alone on its layer, sender-mapped: straight to the output, no layer remap
+
+    e.decodeOneFrameForTest();   // primes the one-tick-ahead pipeline: decodes frame 0, renders nothing yet
+    e.tick();
 
     e.decodeOneFrameForTest();
     e.tick();
@@ -682,6 +691,8 @@ TEST_CASE("a channelDataOffset past the buffered header region is skipped, landi
 
     const uint8_t* buf = s.layer.buffer().data();
     const size_t bytes = s.layer.buffer().count() * 3;
+    e.decodeOneFrameForTest();   // primes the one-tick-ahead pipeline: decodes frame 0, renders nothing yet
+    e.tick();
     e.decodeOneFrameForTest();   // frame 0: every byte is 0, same as the no-gap decode test
     e.tick();
     for (size_t i = 0; i < bytes; i++) CHECK(buf[i] == 0);

@@ -41,7 +41,13 @@ namespace mm {
 ///
 /// ## Why decode runs in tick20ms
 ///
-/// A frame read blocks, which `tick()` must never do. So `tick20ms()` decodes one due frame and writes it straight into `sink_`, the same split `HttpServerModule::driveSdTransfers` uses for SD reads; `tick()` only calls `sink_.tick()`.
+/// A frame read blocks, which `tick()` must never do. So `tick20ms()` decodes one due frame each call, the same split `HttpServerModule::driveSdTransfers` uses for SD reads; `tick()` only calls `sink_.tick()`.
+///
+/// ## A frame decodes one tick ahead of its render
+///
+/// `tick20ms()` renders whatever `decodeCurrentFrame()` decoded last call, before decoding the next one, rather than writing what it decoded immediately. An expensive decode (a zlib track's compression-block boundary) then costs its tick a tick early, not the one whose render it would otherwise delay.
+///
+/// Reaching end of file is checked right after that render, before any new decode. The track's real last frame is always shown for one full tick before the track switches, never overwritten by it in the same call.
 ///
 /// ## An FSEQ frame is already in wiring order
 ///
@@ -139,16 +145,17 @@ public:
         EffectBase::release();
     }
 
-    /// Decode the next due frame off the render tick; a blocking file read, bounded to one frame per call.
+    /// Render last tick's decoded frame, then decode the next due one; a blocking file read, bounded to one frame per call.
     void tick20ms() MM_NONBLOCKING override {
         if (state_ != PlayState::Playing) return;
         const uint32_t now = elapsed();
         const uint32_t stepMs = effectiveStepMs();
         if (now - lastFrameMs_ < stepMs) return;
         lastFrameMs_ += stepMs;   // advance by one step, not to `now`: a stall catches up one frame at a time
+        if (aheadFrameReady_) { writeFrameToSink(); aheadFrameReady_ = false; }
+        if (frameIndex_ >= header_.frameCount) { handleEndOfFile(); return; }   // last frame already rendered above
         if (!decodeCurrentFrame()) return;   // a read failure above already stopped playback
         frameIndex_++;
-        if (frameIndex_ >= header_.frameCount) handleEndOfFile();
     }
 
     /// Hand the sink's held frame to the output; tick20ms() is the only place new data reaches it.
@@ -293,6 +300,7 @@ public:
         currentBlockIndex_ = 0;
         currentBlockFirstFrame_ = 0;
         currentBlockFrameCount_ = 0;
+        aheadFrameReady_ = false;
     }
     /// Force the transport state directly.
     void setStateForTest(PlayState s) { state_ = s; }
@@ -375,6 +383,7 @@ private:
     uint32_t currentBlockIndex_ = 0;           ///< which compression-block-table entry is loaded
     uint32_t currentBlockFirstFrame_ = 0;      ///< that block's first frame
     uint32_t currentBlockFrameCount_ = 0;      ///< how many frames blockBuf_ covers
+    bool     aheadFrameReady_ = false;         ///< frameBuf_ holds a frame decoded one tick ahead, not yet handed to sink_
 
     char        fileNames_[kMaxFiles][kPathCap] = {};   ///< full filesystem paths, found by the scan
     const char* fileOptions_[kMaxFiles] = {};
@@ -470,6 +479,7 @@ private:
         state_ = PlayState::Stopped;
         frameIndex_ = 0;
         visited_ = 0;
+        aheadFrameReady_ = false;   // about to black out anyway: no point rendering it first
         writeBlackFrame();
         refreshStatus();
     }
@@ -501,6 +511,8 @@ private:
 
     /// End of the current track: loop it, advance to the next, or stop a completed pass.
     void handleEndOfFile() {
+        // tick20ms() already rendered any pending frame before calling here; this only guards a direct call (handleEndOfFileForTest).
+        if (aheadFrameReady_) { writeFrameToSink(); aheadFrameReady_ = false; }
         if (loopMode_ == kLoopOne) {
             loadTrack(cursor_);   // re-opens from frame 0: a forward-only stream cannot rewind in place
             return;
@@ -625,6 +637,7 @@ private:
         currentBlockIndex_ = 0;
         currentBlockFirstFrame_ = 0;
         currentBlockFrameCount_ = 0;
+        aheadFrameReady_ = false;
         frameIndex_ = 0;
         lastFrameMs_ = elapsed();
         markVisited(cursor_);
@@ -636,11 +649,10 @@ private:
         return true;
     }
 
-    /// Decode frame `frameIndex_` and write it straight into `sink_`, in wiring order: the one blocking file read `tick20ms` makes, bounded to one frame or compression block.
+    /// Decode frame `frameIndex_` into `frameBuf_`, one tick ahead of render (@xref{a-frame-decodes-one-tick-ahead-of-its-render}). The one blocking read `tick20ms` makes, bounded to one frame or block.
     bool decodeCurrentFrame() {
-        const uint8_t* rawFrame;
         if (header_.compressionType == fseq::CompressionType::Zlib) {
-            rawFrame = frameFromCompressedBlock(frameIndex_);
+            const uint8_t* rawFrame = frameFromCompressedBlock(frameIndex_);
             if (!rawFrame) {
                 setStatus("file read failed mid-file", Severity::Error);
                 state_ = PlayState::Stopped;
@@ -654,7 +666,7 @@ private:
             frameIndex_ = 0;
             return false;
         }
-        writeFrameToSink();
+        aheadFrameReady_ = true;
         return true;
     }
 
