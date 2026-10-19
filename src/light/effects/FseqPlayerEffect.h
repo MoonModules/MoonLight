@@ -63,6 +63,8 @@ namespace mm {
 ///
 /// Every `.fseq` file anywhere in the file manager's tree is found walking from the filesystem root, bounded to `kMaxScanDepth` levels, with no special case for `/sd`. A flash file plays exactly like an SD one.
 ///
+/// `onFileChanged` only walks that tree for a `.fseq` path, so an unrelated upload (a config file, a palette script) costs this effect nothing.
+///
 /// ## Starts on its own
 ///
 /// Becoming enabled starts playback immediately when the playlist is non-empty, in `prepare()`, with no separate "press play" step. `release()` stops and closes the stream first, so a later re-enable never resumes into memory it just freed.
@@ -176,9 +178,10 @@ public:
         EffectBase::onControlChanged(controlName);
     }
 
-    /// Rescan when any file lands or leaves, so an upload through the File Manager reaches the playlist unasked.
+    /// Rescan when a show lands or leaves, so an upload through the File Manager reaches the playlist unasked. An unrelated file skips the whole-tree walk.
     void onFileChanged(const char* path) override {
-        if (path) rescanFiles();
+        if (path && !hasExtension(path, ".fseq")) return;
+        rescanFiles();
     }
 
     // --- ListSource (editable): the playlist -------------------------------------------

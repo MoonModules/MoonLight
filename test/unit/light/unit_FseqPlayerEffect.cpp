@@ -214,23 +214,27 @@ TEST_CASE("rescan finds a real .fseq file, case-insensitively, in a nested folde
     CHECK(e.listRowCount() == 1);
 }
 
-TEST_CASE("onFileChanged rescans on any path, so an upload anywhere reaches the playlist unasked") {
+TEST_CASE("onFileChanged rescans only for a .fseq path, skipping an unrelated upload") {
     SdFixture sd;
     Scene s;
     auto& e = s.effect;
-    e.setup();
-    uint32_t idBefore = 0;
-    REQUIRE(e.addListRow(idBefore));   // nothing scanned yet: defaults to an empty file
-    e.deleteListRow(idBefore);
+    e.setup();   // scans the still-empty card
 
     sd.writeFseq("/sd/new.fseq", makeFseqV1Bytes(9, 3));
-    e.onFileChanged("/sd/new.fseq");
-
-    uint32_t idAfter = 0;
-    REQUIRE(e.addListRow(idAfter));
-    CHECK(e.listRowCount() == 1);
-    // This effect has no path it specifically cares about: any changed path triggers the same rescan, with no crash from a path that names no real file.
+    // An unrelated file changed (and names no real file either): no crash, and no whole-tree rescan, so new.fseq stays unseen.
     e.onFileChanged("/.config/SomeModule.json");
+    {
+        JsonSink sink;
+        e.writeListOptionSets(sink);
+        CHECK(std::string(sink.data()).find("new.fseq") == std::string::npos);
+    }
+
+    e.onFileChanged("/sd/new.fseq");   // the show's own path: this one does rescan
+    {
+        JsonSink sink;
+        e.writeListOptionSets(sink);
+        CHECK(std::string(sink.data()).find("new.fseq") != std::string::npos);
+    }
 }
 
 TEST_CASE("prepare() starts playing on its own once there is a playlist to play") {
