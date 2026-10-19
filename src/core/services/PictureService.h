@@ -3,11 +3,13 @@
 #include "core/module/MoonModule.h"
 #include "core/util/ActiveInstance.h"   // the one-active-source election
 #include "core/util/color.h"            // RGB
+#include "core/util/format.h"           // formatTo: the status line built off snprintf
 #include "core/util/PictureFrame.h"
 #include "core/util/ScratchBuffer.h"
 #include "core/util/TryLock.h"      // the swap a reader holds off for its gather
 #include "platform/platform.h"      // maxAllocBlock, freeHeap: whether the second picture fits
 
+#include <atomic>
 #include <cstdint>
 #include <cstring>
 
@@ -22,20 +24,28 @@ public:
     /// A service, the source half of the picture pipeline. It swaps a front and a back picture, or locks the one picture when there is no room for two, so frames skip but never tear.
     ModuleRole role() const MM_NONBLOCKING override { return ModuleRole::Service; }
 
+    /// Stop any decode first: a task holding this service must never outlive it, even unreleased.
+    ~PictureService() override { stopCapture(); }
+
     /// The sources `source` picks from, in option order.
-    enum Source : uint8_t { kTestPattern, kSourceCount };
+    enum Source : uint8_t { kTestPattern, kUsbCapture, kSourceAll };
+    /// The options offered, which leaves out USB capture on a target with no USB host.
+    static constexpr uint8_t kSourceCount = platform::hasUsbVideo ? kSourceAll : kSourceAll - 1;
     /// Where the picture comes from.
-    /// @guide The test pattern is a test card in the layout of Philips' PM5544, drawn at any size.
+    /// @guide The test pattern is a test card in the layout of Philips' PM5544, drawn at any size. **usb capture** decodes MJPEG from an HDMI grabber, scaled to fit.
     uint8_t source = kTestPattern;
-    /// The picture's width in pixels.
+    /// Frames a second asked of a capture device, which streams the nearest rate it offers.
+    uint8_t fps = 30;
+    /// The picture's width in pixels, and a ceiling for a capture, which scales its frames down to fit.
     uint16_t width = 64;
-    /// The picture's height in pixels.
+    /// The picture's height in pixels, under the same ceiling as the width.
     uint16_t height = 48;
 
     /// Publish the source and the picture's size.
     void defineControls() override {
-        static constexpr const char* kSources[] = {"test pattern"};
+        static constexpr const char* kSources[] = {"test pattern", "usb capture"};
         controls_.addSelect("source", source, kSources, kSourceCount);
+        if (platform::hasUsbVideo) controls_.addControl("fps", fps, 1, 120);
         controls_.addControl("width", width, 1, kMaxSide);
         controls_.addControl("height", height, 1, kMaxSide);
     }
@@ -46,7 +56,9 @@ public:
     /// Size the pixels for the source and draw a still one into them; a failed allocation publishes no picture.
     void prepare() override {
         seat_.claim();
+        stopCapture();   // before the pictures move under a decode still writing one
         if (!prepareBuffers(kRunsInTask[source])) return;
+        if (source == kUsbCapture) { startCapture(); return; }
         drawTestPattern(front_, width, height);   // the frame prepareBuffers published, filled before any reader ticks
     }
 
@@ -78,25 +90,41 @@ public:
         while (!lock_.tryAcquire()) platform::yield();   // readers hold it for one gather at most
         return front_;
     }
-    /// Publish what beginWrite handed out: swap the two pictures, or unlock the one, and bump the generation.
-    void endWrite() {
+    /// Publish what beginWrite handed out at the size written, for a source that cannot hit the one it asked for.
+    void endWrite(uint16_t w, uint16_t h) {
         if (back_) {
             while (!lock_.tryAcquire()) platform::yield();
             uint8_t* filled = back_;
             back_ = front_;
             front_ = filled;
         }
-        frame_ = PictureFrame{front_, width, height, frame_.generation + 1};
+        frame_ = PictureFrame{front_, w, h, frame_.generation + 1};
         lock_.release();
     }
+    /// Publish what beginWrite handed out: swap the two pictures, or unlock the one, and bump the generation.
+    void endWrite() { endWrite(width, height); }
+    /// Give back what beginWrite handed out without publishing it, for a frame that never arrived.
+    void abortWrite() { if (!back_) lock_.release(); }
 
     /// Re-claim an empty seat, so removing the active service lets a survivor take over.
     void tick() MM_NONBLOCKING override { seat_.claim(); }
 
     /// Vacate the seat for any survivor.
     void release() override {
+        stopCapture();
         seat_.vacate();
         MoonModule::release();
+    }
+
+    /// Name the capture's health once a second: the size it publishes, the frames that landed and those lost.
+    void tick1s() MM_NONBLOCKING override {
+        if (source != kUsbCapture || !task_.impl) return;
+        const platform::VideoCaptureStats st = platform::videoCaptureStats();
+        const uint32_t lost = st.dropped + st.failed;
+        mm::formatTo(status_, sizeof(status_), "%u x %u, %u frames, %u lost",
+                     static_cast<unsigned>(frame_.width), static_cast<unsigned>(frame_.height),
+                     static_cast<unsigned>(st.decoded), static_cast<unsigned>(lost));
+        setStatus(status_, lost ? Severity::Warning : Severity::Status);
     }
 
     /// What a consumer reads with no source: a class constant, since a function-local static needs a guard on first use.
@@ -208,7 +236,47 @@ private:
 
     static constexpr uint16_t kMaxSide = 512;   ///< a side above this exceeds what a board holds for one picture
     /// Which sources write from a task of their own, in `source` order; the test pattern is drawn at prepare.
-    static constexpr bool kRunsInTask[kSourceCount] = {false};
+    static constexpr bool kRunsInTask[kSourceAll] = {false, true};
+    /// How long a decode waits for a frame before looping, so a stop is noticed without a grabber sending.
+    static constexpr uint32_t kDecodeWaitMs = 200;
+
+    /// Open the grabber and decode on a task of its own, so the render loop never waits on the device.
+    void startCapture() {
+        if (!platform::videoCaptureInit(capture_, width, height, fps)) {
+            // The format list outlives a failed open, so a device that enumerated but refused is a different fault.
+            setStatus(platform::videoCaptureFormatGeneration() ? "the grabber offers no mode that fits" : "no grabber attached", Severity::Warning);
+            return;
+        }
+        stop_.store(false, std::memory_order_release);
+        // Core 1, beside the USB host's own tasks, so a decode never lands on the render core.
+        if (!platform::spawnPinnedTask(task_, "mmPicCap", &captureTrampoline, this, 4096, 3, 1)) {
+            platform::videoCaptureDeinit(capture_);
+            setStatus("no task for the capture", Severity::Error);
+            return;
+        }
+        clearStatus();
+    }
+
+    /// Stop the decode and release the device, in that order, so nothing writes a picture that has moved.
+    void stopCapture() {
+        if (task_.impl) {
+            stop_.store(true, std::memory_order_release);
+            platform::stopPinnedTask(task_);
+        }
+        if (capture_.impl) platform::videoCaptureDeinit(capture_);
+    }
+
+    static void captureTrampoline(void* self) { static_cast<PictureService*>(self)->runCapture(); }
+
+    /// Decode each frame straight into the back picture and publish it, until prepare or release stops it.
+    void runCapture() {
+        while (!stop_.load(std::memory_order_acquire)) {
+            uint16_t w = 0, h = 0;
+            uint8_t* px = beginWrite();
+            if (platform::videoCaptureDecodeInto(capture_, px, width, height, w, h, kDecodeWaitMs)) endWrite(w, h);
+            else abortWrite();   // no frame: the lights keep the one they have rather than a new generation of nothing
+        }
+    }
 
     /// Whether an optional picture of `bytes` fits one free block with the heap's reserve intact, the rule the mapping uses; 0 from the platform means no limit.
     static bool secondFits(size_t bytes) {
@@ -223,6 +291,10 @@ private:
     uint8_t* back_ = nullptr;    ///< what a writer fills, or null with one picture
     PictureFrame frame_;         ///< the front picture, as a Reader hands it out
     TryLock lock_;               ///< held by a reader for its gather, by the writer to swap or to fill the only picture
+    platform::VideoCaptureHandle capture_;   ///< the open grabber, or an empty handle
+    platform::WorkerTask task_;              ///< the decode task, or an empty handle
+    std::atomic<bool> stop_{false};          ///< tells the decode task to return
+    char status_[64] = {};                   ///< the capture's status line, rebuilt once a second
     ActiveInstance<PictureService> seat_{*this};
 };
 

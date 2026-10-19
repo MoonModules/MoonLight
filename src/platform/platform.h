@@ -1445,4 +1445,51 @@ void injectTestUsbMidi(const uint8_t (*packets)[4], size_t count);
 /// Take up to `max` of the packets sent to the test desk, oldest first; the count taken.
 size_t takeTestUsbMidiSent(uint8_t (*packets)[4], size_t max);
 
+// --- USB video capture, gated by `hasUsbVideo`: an HDMI grabber presenting itself as a webcam ----
+
+/// Opaque per-device state, owned by the platform between init and deinit.
+struct VideoCaptureHandle { void* impl = nullptr; };
+
+/// One mode a grabber advertises, so a source offers what the device has rather than guesses.
+struct VideoCaptureFormat {
+    uint16_t width = 0;    ///< frame width in pixels
+    uint16_t height = 0;   ///< frame height in pixels
+    uint8_t  fps = 0;      ///< frames a second offered at that size
+};
+
+/// Modes kept per device; a grabber lists its largest first, so a low cap hides the cheap ones.
+constexpr size_t kVideoCaptureMaxFormats = 64;
+
+/// Fill `out` with up to `max` advertised modes and answer the count; 0 means no device has been seen.
+size_t videoCaptureFormats(VideoCaptureFormat* out, size_t max);
+
+/// Bumped whenever that list is rewritten, which is when a device enumerates; 0 until then.
+uint32_t videoCaptureFormatGeneration() MM_NONBLOCKING;
+
+/// Claim the first grabber and stream MJPEG near this mode; false when none is attached or none fits.
+bool videoCaptureInit(VideoCaptureHandle& h, uint16_t width, uint16_t height, uint8_t fps);
+
+/// Decode the next frame into `dst`, scaled down to fit `maxWidth` x `maxHeight` x 3 bytes, top row first.
+bool videoCaptureDecodeInto(VideoCaptureHandle& h, uint8_t* dst, uint16_t maxWidth, uint16_t maxHeight,
+                            uint16_t& outWidth, uint16_t& outHeight, uint32_t timeoutMs);
+
+/// Release the device and free its buffers.
+void videoCaptureDeinit(VideoCaptureHandle& h);
+
+/// Why frames did not reach the lights, cumulative since the device was opened.
+struct VideoCaptureStats {
+    uint32_t decoded = 0;   ///< frames decoded into a picture
+    uint32_t dropped = 0;   ///< frames that arrived while the one before was still being decoded
+    uint32_t failed = 0;    ///< frames the decoder refused, a mis-read payload stride among them
+};
+/// The counters above, read atomically enough for a once-a-second status line.
+VideoCaptureStats videoCaptureStats() MM_NONBLOCKING;
+
+/// Attach a stand-in grabber advertising these modes, so a capture source is host-testable; 0 detaches.
+void setTestVideoCaptureFormats(const VideoCaptureFormat* formats, size_t count);
+/// Make the stand-in decode every pixel this color, so a test tells its picture from the test card.
+void setTestVideoCaptureColor(uint8_t r, uint8_t g, uint8_t b);
+/// Make the stand-in refuse to decode, as a bad bitstream does; false lets it decode again.
+void setTestVideoCaptureDecodeFails(bool fail);
+
 } // namespace mm::platform

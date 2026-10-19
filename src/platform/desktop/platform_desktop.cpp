@@ -2863,6 +2863,90 @@ size_t takeTestUsbMidiSent(uint8_t (*packets)[4], size_t max) {
     return n;
 }
 
+// No grabber on the computer, so USB video here is a stand-in that the capture tests drive.
+namespace {
+struct TestGrabber {
+    std::vector<VideoCaptureFormat> formats;
+    uint32_t generation = 0;
+    uint16_t openW = 0, openH = 0;   ///< the mode videoCaptureInit settled on
+    uint8_t openFps = 0;             ///< and the rate it delivers at
+    uint8_t r = 0, g = 0, b = 0;     ///< what a decode writes into every pixel
+    bool decodeFails = false;
+    bool open = false;
+    VideoCaptureStats stats;
+} g_grabber;
+// How far `have` is from `want`, so the nearest advertised mode can be picked without <cstdlib>.
+long apart(long have, long want) { return have > want ? have - want : want - have; }
+}  // namespace
+
+size_t videoCaptureFormats(VideoCaptureFormat* out, size_t max) {
+    size_t n = 0;
+    for (; n < max && n < g_grabber.formats.size(); n++) out[n] = g_grabber.formats[n];
+    return n;
+}
+
+uint32_t videoCaptureFormatGeneration() MM_NONBLOCKING { return g_grabber.generation; }
+
+bool videoCaptureInit(VideoCaptureHandle& h, uint16_t width, uint16_t height, uint8_t fps) {
+    if (g_grabber.formats.empty()) return false;
+    // The nearest advertised mode by area then by rate, as a grabber settles a request it cannot meet.
+    const VideoCaptureFormat* best = nullptr;
+    long bestCost = 0;
+    for (const VideoCaptureFormat& f : g_grabber.formats) {
+        const long cost = apart(long(f.width) * f.height, long(width) * height) + apart(f.fps, fps);
+        if (!best || cost < bestCost) { best = &f; bestCost = cost; }
+    }
+    g_grabber.openW = best->width;
+    g_grabber.openH = best->height;
+    g_grabber.openFps = best->fps;
+    g_grabber.open = true;
+    g_grabber.stats = VideoCaptureStats{};
+    h.impl = &g_grabber;
+    return true;
+}
+
+bool videoCaptureDecodeInto(VideoCaptureHandle& h, uint8_t* dst, uint16_t maxWidth, uint16_t maxHeight,
+                            uint16_t& outWidth, uint16_t& outHeight, uint32_t /*timeoutMs*/) {
+    if (!h.impl || !g_grabber.open) return false;
+    // Paced at the mode's rate, since a caller looping on a grabber that answered at once would spin.
+    std::this_thread::sleep_for(std::chrono::milliseconds(g_grabber.openFps ? 1000 / g_grabber.openFps : 33));
+    if (g_grabber.decodeFails) { g_grabber.stats.failed++; return false; }
+    // Halved until it fits, which is the scaling the decode hardware offers.
+    uint16_t w = g_grabber.openW, hh = g_grabber.openH;
+    while ((w > maxWidth || hh > maxHeight) && w > 1 && hh > 1) { w = uint16_t(w / 2); hh = uint16_t(hh / 2); }
+    if (w > maxWidth || hh > maxHeight) { g_grabber.stats.failed++; return false; }
+    for (size_t i = 0, px = size_t(w) * hh; i < px; i++) {
+        dst[i * 3 + 0] = g_grabber.r;
+        dst[i * 3 + 1] = g_grabber.g;
+        dst[i * 3 + 2] = g_grabber.b;
+    }
+    outWidth = w;
+    outHeight = hh;
+    g_grabber.stats.decoded++;
+    return true;
+}
+
+void videoCaptureDeinit(VideoCaptureHandle& h) {
+    g_grabber.open = false;
+    h.impl = nullptr;
+}
+
+VideoCaptureStats videoCaptureStats() MM_NONBLOCKING { return g_grabber.stats; }
+
+void setTestVideoCaptureFormats(const VideoCaptureFormat* formats, size_t count) {
+    g_grabber.formats.assign(formats, formats + count);
+    g_grabber.generation = count ? g_grabber.generation + 1 : 0;
+    if (!count) g_grabber.open = false;
+}
+
+void setTestVideoCaptureColor(uint8_t r, uint8_t g, uint8_t b) {
+    g_grabber.r = r;
+    g_grabber.g = g;
+    g_grabber.b = b;
+}
+
+void setTestVideoCaptureDecodeFails(bool fail) { g_grabber.decodeFails = fail; }
+
 
 // Video output, resolved on demand and never linked: @xref{the-video-runtimes-structures-are-transcribed-not-included|why the declarations below must not be tidied}.
 namespace {
