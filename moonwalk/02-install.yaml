@@ -1,0 +1,405 @@
+# yaml-language-server: $schema=moonwalk.schema.json
+stage: Install
+summary: Whether MoonLight suits your lights, then MoonLight on a board, a computer, a Linux box or a container, and on your network.
+processes:
+  - id: know-moonlight
+    title: Get to know MoonLight
+    actor: user
+    goal: You know what MoonLight does, and whether it suits your lights.
+    systems: [MoonLight]
+    page: index.md
+    steps:
+      - id: tour
+        say: Watch the tour of MoonLight.
+        when: { open: { url: "https://youtu.be/F_YgmiUyWVQ" } }
+        detail: |
+          Every clip in one chaptered video. The opening clip on [the home page](index.md) says why MoonLight was rebuilt, who wrote it, and the principles it kept.
+      - id: what-it-is
+        say: Read what MoonLight is.
+        when: { read: { page: index.md, section: What it is } }
+        detail: |
+          A show is a stack of simple blocks: a layout, effects, modifiers and a driver. Every setting applies live.
+      - id: catalog
+        say: Browse the effects, layouts and drivers.
+        when: { read: { page: moonmodules/light/index.md } }
+        detail: |
+          [Drivers](moonmodules/light/drivers.md) says whether your lights are supported: LED strips, panels, Art-Net and DMX fixtures. Measured frame rates per device: [Performance](reference/performance.md).
+  - id: install
+    title: Install MoonLight
+    actor: user
+    goal: MoonLight runs on your ESP32 or Teensy board, your computer or in a container, and its interface opens in your browser.
+    systems: [MoonInstaller, MoonCore]
+    inputs:
+      type: object
+      properties:
+        platform: { type: string, enum: [ESP32, Teensy, Windows, macOS, Linux, Docker], description: "Where does MoonLight run?" }
+    intro: |
+      MoonLight runs on an ESP32 or a Teensy 4.1 board driving the lights directly, or on your computer. There it drives Art-Net, DMX and LED panel cards over the network. Pick where it runs. The interface, your settings and updating work the same everywhere.
+
+      MoonLight is provided as is, without warranty: like any software it has bugs, and you use it at your own risk.
+    steps:
+      - id: open-installer
+        section: Open the installer
+        say: Open the web installer.
+        given: [{ input: platform, in: [ESP32, Teensy, Windows, macOS, Linux] }]
+        when: { open: { url: "https://moonmodules.org/MoonLight/install/" } }
+        detail: |
+          ![The web installer](assets/gettingstarted/01-01-installer-start.png)
+
+          The Release picker offers stable releases and `latest`, a build published on every merge to main; leave it on the newest stable unless you want the newest unreleased changes.
+      - id: plug-in
+        say: Plug your board in with a data cable.
+        given: [{ input: platform, in: [ESP32, Teensy] }]
+        when: { manual: "Use Chrome, Edge or Opera." }
+        detail: |
+          Firefox and Safari lack the Web Serial and WebHID flashing needs.
+
+          ![The installer: picking a release, a firmware, and a board from the gallery](assets/moontube/01-install-esp32.webm)
+      - id: pick-port
+        section: Pick the board
+        say: Pick the board's USB port.
+        given: [{ input: platform, in: [ESP32, Teensy] }]
+        when: { manual: "USB Port, then Pick a port: the entry that appeared when you plugged in." }
+        detail: |
+          Not sure which? Unplug, look at the list, and plug back in: the new entry is your board.
+
+          ![Selecting the USB port](assets/gettingstarted/01-02-select-port.png)
+
+          ![Port selected, chip detected](assets/gettingstarted/01-03-port-selected.png)
+
+          **A Teensy** running any program is found by its USB ids and asked into its bootloader. One running none shows no port: cancel the port list, press the board's program button, and click **Teensy not listed?** below the port row.
+
+          **No port on Windows?** [Install the USB-serial driver](moonwalk.md#windows-serial-drivers). **None on a Mac?** In System Settings, Privacy & Security, let new accessories ask to connect, then plug the board in again.
+      - id: pick-device
+        say: Pick your device from the Device picker.
+        given: [{ input: platform, in: [ESP32, Teensy] }]
+        when: { manual: "Leave Release and Firmware at their suggestions." }
+        detail: |
+          ![Picking a device](assets/gettingstarted/01-04-pick-device.png)
+
+          Green pills work the moment you install, yellow once you add its module, amber is planned.
+
+          ![A device card with its details](assets/gettingstarted/01-05-device-details.png)
+
+          The setup panel shows what the install applies.
+
+          ![Device setup](assets/gettingstarted/01-06-device-setup.png)
+
+          Tick **Erase chip first** only to start clean or to switch firmware ([MIGRATING](reference/MIGRATING.md)). It wipes every setting, so [back the device up](how-to/backup-and-restore.md) first.
+      - id: flash
+        say: Click Install.
+        given: [{ input: platform, equals: ESP32 }]
+        when: { manual: "It writes the firmware in under a minute." }
+        detail: |
+          ![Erasing](assets/gettingstarted/01-07-erasing.png)
+
+          ![Installing](assets/gettingstarted/01-08-installing.png)
+      - id: teensy-flash
+        say: Click Install.
+        given: [{ input: platform, equals: Teensy }]
+        when: { manual: "Then pick the bootloader the browser lists as Unknown device (16C0:0478)." }
+        detail: |
+          **Erase chip first** also wipes every setting, for a board whose saved state went bad.
+      - id: teensy-port
+        say: Pick the Teensy's serial port.
+        given: [{ input: platform, equals: Teensy }]
+        when: { manual: "Optional: it shows once the board has rebooted." }
+        detail: |
+          The installer reads the board's address from its log, and **Apply device defaults** sends the device model's settings.
+      - id: network
+        section: Get it on your network
+        say: Enter your WiFi, or plug in Ethernet.
+        given: [{ input: platform, equals: ESP32 }]
+        when: { manual: "Press Connect after the password." }
+        detail: |
+          ![Entering WiFi credentials](assets/gettingstarted/01-09-wifi-credentials.png)
+
+          Ethernet connects on its own. Or press **Skip** and set WiFi up through [the device's own network](moonwalk.md#join-access-point), or when restoring a backup, which carries the WiFi.
+      - id: teensy-network
+        say: Plug in Ethernet.
+        given: [{ input: platform, equals: Teensy }]
+        when: { manual: "A Teensy 4.1 has no WiFi." }
+        detail: |
+          A 4.1-NE, which has no Ethernet of its own, uses a W5500 module. Pins and wiring: [the Teensy 4.1 page](reference/hardware/teensy-4-1.md).
+      - id: download
+        section: Download it
+        say: Download the app for this computer.
+        given: [{ input: platform, in: [Windows, macOS, Linux] }]
+        when: { manual: "Set Install to This computer, then press Download." }
+        detail: |
+          On Windows this gives you `MoonLight-windows-x64-vX.Y.Z-setup.exe`, on macOS a `.dmg`, on Linux a `.tar.gz` and a `.deb`.
+
+          ![The installer pointed at this computer: picking a release, then downloading the app](assets/moontube/01-install-desktop.webm)
+
+          ![The web installer with Windows x64 selected, and the downloaded setup.exe in the browser's Downloads panel carrying a SmartScreen warning](assets/tutorials/windows-01-download.png)
+      - id: keep
+        section: Tell the browser to keep it
+        say: Keep the download when the browser warns.
+        given: [{ input: platform, equals: Windows }]
+        when: { manual: "In the browser's Downloads panel." }
+        detail: |
+          Click the **`⋯`** next to the file, open the **Delete** dropdown and choose **Keep anyway**. In Chrome: the entry's **`⋯`**, **Keep**, then **Keep anyway**.
+
+          ![The SmartScreen download dialog, with the Delete dropdown open showing Keep anyway](assets/tutorials/windows-02-keep-anyway.png)
+
+          MoonLight is not code-signed, so every new build starts with no reputation and gets this warning. Defender removed it, or the download failed? See [Windows flags the download](how-to/troubleshooting.md#windows-flags-the-download).
+      - id: setup
+        section: Install and start it
+        say: Run the setup you kept.
+        given: [{ input: platform, equals: Windows }]
+        when: { manual: "Double-click it and press Install." }
+        detail: |
+          Keeping it was the trust decision, so Windows does not ask again. It installs **for your user only**, into `%LOCALAPPDATA%\Programs\MoonLight`, which is why it never asks for an administrator password. It needs about 1.3 MB.
+
+          ![The MoonLight setup dialog, showing the install location under AppData Local Programs](assets/tutorials/windows-03-setup.png)
+
+          A copy of MoonLight that is already running gets stopped before the files are replaced. A running copy holds a lock on its own executable, so the install would otherwise fail part-way.
+      - id: start
+        say: Open MoonLight from the Start menu.
+        given: [{ input: platform, equals: Windows }]
+        when: { manual: "Press the Windows key and type MoonLight." }
+        detail: |
+          ![The Windows Start menu showing MoonLight with its icon, and an Uninstall MoonLight entry](assets/tutorials/windows-04-start-menu.png)
+
+          The **Uninstall MoonLight** entry beside it is the clean way to remove it later, and it leaves your settings in place.
+      - id: drag-mac
+        section: Install and start it
+        say: Drag MoonLight to Applications.
+        given: [{ input: platform, equals: macOS }]
+        when: { manual: "Open the .dmg and drag the app onto the Applications folder." }
+      - id: open-mac
+        say: Open MoonLight from Applications.
+        given: [{ input: platform, equals: macOS }]
+        when: { manual: "The first time, right-click it and choose Open." }
+        detail: |
+          Gatekeeper asks once, since the build is ad-hoc signed rather than notarized: it says it cannot verify the developer, and **Open** accepts it. Or clear the flag in a terminal:
+
+          ```
+          xattr -dr com.apple.quarantine /Applications/MoonLight.app
+          ```
+      - id: install-deb
+        section: Install and start it
+        say: Install the .deb package.
+        given: [{ input: platform, equals: Linux }]
+        when: { run: { command: "sudo apt install ./moonlight_*_$(dpkg --print-architecture).deb" } }
+        detail: |
+          The releases carry `_amd64.deb` for `x86_64` and `_arm64.deb` for `aarch64` (`uname -m` says which), for Debian, Ubuntu and Raspberry Pi OS with glibc 2.35 or later. On a headless board, fetch the right file over ssh:
+
+          ```
+          arch=$(dpkg --print-architecture)
+          url=$(curl -fsSL https://api.github.com/repos/MoonModules/MoonLight/releases/tags/latest | grep -o "https://[^\"]*_${arch}\.deb" | head -1)
+          curl -fsSL -o moonlight.deb "$url" && sudo apt install -y ./moonlight.deb
+          ```
+
+          `latest` is the rolling build from main; for the newest tagged release, use `releases/latest`. Or unpack the `.tar.gz` and run it in place. To start it on every boot: [Keep MoonLight running on a Linux board](moonwalk.md#run-linux-board).
+      - id: run-linux
+        say: Start MoonLight.
+        given: [{ input: platform, equals: Linux }]
+        when: { run: { command: "MoonLight" } }
+      - id: docker-run
+        section: Run the container
+        say: Run the published image.
+        given: [{ input: platform, equals: Docker }]
+        when: { run: { command: "docker run -d --name moonlight --network host -v moonlight-data:/data --restart unless-stopped ghcr.io/moonmodules/moonlight:latest" } }
+        detail: |
+          It runs with host networking and a volume for its settings.
+
+          One image carries amd64 and arm64, so a board and a server pull the same tag. Host networking is what lets mDNS and Art-Net broadcast reach your fixtures, and `--restart unless-stopped` brings it back after every reboot. Why each flag, and what to do when the container exits at once: [Docker](how-to/installing-on-linux.md#docker).
+      - id: open-device
+        section: That is it
+        say: Click the device's link in the installer.
+        given: [{ input: platform, in: [ESP32, Teensy] }]
+        when: { manual: "The installer says Device is online! with the device's address." }
+        detail: |
+          ![Device is online over WiFi](assets/gettingstarted/01-10-online-wifi.png)
+
+          The same box shows however the device connected, over Ethernet or rejoining a network it already knew. The installer remembers the device under **Your devices**.
+
+          ![Online over Ethernet](assets/gettingstarted/01-11-online-ethernet.png)
+
+          ![Online on an address it already had](assets/gettingstarted/01-12-online-existing-ip.png)
+      - id: open-ui
+        section: That is it
+        say: Open the interface at localhost:8080.
+        given: [{ input: platform, in: [Windows, macOS, Linux] }]
+        when: { open: { url: "http://localhost:8080/" } }
+        then:
+          - { status: 200 }
+        detail: |
+          ![MoonLight running: the web interface with a live 3D preview and the Effects panel](assets/tutorials/windows-05-running.png)
+
+          The window MoonLight runs in, a console on Windows or your terminal, **is** the application. It shows the log, and closing it stops MoonLight. The line that matters on a first run is `MoonLight is running: http://localhost:8080/`. The address printed below it is the same interface, reachable from your phone or another machine on your network.
+
+          On a first install you get a default grid and a running effect, enough to confirm everything works. [How MoonLight works](tutorials/how-moonlight-works.md) explains the Layouts, Effects and Drivers down the left-hand side.
+
+          Two options worth knowing: `--no-browser` stops it opening a browser (for a headless machine), and `--port <n>` serves somewhere other than 8080.
+      - id: open-container
+        section: That is it
+        say: Open the interface on port 8080.
+        given: [{ input: platform, equals: Docker }]
+        when: { manual: "Use http://<machine>:8080, or localhost:8080 on the same machine." }
+        detail: |
+          The machine's address is the one you reach it at over SSH or from your router.
+      - id: settings
+        section: Where your settings live
+        say: Find where your settings live.
+        when: { manual: "They live apart from the program." }
+        detail: |
+          Updating or reinstalling keeps them.
+
+          | Where it runs | Your settings |
+          |---|---|
+          | ESP32 | On the device. **Erase chip first** clears them: [back them up](how-to/backup-and-restore.md) before ticking it. |
+          | Teensy | In 1 MB of the program flash. |
+          | Windows | `%LOCALAPPDATA%\MoonLight`: paste it into Explorer's address bar. Uninstalling leaves it. |
+          | macOS | `~/Library/Application Support/MoonLight`. |
+          | Linux | `~/.local/share/MoonLight`, or under `$XDG_DATA_HOME` when it is set. |
+          | Docker | The `moonlight-data` volume; without it, every `docker rm` starts over. |
+      - id: update
+        section: Updating
+        say: Update from the ⬆ badge.
+        given: [{ input: platform, in: [ESP32, Teensy] }]
+        when: { manual: "It opens the Firmware card." }
+        detail: |
+          It lights when a newer stable release exists, and your settings stay. An ESP32 installs it over the network: [Updating MoonLight](moonwalk.md#update-firmware), with the way back when an update fails.
+
+          A Teensy has no TLS, so the browser downloads the release's `.bin` and uploads it. Power lost right after **Rebooting…** leaves it dark until a USB install with the program button, which keeps the settings.
+      - id: update-app
+        section: Updating
+        say: Install the new build.
+        given: [{ input: platform, in: [Windows, macOS, Linux] }]
+        when: { manual: "The ⬆ badge in the top bar opens its release page." }
+        detail: |
+          The badge lights when a newer stable release ships for your OS. A running program cannot replace its own executable, so updating is the download and the install again, in about a minute. Your settings stay.
+      - id: update-docker
+        section: Updating
+        say: Recreate the container from the new image.
+        given: [{ input: platform, equals: Docker }]
+        when: { run: { command: "docker pull ghcr.io/moonmodules/moonlight:latest && docker rm -f moonlight && docker run -d --name moonlight --network host -v moonlight-data:/data --restart unless-stopped ghcr.io/moonmodules/moonlight:latest" } }
+        detail: |
+          The volume keeps your settings.
+    outro: |
+      ## Where to go next
+
+      - **[How MoonLight works](tutorials/how-moonlight-works.md)**: the interface, and the Layouts, Effects and Drivers model.
+      - **[Driving LED panels with a receiving card](how-to/panel-cards.md)**: turn this desktop into the sending card for an LED wall.
+      - **[Keep it running on a Linux board](moonwalk.md#run-linux-board)**: a Pi or a NanoPi that starts MoonLight on every boot.
+
+      Something not working on a first run? See [Troubleshooting](how-to/troubleshooting.md#a-first-run-on-a-computer-or-in-a-container).
+  - id: install-windows-zip
+    title: Install MoonLight on Windows from the zip
+    actor: user
+    goal: MoonLight runs on Windows without the setup, from a script you can read first.
+    systems: [MoonCore]
+    intro: |
+      The zip is the way through when Defender blocks the setup download, since it is a different file with a different fingerprint. It also lets you read the install script before running it. Settings live in the same folder whichever route you take.
+    steps:
+      - id: download-zip
+        say: Download the zip from the releases page.
+        when: { open: { url: "https://github.com/MoonModules/MoonLight/releases" } }
+        detail: |
+          It is `MoonLight-windows-x64-vX.Y.Z.zip`.
+      - id: extract
+        say: Extract it.
+        when: { manual: "Right-click it and choose Extract All." }
+        detail: |
+          Run the program from the extracted folder rather than inside the zip: Windows unpacks a zip-launched program into a temporary folder it may clear at any time.
+      - id: run
+        say: Run MoonLight.exe, or Install-MoonLight.cmd.
+        when: { manual: "MoonLight.exe runs in place; Install-MoonLight.cmd installs it." }
+        detail: |
+          `MoonLight.exe` writes nothing outside your settings folder, the one for a USB stick. `Install-MoonLight.cmd` installs it as [the setup](moonwalk.md#install) does. It wraps `Install-MoonLight.ps1`, which you can read first. Right-clicking that `.ps1` and choosing **Run with PowerShell** fails: Windows marks every file from a downloaded zip as internet-sourced, and PowerShell refuses an unsigned script carrying that mark. `Uninstall-MoonLight.ps1` reverses the install and leaves your settings alone.
+      - id: open-ui
+        say: Open the interface at localhost:8080.
+        when: { open: { url: "http://localhost:8080/" } }
+  - id: windows-serial-drivers
+    title: Install the USB-serial driver on Windows
+    actor: user
+    goal: A board plugged into a Windows computer gets a COM port the installer and MoonDeck can see.
+    intro: |
+      Windows ships no driver for the two USB-serial chips almost every ESP32 board uses, WCH's CH340 and Silicon Labs' CP2102. macOS and Linux do, so a board that works on a Mac can show up on Windows with no COM port at all. Both the installer's port picker and MoonDeck's then come up empty. It is the operating system, once per computer.
+    steps:
+      - id: recognize
+        say: Check the board has no COM port.
+        when: { manual: "The installer's picker says No serial ports available." }
+        detail: |
+          Device Manager shows the board under Other devices with a yellow triangle. In PowerShell, `Get-PnpDevice | Where-Object InstanceId -match "VID_10C4|VID_1A86"` lists the board with `Status: Error`.
+      - id: which
+        say: Find the driver from the vendor ID.
+        when: { manual: "The vendor ID is in the board's InstanceId." }
+        detail: |
+          | VID | Chip | Common boards | Driver |
+          |---|---|---|---|
+          | `1A86` | WCH CH340, CH341 | LOLIN D32, NodeMCU-ESP32 clones, some Olimex | WCH's CH341SER; Windows Update usually brings it, after `pnputil /scan-devices` from an elevated PowerShell |
+          | `10C4` | Silicon Labs CP2102, CP2102N | ESP32-S3 DevKitC, ESP32-S31 CoreBoard, newer kits | the [Silicon Labs Universal driver](https://www.silabs.com/documents/public/software/CP210x_Universal_Windows_Driver.zip), which Windows Update rarely has |
+          | `0403` | FTDI FT2232, FT230X | some Olimex Gateways, older WROVER kits | Windows Update installs it |
+      - id: install
+        say: Install it, from an elevated PowerShell.
+        when: { run: { command: "pnputil /add-driver $env:TEMP\\cp210x_driver\\silabser.inf /install" } }
+        detail: |
+          For the CP210x, download and unpack the Universal driver first:
+
+          ```
+          Invoke-WebRequest "https://www.silabs.com/documents/public/software/CP210x_Universal_Windows_Driver.zip" -OutFile "$env:TEMP\cp210x_driver.zip"
+          Expand-Archive "$env:TEMP\cp210x_driver.zip" "$env:TEMP\cp210x_driver" -Force
+          ```
+
+          A few seconds later the board appears as `Silicon Labs CP210x USB to UART Bridge (COM…)`, and both pickers list it without a restart.
+      - id: still-nothing
+        say: Clear the known causes of a missing port.
+        when: { manual: "A stale COM port, a wedged CH340 driver or a charge-only cable." }
+        detail: |
+          - **A stale COM port** from an earlier attempt, visible in Device Manager under *Show hidden devices*, can block a new one: remove it with `pnputil /remove-device "USB\VID_…"`, elevated, and plug in again.
+          - **A wedged CH340 driver** shows `Status: Unknown` though installed: `pnputil /delete-driver oem*.inf /uninstall /force` for the WCH driver, plug in again, and let Windows Update fetch a fresh one.
+          - **A charge-only cable** carries power without data and enumerates for a moment, then vanishes. Try a cable you know carries data, in a rear USB 2 port.
+  - id: run-linux-board
+    title: Keep MoonLight running on a Linux board
+    actor: user
+    goal: An always-on Pi or NanoPi runs MoonLight after every reboot.
+    systems: [MoonCore]
+    page: how-to/installing-on-linux.md
+    steps:
+      - id: install
+        say: Install the package on the board.
+        when: { process: install }
+      - id: unit
+        say: Write a systemd unit for MoonLight.
+        when: { read: { page: how-to/installing-on-linux.md, section: Keeping it running after a reboot } }
+      - id: enable
+        say: Enable the service at boot.
+        when: { run: { command: "sudo systemctl enable --now moonlight" } }
+      - id: status
+        say: Check the service runs.
+        when: { run: { command: "systemctl status moonlight" } }
+      - id: shutdown
+        say: Shut the board down cleanly.
+        when: { run: { command: "sudo shutdown now" } }
+  - id: join-access-point
+    title: Join your WiFi through the device's own network
+    actor: user
+    goal: A device with no network learns your WiFi and becomes reachable.
+    systems: [MoonCore]
+    dependsOn: [install]
+    steps:
+      - id: power-on
+        say: Power on the device.
+        when: { manual: "With no network known, it opens its own MM-XXXX network." }
+        detail: |
+          A device that cannot join a network keeps its access point open.
+      - id: join
+        say: Join its MM-XXXX network.
+        when: { manual: "Join from a phone or laptop." }
+        detail: |
+          The sign-in screen opens on the device's WiFi card. Or open http://4.3.2.1 when no sign-in screen appears.
+      - id: pick
+        say: Add your network on the WiFi card.
+        when: { open: { module: WiFiModule } }
+        then:
+          - { module: WiFiModule, control: known, notEquals: 0 }
+        detail: |
+          Pick your network in the scan and type its password.
+      - id: back
+        say: Open the device on your network.
+        when: { manual: "Rejoin your network, then open the device's new address." }
+        detail: |
+          The address shows on the device's WiFi card and in the installer's device list.

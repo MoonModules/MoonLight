@@ -1,0 +1,24 @@
+// Particle fountain: sparks thrown up from the middle, arcing over and falling back, after hpwit's multi_effect_controller.
+
+class ParticleFountainEffect {
+  byte amount = 6;
+
+  int dimensions() { return 2; }
+
+  string tags() { return "💫✨"; }
+
+  void defineControls() {
+    pool(300);
+    addControl("amount", amount, 1, 20); // sparks per frame
+  }
+
+  void tick() {
+    fade(48);
+    emit(width / 2, height / 2, 45056 + random16(8192), height * 16, amount, 120, random16(256));
+    gravity(height * 3);
+    drag(2);
+    step();
+    age(1);
+    render(120);
+  }
+}

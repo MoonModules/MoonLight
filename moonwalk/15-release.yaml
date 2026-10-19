@@ -1,0 +1,44 @@
+# yaml-language-server: $schema=moonwalk.schema.json
+stage: Release
+summary: A tagged release with every binary, the installer, the help and the site.
+processes:
+  - id: release
+    title: Release
+    actor: product-owner
+    goal: A tagged release with every binary, the installer manifests, the help and the docs site.
+    systems: [MoonInstaller]
+    page: contributing/principles-and-process.md
+    intro: |
+      The event where the binary ships, so on "run pre-release" every commit and merge check runs over the tagged tree, whatever it triggers, and every shipped firmware builds. The rest is the product owner's judgment.
+    steps:
+      - id: merge-checks
+        section: Checks
+        say: Run the merge gates on the tagged commit.
+        when: { process: pre-merge }
+        detail: |
+          They run the commit checks with their triggers ignored.
+      - id: firmwares
+        say: Build every shipped ESP32 firmware.
+        actor: contributor
+        when: { manual: "build_esp32.py --firmware <name>, once per shipped variant." }
+        detail: |
+          The shipped variants are the registry's rows marked `ships` in `moondeck/build/firmwares.py`, built [one at a time](moonwalk.md#esp32-build-flash).
+      - id: hardware
+        section: Judgment
+        say: Test it on real hardware.
+        when: { manual: "The product owner's eyes are the measurement." }
+      - id: blockers
+        say: Close every release blocker.
+        when: { manual: "The issues labeled as blocking it, and the release's own criteria." }
+      - id: notes
+        say: Write the release notes.
+        when: { manual: "What a user notices, from the commits since the last tag." }
+      - id: smoke
+        say: Smoke-test every platform on a minor bump.
+        when: { manual: "A major bump too. Install and run it on each desktop OS and a board per chip family." }
+      - id: tag
+        section: Ship
+        say: Tag the release.
+        when: { run: { command: "git tag vX.Y.Z && git push --tags" } }
+        detail: |
+          The release workflow builds, publishes and deploys the site. A `vX.Y.Z-rcN` tag publishes a GitHub release flagged pre-release, offered to readers who pick the pre-release channel; everyone else stays on stable.

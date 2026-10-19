@@ -24,6 +24,30 @@ import { TEENSY_FAMILY, requestHalfKay, requestTeensySerial } from "./teensy-wri
 import * as deviceSupport from "./install-picker-devices.js";
 import { BACKUP_SNIPPET } from "./backup-snippet.js";
 
+// MoonWalk: the docs site's map of every process, the script beside the installer on Pages and on the installer preview. It shows every way to install before one starts, and learns afterwards what the install did.
+const WALK = new URL("../assets/moonwalk.js", import.meta.url).href;
+const WALKED = ["install"];   // what a successful install vouches for
+
+async function openWalk() {
+  let walk;
+  try { walk = await import(WALK); } catch (e) { alert(`MoonWalk could not load: ${e.message}`); return; }
+  // An installer installs a board, so the install opens on its ESP32 path.
+  walk.openMap((host) => walk.drawMap(host, { here: ["install"], choices: { platform: "ESP32" }, actor: "user", newTab: true }), { closeClass: "secondary" });
+}
+document.getElementById("walk-open")?.addEventListener("click", openWalk);
+
+// Vouch for what an install did: kept on this site, whose docs map shares it, and best effort, since a map that cannot load must not get in an install's way.
+function vouch(ids) {
+  import(WALK).then((walk) => walk.markDone(ids)).catch(() => {});
+}
+
+// The device's address with what the install did, so the device's own map learns it on the first open.
+function withWalked(url) {
+  const u = new URL(url);
+  u.searchParams.set("walked", WALKED.join(","));
+  return u.href;
+}
+
 // Windows-only hints (was a separate inline <script> in <head>): reveal .windows-only
 // rows when the UA is Windows.
 // The backup card: the bookmarklet IS the snippet (a javascript: href), the copy button the
@@ -598,6 +622,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function handleSuccess({ url, mdns, device, applyDefaults = true, defaultsApplied = false, viaHttp, alreadyOnline, ethOnlyNoLink }) {
+      vouch(WALKED);   // every successful install counts, the Ethernet one waiting for its cable and the one without an address included
       disarmUnloadGuard();
       // Clear the amber notice styling from any prior install in this session — only the
       // eth-only-no-link branch re-adds it, so every other outcome shows the plain note.
@@ -659,12 +684,12 @@ document.addEventListener('DOMContentLoaded', () => {
       // so a malformed boot-log value can't become a javascript:/data: link.
       const a = document.getElementById("done-url");
       a.textContent = url;
-      if (isHttpUrl(url)) a.href = url; else a.removeAttribute("href");
+      if (isHttpUrl(url)) a.href = withWalked(url); else a.removeAttribute("href");
       const aMdns = document.getElementById("done-url-mdns");
       if (mdns) {
         const mdnsUrl = `http://${mdns}/`;
         aMdns.textContent = mdnsUrl;
-        if (isHttpUrl(mdnsUrl)) aMdns.href = mdnsUrl; else aMdns.removeAttribute("href");
+        if (isHttpUrl(mdnsUrl)) aMdns.href = withWalked(mdnsUrl); else aMdns.removeAttribute("href");
         aMdns.hidden = false;
       } else {
         aMdns.hidden = true;

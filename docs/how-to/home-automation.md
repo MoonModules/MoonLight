@@ -1,15 +1,15 @@
 # Home automation
 
-Bring a MoonLight device into your smart home, controlled alongside your lights, scenes, and automations, using the [MQTT module](../moonmodules/core/system.md#mqtt) (or, for some hubs, the built-in WLED compatibility). The device exposes on/off, brightness, and color; a home-automation platform adopts it and drives those from its own app, voice assistant, and automations.
+Bring a MoonLight device into your smart home, or have it drive your smart lights: the steps are the [Bring the device into a smart home](../moonwalk.md#smart-home) process, and the reference behind them follows: the MQTT topics, the Homebridge accessory, presets in Home Assistant, the infrastructure setup and troubleshooting. The device uses the [MQTT module](../moonmodules/core/system.md#mqtt) (or, for some hubs, the built-in WLED compatibility). It exposes on/off, brightness, and color; a platform adopts it and drives those from its own app, voice assistant, and automations.
 
 Integration goes **both directions**:
 
 - **Your smart home controlling the device**: a hub such as Home Assistant or Homebridge drives its on/off, brightness and color from the hub's app and automations.
 - **The device controlling smart-home lights**: MoonLight drives **Philips Hue** bulbs as effect pixels, so your existing smart bulbs become part of a show.
 
-The device-side recipes below assume the hub and (where relevant) an MQTT broker are already running. If any of that infrastructure isn't there yet, jump to [Set up the infrastructure](#set-up-the-infrastructure) at the end for HA-with-Mosquitto and standalone-Homebridge walkthroughs, then come back.
+The process assumes the hub and (where relevant) an MQTT broker are already running. If any of that infrastructure isn't there yet, jump to [Set up the infrastructure](#set-up-the-infrastructure) at the end for HA-with-Mosquitto and standalone-Homebridge walkthroughs, then come back.
 
-- **[Adopt in Home Assistant](#adopt-in-home-assistant)**: point the device at HA's broker; HA auto-creates the entity. Optionally bridge that entity into Apple Home via HA's HomeKit Bridge.
+- **[Adopt in Home Assistant](#adopt-in-home-assistant)**: HA discovers the device, or auto-creates the entity from HA's broker. Optionally bridge that entity into Apple Home via HA's HomeKit Bridge.
 - **[Adopt in Homebridge](#adopt-in-homebridge)**: standalone Apple-Home-only path when HA isn't wanted: add one `mqttthing` accessory, pair in Home.
 - **[Drive Hue lights](#drive-hue-lights)**: point an effect at your Hue bulbs.
 - **[Other platforms](#other-platforms)**: Node-RED, openHAB, and other MQTT hubs reach the device through the same topics.
@@ -29,7 +29,7 @@ The control surface these integrations drive is documented once: the MQTT contro
 
 <img src="../assets/core/ha-integration.png" width="600" alt="MoonLight devices as 💫-marked lights in a Home Assistant dashboard">
 
-HA discovers a MoonLight device automatically over the WLED path, with no broker and nothing to configure, and lists it as a light with color, palette, and brightness. The 💫 in each name marks it as MoonLight among any plain WLED devices. An optional step brings that entity into Apple Home via HA's own HomeKit Bridge: no Homebridge needed. Turn the `haDiscovery` control on only for the MQTT path (broker-only or cross-subnet setups); see [Let HA auto-create the entity](#2-let-ha-auto-create-the-entity) below.
+HA discovers a MoonLight device automatically over the WLED path, with no broker and nothing to configure, and lists it as a light with color, palette, and brightness. The 💫 in each name marks it as MoonLight among any plain WLED devices. An optional step brings that entity into Apple Home via HA's own HomeKit Bridge: no Homebridge needed. Turn the `haDiscovery` control on only for the MQTT path (broker-only or cross-subnet setups); see [How HA creates the entity](#how-ha-creates-the-entity) below.
 
 The chain:
 
@@ -38,18 +38,7 @@ Apple Home ──HAP──▶ HA (HomeKit Bridge) ──MQTT──▶ Mosquitto 
                              └── HA app / voice / automations
 ```
 
-### 1. (MQTT path only) Point the device at the broker
-
-The default WLED path needs none of this: skip to step 2. Do step 1 **only if you're using the opt-in MQTT path** (a broker-only / cross-subnet setup). In the device's web UI, open the **MQTT** module and set:
-
-- `broker`: the **HA VM's LAN IP** (not `127.0.0.1`, and not `homeassistant.local` unless the device does mDNS; the IP the HAOS console prints is safer).
-- `port`: `1883`.
-- `username` / `password`: the HA user you created for MQTT (a plain HA user with local-network access; see the [broker add-on setup](#install-the-mosquitto-broker-add-on) if you haven't).
-- `haDiscovery`: turn **on** (it's off by default). This is what makes HA auto-create the MQTT entity in the next step; leave it off if you're on the WLED path.
-
-`mqtt_status` turns to `connected` when it reaches the broker. Confirm from HA with the built-in **MQTT integration → Configure → Listen to topic → `MoonLight/#`**: the device's `.../on/get`, `.../brightness/get`, `.../hsv/get`, and retained `.../name` appear.
-
-### 2. Let HA auto-create the entity
+### How HA creates the entity
 
 Nothing to configure: HA discovers the device automatically over the WLED path. Two paths exist; the WLED one is the default and the richer of the two, so a device appears in HA **once** out of the box:
 
@@ -62,41 +51,17 @@ The MQTT control surface (topics, HSV → palette mapping, retained state) is in
 
 **Not this:** do **not** hand-configure HA's generic *MQTT light* against `homeassistant/light/<slug>/…`: that's HA's own discovery topic schema, not a control API. The device answers via the auto-discovery above.
 
-### 3. Optional: expose to Apple Home via HomeKit Bridge
+### Apple Home through HA
 
-HA can act as its own HomeKit bridge. **Settings → Devices & Services → Add Integration → HomeKit Bridge**, pick **Include selected entities**, and tick the MoonLight light entity created above. HA prints a QR code and PIN; in the iOS **Home** app, **Add Accessory → More options → HA HomeKit Bridge** and scan / enter the PIN. The light shows up as a HomeKit accessory driven end-to-end through HA: same outcome as the standalone Homebridge recipe, one fewer service to run.
+HA can act as its own HomeKit bridge, so the light reaches Apple Home driven end-to-end through HA: same outcome as the standalone Homebridge recipe, one fewer service to run.
 
 ## Adopt in Homebridge
 
-Standalone Apple-Home-only path, for when HA isn't wanted. It assumes Homebridge and a Mosquitto broker are running, usually together on a Pi; a Mac or PC works for a test. [Set up standalone Homebridge + Mosquitto](#set-up-standalone-homebridge-mosquitto) covers installing them. Two steps: **point the device at the broker**, then **add one accessory to Homebridge**.
+Standalone Apple-Home-only path, for when HA isn't wanted. It assumes Homebridge and a Mosquitto broker are running, usually together on a Pi; a Mac or PC works for a test. [Set up standalone Homebridge + Mosquitto](#set-up-standalone-homebridge-mosquitto) covers installing them. Find the broker's LAN IP with `hostname -I` (Pi/Linux), `ipconfig getifaddr en0` (macOS), or `ipconfig` (Windows). The accessory is in [The Homebridge accessory](#the-homebridge-accessory).
 
 ```
 Apple Home ──HAP──▶ Homebridge ──MQTT──▶ Mosquitto ◀──MQTT── MoonLight device
 ```
-
-### 1. Point the device at the broker
-
-In the device's web UI, open the **MQTT** module and set:
-
-- `broker`: the broker's hostname or **LAN** IP (not `127.0.0.1`, which is loopback on the *broker's* host, unreachable from the device). Find it with `hostname -I` (Pi/Linux), `ipconfig getifaddr en0` (macOS), or `ipconfig` (Windows).
-- `port`: usually `1883`.
-- `username` / `password`: only if your broker requires auth.
-
-`mqtt_status` turns to `connected` once it reaches the broker, and `mosquitto_sub -t 'MoonLight/#' -v` shows the device's `.../on/get`, `.../brightness/get`, `.../hsv/get`, and retained `.../name`.
-
-### 2. Add the accessory to Homebridge
-
-Install the [`homebridge-mqttthing`](https://github.com/arachnetech/homebridge-mqttthing) plugin from the Config UI **Plugins** screen, or with `npm i -g homebridge-mqttthing`. Then add [the `lightbulb` accessory](#the-homebridge-accessory) to your Homebridge config, in the Config UI **Config** editor or `~/.homebridge/config.json`. Set:
-
-- `url`: `mqtt://<broker>:1883`. When Homebridge and the broker share a host (the usual case), `mqtt://127.0.0.1:1883` works, since here loopback *is* the broker.
-- `563cfe`: replaced by your device's MAC suffix throughout the `topics`.
-- `username` / `password`: matching the broker, or removed if none.
-
-Restart Homebridge.
-
-### 3. Pair it in Apple Home
-
-Once `mosquitto_sub` shows the device and Homebridge lists the accessory, add it to HomeKit. In the **Home** app, pick **Add Accessory → More options →** the Homebridge bridge, with the PIN Homebridge prints on start or shows in its Config UI. The device shows up as a light: on/off, brightness, and the color wheel that steps through palettes.
 
 ## Drive Hue lights
 
@@ -106,14 +71,7 @@ Because Hue is a rate-limited HTTP hub (~10 commands/s), this is **smooth ambien
 
 **Recommended layout:** set up a **one-dimensional grid: width 1, height = the number of Hue lights** you want to control. Each pixel of that column maps to one bulb, in order, so a 1×N grid gives exactly N lights with none wasted. 1D effects such as a rainbow or a chase read naturally across the bulbs. Sizing the grid to your bulb count keeps the effect and the driver in step.
 
-To set it up:
-
-1. **Add a Hue driver.** In the device's web UI pipeline, add a **Hue** driver to the top-level **Drivers** container. Enter your bridge's IP in `bridgeIp` (find it in the Hue app, or at [discovery.meethue.com](https://discovery.meethue.com)).
-2. **Pair with the bridge.** Press the physical **link button** on the Hue bridge, then click the driver's **`pair`** button within ~30 seconds. The device claims an app key (stored on the driver as `appKey`): a one-time step; the status line reports `paired, N lights`.
-3. **Pick what it drives.** The driver lists the bridge's color-capable, reachable bulbs and its rooms; use the `room` / `light` controls to aim the effect at all bulbs, one room, or a single light. Each selected bulb becomes one pixel of the driver's window.
-4. **Run an effect.** Any effect on the layer drives the bulbs, and the global brightness and color order apply as on a strip. Brightness 0 turns a bulb off.
-
-*Note:* a bulb is driven when it is an "Extended color light" and reachable: a white-only bulb, a plug, or a powered-off light is skipped. For true real-time (fast) Hue, the [Hue Entertainment API](https://developers.meethue.com/develop/hue-entertainment/) (DTLS streaming) is out of scope for this driver, which targets the standard API's ambient-color sweet spot.
+The driver lists the bridge's color-capable, reachable bulbs and its rooms. A bulb is driven when it is an "Extended color light" and reachable: a white-only bulb, a plug, or a powered-off light is skipped. For true real-time (fast) Hue, the [Hue Entertainment API](https://developers.meethue.com/develop/hue-entertainment/) (DTLS streaming) is out of scope for this driver, which targets the standard API's ambient-color sweet spot.
 
 ## Other platforms
 
@@ -121,7 +79,7 @@ Home Assistant and Homebridge above are the worked examples; other home-automati
 
 **Node-RED, openHAB, voice assistants via a hub.** Anything that speaks MQTT drives the device through the [control topics](#the-mqtt-topics), with the same [Mosquitto install](#set-up-standalone-homebridge-mosquitto).
 
-Each integration is a self-contained recipe; the shared MQTT reference lives once in [The MQTT topics](#the-mqtt-topics).
+The shared MQTT reference lives once in [The MQTT topics](#the-mqtt-topics).
 
 ## The MQTT topics
 
@@ -187,7 +145,7 @@ sudo uv run moondeck/run/run_desktop.py --port 80
 
 ## Set up the infrastructure
 
-The two recipes above assume the hub + broker are running. Installing them takes one section each: **Home Assistant + Mosquitto**, the recommended path with the HomeKit bridge included, or **standalone Homebridge + Mosquitto** for Apple Home alone.
+[Bring the device into a smart home](../moonwalk.md#smart-home) assumes the hub is running, and for an MQTT path the broker too; Home Assistant's default WLED path needs no broker. Installing them takes one section each: **Home Assistant + Mosquitto**, the recommended path with the HomeKit bridge included, or **standalone Homebridge + Mosquitto** for Apple Home alone.
 
 ### Set up Home Assistant + Mosquitto
 

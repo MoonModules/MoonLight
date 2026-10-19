@@ -1938,6 +1938,15 @@ body.help-hidden .control-row.has-help { margin-bottom: 6px; }
     background: var(--card-bg-0); color: var(--fg);
 }
 .mb-ask::backdrop { background: rgba(0,0,0,0.5); }
+
+/* MoonWalk's map, hosted from the docs site in its own dialog. The map reads the docs theme's color variables; the dialog and the bar that follows a process map the app's colors onto them, so the map's script knows no name of the app's. */
+.mm-walk-dialog, .mm-walk-bar {
+    --md-default-fg-color: var(--fg); --md-default-bg-color: var(--card-bg-0); --md-accent-fg-color: var(--accent);
+    --md-default-fg-color--lightest: var(--border); --md-default-fg-color--light: var(--fg-muted);
+}
+/* A followed step's target: its control row, else its card, outlined for a few seconds so the eye finds it. */
+.walk-target { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; animation: walk-target 3s ease-out forwards; }
+@keyframes walk-target { 0%, 70% { outline-color: var(--accent); } 100% { outline-color: transparent; } }
 .mb-ask h3 { margin: 0 0 10px; font-size: 1rem; }
 .mb-ask p { margin: 0 0 10px; font-size: 0.9em; line-height: 1.45; }
 /* The reassurance reads quieter than the warning above it: the point is that a mistake is cheap,

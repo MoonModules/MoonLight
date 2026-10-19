@@ -1,0 +1,563 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://moonmodules.org/MoonLight/moonwalk/moonwalk.schema.json",
+  "title": "A journey stage and its processes",
+  "description": "One file per stage of the journey (moonwalk/NN-<stage>.yaml). A process is shaped after an Arazzo workflow, a step after Given, When, Then; see docs/work/future/moonwalk.md.",
+  "type": "object",
+  "required": [
+    "stage",
+    "processes"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "stage": {
+      "type": "string",
+      "description": "The stage's title on the map's backbone."
+    },
+    "summary": {
+      "type": "string"
+    },
+    "processes": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/process"
+      }
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
+    },
+    "markdown": {
+      "type": "string"
+    },
+    "process": {
+      "type": "object",
+      "required": [
+        "id",
+        "title",
+        "actor",
+        "goal"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id",
+          "description": "Unique across all stage files."
+        },
+        "title": {
+          "type": "string"
+        },
+        "actor": {
+          "$ref": "#/$defs/actor"
+        },
+        "goal": {
+          "type": "string",
+          "description": "One sentence: what is true once it is done."
+        },
+        "systems": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "The MoonLight systems the process touches, as the architecture's Part table names them; the generator adds what the steps imply."
+        },
+        "dependsOn": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/id"
+          },
+          "description": "Processes that come first, as Arazzo's dependsOn."
+        },
+        "inputs": {
+          "type": "object",
+          "description": "What the reader chooses, as Arazzo's workflow inputs: a JSON Schema whose properties a step's given names, such as the platform.",
+          "required": [
+            "properties"
+          ],
+          "properties": {
+            "type": {
+              "const": "object"
+            },
+            "properties": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "object",
+                "required": [
+                  "enum"
+                ],
+                "properties": {
+                  "type": {
+                    "const": "string"
+                  },
+                  "enum": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "minItems": 2
+                  },
+                  "description": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "page": {
+          "type": "string",
+          "description": "The docs page this process is written up on, relative to docs/; it must exist. A page MoonWalk took over is deleted and redirects to the process."
+        },
+        "intro": {
+          "$ref": "#/$defs/markdown"
+        },
+        "outro": {
+          "$ref": "#/$defs/markdown"
+        },
+        "steps": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/step"
+          }
+        }
+      }
+    },
+    "step": {
+      "type": "object",
+      "required": [
+        "id",
+        "say",
+        "when"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "section": {
+          "type": "string",
+          "description": "Opens a numbered section of the generated page with this heading, as a tutorial groups its steps into chapters."
+        },
+        "say": {
+          "type": "string",
+          "description": "One line: the docs line, the tour bubble, the caption, the test's name."
+        },
+        "actor": {
+          "$ref": "#/$defs/actor",
+          "description": "Who performs this step, when it is not the process's actor."
+        },
+        "given": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/condition"
+          }
+        },
+        "when": {
+          "$ref": "#/$defs/action"
+        },
+        "then": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/expectation"
+          }
+        },
+        "onSuccess": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/branch"
+          }
+        },
+        "onFailure": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/branch"
+          }
+        },
+        "detail": {
+          "$ref": "#/$defs/markdown"
+        }
+      }
+    },
+    "action": {
+      "type": "object",
+      "minProperties": 1,
+      "maxProperties": 1,
+      "additionalProperties": false,
+      "properties": {
+        "open": {
+          "type": "object",
+          "additionalProperties": false,
+          "minProperties": 1,
+          "maxProperties": 1,
+          "properties": {
+            "module": {
+              "$ref": "#/$defs/moduleType"
+            },
+            "view": {
+              "type": "string"
+            },
+            "url": {
+              "type": "string"
+            }
+          }
+        },
+        "set": {
+          "type": "object",
+          "required": [
+            "module",
+            "control",
+            "value"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "module": {
+              "$ref": "#/$defs/moduleType"
+            },
+            "control": {
+              "type": "string"
+            },
+            "value": {}
+          }
+        },
+        "add": {
+          "type": "object",
+          "required": [
+            "module",
+            "type"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "module": {
+              "$ref": "#/$defs/moduleType"
+            },
+            "type": {
+              "type": "string"
+            }
+          }
+        },
+        "replace": {
+          "type": "object",
+          "required": [
+            "module",
+            "type"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "module": {
+              "$ref": "#/$defs/moduleType"
+            },
+            "type": {
+              "type": "string"
+            }
+          }
+        },
+        "delete": {
+          "$ref": "#/$defs/moduleOnly"
+        },
+        "clear": {
+          "$ref": "#/$defs/moduleOnly"
+        },
+        "apply": {
+          "type": "object",
+          "description": "A state document, as PATCH /api/state takes it."
+        },
+        "call": {
+          "type": "object",
+          "required": [
+            "method",
+            "path"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "method": {
+              "enum": [
+                "GET",
+                "POST",
+                "PATCH",
+                "PUT",
+                "DELETE"
+              ]
+            },
+            "path": {
+              "type": "string"
+            },
+            "body": {}
+          }
+        },
+        "run": {
+          "type": "object",
+          "additionalProperties": false,
+          "minProperties": 1,
+          "maxProperties": 2,
+          "properties": {
+            "script": {
+              "type": "string",
+              "description": "A MoonDeck script, moondeck/<dir>/<name>.py."
+            },
+            "args": {
+              "type": "string"
+            },
+            "command": {
+              "type": "string"
+            }
+          }
+        },
+        "read": {
+          "type": "object",
+          "required": [
+            "page"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "page": {
+              "type": "string"
+            },
+            "section": {
+              "type": "string"
+            }
+          }
+        },
+        "process": {
+          "$ref": "#/$defs/id"
+        },
+        "manual": {
+          "type": "string"
+        }
+      }
+    },
+    "moduleType": {
+      "type": "string",
+      "description": "A module type, the key help.json uses, such as GridLayout; the build checks it, and a control named beside it, against help.json."
+    },
+    "moduleOnly": {
+      "type": "object",
+      "required": [
+        "module"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "module": {
+          "$ref": "#/$defs/moduleType"
+        }
+      }
+    },
+    "expectation": {
+      "type": "object",
+      "oneOf": [
+        {
+          "required": [
+            "module",
+            "control"
+          ],
+          "properties": {
+            "module": {
+              "$ref": "#/$defs/moduleType"
+            },
+            "control": {
+              "type": "string"
+            },
+            "equals": {},
+            "notEquals": {},
+            "minimum": {
+              "type": "number"
+            },
+            "maximum": {
+              "type": "number"
+            }
+          },
+          "oneOf": [
+            {
+              "required": [
+                "equals"
+              ],
+              "maxProperties": 3
+            },
+            {
+              "required": [
+                "notEquals"
+              ],
+              "maxProperties": 3
+            },
+            {
+              "anyOf": [
+                {
+                  "required": [
+                    "minimum"
+                  ]
+                },
+                {
+                  "required": [
+                    "maximum"
+                  ]
+                }
+              ],
+              "not": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "equals"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "notEquals"
+                    ]
+                  }
+                ]
+              }
+            }
+          ],
+          "additionalProperties": false,
+          "description": "A control's value: equal to a value, not equal to one, or within a range whose minimum and maximum, JSON Schema's inclusive bounds, may each be left open. A list's value is its number of rows."
+        },
+        {
+          "required": [
+            "module",
+            "exists"
+          ],
+          "properties": {
+            "module": {
+              "$ref": "#/$defs/moduleType"
+            },
+            "exists": {
+              "type": "boolean"
+            }
+          },
+          "maxProperties": 2,
+          "additionalProperties": false
+        },
+        {
+          "required": [
+            "status"
+          ],
+          "properties": {
+            "status": {
+              "type": "integer"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "required": [
+            "file"
+          ],
+          "properties": {
+            "file": {
+              "type": "string"
+            },
+            "contains": {
+              "type": "string"
+            },
+            "equals": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "branch": {
+      "type": "object",
+      "required": [
+        "type"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "enum": [
+            "goto",
+            "end",
+            "retry"
+          ]
+        },
+        "stepId": {
+          "$ref": "#/$defs/id"
+        },
+        "when": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/expectation"
+          }
+        },
+        "retryLimit": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "actor": {
+      "enum": [
+        "user",
+        "contributor",
+        "product-owner",
+        "agent",
+        "ci"
+      ]
+    },
+    "condition": {
+      "description": "A precondition: a process done first, an expectation on the device, the change touching a path, or the reader's choice.",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/id"
+        },
+        {
+          "$ref": "#/$defs/expectation"
+        },
+        {
+          "type": "object",
+          "required": [
+            "changed"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "changed": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "minItems": 1,
+              "description": "Path globs the change touches, as GitHub Actions' on.push.paths."
+            }
+          }
+        },
+        {
+          "description": "The reader's choice: the step shows for one option (`equals`) or for several (`in`).",
+          "type": "object",
+          "required": [
+            "input"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "input": {
+              "type": "string"
+            },
+            "equals": {
+              "type": "string"
+            },
+            "in": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "minItems": 2
+            }
+          },
+          "oneOf": [
+            {
+              "required": [
+                "equals"
+              ]
+            },
+            {
+              "required": [
+                "in"
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

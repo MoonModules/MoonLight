@@ -5,7 +5,6 @@
       "tab": "desktop",
       "group": "build",
       "label": "Build",
-      "speed": "slow",
       "help": "build_desktop",
       "script": "build/build_desktop.py"
     },
@@ -14,7 +13,6 @@
       "tab": "repo",
       "group": "test",
       "label": "Compile Tests",
-      "speed": "slow",
       "help": "compile_tests",
       "script": "build/build_desktop.py",
       "args": [
@@ -26,7 +24,6 @@
       "tab": "repo",
       "group": "test",
       "label": "Unit Test",
-      "speed": "medium",
       "help": "test_desktop",
       "script": "test/test_desktop.py",
       "needs_module": true
@@ -36,7 +33,6 @@
       "tab": "repo",
       "group": "test",
       "label": "Host Tests",
-      "speed": "medium",
       "help": "test_host",
       "script": "test/test_host.py"
     },
@@ -45,7 +41,6 @@
       "tab": "repo",
       "group": "test",
       "label": "Scenarios",
-      "speed": "medium",
       "help": "scenario_pipeline",
       "script": "scenario/run_scenario.py",
       "needs_module": true,
@@ -56,7 +51,6 @@
       "tab": "desktop",
       "group": "run",
       "label": "Run",
-      "speed": "instant",
       "help": "run_desktop",
       "script": "run/run_desktop.py",
       "long_running": true,
@@ -67,7 +61,6 @@
       "tab": "desktop",
       "group": "run",
       "label": "Crash Log",
-      "speed": "instant",
       "help": "show_crash_log",
       "script": "run/show_crash_log.py"
     },
@@ -76,7 +69,6 @@
       "tab": "repo",
       "group": "run",
       "label": "Installer Preview",
-      "speed": "medium",
       "help": "preview_installer",
       "script": "run/preview_installer.py",
       "long_running": true,
@@ -87,7 +79,6 @@
       "tab": "desktop",
       "group": "run",
       "label": "Control Surface",
-      "speed": "medium",
       "help": "run_open_stage_control",
       "script": "run/run_open_stage_control.py",
       "long_running": true,
@@ -98,7 +89,6 @@
       "tab": "repo",
       "group": "tools",
       "label": "All Tools on Module",
-      "speed": "medium",
       "help": "check_module",
       "script": "check/check_module.py",
       "needs_module": true
@@ -108,7 +98,6 @@
       "tab": "repo",
       "group": "tools",
       "label": "clang-tidy",
-      "speed": "slow",
       "help": "check_clang_tidy",
       "script": "check/check_clang_tidy.py",
       "long_running": true
@@ -118,7 +107,6 @@
       "tab": "repo",
       "group": "tools",
       "label": "clang-query",
-      "speed": "medium",
       "help": "check_clang_query",
       "script": "check/check_clang_query.py"
     },
@@ -127,7 +115,6 @@
       "tab": "repo",
       "group": "tools",
       "label": "clang-hotpath",
-      "speed": "slow",
       "help": "check_nonblocking",
       "script": "check/check_nonblocking.py"
     },
@@ -136,7 +123,6 @@
       "tab": "repo",
       "group": "tools",
       "label": "Code report",
-      "speed": "medium",
       "help": "check_code",
       "script": "check/check_code.py"
     },
@@ -145,7 +131,6 @@
       "tab": "repo",
       "group": "tools",
       "label": "CodeQL (CI alerts)",
-      "speed": "instant",
       "help": "check_codeql",
       "script": "check/check_codeql.py",
       "flags": [
@@ -162,7 +147,6 @@
       "tab": "repo",
       "group": "tools",
       "label": "Footprint (ESP32)",
-      "speed": "instant",
       "help": "check_footprint",
       "script": "check/check_footprint.py"
     },
@@ -171,16 +155,30 @@
       "tab": "repo",
       "group": "check",
       "label": "Spec Check",
-      "speed": "instant",
       "help": "check_specs",
       "script": "check/check_specs.py"
+    },
+    {
+      "id": "check_prose",
+      "tab": "repo",
+      "group": "check",
+      "label": "Prose Check",
+      "help": "check_prose",
+      "script": "check/check_prose.py"
+    },
+    {
+      "id": "check_taglines",
+      "tab": "repo",
+      "group": "check",
+      "label": "Tagline Check",
+      "help": "check_taglines",
+      "script": "check/check_taglines.py"
     },
     {
       "id": "check_docgen",
       "tab": "repo",
       "group": "check",
       "label": "Docgen Check",
-      "speed": "instant",
       "help": "check_docgen",
       "script": "check/check_docgen.py"
     },
@@ -189,7 +187,6 @@
       "tab": "esp32",
       "group": "build",
       "label": "Firmware Up To Date",
-      "speed": "instant",
       "help": "check_esp32_built",
       "script": "check/check_esp32_built.py",
       "needs_firmware": true
@@ -199,7 +196,6 @@
       "tab": "repo",
       "group": "check",
       "label": "Board Catalog",
-      "speed": "instant",
       "help": "check_devices",
       "script": "check/check_devices.py"
     },
@@ -208,7 +204,6 @@
       "tab": "repo",
       "group": "check",
       "label": "Firmware List",
-      "speed": "instant",
       "help": "check_firmwares",
       "script": "check/check_firmwares.py"
     },
@@ -217,7 +212,6 @@
       "tab": "repo",
       "group": "check",
       "label": "KPI Report",
-      "speed": "slow",
       "help": "collect_kpi",
       "script": "check/collect_kpi.py"
     },
@@ -226,7 +220,6 @@
       "tab": "repo",
       "group": "check",
       "label": "Repo Health",
-      "speed": "medium",
       "help": "repo_health",
       "script": "check/repo_health.py"
     },
@@ -235,7 +228,6 @@
       "tab": "repo",
       "group": "check",
       "label": "History Report",
-      "speed": "instant",
       "help": "history_report",
       "script": "report/history_report.py"
     },
@@ -244,7 +236,6 @@
       "tab": "repo",
       "group": "docs",
       "label": "Install Playwright",
-      "speed": "slow",
       "help": "screenshot_modules",
       "script": "docs/install_playwright.py"
     },
@@ -253,7 +244,6 @@
       "tab": "repo",
       "group": "docs",
       "label": "Screenshot Modules",
-      "speed": "slow",
       "help": "screenshot_modules",
       "script": "docs/screenshot_modules.py",
       "long_running": true,
@@ -278,7 +268,6 @@
       "tab": "repo",
       "group": "docs",
       "label": "Preview Docs Site",
-      "speed": "slow",
       "help": "build_docs",
       "script": "docs/build_docs.py",
       "args": [
@@ -292,7 +281,6 @@
       "tab": "live",
       "group": "scenario",
       "label": "Live Scenarios",
-      "speed": "medium",
       "help": "live_scenario",
       "script": "scenario/run_live_scenario.py",
       "needs_device": true,
@@ -304,7 +292,6 @@
       "tab": "live",
       "group": "scenario",
       "label": "Network Live Test",
-      "speed": "medium",
       "help": "run_network_live",
       "script": "scenario/run_network_live.py"
     },
@@ -313,7 +300,6 @@
       "tab": "live",
       "group": "scenario",
       "label": "Network Round-trip",
-      "speed": "medium",
       "help": "run_network_roundtrip",
       "script": "scenario/run_network_roundtrip.py"
     },
@@ -322,7 +308,6 @@
       "tab": "live",
       "group": "scenario",
       "label": "FSEQ Play",
-      "speed": "medium",
       "help": "fseq_play",
       "script": "run/fseq_play.py",
       "needs_device": true
@@ -332,7 +317,6 @@
       "tab": "live",
       "group": "scenario",
       "label": "Preview Health",
-      "speed": "slow",
       "help": "preview_health",
       "script": "diag/preview_health.py",
       "needs_device": true
@@ -342,7 +326,6 @@
       "tab": "live",
       "group": "video",
       "label": "Record UI Clip",
-      "speed": "medium",
       "help": "ui_clip",
       "script": "moontube/mtvideo.py",
       "needs_uiclip": true
@@ -352,7 +335,6 @@
       "tab": "live",
       "group": "video",
       "label": "Cut Video Project",
-      "speed": "slow",
       "help": "ui_project",
       "script": "moontube/mtcompose.py",
       "needs_uiproject": true
@@ -362,7 +344,6 @@
       "tab": "esp32",
       "group": "setup",
       "label": "Setup ESP-IDF",
-      "speed": "slow",
       "help": "setup_esp_idf",
       "script": "build/setup_esp_idf.py"
     },
@@ -371,7 +352,6 @@
       "tab": "esp32",
       "group": "setup",
       "label": "Clean",
-      "speed": "instant",
       "help": "clean_esp32",
       "script": "build/clean_esp32.py"
     },
@@ -380,7 +360,6 @@
       "tab": "esp32",
       "group": "build",
       "label": "Build",
-      "speed": "slow",
       "help": "build_esp32",
       "script": "build/build_esp32.py",
       "needs_firmware": true
@@ -390,7 +369,6 @@
       "tab": "esp32",
       "group": "flash",
       "label": "Flash",
-      "speed": "slow",
       "help": "flash_esp32",
       "script": "build/flash_esp32.py",
       "needs_port": true,
@@ -402,7 +380,6 @@
       "tab": "esp32",
       "group": "qemu",
       "label": "Check encodings",
-      "speed": "fast",
       "help": "check_encodings",
       "script": "moonlive/check_encodings.py"
     },
@@ -411,7 +388,6 @@
       "tab": "esp32",
       "group": "qemu",
       "label": "Run emulator",
-      "speed": "slow",
       "help": "run_qemu",
       "script": "qemu/run_qemu.py",
       "flags": [
@@ -430,7 +406,6 @@
       "tab": "esp32",
       "group": "flash",
       "label": "Erase Flash",
-      "speed": "slow",
       "help": "erase_flash_esp32",
       "script": "build/erase_flash_esp32.py",
       "needs_port": true,
@@ -441,7 +416,6 @@
       "tab": "esp32",
       "group": "run",
       "label": "Monitor",
-      "speed": "medium",
       "help": "monitor_esp32",
       "script": "run/monitor_esp32.py",
       "needs_port": true,
@@ -454,7 +428,6 @@
       "tab": "esp32",
       "group": "run",
       "label": "Improv WiFi",
-      "speed": "medium",
       "help": "improv_provision",
       "script": "build/improv_provision.py",
       "needs_port": true,
@@ -465,7 +438,6 @@
       "tab": "esp32",
       "group": "run",
       "label": "Improv Probe",
-      "speed": "instant",
       "help": "improv_probe",
       "script": "build/improv_probe.py",
       "needs_port": true
@@ -475,7 +447,6 @@
       "tab": "esp32",
       "group": "run",
       "label": "Improv Smoke Test",
-      "speed": "slow",
       "help": "improv_smoke_test",
       "script": "build/improv_smoke_test.py",
       "needs_port": true
@@ -485,7 +456,6 @@
       "tab": "esp32",
       "group": "run",
       "label": "WLED Migration Test",
-      "speed": "slow",
       "help": "wled_migration_test",
       "script": "build/wled_migration_test.py",
       "needs_port": true
@@ -495,7 +465,6 @@
       "tab": "teensy",
       "group": "setup",
       "label": "Setup SDK",
-      "speed": "slow",
       "help": "setup_teensy",
       "script": "build/setup_teensy.py"
     },
@@ -504,7 +473,6 @@
       "tab": "teensy",
       "group": "build",
       "label": "Build",
-      "speed": "slow",
       "help": "build_teensy",
       "script": "build/build_teensy.py"
     },
@@ -513,7 +481,6 @@
       "tab": "teensy",
       "group": "flash",
       "label": "Flash",
-      "speed": "medium",
       "help": "flash_teensy",
       "script": "build/flash_teensy.py"
     },
@@ -522,7 +489,6 @@
       "tab": "teensy",
       "group": "run",
       "label": "Monitor",
-      "speed": "medium",
       "help": "monitor_teensy",
       "script": "run/monitor_teensy.py",
       "long_running": true,

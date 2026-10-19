@@ -1,9 +1,11 @@
 // The card decks: a catalog's modules drawn from help.json by the app's own help.js, so a card reads as the module's help does on a device, and the attribution catalog drawn from its own table.
 // Mounted on every page that holds a `.mm-deck`, through Material's document$ so instant navigation mounts it too. A deck with a `data-page` holds that page's modules; one without holds the table inside it, which stays what search indexes and a reader without JavaScript sees.
 
-import { helpMarkdown, safeUrl, moduleHelp, controlHelp, emojiTagsFor, emojiChipRow, chipsMatch, typeDisplayName, EMOJI_LABEL, graphemes } from "./help.js";
+import { helpMarkdown, safeUrl, moduleHelp, controlHelp, walkLinks, emojiTagsFor, emojiChipRow, chipsMatch, typeDisplayName, EMOJI_LABEL, graphemes } from "./help.js";
 
 const HELP = new URL("../help/help.json", import.meta.url);
+const WALK = new URL("../moonwalk/moonwalk.json", import.meta.url);
+const WALK_PAGE = new URL("../moonwalk.html", import.meta.url).href;
 
 // The script is running, so the plain list under each deck can hide until its deck mounts.
 document.documentElement.classList.add("mm-deck-js");
@@ -100,13 +102,13 @@ function playingCard({id, name, emoji, labels, image, alt, line, back, text}) {
 }
 
 // A module's card: its help on the back, the line first as plain text rather than the app's disclosure, so a tap on it turns the card rather than folding the help.
-function moduleCard(type, help) {
+function moduleCard(type, help, walk) {
     const name = typeDisplayName(type);
     const line = document.createElement("p");
     line.className = "mm-pcard-line";
     line.innerHTML = helpMarkdown(help.line || "");
     const back = [line];
-    const box = moduleHelp({...help, image: null}, help.doc);
+    const box = moduleHelp({...help, image: null}, help.doc, walkLinks(walk, type, null, WALK_PAGE));
     const summary = box.querySelector(".help-summary");
     if (summary) back.push(summary);
     back.push(box.querySelector(".card-helpbox-body"));
@@ -117,7 +119,7 @@ function moduleCard(type, help) {
         label.className = "control-label";
         label.textContent = ctrl;
         row.appendChild(label);
-        controlHelp(row, ch);
+        controlHelp(row, ch, walkLinks(walk, type, ctrl, WALK_PAGE));
         back.push(row);
     }
     return playingCard({
@@ -363,6 +365,8 @@ async function mount(host) {
         return;
     }
     let modules;
+    // MoonWalk's index gives the cards their links into it; without it they show the help alone.
+    const walk = fetch(WALK).then(r => r.ok ? r.json() : null).catch(() => null);
     try {
         modules = (await (await fetch(HELP)).json()).modules;
     } catch {
@@ -373,7 +377,8 @@ async function mount(host) {
     const onPage = (doc) => doc === page || doc.startsWith(page + "#");   // a registry link may name the page without a card
     const types = Object.keys(modules).filter(t => onPage(modules[t].doc || ""))
         .sort((a, b) => typeDisplayName(a).localeCompare(typeDisplayName(b)));
-    mountDeck(host, types.map(t => moduleCard(t, modules[t])), "modules");
+    const index = await walk;
+    mountDeck(host, types.map(t => moduleCard(t, modules[t], index)), "modules");
 }
 
 // One resize listener for every deck: instant navigation swaps pages without reloading, so a listener per mount would pile up over detached decks.

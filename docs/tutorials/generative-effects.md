@@ -5,7 +5,7 @@ Most LED effects are written a light at a time: loop over the pixels, work out a
 This page is about the other way. MoonLight ships a set of **power functions**:
 the handful of algorithms that computer graphics has used for forty years to make things look alive. You do not implement them, you compose them. And because most of that vocabulary is reachable from **MoonLive** scripts as well as from compiled C++, a few dozen lines of script gets you an effect that would otherwise be a project.
 
-> Never opened the interface? Start with **[Install & first light](../gettingstarted.md)**
+> Never opened the interface? Start with **[Install MoonLight](../moonwalk.md#install)**
 > and **[How MoonLight works](how-moonlight-works.md)**, then come back.
 
 ---

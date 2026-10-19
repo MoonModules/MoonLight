@@ -81,8 +81,9 @@ TEST_CASE("every shipped script compiles to the IR it had before the compiler ch
         const std::filesystem::path dir = scriptRoot() / sub;
         if (!std::filesystem::exists(dir)) continue;
         std::map<std::string, std::filesystem::path> files;   // sorted, so the printed table is stable
-        for (const auto& e : std::filesystem::directory_iterator(dir))
-            if (e.is_regular_file() && isScriptExt(e.path().extension().string().c_str())) files[e.path().filename().string()] = e.path();
+        // Keyed by the path under the role's folder, so a script in a subfolder is named with it.
+        for (const auto& e : std::filesystem::recursive_directory_iterator(dir))
+            if (e.is_regular_file() && isScriptExt(e.path().extension().string().c_str())) files[std::filesystem::relative(e.path(), dir).generic_string()] = e.path();
         for (const auto& [name, path] : files) {
             const std::string label = std::string(sub) + "/" + name;
             const std::string src = readText(path);

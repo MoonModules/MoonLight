@@ -1289,7 +1289,7 @@ TEST_CASE("every shipped script compiles") {
         // REPORTED, not skipped: a folder that moved would otherwise make this test pass while checking nothing, which is the failure mode it exists to prevent.
         INFO("script folder: ", dir.string());
         REQUIRE(std::filesystem::is_directory(dir));
-        for (const auto& entry : std::filesystem::directory_iterator(dir)) {
+        for (const auto& entry : std::filesystem::recursive_directory_iterator(dir)) {
             if (!entry.is_regular_file()) continue;
             // The exact extensions, not a substring: `.ml` also matches an editor backup or a note file that has no business being compiled.
             const std::string ext = entry.path().extension().string();

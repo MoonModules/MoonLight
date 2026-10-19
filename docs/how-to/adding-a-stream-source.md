@@ -4,7 +4,7 @@ A new way for frames to reach the lights, from a capture device, a file format o
 Every source is one of two families, and each family has one place where its frames land.
 So a source is small: it fetches frames and hands them over, and everything after that is already written and tested.
 
-> This assumes the desktop build and tests run: see [Building, running, flashing](building.md). A source is proven on the desktop before a board sees it.
+The steps are the process [Add a picture or channel-data source](../moonwalk.md#add-stream-source). What follows is the reference behind it: the families, where their frames land, and the contract of each.
 
 ---
 
@@ -86,10 +86,3 @@ A source writing from a task of its own calls `write` there, which waits out at 
 - unit tests that write frames and check each light against what was sent, with `moondeck/run/fseq_play.py` writing reference FSEQ files and streaming them over DDP.
 
 The sink's placement on serpentine, 3D, mirrored and transposed layouts is pinned by Network Receive's tests.
-
----
-
-## Before the pull request
-
-One topic, sized and based as [the process](../contributing/principles-and-process.md) sets.
-The desktop tests pass, the source works on the board it is for, and a board without the device builds and shows a status rather than failing.

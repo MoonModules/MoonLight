@@ -424,7 +424,7 @@ const char kPage[] =
     "<div id=hdr><img src=/logo.png alt=''><h1>MoonBase</h1>"
     // The (?) module cards carry, pointing at the published MoonBase doc.
     "<a id=hlp target=_blank rel=noopener title='MoonBase documentation' "
-    "href='https://moonmodules.org/MoonLight/gettingstarted.html#if-your-device-shows-moonbase'>?</a></div>"
+    "href='https://moonmodules.org/MoonLight/moonwalk.html#update-firmware/boot-app'>?</a></div>"
     "<p class=sub>Install firmware to return this device to normal operation."
     // Which MoonBase this is, filled from the image's own descriptor by the script below.
     "<br><small id=v></small></p>"

@@ -1,6 +1,6 @@
-# Generative fields — top-down build spec
+# Generative fields: top-down build spec
 
-> **Forward-looking design document — exception to CLAUDE.md present-tense rule.** Stage 2 of the generative-fields work: turns the [bottom-up analysis](generative-fields-analysis-bottom-up.md) (Part 1 the specification language, Part 2 the examples, Part 3 the gap) into an implementable spec: homes, types, signatures, the MoonLive surface, budgets, tests, and a step-by-step plan. Written 2026-09-03 against the five product-owner decisions in § 0. Where this document makes a NEW decision it is marked **(proposal)** and listed in § 10. Companions: the [power-functions top-down](power-functions-analysis-top-down.md) owns the library's homes, types and standing decisions, which this document extends rather than restates; the [MoonLive roadmap](moonlive-language-roadmap.md) owns the engine.
+> **Forward-looking design document, the exception to CLAUDE.md's present-tense rule.** Stage 2 of the generative-fields work: turns the [bottom-up analysis](generative-fields-analysis-bottom-up.md) (Part 1 the specification language, Part 2 the examples, Part 3 the gap) into an implementable spec: homes, types, signatures, the MoonLive surface, budgets, tests, and a step-by-step plan. Written 2026-09-03 against the five product-owner decisions in § 0. Where this document makes a NEW decision it is marked **(proposal)** and listed in § 10. Companions: the [power-functions top-down](power-functions-analysis-top-down.md) owns the library's homes, types and standing decisions, which this document extends rather than restates; the [MoonLive roadmap](backlog-moonlive.md) owns the engine.
 
 ## Status legend
 
@@ -343,7 +343,7 @@ effect. The engine already passes `Coord3D` everywhere, so the script vocabulary
 
 This is **not** general struct support. The MoonLive roadmap settles that: a predefined struct is one
 the compiler knows by layout, needing no user-declarable struct machinery
-([roadmap § 4b](moonlive-language-roadmap.md), with user structs deferred to § 10 for readability
+([roadmap § 4b](backlog-moonlive.md), with user structs deferred to § 10 for readability
 rather than capability). It depends on the multi-value call ABI (§ 2 there), which is what makes a
 coordinate in and a color out expressible at all.
 

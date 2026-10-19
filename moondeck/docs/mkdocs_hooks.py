@@ -1,19 +1,10 @@
 """MkDocs build hooks. Wired via `hooks:` in mkdocs.yml. Three jobs:
 
-1. on_files — synthesise `reference/tests/unit-tests.md` + `reference/tests/scenario-tests.md` into
-   MkDocs' virtual file tree from the test files (via `_test_metadata.py`, the
-   same parser the CLI generator + MoonDeck use). So the inventory pages are NOT
-   committed to the repo and can't drift — rebuilt from source every build. The
-   per-effect `[Tests]` links in the catalog pages point at these pages; kept as
-   plain one-line links so the effect cards stay compact (a link, not a case dump).
+1. on_files: synthesize `reference/tests/unit-tests.md` + `reference/tests/scenario-tests.md` into MkDocs' virtual file tree from the test files (via `_test_metadata.py`, the same parser the CLI generator + MoonDeck use). So the inventory pages are NOT committed to the repo and can't drift, rebuilt from source every build. The per-effect `[Tests]` links in the catalog pages point at these pages; kept as plain one-line links so the effect cards stay compact (a link, not a case dump).
 
-2. on_page_markdown — repoint links that escape docs/ into repo files
-   (`../src/*.h`, `../CLAUDE.md`, `../moondeck/*`) to absolute GitHub blob URLs,
-   since the site can't host `src/` (pre-Doxide) and a relative link would 404.
+2. on_page_markdown: repoint links that escape docs/ into repo files (`../src/*.h`, `../CLAUDE.md`, `../moondeck/*`) to absolute GitHub blob URLs, since the site can't host `src/` (pre-Doxide) and a relative link would 404.
 
-3. on_post_build (serve-only) — stage the web installer into the built site under
-   /install/ so the local preview mirrors production's single-origin layout.
-"""
+3. on_post_build (serve-only): stage the web installer into the built site under /install/ so the local preview mirrors production's single-origin layout. """
 
 import json
 import logging
@@ -32,11 +23,11 @@ if str(_HERE) not in sys.path:
 from _test_metadata import (  # noqa: E402
     ROOT,
     collect_unit_files,
-    parse_unit_file,
     collect_scenario_files,
 )
 from generate_test_docs import render_unit_tests, render_scenarios  # noqa: E402
 from gen_help import ATTRIBUTIONS, catalog_rows, display_name  # noqa: E402
+from gen_moonwalk import build as build_moonwalk, absolute_links, render_text as moonwalk_text, split_text as split_moonwalk  # noqa: E402
 
 
 # ---- source-link rewrite: docs link OUT to repo files the site can't host ----
@@ -58,22 +49,25 @@ def _blob_base() -> str:
 
 _BLOB_BASE = _blob_base()
 
+
+def _repo_url(path: str) -> str:
+    """A repo path on GitHub: a folder under /tree/, as GitHub names it, a file under /blob/."""
+    base = _BLOB_BASE.replace("/blob/", "/tree/", 1) if (ROOT / path.split("#", 1)[0]).is_dir() else _BLOB_BASE
+    return f"{base}/{path}"
+
 # Repo top-level dirs/files a doc may link into but the site doesn't host.
-_OUT_OF_DOCS = ("src/", "moondeck/", "test/", "esp32/", "mooninstaller/",
+_OUT_OF_DOCS = ("src/", "moondeck/", "test/", "esp32/", "mooninstaller/", "moonwalk/",
                 ".github/", "CLAUDE.md", "README.md", "library.json", "CMakeLists.txt",
                 ".clang-tidy", ".clangd")
 
 # A markdown link into a repo file the site doesn't host. Two authored shapes, both
 # common in the transient docs/work/ notes:
-#   ../../src/foo   — climbs out of docs/ with `../`
-#   src/foo         — repo-ROOT-relative, no `../` (resolves to a nonexistent docs/src/foo)
+#   ../../src/foo: climbs out of docs/ with `../`
+#   src/foo: repo-ROOT-relative, no `../` (resolves to a nonexistent docs/src/foo)
 # The pattern accepts an optional `../` run, then the href; _sub sorts out which case.
 _OUT_LINK_RE = re.compile(r'\]\((?P<href>(?:\.\./)*(?P<rest>[^)#]+)(?P<frag>#[^)]*)?)\)')
 
-# The repo-root-relative prefixes a bare (no-`../`) link must start with to be treated
-# as an out-of-docs source link. `docs/` is included because a plan that links
-# `docs/plan.md` / `docs/architecture-light.md` (files that never existed or were
-# renamed) still resolves outside the current page and 404s — send it to GitHub.
+# The repo-root-relative prefixes a bare (no-`../`) link must start with to be treated as an out-of-docs source link. `docs/` is included because a plan that links `docs/plan.md` / `docs/architecture-light.md` (files that never existed or were renamed) still resolves outside the current page and 404s: send it to GitHub.
 _ROOT_REL_PREFIXES = _OUT_OF_DOCS + ("docs/",)
 
 
@@ -81,7 +75,7 @@ def _rewrite_out_of_docs_links(markdown: str, src_uri: str) -> str:
     """Rewrite links that climb out of docs/ into repo files → absolute GitHub blob
     URLs, resolved against the page's own location so any `../` depth is handled.
     src_uri is the page's path under docs/ (e.g. 'moonmodules/light/effects.md')."""
-    # The page's directory within docs/ — the anchor `../` hops resolve against.
+    # The page's directory within docs/: the anchor `../` hops resolve against.
     page_dir = Path("docs") / src_uri
     page_dir = page_dir.parent
 
@@ -92,18 +86,12 @@ def _rewrite_out_of_docs_links(markdown: str, src_uri: str) -> str:
         # Resolve against the page dir to a repo-relative path (the correct case).
         target = os.path.normpath(str(page_dir / rel)).replace(os.sep, "/")
         if target.startswith(_OUT_OF_DOCS) and not target.startswith("docs/"):
-            return f"]({_BLOB_BASE}/{target}{frag})"
-        # Fallback for links authored relative to the REPO ROOT (common in the
-        # transient docs/work/ notes, written before their file sat
-        # this deep under docs/): strip leading `../` and see if the remainder is
-        # itself an out-of-docs repo path. Catches `../../moondeck/x.py` from a
-        # docs/work/past/plans/ page, which resolves to a nonexistent docs/moondeck/x.py,
-        # AND a bare `src/x.js` / `docs/plan.md` with no `../` at all (same intent,
-        # written root-relative) — both 404 in-site, so send them to the GitHub blob.
+            return f"]({_repo_url(target)}{frag})"
+        # Fallback for links authored relative to the REPO ROOT (common in the transient docs/work/ notes, written before their file sat this deep under docs/): strip leading `../` and see if the remainder is itself an out-of-docs repo path. Catches `../../moondeck/x.py` from a docs/work/past/plans/ page, which resolves to a nonexistent docs/moondeck/x.py, AND a bare `src/x.js` / `docs/plan.md` with no `../` at all (same intent, written root-relative), both 404 in-site, so send them to the GitHub blob.
         stripped = re.sub(r'^(?:\.\./)+', '', rel)
         if stripped.startswith(_ROOT_REL_PREFIXES):
-            return f"]({_BLOB_BASE}/{stripped}{frag})"
-        return m.group(0)  # in-docs link (incl. ../ into another docs page) — leave it
+            return f"]({_repo_url(stripped)}{frag})"
+        return m.group(0)  # in-docs link (incl. ../ into another docs page): leave it
 
     return _OUT_LINK_RE.sub(_sub, markdown)
 
@@ -200,17 +188,6 @@ def catalog_markdown(src_uri: str) -> str | None:
     return generated_catalog(src_uri, written) or written
 
 
-def _tests_link(url: str, src_uri: str) -> str:
-    """The test inventory's section for a test file, which reads its cases as sentences, where the file names its `@module`; else the file on GitHub, the link the help itself carries."""
-    rel = url.split("/blob/", 1)[-1].partition("/")[2]
-    path = ROOT / rel
-    module = parse_unit_file(path).get("module") if rel and path.exists() else None
-    if not module:
-        return url
-    page = posixpath.relpath("reference/tests/unit-tests.md", posixpath.dirname(src_uri))
-    return f"{page}#{_slug(module)}"
-
-
 def _module_markdown(type_name: str, m: dict, src_uri: str) -> list[str]:
     """One module as plain markdown: its anchor and name, picture, line and summary, controls, attribution and links. The name is bold rather than a heading, so the page's table of contents lists no entry the deck replaces."""
     name = display_name(type_name)
@@ -225,23 +202,25 @@ def _module_markdown(type_name: str, m: dict, src_uri: str) -> list[str]:
         out += controls + [""]
     if m.get("attribution"):
         out += [f"Attribution: {_site_relative(m['attribution'], src_uri)}", ""]
-    links = ([f"[Source]({m['source']})"] if m.get("source") else []) + ([f"[Tests]({_tests_link(m['tests'], src_uri)})"] if m.get("tests") else [])
+    links = ([f"[Source]({m['source']})"] if m.get("source") else []) + ([_site_relative(f"[Tests]({m['tests']})", src_uri)] if m.get("tests") else [])
     return out + ([" · ".join(links), ""] if links else [])
 
 
 def _slug(text: str) -> str:
-    """The heading anchor id MkDocs generates for a `## Heading`, so a hand-built
-    `#anchor` link resolves. Delegates to Python-Markdown's OWN toc slugify (the exact
-    function MkDocs' toc uses) rather than re-implementing it — a hand-rolled mimic
-    drifts on unicode (accent-stripping), consecutive separators, and decoration.
-    e.g. 'LED output — details' -> 'led-output-details'. `markdown` is always present
-    in the build env (it's a MkDocs dependency)."""
+    """The heading id MkDocs generates for a `## Heading`, so a hand-built `#anchor` resolves: Python-Markdown's own toc slugify, which a hand-rolled mimic drifts from on accents and repeated separators. `markdown` is a MkDocs dependency, so the build env has it."""
     from markdown.extensions.toc import slugify
     return slugify(text, "-")
 
 
+def _walk() -> dict:
+    """MoonWalk's map, built once per build: the map's own file and the MoonWalk page both read it."""
+    if "walk" not in _help_cache:
+        _help_cache["walk"] = build_moonwalk()
+    return _help_cache["walk"]
+
+
 def on_pre_build(config):
-    """Forget the last build's help.json, so a live server draws the file as it is now."""
+    """Forget the last build's help.json and map, so a live server draws the files as they are now."""
     _help_cache.clear()
 
 
@@ -264,14 +243,16 @@ def on_files(files, config):
         if not (ROOT / "docs" / "moonmodules" / page).exists():
             _add(f"moonmodules/{page}", generated_catalog(f"moonmodules/{page}"))
     _add("reference/tests/scenario-tests.md", render_scenarios(collect_scenario_files()))
+    # MoonWalk's journey map, from the stage files under moonwalk/, and each process's prose beside it, which the view fetches when the process opens; links absolute, since the view renders them on a device's page too. An invalid file fails the build.
+    walk, texts = split_moonwalk(absolute_links(_walk()))
+    _add("moonwalk/moonwalk.json", json.dumps(walk, ensure_ascii=False))
+    for pid, text in texts.items():
+        _add(f"moonwalk/text/{pid}.json", json.dumps(text, ensure_ascii=False))
 
     return files
 
 
-# Pages that embed a file living at the REPO ROOT via a pymdownx snippet. Their
-# borrowed text spells doc links `docs/explanation/architecture/index.md` — correct from the root (that
-# is where CLAUDE.md is read by agents and on GitHub), but one level too deep once the
-# text is rendered from inside docs/, where it resolves to docs/docs/… and 404s.
+# Pages that embed a file living at the REPO ROOT via a pymdownx snippet. Their borrowed text spells doc links `docs/explanation/architecture/index.md`, correct from the root (that is where CLAUDE.md is read by agents and on GitHub), but one level too deep once the text is rendered from inside docs/, where it resolves to docs/docs/… and 404s.
 _EMBEDS_REPO_ROOT_FILE = {"contributing/principles-and-process.md"}
 
 # `href="docs/<rest>"` → `href="<rest>"`, and the same for the `.md` → `.html` form MkDocs
@@ -279,10 +260,7 @@ _EMBEDS_REPO_ROOT_FILE = {"contributing/principles-and-process.md"}
 # ride along untouched.
 _DOCS_PREFIXED_HREF_RE = re.compile(r'href="docs/([^"#]+?)(\.md)?(#[^"]*)?"')
 
-# The same borrowed text also links to files OUTSIDE docs/ (`moondeck/MoonDeck.md`), which
-# have no page on the site at all. `_rewrite_out_of_docs_links` already sends those to the
-# GitHub blob, but it runs at markdown stage where this page is still an unexpanded
-# `--8<--` directive — so the embedded ones need the same treatment here.
+# The same borrowed text also links to files OUTSIDE docs/ (`moondeck/MoonDeck.md`), which have no page on the site at all. `_rewrite_out_of_docs_links` already sends those to the GitHub blob, but it runs at markdown stage where this page is still an unexpanded `--8<--` directive: so the embedded ones need the same treatment here.
 _OUT_OF_DOCS_HREF_RE = re.compile(
     rf'href="({"|".join(re.escape(p) for p in _OUT_OF_DOCS)})([^"#]*)(#[^"]*)?"')
 
@@ -298,16 +276,9 @@ def _rebase_repo_root_doc_links(html):
     snippet during markdown *conversion*, so at on_page_markdown time this page is still
     just the one-line directive and there is nothing to rewrite yet.
 
-    The alternative — rewriting CLAUDE.md's own links to be docs-relative — would break
-    them everywhere they are actually used (an agent reading the file, GitHub's own
-    rendering) to satisfy one embedded copy. Rebasing at build time keeps the source
-    correct at the root and correct on the site.
+    The alternative, rewriting CLAUDE.md's own links to be docs-relative, would break them everywhere they are actually used (an agent reading the file, GitHub's own rendering) to satisfy one embedded copy. Rebasing at build time keeps the source correct at the root and correct on the site.
 
-    `.md` becomes `.html` here too. MkDocs normally does that itself, but only for links
-    whose target it resolved during validation — and these did not resolve, precisely
-    because of the `docs/` prefix this function strips. So they arrive still pointing at
-    the source file and would 404 on the built site.
-    """
+    `.md` becomes `.html` here too. MkDocs normally does that itself, but only for links whose target it resolved during validation, and these did not resolve, precisely because of the `docs/` prefix this function strips. So they arrive still pointing at the source file and would 404 on the built site. """
     def _fix(m):
         path, _, anchor = m.group(1), m.group(2), m.group(3) or ""
         return f'href="{path}.html{anchor}"' if _ else f'href="{path}{anchor}"'
@@ -319,11 +290,7 @@ def _rebase_repo_root_doc_links(html):
 class _MuteRebasedLinkWarnings(logging.Filter):
     """Drop the link warnings for the page whose links this hook rebases after validation.
 
-    `principles-and-process.md` embeds CLAUDE.md, whose links (`docs/explanation/architecture/index.md`,
-    `moondeck/MoonDeck.md`) are correct where that file is actually read — the repo root and
-    GitHub — and `_rebase_repo_root_doc_links` turns them into working site links. But
-    validation is a markdown treeprocessor inside `Page.render()`, so it judges the
-    pre-rebase text and reports 13 broken links the built site does not have.
+    `principles-and-process.md` embeds CLAUDE.md, whose links (`docs/explanation/architecture/index.md`, `moondeck/MoonDeck.md`) are correct where that file is actually read, the repo root and GitHub, and `_rebase_repo_root_doc_links` turns them into working site links. But validation is a markdown treeprocessor inside `Page.render()`, so it judges the pre-rebase text and reports 13 broken links the built site does not have.
 
     Filtering the log is the narrow fix. `validation.links.not_found: ignore` in mkdocs.yml
     would hide genuinely missing pages across every other doc, and MkDocs has no per-page
@@ -343,10 +310,7 @@ def on_page_content(html, page, config, files):
     """Post-conversion fixups for a page that embeds a repo-root file: rebase its doc
     links, and replace the embedded `# <filename>` heading with the page's own title.
 
-    The embedded file opens with a heading that names it as a file (`# CLAUDE.md`) —
-    right at the repo root and on GitHub, wrong in a docs menu, where the reader wants
-    the subject. Front matter `title:` fixes the nav entry and the browser tab but not
-    the rendered H1, so it is swapped here rather than by editing the source file."""
+    The embedded file opens with a heading that names it as a file (`# CLAUDE.md`): right at the repo root and on GitHub, wrong in a docs menu, where the reader wants the subject. Front matter `title:` fixes the nav entry and the browser tab but not the rendered H1, so it is swapped here rather than by editing the source file."""
     if page.file.src_uri not in _EMBEDS_REPO_ROOT_FILE:
         return html
     html = _rebase_repo_root_doc_links(html)
@@ -430,6 +394,9 @@ def attributed_by(markdown: str) -> str:
 
 def on_page_markdown(markdown, page, config, files):
     """Repoint out-of-docs source links to GitHub blob URLs, follow a written catalog page with its deck, and give the attribution catalog its pictures and the modules naming each entry."""
+    # The MoonWalk page carries every process's prose as plain text, which search indexes and a reader without JavaScript reads; moonwalk.js hides it once the live view draws. Appended first, so its links leaving docs/ are rewritten like the page's own.
+    if page.file.src_uri == "moonwalk.md":
+        markdown += '\n<div class="mm-walk-text" markdown>\n\n' + moonwalk_text(_walk()) + '\n</div>\n'
     markdown = _rewrite_out_of_docs_links(markdown, page.file.src_uri)
     # A written catalog page is the intro its generated deck follows.
     if page.file.abs_src_path and Path(page.file.abs_src_path).exists():
@@ -440,13 +407,7 @@ def on_page_markdown(markdown, page, config, files):
 
 
 def on_post_build(config):
-    """LOCAL PREVIEW ONLY: stage the web installer into the built site under
-    /install/, so the local docs preview mirrors the SINGLE-ORIGIN production
-    layout (docs at /, installer at /install/). Without it the docs preview
-    (:8422) 404s on the Flash link's /MoonLight/install/ target — the installer
-    preview is a separate server on :8421, and a production-relative link can't
-    reach it. Copying it in makes every /install/ link resolve locally exactly
-    as deployed.
+    """LOCAL PREVIEW ONLY: stage the web installer into the built site under /install/, so the local docs preview mirrors the SINGLE-ORIGIN production layout (docs at /, installer at /install/). Without it the docs preview (:8422) 404s on the Flash link's /MoonLight/install/ target, the installer preview is a separate server on :8421, and a production-relative link can't reach it. Copying it in makes every /install/ link resolve locally exactly as deployed.
 
     Gated to serve mode via MM_DOCS_SERVE (set by build_docs.py --serve): in CI,
     release.yml does its OWN, more complete install/ staging (incl. the
@@ -458,7 +419,7 @@ def on_post_build(config):
     import shutil
 
     if os.environ.get("MM_DOCS_SERVE") != "1":
-        return  # CI / plain build — release.yml owns install/ staging
+        return  # CI / plain build: release.yml owns install/ staging
 
     site = Path(config["site_dir"])
     dst = site / "install"

@@ -1,6 +1,6 @@
 # Choosing and wiring an LED driver
 
-Addressable LEDs (WS2812B, SK6812, WS2811) go out through one of two drivers: [RMT LED](../moonmodules/light/drivers.md#rmtled) for a few strands, and [Parallel LED](../moonmodules/light/drivers.md#parallelled) for many. Both read the same shared buffer, so switching between them, or between Parallel LED's peripherals, is a change on the Drivers card with no reflash.
+Addressable LEDs (WS2812B, SK6812, WS2811) go out through one of two drivers: [RMT LED](../moonmodules/light/drivers.md#rmtled) for a few strands, and [Parallel LED](../moonmodules/light/drivers.md#parallelled) for many. Both read the same shared buffer, so switching between them, or between Parallel LED's peripherals, is a change on the Drivers card with no reflash. The steps to add one, set its pins, count and brightness and test the wire are the process [Set up a driver or service for the hardware](../moonwalk.md#driver-setup); the reference behind them follows.
 
 ## Which one
 

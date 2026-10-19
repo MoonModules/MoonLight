@@ -1,9 +1,6 @@
 name: Test
 
-# Fast host-side unit tests for the Python (MoonDeck / build scripts) and JS
-# (web installer) code that the C++ ctest/scenario suites can't reach. Runs on
-# every PR and on pushes to main/next-iteration. Scoped to the paths these tests
-# cover so a docs-only or pure-firmware change doesn't spend a runner here.
+# Fast host-side unit tests for the Python (MoonDeck / build scripts) and JS (web installer) code that the C++ unit and scenario suites can't reach. Runs on every PR and on pushes to main, scoped to the paths these tests cover so a docs-only or pure-firmware change doesn't spend a runner here.
 #
 # Today this pins the Improv frame wire format (test/python + test/js assert a
 # shared golden vector so the device C++, Python, and JS builders can't drift).
@@ -30,6 +27,11 @@ on:
       # the "this is a subset of C++" claim needs re-checking.
       - 'moonlive/**'
       - 'src/light/moonlive/MoonLiveBuiltins_light.h'
+      # MoonWalk's stage files, the map's renderer and what the generator checks them against.
+      - 'moonwalk/**'
+      - 'docs/assets/moonwalk.js'
+      - 'docs/help/help.json'
+      - 'docs/explanation/architecture/index.md'
       # The sanitizer jobs below compile the WHOLE C++ suite, so they have to run when any of it
       # changes. Without these, a C++ change could break them with no run at all, and the fix could
       # not prove itself either: exactly what happened to a missing <string> in a unit test.
@@ -72,7 +74,7 @@ jobs:
       # `pytest test/python` here would compile all 34 scripts a second time.
       - name: pytest
         run: >
-          uv run --with pytest --with pyserial --with markdown --with wled
+          uv run --with pytest --with pyserial --with markdown --with wled --with pyyaml --with jsonschema
           pytest test/python -q --ignore=test/python/test_scripts_are_cpp.py
 
   js:

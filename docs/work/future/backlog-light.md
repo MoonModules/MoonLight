@@ -1,4 +1,4 @@
-# Backlog — light domain
+# Backlog: light domain
 
 Forward-looking to-build items for the **light domain** (`src/light/`: drivers, effects, layouts, modifiers, preview) and its sensors. The core/infrastructure counterpart is [backlog-core.md](backlog-core.md); cross-domain items are in [backlog-mixed.md](backlog-mixed.md). Index + overview: [README.md](index.md). Completed items are removed.
 
@@ -19,6 +19,14 @@ Forward-looking to-build items for the **light domain** (`src/light/`: drivers, 
   at its source, on hardware a user actually has.
 
 ## Effects
+
+### A preview GIF for every MoonLive script (2026-10-19)
+
+The 140 compiled effects each show a GIF on their catalog card (`docs/assets/light/effects/<Type>.gif`, 25 MB in all); the 49 MoonLive effect scripts show none.
+The pictures belong in `docs/assets/moonlive/effects/<subfolder>/<name>.gif`, mirroring the script subfolders, never in `moonlive/` itself, which the build globs and the UI fetches file by file.
+One MoonDeck script makes them all: `screenshot_modules.py` learns to step through the MoonLive catalog, capturing from the preview socket (`/wsp`, requests `[0x51][stride][fps]` and `[0x52][stride]`) the way the hpwit GIFs of 2026-10-18 were made.
+At 0.5 to 1 MB each that is 25 to 50 MB more, so a smaller format (128 px, 2 s) is part of the decision.
+**Decide first** where they show: a MoonLive scripts page with a card per script grouped by subfolder, or the script picker previewing one before its download.
 
 ### Effects and Drivers find their source one way, not two (2026-10-08)
 
@@ -605,7 +613,14 @@ The industry-standard answer is **daisy-chaining** — a sending card's ports ea
 
 - **Read the wall layout from the ColorLight cards.** The cards can report their configuration and at least one user's own tool already does it; it would remove the manual layout step.
 - **Per-card color temperature and brightness**, via the ColorLight sync-packet bytes, grouped by sync group — used to color-match mixed panel batches live.
-- **Docker image**, asked for by a user tracking updates in an IoT system. The Linux binary and `.deb` already ship, so this is packaging rather than new capability.
+
+### Configure a ColorLight card without Windows (2026-10-16, asked)
+
+Asked on Discord by robwomp: a way to set up ColorLight receiving cards from a Linux command line, so a ready-made MoonLight image (a Pi running the desktop build with PanelCardDriver) could configure the card itself and make a card and its panels plug and play.
+
+Today the card's configuration (panel size, panel count, scan, driver IC) is written once with ColorLight's LEDVision, and its firmware with LED Upgrade, both Windows-only ([panel cards §4 and §7](../../how-to/panel-cards.md)). The protocol for those writes is ColorLight's own and undocumented; the pixel and discovery frames are known from [Harald Kubota's write-up](https://hkubota.wordpress.com/2022/01/31/winter-project-colorlight-5a-75b-protocol/), the configuration frames are not.
+
+The route: capture what LEDVision sends while it writes a known configuration (Wireshark on the card's Ethernet), decode the frames, and replay them. [REA](https://github.com/morluto/rea) (MIT) does the decode step: its packet mode reads the capture through TShark and reports repeated values and field candidates, run from the terminal (`npx rea-agents …`) rather than installed into the agent's configuration. Its static .NET inspection could read how LEDVision builds the frames, if LEDVision is .NET and its license allows it. Then replay them from PanelCardDriver as a "configure card" action taking the wall's panel size, count, scan and IC. Reading the configuration back (the "read the wall layout" ask above) shares the same decoding. The firmware path stays with LED Upgrade: a bad write bricks a card, which a configuration write does not. Ask before building: it needs a card on the bench and a Windows machine running LEDVision for the capture.
 
 ## Sensors and audio-reactive input
 

@@ -4,12 +4,15 @@
 import http.server
 import json
 import os
+import re
+import shlex
 import signal
 import subprocess
 import sys
 import tempfile
 import threading
 import time
+import urllib.parse
 from contextlib import suppress
 from datetime import datetime
 from pathlib import Path
@@ -113,6 +116,60 @@ def load_scripts():
 
 _scripts_data = load_scripts()
 SCRIPTS = _scripts_data["scripts"]
+
+sys.path.insert(0, str(SCRIPTS_DIR / "docs"))
+from gen_moonwalk import regenerate as regenerate_moonwalk  # noqa: E402  the one home of regenerating MoonWalk's map on request
+import walk_status  # noqa: E402  MoonWalk's rule for which steps a change needs and which passes hold
+WALK_JSON = ROOT / "build" / "moonwalk" / "moonwalk.json"
+WALK_RUNS = LOG_DIR / "walk-runs.json"   # each step's last run on this machine: its tree, result and seconds
+IN_CHECKOUT = walk_status.in_checkout()   # outside a git checkout a run counts for nothing on the map
+
+
+def card_call(card: dict) -> str:
+    """A card's own call, its script with its fixed arguments: the key its measured runs are kept under."""
+    return walk_status.run_key(f"moondeck/{card['script']}", " ".join(card.get("args", [])))
+
+
+def card_duration(card: dict, durations: dict) -> dict:
+    """How long a card's call takes, the longest of its recent passing runs, and whether that is slow. A server left running has no duration."""
+    if card.get("long_running"):
+        return {}
+    # Every call the card has run counts, its selectors included (`build_esp32.py --firmware esp32` is the ESP32 card's), but not another card's own call.
+    call = card_call(card)
+    others = {card_call(c) for c in SCRIPTS if c is not card}
+    mine = [k for k in durations if k == call or (k.startswith(call + " ") and k not in others)]
+    seconds = max((x for k in mine for x in [walk_status.longest(durations, k)] if x is not None), default=None)
+    return {"seconds": seconds, "slow": seconds is not None and seconds > walk_status.SLOW_SECONDS}
+
+
+def walk_model() -> dict | None:
+    """MoonWalk's map as the stage files are now, or None when they do not build."""
+    return json.loads(WALK_JSON.read_text(encoding="utf-8")) if regenerate_moonwalk(WALK_JSON) else None
+
+
+def gates(base: str | None = None, every: bool = False, with_model: bool = False) -> dict:
+    """MoonWalk's steps that run a script, per process: triggered by the change (against HEAD, against `base` for a merge, every step for a release), still fresh, how long they took, and the card that runs each; with `with_model`, the map they were read from as well, so the map draws without generating it a second time."""
+    model = walk_model()
+    if model is None:
+        return {"error": "gen_moonwalk failed; its error is in this console"}
+    # A step's card is the one whose own call it is, else the first card for its script: Compile Tests runs `build_desktop.py --tests`, not Build.
+    by_call, by_script = {}, {}
+    for c in SCRIPTS:
+        by_call.setdefault(card_call(c), c["id"])
+        by_script.setdefault(f"moondeck/{c['script']}", c["id"])
+    with _lock:
+        running = set(_running)
+    try:
+        processes = walk_status.status(model, walk_status.read_runs(WALK_RUNS), walk_status.read_runs(walk_status.DURATIONS), base=base, every=every)
+    except subprocess.CalledProcessError as e:
+        return {"error": f"git: {e.stderr.strip() or e}"}   # a base git does not know
+    for steps in processes.values():
+        for step in steps:
+            step["card"] = by_call.get(walk_status.run_key(step["script"], step["args"])) or by_script.get(step["script"])
+            step["running"] = step["card"] in running
+    return {"processes": processes, **({"model": model} if with_model else {})}
+
+
 FIRMWARES = _load_firmwares()
 
 
@@ -817,11 +874,27 @@ def _free_port(port: int):
                 subprocess.run(["taskkill", "/F", "/PID", str(pid)], capture_output=True)
             else:
                 os.kill(pid, signal.SIGTERM)
+    # A signal does not end a process at once, and binding before it has let go of the port fails with "Address already in use". Wait for each to exit, up to five seconds.
+    deadline = time.monotonic() + 5
+    while not _IS_WIN and time.monotonic() < deadline and any(_alive(pid) for pid in pids if pid != os.getpid()):
+        time.sleep(0.1)
     if pids:
         print(f"Freed port {port} from a prior instance (pid {', '.join(map(str, pids))}).")
 
 
-def kill_script(script_id: str):
+def _alive(pid: int) -> bool:
+    """Whether a process still exists, by the signal-zero probe that checks without signaling."""
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True   # it exists, under another user
+    return True
+
+
+def kill_script(script_id: str, orphans: bool = True):
+    """Stop the card's run, and with `orphans` any process named like the server the card starts (MoonLight after os.execv, a docs preview)."""
     with _lock:
         proc = _running.pop(script_id, None)
     if proc and proc.poll() is None:
@@ -842,7 +915,7 @@ def kill_script(script_id: str):
 
     # Clean up any orphaned processes (e.g. MoonLight after os.execv)
     script_def = next((s for s in SCRIPTS if s["id"] == script_id), None)
-    pname = script_def.get("process_name") if script_def else None
+    pname = script_def.get("process_name") if script_def and orphans else None
     if pname:
         _kill_process_by_name(pname)
 
@@ -1322,7 +1395,8 @@ class MoonDeckHandler(http.server.BaseHTTPRequestHandler):
             have_logs = set()
             if LOG_DIR.exists():
                 have_logs = {f.stem for f in LOG_DIR.glob("*.log")}
-            scripts = [{**s, "hasLog": s["id"] in have_logs} for s in SCRIPTS]
+            durations = walk_status.read_runs(walk_status.DURATIONS)
+            scripts = [{**s, "hasLog": s["id"] in have_logs, **card_duration(s, durations)} for s in SCRIPTS]
             self._send_json({"scripts": scripts, "firmwares": FIRMWARES})
 
         elif self.path == "/api/ports":
@@ -1404,8 +1478,37 @@ class MoonDeckHandler(http.server.BaseHTTPRequestHandler):
         elif self.path.startswith("/firmware/") and self.path.endswith(".bin"):
             self._serve_firmware_bin()
 
+        # MoonWalk: the scripts' last runs, the map as the stage files are now, and the help's renderer the map imports.
+        elif self.path.split("?", 1)[0] == "/api/gates":
+            q = urllib.parse.parse_qs(self.path.partition("?")[2])
+            self._send_json(gates(q.get("base", [None])[0], q.get("every", ["0"])[0] == "1", q.get("model", ["0"])[0] == "1"))
+        elif self.path.split("?", 1)[0] == "/moonwalk/moonwalk.json":
+            if regenerate_moonwalk(WALK_JSON):
+                self._send_file(WALK_JSON, "application/json")
+            else:
+                self.send_error(500, "gen_moonwalk failed; its error is in this console")
+        elif re.fullmatch(r"/moonwalk/text/[a-z0-9-]+\.json", self.path.split("?", 1)[0]):
+            # A process's prose, written beside the map by the run that answered the map's request.
+            text = WALK_JSON.parent / "text" / self.path.split("?", 1)[0].rsplit("/", 1)[1]
+            if text.exists():
+                self._send_file(text, "application/json")
+            else:
+                self.send_error(404)
+        elif self.path.split("?", 1)[0] == "/assets/help.js":
+            self._send_file(ROOT / "src" / "ui" / "help.js", "application/javascript")
+
         else:
             self._serve_static()
+
+    def _send_file(self, path, content_type, data=None):
+        """One file, whole, with its type, revalidated on every load as every file MoonDeck serves is."""
+        data = path.read_bytes() if data is None else data
+        self.send_response(200)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(len(data)))
+        self.send_header("Cache-Control", "no-cache")
+        self.end_headers()
+        self.wfile.write(data)
 
     def do_POST(self):
         if self.path.startswith("/api/run/"):
@@ -1681,11 +1784,27 @@ class MoonDeckHandler(http.server.BaseHTTPRequestHandler):
                     ("needs_firmware", "firmware", "a firmware variant")]
         missing = [label for flag, key, label in REQUIRED
                    if script_def.get(flag) and not params.get(key)]
-        if missing:
+        # A MoonWalk step runs exactly its own call, read from the process file by the step's name: a request names a step, never arguments.
+        step_args = None
+        if params.get("step"):
+            run = walk_status.step_run(walk_model() or {}, params["step"])
+            if not run or run["script"] != f"moondeck/{script_def['script']}":
+                self._send_json({"error": f"no step {params['step']} runs this card's script"}, 400)
+                return
+            step_args = run.get("args", "")
+        if missing and step_args is None:
             self._send_json({"error": f"Select {' and '.join(missing)} first."}, 400)
             return
 
-        kill_script(script_id)  # Kill previous if still running
+        # A MoonWalk step's own call, `build_docs --strict` say, shares the card with its server: while the server runs, the step asks for it to stop rather than stopping it unasked.
+        if step_args is not None and script_def.get("long_running"):
+            with _lock:
+                serving = _running.get(script_id)
+            if serving and serving.poll() is None and getattr(serving, "_mm_long_running", False):
+                self._send_json({"error": f"{script_def['name']} is running: stop it first, then run this step."}, 409)
+                return
+        # Kill the previous run if still going; a step's call leaves a server the card started elsewhere alone.
+        kill_script(script_id, orphans=step_args is None)
 
         script_path = SCRIPTS_DIR / script_def["script"]
         cmd = ["uv", "run", str(script_path)]
@@ -1750,6 +1869,8 @@ class MoonDeckHandler(http.server.BaseHTTPRequestHandler):
         for flag in script_def.get("flags", []):
             if params.get("flag_" + flag["id"]):
                 cmd.append(flag["arg"])
+        if isinstance(step_args, str):
+            cmd = ["uv", "run", str(script_path), *shlex.split(step_args)]
 
         try:
             # Force live output: a child (build_esp32 → idf.py → ninja, esptool, …) block-buffers
@@ -1796,6 +1917,8 @@ class MoonDeckHandler(http.server.BaseHTTPRequestHandler):
             # streamed proc doesn't orphan it.
             proc._mm_read_stream = read_stream
             proc._mm_master_fd = master_fd
+            proc._mm_key = walk_status.run_key(f"moondeck/{script_def['script']}", " ".join(cmd[3:]))   # the call that ran, the key a step is matched by
+            proc._mm_long_running = bool(script_def.get("long_running")) and step_args is None   # a server card's step call, `build_docs --strict`, finishes and is timed
             with _lock:
                 _running[script_id] = proc
             self._send_json({"status": "started", "pid": proc.pid})
@@ -1871,6 +1994,12 @@ class MoonDeckHandler(http.server.BaseHTTPRequestHandler):
                 self.wfile.flush()
 
             proc.wait()
+            # A passing run's seconds join the call's measured durations; a server's are how long it was left on, and a failure may have stopped early.
+            if proc.returncode == 0 and hasattr(proc, "_mm_key") and not getattr(proc, "_mm_long_running", False):
+                walk_status.record_duration(walk_status.DURATIONS, proc._mm_key, time.monotonic() - started)
+            if IN_CHECKOUT:
+                with suppress(OSError, subprocess.CalledProcessError):
+                    walk_status.record_finished(WALK_RUNS, proc._mm_key, proc.returncode == 0)
             exit_msg = (f"[exit code: {proc.returncode}] [{_duration(time.monotonic() - started)}]"
                         f" [run #{bump_run_count(script_id)}]")
             if log:
@@ -2038,7 +2167,7 @@ code {{ background: transparent; color: #8aa6ba; padding: 0; }}
             return
 
         # Build a compact per-step list. Each step has at minimum an `op`; we render
-        # whatever other keys it carries (id, key, value, document, bounds, …)
+        # whatever other keys it carries (id, key, value, document, …)
         # as a small definition list so the schema can evolve without code change.
         scen_name = html_mod.escape(str(data.get("name", raw)))
         scen_desc = html_mod.escape(str(data.get("description", "")))
@@ -2655,12 +2784,7 @@ document.addEventListener("click", function(e) {{
         # index.html carries a {{VERSION}} placeholder filled at serve time.
         if path == "index.html":
             data = data.replace(b"{{VERSION}}", APP_VERSION.encode())
-        self.send_response(200)
-        self.send_header("Content-Type", content_type)
-        self.send_header("Content-Length", str(len(data)))
-        self.send_header("Cache-Control", "no-cache")
-        self.end_headers()
-        self.wfile.write(data)
+        self._send_file(file_path, content_type, data)
 
 
 # ---------------------------------------------------------------------------

@@ -3,7 +3,7 @@
 The MoonLive language: what a script may declare, what the engine hands it, and what it can call.
 A script compiles to native code on the device, so it runs at the speed of a compiled module.
 The library that ships with MoonLight is [moonlive/](https://github.com/MoonModules/MoonLight/tree/main/moonlive), and the shortest way in is [Write your first script](../../tutorials/first-script.md).
-Scripts other people shared are in [MoonLight-Gallery](https://github.com/MoonModules/MoonLight-Gallery), and the [Gallery](../../how-to/presets.md#from-the-gallery) under the Control card's pads installs one into `/moonlive` with a click.
+Scripts other people shared are in [MoonLight-Gallery](https://github.com/MoonModules/MoonLight-Gallery), and the [Gallery](../../moonwalk.md#gallery-install) under the Control card's pads installs one into `/moonlive` with a click.
 
 <video src="../../assets/moontube/08-moonlive-effects.webm" controls playsinline width="720" title="A library effect downloaded and run, then one written from nothing: a line, a circle, loops, and particles."></video>
 
@@ -28,7 +28,7 @@ class CrosshairEffect {
 These are real calls, not pasted-in text: the callee gets its own frame when it runs, which is what lets one helper call another and lets a function recurse. Arguments are passed BY VALUE, so a function that writes a parameter changes its own copy and the caller's variable is untouched.
 A function takes up to eight words of parameters, an `RGB` or `Coord3D` taking one per field.
 A function's name may not be a builtin's, since the builtin is found first and the function would never run.
-`effects/crosshair.mle` is the worked example; `layouts/sixteen-rings.mll` is the one where the arguments earn their place, calling one helper sixteen times with different coordinates.
+`effects/basics/crosshair.mle` is the worked example; `layouts/sixteen-rings.mll` is the one where the arguments earn their place, calling one helper sixteen times with different coordinates.
 
 ### A script is C++
 
@@ -103,7 +103,7 @@ The fixture shows a repeated last light rather than crashing.
 
 All of a class's members share a small fixed budget (`kCtrlBytes`), so a class that declares more than fits is a compile error naming the arena, not a failed allocation while a fixture runs.
 
-`effects/ember.mle` is the worked example: a heat array that decays and re-ignites, so what it draws this frame depends on the last one. That is the line between an effect that evaluates a formula and one that runs a simulation, and it is the reason arrays exist. `plasma.mle` would look identical if every frame started from scratch; `ember.mle` would go dark.
+`effects/particles/ember.mle` is the worked example: a heat array that decays and re-ignites, so what it draws this frame depends on the last one. That is the line between an effect that evaluates a formula and one that runs a simulation, and it is the reason arrays exist. `plasma.mle` would look identical if every frame started from scratch; `ember.mle` would go dark.
 
 ### Helpers and recursion
 

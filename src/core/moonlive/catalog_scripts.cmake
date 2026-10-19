@@ -21,10 +21,8 @@ elseif(NOT DEFINED PYTHON_CMD)
         "or -DPYTHON_CMD=<interpreter>.")
 endif()
 
-# The repo keeps the three roles in their own folders; the DEVICE keeps one flat directory and
-# carries the role in the extension. The folder survives into the catalog only because it is part of
-# the fetch URL.
-file(GLOB SCRIPT_PATHS
+# The repo keeps each role in its own folder, subfolders grouping a collection; the device keeps one flat directory, the role in the extension, so folder and subfolder survive only as part of the fetch URL.
+file(GLOB_RECURSE SCRIPT_PATHS
      "${SCRIPT_DIR}/effects/*.mle"
      "${SCRIPT_DIR}/layouts/*.mll"
      "${SCRIPT_DIR}/modifiers/*.mlm"
@@ -46,7 +44,7 @@ set(LIST_FILE "${OUT}.filelist")
 file(WRITE "${LIST_FILE}" "${SCRIPT_LIST}\n")
 
 execute_process(
-    COMMAND ${PYTHON_CMD} "${CMAKE_CURRENT_LIST_DIR}/catalog_scripts.py" "${LIST_FILE}" "${OUT}"
+    COMMAND ${PYTHON_CMD} "${CMAKE_CURRENT_LIST_DIR}/catalog_scripts.py" "${LIST_FILE}" "${OUT}" "${SCRIPT_DIR}"
     RESULT_VARIABLE rc)
 file(REMOVE "${LIST_FILE}")
 if(NOT rc EQUAL 0)

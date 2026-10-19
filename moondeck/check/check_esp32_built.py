@@ -20,6 +20,7 @@ Exit codes: 0 fresh · 1 missing or stale (the message says which, and what to r
 """
 
 import argparse
+import re
 import subprocess
 import sys
 import time
@@ -88,6 +89,25 @@ def newest_source(only=None):
     return newest_path, newest_mtime
 
 
+# The UI reaches the firmware as one generated header, whose inputs no compiler reads, so ninja never lists them: the header's own recipe names them, the one home of that list.
+UI_HEADER = "src/ui/ui_embedded.h"
+UI_RECIPE = ROOT / "src" / "ui" / "embed_ui.cmake"
+
+
+def ui_inputs() -> set:
+    """The UI files the embedded header is generated from, as embed_ui.cmake's UI_FILES lists them."""
+    m = re.search(r"set\(UI_FILES ([^)]*)\)", UI_RECIPE.read_text(encoding="utf-8"))
+    # A recipe this check cannot read would leave the UI unwatched again, so it stops rather than passing.
+    if not m:
+        raise SystemExit(f"{UI_RECIPE.relative_to(ROOT)}: no set(UI_FILES ...) to read the UI's files from")
+    return {f"src/ui/{name}" for name in m.group(1).split()}
+
+
+def with_ui(deps: set) -> set:
+    """A build's dependencies, with the UI's own files added when it reads the embedded header, so a UI edit marks the firmware stale."""
+    return deps | ui_inputs() if UI_HEADER in deps else deps
+
+
 def compiled_sources(firmware):
     """The files this firmware's build actually reads, from ninja's own dependency database.
 
@@ -118,7 +138,7 @@ def compiled_sources(firmware):
                 deps.add(path.relative_to(ROOT).as_posix())
             except ValueError:
                 pass   # outside the repo (IDF, toolchain) — not ours to watch
-    return deps or None
+    return with_ui(deps) or None
 
 
 def main():

@@ -9,7 +9,7 @@ consumer reads instead:
 
   * release.yml: the build matrix + both manifest loops select `.ships`,
   * MoonDeck: its firmware picker,
-  * docs/how-to/building.md: points here instead of restating the list.
+  * docs/reference/build-system.md: points here instead of restating the list.
 
 check_firmwares.py guards the committed file against drift from FIRMWARES.
 

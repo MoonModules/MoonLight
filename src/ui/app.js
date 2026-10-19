@@ -8,7 +8,7 @@ import { preview } from "/preview3d.js";
 import { encodeGif } from "/gif.js";
 import { isNewer, parse } from "/semver.js";
 import { applyMigrations, collectFiles, restoreDirs, diffRestore } from "/migrate.js";
-import { moduleHelp, controlHelp, ROLE_EMOJI, DIM_EMOJI, SCRIPTED_EMOJI, COMPILED_EMOJI, EMOJI_LABEL,
+import { moduleHelp, controlHelp, walkLinks, ROLE_EMOJI, DIM_EMOJI, SCRIPTED_EMOJI, COMPILED_EMOJI, EMOJI_LABEL,
          emojiTagsFor, emojiChipRow, chipsMatch } from "/help.js";
 
 // Sections (top to bottom):
@@ -143,7 +143,9 @@ function setupCardsResize() {
 }
 
 function lsRead(key, defaultVal) {
-    const v = localStorage.getItem(key);
+    // Blocked storage (a private window, a policy) reads as unset rather than throwing, for every caller.
+    let v = null;
+    try { v = localStorage.getItem(key); } catch { /* the default */ }
     return v !== null ? v : defaultVal;
 }
 
@@ -217,6 +219,7 @@ function connectWs() {
                 if (state && Array.isArray(state.modules)) {
                     applyStatePatch(data.patch);
                     updateValues();
+                    walker?.update(state);
                     relayMoonCloudOutbox();
                     // A targetFps slider move arrives as a PATCH, and the preview controller aims
                     // at whatever it last heard: without this, the advertised detail/smoothness
@@ -240,6 +243,7 @@ function connectWs() {
             } else {
                 renderStructure();
             }
+            walker?.update(state);   // after the render, so a step that moves on shows a card this state added
             if (data.resync) answerStateWaiters(data.resync);
         } catch {
             // ignore malformed messages
@@ -341,9 +345,25 @@ async function init() {
     // Before anything renders: help the user turned on shapes the first cards, and nothing is fetched until they agreed.
     const helpSource = new URLSearchParams(location.search).get("help");
     try {
-        if (helpSource === "local") localStorage.setItem(LS_HELP_SOURCE, "local");
+        // The local source runs MoonWalk's script from this computer's preview server inside the device's page, and a link switches it on, so it asks once, when the link arrives, and the yes is the stored source.
+        if (helpSource === "local" && lsRead(LS_HELP_SOURCE, "") !== "local"
+            && confirm("Help and MoonWalk's script will load from this computer's preview server (localhost:8421) and run inside this device's page, with access to the device. Load them from there?"))
+            localStorage.setItem(LS_HELP_SOURCE, "local");
         else if (helpSource === "published") localStorage.removeItem(LS_HELP_SOURCE);
     } catch { /* storage blocked: the published help */ }
+    // What the installer vouches for in the device link (`?walked=install`): kept until MoonWalk opens and records it in its own marks.
+    const walked = new URLSearchParams(location.search).get("walked");
+    if (walked) {
+        const ids = walked.split(",").filter((id) => /^[a-z0-9-]+$/.test(id));
+        safeLocalSet(LS_WALKED, JSON.stringify([...new Set([...walkedIds(), ...ids])]));
+    }
+    // Both are answered once: the address drops them, so a reload neither asks again nor vouches twice.
+    if (helpSource || walked) {
+        const url = new URL(location.href);
+        url.searchParams.delete("help");
+        url.searchParams.delete("walked");
+        history.replaceState(null, "", url.pathname + url.search + url.hash);
+    }
     const helpOn = lsRead(LS_HELP_SHOWN, "0") === "1" && lsRead(LS_HELP_CONSENT, "") === "1";
     if (helpOn) loadHelp();
     applyHelpShown(helpOn);
@@ -1074,6 +1094,16 @@ function selectModule(name) {
     closeNavDrawer();
 }
 
+// Select every tab on the way to a module, and return its root, the page that shows it.
+function revealModule(name) {
+    for (let parent = findParentOf(name); parent; parent = findParentOf(name)) {
+        selectedTabs[parent.name] = name;
+        name = parent.name;
+    }
+    safeLocalSet(LS_TABS, JSON.stringify(selectedTabs));
+    return name;
+}
+
 /// Restore the root the user was last on, once the tree is known.
 ///
 /// Called where the full state arrives, before the render that reads the selection: without it renderCards falls back to the first root, and a refresh lands on Control instead of the Layer or File Manager the user left open.
@@ -1083,13 +1113,7 @@ function restoreSelectedRoot() {
     // A link naming a module opens it, each tab on the way selected: the captive portal sends a phone to `?open=WiFi`, where setup continues.
     const wanted = new URLSearchParams(location.search).get("open");
     if (wanted && state && Array.isArray(state.modules) && findModule(wanted)) {
-        let name = wanted;
-        for (let parent = findParentOf(name); parent; parent = findParentOf(name)) {
-            selectedTabs[parent.name] = name;
-            name = parent.name;
-        }
-        safeLocalSet(LS_TABS, JSON.stringify(selectedTabs));
-        selectedModule = name;
+        selectedModule = revealModule(wanted);
         history.replaceState(null, "", location.pathname);   // a refresh then shows what the user chose since
         return;
     }
@@ -2150,7 +2174,7 @@ function createCard(mod, depth) {
     card.appendChild(title);
     const help = helpFor(mod.type);
     // The help's Docs link leads to the module's card on the docs site; docPath comes from /api/types.
-    if (help && help.line) card.appendChild(moduleHelp(help, docPathForType(mod.type)));
+    if (help && help.line) card.appendChild(moduleHelp(help, docPathForType(mod.type), walkLinks(walkIndex, mod.type, null, WALK_PAGE)));
 
     // -- Controls --
     // Child-hosting modules deeper in the tree (Effects, Layer, Drivers, Layouts)
@@ -2815,7 +2839,7 @@ const LS_HELP = "mm_help";            // the last help.json fetched with its add
 const HELP_URL_LOCAL = "http://localhost:8421/help/help.json";
 const LS_HELP_SOURCE = "mm_helpSource";   // "local" while developing help, else absent
 const LS_HELP_SHOWN = "mm_helpShown"; // "1" shows the help, from the ⓘ in the status bar; off by default
-const LS_HELP_CONSENT = "mm_helpConsent"; // "1" once the user agreed to download help; nothing is fetched before
+const LS_HELP_CONSENT = "mm_helpMapConsent"; // "1" once the user agreed to download help and the map; a new key, since the older one covered the docs site alone and the map adds cdnjs
 let helpModules = {};
 let helpPending = false;   // help was asked for before the first state arrived, so the fetch waits for the firmware's version
 
@@ -2832,6 +2856,7 @@ function loadHelp() {
     if (Object.keys(helpModules).length && state && !userIsEditing()) renderCards();
     helpPending = !local && !state;
     if (helpPending) return;
+    loadWalkIndex(local);
     const get = (url) => fetch(url, {cache: "no-cache"}).then(r => r.ok ? r.text().then(text => ({url, text})) : Promise.reject(r.status));
     // A state that names no version reads the site's copy.
     const published = () => (release ? get(release) : Promise.reject()).catch(() => get(HELP_URL));
@@ -2848,6 +2873,8 @@ function loadHelp() {
 function openHelpLink(ev) {
     const a = ev.target.closest?.(".card-helpbox a[href], .control-helper a[href]");
     if (!a || ev.button !== 0 || ev.metaKey || ev.ctrlKey || ev.shiftKey || ev.altKey) return;
+    // A MoonWalk link opens the map here, at its step, beside the card it came from.
+    if (a.dataset.walk) { ev.preventDefault(); openWalk(a.dataset.walk); return; }
     const w = window.open("", "mm-help", "width=960,height=720");
     if (!w) return;
     ev.preventDefault();
@@ -2856,12 +2883,17 @@ function openHelpLink(ev) {
     w.focus();
 }
 
+// One consent for everything the help and MoonWalk download, from the docs site and from cdnjs for the map's graph library, since each shows its host this browser's address.
+function docsSiteConsent() {
+    if (lsRead(LS_HELP_CONSENT, "") === "1") return true;
+    if (!confirm("Help and MoonWalk are downloaded from the MoonLight docs site, hosted by GitHub, and the map's graph library from cdnjs, run by Cloudflare. Both see this browser's address. Download them?")) return false;
+    try { localStorage.setItem(LS_HELP_CONSENT, "1"); } catch { /* not remembered: asked again next time */ }
+    return true;
+}
+
 function toggleHelp() {
     const on = document.body.classList.contains("help-hidden");
-    if (on && lsRead(LS_HELP_CONSENT, "") !== "1") {
-        if (!confirm("Help is downloaded from the MoonLight docs site, hosted by GitHub, which sees this browser's address. Download the help?")) return;
-        try { localStorage.setItem(LS_HELP_CONSENT, "1"); } catch { /* not remembered: asked again next time */ }
-    }
+    if (on && !docsSiteConsent()) return;
     try { localStorage.setItem(LS_HELP_SHOWN, on ? "1" : "0"); } catch { /* not remembered */ }
     applyHelpShown(on);
     if (on && !Object.keys(helpModules).length) loadHelp();
@@ -2872,6 +2904,67 @@ function applyHelpShown(shown) {
     document.body.classList.toggle("help-hidden", !shown);
     const btn = document.getElementById("help-toggle");
     if (btn) { btn.setAttribute("aria-pressed", String(shown)); btn.title = shown ? "Hide help" : "Show help"; }
+}
+
+// ---- MoonWalk: every process on one map, with what this device has done and what comes next ----
+//
+// The map is the docs site's own moonwalk.js, so the flash carries none of it. The app hands it this device's whole state, which the app's own subscription holds only for the cards in view, and the cards in view, where the map opens. `?help=local` reads the local copy through preview_installer, as the help does.
+const WALK_URL = "https://moonmodules.org/MoonLight/assets/moonwalk.js";
+const WALK_URL_LOCAL = "http://localhost:8421/assets/moonwalk.js";
+const LS_WALKED = "mm_walked";   // processes the installer vouched for, until MoonWalk records them
+const WALK_MODEL_URL = "https://moonmodules.org/MoonLight/moonwalk/moonwalk.json";
+const WALK_MODEL_URL_LOCAL = "http://localhost:8421/moonwalk/moonwalk.json";
+const WALK_PAGE = "https://moonmodules.org/MoonLight/moonwalk.html";
+let walkIndex = null;   // moonwalk.json once help is on: which processes a module type and a control take part in
+let walker = null;      // the process MoonWalk's bar follows, which each state change moves on
+
+// A MoonWalk step's target, the element the bar floats under: the first module of its type's control row, else its card. With `reveal`, its page and tabs are selected first, and it scrolls into view highlighted.
+function showTarget(type, control, reveal) {
+    const mod = allModules().find(m => m.type === type);
+    if (!mod) return null;   // a release without this module: the bar still says what to do
+    if (reveal) selectModule(revealModule(mod.name));
+    const card = queryByName(`.card[data-module="${cssEscape(mod.name)}"]`, "data-module", mod.name);
+    if (!card) return null;
+    const collapse = card.querySelector("details.card-controls-collapse");
+    if (reveal && collapse) collapse.open = true;
+    const target = (control && card.querySelector(`.control-row[data-control="${cssEscape(control)}"]`)) || card;
+    if (!reveal) return target;
+    target.scrollIntoView({ block: "center", behavior: "smooth" });
+    target.classList.remove("walk-target");
+    void target.offsetWidth;   // restart the highlight when the same target is shown again
+    target.classList.add("walk-target");
+    return target;
+}
+
+// The help's links into MoonWalk come from moonwalk.json, fetched with the help under its consent and kept by the browser's own cache; offline, the help shows without them.
+function loadWalkIndex(local) {
+    fetch(local ? WALK_MODEL_URL_LOCAL : WALK_MODEL_URL).then(r => r.ok ? r.json() : Promise.reject(r.status)).then(model => {
+        walkIndex = model;
+        if (state && !userIsEditing()) renderCards();
+    }).catch(() => {});
+}
+
+function walkedIds() {
+    try { const ids = JSON.parse(lsRead(LS_WALKED, "[]")); return Array.isArray(ids) ? ids : []; } catch { return []; }
+}
+
+// Open the map, at `at` (`process` or `process/step`) when a help link names one. Show me on a step closes it and hands the process to the bar.
+async function openWalk(at) {
+    walker?.stop();
+    walker = null;
+    if (!docsSiteConsent()) return;
+    // The cards in view: the selected root and everything under it, by type, the key a process's steps target.
+    const types = [];
+    const collect = (m) => { if (!m) return; types.push(m.type); (m.children || []).forEach(collect); };
+    collect(selectedModule ? findModule(selectedModule) : null);
+    let walk;
+    try { walk = await import(lsRead(LS_HELP_SOURCE, "") === "local" ? WALK_URL_LOCAL : WALK_URL); }
+    catch (e) { alert(`MoonWalk could not load: ${e.message}`); return; }   // offline, as on the device's own access point
+    const stop = await walk.openMap(async (host, close) => walk.drawMap(host, {
+        state: await fetch("/api/state").then(r => r.json()), model: walkIndex, modules: types, open: at, done: walkedIds(), actor: "user", newTab: true,
+        show: showTarget, reopen: openWalk, onFollow: (w) => { walker = w; close(); w.update(state); } }), { closeClass: "fm-tool" });
+    // The map recorded the installer's vouch once it drew; a map that could not load leaves it for the next open.
+    if (typeof stop === "function") try { localStorage.removeItem(LS_WALKED); } catch { /* recorded twice next time, which is harmless */ }
 }
 
 function helpFor(moduleType) {
@@ -2922,6 +3015,7 @@ function controlRendersGenerically(mod, ctrl) {
 function createControl(moduleName, moduleType, ctrl, writeTo = (name, value) => sendControl(moduleName, name, value)) {
     const row = document.createElement("div");
     row.className = "control-row";
+    row.dataset.control = ctrl.name;   // the address a MoonWalk step points at, whatever the control's type
     // Expert-only controls (only reachable here when expert mode is on: see controlRendersGenerically)
     // get a distinct treatment so they read as a different tier: a left accent stripe + muted label.
     // One class per tier, because the glyph says WHICH mode reveals it: a reader in expert mode
@@ -3501,7 +3595,7 @@ function createControl(moduleName, moduleType, ctrl, writeTo = (name, value) => 
     // The key the edit cooldown stamps, so a list rebuild puts back a value still being typed; a list's own row fields keep theirs.
     for (const el of row.querySelectorAll("input, select, textarea")) if (!el.dataset.dragkey) el.dataset.dragkey = key;
     const help = helpFor(moduleType);
-    controlHelp(row, help && help.controls ? help.controls[ctrl.name] : null);
+    controlHelp(row, help && help.controls ? help.controls[ctrl.name] : null, walkLinks(walkIndex, moduleType, ctrl.name, WALK_PAGE));
     return row;
 }
 
@@ -5972,6 +6066,7 @@ function setupStatusBarButtons() {
         armPressTwice(rebootBtn, rebootDevice, {armedTitle: "Click again to reboot"});
     }
     document.getElementById("help-toggle")?.addEventListener("click", toggleHelp);
+    document.getElementById("walk-open")?.addEventListener("click", () => openWalk());
     document.addEventListener("click", openHelpLink);
     document.getElementById("theme-toggle")?.addEventListener("click", () => {
         theme = (theme === "dark") ? "light" : "dark";
@@ -6367,6 +6462,18 @@ function mlGroupForExt(ext) {
          : ext === ".mlp" ? "palettes" : null;
 }
 
+/// The collection a catalog group files a script under, "" for one at the kind's root or not in the catalog.
+function mlSubOf(g, name) {
+    return (g.sub || [])[(g.names || []).indexOf(name)] || "";
+}
+
+/// Where a script lives in the repo: in its subfolder when the catalog names one, at the kind's root otherwise. The device keeps every script flat.
+function mlRepoPath(cat, group, name) {
+    const g = (cat && cat[group]) || {};
+    const sub = mlSubOf(g, name);
+    return "moonlive/" + (g.folder || group) + "/" + (sub ? sub + "/" : "") + name;
+}
+
 // Download one factory script and save it to the device.
 //
 // The BROWSER fetches it, not the device: raw.githubusercontent.com sends
@@ -6378,10 +6485,9 @@ function mlGroupForExt(ext) {
 // engine that will run it rather than whatever main happens to hold.
 async function mlDownloadScript(name, group) {
     const cat = await mlFetchCatalog();
-    const folder = (cat[group] || {}).folder;
-    if (!folder) throw new Error("unknown script kind");
+    if (!(cat[group] || {}).folder) throw new Error("unknown script kind");
     const url = "https://raw.githubusercontent.com/MoonModules/MoonLight/"
-              + encodeURIComponent(cat.tag) + "/moonlive/" + folder + "/" + encodeURIComponent(name);
+              + encodeURIComponent(cat.tag) + "/" + mlRepoPath(cat, group, name).split("/").map(encodeURIComponent).join("/");
     const res = await fetch(url);
     // A 404 has two causes now. A RELEASE build fetches from its tag, so a missing script means the
     // release does not carry it. A DEV build fetches from the commit it was built from, so a 404
@@ -8648,9 +8754,15 @@ function buildFilePathControl(row, label, key, moduleName, ctrl) {
             if (g.dim && DIM_EMOJI[g.dim[i]]) marks.push(DIM_EMOJI[g.dim[i]]);
             return marks.length ? marks.join("") + " " : "";
         };
+        // The collection a factory script belongs to upstream, its subfolder, after the name: one library still, with its groups named.
+        const from = (n) => {
+            const g = cat && cat[group];
+            const sub = g ? mlSubOf(g, n) : "";
+            return sub ? " \u00b7 " + sub : "";
+        };
         for (const n of names) {
             const o = document.createElement("option");
-            o.value = n; o.textContent = decl(n) + n;
+            o.value = n; o.textContent = decl(n) + n + from(n);
             picker.appendChild(o);
         }
         // Marked, because picking one costs a download and can fail. One list rather than
@@ -8659,7 +8771,7 @@ function buildFilePathControl(row, label, key, moduleName, ctrl) {
         for (const n of remote) {
             const o = document.createElement("option");
             o.value = n;
-            o.textContent = "\u2601 " + decl(n) + n;   // cloud: not on this device yet
+            o.textContent = "\u2601 " + decl(n) + n + from(n);   // cloud: not on this device yet
             picker.appendChild(o);
         }
         picker.value = cur;
@@ -8758,11 +8870,10 @@ function buildFilePathControl(row, label, key, moduleName, ctrl) {
         } catch (err) { alert("could not read the script: " + err.message); return; }
 
         const cat = await mlFetchCatalog().catch(() => null);
-        const folder = cat && cat[group] ? cat[group].folder : group;
         // A name the library already ships is an EDIT of that file; anything else is a new
         // one. GitHub has a flow for each, and both fork on the user's behalf when they
         // propose the change, so neither needs write access to this repo.
-        const repoPath = "moonlive/" + folder + "/" + name;
+        const repoPath = mlRepoPath(cat, group, name);
         const url = catalogNames.has(name)
             ? "https://github.com/MoonModules/MoonLight/edit/main/" + repoPath
               + "?value=" + encodeURIComponent(text)
@@ -8776,8 +8887,8 @@ function buildFilePathControl(row, label, key, moduleName, ctrl) {
             await navigator.clipboard.writeText(text).catch(() => {});
             alert("This script is too long to send through a link.\n\n"
                 + "It has been copied to your clipboard: open\n"
-                + "github.com/MoonModules/MoonLight, add a file under moonlive/" + folder
-                + "/ and paste it there.");
+                + "github.com/MoonModules/MoonLight, add " + repoPath
+                + " and paste it there.");
             return;
         }
         window.open(url, "_blank", "noopener");

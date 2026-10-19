@@ -72,6 +72,8 @@ constexpr bool hasHls = false;
 constexpr bool hasRtsp = false;
 /// No USB MIDI host.
 constexpr bool hasUsbMidiHost = false;
+/// No USB host, so no video grabber.
+constexpr bool hasUsbVideo = false;
 /// One encoder at most.
 constexpr bool hasEncoderChoice = false;
 /// No segment files.

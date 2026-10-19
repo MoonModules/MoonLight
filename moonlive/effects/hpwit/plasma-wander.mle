@@ -1,0 +1,25 @@
+// Wandering plasma: four sine waves summed per light, the fourth a ring around a wandering center, after hpwit's ProceduralEffects.
+
+class WanderingPlasmaEffect {
+  int dimensions() { return 2; }
+
+  string tags() { return "💫"; }
+
+  // One of 256 steps round a sine, as 0..255.
+  int wave(int i) { return sin(i * 256) / 256; }
+
+  void tick() {
+    int f = mod(t / 33, 25600);
+    int cx = wave(f) * (width - 1) / 255;
+    int cy = wave(f * 2 + 64) * (height - 1) / 255;
+    for (int y = 0; y < height; y = y + 1) {
+      int wy = wave(y * 3 + f * 2);
+      int dy = (y - cy) * (y - cy);
+      for (int x = 0; x < width; x = x + 1) {
+        int d = ((x - cx) * (x - cx) + dy) / 32;
+        int v = wave(x * 2 + f) + wy + wave(x + y + f * 3) + wave(d + f * 4);
+        setPaletteColor(x, y, mod(v / 2 + f, 256), 255);
+      }
+    }
+  }
+}

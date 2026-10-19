@@ -582,3 +582,14 @@ button#watch-ports.watching {
     color: #d6ffe6;
 }
 button#watch-ports.watching:hover { border-color: #2e9e63; color: #d6ffe6; }
+
+/* The MoonWalk button looks like a tab without being one, so the tab switcher leaves it alone. */
+.walk-open { background: transparent; border: 1px solid #0f3460; color: #a0a0b0; padding: 6px 16px; border-radius: 4px; cursor: pointer; font-size: 13px; }
+.walk-open:hover { background: #0f3460; color: #fff; }
+
+/* MoonWalk's map in its dialog: MoonDeck's colors mapped onto the docs theme's variables the map reads, and a wider text for the steps' status. */
+.mm-walk-dialog {
+    --md-default-fg-color: #e0e0e0; --md-default-bg-color: #16213e; --md-accent-fg-color: #e94560;
+    --md-default-fg-color--lightest: #0f3460; --md-default-fg-color--light: #8892b0;
+}
+.mm-walk-dialog .mm-map { --mw-panel: 20rem; }

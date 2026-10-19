@@ -6,6 +6,7 @@
 #include "core/services/PictureService.h"
 
 #include <atomic>
+#include <chrono>
 #include <cstring>
 #include <string>
 #include <thread>
@@ -123,4 +124,158 @@ TEST_CASE("without room for a second picture the service degrades to one, locked
     REQUIRE(p.svc.status() != nullptr);
     CHECK(std::string(p.svc.status()) == "one picture buffer: not enough memory, a capture may skip frames");
     writeWhileReading(p, 300);
+}
+
+namespace {
+// A stand-in grabber advertising one mode, detached again when the test ends.
+struct Grabber {
+    Grabber(uint16_t w, uint16_t h, uint8_t fps, uint8_t r, uint8_t g, uint8_t b) {
+        const mm::platform::VideoCaptureFormat f{w, h, fps};
+        mm::platform::setTestVideoCaptureFormats(&f, 1);
+        mm::platform::setTestVideoCaptureColor(r, g, b);
+    }
+    ~Grabber() {
+        mm::platform::setTestVideoCaptureFormats(nullptr, 0);
+        mm::platform::setTestVideoCaptureDecodeFails(false);
+    }
+};
+// The published generation, or `was` while the writer holds the swap, so a poll never fails on timing.
+uint32_t generationNow(uint32_t was) {
+    const mm::PictureService::Reader r;
+    return r ? r.frame().generation : was;
+}
+// Whether a picture past `was` arrives within two seconds, which a decode on its own task has ample time for.
+bool publishedPast(uint32_t was) {
+    for (int i = 0; i < 400; i++) {
+        if (generationNow(was) != was) return true;
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+    return false;
+}
+// Whether the grabber has answered `n` decodes, passed or refused, within two seconds: the task's own count rather than a guess at its pace.
+bool decodedAtLeast(uint32_t n) {
+    for (int i = 0; i < 400; i++) {
+        const mm::platform::VideoCaptureStats st = mm::platform::videoCaptureStats();
+        if (st.decoded + st.failed >= n) return true;
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+    return false;
+}
+// The status line once tick1s finds the lock free, which a publishing task holds only for a swap.
+std::string captureStatus(mm::PictureService& svc) {
+    for (int i = 0; i < 400; i++) {
+        svc.tick1s();
+        if (svc.status() && std::strchr(svc.status(), 'x')) return svc.status();
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+    return {};
+}
+// The capture source, started on a service sized `w` x `h`; false when no picture arrived.
+bool startCapture(Picture& p, uint32_t& was) {
+    p.svc.source = mm::PictureService::kUsbCapture;
+    p.svc.prepare();
+    was = current().generation;   // prepareBuffers published the resized picture; a frame comes after it
+    return publishedPast(was);
+}
+}  // namespace
+
+// A 640 x 480 grabber on a 256 x 256 picture: halved to 160 x 120, every pixel the color it decoded.
+TEST_CASE("the usb capture source publishes the grabber's frames, scaled to fit the picture") {
+    Grabber g(640, 480, 30, 10, 200, 90);
+    Picture p(256, 256);
+    uint32_t was = 0;
+    REQUIRE(startCapture(p, was));
+    const mm::PictureFrame f = current();
+    CHECK(f.width == 160);
+    CHECK(f.height == 120);
+    const uint8_t* px = pixel(f, 80, 60);
+    CHECK(px[0] == 10);
+    CHECK(px[1] == 200);
+    CHECK(px[2] == 90);
+    p.svc.release();
+}
+
+// A board whose USB port has nothing on it says so, rather than failing or waiting on a device.
+TEST_CASE("the usb capture source without a grabber reports it") {
+    mm::platform::setTestVideoCaptureFormats(nullptr, 0);
+    Picture p(64, 48);
+    p.svc.source = mm::PictureService::kUsbCapture;
+    p.svc.prepare();
+    REQUIRE(p.svc.status() != nullptr);
+    CHECK(std::string(p.svc.status()) == "no grabber attached");
+    p.svc.release();
+}
+
+// A refused bitstream leaves the lights the picture they have, rather than a new generation of nothing.
+TEST_CASE("a frame the decoder refuses publishes nothing, and recovery publishes again") {
+    Grabber g(320, 240, 30, 1, 2, 3);
+    mm::platform::setTestVideoCaptureDecodeFails(true);
+    Picture p(64, 48);
+    p.svc.source = mm::PictureService::kUsbCapture;
+    p.svc.prepare();
+    const uint32_t settled = current().generation;
+    REQUIRE(decodedAtLeast(3));   // three refusals answered
+    CHECK(generationNow(settled) == settled);
+    mm::platform::setTestVideoCaptureDecodeFails(false);
+    CHECK(publishedPast(settled));
+    p.svc.release();
+}
+
+// The status names the size it publishes and what it lost, so a climbing loss is visible without a log.
+TEST_CASE("the capture status counts the frames that landed and those lost") {
+    Grabber g(320, 240, 30, 5, 5, 5);
+    Picture p(64, 48);
+    uint32_t was = 0;
+    REQUIRE(startCapture(p, was));
+    const std::string line = captureStatus(p.svc);
+    CHECK(line.rfind("40 x 30, ", 0) == 0);   // 320 x 240 halved three times to fit 64 x 48
+    CHECK(line.find(" frames, 0 lost") != std::string::npos);
+    CHECK(line.find(" 0 frames") == std::string::npos);   // the picture that arrived is counted
+    CHECK(line.find("one picture") == std::string::npos);
+    CHECK(p.svc.severity() == mm::MoonModule::Severity::Status);
+    p.svc.release();
+}
+
+// Short of memory for a second picture, the capture still publishes and readers still read. The task holds the one picture only while it decodes, never while it waits for a frame.
+TEST_CASE("the usb capture with one picture publishes, and the status says it runs on one") {
+    Grabber g(320, 240, 30, 7, 7, 7);
+    Picture p(64, 48);
+    mm::platform::setTestMaxAllocBlock(64u * 48u * 3u - 1);   // the optional picture finds no block
+    uint32_t was = 0;
+    const bool published = startCapture(p, was);
+    mm::platform::setTestMaxAllocBlock(0);
+    REQUIRE(published);
+    CHECK_FALSE(p.svc.twoBuffers());
+    int reads = 0;
+    const uint32_t target = mm::platform::videoCaptureStats().decoded + 3;
+    while (mm::platform::videoCaptureStats().decoded < target) {
+        const mm::PictureService::Reader r;
+        if (r) reads++;
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    CHECK(reads > 0);
+    CHECK(captureStatus(p.svc).find(", one picture") != std::string::npos);
+    CHECK(p.svc.severity() == mm::MoonModule::Severity::Warning);
+    p.svc.release();
+}
+
+// Switching back stops the decode and draws the card, so the grabber is released rather than still writing.
+TEST_CASE("switching away from the capture stops its task") {
+    Grabber g(320, 240, 30, 0, 0, 0);
+    Picture p(160, 120);
+    uint32_t was = 0;
+    REQUIRE(startCapture(p, was));
+    p.svc.source = mm::PictureService::kTestPattern;
+    p.svc.prepare();
+    mm::platform::VideoCaptureHandle again;
+    CHECK(mm::platform::videoCaptureInit(again, 320, 240, 30));   // the grabber was let go, so it opens anew
+    mm::platform::videoCaptureDeinit(again);
+    const mm::PictureFrame f = current();
+    CHECK(f.width == 160);
+    CHECK(f.height == 120);
+    const uint8_t* px = pixel(f, 5, 2);   // the card's grid gray, not the black the grabber decoded
+    CHECK(px[0] == 128);
+    CHECK(px[1] == 128);
+    CHECK(px[2] == 128);
+    p.svc.release();
 }

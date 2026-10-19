@@ -13,13 +13,13 @@ function harness({ cached = null, version = "1.0.0", stateKnown = true, answers 
     const store = { mm_help: cached ? JSON.stringify(cached) : null };
     const fetched = [];
     const fetch = (url) => { fetched.push(url); return Promise.resolve(answers[url] ? { ok: true, text: () => Promise.resolve(answers[url]) } : { ok: false, status: 404 }); };
-    const run = new Function("lsRead", "state", "deviceFirmwareInfo", "releaseTagOf", "renderCards", "userIsEditing", "fetch", "localStorage",
+    const run = new Function("lsRead", "state", "deviceFirmwareInfo", "releaseTagOf", "renderCards", "userIsEditing", "fetch", "localStorage", "loadWalkIndex",
         "let helpModules = {}, helpPending = false;\n" +
         "const LS_HELP = 'mm_help', LS_HELP_SOURCE = 'mm_helpSource', HELP_URL_LOCAL = 'http://local/help.json';\n" +
         `const HELP_URL = '${SITE}', HELP_URL_RELEASE = (tag) => 'https://rel/' + tag + '/help.json';\n` +
         fnSource("loadHelp") + "\nreturn { loadHelp, modules: () => helpModules, pending: () => helpPending };")(
         (k, d) => store[k] ?? d, stateKnown ? { modules: [] } : null, () => ({ version }), (v) => `v${v}`,
-        () => {}, () => false, fetch, { setItem: (k, v) => { store[k] = v; } });
+        () => {}, () => false, fetch, { setItem: (k, v) => { store[k] = v; } }, () => {});
     return { ...run, fetched, store };
 }
 const settle = () => new Promise((r) => setTimeout(r, 0));
