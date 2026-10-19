@@ -181,7 +181,7 @@ processes:
         section: Install and start it
         say: Install the .deb package.
         given: [{ input: platform, equals: Linux }]
-        when: { run: { command: "sudo apt install ./moonlight_X.Y.Z_<arch>.deb" } }
+        when: { run: { command: "sudo apt install ./moonlight_*_$(dpkg --print-architecture).deb" } }
         detail: |
           The releases carry `_amd64.deb` for `x86_64` and `_arm64.deb` for `aarch64` (`uname -m` says which), for Debian, Ubuntu and Raspberry Pi OS with glibc 2.35 or later. On a headless board, fetch the right file over ssh:
 

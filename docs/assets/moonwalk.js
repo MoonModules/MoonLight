@@ -531,7 +531,7 @@ function showPanel(panel, model, pid, done, onDone, host = {}) {
     } else {
         if (p.url) {
             const line = control("p");
-            line.append(control("a", { href: new URL(p.url, ROOT).href, target: host.newTab ? "_blank" : "", rel: "noopener" }, "Read the page"));
+            line.append(control("a", { href: new URL(p.url, host.site || ROOT).href, target: host.newTab ? "_blank" : "", rel: "noopener" }, "Read the page"));   // a host serving no pages names the site, as linkOf does
             panel.append(line);
         }
         if (p.steps?.length) {
