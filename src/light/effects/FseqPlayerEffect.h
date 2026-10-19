@@ -658,8 +658,9 @@ private:
     /// Decode frame `frameIndex_` into `frameBuf_`, one tick ahead of its render. The one blocking read `tick20ms` makes, bounded to one frame or block.
     bool decodeCurrentFrame() {
         if (header_.compressionType == fseq::CompressionType::Zlib) {
-            const uint8_t* rawFrame = frameFromCompressedBlock(frameIndex_);
-            if (!rawFrame) return failLoad("file read failed mid-file");
+            const char* why = nullptr;
+            const uint8_t* rawFrame = frameFromCompressedBlock(frameIndex_, why);
+            if (!rawFrame) return failLoad(why);
             std::memcpy(frameBuf_.data(), rawFrame, header_.channelCount);
         } else if (!readBytes(frameBuf_.data(), header_.channelCount)) {
             return failLoad("file read failed mid-file");
@@ -690,30 +691,33 @@ private:
         }
     }
 
-    /// The raw bytes for `frameIndex` out of the current (or a freshly loaded) compression block.
-    const uint8_t* frameFromCompressedBlock(uint32_t frameIndex) {
+    /// The raw bytes for `frameIndex` out of the current (or a freshly loaded) compression block, or null with `why` naming what failed.
+    const uint8_t* frameFromCompressedBlock(uint32_t frameIndex, const char*& why) {
         while (frameIndex >= currentBlockFirstFrame_ + currentBlockFrameCount_) {
-            if (!loadNextBlock()) return nullptr;
+            why = loadNextBlock();
+            if (why) return nullptr;
         }
         // A block table not starting at frame 0 is malformed; fail rather than underflow this subtraction.
-        if (frameIndex < currentBlockFirstFrame_) return nullptr;
+        if (frameIndex < currentBlockFirstFrame_) { why = "FSEQ block table does not start at frame 0"; return nullptr; }
         const size_t offset = static_cast<size_t>(frameIndex - currentBlockFirstFrame_) * header_.channelCount;
         return blockBuf_.data() + offset;
     }
 
-    /// Read, decompress and install the next compression block into the buffers `loadTrack` sized; its byte count sets this call's real cost.
-    bool loadNextBlock() {
+    /// Read, decompress and install the next compression block into the buffers `loadTrack` sized, or name what failed; its byte count sets this call's real cost.
+    const char* loadNextBlock() {
         uint32_t firstFrame = 0, byteLen = 0, frames = 0;
         size_t decompLen = 0;
-        if (!blockExtent(currentBlockIndex_, firstFrame, byteLen, frames, decompLen)) return false;
-        if (byteLen > compBuf_.bytes() || decompLen > blockBuf_.bytes() || !readBytes(compBuf_.data(), byteLen)) return false;
+        if (!blockExtent(currentBlockIndex_, firstFrame, byteLen, frames, decompLen) || byteLen > compBuf_.bytes() || decompLen > blockBuf_.bytes())
+            return "FSEQ block table entry invalid";
+        if (!readBytes(compBuf_.data(), byteLen)) return "file read failed mid-file";
         size_t outLen = 0;
-        if (!platform::zlibInflateAll(zlibWork_.data(), compBuf_.data(), byteLen, blockBuf_.data(), decompLen, outLen) || outLen != decompLen) return false;
+        if (!platform::zlibInflateAll(zlibWork_.data(), compBuf_.data(), byteLen, blockBuf_.data(), decompLen, outLen) || outLen != decompLen)
+            return "compressed block does not match its declared size";
 
         currentBlockFirstFrame_ = firstFrame;
         currentBlockFrameCount_ = frames;
         currentBlockIndex_++;
-        return true;
+        return nullptr;
     }
 
     /// One directory level, collected: the same shape as FilesystemModule::removeTree's DirLevel.
