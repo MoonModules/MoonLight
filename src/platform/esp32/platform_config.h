@@ -266,6 +266,8 @@ constexpr bool hasSdCard = true;
 #else
 constexpr bool hasSdCard = false;
 #endif
+/// True: `zlibInflateAll` decodes through the ROM's tinfl on every ESP32 board.
+constexpr bool hasZlibInflate = true;
 /// False: SdCardService offers only the board presets this chip can wire.
 constexpr bool previewsSdPresets = false;
 

@@ -136,6 +136,8 @@ add_executable(mm_tests
     unit/light/unit_FixedRectangleEffect.cpp
     unit/light/unit_FreqMatrixEffect.cpp
     unit/light/unit_FreqSawsEffect.cpp
+    unit/light/unit_FseqFile.cpp
+    unit/light/unit_FseqPlayerEffect.cpp
     unit/light/unit_GEQ3DEffect.cpp
     unit/light/unit_GEQEffect.cpp
     unit/light/unit_GridBlacksLayout.cpp
@@ -145,7 +147,6 @@ add_executable(mm_tests
     unit/light/unit_NoiseMeterEffect.cpp
     unit/light/unit_PaintBrushEffect.cpp
     unit/light/unit_PictureEffect.cpp
-    unit/light/unit_FseqPlayerEffect.cpp
     unit/light/unit_PraxisEffect.cpp
     unit/light/unit_RandomEffect.cpp
     unit/light/unit_RippleXZModifier.cpp

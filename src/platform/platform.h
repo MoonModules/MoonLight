@@ -339,6 +339,11 @@ inline bool fsWriteStream(const char* path, FsWriteSrc src, void* user) {
     return ok && committed;
 }
 
+/// Inflate one self-contained zlib block in one call; `outLen` is set only on success. Real decoder only on ESP32 (the ROM's `tinfl_decompress`, zero flash cost); desktop and Teensy both stub to false, no decoder linked on either.
+bool zlibInflateAll(void* workspace, const uint8_t* src, size_t srcLen, uint8_t* dst, size_t dstCap, size_t& outLen);
+/// The bytes of decoder state the caller lends `zlibInflateAll` as its `workspace`, held only while it plays zlib; 0 where no decoder is linked.
+size_t zlibWorkspaceBytes();
+
 // A second, independent mount (microSD, FAT) sharing the fsXxx surface above through its own `/sd` path prefix; inert wherever hasSdCard is false.
 
 /// Whether `path` names the filesystem's root: "" or "/", the two forms a listing of the root arrives as.

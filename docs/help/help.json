@@ -892,6 +892,62 @@
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/FreqSawsEffect.h",
    "tests": "https://moonmodules.org/MoonLight/reference/tests/unit-tests.html#freqsawseffect"
   },
+  "FseqPlayerEffect": {
+   "line": "Plays FSEQ animation files from the filesystem onto this effect's layer, with a playlist and the standard transport controls.",
+   "summary": "FSEQ is the Falcon Player/xLights sequence format: a flat, per-frame byte stream with no pixel semantics of its own. The playlist follows `FixtureProfilesModule`'s `EditableListSource` shape, the transport `DemoReelEffect`'s cycle/shuffle logic.",
+   "attribution": "[FPP](https://github.com/FalconChristmas/fpp)",
+   "guide": [
+    {
+     "title": "Compressed files need ESP32",
+     "text": "A zlib-compressed FSEQ (xLights/FPP's default) plays only on ESP32 boards; desktop and Teensy builds show a clean error instead of playing it.\n\nZstd-compressed files do not play on any target yet.\n\nExport a track uncompressed if it needs to play everywhere."
+    }
+   ],
+   "image": "https://moonmodules.org/MoonLight/assets/light/effects/FseqPlayerEffect.gif",
+   "controls": {
+    "play": {
+     "line": "Starts a stopped transport, or resumes a paused one."
+    },
+    "pause": {
+     "line": "Holds the current frame on screen."
+    },
+    "stop": {
+     "line": "Stops playback, resets the position and blanks the lights."
+    },
+    "previous": {
+     "line": "Jumps to the previous track in the playlist."
+    },
+    "next": {
+     "line": "Jumps to the next track in the playlist."
+    },
+    "shuffle": {
+     "line": "Picks the next track at random instead of in playlist order."
+    },
+    "loopMode": {
+     "line": "At a track's end: stop, repeat it, or repeat the playlist."
+    },
+    "fpsSource": {
+     "line": "where the rate comes from: the file's step time, or fps_"
+    },
+    "fps": {
+     "line": "the manual playback rate; 1000/fps milliseconds per frame"
+    },
+    "playlist": {
+     "line": "The tracks to play, in order; each row picks a scanned .fseq file."
+    },
+    "position": {
+     "line": "How far into the current track playback is, in frames."
+    },
+    "rescan": {
+     "line": "Looks through the filesystem for .fseq files again."
+    }
+   },
+   "role": "effect",
+   "tags": "🖼️",
+   "dim": 3,
+   "doc": "light/effects.md#fseqplayer",
+   "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/FseqPlayerEffect.h",
+   "tests": "https://moonmodules.org/MoonLight/reference/tests/unit-tests.html#fseqplayereffect"
+  },
   "GameOfLifeEffect": {
    "line": "Conway's cellular automaton generalized to 2D and 3D, with selectable rulesets and a custom `B#/S#` rule.",
    "summary": "Cells live, die and are born by counting their live neighbors, on a panel or through a cube. New cells take a neighbor's palette color, and dead ones blur toward the background.",
@@ -1258,30 +1314,6 @@
    "doc": "light/effects.md#particles",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/ParticlesEffect.h",
    "tests": "https://moonmodules.org/MoonLight/reference/tests/unit-tests.html#particleseffect"
-  },
-  "FseqPlayerEffect": {
-   "line": "An FSEQ show played from a file: the frame-by-frame channel data xLights and Falcon Player write.",
-   "summary": "A show, uncompressed FSEQ v2, lands where a sender-mapped [NetworkReceive](https://moonmodules.org/MoonLight/moonmodules/light/effects.html#networkreceive) stream does, so alone on its layer it reaches the lights in one copy on any layout. Reading the file is the next step, and its status says so.",
-   "attribution": "[FPP](https://github.com/FalconChristmas/fpp)",
-   "image": "https://moonmodules.org/MoonLight/assets/light/effects/FseqPlayerEffect.gif",
-   "alt": "The reference sweep fseq_play writes, the show an FSEQ player plays",
-   "controls": {
-    "file": {
-     "line": "The show's path, an `.fseq` file on flash or under `/sd`."
-    },
-    "loop": {
-     "line": "Start again at the end."
-    },
-    "speed": {
-     "line": "The playback speed, in percent of the file's step time."
-    }
-   },
-   "role": "effect",
-   "tags": "🖼️",
-   "dim": 3,
-   "doc": "light/effects.md#fseqplayer",
-   "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/FseqPlayerEffect.h",
-   "tests": "https://moonmodules.org/MoonLight/reference/tests/unit-tests.html#fseqplayereffect"
   },
   "PictureEffect": {
    "line": "The active [Picture service](https://moonmodules.org/MoonLight/moonmodules/core/services.html#picture)'s picture on the layer, so a picture of any size shows on a layout of any size.",

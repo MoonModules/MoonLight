@@ -1172,6 +1172,10 @@ bool sdMount(const SdPinConfig& pins) {
     return true;
 }
 
+// No decoder linked on desktop; the FSEQ player reports "unsupported" for a compressed file here.
+bool zlibInflateAll(void*, const uint8_t*, size_t, uint8_t*, size_t, size_t&) { return false; }
+size_t zlibWorkspaceBytes() { return 0; }
+
 bool sdCardMounted() { return sdMounted_; }
 
 SdMountError sdMountError() { return sdMountError_; }
