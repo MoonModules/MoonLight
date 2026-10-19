@@ -137,7 +137,7 @@ TEST_CASE("PictureEffect without a Picture service says so and shows black") {
 }
 
 // --- Border sampling ---------------------------------------------------------------------------
-// A border strip's outermost lights own a sliver at the very edge, where a letterbox and the overscan junk live, so edgeDepth reaches further in. Smoothing eases a light toward its new colour.
+// A border strip's outermost lights own a sliver at the edge, where a letterbox and the overscan junk live, so edgeDepth reaches further in. Smoothing eases a light toward its new color.
 
 // The control sets the depth rather than raising a floor under it, so on a coarse grid an edge cell takes less than its own share.
 TEST_CASE("PictureEffect edgeDepth gives the outermost lights the depth they ask for") {
@@ -172,29 +172,29 @@ TEST_CASE("PictureEffect edgeDepth of 0 samples precisely what it did before") {
             for (int ch = 0; ch < 3; ch++) CHECK(off.cell(x, y)[ch] == plain.cell(x, y)[ch]);
 }
 
-// The one that 8-bit state would fail: each step is a fraction of a byte, so the value moves only if those fractions are kept between pictures.
-TEST_CASE("PictureEffect smoothing eases toward a new picture and arrives exactly") {
-    PictureRig rig(8, 8, 8, 8, 1, mm::PictureEffect::kStretch, mm::PictureEffect::kPoint);
-    rig.fx.smoothing = 200;
-    rig.fx.snapAbove = 0;     // ease every move, so nothing lands by jumping
-    rig.fx.prepare();
-    rig.layer.tick();         // the first picture lands whole, or it would creep up out of black
-    const uint8_t first = rig.cell(0, 0)[0];
-    CHECK(first == 255);      // the top-left bar is white
+// Smoothing is a half-life in time, so after one half-life half the gap is closed, whatever the frame rate.
+TEST_CASE("PictureEffect smoothing closes half the gap in one half-life") {
+    const int32_t from = 0, to = 255 << 8;
+    const int32_t half = mm::PictureEffect::easeToward(from, to, mm::halfLifeKeep(500, 500));
+    CHECK(half >= (to / 2) - 256);
+    CHECK(half <= (to / 2) + 256);
+}
 
-    // Now a black picture: the light has to walk down to it over several ticks.
-    uint8_t* rgb = rig.pic.beginWrite();
-    std::memset(rgb, 0, static_cast<size_t>(rig.pic.width) * rig.pic.height * 3);
-    rig.pic.endWrite();
+// Frame-rate independence: ten short steps land where one long step does, within the 8.8 rounding.
+TEST_CASE("PictureEffect smoothing settles at the same speed at any frame rate") {
+    int32_t fast = 0;
+    for (int i = 0; i < 10; i++) fast = mm::PictureEffect::easeToward(fast, 255 << 8, mm::halfLifeKeep(20, 500));
+    const int32_t slow = mm::PictureEffect::easeToward(0, 255 << 8, mm::halfLifeKeep(200, 500));
+    CHECK(fast >= slow - 512);
+    CHECK(fast <= slow + 512);
+}
 
-    rig.layer.tick();
-    const uint8_t stepped = rig.cell(0, 0)[0];
-    CHECK(stepped < first);   // it moved
-    CHECK(stepped > 0);       // but not all the way
-
-    // And it arrives: an unchanged picture keeps being drawn while a cell is still short of it.
-    for (int i = 0; i < 400; i++) rig.layer.tick();
-    CHECK(rig.cell(0, 0)[0] == 0);
+// The one 8-bit state would fail: a step is a fraction of a byte, so a light arrives only if the fractions are kept.
+TEST_CASE("PictureEffect smoothing arrives exactly, and no time passed moves nothing") {
+    int32_t v = 255 << 8;
+    for (int i = 0; i < 2000; i++) v = mm::PictureEffect::easeToward(v, 0, mm::halfLifeKeep(20, 4000));
+    CHECK(v == 0);
+    CHECK(mm::PictureEffect::easeToward(100, 5000, mm::halfLifeKeep(0, 500)) == 100);
 }
 
 // A cut is a real jump, and easing through it reads as the lights lagging the picture.
