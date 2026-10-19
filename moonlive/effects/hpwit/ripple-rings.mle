@@ -1,0 +1,28 @@
+// Ripple rings: rings growing from scattered points and dimming as they spread, each reborn elsewhere, after hpwit's multi_effect_controller.
+
+class RippleRingsEffect {
+  byte speed = 40;
+  byte amount = 6;
+
+  int dimensions() { return 2; }
+
+  string tags() { return "💫"; }
+
+  void defineControls() {
+    addControl("speed", speed, 1, 120); // how fast a ring grows
+    addControl("amount", amount, 1, 20); // rings at a time
+  }
+
+  void tick() {
+    fade(64);
+    int k = t / (2000 / speed);
+    for (int i = 0; i < amount; i = i + 1) {
+      int grown = mod(k + i * 7, 20);
+      int g = (k + i * 7) / 20;
+      int cx = mod(g * 7919 + i * 104729 + g * g * 31, width);
+      int cy = mod(g * 6007 + i * 1299709 + g * g * 17, height);
+      RGB c = paletteRGB(mod(g * 53 + i * 29, 256), 255 - grown * 12);
+      circle(cx, cy, grown, 1, c);
+    }
+  }
+}

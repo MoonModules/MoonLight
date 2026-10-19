@@ -1,6 +1,6 @@
 # Plan: MoonLive `Coord3D` and `RGB` types
 
-Most of what a script handles is a position or a color, and today both are loose integers: a coordinate is three values or an index the script computes by hand, and a color is three bytes that cannot travel together. This plan adds the two predefined types the [language roadmap](../future/moonlive-language-roadmap.md) names as item 4b, so a script reads as its compiled counterpart does: `addRGB(i, getRGB(j))`. It lands now because every script written before it is a script to revisit after it.
+Most of what a script handles is a position or a color, and today both are loose integers: a coordinate is three values or an index the script computes by hand, and a color is three bytes that cannot travel together. This plan adds the two predefined types the [language roadmap](../future/backlog-moonlive.md) names as item 4b, so a script reads as its compiled counterpart does: `addRGB(i, getRGB(j))`. It lands now because every script written before it is a script to revisit after it.
 
 ## The rule it follows
 

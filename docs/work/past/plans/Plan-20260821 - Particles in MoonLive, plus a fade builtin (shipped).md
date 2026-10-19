@@ -22,7 +22,7 @@
 behavior, emitters, and a renderer that already reads the active palette. Nine C++ effects use it.
 No script can, because nothing in the MoonLive stack includes it and no builtin exposes it.
 
-This realizes backlog item **9b** in `docs/backlog/moonlive-language-roadmap.md`, written this
+This realizes backlog item **9b** in `docs/backlog/backlog-moonlive.md`, written this
 session, which already names the two open questions: who owns the frame order, and what a second
 script asking for a pool gets. Both are answered below.
 
@@ -154,7 +154,7 @@ Comments stay minimal: a `.mle` is user-facing, shown in the device's own editor
 - `moonlive/effects/fountain.mle` — new; picked up automatically by the folder-walking compile sweep
 - `test/unit/light/unit_MoonLiveParticles.cpp` — new
 - `docs/moonmodules/light/MoonLiveEffect.md` — the vocabulary table
-- `docs/backlog/moonlive-language-roadmap.md` — delete item 9b, which this realizes
+- `docs/backlog/backlog-moonlive.md` — delete item 9b, which this realizes
 
 ## Verification
 

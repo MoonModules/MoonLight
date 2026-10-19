@@ -132,6 +132,8 @@ Keep each commit under ~100 changed files: CodeRabbit reviews the files a pushed
 
 **A contributed pull request is one topic, max 400 changed lines and ten files**, tests included. Generated files (metrics, images, scenario observations) are a category of their own, outside the count. Past a few hundred lines a review stops catching defects (the SmartBear and Cisco review study; Google's guide on small changes), and the product owner reviews every line. Every pull request is based on main. The one exception is a step of a larger topic, which lands as its own pull request and may build on the step below it. A stacked pull request from a fork shows its parents, so it is reviewed once the one below it merges.
 
+**A contribution is reviewed and finished as [Review and finish a contribution](docs/moonwalk.md#review-contribution) describes**. The contributor fixes their own code first and the maintainer finishes, case by case. The merge keeps their commits and authorship.
+
 ### Build and test
 
 Implement against [the architecture](docs/explanation/architecture/index.md) and [coding-standards.md](docs/contributing/coding-standards.md). Everything build, flash, run and monitor: [the contributor processes in MoonWalk](docs/moonwalk.md#desktop-build-test). Per-script reference: [MoonDeck.md](moondeck/MoonDeck.md).

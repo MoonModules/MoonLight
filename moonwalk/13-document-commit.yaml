@@ -7,6 +7,35 @@ processes:
     actor: contributor
     goal: The module's header and the docs describe what shipped.
     page: contributing/documentation-standards.md
+    intro: |
+      Docs land with the code and describe the system as it is. A fact lives in one place and every other page links to it. Where each kind of text goes: [What we document](contributing/documentation-standards.md#what-we-document).
+    steps:
+      - id: header
+        say: Describe what shipped in the module's header.
+        when: { manual: "A fact about behavior goes in the .h, beside the code." }
+        detail: |
+          The header is the module's own documentation and feeds its catalog card. Write `///` comments as [Comments](contributing/documentation-standards.md#comments) says: one line above the code it explains.
+      - id: page
+        say: Write intent, cost and sequence on a page.
+        when: { manual: "Put it in the Diataxis folder that matches the reader: how-to, explanation or reference." }
+        detail: |
+          A fact about intent, cost or sequence has no member to sit on. The folder under `docs/` is the page's kind, and a page serves one kind only.
+      - id: migrating
+        say: Add a MIGRATING entry for a breaking change.
+        when: { read: { page: reference/MIGRATING.md } }
+        detail: |
+          A break is documented rather than carried. The entry buys one way to do each thing.
+      - id: delete
+        say: Delete the shipped backlog item or spec draft.
+        when: { manual: "Look in docs/work/future for the item before you delete it." }
+      - id: strict
+        say: Build the docs with strict links.
+        when: { run: { script: moondeck/docs/build_docs.py, args: "--strict" } }
+      - id: docgen
+        say: Check the headers with docgen.
+        when: { run: { script: moondeck/check/check_docgen.py } }
+        detail: |
+          Errors stay at zero. Warnings may only fall, in total and per rule. A touched file with warnings is left at zero.
   - id: commit
     title: Run the commit checks, then commit
     actor: contributor
@@ -29,7 +58,7 @@ processes:
       - id: docs
         section: Documentation
         say: Build the docs, strict.
-        given: [{ changed: ["**/*.md", mkdocs.yml, moonwalk/**] }]
+        given: [{ changed: ["**/*.md", "docs/**", mkdocs.yml, moonwalk/**, "moondeck/docs/**"] }]
         when: { run: { script: moondeck/docs/build_docs.py, args: "--strict" } }
       - id: docgen
         say: Check the headers' documentation.

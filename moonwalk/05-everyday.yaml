@@ -300,7 +300,7 @@ processes:
         detail: |
           Home Assistant then creates a light entity with on/off and brightness, grayed out when the device is offline. Leave it off on the WLED path: both together list the device twice. Never hand-configure Home Assistant's generic MQTT light against `homeassistant/light/...`.
       - id: ha-verify
-        say: Check mqtt_status reads connected.
+        say: Check the device's topics reach Home Assistant.
         given: [{ input: platform, equals: Home Assistant }]
         when: { manual: "In Home Assistant open the MQTT integration, Configure, Listen to topic, and enter `MoonLight/#`. The device's on, brightness and hsv topics appear." }
       - id: ha-homekit
@@ -319,7 +319,7 @@ processes:
         detail: |
           Set `broker` to the broker's hostname or LAN IP, not `127.0.0.1`, which is loopback on the broker's own host. Set `port` (usually `1883`) and, only if the broker requires auth, `username` and `password`.
       - id: hb-verify
-        say: Check mqtt_status reads connected.
+        say: Check the device's topics reach the broker.
         given: [{ input: platform, equals: Homebridge }]
         when: { run: { command: "mosquitto_sub -t 'MoonLight/#' -v" } }
         detail: |

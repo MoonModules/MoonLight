@@ -405,19 +405,20 @@ function howTo(s) {
 const hasProse = (p) => Boolean(p.text || p.intro || p.outro || (p.steps || []).some((s) => s.detail));
 
 // A process's prose, its intro, outro and step details, fetched once when its view first opens and merged into the map's process, so the map a page loads stays small.
+// The fetch is shared by every map drawn on the page, and each merges it into its own model, since a map opened again draws from a model fetched again.
 const texts = new Map();
 function withText(pid, p) {
     if (!texts.has(pid)) {
         texts.set(pid, fetch(new URL(`moonwalk/text/${pid}.json`, ROOT)).then((r) => {
             if (!r.ok) throw new Error(`answered ${r.status}`);
             return r.json();
-        }).then((t) => {
-            Object.assign(p, { intro: t.intro, outro: t.outro });
-            for (const s of p.steps || []) if (t.details?.[s.id]) s.detail = t.details[s.id];
-            delete p.text;
         }).catch((e) => { texts.delete(pid); throw e; }));   // a failed fetch is tried again on the next open
     }
-    return texts.get(pid);
+    return texts.get(pid).then((t) => {
+        Object.assign(p, { intro: t.intro, outro: t.outro });
+        for (const s of p.steps || []) if (t.details?.[s.id]) s.detail = t.details[s.id];
+        delete p.text;
+    });
 }
 
 // The process view: a process with its prose reads whole in the panel, widened for reading, its intro, its steps in their numbered sections, each with its detail, and its outro; one without prose shows its steps and links its page.

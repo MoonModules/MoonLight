@@ -372,7 +372,7 @@ TEST_CASE("Xtensa: every shipped script compiles at the device's own code budget
         / "moonlive" / "effects";
     REQUIRE(std::filesystem::exists(dir));
     int checked = 0;
-    for (const auto& entry : std::filesystem::directory_iterator(dir)) {
+    for (const auto& entry : std::filesystem::recursive_directory_iterator(dir)) {
         if (!entry.is_regular_file() || entry.path().extension() != ".mle") continue;
         std::ifstream f(entry.path());
         std::ostringstream ss; ss << f.rdbuf();

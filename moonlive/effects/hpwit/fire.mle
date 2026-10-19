@@ -1,0 +1,41 @@
+// Fire: embers along the bottom row re-lit in bursts, heat rising, spreading and cooling, after hpwit's ProceduralEffects. The lights are the heat field: each frame reads the heat back from the color it drew.
+
+class FireEffect {
+  int dimensions() { return 2; }
+
+  string tags() { return "💫"; }
+
+  // Heat 0..255 through black, red, yellow and white.
+  RGB color(int h) {
+    if (h < 64) { return RGB(h * 4, 0, 0); }
+    if (h < 160) { return RGB(255, (h - 64) * 8 / 3, 0); }
+    return RGB(255, 255, (h - 160) * 8 / 3);
+  }
+
+  // The heat a light shows, read back from its color.
+  int heat(int i) {
+    RGB c = getRGB(i);
+    if (c.b > 0) { return 160 + c.b * 3 / 8; }
+    if (c.g > 0) { return 64 + c.g * 3 / 8; }
+    return c.r / 4;
+  }
+
+  void tick() {
+    int base = (height - 1) * width;
+    for (int x = 0; x < width; x = x + 1) { setRGB(base + x, color(heat(base + x) * 13 / 16)); }
+    for (int b = 0; b < 4; b = b + 1) {
+      int x0 = random16(width);
+      int w = 2 + random16(9);
+      for (int k = 0; k < w; k = k + 1) { setRGB(base + mod(x0 + k, width), color(255)); }
+    }
+    // Each light above becomes a slightly cooled average of the three below it and the one two below, read before this frame overwrites them.
+    for (int y = 0; y < height - 1; y = y + 1) {
+      int below = (y + 1) * width;
+      int under = min(y + 2, height - 1) * width;
+      for (int x = 0; x < width; x = x + 1) {
+        int s = heat(below + mod(x + width - 1, width)) + heat(below + x) + heat(below + mod(x + 1, width)) + heat(under + x);
+        setRGB(y * width + x, color(s * 32 / 130));
+      }
+    }
+  }
+}

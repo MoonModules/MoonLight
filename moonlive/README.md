@@ -25,11 +25,11 @@ The engine stays role-blind either way, so a class defining several moments is s
 | `palettes/` | the `palette` control on [Drivers](../docs/moonmodules/light/supporting.md#drivers) | sixteen palette entries, once per frame |
 | `services/` | [MoonLiveService](../docs/moonmodules/core/services.md#moonliveservice) | hardware reads that drive controls |
 
-Each module ships one of these as its default, so the folder doubles as the reference for what a
-working script looks like.
+A folder may hold subfolders that group a collection, such as `effects/particles/` or `effects/hpwit/`. They exist only here: the catalog records each script's subfolder for its download. The device keeps every script in one flat folder, so a name is unique across all of them, and the build refuses a duplicate.
 
-`unit_MoonLiveScripts` compiles every file here, so a script that stops parsing when the language
-changes fails the build rather than waiting to be pasted into a device.
+Each module ships one of these as its default, so the folder doubles as the reference for what a working script looks like.
+
+`unit_MoonLiveScripts` compiles every file here, so a script that stops parsing when the language changes fails the build rather than waiting to be pasted into a device.
 
 ## How a script reaches a device
 

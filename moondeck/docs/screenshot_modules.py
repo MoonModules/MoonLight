@@ -417,8 +417,9 @@ def push_script(host: str, name: str) -> bool:
 
     Byte-exact through /api/file, the same request the File Manager's upload makes.
     """
-    src = ROOT / "moonlive" / SCRIPT_SRC.get(Path(name).suffix, "") / name
-    if not src.is_file():
+    # Names are unique across a role's subfolders (the catalog generator enforces it), so the first match is the one.
+    src = next((ROOT / "moonlive" / SCRIPT_SRC.get(Path(name).suffix, "")).rglob(name), None) if Path(name).suffix in SCRIPT_SRC else None
+    if src is None or not src.is_file():
         return False
     r = _post(f"http://{host}/api/file?path={SCRIPT_DIR}/{name}",
               headers={"Content-Type": "application/octet-stream"},

@@ -88,3 +88,41 @@ def test_every_shipped_script_is_readable():
     for s in scripts:
         dim, _tags = declared(s)          # raises if the declaration is unreadable
         assert dim in (0, 1, 2, 3), f"{s}: dimension {dim}"
+
+
+def generate(tmp_path, rel_paths: list) -> tuple:
+    """Run the generator over scripts at these paths under a moonlive/ folder; return (exit code, header text)."""
+    import catalog_scripts
+    root = tmp_path / "moonlive"
+    for rel in rel_paths:
+        (root / rel).parent.mkdir(parents=True, exist_ok=True)
+        (root / rel).write_text("class A { void tick() {} }\n", encoding="utf-8")
+    listing = tmp_path / "list.txt"
+    listing.write_text("\n".join(str(root / r) for r in rel_paths) + "\n", encoding="utf-8")
+    out = tmp_path / "script_catalog.h"
+    argv, sys.argv = sys.argv, ["catalog_scripts.py", str(listing), str(out), str(root)]
+    try:
+        code = catalog_scripts.main()
+    finally:
+        sys.argv = argv
+    return code, out.read_text(encoding="utf-8") if out.exists() else ""
+
+
+def test_a_script_in_a_subfolder_is_catalogued_with_it_for_the_download_url(tmp_path):
+    code, header = generate(tmp_path, ["effects/plain.mle", "effects/hpwit/fire.mle"])
+    assert code == 0
+    assert 'kCatalogSubfolders[] = {\n    "",\n    "hpwit",\n};' in header
+    assert "kEffectCatalogSub[] = {\n    0,\n    1,\n};" in header   # in the listing's order, which the build sorts
+
+
+def test_a_subfolder_named_like_a_role_folder_is_still_a_subfolder(tmp_path):
+    code, header = generate(tmp_path, ["effects/effects/fire.mle"])
+    assert code == 0
+    assert "kEffectCatalogSub[] = {\n    1,\n};" in header
+    assert '"effects",\n};' in header
+
+
+def test_two_scripts_of_one_name_in_different_subfolders_fail_the_build(tmp_path, capsys):
+    code, _ = generate(tmp_path, ["effects/a/fire.mle", "effects/b/fire.mle"])
+    assert code == 1
+    assert "duplicate script name fire.mle" in capsys.readouterr().err

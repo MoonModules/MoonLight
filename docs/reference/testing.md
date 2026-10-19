@@ -5,7 +5,7 @@ What we test and how. The detailed inventory of every test lives in two auto-gen
 - **[Unit tests](tests/unit-tests.md)**: one row per `TEST_CASE`, grouped by module. Generated from `test/unit/{core,light}/unit_*.cpp`.
 - **[Scenario tests](tests/scenario-tests.md)**: one section per scenario JSON, grouped by module. Generated from `test/scenarios/{core,light,device}/scenario_*.json`. Each scenario runs in two tiers (in-process + live) unless flagged `live_only` (construct-mode scenarios are also skipped on live, since `main.cpp` owns the live shape).
 
-Both are produced by `moondeck/docs/generate_test_docs.py`; the source of truth is the test files themselves (see [Adding Tests](#adding-tests) below).
+Both are produced by `moondeck/docs/generate_test_docs.py`; the source of truth is the test files themselves (steps to add one: [Add a test, and pin a bug](../moonwalk.md#add-test)).
 
 ## Testing strategy
 
@@ -391,15 +391,7 @@ Open any scenario JSON and the range tells you both the typical case (the value 
 
 A contract changes only when there's a reason: a code change improved performance and you want to commit to the new ceiling, or an accepted regression requires loosening it. Either way the diff records *what* changed and *why*:
 
-```bash
-# After an optimization: tighten the ceiling for desktop-*
-uv run moondeck/scenario/run_scenario.py --update-contract \
-    --reason "Layer LUT inline copy"
-
-# After accepting an ESP32 cost: loosen the ceiling on that target
-uv run moondeck/scenario/run_live_scenario.py --host 192.168.1.210 \
-    --update-contract --reason "added DMX driver overhead"
-```
+Steps: [Renegotiate a performance contract](../moonwalk.md#renegotiate-contract).
 
 Both runners require `--reason`. They stamp `set_by` to today's date and write the new contract for the active target only, other targets are untouched. Review the diff carefully; tightening or loosening a contract is a deliberate act that ships to the project's public KPIs.
 
@@ -478,15 +470,7 @@ uv run moondeck/docs/generate_test_docs.py --check    # exits non-zero on drift 
 
 Inventory: **[docs/tests/unit-tests.md](tests/unit-tests.md)** (auto-generated, grouped by `@module`).
 
-Run them with:
-
-```bash
-uv run moondeck/test/test_desktop.py                      # all
-uv run moondeck/test/test_desktop.py --test "<case-name>"  # one test case
-uv run moondeck/test/test_desktop.py --module Layer       # filtered by module
-```
-
-Or via MoonDeck (Desktop tab → Unit Test card). Pick a module from the shared module dropdown above the card to filter the run. Tests button shows the per-module inventory.
+Steps to run them: [Add a test, and pin a bug](../moonwalk.md#add-test). In MoonDeck, the Desktop tab's Unit Test card filters by the shared module dropdown, and Tests shows the per-module inventory.
 
 Output is summary-only on a full run (the doctest `-s` flag is added only on filtered runs, where the assertion-level detail is small enough to be useful).
 
@@ -494,15 +478,7 @@ Output is summary-only on a full run (the doctest `-s` flag is added only on fil
 
 Inventory: **[docs/tests/scenario-tests.md](tests/scenario-tests.md)** (auto-generated, grouped by `module`).
 
-Run them with:
-
-```bash
-uv run moondeck/scenario/run_scenario.py                                      # all
-uv run moondeck/scenario/run_scenario.py --name scenario_Effects_pipeline_builds_and_renders  # one by stem
-uv run moondeck/scenario/run_scenario.py --module Layer                       # all for one module
-```
-
-Or via MoonDeck (Desktop tab → Scenarios card). The module dropdown is shared with the Unit Test card above it: pick a module once and both card's run-set narrows. Steps button shows the per-scenario step list.
+Steps to run them: [Run a scenario in-process on the desktop](../moonwalk.md#run-scenario). In MoonDeck, the Scenarios card shares the module dropdown with the Unit Test card, and Steps shows the per-scenario step list.
 
 **Scenarios with `"live_only": true`** are skipped in-process (they need a real device, e.g. measure real-Ethernet throughput at a given grid size). They appear in the inventory but only run via the live tier below. The symmetric case (scenarios that only make sense in-process) is already handled by `mode: "construct"`, which skips on live.
 
@@ -519,12 +495,7 @@ A step can also set `"measure": true` on a non-measure op (e.g. mark the last `a
 
 ## Live scenarios
 
-Live scenarios run the same JSON against a running device via the REST API.
-
-```bash
-uv run moondeck/scenario/run_live_scenario.py --host localhost:8080       # desktop
-uv run moondeck/scenario/run_live_scenario.py --host 192.168.1.210        # ESP32
-```
+Live scenarios run the same JSON against a running device via the REST API. Steps: [Run a scenario against a live device](../moonwalk.md#run-live-scenario).
 
 MoonDeck's Live tab wraps the same workflow: the Network bar at the top selects the LAN, Discover/Refresh populates the device list, the Live Scenarios card runs the selected scenario against every checked device.
 
@@ -555,7 +526,7 @@ The runs live in `moontube/clips/`, the engine in `moondeck/moontube/`. MoonTube
 
 ## Hardware Verification
 
-All live scenarios pass on both desktop and ESP32. Per-module timing, memory allocation, and sizeof measurements for each platform are in [performance.md](performance.md).
+All live scenarios pass on both desktop and ESP32. Steps to verify on boards: [Run a live verification on boards](../moonwalk.md#live-verification). Per-module timing, memory allocation, and sizeof measurements for each platform are in [performance.md](performance.md).
 
 ### ESP32: classic, no PSRAM (measured on an Olimex ESP32-Gateway Rev G)
 
@@ -563,13 +534,3 @@ All live scenarios pass on both desktop and ESP32. Per-module timing, memory all
 - Memory tracking verified: mirror toggle shows heap changes, returns to baseline (no leaks).
 - Ethernet (LAN8720 RMII) connects via DHCP.
 - Device discovery from MoonDeck finds the ESP32 on port 80.
-
-## Adding Tests
-
-**Unit test:** add a `TEST_CASE` to the appropriate `test/unit/{core,light}/unit_<ExactModuleName>[_<topic>].cpp` file. Each file carries `// @module <ExactCamelCaseName>` at the top, plus a single `//` description line above each `TEST_CASE`. Add a new file when no existing test covers your module, pick the subfolder matching the module's `src/` domain. After adding cases, run `uv run moondeck/docs/generate_test_docs.py` so the generated inventory matches.
-
-**Scenario test:** create a JSON file under `test/scenarios/{core,light}/` named `scenario_<ExactModuleName>_<topic>.json`, or under `test/scenarios/device/` when it can only run on real hardware. The top-level needs `name` (matching the filename stem), `module`, optional `also`, `description`, `mode` (`construct` or `mutate`), and `top` (the top-level containers it needs). A scenario that can only run against a real device adds `"live_only": true`. Each `steps[]` entry has an `op` (`apply_state`, `set_control`, `measure`), a `name`, a `description` field that the doc generator picks up, and optional `"measure": true` to run a measurement after the op. The scenario runner auto-discovers all `.json` files under `test/scenarios/` recursively.
-
-**Regression test:** when fixing a bug, add a test that reproduces it. The test's description (the `//` line for unit tests, the `description` JSON field for scenarios) should mention the root cause so the connection stays traceable in the generated inventory.
-
-**Doc check:** `moondeck/docs/generate_test_docs.py --check` exits non-zero if regeneration would change `docs/tests/*.md`, a CI-friendly way to catch metadata that drifted from the source.

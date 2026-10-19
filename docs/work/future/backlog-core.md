@@ -64,7 +64,7 @@ It is ours to build rather than WLED's, since the layout it undoes is MoonLight'
 
 ### Logical operators in MoonLive conditions (2026-10-08)
 
-Glow wrote `kick && !kicking` as `kick > kicking`, and the StadBeest effects hit the same gap ([the language roadmap, section 11](moonlive-language-roadmap.md)).
+Glow wrote `kick && !kicking` as `kick > kicking`, and the StadBeest effects hit the same gap ([the language roadmap, section 11](backlog-moonlive.md)).
 An `if` or `for` condition is one comparison compiled straight into a branch, so `&&`, `||` and `!` are the textbook short-circuit translation into branches, on the branch instructions every backend already has:
 - `a && b` sends each failing test past the body, with no extra label;
 - `a || b` sends each passing test but the last into the body, one label per group;
@@ -2081,6 +2081,18 @@ than nothing.
 Worth doing with the OTA path rather than alone: a desktop cannot install its own archive anyway, so
 the honest end state may be a card that names the platform and links the release rather than
 offering a Download button that only ever means "fetch a file and swap it by hand".
+
+## Verify P4 WiFi on our own board: the C6 slave firmware first (2026-10-19)
+
+Issue #146 (a P4 `eth-wifi` boot loop) was fixed without anyone seeing WiFi work: the bench P4-NANO's C6 never answers on SDIO (`ESP-Hosted link not yet up`, no `Card init success`), with or without the fix. So every P4 WiFi question waits on a reporter's board. The textbook cause of a silent C6 is a host/slave mismatch: our host side is ESP-Hosted 2.12.13, built into the firmware, while the C6 runs whatever slave firmware the board maker flashed. **Make our own P4-NANO's link come up, then keep it as the WiFi reference.**
+
+- **The slave image**: `network_adapter.bin` built from esp-hosted-mcu's `slave` example at the host's version (2.12.13), for the C6.
+- **Flashing it, with the link down** (our case): directly over the C6's own UART with its boot pin held, through an ESP-Prog or a USB-serial adapter. The P4-NANO's schematic says where the C6's UART and boot pads are; ESPHome's board page names only the SDIO pins (`clk` 18, `cmd` 19, `d0`-`d3` 14-17) and the C6 reset (`GPIO54`).
+- **Flashing it, with the link up**: ESP-Hosted's transport OTA, its `host_performs_slave_ota` example, which ESPHome wraps as the `esp32_hosted` update platform. This is the path for users once one board works, and a candidate for MoonLight itself: carry the slave image and offer the update on the WiFi card, as ESPHome does.
+- **Say which failure `wifiCoproc` shows**: `no version reply` covers two cases, a link that never came up and a C6 too old to answer the version query (or answering 0.0.0), and only the first stops WiFi. `coprocessorWifi()` in `platform_esp32.cpp` checks the transport state first and reports `link down` or `C6 too old to report`, so a reporter's System card answers what today needs a serial log.
+- **Then**: the round-3 regression (associates on rc1, not on the v6.1 pin) gets measured on a board with a known-good link, and the two defects in the next entry get a repro.
+
+What #146 taught, for any P4 change: before the scheduler starts, the P4 has 148 KB of internal RAM (retention, RTC and SPM; the 384 KB L2 region still holds the startup stacks), and every global constructor allocates from it. ESP-Hosted's took 123 KB until `CONFIG_ESP_HOSTED_MEMPOOL_PREFER_SPIRAM` moved its buffers to PSRAM. A boot that asserts in `vApplicationGetIdleTaskMemory` is that budget exhausted; a `heap_caps_get_free_size(MALLOC_CAP_INTERNAL)` report from a constructor of priority 101 and an `ESP_SYSTEM_INIT_FN` at stage 999 brackets it.
 
 ## P4 WiFi cascade into a dead co-processor link aborts the board (2026-09-08)
 

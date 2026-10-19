@@ -2191,19 +2191,8 @@ void HttpServerModule::serveModule(platform::TcpConnection& conn, const char* na
     sink.flush();
 }
 
-// GET /api/scripts: the factory script names (none of the text), which the UI fetches from GitHub at `tag`, the firmware's own version, and posts to /api/file.
-void HttpServerModule::serveScriptCatalog(platform::TcpConnection& conn) {
-    const char* header =
-        "HTTP/1.1 200 OK\r\n"
-        "Content-Type: application/json\r\n"
-        "Connection: close\r\n"
-        "Access-Control-Allow-Origin: *\r\n"
-        "\r\n";
-    conn.write(reinterpret_cast<const uint8_t*>(header), std::strlen(header));
-
-    JsonSink sink(conn);
-    sink.append("{\"tag\":");
-    // A -dev build fetches from its own commit (kBuildId), which cannot drift like a branch; a `+` dirty suffix is stripped, and an unpushed commit 404s as a failed download.
+// The ref the UI downloads factory scripts from. A -dev build fetches from its own commit (kBuildId), which cannot drift like a branch; a `+` dirty suffix is stripped, and an unpushed commit 404s as a failed download.
+static void writeScriptTag(JsonSink& sink) {
     const char* v = kVersion;
     const bool dev = std::strstr(v, "-dev") != nullptr;
     if (dev) {
@@ -2216,13 +2205,28 @@ void HttpServerModule::serveScriptCatalog(platform::TcpConnection& conn) {
         std::snprintf(tag, sizeof(tag), "v%s", v);
         sink.writeJsonString(tag);
     }
+}
+
+// GET /api/scripts: the factory script names (none of the text), which the UI fetches from GitHub at `tag`, the firmware's own version, and posts to /api/file.
+void HttpServerModule::serveScriptCatalog(platform::TcpConnection& conn) {
+    const char* header =
+        "HTTP/1.1 200 OK\r\n"
+        "Content-Type: application/json\r\n"
+        "Connection: close\r\n"
+        "Access-Control-Allow-Origin: *\r\n"
+        "\r\n";
+    conn.write(reinterpret_cast<const uint8_t*>(header), std::strlen(header));
+
+    JsonSink sink(conn);
+    sink.append("{\"tag\":");
+    writeScriptTag(sink);
     sink.append(",\"dir\":");
     sink.writeJsonString(moonlive::kFactoryScriptDir);
 
-    // `dim` and `tags` ride with each name so a picker can show a script before download; they are copied from its source at build time, for display only.
+    // Each name carries `dim` and `tags` from its source, for the picker, and `sub`, the subfolder the UI fetches it from; the device keeps scripts flat.
     auto emit = [&sink](const char* key, const char* folder,
                         const char* const* names, const unsigned char* dims,
-                        const char* const* tags, size_t count) {
+                        const char* const* tags, const unsigned char* subs, size_t count) {
         sink.appendf(",\"%s\":{\"folder\":\"%s\",\"names\":[", key, folder);
         for (size_t i = 0; i < count; i++) {
             if (i) sink.append(",");
@@ -2235,22 +2239,27 @@ void HttpServerModule::serveScriptCatalog(platform::TcpConnection& conn) {
             if (i) sink.append(",");
             sink.writeJsonString(tags[i]);
         }
+        sink.append("],\"sub\":[");
+        for (size_t i = 0; i < count; i++) {
+            if (i) sink.append(",");
+            sink.writeJsonString(moonlive::kCatalogSubfolders[subs[i]]);
+        }
         sink.append("]}");
     };
     emit("effects", moonlive::kEffectFolder, moonlive::kEffectCatalog,
-         moonlive::kEffectCatalogDim, moonlive::kEffectCatalogTags,
+         moonlive::kEffectCatalogDim, moonlive::kEffectCatalogTags, moonlive::kEffectCatalogSub,
          moonlive::kEffectCatalogCount);
     emit("layouts", moonlive::kLayoutFolder, moonlive::kLayoutCatalog,
-         moonlive::kLayoutCatalogDim, moonlive::kLayoutCatalogTags,
+         moonlive::kLayoutCatalogDim, moonlive::kLayoutCatalogTags, moonlive::kLayoutCatalogSub,
          moonlive::kLayoutCatalogCount);
     emit("modifiers", moonlive::kModifierFolder, moonlive::kModifierCatalog,
-         moonlive::kModifierCatalogDim, moonlive::kModifierCatalogTags,
+         moonlive::kModifierCatalogDim, moonlive::kModifierCatalogTags, moonlive::kModifierCatalogSub,
          moonlive::kModifierCatalogCount);
     emit("services", moonlive::kServiceFolder, moonlive::kServiceCatalog,
-         moonlive::kServiceCatalogDim, moonlive::kServiceCatalogTags,
+         moonlive::kServiceCatalogDim, moonlive::kServiceCatalogTags, moonlive::kServiceCatalogSub,
          moonlive::kServiceCatalogCount);
     emit("palettes", moonlive::kPaletteFolder, moonlive::kPaletteCatalog,
-         moonlive::kPaletteCatalogDim, moonlive::kPaletteCatalogTags,
+         moonlive::kPaletteCatalogDim, moonlive::kPaletteCatalogTags, moonlive::kPaletteCatalogSub,
          moonlive::kPaletteCatalogCount);
     sink.append("}");
     sink.flush();

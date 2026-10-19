@@ -1625,7 +1625,7 @@ async function openWalk() {
             dlg.close();
             runScriptOnce(script, btn, { step: `${step.process}/${step.id}` });   // the server reads the step's call from the process file
         };
-        stop = await walk.drawMap(host, { steps: gates.processes, run, here: ["start", "develop", "hardware", "test", "document-commit", "merge", "release"], actor: "contributor", newTab: true });
+        stop = await walk.drawMap(host, { steps: gates.processes, run, here: ["plan-setup", "develop", "hardware", "test", "document-commit", "merge", "release"], actor: "contributor", newTab: true });
         if (!dlg.open) stop?.();
     } catch (e) {
         host.textContent = `MoonWalk could not load: ${e.message}`;

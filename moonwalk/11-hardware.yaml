@@ -19,13 +19,13 @@ processes:
         section: Once per machine
         say: Clone ESP-IDF into ~/esp/esp-idf.
         given: [{ input: platform, in: [macOS, Linux] }]
-        when: { run: { command: "git clone --depth 1 --branch v6.1 https://github.com/espressif/esp-idf.git ~/esp/esp-idf" } }
+        when: { run: { command: "git clone --depth 1 --recursive --shallow-submodules --branch v6.1 https://github.com/espressif/esp-idf.git ~/esp/esp-idf" } }
         detail: |
-          It takes about 2 GB, where the scripts look first.
+          It takes about 2 GB, where the scripts look first. The tag is the pin `PINNED_IDF_VERSION` in `moondeck/build/build_esp32.py` names; setup moves a checkout that drifted from it.
       - id: clone-windows
         say: Turn on long paths, then clone ESP-IDF.
         given: [{ input: platform, equals: Windows }]
-        when: { run: { command: "git config --global core.longpaths true; git clone --depth 1 --branch v6.1 https://github.com/espressif/esp-idf.git \"$env:USERPROFILE\\esp\\esp-idf\"" } }
+        when: { run: { command: "git config --global core.longpaths true; git clone --depth 1 --recursive --shallow-submodules --branch v6.1 https://github.com/espressif/esp-idf.git \"$env:USERPROFILE\\esp\\esp-idf\"" } }
         detail: |
           Clone it into your profile's esp folder.
 
@@ -88,6 +88,41 @@ processes:
     goal: A flashed board joins WiFi, carries its name and its device model's module tree.
     systems: [MoonDeck]
     dependsOn: [esp32-build-flash]
+    intro: |
+      A flashed board listens for Improv over USB-serial. One run pushes the WiFi credentials and, when you name the device model, its TX-power cap and module tree. The option tables are in [MoonDeck](../moondeck/MoonDeck.md#improv_provision).
+    steps:
+      - id: port
+        say: Find the board's serial port.
+        when: { manual: "Ports drift between sessions: read the port from the device registry or ask, then confirm it." }
+        detail: |
+          Never open a bench port with a bare serial library. Opening it asserts the reset lines on many boards and reboots them, which also fabricates boot chatter that looks like a fault. Use the MoonDeck scripts, and attach a monitor before the event you want to see, never after.
+      - id: provision
+        say: Provision WiFi and the device model.
+        when: { run: { script: moondeck/build/improv_provision.py, args: "--port <port> --device-model \"<Name>\"" } }
+        detail: |
+          `--device-model` takes a name from `mooninstaller/deviceModels.json`. It pushes the TX-power cap before the credentials, then the credentials, then the model's state document, including `System.deviceModel`. Without it only WiFi is set and the module tree, such as the LED driver and its `pins`, stays empty.
+
+          The credentials come from the active network in `moondeck/moondeck.json`, else from the WiFi the host has joined. `--ssid` and `--password` override both. `--tx-power <dBm>` sets the cap without a catalog entry; weak-powered boards need 8.
+      - id: joined
+        say: Check it printed the device URL.
+        when: { manual: "The run exits 0 and prints `==> provisioned: http://<ip>/`." }
+        detail: |
+          A timeout means the board did not answer: check the port, then power-cycle it. The run waits 45 seconds by default.
+      - id: reach
+        say: Open the board's page.
+        when: { open: { url: "http://<ip>/" } }
+      - id: pins
+        say: Change a one-way board from its web page.
+        when: { manual: "Applies when the model's LED pins include GPIO 1 or 3." }
+        detail: |
+          When the LED pins include GPIO 1 or 3, the driver claims the UART pins and serial stops receiving. The push is one way, so changing such a board, a QuinLED for one, goes through its web page.
+      - id: smoke
+        say: Run the smoke test after provisioning changes.
+        when: { run: { script: moondeck/build/improv_smoke_test.py } }
+        detail: |
+          It probes the board, provisions it and fetches its page. Run it after a change to the Improv parser, the UART listener, the installer page or the `improv_*` scripts.
+    outro: |
+      The board is on the network under its name with its modules in place. Continue with [Build, flash and monitor an ESP32](moonwalk.md#esp32-build-flash) for the next change.
   - id: teensy
     title: Build, flash and monitor a Teensy
     actor: contributor

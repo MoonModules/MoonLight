@@ -57,15 +57,16 @@ def declared(path: Path) -> tuple[int, str]:
 
 
 def main() -> int:
-    if len(sys.argv) != 3:
-        print("usage: catalog_scripts.py <filelist> <out.h>", file=sys.stderr)
+    if len(sys.argv) != 4:
+        print("usage: catalog_scripts.py <filelist> <out.h> <script root>", file=sys.stderr)
         return 2
 
     paths = [Path(p) for p in Path(sys.argv[1]).read_text(encoding="utf-8").split("\n") if p.strip()]
     out = Path(sys.argv[2])
+    root = Path(sys.argv[3])
 
-    # A name must be unique on the device: the repo's subfolders vanish when scripts land in one
-    # flat directory, so two roles sharing a base name would collide there. Catching it here turns a
+    # A name must be unique on the device: the repo's folders and subfolders vanish when scripts land in one
+    # flat directory, so two scripts sharing a base name, across roles or subfolders, would collide there. Catching it here turns a
     # silent overwrite on a user's device into a build failure.
     seen: dict[str, Path] = {}
     for p in paths:
@@ -88,9 +89,16 @@ def main() -> int:
     # What each script says it is, in the same order, so the picker can show a row the way the
     # module picker shows a type: its dimension and its emoji, before the script is downloaded.
     decl_by_role: dict[str, list[tuple[int, str]]] = {r: [] for r in ROLE_BY_EXT.values()}
+    # The subfolder under the role's folder, "" for most, as an index into one table, so a collection costs its name once rather than once per script.
+    subfolders: list[str] = [""]
+    sub_by_role: dict[str, list[int]] = {r: [] for r in ROLE_BY_EXT.values()}
     for p in paths:
         role = ROLE_BY_EXT[p.suffix]
         by_role[role].append(p.name)
+        sub = "/".join(p.resolve().relative_to(root.resolve()).parts[1:-1])   # between the role's folder and the file
+        if sub not in subfolders:
+            subfolders.append(sub)
+        sub_by_role[role].append(subfolders.index(sub))
         try:
             decl_by_role[role].append(declared(p))
         except ValueError as e:
@@ -107,10 +115,15 @@ def main() -> int:
         "///\n",
         "/// A device carries names only and the UI fetches a script's text on first pick, so flash scales with the script count and the filesystem holds only what is used.\n",
         "///\n",
-        "/// There is one array per role, because the folder a script lives in is implied by its role and the role by its extension, so neither is stored per entry.\n",
+        "/// There is one array per role: a script's role follows from its extension and its folder from its role, so neither is stored per entry. A subfolder is an index into one shared table.\n",
         "#include <cstddef>\n\n",
         "namespace mm::moonlive {\n\n",
     ]
+
+    parts.append("/// The subfolders a script may sit in under its role's folder upstream, \"\" first for the folder itself.\n")
+    parts.append("constexpr const char* kCatalogSubfolders[] = {\n")
+    parts.append("".join(f'    "{s}",\n' for s in subfolders))
+    parts.append("};\n\n")
 
     for role, names in by_role.items():
         lower = role.lower()
@@ -130,6 +143,10 @@ def main() -> int:
         parts.append(f"/// The emoji each declares, \"\" when it declares none.\n")
         parts.append(f"constexpr const char* k{role}CatalogTags[] = {{\n")
         parts.append("".join(f'    "{g}",\n' for _, g in decls))
+        parts.append("};\n")
+        parts.append(f"/// Where each {lower} above sits under `moonlive/{folder}/`, as an index into kCatalogSubfolders.\n")
+        parts.append(f"constexpr unsigned char k{role}CatalogSub[] = {{\n")
+        parts.append("".join(f"    {i},\n" for i in sub_by_role[role]))
         parts.append("};\n")
         parts.append(f'constexpr const char* k{role}Folder = "{folder}";   ///< its directory upstream\n\n')
 

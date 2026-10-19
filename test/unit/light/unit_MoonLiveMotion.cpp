@@ -31,9 +31,13 @@ namespace {
 /// The point of the two cases at the bottom of this file is the file in `moonlive/`, so it is read from there rather than pasted here.
 /// A pasted copy stops being the thing that ships the first time someone edits the real one.
 const char* shipScript(const char* name) {
-    const std::filesystem::path src =
+    // Found by name in any subfolder, since a script's name is unique and its folder only groups it.
+    const std::filesystem::path effects =
         std::filesystem::path(__FILE__).parent_path().parent_path().parent_path().parent_path()
-        / "moonlive" / "effects" / name;
+        / "moonlive" / "effects";
+    std::filesystem::path src = effects / name;
+    for (const auto& e : std::filesystem::recursive_directory_iterator(effects))
+        if (e.path().filename() == name) src = e.path();
     std::ifstream f(src);
     REQUIRE_MESSAGE(f.good(), "missing shipped script: ", src.string());
     std::ostringstream ss; ss << f.rdbuf();

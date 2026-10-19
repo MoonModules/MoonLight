@@ -1,0 +1,20 @@
+// Twinkling stars: pale lights in the upper half that swell where they land and fade slowly, after hpwit's multi_effect_controller.
+
+class TwinkleStarsEffect {
+  byte amount = 6;
+
+  int dimensions() { return 2; }
+
+  string tags() { return "💫"; }
+
+  void defineControls() {
+    addControl("amount", amount, 1, 20); // how many stars catch per frame
+  }
+
+  void tick() {
+    fade(12);
+    for (int i = 0; i < amount * 4; i = i + 1) {
+      addRGB(random16(height / 2) * width + random16(width), 90, 100, 160);
+    }
+  }
+}

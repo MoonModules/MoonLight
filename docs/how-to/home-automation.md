@@ -145,7 +145,7 @@ sudo uv run moondeck/run/run_desktop.py --port 80
 
 ## Set up the infrastructure
 
-[Bring the device into a smart home](../moonwalk.md#smart-home) assumes the hub and the broker are running. Installing them takes one section each: **Home Assistant + Mosquitto**, the recommended path with the HomeKit bridge included, or **standalone Homebridge + Mosquitto** for Apple Home alone.
+[Bring the device into a smart home](../moonwalk.md#smart-home) assumes the hub is running, and for an MQTT path the broker too; Home Assistant's default WLED path needs no broker. Installing them takes one section each: **Home Assistant + Mosquitto**, the recommended path with the HomeKit bridge included, or **standalone Homebridge + Mosquitto** for Apple Home alone.
 
 ### Set up Home Assistant + Mosquitto
 

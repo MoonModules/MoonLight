@@ -1,0 +1,55 @@
+// Voronoi: nine seeds wander on sine paths, cell borders glow at an even width and a ring pulses round each seed, after hpwit's ProceduralEffects.
+
+class VoronoiEffect {
+  byte sx[9];
+  byte sy[9];
+  byte ring[9];
+
+  int dimensions() { return 2; }
+
+  string tags() { return "💫"; }
+
+  int wave(int i) { return sin(i * 256) / 256; }
+
+  // A palette color at brightness v, washed toward white as s falls.
+  RGB hsv(int h, int s, int v) {
+    RGB c = paletteRGB(h, v);
+    int w = 255 - s;
+    return RGB(c.r + (v - c.r) * w / 255, c.g + (v - c.g) * w / 255, c.b + (v - c.b) * w / 255);
+  }
+
+  void moveSeeds(int f) {
+    for (int i = 0; i < 9; i = i + 1) {
+      sx[i] = wave(f * (mod(i, 3) + 1) / 2 + i * 29) * (width - 1) / 255;
+      sy[i] = wave(f * (mod(i, 2) + 1) / 2 + i * 53 + 64) * (height - 1) / 255;
+      ring[i] = 6 + wave(f * 3 + i * 40) / 20;
+    }
+  }
+
+  void tick() {
+    int f = mod(t / 33, 25600);
+    moveSeeds(f);
+    for (int y = 0; y < height; y = y + 1) {
+      for (int x = 0; x < width; x = x + 1) {
+        int best = 1000000;
+        int second = 1000000;
+        int bi = 0;
+        int si = 0;
+        for (int i = 0; i < 9; i = i + 1) {
+          int d = (x - sx[i]) * (x - sx[i]) + (y - sy[i]) * (y - sy[i]);
+          if (d < best) { second = best; si = bi; best = d; bi = i; }
+          else if (d < second) { second = d; si = i; }
+        }
+        // The difference of the two squared distances over twice the seeds' spacing is the distance to the border.
+        int edge = (second - best) / (2 * polarR(sx[bi] - sx[si], sy[bi] - sy[si]) + 1);
+        int v = 0;
+        int s = 255;
+        int r = ring[bi];
+        if (edge < 5) { v = 255 - edge * 40; s = 110 + edge * 29; }
+        else if (best < 6) { v = 255; }
+        else if (best >= (r - 1) * (r - 1) && best <= (r + 1) * (r + 1)) { v = 170; }
+        setRGB(y * width + x, hsv(mod(bi * 28 + f, 256), s, v));
+      }
+    }
+  }
+}

@@ -81,3 +81,7 @@ def test_the_gate_fails_on_a_firmware_the_registry_lacks_which_no_schema_can_kno
 
 def test_the_gate_passes_a_well_formed_entry(tmp_path, monkeypatch):
     assert run(tmp_path, monkeypatch, [ENTRY]) == 0
+
+
+def test_a_name_that_is_no_string_is_reported_rather_than_crashing_the_gate(tmp_path, monkeypatch):
+    assert run(tmp_path, monkeypatch, [{**ENTRY, "name": ["Board"]}]) == 1

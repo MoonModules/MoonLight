@@ -1,5 +1,5 @@
 # yaml-language-server: $schema=moonwalk.schema.json
-stage: Start
+stage: Plan and set up
 summary: A picked topic on its own branch, on a computer set up to build it.
 processes:
   - id: pick-spec-plan
@@ -8,11 +8,60 @@ processes:
     goal: A module, effect, driver or capability has an approved plan before code.
     systems: [MoonWalk]
     page: contributing/principles-and-process.md
+    intro: |
+      A topic is one module, effect, driver or capability. The plan is the contract for the branch, and it becomes the pull request description. A draft may wait in `docs/work/future/` until its topic is picked.
+    steps:
+      - id: pick
+        say: Name one module, effect, driver or capability.
+        when: { manual: "One topic per cycle." }
+      - id: spec
+        say: Shape the spec before any code.
+        actor: agent
+        when: { manual: "The architect shapes it, the researcher maps the prior art, and it holds enough to build from." }
+        detail: |
+          Check the request against the README, CLAUDE.md and the [architecture](explanation/architecture/index.md). A conflict is named with its reference, and the product owner can still overrule. When in doubt on a spec, ask.
+      - id: end-states
+        say: Name two to four end states.
+        actor: agent
+        when: { manual: "For each, write what it gains and what it loses." }
+        detail: |
+          Only a restructure needs this step, which changes the shape of the system. The plan builds the one end state the product owner picks.
+      - id: plan
+        say: Write the plan.
+        actor: agent
+        when: { manual: "Save it as docs/work/present/Plan-YYYYMMDD - title.md." }
+      - id: approve
+        say: Read the plan and approve it.
+        when: { manual: "Code starts after the approval." }
+      - id: pr
+        say: Use the plan as the pull request description.
+        when: { manual: "The plan file is deleted in the same pull request." }
+        detail: |
+          Deleting the plan is the product owner's call. The code being written is not the plan being realized: verification, including the judgment steps, is part of it.
   - id: branch
     title: Branch and work on it
     actor: product-owner
     goal: Feature work lands on a branch the product owner created, and main stays releasable.
     dependsOn: [pick-spec-plan]
+    intro: |
+      Main is always releasable: what is on main ships as the latest pre-release, and tagged releases are cut from it.
+    steps:
+      - id: create
+        say: Create the branch for the topic.
+        when: { run: { command: "git switch -c <branch-name>" } }
+        detail: |
+          The product owner creates every branch, and whoever initiates a branch submits its pull request. The agent works on the branch it is given and asks when a change does not belong there.
+      - id: work
+        say: Build, test and document on the branch.
+        actor: contributor
+        when: { process: desktop-build-test }
+        detail: |
+          Keep each commit under about 100 changed files: CodeRabbit reviews the files a pushed commit changes, and past that the commit loses a review layer. A mechanical sweep, such as em-dashes or a metrics refresh, is a commit of its own.
+      - id: hotfix
+        say: Commit a small verified hotfix straight to main.
+        when: { manual: "Only when the fix is small and already verified. Otherwise stay on a branch." }
+        detail: |
+          This is the one exception to branching for feature work.
   - id: build-setup
     title: Set up a computer to build MoonLight
     actor: contributor
@@ -26,7 +75,7 @@ processes:
       - id: mac
         say: Install the command line tools, CMake and uv.
         given: [{ input: platform, equals: macOS }]
-        when: { run: { command: "xcode-select --install && brew install cmake uv" } }
+        when: { run: { command: "xcode-select --install; brew install cmake uv" } }
       - id: linux
         say: Install CMake, a compiler and uv.
         given: [{ input: platform, equals: Linux }]

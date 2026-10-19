@@ -46,7 +46,7 @@ std::vector<std::filesystem::path> scriptsIn(const char* sub) {
     std::vector<std::filesystem::path> out;
     const std::filesystem::path dir = scriptRoot() / sub;
     if (!std::filesystem::exists(dir)) return out;
-    for (const auto& e : std::filesystem::directory_iterator(dir))
+    for (const auto& e : std::filesystem::recursive_directory_iterator(dir))
         if (e.is_regular_file() && mmIsScript(e.path())) out.push_back(e.path());
     return out;
 }
@@ -136,6 +136,21 @@ TEST_CASE("the shipped catalog names every script in moonlive/") {
         const std::string n(moonlive::kModifierCatalog[i]);
         CHECK(n.substr(n.rfind('.')) == moonlive::kModifierExt);
     }
+}
+
+// The UI fetches a script from its role's folder plus the subfolder the catalog names, so a wrong subfolder index sends every device to a file that is not there.
+TEST_CASE("every catalog entry's subfolder is where its script lives in moonlive/") {
+    const auto at = [](const char* folder, const unsigned char* sub, const char* const* names, size_t count) {
+        for (size_t i = 0; i < count; i++) {
+            const auto p = scriptRoot() / folder / moonlive::kCatalogSubfolders[sub[i]] / names[i];
+            CHECK_MESSAGE(std::filesystem::is_regular_file(p), p.string());
+        }
+    };
+    at(moonlive::kEffectFolder, moonlive::kEffectCatalogSub, moonlive::kEffectCatalog, moonlive::kEffectCatalogCount);
+    at(moonlive::kLayoutFolder, moonlive::kLayoutCatalogSub, moonlive::kLayoutCatalog, moonlive::kLayoutCatalogCount);
+    at(moonlive::kModifierFolder, moonlive::kModifierCatalogSub, moonlive::kModifierCatalog, moonlive::kModifierCatalogCount);
+    at(moonlive::kServiceFolder, moonlive::kServiceCatalogSub, moonlive::kServiceCatalog, moonlive::kServiceCatalogCount);
+    at(moonlive::kPaletteFolder, moonlive::kPaletteCatalogSub, moonlive::kPaletteCatalog, moonlive::kPaletteCatalogCount);
 }
 
 // Comments are what makes a script in `moonlive/` readable, so the lexer has to treat a plain `//` line as whitespace, anywhere, including between the statements of a loop body.

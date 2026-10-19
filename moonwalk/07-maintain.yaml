@@ -1,6 +1,6 @@
 # yaml-language-server: $schema=moonwalk.schema.json
 stage: Maintain
-summary: Updates, moves, backups and finding faults.
+summary: Updates, moves, backups, finding faults and reporting them.
 processes:
   - id: update-firmware
     title: Update MoonLight, and recover when an update fails
@@ -131,3 +131,13 @@ processes:
         when: { read: { page: how-to/led-signal-integrity.md } }
         detail: |
           On a 3.3 V board driving 5 V LEDs this is electrical far more often than firmware.
+  - id: log-issue
+    title: Log an issue
+    actor: user
+    goal: A bug report with the device's state attached.
+    systems: [MoonCore]
+    page: how-to/logging-an-issue.md
+  - id: report-vulnerability
+    title: Report a vulnerability
+    actor: user
+    goal: A security finding reaches the maintainers privately.

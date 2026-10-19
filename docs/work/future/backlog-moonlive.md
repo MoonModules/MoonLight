@@ -1,4 +1,4 @@
-# MoonLive language roadmap
+# Backlog: MoonLive
 
 > **Forward-looking backlog document, an exception to the CLAUDE.md present-tense rule.** Third in a
 > family: [livescripts-analysis-top-down.md](livescripts-analysis-top-down.md) designs the ENGINE
@@ -22,7 +22,7 @@ feature below that landed, and each one that does not names the next gap.
 
 The measure throughout is **what a real effect needs**. A simulation effect (particles, physics,
 anything where this frame depends on the last) is the honest test, because it exercises state,
-arithmetic and control flow together rather than one at a time. `moonlive/effects/balls.mle` is the
+arithmetic and control flow together rather than one at a time. `moonlive/effects/particles/balls.mle` is the
 worked example: bouncing balls, written against the language as it stands today, and every
 compromise it had to make is a line item below.
 
@@ -293,7 +293,7 @@ per-run draw canvas, so this rode the existing seam. `paletteRGB(i, bri)` answer
 
 ### 4c. Insights from porting a per-pixel effect: *the cost is CALLS, not math*
 
-A second port (`moonlive/effects/octopus.mle`, a polar spiral) measured very differently from the
+A second port (`moonlive/effects/waves/octopus.mle`, a polar spiral) measured very differently from the
 first, and the difference is the useful part.
 
 | effect | shape | S3, 64x64 |
@@ -528,6 +528,27 @@ Two effects written in one session on real hardware: `stadbeest-walk.mle` (a wal
 | `setPaletteColor` clamps the palette index | a palette is circular, but `hue + offset` past 255 sticks at the last color unless the script writes `mod(..., 256)` | wrap the index, as the palette itself does |
 | an effect visits every grid pixel | the eye computes 1600 pixels to light 241, and the legs' grid is mostly empty between 10 tubes | a way to iterate only the layout's lights, for sparse layouts |
 | a `bool` control takes a min and a max | `addControl("pulse", pulse, 0, 1)` | `addControl(name, flag)` for a bool |
+
+### 12. A one-to-one port of hpwit's scripts, for a like-for-like comparison (2026-10-19)
+
+hpwit's compiler (`hpwit/new-parser`, `asmparser2`) runs whole C-like programs. His `multi_effect_controller.sc` (800 lines) and the five `ProceduralEffects` were ported to MoonLive on 2026-10-18 (`moonlive/effects/hpwit/`), but as the same LOOK rather than the same program, so code size and frame time do not compare like for like. A one-to-one port needs the language to accept his programs as written. Each construct was compiled on the desktop on 2026-10-19:
+
+| his scripts use | MoonLive today | what it takes | work |
+|---|---|---|---|
+| ~10 KB of state: struct arrays of 160 to 220 objects, a 40×80 trail, 12 KB heat and angle tables | 64 bytes of members, 16 members | an arena sized from the declarations, on the heap or PSRAM, past the `uint8_t` and 64-bit seeded-mask limits; item 3 has the blockers | L, 3 to 5 days |
+| ~30 functions: struct methods and free functions | 8 per class (`kMaxEntryPoints`) | a function table sized per script; free functions outside the class | M, 1 to 2 days |
+| `struct` with fields, methods and a constructor, arrays of them | refused | item 10, user structs, then their methods and arrays | XL, 1 to 2 weeks |
+| `float`, `uint8_t`, `uint32_t`, casts like `(int)(x)` | refused | `float` (every target but the RP2040 has an FPU) or float mapped onto `fixed`; the sized integer names as aliases; casts | S for the names and casts, 1 day; M to map `float` onto `fixed`, 2 days; XL for a real `float` on five backends, 1 to 2 weeks |
+| `grid[y][x]` (his `[y, x]`) | refused | 2D arrays over the existing element-width path | M, 1 to 2 days |
+| `while`, `break`, `continue`, `i++`, `+=`, `?:`, `switch` | all refused | the statements and operators, each a parser and IR addition | S each for `while`, `++` and `+=` (rewritten into what exists), 1 day together; M each for `break`/`continue`, `?:` and `switch`, 3 to 5 days together |
+| `#define` constants | refused | a constant declaration (`const int`) rather than a preprocessor | S, half a day |
+| `main()` with `while (true)`, `show()`, `delay()` | `tick()` per frame | a shim: the loop body becomes `tick()`, `show()` and `delay()` become no-ops, `millis()` reads `t` | M, 1 to 2 days |
+| `hsv()`, `rand(mod)`, `atan2`, `hypot`, `sin` on radians, `printfln`, `pinInterrupt` | palette, `random16`, `polarA`/`polarR`, `sin` on 0..65535, `print`, none | host bindings with his signatures, under his names, in a compatibility table | M, 2 days, once `float` is decided |
+| code past 16 KB | `kCodeCap` 16 KB | the cap per platform (§ The code cap, per platform) | S to M, 1 day |
+
+Work is in days of agent implementation with the product owner's review, for the parser, the IR and all five backends, each with its tests; S is under a day, M one to two, L a week, XL two. In all about five weeks with `float` mapped onto `fixed`, about seven with a real `float`, the structs and the arena being most of it.
+
+Most rows are general language growth the MoonLive scripts want anyway; the `main()` shim and his host bindings exist only for the comparison, and stay behind a compatibility table rather than entering the standard vocabulary. **Decide first** whether the comparison is worth the compatibility layer, or whether comparing on the ported looks, now in `moonlive/effects/hpwit/`, is enough.
 
 ## How to know a step landed
 

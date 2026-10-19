@@ -22,7 +22,7 @@ def stage(tmp_path: Path, body: str) -> Path:
 
 def test_the_repo_stage_files_build_into_one_map():
     model = gen_moonwalk.build()
-    assert [s["id"] for s in model["stages"]][:2] == ["read", "install"]
+    assert [s["id"] for s in model["stages"]][:2] == ["install", "first-light"]
     assert model["processes"]["first-light-show"]["stage"] == "first-light"
     assert "run-linux-board" in model["byPage"]["how-to/installing-on-linux.html"]
 
@@ -54,9 +54,9 @@ def test_a_file_that_is_not_yaml_names_itself(tmp_path):
 
 
 def test_a_process_id_is_unique_across_stages(tmp_path):
-    shutil.copy(ROOT / "moonwalk" / "01-read.yaml", tmp_path / "01-read.yaml")
-    shutil.copy(ROOT / "moonwalk" / "01-read.yaml", tmp_path / "02-again.yaml")
-    with pytest.raises(ValueError, match="know-moonlight is also in stage read"):
+    shutil.copy(ROOT / "moonwalk" / "02-install.yaml", tmp_path / "02-install.yaml")
+    shutil.copy(ROOT / "moonwalk" / "02-install.yaml", tmp_path / "03-again.yaml")
+    with pytest.raises(ValueError, match="know-moonlight is also in stage install"):
         gen_moonwalk.build(tmp_path)
 
 

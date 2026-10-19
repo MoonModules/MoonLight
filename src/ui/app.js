@@ -6478,6 +6478,13 @@ function mlGroupForExt(ext) {
          : ext === ".mlp" ? "palettes" : null;
 }
 
+/// Where a script lives in the repo: in its subfolder when the catalog names one, at the kind's root otherwise. The device keeps every script flat.
+function mlRepoPath(cat, group, name) {
+    const g = (cat && cat[group]) || {};
+    const sub = (g.sub || [])[(g.names || []).indexOf(name)] || "";
+    return "moonlive/" + (g.folder || group) + "/" + (sub ? sub + "/" : "") + name;
+}
+
 // Download one factory script and save it to the device.
 //
 // The BROWSER fetches it, not the device: raw.githubusercontent.com sends
@@ -6489,10 +6496,9 @@ function mlGroupForExt(ext) {
 // engine that will run it rather than whatever main happens to hold.
 async function mlDownloadScript(name, group) {
     const cat = await mlFetchCatalog();
-    const folder = (cat[group] || {}).folder;
-    if (!folder) throw new Error("unknown script kind");
+    if (!(cat[group] || {}).folder) throw new Error("unknown script kind");
     const url = "https://raw.githubusercontent.com/MoonModules/MoonLight/"
-              + encodeURIComponent(cat.tag) + "/moonlive/" + folder + "/" + encodeURIComponent(name);
+              + encodeURIComponent(cat.tag) + "/" + mlRepoPath(cat, group, name).split("/").map(encodeURIComponent).join("/");
     const res = await fetch(url);
     // A 404 has two causes now. A RELEASE build fetches from its tag, so a missing script means the
     // release does not carry it. A DEV build fetches from the commit it was built from, so a 404
@@ -8759,9 +8765,15 @@ function buildFilePathControl(row, label, key, moduleName, ctrl) {
             if (g.dim && DIM_EMOJI[g.dim[i]]) marks.push(DIM_EMOJI[g.dim[i]]);
             return marks.length ? marks.join("") + " " : "";
         };
+        // The collection a factory script belongs to upstream, its subfolder, after the name: one library still, with its groups named.
+        const from = (n) => {
+            const g = cat && cat[group];
+            const sub = g && g.sub && g.names ? g.sub[g.names.indexOf(n)] : "";
+            return sub ? " \u00b7 " + sub : "";
+        };
         for (const n of names) {
             const o = document.createElement("option");
-            o.value = n; o.textContent = decl(n) + n;
+            o.value = n; o.textContent = decl(n) + n + from(n);
             picker.appendChild(o);
         }
         // Marked, because picking one costs a download and can fail. One list rather than
@@ -8770,7 +8782,7 @@ function buildFilePathControl(row, label, key, moduleName, ctrl) {
         for (const n of remote) {
             const o = document.createElement("option");
             o.value = n;
-            o.textContent = "\u2601 " + decl(n) + n;   // cloud: not on this device yet
+            o.textContent = "\u2601 " + decl(n) + n + from(n);   // cloud: not on this device yet
             picker.appendChild(o);
         }
         picker.value = cur;
@@ -8869,11 +8881,10 @@ function buildFilePathControl(row, label, key, moduleName, ctrl) {
         } catch (err) { alert("could not read the script: " + err.message); return; }
 
         const cat = await mlFetchCatalog().catch(() => null);
-        const folder = cat && cat[group] ? cat[group].folder : group;
         // A name the library already ships is an EDIT of that file; anything else is a new
         // one. GitHub has a flow for each, and both fork on the user's behalf when they
         // propose the change, so neither needs write access to this repo.
-        const repoPath = "moonlive/" + folder + "/" + name;
+        const repoPath = mlRepoPath(cat, group, name);
         const url = catalogNames.has(name)
             ? "https://github.com/MoonModules/MoonLight/edit/main/" + repoPath
               + "?value=" + encodeURIComponent(text)

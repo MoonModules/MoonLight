@@ -1,4 +1,4 @@
-# Backlog — light domain
+# Backlog: light domain
 
 Forward-looking to-build items for the **light domain** (`src/light/`: drivers, effects, layouts, modifiers, preview) and its sensors. The core/infrastructure counterpart is [backlog-core.md](backlog-core.md); cross-domain items are in [backlog-mixed.md](backlog-mixed.md). Index + overview: [README.md](index.md). Completed items are removed.
 
@@ -19,6 +19,14 @@ Forward-looking to-build items for the **light domain** (`src/light/`: drivers, 
   at its source, on hardware a user actually has.
 
 ## Effects
+
+### A preview GIF for every MoonLive script (2026-10-19)
+
+The 140 compiled effects each show a GIF on their catalog card (`docs/assets/light/effects/<Type>.gif`, 25 MB in all); the 49 MoonLive effect scripts show none.
+The pictures belong in `docs/assets/moonlive/effects/<subfolder>/<name>.gif`, mirroring the script subfolders, never in `moonlive/` itself, which the build globs and the UI fetches file by file.
+One MoonDeck script makes them all: `screenshot_modules.py` learns to step through the MoonLive catalog, capturing from the preview socket (`/wsp`, requests `[0x51][stride][fps]` and `[0x52][stride]`) the way the hpwit GIFs of 2026-10-18 were made.
+At 0.5 to 1 MB each that is 25 to 50 MB more, so a smaller format (128 px, 2 s) is part of the decision.
+**Decide first** where they show: a MoonLive scripts page with a card per script grouped by subfolder, or the script picker previewing one before its download.
 
 ### Effects and Drivers find their source one way, not two (2026-10-08)
 

@@ -175,6 +175,55 @@ processes:
     actor: agent
     goal: A script is edited and judged on the device before it lands in the repo.
     systems: [MoonLive]
+    intro: |
+      The working copy of a script lives on the board while you shape it with the product owner. The device compiles it and reports errors in the module's status, so a tweak costs one upload instead of a tree edit and a desktop build. The language: [MoonLive](moonmodules/light/moonlive.md). The HTTP calls: [Integrating](reference/integrating.md#a-moonlive-script-end-to-end).
+    steps:
+      - id: name
+        section: Edit on the device
+        say: Read the script name the module runs.
+        when: { run: { command: "curl http://<device>/api/state" } }
+        detail: |
+          Find the MoonLive effect module and read its `script` control. The product owner may rename modules and scripts on the board, so upload to the file the running module names, never to a remembered one.
+      - id: shadow
+        say: List the user script folder.
+        when: { run: { command: "curl \"http://<device>/api/dir?path=/moonlive\"" } }
+        detail: |
+          The loader prefers `/moonlive`, the folder the device's own editor writes, over `/.moonlive`, the factory folder. A stale copy there shadows every other upload of that name and has cost whole sessions. List it before forming any theory about a script that misbehaves on one board and passes on another.
+
+          A copy older than the current language is dead weight and safe to delete once shown. A copy in current syntax may be the product owner's own edit, and a folder also holds their palettes: never delete it wholesale.
+      - id: write
+        say: Upload the script to the board.
+        when: { run: { command: "curl -X POST -H \"Expect:\" --data-binary @<file>.mle \"http://<device>/api/file?path=/moonlive/<name>.mle\"" } }
+        detail: |
+          A script is shown in the device's own editor, so it reads as user-facing text: one header line saying what it is, and a short `//` hint after each `addControl`. The reasoning belongs in the commit message, not in the script. Re-read the file and delete every other comment before you show it.
+      - id: verify
+        say: Read it back and compare.
+        when: { run: { command: "curl \"http://<device>/api/file?path=/moonlive/<name>.mle\"" } }
+        detail: |
+          The read-back must match the file you sent, byte for byte.
+      - id: status
+        say: Read the module's status.
+        when: { run: { command: "curl http://<device>/api/state" } }
+        detail: |
+          A byte count means the script compiled. A failure shows its message with an offset, such as `a script is a class: expected class <Name> { … } @0`; an offset that lands mid-comment in a file you just pushed points at a stale shadow copy first. A copy from `/moonlive` adds `edited copy` to the status.
+      - id: memory
+        say: Check the heap on a refused compile.
+        when: { run: { command: "curl http://<device>/api/system" } }
+        detail: |
+          `codegen failed` on a classic ESP32 is usually memory, not the compiler: the same script lowers on the desktop. Read `freeInternal` and `maxBlock` before you theorize about registers or the emitter, and when the host and the device disagree on identical input, make the device name which guard fired.
+      - id: repeat
+        say: Edit, upload and read the status again.
+        when: { manual: "Repeat until the product owner approves what the board shows." }
+        detail: |
+          Every variant overwrites the running script. While you bisect, the last upload must be the working version, and you confirm it from the lit lights before saying it is back, so a broken variant never keeps running unnoticed.
+      - id: land
+        section: Land it
+        say: Copy the finished script into the repo.
+        when: { manual: "Copy it into its collection under moonlive/effects/, moonlive/layouts/ or moonlive/modifiers/ only when the product owner says it is finished." }
+        detail: |
+          Keep the header line and the control hints and nothing else. Every shipped script must also compile as C++, which `test_scripts_are_cpp.py` pins.
+    outro: |
+      Drafts stay on the board and the repo gets the finished script once. The product owner judges the result on the hardware.
   - id: package-desktop
     title: Package the desktop build
     actor: contributor

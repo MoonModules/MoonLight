@@ -164,9 +164,11 @@ def main():
             continue   # the schema reported it
 
         name = e.get("name")
-        if name in names_seen:
-            errors.append(f"{where}: duplicate device name")
-        names_seen.add(name)
+        # The schema reported a name that is no string; the checks below key on one, so it stays out of them.
+        if isinstance(name, str):
+            if name in names_seen:
+                errors.append(f"{where}: duplicate device name")
+            names_seen.add(name)
 
         # --- chip: the family the installer detects and the manifests name, and the one every firmware installs onto ---
         chip = e.get("chip")
