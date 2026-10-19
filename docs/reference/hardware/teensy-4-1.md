@@ -17,7 +17,7 @@ The one firmware, `teensy41`, finds at boot which of the two the board has; it i
 - 1 MB RAM: 512 KB of tightly coupled memory, shared between code and the stack, and 512 KB of OCRAM, which holds the heap.
 - 8 MB flash, with 1 MB of it holding MoonLight's settings (LittleFS), kept across power cycles and USB uploads.
 - Pads for 8 or 16 MB PSRAM, empty on the boards MoonLight runs on so far.
-- A microSD slot (pins 42 to 47) and USB host pins.
+- A microSD slot (pins 42 to 47) and USB host pins. A card goes in with the board unpowered: the slot sits on the 3.3 V rail, and a card's inrush resets the board.
 - A regular Teensy 4.1 carries a DP83825I Ethernet PHY, wired to the jack of PJRC's Ethernet kit; the firmware drives it, with no pins to set.
 - The **Teensy 4.1-NE** has no Ethernet chip, so the W5500 below gives it a network; the firmware finds the PHY missing at boot and uses the W5500.
 

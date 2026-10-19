@@ -1571,7 +1571,7 @@ Two cases in `test/unit/core/unit_AudioService_sync.cpp` fail intermittently, bo
 
 **Why it matters:** the gate scripts run the suite on every commit and merge, so a 1-in-10 flake interrupts gate lists often enough to train the reader to re-run instead of investigate — the habit that hides a real regression later.
 
-**Fix (do not paper over it):** treat the two cases separately. For the receive path, bind an **ephemeral** port (bind 0, read the assigned port back) so two runs can never contend. For the send path, first determine *why* the lazy open fails under repetition — whether the broadcast connect is refused or the latch is left set by an earlier case in the same process. A retry wrapper or a sleep is explicitly the wrong fix: it hides the next genuine failure too. `unit_NetworkReceiveEffect*` and `unit_SineEffect` share the fixed-port shape and deserve the same treatment while the fix is fresh.
+**Fix (do not paper over it):** treat the two cases separately. For the receive path, bind an **ephemeral** port (bind 0, read the assigned port back) so two runs can never contend. For the send path, first determine *why* the lazy open fails under repetition: whether the broadcast connect is refused or the latch is left set by an earlier case in the same process. A retry wrapper or a sleep is explicitly the wrong fix: it hides the next genuine failure too. `unit_NetworkReceiveEffect*` (a real UDP round trip on localhost) and `unit_SineEffect` (timing) flake the same way, about 1 full run in 3, and deserve the same treatment while the fix is fresh.
 
 ## ModuleFactory: registration can fail silently (uint8_t ceiling, unchecked bool)
 

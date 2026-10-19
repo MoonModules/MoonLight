@@ -28,11 +28,7 @@ if(MSVC)
     #           -Wextra. The codebase uses explicit static_cast at the sites
     #           where loss-of-data is the real concern; suppressing here brings
     #           MSVC noise level back in line with GCC.
-    #   C5285 — vendored doctest.h (v2.4.11) forward-declares `std::tuple` as a
-    #           libstdc++/libc++ portability workaround; the VS 2026 MSVC STL
-    #           newly flags that as "specializing a standard template". It's in
-    #           third-party header code we don't own and GCC/Clang never warn.
-    add_compile_options(/W4 /WX /wd4702 /wd4244 /wd4267 /wd5285)
+    add_compile_options(/W4 /WX /wd4702 /wd4244 /wd4267)
     # Our sources are UTF-8 and every other compiler reads them that way. MSVC alone assumes the
     # system codepage for both the source and the execution charset, so a non-ASCII literal raises
     # C4566 ("cannot be represented in the current code page") and /WX makes it fatal. /utf-8 sets
@@ -75,50 +71,12 @@ else()
     # <streambuf>, <stdio2.h>), so no source change can reach them. GCC 16 is clean, which is
     # why this went unnoticed locally: the maintainer's GCC is 16 and CI's is 13.
     # A version test rather than a flag probe, deliberately: the flags all EXIST here, it is
-    # their judgement that is wrong, so CheckCXXCompilerFlag would happily confirm them.
+    # their judgment that is wrong, so CheckCXXCompilerFlag would happily confirm them.
     if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 16)
-        add_compile_options(-Wno-error=restrict
+        add_compile_options(-Wno-error=null-dereference
+                            -Wno-error=restrict
                             -Wno-error=stringop-overflow
                             -Wno-error=format-truncation)
-    endif()
-
-    # -Wnull-dereference also fires on GCC 16.2.1, past the version bound above, but only for one
-    # real class of site: a plain `this->member_` read inlined through a lambda/callback chain
-    # (MoonModule::enabled()'s `enabled_ && !held_`, reached through several tests' std::function
-    # plumbing) where GCC's analysis loses track of `this` and can't prove it non-null. There is no
-    # source fix for that shape (testing `this == nullptr` in a member function is not meaningful),
-    # so it stays unconditional for GCC pending a version where it is confirmed to stop. Two other
-    # sites GCC flagged under the same warning turned out to be real, provably-safe `rootNode()`
-    # calls gated on a prior `json::parse()` success and are fixed directly instead (StateDocument.cpp,
-    # ControlModule.h::readHeader) — this exception covers only the this-across-a-thunk shape now.
-    if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-        add_compile_options(-Wno-error=null-dereference)
-    endif()
-
-    # -Warray-bounds= fires on GCC 16.2.1 too: MoonModule::setName's std::memcpy(name_, n, len)
-    # is bound-checked (len < sizeof(name_), a real fixed array) before the call, but GCC 16.2.1,
-    # inlining it through several unit tests' DOCTEST_ANON_FUNCs, deduces a 0-byte region for
-    # name_ at some of those call sites and reports offset 0 as out of [0, 0] bounds — a false
-    # positive from the same aggressive-inlining-loses-the-real-size class as the others here.
-    if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-        add_compile_options(-Wno-error=array-bounds=)
-    endif()
-
-    # -Wmaybe-uninitialized fires on GCC 16.2.1 too: unit_Hub75Driver_pins.cpp reads out[i] only
-    # for i < n (n itself checked == 14 just above), but GCC 16.2.1 flags out[14]/out[15] anyway,
-    # past the loop's own dynamic bound — a `fixedPins(out, 16)` return value it isn't correlating
-    # with the loop condition after inlining, not a real read of memory the loop never reaches.
-    if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-        add_compile_options(-Wno-error=maybe-uninitialized)
-    endif()
-
-    # Vendored doctest.h always includes <ciso646> on Clang, unconditionally, to detect libc++ via
-    # _LIBCPP_VERSION (doctest's own long-standing quirk: github.com/doctest/doctest/issues/126, #356).
-    # A Clang new enough to deprecate that pre-C++20 header turns its #warning into a build failure
-    # under -Werror. Third-party header code we don't own, so this stays unconditional rather than
-    # version-gated, matching the MSVC C5285 suppression above for the same vendored file.
-    if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-        add_compile_options("-Wno-error=#warnings")   # quoted: a bare # starts a CMake comment, truncating the rest of the file
     endif()
 
     # Hot-path discipline, enforced by the compiler. MM_NONBLOCKING marks tick/tick20ms/tick1s

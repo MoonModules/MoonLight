@@ -169,7 +169,7 @@ function elements(model, by, keep = () => true) {
             out.push({ data: { id: nid, pid, parent: `col:${column.id}`, label: p.title, kind: "process", actor: p.actor, stepped: steps.length > 0 },
                        position: { x: x * COL, y } });
             steps.forEach((s, k) => {
-                out.push({ data: { id: `${nid}/${s.id}`, pid, parent: nid, label: s.say, kind: "step", actor: s.actor },
+                out.push({ data: { id: `${nid}/${s.id}`, pid, sid: s.id, parent: nid, label: s.say, kind: "step", actor: s.actor },
                            position: { x: x * COL, y: y + (k + 1) * STEP_H } });
                 if (k) out.push({ data: { id: `next:${nid}/${k}`, source: `${nid}/${steps[k - 1].id}`, target: `${nid}/${s.id}`, kind: "next" } });
             });
@@ -270,14 +270,22 @@ export function doneOnDevice(model, stateDoc) {
     return done;
 }
 
-// The processes a contributor's runs show done: every step the change triggers has a pass that still holds, and there is at least one. `steps` is what MoonDeck's /api/gates reports per process, each step triggered or not and fresh or not.
+// Script steps together, as one process's or one subprocess's: triggered when any is, fresh when every triggered one is and there is at least one.
+function together(list) {
+    const needed = list.filter((s) => s.triggered);
+    return { triggered: needed.length > 0, fresh: needed.length > 0 && needed.every((s) => s.fresh), running: needed.some((s) => s.running) };
+}
+
+// A step's status from MoonDeck's /api/gates (`steps`, per process, each script step triggered or not and fresh or not): its own run, or for a step that runs a subprocess, that subprocess's steps together. Undefined for a step that runs no script.
+export function gateOf(steps, pid, s) {
+    const sub = s.when?.process;
+    if (sub) return steps?.[sub]?.length ? together(steps[sub]) : undefined;
+    return steps?.[pid]?.find((r) => r.process === pid && r.id === s.id);   // a process's list holds its subprocesses' steps too, keyed by their own process
+}
+
+// The processes a contributor's runs show done: every step the change triggers has a pass that still holds, and there is at least one.
 export function doneBySteps(steps) {
-    const done = new Set();
-    for (const [pid, list] of Object.entries(steps || {})) {
-        const needed = list.filter((s) => s.triggered);
-        if (needed.length && needed.every((s) => s.fresh)) done.add(pid);
-    }
-    return done;
+    return new Set(Object.entries(steps || {}).filter(([, list]) => together(list).fresh).map(([pid]) => pid));
 }
 
 // A run's duration as a reader takes it in: `42s`, `3m05s`.
@@ -479,7 +487,7 @@ function showPanel(panel, model, pid, done, onDone, host = {}) {
         host.offChoice?.(p, chosen);   // the map grays out the steps of the options not chosen
         // A step that does not apply, for another choice or not needed for this change, is grayed as on the map, or left out when the reader hides them.
         const steps = p.steps || [];
-        const runOf = (s) => host.steps?.[pid]?.find((r) => r.id === s.id);
+        const runOf = (s) => gateOf(host.steps, pid, s);
         const off = steps.map((s) => !applies(s, chosen) || runOf(s)?.triggered === false);
         let current = null;
         const sectionOf = steps.map((s) => (current = s.section || current));
@@ -521,6 +529,13 @@ function showPanel(panel, model, pid, done, onDone, host = {}) {
                 line.append(b);
             }
             block.append(line);
+            // A step that runs a subprocess opens it, as a choice opens a process.
+            const sub = model.processes[s.when?.process];
+            if (sub && host.open) {
+                const into = control("p", { className: "mm-map-next" }, sub.title);
+                into.addEventListener("click", () => host.open(s.when.process));
+                block.append(into);
+            }
             const how = howTo(s) || linkOf(s, host);
             if (how) block.append(how);
             if (s.detail) { const d = control("div"); d.innerHTML = host.helpMarkdown(s.detail); block.append(d); }
@@ -714,7 +729,7 @@ export async function drawMap(host, opts = {}) {
         chips.append(chip);
     }
     // A step that does not apply, for the reader's choice or not needed for this change, leaves the layout when the reader hides them.
-    const keepStep = (pid, s) => !hideOff.checked || (applies(s, chosenOf(model.processes[pid], opts.choices)) && opts.steps?.[pid]?.find((r) => r.id === s.id)?.triggered !== false);
+    const keepStep = (pid, s) => !hideOff.checked || (applies(s, chosenOf(model.processes[pid], opts.choices)) && gateOf(opts.steps, pid, s)?.triggered !== false);
     const cy = window.cytoscape({ container: canvas, elements: elements(model, by.value, keepStep), style: style(host), layout: { name: "preset" }, minZoom: 0.05, maxZoom: 3, autoungrabify: true });   // the layout is the model's order, so a block taps but never drags
     const nodesOf = (pid) => cy.nodes().filter((n) => n.data("pid") === pid);
     // A drag that starts on a block pans the map, as one on the background does; a tap without moving still opens the block.
@@ -748,7 +763,8 @@ export async function drawMap(host, opts = {}) {
         });
         // A script step the change does not need grays out, and one whose pass still holds is done, over its process's own mark.
         cy.nodes("[kind='step']").forEach((n) => {
-            const r = opts.steps?.[n.data("pid")]?.find((x) => n.id().endsWith(`/${x.id}`));
+            const s = model.processes[n.data("pid")].steps.find((st) => st.id === n.data("sid"));
+            const r = gateOf(opts.steps, n.data("pid"), s);
             if (r) n.toggleClass("mm-skip", !r.triggered).toggleClass("done", r.fresh);
         });
         return visible;
@@ -820,8 +836,9 @@ export async function drawMap(host, opts = {}) {
         showPanel(panel, model, pid, done, mark, host_);
         fit(target.union(target.children()));
     };
+    host_.open = open;
     cy.on("tap", "node[kind='process']", (ev) => { if (!tapped()) return; remember(ev.target.data("pid")); showPanel(panel, model, ev.target.data("pid"), done, mark, host_); });
-    cy.on("tap", "node[kind='step']", (ev) => { if (!tapped()) return; const pid = ev.target.data("pid"); remember(pid); toStep(pid, ev.target.id().split("/").pop()); });
+    cy.on("tap", "node[kind='step']", (ev) => { if (!tapped()) return; const pid = ev.target.data("pid"); remember(pid); toStep(pid, ev.target.data("sid")); });
 
     // Where the reader is: the processes touching the cards in view, or the page they came from. A link naming one process opens it; anything else opens on the choices.
     const focus = opts.ownsAddress ? new URLSearchParams(location.search).get("focus") || "" : "";

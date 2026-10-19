@@ -19,7 +19,7 @@ processes:
         actor: agent
         when: { manual: "The architect shapes it and the researcher maps the prior art." }
         detail: |
-          The spec holds enough to build from. Check the request against the README, CLAUDE.md and the [architecture](explanation/architecture/index.md): a conflict is named briefly with its reference, and the product owner can still overrule. Ask rather than guess: asking the product owner beats guessing, and when in doubt on a spec, ask.
+          The spec holds enough to build from, checked against the README, CLAUDE.md and the [architecture](explanation/architecture/index.md). When in doubt on a spec, ask.
       - id: end-states
         say: Name two to four end states.
         actor: agent
@@ -34,7 +34,7 @@ processes:
         say: Approve the plan.
         when: { manual: "Read it first: code starts after the approval." }
         detail: |
-          Each cycle subtracts as well as adds: a change that adds a rule, a file or a concept says what comes out, or says plainly that nothing does and why.
+          Each cycle subtracts as well as adds.
       - id: pr
         say: Use the plan as the pull request description.
         when: { manual: "The plan file is deleted in the same pull request." }
@@ -46,9 +46,7 @@ processes:
     goal: Feature work lands on a branch the product owner created, and main stays releasable.
     dependsOn: [pick-spec-plan]
     intro: |
-      Main is always releasable: what is on main ships as the latest pre-release, and tagged releases are cut from it. Feature work branches; a branch may bundle several topics, one combined commit per cycle.
-
-      Scope is what was asked, and nothing adjacent: work spotted while working is named in one sentence at the end and left undone, and a follow-up is offered once. A question is answered, not acted on: changes happen after explicit agreement.
+      Main is always releasable: what is on main ships as the latest pre-release, and tagged releases are cut from it. Feature work branches; a branch may bundle several topics, one combined commit per cycle. How an agent works on it: [CLAUDE.md's Roles](../CLAUDE.md#roles).
     steps:
       - id: create
         say: Create the branch for the topic.

@@ -6,15 +6,15 @@
 ///
 /// ## Why it exists
 ///
-/// A migration rewrites an effect's internals under the contract that it stays pixel-identical.
+/// A refactor rewrites an effect's internals under the contract that it stays pixel-identical.
 /// A behavior test, one asserting that something is written or that it varies along an axis, passes just as happily when the arithmetic drifted by one unit.
-/// That is exactly the regression such a migration introduces.
+/// That is exactly the regression such a refactor introduces.
 /// A hash over the rendered bytes catches it.
 ///
 /// ## Where the determinism comes from
 ///
 /// Three fixed inputs: a fixed grid, a fixed frame count, and a fixed clock.
-/// The clock matters most, every migrated effect being time-driven and the tick reading the platform's own millisecond source.
+/// The clock matters most, every pinned effect being time-driven and the tick reading the platform's own millisecond source.
 /// A test seam makes the sequence reproducible, and a scoped guard restores real time afterwards.
 ///
 /// ## Why a hash and not a stored frame

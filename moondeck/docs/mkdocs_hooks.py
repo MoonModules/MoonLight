@@ -98,8 +98,6 @@ def _rewrite_out_of_docs_links(markdown: str, src_uri: str) -> str:
 
 # ---- MkDocs hooks ----
 
-# ---- catalog-page table transform: render prose ### blocks as a MoonLight-style table ----
-
 # The module types whose preview is MOTION, so their image is a .gif rather than a .png:
 # a still frame of a moving effect says almost nothing about it. One home, because three
 # places act on it: check_docgen enforces the format, screenshot_modules captures it, and

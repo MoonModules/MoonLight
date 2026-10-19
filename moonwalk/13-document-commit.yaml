@@ -38,9 +38,9 @@ processes:
     dependsOn: [desktop-build-test, document]
     page: contributing/principles-and-process.md
     intro: |
-      The product owner initiates every event and every gate list. On "run pre-commit", run each check whose trigger the change matches, once, and report one line each, PASS, FAIL or SKIP with the reason, and stop. An applicable check skipped carries a one-line reason in the commit or the pull request. A failure is reported rather than fixed and run again: a second run needs the words again.
+      The product owner initiates every event and every gate list. On "run pre-commit", run each check whose trigger the change matches, once, and report one line each, PASS, FAIL or SKIP with the reason, and stop. An applicable check skipped carries a one-line reason in the commit or pull request. A failure is reported, not fixed and rerun: a second run needs the words again.
 
-      The scope freezes at the words, so a request made during a run goes to the next commit. A change made after a run re-checks only itself, on the product owner's go; "restart" reruns everything, and a cosmetic change rides on the run it followed. On a diff of about ten files across areas, the Reviewer reads the staged diff first. `test_host --ui` is never a gate.
+      The scope freezes at the words: a request made during a run goes to the next commit. A change made after a run re-checks only itself, on the product owner's go; "restart" reruns everything, and a cosmetic change rides on the run it followed. On a diff of about ten files across areas, or on request, run the Reviewer on the staged diff first and wait for its findings, so the checks run once, on the diff that commits. `test_host --ui` is never a gate.
     steps:
       - id: specs
         section: Every change
@@ -52,7 +52,46 @@ processes:
         detail: |
           It also writes its report to the tree, a record the commit carries.
       - id: docs
-        section: Documentation
+        section: By what the change touches
+        say: Run the docs checks.
+        when: { process: commit-docs }
+      - id: code
+        say: Run the code checks.
+        when: { process: commit-code }
+      - id: web
+        say: Run the web page checks.
+        when: { process: commit-web }
+      - id: scripts
+        say: Run the script checks.
+        when: { process: commit-scripts }
+      - id: improv
+        section: With a board attached
+        say: Provision a board over Improv, end to end.
+        given: [{ changed: ["src/**/*Improv*", "src/platform/*/platform_*_improv.cpp", mooninstaller/improv-frame.js, mooninstaller/install-orchestrator.js, "moondeck/build/improv_*.py"] }]
+        when: { manual: "improv_smoke_test.py --port <the board's port>, or its card with the port picked." }
+        detail: |
+          Recommended rather than required, since it needs a board on USB; a skip names its reason.
+      - id: stage
+        section: Commit
+        actor: product-owner
+        say: Stage the diff you reviewed.
+        when: { manual: "Staged means read, unstaged means not." }
+        detail: |
+          The agent never stages or unstages: staging claims something as reviewed that nobody read, and unstaging discards a verification invisibly. A scratch file of the agent's that lands in the index is reported rather than quietly removed. A tracked file is deleted with plain `rm`, since `git rm` stages the deletion. Never `git stash`: a conflicted pop stages every change, and a before number comes from the committed reports or `git show HEAD:<path>`.
+      - id: commit
+        actor: product-owner
+        say: Commit on the words "commit now".
+        when: { run: { command: "git commit" } }
+        detail: |
+          Only "commit now" commits, and it covers the diff the product owner reviewed: any later edit voids it.
+
+          The message opens with an imperative title of at most 72 characters and a 1 to 3 sentence end-user summary with no file lists. Then the performance line and the account line from `collect_kpi.py --commit`. Then bullets under **Core**, **Light domain**, **UI**, **Scripts/MoonDeck**, **Tests**, **Docs/CI** and **Reviews**, with one Reviews bullet per finding: flagged, then done, accepted or deferred, and why. No hard wraps.
+  - id: commit-docs
+    title: The docs checks
+    actor: contributor
+    goal: Every documentation check the change triggers passed.
+    steps:
+      - id: docs
         say: Build the docs, strict.
         given: [{ changed: ["**/*.md", "docs/**", mkdocs.yml, moonwalk/**, "moondeck/docs/**"] }]
         when: { run: { script: moondeck/docs/build_docs.py, args: "--strict" } }
@@ -61,13 +100,17 @@ processes:
         given: [{ changed: ["**/*.md", src/**, test/**] }]
         when: { run: { script: moondeck/check/check_docgen.py } }
         detail: |
-          A ratchet: errors stay at zero, and warnings may only fall, in total and per rule, against the committed `docs/reference/metrics/docgen.md`. A rule whose own limit changed says so in the commit. A touched file with warnings gets all of them resolved; what resists stays, with one line saying why.
+          A ratchet against the committed `docs/reference/metrics/docgen.md`, per rule and in total: [check_docgen](../moondeck/MoonDeck.md#check_docgen).
       - id: taglines
         say: Check the front pages agree on the platforms.
         given: [{ changed: [README.md, docs/index.md, CLAUDE.md] }]
         when: { run: { script: moondeck/check/check_taglines.py } }
+  - id: commit-code
+    title: The code checks
+    actor: contributor
+    goal: Every code check the change triggers passed, and the repo's health is recorded.
+    steps:
       - id: code
-        section: Code
         say: Check the code's boundaries and complexity.
         given: [{ changed: [src/**, test/**, "!test/js/**", "!test/python/**"] }]
         when: { run: { script: moondeck/check/check_code.py } }
@@ -94,7 +137,7 @@ processes:
         given: [{ changed: [src/**, "!src/platform/desktop/**", moonbase/**] }]
         when: { run: { script: moondeck/check/check_esp32_built.py, args: "--firmware esp32" } }
         detail: |
-          It compares the binary and its MoonBase against every source in a tenth of a second, and catches the edit that was never compiled. One firmware per chip family is the gate. A stale one is rebuilt on the product owner's go, [one at a time](moonwalk.md#esp32-build-flash).
+          It compares the binary and its MoonBase against every source in a tenth of a second, and catches the edit that was never compiled. One firmware per chip family is the gate; a change to a per-variant sdkconfig fragment, the executable-memory path or host-ISA code needs every shipped variant built, since CI is otherwise the first to build the rest. A stale one is rebuilt on the product owner's go, [one at a time](moonwalk.md#esp32-build-flash).
       - id: esp32-fresh-s3
         say: Check the S3 firmware is up to date.
         given: [{ changed: [src/**, "!src/platform/desktop/**"] }]
@@ -105,7 +148,7 @@ processes:
         when: { run: { script: moondeck/check/check_esp32_built.py, args: "--firmware esp32p4rev3-eth" } }
       - id: no-jit
         say: Build the desktop without the MoonLive backend.
-        given: [{ changed: [src/core/moonlive/**] }]
+        given: [{ changed: ["src/*/moonlive/**"] }]
         when: { run: { script: moondeck/build/build_desktop.py, args: "--no-jit" } }
         detail: |
           It catches a helper left unused outside its guard, fatal under GCC while clang stays silent.
@@ -115,17 +158,25 @@ processes:
         when: { run: { script: moondeck/check/collect_kpi.py, args: "--commit" } }
         detail: |
           Flash and DRAM per target, binary size, the tick matrix, line counts and complexity: its diff belongs in the commit and its deltas in the message. It runs when the code changes, since its timings drift with the host.
+  - id: commit-web
+    title: The web page checks
+    actor: contributor
+    goal: Every web page check the change triggers passed.
+    steps:
       - id: js
-        section: The web pages
         say: Run the JavaScript tests.
-        given: [{ changed: [src/ui/**, mooninstaller/**, docs/assets/**, test/js/**] }]
+        given: [{ changed: [src/ui/**, mooninstaller/**, "docs/assets/*.js", test/js/**] }]
         when: { run: { script: moondeck/test/test_host.py, args: "--js" } }
       - id: devices
         say: Check the installer's device catalog.
         given: [{ changed: [src/ui/**, mooninstaller/**] }]
         when: { run: { script: moondeck/check/check_devices.py } }
+  - id: commit-scripts
+    title: The script checks
+    actor: contributor
+    goal: Every script check the change triggers passed.
+    steps:
       - id: python
-        section: The scripts
         say: Run the Python tests.
         given: [{ changed: [moondeck/**, moonlive/**, moonwalk/**, test/python/**, "docs/moonmodules/**/*.md"] }]
         when: { run: { script: moondeck/test/test_host.py, args: "--python" } }
@@ -133,25 +184,3 @@ processes:
         say: Check the firmware list.
         given: [{ changed: [moondeck/**, moonlive/**] }]
         when: { run: { script: moondeck/check/check_firmwares.py } }
-      - id: improv
-        section: With a board attached
-        say: Provision a board over Improv, end to end.
-        given: [{ changed: ["src/**/*Improv*", "src/platform/*/platform_*_improv.cpp", mooninstaller/improv-frame.js, mooninstaller/install-orchestrator.js, "moondeck/build/improv_*.py"] }]
-        when: { manual: "improv_smoke_test.py --port <the board's port>, or its card with the port picked." }
-        detail: |
-          Recommended rather than required, since it needs a board on USB; a skip names its reason.
-      - id: stage
-        section: Commit
-        actor: product-owner
-        say: Stage the diff you reviewed.
-        when: { manual: "Staged means read, unstaged means not." }
-        detail: |
-          The agent never stages or unstages: staging claims something as reviewed that nobody read, and unstaging discards a verification invisibly. A scratch file of the agent's that lands in the index is reported rather than quietly removed.
-      - id: commit
-        actor: product-owner
-        say: Commit on the words "commit now".
-        when: { run: { command: "git commit" } }
-        detail: |
-          Only "commit now" commits, and it covers the diff the product owner reviewed: any later edit voids it.
-
-          The message opens with an imperative title of at most 72 characters and a 1 to 3 sentence end-user summary with no file lists. Then the performance line and the account line from `collect_kpi.py --commit`. Then bullets under **Core**, **Light domain**, **UI**, **Scripts/MoonDeck**, **Tests**, **Docs/CI** and **Reviews**, with one Reviews bullet per finding: flagged, then done, accepted or deferred, and why. No hard wraps.

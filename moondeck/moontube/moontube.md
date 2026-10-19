@@ -90,7 +90,7 @@ A run has to be REPEATABLE, because the same file is a test. So a step says what
 
 A step that POSTs its way to the outcome proves nothing about the interface, and on camera it shows an effect with no cause. Every action goes through the affordance a person uses: the `+` tab, the picker, the card's own buttons, the real inputs.
 
-The rule covers the tooling around a run, not only its steps. Cleanup is the place it is easiest to break. Deleting a leftover module with a `DELETE` is quick, and it both sets state behind the interface's back and hides a run whose own delete steps are broken. So neither the video tool nor the test fixture writes: a leftover is reported, which fails the test, and the next run's `clear_children` step puts the pipeline right through the UI.
+The rule covers the tooling around a run, not only its steps. Cleanup is the place it is easiest to break. Deleting a leftover module with a `DELETE` is quick, and it both sets state behind the interface's back and hides a run whose own delete steps are broken. So neither the video tool nor the test fixture writes. A leftover is reported, which fails the test, and the next run's `clear_children` step puts the pipeline right through the UI. A clip that leaves what it built on screen records with `mtvideo.py --keep`, since the next clip's reset clears the device.
 
 ## Locators
 

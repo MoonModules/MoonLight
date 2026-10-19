@@ -4192,7 +4192,7 @@
      "line": "The build variant; on the MoonBase tab, its chip."
     },
     "partition": {
-     "line": "The image against the size of its slot.",
+     "line": "The installed image against the size of its slot, which a new image must fit.",
      "more": "The bar doubles as the install bar: it fills with the incoming image mid-install."
     }
    },

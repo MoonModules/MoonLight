@@ -296,3 +296,17 @@ def test_a_step_calling_a_missing_process_or_jumping_to_a_missing_step_is_refuse
                            "      - {id: s, say: Check it., when: {manual: Look}, onFailure: [{type: goto, stepId: gone}]}\n")
     with pytest.raises(ValueError, match="goto names no step: gone"):
         gen_moonwalk.build(jump)
+
+
+def test_the_commit_checks_fold_into_one_subprocess_per_trigger_group_each_within_its_caps():
+    processes = gen_moonwalk.build()["processes"]
+    groups = {"docs": "commit-docs", "code": "commit-code", "web": "commit-web", "scripts": "commit-scripts"}
+    parent = {s["id"]: s for s in processes["commit"]["steps"]}
+    assert {sid: parent[sid]["when"].get("process") for sid in groups} == groups
+    assert all("given" not in parent[sid] for sid in groups)   # a group triggers nothing itself: its steps' paths decide
+    # Every check keeps its id, so a run record and a link keyed on it still find it.
+    ids = [s["id"] for pid in ["commit", *groups.values()] for s in processes[pid]["steps"] if "run" in s["when"]]
+    assert sorted(ids) == sorted(["specs", "prose", "commit", "docs", "docgen", "taglines", "code", "build-desktop", "build-tests", "test-desktop", "scenarios",
+                                  "esp32-fresh", "esp32-fresh-s3", "esp32-fresh-p4", "no-jit", "kpi", "js", "devices", "python", "firmwares"])
+    over = [w for w in gen_moonwalk.size_warnings(processes) if w[0] == "document-commit"]
+    assert over == []   # the parent, each group and the stage within their caps

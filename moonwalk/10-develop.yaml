@@ -18,8 +18,6 @@ processes:
         when: { run: { script: moondeck/build/build_desktop.py } }
         detail: |
           Build only when the next step needs it, rather than after every edit. Desktop and Raspberry Pi build from the same root `CMakeLists.txt`, natively or cross-compiled.
-
-          A build error or a test failure that survives two fix attempts: stop, and ask or propose a rollback. Reverting is the product owner's call, whatever prompted it.
       - id: run
         say: Run it.
         when: { run: { script: moondeck/run/run_desktop.py } }

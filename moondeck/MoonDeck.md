@@ -4,7 +4,7 @@ MoonDeck is MoonLight's browser-based developer console. One page builds, flashe
 
 Launch it with `uv run moondeck/moondeck.py` and open <http://localhost:8420>. The console has five tabs. **Repo**, where MoonDeck opens, holds the tests, checks, tools and docs.
 **Desktop**, **ESP32** and **Teensy** build, run or flash, and monitor a target, and **Live** discovers networked devices and runs against them.
-A network bar and per-device deviceModel pickers sit above them. The 🗺️ MoonWalk button in the header opens the map of every process on the contributor's stages. Each step that runs a script shows whether the change needs it, whether its pass still holds and how long it took, from `GET /api/gates`. The change is against HEAD for a commit, `?base=main` for a merge's branch, `?every=1` takes every step, as a release does. `?model=1` adds the map itself, so the map draws from one generation. **Run** names the step, and MoonDeck reads its call from the process file, so a request can never add arguments of its own. A pass holds while the paths the step covers are unchanged since it ran, the tree each run saw recorded in `build/moondeck-logs/walk-runs.json`; the rule is `moondeck/docs/walk_status.py`. Script definitions live in `moondeck/moondeck_config.json` (committed); runtime state (selected network, devices, ports) persists in `moondeck/moondeck.json` (gitignored).
+A network bar and per-device deviceModel pickers sit above them. The 🗺️ MoonWalk button in the header opens the map of every process on the contributor's stages. Each step that runs a script shows whether the change needs it, whether its pass still holds and how long it took, from `GET /api/gates`. The change is against HEAD for a commit, `?base=main` for a merge's branch, `?every=1` takes every step, as a release does. A step that runs a subprocess, as `commit` runs its four groups, stands for that subprocess's steps. `?model=1` adds the map itself, so the map draws from one generation. **Run** names the step, and MoonDeck reads its call from the process file, so a request can never add arguments of its own. A pass holds while the paths the step covers are unchanged since it ran, the tree each run saw recorded in `build/moondeck-logs/walk-runs.json`; the rule is `moondeck/docs/walk_status.py`. Script definitions live in `moondeck/moondeck_config.json` (committed); runtime state (selected network, devices, ports) persists in `moondeck/moondeck.json` (gitignored).
 
 Below: the UI behaviors common to every card, described once, then one section per script grouped by the tab it appears on. Each section gives the equivalent CLI invocation, so the page doubles as the command reference for running anything without the browser.
 
@@ -98,7 +98,7 @@ Runs `./build/<host>/test/mm_tests -s` (doctest with all test cases shown) — s
 
 ### test_host
 
-Run the host test suites: the Python ones, the JS ones, and the UI ones.
+Run the host test suites: the Python ones, the JS ones, and the UI ones. The UI runs drive a real browser against a running device, cost minutes and skip without a desktop and a Playwright browser, so they run on request only and are never a gate.
 
 ```bash
 uv run moondeck/test/test_host.py            # Python and JS
@@ -199,6 +199,10 @@ Every run writes [docs/reference/metrics/docgen.md](../docs/reference/metrics/do
 **A ratchet, not a snapshot.** The committed `docs/reference/metrics/docgen.md` is the baseline: the run rewrites the file, then compares what it found against the copy in `HEAD`. An error fails the run, and so does any rule whose warning count ROSE, the total included, and so does the total of `///` lines after `@technical`. Warnings are staged work, and staged work that grows is not a sweep. The appendix total catches the other way to fake a sweep: warnings that fall because their comments moved into an appendix rather than being cut. A rise names the changed files whose appendix grew.
 
 The comparison is per rule as well as on the total, because each hides a different move. A total alone hides one rule paying for another: splitting an over-wide line lowers the width count and raises the block count, which is the trade the block cap exists to refuse. Per rule alone misses a rule sitting under its own baseline while the total climbs. A rule whose limit itself changed is the one case where a rise is right, and the commit message is where that is said.
+
+**A touched file leaves the list.** Holding the line is the floor, and the aim is zero. The report shrinks only when each change spends effort on the warnings in the files it touches, so a touched file that still has warnings gets all of them resolved. Clearing a file beats shaving one finding off each of five, since a file at zero stays there and a file at four drifts back. The effort is reasonable: the findings a reader would agree with, and what resists keeps its count rather than being forced, with one line saying what remains and why.
+
+Cut first. Move only what neither the code, the test name nor the spec says, and prefer an existing home over a new appendix section. Files the change never opened are a sweep of their own.
 
 **There is no tolerated list.** The limits are the limits, and the check is red until the tree meets them. A grandfather list was tried and removed: while one exists, the cheapest way to make the check green is to add to it, which is how the comment budget eroded in the first place.
 
@@ -853,7 +857,9 @@ uv run moondeck/docs/build_docs.py --strict    # promote every warning to an err
 uv run moondeck/docs/build_docs.py --serve --host 0.0.0.0   # reachable from a phone or tablet on the network
 ```
 
-The preview binds **:8422** — the [Installer Preview](#preview_installer) owns :8421 and MoonDeck :8420, so all three servers run at once. Config is `mkdocs.yml`; deps (`mkdocs-material`) are declared inline in the script, so `uv run` provisions them on first use. The two test-inventory pages and each effect/modifier's inline test list are generated from the test files at build time (`moondeck/docs/mkdocs_hooks.py`), so they're never committed and can't drift; `history/` and `backlog/` are built but kept off the nav. Warnings for links to repo files outside `docs/` (rewritten to GitHub URLs) and pre-existing stale anchors are expected — the build still succeeds.
+The preview binds **:8422**: the [Installer Preview](#preview_installer) owns :8421 and MoonDeck :8420, so all three servers run at once. Config is `mkdocs.yml`; deps (`mkdocs-material`) are declared inline in the script, so `uv run` provisions them on first use. The test inventories and each effect/modifier's inline test list are generated from the test files at build time (`mkdocs_hooks.py`), so they are never committed and cannot drift. `docs/work/` is built but kept off the nav. Warnings for links to repo files outside `docs/` (rewritten to GitHub URLs) and pre-existing stale anchors are expected, and the build still succeeds.
+
+`--serve` loads `mkdocs_hooks.py` and the generators it imports once: after editing anything under `moondeck/docs/`, restart the preview and confirm the change by fetching the generated file.
 
 ## Live Tab
 
@@ -1175,7 +1181,7 @@ The emulated board is a full device, not a console toy: the `qemu` firmware vari
 
 **Erase flash** (the checkbox) deletes the merged flash image so every data partition, settings and scripts, comes back blank. On a real board that is `erase_flash_esp32`; here the whole chip is one file, so removing it is the same operation. Without it, everything persists across restarts.
 
-Two things to know when reading a QEMU run: the guest clock is emulated, so **timings are never KPI material**, and after any crash the emulator can boot-loop until the QEMU *process* itself is restarted (`--stop`, then start again).
+Three things to know when reading a QEMU run. The guest clock is emulated, so **timings are never KPI material**. An interrupt watchdog on CPU1 in `spinlock_acquire` fires even on an idle guest, so a crash's signature is checked with the script or module disabled before the firmware is blamed. After any crash the emulator can boot-loop until the QEMU *process* itself is restarted (`--stop`, then start again).
 
 ### improv_provision
 

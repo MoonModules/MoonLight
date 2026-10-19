@@ -184,3 +184,32 @@ def test_a_card_counts_its_own_calls_but_not_another_cards():
 def test_a_step_with_a_placeholder_in_its_call_is_the_readers_to_run():
     model = {"processes": {"p": {"steps": [{"id": "flash", "when": {"run": {"script": "moondeck/x.py", "args": "--port <port>"}}}]}}}
     assert walk_status.step_run(model, "p/flash") is None
+
+
+def test_a_step_running_a_subprocess_reports_the_subprocess_steps_under_their_own_ids(tmp_path):
+    repo = repo_with(tmp_path)
+    (repo / "src/a.cpp").write_text("a2")
+    model = {"processes": {
+        "commit": {"steps": [{"id": "specs", "when": {"run": {"script": "moondeck/check/check_specs.py"}}},
+                             {"id": "code", "when": {"process": "commit-code"}}]},
+        "commit-code": {"steps": MODEL["processes"]["commit"]["steps"]},
+    }}
+    result = status(model, {}, root=repo)
+    assert [(s["process"], s["id"]) for s in result["commit"]] == [("commit", "specs"), ("commit-code", "build"), ("commit-code", "docs")]
+    assert result["commit"][1]["triggered"] and not result["commit"][2]["triggered"]   # each keeps its own trigger
+    assert [s["id"] for s in result["commit-code"]] == ["build", "docs"]
+    assert walk_status.step_run(model, "commit-code/build") == {"script": "moondeck/build/build_desktop.py"}   # a reported step runs by its own process and id
+
+
+def test_a_subprocess_reached_twice_or_through_a_cycle_is_read_once(tmp_path):
+    repo = repo_with(tmp_path)
+    build = {"id": "build", "when": {"run": {"script": "moondeck/build/build_desktop.py"}}}
+    model = {"processes": {
+        "a": {"steps": [build, {"id": "to-b", "when": {"process": "b"}}, {"id": "again", "when": {"process": "b"}}]},
+        "b": {"steps": [{"id": "test", "when": {"run": {"script": "moondeck/test/test_desktop.py"}}}, {"id": "back", "when": {"process": "a"}}]},
+        "lost": {"steps": [{"id": "nowhere", "when": {"process": "missing"}}]},
+    }}
+    result = status(model, {}, root=repo)
+    assert [(s["process"], s["id"]) for s in result["a"]] == [("a", "build"), ("b", "test")]
+    assert [(s["process"], s["id"]) for s in result["b"]] == [("b", "test"), ("a", "build")]
+    assert "lost" not in result   # a process naming none that exists runs no script

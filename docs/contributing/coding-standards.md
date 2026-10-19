@@ -17,6 +17,7 @@ Decided once, not re-derived per file.
 - **`std::span`** over pointer + length pair in function signatures. The span carries the bound; the caller can't desync.
 - **Namespace `mm`** for everything in the project. Platform code lives in `mm::platform`. Tests live in `mm` (no `mm::test`, keeps the same names visible to test code as to library code).
 - **No `using namespace` in headers.** In a `.cpp`, `using namespace mm;` is allowed at file scope. In a header it pollutes every translation unit that includes it.
+- **Include what you use, and compare strings with `strcmp`.** Clang resolves standard headers transitively and merges identical literals; GCC in CI does neither, and macOS's libc++ hides a missing `<cstdint>` that Linux's libstdc++ shows.
 
 ### Naming
 
@@ -35,7 +36,7 @@ Use project typedefs (`lengthType`, `nrOfLightsType`) consistently so types matc
 ## Growing the codebase
 
 - **Consider extending before creating.** When adding a feature, check whether an existing module extends cleanly; a new file is fine if genuinely cleaner, but justify it.
-- **Reference, don't copy.** Prior art (friend repos, datasheets, our own prototype branches) holds proven approaches: study it, take the ideas, write our own code, never copy or trace the structure. Credits live in the [friend-repo digests](../friend-repos/index.md) and in each module's `@attribution`, listed in [the attribution catalog](../reference/attributions.md).
+- **Reference, don't copy.** Prior art (friend repos, datasheets, our own prototype branches) holds proven approaches: study it, take the ideas, write our own code, never copy or trace the structure. Credits live in the [friend-repo digests](../friend-repos/index.md) and in each module's `@attribution`, listed in [the attribution catalog](../reference/attributions.md). A friend repo's contract is read from its default branch after a fetch (`git show origin/main:<path>`), the one its users will have next.
 
 ## Values and types
 
@@ -85,6 +86,12 @@ carry_ += rate * time_.advance(elapsed());     // particles::FrameTime, 256 = on
 **Ask whether something upstream already scales it.** Do not scale a quantity twice. A fade requested through `Layer::fadeToBlackBy` is already scaled by the Layer, so an effect passes a rate and does nothing else. A fade requested only on frames that pass a wallclock gate gets throttled by the gate AND by the scale. When in doubt, write the two-rate test first.
 
 **A compounding spatial operation is not a rate.** `draw::blur` applied twice at half strength is not one blur at full strength. The carry pattern above does not transfer to it. Gate it in time and leave it at full strength.
+
+**A constant divisor is free; a runtime one in a per-light loop is not.** The compiler turns a constant divide into a multiply-high and a shift. A reciprocal for a runtime divisor needs a proven range over the caller's inputs, or the divide stays.
+
+**A host benchmark ranks nothing for Xtensa.** Compile a probe with the target compiler (`-O2 -S`), count its instructions, branches, calls and stack traffic, then flash the one winner. An arity is a template parameter, never a runtime argument.
+
+**A FreeRTOS wait is at least one tick.** `CONFIG_FREERTOS_HZ` is 100, so `pdMS_TO_TICKS` below 10 ms is 0 and a wait with it spins the task.
 
 ## Shaping a module
 
@@ -149,6 +156,11 @@ When a `switch (type)` outside the type's home file is legitimate: the caller ha
 - **User-soldered → leave it unset.** A MEMS mic, an LED strand or an LED-driver pin goes wherever the user ran the wire. Any default is then a guess that can drive a pin the user committed elsewhere. Empty until set; idle with a "set pins" status meanwhile (degraded is fine, crashed is not).
 
 A "default" that is one specific board's values is bespoke masquerading as standard. Make the capability opt-in and require each consumer to state its own values, so a missing declaration fails loudly instead of inheriting a stranger's wiring. Never auto-run a peripheral whose init can block on absent hardware. The design rationale, the MCU to deviceModel provenance model, is in [architecture.md, config provenance](../explanation/architecture/mooninstaller.md#config-provenance-mcu-devicemodel).
+
+### Storage
+
+- **A control binds the address of its member.** Control-backed storage is a plain member array sized by the cap, never a `ScratchBuffer`, which moves on a disable and re-enable.
+- **A large buffer lives on the heap, never inline.** `registerType` builds a throwaway instance on the main task's 8 KB stack, so an inline array that fits the S3 by luck panics the P4.
 
 ## Tooling and checks
 
@@ -216,6 +228,9 @@ Hard-won discipline for diagnosing hardware and infrastructure failures, distill
 - **Stop at the first failed fix on a working path.** Revert to the known-good state at attempt two rather than re-engineering a seam that already worked (§ *Anti-stalling* in CLAUDE.md).
 - **A generated artifact's ground truth is the rendered output, not a re-derivation.** Verify a doc anchor against the built HTML (`grep id=` the `.html`), not a reimplementation of the slug algorithm; verify an emitted machine instruction against the real toolchain's disassembler before flashing.
 - **A cross-boundary fact duplicated in code drifts silently; gate it.** A `docPath` in `main.cpp` pointing at a docs page, a firmware projection mirroring a build dict. The moment a check can resolve it against ground truth, that check is cheaper than the drift.
+- **Ask what would make a measurement read zero while the thing happens**: a symmetry, the background, a cached build. Then run it against code known to have the defect.
+- **Never pipe a build.** A pipe reports the last command's exit status, so a failed build reads as 0: redirect the output to a file and read `$?`.
+- **A destructive edit acts on fresh state.** Re-query right before a delete or an overwrite, since a listing from earlier is stale once the product owner acts in parallel. A scripted edit ends at its block's own end, asserts it matched once, and is read back with `git diff --stat`.
 
 Moved to [documentation-standards.md § Module pages](documentation-standards.md#module-pages): the two reader surfaces, the `///` rules, and how `docs/moonmodules/` mirrors `src/`. It is a documentation rule rather than a coding one, and it sits beside the prose rules it depends on.
 

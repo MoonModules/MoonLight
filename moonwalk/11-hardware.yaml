@@ -48,17 +48,17 @@ processes:
         say: Build the firmware for your board.
         when: { run: { script: moondeck/build/build_esp32.py, args: "--firmware <firmware>" } }
         detail: |
-          Pick the variant for your board in MoonDeck's Firmware menu, or pass its key. Build one firmware at a time: the variants share their managed components, so two builds at once corrupt each other. After an sdkconfig or toolchain change, compile for real rather than trusting a freshness check. A MoonBase variant also builds MoonBase: [MoonBase and the partition layout](reference/build-system.md#moonbase-and-the-partition-layout).
+          Pick the variant for your board in MoonDeck's Firmware menu, or pass its key. Build one firmware at a time: the variants share their managed components, so two builds at once corrupt each other. Iterate on the one board that runs the change; the other chip families build at the commit check. After an sdkconfig or toolchain change, compile for real rather than trusting a freshness check. A MoonBase variant also builds MoonBase: [MoonBase and the partition layout](reference/build-system.md#moonbase-and-the-partition-layout).
       - id: flash
         say: Flash it over USB.
         when: { manual: "flash_esp32.py --firmware <name> --port <port>, or the Flash card with the port picked." }
         detail: |
-          Probe the ports again first, since they drift between sessions. On Windows the port is a `COM` name, and no port at all means a missing driver: [Install the USB-serial driver on Windows](moonwalk.md#windows-serial-drivers). The web installer flashes the same images, the S31 included.
+          Probe the ports again first, since they drift between sessions. Confirm the flash size with esptool's `flash_id` rather than a registry, since a variant built for another size boot-loops. On Windows the port is a `COM` name, and no port at all means a missing driver: [Install the USB-serial driver on Windows](moonwalk.md#windows-serial-drivers). The web installer flashes the same images, the S31 included.
       - id: monitor
         say: Watch its log over USB.
         when: { manual: "monitor_esp32.py --port <port>, or the Monitor card." }
         detail: |
-          A silent reset is a hardware question before a software one. A watchdog reset with no panic, both CPUs stopped and the program counter inside the panic handler mean the flash cache is gone. That is a pin fault far more often than a code fault, so check the package before theorizing about the code.
+          A silent reset is a hardware question before a software one. A watchdog reset with no panic, both CPUs stopped and the program counter inside the panic handler mean the flash cache is gone. That is a pin fault far more often than a code fault, so check the package before theorizing about the code. Reset a native-USB board (`/dev/cu.usbmodem*`) through esptool's hard reset rather than by toggling DTR and RTS, which its ROM reads as a boot-mode command.
   - id: ota-board
     title: Update a running board over the network
     actor: contributor
@@ -72,6 +72,12 @@ processes:
       properties:
         moonbase: { type: string, enum: [With MoonBase, Without MoonBase], description: "Does the board's variant carry MoonBase?" }
     steps:
+      - id: install-moonbase
+        say: Install MoonBase from the app.
+        given: [{ input: moonbase, equals: With MoonBase }]
+        when: { run: { command: "curl -X POST --http1.1 -H \"Expect:\" --data-binary @build/moonbase-<chip>/MoonLight-moonbase.bin http://<device>/api/firmware/moonbase-update" } }
+        detail: |
+          Once, on a board that has none yet.
       - id: to-moonbase
         say: Reboot the app into MoonBase.
         given: [{ input: moonbase, equals: With MoonBase }]

@@ -52,7 +52,7 @@ The add returns the **name** the device gave the module, which is what every lat
 
 | Endpoint | Body | Does |
 |---|---|---|
-| `POST /api/modules` | `{"type":…,"parent_id":…,"id":…}` | Adds a module named `id`, or after its type when `id` is absent, and returns its name; a name in use answers 409 |
+| `POST /api/modules` | `{"type":…,"parent_id":…,"id":…}` | Adds a module named `id`, at most 15 characters, or after its type when `id` is absent, and returns its name; a name in use answers 409 |
 | `POST /api/control` | `{"module":…,"control":…,"value":…}` | Sets one control |
 | `PATCH /api/state` | a state document | Sets any part of the tree in one call: controls, new modules, removals |
 | `DELETE /api/modules/<name>` | | Removes a module and its children |
