@@ -2863,32 +2863,31 @@ size_t takeTestUsbMidiSent(uint8_t (*packets)[4], size_t max) {
     return n;
 }
 
-// No grabber on the computer, so USB video here is a stand-in that the capture tests drive.
+// No grabber on the computer, so USB video here is a stand-in that the capture tests drive. The test thread and the capture task share it, so what both touch is atomic.
 namespace {
 struct TestGrabber {
-    std::vector<VideoCaptureFormat> formats;
-    uint32_t generation = 0;
-    uint16_t openW = 0, openH = 0;   ///< the mode videoCaptureInit settled on
+    std::vector<VideoCaptureFormat> formats;   ///< written by a test while no capture runs
+    std::atomic<uint32_t> generation{0};
+    uint16_t openW = 0, openH = 0;   ///< the mode videoCaptureInit settled on, before the task starts
     uint8_t openFps = 0;             ///< and the rate it delivers at
-    uint8_t r = 0, g = 0, b = 0;     ///< what a decode writes into every pixel
-    bool decodeFails = false;
-    bool open = false;
-    VideoCaptureStats stats;
+    std::atomic<uint8_t> r{0}, g{0}, b{0};   ///< what a decode writes into every pixel
+    std::atomic<bool> decodeFails{false};
+    std::atomic<bool> open{false};
+    std::atomic<uint32_t> decoded{0}, failed{0};
 } g_grabber;
 // How far `have` is from `want`, so the nearest advertised mode can be picked without <cstdlib>.
 long apart(long have, long want) { return have > want ? have - want : want - have; }
+// Halve `w` x `h` until it fits `maxW` x `maxH`, which is the scaling the decode hardware offers; false when even one pixel does not fit.
+bool halveToFit(uint16_t& w, uint16_t& h, uint16_t maxW, uint16_t maxH) {
+    while ((w > maxW || h > maxH) && w > 1 && h > 1) { w = uint16_t(w / 2); h = uint16_t(h / 2); }
+    return w <= maxW && h <= maxH;
+}
 }  // namespace
 
-size_t videoCaptureFormats(VideoCaptureFormat* out, size_t max) {
-    size_t n = 0;
-    for (; n < max && n < g_grabber.formats.size(); n++) out[n] = g_grabber.formats[n];
-    return n;
-}
-
-uint32_t videoCaptureFormatGeneration() MM_NONBLOCKING { return g_grabber.generation; }
+uint32_t videoCaptureFormatGeneration() MM_NONBLOCKING { return g_grabber.generation.load(); }
 
 bool videoCaptureInit(VideoCaptureHandle& h, uint16_t width, uint16_t height, uint8_t fps) {
-    if (g_grabber.formats.empty()) return false;
+    if (g_grabber.formats.empty() || g_grabber.open) return false;   // one owner at a time, as a device is claimed once
     // The nearest advertised mode by area then by rate, as a grabber settles a request it cannot meet.
     const VideoCaptureFormat* best = nullptr;
     long bestCost = 0;
@@ -2899,39 +2898,50 @@ bool videoCaptureInit(VideoCaptureHandle& h, uint16_t width, uint16_t height, ui
     g_grabber.openW = best->width;
     g_grabber.openH = best->height;
     g_grabber.openFps = best->fps;
+    g_grabber.decoded = 0;
+    g_grabber.failed = 0;
     g_grabber.open = true;
-    g_grabber.stats = VideoCaptureStats{};
     h.impl = &g_grabber;
     return true;
 }
 
-bool videoCaptureDecodeInto(VideoCaptureHandle& h, uint8_t* dst, uint16_t maxWidth, uint16_t maxHeight,
-                            uint16_t& outWidth, uint16_t& outHeight, uint32_t /*timeoutMs*/) {
+bool videoCaptureAwaitFrame(VideoCaptureHandle& h, uint32_t timeoutMs) {
     if (!h.impl || !g_grabber.open) return false;
-    // Paced at the mode's rate, since a caller looping on a grabber that answered at once would spin.
-    std::this_thread::sleep_for(std::chrono::milliseconds(g_grabber.openFps ? 1000 / g_grabber.openFps : 33));
-    if (g_grabber.decodeFails) { g_grabber.stats.failed++; return false; }
-    // Halved until it fits, which is the scaling the decode hardware offers.
+    // A frame every period of the mode's rate; a period longer than the wait answers no frame yet.
+    const uint32_t period = g_grabber.openFps ? 1000u / g_grabber.openFps : 33u;
+    std::this_thread::sleep_for(std::chrono::milliseconds(period < timeoutMs ? period : timeoutMs));
+    return period <= timeoutMs;
+}
+
+bool videoCaptureDecodeInto(VideoCaptureHandle& h, uint8_t* dst, uint16_t maxWidth, uint16_t maxHeight,
+                            uint16_t& outWidth, uint16_t& outHeight) {
+    if (!h.impl || !g_grabber.open) return false;
+    if (g_grabber.decodeFails) { g_grabber.failed++; return false; }
     uint16_t w = g_grabber.openW, hh = g_grabber.openH;
-    while ((w > maxWidth || hh > maxHeight) && w > 1 && hh > 1) { w = uint16_t(w / 2); hh = uint16_t(hh / 2); }
-    if (w > maxWidth || hh > maxHeight) { g_grabber.stats.failed++; return false; }
+    if (!halveToFit(w, hh, maxWidth, maxHeight)) { g_grabber.failed++; return false; }
+    const uint8_t r = g_grabber.r, g = g_grabber.g, b = g_grabber.b;
     for (size_t i = 0, px = size_t(w) * hh; i < px; i++) {
-        dst[i * 3 + 0] = g_grabber.r;
-        dst[i * 3 + 1] = g_grabber.g;
-        dst[i * 3 + 2] = g_grabber.b;
+        dst[i * 3 + 0] = r;
+        dst[i * 3 + 1] = g;
+        dst[i * 3 + 2] = b;
     }
     outWidth = w;
     outHeight = hh;
-    g_grabber.stats.decoded++;
+    g_grabber.decoded++;
     return true;
 }
 
 void videoCaptureDeinit(VideoCaptureHandle& h) {
-    g_grabber.open = false;
+    if (h.impl == &g_grabber) g_grabber.open = false;   // only the owning handle closes it
     h.impl = nullptr;
 }
 
-VideoCaptureStats videoCaptureStats() MM_NONBLOCKING { return g_grabber.stats; }
+VideoCaptureStats videoCaptureStats() MM_NONBLOCKING {
+    VideoCaptureStats s;
+    s.decoded = g_grabber.decoded.load();
+    s.failed = g_grabber.failed.load();
+    return s;
+}
 
 void setTestVideoCaptureFormats(const VideoCaptureFormat* formats, size_t count) {
     g_grabber.formats.assign(formats, formats + count);
@@ -3049,7 +3059,7 @@ bool ndiLoad() {
     }
     // NDIlib_initialize returns false when the CPU is unsupported, a real "cannot use it" that must not read as "installed and working".
     if (!ndiInit_()) { ndiSendVideo_ = nullptr; return false; }
-    // NDIlib_destroy pairs with NDIlib_initialize at process exit, since a sender may reopen later in the same run. Only with no sender open: a quit closes it first, while a reboot exits with the render thread still sending, where the process ending is the teardown.
+    // NDIlib_destroy pairs with NDIlib_initialize at process exit, since a sender may reopen later in the same run. Only with no sender open: a reboot exits with the render thread still sending, and the process ending is the teardown.
     std::atexit([]() { if (ndiDestroy_ && !ndiSender_) ndiDestroy_(); });
     return true;
 }

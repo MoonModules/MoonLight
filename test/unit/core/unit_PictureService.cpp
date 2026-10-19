@@ -152,6 +152,24 @@ bool publishedPast(uint32_t was) {
     }
     return false;
 }
+// Whether the grabber has answered `n` decodes, passed or refused, within two seconds: the task's own count rather than a guess at its pace.
+bool decodedAtLeast(uint32_t n) {
+    for (int i = 0; i < 400; i++) {
+        const mm::platform::VideoCaptureStats st = mm::platform::videoCaptureStats();
+        if (st.decoded + st.failed >= n) return true;
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+    return false;
+}
+// The status line once tick1s finds the lock free, which a publishing task holds only for a swap.
+std::string captureStatus(mm::PictureService& svc) {
+    for (int i = 0; i < 400; i++) {
+        svc.tick1s();
+        if (svc.status() && std::strchr(svc.status(), 'x')) return svc.status();
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+    return {};
+}
 // The capture source, started on a service sized `w` x `h`; false when no picture arrived.
 bool startCapture(Picture& p, uint32_t& was) {
     p.svc.source = mm::PictureService::kUsbCapture;
@@ -196,7 +214,7 @@ TEST_CASE("a frame the decoder refuses publishes nothing, and recovery publishes
     p.svc.source = mm::PictureService::kUsbCapture;
     p.svc.prepare();
     const uint32_t settled = current().generation;
-    std::this_thread::sleep_for(std::chrono::milliseconds(80));   // the task has looped many times by now
+    REQUIRE(decodedAtLeast(3));   // three refusals answered
     CHECK(generationNow(settled) == settled);
     mm::platform::setTestVideoCaptureDecodeFails(false);
     CHECK(publishedPast(settled));
@@ -209,11 +227,35 @@ TEST_CASE("the capture status counts the frames that landed and those lost") {
     Picture p(64, 48);
     uint32_t was = 0;
     REQUIRE(startCapture(p, was));
-    p.svc.tick1s();
-    REQUIRE(p.svc.status() != nullptr);
-    const std::string line = p.svc.status();
-    CHECK(line.rfind("40 x 30", 0) == 0);   // 320 x 240 halved three times to fit 64 x 48
-    CHECK(line.find(" lost") != std::string::npos);
+    const std::string line = captureStatus(p.svc);
+    CHECK(line.rfind("40 x 30, ", 0) == 0);   // 320 x 240 halved three times to fit 64 x 48
+    CHECK(line.find(" frames, 0 lost") != std::string::npos);
+    CHECK(line.find(" 0 frames") == std::string::npos);   // the picture that arrived is counted
+    CHECK(line.find("one picture") == std::string::npos);
+    CHECK(p.svc.severity() == mm::MoonModule::Severity::Status);
+    p.svc.release();
+}
+
+// Short of memory for a second picture, the capture still publishes and readers still read. The task holds the one picture only while it decodes, never while it waits for a frame.
+TEST_CASE("the usb capture with one picture publishes, and the status says it runs on one") {
+    Grabber g(320, 240, 30, 7, 7, 7);
+    Picture p(64, 48);
+    mm::platform::setTestMaxAllocBlock(64u * 48u * 3u - 1);   // the optional picture finds no block
+    uint32_t was = 0;
+    const bool published = startCapture(p, was);
+    mm::platform::setTestMaxAllocBlock(0);
+    REQUIRE(published);
+    CHECK_FALSE(p.svc.twoBuffers());
+    int reads = 0;
+    const uint32_t target = mm::platform::videoCaptureStats().decoded + 3;
+    while (mm::platform::videoCaptureStats().decoded < target) {
+        const mm::PictureService::Reader r;
+        if (r) reads++;
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    CHECK(reads > 0);
+    CHECK(captureStatus(p.svc).find(", one picture") != std::string::npos);
+    CHECK(p.svc.severity() == mm::MoonModule::Severity::Warning);
     p.svc.release();
 }
 
@@ -225,9 +267,9 @@ TEST_CASE("switching away from the capture stops its task") {
     REQUIRE(startCapture(p, was));
     p.svc.source = mm::PictureService::kTestPattern;
     p.svc.prepare();
-    const uint32_t settled = current().generation;
-    std::this_thread::sleep_for(std::chrono::milliseconds(80));   // a decode left running would publish here
-    CHECK(generationNow(settled) == settled);
+    mm::platform::VideoCaptureHandle again;
+    CHECK(mm::platform::videoCaptureInit(again, 320, 240, 30));   // the grabber was let go, so it opens anew
+    mm::platform::videoCaptureDeinit(again);
     const mm::PictureFrame f = current();
     CHECK(f.width == 160);
     CHECK(f.height == 120);

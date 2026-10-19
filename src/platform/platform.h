@@ -1457,21 +1457,18 @@ struct VideoCaptureFormat {
     uint8_t  fps = 0;      ///< frames a second offered at that size
 };
 
-/// Modes kept per device; a grabber lists its largest first, so a low cap hides the cheap ones.
-constexpr size_t kVideoCaptureMaxFormats = 64;
-
-/// Fill `out` with up to `max` advertised modes and answer the count; 0 means no device has been seen.
-size_t videoCaptureFormats(VideoCaptureFormat* out, size_t max);
-
 /// Bumped whenever that list is rewritten, which is when a device enumerates; 0 until then.
 uint32_t videoCaptureFormatGeneration() MM_NONBLOCKING;
 
 /// Claim the first grabber and stream MJPEG near this mode; false when none is attached or none fits.
 bool videoCaptureInit(VideoCaptureHandle& h, uint16_t width, uint16_t height, uint8_t fps);
 
-/// Decode the next frame into `dst`, scaled down to fit `maxWidth` x `maxHeight` x 3 bytes, top row first.
+/// Wait up to `timeoutMs` for the next frame; true once one is ready to decode.
+bool videoCaptureAwaitFrame(VideoCaptureHandle& h, uint32_t timeoutMs);
+
+/// Decode the frame videoCaptureAwaitFrame announced into `dst`, scaled down to fit `maxWidth` x `maxHeight` x 3 bytes, top row first.
 bool videoCaptureDecodeInto(VideoCaptureHandle& h, uint8_t* dst, uint16_t maxWidth, uint16_t maxHeight,
-                            uint16_t& outWidth, uint16_t& outHeight, uint32_t timeoutMs);
+                            uint16_t& outWidth, uint16_t& outHeight);
 
 /// Release the device and free its buffers.
 void videoCaptureDeinit(VideoCaptureHandle& h);

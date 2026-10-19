@@ -28,15 +28,13 @@ public:
     ~PictureService() override { stopCapture(); }
 
     /// The sources `source` picks from, in option order.
-    enum Source : uint8_t { kTestPattern, kUsbCapture, kSourceAll };
-    /// The options offered, which leaves out USB capture on a target with no USB host.
-    static constexpr uint8_t kSourceCount = platform::hasUsbVideo ? kSourceAll : kSourceAll - 1;
+    enum Source : uint8_t { kTestPattern, kUsbCapture, kSourceCount };
     /// Where the picture comes from.
     /// @guide The test pattern is a test card in the layout of Philips' PM5544, drawn at any size. **usb capture** decodes MJPEG from an HDMI grabber, scaled to fit.
     uint8_t source = kTestPattern;
     /// Frames a second asked of a capture device, which streams the nearest rate it offers.
     uint8_t fps = 30;
-    /// The picture's width in pixels, and a ceiling for a capture, which scales its frames down to fit.
+    /// The picture's width in pixels, and the most a capture scales its frames to.
     uint16_t width = 64;
     /// The picture's height in pixels, under the same ceiling as the width.
     uint16_t height = 48;
@@ -73,6 +71,8 @@ public:
             return false;
         }
         front_ = a_.data();
+        bufW_ = width;
+        bufH_ = height;
         back_ = writerTask && secondFits(bytes) && b_.resize(bytes) ? b_.data() : nullptr;
         if (!back_) b_.resize(0);
         if (writerTask && !back_) setStatus("one picture buffer: not enough memory, a capture may skip frames", Severity::Warning);
@@ -90,8 +90,10 @@ public:
         while (!lock_.tryAcquire()) platform::yield();   // readers hold it for one gather at most
         return front_;
     }
-    /// Publish what beginWrite handed out at the size written, for a source that cannot hit the one it asked for.
+    /// Publish what beginWrite handed out at the size written, for a source that cannot hit the one it asked for; a size past the picture's is clamped to it.
     void endWrite(uint16_t w, uint16_t h) {
+        if (w > bufW_) w = bufW_;
+        if (h > bufH_) h = bufH_;
         if (back_) {
             while (!lock_.tryAcquire()) platform::yield();
             uint8_t* filled = back_;
@@ -102,8 +104,8 @@ public:
         lock_.release();
     }
     /// Publish what beginWrite handed out: swap the two pictures, or unlock the one, and bump the generation.
-    void endWrite() { endWrite(width, height); }
-    /// Give back what beginWrite handed out without publishing it, for a frame that never arrived.
+    void endWrite() { endWrite(bufW_, bufH_); }
+    /// Give back what beginWrite handed out without publishing it; with one picture, what a failed decode already wrote stays in it.
     void abortWrite() { if (!back_) lock_.release(); }
 
     /// Re-claim an empty seat, so removing the active service lets a survivor take over.
@@ -119,12 +121,14 @@ public:
     /// Name the capture's health once a second: the size it publishes, the frames that landed and those lost.
     void tick1s() MM_NONBLOCKING override {
         if (source != kUsbCapture || !task_.impl) return;
+        if (!lock_.tryAcquire()) return;   // the decode task is publishing: the next second reads it
+        const unsigned w = frame_.width, h = frame_.height;
+        lock_.release();
         const platform::VideoCaptureStats st = platform::videoCaptureStats();
         const uint32_t lost = st.dropped + st.failed;
-        mm::formatTo(status_, sizeof(status_), "%u x %u, %u frames, %u lost",
-                     static_cast<unsigned>(frame_.width), static_cast<unsigned>(frame_.height),
-                     static_cast<unsigned>(st.decoded), static_cast<unsigned>(lost));
-        setStatus(status_, lost ? Severity::Warning : Severity::Status);
+        mm::formatTo(status_, sizeof(status_), "%u x %u, %u frames, %u lost%s", w, h,
+                     static_cast<unsigned>(st.decoded), static_cast<unsigned>(lost), back_ ? "" : ", one picture");
+        setStatus(status_, lost || !back_ ? Severity::Warning : Severity::Status);
     }
 
     /// What a consumer reads with no source: a class constant, since a function-local static needs a guard on first use.
@@ -236,9 +240,9 @@ private:
 
     static constexpr uint16_t kMaxSide = 512;   ///< a side above this exceeds what a board holds for one picture
     /// Which sources write from a task of their own, in `source` order; the test pattern is drawn at prepare.
-    static constexpr bool kRunsInTask[kSourceAll] = {false, true};
-    /// How long a decode waits for a frame before looping, so a stop is noticed without a grabber sending.
-    static constexpr uint32_t kDecodeWaitMs = 200;
+    static constexpr bool kRunsInTask[kSourceCount] = {false, true};
+    /// How long the task waits for a frame before checking for a stop, which bounds how long a control change waits on it.
+    static constexpr uint32_t kFrameWaitMs = 50;
 
     /// Open the grabber and decode on a task of its own, so the render loop never waits on the device.
     void startCapture() {
@@ -254,7 +258,7 @@ private:
             setStatus("no task for the capture", Severity::Error);
             return;
         }
-        clearStatus();
+        if (back_) clearStatus();   // with one picture, prepareBuffers' warning stays until the first status line
     }
 
     /// Stop the decode and release the device, in that order, so nothing writes a picture that has moved.
@@ -268,13 +272,15 @@ private:
 
     static void captureTrampoline(void* self) { static_cast<PictureService*>(self)->runCapture(); }
 
-    /// Decode each frame straight into the back picture and publish it, until prepare or release stops it.
+    /// Wait for a frame, then decode it straight into the back picture and publish it, until prepare or release stops it.
     void runCapture() {
         while (!stop_.load(std::memory_order_acquire)) {
+            // The wait comes before beginWrite, so with one picture the lock covers the decode alone and readers sample between frames.
+            if (!platform::videoCaptureAwaitFrame(capture_, kFrameWaitMs)) continue;
             uint16_t w = 0, h = 0;
             uint8_t* px = beginWrite();
-            if (platform::videoCaptureDecodeInto(capture_, px, width, height, w, h, kDecodeWaitMs)) endWrite(w, h);
-            else abortWrite();   // no frame: the lights keep the one they have rather than a new generation of nothing
+            if (platform::videoCaptureDecodeInto(capture_, px, bufW_, bufH_, w, h)) endWrite(w, h);   // the size the pictures hold, never a control a write changed since
+            else abortWrite();   // a refused frame: the lights keep the one they have rather than a new generation of nothing
         }
     }
 
@@ -290,6 +296,7 @@ private:
     uint8_t* front_ = nullptr;   ///< what readers see
     uint8_t* back_ = nullptr;    ///< what a writer fills, or null with one picture
     PictureFrame frame_;         ///< the front picture, as a Reader hands it out
+    uint16_t bufW_ = 0, bufH_ = 0;   ///< the size the pictures were allocated at, which a writer fills; the controls may already say otherwise
     TryLock lock_;               ///< held by a reader for its gather, by the writer to swap or to fill the only picture
     platform::VideoCaptureHandle capture_;   ///< the open grabber, or an empty handle
     platform::WorkerTask task_;              ///< the decode task, or an empty handle
