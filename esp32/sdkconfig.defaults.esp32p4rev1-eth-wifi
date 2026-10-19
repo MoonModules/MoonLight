@@ -97,3 +97,6 @@ CONFIG_PM_SLEEP_CLK_ICG_ENABLE=n
 # task 1 to 10 changed nothing, and IDF's esp_http_server runs at priority 5 anyway), and Nagle
 # with delayed ACK (TCP_NODELAY changed neither build). See docs/backlog for what would settle it.
 CONFIG_LWIP_TCPIP_TASK_PRIO=23
+
+# ESP-Hosted's transport buffers in PSRAM, which the P4's DMA reaches. A global constructor allocates them before the scheduler starts, when the P4 has 148 KB of internal RAM, the rest still holding the startup stacks: in internal RAM they took 123 KB of it and the idle task could not be placed, a boot loop (#146).
+CONFIG_ESP_HOSTED_MEMPOOL_PREFER_SPIRAM=y
