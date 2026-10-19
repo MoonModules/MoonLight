@@ -215,6 +215,28 @@ TEST_CASE("a buffer truncated at every interesting point reports Truncated rathe
     CHECK(parseHeader(full.data(), 32 + 2 * 6, hdrExact) == ParseError::None);
 }
 
+TEST_CASE("a v1 header with 0 channels is Empty, not a crash waiting to happen") {
+    const auto buf = makeV1(32, /*channelCount=*/0, /*frameCount=*/10, 25);
+    FseqHeader hdr;
+    CHECK(parseHeader(buf.data(), buf.size(), hdr) == ParseError::Empty);
+}
+
+TEST_CASE("a v1 header with 0 frames is Empty") {
+    const auto buf = makeV1(32, /*channelCount=*/100, /*frameCount=*/0, 25);
+    FseqHeader hdr;
+    CHECK(parseHeader(buf.data(), buf.size(), hdr) == ParseError::Empty);
+}
+
+TEST_CASE("a v2 header with 0 channels or 0 frames is Empty before any v2-only field is read") {
+    const auto buf1 = makeV2(32, /*channelCount=*/0, /*frameCount=*/10, 25, 0, 0, {});
+    FseqHeader hdr1;
+    CHECK(parseHeader(buf1.data(), buf1.size(), hdr1) == ParseError::Empty);
+
+    const auto buf2 = makeV2(32, /*channelCount=*/100, /*frameCount=*/0, 25, 0, 0, {});
+    FseqHeader hdr2;
+    CHECK(parseHeader(buf2.data(), buf2.size(), hdr2) == ParseError::Empty);
+}
+
 TEST_CASE("channelDataOffset overlapping the v1 fixed header is refused") {
     auto buf = makeV1(/*channelDataOffset=*/32, 10, 1, 25);
     putU16(buf, 4, 20);   // claims frame 0 starts inside the 32-byte fixed header

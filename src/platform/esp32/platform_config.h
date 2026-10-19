@@ -259,6 +259,8 @@ constexpr bool hasSdCard = true;
 #else
 constexpr bool hasSdCard = false;
 #endif
+/// `zlibInflateAll`'s real decoder lives in the SD-card source file, so it is linked only where hasSdCard is; a flash-only board gets the inert stub. Tracked separately, not this flag's job to fix.
+constexpr bool hasZlibInflate = hasSdCard;
 /// False: SdCardService offers only the board presets this chip can wire.
 constexpr bool previewsSdPresets = false;
 

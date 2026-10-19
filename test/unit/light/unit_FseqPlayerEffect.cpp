@@ -26,7 +26,7 @@ fseq::FseqHeader makeHeader(uint32_t channelCount, uint32_t frameCount, uint8_t 
     return h;
 }
 
-// A one-frame v1 FSEQ file whose light k's red byte is k + 1, as a real exporter writes wiring order, so a test can tell which wiring position a byte reached.
+// A one-frame v1 FSEQ file whose light k's red byte is k + 1, matching a real exporter's wiring order; a test can tell which position a byte reached.
 std::vector<uint8_t> makeFseqV1BytesNumbered(uint16_t lights) {
     const uint32_t channelCount = static_cast<uint32_t>(lights) * 3;
     std::vector<uint8_t> b(32 + channelCount, 0);
@@ -110,6 +110,23 @@ std::vector<uint8_t> makeFseqV1BytesWithOffset(uint16_t channelDataOffset, uint3
     b[18] = 25;
     for (uint32_t f = 0; f < frameCount; f++)
         std::memset(b.data() + channelDataOffset + static_cast<size_t>(f) * channelCount, static_cast<int>(f), channelCount);
+    return b;
+}
+
+// A v2 file declaring zlib compression, with `blockCount` (empty) entries in its compression block table.
+std::vector<uint8_t> makeFseqV2ZlibBytes(uint32_t channelCount, uint32_t frameCount, uint8_t blockCount) {
+    const size_t channelDataOffset = 32 + static_cast<size_t>(blockCount) * 8;
+    std::vector<uint8_t> b(channelDataOffset + static_cast<size_t>(channelCount) * frameCount, 0);
+    std::memcpy(b.data(), "PSEQ", 4);
+    b[4] = static_cast<uint8_t>(channelDataOffset & 0xFF);
+    b[5] = static_cast<uint8_t>(channelDataOffset >> 8);
+    b[6] = 0; b[7] = 2;   // minor=0, major=2
+    for (int i = 0; i < 4; i++) b[10 + i] = static_cast<uint8_t>(channelCount >> (8 * i));
+    for (int i = 0; i < 4; i++) b[14 + i] = static_cast<uint8_t>(frameCount >> (8 * i));
+    b[18] = 25;
+    b[20] = 2;   // compressionType = zlib
+    b[21] = blockCount;
+    b[22] = 0;   // sparseRangeCount
     return b;
 }
 
@@ -446,18 +463,81 @@ TEST_CASE("shuffle's cursor never repeats the row it just left") {
 
 TEST_CASE("the recursive scan's path join never doubles the slash at the SD root, and truncates safely") {
     char out[32];
-    FseqPlayerEffect::joinPathForTest("/sd", "show.fseq", out, sizeof(out));
+    CHECK(FseqPlayerEffect::joinPathForTest("/sd", "show.fseq", out, sizeof(out)));
     CHECK(std::string(out) == "/sd/show.fseq");
 
-    FseqPlayerEffect::joinPathForTest("/sd/shows", "intro.fseq", out, sizeof(out));
+    CHECK(FseqPlayerEffect::joinPathForTest("/sd/shows", "intro.fseq", out, sizeof(out)));
     CHECK(std::string(out) == "/sd/shows/intro.fseq");
 
-    FseqPlayerEffect::joinPathForTest("/sd/shows/", "intro.fseq", out, sizeof(out));
+    CHECK(FseqPlayerEffect::joinPathForTest("/sd/shows/", "intro.fseq", out, sizeof(out)));
     CHECK(std::string(out) == "/sd/shows/intro.fseq");   // trailing slash on dir: no double "//"
 
     char small[6];
-    FseqPlayerEffect::joinPathForTest("/sd/shows", "averylongname.fseq", small, sizeof(small));
+    CHECK_FALSE(FseqPlayerEffect::joinPathForTest("/sd/shows", "averylongname.fseq", small, sizeof(small)));
     CHECK(std::strlen(small) < sizeof(small));   // truncated, still NUL-terminated, never overrun
+}
+
+TEST_CASE("a header with 0 channels or 0 frames fails to load with its own status, not out of memory") {
+    SdFixture sd;
+    sd.writeFseq("/sd/empty.fseq", makeFseqV1Bytes(/*channelCount=*/10, /*frameCount=*/0));
+    Scene s;
+    auto& e = s.effect;
+    e.setup();
+    uint32_t id = 0;
+    REQUIRE(e.addListRow(id));
+
+    e.onControlChanged("play");
+    CHECK(e.stateForTest() == FseqPlayerEffect::PlayState::Stopped);
+    REQUIRE(e.status() != nullptr);
+    CHECK(std::string(e.status()) == "empty show: 0 channels or frames");
+    CHECK(e.severity() == MoonModule::Severity::Error);
+}
+
+TEST_CASE("a zlib file fails to load on desktop with its own status, not a generic read failure") {
+    SdFixture sd;
+    sd.writeFseq("/sd/z.fseq", makeFseqV2ZlibBytes(/*channelCount=*/10, /*frameCount=*/5, /*blockCount=*/2));
+    Scene s;
+    auto& e = s.effect;
+    e.setup();
+    uint32_t id = 0;
+    REQUIRE(e.addListRow(id));
+
+    e.onControlChanged("play");
+    CHECK(e.stateForTest() == FseqPlayerEffect::PlayState::Stopped);
+    REQUIRE(e.status() != nullptr);
+    CHECK(std::string(e.status()) == "zlib plays on ESP32 only");
+}
+
+TEST_CASE("a zlib file declaring no compression blocks is refused by name, before the platform check") {
+    SdFixture sd;
+    sd.writeFseq("/sd/z0.fseq", makeFseqV2ZlibBytes(/*channelCount=*/10, /*frameCount=*/5, /*blockCount=*/0));
+    Scene s;
+    auto& e = s.effect;
+    e.setup();
+    uint32_t id = 0;
+    REQUIRE(e.addListRow(id));
+
+    e.onControlChanged("play");
+    CHECK(e.stateForTest() == FseqPlayerEffect::PlayState::Stopped);
+    REQUIRE(e.status() != nullptr);
+    CHECK(std::string(e.status()) == "zlib file declares no compression blocks");
+}
+
+TEST_CASE("a scanned name past kPathCap is skipped, not truncated into a different file, with a named warning") {
+    SdFixture sd;
+    sd.writeFseq("/sd/good.fseq", makeFseqV1Bytes(10, 2));
+    const std::string longName(200, 'x');   // past kPathCap (192)
+    sd.writeFseq(("/sd/" + longName + ".fseq").c_str(), makeFseqV1Bytes(10, 2));
+
+    Scene s;
+    auto& e = s.effect;
+    e.setup();   // rescans once on its own
+
+    uint32_t id = 0;
+    REQUIRE(e.addListRow(id));
+    CHECK(e.listRowCount() == 1);   // the oversized name was skipped; the short one still scanned
+    REQUIRE(e.status() != nullptr);
+    CHECK(std::string(e.status()).find("too long") != std::string::npos);
 }
 
 TEST_CASE("fpsSource=manual: the fps slider sets the playback rate directly, ignoring the file's own step time") {

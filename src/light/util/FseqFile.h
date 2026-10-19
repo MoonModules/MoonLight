@@ -57,6 +57,7 @@ enum class ParseError : uint8_t {
     UnsupportedCompression,   ///< zstd (type 1): no decoder exists in this build, not a malformed file
     TooManySparseRanges,      ///< non-fatal: the table was clipped to kMaxSparseRanges and parsed anyway
     Truncated,                ///< buffer ends before a field/table this header claims to have
+    Empty,                    ///< 0 channels or 0 frames: a real header, nothing to play
 };
 
 /// A file's declared compression, read from header byte 20 (v2 only).
@@ -148,6 +149,7 @@ inline ParseError parseHeader(const uint8_t* buf, size_t len, FseqHeader& out) {
     out.stepTimeMs = buf[18];
 
     if (out.majorVersion != 1 && out.majorVersion != 2) return ParseError::UnsupportedVersion;
+    if (out.channelCount == 0 || out.frameCount == 0) return ParseError::Empty;
     if (out.majorVersion == 1) {
         if (out.channelDataOffset < 32) return ParseError::Truncated;
         return ParseError::None;   // v1 has no compression/sparse fields

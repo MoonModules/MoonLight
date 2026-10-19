@@ -106,6 +106,9 @@ constexpr bool hasSdCard = true;
 /// False: SdCardService offers only the socket this board wires.
 constexpr bool previewsSdPresets = false;
 
+/// False: no zlib decoder is linked here; `zlibInflateAll` is a stub.
+constexpr bool hasZlibInflate = false;
+
 /// The bits a call to emitted code adds to its address. Thumb state: a Cortex-M7 runs only Thumb code, and a call address carries it in bit 0.
 constexpr uintptr_t codeAddressBits = 1;
 

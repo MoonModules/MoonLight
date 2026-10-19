@@ -125,6 +125,9 @@ constexpr bool hasSdCard = true;
 /// True: no slot is wired, so SdCardService offers every board preset, for the tests to exercise them.
 constexpr bool previewsSdPresets = true;
 
+/// False: no zlib decoder is linked here; `zlibInflateAll` is a stub.
+constexpr bool hasZlibInflate = false;
+
 } // namespace mm::platform
 
 // 1 on arm64 and x86-64; any other host ISA falls through and compiles scripts to a clean failure.

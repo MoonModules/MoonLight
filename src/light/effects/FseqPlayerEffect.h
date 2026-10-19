@@ -69,11 +69,19 @@ namespace mm {
 ///
 /// Zlib (type 2) decodes through the ESP32 ROM's `tinfl_decompress` at zero flash cost and is ESP32-only to play (every target parses it). Zstd (type 1) has no decoder yet, reported as its own status, not a bug.
 ///
-/// ## A corrupt file degrades, never overflows
+/// `platform::hasZlibInflate` is checked in `loadTrack`, so a zlib file on desktop or Teensy is refused up front with its own status rather than failing mid-playback on the first compressed block.
+///
+/// ## A corrupt or unusual file degrades, never overflows
 ///
 /// `channelCount` sizes `frameBuf_` directly, however large; the allocation is checked for success, so a hostile value fails cleanly rather than writing into a null or short buffer.
 ///
 /// A compression block's table entry is validated (`fseq::validateBlockRange`) before any buffer is sized by it: a non-advancing entry or an overflowing byte count is refused rather than read.
+///
+/// A header with 0 channels or 0 frames is refused by the parser itself, not left to surface as "out of memory" and a looping playlist reopening it every tick.
+///
+/// A zlib file whose compression block table is empty is refused by name in `loadTrack`, rather than surfacing as a generic mid-file read failure on the first decode.
+///
+/// A scanned name or joined path past `kPathCap` is skipped rather than silently truncated into a different file, with one status line naming that something was.
 ///
 /// ## The scan is depth-bounded recursion over a heap-per-level buffer
 ///
@@ -313,8 +321,8 @@ public:
     /// Run one tick20ms decode step without waiting out the real frame cadence.
     void decodeOneFrameForTest() { lastFrameMs_ = elapsed() - effectiveStepMs(); tick20ms(); }
     /// Test seam for the scan's directory-join, the one piece of the scan desktop can exercise directly.
-    static void joinPathForTest(const char* dir, const char* name, char* out, size_t outCap) {
-        joinPath(dir, name, out, outCap);
+    static bool joinPathForTest(const char* dir, const char* name, char* out, size_t outCap) {
+        return joinPath(dir, name, out, outCap);
     }
 
 private:
@@ -330,7 +338,10 @@ private:
     /// A ceiling against a corrupt block-length field: real exports ran up to ~300KB/block, so 4MB keeps headroom.
     static constexpr size_t kMaxCompressedBlockBytes = 4 * 1024 * 1024;
 
-    struct Track { uint32_t id = 0; char file[96] = {}; };   ///< the full filesystem path, not a bare name
+    /// One path budget for a scanned name, a joined path and `Track::file` alike, matching `FilesystemModule::removeTree`'s own.
+    static constexpr size_t kPathCap = 192;
+
+    struct Track { uint32_t id = 0; char file[kPathCap] = {}; };   ///< the full filesystem path, not a bare name
     Track    tracks_[kMaxTracks] = {};
     uint8_t  playlistCount_ = 0;
     uint32_t nextId_ = 1;
@@ -365,12 +376,13 @@ private:
     uint32_t currentBlockFirstFrame_ = 0;      ///< that block's first frame
     uint32_t currentBlockFrameCount_ = 0;      ///< how many frames blockBuf_ covers
 
-    char        fileNames_[kMaxFiles][96] = {};   ///< full filesystem paths, found by the scan
+    char        fileNames_[kMaxFiles][kPathCap] = {};   ///< full filesystem paths, found by the scan
     const char* fileOptions_[kMaxFiles] = {};
     uint8_t     fileCount_ = 0;
+    bool        scanSkipped_ = false;   ///< a name or joined path did not fit kPathCap during the last scan
 
-    /// Sized for "playing: " + a 95-char path + " (999/999)", with headroom; setStatus holds the pointer, so this outlives the call.
-    char statusBuf_[128] = {};
+    /// Sized for "playing: " + a kPathCap-1-char path + " (999/999)", with headroom; setStatus holds the pointer, so this outlives the call.
+    char statusBuf_[kPathCap + 32] = {};
 
     /// A plain bounded copy, not snprintf: GCC's -Wrestrict flags snprintf between two member arrays of the same `this`.
     static void copyBounded(char* dst, size_t dstCap, const char* src) {
@@ -380,15 +392,17 @@ private:
         std::memcpy(dst, src, n);
         dst[n] = '\0';
     }
-    /// dir + "/" + name, built by hand for the same -Wrestrict reason as copyBounded; skips the slash when dir already ends in one.
-    static void joinPath(const char* dir, const char* name, char* out, size_t outCap) {
+    /// dir + "/" + name, built by hand for the same -Wrestrict reason as copyBounded; skips the slash when dir already ends in one. False when the joined path did not fit and was truncated.
+    static bool joinPath(const char* dir, const char* name, char* out, size_t outCap) {
         const size_t dirLen = std::strlen(dir);
+        const size_t needsSlash = dirLen == 0 || dir[dirLen - 1] != '/' ? 1 : 0;
+        const size_t fits = dirLen + needsSlash + std::strlen(name) < outCap;
         size_t n = dirLen < outCap ? dirLen : (outCap > 0 ? outCap - 1 : 0);
         std::memcpy(out, dir, n);
-        const bool needsSlash = dirLen == 0 || dir[dirLen - 1] != '/';
         if (needsSlash && n < outCap) { out[n] = '/'; n++; }
         if (n < outCap) copyBounded(out + n, outCap - n, name);
         else if (outCap > 0) out[outCap - 1] = '\0';
+        return fits;
     }
 
     int indexOf(uint32_t id) const {
@@ -577,7 +591,14 @@ private:
             case fseq::ParseError::UnsupportedVersion:     errMsg = "unsupported FSEQ version"; break;
             case fseq::ParseError::UnsupportedCompression: errMsg = "compressed (zstd) FSEQ not supported yet"; break;
             case fseq::ParseError::Truncated:              errMsg = "FSEQ header truncated or unreadable"; break;
+            case fseq::ParseError::Empty:                  errMsg = "empty show: 0 channels or frames"; break;
             default: break;   // None, or TooManySparseRanges (non-fatal, handled below)
+        }
+        if (!errMsg && hdr.compressionType == fseq::CompressionType::Zlib && hdr.compressionBlockCount == 0) {
+            errMsg = "zlib file declares no compression blocks";
+        }
+        if (!errMsg && hdr.compressionType == fseq::CompressionType::Zlib && !platform::hasZlibInflate) {
+            errMsg = "zlib plays on ESP32 only";
         }
         if (errMsg) {
             setStatus(errMsg, Severity::Error);
@@ -710,15 +731,17 @@ private:
     /// One directory level, collected: the same shape as FilesystemModule::removeTree's DirLevel.
     struct ScanLevel {
         static constexpr uint8_t kMax = 64;
-        char names[kMax][40];
+        char names[kMax][kPathCap];
         bool isDir[kMax];
         uint8_t count = 0;
+        bool skipped = false;   ///< an entry's own name alone did not fit kPathCap
     };
 
     static void collectScanEntry(const char* name, bool isDir, uint32_t, void* user) {
         auto* lvl = static_cast<ScanLevel*>(user);
         if (lvl->count >= ScanLevel::kMax) return;
-        if (!name || name[0] == '.' || std::strlen(name) >= sizeof(lvl->names[0])) return;
+        if (!name || name[0] == '.') return;
+        if (std::strlen(name) >= sizeof(lvl->names[0])) { lvl->skipped = true; return; }
         std::snprintf(lvl->names[lvl->count], sizeof(lvl->names[0]), "%s", name);
         lvl->isDir[lvl->count] = isDir;
         lvl->count++;
@@ -733,9 +756,10 @@ private:
         ScanLevel& lvl = *lvlp;
         struct Freer { ScanLevel* p; ~Freer() { p->~ScanLevel(); platform::free(p); } } freer{lvlp};
         platform::fsList(path, &collectScanEntry, &lvl);
+        if (lvl.skipped) scanSkipped_ = true;
         for (uint8_t i = 0; i < lvl.count && fileCount_ < kMaxFiles; i++) {
-            char child[96];
-            joinPath(path, lvl.names[i], child, sizeof(child));
+            char child[kPathCap];
+            if (!joinPath(path, lvl.names[i], child, sizeof(child))) { scanSkipped_ = true; continue; }
             if (lvl.isDir[i]) {
                 scanDir(child, static_cast<uint8_t>(depth + 1));
             } else if (hasExtension(lvl.names[i], ".fseq")) {
@@ -747,11 +771,13 @@ private:
     /// Re-scan the filesystem root for `.fseq` files into the shared option set.
     void rescanFiles() {
         fileCount_ = 0;
+        scanSkipped_ = false;
         scanDir("/", 0);
         for (uint8_t i = 0; i < fileCount_; i++) fileOptions_[i] = fileNames_[i];
         rebuildControls();
         // Fires the resync directly: rebuildControls()'s own change-detection does not hash a List's row/option-set content.
         notifySchemaChanged();
+        if (scanSkipped_) setStatus("some .fseq names or paths too long, skipped", Severity::Warning);
     }
 
     /// One row of `onControlChanged`'s dispatch table: a button's name and its handler.
