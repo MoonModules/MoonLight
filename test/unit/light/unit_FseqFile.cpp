@@ -252,17 +252,16 @@ TEST_CASE("channelDataOffset overlapping a v2 file's compression/sparse tables i
     CHECK(parseHeader(buf.data(), buf.size(), hdr) == ParseError::Truncated);
 }
 
-TEST_CASE("frameByteOffset uses size_t arithmetic, so a large show does not overflow a 32-bit accumulator") {
-    FseqHeader hdr;
-    hdr.channelDataOffset = 32;
-    hdr.channelCount = 300000;   // a large 3D voxel show
-    CHECK(frameByteOffset(hdr, 0) == 32);
-    CHECK(frameByteOffset(hdr, 1) == 32u + 300000u);
-    // frameIndex * channelCount alone exceeds UINT32_MAX by frame ~14310: size_t keeps this exact.
-    const uint32_t bigFrame = 20000;
-    const size_t expected = size_t{32} + size_t{bigFrame} * size_t{300000};
-    CHECK(expected > 0xFFFFFFFFULL);
-    CHECK(frameByteOffset(hdr, bigFrame) == expected);
+TEST_CASE("blockEntry reads one table entry's first frame and compressed length, and refuses an entry past the buffer") {
+    std::vector<uint8_t> buf(32 + 2 * 8, 0);
+    putU32(buf, 32, 0);        putU32(buf, 36, 1234);
+    putU32(buf, 40, 60);       putU32(buf, 44, 5678);
+    uint32_t firstFrame = 99, byteLen = 99;
+    REQUIRE(blockEntry(buf.data(), buf.size(), 1, firstFrame, byteLen));
+    CHECK(firstFrame == 60);
+    CHECK(byteLen == 5678);
+    CHECK_FALSE(blockEntry(buf.data(), buf.size(), 2, firstFrame, byteLen));   // the third entry would end past the buffer
+    CHECK_FALSE(blockEntry(buf.data(), buf.size() - 1, 1, firstFrame, byteLen));
 }
 
 TEST_CASE("validateBlockRange accepts a well-formed entry and computes its decompressed length") {

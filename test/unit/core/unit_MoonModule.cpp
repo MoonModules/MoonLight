@@ -150,26 +150,6 @@ TEST_CASE("schemaSignature: value change is invisible, schema change is not") {
     CHECK(m.schemaSignature() != base);
 }
 
-namespace {
-// A module whose Progress total changes at runtime, the way a track change moves FseqPlayerEffect's frameCount_.
-class ProgressModule : public mm::MoonModule {
-public:
-    uint32_t position = 0;
-    uint32_t total = 100;
-    void defineControls() override { controls_.addProgress("position", position, total); }
-};
-}  // namespace
-
-// Pins the fix for the PR #148 follow-up: a Progress total is a value, not schema, so changing it and rebuilding must not trip a full browser resync.
-TEST_CASE("schemaSignature: a Progress total change alone is invisible, same as its value") {
-    ProgressModule m; m.defineControls();
-    const uint32_t base = m.schemaSignature();
-    m.total = 9999;
-    m.rebuildControls();   // re-snapshots aux for the new total, the same call loadTrack() makes on a track change
-    CHECK(m.schemaSignature() == base);
-    CHECK(m.controls()[0].aux == 9999);   // the total did refresh; only the resync-trigger is suppressed
-}
-
 TEST_CASE("schemaSignature: recurses into children (a child schema change is caught)") {
     auto* parent = new mm::MoonModule();
     auto* child = new SelectModule();
@@ -248,9 +228,11 @@ TEST_CASE("a progress control declares its unit to the UI, bytes unless told oth
     uint32_t used = 1, usedKiB = 1;
     mod.controls().addProgress("flash", used, 4096);
     mod.controls().addProgress("card", usedKiB, 31166976, mm::ProgressUnit::KiB);
+    mod.controls().addProgress("frames", used, 6300, mm::ProgressUnit::Count);
     const auto meta = [&](uint8_t i) { mm::JsonSink sink; mm::writeControlMetadata(sink, mod.controls()[i]); return std::string(sink.data(), sink.size()); };
     CHECK(meta(0) == ",\"total\":4096,\"unit\":\"B\"");
     CHECK(meta(1) == ",\"total\":31166976,\"unit\":\"KiB\"");
+    CHECK(meta(2) == ",\"total\":6300,\"unit\":\"count\"");
 }
 
 // enabled defaults to true; setEnabled flips the universal enable gate (Scheduler and parent containers respect it).

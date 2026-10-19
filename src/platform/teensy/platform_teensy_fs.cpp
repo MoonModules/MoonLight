@@ -16,7 +16,8 @@ extern unsigned long _flashimagelen;
 namespace mm::platform {
 
 // No zlib/zstd decoder on Teensy: FseqPlayerEffect's compressed-block path never succeeds here.
-bool zlibInflateAll(const uint8_t*, size_t, uint8_t*, size_t, size_t&) { return false; }
+bool zlibInflateAll(void*, const uint8_t*, size_t, uint8_t*, size_t, size_t&) { return false; }
+size_t zlibWorkspaceBytes() { return 0; }
 
 // --- Filesystem: LittleFS on the top of program flash -------------------------------------------
 

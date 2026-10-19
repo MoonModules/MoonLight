@@ -10,14 +10,15 @@
 
 #include <cstdio>
 #include <cstring>
-#include <new>   // placement new: scanDir's heap-allocated ScanLevel
 
 namespace mm {
 
 /// Plays FSEQ animation files from the filesystem onto this effect's layer, with a playlist and the standard transport controls.
 /// @card FseqPlayerEffect.gif
 ///
-/// FSEQ is the Falcon Player/xLights sequence format: a flat, per-frame byte stream with no pixel semantics of its own.
+/// FSEQ is the Falcon Player/xLights sequence format: a flat, per-frame byte stream with no pixel semantics of its own. The playlist follows `FixtureProfilesModule`'s `EditableListSource` shape, the transport `DemoReelEffect`'s cycle/shuffle logic.
+///
+/// @attribution FPP
 ///
 /// @guide
 ///
@@ -28,72 +29,6 @@ namespace mm {
 /// Zstd-compressed files do not play on any target yet.
 ///
 /// Export a track uncompressed if it needs to play everywhere.
-///
-/// @technical
-///
-/// ## Prior art
-///
-/// FPP's `FSEQ_Sequence_File_Format.txt` is the spec this plays against; the playlist follows `FixtureProfilesModule`'s `EditableListSource` shape, the transport `DemoReelEffect`'s cycle/shuffle logic.
-///
-/// ## The rate comes from the file by default, or the fps slider when asked
-///
-/// `fpsSource` picks `file` (the track's own `stepTimeMs`, default) or `manual` (the `fps` slider). Either is capped at 50 to match `tick20ms()` (@xref{why-decode-runs-in-tick20ms}), with a warning when a file asks for more.
-///
-/// ## Why decode runs in tick20ms
-///
-/// A frame read blocks, which `tick()` must never do. So `tick20ms()` decodes one due frame each call, the same split `HttpServerModule::driveSdTransfers` uses for SD reads; `tick()` only calls `sink_.tick()`.
-///
-/// ## A frame decodes one tick ahead of its render
-///
-/// `tick20ms()` renders whatever `decodeCurrentFrame()` decoded last call, before decoding the next one, rather than writing what it decoded immediately. An expensive decode (a zlib track's compression-block boundary) then costs its tick a tick early, not the one whose render it would otherwise delay.
-///
-/// Reaching end of file is checked right after that render, before any new decode. The track's real last frame is always shown for one full tick before the track switches, never overwritten by it in the same call.
-///
-/// ## An FSEQ frame is already in wiring order
-///
-/// FSEQ carries the raw byte stream a controller sends, the same shape @ref NetworkReceiveEffect's sender-mapped frames take. `ChannelDataSink` places it unmapped, alone on its layer, so a serpentine layout is not applied twice.
-///
-/// ## Sequential reads replace random-offset ones
-///
-/// FSEQ data appears in file order. So one open stream per track, read forward only, replaces every offset-based read the format would otherwise need; a track restart or change reopens it.
-///
-/// A file whose variable-length metadata pushes `channelDataOffset` past the buffered header region has that gap skipped, byte for byte, before frame 0's own read begins (`skipHeaderGap`).
-///
-/// ## Where animations live
-///
-/// Every `.fseq` file anywhere in the file manager's tree is found walking from the filesystem root, bounded to `kMaxScanDepth` levels, with no special case for `/sd`. A flash file plays exactly like an SD one.
-///
-/// `onFileChanged` only walks that tree for a `.fseq` path, so an unrelated upload (a config file, a palette script) costs this effect nothing.
-///
-/// ## Starts on its own
-///
-/// Becoming enabled starts playback immediately when the playlist is non-empty, in `prepare()`, with no separate "press play" step. `release()` stops and closes the stream first, so a later re-enable never resumes into memory it just freed.
-///
-/// ## Stopping writes one black frame; pausing just stops decoding
-///
-/// `sink_` holds the last frame written until something writes another, so a stopped transport writes one all-zero frame on the stop transition rather than going black every tick. A paused transport simply stops calling `tick20ms()`; the sink keeps showing what it already held, unchanged.
-///
-/// ## Compression: zlib on ESP32 only, zstd nowhere yet
-///
-/// Zlib (type 2) decodes through the ESP32 ROM's `tinfl_decompress` at zero flash cost and is ESP32-only to play (every target parses it). Zstd (type 1) has no decoder yet, reported as its own status, not a bug.
-///
-/// `platform::hasZlibInflate` is checked in `loadTrack`, so a zlib file on desktop or Teensy is refused up front with its own status rather than failing mid-playback on the first compressed block.
-///
-/// ## A corrupt or unusual file degrades, never overflows
-///
-/// `channelCount` sizes `frameBuf_` directly, however large; the allocation is checked for success, so a hostile value fails cleanly rather than writing into a null or short buffer.
-///
-/// A compression block's table entry is validated (`fseq::validateBlockRange`) before any buffer is sized by it: a non-advancing entry or an overflowing byte count is refused rather than read.
-///
-/// A header with 0 channels or 0 frames is refused by the parser itself, not left to surface as "out of memory" and a looping playlist reopening it every tick.
-///
-/// A zlib file whose compression block table is empty is refused by name in `loadTrack`, rather than surfacing as a generic mid-file read failure on the first decode.
-///
-/// A scanned name or joined path past `kPathCap` is skipped rather than silently truncated into a different file, with one status line naming that something was.
-///
-/// ## The scan is depth-bounded recursion over a heap-per-level buffer
-///
-/// `scanDir` mirrors `FilesystemModule::removeTree`'s shape for the same problem (an oversized stack frame): one heap-allocated `platform::fsList` level per recursion, bounded in depth, not a member-held breadth-first queue.
 class FseqPlayerEffect : public EffectBase, public ListSource {
 public:
     /// The transport's three states.
@@ -103,35 +38,51 @@ public:
     /// The two fpsSource values, public so a test can select one by name.
     static constexpr uint8_t kFpsFromFile = 0, kFpsManual = 1;
 
+    /// Free the playlist's path strings, the one memory a disabled player keeps.
+    ~FseqPlayerEffect() override { clearTracks(); }
+
     /// Catalog tags: a recorded show, played back.
     const char* tags() const override { return "🖼️"; }
 
     /// Bind the transport buttons, the shuffle/loop controls, the playlist and the position gauge.
     void defineControls() override {
+        /// Starts a stopped transport, or resumes a paused one.
         controls_.addButton("play");
+        /// Holds the current frame on screen.
         controls_.addButton("pause");
+        /// Stops playback, resets the position and blanks the lights.
         controls_.addButton("stop");
+        /// Jumps to the previous track in the playlist.
         controls_.addButton("previous");
+        /// Jumps to the next track in the playlist.
         controls_.addButton("next");
+        /// Picks the next track at random instead of in playlist order.
         controls_.addControl("shuffle", shuffle_);
+        /// At a track's end: stop, repeat it, or repeat the playlist.
         controls_.addSelect("loopMode", loopMode_, kLoopModeOptions, 3);
         controls_.addSelect("fpsSource", fpsSource_, kFpsSourceOptions, 2);
         controls_.addControl("fps", fps_, 1, kMaxFps);
         controls_.setHidden(controls_.count() - 1, fpsSource_ != kFpsManual);
+        /// The tracks to play, in order; each row picks a scanned .fseq file.
         controls_.addList("playlist", *this);
-        controls_.addProgress("position", frameIndex_, frameCount_);   // a frame count, not bytes; ProgressUnit has no plain-count variant yet
+        /// How far into the current track playback is, in frames.
+        controls_.addProgress("position", frameIndex_, frameCount_, ProgressUnit::Count);
+        /// Looks through the filesystem for .fseq files again.
         controls_.addButton("rescan");
     }
 
     /// Scan the filesystem for animations once.
     void setup() override {
         EffectBase::setup();
-        rescanFiles();
+        rng_.seed(platform::micros());   // a different shuffle order each boot
+        if (enabled()) rescanFiles();
     }
 
     /// Size the sink to the layer, then start playing on its own once the effect becomes enabled.
     void prepare() override {
-        sink_.prepare(/*senderMapped=*/true);   // an FSEQ frame is already in wiring order: @xref{an-fseq-frame-is-already-in-wiring-order}
+        sink_.prepare(/*senderMapped=*/true);   // an FSEQ frame is already in wiring order, the same shape NetworkReceiveEffect's sender-mapped frames take, so a serpentine layout is not applied twice
+        sizeExpandBuf();
+        if (!fileNames_) rescanFiles();   // the scan cache is freed on release, so an enabled effect rebuilds it
         if (state_ == PlayState::Stopped && playlistCount_ > 0) {
             visited_ = 0;
             // Set before loadTrack: its own refreshStatus() must see Playing already, though loadTrack corrects this back on its own failure paths.
@@ -144,10 +95,11 @@ public:
     void release() override {
         closeTrackStream();
         state_ = PlayState::Stopped;
+        fileCount_ = 0;   // the names below are freed with the scratch buffers
         EffectBase::release();
     }
 
-    /// Render last tick's decoded frame, then decode the next due one; a blocking file read, bounded to one frame per call.
+    /// Render last tick's decoded frame, then decode the next due one: the blocking read lives here, never in `tick()`, at most one frame per call.
     void tick20ms() MM_NONBLOCKING override {
         if (state_ != PlayState::Playing) return;
         const uint32_t now = elapsed();
@@ -168,9 +120,10 @@ public:
     /// The sink hands its held frame to the output.
     void copyWiringFrame(uint8_t* out, size_t bytes, bool force) override { sink_.copyWiringFrame(out, bytes, force); }
 
-    /// Dispatch a transport button through a name-to-handler table, a Command row per button rather than a branch.
+    /// Dispatch a transport button through a name-to-handler table, a Command row per button rather than a branch; a changed rate source rebuilds the controls so `fps` shows or hides.
     void onControlChanged(const char* controlName) override {
         if (controlName) {
+            if (std::strcmp(controlName, "fpsSource") == 0) rebuildControls();
             for (const auto& row : kButtonHandlers) {
                 if (std::strcmp(controlName, row.name) == 0) { (this->*row.handler)(); break; }
             }
@@ -178,9 +131,9 @@ public:
         EffectBase::onControlChanged(controlName);
     }
 
-    /// Rescan when a show lands or leaves, so an upload through the File Manager reaches the playlist unasked. An unrelated file skips the whole-tree walk.
+    /// Rescan when a show lands or leaves, so an upload through the File Manager reaches the playlist unasked. An unrelated file, or a disabled effect, skips the whole-tree walk.
     void onFileChanged(const char* path) override {
-        if (path && !hasExtension(path, ".fseq")) return;
+        if (!enabled() || (path && !hasExtension(path, ".fseq"))) return;
         rescanFiles();
     }
 
@@ -192,7 +145,7 @@ public:
     /// Write one row, which is also the persisted form: the stable id and the chosen file.
     void writeListRow(JsonSink& sink, uint8_t row) const override {
         sink.appendf("{\"id\":%lu,\"file\":", static_cast<unsigned long>(tracks_[row].id));
-        sink.writeJsonString(tracks_[row].file);
+        sink.writeJsonString(trackFile(row));
         sink.append("}");
     }
 
@@ -201,7 +154,7 @@ public:
         sink.append("\"files\":[");
         for (uint8_t i = 0; i < fileCount_; i++) {
             if (i) sink.append(",");
-            sink.writeJsonString(fileOptions_[i]);
+            sink.writeJsonString(fileName(i));
         }
         sink.append("]");
     }
@@ -210,7 +163,7 @@ public:
     void writeListRowDetail(JsonSink& sink, uint8_t row) const override {
         sink.append("{\"fields\":[");
         sink.appendf("{\"name\":\"file\",\"type\":\"select\",\"value\":%d,\"optionsRef\":\"files\"},",
-                     fileIndexOf(tracks_[row].file));
+                     fileIndexOf(trackFile(row)));
         sink.append("{\"name\":\"play\",\"type\":\"button\"}");
         sink.append("]}");
     }
@@ -222,9 +175,8 @@ public:
     bool addListRow(uint32_t& outId) override {
         if (playlistCount_ >= kMaxTracks) return false;
         Track& t = tracks_[playlistCount_];
-        t = Track{};
+        if (fileCount_ > 0 && !setTrackFile(t, fileName(0))) return false;
         t.id = nextId_++;
-        if (fileCount_ > 0) copyBounded(t.file, sizeof(t.file), fileNames_[0]);
         playlistCount_++;
         outId = t.id;
         return true;
@@ -234,8 +186,10 @@ public:
     bool deleteListRow(uint32_t id) override {
         const int i = indexOf(id);
         if (i < 0) return false;
+        platform::free(tracks_[i].file);
         for (uint8_t j = static_cast<uint8_t>(i); j + 1 < playlistCount_; j++) tracks_[j] = tracks_[j + 1];
         playlistCount_--;
+        tracks_[playlistCount_] = Track{};   // the vacated slot no longer owns the path it was shifted from
         if (cursor_ >= playlistCount_ && playlistCount_ > 0) cursor_ = static_cast<uint8_t>(playlistCount_ - 1);
         return true;
     }
@@ -259,8 +213,7 @@ public:
         if (std::strcmp(field, "file") == 0) {
             const int idx = mm::json::parseInt(valueJson, "value");
             if (idx < 0 || idx >= fileCount_) return false;
-            copyBounded(tracks_[i].file, sizeof(tracks_[i].file), fileNames_[idx]);
-            return true;
+            return setTrackFile(tracks_[i], fileName(static_cast<uint8_t>(idx)));
         }
         if (std::strcmp(field, "play") == 0) {
             cursor_ = static_cast<uint8_t>(i);
@@ -278,14 +231,15 @@ public:
         if (!mm::json::parse(json, doc)) return false;
         const mm::json::JsonNode* arr = mm::json::member(doc, doc.rootNode(), key);
         if (!arr || arr->type != mm::json::JsonType::Array) return false;
-        playlistCount_ = 0;
+        clearTracks();
         const int n = mm::json::arraySize(doc, arr);
         for (int r = 0; r < n && playlistCount_ < kMaxTracks; r++) {
             const mm::json::JsonNode* row = mm::json::element(doc, arr, r);
             Track& t = tracks_[playlistCount_];
-            t = Track{};
             t.id = static_cast<uint32_t>(mm::json::readInt(mm::json::member(doc, row, "id"), 0));
-            mm::json::readString(mm::json::member(doc, row, "file"), t.file, sizeof(t.file));
+            char path[kPathCap];
+            mm::json::readString(mm::json::member(doc, row, "file"), path, sizeof(path));
+            if (path[0]) setTrackFile(t, path);
             if (t.id >= nextId_) nextId_ = t.id + 1;   // never reissue a persisted id
             playlistCount_++;
         }
@@ -299,11 +253,16 @@ public:
         header_ = h;
         frameCount_ = h.frameCount;
         frameBuf_.resize(h.channelCount);
+        sizeExpandBuf();
         frameIndex_ = 0;
         currentBlockIndex_ = 0;
         currentBlockFirstFrame_ = 0;
         currentBlockFrameCount_ = 0;
         aheadFrameReady_ = false;
+    }
+    /// The scratch bytes held right now across every runtime buffer: zero once released.
+    size_t scratchBytesForTest() const {
+        return fileNames_.bytes() + headBuf_.bytes() + frameBuf_.bytes() + expandBuf_.bytes() + compBuf_.bytes() + blockBuf_.bytes() + zlibWork_.bytes();
     }
     /// Force the transport state directly.
     void setStateForTest(PlayState s) { state_ = s; }
@@ -341,8 +300,9 @@ private:
     static constexpr const char* kFpsSourceOptions[] = {"file", "manual"};
     static constexpr uint8_t kMaxTracks = 64;         // a playlist, not a media library: bounded, no heap
     static constexpr uint8_t kMaxFiles = 64;
+    static constexpr size_t  kHeadBytes = 4096;
     static constexpr uint8_t kMaxScanDepth = 8;       // matches FilesystemModule::removeTree's own bound
-    /// 50, not the usual control range: tick20ms's own ~50 Hz cadence is the decode ceiling (@xref{why-decode-runs-in-tick20ms}).
+    /// 50, not the usual control range: tick20ms's own ~50 Hz cadence is the decode ceiling.
     static constexpr uint8_t kMaxFps = 50;
     /// The slowest step the decode cadence can honor: 1000 / kMaxFps, so a file-sourced rate above it clamps here.
     static constexpr uint32_t kMinStepMs = 1000u / kMaxFps;
@@ -352,7 +312,8 @@ private:
     /// One path budget for a scanned name, a joined path and `Track::file` alike, matching `FilesystemModule::removeTree`'s own.
     static constexpr size_t kPathCap = 192;
 
-    struct Track { uint32_t id = 0; char file[kPathCap] = {}; };   ///< the full filesystem path, not a bare name
+    /// One playlist row: its stable id and its full filesystem path, a heap string sized to the path (null while the row names no file).
+    struct Track { uint32_t id = 0; char* file = nullptr; };
     Track    tracks_[kMaxTracks] = {};
     uint8_t  playlistCount_ = 0;
     uint32_t nextId_ = 1;
@@ -360,7 +321,7 @@ private:
 
     bool     shuffle_ = false;
     uint8_t  loopMode_ = kLoopAll;
-    uint8_t  fpsSource_ = kFpsFromFile;   ///< kFpsFromFile reads the track's own stepTimeMs; kFpsManual reads fps_
+    uint8_t  fpsSource_ = kFpsFromFile;   ///< where the rate comes from: the file's step time, or fps_
     uint8_t  fps_ = 30;   ///< the manual playback rate; 1000/fps milliseconds per frame
 
     PlayState       state_ = PlayState::Stopped;
@@ -371,10 +332,10 @@ private:
     uint64_t        visited_ = 0;   ///< per-pass bitset over playlist rows, for shuffle+loopOff
     Random8         rng_;
 
-    /// The one open track stream, plus its buffered header: @xref{sequential-reads-replace-random-offset-ones}.
+    /// The one open track stream, read forward only, plus its buffered header; a track restart or change reopens it.
     platform::FsReadStream stream_{};
     bool     streamOpen_ = false;
-    uint8_t  headBuf_[4096] = {};   ///< the header, block table and sparse table of virtually any real file
+    ScratchBuffer<uint8_t> headBuf_{*this};   ///< the header, block table and sparse table of virtually any real file: kHeadBytes, sized when a track opens
     size_t   headLen_ = 0;          ///< bytes actually filled in headBuf_
     size_t   headPos_ = 0;          ///< how far into headBuf_ sequential reads have already consumed
 
@@ -383,13 +344,13 @@ private:
     ScratchBuffer<uint8_t> expandBuf_{*this};   ///< a sparse frame expanded to the sink's own size, before the one write into it
     ScratchBuffer<uint8_t> compBuf_{*this};     ///< one compression block's compressed bytes
     ScratchBuffer<uint8_t> blockBuf_{*this};    ///< that block, decompressed
+    ScratchBuffer<uint8_t> zlibWork_{*this};    ///< the decoder's state, lent to platform::zlibInflateAll for a zlib track
     uint32_t currentBlockIndex_ = 0;           ///< which compression-block-table entry is loaded
     uint32_t currentBlockFirstFrame_ = 0;      ///< that block's first frame
     uint32_t currentBlockFrameCount_ = 0;      ///< how many frames blockBuf_ covers
     bool     aheadFrameReady_ = false;         ///< frameBuf_ holds a frame decoded one tick ahead, not yet handed to sink_
 
-    char        fileNames_[kMaxFiles][kPathCap] = {};   ///< full filesystem paths, found by the scan
-    const char* fileOptions_[kMaxFiles] = {};
+    ScratchBuffer<char> fileNames_{*this};   ///< kMaxFiles full filesystem paths of kPathCap bytes each, found by the scan; held while enabled
     uint8_t     fileCount_ = 0;
     bool        scanSkipped_ = false;   ///< a name or joined path did not fit kPathCap during the last scan
 
@@ -417,12 +378,34 @@ private:
         return fits;
     }
 
+    /// Row `i`'s path, empty while it names no file.
+    const char* trackFile(uint8_t i) const { return tracks_[i].file ? tracks_[i].file : ""; }
+    /// Scanned file `i`'s full path.
+    const char* fileName(uint8_t i) const { return fileNames_.data() + static_cast<size_t>(i) * kPathCap; }
+    /// Give `t` its own copy of `path` (at most kPathCap - 1 bytes), keeping the old path when the allocation fails.
+    static bool setTrackFile(Track& t, const char* path) {
+        size_t n = std::strlen(path);
+        if (n >= kPathCap) n = kPathCap - 1;
+        char* copy = static_cast<char*>(platform::alloc(n + 1));
+        if (!copy) return false;
+        std::memcpy(copy, path, n);
+        copy[n] = '\0';
+        platform::free(t.file);
+        t.file = copy;
+        return true;
+    }
+    /// Free every row's path and empty the playlist.
+    void clearTracks() {
+        for (uint8_t i = 0; i < kMaxTracks; i++) { platform::free(tracks_[i].file); tracks_[i] = Track{}; }
+        playlistCount_ = 0;
+    }
+
     int indexOf(uint32_t id) const {
         for (uint8_t i = 0; i < playlistCount_; i++) if (tracks_[i].id == id) return i;
         return -1;
     }
     int fileIndexOf(const char* file) const {
-        for (uint8_t i = 0; i < fileCount_; i++) if (std::strcmp(fileOptions_[i], file) == 0) return i;
+        for (uint8_t i = 0; i < fileCount_; i++) if (std::strcmp(fileName(i), file) == 0) return i;
         return -1;   // no scanned file matches, e.g. one deleted after a row picked it
     }
     void markVisited(uint8_t idx) { if (idx < 64) visited_ |= (uint64_t{1} << idx); }
@@ -544,11 +527,11 @@ private:
     /// Open `path` fresh and buffer its header region; false when the file can't be opened or has no bytes.
     bool openTrackStream(const char* path) {
         closeTrackStream();
-        if (!platform::fsReadStreamOpen(stream_, path)) return false;
+        if (!headBuf_.resize(kHeadBytes) || !platform::fsReadStreamOpen(stream_, path)) return false;
         streamOpen_ = true;
         size_t got = 0;
-        while (got < sizeof(headBuf_)) {
-            const int n = platform::fsReadStreamRead(stream_, reinterpret_cast<char*>(headBuf_) + got, sizeof(headBuf_) - got);
+        while (got < kHeadBytes) {
+            const int n = platform::fsReadStreamRead(stream_, reinterpret_cast<char*>(headBuf_.data()) + got, kHeadBytes - got);
             if (n <= 0) break;
             got += static_cast<size_t>(n);
         }
@@ -562,7 +545,7 @@ private:
         size_t fromHead = 0;
         if (headPos_ < headLen_) {
             fromHead = n < (headLen_ - headPos_) ? n : (headLen_ - headPos_);
-            std::memcpy(dst, headBuf_ + headPos_, fromHead);
+            std::memcpy(dst, headBuf_.data() + headPos_, fromHead);
             headPos_ += fromHead;
         }
         const size_t remain = n - fromHead;
@@ -588,18 +571,21 @@ private:
         return true;
     }
 
+    /// Report why a track did not load or play, stop the transport and rewind; always false, so a failure path returns it.
+    bool failLoad(const char* message) {
+        setStatus(message, Severity::Error);
+        state_ = PlayState::Stopped;
+        frameIndex_ = 0;
+        return false;
+    }
+
     /// Open and parse one playlist row's header; forces Stopped and reports the reason on failure.
     bool loadTrack(uint8_t idx) {
         if (idx >= playlistCount_) { state_ = PlayState::Stopped; return false; }
         cursor_ = idx;
-        if (!openTrackStream(tracks_[cursor_].file)) {
-            setStatus("file read failed", Severity::Error);
-            state_ = PlayState::Stopped;
-            frameIndex_ = 0;
-            return false;
-        }
+        if (!openTrackStream(trackFile(cursor_))) return failLoad("file read failed");
         fseq::FseqHeader hdr;
-        const fseq::ParseError err = fseq::parseHeader(headBuf_, headLen_, hdr);
+        const fseq::ParseError err = fseq::parseHeader(headBuf_.data(), headLen_, hdr);
         const char* errMsg = nullptr;
         switch (err) {
             case fseq::ParseError::BadMagic:               errMsg = "not an FSEQ file"; break;
@@ -615,28 +601,13 @@ private:
         if (!errMsg && hdr.compressionType == fseq::CompressionType::Zlib && !platform::hasZlibInflate) {
             errMsg = "zlib plays on ESP32 only";
         }
-        if (errMsg) {
-            setStatus(errMsg, Severity::Error);
-            state_ = PlayState::Stopped;
-            frameIndex_ = 0;
-            return false;
-        }
+        if (errMsg) return failLoad(errMsg);
         header_ = hdr;
         frameCount_ = header_.frameCount;
         frameBuf_.resize(header_.channelCount);
-        if (!frameBuf_) {
-            setStatus("out of memory for this track's frame size", Severity::Error);
-            state_ = PlayState::Stopped;
-            frameIndex_ = 0;
-            return false;
-        }
+        if (!frameBuf_ || !sizeBlockBuffers() || !sizeExpandBuf()) return failLoad("out of memory for this track, or its block table is invalid");
         headPos_ = header_.channelDataOffset;   // skip the header, land exactly where frame 0 starts
-        if (headPos_ > headLen_ && !skipHeaderGap(headPos_ - headLen_)) {
-            setStatus("FSEQ header truncated or unreadable", Severity::Error);
-            state_ = PlayState::Stopped;
-            frameIndex_ = 0;
-            return false;
-        }
+        if (headPos_ > headLen_ && !skipHeaderGap(headPos_ - headLen_)) return failLoad("FSEQ header truncated or unreadable");
         currentBlockIndex_ = 0;
         currentBlockFirstFrame_ = 0;
         currentBlockFrameCount_ = 0;
@@ -652,22 +623,46 @@ private:
         return true;
     }
 
-    /// Decode frame `frameIndex_` into `frameBuf_`, one tick ahead of render (@xref{a-frame-decodes-one-tick-ahead-of-its-render}). The one blocking read `tick20ms` makes, bounded to one frame or block.
+    /// Size the block buffers and decoder workspace once for the track's largest block, so the 50 Hz path never allocates.
+    bool sizeBlockBuffers() {
+        size_t maxCompressed = 0, maxDecompressed = 0;
+        if (header_.compressionType == fseq::CompressionType::Zlib) {
+            for (uint32_t i = 0; i < header_.compressionBlockCount; i++) {
+                uint32_t firstFrame = 0, byteLen = 0, frames = 0;
+                size_t decompLen = 0;
+                if (!blockExtent(i, firstFrame, byteLen, frames, decompLen)) return false;
+                if (byteLen > maxCompressed) maxCompressed = byteLen;
+                if (decompLen > maxDecompressed) maxDecompressed = decompLen;
+            }
+        }
+        const bool zlib = header_.compressionType == fseq::CompressionType::Zlib;
+        return compBuf_.resize(maxCompressed) && blockBuf_.resize(maxDecompressed) && zlibWork_.resize(zlib ? platform::zlibWorkspaceBytes() : 0);
+    }
+
+    /// Size the sparse expansion buffer to the sink, once per track and per layer resize; a dense track frees it.
+    bool sizeExpandBuf() {
+        return expandBuf_.resize(header_.sparseRangeCount ? sink_.bytes() : 0);
+    }
+
+    /// One compression block's table entry, validated: where it starts, its compressed length, and how many frames and decompressed bytes it covers.
+    bool blockExtent(uint32_t index, uint32_t& firstFrame, uint32_t& byteLen, uint32_t& frames, size_t& decompLen) const {
+        if (index >= header_.compressionBlockCount || !fseq::blockEntry(headBuf_.data(), headLen_, index, firstFrame, byteLen)) return false;
+        const bool hasNext = index + 1 < header_.compressionBlockCount;
+        uint32_t nextFirstFrame = 0, nextByteLen = 0;
+        if (hasNext && !fseq::blockEntry(headBuf_.data(), headLen_, index + 1, nextFirstFrame, nextByteLen)) return false;
+        if (!fseq::validateBlockRange(firstFrame, header_.frameCount, hasNext, nextFirstFrame, header_.channelCount, frames, decompLen))
+            return false;
+        return byteLen != 0 && byteLen <= kMaxCompressedBlockBytes && frames != 0;
+    }
+
+    /// Decode frame `frameIndex_` into `frameBuf_`, one tick ahead of its render. The one blocking read `tick20ms` makes, bounded to one frame or block.
     bool decodeCurrentFrame() {
         if (header_.compressionType == fseq::CompressionType::Zlib) {
             const uint8_t* rawFrame = frameFromCompressedBlock(frameIndex_);
-            if (!rawFrame) {
-                setStatus("file read failed mid-file", Severity::Error);
-                state_ = PlayState::Stopped;
-                frameIndex_ = 0;
-                return false;
-            }
+            if (!rawFrame) return failLoad("file read failed mid-file");
             std::memcpy(frameBuf_.data(), rawFrame, header_.channelCount);
         } else if (!readBytes(frameBuf_.data(), header_.channelCount)) {
-            setStatus("file read failed mid-file", Severity::Error);
-            state_ = PlayState::Stopped;
-            frameIndex_ = 0;
-            return false;
+            return failLoad("file read failed mid-file");
         }
         aheadFrameReady_ = true;
         return true;
@@ -680,7 +675,7 @@ private:
             return;
         }
         // Unmapped channels go dark: the sparse table only addresses the fixtures a show touches.
-        if (!expandBuf_.resize(sink_.bytes())) return;
+        if (expandBuf_.bytes() != sink_.bytes()) return;   // sized by sizeExpandBuf(), never here on the render path
         std::memset(expandBuf_.data(), 0, expandBuf_.bytes());
         fseq::expandSparseFrame(header_, frameBuf_.data(), header_.channelCount, expandBuf_.data(), expandBuf_.bytes());
         sink_.write(0, expandBuf_.data(), expandBuf_.bytes());
@@ -706,39 +701,17 @@ private:
         return blockBuf_.data() + offset;
     }
 
-    /// Read, decompress and install the next compression block; its byte count sets this call's real cost.
+    /// Read, decompress and install the next compression block into the buffers `loadTrack` sized; its byte count sets this call's real cost.
     bool loadNextBlock() {
-        if (currentBlockIndex_ >= header_.compressionBlockCount) return false;
-        const size_t entryOffset = 32 + static_cast<size_t>(currentBlockIndex_) * 8;
-        if (entryOffset + 8 > headLen_) return false;   // the block table lives inside the buffered header region
-        const uint32_t blockFirstFrame = fseq::detail::rdU32(headBuf_ + entryOffset);
-        const uint32_t blockByteLen = fseq::detail::rdU32(headBuf_ + entryOffset + 4);
-
-        const bool hasNext = currentBlockIndex_ + 1 < header_.compressionBlockCount;
-        uint32_t nextFirstFrame = 0;
-        if (hasNext) {
-            if (entryOffset + 12 > headLen_) return false;
-            nextFirstFrame = fseq::detail::rdU32(headBuf_ + entryOffset + 8);
-        }
-        uint32_t blockFrameCount = 0;
+        uint32_t firstFrame = 0, byteLen = 0, frames = 0;
         size_t decompLen = 0;
-        if (!fseq::validateBlockRange(blockFirstFrame, header_.frameCount, hasNext, nextFirstFrame,
-                                       header_.channelCount, blockFrameCount, decompLen))
-            return false;
-        if (blockByteLen == 0 || blockByteLen > kMaxCompressedBlockBytes || blockFrameCount == 0) return false;
-
-        compBuf_.resize(blockByteLen);
-        if (!compBuf_ || !readBytes(compBuf_.data(), blockByteLen)) return false;
-
-        blockBuf_.resize(decompLen);
-        if (!blockBuf_) return false;
+        if (!blockExtent(currentBlockIndex_, firstFrame, byteLen, frames, decompLen)) return false;
+        if (byteLen > compBuf_.bytes() || decompLen > blockBuf_.bytes() || !readBytes(compBuf_.data(), byteLen)) return false;
         size_t outLen = 0;
-        if (!platform::zlibInflateAll(compBuf_.data(), blockByteLen, blockBuf_.data(), decompLen, outLen) ||
-            outLen != decompLen)
-            return false;
+        if (!platform::zlibInflateAll(zlibWork_.data(), compBuf_.data(), byteLen, blockBuf_.data(), decompLen, outLen) || outLen != decompLen) return false;
 
-        currentBlockFirstFrame_ = blockFirstFrame;
-        currentBlockFrameCount_ = blockFrameCount;
+        currentBlockFirstFrame_ = firstFrame;
+        currentBlockFrameCount_ = frames;
         currentBlockIndex_++;
         return true;
     }
@@ -762,14 +735,15 @@ private:
         lvl->count++;
     }
 
-    /// Recurse into `path`, depth-bounded, one heap-allocated level at a time (@xref{the-scan-is-depth-bounded-recursion-over-a-heap-per-level-buffer}).
+    /// Recurse into `path`, depth-bounded, one heap-allocated level at a time, the shape of `FilesystemModule::removeTree`.
     void scanDir(const char* path, uint8_t depth) {
         if (depth > kMaxScanDepth || fileCount_ >= kMaxFiles) return;
         auto* raw = platform::alloc(sizeof(ScanLevel));
         if (!raw) return;
-        ScanLevel* lvlp = new (raw) ScanLevel;
-        ScanLevel& lvl = *lvlp;
-        struct Freer { ScanLevel* p; ~Freer() { p->~ScanLevel(); platform::free(p); } } freer{lvlp};
+        ScanLevel& lvl = *static_cast<ScanLevel*>(raw);   // plain data: the two counters are set here, the arrays are written before they are read
+        lvl.count = 0;
+        lvl.skipped = false;
+        struct Freer { void* p; ~Freer() { platform::free(p); } } freer{raw};
         platform::fsList(path, &collectScanEntry, &lvl);
         if (lvl.skipped) scanSkipped_ = true;
         for (uint8_t i = 0; i < lvl.count && fileCount_ < kMaxFiles; i++) {
@@ -778,7 +752,7 @@ private:
             if (lvl.isDir[i]) {
                 scanDir(child, static_cast<uint8_t>(depth + 1));
             } else if (hasExtension(lvl.names[i], ".fseq")) {
-                copyBounded(fileNames_[fileCount_++], sizeof(fileNames_[0]), child);
+                copyBounded(fileNames_.data() + static_cast<size_t>(fileCount_++) * kPathCap, kPathCap, child);
             }
         }
     }
@@ -787,8 +761,8 @@ private:
     void rescanFiles() {
         fileCount_ = 0;
         scanSkipped_ = false;
-        scanDir("/", 0);
-        for (uint8_t i = 0; i < fileCount_; i++) fileOptions_[i] = fileNames_[i];
+        if (fileNames_.resize(static_cast<size_t>(kMaxFiles) * kPathCap)) scanDir("/", 0);
+        else setStatus("out of memory for the file list", Severity::Error);
         rebuildControls();
         // Fires the resync directly: rebuildControls()'s own change-detection does not hash a List's row/option-set content.
         notifySchemaChanged();
@@ -828,8 +802,8 @@ private:
                            : state_ == PlayState::Paused  ? "paused"
                                                            : "stopped";
         // Copied to a local first: GCC's -Wrestrict cannot see past two member arrays of the same `this`.
-        char fileCopy[sizeof(Track::file)];
-        copyBounded(fileCopy, sizeof(fileCopy), tracks_[cursor_].file);
+        char fileCopy[kPathCap];
+        copyBounded(fileCopy, sizeof(fileCopy), trackFile(cursor_));
         std::snprintf(statusBuf_, sizeof(statusBuf_), "%s: %s (%u/%u)", label, fileCopy,
                       static_cast<unsigned>(cursor_ + 1), static_cast<unsigned>(playlistCount_));
         setStatus(statusBuf_);

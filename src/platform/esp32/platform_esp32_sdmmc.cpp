@@ -59,7 +59,6 @@
 #if SOC_SDMMC_IO_POWER_EXTERNAL
 #include "sd_pwr_ctrl_by_on_chip_ldo.h"
 #endif
-#include "miniz.h"   // tinfl_decompress_mem_to_mem: zlibInflateAll's ROM-resident decoder
 #endif
 
 namespace mm::platform {
@@ -600,34 +599,7 @@ bool sdCardWriteStreamClose(void* handle, bool commit) {
     return ok;
 }
 
-static tinfl_decompressor* g_tinflDecomp = nullptr;   ///< heap-allocated once, reused every call: ~2.5KB this main task's 12KB stack cannot spare
-
-/// The only real decoder this call ever reaches, since FseqPlayerEffect (its sole caller) is itself gated on `hasSdCard`.
-///
-/// `tinfl_decompress_mem_to_mem` keeps its own `tinfl_decompressor` on the caller's stack, which this task's 12KB has no room for.
-/// This calls `tinfl_init`/`tinfl_decompress` directly instead, against one heap-allocated instance reused every call rather than freed, since each call fully re-inits it anyway.
-bool zlibInflateAll(const uint8_t* src, size_t srcLen, uint8_t* dst, size_t dstCap, size_t& outLen) {
-    if (!g_tinflDecomp) {
-        g_tinflDecomp = static_cast<tinfl_decompressor*>(platform::alloc(sizeof(tinfl_decompressor)));
-        if (!g_tinflDecomp) return false;
-    }
-    tinfl_init(g_tinflDecomp);
-    size_t inPos = 0, outPos = 0;
-    for (;;) {
-        size_t inBytes = srcLen - inPos;
-        size_t outBytes = dstCap - outPos;
-        const tinfl_status status = tinfl_decompress(g_tinflDecomp, src + inPos, &inBytes, dst, dst + outPos, &outBytes,
-                                                      TINFL_FLAG_PARSE_ZLIB_HEADER | TINFL_FLAG_USING_NON_WRAPPING_OUTPUT_BUF);
-        inPos += inBytes;
-        outPos += outBytes;
-        if (status == TINFL_STATUS_DONE) { outLen = outPos; return true; }
-        if (status != TINFL_STATUS_HAS_MORE_OUTPUT) return false;   // a real decode error, or no input left to satisfy NEEDS_MORE_INPUT
-    }
-}
-
 #else  // !MM_HAS_SDMMC: every symbol below is inert so a board with no SDMMC host still links.
-
-bool zlibInflateAll(const uint8_t*, size_t, uint8_t*, size_t, size_t&) { return false; }
 
 bool sdCardMounted() { return false; }
 bool sdCardPresent() { return false; }

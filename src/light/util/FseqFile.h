@@ -2,47 +2,9 @@
 
 /// Parses an FSEQ sequence file's fixed header, compression flags and sparse-range table.
 ///
-/// FSEQ is the Falcon Player/xLights animation file format: a flat, per-frame byte stream with no pixel/RGB semantics of its own. This header is pure and platform-agnostic: it reads caller-supplied byte buffers only, no `platform::` calls, no I/O.
+/// FSEQ is the Falcon Player/xLights animation file format: a flat, per-frame byte stream with no pixel semantics of its own.
 ///
-/// @technical
-///
-/// ## Prior art
-///
-/// FPP's `FSEQ_Sequence_File_Format.txt` is the spec; `core/util/FirmwareImage.h` is the structural template this header follows: a truncation-safe parser over a caller-supplied buffer, no I/O of its own.
-///
-/// ## Mapping bytes onto pixels is the caller's job
-///
-/// FSEQ carries no pixel/RGB semantics of its own, just a flat numbered byte stream per frame. Mapping a frame's bytes onto a light buffer is `FseqPlayerEffect`'s job, not this parser's.
-///
-/// ## Compression
-///
-/// A v2 file may compress channel data per-frame. Type 2 (zlib) decodes via the ESP32 ROM's `tinfl_decompress` at zero flash cost; type 1 (zstd) has no decoder yet, reported as its own error, not a bug.
-///
-/// ## Sparse ranges
-///
-/// A v2 file may carry only some of a show's channels. The sparse range table lists which absolute channel each raw-byte slice belongs to, and `expandSparseFrame` places it; a frame with no sparse ranges maps 1:1, skipping it.
-///
-/// ## Why bytes 20 and 21 are read whole, not nibble-split
-///
-/// A real xLights export disproved packing the compression block count across byte 20's high nibble and byte 21. `compressionBlockCount * 8 + 32` only lands on its own `variableHeaderOffset` when each byte is read whole.
-///
-/// ## `parseHeader` never reads past `len`
-///
-/// A buffer too short for a field or table the header claims to have returns `Truncated`. `out` is left however far parsing got, the same truncation-safe contract as `FirmwareImage.h`'s `identify()`.
-///
-/// `channelDataOffset` is checked against where the header's own tables end, so frame 0 can never start inside them; before that end returns `Truncated` too.
-///
-/// ## `parseHeader`'s two non-fatal errors
-///
-/// `TooManySparseRanges` and `UnsupportedCompression` return only once `out` is otherwise fully populated (clipped to `kMaxSparseRanges` first), so a caller may still use the rest, e.g. for a status line.
-///
-/// ## Why `frameByteOffset` returns `size_t`, not `uint32_t`
-///
-/// `frameIndex * channelCount` overflows a 32-bit accumulator well within a real show's frame count once channel count is in the thousands.
-///
-/// ## The layout `expandSparseFrame`'s `rawFrame` and `out` each assume
-///
-/// `rawFrame` holds `hdr.sparseRangeCount` ranges back-to-back; each lands at `out[startChannel..startChannel+channelCount)`, clipped to `outCap`, leaving gaps the caller already zeroed, once per frame, untouched.
+/// This header follows FPP's `FSEQ_Sequence_File_Format.txt` and is pure: it reads caller-supplied byte buffers only, with no `platform::` calls and no I/O.
 
 #include <cstddef>
 #include <cstdint>
@@ -68,6 +30,10 @@ struct SparseRange {
     uint32_t startChannel = 0;   ///< the absolute (unsparsed) channel this slice starts at
     uint32_t channelCount = 0;   ///< how many raw bytes belong to this slice
 };
+
+/// Where the compression block table starts, right after the fixed header, and the bytes each entry (first frame, compressed length) takes.
+constexpr size_t kBlockTableOffset = 32;
+constexpr size_t kBlockEntryBytes = 8;
 
 /// Bound on parsed sparse ranges: large enough for any real show, small enough to hold inline.
 constexpr uint8_t kMaxSparseRanges = 32;
@@ -106,12 +72,12 @@ inline bool isValidMagic(const uint8_t* buf) {
 
 /// Parse the v2-only compression type, block count and sparse-range table into `out`; `buf`/`len` are the whole header buffer, unchanged from `parseHeader`.
 inline ParseError parseV2Tail(const uint8_t* buf, size_t len, FseqHeader& out) {
-    // Byte 20 is the whole compression-type byte; byte 21 is the whole block count (see @technical above).
+    // Byte 20 is the whole compression-type byte; byte 21 is the whole block count, since only that lands `compressionBlockCount * 8 + 32` on a real export's `variableHeaderOffset`.
     const uint8_t compressionByte = buf[20];
     out.compressionBlockCount = buf[21];
     const uint8_t sparseCountRaw = buf[22];
 
-    const size_t sparseTableOffset = 32 + static_cast<size_t>(out.compressionBlockCount) * 8;
+    const size_t sparseTableOffset = kBlockTableOffset + static_cast<size_t>(out.compressionBlockCount) * kBlockEntryBytes;
     const uint8_t sparseCount = sparseCountRaw > kMaxSparseRanges ? kMaxSparseRanges : sparseCountRaw;
     const size_t sparseTableEnd = sparseTableOffset + static_cast<size_t>(sparseCount) * 6;
     if (len < sparseTableEnd) return ParseError::Truncated;
@@ -135,7 +101,7 @@ inline ParseError parseV2Tail(const uint8_t* buf, size_t len, FseqHeader& out) {
     return ParseError::None;
 }
 
-/// Parse the fixed header, compression flags and (v2) sparse-range table out of `buf`.
+/// Parse the fixed header, compression flags and (v2) sparse-range table out of `buf`; it never reads past `len`.
 inline ParseError parseHeader(const uint8_t* buf, size_t len, FseqHeader& out) {
     out = FseqHeader{};
     if (len < 32) return ParseError::Truncated;
@@ -157,10 +123,13 @@ inline ParseError parseHeader(const uint8_t* buf, size_t len, FseqHeader& out) {
     return parseV2Tail(buf, len, out);
 }
 
-/// The byte offset of frame `frameIndex`'s channel data within the file.
-inline size_t frameByteOffset(const FseqHeader& hdr, uint32_t frameIndex) {
-    return static_cast<size_t>(hdr.channelDataOffset) +
-           static_cast<size_t>(frameIndex) * static_cast<size_t>(hdr.channelCount);
+/// Reads compression block table entry `index` out of the header buffer: the block's first frame and compressed byte length; false when the entry lies past `len`.
+inline bool blockEntry(const uint8_t* buf, size_t len, uint32_t index, uint32_t& firstFrame, uint32_t& byteLen) {
+    const size_t at = kBlockTableOffset + static_cast<size_t>(index) * kBlockEntryBytes;
+    if (at + kBlockEntryBytes > len) return false;
+    firstFrame = detail::rdU32(buf + at);
+    byteLen = detail::rdU32(buf + at + 4);
+    return true;
 }
 
 /// Validates one compression block's frame range against `frameCount` and the next table entry, and computes its decompressed byte length; false rejects it outright, before any buffer is sized by it.

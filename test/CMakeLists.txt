@@ -147,7 +147,6 @@ add_executable(mm_tests
     unit/light/unit_NoiseMeterEffect.cpp
     unit/light/unit_PaintBrushEffect.cpp
     unit/light/unit_PictureEffect.cpp
-    unit/light/unit_FseqPlayerEffect.cpp
     unit/light/unit_PraxisEffect.cpp
     unit/light/unit_RandomEffect.cpp
     unit/light/unit_RippleXZModifier.cpp

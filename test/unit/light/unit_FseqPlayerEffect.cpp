@@ -139,9 +139,18 @@ void twoTrackPlaylist(SdFixture& sd, FseqPlayerEffect& e, uint32_t& id1, uint32_
     e.addListRow(id2);
 }
 
+// Scans the fixture, adds its first file as the only playlist row and presses play.
+void playFirstScannedFile(FseqPlayerEffect& e) {
+    e.setup();
+    uint32_t id = 0;
+    REQUIRE(e.addListRow(id));
+    e.onControlChanged("play");
+    REQUIRE(e.stateForTest() == FseqPlayerEffect::PlayState::Playing);
+}
+
 } // namespace
 
-// Pins the independence the product owner asked for directly: no SD-specific check or status, ever.
+// A flash-only board scans exactly like one with a card: no SD-specific check or status, ever.
 TEST_CASE("setup scans silently, with no SD-specific check or status") {
     Scene s;
     auto& e = s.effect;
@@ -166,12 +175,7 @@ TEST_CASE("playing a flash-found file decodes and blits its frames, same as an S
     flash.writeFseq("/show.fseq", makeFseqV1Bytes(/*channelCount=*/48, /*frameCount=*/3));   // 48 = 4x4x1x3
     Scene s;
     auto& e = s.effect;
-    e.setup();
-    uint32_t id = 0;
-    REQUIRE(e.addListRow(id));
-
-    e.onControlChanged("play");
-    REQUIRE(e.stateForTest() == FseqPlayerEffect::PlayState::Playing);
+    playFirstScannedFile(e);
     REQUIRE(e.status() != nullptr);
     CHECK(std::string(e.status()).rfind("playing", 0) == 0);
 
@@ -294,7 +298,7 @@ TEST_CASE("playing a real file decodes and blits its frames in order") {
     // Frame 3 does not exist: the call above rendered frame 2 then ran handleEndOfFile (loopAll default: reloads frame 0).
     CHECK(e.frameIndexForTest() == 0);
 
-    // Pause updates status too, not just state: a pre-existing gap found and fixed alongside the play-status bug above.
+    // Pause updates the status line too, not just the state.
     e.onControlChanged("pause");
     REQUIRE(e.status() != nullptr);
     CHECK(std::string(e.status()).rfind("paused", 0) == 0);
@@ -360,7 +364,7 @@ TEST_CASE("a stopped player owns its background (clears to black), but a paused 
     std::memset(buf, kStale, bytes);
     e.setStateForTest(FseqPlayerEffect::PlayState::Paused);
     e.tick();
-    // No frame has ever decoded (frameBuf_ was never allocated): blitFrameBuf's own guard makes this a no-op, not a crash.
+    // No frame has ever decoded, so a paused transport has nothing to show: the sink stays as it was, no crash.
     for (size_t i = 0; i < bytes; i++) CHECK(buf[i] == kStale);
 }
 
@@ -490,9 +494,10 @@ TEST_CASE("the recursive scan's path join never doubles the slash at the SD root
     CHECK(std::strlen(small) < sizeof(small));   // truncated, still NUL-terminated, never overrun
 }
 
-TEST_CASE("a header with 0 channels or 0 frames fails to load with its own status, not out of memory") {
+// Plays `bytes` as the only playlist row and checks loadTrack refuses it: transport stopped, `status` named, severity Error.
+static void expectRefused(const char* path, const std::vector<uint8_t>& bytes, const char* status) {
     SdFixture sd;
-    sd.writeFseq("/sd/empty.fseq", makeFseqV1Bytes(/*channelCount=*/10, /*frameCount=*/0));
+    sd.writeFseq(path, bytes);
     Scene s;
     auto& e = s.effect;
     e.setup();
@@ -502,38 +507,20 @@ TEST_CASE("a header with 0 channels or 0 frames fails to load with its own statu
     e.onControlChanged("play");
     CHECK(e.stateForTest() == FseqPlayerEffect::PlayState::Stopped);
     REQUIRE(e.status() != nullptr);
-    CHECK(std::string(e.status()) == "empty show: 0 channels or frames");
+    CHECK(std::string(e.status()) == status);
     CHECK(e.severity() == MoonModule::Severity::Error);
 }
 
-TEST_CASE("a zlib file fails to load on desktop with its own status, not a generic read failure") {
-    SdFixture sd;
-    sd.writeFseq("/sd/z.fseq", makeFseqV2ZlibBytes(/*channelCount=*/10, /*frameCount=*/5, /*blockCount=*/2));
-    Scene s;
-    auto& e = s.effect;
-    e.setup();
-    uint32_t id = 0;
-    REQUIRE(e.addListRow(id));
+TEST_CASE("a header with 0 channels or 0 frames fails to load with its own status, not out of memory") {
+    expectRefused("/sd/empty.fseq", makeFseqV1Bytes(/*channelCount=*/10, /*frameCount=*/0), "empty show: 0 channels or frames");
+}
 
-    e.onControlChanged("play");
-    CHECK(e.stateForTest() == FseqPlayerEffect::PlayState::Stopped);
-    REQUIRE(e.status() != nullptr);
-    CHECK(std::string(e.status()) == "zlib plays on ESP32 only");
+TEST_CASE("a zlib file fails to load on desktop with its own status, not a generic read failure") {
+    expectRefused("/sd/z.fseq", makeFseqV2ZlibBytes(/*channelCount=*/10, /*frameCount=*/5, /*blockCount=*/2), "zlib plays on ESP32 only");
 }
 
 TEST_CASE("a zlib file declaring no compression blocks is refused by name, before the platform check") {
-    SdFixture sd;
-    sd.writeFseq("/sd/z0.fseq", makeFseqV2ZlibBytes(/*channelCount=*/10, /*frameCount=*/5, /*blockCount=*/0));
-    Scene s;
-    auto& e = s.effect;
-    e.setup();
-    uint32_t id = 0;
-    REQUIRE(e.addListRow(id));
-
-    e.onControlChanged("play");
-    CHECK(e.stateForTest() == FseqPlayerEffect::PlayState::Stopped);
-    REQUIRE(e.status() != nullptr);
-    CHECK(std::string(e.status()) == "zlib file declares no compression blocks");
+    expectRefused("/sd/z0.fseq", makeFseqV2ZlibBytes(/*channelCount=*/10, /*frameCount=*/5, /*blockCount=*/0), "zlib file declares no compression blocks");
 }
 
 TEST_CASE("a scanned name past kPathCap is skipped, not truncated into a different file, with a named warning") {
@@ -570,6 +557,27 @@ TEST_CASE("fpsSource=manual: the fps slider sets the playback rate directly, ign
     CHECK(e.effectiveStepMsForTest() == 20);   // the ceiling the `fps` control allows: tick20ms's own cadence
 }
 
+TEST_CASE("choosing fpsSource=manual shows the fps slider, and choosing file hides it again") {
+    Scene s;
+    auto& e = s.effect;
+    e.defineControls();
+    const auto fpsHidden = [&e]() {
+        for (uint8_t i = 0; i < e.controls().count(); i++)
+            if (std::strcmp(e.controls()[i].name, "fps") == 0) return e.controls()[i].hidden;
+        FAIL("no fps control");
+        return false;
+    };
+    CHECK(fpsHidden());   // the file's own rate is the default, so the slider has nothing to say
+
+    e.setFpsSourceForTest(FseqPlayerEffect::kFpsManual);
+    e.onControlChanged("fpsSource");
+    CHECK_FALSE(fpsHidden());
+
+    e.setFpsSourceForTest(FseqPlayerEffect::kFpsFromFile);
+    e.onControlChanged("fpsSource");
+    CHECK(fpsHidden());
+}
+
 TEST_CASE("fpsSource=file is the default, and reads the track's own stepTimeMs directly") {
     Scene s;
     auto& e = s.effect;
@@ -597,12 +605,7 @@ TEST_CASE("loading a file-sourced track faster than 50fps warns, naming the rate
     sd.writeFseq("/sd/fast.fseq", makeFseqV1Bytes(10, 3, /*stepTimeMs=*/10));
     Scene s;
     auto& e = s.effect;
-    e.setup();
-    uint32_t id = 0;
-    REQUIRE(e.addListRow(id));
-
-    e.onControlChanged("play");
-    REQUIRE(e.stateForTest() == FseqPlayerEffect::PlayState::Playing);
+    playFirstScannedFile(e);
     REQUIRE(e.status() != nullptr);
     CHECK(e.severity() == MoonModule::Severity::Warning);
     CHECK(std::string(e.status()).find("100") != std::string::npos);
@@ -686,12 +689,7 @@ TEST_CASE("a channelDataOffset past the buffered header region is skipped, landi
     sd.writeFseq("/sd/gap.fseq", makeFseqV1BytesWithOffset(5000, /*channelCount=*/48, /*frameCount=*/3));
     Scene s;
     auto& e = s.effect;
-    e.setup();
-    uint32_t id = 0;
-    REQUIRE(e.addListRow(id));
-
-    e.onControlChanged("play");
-    REQUIRE(e.stateForTest() == FseqPlayerEffect::PlayState::Playing);
+    playFirstScannedFile(e);
 
     const uint8_t* buf = s.layer.buffer().data();
     const size_t bytes = s.layer.buffer().count() * 3;
@@ -734,4 +732,52 @@ TEST_CASE("a playlist row's own play field jumps to that row and starts a fresh 
     e.setListRowField(id2, "play", "{}");
     CHECK(e.cursorForTest() == 1);
     CHECK(e.stateForTest() == FseqPlayerEffect::PlayState::Playing);   // the row's own file opened fine
+}
+
+TEST_CASE("a released player holds no scan cache or buffers, keeps its playlist, and rebuilds the cache when enabled again") {
+    SdFixture sd;
+    sd.writeFseq("/sd/a.fseq", makeFseqV1Bytes(10, 3));
+    Scene s;
+    auto& e = s.effect;
+    e.setup();
+    uint32_t id = 0;
+    REQUIRE(e.addListRow(id));
+    e.onControlChanged("play");
+    REQUIRE(e.stateForTest() == FseqPlayerEffect::PlayState::Playing);
+    CHECK(e.scratchBytesForTest() > 0);
+
+    e.release();
+    CHECK(e.scratchBytesForTest() == 0);
+    CHECK(e.listRowCount() == 1);   // the playlist is the module's settings and survives a disable
+    mm::JsonSink row;
+    e.writeListRow(row, 0);
+    CHECK(std::string(row.data(), row.size()).find("/sd/a.fseq") != std::string::npos);
+
+    e.prepare();   // enabled again: the scan cache comes back and the stopped player starts on its own
+    CHECK(e.scratchBytesForTest() > 0);
+    CHECK(e.stateForTest() == FseqPlayerEffect::PlayState::Playing);
+}
+
+TEST_CASE("deleting and moving playlist rows keeps each row's own path") {
+    SdFixture sd;
+    sd.writeFseq("/sd/a.fseq", makeFseqV1Bytes(10, 2));
+    sd.writeFseq("/sd/b.fseq", makeFseqV1Bytes(10, 2));
+    Scene s;
+    auto& e = s.effect;
+    e.setup();
+    uint32_t id1 = 0, id2 = 0, id3 = 0;
+    REQUIRE(e.addListRow(id1));
+    REQUIRE(e.addListRow(id2));
+    REQUIRE(e.addListRow(id3));
+    REQUIRE(e.setListRowField(id2, "file", "{\"value\":1}"));
+    const auto path = [&e](uint8_t row) { mm::JsonSink j; e.writeListRow(j, row); const std::string t(j.data(), j.size()); return t.substr(t.find("/sd/"), 10); };
+    CHECK(path(0) == "/sd/a.fseq");
+    CHECK(path(1) == "/sd/b.fseq");
+    REQUIRE(e.moveListRow(id2, 0));
+    CHECK(path(0) == "/sd/b.fseq");
+    CHECK(path(1) == "/sd/a.fseq");
+    REQUIRE(e.deleteListRow(id1));
+    CHECK(e.listRowCount() == 2);
+    CHECK(path(0) == "/sd/b.fseq");
+    CHECK(path(1) == "/sd/a.fseq");
 }

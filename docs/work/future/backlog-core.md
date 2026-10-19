@@ -2,6 +2,12 @@
 
 Forward-looking to-build items for the **core / infrastructure** domain (`src/core/`, `src/platform/`, build, CI, network, persistence, UI). The light-domain counterpart is [backlog-light.md](backlog-light.md); items that genuinely span both are in [backlog-mixed.md](backlog-mixed.md). Index + overview: [README.md](index.md). Completed items are removed.
 
+### A Progress total rides the value patch (2026-10-19)
+
+A Progress control's total travels only in `writeControlMetadata` (Control.cpp), so a changed total needs a schema resync, which `rebuildControls()` triggers because `aux` is in the schema hash.
+One line in `writeControlValue` and one in `app.js`'s patch handler would let the total ride the value, and the hash could then skip it, so a track change in FseqPlayerEffect stops resyncing every browser.
+Pin it with a test that changes the total, patches, and finds the browser-side max moved with no resync.
+
 ### An SD card inserted after boot mounts only when its module restarts (2026-10-12)
 
 A mount attempt on an empty slot runs the SDMMC card-init sequence to its timeouts, so `SdCardModule` never retries one on the render thread: a card inserted later mounts when the module is switched off and on, on a pin edit, or at boot. A pull is still noticed within a second through a cheap presence probe. Detecting an insertion without that stall needs a card-detect pin where the slot has one, or a mount attempt off the render thread. The timed retry PR #136 carried was dropped for this reason before its merge.
