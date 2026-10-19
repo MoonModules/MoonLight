@@ -1295,6 +1295,17 @@
     "sampling": {
      "line": "One pixel per light, or the mean of the light's rectangle.",
      "more": "**point** takes the one pixel at a light's center, sharp and the fastest. With **area** each light averages its rectangle of the picture, so fine detail stays steady when a large picture shrinks onto few lights."
+    },
+    "edgeDepth": {
+     "line": "How far in the edge lights look, in percent; 0 is their own share.",
+     "more": "A border strip's outermost lights own a sliver at the edge, where letterboxes and overscan live. Raise **edgeDepth** and they reach further in, as Hyperion's 8% does; a stride keeps the reads the same."
+    },
+    "smoothing": {
+     "line": "How slowly a light eases to a new color, as a half-life; 0 is off.",
+     "more": "Raise **smoothing** and a light eases toward its new color, settling a noisy source alike on every source and board. A cut is a real jump, so **snapAbove** lands a bigger move whole; at 0 every move eases."
+    },
+    "snapAbove": {
+     "line": "A channel moving further than this jumps instead of easing."
     }
    },
    "role": "effect",
