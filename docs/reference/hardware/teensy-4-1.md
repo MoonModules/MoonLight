@@ -51,18 +51,9 @@ There is no GPU: the chip's PXP is a fixed-function 2D engine for displays, whos
 
 ## Installing and updating
 
-The [web installer](https://moonmodules.org/MoonLight/install/) installs a Teensy from Chrome or Edge on a desktop computer, with no tools to install.
-Choose **A board on a USB port**: a running board, MoonLight or PJRC's factory blink, is found by its USB ids and asked into its bootloader.
-A board with no running program shows no port: cancel the port list, press the board's program button, and click **Teensy not listed?** below the port row.
-Every install asks for one click on the bootloader, which the browser lists as `Unknown device (16C0:0478)`, since it reports no product name.
-After the install the installer reads the board's address from its serial log.
-With **Apply device defaults** it also sends the device model's settings over the same USB serial port.
-**Erase chip first** wipes every setting along with the install, for a board whose saved state went bad; the program is replaced either way.
+From Chrome or Edge with the web installer, and over the network from its Firmware card: [Install MoonLight](../../moonwalk.md#install), with Teensy picked. Settings live in 1 MB of the program flash and survive both.
 
-A running board updates over the network from its Firmware card: the browser downloads the release's `.bin` and uploads it, since the board has no TLS to fetch it.
-A `.bin` file uploads the same way, and the settings survive both.
-MoonCloud's usage report and Talk messages also go out through the open page, for the same reason.
-Power lost in the few seconds after **Rebooting…**, while the new image replaces the old, leaves the board dark: the program-button install above brings it back, settings included.
+The board has no TLS, so the browser downloads a network update's `.bin` and uploads it. MoonCloud's usage report and Talk messages go out through the open page for the same reason.
 
 ## Ethernet: a W5500 on SPI
 

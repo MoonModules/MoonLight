@@ -2,7 +2,7 @@
 
 MoonLight's [Control](../moonmodules/core/system.md#control) card is a surface: eight switches, eight encoders, eight faders and a pad grid, each driving whatever you assign it. A control surface puts those controls under your hands. It can be a phone or tablet, a game controller, or a motorized mixing desk whose faders move when something else changes them.
 
-> New here? Start with **[Install & first light](../gettingstarted.md)**. What follows assumes MoonLight is running and you can find it in a browser.
+The steps are processes: **[Connect a control surface](../moonwalk.md#control-surface)** for a desk, a gamepad or WLED Native, and **[Control a device from a phone or tablet over OSC](../moonwalk.md#osc-control)**. Below is what they refer to: the routes, the desk behavior, the OSC addresses and troubleshooting. It assumes MoonLight is running and you can find it in a browser.
 
 
 <video src="../assets/moontube/10-control.webm" controls playsinline title="The surface: the mapped controls, assigning your own, and OSC arriving from outside."></video>
@@ -13,6 +13,7 @@ MoonLight's [Control](../moonmodules/core/system.md#control) card is a surface: 
 
 | What you have | Route | What it needs |
 |---|---|---|
+| A phone, for power and brightness only | [WLED Native](#a-phone-with-wled-native) | The free WLED Native app on the same network; it drives the device rather than the surface |
 | A phone, a tablet or another app | [OSC](#a-phone-or-tablet-over-osc) | Open Stage Control, TouchOSC, Resolume, TouchDesigner or QLC+ on the same network |
 | A MIDI desk (Mackie Control, such as the X-Touch or the QCon) or a gamepad | [The browser](#a-midi-desk-or-a-gamepad-through-the-browser) | The desk or pad plugged into the computer showing MoonLight's page |
 | One desk for boards elsewhere in the rig | [The desktop app plus OSC](#one-desk-for-several-boards) | MoonLight running on the computer the desk is plugged into |
@@ -24,12 +25,7 @@ Every route lands on the same surface, so a desk, a phone and the web UI stay in
 
 ## A MIDI desk or a gamepad, through the browser
 
-1. In MoonLight add the service under **Services**: **Midi** for a desk, **Gamepad** for a controller.
-2. Plug the desk or pad into the computer showing MoonLight's page, in Chrome, Edge or Firefox.
-3. A desk: Chrome asks to use MIDI devices the first time; allow it. A pad: press any button, and the browser lists it.
-4. Assign the surface's controls on the Control card, such as `fader2` to a game's paddle.
-
-A Mackie desk in MC mode needs no setup: faders, knobs, SELECT buttons, touch sensors, motors and lights are mapped. An Akai APC40 mkII needs one choice: set the MIDI service's `profile` to Akai APC40 mkII, and its faders, knobs, activator buttons and clip pads are mapped, with their lights. A gamepad comes with default rows for its sticks and its A button.
+The **Midi** service takes a desk and the **Gamepad** service a controller, in Chrome, Edge or Firefox with the device plugged into the computer showing MoonLight's page. A Mackie desk in MC mode needs no setup: faders, knobs, SELECT buttons, touch sensors, motors and lights are mapped. An Akai APC40 mkII needs one choice: set the MIDI service's `profile` to Akai APC40 mkII, and its faders, knobs, activator buttons and clip pads are mapped, with their lights. A gamepad comes with default rows for its sticks and its A button.
 
 <img src="../assets/reference/akai-apc40-mkii.png" width="320" alt="The Akai APC40 mkII"> <img src="../assets/reference/microsoft-xbox-series-controller.png" width="200" alt="A Microsoft Xbox Series controller">
 
@@ -76,16 +72,11 @@ With the MIDI service's `source` on USB, the desk plugs into the board instead o
 
 With `source` on network, the desk is an [RTP-MIDI](https://www.rfc-editor.org/rfc/rfc6295) session, the standard Apple's Network MIDI uses. `host` names the other end: a device sharing the desk on its USB port, a desk with a network port, or a computer sharing its desk.
 
-- The service invites the host, and asks again every second until it answers, so either side may start first.
-- With `host` empty the service waits to be invited, as a Mac's Audio MIDI Setup does when its Network window connects to the board. Windows does the same with the free rtpMIDI driver.
-- The greeting, the surface and the touch handling are those of a desk on the board's own USB port.
+The service invites the host and asks again every second until it answers, so either side may start first. With `host` empty the service waits to be invited, as a Mac's Audio MIDI Setup does when its Network window connects to the board. Windows does the same with the free rtpMIDI driver. The greeting, the surface and the touch handling are those of a desk on the board's own USB port.
 
 ### Sharing a desk with another board
 
-With `source` on USB and `share` on, the board's USB desk drives nothing here: the board is a network MIDI cable, as an RTP-MIDI interface is.
-
-1. On the board with the desk, set `source` to USB and turn `share` on.
-2. On the board the desk should drive, set `source` to network and put the first board in `host`, by address or by name: `<name>.local`. A board waiting to be invited announces itself over Bonjour as `_apple-midi._udp`, and a Mac lists it in Audio MIDI Setup's Network window the same way.
+With `source` on USB and `share` on, the board's USB desk drives nothing here: the board is a network MIDI cable, as an RTP-MIDI interface is. On the board the desk should drive, `source` is network and `host` is the first board, by address or by name: `<name>.local`. A board waiting to be invited announces itself over Bonjour as `_apple-midi._udp`, and a Mac lists it in Audio MIDI Setup's Network window the same way.
 
 The sharing board accepts a session only while a desk is plugged in, so a desk plugged in later is greeted: the host invites again until the bridge says yes. One host at a time; a second is refused while the first holds the session. The host's status says why it was refused: `no desk`, `in use`, or `it invites` when the board it invited has a `host` of its own.
 
@@ -95,14 +86,12 @@ Messages pass both ways unchanged. The one exception is a SysEx the desk sends, 
 
 ## One desk for several boards
 
-The desk plugs into a computer running the MoonLight desktop app, and the app passes its surface on to the boards over OSC.
+The desk plugs into a computer running the MoonLight desktop app, with the desk set up on `localhost` as in the browser route, and the app passes its surface on to the boards over OSC.
 
-1. On the desktop app, set up the desk as in the route above, on `localhost`.
-2. On the desktop app: **Services → OSC**, turn on `listen` and `feedback`, and set `feedbackPort` to `9000`.
-3. Pick how the surface travels:
-    - **A few known boards:** `addressing` `unicast`, with the boards in `hosts`: `192.168.1.139, MM-testbench-S3.local`. Every board gets its own copy, retried by WiFi.
-    - **Any number of boards:** `addressing` `multicast`. Every board listening on the default `group` hears it; a second rig on the same network gives its desktop and boards another `group`.
-4. On each board: **Services → OSC**, turn on `listen`.
+- On the desktop app, **Services → OSC** has `listen` and `feedback` on and `feedbackPort` at `9000`.
+- **A few known boards:** `addressing` `unicast`, with the boards in `hosts`: `192.168.1.139, MM-testbench-S3.local`. Every board gets its own copy, retried by WiFi.
+- **Any number of boards:** `addressing` `multicast`. Every board listening on the default `group` hears it; a second rig on the same network gives its desktop and boards another `group`.
+- On each board, **Services → OSC** has `listen` on.
 
 Every change on the desktop's surface now reaches the boards' surfaces, a self-playing game's moving paddle included.
 
@@ -110,66 +99,18 @@ Every change on the desktop's surface now reaches the boards' surfaces, a self-p
 
 ## A phone or tablet, over OSC
 
-Eight switches, eight knobs and eight faders on a touchscreen, moving the device in real time and following it when something else moves it. It takes about five minutes, using a free app and one file.
+Eight switches, eight knobs and eight faders on a touchscreen, moving the device in real time and following it when something else moves it. The steps are in [Control a device from a phone or tablet over OSC](../moonwalk.md#osc-control).
 
-### The short version
+### What this gives you
 
-1. Install **[Open Stage Control](https://openstagecontrol.ammd.net/)** (free; macOS, Windows, Linux)
-2. Download **[MoonLight-control-surface.json](https://github.com/MoonModules/MoonLight/releases/download/latest/MoonLight-control-surface.json)**
-3. In its launcher set `send` to `<your-device-ip>:9000`, `osc-port` to `9001`, and `load` to the file
-4. On the device: **Services → OSC**, turn on `listen` and `feedback`
-5. Press start
-
-The faders move the device; moving something in the MoonLight UI moves the faders back.
-
----
-
-### 1. What this gives you
-
-MoonLight's Control card is a surface: a row of switches, a row of encoders, a row of faders, each of which can drive something on the device. The web UI shows it, but a mouse can only touch one control at a time.
-
-A **control surface** is that same row of controls on something you can put your hands on. Open Stage Control is a free app that draws one on any screen, including a phone or tablet browser, and speaks **OSC**, the protocol MoonLight listens for.
-
-Two things make this worth the five minutes:
+A **control surface** is the Control card's rows of controls on something you can put your hands on. The web UI shows it, but a mouse can only touch one control at a time. Open Stage Control is a free app that draws one on any screen, including a phone or tablet browser, and speaks **OSC**, the protocol MoonLight listens for.
 
 - **Several at once.** Ten fingers on a touchscreen, not one mouse pointer.
 - **It follows the device.** Change brightness in the web UI, or recall a preset, and the fader moves to match. The surface and the device never disagree about a value.
 
-`switch1` drives the master on/off and `fader1` drives the global brightness. The rest are wired and waiting for assignments. From the second slot on, a slot nobody assigned follows the effect enabled last, so switching a look on brings its controls to the surface. On the Control card, right-click an encoder to see what it is bound to.
+`switch1` drives the master on/off and `fader1` drives the global brightness. The rest are wired and waiting for assignments. From the second slot on, a slot nobody assigned follows the effect enabled last, so switching a look on brings its controls to the surface. On the Control card, right-click an encoder to see what it is bound to. The session file always serves the newest layout and sits beside the firmware on the [releases page](https://github.com/MoonModules/MoonLight/releases).
 
----
-
-### 2. Find your device's IP address
-
-The surface sends to an address, so you need the one your device is on.
-
-It is in the MoonLight UI on the **System** card, and it is the same address you typed into the browser to get there. On a desktop install talking to itself, it is `127.0.0.1`.
-
-Write it down; it goes in step 5.
-
----
-
-### 3. Install Open Stage Control
-
-Download it from **[openstagecontrol.ammd.net](https://openstagecontrol.ammd.net/)**. It is free and open source, and runs on macOS, Windows and Linux.
-
-**On macOS the first launch needs a right-click → Open**, once. The download is unsigned, so a double-click gets refused with a warning about an unidentified developer. Right-click, choose Open, confirm, and macOS remembers.
-
----
-
-### 4. Get the session file
-
-A **session** is the layout: which knobs exist, what they look like, and what each one sends. You do not have to build one.
-
-**[Download MoonLight-control-surface.json](https://github.com/MoonModules/MoonLight/releases/download/latest/MoonLight-control-surface.json)**
-
-That link always serves the newest session, built from the latest code, and it sits beside the firmware on the [releases page](https://github.com/MoonModules/MoonLight/releases) if you would rather find it there.
-
-Save it somewhere you can find again. The file does not contain your device's address, so the same file works for every device you own.
-
----
-
-### 5. Point it at your device
+### The launcher
 
 Open Stage Control opens a **launcher** first, a settings window, before it draws anything. Three fields matter:
 
@@ -177,19 +118,17 @@ Open Stage Control opens a **launcher** first, a settings window, before it draw
 |---|---|---|
 | `send` | `<your-device-ip>:9000` | where the surface sends. `9000` is the port MoonLight listens on |
 | `osc-port` | `9001` | where the surface LISTENS, so the device can answer |
-| `load` | the file from step 4 | the layout to draw |
+| `load` | the session file | the layout to draw |
 
 So a device at `192.168.1.42` gets `send` = `192.168.1.42:9000`.
 
 The two ports are different on purpose and this is the one place people go wrong: `9000` is the device's ear, `9001` is the surface's ear. They are not interchangeable.
 
-> Leave `read-only` **off** if you want to rearrange the layout later. On to keep it as shipped.
-
-Press the start button. The surface appears.
+Leave `read-only` **off** to rearrange the layout later; on keeps it as shipped.
 
 ---
 
-### 6. Turn the device's side on
+### The device's side
 
 In MoonLight: **Services → OSC**.
 
@@ -197,40 +136,28 @@ In MoonLight: **Services → OSC**.
 |---|---|---|
 | `listen` | on | accept incoming OSC. Without it the device ignores the surface entirely |
 | `feedback` | on | answer back, so the faders follow the device |
-| `feedbackPort` | `9001` | where to answer. Must match the `osc-port` from step 5 |
+| `feedbackPort` | `9001` | where to answer. Must match the `osc-port` in the launcher |
 | `port` | `9000` | where the device listens. Matches the `send` port |
 
 Leave `hosts` empty, with `addressing` on `unicast`. Empty means "answer whoever last wrote to us", which finds your surface on its own. Fill it in only when you want feedback sent somewhere other than the thing driving it.
-
-Move a fader. The device should react immediately.
 
 <img src="../assets/core/OscService-open-stage-control.png" width="600" alt="The shipped Open Stage Control session beside MoonLight's own Control card: eight switches, eight encoders and eight faders in both">
 
 ---
 
-### 7. Use it from a phone
+### A phone as the surface
 
-This is where it gets good, and it needs no extra setup.
-
-Open Stage Control also serves the surface as a **web page**. While it is running, look at its console output for a line naming a port (`8080` by default). On any phone or tablet on the same network, browse to:
-
-```text
-http://<the-computer-running-open-stage-control>:8080
-```
-
-Same surface, on a touchscreen, with ten fingers instead of one pointer. The computer running Open Stage Control stays the middleman; the phone talks to it, and it talks to the device.
-
-> If MoonLight's own UI is on port 8080 on that same machine, give Open Stage Control a different port in its launcher, or the two collide.
+Open Stage Control serves the surface as a web page; its console names the port (`8080` by default). A phone or tablet on the same network browses to `http://<the-computer-running-open-stage-control>:8080`. The computer stays the middleman: the phone talks to it, and it talks to the device. If MoonLight's own UI is on port 8080 on that machine, give Open Stage Control a different port in its launcher.
 
 ---
 
-### 8. When you see nothing
+### When the surface does nothing
 
 The surface draws fine but the device does not move, or the faders sit at zero and never follow. In rough order of likelihood:
 
 **The device is not listening.** `listen` off is the most common cause, and it is off by default. Services → OSC → `listen` on.
 
-**Wrong IP.** Check the System card again. A device that got a new address from DHCP after a reboot is a classic one: the surface is faithfully sending to nobody.
+**Wrong IP.** Check the System card. A device that got a new address from DHCP after a reboot is a classic one: the surface is faithfully sending to nobody.
 
 **The two ports are swapped.** `send` must end in `:9000`, `osc-port` must be `9001`. Swapping them produces exactly this symptom: nothing moves, nothing errors.
 
@@ -250,17 +177,13 @@ Brightness should jump. If that works and the surface does not, the problem is o
 
 ---
 
-### 9. One command, if you have the repo
-
-With a checkout, skip steps 3 to 6 entirely:
+### One command, from a checkout
 
 ```sh
 uv run moondeck/run/run_open_stage_control.py --host 192.168.1.42
 ```
 
-It finds the app, passes the session, the address and both ports, and runs it headless. Open **http://127.0.0.1:8088**. You still turn `listen` and `feedback` on at the device.
-
-It runs **headless**, as a web server, so a phone or another laptop reaches the surface at the URLs the launcher prints. On macOS that also sidesteps the quarantine dialog of an unsigned download. The session sends `/mm/hello` when the page loads, so every widget shows the device's real values straight away, and a browser refresh re-reads them.
+It finds the app, passes the session, the address and both ports, and runs it headless as a web server, at **http://127.0.0.1:8088**, so a phone or another laptop reaches the surface at the URLs the launcher prints. On macOS that also sidesteps the quarantine dialog of an unsigned download. The session sends `/mm/hello` when the page loads, so every widget shows the device's real values straight away, and a browser refresh re-reads them.
 
 | Option | Meaning |
 |---|---|
@@ -311,3 +234,16 @@ A device with `listen` on, on the leader's `feedbackPort`, takes every value the
 - **[Control card](../moonmodules/core/system.md#control)**: the surface the device owns, and what each control drives
 - **[MIDI and Gamepad services](../moonmodules/core/services.md#midi)**: the desk profiles, `source` and `share`, and the pad's rows
 - **[Control surfaces](../reference/hardware/control-surfaces.md)**: the X-Touch and QCon hardware, and Mackie Control on the wire
+
+---
+
+## A phone, with WLED Native
+
+The steps are in [Connect a control surface](../moonwalk.md#control-surface). For power and brightness from your pocket there is **WLED Native**, the open-source mobile app of the WLED ecosystem. MoonLight speaks the WLED JSON API and announces itself on the network as a WLED device does, so the app finds each MoonLight device with no setup and no pairing. Each shows up as a card with a power toggle and a brightness slider.
+
+![MoonLight devices discovered in WLED Native](../assets/core/WLED%20Native%20discovers%20MoonLight.jpeg){ width="300" }
+
+It is free on the [App Store](https://apps.apple.com/us/app/wled-native/id6446207239) for iPhone and iPad, and on [Google Play](https://play.google.com/store/apps/details?id=ca.cgagnier.wlednativeandroid) for Android.
+
+WLED Native is by **Christophe Gagnier ([@Moustachauve](https://github.com/Moustachauve))**, who wrote both the [Android](https://github.com/Moustachauve/WLED-Android) and the [iOS](https://github.com/Moustachauve/WLED-iOS) app. Their open source is what showed exactly what the apps read, so a MoonLight device appears in them without either side knowing about the other. For everything else, the device's own interface stays at `http://<devicename>.local`.
+

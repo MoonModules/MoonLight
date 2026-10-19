@@ -187,7 +187,7 @@ curl "http://<device>/api/file?path=/.config/Drivers.json"
 curl -X POST "http://<device>/api/file?path=/.config/Drivers.json" --data-binary @Drivers.json
 ```
 
-A restore lands on the next reboot, since a module reads its file at startup. A full backup is `/.config` plus `/moonlive` for the user's scripts, which together are everything a device knows that its firmware does not.
+A written file applies live, queued for the render task; network settings wait for the next boot, as [Backup and restore](../how-to/backup-and-restore.md) explains. A full backup is `/.config` plus `/moonlive` for the user's scripts, which together are everything a device knows that its firmware does not.
 
 ## Firmware
 

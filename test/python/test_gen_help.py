@@ -344,7 +344,7 @@ HELP = {"line": "A picture on the layer.",
         "controls": {"fit": {"line": "Keep the aspect.", "more": "Long."}, "file": {"line": "FSEQ only."}},
         "doc": "light/effects.md#picture",
         "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/PictureEffect.h",
-        "tests": "https://github.com/MoonModules/MoonLight/blob/main/test/unit/light/unit_PictureEffect.cpp"}
+        "tests": "https://moonmodules.org/MoonLight/reference/tests/unit-tests.html#pictureeffect"}
 
 
 def test_the_attribution_catalog_shows_avatars_and_the_modules_that_name_each_entry(monkeypatch):
@@ -385,6 +385,11 @@ def test_a_module_reads_as_plain_markdown_under_its_deck():
     assert "Attribution: Gomez 2000" in out
     assert "[Source](https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/PictureEffect.h)" in out   # the header on GitHub
     assert "[Tests](../../reference/tests/unit-tests.md#pictureeffect)" in out   # the site's own page, by @module
+
+
+def test_a_modules_tests_link_opens_its_section_in_the_test_inventory():
+    assert gen_help.tests_url("PictureEffect", "main") == "https://moonmodules.org/MoonLight/reference/tests/unit-tests.html#pictureeffect"
+    assert gen_help.tests_url("NoSuchThing", "main") is None
 
 
 def test_the_attribution_table_is_wrapped_in_a_deck_the_page_never_writes():

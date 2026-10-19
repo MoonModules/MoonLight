@@ -1,0 +1,70 @@
+// Spinning squares: six gradient squares orbit the center, each spinning on itself, over a dim swirl of twisted squares, after hpwit's ProceduralEffects.
+
+class SpinningSquaresEffect {
+  byte qx[6];
+  byte qy[6];
+  byte qc[6];
+  byte qs[6];
+  int qsize[6];
+
+  int dimensions() { return 2; }
+
+  string tags() { return "💫"; }
+
+  int wave(int i) { return sin(i * 256) / 256; }
+
+  RGB hsv(int h, int s, int v) {
+    RGB c = paletteRGB(h, v);
+    int w = 255 - s;
+    return RGB(c.r + (v - c.r) * w / 255, c.g + (v - c.g) * w / 255, c.b + (v - c.b) * w / 255);
+  }
+
+  // Each square's place on its orbit, and the cosine and sine of its spin, kept as 0..255 around 128. Orbit and size scale with the width, drawn for 128 lights across.
+  void moveSquares(int f) {
+    for (int i = 0; i < 6; i = i + 1) {
+      int orbit = mod(f + i * 43, 256);
+      int reach = (24 + mod(i, 2) * 16) * width / 128;
+      qx[i] = width / 2 + reach * (wave(orbit + 64) - 128) / 127;
+      qy[i] = height / 2 + reach * (wave(orbit) - 128) / 160;
+      int spin = mod(f * 3 + i * 40, 256);
+      if (mod(i, 2) == 1) { spin = 255 - spin; }
+      qc[i] = wave(spin + 64);
+      qs[i] = wave(spin);
+      qsize[i] = max((9 + wave(f * 2 + i * 60) / 40) * 127 * width / 128, 127);
+    }
+  }
+
+  void tick() {
+    int f = mod(t / 33, 25600);
+    moveSquares(f);
+    int flow = 256 - mod(f * 2, 256);
+    for (int y = 0; y < height; y = y + 1) {
+      for (int x = 0; x < width; x = x + 1) {
+        int dx = x - width / 2;
+        int dy = y - height / 2;
+        // The swirl: the square test under a rotation that grows with the distance from the center.
+        int twist = mod(f + (dx * dx + dy * dy) / 48, 256);
+        int c = wave(twist + 64) - 128;
+        int s = wave(twist) - 128;
+        int m = max(abs(dx * c + dy * s), abs(dy * c - dx * s)) / 127;
+        int band = wave(m * 10 + flow);
+        int v = band * band / 520;
+        int hue = m * 3 + f;
+        int sat = 255;
+        for (int i = 0; i < 6; i = i + 1) {
+          int ex = x - qx[i];
+          int ey = y - qy[i];
+          int across = ex * (qc[i] - 128) + ey * (qs[i] - 128);
+          int inside = max(abs(across), abs(ey * (qc[i] - 128) - ex * (qs[i] - 128)));
+          if (inside < qsize[i]) {
+            int g = inside * 255 / qsize[i];
+            v = 110 + g * 145 / 255;
+            hue = i * 43 + 64 + across * 56 / qsize[i] + f * 2;
+            sat = 255 - g * g / 600;
+          }
+        }
+        setRGB(y * width + x, hsv(mod(hue + 512, 256), sat, v));
+      }
+    }
+  }
+}

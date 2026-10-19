@@ -1,0 +1,131 @@
+# yaml-language-server: $schema=moonwalk.schema.json
+stage: First light
+summary: A device checked, and an effect on its lights.
+processes:
+  - id: first-look
+    title: Check your device
+    actor: user
+    goal: You know your device runs well, its name, its firmware and its network, before changing anything.
+    systems: [MoonCore]
+    dependsOn: [install]
+    intro: |
+      The top of the list is the device's own: read-outs and connection settings, and the first place to look when something seems off. What every card is and how they fit together is [How MoonLight works](tutorials/how-moonlight-works.md).
+    steps:
+      - id: system
+        section: The device
+        say: Open System.
+        when: { open: { module: SystemModule } }
+        detail: |
+          It shows the device's name, its model, uptime, frame rate and memory.
+
+          ![The System module](assets/gettingstarted/02-05-UI-System.png)
+
+          A device with a microphone also shows its **Audio** service, which is how audio-reactive effects hear the music.
+      - id: firmware
+        say: Open Firmware.
+        when: { open: { module: FirmwareUpdateModule } }
+        detail: |
+          It shows the build the device runs, and its Install button updates it over the network.
+
+          ![The Firmware module](assets/gettingstarted/02-06-UI-Firmware.png)
+
+          Coming from an older build? Skim the [migration notes](reference/MIGRATING.md) first: most updates need nothing, and a breaking change lists the one action it costs.
+      - id: network
+        section: The network
+        say: Open Network.
+        when: { open: { module: NetworkModule } }
+        detail: |
+          It shows the connection, its signal and the address others reach the device at.
+
+          ![The Network module](assets/gettingstarted/02-07-UI-Network.png)
+
+          **Devices** under it lists the other MoonLight devices on the same network, so several of them find each other.
+  - id: first-light-show
+    title: Show an effect on your lights
+    actor: user
+    goal: Your lights show an effect, on a layout that matches them, kept as you go.
+    systems: [MoonLight]
+    dependsOn: [first-look]
+    intro: |
+      A layout that matches your lights, an effect on it, and the result sent out to them. What the cards are and how they fit together is [How MoonLight works](tutorials/how-moonlight-works.md).
+
+      It all happens live in the device's web interface: nothing compiles, saves or reboots. A board with no lights attached works too, since the 3D preview shows the same.
+    steps:
+      - id: open-layouts
+        section: Say where your lights are
+        say: Open Layouts.
+        when: { open: { module: Layouts } }
+        detail: |
+          A fresh device has a Grid. A grid is a width, a height and a depth of evenly spaced points, the shape most rigs start as. A ring, a cube or a shape of your own is a different layout card in the same place.
+      - id: grid-size
+        say: Size the Grid to your lights.
+        when: { open: { module: GridLayout } }
+        detail: |
+          Set its width and height.
+
+          A 16×16 panel is width 16 and height 16; a strip of 60 is width 60 and height 1. The preview reshapes as you type, and the light count under the card follows.
+
+          If your strip zig-zags back and forth along the rows, turn on **serpentine**. A wrong setting shows up as every other row drawn backwards.
+
+          ![Resizing a grid while it renders, then the other layout shapes the same effect paints into.](assets/moontube/05-layouts.webm)
+      - id: add-effect
+        section: Paint something on it
+        say: Add an effect under the Layer.
+        when: { open: { module: Layer } }
+        detail: |
+          Open Effects, press + add module under the Layer and pick one.
+
+          The picker filters by the emoji on each card; one with visible motion, such as Bouncing Balls or Ripples, shows its controls' effect at once.
+      - id: adjust
+        say: Adjust its controls while it runs.
+        when: { manual: "Keep going until it looks the way you want. Each control's line under it says what it does, with help on." }
+      - id: brightness
+        section: Send it to your lights
+        say: Set brightness low in Drivers.
+        when: { set: { module: Drivers, control: brightness, value: 20 } }
+        then:
+          - { module: Drivers, control: brightness, minimum: 1, maximum: 20 }
+        detail: |
+          20 is plenty on a bench.
+
+          A full-brightness panel at arm's length is genuinely unpleasant.
+      - id: driver
+        say: Add the driver for your hardware.
+        when: { manual: "An RmtLedDriver on a pin, a NetworkSendDriver for Art-Net, E1.31 or DDP, or nothing for the preview alone." }
+        detail: |
+          - **LED strip on a pin**: add an **RmtLedDriver** (or a **ParallelLedDriver** for many strands at once) and set **pins** to the GPIO your data line is soldered to. Then match the light count to the layout.
+          - **Over the network**: add a **NetworkSendDriver** for Art-Net, E1.31/sACN or DDP, and give it the destination address.
+          - **Nothing attached**: the **Preview** driver is already there, and it feeds the 3D view.
+      - id: keep
+        section: Keep it
+        say: Check it survives a reboot.
+        when: { manual: "Nothing to save: everything you did is already persisted. Reboot the device to prove it: the tree comes back as you left it." }
+        detail: |
+          Controls save themselves a couple of seconds after the last change, so a power cut costs at most the last second or two of fiddling.
+    outro: |
+      ## Where to go next
+
+      - **Stack effects, blend layers and reshape with a modifier**: [How MoonLight works](tutorials/how-moonlight-works.md#3-the-light-pipeline) explains each, and its clips show them.
+      - **[Making beautiful effects](tutorials/generative-effects.md)** is about the effects themselves: why noise looks organic and how a field turns into something worth watching.
+      - **[Build your own MoonModules](tutorials/build-your-own-moonmodules.md)** is about writing one in C++ when the catalog does not have what you want.
+  - id: turn-help-on
+    title: Turn help on in the app
+    actor: user
+    goal: A help line shows under every module and control.
+    systems: [MoonCore]
+    dependsOn: [install]
+    page: moonmodules/core/ui.md
+    steps:
+      - id: toggle
+        say: Press ⓘ in the status bar.
+        when: { manual: "It is dimmed while help is off." }
+      - id: consent
+        say: Allow the help download.
+        when: { manual: "Asked once: the help comes from the docs site." }
+        detail: |
+          The browser keeps `help.json` and the yes, so the firmware carries none of it. Each release carries its own copy, so the help names the controls the running firmware has.
+      - id: more
+        say: Tap a help line for more.
+        when: { manual: "A module's line opens its guide; a ▸ opens a control's longer help." }
+        detail: |
+          A module's help links its docs, its source and its tests, and lists the processes it takes part in.

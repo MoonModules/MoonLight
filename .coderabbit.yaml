@@ -10,6 +10,8 @@ reviews:
     enabled: false
     drafts: false
     base_branches: ["main"]
+    # Never pause: every review is asked for by hand, so a pause only swallows the next request.
+    auto_pause_after_reviewed_commits: 0
 
   path_filters:
     - "!**/build/**"

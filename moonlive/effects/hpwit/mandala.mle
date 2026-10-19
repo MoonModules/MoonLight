@@ -1,0 +1,44 @@
+// Mandala: a six-fold kaleidoscope, petal rings drifting outward and swelling with a slow breath while the colors travel, after hpwit's ProceduralEffects.
+
+class MandalaEffect {
+  int dimensions() { return 2; }
+
+  string tags() { return "💫"; }
+
+  int wave(int i) { return sin(i * 256) / 256; }
+
+  RGB hsv(int h, int s, int v) {
+    RGB c = paletteRGB(h, v);
+    int w = 255 - s;
+    return RGB(c.r + (v - c.r) * w / 255, c.g + (v - c.g) * w / 255, c.b + (v - c.b) * w / 255);
+  }
+
+  void tick() {
+    int f = mod(t / 33, 25600);
+    int swell = 40 + wave(f / 2) / 3;
+    int drift = 256 - mod(f, 256);
+    for (int y = 0; y < height; y = y + 1) {
+      for (int x = 0; x < width; x = x + 1) {
+        int dx = x - width / 2;
+        int dy = y - height / 2;
+        int r = polarR(dx, dy);
+        // Six turns of the angle per circle, folded into one mirrored wedge.
+        int p = mod(polarA(dx, dy) * 6 / 256 + f / 2, 256);
+        if (p > 127) { p = 255 - p; }
+        int petal = wave(p * 2 + 192);
+        int soft = wave(r * 5 + petal * swell / 256 + drift);
+        int b = soft * soft / 255;
+        b = b * b / 255;
+        int b2 = wave(p * 2 + r * 2 + f);
+        b2 = b2 * b2 / 255;
+        b2 = b2 * b2 / 400;
+        int hue = r * 2 + petal / 4 + f;
+        int v = soft / 6 + 16;
+        if (b > v) { v = b; }
+        if (b2 > v) { v = b2; hue = hue + 128; }
+        if (r < 3) { v = 255; }
+        setRGB(y * width + x, hsv(mod(hue, 256), 255 - v / 3, v));
+      }
+    }
+  }
+}

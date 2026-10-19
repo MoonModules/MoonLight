@@ -1,0 +1,257 @@
+# yaml-language-server: $schema=moonwalk.schema.json
+stage: Develop
+summary: The change written and proven on the desktop.
+processes:
+  - id: desktop-build-test
+    title: Build, run and test on the desktop
+    actor: contributor
+    goal: A change is proven on the host before any board build.
+    systems: [MoonDeck]
+    dependsOn: [build-setup]
+    intro: |
+      Desktop first, always: anything the desktop can prove, the user interface, the logic and the tests, is proven there rather than through a multi-minute compile and a flash. A board build comes after the desktop is clean, and only for what the desktop cannot show: the platform layer, timing, memory, real hardware. Implement against [the architecture](explanation/architecture/index.md) and [the coding standards](contributing/coding-standards.md).
+
+      Every task is one MoonDeck script, and the script is the contract. It picks the build directory, applies the flags the gate expects and tees its output where the report reads it. Never run `ctest`, `cmake`, `pytest`, `node --test` or `idf.py` directly when a script wraps it; a task with no script is worth saying rather than working around. Where each build writes: [Build directories](reference/build-system.md#build-directories).
+    steps:
+      - id: build
+        say: Build the desktop firmware, with zero warnings.
+        when: { run: { script: moondeck/build/build_desktop.py } }
+        detail: |
+          Build only when the next step needs it, rather than after every edit. Desktop and Raspberry Pi build from the same root `CMakeLists.txt`, natively or cross-compiled.
+
+          A build error or a test failure that survives two fix attempts: stop, and ask or propose a rollback. Reverting is the product owner's call, whatever prompted it.
+      - id: run
+        say: Run it.
+        when: { run: { script: moondeck/run/run_desktop.py } }
+        detail: |
+          A second run replaces the instance already running; started by hand, an older process keeps port 8080 and answers every request with the code you replaced.
+
+          The run detaches and outlives the script that started it, as a flashed board runs on its own. Open `http://localhost:8080`. A source checkout keeps its settings in `build/fs/`: [where the desktop keeps its settings](reference/build-system.md#where-the-desktop-keeps-its-settings).
+
+          When the product owner can see or judge the result, hand it over, leave it running, and wait for their observation before moving on.
+      - id: build-tests
+        say: Build the unit tests and the scenario runner.
+        when: { run: { script: moondeck/build/build_desktop.py, args: "--tests" } }
+      - id: test
+        say: Run the unit tests.
+        when: { run: { script: moondeck/test/test_desktop.py } }
+      - id: scenarios
+        say: Replay the scenarios in-process.
+        when: { run: { script: moondeck/scenario/run_scenario.py } }
+        detail: |
+          Select what the change touched, as [Run a scenario in-process](moonwalk.md#run-scenario) describes. Ask before anything slow, such as a full scenario sweep, a gate list or a repo-wide sweep. Run the cheapest thing that answers the question, and say what the expensive one is and why.
+  - id: write-module
+    title: Write a MoonModule in C++
+    actor: contributor
+    goal: A new effect, layout, modifier or driver that builds, runs on the desktop and is tested and documented.
+    systems: [MoonCore, MoonLight, MoonDeck]
+    dependsOn: [desktop-build-test]
+    intro: |
+      You write what the module does; the core decides when to run it. Every module shares one lifecycle, so the steps are the same for each kind. For a guided first effect with the reasoning, follow the [Build your own MoonModules](tutorials/build-your-own-moonmodules.md) tutorial. The contract: [MoonModule](explanation/architecture/moonmodule.md).
+    steps:
+      - id: role
+        section: Write the module
+        say: Pick the role and its base class.
+        when: { manual: "Derive from EffectBase, LayoutBase, ModifierBase or DriverBase." }
+        detail: |
+          An effect draws into a pixel buffer, a layout reports where each light sits, a modifier bends or masks coordinates, and a driver pushes the image to hardware.
+
+          A light-domain module is one header under `src/light/`, which includes only its base header. A second include is a helper outside the domain's standard surface and carries a one-line comment. A core service is a `.h` and a `.cpp`: [File shape](contributing/coding-standards.md#file-shape-header-only-vs-h-cpp).
+      - id: hooks
+        say: Override the hooks the module needs.
+        when: { manual: "defineControls() declares controls, prepare() builds state, tick() runs every render tick, release() frees non-buffer resources." }
+        detail: |
+          Override-and-chain order for a container: `tick` does its own work then chains, while `setup`, `defineControls` and `prepare` chain first: [Override-and-chain](contributing/coding-standards.md#override-and-chain-convention).
+
+          `tick()` is the hot path: no heap allocation, no blocking, integer math in per-light work. Read `width()`, `height()` and `depth()` every frame and iterate exactly those bounds, and animate off `elapsed()`, never a frame counter. Expensive and occasional work goes in `prepare()`.
+      - id: controls
+        say: Declare the controls.
+        when: { manual: "In defineControls(), call controls_.addControl, addSelect or the matching helper for each member variable." }
+        detail: |
+          A control is an ordinary member variable the framework keeps in sync with the UI. Register a conditional control below the one it depends on. Assign a default only where the hardware fixes the value; a user-soldered pin stays unset, with an idle status until set: [Defaults](contributing/coding-standards.md#defaults).
+
+          A cheap reaction to one edit goes in `onControlChanged(name)`. A change that resizes memory or reshapes the grid makes `affectsPrepare(name)` return true, so the rebuild lands in `prepare()`.
+      - id: memory
+        say: Hold scratch memory in a ScratchBuffer.
+        when: { manual: "Declare ScratchBuffer<T> buf_{*this}; resize it in prepare(); guard tick() with if (!buf_)." }
+        detail: |
+          The buffer frees itself on disable and reports its bytes to the card, so the module needs no `release()` for it. Hold a scarce resource such as a GPIO or a socket in `prepare()` and free it in `release()`, so a disabled module genuinely lets go.
+      - id: register
+        section: Register and prove it
+        say: Register the type.
+        when: { manual: "Add mm::ModuleFactory::registerType<mm::MyEffect>(\"MyEffect\", \"light/effects.md#my-effect\") in src/module_types.cpp." }
+        detail: |
+          The second argument is the doc anchor the help's Docs link opens: your module's entry in its catalog page.
+      - id: test
+        say: Pin the module with a unit test.
+        when: { process: add-test }
+        detail: |
+          Put it in `test/unit/light/unit_<Module>.cpp`. Build a small grid, run one frame and check the output. Pin that the module survives a 1x1 and a 0x0 grid, and that a module holding memory drops its `dynamicBytes` to zero when disabled.
+      - id: run
+        say: Try the module on the running desktop.
+        when: { run: { script: moondeck/run/run_desktop.py } }
+        detail: |
+          Open `http://localhost:8080`, add the module in the UI, then resize the grid live to 1x1 and 0x0. It must not crash.
+      - id: header
+        say: Describe the module in its header.
+        when: { manual: "Put a /// comment above the class and above each control's member." }
+        detail: |
+          The header is the one place a module is described: its `///` comments feed the app's help and the catalog card. A plain `//` stays a note for whoever reads the code: [Comments](contributing/documentation-standards.md#comments).
+    outro: |
+      Run [Document a change](moonwalk.md#document) before the commit. `moondeck/check/check_module.py --module <Module>` reports every static-analysis tool on the one file.
+  - id: add-stream-source
+    title: Add a picture or channel-data source
+    actor: contributor
+    goal: A new way for frames to reach the lights, proven on the desktop, then on a board.
+    systems: [MoonLight, MoonDeck]
+    dependsOn: [desktop-build-test]
+    page: how-to/adding-a-stream-source.md
+    intro: |
+      A source fetches frames and hands them over, and everything after that is already written and tested. It comes from a capture device, a file format or a network protocol. Every source is one of two families, and each family has one place where its frames land: [Which family](how-to/adding-a-stream-source.md#which-family).
+    inputs:
+      type: object
+      properties:
+        family: { type: string, enum: [Picture, Channel data], description: "Are your frames width x height pixels, or one value per light?" }
+    steps:
+      - id: pick
+        section: Write the source
+        say: Pick the family from the table.
+        when: { read: { page: how-to/adding-a-stream-source.md#which-family } }
+        detail: |
+          Pixels of any size are a picture: a USB capture, a camera, a GIF, a browser tab. One value per light, in wiring order or row by row, is channel data: Art-Net, E1.31, DDP, an FSEQ file.
+      - id: picture-option
+        say: Add an option to the Picture service's source.
+        given: [{ input: family, equals: Picture }]
+        when: { manual: "In src/core/services/PictureService.h, append it to the Source enum and its name to the source select." }
+        detail: |
+          Say in `kRunsInTask` whether it runs in a task of its own. A still picture draws once in `prepare()`, like the test pattern: write into the picture `prepareBuffers` sized, and set the frame. Sources are options of one module, so a source edits that file.
+      - id: picture-write
+        say: Write pictures from a task of its own.
+        given: [{ input: family, equals: Picture }]
+        when: { manual: "Start the task in prepare() and stop it in release(), so the render loop never waits on a device." }
+        detail: |
+          Per picture: `beginWrite()` returns the back picture, `width x height x 3` bytes with the top row first. Decode into it directly, then call `endWrite()` to swap it to the front and bump the generation.
+
+          With room for two pictures the swap keeps effects reading an undisturbed front picture. Short of memory, the service keeps one picture and locks it while you write: frames may be skipped, never torn, and its status says why. Effects read through `PictureService::Reader`; a source never touches them.
+      - id: channel-effect
+        say: Write an effect that owns a ChannelDataSink.
+        given: [{ input: family, equals: Channel data }]
+        when: { manual: "Derive from EffectBase, as src/light/effects/FseqPlayerEffect.h does." }
+        detail: |
+          `NetworkReceiveEffect.h` is the complete example. In `prepare()` call `sink_.prepare(true)` for wiring order, open your file or socket, check its header, and set a status for what you refuse.
+      - id: channel-write
+        say: Hand each frame to the sink.
+        given: [{ input: family, equals: Channel data }]
+        when: { manual: "In tick(): sink_.write(offset, data, length), then sink_.tick(). Forward deliversWiringOrder and copyWiringFrame to the sink." }
+        detail: |
+          The sink holds the last frame so the lights keep it between frames, skips a frame that did not change, and places it. A source writing from a task of its own calls `write` there, which waits out at most one render copy; one that reads in `tick()` calls `write<false>`.
+
+          Placement follows the layer: a frame mapped by the sender, alone on its layer, goes to the output as it is. Beside another effect or under a modifier it lands on the grid by the layout's positions, so a modifier transforms it.
+      - id: register
+        section: Register and test
+        say: Register the effect type.
+        given: [{ input: family, equals: Channel data }]
+        when: { manual: "Add a registerType line in src/module_types.cpp." }
+        detail: |
+          The effect, its settings and its spec card follow [Write a MoonModule in C++](moonwalk.md#write-module).
+      - id: spec-card
+        say: Give the source its spec card row.
+        given: [{ input: family, equals: Picture }]
+        when: { manual: "Document the new option on the Picture service's spec card, in its header." }
+      - id: unit-test
+        say: Pin the source with a unit test.
+        when: { process: add-test }
+        detail: |
+          A picture source drives the desktop with a stand-in for the device. A channel-data source writes frames and checks each light against what was sent; `moondeck/run/fseq_play.py` writes reference FSEQ files and streams them over DDP. The service's own tests already pin the swap, and Network Receive's tests pin the sink's placement on serpentine, 3D, mirrored and transposed layouts.
+    outro: |
+      Prove the source on the desktop before a board sees it. Then run it on the board it is for: a platform seam holds the device itself, with stubs on every other platform, so a board without the device builds and shows a status rather than failing. Flash it with [Build, flash and monitor an ESP32](moonwalk.md#esp32-build-flash), then open the change as [one topic](moonwalk.md#contribute-pr).
+  - id: iterate-moonlive
+    title: Iterate a MoonLive script on a board
+    actor: agent
+    goal: A script is edited and judged on the device before it lands in the repo.
+    systems: [MoonLive]
+    intro: |
+      The working copy of a script lives on the board while you shape it with the product owner. The device compiles it and reports errors in the module's status, so a tweak costs one upload instead of a tree edit and a desktop build. The language: [MoonLive](moonmodules/light/moonlive.md). The HTTP calls: [Integrating](reference/integrating.md#a-moonlive-script-end-to-end).
+    steps:
+      - id: name
+        section: Edit on the device
+        say: Read the script name the module runs.
+        when: { run: { command: "curl http://<device>/api/state" } }
+        detail: |
+          Find the MoonLive effect module and read its `script` control. The product owner may rename modules and scripts on the board, so upload to the file the running module names, never to a remembered one.
+      - id: shadow
+        say: List the user script folder.
+        when: { run: { command: "curl \"http://<device>/api/dir?path=/moonlive\"" } }
+        detail: |
+          The loader prefers `/moonlive`, the folder the device's own editor writes, over `/.moonlive`, the factory folder. A stale copy there shadows every other upload of that name and has cost whole sessions. List it before forming any theory about a script that misbehaves on one board and passes on another.
+
+          A copy older than the current language is dead weight and safe to delete once shown. A copy in current syntax may be the product owner's own edit, and a folder also holds their palettes: never delete it wholesale.
+      - id: write
+        say: Upload the script to the board.
+        when: { run: { command: "curl -X POST -H \"Expect:\" --data-binary @<file>.mle \"http://<device>/api/file?path=/moonlive/<name>.mle\"" } }
+        detail: |
+          A script is shown in the device's own editor, so it reads as user-facing text: one header line saying what it is, and a short `//` hint after each `addControl`. The reasoning belongs in the commit message, not in the script. Re-read the file and delete every other comment before you show it.
+      - id: verify
+        say: Read the script back.
+        when: { run: { command: "curl \"http://<device>/api/file?path=/moonlive/<name>.mle\"" } }
+        detail: |
+          The read-back must match the file you sent, byte for byte.
+      - id: status
+        say: Read the module's status.
+        when: { run: { command: "curl http://<device>/api/state" } }
+        detail: |
+          A byte count means the script compiled. A failure shows its message with an offset, such as `a script is a class: expected class <Name> { … } @0`; an offset that lands mid-comment in a freshly pushed file points at a stale shadow copy first. A copy from `/moonlive` adds `edited copy` to the status.
+      - id: memory
+        say: Check the heap on a refused compile.
+        when: { run: { command: "curl http://<device>/api/system" } }
+        detail: |
+          `codegen failed` on a classic ESP32 is usually memory, not the compiler: the same script lowers on the desktop. Read `freeInternal` and `maxBlock` before you theorize about registers or the emitter, and when the host and the device disagree on identical input, make the device name which guard fired.
+      - id: repeat
+        say: Repeat until the product owner approves.
+        when: { manual: "Each round uploads, reads back and reads the status." }
+        detail: |
+          Every variant overwrites the running script. While you bisect, the last upload must be the working version. Confirm it from the lit lights before saying it is back, so a broken variant never keeps running unnoticed.
+      - id: land
+        section: Land it
+        say: Copy the finished script into the repo.
+        when: { manual: "Copy it into its collection under moonlive/effects/, moonlive/layouts/ or moonlive/modifiers/ only when the product owner says it is finished." }
+        detail: |
+          Keep the header line and the control hints and nothing else. Every shipped script must also compile as C++, which `test_scripts_are_cpp.py` pins.
+    outro: |
+      Drafts stay on the board and the repo gets the finished script once. The product owner judges the result on the hardware.
+  - id: package-desktop
+    title: Package the desktop build
+    actor: contributor
+    goal: The installable files for the host it runs on.
+    systems: [MoonDeck]
+    dependsOn: [desktop-build-test]
+    steps:
+      - id: package
+        say: Package the build for this host.
+        when: { run: { script: moondeck/ci/package_desktop.py } }
+        detail: |
+          A `.dmg` holding a `.app` on macOS, a `.tar.gz` and a `.deb` on Linux, a `.zip` and an NSIS `-setup.exe` on Windows. The setup installs as [Install MoonLight](moonwalk.md#install) describes and keeps the settings folder.
+
+          The Windows icon and the macOS `.icns` both derive from `mooninstaller/favicon.png`; the `.ico` is generated in the CMake build (`moondeck/ci/make_ico.py`) and embedded in the executable. A packager skips its format when its tool is missing (`dpkg-deb`, `makensis`) on a development machine. It fails outright in CI, where a missing file would otherwise fail the release on a glob.
+  - id: preview-installer
+    title: Try the web installer locally
+    actor: contributor
+    goal: A change to the installer runs end to end on a USB board before it ships.
+    systems: [MoonInstaller, MoonDeck]
+    steps:
+      - id: build
+        say: Build the firmware to install.
+        when: { run: { script: moondeck/build/build_esp32.py, args: "--firmware <firmware>" } }
+        detail: |
+          Optional. With a local ESP32 or Teensy build, the preview serves it as the release `latest`. Without one it only renders: the picker reads the real releases and Install fails.
+      - id: serve
+        say: Serve the installer.
+        when: { run: { script: moondeck/run/preview_installer.py } }
+      - id: open
+        say: Open it in Chrome, Edge or Opera.
+        when: { open: { url: "http://localhost:8421/?nocache=1" } }
+        detail: |
+          `?nocache=1` skips the picker's five-minute release cache while you edit; the cache is what keeps it under GitHub's 60 anonymous API requests an hour. Web Serial works on localhost without HTTPS.
+      - id: install
+        say: Install on a board plugged in over USB.
+        when: { manual: "Pick latest as the release: the preview serves your build under it." }

@@ -1,0 +1,31 @@
+// Edge comets: comets crossing from a random edge, their sparks the tail, after hpwit's multi_effect_controller.
+
+class EdgeCometsEffect {
+  byte amount = 6;
+
+  int dimensions() { return 2; }
+
+  string tags() { return "💫✨"; }
+
+  void defineControls() {
+    pool(300);
+    addControl("amount", amount, 1, 20); // how often a comet sets off
+  }
+
+  void tick() {
+    fade(32);
+    if (random16(20) < amount) {
+      int edge = random16(4);
+      int x = random16(width);
+      int y = random16(height);
+      if (edge == 0) { x = 0; }
+      else if (edge == 1) { y = 0; }
+      else if (edge == 2) { x = width - 1; }
+      else { y = height - 1; }
+      emit(x, y, edge * 16384, width * 16, 2, width * 2, random16(256));
+    }
+    step();
+    age(1);
+    render(100);
+  }
+}

@@ -1,0 +1,152 @@
+# yaml-language-server: $schema=moonwalk.schema.json
+stage: Plan and set up
+summary: A picked topic on its own branch, on a computer set up to build it.
+processes:
+  - id: pick-spec-plan
+    title: Pick, spec and plan a topic
+    actor: product-owner
+    goal: A module, effect, driver or capability has an approved plan before code.
+    systems: [MoonWalk]
+    page: contributing/principles-and-process.md
+    intro: |
+      A topic is one module, effect, driver or capability. The plan is the contract for the branch, and it becomes the pull request description. A draft may wait in `docs/work/future/` until its topic is picked.
+    steps:
+      - id: pick
+        say: Name one module, effect, driver or capability.
+        when: { manual: "One topic per cycle." }
+      - id: spec
+        say: Shape the spec before any code.
+        actor: agent
+        when: { manual: "The architect shapes it and the researcher maps the prior art." }
+        detail: |
+          The spec holds enough to build from. Check the request against the README, CLAUDE.md and the [architecture](explanation/architecture/index.md): a conflict is named briefly with its reference, and the product owner can still overrule. Ask rather than guess: asking the product owner beats guessing, and when in doubt on a spec, ask.
+      - id: end-states
+        say: Name two to four end states.
+        actor: agent
+        when: { manual: "For each, write what it gains and what it loses." }
+        detail: |
+          Only a restructure needs this step, which changes the shape of the system. The plan builds the one end state the product owner picks.
+      - id: plan
+        say: Write the plan.
+        actor: agent
+        when: { manual: "Save it as docs/work/present/Plan-YYYYMMDD - title.md." }
+      - id: approve
+        say: Approve the plan.
+        when: { manual: "Read it first: code starts after the approval." }
+        detail: |
+          Each cycle subtracts as well as adds: a change that adds a rule, a file or a concept says what comes out, or says plainly that nothing does and why.
+      - id: pr
+        say: Use the plan as the pull request description.
+        when: { manual: "The plan file is deleted in the same pull request." }
+        detail: |
+          Deleting the plan is the product owner's call. The code being written is not the plan being realized: verification, including the judgment steps, is part of it.
+  - id: branch
+    title: Branch and work on it
+    actor: product-owner
+    goal: Feature work lands on a branch the product owner created, and main stays releasable.
+    dependsOn: [pick-spec-plan]
+    intro: |
+      Main is always releasable: what is on main ships as the latest pre-release, and tagged releases are cut from it. Feature work branches; a branch may bundle several topics, one combined commit per cycle.
+
+      Scope is what was asked, and nothing adjacent: work spotted while working is named in one sentence at the end and left undone, and a follow-up is offered once. A question is answered, not acted on: changes happen after explicit agreement.
+    steps:
+      - id: create
+        say: Create the branch for the topic.
+        when: { run: { command: "git switch -c <branch-name>" } }
+        detail: |
+          The product owner creates every branch, and whoever initiates a branch submits its pull request. The agent works on the branch it is given and asks when a change does not belong there.
+      - id: work
+        say: Prove the change on the desktop.
+        actor: contributor
+        when: { process: desktop-build-test }
+        detail: |
+          Keep each commit under about 100 changed files: CodeRabbit reviews the files a pushed commit changes, and past that the commit silently loses a review layer. A mechanical sweep, such as em-dashes or a metrics refresh, is a commit of its own, apart from behavioral fixes, so both stay reviewable.
+      - id: hotfix
+        say: Commit a small verified hotfix straight to main.
+        when: { manual: "Only a small fix, already verified." }
+        detail: |
+          The one exception to branching for feature work.
+  - id: build-setup
+    title: Set up a computer to build MoonLight
+    actor: contributor
+    goal: uv, CMake 3.20 or newer and a C++20 compiler on the machine, once.
+    systems: [MoonDeck]
+    inputs:
+      type: object
+      properties:
+        platform: { type: string, enum: [macOS, Linux, Windows], description: "Which computer?" }
+    steps:
+      - id: mac
+        say: Install the command line tools, CMake and uv.
+        given: [{ input: platform, equals: macOS }]
+        when: { run: { command: "xcode-select --install; brew install cmake uv" } }
+      - id: linux
+        say: Install CMake, a compiler and uv.
+        given: [{ input: platform, equals: Linux }]
+        when: { run: { command: "sudo apt install cmake g++ && curl -LsSf https://astral.sh/uv/install.sh | sh" } }
+        detail: |
+          GCC 12 or Clang 15 from your distribution, and uv from astral's installer.
+      - id: windows
+        say: Install CMake and the Visual Studio Build Tools.
+        given: [{ input: platform, equals: Windows }]
+        when: { run: { command: "winget install Kitware.CMake; winget install Microsoft.VisualStudio.2022.BuildTools --override \"--passive --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended\"" } }
+        detail: |
+          Visual Studio 2022 with the MSVC v143 workload and the Windows 11 SDK, from an elevated terminal.
+
+          Build and test from a **Developer PowerShell for VS 2022**, so `cl.exe` and the SDK are on `PATH`. Install uv from astral's installer as well.
+      - id: moondeck
+        say: Start MoonDeck.
+        when: { run: { command: "uv run moondeck/moondeck.py" } }
+        detail: |
+          Open `http://localhost:8420` in the browser. Every MoonDeck script a process runs is one of its cards, and the same scripts run from a terminal.
+  - id: setup-editor
+    title: Set up the editor
+    actor: contributor
+    goal: Diagnostics appear as you type, from the same `.clang-tidy` CI uses.
+    systems: [MoonDeck]
+    dependsOn: [build-setup]
+    steps:
+      - id: clangd
+        say: Install the clangd extension.
+        when: { manual: "llvm-vs-code-extensions.vscode-clangd" }
+        detail: |
+          Nothing else to configure: `.clangd` points at the compilation database, and any build refreshes it, since `CMakeLists.txt` sets `CMAKE_EXPORT_COMPILE_COMMANDS`. clangd skips the checks it counts as slow, so CI stays the authority.
+      - id: intellisense
+        say: Turn off IntelliSense.
+        when: { manual: "With clangd, it reports every diagnostic twice, and they disagree." }
+      - id: build-once
+        say: Build the desktop once.
+        when: { run: { script: moondeck/build/build_desktop.py } }
+        detail: |
+          It writes the compilation database clangd reads.
+
+          **Every file reports `'cstdint' file not found`?** The build directory was configured with another compiler than clangd uses. `.clangd`'s `--query-driver` covers the usual ones; add a new toolchain there.
+  - id: bump-idf
+    title: Bump the ESP-IDF pin
+    actor: contributor
+    goal: Every ESP32 target builds on the new IDF, locally and in CI.
+    systems: [MoonDeck]
+    intro: |
+      A pin move is a deliberate re-test pass, never a routine pull. What the pin is and why: [ESP-IDF version](reference/build-system.md#esp-idf-version).
+    steps:
+      - id: pins
+        say: Move the pin in both places.
+        when: { manual: "build_esp32.py's PINNED_IDF_COMMIT and PINNED_IDF_VERSION; release.yml's esp_idf_version." }
+        detail: |
+          In `moondeck/build/build_esp32.py`, and in `.github/workflows/release.yml` the Docker tag `esp_idf_version` with its cache key.
+      - id: checkout
+        say: Move the IDF checkout onto the new pin.
+        when: { run: { script: moondeck/build/setup_esp_idf.py } }
+        detail: |
+          Fetch the new tag in the IDF checkout first. Setup checks out the pinned commit and its submodules, recursively: a different IDF commit without its submodules builds against the old ones.
+      - id: build-all
+        say: Build every ESP32 firmware, one at a time.
+        when: { manual: "build_esp32.py --firmware <name>, once per variant." }
+      - id: retest
+        say: Re-test each chip family on a board.
+        when: { process: live-verification }
+        detail: |
+          A classic, an S3, an S31 and a P4, with the device scenarios.
+      - id: commit
+        say: Commit the pin move.
+        when: { process: commit }

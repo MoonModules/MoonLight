@@ -1,0 +1,157 @@
+# yaml-language-server: $schema=moonwalk.schema.json
+stage: Document and commit
+summary: The change documented, checked and committed.
+processes:
+  - id: document
+    title: Document a change
+    actor: contributor
+    goal: The module's header and the docs describe what shipped.
+    page: contributing/documentation-standards.md
+    intro: |
+      Docs land with the code and describe the system as it is. A fact lives in one place and every other page links to it. Where each kind of text goes: [What we document](contributing/documentation-standards.md#what-we-document).
+    steps:
+      - id: header
+        say: Describe what shipped in the module's header.
+        when: { manual: "A fact about behavior goes in the .h, beside the code." }
+        detail: |
+          The header is the module's own documentation and feeds its catalog card. Write `///` comments as [Comments](contributing/documentation-standards.md#comments) says: one line above the code it explains.
+      - id: page
+        say: Write intent, cost and sequence on a page.
+        when: { manual: "Put it in the Diataxis folder that matches the reader: how-to, explanation or reference." }
+        detail: |
+          A fact about intent, cost or sequence has no member to sit on. The folder under `docs/` is the page's kind, and a page serves one kind only.
+      - id: migrating
+        say: Add a MIGRATING entry for a breaking change.
+        when: { read: { page: reference/MIGRATING.md } }
+        detail: |
+          A break is documented rather than carried. The entry buys one way to do each thing.
+      - id: delete
+        say: Delete the shipped backlog item or spec draft.
+        when: { manual: "Look in docs/work/future for the item before you delete it." }
+    outro: |
+      The docs build and the documentation checks run with [the commit checks](moonwalk.md#commit). The merge gate verifies the docs landed with the code.
+  - id: commit
+    title: Run the commit checks, then commit
+    actor: contributor
+    goal: A commit whose every check the change triggers passed, reviewed and measured.
+    systems: [MoonDeck]
+    dependsOn: [desktop-build-test, document]
+    page: contributing/principles-and-process.md
+    intro: |
+      The product owner initiates every event and every gate list. On "run pre-commit", run each check whose trigger the change matches, once, and report one line each, PASS, FAIL or SKIP with the reason, and stop. An applicable check skipped carries a one-line reason in the commit or the pull request. A failure is reported rather than fixed and run again: a second run needs the words again.
+
+      The scope freezes at the words, so a request made during a run goes to the next commit. A change made after a run re-checks only itself, on the product owner's go; "restart" reruns everything, and a cosmetic change rides on the run it followed. On a diff of about ten files across areas, the Reviewer reads the staged diff first. `test_host --ui` is never a gate.
+    steps:
+      - id: specs
+        section: Every change
+        say: Check the specs.
+        when: { run: { script: moondeck/check/check_specs.py } }
+      - id: prose
+        say: Check the prose of the added lines.
+        when: { run: { script: moondeck/check/check_prose.py } }
+        detail: |
+          It also writes its report to the tree, a record the commit carries.
+      - id: docs
+        section: Documentation
+        say: Build the docs, strict.
+        given: [{ changed: ["**/*.md", "docs/**", mkdocs.yml, moonwalk/**, "moondeck/docs/**"] }]
+        when: { run: { script: moondeck/docs/build_docs.py, args: "--strict" } }
+      - id: docgen
+        say: Check the headers' documentation.
+        given: [{ changed: ["**/*.md", src/**, test/**] }]
+        when: { run: { script: moondeck/check/check_docgen.py } }
+        detail: |
+          A ratchet: errors stay at zero, and warnings may only fall, in total and per rule, against the committed `docs/reference/metrics/docgen.md`. A rule whose own limit changed says so in the commit. A touched file with warnings gets all of them resolved; what resists stays, with one line saying why.
+      - id: taglines
+        say: Check the front pages agree on the platforms.
+        given: [{ changed: [README.md, docs/index.md, CLAUDE.md] }]
+        when: { run: { script: moondeck/check/check_taglines.py } }
+      - id: code
+        section: Code
+        say: Check the code's boundaries and complexity.
+        given: [{ changed: [src/**, test/**, "!test/js/**", "!test/python/**"] }]
+        when: { run: { script: moondeck/check/check_code.py } }
+      - id: build-desktop
+        say: Build the desktop firmware, with zero warnings.
+        given: [{ changed: [src/**, test/**, "!test/js/**", "!test/python/**"] }]
+        when: { run: { script: moondeck/build/build_desktop.py } }
+      - id: build-tests
+        say: Build the unit tests and the scenario runner.
+        given: [{ changed: [src/**, test/**, "!test/js/**", "!test/python/**"] }]
+        when: { run: { script: moondeck/build/build_desktop.py, args: "--tests" } }
+      - id: test-desktop
+        say: Run the unit tests.
+        given: [{ changed: [src/**, test/**, "!test/js/**", "!test/python/**"] }]
+        when: { run: { script: moondeck/test/test_desktop.py } }
+      - id: scenarios
+        say: Run the scenarios the change touches.
+        given: [{ changed: [src/**, test/**, "!test/js/**", "!test/python/**"] }]
+        when: { run: { script: moondeck/scenario/run_scenario.py } }
+        detail: |
+          Select what the change touched: [Run a scenario in-process](moonwalk.md#run-scenario).
+      - id: esp32-fresh
+        say: Check the classic firmware is up to date.
+        given: [{ changed: [src/**, "!src/platform/desktop/**", moonbase/**] }]
+        when: { run: { script: moondeck/check/check_esp32_built.py, args: "--firmware esp32" } }
+        detail: |
+          It compares the binary and its MoonBase against every source in a tenth of a second, and catches the edit that was never compiled. One firmware per chip family is the gate. A stale one is rebuilt on the product owner's go, [one at a time](moonwalk.md#esp32-build-flash).
+      - id: esp32-fresh-s3
+        say: Check the S3 firmware is up to date.
+        given: [{ changed: [src/**, "!src/platform/desktop/**"] }]
+        when: { run: { script: moondeck/check/check_esp32_built.py, args: "--firmware esp32s3-n16r8" } }
+      - id: esp32-fresh-p4
+        say: Check the P4 firmware is up to date.
+        given: [{ changed: [src/**, "!src/platform/desktop/**"] }]
+        when: { run: { script: moondeck/check/check_esp32_built.py, args: "--firmware esp32p4rev3-eth" } }
+      - id: no-jit
+        say: Build the desktop without the MoonLive backend.
+        given: [{ changed: [src/core/moonlive/**] }]
+        when: { run: { script: moondeck/build/build_desktop.py, args: "--no-jit" } }
+        detail: |
+          It catches a helper left unused outside its guard, fatal under GCC while clang stays silent.
+      - id: kpi
+        say: Record the repo's health.
+        given: [{ changed: [src/**, test/**, "!test/js/**", "!test/python/**"] }]
+        when: { run: { script: moondeck/check/collect_kpi.py, args: "--commit" } }
+        detail: |
+          Flash and DRAM per target, binary size, the tick matrix, line counts and complexity: its diff belongs in the commit and its deltas in the message. It runs when the code changes, since its timings drift with the host.
+      - id: js
+        section: The web pages
+        say: Run the JavaScript tests.
+        given: [{ changed: [src/ui/**, mooninstaller/**, docs/assets/**, test/js/**] }]
+        when: { run: { script: moondeck/test/test_host.py, args: "--js" } }
+      - id: devices
+        say: Check the installer's device catalog.
+        given: [{ changed: [src/ui/**, mooninstaller/**] }]
+        when: { run: { script: moondeck/check/check_devices.py } }
+      - id: python
+        section: The scripts
+        say: Run the Python tests.
+        given: [{ changed: [moondeck/**, moonlive/**, moonwalk/**, test/python/**, "docs/moonmodules/**/*.md"] }]
+        when: { run: { script: moondeck/test/test_host.py, args: "--python" } }
+      - id: firmwares
+        say: Check the firmware list.
+        given: [{ changed: [moondeck/**, moonlive/**] }]
+        when: { run: { script: moondeck/check/check_firmwares.py } }
+      - id: improv
+        section: With a board attached
+        say: Provision a board over Improv, end to end.
+        given: [{ changed: ["src/**/*Improv*", "src/platform/*/platform_*_improv.cpp", mooninstaller/improv-frame.js, mooninstaller/install-orchestrator.js, "moondeck/build/improv_*.py"] }]
+        when: { manual: "improv_smoke_test.py --port <the board's port>, or its card with the port picked." }
+        detail: |
+          Recommended rather than required, since it needs a board on USB; a skip names its reason.
+      - id: stage
+        section: Commit
+        actor: product-owner
+        say: Stage the diff you reviewed.
+        when: { manual: "Staged means read, unstaged means not." }
+        detail: |
+          The agent never stages or unstages: staging claims something as reviewed that nobody read, and unstaging discards a verification invisibly. A scratch file of the agent's that lands in the index is reported rather than quietly removed.
+      - id: commit
+        actor: product-owner
+        say: Commit on the words "commit now".
+        when: { run: { command: "git commit" } }
+        detail: |
+          Only "commit now" commits, and it covers the diff the product owner reviewed: any later edit voids it.
+
+          The message opens with an imperative title of at most 72 characters and a 1 to 3 sentence end-user summary with no file lists. Then the performance line and the account line from `collect_kpi.py --commit`. Then bullets under **Core**, **Light domain**, **UI**, **Scripts/MoonDeck**, **Tests**, **Docs/CI** and **Reviews**, with one Reviews bullet per finding: flagged, then done, accepted or deferred, and why. No hard wraps.

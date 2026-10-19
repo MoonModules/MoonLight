@@ -1,10 +1,39 @@
 // How a module describes itself, its help and its emoji, shared by the app and the docs site's card deck so both show the same; it imports nothing, as the site serves it beside its own scripts.
 
-// Inline markdown as HTML: everything escaped first, then code, bold and absolute links, so text from the file cannot become markup.
-const inline = s => s
-    .replace(/`([^`]+)`/g, "<code>$1</code>")
+// Inline markdown as HTML: everything escaped first, so text from the file cannot become markup. Code spans and link targets are set aside before bold and italics, as CommonMark parses them first, so a `*` inside them stays literal.
+const emphasis = s => s
     .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
-    .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+    .replace(/\*([^*\s][^*]*)\*/g, "<em>$1</em>");
+const inline = s => {
+    const kept = [];
+    const keep = html => `\u0000${kept.push(html) - 1}\u0000`;
+    let out = emphasis(s
+        .replace(/`([^`]+)`/g, (_, code) => keep(`<code>${code}</code>`))
+        .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, (_, text, url) => keep(`<a href="${url}" target="_blank" rel="noopener">${emphasis(text)}</a>`)));
+    // A link's text may hold a code span, so a second pass restores what the first one put back; a NUL in the text itself is no placeholder and stays.
+    for (let pass = 0; pass < 2; pass++) out = out.replace(/\u0000(\d+)\u0000/g, (m, i) => kept[i] ?? m);
+    return out;
+};
+
+// The block forms MoonWalk's prose adds to the help's paragraphs and tables: a list, a heading (one level under the view's own), and a picture or a clip on a paragraph of its own. Only an https address becomes a source.
+const isList = p => p.split("\n").every(l => /^- /.test(l));
+const list = p => `<ul>${p.split("\n").map(l => `<li>${inline(l.slice(2))}</li>`).join("")}</ul>`;
+const HEADING = /^(#{2,4}) (.+)$/;
+const MEDIA = /^!\[([^\]]*)\]\((https:\/\/[^)\s"]+)\)$/;
+function media(alt, src) {
+    return /\.(webm|mp4)$/.test(src)
+        ? `<video src="${src}" controls playsinline title="${alt}"></video>`
+        : `<img src="${src}" alt="${alt}">`;
+}
+function block(p) {
+    if (isTable(p)) return table(p);
+    if (isList(p)) return list(p);
+    const h = p.match(HEADING);
+    if (h) return `<h${h[1].length + 2}>${inline(h[2])}</h${h[1].length + 2}>`;
+    const m = p.match(MEDIA);
+    if (m) return media(m[1], m[2]);
+    return inline(p);
+}
 
 // A GitHub-flavored markdown table, a paragraph whose every line is a `| … |` row: the first row heads it and the `|---|` row below it is dropped.
 const isTable = p => p.split("\n").every(l => /^\|.*\|$/.test(l.trim()));
@@ -18,7 +47,11 @@ function table(p) {
 
 export function helpMarkdown(text) {
     const esc = String(text).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-    return esc.split(/\n\n+/).map(p => isTable(p) ? table(p) : inline(p)).join("<br><br>");
+    // A fenced code block is lifted out before the text splits into paragraphs, so a blank line inside it stays code; it keeps its text as written, already escaped, with no inline formatting.
+    const code = [];
+    const held = esc.replace(/\u0000/g, "").trim().replace(/^```[a-z]*\n([\s\S]*?)\n```$/gm, (_, body) => `\u0000${code.push(body) - 1}\u0000`);
+    // Trimmed, so the text's last line is a block like any other.
+    return held.split(/\n\n+/).map(p => /^\u0000(\d+)\u0000$/.test(p) ? `<pre><code>${code[+p.slice(1, -1)]}</code></pre>` : block(p)).join("<br><br>");
 }
 
 // A URL taken from help.json, only when it is https and cannot leave its attribute; anything else is no link at all.
@@ -31,8 +64,25 @@ export function docUrl(docPath) {
     return "https://moonmodules.org/MoonLight/moonmodules/" + docPath.replace(/\.md(#.*)?$/, ".html$1");
 }
 
-// A module's help, progressive disclosure: the line and the summary always show, the guide and the rest open on a tap, and the picture loads only then.
-export function moduleHelp(help, docPath) {
+// The MoonWalk processes a module or one of its controls takes part in, as links: `index` is moonwalk.json's byModule and byControl with its processes, `page` the MoonWalk page the host knows. A link carries its step as `ref`, `process/step`, for a host that opens MoonWalk in place, and its address opens the page at that step.
+export function walkLinks(index, type, control, page) {
+    const refs = (control ? index?.byControl?.[`${type}.${control}`] : index?.byModule?.[type]) || [];
+    // A module lists each process once, at its first step; a control names the step itself.
+    const firsts = new Map();
+    for (const ref of refs) { const pid = ref.split("/")[0]; if (!firsts.has(pid)) firsts.set(pid, ref); }
+    return [...firsts].filter(([pid]) => index.processes?.[pid])
+        .map(([pid, ref]) => ({ label: `MoonWalk: ${index.processes[pid].title}`, href: `${page}#${ref.split("/").map(encodeURIComponent).join("/")}`, ref }));
+}
+
+// A walk link as an element, its step on `data-walk`. Its address is the host's own page with the ids encoded after the #, so nothing from the file chooses where it leads.
+function walkAnchor(w) {
+    const a = document.createElement("a");
+    a.href = w.href; a.target = "_blank"; a.rel = "noopener"; a.textContent = w.label; a.dataset.walk = w.ref;
+    return a;
+}
+
+// A module's help, progressive disclosure: the line and the summary always show, the guide and the rest open on a tap, and the picture loads only then. `walks` are walkLinks' links, listed after the source and the tests.
+export function moduleHelp(help, docPath, walks = []) {
     const box = document.createElement("details");
     box.className = "card-helpbox";
     // The line and the summary always show; the arrow opens the guide, the picture, the attribution and the links.
@@ -64,24 +114,33 @@ export function moduleHelp(help, docPath) {
         a.href = href; a.target = "_blank"; a.rel = "noopener"; a.textContent = label;
         links.appendChild(a);
     }
+    for (const a of walks.map(walkAnchor)) {
+        if (links.childNodes.length) links.append(" · ");
+        links.appendChild(a);
+    }
     if (links.childNodes.length) body.appendChild(links);
     box.appendChild(body);
     box.addEventListener("toggle", () => { if (box.open && img && !img.src) img.src = image; });
     return box;
 }
 
-// A control's help as Material's helper text, a line under the field rather than a hover tooltip, which fails on touch; any more opens from the line.
-export function controlHelp(row, help) {
-    if (!help || !help.line) return;
+// A control's help as Material's helper text, a line under the field rather than a hover tooltip, which fails on touch; any more opens from the line, the MoonWalk steps that set the control with it.
+export function controlHelp(row, help, walks = []) {
+    const anchors = walks.map(walkAnchor);
+    if (!help?.line && !anchors.length) return;
     let el;
-    if (help.more) {
+    if (!help?.line) {
+        el = document.createElement("div");   // no line of its own, but steps that set it: the links alone
+        anchors.forEach((a, i) => { if (i) el.append(" · "); el.appendChild(a); });
+    } else if (help.more || anchors.length) {
         el = document.createElement("details");
         const s = document.createElement("summary");
         s.innerHTML = helpMarkdown(help.line);
         el.appendChild(s);
         const d = document.createElement("div");
         d.className = "control-helper-more";
-        d.innerHTML = helpMarkdown(help.more);
+        d.innerHTML = help.more ? helpMarkdown(help.more) : "";
+        for (const a of anchors) { if (d.childNodes.length) d.append(" · "); d.appendChild(a); }
         el.appendChild(d);
     } else {
         el = document.createElement("div");

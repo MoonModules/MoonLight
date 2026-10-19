@@ -32,7 +32,7 @@ IDF_SEARCH_PATHS = [
 ]
 
 # The ESP-IDF commit every target (classic ESP32, S3, P4, S31) has been
-# validated against; the `v6.1-rc1` tag, on the earliest IDF line that
+# validated against; the `v6.1` tag, on the earliest IDF line that
 # carries the esp32s31 preview target. Kept here (not in setup_esp_idf.py) so
 # the pre-build drift check below can share the constant; a stale local IDF is
 # the single most common source of an "it built for me last week" ESP32 build
@@ -79,7 +79,7 @@ def check_idf_pin(idf_path: Path) -> None:
           file=sys.stderr)
     print("Fix: re-run `uv run moondeck/build/setup_esp_idf.py` (it will offer "
           "to check out the pinned commit + resync submodules + reinstall "
-          "toolchains). See docs/how-to/building.md § ESP-IDF version for the "
+          "toolchains). See docs/reference/build-system.md § ESP-IDF version for the "
           "manual command if you'd rather do it by hand.", file=sys.stderr)
     print("Or pass --skip-idf-pin-check to build anyway (deliberate migration "
           "to a newer IDF release; re-tests then update PINNED_IDF_COMMIT).",
@@ -299,15 +299,9 @@ FIRMWARES: dict[str, dict] = {
         "eth_only": False,
         "description": "Waveshare ESP32-P4-NANO: Ethernet + WiFi via the on-board "
                        "ESP32-C6 over SDIO (esp_hosted), for P4 revisions 0.x/1.x "
-                       "ONLY. Boots and associates as of IDF v6.1-rc1 with "
-                       "CONFIG_PM_SLEEP_CLK_ICG_ENABLE=n, which sidesteps esp-idf "
-                       "#18759 (sleep_clock_icg_startup_init failing ESP_ERR_NO_MEM "
-                       "and aborting cpu_start).",
-        # Was a crash-repro build for esp-idf #18759 and is now a working firmware:
-        # bench-verified on a v1.3 P4 (associates, RSSI -52, serves the UI). #18759 is
-        # NOT fixed upstream; CONFIG_PM_SLEEP_CLK_ICG_ENABLE=n (an option v6.1-rc1
-        # added) skips the allocation that failed, at the cost of peripheral clock
-        # gating during light sleep, which this device never enters.
+                       "ONLY. Ethernet works; WiFi over the C6 associates on some "
+                       "boots and not on others.",
+        # Ships while WiFi is intermittent so users can try it (backlog-core § ESP32-P4 round 3). esp-idf #18759 is open upstream; CONFIG_PM_SLEEP_CLK_ICG_ENABLE=n skips the allocation that aborted cpu_start, at the cost of peripheral clock gating during light sleep, which this device never enters.
         "ships": True,
         "panel_cards": True,
     },

@@ -13,8 +13,8 @@ renders wrong" and never as an error:
 
 Not one was a mistake in a script. Each was a script author choosing a storage width and the engine
 silently disagreeing. The product owner and the agent settled the replacement in
-[moonlive-language-roadmap.md](../../future/moonlive-language-roadmap.md): **five types — `int`,
-`byte`, `bool`, `fixed`, `string` — each usable as scalar or array. Every scalar occupies one uniform
+[backlog-moonlive.md](../../future/backlog-moonlive.md): **five types, `int`,
+`byte`, `bool`, `fixed`, `string`, each usable as scalar or array. Every scalar occupies one uniform
 4-byte slot; arrays pack by element.** A type becomes a semantic rather than a width, which deletes
 the machinery instead of patching it a fifth time.
 
@@ -42,7 +42,7 @@ quarter of an `int[]` one, and the classic ESP32 has no PSRAM to absorb the diff
 
 The compiler is single-pass with no tree, so a type rides alongside the value: every parse function
 sets `exprIsFixed` before returning, and the places where two values meet compare it. `byte` and
-`bool` decay to `int` on read — they are semantics on storage, not on arithmetic — so the question is
+`bool` decay to `int` on read (they are semantics on storage, not on arithmetic), so the question is
 only ever "is this Q16.16 or a plain integer".
 
 Mixing is a compile error naming the conversion, because at run time the two are the same 32 bits.
@@ -52,9 +52,9 @@ emitted `Const` (free at run time), so `v * 2`, `if (v < 0)` and `c = 5;` read n
 
 ### `fixed` gets real instructions
 
-The JIT had no shift primitive and no multiply-high — `mulReg` is a plain 32-bit multiply and `/` was
+The JIT had no shift primitive and no multiply-high: `mulReg` is a plain 32-bit multiply and `/` was
 already a host call. Routing `fixed` through host builtins would have put a call in every per-pixel
-multiply and made `int`↔`fixed` conversion — one shift — a function call. So four primitives went
+multiply and made `int`↔`fixed` conversion, one shift, a function call. So four primitives went
 into all four backends: `mulhi`, `shlImm`, `shrImm`, `sarImm`, plus 32-bit slot access.
 
 A fixed multiply is `Mulhi + Mul + two shifts`. A fixed divide goes through a **host** call (`fdiv`)
@@ -63,14 +63,14 @@ that widens in int64: any 32-bit pre-shift wraps past |128.0|, which is exactly 
 ### One control declaration
 
 `addUint8`/`addUint16` collapse into `addControl(name, member, min, max)`, which reads the widget from
-the member's declared type — so a call and a declaration can no longer disagree. A `byte` control's
+the member's declared type, so a call and a declaration can no longer disagree. A `byte` control's
 descriptor points at its slot's low byte, which is only sound because the store narrows: the upper
 three bytes are always zero.
 
 ## Verification
 
 - The unit suite and 20 scenario tests, all 11 pre-commit gates, on arm64 AND on x86-64
-  under Rosetta — the x86-only tests no arm64 run compiles are where two defects hid.
+  under Rosetta: the x86-only tests no arm64 run compiles are where two defects hid.
 - Every shipped script compiles, on the host backend and on both device ISAs.
 - `disasm.py` on all four backends, reading the emitted sequences by eye.
 - On hardware: desktop and an ESP32-S3 (shiffy), with the product owner's eyes on metal, fractal,
@@ -91,14 +91,14 @@ Recorded because the plan was wrong about them, and the next reader should not r
   Parity with `string[]`, deferred until a script needs it.
 - **`bool` truncates on store rather than normalizing** (`flag = 256` reads false): normalizing in
   the emitted code needs a compare-and-select the IR has no op for, and a branch would spend two of
-  the script's sixteen labels. The byte IS normalized where it matters — at publish time, before
+  the script's sixteen labels. The byte IS normalized where it matters: at publish time, before
   the UI binding reads it through a `bool*`, which would otherwise be undefined behaviour.
-- **`string` is declared but inert** — a string member cannot be initialized yet, and says so.
+- **`string` is declared but inert**: a string member cannot be initialized yet, and says so.
 
 ## The lesson that cost the most
 
 Every hand-built Xtensa encoding was byte-reversed. The two ESP toolchain objdumps print different
-conventions — `esp32-elf` shows the 24-bit word, `esp32s3-elf` shows memory bytes — so verifying
+conventions (`esp32-elf` shows the 24-bit word, `esp32s3-elf` shows memory bytes), so verifying
 against the wrong one "matched" while emitting every instruction backwards. The reversed `slli`
 decoded as `l32r a1`, a stack-pointer clobber that hung the board with no panic text while all 1400+
 host tests stayed green. Encoders now build words and emit through `emit3`/`emit2`, as the

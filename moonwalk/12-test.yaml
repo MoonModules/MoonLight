@@ -1,0 +1,262 @@
+# yaml-language-server: $schema=moonwalk.schema.json
+stage: Test
+summary: The change pinned by tests, scenarios, live runs and clips.
+processes:
+  - id: add-test
+    title: Add a test, and pin a bug
+    actor: contributor
+    goal: New behavior and every fixed defect are pinned by a test.
+    systems: [MoonDeck]
+    page: reference/testing.md
+    inputs:
+      type: object
+      properties:
+        kind:
+          type: string
+          enum: [Module logic, Full pipeline, MoonDeck script, Installer or UI code]
+          description: "What does the test pin?"
+    intro: |
+      Every behavior is pinned by a test, and every discovered crash becomes one. The file shapes, annotations and naming rules are in [Testing](reference/testing.md).
+    steps:
+      - id: place
+        say: Pick the tier by what you pin.
+        when: { manual: "Module logic gets a unit test, a pipeline a scenario, MoonDeck scripts a Python test, installer and UI code a JS test." }
+        detail: |
+          A scenario fits behavior that only exists with modules wired together, such as the pipeline reallocating when the grid resizes. A unit test fits a module in isolation. Host tests, Python and JS, reach the code the C++ binary cannot: [Host-side tests](reference/testing.md#host-side-tests-python-js). See [Testing strategy](reference/testing.md#testing-strategy) and the placement rule in [coding standards](contributing/coding-standards.md#tests).
+      - id: bug-first
+        say: Reproduce a bug in the test first.
+        when: { manual: "The new test fails against the unfixed code, then passes with the fix." }
+        detail: |
+          A test that passes against the bug proves nothing: see [A passing test is not evidence until it can fail](reference/testing.md#a-passing-test-is-not-evidence-until-it-can-fail). The test's description names the root cause, so the generated inventory keeps the link to the defect.
+      - id: unit
+        say: Add a TEST_CASE to the module's unit file.
+        given: [{ input: kind, equals: Module logic }]
+        when: { manual: "Use test/unit/{core,light}/unit_<ExactModuleName>[_<topic>].cpp, mirroring the module's src/ domain." }
+        detail: |
+          The file starts with `// @module <Name>`, and each `TEST_CASE` has one `//` line above it saying what it verifies. A new file is created only when no existing one covers the module. Shape and naming: [Unit-test file shape](reference/testing.md#unit-test-file-shape), [Naming convention](reference/testing.md#naming-convention).
+      - id: scenario
+        say: Add a scenario JSON for the pipeline.
+        given: [{ input: kind, equals: Full pipeline }]
+        when: { manual: "Create test/scenarios/{core,light}/scenario_<ExactModuleName>_<topic>.json, or under device/ when it needs real hardware." }
+        detail: |
+          The `name` equals the filename stem, and every step has an `op`, a `name` and a `description`. The runner discovers the file on its own. Fields, modes and the reset block: [Scenario file shape](reference/testing.md#scenario-file-shape).
+      - id: python
+        say: Add a pytest file for the script.
+        given: [{ input: kind, equals: MoonDeck script }]
+        when: { manual: "Create test/python/test_<topic>.py with its dependencies in a PEP-723 script block." }
+      - id: js
+        say: Add a Node test file for the code.
+        given: [{ input: kind, equals: Installer or UI code }]
+        when: { manual: "Create test/js/<topic>.test.mjs for Node's built-in runner; no package.json is needed." }
+      - id: build
+        say: Build the desktop tests.
+        given: [{ input: kind, in: [Module logic, Full pipeline] }]
+        when: { run: { script: moondeck/build/build_desktop.py, args: "--tests" } }
+        detail: |
+          It builds `mm_tests` and `mm_scenarios` only, not the app.
+      - id: run-unit
+        say: Run the unit tests.
+        given: [{ input: kind, equals: Module logic }]
+        when: { run: { script: moondeck/test/test_desktop.py, args: "--module <Name>" } }
+        detail: |
+          `--test "<case-name>"` runs one case; a bare run runs all of them. A full run prints a summary, and a filtered run adds assertion-level detail.
+      - id: run-scenario
+        say: Run the scenario.
+        given: [{ input: kind, equals: Full pipeline }]
+        when: { process: run-scenario }
+      - id: run-python
+        say: Run the Python host tests.
+        given: [{ input: kind, equals: MoonDeck script }]
+        when: { run: { script: moondeck/test/test_host.py, args: "--python" } }
+      - id: run-js
+        say: Run the JS host tests.
+        given: [{ input: kind, equals: Installer or UI code }]
+        when: { run: { script: moondeck/test/test_host.py, args: "--js" } }
+        detail: |
+          It reports SKIP rather than failing when node is absent.
+      - id: inventory
+        say: Regenerate the test inventory.
+        given: [{ input: kind, in: [Module logic, Full pipeline] }]
+        when: { run: { script: moondeck/docs/generate_test_docs.py } }
+        detail: |
+          The inventory under `docs/reference/tests/` is generated from the test files. `--check` exits non-zero when it is stale.
+    outro: |
+      A bug fix ships with the test that failed before it.
+  - id: run-scenario
+    title: Run a scenario in-process on the desktop
+    actor: contributor
+    goal: One scenario replays against a scheduler inside the test binary and records what each step costs.
+    systems: [MoonDeck]
+    page: reference/testing.md
+    intro: |
+      A scenario replays a JSON script against the whole pipeline inside the test binary and checks each measured step against its contract. The inventory is [Scenario tests](reference/tests/scenario-tests.md).
+    steps:
+      - id: build
+        say: Build the desktop tests.
+        when: { run: { script: moondeck/build/build_desktop.py, args: "--tests" } }
+      - id: select
+        say: Run what the diff touched.
+        when: { run: { script: moondeck/scenario/run_scenario.py, args: "--module <Name>" } }
+        detail: |
+          `--name <stem>` runs one scenario, `--module <Name>` every scenario for one module, and a bare run all of them. Select what the diff touched rather than refreshing everything, and say in one line what was picked and why. In MoonDeck the Scenarios card shares its module dropdown with the Unit Test card.
+      - id: read
+        say: Read each step's tick and heap.
+        when: { manual: "Each measured step prints tick, FPS, lights and heap delta, and passes or fails its contract." }
+        detail: |
+          Scenarios flagged `live_only` are skipped here and run only against a device. Going faster or freeing more heap than the contract is never a failure.
+      - id: record
+        say: Review the recorded observations.
+        when: { manual: "The run widens the observed range in the scenario JSONs; a value outside the old range appears in the diff." }
+        detail: |
+          The numbers are read rather than filed: a tick or heap value that moves without a reason in the diff is an irregularity to explain before committing. `collect_kpi.py` feeds them to repo health as the per-commit trend. Format: [Persistent observations](reference/testing.md#persistent-observations-observedtarget).
+    outro: |
+      A contract failure is a regression to fix, or a promise to renegotiate with a reason: [Renegotiate a performance contract](moonwalk.md#renegotiate-contract).
+  - id: run-live-scenario
+    title: Run a scenario against a live device
+    actor: contributor
+    goal: The same scenario over REST against a running desktop or board, leaving the device as found.
+    systems: [MoonDeck]
+    page: reference/testing.md
+    inputs:
+      type: object
+      properties:
+        target:
+          type: string
+          enum: [Desktop, Board]
+          description: "Which device runs the scenario?"
+    intro: |
+      The same JSON, driven over REST against a running device. It is the tier that proves the device rather than a model of it.
+    steps:
+      - id: start-desktop
+        say: Run the desktop app.
+        given: [{ input: target, equals: Desktop }]
+        when: { run: { script: moondeck/run/run_desktop.py } }
+        detail: |
+          It stops the previous instance first, so the run never hits an old binary.
+      - id: find-board
+        say: Find the board's address.
+        given: [{ input: target, equals: Board }]
+        when: { manual: "In MoonDeck's Live tab, choose the network and press Discover, or take the address from the registry." }
+        detail: |
+          The Live Scenarios card runs the selected scenario against every checked device.
+      - id: run
+        say: Run the scenario against the host.
+        when: { run: { script: moondeck/scenario/run_live_scenario.py, args: "--host <host> --name <scenario>" } }
+        detail: |
+          Use `--host localhost:8080` for the desktop. `--name` takes several comma-separated stems, and `--module` selects by module. The pipeline gets 3 seconds to settle first (`--settle`). Construct-mode scenarios are skipped, since a live tree is never empty.
+      - id: read
+        say: Read the measurements against the contract.
+        when: { manual: "Each step reports FPS and heap. On a board, heap reads are real; on the desktop they read 0." }
+        detail: |
+          The memory check in the control-change scenario proves the heap returns to baseline after a toggle. Scenarios that add modules clean them up, and modules that already exist show `=` instead of `+`.
+      - id: restored
+        say: Confirm the device is as found.
+        when: { manual: "Cleared modules are back, replaced modules are swapped back, and every written control is restored." }
+        detail: |
+          Passwords are the exception, because the device returns them obfuscated. Scenarios that leave the network or reboot (`host_network`, `reboot`) and the multi-board form (`--board NAME=HOST`) are described in [Testing](reference/testing.md#walking-first-setup-with-the-computer-as-the-phone).
+    outro: |
+      A scenario that spans several devices over UDP is a script of its own, `run_network_live.py`: [MoonDeck](../moondeck/MoonDeck.md#run_network_live).
+  - id: live-verification
+    title: Run a live verification on boards
+    actor: contributor
+    goal: The bench boards confirm what the desktop cannot measure.
+    systems: [MoonDeck]
+    page: reference/testing.md
+    intro: |
+      The desktop cannot show platform code, timing or memory, so a change touching them is verified on boards. Per-module timing and memory per platform are in [Performance](reference/performance.md).
+    steps:
+      - id: approval
+        say: Ask the product owner before flashing.
+        when: { manual: "Build and flash only on approval, with the desktop already clean. Probe the serial ports again first, since they drift between sessions." }
+      - id: ports
+        section: Prepare the bench
+        say: Open MoonDeck's Live tab.
+        when: { manual: "Select the LAN, press Discover and check the boards that should run." }
+        detail: |
+          The registry in `moondeck/moondeck.json` is the authoritative list of bench boards.
+      - id: scenarios
+        say: Run the device scenarios on each board.
+        when: { process: run-live-scenario }
+        detail: |
+          Scenarios under `test/scenarios/device/` carry `live_only` because they measure what only silicon shows: peripherals, DMA budgets, internal heap fragmentation and float cost on an FPU-less Xtensa. Their numbers mean nothing on the host.
+      - id: cost
+        section: Read what the configuration costs
+        say: Compare tick, heap and largest block.
+        when: { manual: "For the configuration under test, note tick, free heap and max allocation block per board." }
+        detail: |
+          Tick is a ceiling and heap a floor; the largest free block exposes fragmentation. Compare against the contract of the board's target and against [Performance](reference/performance.md).
+      - id: record
+        say: Review the observed ranges.
+        when: { manual: "Read the diff of the scenario JSONs." }
+        detail: |
+          A run records its observations as [Run a scenario in-process](moonwalk.md#run-scenario) describes. A wide gap between the observed maximum and the contract ceiling means headroom. A maximum creeping up to the ceiling signals a coming regression.
+    outro: |
+      Verified means it ran on real hardware and the product owner saw the result.
+  - id: renegotiate-contract
+    title: Renegotiate a performance contract
+    actor: contributor
+    goal: A scenario's contract moves with a stated reason.
+    systems: [MoonDeck]
+    page: reference/testing.md
+    inputs:
+      type: object
+      properties:
+        target:
+          type: string
+          enum: [Desktop, Board]
+          description: "Which target's contract moves?"
+    intro: |
+      A contract is a hand-set promise, a tick ceiling and a heap floor per target. It moves only for a reason: an optimization that earns a tighter ceiling, or an accepted cost that loosens one. The contract fields are in [Performance contracts](reference/testing.md#performance-contracts-contracttarget).
+    steps:
+      - id: why
+        say: State the reason for the change.
+        when: { manual: "A code change improved performance, or you accept a regression on purpose." }
+        detail: |
+          A tick that rose without a reason in the diff is a regression to explain, not a contract to loosen.
+      - id: desktop
+        say: Re-run the scenario with the reason.
+        given: [{ input: target, equals: Desktop }]
+        when: { run: { script: moondeck/scenario/run_scenario.py, args: '--module <Name> --update-contract --reason "<why>"' } }
+        detail: |
+          Both flags are required together, the reason in a few words, such as `Layer LUT inline copy`. The run stamps `set_by` with the run's date and writes the new contract for the host target only.
+      - id: board
+        say: Re-run the scenario on the board.
+        given: [{ input: target, equals: Board }]
+        when: { run: { script: moondeck/scenario/run_live_scenario.py, args: '--host <host> --name <scenario> --update-contract --reason "<why>"' } }
+        detail: |
+          Both flags are required together. The target key is the device's `firmware` value, and other targets stay untouched.
+      - id: review
+        section: Commit it
+        say: Review the diff of the scenario JSON.
+        when: { manual: "The contract, its set_by date and reason changed, and the observed range reset to the new measurement." }
+        detail: |
+          The old range belonged to the old contract. Tightening or loosening is a deliberate act that ships to the project's public KPIs.
+      - id: commit-reason
+        say: Name the reason in the commit.
+        when: { manual: "The scenario, its target, and which way the contract moved." }
+    outro: |
+      The contract's own `reason` field keeps the why next to the number.
+  - id: perform-clip
+    title: Perform a clip as a UI test
+    actor: contributor
+    goal: The UI does what every published clip shows.
+    systems: [MoonTube]
+    page: reference/testing.md
+    intro: |
+      A clip is a UI scenario. Its run file lists what a person does, such as opening a card or dragging a slider, and each step checks itself by reading the device back over REST. The same run recorded produces the published video, so a failing run means the interface differs from what the video shows. Format and actions: [moontube.md](../moondeck/moontube/moontube.md).
+    steps:
+      - id: start
+        say: Run the desktop app.
+        when: { run: { script: moondeck/run/run_desktop.py } }
+        detail: |
+          A run that drives another surface, such as the installer's preview server, names its own `host`, and one that needs particular hardware names a `requires` capability from the bench registry.
+      - id: clip
+        say: Perform one clip.
+        when: { run: { script: moondeck/moontube/mtvideo.py, args: "--run moontube/clips/<clip>.json" } }
+        detail: |
+          Every state change goes through the affordance a person uses; REST only reads, since a step that POSTs its way to the outcome proves nothing about the interface.
+      - id: lane
+        say: Run every clip as the UI lane.
+        when: { run: { script: moondeck/test/test_host.py, args: "--ui" } }
+        detail: |
+          It runs on request only and is never a gate, at a commit, a merge or a release: it drives a real browser against a running device and costs minutes. It skips rather than fails when nothing answers or no Playwright browser is installed.

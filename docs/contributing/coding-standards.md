@@ -2,7 +2,7 @@
 
 How code in this repo is written. Hard rules and process live in [CLAUDE.md](../CLAUDE.md).
 
-How to build and run lives in [building.md](../how-to/building.md), and what is tested in [testing.md](../reference/testing.md). Design rationale lives in [the architecture](../explanation/architecture/index.md).
+How to build and run lives in [MoonWalk's contributor processes](../moonwalk.md#desktop-build-test), and what is tested in [testing.md](../reference/testing.md). Design rationale lives in [the architecture](../explanation/architecture/index.md).
 
 It runs from the smallest scale outward: the line you are typing, then naming and when to add a file, then values and the hot path they run in. After that the shape of a whole module, then the tooling that checks all of it, and last the method for when something breaks.
 
@@ -165,7 +165,7 @@ All targets build warnings-as-errors: `-Wall -Wextra -Werror` on Clang/GCC (macO
 - In a comparison, keep both sides the same signedness, don't mix a signed expression with an unsigned literal (`== 1`, not `== 1u`, when the other side is signed). Watch `& `, `%`, and subtraction results, which carry the signedness of their operands.
 - A change that only built+passed on macOS/Linux is **not** verified for Windows. The Windows CI job (`release.yml`) is the real gate for MSVC-only warnings; let it run before considering a `src/`-touching change done, or build with MSVC locally if you have it.
 
-Diagnostics as you type come from clangd, using the same `.clang-tidy` CI runs; once-per-machine setup is in [building.md, editor setup](../how-to/building.md#editor-setup-clangd).
+Diagnostics as you type come from clangd, using the same `.clang-tidy` CI runs; once-per-machine setup is [Set up the editor](../moonwalk.md#setup-editor).
 
 ### Static checks
 

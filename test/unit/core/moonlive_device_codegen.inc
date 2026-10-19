@@ -325,7 +325,7 @@ TEST_CASE("every shipped script compiles for " MM_ISA_NAME) {
             std::filesystem::path(__FILE__).parent_path().parent_path().parent_path().parent_path()
             / "moonlive" / sub;
         if (!std::filesystem::exists(dir)) continue;
-        for (const auto& entry : std::filesystem::directory_iterator(dir)) {
+        for (const auto& entry : std::filesystem::recursive_directory_iterator(dir)) {
             if (!entry.is_regular_file() || !mmIsScript(entry.path())) continue;
             std::ifstream f(entry.path());
             std::ostringstream ss;

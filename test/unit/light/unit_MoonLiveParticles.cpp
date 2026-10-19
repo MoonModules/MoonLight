@@ -183,7 +183,7 @@ TEST_CASE("two scripted effects each get their own particles") {
 TEST_CASE("the fountain example keeps emitting once its pool has cycled") {
     // The SHIPPED file, staged into the test filesystem: this drives the real example rather than a copy that could drift from it.
     const std::filesystem::path src = std::filesystem::path(__FILE__).parent_path()
-        .parent_path().parent_path().parent_path() / "moonlive" / "effects" / "fountain.mle";
+        .parent_path().parent_path().parent_path() / "moonlive" / "effects" / "particles" / "fountain.mle";
     std::ifstream in(src);
     REQUIRE(in.good());
     std::stringstream ss; ss << in.rdbuf();

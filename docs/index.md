@@ -5,7 +5,7 @@ High-performance LED &amp; DMX lighting control for ESP32 and beyond.
 [:material-flash: Flash an ESP32 from your browser](/MoonLight/install/){ .md-button .md-button--primary } &nbsp; [:material-github: GitHub](https://github.com/MoonModules/MoonLight){ .md-button }
 
 !!! tip "New here?"
-    The [Getting started](gettingstarted.md) guide walks you from a blank ESP32 to your first running light show, step by step, with no build tools required.
+    [Install MoonLight](moonwalk.md#install) walks you from a blank ESP32 to a running device, step by step, with no build tools required, and [Show an effect on your lights](moonwalk.md#first-light-show) to your first light show.
 
 This documentation follows the latest pre-release; a tagged release may lack what is described here.
 
@@ -32,7 +32,7 @@ One source tree drives ESP32, Teensy, Raspberry Pi, macOS, Windows and Linux.
 
     Flash a board from your browser and light your first pixels.
 
-    [Getting started](gettingstarted.md) · [Web installer](/MoonLight/install/)
+    [Install MoonLight](moonwalk.md#install) · [Web installer](/MoonLight/install/)
 
 -   :material-palette: **Build a show**
 

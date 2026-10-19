@@ -1,0 +1,24 @@
+// Ring plasma: four sine waves summed, along x, along y, on the diagonal and around the center, after hpwit's multi_effect_controller.
+
+class RingPlasmaEffect {
+  byte speed = 40;
+
+  int dimensions() { return 2; }
+
+  string tags() { return "💫"; }
+
+  void defineControls() {
+    addControl("speed", speed, 1, 120); // how fast the waves travel
+  }
+
+  void tick() {
+    int b = beat(speed, t);
+    for (int y = 0; y < height; y = y + 1) {
+      for (int x = 0; x < width; x = x + 1) {
+        int r = polarR(x - width / 2, y - height / 2);
+        int v = sin(x * 1300 + b) + sin(y * 1700 - b) + sin((x + y) * 1000 + b * 2) + sin(r * 2600 - b * 3);
+        setPaletteColor(x, y, v / 1024, 200);
+      }
+    }
+  }
+}

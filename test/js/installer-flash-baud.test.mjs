@@ -1,5 +1,5 @@
 // Flash-baud contract for the web installer. A board opts into a non-default flash
-// baud via deviceModels.json `flashBaud` — up for a verified-fast bridge (the S31's
+// baud via deviceModels.json `flashBaud`: up for a verified-fast bridge (the S31's
 // 921600, CLI-only), down for a flaky one (a LOLIN-style CH340 pinned to 460800). The
 // installer's orchestrator resolves it per board (catalogFlashBaud) and hands it to
 // esptool-js; the CLI (flash_esp32.py) resolves the same field. This test pins that the
@@ -22,14 +22,16 @@ const boards = JSON.parse(
     readFileSync(join(ROOT, "mooninstaller", "deviceModels.json"), "utf8")
 );
 
-// The standard esptool bauds a board may declare — keep in step with
-// check_devices.py FLASH_BAUDS and flash_esp32.py.
-const VALID_BAUDS = new Set([115200, 230400, 460800, 921600]);
+// The standard esptool bauds a board may declare, from the catalog's schema, which check_devices.py validates against too.
+const schema = JSON.parse(
+    readFileSync(join(ROOT, "mooninstaller", "deviceModels.schema.json"), "utf8")
+);
+const VALID_BAUDS = new Set(schema.items.properties.flashBaud.enum);
 
 test("the orchestrator drives esptool-js from the catalog flashBaud, not a hardcoded rate", () => {
     // The esploader baudrate must come from the resolved variable, so a board's
     // flashBaud actually reaches the flash. A literal `baudrate: 460800` would mean
-    // the catalog value is ignored — pin against that regression.
+    // the catalog value is ignored: pin against that regression.
     assert.match(
         orchestrator,
         /const\s+flashBaud\s*=\s*await\s+catalogFlashBaud\(/,
