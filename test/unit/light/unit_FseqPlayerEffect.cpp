@@ -760,8 +760,8 @@ TEST_CASE("a released player holds no scan cache or buffers, keeps its playlist,
 
 TEST_CASE("deleting and moving playlist rows keeps each row's own path") {
     SdFixture sd;
+    sd.writeFseq("/sd/b.fseq", makeFseqV1Bytes(10, 2));   // written second-name first: the picker sorts, whatever order the filesystem lists
     sd.writeFseq("/sd/a.fseq", makeFseqV1Bytes(10, 2));
-    sd.writeFseq("/sd/b.fseq", makeFseqV1Bytes(10, 2));
     Scene s;
     auto& e = s.effect;
     e.setup();

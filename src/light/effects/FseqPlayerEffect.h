@@ -9,6 +9,7 @@
 #include "core/util/JsonUtil.h"      // restoreList: recursive reader for the persisted playlist
 
 #include <cstdio>
+#include <cstdlib>   // qsort: the picker's file order
 #include <cstring>
 
 namespace mm {
@@ -765,8 +766,14 @@ private:
     void rescanFiles() {
         fileCount_ = 0;
         scanSkipped_ = false;
-        if (fileNames_.resize(static_cast<size_t>(kMaxFiles) * kPathCap)) scanDir("/", 0);
-        else setStatus("out of memory for the file list", Severity::Error);
+        if (fileNames_.resize(static_cast<size_t>(kMaxFiles) * kPathCap)) {
+            scanDir("/", 0);
+            // A directory lists its entries in no order of its own (POSIX leaves it to the filesystem), so the picker sorts them, the same on every board.
+            std::qsort(fileNames_.data(), fileCount_, kPathCap,
+                       [](const void* a, const void* b) { return std::strcmp(static_cast<const char*>(a), static_cast<const char*>(b)); });
+        } else {
+            setStatus("out of memory for the file list", Severity::Error);
+        }
         rebuildControls();
         // Fires the resync directly: rebuildControls()'s own change-detection does not hash a List's row/option-set content.
         notifySchemaChanged();
