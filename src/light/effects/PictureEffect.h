@@ -154,7 +154,7 @@ private:
     /// One cell eased toward `want`, keeping the fraction of a step that a byte would lose.
     RGB eased(size_t cell, RGB want) {
         const uint8_t target[3] = {want.r, want.g, want.b};
-        const int32_t step = 256 - smoothing;                      // 255 closes almost all of the gap
+        const int32_t step = 256 - smoothing;                      // 255 closes 1/256 of the gap, the slowest
         const int32_t snap = static_cast<int32_t>(snapAbove) << 8;
         uint8_t out[3];
         for (int ch = 0; ch < 3; ch++) {
