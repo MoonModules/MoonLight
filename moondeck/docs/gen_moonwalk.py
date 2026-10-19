@@ -72,6 +72,12 @@ def implied_systems(step: dict) -> set[str]:
     return found
 
 
+def page_exists(page: str) -> bool:
+    """Whether a docs page exists: its file, or a catalog page the docs build generates from help.json."""
+    from gen_help import CATALOGS   # imported here, as site_url is
+    return (ROOT / "docs" / page).exists() or page.removeprefix("moonmodules/") in CATALOGS
+
+
 def page_url(page: str) -> str:
     """The site address of a docs page, as MkDocs writes it with use_directory_urls off."""
     return page[:-3] + ".html" if page.endswith(".md") else page
@@ -97,7 +103,7 @@ def shape_errors(processes: dict) -> list:
             errors.append(f"{pid}: goal over {MAX_GOAL_WORDS} words or more than one sentence")
         for st in p.get("steps", []):
             if _words(st.get("say")) > MAX_SAY_WORDS or not _one_sentence(st.get("say", "")):
-                errors.append(f"{pid}/{st.get('id')}: say is one action in at most {MAX_SAY_WORDS} words; the rest goes in its note or detail")
+                errors.append(f"{pid}/{st.get('id')}: say is one action in at most {MAX_SAY_WORDS} words; the rest goes in its detail")
     return errors
 
 
@@ -237,7 +243,7 @@ def build(root: Path = MOONWALK) -> dict:
             if dep not in processes:
                 errors.append(f"{pid}: dependsOn names no process: {dep}")
         if "page" in p:
-            if not (ROOT / "docs" / p["page"]).exists():
+            if not page_exists(p["page"]):
                 errors.append(f"{pid}: page does not exist: docs/{p['page']}")
             p["url"] = page_url(p["page"])
             by_page.setdefault(p["url"], []).append(pid)
@@ -254,6 +260,16 @@ def build(root: Path = MOONWALK) -> dict:
         for s in p.get("steps", []):
             (verb, arg), = s["when"].items()
             s["runners"] = RUNNERS.get(verb, [])
+            # Where the step takes the reader, as the view links it: a page as the site addresses it, or an address to open; one with a placeholder to fill in is no link.
+            if verb == "read":
+                page, _, anchor = arg["page"].partition("#")
+                if not page_exists(page):
+                    errors.append(f"{pid}/{s['id']}: page does not exist: docs/{page}")
+                from gen_help import heading_id   # imported here, as site_url is
+                anchor = anchor or (heading_id(arg["section"]) if arg.get("section") else "")
+                s["url"] = page_url(page) + (f"#{anchor}" if anchor else "")
+            elif verb == "open" and "url" in arg and "<" not in arg["url"]:
+                s["url"] = arg["url"]
             s.setdefault("actor", p.get("actor"))
             for g in s.get("given", []):
                 if isinstance(g, str) and g not in processes:
@@ -319,7 +335,9 @@ def render_text(model: dict) -> str:
     """Every process, with its prose where it has some, as plain Markdown under the MoonWalk page: what the site's search indexes and a reader without JavaScript reads, until moonwalk.js draws the live view. Each heading's id is the process id, the address the view opens at."""
     out: list[str] = []
     # Every heading in the prose sits one level under its process's, as the view renders it under the section.
-    prose = lambda text: re.sub(r"^(#+) ", r"#\1 ", text.strip(), flags=re.MULTILINE) + "\n"
+    # A fenced block is code, so a `# comment` in it stays as written: the split keeps fences at the odd indexes.
+    prose = lambda text: "".join(part if i % 2 else re.sub(r"^(#+) ", r"#\1 ", part, flags=re.MULTILINE)
+                                 for i, part in enumerate(re.split(r"(^```.*?^```)", text.strip(), flags=re.MULTILINE | re.DOTALL))) + "\n"
     for p in model["processes"].values():
         # Every process has its heading and goal here, so any process is linkable by its id, as the view opens it.
         out.append(f"## {p['title']} {{#{p['id']}}}\n")
@@ -334,6 +352,10 @@ def render_text(model: dict) -> str:
                 out.append(f"### {chapter}. {section}\n")
             option = next((g.get("equals") or ", ".join(g["in"]) for g in s.get("given", []) if isinstance(g, dict) and "input" in g), None)
             out.append(f"**{option + ': ' if option else ''}{s['say']}**\n")
+            # Where the step takes the reader, under its instruction: a page link names the source file, so the docs build checks it and turns it into the page's address.
+            if s.get("url"):
+                web = re.match(r"https?://", s["url"])
+                out.append(f"[{s['url'][web.end():] if web else 'Read the page'}]({s['url'] if web else re.sub(r'^([^:#]+)[.]html', r'\1.md', s['url'])})\n")
             if s.get("detail"):
                 out.append(prose(s["detail"]))
         if p.get("outro"):

@@ -523,17 +523,9 @@
       word-break: break-all;
     }
 
-/* MoonWalk's map in the installer's own dialog, resized from its corner; the installer's colors mapped onto the docs theme's variables the map reads. */
+/* MoonWalk's map in its dialog: the installer's colors mapped onto the docs theme's variables the map reads. */
 .link-button { background: none; border: none; padding: 0; color: var(--accent); text-decoration: underline; cursor: pointer; font: inherit; }
-.walk-dialog {
-  width: min(960px, 92vw); height: min(640px, 85vh); min-width: min(420px, 92vw); min-height: min(360px, 96vh); max-width: 98vw; max-height: 96vh;
-  resize: both; overflow: hidden; padding: 12px 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--card); color: var(--fg);
+.mm-walk-dialog {
   --md-default-fg-color: var(--fg); --md-default-bg-color: var(--card); --md-accent-fg-color: var(--accent);
   --md-default-fg-color--lightest: var(--border); --md-default-fg-color--light: var(--muted);
 }
-.walk-dialog[open] { display: flex; flex-direction: column; }
-.walk-dialog::backdrop { background: rgba(0,0,0,0.5); }
-.walk-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
-.walk-head h3 { margin: 0; font-size: 1rem; }
-.walk-body { flex: 1; min-height: 0; }
-.walk-dialog .mm-map { height: 100%; grid-template-rows: auto 1fr; --mw-panel: 16rem; }

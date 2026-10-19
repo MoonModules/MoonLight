@@ -219,7 +219,7 @@ def stage_teensy_builds() -> list[str]:
 def write_local_firmwares_json(staged: list[str]):
     """Write local-firmwares.json so the picker offers locally-staged firmwares.
 
-    The picker's firmware dropdown is normally driven by the published release's GitHub assets, so a brand-new variant (built locally, not yet in any release) wouldn't appear even though its bins are staged. install.js fetches this file and hands the picker an `extraFirmwaresByTag` override; the URLs are the same `./releases/<tag>/...` paths the staged bins already live at, so Install resolves them same-origin. Shape: { <tag>: [{firmware, manifestUrl, binaryUrl}] }.
+    The picker's firmware dropdown is normally driven by the published release's GitHub assets, so a variant built here, which the release lacks, appears through this file once its bins are staged. install.js fetches this file and hands the picker an `extraFirmwaresByTag` override; the URLs are the same `./releases/<tag>/...` paths the staged bins already live at, so Install resolves them same-origin. Shape: { <tag>: [{firmware, manifestUrl, binaryUrl}] }.
     """
     by_tag = {LOCAL_TAG: [
         {

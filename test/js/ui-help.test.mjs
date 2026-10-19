@@ -118,8 +118,8 @@ test("a blocked popup leaves the link to open its own tab", () => {
 });
 
 test("a MoonWalk link in the help opens the map in the app at its step, not a popup", () => {
-    const w = linkWorld({ walk: "first-light-show/grid-width" });
-    assert.deepEqual(w.walked, ["first-light-show/grid-width"]);
+    const w = linkWorld({ walk: "first-light-show/grid-size" });
+    assert.deepEqual(w.walked, ["first-light-show/grid-size"]);
     assert.equal(w.opened.length, 0);
     assert.equal(w.prevented, true);
 });
@@ -131,6 +131,11 @@ test("a link outside the help, or a modified click, is left to the browser", () 
 
 test("a list renders as one, its items formatted", () => {
     assert.equal(helpMarkdown("- **Pin**: a strip\n- *Network*: Art-Net"), "<ul><li><strong>Pin</strong>: a strip</li><li><em>Network</em>: Art-Net</li></ul>");
+});
+
+test("a star inside code or a link's address stays literal, and a link's text may be emphasized", () => {
+    assert.equal(helpMarkdown("Globs: `src/**/*.cpp` and `improv_*`, *all* of them."), "Globs: <code>src/**/*.cpp</code> and <code>improv_*</code>, <em>all</em> of them.");
+    assert.equal(helpMarkdown("[*the* page](https://a.com/*foo*)"), '<a href="https://a.com/*foo*" target="_blank" rel="noopener"><em>the</em> page</a>');
 });
 
 test("a heading renders one level under the view's own", () => {

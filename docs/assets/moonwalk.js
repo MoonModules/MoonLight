@@ -44,6 +44,7 @@ const COL = 340, PROC_H = 64, STEP_H = 36, GAP = 28;
 
 // The map's styles, injected once, since the app has no copy of the site's stylesheet. Its colors are the docs theme's variables, which a host that is not the site maps its own colors onto, else fixed ones.
 const STYLES = `
+:where(.mm-walk-dialog) .mm-map { --mw-panel: 16rem; }   /* the text's share in a dialog; :where keeps it below any host's own rule, whatever the order the styles load in */
 .mm-map { --mw-line: var(--md-default-fg-color--lightest, #8884); --mw-bg: var(--md-default-bg-color, transparent); --mw-muted: var(--md-default-fg-color--light, #888); --mw-accent: var(--md-accent-fg-color, #526cfe);
   display: grid; grid-template-columns: minmax(0, 1fr) 8px var(--mw-panel, 20rem); grid-template-rows: auto 75vh; gap: 0.5rem; }
 .mm-map-bar { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; font-size: 0.75rem; }
@@ -63,6 +64,7 @@ const STYLES = `
 .mm-map-view { line-height: 1.5; }   /* the panel's size, the host's secondary text */
 .mm-map-view h4 { margin: 1.2em 0 0.4em; }
 .mm-map-view video, .mm-map-view img { max-width: 100%; border-radius: 6px; }
+.mm-map-panel a { color: var(--mw-accent); text-decoration: underline; }   /* a link reads as one in every host, whose own styles may reset it */
 .mm-map-step { margin: 0.8em 0 0.3em; padding: 0.3em 0.6em; font-weight: bold; border: 2px solid var(--mw-actor, var(--mw-muted)); border-radius: 6px; background: color-mix(in srgb, currentColor 6%, transparent); }   /* the line a step on the map scrolls to, drawn as its box there */
 .mm-map-off { opacity: 0.45; }
 .mm-map-call { display: flex; gap: 0.5em; align-items: center; margin: 0.2em 0 0.4em; }
@@ -75,6 +77,14 @@ const STYLES = `
 .mm-walk-bar.mm-walk-anchored { bottom: auto; transform: none; }
 .mm-walk-bar .mm-walk-say { cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mm-walk-bar button { border: 1px solid var(--mw-line); background: transparent; color: inherit; border-radius: 4px; padding: 2px 8px; font: inherit; cursor: pointer; }
+.mm-walk-dialog { width: min(960px, 92vw); height: min(640px, 85vh); min-width: min(420px, 92vw); min-height: min(360px, 96vh); max-width: 98vw; max-height: 96vh; margin: auto;
+  resize: both; overflow: hidden; padding: 12px 14px; border: 1px solid var(--md-default-fg-color--lightest, #8884); border-radius: 10px; background: var(--md-default-bg-color, #fff); color: var(--md-default-fg-color, #000); }
+.mm-walk-dialog[open] { display: flex; flex-direction: column; }
+.mm-walk-dialog::backdrop { background: rgba(0,0,0,0.5); }
+.mm-walk-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.mm-walk-head h3 { margin: 0; font-size: 1rem; }
+.mm-walk-body { flex: 1; min-height: 0; }
+.mm-walk-dialog .mm-map { height: 100%; grid-template-rows: auto 1fr; }
 @media (max-width: 760px) { .mm-map { grid-template-columns: 1fr; grid-template-rows: auto 60vh auto; } .mm-map-split { display: none; } }`;
 
 function ensureStyles() {
@@ -95,7 +105,7 @@ function writeDone(done) {
 // A host vouching for processes it saw done, such as the installer after an install: kept as marks on this origin, where the map reads them.
 export function markDone(ids) {
     const done = readDone();
-    for (const id of ids || []) done.add(id);
+    for (const id of ids || []) if (typeof id === "string" && /^[a-z0-9-]+$/.test(id)) done.add(id);   // a process id, whoever hands it over
     writeDone(done);
 }
 
@@ -278,11 +288,10 @@ export const took = (seconds) => {
 };
 
 // A process followed in the host while the user performs it, the onboarding checklist's construct: one bar holding the current step, which the host's state moves on and a tap turns back into the map. The bar floats under the step's target as a coach mark does, above it when there is no room below, and at the bottom of the screen when the step has none in view. The host passes `show(type, control, reveal)`, which returns the target's element and with `reveal` brings it into view first, and `reopen(at)`, which opens the map at `process/step`. Returns `update(stateDoc)`, which the host calls on each state change, and `stop()`.
-export function follow(model, pid, stepId, { show, reopen }) {
+export function follow(model, pid, stepId, { show, reopen, choices }) {
     ensureStyles();
     const p = model.processes[pid];
-    const chosen = readInputs();
-    const steps = (p?.steps || []).filter((s) => applies(s, chosen));
+    const steps = (p?.steps || []).filter((s) => applies(s, chosenOf(p, choices)));   // the reader's choices as the panel shows them, so the bar counts the steps it numbered
     let i = Math.max(0, steps.findIndex((s) => s.id === stepId));
     const bar = control("div", { className: "mm-walk-bar", role: "status" });
     const say = control("span", { className: "mm-walk-say", title: "Open MoonWalk at this step" });
@@ -331,7 +340,7 @@ export function follow(model, pid, stepId, { show, reopen }) {
     go(i);
     return {
         update(stateDoc) {
-            if (stopped) return;
+            if (stopped || i >= steps.length) return;   // a finished process has nothing left to watch for
             const n = advance(steps, i, stateDoc);
             if (n !== i) go(n);
             else later();   // a redraw can move the target
@@ -355,12 +364,21 @@ function control(tag, attrs, text) {
     return el;
 }
 
+// Where a step takes the reader, a page or an address, as a link in the text under its instruction; another site opens beside the map. An address reads as itself, a page as "Read the page".
+function linkOf(s, host) {
+    if (!s.url || /^[a-z][\w+.-]*:/i.test(s.url) && !/^https?:/.test(s.url)) return null;   // a page of the site or a web address, never another scheme
+    const web = /^https?:/.test(s.url);
+    const p = control("p");
+    p.append(control("a", { href: new URL(s.url, web ? ROOT : host.site || ROOT).href, target: host.newTab || web ? "_blank" : "", rel: "noopener" }, web ? s.url.replace(/^https?:\/\//, "") : "Read the page"));
+    return p;
+}
+
 // What the panel adds after a step: who does it when that is not the process's actor, and what it waits on.
 function stepNote(s, p) {
     const notes = [];
     if (s.actor && s.actor !== p.actor) notes.push(s.actor);
     for (const g of s.given || []) {
-        if (g.input) notes.push(`${g.input}: ${g.equals}`);
+        if (g.input) notes.push(`${g.input}: ${g.in ? g.in.join(", ") : g.equals}`);   // one option, or the several a step serves
         else if (g.changed) notes.push(`changes ${g.changed.join(", ")}`);
     }
     return notes.length ? ` (${notes.join("; ")})` : "";
@@ -479,7 +497,8 @@ function showPanel(panel, model, pid, done, onDone, host = {}) {
             block.dataset.step = s.id;
             if (off[i]) block.classList.add("mm-map-off");
             // The instruction in its box from the map, bordered in its actor's color, what it waits on as a quiet aside after it.
-            const line = control("p", { className: "mm-map-step" }, s.say);
+            const line = control("p", { className: "mm-map-step" });
+            line.append(s.say);
             if (ACTOR_COLOR[s.actor]) line.style.setProperty("--mw-actor", ACTOR_COLOR[s.actor]);
             if (stepNote(s, p)) line.append(control("span", { className: "mm-map-note" }, stepNote(s, p)));
             // In a host that can show a card, a step with a target follows from here: the map gives way to the app and the bar.
@@ -502,7 +521,7 @@ function showPanel(panel, model, pid, done, onDone, host = {}) {
                 line.append(b);
             }
             block.append(line);
-            const how = howTo(s);
+            const how = howTo(s) || linkOf(s, host);
             if (how) block.append(how);
             if (s.detail) { const d = control("div"); d.innerHTML = host.helpMarkdown(s.detail); block.append(d); }
             view.append(block);
@@ -518,9 +537,10 @@ function showPanel(panel, model, pid, done, onDone, host = {}) {
         if (p.steps?.length) {
             const ol = control("ol");
             for (const s of p.steps) {
-                const li = control("li", {}, s.say + stepNote(s, p));
+                const li = control("li");
+                li.append(s.say, stepNote(s, p));
                 li.dataset.step = s.id;
-                const how = howTo(s);
+                const how = howTo(s) || linkOf(s, host);
                 if (how) li.append(how);
                 ol.append(li);
             }
@@ -588,7 +608,30 @@ function dragSplit(host, split, panel) {
     });
 }
 
-// Draw the map into `host`, and return its teardown. A host passes what it knows: `state` (a device's /api/state document), `steps` (MoonDeck's /api/gates per process: each script step triggered, fresh, its seconds and its card), `run` (MoonDeck's: runs one such step), `modules` (the types of the cards in view), `here` (the processes or stages it is about, by id), `open` (a process or `process/step` to open at), `show`, `reopen` and `onFollow` (a host that can show a card: Show me hands it the followed process, see follow), `choices` (a choice's option the host knows, by input name), `done` (processes it vouches for, kept as marks), `actor` (the reader it starts filtered to) and `newTab` (pages open beside the host rather than over it).
+// The map in a host's own dialog, resized from its corner, for the hosts that are not the docs page. `draw(body, close)` draws into the dialog's body, usually through drawMap, and returns the map's teardown, which runs when the dialog closes; `closeClass` styles the Close button as the host's own. Returns the teardown, or nothing when the map did not draw.
+export async function openMap(draw, { closeClass = "" } = {}) {
+    ensureStyles();
+    const dlg = control("dialog", { className: "mm-walk-dialog" });
+    const head = control("div", { className: "mm-walk-head" });
+    const close = control("button", { type: "button", className: closeClass }, "Close");
+    close.addEventListener("click", () => dlg.close());
+    head.append(control("h3", {}, "MoonWalk"), close);
+    const body = control("div", { className: "mm-walk-body" });
+    dlg.append(head, body);
+    let stop = null;
+    dlg.addEventListener("close", () => { stop?.(); dlg.remove(); }, { once: true });
+    document.body.append(dlg);
+    dlg.showModal();
+    try {
+        stop = await draw(body, () => dlg.close());
+        if (!dlg.open) stop?.();   // closed while it was still loading
+    } catch (e) {
+        body.textContent = `MoonWalk could not load: ${e.message}`;   // offline, as on a device's own access point
+    }
+    return stop;
+}
+
+// Draw the map into `host`, and return its teardown. A host passes what it knows: `site` (where the docs pages live, for a host that does not serve them), `model` (moonwalk.json when it holds it already), `ownsAddress` (the docs page, whose address is the open process), `state` (a device's /api/state document), `steps` (MoonDeck's /api/gates per process: each script step triggered, fresh, its seconds and its card), `run` (MoonDeck's: runs one such step), `modules` (the types of the cards in view), `here` (the processes or stages it is about, by id), `open` (a process or `process/step` to open at), `show`, `reopen` and `onFollow` (a host that can show a card: Show me hands it the followed process, see follow), `choices` (a choice's option the host knows, by input name), `done` (processes it vouches for, kept as marks), `actor` (the reader it starts filtered to) and `newTab` (pages open beside the host rather than over it).
 export async function drawMap(host, opts = {}) {
     if (host.dataset.mounted) return;
     host.dataset.mounted = "1";
@@ -630,9 +673,12 @@ export async function drawMap(host, opts = {}) {
     let model;
     try {
         await loadScript(CYTOSCAPE);
-        const r = await fetch(MODEL);
-        if (!r.ok) throw new Error(`${MODEL.href} answered ${r.status}`);
-        model = await r.json();
+        if (opts.model) model = structuredClone(opts.model);   // the host's copy, which the map's prose is merged into
+        else {
+            const r = await fetch(MODEL);
+            if (!r.ok) throw new Error(`${MODEL.href} answered ${r.status}`);
+            model = await r.json();
+        }
     } catch (e) {
         canvas.textContent = `The map could not load: ${e.message}`;
         return;
@@ -645,7 +691,7 @@ export async function drawMap(host, opts = {}) {
     if (opts.done?.length) markDone(opts.done);
     const marks = readDone();
     const done = new Set([...marks, ...device]);
-    const host_ = { device, newTab: opts.newTab, root: host, helpMarkdown, choices: opts.choices, doneBy: opts.state ? "Done on this device" : "Done: its scripts last passed" };
+    const host_ = { device, newTab: opts.newTab, site: opts.site, root: host, helpMarkdown, choices: opts.choices, doneBy: opts.state ? "Done on this device" : "Done: its scripts last passed" };
     host_.state = opts.state;
     host_.hideOff = hideOff.checked;
     hideOff.addEventListener("change", () => { host_.hideOff = hideOff.checked; host_.relayout?.(); if (host_.current) showPanel(panel, model, host_.current, done, mark, host_); });
@@ -653,8 +699,8 @@ export async function drawMap(host, opts = {}) {
     if (opts.run) host_.run = opts.run;
     host_.types = opts.state ? typesOf(opts.state) : null;   // indexed once, for every step the panel ticks
     if (opts.show) host_.follow = (pid, stepId) => opts.onFollow?.(follow(model, pid, stepId, opts));
-    // On the site the open process is the page's address, so a link, a search result or a bookmark opens it; in the app the address is the app's own.
-    const remember = (pid) => { if (!opts.state) history.replaceState(null, "", pid ? `#${pid}` : location.pathname + location.search); };
+    // On the site the open process is the page's address, so a link, a search result or a bookmark opens it; every other host's address is its own.
+    const remember = (pid) => { if (opts.ownsAddress) history.replaceState(null, "", pid ? `#${pid}` : location.pathname + location.search); };
     const picked = new Set();   // the system chips switched on; none means every system
     // A chip for each system some process touches, so none filters to an empty map.
     const used = new Set(Object.values(model.processes).flatMap((p) => p.systems || []));
@@ -778,7 +824,7 @@ export async function drawMap(host, opts = {}) {
     cy.on("tap", "node[kind='step']", (ev) => { if (!tapped()) return; const pid = ev.target.data("pid"); remember(pid); toStep(pid, ev.target.id().split("/").pop()); });
 
     // Where the reader is: the processes touching the cards in view, or the page they came from. A link naming one process opens it; anything else opens on the choices.
-    const focus = new URLSearchParams(location.search).get("focus") || "";
+    const focus = opts.ownsAddress ? new URLSearchParams(location.search).get("focus") || "" : "";
     const touching = (opts.modules || []).flatMap((m) => (model.byModule[m] || []).map((ref) => ref.split("/")[0]));
     // What the host names comes first: a process by id, or a stage standing for its processes.
     const named = (opts.here || []).flatMap((id) => model.processes[id] ? [id] : model.stages.find((s) => s.id === id)?.processes || []);
@@ -795,7 +841,8 @@ export async function drawMap(host, opts = {}) {
         cy.elements().unselect();
         const target = cy.collection(shown.map((id) => nodesOf(id))).filter((n) => n.data("kind") === "process");
         target.select();
-        fit(target.length ? target : cy.collection());
+        // Where the host or the page names processes, the map zooms to them; otherwise it shows the whole journey, as Fit selection does.
+        fit(here.length && target.length ? target : apply());
     };
     host_.back = choose;
     // A new actor refilters the map; the choices follow unless a process is open for reading.
@@ -803,7 +850,7 @@ export async function drawMap(host, opts = {}) {
     apply();
     // What the host or the address names, a process or one of its steps, opens; anything else opens on the choices.
     // A redirect from a page MoonWalk took over keeps that page's anchor after the process's, so only the first part counts.
-    const [asked, step] = (opts.open || decodeURIComponent(location.hash.slice(1)).split("#")[0] || focus).split("/");
+    const [asked, step] = (opts.open || (opts.ownsAddress ? decodeURIComponent(location.hash.slice(1)).split("#")[0] : "") || focus).split("/");
     if (model.processes[asked]) { open(asked); if (step) toStep(asked, step); }
     else choose();
     // What a host calls when it closes the map: Cytoscape's window listeners and both observers go with it.
@@ -815,7 +862,9 @@ function mount() {
     const host = document.getElementById("mm-map");
     if (!host) return;
     document.documentElement.classList.add("mm-walk-js");   // the page's plain text gives way to the live view
-    drawMap(host);
+    // The page owns its address, so the open process is its hash. A map that cannot draw returns no teardown, and the plain text comes back.
+    const plain = () => document.documentElement.classList.remove("mm-walk-js");
+    drawMap(host, { ownsAddress: true }).then((stop) => { if (!stop) plain(); }, plain);
 }
 
 // Mounted where there is a page to mount on; a test imports the module for its rules alone.

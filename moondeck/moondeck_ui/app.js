@@ -242,7 +242,7 @@ window.addEventListener("message", (e) => {
 // Script cards
 // ---------------------------------------------------------------------------
 
-// How long a script takes, measured: the longest of its recent passing runs on the bench (moondeck/durations.json), so you can tell at a glance whether clicking costs a second or a coffee. A slow one carries the snail. A card never measured says so, and a server left running has no duration.
+// How long a script takes, measured: the longest of its recent passing runs on this machine (build/moondeck-logs/durations.json), so you can tell at a glance whether clicking costs a second or a coffee. A slow one carries the snail. A card never measured says so, and a server left running has no duration.
 const took = (seconds) => { const s = Math.round(seconds); return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m${String(s % 60).padStart(2, "0")}s`; };   // rounded first, so 119.6 reads 2m00s rather than 1m60s
 
 // Replay a script's stored last run into the log pane. Shared by the button rendered at load
@@ -1595,26 +1595,10 @@ init();
 
 // MoonWalk: the map of every process, opened on the contributor's stages, with each script step's status from /api/gates: what the change needs, which passes still hold, and how long each took. The map is the docs site's moonwalk.js, served here from the repo.
 async function openWalk() {
-    const dlg = document.createElement("dialog");
-    dlg.className = "walk-dialog";
-    const head = document.createElement("div");
-    head.className = "walk-head";
-    const title = document.createElement("h3");
-    title.textContent = "MoonWalk";
-    const close = document.createElement("button");
-    close.className = "walk-open";
-    close.textContent = "Close";
-    close.addEventListener("click", () => dlg.close());
-    head.append(title, close);
-    const host = document.createElement("div");
-    host.className = "walk-body";
-    dlg.append(head, host);
-    let stop = null;   // the map's teardown, once it has drawn
-    dlg.addEventListener("close", () => { stop?.(); dlg.remove(); }, { once: true });
-    document.body.appendChild(dlg);
-    dlg.showModal();
-    try {
-        const [walk, gates] = await Promise.all([import("/assets/moonwalk.js"), fetch("/api/gates").then((r) => r.json())]);
+    let walk;
+    try { walk = await import("/assets/moonwalk.js"); } catch (e) { alert(`MoonWalk could not load: ${e.message}`); return; }
+    walk.openMap(async (host, close) => {
+        const gates = await fetch("/api/gates?model=1").then((r) => r.json());
         if (gates.error) throw new Error(gates.error);
         // Run on a step gives way to MoonDeck, as Show me gives way to the app: the card's page, its log pane, and exactly the step's call.
         const run = (step) => {
@@ -1622,13 +1606,12 @@ async function openWalk() {
             const btn = document.querySelector(`.run-btn[data-id="${step.card}"]`);
             if (!script || !btn) return;
             document.querySelector(`.tab[data-tab="${script.tab}"]`)?.click();
-            dlg.close();
+            close();
             runScriptOnce(script, btn, { step: `${step.process}/${step.id}` });   // the server reads the step's call from the process file
         };
-        stop = await walk.drawMap(host, { steps: gates.processes, run, here: ["plan-setup", "develop", "hardware", "test", "document-commit", "merge", "release"], actor: "contributor", newTab: true });
-        if (!dlg.open) stop?.();
-    } catch (e) {
-        host.textContent = `MoonWalk could not load: ${e.message}`;
-    }
+        // Opened on the stages whose processes are not an end user's: the contributor's, from planning to a release.
+        const here = gates.model.stages.filter((st) => st.processes.some((pid) => gates.model.processes[pid].actor !== "user")).map((st) => st.id);
+        return walk.drawMap(host, { model: gates.model, steps: gates.processes, run, here, actor: "contributor", newTab: true, site: "https://moonmodules.org/MoonLight/" });   // MoonDeck serves no docs pages
+    }, { closeClass: "walk-open" });
 }
 document.getElementById("walk-open")?.addEventListener("click", openWalk);

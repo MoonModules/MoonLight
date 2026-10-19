@@ -477,14 +477,18 @@ static int runScenario(const char* path) {
     std::printf("%s\n", scenario["description"].c_str());
     std::printf("Target: %s\n\n", hostTarget());
 
+    // The mode field says what shape the scenario expects the world to be in, defaulting to construct: @xref{the-construct-and-mutate-modes}.
+    std::string mode = scenario.has("mode") ? scenario["mode"].str : std::string("construct");
+    if (mode != "construct" && mode != "mutate") {
+        std::printf("  FAIL: unknown mode: %s (expected construct or mutate)\n", mode.c_str());
+        return 1;
+    }
+
     // The one rule that keeps a scenario out of this runner: @xref{the-construct-and-mutate-modes}.
     if (scenario.has("live_only") && scenario["live_only"].boolean) {
         std::printf("  SKIP (live_only)\n");
         return kSkipped;
     }
-
-    // The mode field says what shape the scenario expects the world to be in, defaulting to construct: @xref{the-construct-and-mutate-modes}.
-    std::string mode = scenario.has("mode") ? scenario["mode"].str : std::string("construct");
 
     if (mode == "mutate") {
         // In-process replays the fixture before the scenario's actual steps: @xref{the-construct-and-mutate-modes}.
@@ -494,9 +498,6 @@ static int runScenario(const char* path) {
             std::printf("  FAIL: mutate scenario with no fixture or top asserts nothing in-process; mark it \"live_only\": true\n");
             return 1;
         }
-    } else if (mode != "construct") {
-        std::printf("  FAIL: unknown mode: %s (expected construct or mutate)\n", mode.c_str());
-        return 1;
     }
 
     ScenarioContext ctx;
@@ -792,9 +793,13 @@ static int runScenario(const char* path) {
         } else if (std::strcmp(op, "measure") == 0) {
             // Pure measurement step with no side effects: @xref{why-a-measure-step-has-two-spellings}.
             std::printf("  ...   %s\n", name);
-        } else {
-            // A live-tier op (expect_http, host_wifi) or a misspelt one: said, as the live runner says an op it does not know, rather than passed in silence.
+        } else if (std::strcmp(op, "expect_http") == 0 || std::strcmp(op, "host_wifi") == 0) {
+            // A live-tier op needs a device on the network: said, rather than passed in silence.
             std::printf("  SKIP  %s (op not run in-process: %s)\n", name, op);
+        } else {
+            // An op neither runner knows is a misspelling, and a scenario with one asserts less than it reads.
+            std::printf("  FAIL  %s (unknown op: %s)\n", name, op);
+            result.check(false, name);
         }
 
         // Per-step measurement: warmup, measure, contract assertions: @xref{why-a-measure-step-has-two-spellings}.

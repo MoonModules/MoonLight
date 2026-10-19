@@ -20,6 +20,17 @@ def test_a_build_reading_the_ui_header_depends_on_the_ui_files():
     assert "src/ui/app.js" in deps
 
 
+def test_the_sources_a_firmware_reads_include_the_ui_files_its_header_embeds(tmp_path, monkeypatch):
+    build = tmp_path / "build" / "esp32-x"
+    build.mkdir(parents=True)
+    (build / ".ninja_deps").write_bytes(b"")
+    ninja = type("Ran", (), {"returncode": 0, "stdout": "output: x.o\n  ../../src/main.cpp\n  ../../src/ui/ui_embedded.h\n"})()
+    monkeypatch.setattr(check, "ROOT", tmp_path)
+    monkeypatch.setattr(check.subprocess, "run", lambda *a, **k: ninja)
+    deps = check.compiled_sources("x")
+    assert "src/main.cpp" in deps and "src/ui/app.js" in deps   # app.js is embedded through the header, which ninja lists
+
+
 def test_a_build_without_the_ui_header_gains_nothing():
     assert check.with_ui({"src/main.cpp"}) == {"src/main.cpp"}
 

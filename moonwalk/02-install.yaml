@@ -8,6 +8,22 @@ processes:
     goal: You know what MoonLight does, and whether it suits your lights.
     systems: [MoonLight]
     page: index.md
+    steps:
+      - id: tour
+        say: Watch the tour of MoonLight.
+        when: { open: { url: "https://youtu.be/F_YgmiUyWVQ" } }
+        detail: |
+          Every clip in one chaptered video. The opening clip on [the home page](index.md) says why MoonLight was rebuilt, who wrote it, and the principles it kept.
+      - id: what-it-is
+        say: Read what MoonLight is.
+        when: { read: { page: index.md, section: What it is } }
+        detail: |
+          A show is a stack of simple blocks: a layout, effects, modifiers and a driver. Every setting applies live.
+      - id: catalog
+        say: Browse the effects, layouts and drivers.
+        when: { read: { page: moonmodules/light/index.md } }
+        detail: |
+          [Drivers](moonmodules/light/drivers.md) says whether your lights are supported: LED strips, panels, Art-Net and DMX fixtures. Measured frame rates per device: [Performance](reference/performance.md).
   - id: install
     title: Install MoonLight
     actor: user
@@ -34,14 +50,16 @@ processes:
       - id: plug-in
         say: Plug your board in with a data cable.
         given: [{ input: platform, in: [ESP32, Teensy] }]
-        when: { manual: "Use Chrome, Edge or Opera. Flashing needs Web Serial, and a Teensy WebHID, which Firefox and Safari lack; a charge-only cable powers the board without showing it." }
+        when: { manual: "Use Chrome, Edge or Opera." }
         detail: |
+          Firefox and Safari lack the Web Serial and WebHID flashing needs.
+
           ![The installer: picking a release, a firmware, and a board from the gallery](assets/moontube/01-install-esp32.webm)
       - id: pick-port
         section: Pick the board
         say: Pick the board's USB port.
         given: [{ input: platform, in: [ESP32, Teensy] }]
-        when: { manual: "The installer recognizes the chip. USB Port, then Pick a port: the entry that appeared when you plugged in." }
+        when: { manual: "USB Port, then Pick a port: the entry that appeared when you plugged in." }
         detail: |
           Not sure which? Unplug, look at the list, and plug back in: the new entry is your board.
 
@@ -55,59 +73,59 @@ processes:
       - id: pick-device
         say: Pick your device from the Device picker.
         given: [{ input: platform, in: [ESP32, Teensy] }]
-        when: { manual: "Leave Release and Firmware at their suggestions. Each card shows the device, its chip and what it can do." }
+        when: { manual: "Leave Release and Firmware at their suggestions." }
         detail: |
           ![Picking a device](assets/gettingstarted/01-04-pick-device.png)
 
-          Green pills work the moment you install, yellow once you add its module, amber is planned. **details** on a card links its product page.
+          Green pills work the moment you install, yellow once you add its module, amber is planned.
 
           ![A device card with its details](assets/gettingstarted/01-05-device-details.png)
 
-          The setup panel shows what the install applies; you change any of it later.
+          The setup panel shows what the install applies.
 
           ![Device setup](assets/gettingstarted/01-06-device-setup.png)
 
-          Tick **Erase chip first** only to start clean or to switch firmware; a 4 MB classic board on a release before v4.0 needs it once ([MIGRATING](reference/MIGRATING.md)). It wipes the WiFi and every setting, so [back the device up](how-to/backup-and-restore.md) first.
+          Tick **Erase chip first** only to start clean or to switch firmware ([MIGRATING](reference/MIGRATING.md)). It wipes every setting, so [back the device up](how-to/backup-and-restore.md) first.
       - id: flash
         say: Click Install.
         given: [{ input: platform, equals: ESP32 }]
-        when: { manual: "It erases when you asked it to, then writes the firmware in under a minute." }
+        when: { manual: "It writes the firmware in under a minute." }
         detail: |
           ![Erasing](assets/gettingstarted/01-07-erasing.png)
 
           ![Installing](assets/gettingstarted/01-08-installing.png)
       - id: teensy-flash
-        say: Click Install, then pick the Teensy's bootloader.
+        say: Click Install.
         given: [{ input: platform, equals: Teensy }]
-        when: { manual: "The browser lists the bootloader by its USB ids as \"Unknown device (16C0:0478)\", since it reports no product name." }
+        when: { manual: "Then pick the bootloader the browser lists as Unknown device (16C0:0478)." }
         detail: |
-          **Erase chip first** wipes every setting along with the install, for a board whose saved state went bad; the program is replaced either way.
+          **Erase chip first** also wipes every setting, for a board whose saved state went bad.
       - id: teensy-port
-        say: Pick the Teensy's serial port, or skip.
+        say: Pick the Teensy's serial port.
         given: [{ input: platform, equals: Teensy }]
-        when: { manual: "It shows once the board has rebooted. The installer reads the board's address from its serial log." }
+        when: { manual: "Optional: it shows once the board has rebooted." }
         detail: |
-          With **Apply device defaults** it also sends the device model's settings over the same port.
+          The installer reads the board's address from its log, and **Apply device defaults** sends the device model's settings.
       - id: network
         section: Get it on your network
         say: Enter your WiFi, or plug in Ethernet.
         given: [{ input: platform, equals: ESP32 }]
-        when: { manual: "Press Connect after the password. Ethernet connects on its own, with no password." }
+        when: { manual: "Press Connect after the password." }
         detail: |
           ![Entering WiFi credentials](assets/gettingstarted/01-09-wifi-credentials.png)
 
-          Or press **Skip** and set WiFi up from the device itself, through [its own network](moonwalk.md#join-access-point). Restoring a backup? Skip here too: the backup carries the WiFi.
+          Ethernet connects on its own. Or press **Skip** and set WiFi up through [the device's own network](moonwalk.md#join-access-point), or when restoring a backup, which carries the WiFi.
       - id: teensy-network
         say: Plug in Ethernet.
         given: [{ input: platform, equals: Teensy }]
-        when: { manual: "A Teensy 4.1 has no WiFi. A regular Teensy 4.1 uses its own Ethernet; a 4.1-NE, which has none, a W5500 module the firmware finds at boot." }
+        when: { manual: "A Teensy 4.1 has no WiFi." }
         detail: |
-          Pins, wiring and power are on [the Teensy 4.1 page](reference/hardware/teensy-4-1.md).
+          A 4.1-NE, which has no Ethernet of its own, uses a W5500 module. Pins and wiring: [the Teensy 4.1 page](reference/hardware/teensy-4-1.md).
       - id: download
         section: Download it
-        say: Set Install to This computer, and press Download.
+        say: Download the app for this computer.
         given: [{ input: platform, in: [Windows, macOS, Linux] }]
-        when: { manual: "Windows gets a setup, macOS a .dmg, Linux a .tar.gz and a .deb." }
+        when: { manual: "Set Install to This computer, then press Download." }
         detail: |
           On Windows this gives you `MoonLight-windows-x64-vX.Y.Z-setup.exe`, on macOS a `.dmg`, on Linux a `.tar.gz` and a `.deb`.
 
@@ -118,18 +136,18 @@ processes:
         section: Tell the browser to keep it
         say: Keep the download when the browser warns.
         given: [{ input: platform, equals: Windows }]
-        when: { manual: "In the browser's Downloads panel, choose Keep anyway." }
+        when: { manual: "In the browser's Downloads panel." }
         detail: |
-          In the Downloads panel, click the **`⋯`** next to the file, open the **Delete** dropdown and choose **Keep anyway**. In Chrome: the entry's **`⋯`**, **Keep**, then **Keep anyway**.
+          Click the **`⋯`** next to the file, open the **Delete** dropdown and choose **Keep anyway**. In Chrome: the entry's **`⋯`**, **Keep**, then **Keep anyway**.
 
           ![The SmartScreen download dialog, with the Delete dropdown open showing Keep anyway](assets/tutorials/windows-02-keep-anyway.png)
 
           MoonLight is not code-signed, so every new build starts with no reputation and gets this warning. Defender removed it, or the download failed? See [Windows flags the download](how-to/troubleshooting.md#windows-flags-the-download).
       - id: setup
         section: Install and start it
-        say: Double-click the file you kept and press Install.
+        say: Run the setup you kept.
         given: [{ input: platform, equals: Windows }]
-        when: { manual: "Double-click the downloaded setup and press Install." }
+        when: { manual: "Double-click it and press Install." }
         detail: |
           Keeping it was the trust decision, so Windows does not ask again. It installs **for your user only**, into `%LOCALAPPDATA%\Programs\MoonLight`, which is why it never asks for an administrator password. It needs about 1.3 MB.
 
@@ -139,27 +157,31 @@ processes:
       - id: start
         say: Open MoonLight from the Start menu.
         given: [{ input: platform, equals: Windows }]
-        when: { manual: "MoonLight is in the Start menu with its own icon." }
+        when: { manual: "Press the Windows key and type MoonLight." }
         detail: |
           ![The Windows Start menu showing MoonLight with its icon, and an Uninstall MoonLight entry](assets/tutorials/windows-04-start-menu.png)
 
           The **Uninstall MoonLight** entry beside it is the clean way to remove it later, and it leaves your settings in place.
-      - id: open-mac
+      - id: drag-mac
         section: Install and start it
-        say: Drag MoonLight to Applications, then open it.
+        say: Drag MoonLight to Applications.
         given: [{ input: platform, equals: macOS }]
-        when: { manual: "Open the .dmg first; the first time, right-click the app and choose Open. Gatekeeper asks once, since the build is ad-hoc signed rather than notarized." }
+        when: { manual: "Open the .dmg and drag the app onto the Applications folder." }
+      - id: open-mac
+        say: Open MoonLight from Applications.
+        given: [{ input: platform, equals: macOS }]
+        when: { manual: "The first time, right-click it and choose Open." }
         detail: |
-          Gatekeeper says it cannot verify the developer: right-click the app and choose **Open** to accept it once, or clear the flag in a terminal:
+          Gatekeeper asks once, since the build is ad-hoc signed rather than notarized: it says it cannot verify the developer, and **Open** accepts it. Or clear the flag in a terminal:
 
           ```
           xattr -dr com.apple.quarantine /Applications/MoonLight.app
           ```
       - id: install-deb
         section: Install and start it
-        say: Install the .deb and run MoonLight.
+        say: Install the .deb package.
         given: [{ input: platform, equals: Linux }]
-        when: { run: { command: "sudo apt install ./moonlight_X.Y.Z_<arch>.deb && MoonLight" } }
+        when: { run: { command: "sudo apt install ./moonlight_X.Y.Z_<arch>.deb" } }
         detail: |
           The releases carry `_amd64.deb` for `x86_64` and `_arm64.deb` for `aarch64` (`uname -m` says which), for Debian, Ubuntu and Raspberry Pi OS with glibc 2.35 or later. On a headless board, fetch the right file over ssh:
 
@@ -170,6 +192,10 @@ processes:
           ```
 
           `latest` is the rolling build from main; for the newest tagged release, use `releases/latest`. Or unpack the `.tar.gz` and run it in place. To start it on every boot: [Keep MoonLight running on a Linux board](moonwalk.md#run-linux-board).
+      - id: run-linux
+        say: Start MoonLight.
+        given: [{ input: platform, equals: Linux }]
+        when: { run: { command: "MoonLight" } }
       - id: docker-run
         section: Run the container
         say: Run the published image.
@@ -183,7 +209,7 @@ processes:
         section: That is it
         say: Click the device's link in the installer.
         given: [{ input: platform, in: [ESP32, Teensy] }]
-        when: { manual: "The installer says Device is online! with the device's address. The link opens the device's own web interface, served by the ESP32." }
+        when: { manual: "The installer says Device is online! with the device's address." }
         detail: |
           ![Device is online over WiFi](assets/gettingstarted/01-10-online-wifi.png)
 
@@ -211,12 +237,16 @@ processes:
         section: That is it
         say: Open the interface on port 8080.
         given: [{ input: platform, equals: Docker }]
-        when: { manual: "Use http://<machine>:8080, or localhost:8080 on the same machine. The machine's address is the one you reach it at over SSH or from your router." }
+        when: { manual: "Use http://<machine>:8080, or localhost:8080 on the same machine." }
+        detail: |
+          The machine's address is the one you reach it at over SSH or from your router.
       - id: settings
         section: Where your settings live
         say: Find where your settings live.
-        when: { manual: "They live apart from the program, so updating or reinstalling keeps them. Delete that place by hand only when you want a clean slate." }
+        when: { manual: "They live apart from the program." }
         detail: |
+          Updating or reinstalling keeps them.
+
           | Where it runs | Your settings |
           |---|---|
           | ESP32 | On the device. **Erase chip first** clears them: [back them up](how-to/backup-and-restore.md) before ticking it. |
@@ -229,31 +259,31 @@ processes:
         section: Updating
         say: Update from the ⬆ badge.
         given: [{ input: platform, in: [ESP32, Teensy] }]
-        when: { manual: "It lights in the top bar when a newer stable release exists, also on a latest build, and opens the Firmware card. Your settings stay." }
+        when: { manual: "It opens the Firmware card." }
         detail: |
-          An ESP32 installs it in place over the network: [Updating MoonLight](moonwalk.md#update-firmware) covers it, and the way back when an update fails.
+          It lights when a newer stable release exists, and your settings stay. An ESP32 installs it over the network: [Updating MoonLight](moonwalk.md#update-firmware), with the way back when an update fails.
 
-          A Teensy has no TLS, so the browser downloads the release's `.bin` and uploads it. Power lost in the seconds after **Rebooting…** leaves the board dark: an install over USB with the program button brings it back, settings included.
+          A Teensy has no TLS, so the browser downloads the release's `.bin` and uploads it. Power lost right after **Rebooting…** leaves it dark until a USB install with the program button, which keeps the settings.
       - id: update-app
         section: Updating
-        say: Download and install the new build.
+        say: Install the new build.
         given: [{ input: platform, in: [Windows, macOS, Linux] }]
-        when: { manual: "The ⬆ badge in the top bar lights when a newer stable release ships for your OS, and opens its page. Your settings stay." }
+        when: { manual: "The ⬆ badge in the top bar opens its release page." }
         detail: |
-          A running program cannot replace its own executable, so updating is the steps above again, in about a minute.
+          The badge lights when a newer stable release ships for your OS. A running program cannot replace its own executable, so updating is the download and the install again, in about a minute. Your settings stay.
       - id: update-docker
         section: Updating
-        say: Pull the new image, then run it again.
+        say: Recreate the container from the new image.
         given: [{ input: platform, equals: Docker }]
-        when: { run: { command: "docker pull ghcr.io/moonmodules/moonlight:latest && docker rm -f moonlight" } }
+        when: { run: { command: "docker pull ghcr.io/moonmodules/moonlight:latest && docker rm -f moonlight && docker run -d --name moonlight --network host -v moonlight-data:/data --restart unless-stopped ghcr.io/moonmodules/moonlight:latest" } }
         detail: |
-          Then run it as above; the volume keeps your settings.
+          The volume keeps your settings.
     outro: |
       ## Where to go next
 
       - **[How MoonLight works](tutorials/how-moonlight-works.md)**: the interface, and the Layouts, Effects and Drivers model.
       - **[Driving LED panels with a receiving card](how-to/panel-cards.md)**: turn this desktop into the sending card for an LED wall.
-      - **[Keep it running on a Linux board](how-to/installing-on-linux.md)**: a Pi or a NanoPi that starts MoonLight on every boot.
+      - **[Keep it running on a Linux board](moonwalk.md#run-linux-board)**: a Pi or a NanoPi that starts MoonLight on every boot.
 
       Something not working on a first run? See [Troubleshooting](how-to/troubleshooting.md#a-first-run-on-a-computer-or-in-a-container).
   - id: install-windows-zip
@@ -271,12 +301,14 @@ processes:
           It is `MoonLight-windows-x64-vX.Y.Z.zip`.
       - id: extract
         say: Extract it.
-        when: { manual: "Extract it rather than opening the program inside the zip: Windows unpacks a zip-launched program into a temporary folder it may clear at any time." }
+        when: { manual: "Right-click it and choose Extract All." }
+        detail: |
+          Run the program from the extracted folder rather than inside the zip: Windows unpacks a zip-launched program into a temporary folder it may clear at any time.
       - id: run
         say: Run MoonLight.exe, or Install-MoonLight.cmd.
-        when: { manual: "MoonLight.exe runs in place and writes nothing outside your settings folder, the one for a USB stick. Install-MoonLight.cmd installs it as the setup does." }
+        when: { manual: "MoonLight.exe runs in place; Install-MoonLight.cmd installs it." }
         detail: |
-          The `.cmd` copies the program to `%LOCALAPPDATA%\Programs\MoonLight`, adds the Start-menu entry, registers an uninstaller and stops a running copy first, with no administrator rights. It wraps `Install-MoonLight.ps1`, which you can read first. Right-clicking that `.ps1` and choosing **Run with PowerShell** fails: Windows marks every file from a downloaded zip as internet-sourced, and PowerShell refuses an unsigned script carrying that mark. `Uninstall-MoonLight.ps1` reverses the install and leaves your settings alone.
+          `MoonLight.exe` writes nothing outside your settings folder, the one for a USB stick. `Install-MoonLight.cmd` installs it as [the setup](moonwalk.md#install) does. It wraps `Install-MoonLight.ps1`, which you can read first. Right-clicking that `.ps1` and choosing **Run with PowerShell** fails: Windows marks every file from a downloaded zip as internet-sourced, and PowerShell refuses an unsigned script carrying that mark. `Uninstall-MoonLight.ps1` reverses the install and leaves your settings alone.
       - id: open-ui
         say: Open the interface at localhost:8080.
         when: { open: { url: "http://localhost:8080/" } }
@@ -289,12 +321,12 @@ processes:
     steps:
       - id: recognize
         say: Check the board has no COM port.
-        when: { manual: "The installer's picker says No serial ports available; Device Manager shows the board under Other devices with a yellow triangle." }
+        when: { manual: "The installer's picker says No serial ports available." }
         detail: |
-          In PowerShell, `Get-PnpDevice | Where-Object InstanceId -match "VID_10C4|VID_1A86"` lists the board with `Status: Error`.
+          Device Manager shows the board under Other devices with a yellow triangle. In PowerShell, `Get-PnpDevice | Where-Object InstanceId -match "VID_10C4|VID_1A86"` lists the board with `Status: Error`.
       - id: which
         say: Find the driver from the vendor ID.
-        when: { manual: "The vendor ID is in the board's InstanceId. VID_1A86 is a CH340, VID_10C4 a CP2102, VID_0403 an FTDI." }
+        when: { manual: "The vendor ID is in the board's InstanceId." }
         detail: |
           | VID | Chip | Common boards | Driver |
           |---|---|---|---|
@@ -314,8 +346,8 @@ processes:
 
           A few seconds later the board appears as `Silicon Labs CP210x USB to UART Bridge (COM…)`, and both pickers list it without a restart.
       - id: still-nothing
-        say: If still nothing, try the fixes below.
-        when: { manual: "Each is a known cause, cheapest last." }
+        say: Clear the known causes of a missing port.
+        when: { manual: "A stale COM port, a wedged CH340 driver or a charge-only cable." }
         detail: |
           - **A stale COM port** from an earlier attempt, visible in Device Manager under *Show hidden devices*, can block a new one: remove it with `pnputil /remove-device "USB\VID_…"`, elevated, and plug in again.
           - **A wedged CH340 driver** shows `Status: Unknown` though installed: `pnputil /delete-driver oem*.inf /uninstall /force` for the WCH driver, plug in again, and let Windows Update fetch a fresh one.
@@ -326,6 +358,22 @@ processes:
     goal: An always-on Pi or NanoPi runs MoonLight after every reboot.
     systems: [MoonCore]
     page: how-to/installing-on-linux.md
+    steps:
+      - id: install
+        say: Install the package on the board.
+        when: { process: install }
+      - id: unit
+        say: Write a systemd unit for MoonLight.
+        when: { read: { page: how-to/installing-on-linux.md, section: Keeping it running after a reboot } }
+      - id: enable
+        say: Enable the service at boot.
+        when: { run: { command: "sudo systemctl enable --now moonlight" } }
+      - id: status
+        say: Check the service runs.
+        when: { run: { command: "systemctl status moonlight" } }
+      - id: shutdown
+        say: Shut the board down cleanly.
+        when: { run: { command: "sudo shutdown now" } }
   - id: join-access-point
     title: Join your WiFi through the device's own network
     actor: user
@@ -335,17 +383,23 @@ processes:
     steps:
       - id: power-on
         say: Power on the device.
-        when: { manual: "With no network known, it opens its own MM-XXXX WiFi network. A device that cannot join a network keeps its access point open." }
+        when: { manual: "With no network known, it opens its own MM-XXXX network." }
+        detail: |
+          A device that cannot join a network keeps its access point open.
       - id: join
         say: Join its MM-XXXX network.
-        when: { manual: "Join from a phone or laptop; the sign-in screen opens on the device's WiFi card. Or open http://4.3.2.1 when no sign-in screen appears." }
+        when: { manual: "Join from a phone or laptop." }
+        detail: |
+          The sign-in screen opens on the device's WiFi card. Or open http://4.3.2.1 when no sign-in screen appears.
       - id: pick
-        say: Pick your network and type its password.
+        say: Add your network on the WiFi card.
         when: { open: { module: WiFiModule } }
         then:
           - { module: WiFiModule, control: known, notEquals: 0 }
         detail: |
-          Your network is in the scan.
+          Pick your network in the scan and type its password.
       - id: back
-        say: Rejoin your network and open the device.
-        when: { manual: "The device has joined your network, at its new address. The address shows on the device's WiFi card and in the installer's device list." }
+        say: Open the device on your network.
+        when: { manual: "Rejoin your network, then open the device's new address." }
+        detail: |
+          The address shows on the device's WiFi card and in the installer's device list.

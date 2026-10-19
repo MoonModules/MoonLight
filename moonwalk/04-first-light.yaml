@@ -115,3 +115,17 @@ processes:
     systems: [MoonCore]
     dependsOn: [install]
     page: moonmodules/core/ui.md
+    steps:
+      - id: toggle
+        say: Press ⓘ in the status bar.
+        when: { manual: "It is dimmed while help is off." }
+      - id: consent
+        say: Allow the help download.
+        when: { manual: "Asked once: the help comes from the docs site." }
+        detail: |
+          The browser keeps `help.json` and the yes, so the firmware carries none of it. Each release carries its own copy, so the help names the controls the running firmware has.
+      - id: more
+        say: Tap a help line for more.
+        when: { manual: "A module's line opens its guide; a ▸ opens a control's longer help." }
+        detail: |
+          A module's help links its docs, its source and its tests, and lists the processes it takes part in.

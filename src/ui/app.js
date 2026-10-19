@@ -356,9 +356,13 @@ async function init() {
     if (walked) {
         const ids = walked.split(",").filter((id) => /^[a-z0-9-]+$/.test(id));
         safeLocalSet(LS_WALKED, JSON.stringify([...new Set([...walkedIds(), ...ids])]));
+    }
+    // Both are answered once: the address drops them, so a reload neither asks again nor vouches twice.
+    if (helpSource || walked) {
         const url = new URL(location.href);
+        url.searchParams.delete("help");
         url.searchParams.delete("walked");
-        history.replaceState(null, "", url.pathname + url.search);
+        history.replaceState(null, "", url.pathname + url.search + url.hash);
     }
     const helpOn = lsRead(LS_HELP_SHOWN, "0") === "1" && lsRead(LS_HELP_CONSENT, "") === "1";
     if (helpOn) loadHelp();
@@ -2835,7 +2839,7 @@ const LS_HELP = "mm_help";            // the last help.json fetched with its add
 const HELP_URL_LOCAL = "http://localhost:8421/help/help.json";
 const LS_HELP_SOURCE = "mm_helpSource";   // "local" while developing help, else absent
 const LS_HELP_SHOWN = "mm_helpShown"; // "1" shows the help, from the ⓘ in the status bar; off by default
-const LS_HELP_CONSENT = "mm_helpConsent"; // "1" once the user agreed to download help; nothing is fetched before
+const LS_HELP_CONSENT = "mm_helpMapConsent"; // "1" once the user agreed to download help and the map; a new key, since the older one covered the docs site alone and the map adds cdnjs
 let helpModules = {};
 let helpPending = false;   // help was asked for before the first state arrived, so the fetch waits for the firmware's version
 
@@ -2941,7 +2945,7 @@ function loadWalkIndex(local) {
 }
 
 function walkedIds() {
-    try { return JSON.parse(lsRead(LS_WALKED, "[]")); } catch { return []; }
+    try { const ids = JSON.parse(lsRead(LS_WALKED, "[]")); return Array.isArray(ids) ? ids : []; } catch { return []; }
 }
 
 // Open the map, at `at` (`process` or `process/step`) when a help link names one. Show me on a step closes it and hands the process to the bar.
@@ -2949,39 +2953,18 @@ async function openWalk(at) {
     walker?.stop();
     walker = null;
     if (!docsSiteConsent()) return;
-    const dlg = document.createElement("dialog");
-    dlg.className = "walk-dialog";
-    const head = document.createElement("div");
-    head.className = "walk-head";
-    const title = document.createElement("h3");
-    title.textContent = "MoonWalk";
-    const close = document.createElement("button");
-    close.className = "fm-tool";
-    close.textContent = "Close";
-    close.addEventListener("click", () => dlg.close());
-    head.append(title, close);
-    const host = document.createElement("div");
-    host.className = "walk-body";
-    dlg.append(head, host);
-    let stop = null;   // the map's teardown, once it has drawn
-    dlg.addEventListener("close", () => { stop?.(); dlg.remove(); }, { once: true });
-    document.body.appendChild(dlg);
-    dlg.showModal();
     // The cards in view: the selected root and everything under it, by type, the key a process's steps target.
     const types = [];
     const collect = (m) => { if (!m) return; types.push(m.type); (m.children || []).forEach(collect); };
     collect(selectedModule ? findModule(selectedModule) : null);
-    try {
-        const local = lsRead(LS_HELP_SOURCE, "") === "local";
-        const [walk, deviceState] = await Promise.all([import(local ? WALK_URL_LOCAL : WALK_URL), fetch("/api/state").then(r => r.json())]);
-        stop = await walk.drawMap(host, { state: deviceState, modules: types, open: at, done: walkedIds(), actor: "user", newTab: true,
-            show: showTarget, reopen: openWalk, onFollow: (w) => { walker = w; dlg.close(); w.update(state); } });
-        // The map recorded the installer's vouch once it drew; a map that could not load leaves it for the next open.
-        if (typeof stop === "function") try { localStorage.removeItem(LS_WALKED); } catch { /* recorded twice next time, which is harmless */ }
-        if (!dlg.open) stop?.();   // closed while it was still loading
-    } catch (e) {
-        host.textContent = `MoonWalk could not load: ${e.message}`;   // offline, as on the device's own access point
-    }
+    let walk;
+    try { walk = await import(lsRead(LS_HELP_SOURCE, "") === "local" ? WALK_URL_LOCAL : WALK_URL); }
+    catch (e) { alert(`MoonWalk could not load: ${e.message}`); return; }   // offline, as on the device's own access point
+    const stop = await walk.openMap(async (host, close) => walk.drawMap(host, {
+        state: await fetch("/api/state").then(r => r.json()), model: walkIndex, modules: types, open: at, done: walkedIds(), actor: "user", newTab: true,
+        show: showTarget, reopen: openWalk, onFollow: (w) => { walker = w; close(); w.update(state); } }), { closeClass: "fm-tool" });
+    // The map recorded the installer's vouch once it drew; a map that could not load leaves it for the next open.
+    if (typeof stop === "function") try { localStorage.removeItem(LS_WALKED); } catch { /* recorded twice next time, which is harmless */ }
 }
 
 function helpFor(moduleType) {
@@ -6478,10 +6461,15 @@ function mlGroupForExt(ext) {
          : ext === ".mlp" ? "palettes" : null;
 }
 
+/// The collection a catalog group files a script under, "" for one at the kind's root or not in the catalog.
+function mlSubOf(g, name) {
+    return (g.sub || [])[(g.names || []).indexOf(name)] || "";
+}
+
 /// Where a script lives in the repo: in its subfolder when the catalog names one, at the kind's root otherwise. The device keeps every script flat.
 function mlRepoPath(cat, group, name) {
     const g = (cat && cat[group]) || {};
-    const sub = (g.sub || [])[(g.names || []).indexOf(name)] || "";
+    const sub = mlSubOf(g, name);
     return "moonlive/" + (g.folder || group) + "/" + (sub ? sub + "/" : "") + name;
 }
 
@@ -8768,7 +8756,7 @@ function buildFilePathControl(row, label, key, moduleName, ctrl) {
         // The collection a factory script belongs to upstream, its subfolder, after the name: one library still, with its groups named.
         const from = (n) => {
             const g = cat && cat[group];
-            const sub = g && g.sub && g.names ? g.sub[g.names.indexOf(n)] : "";
+            const sub = g ? mlSubOf(g, n) : "";
             return sub ? " \u00b7 " + sub : "";
         };
         for (const n of names) {
@@ -8898,8 +8886,8 @@ function buildFilePathControl(row, label, key, moduleName, ctrl) {
             await navigator.clipboard.writeText(text).catch(() => {});
             alert("This script is too long to send through a link.\n\n"
                 + "It has been copied to your clipboard: open\n"
-                + "github.com/MoonModules/MoonLight, add a file under moonlive/" + folder
-                + "/ and paste it there.");
+                + "github.com/MoonModules/MoonLight, add " + repoPath
+                + " and paste it there.");
             return;
         }
         window.open(url, "_blank", "noopener");

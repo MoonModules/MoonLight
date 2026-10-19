@@ -14,13 +14,21 @@ from functools import lru_cache
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent.parent
-DURATIONS = ROOT / "moondeck" / "durations.json"   # each call's recent passing runs on the bench, committed so every reader compares on one machine
+DURATIONS = ROOT / "build" / "moondeck-logs" / "durations.json"   # each call's recent passing runs on this machine, beside its run record: a duration is this machine's, as a run is
 SLOW_SECONDS = 45   # where the measured runs split: the checks finish within about 30 s, the builds, sweeps and flashes take a minute and more
 KEEP = 5            # passing runs kept per call: a clean build and an incremental one both count
 
 
 def _git(*args, env=None, root=ROOT) -> str:
     return subprocess.run(["git", *args], cwd=root, env=env, capture_output=True, text=True, check=True).stdout.strip()
+
+
+def in_checkout(root: Path = ROOT) -> bool:
+    """Whether `root` is a git working tree, where a run's tree can be recorded."""
+    try:
+        return _git("rev-parse", "--is-inside-work-tree", root=root) == "true"
+    except (OSError, subprocess.CalledProcessError):
+        return False
 
 
 def tree_now(root: Path = ROOT) -> str:
@@ -99,6 +107,11 @@ def record_run(path: Path, key: str, tree: str, passed: bool) -> None:
     _update(path, lambda runs: runs.__setitem__(key, {"tree": tree, "passed": passed}))
 
 
+def record_finished(path: Path, key: str, passed: bool, root: Path = ROOT) -> None:
+    """Keep a finished run's result with the tree it leaves behind, its own outputs (a report, observations, the durations) inside it, as a build counts its outputs newer than its inputs; an edit made during the run counts as seen."""
+    record_run(path, key, tree_now(root), passed)
+
+
 def record_duration(path: Path, key: str, seconds: float) -> None:
     """Add a passing run's seconds to the call's recent runs, the last KEEP of them."""
     def add(durations):
@@ -118,12 +131,17 @@ def run_key(script: str, args: str = "") -> str:
     return f"{script} {args}".strip()
 
 
+def runnable(run) -> bool:
+    """Whether a step's `run` is a call MoonDeck can make as written: a script, and no `<placeholder>` the reader fills in."""
+    return isinstance(run, dict) and bool(run.get("script")) and "<" not in run.get("args", "")
+
+
 def step_run(model: dict, ref: str) -> dict | None:
     """The `run` of the step `process/step` names, or None: a step's call comes from the process file, never from the request that asks for it."""
     pid, _, sid = (ref or "").partition("/")
     step = next((s for s in model.get("processes", {}).get(pid, {}).get("steps", []) if s.get("id") == sid), None)
     run = (step or {}).get("when", {}).get("run")
-    return run if isinstance(run, dict) and run.get("script") else None
+    return run if runnable(run) else None
 
 
 def status(model: dict, runs: dict, durations: dict | None = None, root: Path = ROOT, now: str | None = None,
@@ -141,7 +159,7 @@ def status(model: dict, runs: dict, durations: dict | None = None, root: Path = 
         steps = []
         for s in p.get("steps", []):
             run = (s.get("when") or {}).get("run")
-            if not (isinstance(run, dict) and run.get("script")):
+            if not runnable(run):
                 continue
             globs = [x for g in s.get("given", []) if isinstance(g, dict) for x in g.get("changed", [])]
             covers = (lambda paths: any(matches(q, globs) for q in paths)) if globs else bool

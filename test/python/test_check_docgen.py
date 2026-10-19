@@ -1230,7 +1230,6 @@ def test_a_process_over_its_word_caps_is_a_warning_on_its_stage_file(tmp_path, m
     import gen_moonwalk
     (tmp_path / "01-test.yaml").write_text("stage: T\nprocesses:\n  - id: a\n    title: A\n    actor: user\n    goal: G\n"
                                            f"    steps:\n      - {{id: s, say: Open it., when: {{manual: Do it}}, detail: {'word ' * 121}}}\n", encoding="utf-8")
-    monkeypatch.setattr(gen_moonwalk, "MOONWALK", tmp_path)
     monkeypatch.setattr(gen_moonwalk, "build", lambda root=tmp_path, build=gen_moonwalk.build: build(root))
     found = check_docgen._process_sizes()
     assert found == [("moonwalk/01-test.yaml", "process over its caps: a: step s's detail 121 words > 120")]
@@ -1242,7 +1241,6 @@ def test_a_process_within_its_word_caps_is_silent(tmp_path, monkeypatch):
     import gen_moonwalk
     (tmp_path / "01-test.yaml").write_text("stage: T\nprocesses:\n  - id: a\n    title: A\n    actor: user\n    goal: G\n"
                                            "    steps:\n      - {id: s, say: Open it., when: {manual: Do it}, detail: Short.}\n", encoding="utf-8")
-    monkeypatch.setattr(gen_moonwalk, "MOONWALK", tmp_path)
     monkeypatch.setattr(gen_moonwalk, "build", lambda root=tmp_path, build=gen_moonwalk.build: build(root))
     assert check_docgen._process_sizes() == []
 
@@ -1251,7 +1249,6 @@ def test_a_stage_file_the_generator_refuses_is_an_error_rather_than_a_traceback(
     import check_docgen
     import gen_moonwalk
     (tmp_path / "01-test.yaml").write_text("stage: T\nprocesses:\n  - {id: a, title: A, actor: user, goal: G, dependsOn: [missing]}\n", encoding="utf-8")
-    monkeypatch.setattr(gen_moonwalk, "MOONWALK", tmp_path)
     monkeypatch.setattr(gen_moonwalk, "build", lambda root=tmp_path, build=gen_moonwalk.build: build(root))
     [(key, why)] = check_docgen._process_sizes()
     assert why.startswith("MoonWalk does not build") and check_docgen._blocks(key, why)

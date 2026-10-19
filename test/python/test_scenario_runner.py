@@ -26,10 +26,20 @@ def run(tmp_path: Path, scenario: dict) -> subprocess.CompletedProcess:
     return subprocess.run([str(RUNNER), str(path)], cwd=ROOT, env=env, capture_output=True, text=True, encoding="utf-8", timeout=120)
 
 
-def test_an_op_the_runner_does_not_run_is_reported_as_skipped(tmp_path):
-    scenario = {"name": "scenario_T_unknown_op", "module": "FileManagerModule", "mode": "mutate", "description": "t",
-                "top": ["FileManagerModule"], "steps": [{"name": "misspelt", "op": "expect_flie", "path": "/x"}]}
-    assert "SKIP  misspelt (op not run in-process: expect_flie)" in run(tmp_path, scenario).stdout
+def test_a_live_op_is_skipped_and_an_op_neither_runner_knows_fails(tmp_path):
+    scenario = {"name": "scenario_T_ops", "module": "FileManagerModule", "mode": "mutate", "description": "t",
+                "top": ["FileManagerModule"], "steps": [{"name": "wrote", "op": "write_file", "path": "/x.txt", "value": "x"},
+                                                        {"name": "read", "op": "expect_file", "path": "/x.txt", "contains": "x"},
+                                                        {"name": "online", "op": "expect_http", "path": "/x"}]}
+    live = run(tmp_path, scenario)
+    assert live.returncode == 0 and "SKIP  online (op not run in-process: expect_http)" in live.stdout
+    misspelled = run(tmp_path, {**scenario, "steps": scenario["steps"][:2] + [{"name": "misspelled", "op": "expect_flie", "path": "/x"}]})
+    assert misspelled.returncode == 1 and "FAIL  misspelled (unknown op: expect_flie)" in misspelled.stdout
+
+
+def test_an_unknown_mode_fails_even_on_a_live_only_scenario(tmp_path):
+    scenario = {"name": "scenario_T_mode", "module": "WiFiModule", "mode": "mutat", "live_only": True, "description": "t", "steps": []}
+    assert run(tmp_path, scenario).returncode == 1
 
 
 def test_a_mutate_scenario_with_nothing_to_build_fails_unless_it_says_live_only(tmp_path):

@@ -108,7 +108,7 @@ def generate(tmp_path, rel_paths: list) -> tuple:
     return code, out.read_text(encoding="utf-8") if out.exists() else ""
 
 
-def test_a_script_in_a_subfolder_is_catalogued_with_it_for_the_download_url(tmp_path):
+def test_a_script_in_a_subfolder_is_cataloged_with_it_for_the_download_url(tmp_path):
     code, header = generate(tmp_path, ["effects/plain.mle", "effects/hpwit/fire.mle"])
     assert code == 0
     assert 'kCatalogSubfolders[] = {\n    "",\n    "hpwit",\n};' in header
@@ -126,3 +126,9 @@ def test_two_scripts_of_one_name_in_different_subfolders_fail_the_build(tmp_path
     code, _ = generate(tmp_path, ["effects/a/fire.mle", "effects/b/fire.mle"])
     assert code == 1
     assert "duplicate script name fire.mle" in capsys.readouterr().err
+
+
+def test_more_subfolders_than_an_index_holds_fail_the_build(tmp_path, capsys):
+    code, _ = generate(tmp_path, [f"effects/c{i}/s{i}.mle" for i in range(256)])
+    assert code == 1
+    assert "257th subfolder" in capsys.readouterr().err

@@ -65,9 +65,7 @@ def main() -> int:
     out = Path(sys.argv[2])
     root = Path(sys.argv[3])
 
-    # A name must be unique on the device: the repo's folders and subfolders vanish when scripts land in one
-    # flat directory, so two scripts sharing a base name, across roles or subfolders, would collide there. Catching it here turns a
-    # silent overwrite on a user's device into a build failure.
+    # A name is unique on the device, whose one flat directory drops the repo's folders, so a duplicate across roles or subfolders fails the build rather than overwriting silently.
     seen: dict[str, Path] = {}
     for p in paths:
         if p.suffix not in ROLE_BY_EXT:
@@ -97,6 +95,9 @@ def main() -> int:
         by_role[role].append(p.name)
         sub = "/".join(p.resolve().relative_to(root.resolve()).parts[1:-1])   # between the role's folder and the file
         if sub not in subfolders:
+            if len(subfolders) == 256:   # an index is an unsigned char
+                print(f"catalog_scripts: {p} opens a 257th subfolder; the catalog indexes at most 256", file=sys.stderr)
+                return 1
             subfolders.append(sub)
         sub_by_role[role].append(subfolders.index(sub))
         try:

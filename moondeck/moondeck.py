@@ -122,6 +122,7 @@ from gen_moonwalk import regenerate as regenerate_moonwalk  # noqa: E402  the on
 import walk_status  # noqa: E402  MoonWalk's rule for which steps a change needs and which passes hold
 WALK_JSON = ROOT / "build" / "moonwalk" / "moonwalk.json"
 WALK_RUNS = LOG_DIR / "walk-runs.json"   # each step's last run on this machine: its tree, result and seconds
+IN_CHECKOUT = walk_status.in_checkout()   # outside a git checkout a run counts for nothing on the map
 
 
 def card_call(card: dict) -> str:
@@ -146,8 +147,8 @@ def walk_model() -> dict | None:
     return json.loads(WALK_JSON.read_text(encoding="utf-8")) if regenerate_moonwalk(WALK_JSON) else None
 
 
-def gates(base: str | None = None, every: bool = False) -> dict:
-    """MoonWalk's steps that run a script, per process: triggered by the change (against HEAD, against `base` for a merge, every step for a release), still fresh, how long they took, and the card that runs each."""
+def gates(base: str | None = None, every: bool = False, with_model: bool = False) -> dict:
+    """MoonWalk's steps that run a script, per process: triggered by the change (against HEAD, against `base` for a merge, every step for a release), still fresh, how long they took, and the card that runs each; with `with_model`, the map they were read from as well, so the map draws without generating it a second time."""
     model = walk_model()
     if model is None:
         return {"error": "gen_moonwalk failed; its error is in this console"}
@@ -166,7 +167,7 @@ def gates(base: str | None = None, every: bool = False) -> dict:
         for step in steps:
             step["card"] = by_call.get(walk_status.run_key(step["script"], step["args"])) or by_script.get(step["script"])
             step["running"] = step["card"] in running
-    return {"processes": processes}
+    return {"processes": processes, **({"model": model} if with_model else {})}
 
 
 FIRMWARES = _load_firmwares()
@@ -882,7 +883,7 @@ def _free_port(port: int):
 
 
 def _alive(pid: int) -> bool:
-    """Whether a process still exists, by the signal-zero probe that checks without signalling."""
+    """Whether a process still exists, by the signal-zero probe that checks without signaling."""
     try:
         os.kill(pid, 0)
     except ProcessLookupError:
@@ -1480,7 +1481,7 @@ class MoonDeckHandler(http.server.BaseHTTPRequestHandler):
         # MoonWalk: the scripts' last runs, the map as the stage files are now, and the help's renderer the map imports.
         elif self.path.split("?", 1)[0] == "/api/gates":
             q = urllib.parse.parse_qs(self.path.partition("?")[2])
-            self._send_json(gates(q.get("base", [None])[0], q.get("every", ["0"])[0] == "1"))
+            self._send_json(gates(q.get("base", [None])[0], q.get("every", ["0"])[0] == "1", q.get("model", ["0"])[0] == "1"))
         elif self.path.split("?", 1)[0] == "/moonwalk/moonwalk.json":
             if regenerate_moonwalk(WALK_JSON):
                 self._send_file(WALK_JSON, "application/json")
@@ -1795,7 +1796,14 @@ class MoonDeckHandler(http.server.BaseHTTPRequestHandler):
             self._send_json({"error": f"Select {' and '.join(missing)} first."}, 400)
             return
 
-        # Kill the previous run if still going; a MoonWalk step's own call, `build_docs --strict` say, leaves the card's server running beside it.
+        # A MoonWalk step's own call, `build_docs --strict` say, shares the card with its server: while the server runs, the step asks for it to stop rather than stopping it unasked.
+        if step_args is not None and script_def.get("long_running"):
+            with _lock:
+                serving = _running.get(script_id)
+            if serving and serving.poll() is None and getattr(serving, "_mm_long_running", False):
+                self._send_json({"error": f"{script_def['name']} is running: stop it first, then run this step."}, 409)
+                return
+        # Kill the previous run if still going; a step's call leaves a server the card started elsewhere alone.
         kill_script(script_id, orphans=step_args is None)
 
         script_path = SCRIPTS_DIR / script_def["script"]
@@ -1863,11 +1871,6 @@ class MoonDeckHandler(http.server.BaseHTTPRequestHandler):
                 cmd.append(flag["arg"])
         if isinstance(step_args, str):
             cmd = ["uv", "run", str(script_path), *shlex.split(step_args)]
-        # The working tree this run sees, so its pass holds while the paths a step covers stay unchanged.
-        try:
-            tree = walk_status.tree_now()
-        except (OSError, subprocess.CalledProcessError):
-            tree = None   # outside a git checkout: the run counts for nothing on the map
 
         try:
             # Force live output: a child (build_esp32 → idf.py → ninja, esptool, …) block-buffers
@@ -1915,7 +1918,6 @@ class MoonDeckHandler(http.server.BaseHTTPRequestHandler):
             proc._mm_read_stream = read_stream
             proc._mm_master_fd = master_fd
             proc._mm_key = walk_status.run_key(f"moondeck/{script_def['script']}", " ".join(cmd[3:]))   # the call that ran, the key a step is matched by
-            proc._mm_tree = tree
             proc._mm_long_running = bool(script_def.get("long_running")) and step_args is None   # a server card's step call, `build_docs --strict`, finishes and is timed
             with _lock:
                 _running[script_id] = proc
@@ -1992,11 +1994,12 @@ class MoonDeckHandler(http.server.BaseHTTPRequestHandler):
                 self.wfile.flush()
 
             proc.wait()
-            if getattr(proc, "_mm_tree", None):
-                walk_status.record_run(WALK_RUNS, proc._mm_key, proc._mm_tree, proc.returncode == 0)
             # A passing run's seconds join the call's measured durations; a server's are how long it was left on, and a failure may have stopped early.
             if proc.returncode == 0 and hasattr(proc, "_mm_key") and not getattr(proc, "_mm_long_running", False):
                 walk_status.record_duration(walk_status.DURATIONS, proc._mm_key, time.monotonic() - started)
+            if IN_CHECKOUT:
+                with suppress(OSError, subprocess.CalledProcessError):
+                    walk_status.record_finished(WALK_RUNS, proc._mm_key, proc.returncode == 0)
             exit_msg = (f"[exit code: {proc.returncode}] [{_duration(time.monotonic() - started)}]"
                         f" [run #{bump_run_count(script_id)}]")
             if log:
@@ -2164,7 +2167,7 @@ code {{ background: transparent; color: #8aa6ba; padding: 0; }}
             return
 
         # Build a compact per-step list. Each step has at minimum an `op`; we render
-        # whatever other keys it carries (id, key, value, document, bounds, …)
+        # whatever other keys it carries (id, key, value, document, …)
         # as a small definition list so the schema can evolve without code change.
         scen_name = html_mod.escape(str(data.get("name", raw)))
         scen_desc = html_mod.escape(str(data.get("description", "")))

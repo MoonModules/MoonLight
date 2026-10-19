@@ -7,20 +7,28 @@ processes:
     actor: contributor
     goal: A change is proven on the host before any board build.
     systems: [MoonDeck]
-    dependsOn: [branch, build-setup]
+    dependsOn: [build-setup]
     intro: |
-      Desktop first, always: anything the desktop can prove, the user interface, the logic and the tests, is proven there rather than through a multi-minute compile and a flash. Desktop and Raspberry Pi build from the same root `CMakeLists.txt`, natively or cross-compiled. Where each build writes: [Build directories](reference/build-system.md#build-directories).
+      Desktop first, always: anything the desktop can prove, the user interface, the logic and the tests, is proven there rather than through a multi-minute compile and a flash. A board build comes after the desktop is clean, and only for what the desktop cannot show: the platform layer, timing, memory, real hardware. Implement against [the architecture](explanation/architecture/index.md) and [the coding standards](contributing/coding-standards.md).
+
+      Every task is one MoonDeck script, and the script is the contract. It picks the build directory, applies the flags the gate expects and tees its output where the report reads it. Never run `ctest`, `cmake`, `pytest`, `node --test` or `idf.py` directly when a script wraps it; a task with no script is worth saying rather than working around. Where each build writes: [Build directories](reference/build-system.md#build-directories).
     steps:
       - id: build
         say: Build the desktop firmware, with zero warnings.
         when: { run: { script: moondeck/build/build_desktop.py } }
+        detail: |
+          Build only when the next step needs it, rather than after every edit. Desktop and Raspberry Pi build from the same root `CMakeLists.txt`, natively or cross-compiled.
+
+          A build error or a test failure that survives two fix attempts: stop, and ask or propose a rollback. Reverting is the product owner's call, whatever prompted it.
       - id: run
         say: Run it.
         when: { run: { script: moondeck/run/run_desktop.py } }
         detail: |
-          A second run replaces the instance already running.
+          A second run replaces the instance already running; started by hand, an older process keeps port 8080 and answers every request with the code you replaced.
 
           The run detaches and outlives the script that started it, as a flashed board runs on its own. Open `http://localhost:8080`. A source checkout keeps its settings in `build/fs/`: [where the desktop keeps its settings](reference/build-system.md#where-the-desktop-keeps-its-settings).
+
+          When the product owner can see or judge the result, hand it over, leave it running, and wait for their observation before moving on.
       - id: build-tests
         say: Build the unit tests and the scenario runner.
         when: { run: { script: moondeck/build/build_desktop.py, args: "--tests" } }
@@ -30,6 +38,8 @@ processes:
       - id: scenarios
         say: Replay the scenarios in-process.
         when: { run: { script: moondeck/scenario/run_scenario.py } }
+        detail: |
+          Select what the change touched, as [Run a scenario in-process](moonwalk.md#run-scenario) describes. Ask before anything slow, such as a full scenario sweep, a gate list or a repo-wide sweep. Run the cheapest thing that answers the question, and say what the expensive one is and why.
   - id: write-module
     title: Write a MoonModule in C++
     actor: contributor
@@ -73,18 +83,12 @@ processes:
         detail: |
           The second argument is the doc anchor the help's Docs link opens: your module's entry in its catalog page.
       - id: test
-        say: Write the unit test.
+        say: Pin the module with a unit test.
         when: { process: add-test }
         detail: |
           Put it in `test/unit/light/unit_<Module>.cpp`. Build a small grid, run one frame and check the output. Pin that the module survives a 1x1 and a 0x0 grid, and that a module holding memory drops its `dynamicBytes` to zero when disabled.
-      - id: build-tests
-        say: Build the unit tests.
-        when: { run: { script: moondeck/build/build_desktop.py, args: "--tests" } }
-      - id: test-run
-        say: Run the unit tests.
-        when: { run: { script: moondeck/test/test_desktop.py } }
       - id: run
-        say: Run the desktop and add the module.
+        say: Try the module on the running desktop.
         when: { run: { script: moondeck/run/run_desktop.py } }
         detail: |
           Open `http://localhost:8080`, add the module in the UI, then resize the grid live to 1x1 and 0x0. It must not crash.
@@ -155,19 +159,10 @@ processes:
         given: [{ input: family, equals: Picture }]
         when: { manual: "Document the new option on the Picture service's spec card, in its header." }
       - id: unit-test
-        say: Write a unit test with a stand-in device.
+        say: Pin the source with a unit test.
         when: { process: add-test }
         detail: |
           A picture source drives the desktop with a stand-in for the device. A channel-data source writes frames and checks each light against what was sent; `moondeck/run/fseq_play.py` writes reference FSEQ files and streams them over DDP. The service's own tests already pin the swap, and Network Receive's tests pin the sink's placement on serpentine, 3D, mirrored and transposed layouts.
-      - id: build-tests
-        say: Build the unit tests and the scenario runner.
-        when: { run: { script: moondeck/build/build_desktop.py, args: "--tests" } }
-      - id: test
-        say: Run the unit tests.
-        when: { run: { script: moondeck/test/test_desktop.py } }
-      - id: scenarios
-        say: Replay the scenarios in-process.
-        when: { run: { script: moondeck/scenario/run_scenario.py } }
     outro: |
       Prove the source on the desktop before a board sees it. Then run it on the board it is for: a platform seam holds the device itself, with stubs on every other platform, so a board without the device builds and shows a status rather than failing. Flash it with [Build, flash and monitor an ESP32](moonwalk.md#esp32-build-flash), then open the change as [one topic](moonwalk.md#contribute-pr).
   - id: iterate-moonlive
@@ -197,7 +192,7 @@ processes:
         detail: |
           A script is shown in the device's own editor, so it reads as user-facing text: one header line saying what it is, and a short `//` hint after each `addControl`. The reasoning belongs in the commit message, not in the script. Re-read the file and delete every other comment before you show it.
       - id: verify
-        say: Read it back and compare.
+        say: Read the script back.
         when: { run: { command: "curl \"http://<device>/api/file?path=/moonlive/<name>.mle\"" } }
         detail: |
           The read-back must match the file you sent, byte for byte.
@@ -205,17 +200,17 @@ processes:
         say: Read the module's status.
         when: { run: { command: "curl http://<device>/api/state" } }
         detail: |
-          A byte count means the script compiled. A failure shows its message with an offset, such as `a script is a class: expected class <Name> { … } @0`; an offset that lands mid-comment in a file you just pushed points at a stale shadow copy first. A copy from `/moonlive` adds `edited copy` to the status.
+          A byte count means the script compiled. A failure shows its message with an offset, such as `a script is a class: expected class <Name> { … } @0`; an offset that lands mid-comment in a freshly pushed file points at a stale shadow copy first. A copy from `/moonlive` adds `edited copy` to the status.
       - id: memory
         say: Check the heap on a refused compile.
         when: { run: { command: "curl http://<device>/api/system" } }
         detail: |
           `codegen failed` on a classic ESP32 is usually memory, not the compiler: the same script lowers on the desktop. Read `freeInternal` and `maxBlock` before you theorize about registers or the emitter, and when the host and the device disagree on identical input, make the device name which guard fired.
       - id: repeat
-        say: Edit, upload and read the status again.
-        when: { manual: "Repeat until the product owner approves what the board shows." }
+        say: Repeat until the product owner approves.
+        when: { manual: "Each round uploads, reads back and reads the status." }
         detail: |
-          Every variant overwrites the running script. While you bisect, the last upload must be the working version, and you confirm it from the lit lights before saying it is back, so a broken variant never keeps running unnoticed.
+          Every variant overwrites the running script. While you bisect, the last upload must be the working version. Confirm it from the lit lights before saying it is back, so a broken variant never keeps running unnoticed.
       - id: land
         section: Land it
         say: Copy the finished script into the repo.
@@ -232,10 +227,10 @@ processes:
     dependsOn: [desktop-build-test]
     steps:
       - id: package
-        say: Build and package for this host.
+        say: Package the build for this host.
         when: { run: { script: moondeck/ci/package_desktop.py } }
         detail: |
-          A `.dmg` holding a `.app` on macOS, a `.tar.gz` and a `.deb` on Linux, a `.zip` and an NSIS `-setup.exe` on Windows. The Windows setup installs into `%LOCALAPPDATA%\Programs\MoonLight` with a Start-menu entry and an uninstaller, needs no administrator, and never touches the settings folder, so an upgrade keeps the user's configuration.
+          A `.dmg` holding a `.app` on macOS, a `.tar.gz` and a `.deb` on Linux, a `.zip` and an NSIS `-setup.exe` on Windows. The setup installs as [Install MoonLight](moonwalk.md#install) describes and keeps the settings folder.
 
           The Windows icon and the macOS `.icns` both derive from `mooninstaller/favicon.png`; the `.ico` is generated in the CMake build (`moondeck/ci/make_ico.py`) and embedded in the executable. A packager skips its format when its tool is missing (`dpkg-deb`, `makensis`) on a development machine. It fails outright in CI, where a missing file would otherwise fail the release on a glob.
   - id: preview-installer
@@ -245,10 +240,10 @@ processes:
     systems: [MoonInstaller, MoonDeck]
     steps:
       - id: build
-        say: Build the firmware to install, or skip.
-        when: { run: { script: moondeck/build/build_esp32.py, args: "--firmware esp32" } }
+        say: Build the firmware to install.
+        when: { run: { script: moondeck/build/build_esp32.py, args: "--firmware <firmware>" } }
         detail: |
-          With a local ESP32 or Teensy build, the preview serves it as the release `latest`. Without one it only renders: the picker reads the real releases and Install fails.
+          Optional. With a local ESP32 or Teensy build, the preview serves it as the release `latest`. Without one it only renders: the picker reads the real releases and Install fails.
       - id: serve
         say: Serve the installer.
         when: { run: { script: moondeck/run/preview_installer.py } }

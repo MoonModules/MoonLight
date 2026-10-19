@@ -28,14 +28,8 @@ processes:
       - id: delete
         say: Delete the shipped backlog item or spec draft.
         when: { manual: "Look in docs/work/future for the item before you delete it." }
-      - id: strict
-        say: Build the docs with strict links.
-        when: { run: { script: moondeck/docs/build_docs.py, args: "--strict" } }
-      - id: docgen
-        say: Check the headers with docgen.
-        when: { run: { script: moondeck/check/check_docgen.py } }
-        detail: |
-          Errors stay at zero. Warnings may only fall, in total and per rule. A touched file with warnings is left at zero.
+    outro: |
+      The docs build and the documentation checks run with [the commit checks](moonwalk.md#commit). The merge gate verifies the docs landed with the code.
   - id: commit
     title: Run the commit checks, then commit
     actor: contributor
@@ -44,7 +38,9 @@ processes:
     dependsOn: [desktop-build-test, document]
     page: contributing/principles-and-process.md
     intro: |
-      Each check runs when the change touches its paths, and once: a pass counts until the files it covers change again. The product owner commits in this role too.
+      The product owner initiates every event and every gate list. On "run pre-commit", run each check whose trigger the change matches, once, and report one line each, PASS, FAIL or SKIP with the reason, and stop. An applicable check skipped carries a one-line reason in the commit or the pull request. A failure is reported rather than fixed and run again: a second run needs the words again.
+
+      The scope freezes at the words, so a request made during a run goes to the next commit. A change made after a run re-checks only itself, on the product owner's go; "restart" reruns everything, and a cosmetic change rides on the run it followed. On a diff of about ten files across areas, the Reviewer reads the staged diff first. `test_host --ui` is never a gate.
     steps:
       - id: specs
         section: Every change
@@ -65,7 +61,7 @@ processes:
         given: [{ changed: ["**/*.md", src/**, test/**] }]
         when: { run: { script: moondeck/check/check_docgen.py } }
         detail: |
-          It holds the documentation to its ratchet.
+          A ratchet: errors stay at zero, and warnings may only fall, in total and per rule, against the committed `docs/reference/metrics/docgen.md`. A rule whose own limit changed says so in the commit. A touched file with warnings gets all of them resolved; what resists stays, with one line saying why.
       - id: taglines
         say: Check the front pages agree on the platforms.
         given: [{ changed: [README.md, docs/index.md, CLAUDE.md] }]
@@ -92,21 +88,19 @@ processes:
         given: [{ changed: [src/**, test/**, "!test/js/**", "!test/python/**"] }]
         when: { run: { script: moondeck/scenario/run_scenario.py } }
         detail: |
-          Select by `--module` or `--name` rather than refreshing every scenario. A run writes its observation blocks back into the scenario files.
+          Select what the change touched: [Run a scenario in-process](moonwalk.md#run-scenario).
       - id: esp32-fresh
         say: Check the classic firmware is up to date.
         given: [{ changed: [src/**, "!src/platform/desktop/**", moonbase/**] }]
         when: { run: { script: moondeck/check/check_esp32_built.py, args: "--firmware esp32" } }
         detail: |
-          It and its MoonBase must be newer than their sources; rebuild them on the product owner's go when they are not.
-
-          One firmware per chip family is the gate: this one, the S3's and the P4's. A stale one is rebuilt with `build_esp32.py --firmware <name>`, one at a time, since the variants share their managed components. The check compares the binary against every source in a tenth of a second and catches the edit that was never compiled.
+          It compares the binary and its MoonBase against every source in a tenth of a second, and catches the edit that was never compiled. One firmware per chip family is the gate. A stale one is rebuilt on the product owner's go, [one at a time](moonwalk.md#esp32-build-flash).
       - id: esp32-fresh-s3
-        say: The same for the S3 firmware.
+        say: Check the S3 firmware is up to date.
         given: [{ changed: [src/**, "!src/platform/desktop/**"] }]
         when: { run: { script: moondeck/check/check_esp32_built.py, args: "--firmware esp32s3-n16r8" } }
       - id: esp32-fresh-p4
-        say: The same for the P4 firmware.
+        say: Check the P4 firmware is up to date.
         given: [{ changed: [src/**, "!src/platform/desktop/**"] }]
         when: { run: { script: moondeck/check/check_esp32_built.py, args: "--firmware esp32p4rev3-eth" } }
       - id: no-jit
@@ -120,9 +114,7 @@ processes:
         given: [{ changed: [src/**, test/**, "!test/js/**", "!test/python/**"] }]
         when: { run: { script: moondeck/check/collect_kpi.py, args: "--commit" } }
         detail: |
-          Put its deltas in the commit message.
-
-          Flash and DRAM per target, binary size, the tick matrix, line counts and complexity. It runs when the code changes, since its timings drift with the host.
+          Flash and DRAM per target, binary size, the tick matrix, line counts and complexity: its diff belongs in the commit and its deltas in the message. It runs when the code changes, since its timings drift with the host.
       - id: js
         section: The web pages
         say: Run the JavaScript tests.
@@ -150,10 +142,16 @@ processes:
           Recommended rather than required, since it needs a board on USB; a skip names its reason.
       - id: stage
         section: Commit
-        say: Read the diff and stage what you reviewed.
-        when: { manual: "Staged means read." }
+        actor: product-owner
+        say: Stage the diff you reviewed.
+        when: { manual: "Staged means read, unstaged means not." }
+        detail: |
+          The agent never stages or unstages: staging claims something as reviewed that nobody read, and unstaging discards a verification invisibly. A scratch file of the agent's that lands in the index is reported rather than quietly removed.
       - id: commit
-        say: Commit, with the deltas the health check printed.
+        actor: product-owner
+        say: Commit on the words "commit now".
         when: { run: { command: "git commit" } }
         detail: |
-          The message carries the performance line and the account line from `collect_kpi.py --commit`.
+          Only "commit now" commits, and it covers the diff the product owner reviewed: any later edit voids it.
+
+          The message opens with an imperative title of at most 72 characters and a 1 to 3 sentence end-user summary with no file lists. Then the performance line and the account line from `collect_kpi.py --commit`. Then bullets under **Core**, **Light domain**, **UI**, **Scripts/MoonDeck**, **Tests**, **Docs/CI** and **Reviews**, with one Reviews bullet per finding: flagged, then done, accepted or deferred, and why. No hard wraps.

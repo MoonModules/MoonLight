@@ -108,7 +108,7 @@
         },
         "page": {
           "type": "string",
-          "description": "The docs page this process is written up on, relative to docs/. When the page's own file is gone, the docs build generates it from the processes naming it."
+          "description": "The docs page this process is written up on, relative to docs/; it must exist. A page MoonWalk took over is deleted and redirects to the process."
         },
         "intro": {
           "$ref": "#/$defs/markdown"

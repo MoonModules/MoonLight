@@ -139,7 +139,9 @@ def main():
 
     # Imported here rather than at the top, so check_code, which imports this module's readers, needs no schema package.
     import jsonschema
-    validator = jsonschema.Draft202012Validator(json.loads(SCHEMA.read_text(encoding="utf-8")))
+    # An integer is an int, as esptool reads one: JSON Schema counts 921600.0 as an integer, and it would reach the flasher as a float.
+    strict = jsonschema.Draft202012Validator.TYPE_CHECKER.redefine("integer", lambda _, v: isinstance(v, int) and not isinstance(v, bool))
+    validator = jsonschema.validators.extend(jsonschema.Draft202012Validator, type_checker=strict)(json.loads(SCHEMA.read_text(encoding="utf-8")))
     for err in validator.iter_errors(catalog):
         path = list(err.absolute_path)
         entry = catalog[path[0]] if path and isinstance(catalog, list) else None

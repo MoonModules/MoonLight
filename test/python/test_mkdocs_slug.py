@@ -8,9 +8,7 @@ from pathlib import Path
 
 import pytest
 
-# `markdown` ships with MkDocs but isn't in the base test env — skip cleanly rather
-# than error collection where it's absent. CI installs it (--with markdown) so the
-# test actually runs there; a contributor without it just skips this one file.
+# `markdown` ships with MkDocs and the base test env lacks it, so the file skips where it is absent; CI installs it (--with markdown), so it runs there.
 markdown = pytest.importorskip("markdown")
 from markdown.extensions.toc import slugify  # noqa: E402
 
@@ -21,8 +19,7 @@ from mkdocs_hooks import _slug  # noqa: E402
 
 
 def test_slug_matches_markdown_toc_slugify():
-    """_slug is exactly Python-Markdown's toc slugify — including the edge cases a
-    hand-rolled mimic gets wrong (accent-stripping, decoration, repeated separators)."""
+    """_slug is exactly Python-Markdown's toc slugify, including the edge cases a hand-rolled mimic gets wrong: accents, decoration, repeated separators."""
     for text in [
         "LED output — details",
         "Fire2012 — details",
@@ -35,11 +32,18 @@ def test_slug_matches_markdown_toc_slugify():
 
 
 def test_slug_resolves_to_the_real_rendered_heading_id():
-    """A `## <heading>` rendered by the same toc extension MkDocs uses gets an
-    `id=` equal to _slug(heading) — so the hand-built anchor actually resolves."""
+    """A `## <heading>` rendered by the toc extension MkDocs uses gets an `id=` equal to _slug(heading), so the hand-built anchor resolves."""
     for heading in ["LED output — details", "GEQ · 3D — details"]:
         html = markdown.markdown(f"## {heading}", extensions=["toc"])
         assert f'id="{_slug(heading)}"' in html, heading
+
+
+def test_the_generators_heading_id_is_the_one_mkdocs_renders():
+    """gen_help.heading_id builds the anchors of a module's tests and a MoonWalk step's section without Python-Markdown, so it must agree with it on the headings those name."""
+    from gen_help import heading_id
+    from _test_metadata import collect_unit_files
+    for text in [f["module"] for f in collect_unit_files() if f.get("module")] + ["The Homebridge accessory", "Which family?", "LED output: details"]:
+        assert heading_id(text) == _slug(text), text
 
 
 # --- Catalog-page card images resolve on disk ---

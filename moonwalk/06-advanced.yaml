@@ -28,19 +28,21 @@ processes:
           Type it in its script box; the card opens an editor.
       - id: write
         section: Write it
-        say: Write the effect and save it.
-        when: { manual: "It is a class with a tick() that paints; save with Ctrl/Cmd+S or by clicking away. fill() paints every light the same; setRGB(i, r, g, b) paints light i of lightCount." }
+        say: Write the effect.
+        when: { manual: "A class with a tick() that paints; Ctrl/Cmd+S saves." }
         detail: |
-          Saving recompiles and swaps the effect in live; a half-typed line compiles only when you save.
+          `fill()` paints every light the same; `setRGB(i, r, g, b)` paints light i of `lightCount`. Clicking away saves too. Saving recompiles and swaps the effect in live; a half-typed line compiles only when you save.
       - id: controls
         say: Give it controls.
-        when: { manual: "Each is a member with an addControl in defineControls(), and appears on the card as a slider. addControl(\"speed\", speed, 1, 120) for a byte speed." }
+        when: { manual: "Each is a member with an addControl in defineControls()." }
         detail: |
-          A script's control is a real control, the same kind a compiled effect declares: it persists across a reboot and answers over the API.
+          It appears on the card as a slider: `addControl("speed", speed, 1, 120)` for a byte speed. A script's control is a real control, the same kind a compiled effect declares: it persists across a reboot and answers over the API.
       - id: errors
         section: When it fails
         say: Fix it when it does not compile.
-        when: { manual: "The card shows the error, and the device keeps running. Fix it and save again; the effect comes back." }
+        when: { manual: "The card shows the error; save the fix." }
+        detail: |
+          The device keeps running, and the effect comes back once the script compiles.
   - id: panel-cards
     title: Drive LED panels through a receiving card
     actor: user
@@ -64,9 +66,9 @@ processes:
           The card must know its panels before MoonLight sends anything. A test pattern from LEDVision fills the wall correctly when this is done.
       - id: wire
         say: Wire the controller, card and panels.
-        when: { manual: "Cat5e or Cat6 from the controller to the card's input port, HUB75 ribbons from the card to the panels, 5 V to the panels and the card." }
+        when: { manual: "Ethernet to the card, HUB75 ribbons to the panels, 5 V to both." }
         detail: |
-          The card's second RJ45 port daisy-chains to the next cabinet. Size the supply from the panels' own datasheet: a sagging 5 V rail shows as flicker, color shifts or resets. A P4 or S3 is 100 Mbit and wants a gigabit switch between it and the card; an S31 connects straight. [Boards](how-to/panel-cards.md#3-pick-a-board).
+          Cat5e or Cat6 from the controller to the card's input port. The card's second RJ45 port daisy-chains to the next cabinet. Size the supply from the panels' own datasheet: a sagging 5 V rail shows as flicker, color shifts or resets. A P4 or S3 is 100 Mbit and wants a gigabit switch between it and the card; an S31 connects straight. [Boards](how-to/panel-cards.md#3-pick-a-board).
       - id: flash
         say: Flash an S31, P4 or S3 board.
         given: [{ input: where, equals: ESP32 }]
@@ -140,10 +142,10 @@ processes:
       The card stores its panel size, count and driver IC, written once with ColorLight's LEDVision on Windows. MoonLight then needs no panel wiring settings. Use an 8.x build: this project's wall runs 8.8, and a video walkthrough uses 8.5. Labels move between versions, so treat the shape as right and the wording as approximate.
     steps:
       - id: connect
-        say: Connect the card and power it.
-        when: { manual: "Cable the card to the machine's Ethernet port, and power the panels and the card." }
+        say: Connect the card to this machine.
+        when: { manual: "Cable it to the Ethernet port, and power the card and the panels." }
       - id: download
-        say: Download and open LEDVision.
+        say: Install LEDVision.
         when: { open: { url: "https://en.colorlightinside.com/product/download/380" } }
         detail: |
           Go to the receiving-card setup, usually under `Settings`. Some versions ask for a password, commonly `168`.
@@ -161,11 +163,18 @@ processes:
         detail: |
           This makes the card, not MoonLight, responsible for panel order. Every other row mirrored, or panels in the wrong places, is fixed here.
       - id: send
-        say: Send to the receiving card, then save.
-        when: { manual: "Saving is a separate action from sending in most versions. Skipping it makes the wall come back wrong after a power cycle." }
+        say: Send the settings to the receiving card.
+        when: { manual: "Send to receiving card, in LEDVision's receiving-card setup." }
+      - id: save
+        say: Save the settings on the card.
+        when: { manual: "A separate action from sending in most versions." }
+        detail: |
+          Skipping it makes the wall come back wrong after a power cycle.
       - id: test
         say: Run a LEDVision test pattern.
-        when: { manual: "It fills the wall correctly. This separates configured panels from a working sender." }
+        when: { manual: "It fills the wall correctly." }
+        detail: |
+          This separates configured panels from a working sender.
     outro: |
       A video of the whole card setup, driven from FPP instead of MoonLight: [Setting up a Colorlight Card with FPP v6.3 and LED Vision 8.5](https://www.youtube.com/watch?v=L4lHbwUszAs).
   - id: panel-card-downgrade
@@ -179,10 +188,14 @@ processes:
     steps:
       - id: connect
         say: Connect the card directly to the machine.
-        when: { manual: "No switch in between. On Windows, a USB gigabit Ethernet dongle is the known way through when a built-in port is held by Hyper-V's virtual switch." }
+        when: { manual: "No switch in between." }
+        detail: |
+          On Windows, a USB gigabit Ethernet dongle is the known way through when a built-in port is held by Hyper-V's virtual switch.
       - id: close
         say: Close everything else that talks to the card.
-        when: { manual: "Close MoonLight and LEDVision. A card being streamed at will not answer, and two ColorLight tools at once interfere." }
+        when: { manual: "Close MoonLight and LEDVision." }
+        detail: |
+          A card being streamed at will not answer, and two ColorLight tools at once interfere.
       - id: download
         say: Open LEDUpgrade 4.0.
         when: { open: { url: "https://en.colorlightinside.com/product/download/383" } }
@@ -190,7 +203,9 @@ processes:
           Version 5.0 ships no pre-v12 firmware, so it cannot do this downgrade.
       - id: adapter
         say: Choose your network adapter.
-        when: { manual: "Set Send Mode to the network-card mode, pick the adapter, then restart LEDUpgrade. It binds the adapter at startup." }
+        when: { manual: "Set Send Mode to the network-card mode and pick the adapter." }
+        detail: |
+          Restart LEDUpgrade after: it binds the adapter at startup.
       - id: detect
         say: Detect Receiver Cards.
         when: { manual: "It reports something like 5A 13.17 (v8.0): firmware 13.17 on v8.0 hardware." }
@@ -208,7 +223,9 @@ processes:
       - id: match
         section: Tell MoonLight
         say: Leave firmware on v12 and older.
-        when: { manual: "A stock v13 card takes v13 and newer. A downgraded card left on it gets a second sync, aborts each refresh, and updates once every few seconds." }
+        when: { manual: "On the PanelCard driver's firmware control." }
+        detail: |
+          A stock v13 card takes `v13 and newer`. A downgraded card left on it gets a second sync, aborts each refresh, and updates once every few seconds.
   - id: driver-setup
     title: Set up a driver or service for the hardware
     actor: user
@@ -239,7 +256,7 @@ processes:
         when: { add: { module: Drivers, type: ParallelLedDriver } }
         given: [{ input: driver, equals: ParallelLedDriver }]
         detail: |
-          Parallel LED drives many strands. Pick its `peripheral` from the table on the page; start with `i80`.
+          Parallel LED drives many strands. Pick its `peripheral` from [Which one](how-to/led-drivers.md#which-one); start with `i80`.
       - id: pins
         say: Enter the data pins.
         when: { manual: "Type the GPIOs in pins, one per strand, separated by commas." }
@@ -252,9 +269,9 @@ processes:
       - id: test
         section: Test the wire
         say: Turn on the loopback test.
-        when: { manual: "Switch loopbackTest on (developer view), jumper a data GPIO to loopbackRxPin and read the verdict in the status field." }
+        when: { manual: "Jumper a data GPIO to loopbackRxPin and switch loopbackTest on." }
         detail: |
-          A PASS means the chip and the peripheral are clean, so flicker that remains is [signal integrity](how-to/led-signal-integrity.md). Through a 74HCT595 the jumper comes from a register output, behind a level shifter: see the page.
+          It is in the developer view, and the verdict shows in the status field. A PASS means the chip and the peripheral are clean, so flicker that remains is [signal integrity](how-to/led-signal-integrity.md). Through a 74HCT595 the jumper comes from a register output, behind a level shifter: [Testing the wire with the loopback](how-to/led-drivers.md#testing-the-wire-with-the-loopback).
     outro: |
       A 12 V WS2811 in low-speed mode needs the `400kHz WS2811` timing on RMT LED. Other hardware has its own pages: [HUB75 panels](how-to/hub75-panels.md), [audio input](how-to/audio-input.md) and [watching the output](how-to/watching-the-output.md).
   - id: multi-device
@@ -313,16 +330,44 @@ processes:
         say: Plug a desk into the leader.
         when: { open: { module: MidiService } }
         detail: |
-          A desk on the leader moves every device, since its changes go out over OSC. Use [a control surface](how-to/control-surface.md) in the browser, or put the desk on a small bridge device with `source` USB and `share` on, and set the leader's `source` to network with the bridge as `host`.
+          A desk on the leader moves every device, since its changes go out over OSC. Use [a control surface](how-to/control-surface.md) in the browser. Or put the desk on a small bridge device with `source` USB and `share` on, and set the leader's `source` to network with the bridge as `host`.
       - id: update
         section: Keep it running
         say: Update devices one at a time.
         when: { process: update-firmware }
         detail: |
-          Compare the image size with the `partition` total on the Firmware card first. A device with two app slots takes `POST /api/firmware/upload`. A 4 MB device has one app slot, so `POST /api/firmware/moonbase` restarts it into MoonBase, which takes the upload. See it run before the next.
+          Compare the image size with the `partition` total on the Firmware card first. Over the API: [Update a running board over the network](moonwalk.md#ota-board). See each device run before the next.
   - id: http-api
     title: Script against the HTTP API
     actor: user
     goal: Add a module, set a control, apply a document and find the device over HTTP.
     systems: [MoonCore]
     page: reference/integrating.md
+    intro: |
+      Anything the interface does, a script does over HTTP: the browser page is one client of the API among others. Every endpoint and what each answers: [Integrating](reference/integrating.md).
+    steps:
+      - id: find
+        say: Address the device by its mDNS name.
+        when: { manual: "http://<deviceName>.local, the name on the System card." }
+        detail: |
+          A hardcoded address breaks when DHCP moves the device. Every device advertises its name: [Finding devices](reference/integrating.md#finding-devices).
+      - id: types
+        say: Read the module types the device knows.
+        when: { call: { method: GET, path: /api/types } }
+        detail: |
+          It names every type you can add and what may parent it.
+      - id: add
+        say: Add a module.
+        when: { call: { method: POST, path: /api/modules, body: { type: "<Type>", parent_id: "<parent>" } } }
+        detail: |
+          For example a `RainbowEffect` under `Layer`. The answer names the module, and every later call addresses it by that name.
+      - id: set
+        say: Set one of its controls.
+        when: { call: { method: POST, path: /api/control, body: { module: "<name>", control: "<control>", value: "<value>" } } }
+        detail: |
+          A number rides as a JSON number: `"value":40` sets 40, where `"value":"40"` parses to 0. `GET /api/modules/<name>` lists the controls by name.
+      - id: document
+        say: Apply a state document.
+        when: { call: { method: PATCH, path: /api/state, body: "<document>" } }
+        detail: |
+          The part of the tree you want, keyed by module name, in one call: controls, new modules and removals. A failed call answers with a reason: [Setting everything at once](reference/integrating.md#setting-everything-at-once).

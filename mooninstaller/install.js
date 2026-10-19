@@ -29,33 +29,10 @@ const WALK = new URL("../assets/moonwalk.js", import.meta.url).href;
 const WALKED = ["install"];   // what a successful install vouches for
 
 async function openWalk() {
-  const dlg = document.createElement("dialog");
-  dlg.className = "walk-dialog";
-  const head = document.createElement("div");
-  head.className = "walk-head";
-  const title = document.createElement("h3");
-  title.textContent = "MoonWalk";
-  const close = document.createElement("button");
-  close.type = "button";
-  close.className = "secondary";
-  close.textContent = "Close";
-  close.addEventListener("click", () => dlg.close());
-  head.append(title, close);
-  const host = document.createElement("div");
-  host.className = "walk-body";
-  dlg.append(head, host);
-  let stop = null;   // the map's teardown, once it has drawn
-  dlg.addEventListener("close", () => { stop?.(); dlg.remove(); }, { once: true });
-  document.body.appendChild(dlg);
-  dlg.showModal();
-  try {
-    const walk = await import(WALK);
-    // An installer installs a board, so the install opens on its ESP32 path.
-    stop = await walk.drawMap(host, { here: ["install"], choices: { platform: "ESP32" }, actor: "user", newTab: true });
-    if (!dlg.open) stop?.();
-  } catch (e) {
-    host.textContent = `MoonWalk could not load: ${e.message}`;
-  }
+  let walk;
+  try { walk = await import(WALK); } catch (e) { alert(`MoonWalk could not load: ${e.message}`); return; }
+  // An installer installs a board, so the install opens on its ESP32 path.
+  walk.openMap((host) => walk.drawMap(host, { here: ["install"], choices: { platform: "ESP32" }, actor: "user", newTab: true }), { closeClass: "secondary" });
 }
 document.getElementById("walk-open")?.addEventListener("click", openWalk);
 

@@ -14,7 +14,7 @@ Step 2 of [Processes, described once](../present/Plan-20261015%20-%20Processes%2
 
 | Level | What it is | Textbook | Zoom |
 |---|---|---|---|
-| The journey | stages, left to right: read, install, first light, everyday use, advanced use, maintain, report, contribute, review and merge, release | the user story map (Patton) | zoomed out |
+| The journey | stages, left to right: install, first light, everyday use, advanced use, maintain, plan and set up, develop, run on hardware, test, document and commit, review and merge, release | the user story map (Patton) | zoomed out |
 | A process | a goal, its actor, the processes it depends on, its steps, its branches | an Arazzo workflow | middle |
 | A step | a precondition, an action, an expectation | Given, When, Then (Gherkin) | zoomed in |
 
@@ -25,8 +25,7 @@ Step 2 of [Processes, described once](../present/Plan-20261015%20-%20Processes%2
 ```
 moonwalk/
   moonwalk.schema.json
-  01-read.yaml            one file per journey stage: the stage, then its processes
-  02-install.yaml
+  02-install.yaml         one file per journey stage: the stage, then its processes; the number orders them
   ...
   15-release.yaml
 ```
@@ -42,7 +41,7 @@ processes:
     actor: user
     goal: An effect runs on the desktop's preview.
     dependsOn: [first-look]
-    page: tutorials/first-light-show.md
+    page: tutorials/how-moonlight-works.md
     intro: |
       Markdown shown above the steps on the generated page.
     steps:
@@ -50,15 +49,15 @@ processes:
         say: Open the Effects card.
         when: { open: { module: Effects } }
       - id: add-rainbow
-        say: Add a Rainbow effect with the + on the Effects card.
+        say: Add a Rainbow effect.
         when: { add: { module: Effects, type: RainbowEffect } }
         then:
-          - { module: Rainbow, exists: true }
+          - { module: RainbowEffect, exists: true }
       - id: brighter
-        say: Raise the brightness until it looks right.
-        when: { set: { module: Layer, control: brightness, value: 200 } }
+        say: Set brightness low in Drivers.
+        when: { set: { module: Drivers, control: brightness, value: 20 } }
         then:
-          - { module: Layer, control: brightness, equals: 200 }
+          - { module: Drivers, control: brightness, minimum: 1, maximum: 20 }
         detail: |
           Markdown for the page only: why, what to watch for.
     outro: |
@@ -67,9 +66,9 @@ processes:
 
 ## A step
 
-- **`say`**: the instruction, one action, verb first, in at most 8 words: *Power on the device.* It is the docs line, the app's step, the film caption and the test's name, so a reader knows the step at a glance. What happens next goes in its note or its detail.
+- **`say`**: the instruction, one action, verb first, in at most 8 words: *Power on the device.* It is the docs line, the app's step, the film caption and the test's name, so a reader knows the step at a glance. What happens next goes in its detail.
 - **`actor`**: who performs the step, when it is not the process's actor; the generator fills in the process's otherwise. BPMN's lane: the commit is the product owner's process, and the checks in it are the agent's.
-- **`given`**: preconditions, of four kinds. A process done first (`install`); an expectation on the device; the change touching a path (`{ changed: ["src/**"] }`, the globs GitHub Actions' `on.push.paths` takes, which the agent and CI read from `git diff --name-only`); and the reader's choice (`{ input: platform, equals: windows }`). The scenarios' `fixture`, `reset` and `top` and a clip's `setup` are all this.
+- **`given`**: preconditions, of four kinds. A process done first (`install`); an expectation on the device; the change touching a path (`{ changed: ["src/**"] }`, the globs GitHub Actions' `on.push.paths` takes, which the agent and CI read from `git diff --name-only`); and the reader's choice (`{ input: platform, equals: Windows }`, or `in: [...]` for several options). The scenarios' `fixture`, `reset` and `top` and a clip's `setup` are all this.
 - **`when`**: one action, by intent rather than gesture, so each runner picks its own gesture: the app points at the card's +, the test applies a state document, MoonTube clicks.
 
   | Action | Target | Runs in |
@@ -144,7 +143,7 @@ The website cannot read a device (an https page cannot call a device's http addr
 
 ## The map
 
-- **One generated file**: `gen_moonwalk.py`, beside `gen_help.py`, validates every stage file against the schema and writes `moonwalk.json`: the stages, the processes, the steps with their derived runners, and two indexes, by module and control and by docs page. It runs in the docs build and is mirrored per release, as `help.json` is.
+- **One generated file**: `gen_moonwalk.py`, beside `gen_help.py`, validates every stage file against the schema and writes `moonwalk.json`: the stages, the processes, the steps with their derived runners, and three indexes, by module, by control and by docs page. It runs in the docs build.
 - **One map, two hosts**: `moonwalk.js` draws `moonwalk.json` with **Cytoscape.js** (MIT, from cdnjs, about 430 KB, so it never enters the firmware). Compound nodes give the three levels: a stage holds its processes, a process holds its steps. The layout is the story map's grid, stages as columns and processes stacked in `dependsOn` order, computed in a few lines rather than by a layout library.
   - **Semantic zoom**: zoomed out shows stages and process titles, zooming in shows the steps and their `say`.
   - **Search and filters**: text over titles, steps and targets; actor; system; hide what is done. Filters by runner (tested, filmed) wait for the runners' adapters.

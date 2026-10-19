@@ -18,7 +18,7 @@ class RippleRingsEffect {
     int k = t / (2000 / speed);
     for (int i = 0; i < amount; i = i + 1) {
       int grown = mod(k + i * 7, 20);
-      int g = (k + i * 7) / 20;
+      int g = mod((k + i * 7) / 20, 1024);   // the generation wraps, so its products stay within an int however long it runs
       int cx = mod(g * 7919 + i * 104729 + g * g * 31, width);
       int cy = mod(g * 6007 + i * 1299709 + g * g * 17, height);
       RGB c = paletteRGB(mod(g * 53 + i * 29, 256), 255 - grown * 12);

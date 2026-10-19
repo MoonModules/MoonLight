@@ -107,7 +107,7 @@ def test_a_step_adds_the_systems_its_action_implies():
     assert "MoonDeck" in processes["commit"]["systems"]
 
 
-def test_a_misspelt_expectation_key_is_refused_rather_than_never_checked(tmp_path):
+def test_a_misspelled_expectation_key_is_refused_rather_than_never_checked(tmp_path):
     root = stage(tmp_path, "stage: T\nprocesses:\n  - id: a\n    title: A\n    actor: user\n    goal: G\n    steps:\n"
                            "      - {id: s, say: Set it., when: {set: {module: GridLayout, control: width, value: 16}}, then: [{module: GridLayout, control: width, equal: 16}]}\n")
     with pytest.raises(ValueError, match="then/0"):
@@ -178,8 +178,8 @@ def test_a_choice_shows_once_per_section_and_names_its_option_in_the_plain_text(
     text = gen_moonwalk.render_text(gen_moonwalk.build())
     desktop = text[text.index("{#install}"):text.index("{#install-windows-zip}")]
     assert desktop.count("Where your settings live") == 1   # three options, one heading
-    assert "**Windows: Double-click the file you kept and press Install.**" in desktop
-    assert "**macOS: Drag MoonLight to Applications, then open it.**" in desktop
+    assert "**Windows: Run the setup you kept.**" in desktop
+    assert "**macOS: Drag MoonLight to Applications.**" in desktop
     assert desktop.count(". Updating\n") == 1   # a step per platform, one heading
 
 
@@ -197,7 +197,7 @@ def test_a_process_entry_that_is_not_a_mapping_is_reported_not_crashed_on(tmp_pa
 
 def test_a_step_for_several_options_names_them_all_in_the_plain_text():
     text = gen_moonwalk.render_text(gen_moonwalk.build())
-    assert "**Windows, macOS, Linux: Set Install to This computer, and press Download.**" in text
+    assert "**Windows, macOS, Linux: Download the app for this computer.**" in text
 
 
 def one_step(say: str, detail: str = "") -> str:
@@ -263,3 +263,36 @@ def test_writing_the_map_replaces_the_prose_of_a_process_that_is_gone(tmp_path):
     gen_moonwalk.write(gen_moonwalk.build(), tmp_path / "moonwalk.json")
     assert not (tmp_path / "text" / "removed.json").exists()
     assert (tmp_path / "text" / "install.json").exists() and "intro" not in (tmp_path / "moonwalk.json").read_text(encoding="utf-8")
+
+
+def test_a_step_that_opens_an_address_or_reads_a_page_links_there():
+    steps = {s["id"]: s for p in gen_moonwalk.build()["processes"].values() for s in p.get("steps", [])}
+    assert steps["open-installer"]["url"] == "https://moonmodules.org/MoonLight/install/"
+    assert steps["signal"]["url"] == "how-to/led-signal-integrity.html"
+
+
+def test_a_step_reading_a_missing_page_is_refused(tmp_path):
+    root = stage(tmp_path, "stage: T\nprocesses:\n  - id: a\n    title: A\n    actor: user\n    goal: G\n    steps:\n"
+                           "      - {id: s, say: Read it., when: {read: {page: nowhere.md}}}\n")
+    with pytest.raises(ValueError, match="page does not exist: docs/nowhere.md"):
+        gen_moonwalk.build(root)
+
+
+def test_a_title_past_its_cap_or_a_goal_of_two_sentences_is_refused(tmp_path):
+    long_title = stage(tmp_path, "stage: T\nprocesses:\n  - {id: a, title: " + "word " * 11 + ", actor: user, goal: G}\n")
+    with pytest.raises(ValueError, match="title over 10 words"):
+        gen_moonwalk.build(long_title)
+    two = stage(tmp_path, "stage: T\nprocesses:\n  - {id: a, title: A, actor: user, goal: It runs. It is fast.}\n")
+    with pytest.raises(ValueError, match="more than one sentence"):
+        gen_moonwalk.build(two)
+
+
+def test_a_step_calling_a_missing_process_or_jumping_to_a_missing_step_is_refused(tmp_path):
+    call = stage(tmp_path, "stage: T\nprocesses:\n  - id: a\n    title: A\n    actor: user\n    goal: G\n    steps:\n"
+                           "      - {id: s, say: Run it., when: {process: nowhere}}\n")
+    with pytest.raises(ValueError, match="runs no process: nowhere"):
+        gen_moonwalk.build(call)
+    jump = stage(tmp_path, "stage: T\nprocesses:\n  - id: a\n    title: A\n    actor: user\n    goal: G\n    steps:\n"
+                           "      - {id: s, say: Check it., when: {manual: Look}, onFailure: [{type: goto, stepId: gone}]}\n")
+    with pytest.raises(ValueError, match="goto names no step: gone"):
+        gen_moonwalk.build(jump)

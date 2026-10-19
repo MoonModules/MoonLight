@@ -85,3 +85,7 @@ def test_the_gate_passes_a_well_formed_entry(tmp_path, monkeypatch):
 
 def test_a_name_that_is_no_string_is_reported_rather_than_crashing_the_gate(tmp_path, monkeypatch):
     assert run(tmp_path, monkeypatch, [{**ENTRY, "name": ["Board"]}]) == 1
+
+
+def test_the_gate_refuses_a_baud_written_as_a_float_which_esptool_would_misread(tmp_path, monkeypatch):
+    assert run(tmp_path, monkeypatch, [{**ENTRY, "flashBaud": 921600.0}]) == 1

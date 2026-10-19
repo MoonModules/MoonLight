@@ -1,11 +1,19 @@
 // How a module describes itself, its help and its emoji, shared by the app and the docs site's card deck so both show the same; it imports nothing, as the site serves it beside its own scripts.
 
-// Inline markdown as HTML: everything escaped first, then code, bold, italics and absolute links, so text from the file cannot become markup.
-const inline = s => s
-    .replace(/`([^`]+)`/g, "<code>$1</code>")
+// Inline markdown as HTML: everything escaped first, so text from the file cannot become markup. Code spans and link targets are set aside before bold and italics, as CommonMark parses them first, so a `*` inside them stays literal.
+const emphasis = s => s
     .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
-    .replace(/\*([^*\s][^*]*)\*/g, "<em>$1</em>")
-    .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+    .replace(/\*([^*\s][^*]*)\*/g, "<em>$1</em>");
+const inline = s => {
+    const kept = [];
+    const keep = html => `\u0000${kept.push(html) - 1}\u0000`;
+    let out = emphasis(s
+        .replace(/`([^`]+)`/g, (_, code) => keep(`<code>${code}</code>`))
+        .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, (_, text, url) => keep(`<a href="${url}" target="_blank" rel="noopener">${emphasis(text)}</a>`)));
+    // A link's text may hold a code span, so a second pass restores what the first one put back; a NUL in the text itself is no placeholder and stays.
+    for (let pass = 0; pass < 2; pass++) out = out.replace(/\u0000(\d+)\u0000/g, (m, i) => kept[i] ?? m);
+    return out;
+};
 
 // The block forms MoonWalk's prose adds to the help's paragraphs and tables: a list, a heading (one level under the view's own), and a picture or a clip on a paragraph of its own. Only an https address becomes a source.
 const isList = p => p.split("\n").every(l => /^- /.test(l));
@@ -118,10 +126,13 @@ export function moduleHelp(help, docPath, walks = []) {
 
 // A control's help as Material's helper text, a line under the field rather than a hover tooltip, which fails on touch; any more opens from the line, the MoonWalk steps that set the control with it.
 export function controlHelp(row, help, walks = []) {
-    if (!help || !help.line) return;
-    let el;
     const anchors = walks.map(walkAnchor);
-    if (help.more || anchors.length) {
+    if (!help?.line && !anchors.length) return;
+    let el;
+    if (!help?.line) {
+        el = document.createElement("div");   // no line of its own, but steps that set it: the links alone
+        anchors.forEach((a, i) => { if (i) el.append(" · "); el.appendChild(a); });
+    } else if (help.more || anchors.length) {
         el = document.createElement("details");
         const s = document.createElement("summary");
         s.innerHTML = helpMarkdown(help.line);

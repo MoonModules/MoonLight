@@ -1,12 +1,11 @@
 name: Generated files
 
-# A contributor's pull request leaves the generated files out: the metrics, MoonDeck's measured durations and a scenario's observation blocks are measured on the contributor's machine, and the merge regenerates them on ours. A warning rather than a failure, since a pull request can mean to change one, a new scenario for one.
+# A contributor's pull request leaves the generated files out: the metrics and a scenario's observation blocks are measured on the contributor's machine, and the merge regenerates them on ours. A warning rather than a failure, since a pull request can mean to change one, a new scenario for one.
 
 on:
   pull_request:
     paths:
       - 'docs/reference/metrics/**'
-      - 'moondeck/durations.json'
       - 'test/scenarios/**'
 
 jobs:
@@ -22,8 +21,8 @@ jobs:
         env:
           BASE: ${{ github.event.pull_request.base.sha }}
         run: |
-          # Metrics and durations are generated whole; a scenario only when it already existed, since a new one is written by hand.
-          { git diff --name-only "$BASE"...HEAD -- docs/reference/metrics moondeck/durations.json
+          # Metrics are generated whole; a scenario only when it already existed, since a new one is written by hand.
+          { git diff --name-only "$BASE"...HEAD -- docs/reference/metrics
             git diff --name-only --diff-filter=M "$BASE"...HEAD -- test/scenarios; } | while read -r f; do
             echo "::warning file=$f::Generated on your machine: the merge regenerates it on ours, so leave it out of the pull request unless you mean to change it."
           done

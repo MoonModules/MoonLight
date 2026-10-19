@@ -7,34 +7,29 @@ processes:
     actor: product-owner
     goal: A tagged release with every binary, the installer manifests, the help and the docs site.
     systems: [MoonInstaller]
-    dependsOn: [pre-merge]
     page: contributing/principles-and-process.md
     intro: |
-      The event where the binary ships, so every check runs over the tagged tree, whatever it triggers, and every shipped firmware builds.
+      The event where the binary ships, so on "run pre-release" every commit and merge check runs over the tagged tree, whatever it triggers, and every shipped firmware builds. The rest is the product owner's judgment.
     steps:
-      - id: checks
-        section: Checks
-        say: Run every commit check, triggers ignored.
-        actor: contributor
-        when: { process: commit }
-        detail: |
-          Run them over the tagged tree.
       - id: merge-checks
+        section: Checks
         say: Run the merge gates on the tagged commit.
         when: { process: pre-merge }
+        detail: |
+          They run the commit checks with their triggers ignored.
       - id: firmwares
         say: Build every shipped ESP32 firmware.
         actor: contributor
         when: { manual: "build_esp32.py --firmware <name>, once per shipped variant." }
         detail: |
-          The shipped variants are the registry's rows marked `ships` in `moondeck/build/firmwares.py`. One build at a time: the variants share their managed components, so two at once corrupt each other.
+          The shipped variants are the registry's rows marked `ships` in `moondeck/build/firmwares.py`, built [one at a time](moonwalk.md#esp32-build-flash).
       - id: hardware
         section: Judgment
         say: Test it on real hardware.
         when: { manual: "The product owner's eyes are the measurement." }
       - id: blockers
         say: Close every release blocker.
-        when: { manual: "Meet the release's own criteria too. The issues labeled as blocking this release." }
+        when: { manual: "The issues labeled as blocking it, and the release's own criteria." }
       - id: notes
         say: Write the release notes.
         when: { manual: "What a user notices, from the commits since the last tag." }

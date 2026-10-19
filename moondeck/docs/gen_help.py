@@ -24,6 +24,8 @@ ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(ROOT / "moondeck" / "check"))
 sys.path.insert(0, str(ROOT / "moondeck" / "docs"))
 
+from _test_metadata import parse_unit_file  # noqa: E402
+
 SITE = "https://moonmodules.org/MoonLight/"
 REPO = "https://github.com/MoonModules/MoonLight/blob/"
 REGISTRY = "src/module_types.cpp"
@@ -412,12 +414,19 @@ def resolve_refs(node, link):
     return node
 
 
+def heading_id(text: str) -> str:
+    """The id MkDocs gives a heading of plain words: lowercased, spaces as hyphens, punctuation dropped (pinned against Python-Markdown's own slugify in test_mkdocs_slug.py)."""
+    return re.sub(r"[\s-]+", "-", re.sub(r"[^\w\s-]", "", text.lower())).strip("-")
+
+
 def tests_url(cls_name: str, ref: str) -> str | None:
+    """The module's section in the test inventory, whose test names read as its behavior, when its test file names an `@module`; else the file on GitHub."""
     stem = re.sub(r"(Effect|Modifier|Layout|Driver|Service)$", "", cls_name)
     for name in dict.fromkeys((cls_name, stem)):
         hits = sorted((ROOT / "test").rglob(f"unit_{name}.cpp"))
         if hits:
-            return REPO + ref + "/" + hits[0].relative_to(ROOT).as_posix()
+            module = parse_unit_file(hits[0]).get("module")
+            return SITE + "reference/tests/unit-tests.html#" + heading_id(module) if module else REPO + ref + "/" + hits[0].relative_to(ROOT).as_posix()
     return None
 
 

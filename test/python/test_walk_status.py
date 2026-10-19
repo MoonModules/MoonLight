@@ -36,7 +36,7 @@ def repo_with(tmp_path: Path) -> Path:
         (tmp_path / name).write_text(text)
     git(tmp_path, "init", "-q")
     git(tmp_path, "add", "-A")
-    git(tmp_path, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "start")
+    git(tmp_path, "-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false", "-c", "core.hooksPath=/dev/null", "commit", "-q", "-m", "start")   # no signing or hooks from the machine
     return tmp_path
 
 
@@ -67,6 +67,15 @@ def test_a_pass_holds_until_a_file_it_covers_changes(tmp_path):
     assert by_id(status(MODEL, runs, root=repo))["build"]["fresh"]
     (repo / "src/a.cpp").write_text("a3")   # inside them
     assert not by_id(status(MODEL, runs, root=repo))["build"]["fresh"]
+
+
+def test_a_pass_that_writes_a_file_it_covers_still_holds(tmp_path):
+    # A docs check rewrites its own report: the tree recorded is the one the run leaves, so its output cannot make it stale.
+    repo = repo_with(tmp_path)
+    (repo / "docs/report.md").write_text("written by the run")
+    walk_status.record_finished(tmp_path / "walk-runs.json", run_key("moondeck/docs/build_docs.py", "--strict"), True, root=repo)
+    runs = walk_status.read_runs(tmp_path / "walk-runs.json")
+    assert by_id(status(MODEL, runs, root=repo))["docs"]["fresh"]
 
 
 def test_a_failed_run_or_one_with_other_arguments_proves_nothing(tmp_path):
@@ -170,3 +179,8 @@ def test_a_card_counts_its_own_calls_but_not_another_cards():
     durations = {"moondeck/build/build_desktop.py --tests": [30.1], "moondeck/build/build_desktop.py": [1.9]}
     assert card_duration(build, durations)["seconds"] == 1.9    # the Compile Tests card's call is not the Build card's
     assert card_duration(tests, durations)["seconds"] == 30.1
+
+
+def test_a_step_with_a_placeholder_in_its_call_is_the_readers_to_run():
+    model = {"processes": {"p": {"steps": [{"id": "flash", "when": {"run": {"script": "moondeck/x.py", "args": "--port <port>"}}}]}}}
+    assert walk_status.step_run(model, "p/flash") is None

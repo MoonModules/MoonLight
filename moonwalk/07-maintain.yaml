@@ -22,24 +22,24 @@ processes:
         detail: |
           It shows the version, the build and its partition, and says when a newer release exists. A stable release always wins; only a device on a `-dev` build is offered `latest`. On a board with MoonBase, its **image** selector picks the app or MoonBase itself.
       - id: install
-        say: Pick the release and install it.
-        when: { manual: "The card reports the download and the write, then the device reboots into it on its own." }
+        say: Install the release the card offers.
+        when: { manual: "Pick the release, then press Install." }
         detail: |
-          `latest` is the rolling build from `main`; a tagged release moves slower, for a rig that has to keep working. The image matches the device's variant: an `esp32s3-n16r8` image on a classic ESP32 refuses to boot. Through MoonBase, the device reboots into MoonBase, which writes the app and reboots back, all behind one overlay.
+          The card reports the download and the write, then the device reboots into it on its own. `latest` is the rolling build from `main`; a tagged release moves slower, for a rig that has to keep working. The image matches the device's variant: an `esp32s3-n16r8` image on a classic ESP32 refuses to boot. Through MoonBase, the device reboots into MoonBase, which writes the app and reboots back, all behind one overlay.
       - id: moonbase-self
         say: Install MoonBase when the card asks.
-        when: { manual: "The card warns when MoonBase does not match the app. Pick MoonBase as the image and install it the same way." }
+        when: { manual: "Pick MoonBase as the image and install it." }
         detail: |
-          The device first checks it is a MoonBase image for this chip. During the write the device holds no recovery image, but the app keeps running, so a failure is answered by trying again.
+          The card warns when MoonBase does not match the app. The device first checks it is a MoonBase image for this chip. During the write the device holds no recovery image, but the app keeps running, so a failure is answered by trying again.
       - id: boot-app
         section: When it boots into MoonBase
         say: Press Boot the app first.
-        when: { manual: "MoonBase's page means the app did not start or an update was interrupted. It boots only an image that validates." }
+        when: { manual: "On MoonBase's page." }
         detail: |
-          Not on your network? MoonBase opens the device's `MM-XXXX` access point, protected by your WiFi's password once it knows one. Joining it opens MoonBase's page, also at **4.3.2.1**.
+          MoonBase's page means the app did not start or an update was interrupted, and it boots only an image that validates. Not on your network? MoonBase opens the device's `MM-XXXX` access point, protected by your WiFi's password once it knows one. Joining it opens MoonBase's page, also at **4.3.2.1**.
       - id: retry
-        say: Or install from a file or a URL.
-        when: { manual: "From a file takes a firmware-....bin you downloaded; From a URL fetches and installs in one step." }
+        say: Install a firmware file or URL instead.
+        when: { manual: "From a file takes a downloaded .bin; From a URL fetches it." }
         detail: |
           The [releases page](https://github.com/MoonModules/MoonLight/releases) has one file per firmware variant, named for it, and a link to each to paste. A URL crosses into MoonBase through a fixed slot of 255 characters, and a longer one is refused rather than truncated.
       - id: usb
@@ -51,6 +51,39 @@ processes:
     goal: A bulb moves to MoonLight without a cable.
     systems: [MoonBase]
     page: how-to/migrating-over-the-air.md
+    intro: |
+      The migration image, a small program that runs once, writes MoonBase and MoonLight's partition table through the old firmware's own update page, and MoonBase then installs MoonLight. It checks it can finish before it writes anything, and restarts the old firmware unchanged when it cannot. A power cut in the 50 milliseconds it rewrites the partition table, or going back to the old firmware, needs a USB cable. The migration is at your own risk: [What can stop it](how-to/migrating-over-the-air.md#what-can-stop-it).
+    steps:
+      - id: chip
+        say: Check the chip on WLED's Info page.
+        when: { manual: "A migration image is built for one chip." }
+        detail: |
+          An ESP32-C3 with 4 MB of flash is verified from WLED 0.15.0: [What can move](how-to/migrating-over-the-air.md#what-can-move).
+      - id: download
+        say: Download the migration image for that chip.
+        when: { open: { url: "https://github.com/MoonModules/MoonLight/releases" } }
+        detail: |
+          From the latest release: `shared-migrate-esp32c3.bin` for an ESP32-C3.
+      - id: upload
+        say: Upload it through WLED's update page.
+        when: { manual: "Config, Security & Updates, Manual OTA Update, then Update." }
+        detail: |
+          Keep the power on for the next ten seconds. A newer WLED checks an upload's release name until its option to skip that check is ticked.
+      - id: moonbase
+        say: Open the device's address in a browser.
+        when: { manual: "It restarts as MoonBase, on the same WiFi." }
+        detail: |
+          Off your network, it could not carry the WiFi over and opens an `MM-` access point: [join it](moonwalk.md#join-access-point) and set your WiFi there.
+      - id: install
+        say: Install MoonLight from MoonBase.
+        when: { manual: "Pick the release's firmware for the chip and press Install." }
+        detail: |
+          MoonLight starts on the same WiFi.
+      - id: setup
+        say: Set the light up as on any device.
+        when: { process: first-light-show }
+        detail: |
+          A bulb with five PWM channels, such as the Athom 12W, is the catalog's **ESP32-C3 RGBWW PWM bulb**. It takes the **PWM Light** driver with its five pins, the `RGBCCT` fixture and a 1×1 grid.
   - id: backup-restore
     title: Back up and restore a device
     actor: user
@@ -80,10 +113,10 @@ processes:
         detail: |
           Restore there: the bundle carries your WiFi, so after the restart the device comes back on your network by itself.
       - id: restore
-        say: Press Restore, choose the bundle, confirm twice.
+        say: Restore the bundle in the File Manager.
         when: { open: { module: FileManagerModule } }
         detail: |
-          The second press is deliberate: restoring overwrites the device's files.
+          Press **Restore**, choose the bundle and confirm twice. The second press is deliberate: restoring overwrites the device's files.
       - id: report
         say: Read the report.
         when: { manual: "It lists what was renamed and mapped, the values to review, and what this firmware lacks." }
@@ -91,11 +124,17 @@ processes:
         say: Restart when the dialog offers it.
         when: { manual: "The network settings and the web server's port apply at boot; the rest applied as each file landed." }
       - id: pins
-        say: Check the pins and rename the clone.
+        say: Check the drivers' pins match this board.
+        given: [{ input: target, equals: Another device }]
+        when: { open: { module: Drivers } }
+        detail: |
+          The backup carries the old board's pins: a board wired differently shows wrong lights, which look like a broken effect.
+      - id: rename
+        say: Give the clone its own name.
         given: [{ input: target, equals: Another device }]
         when: { open: { module: SystemModule } }
         detail: |
-          The backup carries the old board's pins: a board wired differently shows wrong lights, which look like a broken effect. The [device name](explanation/architecture/mooncore.md#device-name-one-identity-every-network-name-derives-from-it) comes across too, so give the clone its own.
+          The [device name](explanation/architecture/mooncore.md#device-name-one-identity-every-network-name-derives-from-it) comes across with the backup.
   - id: diagnose-lights
     title: Diagnose dark or flickering lights
     actor: user
@@ -107,7 +146,9 @@ processes:
     steps:
       - id: preview
         say: Check the preview shows the effect.
-        when: { manual: "Running: the pipeline is fine, so look downstream at the driver, the wiring or the power. Dark too: look upstream at the layout, the effect or the brightness." }
+        when: { manual: "Running means look downstream; dark means look upstream." }
+        detail: |
+          Running: the pipeline is fine, so look at the driver, the wiring or the power. Dark too: look at the layout, the effect or the brightness.
       - id: brightness
         say: Raise the brightness on Drivers.
         when: { open: { module: Drivers } }
@@ -137,7 +178,53 @@ processes:
     goal: A bug report with the device's state attached.
     systems: [MoonCore]
     page: how-to/logging-an-issue.md
+    intro: |
+      Describe what you saw and hand over the state of the device it happened on; diagnosing it is ours. Not sure it is a bug? Ask on [Discord](https://discord.gg/TC8NSUSCdV) first. A feature request needs no template and no diagnostics: describe the use case.
+    steps:
+      - id: search
+        say: Search the existing issues first.
+        when: { open: { url: "https://github.com/MoonModules/MoonLight/issues" } }
+        detail: |
+          It may already be reported, or already fixed.
+      - id: version
+        say: Check the version on the Firmware card.
+        when: { open: { module: FirmwareUpdateModule } }
+        detail: |
+          A fix may already be in the current version.
+      - id: diagnostics
+        say: Copy each card's diagnostics.
+        when: { manual: "The card's { }, then diagnostics; select all in the new tab and copy." }
+        detail: |
+          Always System and Firmware, and the card that went wrong. The Layer card for lights, the Drivers card for pins or wiring. Wrap each in a fenced code block. [Which cards to include](how-to/logging-an-issue.md#2-attach-the-output).
+      - id: describe
+        say: Describe the steps, the expected and the actual.
+        when: { manual: "Steps to reproduce, what should happen, what happens instead." }
+        detail: |
+          A device that crashed or does not boot serves no `{ }`. Say what the LEDs did and what changed shortly before. Say whether it repeats after a power cycle, and add the serial boot log if you have one. A `bootReason` of `PANIC`, `TASK_WDT` or `BROWNOUT` on the System card goes in the first line.
+      - id: photo
+        say: Add a photo of what you see.
+        when: { manual: "A fixture in the wrong colors, or a screenshot of the interface." }
+      - id: open
+        say: Open the issue on GitHub.
+        when: { open: { url: "https://github.com/MoonModules/MoonLight/issues/new" } }
   - id: report-vulnerability
     title: Report a vulnerability
     actor: user
     goal: A security finding reaches the maintainers privately.
+    systems: [MoonCore]
+    intro: |
+      A private report lets the fix ship before the details are public, so a vulnerability stays out of public issues and chat. The policy is [SECURITY.md](https://github.com/MoonModules/MoonLight/blob/main/SECURITY.md); what a device trusts and how to secure an installation is [Security](explanation/security.md).
+    steps:
+      - id: report
+        say: Open a private report on GitHub.
+        when: { open: { url: "https://github.com/MoonModules/MoonLight/security/advisories/new" } }
+        detail: |
+          GitHub's private vulnerability reporting on the MoonModules/MoonLight repository.
+      - id: describe
+        say: Describe the finding and how to reproduce it.
+        when: { manual: "The version, the steps, and what an attacker gains." }
+      - id: follow
+        say: Follow the maintainer's answer in the advisory.
+        when: { manual: "The fix and the advisory are published together." }
+        detail: |
+          Fixes land on `main`, which ships as the latest pre-release, and in the next tagged release.

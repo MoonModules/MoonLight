@@ -5,6 +5,7 @@ The to-build list, split along the codebase's own boundary:
 - [backlog-core.md](backlog-core.md): core and infrastructure.
 - [backlog-light.md](backlog-light.md): the light domain, drivers, effects, sensors.
 - [backlog-mixed.md](backlog-mixed.md): items where a core mechanism meets a light one.
+- [backlog-moonlive.md](backlog-moonlive.md): the MoonLive language and its engine, in the order the steps are built.
 
 The analyses beside them survey a problem before it is planned: read when planning, not otherwise.
 

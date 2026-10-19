@@ -26,7 +26,7 @@
     {"effects/hpwit/particle-fountain.mle", 0x12214c875f5cbc8dull},
     {"effects/hpwit/plasma-ring.mle", 0x3e4ae542352cd91cull},
     {"effects/hpwit/plasma-wander.mle", 0x4758ad600fd6eaaeull},
-    {"effects/hpwit/ripple-rings.mle", 0xe58aa3f53563708full},
+    {"effects/hpwit/ripple-rings.mle", 0x76207732c0dc3e0cull},
     {"effects/hpwit/spinning-squares.mle", 0x66aecdf09d7fd145ull},
     {"effects/hpwit/twinkle-stars.mle", 0xe0fa607c57e84063ull},
     {"effects/hpwit/voronoi.mle", 0x372b280bc5711cdeull},

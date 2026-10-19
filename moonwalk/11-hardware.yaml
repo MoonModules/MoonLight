@@ -10,6 +10,8 @@ processes:
     dependsOn: [desktop-build-test]
     intro: |
       ESP-IDF directly, not the Arduino framework, at the pinned [ESP-IDF version](reference/build-system.md#esp-idf-version). The firmware variants and their keys: [Firmware variants](reference/build-system.md#firmware-variants).
+
+      A board build and flash happen only when the product owner approves them, once the desktop is clean and its result judged. Never build to confirm something compiles, at the end of a phase or for an interesting measurement. Bench boards are free in risk and costly in time: nothing on them is precious, and the product owner still says when a board is written to. A change that could brick, boot-loop or wipe one gets a one-sentence heads-up.
     inputs:
       type: object
       properties:
@@ -19,17 +21,21 @@ processes:
         section: Once per machine
         say: Clone ESP-IDF into ~/esp/esp-idf.
         given: [{ input: platform, in: [macOS, Linux] }]
-        when: { run: { command: "git clone --depth 1 --recursive --shallow-submodules --branch v6.1 https://github.com/espressif/esp-idf.git ~/esp/esp-idf" } }
+        when: { run: { command: "git clone --depth 1 --recursive --shallow-submodules --branch <PINNED_IDF_VERSION> https://github.com/espressif/esp-idf.git ~/esp/esp-idf" } }
         detail: |
-          It takes about 2 GB, where the scripts look first. The tag is the pin `PINNED_IDF_VERSION` in `moondeck/build/build_esp32.py` names; setup moves a checkout that drifted from it.
-      - id: clone-windows
-        say: Turn on long paths, then clone ESP-IDF.
+          It takes about 2 GB, where the scripts look first. The tag is `PINNED_IDF_VERSION` in `moondeck/build/build_esp32.py`; setup moves a checkout that drifted from it.
+      - id: long-paths
+        say: Turn on Git's long paths.
         given: [{ input: platform, equals: Windows }]
-        when: { run: { command: "git config --global core.longpaths true; git clone --depth 1 --recursive --shallow-submodules --branch v6.1 https://github.com/espressif/esp-idf.git \"$env:USERPROFILE\\esp\\esp-idf\"" } }
+        when: { run: { command: "git config --global core.longpaths true" } }
         detail: |
-          Clone it into your profile's esp folder.
-
           The IDF's tooling nests deeply, and without long paths the clone trips Windows' 260-character limit.
+      - id: clone-windows
+        say: Clone ESP-IDF into your profile's esp folder.
+        given: [{ input: platform, equals: Windows }]
+        when: { run: { command: "git clone --depth 1 --recursive --shallow-submodules --branch <PINNED_IDF_VERSION> https://github.com/espressif/esp-idf.git \"$env:USERPROFILE\\esp\\esp-idf\"" } }
+        detail: |
+          The tag is `PINNED_IDF_VERSION` in `moondeck/build/build_esp32.py`.
       - id: setup
         say: Set up the IDF's environment and toolchains.
         when: { run: { script: moondeck/build/setup_esp_idf.py } }
@@ -40,17 +46,19 @@ processes:
       - id: build
         section: Each change
         say: Build the firmware for your board.
-        when: { run: { script: moondeck/build/build_esp32.py, args: "--firmware esp32" } }
+        when: { run: { script: moondeck/build/build_esp32.py, args: "--firmware <firmware>" } }
         detail: |
-          Pick the variant for your board in MoonDeck's Firmware menu, or pass its key. A MoonBase variant also builds MoonBase: [MoonBase and the partition layout](reference/build-system.md#moonbase-and-the-partition-layout).
+          Pick the variant for your board in MoonDeck's Firmware menu, or pass its key. Build one firmware at a time: the variants share their managed components, so two builds at once corrupt each other. After an sdkconfig or toolchain change, compile for real rather than trusting a freshness check. A MoonBase variant also builds MoonBase: [MoonBase and the partition layout](reference/build-system.md#moonbase-and-the-partition-layout).
       - id: flash
         say: Flash it over USB.
         when: { manual: "flash_esp32.py --firmware <name> --port <port>, or the Flash card with the port picked." }
         detail: |
-          On Windows the port is a `COM` name, and no port at all means a missing driver: [Install the USB-serial driver on Windows](moonwalk.md#windows-serial-drivers). The web installer flashes the same images, the S31 included.
+          Probe the ports again first, since they drift between sessions. On Windows the port is a `COM` name, and no port at all means a missing driver: [Install the USB-serial driver on Windows](moonwalk.md#windows-serial-drivers). The web installer flashes the same images, the S31 included.
       - id: monitor
         say: Watch its log over USB.
         when: { manual: "monitor_esp32.py --port <port>, or the Monitor card." }
+        detail: |
+          A silent reset is a hardware question before a software one. A watchdog reset with no panic, both CPUs stopped and the program counter inside the panic handler mean the flash cache is gone. That is a pin fault far more often than a code fault, so check the package before theorizing about the code.
   - id: ota-board
     title: Update a running board over the network
     actor: contributor

@@ -20,10 +20,10 @@ processes:
         say: Open an empty pad's editor.
         when: { manual: "Click an empty pad, or right-click a full one; on a touchscreen, press and hold it." }
       - id: save
-        say: Name it, pick its container, and save.
-        when: { manual: "Press save current state here. Effects is a look, Layouts a geometry, Drivers a hardware setup, Services a service configuration." }
+        say: Save the current state on the pad.
+        when: { manual: "Give it a name, pick its container and press save current state here." }
         detail: |
-          One container per save keeps a look portable: an Effects preset applies on any board, since it carries no pins.
+          Effects is a look, Layouts a geometry, Drivers a hardware setup, Services a service configuration. One container per save keeps a look portable: an Effects preset applies on any board, since it carries no pins.
 
           Any card saves itself too: its `{ }` button, a name and **save as preset** put that card alone on the first free pad.
       - id: apply
@@ -95,21 +95,17 @@ processes:
     steps:
       - id: add-midi
         section: Connect it
-        say: Add the Midi service for a desk.
-        given: [{ input: route, equals: Desk or gamepad in the browser }]
+        say: Add the Midi service.
+        given: [{ input: route, in: [Desk or gamepad in the browser, Desk on the board's USB port, Desk on the network] }]
         when: { add: { module: Services, type: MidiService } }
         detail: |
-          Add the Gamepad service for a controller instead. A Mackie desk in MC mode needs no setup. For an Akai APC40 mkII set `profile` to Akai APC40 mkII.
+          A gamepad takes the Gamepad service instead. A Mackie desk in MC mode needs no setup; for an Akai APC40 mkII set `profile` to Akai APC40 mkII. A desk on the network takes it on the board it drives.
       - id: plug-browser
         say: Plug the desk into this computer.
         given: [{ input: route, equals: Desk or gamepad in the browser }]
-        when: { manual: "Use Chrome, Edge or Firefox. A desk: allow MIDI devices when the browser asks. A pad: press any button, and the browser lists it." }
+        when: { manual: "Use Chrome, Edge or Firefox, and allow MIDI devices when it asks." }
         detail: |
-          Safari has no Web MIDI. A board's own page is not a secure origin, so Chrome asks nothing: [mark it as secure once](how-to/control-surface.md#a-boards-own-page-needs-marking-as-secure-once). A pad that does not appear: [making a gamepad appear](how-to/control-surface.md#making-a-gamepad-appear).
-      - id: add-midi-usb
-        say: Add the Midi service.
-        given: [{ input: route, equals: Desk on the board's USB port }]
-        when: { add: { module: Services, type: MidiService } }
+          A pad shows once you press any of its buttons. Safari has no Web MIDI. A board's own page is not a secure origin, so Chrome asks nothing: [mark it as secure once](how-to/control-surface.md#a-boards-own-page-needs-marking-as-secure-once). A pad that does not appear: [making a gamepad appear](how-to/control-surface.md#making-a-gamepad-appear).
       - id: source-usb
         say: Set source to USB.
         given: [{ input: route, equals: Desk on the board's USB port }]
@@ -119,13 +115,9 @@ processes:
       - id: plug-usb
         say: Plug the desk into the board.
         given: [{ input: route, equals: Desk on the board's USB port }]
-        when: { manual: "The desk takes its power from the port, so the board supplies 5 V there, or a powered hub does. An APC40 mkII draws about 0.15 A." }
+        when: { manual: "The board's port, or a powered hub, supplies the desk's 5 V." }
         detail: |
-          The port then carries no serial log and no USB flashing, so a board with a second USB port keeps that one for the computer.
-      - id: add-midi-net
-        say: Add the Midi service to the driven board.
-        given: [{ input: route, equals: Desk on the network }]
-        when: { add: { module: Services, type: MidiService } }
+          An APC40 mkII draws about 0.15 A. The port then carries no serial log and no USB flashing, so a board with a second USB port keeps that one for the computer.
       - id: source-net
         say: Set source to network.
         given: [{ input: route, equals: Desk on the network }]
@@ -135,15 +127,15 @@ processes:
       - id: host
         say: Name the desk's end in host.
         given: [{ input: route, equals: Desk on the network }]
-        when: { manual: "An address or <name>.local: a board sharing the desk, a desk with a network port, or a computer sharing its desk. Empty waits to be invited." }
+        when: { manual: "An address or <name>.local; empty waits to be invited." }
         detail: |
-          The service invites the host every second until it answers, so either side may start first. A Mac's Audio MIDI Setup and Windows' rtpMIDI driver invite a board with an empty `host`.
+          The host is a board sharing the desk, a desk with a network port, or a computer sharing its desk. The service invites the host every second until it answers, so either side may start first. A Mac's Audio MIDI Setup and Windows' rtpMIDI driver invite a board with an empty `host`.
       - id: share
         say: Share the desk from its board.
         given: [{ input: route, equals: Desk on the network }]
-        when: { manual: "On that board set source to USB and turn share on. It then forwards the desk like a network MIDI cable." }
+        when: { manual: "On that board set source to USB and turn share on." }
         detail: |
-          One host at a time. The host's status says why it was refused: `no desk`, `in use` or `it invites`. [One desk for many boards over OSC](how-to/control-surface.md#one-desk-for-several-boards).
+          It then forwards the desk like a network MIDI cable. One host at a time. The host's status says why it was refused: `no desk`, `in use` or `it invites`. [One desk for many boards over OSC](how-to/control-surface.md#one-desk-for-several-boards).
       - id: osc
         say: Follow the OSC process.
         given: [{ input: route, equals: Phone or tablet over OSC }]
@@ -157,8 +149,10 @@ processes:
       - id: wled-find
         say: Pick the MoonLight device in the app.
         given: [{ input: route, equals: Phone with WLED Native }]
-        when: { manual: "The app finds each device with no setup and no pairing, as a card with a power toggle and a brightness slider." }
+        when: { manual: "The app finds each device with no setup and no pairing." }
         detail: |
+          Each device is a card with a power toggle and a brightness slider.
+
           ![MoonLight devices discovered in WLED Native](assets/core/WLED%20Native%20discovers%20MoonLight.jpeg){ width="300" }
 
           WLED Native is by Christophe Gagnier ([@Moustachauve](https://github.com/Moustachauve)); MoonLight speaks the WLED JSON API. Everything else stays at `http://<devicename>.local`.
@@ -210,7 +204,7 @@ processes:
         say: Press start.
         when: { manual: "The surface appears. Move a fader and the device reacts; move something in the MoonLight UI and the faders follow." }
         detail: |
-          <img src="assets/core/OscService-open-stage-control.png" width="600" alt="The shipped Open Stage Control session beside MoonLight's own Control card">
+          ![The shipped Open Stage Control session beside MoonLight's own Control card](assets/core/OscService-open-stage-control.png)
 
           `switch1` drives the master on/off and `fader1` the global brightness. From the second slot on, an unassigned slot follows the effect enabled last.
       - id: phone
@@ -286,13 +280,16 @@ processes:
         section: Adopt in Home Assistant
         say: Look for the device in Home Assistant.
         given: [{ input: platform, equals: Home Assistant }]
-        when: { manual: "Home Assistant finds the device on its own over the WLED path and lists it as a light with color, palette and brightness. The 💫 in the name marks it as MoonLight. This path needs no broker." }
-      - id: ha-broker
+        when: { manual: "Home Assistant finds it on its own over the WLED path." }
+        detail: |
+          It lists the device as a light with color, palette and brightness, with 💫 in its name marking it as MoonLight. This path needs no broker.
+      - id: broker
+        section: Connect the broker
         say: Set the broker on the MQTT card.
-        given: [{ input: platform, equals: Home Assistant }]
+        given: [{ input: platform, in: [Home Assistant, Homebridge] }]
         when: { open: { module: MqttModule } }
         detail: |
-          Only for a broker-only or cross-subnet setup. Set `broker` to the Home Assistant host's LAN IP, the one its console prints, not `127.0.0.1` and not `homeassistant.local` unless the device does mDNS; `port` to `1883`, and `username` and `password` to the Home Assistant user created for MQTT.
+          Set `broker` to the broker's hostname or LAN IP, never `127.0.0.1`, which is loopback on the broker's own host. For Home Assistant's broker it is the IP its console prints. Set `port`, usually `1883`, and `username` and `password` when the broker requires them, for Home Assistant the user created for MQTT. Home Assistant needs this only for a broker-only or cross-subnet setup.
       - id: ha-discovery
         say: Turn haDiscovery on.
         given: [{ input: platform, equals: Home Assistant }]
@@ -302,28 +299,28 @@ processes:
       - id: ha-verify
         say: Check the device's topics reach Home Assistant.
         given: [{ input: platform, equals: Home Assistant }]
-        when: { manual: "In Home Assistant open the MQTT integration, Configure, Listen to topic, and enter `MoonLight/#`. The device's on, brightness and hsv topics appear." }
-      - id: ha-homekit
-        say: Add the HomeKit Bridge integration.
-        given: [{ input: platform, equals: Home Assistant }]
-        when: { manual: "Optional, to reach Apple Home. In Home Assistant open Settings, Devices & Services, Add Integration, HomeKit Bridge, pick Include selected entities and tick the MoonLight light." }
-      - id: ha-pair
-        say: Scan the code in the Home app.
-        given: [{ input: platform, equals: Home Assistant }]
-        when: { manual: "Home Assistant prints a QR code and PIN. In Home pick Add Accessory, More options, HA HomeKit Bridge, then scan the code or enter the PIN." }
-      - id: hb-broker
-        section: Adopt in Homebridge
-        say: Set the broker on the MQTT card.
-        given: [{ input: platform, equals: Homebridge }]
-        when: { open: { module: MqttModule } }
+        when: { manual: "MQTT integration, Configure, Listen to topic: MoonLight/#." }
         detail: |
-          Set `broker` to the broker's hostname or LAN IP, not `127.0.0.1`, which is loopback on the broker's own host. Set `port` (usually `1883`) and, only if the broker requires auth, `username` and `password`.
+          The device's on, brightness and hsv topics appear.
       - id: hb-verify
         say: Check the device's topics reach the broker.
         given: [{ input: platform, equals: Homebridge }]
         when: { run: { command: "mosquitto_sub -t 'MoonLight/#' -v" } }
         detail: |
           The device's on, brightness and hsv topics and its retained name appear. Its MAC suffix, the last 6 hex digits, is in the topics: you need it in the accessory.
+      - id: ha-homekit
+        section: Reach Apple Home
+        say: Add the HomeKit Bridge integration.
+        given: [{ input: platform, equals: Home Assistant }]
+        when: { manual: "Settings, Devices & Services, Add Integration, HomeKit Bridge." }
+        detail: |
+          Optional, to reach Apple Home. Pick **Include selected entities** and tick the MoonLight light.
+      - id: ha-pair
+        say: Scan the code in the Home app.
+        given: [{ input: platform, equals: Home Assistant }]
+        when: { manual: "Add Accessory, More options, HA HomeKit Bridge." }
+        detail: |
+          Home Assistant prints the QR code and a PIN; scan the code or enter the PIN.
       - id: hb-plugin
         say: Install the homebridge-mqttthing plugin.
         given: [{ input: platform, equals: Homebridge }]
@@ -333,7 +330,7 @@ processes:
         given: [{ input: platform, equals: Homebridge }]
         when: { read: { page: how-to/home-automation.md, section: The Homebridge accessory } }
         detail: |
-          Add it in the Config UI Config editor or in `~/.homebridge/config.json`. Set `url` to `mqtt://<broker>:1883` (`mqtt://127.0.0.1:1883` when Homebridge and the broker share a host), replace `563cfe` in every topic with your MAC suffix, and match `username` and `password` to the broker or remove them.
+          Add it in the Config UI Config editor or in `~/.homebridge/config.json`. Set `url` to `mqtt://<broker>:1883`, or `mqtt://127.0.0.1:1883` when Homebridge and the broker share a host. Replace `563cfe` in every topic with your MAC suffix, and match `username` and `password` to the broker or remove them.
       - id: hb-restart
         say: Restart Homebridge.
         given: [{ input: platform, equals: Homebridge }]
@@ -341,7 +338,9 @@ processes:
       - id: hb-pair
         say: Pair the bridge in the Home app.
         given: [{ input: platform, equals: Homebridge }]
-        when: { manual: "In Home pick Add Accessory, More options, the Homebridge bridge, with the PIN Homebridge prints on start. The device appears as a light with on/off, brightness and a color wheel that steps through palettes." }
+        when: { manual: "Add Accessory, More options, the Homebridge bridge." }
+        detail: |
+          Use the PIN Homebridge prints on start. The device appears as a light with on/off, brightness and a color wheel that steps through palettes.
       - id: hue-driver
         section: Drive Hue lights
         say: Add a Hue driver to Drivers.
@@ -352,7 +351,7 @@ processes:
       - id: hue-link
         say: Press the link button on the bridge.
         given: [{ input: platform, equals: Hue lights }]
-        when: { manual: "Press the physical button on the Hue bridge." }
+        when: { manual: "It opens a 30-second pairing window." }
       - id: hue-pair
         say: Press pair within 30 seconds.
         given: [{ input: platform, equals: Hue lights }]
@@ -362,7 +361,9 @@ processes:
       - id: hue-pick
         say: Pick the room and light to drive.
         given: [{ input: platform, equals: Hue lights }]
-        when: { manual: "Use the driver's `room` and `light` controls for all bulbs, one room or a single light. Only reachable Extended color lights are driven: white-only bulbs, plugs and powered-off lights are skipped." }
+        when: { manual: "Use the driver's room and light controls." }
+        detail: |
+          All bulbs, one room or a single light. Only reachable Extended color lights are driven: white-only bulbs, plugs and powered-off lights are skipped.
       - id: hue-layout
         say: Size the layout as one column of bulbs.
         given: [{ input: platform, equals: Hue lights }]
@@ -372,6 +373,8 @@ processes:
       - id: hue-effect
         say: Run an effect.
         given: [{ input: platform, equals: Hue lights }]
-        when: { manual: "Any effect on the layer drives the bulbs. Global brightness and color order apply as on a strip; brightness 0 turns a bulb off." }
+        when: { manual: "Any effect on the layer drives the bulbs." }
+        detail: |
+          Global brightness and color order apply as on a strip; brightness 0 turns a bulb off.
     outro: |
       The topics the platforms use, presets in Home Assistant and troubleshooting: [Home automation](how-to/home-automation.md).

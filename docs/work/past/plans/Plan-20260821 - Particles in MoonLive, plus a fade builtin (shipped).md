@@ -154,7 +154,7 @@ Comments stay minimal: a `.mle` is user-facing, shown in the device's own editor
 - `moonlive/effects/fountain.mle` — new; picked up automatically by the folder-walking compile sweep
 - `test/unit/light/unit_MoonLiveParticles.cpp` — new
 - `docs/moonmodules/light/MoonLiveEffect.md` — the vocabulary table
-- `docs/backlog/backlog-moonlive.md` — delete item 9b, which this realizes
+- `docs/backlog/backlog-moonlive.md`: delete item 9b, which this realizes
 
 ## Verification
 
