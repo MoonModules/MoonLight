@@ -135,3 +135,92 @@ TEST_CASE("PictureEffect without a Picture service says so and shows black") {
     CHECK(std::string(r.fx.status()) == "no picture: add a Picture service under Services");
     CHECK(r.cell(0, 0)[0] == 0);
 }
+
+// --- Border sampling ---------------------------------------------------------------------------
+// A border strip's outermost lights own a sliver at the very edge, where a letterbox and the overscan junk live, so edgeDepth reaches further in. Smoothing eases a light toward its new colour.
+
+// The control sets the depth rather than raising a floor under it, so on a coarse grid an edge cell takes less than its own share.
+TEST_CASE("PictureEffect edgeDepth gives the outermost lights the depth they ask for") {
+    // Four columns over 100 picture columns: each owns 25, so 10% is deliberately shallower.
+    PictureRig deep(100, 100, 4, 4, 1, mm::PictureEffect::kStretch, mm::PictureEffect::kArea);
+    deep.fx.edgeDepth = 10;
+    deep.fx.prepare();
+    deep.layer.tick();
+
+    PictureRig share(100, 100, 4, 4, 1, mm::PictureEffect::kStretch, mm::PictureEffect::kArea);
+    share.layer.tick();
+
+    // The ramp rises left to right, so a shallower first column reads darker: the leftmost tenth, not quarter.
+    CHECK(deep.cell(0, 3)[0] < share.cell(0, 3)[0]);
+    // And the last column reads brighter, averaging the rightmost tenth rather than its quarter.
+    CHECK(deep.cell(3, 3)[0] > share.cell(3, 3)[0]);
+    // Interior columns are on no edge, so they are untouched.
+    CHECK(deep.cell(1, 3)[0] == share.cell(1, 3)[0]);
+    CHECK(deep.cell(2, 3)[0] == share.cell(2, 3)[0]);
+}
+
+// 0 is the whole point of the default: it must leave the ranges exactly as they were.
+TEST_CASE("PictureEffect edgeDepth of 0 samples precisely what it did before") {
+    PictureRig off(64, 64, 8, 8, 1, mm::PictureEffect::kStretch, mm::PictureEffect::kArea);
+    off.fx.edgeDepth = 0;
+    off.fx.prepare();
+    off.layer.tick();
+    PictureRig plain(64, 64, 8, 8, 1, mm::PictureEffect::kStretch, mm::PictureEffect::kArea);
+    plain.layer.tick();
+    for (size_t y = 0; y < 8; y++)
+        for (size_t x = 0; x < 8; x++)
+            for (int ch = 0; ch < 3; ch++) CHECK(off.cell(x, y)[ch] == plain.cell(x, y)[ch]);
+}
+
+// The one that 8-bit state would fail: each step is a fraction of a byte, so the value moves only if those fractions are kept between pictures.
+TEST_CASE("PictureEffect smoothing eases toward a new picture and arrives exactly") {
+    PictureRig rig(8, 8, 8, 8, 1, mm::PictureEffect::kStretch, mm::PictureEffect::kPoint);
+    rig.fx.smoothing = 200;
+    rig.fx.snapAbove = 0;     // ease every move, so nothing lands by jumping
+    rig.fx.prepare();
+    rig.layer.tick();         // the first picture lands whole, or it would creep up out of black
+    const uint8_t first = rig.cell(0, 0)[0];
+    CHECK(first == 255);      // the top-left bar is white
+
+    // Now a black picture: the light has to walk down to it over several ticks.
+    uint8_t* rgb = rig.pic.beginWrite();
+    std::memset(rgb, 0, static_cast<size_t>(rig.pic.width) * rig.pic.height * 3);
+    rig.pic.endWrite();
+
+    rig.layer.tick();
+    const uint8_t stepped = rig.cell(0, 0)[0];
+    CHECK(stepped < first);   // it moved
+    CHECK(stepped > 0);       // but not all the way
+
+    // And it arrives: an unchanged picture keeps being drawn while a cell is still short of it.
+    for (int i = 0; i < 400; i++) rig.layer.tick();
+    CHECK(rig.cell(0, 0)[0] == 0);
+}
+
+// A cut is a real jump, and easing through it reads as the lights lagging the picture.
+TEST_CASE("PictureEffect snapAbove lands a cut whole instead of easing into it") {
+    PictureRig rig(8, 8, 8, 8, 1, mm::PictureEffect::kStretch, mm::PictureEffect::kPoint);
+    rig.fx.smoothing = 200;
+    rig.fx.snapAbove = 40;    // 255 to 0 is far beyond this
+    rig.fx.prepare();
+    rig.layer.tick();
+    REQUIRE(rig.cell(0, 0)[0] == 255);
+
+    uint8_t* rgb = rig.pic.beginWrite();
+    std::memset(rgb, 0, static_cast<size_t>(rig.pic.width) * rig.pic.height * 3);
+    rig.pic.endWrite();
+    rig.layer.tick();
+    CHECK(rig.cell(0, 0)[0] == 0);   // one tick, not four hundred
+}
+
+// Smoothing off is the default, so it must cost nothing and follow the picture exactly.
+TEST_CASE("PictureEffect without smoothing follows the picture tick for tick") {
+    PictureRig rig(8, 8, 8, 8, 1, mm::PictureEffect::kStretch, mm::PictureEffect::kPoint);
+    rig.layer.tick();
+    REQUIRE(rig.cell(0, 0)[0] == 255);
+    uint8_t* rgb = rig.pic.beginWrite();
+    std::memset(rgb, 0, static_cast<size_t>(rig.pic.width) * rig.pic.height * 3);
+    rig.pic.endWrite();
+    rig.layer.tick();
+    CHECK(rig.cell(0, 0)[0] == 0);
+}
