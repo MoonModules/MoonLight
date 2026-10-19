@@ -217,12 +217,13 @@ void writeControlMetadata(JsonSink& sink, const ControlDescriptor& c) {
             sink.append("]");
             return;
         }
-        case ControlType::Progress:
-            // The unit rides in min (see addProgress); the UI scales by it and picks KB, MB or GB itself.
+        case ControlType::Progress: {
+            // The unit rides in min (see addProgress); the UI scales by it and picks KB, MB or GB itself. Braced, so the table's scope ends before the next label, which MSVC requires (C2360).
             static constexpr const char* kProgressUnitNames[] = {"B", "KiB", "count"};   // indexed by ProgressUnit
             sink.appendf(",\"total\":%lu,\"unit\":\"%s\"", static_cast<unsigned long>(c.aux),
                          kProgressUnitNames[static_cast<uint8_t>(c.min)]);
             return;
+        }
         case ControlType::List: {
             // The detail an expanded row shows, as an array parallel to the summary `value`, which stays small for the collapsed list.
             const auto* src = static_cast<const ListSource*>(c.ptr);
