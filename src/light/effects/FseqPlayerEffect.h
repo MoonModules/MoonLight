@@ -1,5 +1,6 @@
 #pragma once
 
+#include "light/effects/ChannelDataSink.h"   // where the decoded frame lands, held and placed in wiring order
 #include "light/effects/EffectBase.h"
 
 #include "light/util/FseqFile.h"     // the FSEQ header/sparse-range parser this effect plays back
@@ -40,7 +41,11 @@ namespace mm {
 ///
 /// ## Why decode runs in tick20ms
 ///
-/// A frame read blocks, which `tick()` must never do. So `tick20ms()` decodes one due frame into `frameBuf_` instead, the same split `HttpServerModule::driveSdTransfers` uses for SD reads; `tick()` only blits what is there.
+/// A frame read blocks, which `tick()` must never do. So `tick20ms()` decodes one due frame and writes it straight into `sink_`, the same split `HttpServerModule::driveSdTransfers` uses for SD reads; `tick()` only calls `sink_.tick()`.
+///
+/// ## An FSEQ frame is already in wiring order
+///
+/// FSEQ carries the raw byte stream a controller sends, the same shape @ref NetworkReceiveEffect's sender-mapped frames take. `ChannelDataSink` places it unmapped, alone on its layer, so a serpentine layout is not applied twice.
 ///
 /// ## Sequential reads replace random-offset ones
 ///
@@ -56,9 +61,9 @@ namespace mm {
 ///
 /// Becoming enabled starts playback immediately when the playlist is non-empty, in `prepare()`, with no separate "press play" step. `release()` stops and closes the stream first, so a later re-enable never resumes into memory it just freed.
 ///
-/// ## tick(): stopped clears, paused re-blits the same frame
+/// ## Stopping writes one black frame; pausing just stops decoding
 ///
-/// A stopped transport goes black every tick rather than keep the previous effect's paint. A paused one re-blits the same decoded frame every tick instead of holding a stale buffer, so a clear elsewhere self-heals.
+/// `sink_` holds the last frame written until something writes another, so a stopped transport writes one all-zero frame on the stop transition rather than going black every tick. A paused transport simply stops calling `tick20ms()`; the sink keeps showing what it already held, unchanged.
 ///
 /// ## Compression: zlib on ESP32 only, zstd nowhere yet
 ///
@@ -108,8 +113,9 @@ public:
         rescanFiles();
     }
 
-    /// Start playing on its own once the effect becomes enabled.
+    /// Size the sink to the layer, then start playing on its own once the effect becomes enabled.
     void prepare() override {
+        sink_.prepare(/*senderMapped=*/true);   // an FSEQ frame is already in wiring order: @xref{an-fseq-frame-is-already-in-wiring-order}
         if (state_ == PlayState::Stopped && playlistCount_ > 0) {
             visited_ = 0;
             // Set before loadTrack: its own refreshStatus() must see Playing already, though loadTrack corrects this back on its own failure paths.
@@ -137,15 +143,13 @@ public:
         if (frameIndex_ >= header_.frameCount) handleEndOfFile();
     }
 
-    /// Blit the already-decoded frame, or hold black while stopped. Pure memory work, no I/O.
-    void tick() MM_NONBLOCKING override {
-        if (state_ == PlayState::Stopped) {
-            uint8_t* buf = buffer();
-            if (buf) std::memset(buf, 0, static_cast<size_t>(nrOfLights()) * channelsPerLight());
-            return;
-        }
-        blitFrameBuf();
-    }
+    /// Hand the sink's held frame to the output; tick20ms() is the only place new data reaches it.
+    void tick() MM_NONBLOCKING override { sink_.tick(); }
+
+    /// An FSEQ frame is in wiring order.
+    bool deliversWiringOrder() const MM_NONBLOCKING override { return sink_.wiringOrder(); }
+    /// The sink hands its held frame to the output.
+    void copyWiringFrame(uint8_t* out, size_t bytes, bool force) override { sink_.copyWiringFrame(out, bytes, force); }
 
     /// Dispatch a transport button through a name-to-handler table, a Command row per button rather than a branch.
     void onControlChanged(const char* controlName) override {
@@ -352,9 +356,11 @@ private:
     size_t   headLen_ = 0;          ///< bytes actually filled in headBuf_
     size_t   headPos_ = 0;          ///< how far into headBuf_ sequential reads have already consumed
 
-    ScratchBuffer<uint8_t> frameBuf_{*this};   ///< the one decoded frame tick() blits
-    ScratchBuffer<uint8_t> compBuf_{*this};    ///< one compression block's compressed bytes
-    ScratchBuffer<uint8_t> blockBuf_{*this};   ///< that block, decompressed
+    ChannelDataSink sink_{*this};               ///< where the decoded frame lands, held and placed in wiring order
+    ScratchBuffer<uint8_t> frameBuf_{*this};    ///< the one decoded frame, read straight off the file or a compression block
+    ScratchBuffer<uint8_t> expandBuf_{*this};   ///< a sparse frame expanded to the sink's own size, before the one write into it
+    ScratchBuffer<uint8_t> compBuf_{*this};     ///< one compression block's compressed bytes
+    ScratchBuffer<uint8_t> blockBuf_{*this};    ///< that block, decompressed
     uint32_t currentBlockIndex_ = 0;           ///< which compression-block-table entry is loaded
     uint32_t currentBlockFirstFrame_ = 0;      ///< that block's first frame
     uint32_t currentBlockFrameCount_ = 0;      ///< how many frames blockBuf_ covers
@@ -450,6 +456,7 @@ private:
         state_ = PlayState::Stopped;
         frameIndex_ = 0;
         visited_ = 0;
+        writeBlackFrame();
         refreshStatus();
     }
 
@@ -489,6 +496,7 @@ private:
             state_ = PlayState::Stopped;
             frameIndex_ = 0;
             visited_ = 0;
+            writeBlackFrame();
             refreshStatus();
             return;
         }
@@ -607,7 +615,7 @@ private:
         return true;
     }
 
-    /// Decode frame `frameIndex_` into `frameBuf_`: the one blocking file read `tick20ms` makes, bounded to one frame or compression block.
+    /// Decode frame `frameIndex_` and write it straight into `sink_`, in wiring order: the one blocking file read `tick20ms` makes, bounded to one frame or compression block.
     bool decodeCurrentFrame() {
         const uint8_t* rawFrame;
         if (header_.compressionType == fseq::CompressionType::Zlib) {
@@ -625,22 +633,29 @@ private:
             frameIndex_ = 0;
             return false;
         }
+        writeFrameToSink();
         return true;
     }
 
-    /// Blit the decoded frame onto the layer buffer, sparse or dense; a no-op before any frame has decoded.
-    void blitFrameBuf() {
-        if (!frameBuf_.data() || frameCount_ == 0) return;
-        uint8_t* buf = buffer();
-        if (!buf) return;
-        const size_t bufBytes = static_cast<size_t>(nrOfLights()) * channelsPerLight();
-        if (header_.sparseRangeCount > 0) {
-            // Unmapped channels go dark: the sparse table only addresses the fixtures a show touches.
-            std::memset(buf, 0, bufBytes);
-            fseq::expandSparseFrame(header_, frameBuf_.data(), header_.channelCount, buf, bufBytes);
-        } else {
-            const size_t n = static_cast<size_t>(header_.channelCount) < bufBytes ? header_.channelCount : bufBytes;
-            std::memcpy(buf, frameBuf_.data(), n);
+    /// Place the just-decoded frame into `sink_`, sparse or dense.
+    void writeFrameToSink() {
+        if (header_.sparseRangeCount == 0) {
+            sink_.write(0, frameBuf_.data(), header_.channelCount);
+            return;
+        }
+        // Unmapped channels go dark: the sparse table only addresses the fixtures a show touches.
+        if (!expandBuf_.resize(sink_.bytes())) return;
+        std::memset(expandBuf_.data(), 0, expandBuf_.bytes());
+        fseq::expandSparseFrame(header_, frameBuf_.data(), header_.channelCount, expandBuf_.data(), expandBuf_.bytes());
+        sink_.write(0, expandBuf_.data(), expandBuf_.bytes());
+    }
+
+    /// Write one all-zero frame into the sink, through a small static chunk: the stop transition's one-time black-out.
+    void writeBlackFrame() {
+        static constexpr uint8_t kZero[256] = {};
+        for (size_t off = 0; off < sink_.bytes(); off += sizeof(kZero)) {
+            const size_t n = sink_.bytes() - off < sizeof(kZero) ? sink_.bytes() - off : sizeof(kZero);
+            sink_.write(off, kZero, n);
         }
     }
 

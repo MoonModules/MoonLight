@@ -26,6 +26,20 @@ fseq::FseqHeader makeHeader(uint32_t channelCount, uint32_t frameCount, uint8_t 
     return h;
 }
 
+// A one-frame v1 FSEQ file whose light k's red byte is k + 1, as a real exporter writes wiring order, so a test can tell which wiring position a byte reached.
+std::vector<uint8_t> makeFseqV1BytesNumbered(uint16_t lights) {
+    const uint32_t channelCount = static_cast<uint32_t>(lights) * 3;
+    std::vector<uint8_t> b(32 + channelCount, 0);
+    std::memcpy(b.data(), "PSEQ", 4);
+    b[4] = 32; b[5] = 0;
+    b[6] = 0; b[7] = 1;
+    for (int i = 0; i < 4; i++) b[10 + i] = static_cast<uint8_t>(channelCount >> (8 * i));
+    b[14] = 1;   // frameCount = 1
+    b[18] = 25;
+    for (uint16_t k = 0; k < lights; k++) b[32 + static_cast<size_t>(k) * 3] = static_cast<uint8_t>(k + 1);
+    return b;
+}
+
 // A real v1 FSEQ file's bytes: frame i's channels all hold the byte value i, so a test can tell which frame decoded.
 std::vector<uint8_t> makeFseqV1Bytes(uint32_t channelCount, uint32_t frameCount, uint8_t stepTimeMs = 25) {
     std::vector<uint8_t> b(32 + static_cast<size_t>(channelCount) * frameCount, 0);
@@ -221,6 +235,7 @@ TEST_CASE("playing a real file decodes and blits its frames in order") {
     Scene s;
     auto& e = s.effect;
     e.setup();
+    e.prepare();   // sizes the sink; empty playlist here, so this alone does not start playback
     uint32_t id = 0;
     REQUIRE(e.addListRow(id));
 
@@ -229,20 +244,24 @@ TEST_CASE("playing a real file decodes and blits its frames in order") {
     // Pins a real bug: loadTrack's own refreshStatus() must see the state this call transitions to, not the one it leaves, or a successful play reports "stopped".
     REQUIRE(e.status() != nullptr);
     CHECK(std::string(e.status()).rfind("playing", 0) == 0);
+    REQUIRE(e.deliversWiringOrder());   // an FSEQ frame is already in wiring order, and this effect is alone on its layer
 
-    const uint8_t* buf = s.layer.buffer().data();
-    const size_t bytes = s.layer.buffer().count() * 3;
+    const size_t bytes = static_cast<size_t>(s.layer.physicalLightCount()) * 3;
+    std::vector<uint8_t> buf(bytes);
 
     e.decodeOneFrameForTest();   // frame 0: every byte is 0
     e.tick();
+    e.copyWiringFrame(buf.data(), buf.size(), /*force=*/true);
     for (size_t i = 0; i < bytes; i++) CHECK(buf[i] == 0);
 
     e.decodeOneFrameForTest();   // frame 1: every byte is 1
     e.tick();
+    e.copyWiringFrame(buf.data(), buf.size(), /*force=*/true);
     for (size_t i = 0; i < bytes; i++) CHECK(buf[i] == 1);
 
     e.decodeOneFrameForTest();   // frame 2, the last one
     e.tick();
+    e.copyWiringFrame(buf.data(), buf.size(), /*force=*/true);
     for (size_t i = 0; i < bytes; i++) CHECK(buf[i] == 2);
 
     // Frame 3 does not exist: handleEndOfFile already ran inside the decode above (loopAll default: reloads frame 0).
@@ -252,6 +271,40 @@ TEST_CASE("playing a real file decodes and blits its frames in order") {
     e.onControlChanged("pause");
     REQUIRE(e.status() != nullptr);
     CHECK(std::string(e.status()).rfind("paused", 0) == 0);
+}
+
+// A real exporter already writes wiring order; alone on a serpentine layout the frame must reach the output unmapped, not mapped a second time.
+TEST_CASE("playing on a serpentine layout keeps the frame in wiring order") {
+    SdFixture sd;
+    sd.writeFseq("/sd/wiring.fseq", makeFseqV1BytesNumbered(16));
+
+    Layouts layouts;
+    GridLayout grid;
+    grid.width = 4; grid.height = 4; grid.depth = 1;
+    grid.serpentine = true;   // the mapping a second application would scramble
+    layouts.addChild(&grid);
+    Layer layer;
+    layer.setLayouts(&layouts);
+    layer.setChannelsPerLight(3);
+    FseqPlayerEffect e;
+    layer.addChild(&e);
+
+    e.setup();
+    e.defineControls();
+    layer.applyState();   // builds the serpentine LUT too, not just this effect's own prepare()
+    uint32_t id = 0;
+    REQUIRE(e.addListRow(id));
+    e.onControlChanged("play");
+    REQUIRE(e.deliversWiringOrder());
+    REQUIRE(layer.lut().hasLUT());         // serpentine: the mapping is not the identity
+    REQUIRE(layer.wiringSource() == &e);   // alone on its layer, sender-mapped: straight to the output, no layer remap
+
+    e.decodeOneFrameForTest();
+    e.tick();
+
+    std::vector<uint8_t> out(16 * 3, 0);
+    e.copyWiringFrame(out.data(), out.size(), /*force=*/true);
+    for (uint8_t k = 0; k < 16; k++) CHECK(out[k * 3] == k + 1);   // light k shows what was authored for k, not the serpentine's remap
 }
 
 TEST_CASE("release() forces a clean stop, so a later re-enable never resumes into freed buffers") {
