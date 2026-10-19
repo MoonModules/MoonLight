@@ -3733,13 +3733,16 @@
    "controls": {
     "source": {
      "line": "Where the picture comes from.",
-     "more": "The test pattern is a test card in the layout of Philips' PM5544, drawn at any size."
+     "more": "The test pattern is a test card in the layout of Philips' PM5544, drawn at any size. **usb capture** decodes MJPEG from an HDMI grabber, scaled to fit."
+    },
+    "fps": {
+     "line": "Frames a second asked of a capture device, which streams the nearest rate it offers."
     },
     "width": {
-     "line": "The picture's width in pixels."
+     "line": "The picture's width in pixels, and the most a capture scales its frames to."
     },
     "height": {
-     "line": "The picture's height in pixels."
+     "line": "The picture's height in pixels, under the same ceiling as the width."
     }
    },
    "role": "service",
