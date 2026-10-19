@@ -155,8 +155,9 @@ public:
                 // Hash the strings, so an in-place rename still changes the signature.
                 const char* const* opts = reinterpret_cast<const char* const*>(c.aux);
                 for (int32_t o = 0; o < c.max; o++) mixStr(opts[o]);
-            } else {
-                mix(static_cast<uint32_t>(c.aux));   // a Progress total or another aux value, so a change differs
+            } else if (c.type != ControlType::Progress) {
+                // A Progress's aux is its total, a value as live as c.ptr's, so it rides the value patch too: never a resync by itself.
+                mix(static_cast<uint32_t>(c.aux));   // a structural aux word (e.g. ReadOnlyInt's unit, Palette's option fn), so a change differs
             }
         }
         for (uint8_t i = 0; i < childCount_; i++) children_[i]->mixSchema(f);
