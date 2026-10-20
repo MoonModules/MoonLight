@@ -1124,8 +1124,9 @@ def _help_freshness():
         stale = gen_help.stale()
     except gen_help.ToolchainMissing as e:   # no LLVM here: any other failure is the help's own and stays a failure
         raise _Unmeasurable(str(e)) from e
+    # The first lines of the difference, so a stale file says what moved: a header edit, or a host whose headers parse differently.
     return ([("docs/help/help.json",
-              f"{_STALE_HELP_RULE}: run `uv run moondeck/docs/gen_help.py` and commit the result")]
+              f"{_STALE_HELP_RULE}: run `uv run moondeck/docs/gen_help.py` and commit the result. It differs in:\n      " + "\n      ".join(stale[2:14]))]
             if stale else [])
 
 

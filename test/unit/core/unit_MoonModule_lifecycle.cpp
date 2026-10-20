@@ -164,7 +164,7 @@ public:
 };
 } // namespace
 
-// Switching a module on or off is a structural change a worker on another core may be ticking through, and onEnabled may release what that tick uses, so the workers park first, as for adding or removing a child; setting the flag it already has parks nothing.
+// A worker on another core may be in the module's tick, and onEnabled may release what it uses, so a switch parks the workers first.
 TEST_CASE("switching a module parks its workers first, and setting the same flag parks nothing") {
     Parking m;
     m.setEnabled(true);

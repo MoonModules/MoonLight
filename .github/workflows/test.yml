@@ -189,13 +189,14 @@ jobs:
           # RTSan does NOT halt: the render path's known blocking calls are counted in
           # check_code (docs/reference/metrics/code.json) and backlogged as architecture work, so halting would
           # fail this lane on every run. It reports; the log is the signal.
-          # The address lane writes the unit results as JUnit for the annotations: one lane is enough, and a lane that halts on a race leaves a truncated file.
+          # The address lane writes the unit results as JUnit for the annotations: one lane is enough.
           results=""
           if [ "${{ matrix.kind }}" = "address" ]; then
             mkdir -p results
             results="--reporters=junit --out=results/junit-unit.xml"
           fi
-          ASAN_OPTIONS=detect_leaks=0 TSAN_OPTIONS=halt_on_error=1 \
+          # TSan reports every race of the run and still fails it (exit code 66): halting at the first hid the next one behind each fix.
+          ASAN_OPTIONS=detect_leaks=0 TSAN_OPTIONS=halt_on_error=0 \
             RTSAN_OPTIONS=halt_on_error=0 ./build/san/test/mm_tests $results
       - if: always() && matrix.kind == 'address'
         run: uv run moondeck/ci/github_annotations.py --junit results/*.xml
