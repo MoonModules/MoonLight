@@ -2,10 +2,8 @@
   "name": "scenario_Effects_teardown_under_a_running_pipeline",
   "mode": "mutate",
   "instances": {
-    "FX2": "RainbowEffect",
     "Grid": "GridLayout",
-    "Preview": "PreviewDriver",
-    "Spectrum": "AudioSpectrumEffect"
+    "Preview": "PreviewDriver"
   },
   "description": "Removing modules while the lights are still rendering. A module that is taken away mid-frame must leave the pipeline running on whatever it can still reach, rather than following a pointer to something that is gone.",
   "also": [

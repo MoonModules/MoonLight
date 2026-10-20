@@ -2,9 +2,7 @@
   "name": "scenario_Modifiers_reshape_the_mapping",
   "mode": "mutate",
   "instances": {
-    "Check": "MirrorModifier",
-    "Grid": "GridLayout",
-    "Mult": "MultiplyModifier"
+    "Grid": "GridLayout"
   },
   "description": "A modifier changes where an effect's pixels land, not what it draws. Stacking, reordering and removing them rebuilds the mapping under a running pipeline, and a layer with no modifier at all must stay on the identity path rather than paying for a lookup table it does not need.",
   "also": [

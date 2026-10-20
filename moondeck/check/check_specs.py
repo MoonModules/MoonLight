@@ -17,6 +17,14 @@ SRC = ROOT / "src"
 SPECS = ROOT / "docs" / "moonmodules"
 
 sys.path.insert(0, str(ROOT / "moondeck" / "docs"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import _findings  # noqa: E402
+
+RULES = {
+    "undocumented module": {"reason": "A MoonModule header is not read into help.json, so the module has no documentation.", "fix": "Register the module, or give its class a `///` line.", "standard": "docs/contributing/documentation-standards.md"},
+    "source link": {"reason": "A page under docs/moonmodules/ has no resolvable source link.", "fix": "Link the page to an existing source file under its Source section.", "standard": "docs/contributing/documentation-standards.md"},
+    "doc path": {"reason": "A registerType docPath does not reach its page or anchor, so the in-UI help link breaks.", "fix": "Point the docPath at an existing page and anchor.", "standard": "docs/contributing/documentation-standards.md"},
+}
 
 def spec_md_files():
     """Every written page under docs/moonmodules/."""
@@ -188,6 +196,11 @@ def main():
 
     source_link_issues = check_source_links()
     docpath_issues = check_registertype_docpaths()
+
+    _findings.write("check_specs", RULES,
+                    [{"rule": "undocumented module", "message": "help.json does not read its header", "file": f"src/{m.as_posix()}", "level": "error"} for m in missing]
+                    + [{"rule": "source link", "message": issue, "file": spec.as_posix(), "level": "error"} for spec, issue in source_link_issues]
+                    + [{"rule": "doc path", "message": issue, "level": "error"} for issue in docpath_issues])
 
     # Report
     print(f"Spec check: {len(modules)} modules, {len(ok)} ok, {len(missing)} missing, "

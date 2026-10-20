@@ -1,9 +1,9 @@
-// The test page: every unit test and scenario, from the registry the docs build publishes (tests/index.json and a shard per subject), drawn like the card decks and the map.
+// The test page: every test, unit, scenario, Python, JS and check, from the registry the docs build publishes (tests/index.json and a shard per subject), drawn like the card decks and the map.
 // The index lists the subjects with their counts; a shard holds the tests about one subject and is fetched when it opens. Text goes in with textContent only.
 
 const ROOT = new URL("../", import.meta.url);
-const REPO = "https://github.com/MoonModules/MoonLight/blob/main/";
-const KINDS = { unit: "Unit", scenario: "Scenario", live: "Live" };
+let REPO = "https://github.com/MoonModules/MoonLight/blob/main/";   // the index names the branch the page was built from
+const KINDS = { unit: "Unit", scenario: "Scenario", live: "Live", python: "Python", js: "JS", check: "Check" };
 
 const STYLE = `
 .mm-tests { display: block; }
@@ -24,6 +24,8 @@ const STYLE = `
 .mm-tests-subject { margin-left: 1.3rem !important; }   /* one indent per level: group, subject, test */
 .mm-tests-subject > summary { font-weight: normal; }
 .mm-tests-subject ul { margin-left: 1.3rem !important; list-style: none; }
+.mm-tests-file { margin-left: 1.3rem !important; }
+.mm-tests-file > summary { font-weight: normal; }
 .mm-tests-subjects li:not(.mm-tests-detail):hover, .mm-tests-subjects li[aria-current="true"] { background: color-mix(in srgb, var(--md-accent-fg-color, #526cfe) 15%, transparent); }
 .mm-tests-detail { display: block; padding: 0.2rem 0 0.7rem 1.4rem !important; cursor: default; }
 .mm-tests-gaps { margin-bottom: 0.8rem; }
@@ -41,6 +43,9 @@ const STYLE = `
 .mm-tests-list article[data-kind="unit"] { --mw-kind: #2f9e44; }
 .mm-tests-list article[data-kind="scenario"] { --mw-kind: #1c7ed6; }
 .mm-tests-list article[data-kind="live"] { --mw-kind: #e8590c; }
+.mm-tests-list article[data-kind="python"] { --mw-kind: #f59f00; }
+.mm-tests-list article[data-kind="js"] { --mw-kind: #fab005; }
+.mm-tests-list article[data-kind="check"] { --mw-kind: #7048e8; }
 .mm-tests-title { font-weight: bold; }
 .mm-tests-meta { color: var(--md-default-fg-color--light, #888); font-size: 0.85em; }
 .mm-tests-list p { margin: 0.3rem 0; }
@@ -52,8 +57,6 @@ const STYLE = `
 .mm-tests-list ol { margin: 0.3rem 0; }
 .mm-tests-list details { margin: 0.4rem 0; }
 .mm-tests-text { display: none; }
-.mm-tests-card { position: fixed; z-index: 60; font-size: 0.8rem; line-height: 1.55; color: var(--md-default-fg-color, inherit); overflow: auto; padding: 0.5rem 0.9rem; background: var(--md-default-bg-color, #fff); border: 1px solid var(--md-default-fg-color--lightest, #8884); border-radius: 8px; box-shadow: 0 8px 28px #0006; }
-.mm-tests-card[hidden] { display: none; }
 `;
 
 function el(tag, attrs = {}, text) {
@@ -116,7 +119,7 @@ function resultLine(run) {
     return p;
 }
 
-// A check's rules with what each last found on the machine that built the page, and the files with the most findings.
+// A check's rules with what each last found on the machine that built the page, and every file it found something in.
 function findingsBlock(f) {
     const d = el("details");
     d.append(el("summary", {}, `${f.total} findings under ${Object.values(f.rules).filter((r) => r.count).length} of ${Object.keys(f.rules).length} rules`));
@@ -133,7 +136,25 @@ function findingsBlock(f) {
         table.append(row);
     }
     d.append(table);
-    if (f.files.length) d.append(el("p", { className: "mm-tests-meta" }, `Most findings: ${f.files.map((x) => `${x.file} (${x.count})`).join(", ")}`));
+    if (f.committed) d.append(el("p", { className: "mm-tests-meta" }, "The counts committed with the tree. Run the check to see the files."));
+    // Every file with its count, most first, and an erroring file's errors in full: an error blocks a commit, so its reader needs to know what to fix.
+    if (f.files.length) {
+        const files = el("details");
+        files.append(el("summary", {}, `${f.files.length} files`));
+        const list = el("ul");
+        for (const x of f.files) {
+            const item = el("li");
+            item.append(el("code", {}, x.file), ` ${x.count}`);
+            if (x.errors) {
+                const errs = el("ul");
+                errs.append(...x.errors.map((e) => el("li", {}, `${e.line ? `line ${e.line}: ` : ""}${e.message}`)));
+                item.append(errs);
+            }
+            list.append(item);
+        }
+        files.append(list);
+        d.append(files);
+    }
     return d;
 }
 
@@ -146,9 +167,6 @@ function badges(s) {
     for (const [n, mark, cls, title] of parts) if (n) box.append(el("span", { className: `mm-tests-badge ${cls}`, title }, `${mark} ${n}`));
     return box;
 }
-
-// What a subject's state is, for the filters: wrong (failed tests or errors), warned, or without a result.
-const states = (s) => [(s.failed || s.errors) && "bad", s.warnings && "warn", s.norun && "none"].filter(Boolean);
 
 function testCard(id, t, run, findings) {
     const card = el("article");
@@ -186,10 +204,16 @@ function testCard(id, t, run, findings) {
 
 // A test's mark in the tree: how its last run on this machine ended.
 const MARK = { pass: ["\u2714", "ok", "passed"], fail: ["\u2716", "bad", "failed"] };
-const markOf = (run) => MARK[run?.status] || ["?", "none", run?.status === "skip" ? "skipped" : "no result on this machine"];
+const markOf = (run, found) => (found?.errors ? ["\u2716", "bad", `found ${found.errors} errors`] : MARK[run?.status]) || ["?", "none", run?.status === "skip" ? "skipped" : "no result on this machine"];   // a check that found errors is wrong, though its run passed
+
+// The page-wide listeners of the mounted page, which the next mount removes: with instant navigation a page is left without a reload.
+let leave = null;
 
 export async function drawTests(host) {
     if (host.dataset.mounted) return;
+    leave?.abort();
+    leave = new AbortController();
+    const { signal } = leave;
     host.dataset.mounted = "1";
     if (!document.getElementById("mm-tests-style")) document.head.append(el("style", { id: "mm-tests-style" }, STYLE));
     host.classList.add("mm-tests");
@@ -198,6 +222,7 @@ export async function drawTests(host) {
         const r = await fetch(new URL("tests/index.json", ROOT));
         if (!r.ok) throw new Error(`answered ${r.status}`);
         index = await r.json();
+        if (index.blob) REPO = index.blob;
     } catch (e) {
         host.textContent = `The tests could not load: ${e.message}`;
         return;
@@ -229,7 +254,17 @@ export async function drawTests(host) {
     const gapsPane = el("div", { className: "mm-tests-list mm-tests-gaps" });
     bar.after(gapsPane);
     const shards = new Map();         // subject -> its tests, once fetched
-    const openGroups = new Set(), openSubjects = new Set();   // what the reader opened, kept across a redraw
+    const openGroups = new Set(), openSubjects = new Set(), openFiles = new Set();   // what the reader opened, kept across a redraw
+    // The counts of a list of tests, in the shape a subject's index entry has, so a file's line reads like its subject's.
+    const tally = (subject, list) => {
+        const n = { failed: 0, errors: 0, warnings: 0, passed: 0, norun: 0 };
+        for (const [id, t] of list) {
+            const status = runs[id]?.status;
+            if (status === "pass") n.passed++; else if (status === "fail") n.failed++; else if (Object.keys(runs).length) n.norun++;
+            if (t.kind === "check") { n.errors += findings[subject]?.errors || 0; n.warnings += findings[subject]?.warnings || 0; }
+        }
+        return n;
+    };
     const kindCount = (s) => Object.entries(s.kinds).filter(([k]) => !kinds.size || kinds.has(k)).reduce((n, [, v]) => n + v, 0);
 
     async function load(subject) {
@@ -254,7 +289,7 @@ export async function drawTests(host) {
         draw();
     }
 
-    document.addEventListener("keydown", (ev) => { if (ev.key === "Escape") hideDetail(); });
+    document.addEventListener("keydown", (ev) => { if (ev.key === "Escape") hideDetail(); }, { signal });
 
     const testBuild = (subject, id) => async () => {
         const t = (await load(subject))[id];
@@ -268,7 +303,7 @@ export async function drawTests(host) {
         return Object.entries(tests).filter(([id, t]) => {
             if (kinds.size && !kinds.has(t.kind)) return false;
             const status = runs[id]?.status;
-            const wrong = status === "fail" || (t.kind === "check" && findings[subject]?.errors > 0);   // a check that found errors is wrong, though its run passed
+            const wrong = markOf(runs[id], t.kind === "check" ? findings[subject] : null)[1] === "bad";   // the row's own mark decides, so a filter and the tree agree
             if (state.has("bad") || state.has("none")) return (state.has("bad") && wrong) || (state.has("none") && status !== "pass" && status !== "fail");
             return true;
         });
@@ -311,27 +346,43 @@ export async function drawTests(host) {
                 const ss = el("summary");
                 ss.append(el("span", {}, name), s.title ? el("span", { className: "mm-tests-count" }, s.title) : "", badges(s), el("span", { className: "mm-tests-count" }, String(kindCount(s))));
                 sd.append(ss);
-                const ul = el("ul");
+                // One node per file the subject's tests come from, as a test explorer shows a suite: its badges count what is under it, so every number on a line above can be traced to its tests.
+                const files = new Map();
                 for (const [id, t] of visible(name)) {
-                    const [mark, cls, why] = markOf(runs[id]);
-                    const li = el("li");
-                    li.dataset.id = id;
-                    li.setAttribute("aria-current", String(pinned === id));
-                    li.append(el("span", { className: `mm-tests-mark ${cls}`, title: why }, mark), el("span", { className: "mm-tests-name" }, t.title), t.kind === "check" && findings[name] ? badges(findings[name]) : "");
-                    li.addEventListener("click", () => {
-                        if (pinned === id) return hideDetail();   // a second click closes it
-                        history.replaceState(null, "", `#${name.toLowerCase()}:${id}`);
-                        showDetail(id, testBuild(name, id));
-                    });
-                    ul.append(li);
-                    if (pinned === id && pinnedContent) {
-                        const open = el("li", { className: "mm-tests-detail mm-tests-list" });
-                        open.append(pinnedContent);
-                        ul.append(open);
-                    }
+                    if (!files.has(t.file)) files.set(t.file, []);
+                    files.get(t.file).push([id, t]);
                 }
-                if (sd.open && !shards.has(name)) ul.append(el("li", {}, "Loading…"));
-                sd.append(ul);
+                for (const [file, list] of files) {
+                    const key = `${name}|${file}`;
+                    const fd = el("details", { className: "mm-tests-file" });
+                    fd.open = files.size === 1 || Boolean(q) || state.size > 0 || openFiles.has(key) || list.some(([id]) => id === pinned);
+                    fd.addEventListener("toggle", () => { fd.open ? openFiles.add(key) : openFiles.delete(key); });
+                    const fs = el("summary", { title: file });
+                    fs.append(el("span", {}, file.split("/").pop()), el("span", { className: "mm-tests-count" }, KINDS[list[0][1].kind] || list[0][1].kind), badges(tally(name, list)), el("span", { className: "mm-tests-count" }, String(list.length)));
+                    fd.append(fs);
+                    const ul = el("ul");
+                    for (const [id, t] of list) {
+                        const [mark, cls, why] = markOf(runs[id], t.kind === "check" ? findings[name] : null);
+                        const li = el("li");
+                        li.dataset.id = id;
+                        li.setAttribute("aria-current", String(pinned === id));
+                        li.append(el("span", { className: `mm-tests-mark ${cls}`, title: why }, mark), el("span", { className: "mm-tests-name" }, t.title));
+                        li.addEventListener("click", () => {
+                            if (pinned === id) return hideDetail();   // a second click closes it
+                            history.replaceState(null, "", `#${name.toLowerCase()}:${id}`);
+                            showDetail(id, testBuild(name, id));
+                        });
+                        ul.append(li);
+                        if (pinned === id && pinnedContent) {
+                            const open = el("li", { className: "mm-tests-detail mm-tests-list" });
+                            open.append(pinnedContent);
+                            ul.append(open);
+                        }
+                    }
+                    fd.append(ul);
+                    sd.append(fd);
+                }
+                if (sd.open && !shards.has(name)) { const ul = el("ul"); ul.append(el("li", {}, "Loading…")); sd.append(ul); }
                 g.append(sd);
             }
             tree.append(g);
@@ -377,9 +428,10 @@ export async function drawTests(host) {
         if (row) { await showDetail(id, testBuild(named, id)); [...tree.querySelectorAll("li")].find((li) => li.dataset.id === id)?.scrollIntoView({ block: "center" }); }
         else (tree.querySelector(".mm-tests-subject[open]") || tree).scrollIntoView({ block: "start" });
     }
-    addEventListener("hashchange", () => { if (!location.hash.slice(1).endsWith(pinned) || !pinned) follow(); });
+    addEventListener("hashchange", () => { if (!location.hash.slice(1).endsWith(pinned) || !pinned) follow(); }, { signal });
     await follow();
 }
 
-const mount = document.getElementById("mm-tests");
-if (mount) drawTests(mount);
+// Mounted on every page Material shows, since instant navigation swaps the page without loading this module again.
+const mount = () => { const host = document.getElementById("mm-tests"); if (host) drawTests(host); };
+if (globalThis.document$) globalThis.document$.subscribe(mount); else if (globalThis.document) mount();

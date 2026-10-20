@@ -2,9 +2,6 @@
   "name": "scenario_Aurora_fps",
   "module": "AuroraEffect",
   "mode": "mutate",
-  "instances": {
-    "Aurora": "AuroraEffect"
-  },
   "also": [
     "OscillatorBank",
     "PolarLut",

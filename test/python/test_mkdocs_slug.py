@@ -1,4 +1,4 @@
-"""The docs hooks build anchors by hand, a module's card from its name and a test file's section in the test inventory, and each must land on the heading id MkDocs renders. Because `validation.links.anchors` is `warn` (not `fail`), a slug that diverges from the real heading id produces a SILENT dead link, not a build failure, so this test pins `_slug()` to the anchor Python-Markdown generates.
+"""The docs hooks build anchors by hand, a module's card from its name, and each must land on the heading id MkDocs renders. Because `validation.links.anchors` is `warn` (not `fail`), a slug that diverges from the real heading id produces a SILENT dead link, not a build failure, so this test pins `_slug()` to the anchor Python-Markdown generates.
 
 `_slug()` delegates to `markdown.extensions.toc.slugify` (the exact function MkDocs' toc uses), so this both guards that delegation and documents the contract. If `_slug` is ever re-hand-rolled, the unicode and consecutive-separator cases below catch the drift.
 """

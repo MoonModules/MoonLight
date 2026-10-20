@@ -166,7 +166,7 @@ Verify that prose a change ADDS follows the coding standards: no em-dashes, US s
 uv run moondeck/check/check_prose.py
 ```
 
-Reads the added lines of the branch diff and the working tree, so pre-existing prose a rename merely touched is out of scope. A commit check on every diff ([CLAUDE.md § Commit](../CLAUDE.md#commit)). It does two things beyond that report. An ERROR on a line the change added fails it. It also writes [prose.md](../docs/reference/metrics/prose.md), the whole tree's findings by rule, which ratchets against the committed copy exactly as docgen.md does.
+Reads the added lines of the branch diff and the working tree, so pre-existing prose a rename merely touched is out of scope. A commit check on every diff ([CLAUDE.md § Commit](../CLAUDE.md#commit)). It does two things beyond that report. An ERROR on a line the change added fails it. It also counts the whole tree's findings by rule into `docs/reference/metrics/prose.json`, which ratchets against the committed counts exactly as docgen's do, and the [test page](../docs/reference/tests.md#check_prose) shows every finding.
 
 ### check_docgen
 
@@ -194,13 +194,13 @@ And per file, over every `.h` and `.cpp` under `src/`, `test/`, `esp32/main`, `m
 
 **A finding in a file that generates a page is an error; one in an implementation file is a warning.** A header and a catalog page are published, so a defect there ships and fails the gate. A `.cpp` publishes nothing: its comments are a note to the next reader, worth fixing without stopping a commit. Both are counted and both are reported. The split stages the sweep rather than ranking the two kinds of comment, so it goes and everything blocks once the warning column reaches zero.
 
-Every run writes [docs/reference/metrics/docgen.md](../docs/reference/metrics/docgen.md), the tracked state of the sweep: errors and warnings per rule and per page, then the files ranked within each area. Current state only, so its git history is the trend, the same shape repo-health.md uses. Every erroring file also carries its own findings in full, since an error blocks a commit and its reader needs to know what to fix; warnings stay counted rather than listed, which keeps the page a report rather than a log. The file is the artifact to read, because stdout scrolls away and truncates.
+Every run records its findings, and the [test page](../docs/reference/tests.md#check_docgen) shows them: each rule with its count, and every file with its count and its errors in full, since an error blocks a commit and its reader needs to know what to fix. The page is the artifact to read, because stdout scrolls away and truncates.
 
-**A ratchet, not a snapshot.** The committed `docs/reference/metrics/docgen.md` is the baseline: the run rewrites the file, then compares what it found against the copy in `HEAD`. An error fails the run, and so does any rule whose warning count ROSE, the total included, and so does the total of `///` lines after `@technical`. Warnings are staged work, and staged work that grows is not a sweep. The appendix total catches the other way to fake a sweep: warnings that fall because their comments moved into an appendix rather than being cut. A rise names the changed files whose appendix grew.
+**A ratchet, not a snapshot.** The tracked counts, `docs/reference/metrics/docgen.json`, are the baseline: the run rewrites the file, then compares its counts against the copy in `HEAD`, and the file's git history is the trend. Each ratchet keeps its counts this way. An error fails the run, and so does any rule whose warning count ROSE, the total included, and so does the total of `///` lines after `@technical`. Warnings are staged work, and staged work that grows is not a sweep. The appendix total catches the other way to fake a sweep: warnings that fall because their comments moved into an appendix rather than being cut. A rise names the changed files whose appendix grew.
 
 The comparison is per rule as well as on the total, because each hides a different move. A total alone hides one rule paying for another: splitting an over-wide line lowers the width count and raises the block count, which is the trade the block cap exists to refuse. Per rule alone misses a rule sitting under its own baseline while the total climbs. A rule whose limit itself changed is the one case where a rise is right, and the commit message is where that is said.
 
-**A touched file leaves the list.** Holding the line is the floor, and the aim is zero. The report shrinks only when each change spends effort on the warnings in the files it touches, so a touched file that still has warnings gets all of them resolved. Clearing a file beats shaving one finding off each of five, since a file at zero stays there and a file at four drifts back. The effort is reasonable: the findings a reader would agree with, and what resists keeps its count rather than being forced, with one line saying what remains and why.
+**A touched file leaves the list.** Holding the line is the floor, and the aim is zero. The counts shrink only when each change spends effort on the warnings in the files it touches, so a touched file that still has warnings gets all of them resolved. Clearing a file beats shaving one finding off each of five, since a file at zero stays there and a file at four drifts back. The effort is reasonable: the findings a reader would agree with, and what resists keeps its count rather than being forced, with one line saying what remains and why.
 
 Cut first. Move only what neither the code, the test name nor the spec says, and prefer an existing home over a new appendix section. Files the change never opened are a sweep of their own.
 
@@ -252,7 +252,7 @@ Captures a live tick from a connected ESP32 (and the desktop scenario ticks) plu
 
 The ESP32 half reads `esp32/monitor.log`, and refreshes it by opening the serial port for 15 s when that log is older than 5 minutes. That reading is accurate, but takes ~80 s and a bench board. `--no-live-capture` skips that refresh and uses whatever log exists (a few seconds, no board needed); the ESP32 tick line is then absent rather than stale when no recent log is around. The gate lists pass the flag so their cost stays predictable; omit it when composing a commit message, where the fresh reading is the point.
 
-In `--commit` mode it also prints the change's own account from [check_code](#check_code): lines added and removed under `src/` and `test/`, and the change in code findings and duplicated lines against the committed `code.md`. It writes the repo-health snapshot (below) too, reusing the tick/FPS it measured, and prints the flash split beside the account: what each rebuilt firmware's flash went to.
+In `--commit` mode it also prints the change's own account from [check_code](#check_code): lines added and removed under `src/` and `test/`, and the change in code findings and duplicated lines against the counts committed in `code.json`. It writes the repo-health snapshot (below) too, reusing the tick/FPS it measured, and prints the flash split beside the account: what each rebuilt firmware's flash went to.
 
 ### bench_kernels
 
@@ -278,7 +278,7 @@ uv run moondeck/check/repo_health.py --write   # rewrite repo-health.json
 
 Two properties worth knowing. Measurements read **tracked files only** (`git ls-files`), so a stray build artifact or scratch file can't move a number. And anything this run could not measure **carries its previous value forward** rather than disappearing: a firmware variant that wasn't built, or a tick with no board attached. A docs-only commit so keeps its flash sizes, and the next diff stays readable.
 
-**Since the last release.** The page opens with each number a user feels beside its value at the last release tag (`git describe`). Those are flash per target, free heap, the isolated scenario ticks, lines of code, the code report's findings and the tests. The per-commit deltas move with host noise, so a simplification shows as a gain here over weeks. A firmware not rebuilt since the tag is left out, so a carried number never reads as no growth.
+**Since the last release.** The page opens with each number a user feels beside its value at the last release tag (`git describe`). Those are flash per target, free heap, the isolated scenario ticks, lines of code, the code check's findings and the tests. The per-commit deltas move with host noise, so a simplification shows as a gain here over weeks. A firmware not rebuilt since the tag is left out, so a carried number never reads as no growth.
 
 **The flash split.** Each firmware rebuilt this run has its flash change split symbol by symbol. **New** is new functionality, **removed** and **shrunk** are what a cleanup saved, and **grown** is existing code that got bigger. **Other** is merged strings and alignment, so the parts sum to the net. The baseline is the last measurement before the current commit, named after it and kept beside the build as `flash-symbols.base.json`. Every run inside one commit so compares against the same state. A firmware's first split appears one commit after it is first measured. The page lists the largest moves per firmware, which is where a rename, read as removed plus new, shows itself. The split is a change rather than a state, so it stays out of the JSON. The code lives in [`flash_split.py`](check/flash_split.py).
 
@@ -616,7 +616,7 @@ function's own body is never analyzed. A platform function that blocks internall
 carrying `MM_NONBLOCKING` is invisible. Closing that needs an xtensa clang — backlogged as
 "ESP32 clang/LLVM toolchain" in backlog-core.md.
 
-The count lives in the code report: [check_code](#check_code) runs the same build and adds one `blocking call on the render path` row per site, whose committed count may only fall. This script is the detailed view of those sites, on request. `-Wno-error=function-effects` keeps the build green, since each finding is a judgment: fix it, annotate the callee, or accept it with a scoped reason.
+The count lives in the code check: [check_code](#check_code) runs the same build and adds one `blocking call on the render path` row per site, whose committed count may only fall. This script is the detailed view of those sites, on request. `-Wno-error=function-effects` keeps the build green, since each finding is a judgment: fix it, annotate the callee, or accept it with a scoped reason.
 
 ### check_codeql
 
@@ -748,19 +748,19 @@ printing an empty table — an absent measurement is not a zero.
 
 ### check_code
 
-The code report: one page of counts that only fall, the shape [docgen.md](../docs/reference/metrics/docgen.md) and [prose.md](../docs/reference/metrics/prose.md) have, for code.
+The code check: counts that only fall, kept as check_docgen and check_prose keep theirs, for code.
 
 ```bash
-uv run moondeck/check/check_code.py                   # rewrite code.md, exit 1 if any count rose
-uv run moondeck/check/check_code.py --module Control  # one module's findings, no report
+uv run moondeck/check/check_code.py                   # record the counts and findings, exit 1 if any count rose
+uv run moondeck/check/check_code.py --module Control  # one module's findings, nothing recorded
 uv run moondeck/check/check_code.py --account         # this change's account for its commit message
 ```
 
-Each rule is a textbook measure with a known tool, four of them counted by [lizard](https://github.com/terryyin/lizard). **Complex function** is cyclomatic complexity over 10: one plus every branch point, the number of paths a reader holds at once and the number of tests that cover it. **Long function** is over 60 non-comment lines. **Deeply nested** is control flow more than 3 levels deep, the part of cognitive complexity that measures what a reader trips on. **Long parameter list** is more than 7 parameters. **Large file** is over 1000 lines, counted by the script over every code file we own. The nesting and file-length limits are SonarQube's defaults. **Duplicated block** is a run of 5 or more lines sharing 50 or more tokens with a run elsewhere. [jscpd](https://github.com/kucherenko/jscpd) finds it among the code files the file-length rule counts. A clone counts under both of its files, so either file's edit clears it, and the headline carries the share of all lines that are duplicated. jscpd comes through npx, the dependency the docs build already has. Lizard tokenizes rather than parses, so it needs no build and runs in a second. The cost is a mangled name on some template-dense bodies, which counting per file makes harmless.
+Each rule is a textbook measure with a known tool, four of them counted by [lizard](https://github.com/terryyin/lizard). **Complex function** is cyclomatic complexity over 10: one plus every branch point, the number of paths a reader holds at once and the number of tests that cover it. **Long function** is over 60 non-comment lines. **Deeply nested** is control flow more than 3 levels deep, the part of cognitive complexity that measures what a reader trips on. **Long parameter list** is more than 7 parameters. **Large file** is over 1000 lines, counted by the script over every code file we own. The nesting and file-length limits are SonarQube's defaults. **Duplicated block** is a run of 5 or more lines sharing 50 or more tokens with a run elsewhere. [jscpd](https://github.com/kucherenko/jscpd) finds it among the code files the file-length rule counts. A clone counts under both of its files, so either file's edit clears it, and the counts carry the duplicated lines. jscpd comes through npx, the dependency the docs build already has. Lizard tokenizes rather than parses, so it needs no build and runs in a second. The cost is a mangled name on some template-dense bodies, which counting per file makes harmless.
 
-The report, [`docs/reference/metrics/code.md`](../docs/reference/metrics/code.md), lists the counts by rule, by area and by file, each file with its worst function first. It is rewritten on every run and tracked, so its git history is the trend. **The committed copy is the number to beat**, per rule and in total: a run that raises either fails. A touched file clears its own rows so it leaves the list, with the same reasonable-effort clause CLAUDE.md gives docgen. The report lists findings per file, so a renamed function or a moved file carries its findings along; the ratchet compares rule counts and the total.
+The [test page](../docs/reference/tests.md#check_code) shows each rule with its count and the move that solves it, and every file with its findings. The counts, `docs/reference/metrics/code.json`, are rewritten on every run and tracked, so their git history is the trend. **The committed counts are the number to beat**, per rule and in total: a run that raises either fails. A touched file clears its own findings so it leaves the list, with the same reasonable-effort clause CLAUDE.md gives docgen. Findings are listed per file, so a renamed function or a moved file carries its findings along; the ratchet compares rule counts and the total.
 
-`repo_health` and `collect_kpi` count the function rules through the same two functions this script uses. The clones and the file sizes are the report's alone, a pass too slow for every KPI run. clang-tidy's `readability-function-*` checks stay off: one rule, one owner.
+`repo_health` and `collect_kpi` count the function rules through the same two functions this script uses. The clones and the file sizes are this check's alone, a pass too slow for every KPI run. clang-tidy's `readability-function-*` checks stay off: one rule, one owner.
 
 **Platform code outside src/platform** and **light include in core** are the architecture's two boundaries, counted per line. The first is a vendor header or a platform `#ifdef` outside `src/platform/`, the second a `src/core` file including a `light/` header.
 
@@ -768,9 +768,9 @@ The report, [`docs/reference/metrics/code.md`](../docs/reference/metrics/code.md
 
 **Large stack frame** is a firmware function whose frame the compiler measures over 512 bytes, from `-Wframe-larger-than=512` in the desktop Release build. It is read from the same saved findings as the render path, so it costs no extra time, and each template instance counts as its own function. **Raw allocation in light** is a buffer taken by hand in `src/light`: an array `new`, a malloc-family call or `platform::alloc`. The architecture asks for a `ScratchBuffer` member there, and a factory creating an object is not one.
 
-**Blocking call on the render path** is the last rule, one row per site [check_nonblocking](#check_nonblocking) finds, a float conversion at a `formatTo` site included. It reads that script's saved findings after an incremental desktop build, so a full run takes seconds; `--module` and `--account` skip it. A host without Clang 20 skips this rule with a SKIP line and leaves `code.md` as it is, while every other rule still ratchets.
+**Blocking call on the render path** is the last rule, one row per site [check_nonblocking](#check_nonblocking) finds, a float conversion at a `formatTo` site included. It reads that script's saved findings after an incremental desktop build, so a full run takes seconds; `--module` and `--account` skip it. A host without Clang 20 skips this rule with a SKIP line and leaves `code.json` as it is, while every other rule still ratchets.
 
-The account, `--account`, reads `code.md` as the last full run wrote it, so it follows a full run in the same gate pass. A saving shows in the commit that made it, rather than only in a later total.
+The account, `--account`, reads `code.json` as the last full run wrote it, so it follows a full run in the same gate pass. A saving shows in the commit that made it, rather than only in a later total.
 
 ### scenario_pipeline
 
@@ -857,7 +857,7 @@ uv run moondeck/docs/build_docs.py --strict    # promote every warning to an err
 uv run moondeck/docs/build_docs.py --serve --host 0.0.0.0   # reachable from a phone or tablet on the network
 ```
 
-The preview binds **:8422**: the [Installer Preview](#preview_installer) owns :8421 and MoonDeck :8420, so all three servers run at once. Config is `mkdocs.yml`; deps (`mkdocs-material`) are declared inline in the script, so `uv run` provisions them on first use. The test inventories and each effect/modifier's inline test list are generated from the test files at build time (`mkdocs_hooks.py`), so they are never committed and cannot drift. `docs/work/` is built but kept off the nav. Warnings for links to repo files outside `docs/` (rewritten to GitHub URLs) and pre-existing stale anchors are expected, and the build still succeeds.
+The preview binds **:8422**: the [Installer Preview](#preview_installer) owns :8421 and MoonDeck :8420, so all three servers run at once. Config is `mkdocs.yml`; deps (`mkdocs-material`) are declared inline in the script, so `uv run` provisions them on first use. The test registry the test page reads is generated from the test files at build time (`mkdocs_hooks.py`), so they are never committed and cannot drift. `docs/work/` is built but kept off the nav. Warnings for links to repo files outside `docs/` (rewritten to GitHub URLs) and pre-existing stale anchors are expected, and the build still succeeds.
 
 `--serve` loads `mkdocs_hooks.py` and the generators it imports once: after editing anything under `moondeck/docs/`, restart the preview and confirm the change by fetching the generated file.
 

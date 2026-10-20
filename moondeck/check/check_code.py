@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""The code report: one page of counts that only fall, in the shape docgen.md and prose.md have.
+"""The code check: counts that only fall, per rule and in total, as check_docgen and check_prose keep theirs.
 
-Each rule is a textbook measure with a known tool: cyclomatic complexity, function length, nesting depth and parameter count from lizard, duplicated blocks from jscpd, file length, the two architecture boundaries, module types named in the UI, name spread and buffers taken by hand in the light domain counted here, and the blocking calls the render path reaches and the stack frames over 512 bytes from the compiler's `-Wfunction-effects` and `-Wframe-larger-than` through check_nonblocking's build, a clean rebuild of the desktop that costs minutes. A finding is listed per file, so a touched file clears its own rows and leaves the list. The committed docs/reference/metrics/code.md is the number to beat, per rule and in total.
+Each rule is a textbook measure with a known tool: cyclomatic complexity, function length, nesting depth and parameter count from lizard, duplicated blocks from jscpd, file length, the two architecture boundaries, module types named in the UI, name spread and buffers taken by hand in the light domain counted here, and the blocking calls the render path reaches and the stack frames over 512 bytes from the compiler's `-Wfunction-effects` and `-Wframe-larger-than` through check_nonblocking's build, a clean rebuild of the desktop that costs minutes. A finding is listed per file, so a touched file clears its own rows and leaves the list. The counts committed in docs/reference/metrics/code.json are the number to beat, per rule and in total; the test page shows every finding.
 
 Lizard tokenizes rather than parses, which is what lets it run in a second with no build; the cost is a mangled name on some template-dense bodies. Counting per FILE rather than whitelisting per function name is what makes that harmless: a file's count is right whatever lizard calls the function.
 
 Usage:
-  uv run moondeck/check/check_code.py                   # rewrite code.md, exit 1 if any count rose
-  uv run moondeck/check/check_code.py --module Control  # the findings in one module's files, no report
+  uv run moondeck/check/check_code.py                   # record the counts and findings, exit 1 if any count rose
+  uv run moondeck/check/check_code.py --module Control  # the findings in one module's files, nothing recorded
   uv run moondeck/check/check_code.py --account         # this change's own account against the last commit, for its message
 """
 
@@ -25,11 +25,12 @@ from collections import Counter, defaultdict
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _ratchet import committed, risen  # noqa: E402
+import _ratchet  # noqa: E402
+from _ratchet import risen  # noqa: E402
 import _findings  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent.parent
-REPORT = ROOT / "docs" / "reference" / "metrics" / "code.md"
+COUNTS = ROOT / "docs" / "reference" / "metrics" / "code.json"   # the counts the ratchet compares; the test page shows the findings
 
 # McCabe's cyclomatic complexity and the body's non-comment lines, as lizard counts them; nesting and file length at SonarQube's defaults. clang-tidy's readability-function-* checks stay off, so each has one owner.
 MAX_CCN = 10
@@ -89,7 +90,13 @@ LIMITS = {"complex function": MAX_CCN, "long function": MAX_NLOC, "deeply nested
           "long parameter list": MAX_PARAMS, "duplicated block": MIN_CLONE_LINES, "large file": MAX_FILE_LINES, HOT_PATH: 1,
           PLATFORM: 1, CORE_LIGHT: 1, UI_TYPE: 1, SPREAD: MAX_SPREAD, STACK: MAX_FRAME, RAW_ALLOC: 1, MUTABLE_STATIC: 1,
           NO_PRAGMA: 1, HEADER_USING: 1, FIRMWARE_DOUBLE: 1, DEFINE_CONSTANT: 1, RTTI: 1}
-# The catalog move for each smell (Fowler, Refactoring), so a finding says how it is solved; the table is coding-standards § From a finding to a fix.
+
+# Where each rule lives in the coding standards, for a rule whose home is not the static checks' own section.
+STANDARDS = "docs/contributing/coding-standards.md"
+STANDARD = {NO_PRAGMA: STANDARDS + "#language-mechanics", HEADER_USING: STANDARDS + "#language-mechanics", DEFINE_CONSTANT: STANDARDS + "#language-mechanics",
+            RTTI: STANDARDS + "#casts", FIRMWARE_DOUBLE: STANDARDS + "#values-and-types"}
+
+# The catalog move for each smell (Fowler, Refactoring), so a finding says how it is solved; the test page shows it beside the rule.
 FIXES = {"complex function": "a chain on one value becomes a table; a switch on a state becomes one method per state",
          "long function": "Extract Function: a named step a reader can skip",
          "deeply nested": "a guard becomes an early return; an inner loop becomes a function",
@@ -382,26 +389,36 @@ _USING_RE = re.compile(r"^\s*using\s+namespace\b")
 _DOUBLE_RE = re.compile(r"\bdouble\b")
 
 
+def _firmware(rel: str) -> bool:
+    """A C++ file of the firmware's sources; the vendored ones are already out of owned_files()."""
+    return rel.startswith("src/") and rel.endswith((".h", ".cpp"))
+
+
+def _code(line: str) -> str:
+    """A line's code: its strings emptied first, so a `//` inside one is no comment, then its comment cut."""
+    return re.sub(r'"(?:[^"\\]|\\.)*"', '""', line).split("//")[0]
+
+
 def header_findings(rel: str, text: str) -> list:
     """The two header rules of one file under src/: it guards with `#pragma once`, and it never says `using namespace`."""
-    if not (rel.startswith("src/") and rel.endswith(".h")) or rel.startswith(("src/platform/desktop/vendor/", "src/ui/")):
+    if not (_firmware(rel) and rel.endswith(".h")):
         return []
     rows = []
     if "#pragma once" not in text or _GUARD_RE.search(text):
         rows.append((rel, NO_PRAGMA, "guards with #ifndef or not at all", 1))
     for n, line in enumerate(text.splitlines(), 1):
-        if _USING_RE.match(line.split("//")[0]):
+        if _USING_RE.match(_code(line)):
             rows.append((rel, HEADER_USING, f"line {n}: {line.strip()[:60]}", 1))
     return rows
 
 
 def double_findings(rel: str, lines) -> list:
     """Every line naming the type `double` in one firmware file; the host's own platform code and vendored files are not firmware."""
-    if not rel.startswith("src/") or rel.startswith(("src/platform/desktop/", "src/ui/")) or not rel.endswith((".h", ".cpp")):
+    if not _firmware(rel) or rel.startswith("src/platform/desktop/"):
         return []
     rows = []
     for n, line in enumerate(lines, 1):
-        code = re.sub(r'"(?:[^"\\]|\\.)*"', '""', line.split("//")[0])   # a word in a string or a comment is no type
+        code = _code(line)   # a word in a string or a comment is no type
         if _DOUBLE_RE.search(code):
             rows.append((rel, FIRMWARE_DOUBLE, f"line {n}: {code.strip()[:60]}", 1))
     return rows
@@ -424,7 +441,7 @@ def tested_names(texts) -> set:
 
 def define_findings(rel: str, lines, tested: set) -> list:
     """Every `#define NAME <number or string>` in one firmware file that no #if tests, outside the platform layer: a constant written as a macro."""
-    if not rel.startswith("src/") or rel.startswith(("src/platform/", "src/ui/")) or not rel.endswith((".h", ".cpp")):
+    if not _firmware(rel) or rel.startswith("src/platform/"):
         return []
     rows = []
     for n, line in enumerate(lines, 1):
@@ -435,26 +452,20 @@ def define_findings(rel: str, lines, tested: set) -> list:
 
 def rtti_findings(rel: str, lines) -> list:
     """Every `dynamic_cast` or `typeid` in one firmware file; the build has no runtime type information."""
-    if not rel.startswith("src/") or rel.startswith(("src/platform/desktop/", "src/ui/")) or not rel.endswith((".h", ".cpp")):
+    if not _firmware(rel) or rel.startswith("src/platform/desktop/"):
         return []
-    return [(rel, RTTI, f"line {n}: {line.strip()[:60]}", 1) for n, line in enumerate(lines, 1) if _RTTI_RE.search(line.split("//")[0])]
+    return [(rel, RTTI, f"line {n}: {line.strip()[:60]}", 1) for n, line in enumerate(lines, 1) if _RTTI_RE.search(_code(line))]
 
 
 def style_rows() -> list:
     """The header, `double`, constant-macro and RTTI rules over every firmware file we own."""
-    texts = {rel: (ROOT / rel).read_text(encoding="utf-8", errors="replace") for rel in owned_files() if rel.startswith("src/") and rel.endswith((".h", ".cpp"))}
+    texts = {rel: (ROOT / rel).read_text(encoding="utf-8", errors="replace") for rel in owned_files() if _firmware(rel)}
     tested = tested_names(texts.values())
     rows = []
     for rel, text in texts.items():
         lines = text.splitlines()
         rows += header_findings(rel, text) + double_findings(rel, lines) + define_findings(rel, lines, tested) + rtti_findings(rel, lines)
     return rows
-
-
-def area(path: str) -> str:
-    """The area a file counts under, the second directory level under src/."""
-    parts = path.split("/")
-    return parts[1] if len(parts) > 2 and parts[0] == "src" else parts[0]
 
 
 def counts(rows) -> dict:
@@ -464,31 +475,12 @@ def counts(rows) -> dict:
     return dict(now)
 
 
+DUPLICATED = "(duplicated lines)"   # recorded for the commit's account, not ratcheted: the duplicated block rule is the count that only falls
+
+
 def committed_counts() -> dict | None:
-    """The committed report's counts, parsed from its `## By rule` table and headline."""
-    text = committed(REPORT)
-    return None if text is None else counts_in(text)
-
-
-def counts_in(text: str) -> dict | None:
-    """A report's counts, per rule and in total, from its `## By rule` table and headline."""
-    out, in_rules = {}, False
-    for line in text.split("\n"):
-        if line.startswith("## "):
-            in_rules = line.strip() == "## By rule"
-        m = re.match(r"^\| (.+?) \| (\d+) \|$", line.strip())
-        if in_rules and m and m.group(1) != "Rule":
-            out[m.group(1)] = int(m.group(2))
-        m = re.match(r"^\*\*(\d+) finding\(s\)\*\*", line.strip())
-        if m:
-            out["(total)"] = int(m.group(1))
-    return out or None
-
-
-def duplicated_lines_in(text: str) -> int | None:
-    """The duplicated lines a report's headline records, or None for a report written without the clone pass."""
-    m = re.search(r"of all lines are duplicated, (\d+) lines", text)
-    return int(m.group(1)) if m else None
+    """The committed counts, per rule and in total."""
+    return _ratchet.committed_counts(COUNTS)
 
 
 def changed_lines() -> dict:
@@ -522,43 +514,17 @@ def account_line(lines: dict, base: dict | None, now: dict | None, dup_base: int
 
 
 def account() -> str:
-    """This change's account against the last commit, reading code.md as the last run of this check wrote it."""
-    before = committed(REPORT)
-    after = REPORT.read_text(encoding="utf-8") if REPORT.exists() else None
-    return account_line(changed_lines(),
-                        counts_in(before) if before else None, counts_in(after) if after else None,
-                        duplicated_lines_in(before) if before else None, duplicated_lines_in(after) if after else None)
+    """This change's account against the last commit, reading the counts as the last run of this check wrote them."""
+    before, after = _ratchet.committed_counts(COUNTS), _ratchet.current_counts(COUNTS)
+    def rules(c):
+        return {k: v for k, v in c.items() if k != DUPLICATED} if c else None
+    return account_line(changed_lines(), rules(before), rules(after),
+                        before.get(DUPLICATED) if before else None, after.get(DUPLICATED) if after else None)
 
 
-def write_report(rows, duplicated=None) -> None:
-    """The current state as a tracked page, so its git history is the trend."""
-    by_rule = Counter(rule for _, rule, _, _ in rows)
-    by_file = defaultdict(list)
-    for file, rule, name, value in rows:
-        by_file[file].append((rule, name, value))
-    by_area = Counter(area(file) for file, _, _, _ in rows)
-    out = ["# Code", "",
-           "Generated by [`moondeck/check/check_code.py`](../../../moondeck/check/check_code.py) on every run. **Do not edit by hand.**", "",
-           "Every function, block and file over a limit the [coding standards](../../contributing/coding-standards.md#static-checks) set. Current state only: the trend is this file's git history. The list only shrinks, per rule and in total, and a touched file clears its own rows.", "",
-           f"**{len(rows)} finding(s)** across {len(by_file)} file(s)."
-           + (f" {duplicated[0]:.2f}% of all lines are duplicated, {duplicated[1]} lines." if duplicated is not None else ""), "",
-           "## By rule", "", "| Rule | Findings |", "|---|---:|"]
-    for rule in sorted(by_rule, key=lambda r: (-by_rule[r], r)):
-        out.append(f"| {rule} | {by_rule[rule]} |")
-    out += ["", "## How a finding is solved", "",
-            "Each rule is a code smell with a named move from the refactoring catalog, shown with the rule on [the test page](../tests.md#check_code). The commit names the move.", ""]
-    for rule in RULES:
-        out.append(f"- **{rule}** ({RULES[rule]}): {FIXES[rule]}.")
-    out += ["", "## By area", "", "| Area | Findings |", "|---|---:|"]
-    for a in sorted(by_area, key=lambda a: (-by_area[a], a)):
-        out.append(f"| `{a}` | {by_area[a]} |")
-    out += ["", "## By file", "", "The next function worth simplifying is at the top of each file's list.", "",
-            "| File | Findings | Worst |", "|---|---:|---|"]
-    for file in sorted(by_file, key=lambda f: (-len(by_file[f]), f)):
-        worst = max(by_file[file], key=lambda r: r[2] / LIMITS[r[0]])
-        out.append(f"| `{file}` | {len(by_file[file])} | `{worst[1].removeprefix('mm::')}`, {worst[0]} {worst[2]} |")
-    REPORT.parent.mkdir(parents=True, exist_ok=True)
-    REPORT.write_text("\n".join(out) + "\n", encoding="utf-8")
+def record(rows, duplicated=None) -> None:
+    """Keep this run's counts with the tree, so the commit that carries them makes them the number to beat and their git history is the trend."""
+    _ratchet.record(COUNTS, counts(rows) | ({DUPLICATED: duplicated[1]} if duplicated is not None else {}))
 
 
 def _table(rows) -> str:
@@ -573,7 +539,7 @@ def _table(rows) -> str:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--module", help="Report only this module's source files, without touching the report.")
+    ap.add_argument("--module", help="Report only this module's source files, without recording anything.")
     ap.add_argument("--account", action="store_true", help="Print this change's account against the last commit, without measuring.")
     args = ap.parse_args()
     if args.account:
@@ -583,7 +549,7 @@ def main() -> int:
     funcs = measure()
     if funcs is None:
         return 2
-    # Clones are found repo-wide, so the module view leaves them to the full report rather than pay for that pass per module.
+    # Clones are found repo-wide, so the module view leaves them to the full run rather than pay for that pass per module.
     report = None if args.module else clones()
     if report is None and not args.module:
         return 2
@@ -591,7 +557,7 @@ def main() -> int:
     types = registered_types()
     rows = (findings(funcs) + dup_rows + large_files() + boundary_rows() + ui_type_rows(types) + spread_rows(types)
             + raw_alloc_rows() + mutable_static_rows() + style_rows())
-    # The hot path is a full rebuild, so the module view leaves it to the full report as it does clones; check_nonblocking --module is its detailed view.
+    # The hot path is a full rebuild, so the module view leaves it to the full run as it does clones; check_nonblocking --module is its detailed view.
     try:
         warnings = None if args.module else build_warnings()
     except BuildMissing as e:
@@ -613,28 +579,28 @@ def main() -> int:
         print(_table(rows))
         return 0
 
-    # The findings in the one shape every check keeps, whatever else this run does with its report.
-    if _findings.is_real(REPORT):
-        _findings.write("check_code", {r: {"reason": RULES[r], "fix": FIXES[r], "standard": "docs/contributing/coding-standards.md#static-checks"} for r in RULES},
+    # The findings in the one shape every check keeps, which the test page shows; a rule this host cannot measure is left out rather than recorded as zero.
+    if _findings.is_real(COUNTS):
+        measured = [r for r in RULES if hot is not None or r not in (HOT_PATH, STACK)]
+        _findings.write("check_code", {r: {"reason": RULES[r], "fix": FIXES[r], "standard": STANDARD.get(r, STANDARDS + "#static-checks")} for r in measured},
                         [{"rule": rule, "message": name, "file": file, "value": value} for file, rule, name, value in rows])
-    base = committed_counts()
+    base = {k: v for k, v in (committed_counts() or {}).items() if k != DUPLICATED} or None
     if hot is None:
-        # A host without Clang 20's -Wfunction-effects cannot count the hot path: every other rule still ratchets, and the report keeps the last full count rather than losing that rule.
-        print(f"SKIP {HOT_PATH}: not measurable on this host (it needs Clang 20+), so code.md is left as it is.")
+        # A host without Clang 20's -Wfunction-effects cannot count the hot path: every other rule still ratchets, and the counts keep the last full run rather than losing that rule.
+        print(f"SKIP {HOT_PATH}: not measurable on this host (it needs Clang 20+), so code.json is left as it is.")
         base = {k: v for k, v in (base or {}).items() if k not in (HOT_PATH, STACK, "(total)")} or None
         now = {k: v for k, v in counts(rows).items() if k != "(total)"}
     else:
-        # The report is the artifact, written on every run: stdout scrolls away, the file is what the reviewer reads.
-        write_report(rows, duplicated)
+        record(rows, duplicated)
         now = counts(rows)
     rose = risen(base, now)
     print(f"Code check: {len(rows)} finding(s), {', '.join(f'{RULES[r]}: {n}' for r, n in Counter(x[1] for x in rows).items())}.")
     if rose:
-        print("\nROSE against the committed report. These only shrink:")
+        print("\nROSE against the committed counts. These only shrink:")
         for rule, was, now in rose:
             print(f"  {rule}: {was} -> {now}")
         print("  Simplify what this change touched, or say in the commit why the rule itself changed.")
-    print("\nThe move per rule: " + "; ".join(f"{r}: {FIXES[r]}" for r in RULES) + ".\nRules: docs/contributing/coding-standards.md § From a finding to a fix.")
+    print("\nThe move per rule: " + "; ".join(f"{r}: {FIXES[r]}" for r in RULES) + ".\nRules: the check_code card on the test page, docs/reference/tests.md.")
     return 1 if rose else 0
 
 

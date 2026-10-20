@@ -562,7 +562,7 @@ function showPanel(panel, model, pid, done, onDone, host = {}) {
             const proofs = host.tests?.[`${pid}/${s.id}`];
             if (proofs?.length) {
                 const p = control("p", { className: "mm-map-note" }, "Tested by ");
-                proofs.forEach((x, i) => { if (i) p.append(" \u00b7 "); p.append(control("a", { href: new URL(x.href, host.site || ROOT).href, target: "_blank", rel: "noopener" }, x.title.replace(/^scenario_/, "").replace(/_/g, " "))); });
+                proofs.forEach((x, i) => { if (i) p.append(" \u00b7 "); p.append(control("a", { href: new URL(x.href, host.site || ROOT).href, target: "_blank", rel: "noopener" }, x.title)); });
                 block.append(p);
             }
             // A step that runs a subprocess opens it, as a choice opens a process.

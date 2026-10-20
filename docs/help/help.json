@@ -50,7 +50,7 @@
      "more": "Multiply darkens what is beneath it, additive adds light, and alpha blends by opacity.",
      "tests": [
       {
-       "title": "scenario_Layers_stack_and_blend_live",
+       "title": "Layers stack and blend live",
        "url": "https://moonmodules.org/MoonLight/reference/tests.html#effects:scenario:scenario_Layers_stack_and_blend_live"
       }
      ]
@@ -59,7 +59,7 @@
      "line": "How strongly this layer shows, from invisible to full.",
      "tests": [
       {
-       "title": "scenario_Layers_stack_and_blend_live",
+       "title": "Layers stack and blend live",
        "url": "https://moonmodules.org/MoonLight/reference/tests.html#effects:scenario:scenario_Layers_stack_and_blend_live"
       }
      ]
@@ -80,7 +80,7 @@
      "more": "Off scales the output to black and keeps `brightness`, so switching on restores the level. The UI, infrared, the WLED app, Home Assistant and MQTT all drive it.",
      "tests": [
       {
-       "title": "scenario_Drivers_output_and_brightness",
+       "title": "Drivers output and brightness",
        "url": "https://moonmodules.org/MoonLight/reference/tests.html#drivers:scenario:scenario_Drivers_output_and_brightness"
       }
      ]
@@ -93,15 +93,15 @@
      "more": "It starts low, so a fresh device on USB 5 V never browns out at full white.",
      "tests": [
       {
-       "title": "scenario_Control_a_palette_preset_changes_only_the_palette",
+       "title": "Control a palette preset changes only the palette",
        "url": "https://moonmodules.org/MoonLight/reference/tests.html#controlmodule:scenario:scenario_Control_a_palette_preset_changes_only_the_palette"
       },
       {
-       "title": "scenario_Control_presets_capture_and_restore",
+       "title": "Control presets capture and restore",
        "url": "https://moonmodules.org/MoonLight/reference/tests.html#controlmodule:scenario:scenario_Control_presets_capture_and_restore"
       },
       {
-       "title": "scenario_Drivers_output_and_brightness",
+       "title": "Drivers output and brightness",
        "url": "https://moonmodules.org/MoonLight/reference/tests.html#drivers:scenario:scenario_Drivers_output_and_brightness"
       }
      ]
@@ -110,11 +110,11 @@
      "line": "What effects sample from: a built-in palette or a scripted `.mlp` one.",
      "tests": [
       {
-       "title": "scenario_Control_a_palette_preset_changes_only_the_palette",
+       "title": "Control a palette preset changes only the palette",
        "url": "https://moonmodules.org/MoonLight/reference/tests.html#controlmodule:scenario:scenario_Control_a_palette_preset_changes_only_the_palette"
       },
       {
-       "title": "scenario_Palettes_a_script_drives_the_effects",
+       "title": "Palettes a script drives the effects",
        "url": "https://moonmodules.org/MoonLight/reference/tests.html#drivers:scenario:scenario_Palettes_a_script_drives_the_effects"
       }
      ]
@@ -123,7 +123,7 @@
      "line": "The scripted palette's file, which `palette` picks.",
      "tests": [
       {
-       "title": "scenario_Palettes_a_script_drives_the_effects",
+       "title": "Palettes a script drives the effects",
        "url": "https://moonmodules.org/MoonLight/reference/tests.html#drivers:scenario:scenario_Palettes_a_script_drives_the_effects"
       }
      ]
@@ -357,15 +357,15 @@
      "line": "The grid's extent on x.",
      "tests": [
       {
-       "title": "scenario_Effects_pipeline_builds_and_renders",
+       "title": "Effects pipeline builds and renders",
        "url": "https://moonmodules.org/MoonLight/reference/tests.html#effects:scenario:scenario_Effects_pipeline_builds_and_renders"
       },
       {
-       "title": "scenario_Effects_teardown_under_a_running_pipeline",
+       "title": "Effects teardown under a running pipeline",
        "url": "https://moonmodules.org/MoonLight/reference/tests.html#uncategorized:scenario:scenario_Effects_teardown_under_a_running_pipeline"
       },
       {
-       "title": "scenario_Fluid_solver",
+       "title": "Fluid solver",
        "url": "https://moonmodules.org/MoonLight/reference/tests.html#fluideffect:live:scenario_Fluid_solver"
       }
      ]
@@ -374,16 +374,16 @@
      "line": "Its extent on y.",
      "tests": [
       {
-       "title": "scenario_Fluid_solver",
+       "title": "Fluid solver",
        "url": "https://moonmodules.org/MoonLight/reference/tests.html#fluideffect:live:scenario_Fluid_solver"
       },
       {
-       "title": "scenario_GridLayout_resize",
+       "title": "GridLayout resize",
        "url": "https://moonmodules.org/MoonLight/reference/tests.html#gridlayout:live:scenario_GridLayout_resize"
       },
       {
-       "title": "scenario_Layouts_resize_reallocates_live",
-       "url": "https://moonmodules.org/MoonLight/reference/tests.html#gridlayout:scenario:scenario_Layouts_resize_reallocates_live"
+       "title": "Layers stack and blend live",
+       "url": "https://moonmodules.org/MoonLight/reference/tests.html#effects:scenario:scenario_Layers_stack_and_blend_live"
       }
      ]
     },
@@ -391,7 +391,7 @@
      "line": "Its extent on z, 1 for a flat panel.",
      "tests": [
       {
-       "title": "scenario_Fluid_solver",
+       "title": "Fluid solver",
        "url": "https://moonmodules.org/MoonLight/reference/tests.html#fluideffect:live:scenario_Fluid_solver"
       }
      ]
@@ -400,7 +400,7 @@
      "line": "Every other row runs in reverse, for a snaked strip.",
      "tests": [
       {
-       "title": "scenario_NetworkReceive_two_boards",
+       "title": "NetworkReceive two boards",
        "url": "https://moonmodules.org/MoonLight/reference/tests.html#networkreceiveeffect:live:scenario_NetworkReceive_two_boards"
       }
      ]
@@ -650,7 +650,7 @@
      "line": "How many spokes radiate from the hub.",
      "tests": [
       {
-       "title": "scenario_Layers_stack_and_blend_live",
+       "title": "Layers stack and blend live",
        "url": "https://moonmodules.org/MoonLight/reference/tests.html#effects:scenario:scenario_Layers_stack_and_blend_live"
       }
      ]
@@ -676,7 +676,7 @@
      "line": "Bars colored by height, the VU look, or per band, a rainbow.",
      "tests": [
       {
-       "title": "scenario_Effects_teardown_under_a_running_pipeline",
+       "title": "Effects teardown under a running pipeline",
        "url": "https://moonmodules.org/MoonLight/reference/tests.html#uncategorized:scenario:scenario_Effects_teardown_under_a_running_pipeline"
       }
      ]
@@ -1300,7 +1300,7 @@
      "more": "**receiver**: frames arrive row by row and this board applies its wiring. **sender**: a [NetworkSend](https://moonmodules.org/MoonLight/moonmodules/light/drivers.html#networksend) sends wiring order, keeping byte order, brightness 255 and the linear curve.",
      "tests": [
       {
-       "title": "scenario_NetworkReceive_two_boards",
+       "title": "NetworkReceive two boards",
        "url": "https://moonmodules.org/MoonLight/reference/tests.html#networkreceiveeffect:live:scenario_NetworkReceive_two_boards"
       }
      ]
@@ -1557,15 +1557,15 @@
      "line": "Animation BPM: one full hue cycle per beat.",
      "tests": [
       {
-       "title": "scenario_Control_a_palette_preset_changes_only_the_palette",
+       "title": "Control a palette preset changes only the palette",
        "url": "https://moonmodules.org/MoonLight/reference/tests.html#controlmodule:scenario:scenario_Control_a_palette_preset_changes_only_the_palette"
       },
       {
-       "title": "scenario_Effects_teardown_under_a_running_pipeline",
+       "title": "Effects teardown under a running pipeline",
        "url": "https://moonmodules.org/MoonLight/reference/tests.html#uncategorized:scenario:scenario_Effects_teardown_under_a_running_pipeline"
       },
       {
-       "title": "scenario_State_one_document_adds_an_effect_with_its_controls",
+       "title": "State one document adds an effect with its controls",
        "url": "https://moonmodules.org/MoonLight/reference/tests.html#httpservermodule:scenario:scenario_State_one_document_adds_an_effect_with_its_controls"
       }
      ]
@@ -1770,7 +1770,7 @@
      "line": "How many fields are composited, and the main cost knob.",
      "tests": [
       {
-       "title": "scenario_Aurora_fps",
+       "title": "Aurora fps",
        "url": "https://moonmodules.org/MoonLight/reference/tests.html#auroraeffect:live:scenario_Aurora_fps"
       }
      ]
@@ -1779,7 +1779,7 @@
      "line": "How far the field displaces its own sample angle.",
      "tests": [
       {
-       "title": "scenario_Aurora_fps",
+       "title": "Aurora fps",
        "url": "https://moonmodules.org/MoonLight/reference/tests.html#auroraeffect:live:scenario_Aurora_fps"
       }
      ]
@@ -1791,7 +1791,7 @@
      "line": "Kaleidoscope wedges; 1 leaves the composition unfolded.",
      "tests": [
       {
-       "title": "scenario_Aurora_fps",
+       "title": "Aurora fps",
        "url": "https://moonmodules.org/MoonLight/reference/tests.html#auroraeffect:live:scenario_Aurora_fps"
       }
      ]
@@ -1803,7 +1803,7 @@
      "line": "Detail within each layer, multiplying the cost knob.",
      "tests": [
       {
-       "title": "scenario_Aurora_fps",
+       "title": "Aurora fps",
        "url": "https://moonmodules.org/MoonLight/reference/tests.html#auroraeffect:live:scenario_Aurora_fps"
       }
      ]
@@ -1901,7 +1901,7 @@
      "line": "How many places light is poured in.",
      "tests": [
       {
-       "title": "scenario_Fluid_solver",
+       "title": "Fluid solver",
        "url": "https://moonmodules.org/MoonLight/reference/tests.html#fluideffect:live:scenario_Fluid_solver"
       }
      ]
@@ -1919,7 +1919,7 @@
      "line": "How long dye survives, as a half-life.",
      "tests": [
       {
-       "title": "scenario_Fluid_solver",
+       "title": "Fluid solver",
        "url": "https://moonmodules.org/MoonLight/reference/tests.html#fluideffect:live:scenario_Fluid_solver"
       }
      ]
@@ -1928,7 +1928,7 @@
      "line": "Pressure-solve effort, and the cost knob.",
      "tests": [
       {
-       "title": "scenario_Fluid_solver",
+       "title": "Fluid solver",
        "url": "https://moonmodules.org/MoonLight/reference/tests.html#fluideffect:live:scenario_Fluid_solver"
       }
      ]
@@ -1969,7 +1969,7 @@
      "line": "Detail within the field, and its cost knob.",
      "tests": [
       {
-       "title": "scenario_Layers_stack_and_blend_live",
+       "title": "Layers stack and blend live",
        "url": "https://moonmodules.org/MoonLight/reference/tests.html#effects:scenario:scenario_Layers_stack_and_blend_live"
       }
      ]
@@ -2820,7 +2820,13 @@
    "image": "https://moonmodules.org/MoonLight/assets/light/modifiers/CheckerboardModifier.gif",
    "controls": {
     "size": {
-     "line": "The edge of a checker square, in lights."
+     "line": "The edge of a checker square, in lights.",
+     "tests": [
+      {
+       "title": "Modifiers reshape the mapping",
+       "url": "https://moonmodules.org/MoonLight/reference/tests.html#uncategorized:scenario:scenario_Modifiers_reshape_the_mapping"
+      }
+     ]
     },
     "invert": {
      "line": "Swap which squares show the effect and which stay dark."
@@ -2890,7 +2896,7 @@
      "line": "Mirror across the center along y.",
      "tests": [
       {
-       "title": "scenario_Modifiers_reshape_the_mapping",
+       "title": "Modifiers reshape the mapping",
        "url": "https://moonmodules.org/MoonLight/reference/tests.html#uncategorized:scenario:scenario_Modifiers_reshape_the_mapping"
       }
      ]
@@ -2916,7 +2922,7 @@
      "line": "Tiles along x, one meaning none.",
      "tests": [
       {
-       "title": "scenario_Modifiers_reshape_the_mapping",
+       "title": "Modifiers reshape the mapping",
        "url": "https://moonmodules.org/MoonLight/reference/tests.html#uncategorized:scenario:scenario_Modifiers_reshape_the_mapping"
       }
      ]
@@ -2931,7 +2937,7 @@
      "line": "Reflect every other tile along x.",
      "tests": [
       {
-       "title": "scenario_Modifiers_reshape_the_mapping",
+       "title": "Modifiers reshape the mapping",
        "url": "https://moonmodules.org/MoonLight/reference/tests.html#uncategorized:scenario:scenario_Modifiers_reshape_the_mapping"
       }
      ]
@@ -3169,11 +3175,11 @@
      "line": "The wire protocol: Art-Net, E1.31 or DDP; the port follows.",
      "tests": [
       {
-       "title": "scenario_NetworkReceive_two_boards",
+       "title": "NetworkReceive two boards",
        "url": "https://moonmodules.org/MoonLight/reference/tests.html#networkreceiveeffect:live:scenario_NetworkReceive_two_boards"
       },
       {
-       "title": "scenario_NetworkSend_one_sender_many_receivers",
+       "title": "NetworkSend one sender many receivers",
        "url": "https://moonmodules.org/MoonLight/reference/tests.html#networksenddriver:live:scenario_NetworkSend_one_sender_many_receivers"
       }
      ]
@@ -3183,7 +3189,7 @@
      "more": "Art-Net 4 requires unicast; broadcast loads every host. E1.31 `multicast` needs [IGMP snooping](https://moonmodules.org/MoonLight/explanation/architecture/moonlight.html#multicast-and-igmp-snooping), and the status says when it is dropped.",
      "tests": [
       {
-       "title": "scenario_NetworkSend_one_sender_many_receivers",
+       "title": "NetworkSend one sender many receivers",
        "url": "https://moonmodules.org/MoonLight/reference/tests.html#networksenddriver:live:scenario_NetworkSend_one_sender_many_receivers"
       }
      ]
@@ -3241,7 +3247,7 @@
      "line": "The rate the preview aims for: lower for detail, raise for smoothness.",
      "tests": [
       {
-       "title": "scenario_Effects_teardown_under_a_running_pipeline",
+       "title": "Effects teardown under a running pipeline",
        "url": "https://moonmodules.org/MoonLight/reference/tests.html#uncategorized:scenario:scenario_Effects_teardown_under_a_running_pipeline"
       }
      ]
@@ -3681,7 +3687,7 @@
      "line": "The DMA peripheral that clocks the strands out, filtered to what the chip supports.",
      "tests": [
       {
-       "title": "scenario_peripheral_switch",
+       "title": "peripheral switch",
        "url": "https://moonmodules.org/MoonLight/reference/tests.html#parallelleddriver:live:scenario_peripheral_switch"
       }
      ]
@@ -3691,7 +3697,7 @@
      "more": "Leave it on: a tick costs the longer of encode and wire, not their sum, for one extra DMA buffer and 8 to 20 ms of latency. A board without room falls back to one buffer.",
      "tests": [
       {
-       "title": "scenario_peripheral_switch",
+       "title": "peripheral switch",
        "url": "https://moonmodules.org/MoonLight/reference/tests.html#parallelleddriver:live:scenario_peripheral_switch"
       }
      ]
@@ -3701,7 +3707,7 @@
      "more": "It buys pins, not memory: the frame grows eightfold, about 1.1 KB per light, up to 64 strands. `i80` stops at about 96 lights per strand, `MoonI80` drives 128.",
      "tests": [
       {
-       "title": "scenario_peripheral_switch",
+       "title": "peripheral switch",
        "url": "https://moonmodules.org/MoonLight/reference/tests.html#parallelleddriver:live:scenario_peripheral_switch"
       }
      ]
@@ -3763,7 +3769,7 @@
      "more": "Anything but letters, digits and hyphens is coerced to a valid hostname, and a rename reaches the network within a tick.",
      "tests": [
       {
-       "title": "scenario_System_identity_survives_reboot",
+       "title": "System identity survives reboot",
        "url": "https://moonmodules.org/MoonLight/reference/tests.html#systemmodule:scenario:scenario_System_identity_survives_reboot"
       }
      ]
@@ -3917,7 +3923,7 @@
      "line": "The source: a synthesized signal, the network, or its own input.",
      "tests": [
       {
-       "title": "scenario_Services_audio_drives_the_effects",
+       "title": "Services audio drives the effects",
        "url": "https://moonmodules.org/MoonLight/reference/tests.html#audioservice:scenario:scenario_Services_audio_drives_the_effects"
       }
      ]
@@ -3952,7 +3958,7 @@
      "line": "The mic or ADC sample rate.",
      "tests": [
       {
-       "title": "scenario_Services_audio_drives_the_effects",
+       "title": "Services audio drives the effects",
        "url": "https://moonmodules.org/MoonLight/reference/tests.html#audioservice:scenario:scenario_Services_audio_drives_the_effects"
       }
      ]
@@ -3970,7 +3976,7 @@
      "more": "The default suits a quiet MEMS mic, so turn it down hard for a loopback device or everything clips.",
      "tests": [
       {
-       "title": "scenario_Services_audio_drives_the_effects",
+       "title": "Services audio drives the effects",
        "url": "https://moonmodules.org/MoonLight/reference/tests.html#audioservice:scenario:scenario_Services_audio_drives_the_effects"
       }
      ]
@@ -4471,7 +4477,7 @@
      "line": "The installed version.",
      "tests": [
       {
-       "title": "scenario_Firmware_reports_what_is_running",
+       "title": "Firmware reports what is running",
        "url": "https://moonmodules.org/MoonLight/reference/tests.html#firmwareupdatemodule:scenario:scenario_Firmware_reports_what_is_running"
       }
      ]
@@ -4527,7 +4533,7 @@
      "more": "Nothing is sent and no identifier is computed while it is off.",
      "tests": [
       {
-       "title": "scenario_MoonCloud_consent_is_off_until_asked",
+       "title": "MoonCloud consent is off until asked",
        "url": "https://moonmodules.org/MoonLight/reference/tests.html#mooncloudmodule:scenario:scenario_MoonCloud_consent_is_off_until_asked"
       }
      ]
@@ -4567,7 +4573,7 @@
      "more": "Nothing is published or read while it is off.",
      "tests": [
       {
-       "title": "scenario_MoonCloud_consent_is_off_until_asked",
+       "title": "MoonCloud consent is off until asked",
        "url": "https://moonmodules.org/MoonLight/reference/tests.html#mooncloudmodule:scenario:scenario_MoonCloud_consent_is_off_until_asked"
       }
      ]
@@ -4644,7 +4650,7 @@
      "more": "Off by default: Home Assistant already finds the device over the WLED integration, and both would list it twice. Turn it on for broker-only or cross-subnet setups. The firmware update entity follows the same switch.",
      "tests": [
       {
-       "title": "scenario_Network_hardware_reconfigures_live",
+       "title": "Network hardware reconfigures live",
        "url": "https://moonmodules.org/MoonLight/reference/tests.html#uncategorized:live:scenario_Network_hardware_reconfigures_live"
       }
      ]
@@ -4675,7 +4681,7 @@
      "more": "Broadcast is the default, since WLED devices hear it too.",
      "tests": [
       {
-       "title": "scenario_Network_identity_and_discovery",
+       "title": "Network identity and discovery",
        "url": "https://moonmodules.org/MoonLight/reference/tests.html#networkmodule:scenario:scenario_Network_identity_and_discovery"
       }
      ]
@@ -4704,15 +4710,15 @@
      "line": "The interface in use.",
      "tests": [
       {
-       "title": "scenario_AccessPoint_first_setup_from_its_own_network",
+       "title": "AccessPoint first setup from its own network",
        "url": "https://moonmodules.org/MoonLight/reference/tests.html#accesspointmodule:live:scenario_AccessPoint_first_setup_from_its_own_network"
       },
       {
-       "title": "scenario_AccessPoint_protected_and_always_on",
+       "title": "AccessPoint protected and always on",
        "url": "https://moonmodules.org/MoonLight/reference/tests.html#accesspointmodule:live:scenario_AccessPoint_protected_and_always_on"
       },
       {
-       "title": "scenario_Firmware_MoonBase_joins_the_apps_network",
+       "title": "Firmware MoonBase joins the apps network",
        "url": "https://moonmodules.org/MoonLight/reference/tests.html#firmwareupdatemodule:live:scenario_Firmware_MoonBase_joins_the_apps_network"
       }
      ]
@@ -4721,11 +4727,11 @@
      "line": "The `<name>.local` hostname, on IPv4 and IPv6.",
      "tests": [
       {
-       "title": "scenario_Network_hardware_reconfigures_live",
+       "title": "Network hardware reconfigures live",
        "url": "https://moonmodules.org/MoonLight/reference/tests.html#uncategorized:live:scenario_Network_hardware_reconfigures_live"
       },
       {
-       "title": "scenario_Network_identity_and_discovery",
+       "title": "Network identity and discovery",
        "url": "https://moonmodules.org/MoonLight/reference/tests.html#networkmodule:scenario:scenario_Network_identity_and_discovery"
       }
      ]
@@ -4756,7 +4762,7 @@
      "line": "The PHY chip, seeded per chip and overridden by the catalog.",
      "tests": [
       {
-       "title": "scenario_Network_hardware_reconfigures_live",
+       "title": "Network hardware reconfigures live",
        "url": "https://moonmodules.org/MoonLight/reference/tests.html#uncategorized:live:scenario_Network_hardware_reconfigures_live"
       }
      ]
@@ -4824,7 +4830,7 @@
      "more": "It shows after a join from the access point. Open the link in a browser, since a phone's sign-in screen has no address bar.",
      "tests": [
       {
-       "title": "scenario_AccessPoint_first_setup_from_its_own_network",
+       "title": "AccessPoint first setup from its own network",
        "url": "https://moonmodules.org/MoonLight/reference/tests.html#accesspointmodule:live:scenario_AccessPoint_first_setup_from_its_own_network"
       }
      ]
@@ -4884,11 +4890,11 @@
      "more": "A join in progress holds it back, since one radio serves both; first setup stays open until a network or Ethernet is set.",
      "tests": [
       {
-       "title": "scenario_AccessPoint_first_setup_from_its_own_network",
+       "title": "AccessPoint first setup from its own network",
        "url": "https://moonmodules.org/MoonLight/reference/tests.html#accesspointmodule:live:scenario_AccessPoint_first_setup_from_its_own_network"
       },
       {
-       "title": "scenario_AccessPoint_protected_and_always_on",
+       "title": "AccessPoint protected and always on",
        "url": "https://moonmodules.org/MoonLight/reference/tests.html#accesspointmodule:live:scenario_AccessPoint_protected_and_always_on"
       }
      ]
@@ -4901,7 +4907,7 @@
      "line": "The devices on it.",
      "tests": [
       {
-       "title": "scenario_AccessPoint_protected_and_always_on",
+       "title": "AccessPoint protected and always on",
        "url": "https://moonmodules.org/MoonLight/reference/tests.html#accesspointmodule:live:scenario_AccessPoint_protected_and_always_on"
       }
      ]

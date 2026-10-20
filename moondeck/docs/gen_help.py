@@ -493,7 +493,7 @@ def generate(ref: str = "main") -> tuple[dict, dict]:
         for control, h in entry.get("controls", {}).items():
             # The scenarios that set or expect the control, so its help says what proves it: a few, each linking its entry on the test page.
             if found := scenario_controls.get(f"{type_name}.{control}"):
-                h["tests"] = [{"title": s["title"], "url": f"{SITE}reference/tests.html#{heading_id(s['subject'])}:{s['id']}"} for s in found[:3]]
+                h["tests"] = [{"title": s["title"], "url": f"{SITE}reference/tests.html#{gen_tests.anchor(s['subject'], s['id'])}"} for s in found[:3]]
         modules[type_name] = entry
         missing = [c for c, h in entry.get("controls", {}).items() if not h.get("line")]
         if missing or not entry.get("line"):

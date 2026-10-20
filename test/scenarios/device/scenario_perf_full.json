@@ -3,8 +3,7 @@
   "module": "Layer",
   "mode": "mutate",
   "instances": {
-    "Audio": "AudioService",
-    "Grid": "GridLayout"
+    "Audio": "AudioService"
   },
   "also": [
     "Layouts",

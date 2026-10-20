@@ -3,8 +3,7 @@
   "module": "ParallelLedDriver",
   "mode": "mutate",
   "instances": {
-    "Grid": "GridLayout",
-    "ParallelLed": "ParallelLedDriver"
+    "Grid": "GridLayout"
   },
   "also": [
     "I80Peripheral",

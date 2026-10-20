@@ -375,7 +375,7 @@ private:
         return n;
     }
 
-    /// Are the pin controls the user's to edit, for the board currently selected?
+    /// Are the pin controls the user's to edit, for the selected board?
     bool pinsEditable() const {
         if (boardSel >= boardOptionCount_) return true;   // no board resolved: never hide
         return kBoards[boardIndex_[boardSel]].editable;

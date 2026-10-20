@@ -222,7 +222,7 @@ def on_pre_build(config):
 
 
 def on_files(files, config):
-    """Inject the build-time pages into the virtual tree: the test inventories, the help the deck reads, and the catalog pages drawn from help.json."""
+    """Inject the build-time pages into the virtual tree: the test registry, the help the deck reads, and the catalog pages drawn from help.json."""
     from mkdocs.structure.files import File
 
     def _add(src_uri: str, content: str):
@@ -239,17 +239,19 @@ def on_files(files, config):
         if not (ROOT / "docs" / "moonmodules" / page).exists():
             _add(f"moonmodules/{page}", generated_catalog(f"moonmodules/{page}"))
     # The test registry, sharded by subject: tests.js reads the index and fetches the shard of the subject a reader opens.
-    index, by_subject = gen_tests.shards(gen_tests.registry())
+    tests, findings = gen_tests.registry(), _findings.read_all()   # each read once per build
+    index, by_subject = gen_tests.shards(tests)
     index["files"] = {s: gen_tests.file_name(s) for s in by_subject}
-    runs = test_runs.published(known=set(gen_tests.registry()))
-    gen_tests.annotate(index, by_subject, runs, _findings.read_all())
+    index["blob"] = _BLOB_BASE + "/"   # the branch being built, so the page's file links reach files main may not have
+    runs = test_runs.published(known=set(tests))
+    gen_tests.annotate(index, by_subject, runs, findings)
     _add("tests/index.json", json.dumps(index, ensure_ascii=False, separators=(",", ":")))
     for subject, shard in by_subject.items():
         _add(f"tests/{gen_tests.file_name(subject)}", json.dumps(shard, ensure_ascii=False, separators=(",", ":")))
     _add("tests/runs.json", json.dumps(runs, separators=(",", ":")))   # this machine's last results, empty where nothing ran
-    _add("tests/findings.json", json.dumps(_findings.read_all(), ensure_ascii=False, separators=(",", ":")))   # what each check last found on this machine
-    _add("tests/gaps.json", json.dumps(gen_tests.gaps(_walk()["processes"], _help_file()), ensure_ascii=False, separators=(",", ":")))   # what no test covers
-    _add("tests/steps.json", json.dumps(gen_tests.step_tests(_walk()["processes"]), ensure_ascii=False, separators=(",", ":")))   # the tests of each process step, for the map to show
+    _add("tests/findings.json", json.dumps(findings, ensure_ascii=False, separators=(",", ":")))   # what each check last found on this machine
+    _add("tests/gaps.json", json.dumps(gen_tests.gaps(_walk()["processes"], _help_file(), tests), ensure_ascii=False, separators=(",", ":")))   # what no test covers
+    _add("tests/steps.json", json.dumps(gen_tests.step_tests(_walk()["processes"], tests), ensure_ascii=False, separators=(",", ":")))   # the tests of each process step, for the map to show
     # MoonWalk's journey map, from the stage files under moonwalk/, and each process's prose beside it, which the view fetches when the process opens; links absolute, since the view renders them on a device's page too. An invalid file fails the build.
     walk, texts = split_moonwalk(absolute_links(_walk()))
     _add("moonwalk/moonwalk.json", moonwalk_json(walk))

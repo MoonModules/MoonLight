@@ -23,11 +23,11 @@ SO: keep a bounded window of raw samples and derive order statistics from it.
   - p95: the tail, replacing max as the regression indicator. A real regression moves
     it; a single bad run does not.
   - min: the floor, i.e. the uncontended cost, which is genuinely informative.
-  - max: kept for continuity with the previous shape and as an outlier tell.
+  - max: the outlier tell.
   - n: how many samples back the numbers. n=1 is a first impression, not a baseline,
     and the reader can see which they are looking at.
 
-Shape:
+Shape, in the local store; the scenario file's summary is the same without `samples`:
     observed.<target> = {
         "tick_us":         {"p50":…, "p95":…, "min":…, "max":…, "n":…, "samples":[…]},
         "free_heap":       {…},
@@ -35,22 +35,16 @@ Shape:
         "last_updated":    iso_date,
     }
 
-`last_updated` is the date this block last took a sample. It was `at` holding
-`[first_seen, last_updated]`; the pair was dropped as misleading. After kWindow runs the
-block's creation date describes samples that have long aged out, so it answered "when did
-we start watching this" while reading as "how old is this data". The question a reader
-actually has is whether the numbers are fresh, which one date answers.
+`last_updated` is the date this block last took a sample: the question a reader has is
+whether the numbers are fresh, and after kWindow runs a first-seen date describes
+samples that have long aged out.
 
-The window is bounded (kWindow) so the file cannot grow without limit and so an old
-contended sample eventually ages out, which the widen-only shape could never do.
+The window is bounded (kWindow) so the store cannot grow without limit and so an old
+contended sample eventually ages out.
 
 The "what to watch" mapping is a property of the contract direction (tick contract =
 ceiling, so p95 is the failure indicator; heap/block contract = floor, so min is).
 See docs/reference/testing.md § Persistent observations.
-
-A target that cannot be run here (another OS) is reformatted into this shape with n=0
-and an empty window, so the file is uniform and the absence of data is explicit rather
-than implied by a stale pair of numbers.
 """
 from __future__ import annotations
 
@@ -107,33 +101,16 @@ def _stats(samples: list[int]) -> dict:
 
 
 def _window_of(block: dict, field: str) -> list[int]:
-    """The existing sample window for `field`, migrating the older shapes on the way.
-
-    Three shapes have existed and a file can hold any of them: the current dict with a
-    window, the [min, max] range, and a bare scalar.
-
-    A range seeds the window with its MIN only, not both ends. The min is a real
-    observation (something once ran that fast), while the max of a widen-only range is
-    the worst excursion ever recorded on any machine -- the very number this shape exists
-    to stop trusting. Importing it as a sample would carry the defect across the
-    migration and hold p95 up for 32 runs.
-    """
+    """The existing sample window for `field`, empty where there is none yet."""
     cur = block.get(field)
-    if isinstance(cur, dict):
-        w = cur.get("samples")
-        return [int(v) for v in w] if isinstance(w, list) else []
-    if isinstance(cur, list) and len(cur) == 2:
-        return [int(cur[0])]          # the min: see the docstring
-    if isinstance(cur, (int, float)):
-        return [int(cur)]
-    return []
+    w = cur.get("samples") if isinstance(cur, dict) else None
+    return [int(v) for v in w] if isinstance(w, list) else []
 
 
 def widen(existing: dict | None, sample: dict, today: str) -> tuple[dict, bool]:
     """Return (new_observed_block, changed) for a fresh measurement.
 
-    Named `widen` for its callers' sake (both runners call it on every measured step);
-    it now appends to a rolling window rather than widening a range.
+    It appends to a rolling window; `record` calls it on every measured step of both runners.
 
     `changed` is True whenever a sample was recorded, because the sample IS the state:
     the window has to be persisted for the next run to build on it, and a caller that
@@ -214,46 +191,9 @@ def summary(block: dict) -> dict:
     return out
 
 
-def empty(fields: tuple[str, ...] = _FIELDS) -> dict:
-    """A block for a target that cannot be measured here (another OS): the current shape,
-    n=0, no samples. Explicit absence, rather than a stale number that reads as data."""
-    return {f: _stats([]) for f in fields}
-
-
-def compact_samples(text: str) -> str:
-    """Collapse each `"samples": [...]` array onto one line in already-serialized JSON.
-
-    json.dump indents every array element, so a 32-sample window becomes 34 lines of
-    single numbers and buries the statistics that sit above it. The window is one value
-    conceptually, so it reads as one line. Applied to the serialized text because
-    json.dump cannot format one array differently from the rest.
-
-    Only touches arrays of numbers, so a `samples` key holding anything else (there is
-    none today) is left exactly as written rather than silently reformatted.
-    """
-    import re
-
-    def one_line(m: "re.Match[str]") -> str:
-        body = m.group(2)
-        if not re.fullmatch(r"[\s\d,.\-]*", body):
-            return m.group(0)                     # not plain numbers: leave it alone
-        nums = [p.strip() for p in body.split(",") if p.strip()]
-        return f'{m.group(1)}"samples": [{", ".join(nums)}]'
-
-    return re.sub(r'( *)"samples": \[([^\]]*)\]', one_line, text)
-
-
 def save_scenario(path, scenario) -> None:
-    """Write a scenario JSON the one way scenarios are written.
-
-    THE writer: every runner goes through this rather than calling json.dump itself, because the
-    sample-window compaction below is not optional formatting. It was missing from the live runner
-    while the host runner had it, so the same file's shape depended on which one last touched it and
-    every switch between them produced a whole-file diff that buried the numbers that actually moved.
-    A shared writer is the reason that cannot come back: there is nowhere left to forget it.
-    """
+    """Write a scenario JSON the one way both runners write it, so a file's shape never depends on which runner touched it last."""
     import json
 
-    text = compact_samples(json.dumps(scenario, indent=2, ensure_ascii=False))
     with open(path, "w", encoding="utf-8") as f:
-        f.write(text + "\n")
+        f.write(json.dumps(scenario, indent=2, ensure_ascii=False) + "\n")

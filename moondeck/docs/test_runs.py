@@ -126,7 +126,7 @@ def published(path: Path = RUNS, tree: str | None = None, known: set | None = No
         if "status" not in r:
             continue
         if known is not None and i not in known:
-            parent = next((k for k in known if i.startswith(k + "/")), None)
+            parent = max((k for k in known if i.startswith(k + "/")), key=len, default=None)   # the longest, since a case's own name may hold a `/`
             if parent is None:
                 continue
             i = parent

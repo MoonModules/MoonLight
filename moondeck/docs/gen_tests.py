@@ -7,7 +7,8 @@
 
 The registry is the test engine's index (docs/work/present/Plan-20261020 - Test engine.md, its schema is
 tests.schema.json). `index.json` lists the subjects with their counts and `<subject>.json` holds the tests about
-one subject, so a page or a device fetches only what it opens, as MoonWalk fetches a process's text.
+one subject, so a page or a device fetches only what it opens, as MoonWalk fetches a process's text. The docs build
+publishes them; run as a script, it writes only the tests of each process step, for the preview server.
 
     uv run moondeck/docs/gen_tests.py --out <dir>
 """
@@ -24,7 +25,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import _test_metadata as meta  # noqa: E402
 
 ROOT = meta.ROOT
-UNCATEGORIZED = "Uncategorized"   # a test that names no subject, as the generated pages group it today
+UNCATEGORIZED = "Uncategorized"   # a test that names no subject
 
 
 def _rel(path: Path) -> str:
@@ -56,18 +57,37 @@ def _step(s: dict) -> dict:
     return entry
 
 
+def _document_types(doc) -> dict:
+    """Every instance a state document creates with its type, by name: a node that names its `type`."""
+    out = {}
+    if isinstance(doc, dict):
+        for name, node in doc.items():
+            if isinstance(node, dict) and isinstance(node.get("type"), str):
+                out[name] = node["type"]
+            out |= _document_types(node)
+    elif isinstance(doc, list):
+        for node in doc:
+            out |= _document_types(node)
+    return out
+
+
 def _controls(scenario: dict) -> list:
-    """The `Type.control` pairs a scenario sets or expects, through the instances it declares: a step names an instance, never a type, and a name with no declared type is refused rather than guessed."""
-    out = set()
+    """The `Type.control` pairs a scenario sets or expects. A step names an instance, never a type: the type is the one the scenario's last state document gave that name, so an instance swapped for another type is read as it is at that step, and `instances` declares only what a step uses before any document creates it, the modules a device already has. A name with no type is refused rather than guessed, and so is a declaration a document makes redundant, a second home for its type."""
+    now, out, unused = dict(scenario["instances"]), set(), set(scenario["instances"])
     for s in scenario["steps"]:
+        if twice := sorted(unused & set(_document_types(s.get("document")))):
+            raise ValueError(f"{scenario['name']}: `instances` declares {', '.join(twice)}, which step {s['name']} creates before any step uses it; declare only what a step uses before a document creates it")
+        now |= _document_types(s.get("document"))
         if s["op"] in ("set_control", "expect_control") and s["id"] and s["key"]:
-            if s["id"] not in scenario["instances"]:
+            unused.discard(s["id"])
+            if s["id"] not in now:
                 raise ValueError(f"{scenario['name']}: step {s['name']} names the instance {s['id']}, which the scenario does not declare in `instances`")
-            out.add(f"{scenario['instances'][s['id']]}.{s['key']}")
+            out.add(f"{now[s['id']]}.{s['key']}")
     return sorted(out)
 
 
 _NAME_TOKEN = re.compile(r'"(?:[^"\\]|\\.)*"|\w+')
+_SPACE = re.compile(r"\s*")
 
 
 def _case_name_templates(text: str) -> list:
@@ -76,7 +96,7 @@ def _case_name_templates(text: str) -> list:
     for m in re.finditer(r"^TEST_CASE\s*\(", text, re.MULTILINE):
         parts, i = [], m.end()
         while True:
-            tok = _NAME_TOKEN.match(text, text.index(next(c for c in text[i:] if not c.isspace()), i))
+            tok = _NAME_TOKEN.match(text, _SPACE.match(text, i).end())
             if not tok:
                 break
             parts.append(tok.group(0))
@@ -219,12 +239,22 @@ def group_of(subject: str, tests: dict, help_json: dict) -> str:
     return f"{domain.capitalize()} \u00b7 Internals" if domain else "Other"
 
 
+def anchor(subject: str, test_id: str) -> str:
+    """The address of a test on the test page, which the help's and the map's links use: the subject as the page compares it, lowercase, and the test's id."""
+    return f"{subject.lower()}:{test_id}"
+
+
+def readable(title: str) -> str:
+    """A test's title as a link reads it: a scenario's name without its prefix and with spaces."""
+    return title.removeprefix("scenario_").replace("_", " ")
+
+
 def by_control(tests: dict | None = None) -> dict:
     """The scenarios that set or expect each `Type.control`: id and the subject whose page lists it, for the help of that control."""
     out: dict = {}
     for test_id, entry in (tests if tests is not None else registry()).items():
         for control in entry.get("controls", []):
-            out.setdefault(control, []).append({"id": test_id, "title": entry["title"], "subject": entry["subjects"][0]})
+            out.setdefault(control, []).append({"id": test_id, "title": readable(entry["title"]), "subject": entry["subjects"][0]})
     return {c: sorted(v, key=lambda x: x["title"]) for c, v in out.items()}
 
 
@@ -235,7 +265,7 @@ def step_tests(processes: dict, tests: dict | None = None) -> dict:
     named: dict = {}   # the tests that name a step themselves, which come before the ones that only share its control
     for test_id, entry in tests.items():
         for step in entry.get("steps", []):
-            named.setdefault(step, []).append({"id": test_id, "title": entry["title"], "subject": entry["subjects"][0]})
+            named.setdefault(step, []).append({"id": test_id, "title": readable(entry["title"]), "subject": entry["subjects"][0]})
     out: dict = {}
     for pid, p in processes.items():
         for s in p.get("steps", []):
@@ -245,7 +275,7 @@ def step_tests(processes: dict, tests: dict | None = None) -> dict:
                 keys.append(f"{arg['module']}.{arg['control']}")
             hits = list({h["id"]: h for h in [*named.get(f"{pid}/{s['id']}", []), *(h for k in dict.fromkeys(keys) for h in found.get(k, []))]}.values())
             if hits:
-                out[f"{pid}/{s['id']}"] = [{"title": h["title"], "href": f"reference/tests.html#{h['subject'].lower()}:{h['id']}"} for h in hits[:3]]
+                out[f"{pid}/{s['id']}"] = [{"title": h["title"], "href": f"reference/tests.html#{anchor(h['subject'], h['id'])}"} for h in hits[:3]]
     return out
 
 
@@ -277,7 +307,7 @@ def gaps(processes: dict, help_json: dict, tests: dict | None = None) -> dict:
 
 
 def write_steps(out: Path) -> None:
-    """`steps.json` under `out`: the tests of each step, for the map to show."""
+    """`steps.json` and `gaps.json` under `out`: the tests of each step, for the map to show, and what no test covers."""
     import gen_moonwalk
     out.mkdir(parents=True, exist_ok=True)
     processes = gen_moonwalk.build()["processes"]
@@ -327,7 +357,7 @@ def annotate(index: dict, by_subject: dict, runs: dict, findings: dict) -> None:
         first = next(iter(tests.values()), {})
         if first.get("kind") in ("python", "js") and (title := file_title(first["file"])):
             entry["title"] = title
-        if check := next((t for t in tests.values() if t["kind"] == "check"), None):
+        if check := next((t for t in tests.values() if t.get("kind") == "check"), None):
             entry["title"] = check["title"]   # a check script is named by what it checks, its docstring is the card's description
 
 
@@ -350,33 +380,10 @@ def file_name(subject: str) -> str:
     return re.sub(r"[^A-Za-z0-9_.-]+", "_", subject) + ".json"
 
 
-def write(out: Path) -> int:
-    """index.json and a shard per subject under `out`, each swapped in whole and the stale ones removed after."""
-    index, by_subject = shards(registry())
-    index["files"] = {s: file_name(s) for s in by_subject}
-    out.mkdir(parents=True, exist_ok=True)
-    for subject, shard in by_subject.items():
-        tmp = out / (file_name(subject) + ".tmp")
-        tmp.write_text(json.dumps(shard, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
-        tmp.replace(out / file_name(subject))
-    for old in out.glob("*.json"):
-        if old.name not in index["files"].values() and old.name not in ("index.json", "steps.json", "gaps.json"):
-            old.unlink()
-    (out / "index.json").write_text(json.dumps(index, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
-    return len(by_subject)
-
-
 def main() -> int:
-    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--out", type=Path, required=True, help="the directory to write index.json and the shards into")
-    ap.add_argument("--steps-only", action="store_true", help="write only steps.json, the tests of each process step")
-    args = ap.parse_args()
-    if args.steps_only:
-        write_steps(args.out)
-        return 0
-    n = write(args.out)
-    write_steps(args.out)
-    print(f"gen_tests: {n} subjects, {json.loads((args.out / 'index.json').read_text())['tests']} tests under {args.out}")
+    ap = argparse.ArgumentParser(description="Write steps.json and gaps.json, the tests of each process step and what no test covers, for a server that serves the map without the docs build.")
+    ap.add_argument("--out", type=Path, required=True, help="the directory to write steps.json and gaps.json into")
+    write_steps(ap.parse_args().out)
     return 0
 
 

@@ -24,6 +24,10 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent.parent
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import _findings  # noqa: E402
+
+RULES = {"tagline out of step": {"reason": "A front page does not carry the canonical platform sentence.", "fix": "Say the platform list the same way in each front page, or change TAGLINE and update them together.", "standard": "docs/contributing/documentation-standards.md"}}
 
 # The canonical sentence. Changing it here is the whole edit: the check then names every file
 # that still carries the old wording.
@@ -42,6 +46,8 @@ def main():
             continue
         if TAGLINE not in path.read_text(encoding="utf-8"):
             missing.append((rel, "does not carry the canonical platform sentence"))
+
+    _findings.write("check_taglines", RULES, [{"rule": "tagline out of step", "message": why, "file": rel, "level": "error"} for rel, why in missing])
 
     if missing:
         print(f"Tagline check: {len(missing)} file(s) out of step.\n")

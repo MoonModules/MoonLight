@@ -2,11 +2,6 @@
   "name": "scenario_Layers_stack_and_blend_live",
   "module": "Effects",
   "mode": "mutate",
-  "instances": {
-    "BaseFX": "NebulaEffect",
-    "Grid": "WheelLayout",
-    "Top": "Layer"
-  },
   "also": [
     "Layer",
     "Layouts",

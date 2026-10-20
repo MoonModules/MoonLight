@@ -1,0 +1,66 @@
+name: Findings
+
+# The checks' findings in GitHub code scanning: each check writes its findings in one shape (moondeck/check/_findings.py), findings_sarif.py spells them as SARIF, and code scanning shows a pull request the findings its diff adds.
+# Each check is a step that passes or fails as it does locally, so a pull request, a fork's included, shows which check a change broke. Its error-level findings are annotated in the files the pull request changes, through workflow commands, which need no token; the SARIF upload, which does, runs for our own branches.
+# The checks here need no build: check_code reads a configured tree, so its two compiler rules (the render path and the stack frames, Clang 20 only) are left to the local run.
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write   # the SARIF upload
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0   # the pull request's base, for the files it changes
+      - uses: astral-sh/setup-uv@v3
+      - name: install Vale
+        run: |
+          curl -sSL https://github.com/errata-ai/vale/releases/download/v3.21.0/vale_3.21.0_Linux_64-bit.tar.gz | tar -xz -C "$RUNNER_TEMP" vale
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+      - name: configure the desktop build, which check_code reads
+        run: cmake -S . -B build/linux
+      - name: check_code
+        if: always()
+        run: uv run moondeck/check/check_code.py
+      - name: check_docgen
+        if: always()
+        run: uv run moondeck/check/check_docgen.py
+      # The pull request's own added lines, from its base; on main the whole-tree ratchet alone.
+      - name: check_prose
+        if: always()
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: uv run moondeck/check/check_prose.py ${BASE:+"$BASE...HEAD"}
+      - name: check_specs, check_taglines, check_devices, check_firmwares
+        if: always()
+        run: |
+          rc=0
+          for c in specs taglines devices firmwares; do uv run "moondeck/check/check_$c.py" || rc=1; done
+          exit $rc
+      - name: the findings in the files the pull request changes
+        if: always()
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if [ -n "$BASE" ]; then git diff --name-only "$BASE"...HEAD > "$RUNNER_TEMP/changed.txt"; fi
+          uv run moondeck/ci/github_annotations.py --findings --changed "$RUNNER_TEMP/changed.txt"
+      - name: the findings as SARIF
+        if: always()
+        run: uv run moondeck/ci/findings_sarif.py --out build/sarif
+      # A pull request from a fork gets a read-only token, which cannot upload; the annotations above carry its findings.
+      - if: always() && (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository)
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: build/sarif

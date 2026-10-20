@@ -1,6 +1,6 @@
 """Shared parsers for unit-test and scenario metadata.
 
-Both `moondeck/docs/generate_test_docs.py` (writes markdown to disk) and
+Both `moondeck/docs/gen_tests.py` (the test registry) and
 `moondeck/moondeck.py` (serves HTML views in the MoonDeck UI) read the same
 `@module` / `@also` / per-TEST_CASE descriptions from unit tests and the same
 `module` / `also` / per-step `description` JSON fields from scenarios. This
@@ -28,8 +28,8 @@ def parse_unit_file(path: Path) -> dict:
     """Return {path, module, also, file_description, cases: [(name, description)]}.
 
     A case `description` is the single `//` comment line immediately above the
-    TEST_CASE. Missing → None; callers decide how to fall back (the doc
-    generator uses the TEST_CASE name itself, MoonDeck italicises it).
+    TEST_CASE. Missing → None; callers decide how to fall back (the
+    registry uses the TEST_CASE name itself, MoonDeck italicizes it).
     """
     text = path.read_text(encoding="utf-8")
     lines = text.splitlines()
@@ -107,6 +107,7 @@ def parse_scenario_file(path: Path) -> dict:
             "measure": bool(step.get("measure")),
             "id": step.get("id"),
             "key": step.get("key"),
+            "document": step.get("document"),
             "contract": step.get("contract") or {},
             "observed": step.get("observed") or {},
         })

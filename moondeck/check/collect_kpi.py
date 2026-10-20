@@ -430,7 +430,7 @@ def collect_code():
     kpi["specs"] = len(list((ROOT / "docs" / "moonmodules").rglob("*.md")))
     kpi["scenarios"] = len(list((ROOT / "test" / "scenarios").rglob("*.json")))
 
-    # The code report's function rules, counted by the same function; its clones and file sizes are the report's alone, a pass too slow for every KPI run.
+    # The code check's function rules, counted by the same function; its clones and file sizes are that check's alone, a pass too slow for every KPI run.
     funcs = check_code.measure()
     if funcs is None:
         kpi["code_findings"] = None   # lizard read nothing: unavailable, never a clean zero

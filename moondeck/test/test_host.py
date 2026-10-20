@@ -62,6 +62,7 @@ def main() -> int:
             cmd += ["--with", d]
         junit = ROOT / "build" / "moondeck-logs" / "junit-python.xml"   # the results beside the console, to be kept as runs
         junit.parent.mkdir(parents=True, exist_ok=True)
+        junit.unlink(missing_ok=True)   # a run that writes none records none, rather than the last one's results as this tree's
         cmd += ["pytest", "test/python", "-q", f"--junitxml={junit}"]
         rc |= run(cmd, "Python (test/python)")
         if junit.exists():
@@ -84,6 +85,7 @@ def main() -> int:
             else:
                 junit = ROOT / "build" / "moondeck-logs" / "junit-js.xml"
                 junit.parent.mkdir(parents=True, exist_ok=True)
+                junit.unlink(missing_ok=True)
                 console = "spec" if sys.stdout.isatty() else "tap"   # what node picks on its own, named now that a second reporter writes the results
                 rc |= run(["node", "--test", f"--test-reporter={console}", "--test-reporter-destination=stdout",
                            "--test-reporter=junit", f"--test-reporter-destination={junit}", *tests], "JS (test/js)")

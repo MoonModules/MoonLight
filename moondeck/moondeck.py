@@ -42,15 +42,12 @@ UI_DIR = SCRIPTS_DIR / "moondeck_ui"
 ASSETS_DIR = ROOT / "docs" / "assets"
 STATE_FILE = SCRIPTS_DIR / "moondeck.json"
 
-# Shared test-metadata parsers live next to the doc generator. Both this server
-# and moondeck/docs/generate_test_docs.py import from there so the two views of
-# the same source files (HTML in MoonDeck, markdown in docs/reference/tests/) can't drift.
+# Shared test-metadata parsers live next to the test registry. Both this server and
+# moondeck/docs/gen_tests.py read the test files through them, so the two views cannot drift.
 sys.path.insert(0, str(SCRIPTS_DIR / "docs"))
 import _test_metadata as test_meta  # noqa: E402
-# Re-use the doc generator's perf-table formatter so the MoonDeck step view
-# and the test page show the same shape per step (single
-# source of truth — adding/changing a metric updates both surfaces at once).
-import generate_test_docs as test_doc_gen  # noqa: E402
+# The perf table of a scenario step, one home for its shape.
+import perf_table  # noqa: E402
 # The name ESP-IDF gives a build's app image has one home, beside the firmware list.
 sys.path.insert(0, str(SCRIPTS_DIR / "build"))
 from build_esp32 import APP_BIN  # noqa: E402
@@ -1293,12 +1290,12 @@ def _apply_probe_results(devices: list, probed: dict) -> None:
 
 def _render_perf_table_html(step: dict) -> str:
     """Render a scenario step's contract+observed data as an HTML table that
-    matches the markdown table emitted by test_doc_gen._format_perf_table.
+    matches the markdown table emitted by perf_table._format_perf_table.
     The doc generator owns the cell formatters; we just translate its pipe-
     delimited markdown to <table><tr><td>. Returns "" when the step has no
     contract/observed data."""
     import html as html_mod
-    md_lines = test_doc_gen._format_perf_table(step)
+    md_lines = perf_table._format_perf_table(step)
     if not md_lines:
         return ""
     # Lines come in groups:
@@ -2190,7 +2187,7 @@ code {{ background: transparent; color: #8aa6ba; padding: 0; }}
             step_desc = html_mod.escape(str(step.get("description", "")))
             # `contract` and `observed` are the per-target performance data
             # and render as a single shared table (same shape as
-            # the test page; see test_doc_gen._format_perf_table).
+            # the test page; see perf_table._format_perf_table).
             # Everything else stays in the JSON-dump key/value list below.
             perf_html = _render_perf_table_html(step)
             other = {k: v for k, v in step.items()

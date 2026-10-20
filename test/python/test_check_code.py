@@ -1,4 +1,4 @@
-"""The code report and the ratchet it shares with docgen and prose."""
+"""The code check and the ratchet it shares with docgen and prose."""
 
 import sys
 from pathlib import Path
@@ -41,20 +41,16 @@ def test_a_large_file_is_a_finding_and_a_vendored_one_is_not(tmp_path, monkeypat
     assert "src/main.cpp" in owned and "moondeck/moondeck.py" in owned and "test/scenario_runner.cpp" in owned
 
 
-def test_the_report_round_trips_through_its_own_committed_parser(tmp_path, monkeypatch):
-    """What the writer puts in the `## By rule` table and the headline is what the ratchet reads back, or the comparison compares nothing."""
-    monkeypatch.setattr(check_code, "REPORT", tmp_path / "code.md")
+def test_the_counts_the_ratchet_reads_back_are_the_counts_the_run_recorded(tmp_path, monkeypatch):
+    """A run records its counts per rule, in total and the duplicated lines, and the ratchet and the commit's account read them back, or the comparison compares nothing."""
+    monkeypatch.setattr(check_code, "COUNTS", tmp_path / "code.json")
     rows = [("src/core/a.cpp", "complex function", "mm::x", 12), ("src/core/a.cpp", "long function", "mm::x", 70),
             ("src/light/b.h", "complex function", "mm::y", 11)]
-    check_code.write_report(rows, (3.11, 4321))
-    text = (tmp_path / "code.md").read_text()
-    assert check_code.duplicated_lines_in(text) == 4321
-    monkeypatch.setattr(check_code, "committed", lambda _report: text)
-    assert check_code.committed_counts() == {"complex function": 2, "long function": 1, "(total)": 3}
-    # Only the rule table feeds the baseline: a file or area row would be a rule that never appears.
-    assert "`src/core/a.cpp`" in text and "`core`" in text
-    # Every rule says how it is solved, the catalog move by name.
-    assert all(rule in text and fix in text for rule, fix in check_code.FIXES.items())
+    check_code.record(rows, (3.11, 4321))
+    recorded = _ratchet.current_counts(check_code.COUNTS)
+    assert recorded == {"complex function": 2, "long function": 1, "(total)": 3, check_code.DUPLICATED: 4321}
+    monkeypatch.setattr(_ratchet, "committed", lambda path: (tmp_path / "code.json").read_text() if path == tmp_path / "code.json" else None)
+    assert check_code.committed_counts() == recorded
 
 
 def test_the_ratchet_refuses_a_rise_per_rule_and_in_total_over_the_union():
@@ -65,12 +61,6 @@ def test_the_ratchet_refuses_a_rise_per_rule_and_in_total_over_the_union():
     assert _ratchet.risen(base, {"complex function": 4, "long function": 2, "big file": 1, "(total)": 7}) == \
         [("(total)", 6, 7), ("big file", 0, 1)]
     assert _ratchet.risen(None, {"complex function": 9, "(total)": 9}) == [], "a first run records rather than refuses"
-
-
-def test_the_area_is_the_directory_under_src():
-    assert check_code.area("src/core/system/NetworkModule.h") == "core"
-    assert check_code.area("src/platform/esp32/platform_esp32.cpp") == "platform"
-    assert check_code.area("moondeck/check/x.py") == "moondeck"
 
 
 def test_a_measurement_that_reads_nothing_is_a_failure_not_a_clean_report(tmp_path, monkeypatch):
@@ -215,9 +205,10 @@ def test_the_launcher_keeps_what_the_compiler_said_beside_the_object(tmp_path):
     assert diag_launcher.object_path(["cc", "-E", "a.cpp"]) is None
 
 
-def test_the_baseline_is_the_committed_report_and_a_report_never_committed_is_a_first_run():
-    assert _ratchet.committed(_ratchet.ROOT / "docs/reference/metrics/docgen.md")
+def test_the_baseline_is_read_from_the_last_commit_and_a_report_never_committed_is_a_first_run():
+    assert _ratchet.committed(_ratchet.ROOT / "docs/reference/metrics/repo-health.json")
     assert _ratchet.committed(_ratchet.ROOT / "docs/reference/metrics/no-such-report.md") is None
+    assert _ratchet.committed_counts(_ratchet.ROOT / "docs/reference/metrics/no-such-report.md") is None
 
 
 def _tree(tmp_path, monkeypatch, files: dict):
@@ -299,7 +290,6 @@ def test_a_header_must_guard_with_pragma_once_and_never_say_using_namespace():
     assert [r[1] for r in c.header_findings("src/core/A.h", "#ifndef A_H\n#define A_H\n#endif\n")] == [c.NO_PRAGMA]
     assert [r[1] for r in c.header_findings("src/core/A.h", "#pragma once\nusing namespace mm;\n")] == [c.HEADER_USING]
     assert c.header_findings("src/core/A.cpp", "using namespace mm;\n") == []   # a .cpp may, at file scope
-    assert c.header_findings("src/ui/x.h", "no guard") == []
 
 
 def test_the_type_double_is_a_finding_in_firmware_and_a_word_in_a_string_or_a_comment_is_not():
@@ -307,6 +297,7 @@ def test_the_type_double_is_a_finding_in_firmware_and_a_word_in_a_string_or_a_co
     assert [r[1] for r in c.double_findings("src/core/A.h", ["double v = 1;\n"])] == [c.FIRMWARE_DOUBLE]
     assert c.double_findings("src/core/A.h", ['const char* s = "a double test"; // a double comment\n']) == []
     assert c.double_findings("src/platform/desktop/p.cpp", ["double v;\n"]) == []   # the host's own code is not firmware
+    assert [r[1] for r in c.double_findings("src/core/A.h", ['const char* u = "http://a"; double v;\n'])] == [c.FIRMWARE_DOUBLE], "a // inside a string is no comment"
 
 
 def test_every_rule_the_coding_standards_say_check_code_checks_is_a_rule_it_reports():
@@ -322,7 +313,7 @@ def test_a_constant_written_as_a_macro_is_a_finding_and_a_macro_the_preprocessor
     import check_code as c
     tested = c.tested_names(["#ifdef MM_FLAG\n#endif\n#if defined(OTHER) && X > 1\n#endif\n"])
     assert tested >= {"MM_FLAG", "OTHER", "X"}
-    assert [r[1] for r in c.define_findings("src/core/A.h", ["#define MM_MAX_GPIO 63\n"], tested)] == [c.DEFINE_CONSTANT]
+    assert [r[1] for r in c.define_findings("src/core/A.h", ["#define MM_CAPTIVE_WIDTH 63\n"], tested)] == [c.DEFINE_CONSTANT]
     assert c.define_findings("src/core/A.h", ["#define MM_FLAG 1\n", "#define MM_SQUARE(x) ((x)*(x))\n"], tested) == []
     assert c.define_findings("src/platform/esp32/p.h", ["#define A 1\n"], tested) == []   # the platform layer owns its flags
 

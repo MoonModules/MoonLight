@@ -138,13 +138,13 @@ A step is one block in the panel, and a row on the map. Its parts, in order:
 3. **The state.** "✔ done" when the device shows it, as section 2 describes. Otherwise the button the kind gives, below.
 4. **What to do.** The step's call to copy, a link, or the prose.
 5. **The detail,** written text that explains the step, with links and examples.
-6. **"Tested by",** under the step: the scenarios and unit tests that prove it. A test that names the step itself comes first (`steps_proved` in a scenario, `// @step process/step` above a unit test), then the scenarios that set or expect the control the step sets. Each opens its entry on [the test page](../tests.md).
+6. **"Tested by",** under the step: the scenarios and unit tests that prove it. A test that names the step itself comes first (`steps_proved` in a scenario, `// @step process/step` above a unit test), then the scenarios that set or expect the control the step sets. Each opens its entry on [the test page](tests.md).
 
 A chapter heading starts a group of steps. It is numbered by the chapters that hold a step that applies, and grayed when all of its steps are grayed.
 
 ![One step, its parts numbered](../assets/reference/moonwalk/step.png)
 
-The numbers follow the list above: 1 the instruction, 2 its notes, 4 what to do, 5 the detail. The state (3) is empty here, since this device does not yet hold the condition; it reads "✔ done" once it does.
+The numbers follow the list above: 1 the instruction, 2 its notes, 4 what to do, 5 the detail. The state (3) is empty here, since this device does not hold the condition; it reads "✔ done" once it does.
 
 **What each kind gives:**
 

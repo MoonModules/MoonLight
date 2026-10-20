@@ -16,7 +16,7 @@ it. clang-query then annotates each site with the branch that guards it (the CON
 a purely local AST question. Sites that run unconditionally sort first: they cost every tick,
 where a guarded one may not run at all.
 
-The count is the code report's: `check_code.py` runs this build and adds one "blocking call on the render path" row per site to code.md, whose committed count may only fall.
+The count is the code check's: `check_code.py` runs this build and adds one "blocking call on the render path" finding per site, whose committed count may only fall.
 This script is the detailed view of the same sites.
 `-Wno-error=function-effects` in CMakeLists keeps the build green, since each finding is a judgment (fix it, annotate the callee, or accept it with a scoped reason) and the answer differs per site.
 
@@ -37,6 +37,7 @@ ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import check_clang_query  # noqa: E402  — the module→files resolver, one owner
 import check_clang_tidy   # noqa: E402  — build-dir resolution, one owner
+import _findings  # noqa: E402
 
 # `path:line:col: warning: <msg> [-Wfunction-effects]`
 _WARN = re.compile(r"^(?P<file>\S+?):(?P<line>\d+):(?P<col>\d+): warning: "
@@ -497,6 +498,16 @@ def float_conversions_on_the_hot_path():
     return bad
 
 
+def record(floats, rows):
+    """Keep this run's findings: a float conversion at a formatTo site fails the check, a blocking call from the render path is reported. `rows` is None where the transitive check cannot run, and its rule is then left out rather than recorded as zero."""
+    rules = {"float conversion in formatTo": {"reason": "A `%f` at a formatTo site allocates on newlib, which breaks the promise of the annotation."}}
+    if rows is not None:
+        rules["blocking call on the render path"] = {"reason": "A call from the render path that can block or allocate (-Wfunction-effects)."}
+    _findings.write("check_nonblocking", rules,
+        [{"rule": "float conversion in formatTo", "level": "error", "message": "float conversion in a formatTo call", "file": f.rsplit(":", 1)[0], "line": int(f.rsplit(":", 1)[1])} for f in floats]
+        + [{"rule": "blocking call on the render path", "message": f"{r['fn'] or '?'} calls {r['callee']}" + (f" ({r['why']})" if r["why"] else ""), "file": r["file"], "line": r["line"]} for r in rows or []])
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--module", help="Only findings in this module's source files.")
@@ -540,6 +551,8 @@ def main():
               f"probe), so the transitive hot-path\ncheck cannot run here. Reconfigure on a Clang "
               f"20+ host to run it, or read the\nclang-hotpath card, which CI keeps current. The "
               f"float-conversion findings above DID run.")
+        if not args.module:
+            record(floats, None)
         return 1 if floats else 0
 
     out = build_output(build_dir)
@@ -574,6 +587,9 @@ def main():
                 r["cond"] = form or NO_CAUSE
             else:
                 r["cond"] = f"{form}·rate" if rate_hint(r["file"], r["line"]) else form
+
+    if not args.module:
+        record(floats, rows)
 
     # THE ABSOLUTE NUMBER, first, because it is the one with a criterion rather than a comparison.
     # A call with no guard runs on EVERY tick, so its target is zero and no list is needed to say

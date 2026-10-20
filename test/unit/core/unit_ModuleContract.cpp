@@ -5,7 +5,7 @@
 ///
 /// Each type is placed where its role belongs, as a device does, run for a few frames, then disabled the way the UI does.
 ///
-/// Each list below holds the types that break its check today, with the reason: a listed type that passes fails the test, so a list only shrinks. A new module never joins one.
+/// Each list below holds the types that break its check, with the reason: a listed type that passes fails the test, so a list only shrinks. A new module never joins one.
 
 #include "doctest.h"
 #include "core/module/Scheduler.h"

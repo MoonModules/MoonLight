@@ -2,9 +2,6 @@
   "name": "scenario_Effects_pipeline_builds_and_renders",
   "module": "Effects",
   "mode": "construct",
-  "instances": {
-    "Grid": "GridLayout"
-  },
   "also": [
     "Layouts",
     "GridLayout",

@@ -88,7 +88,7 @@ Findings split by whether the file publishes a page, which is what decides sever
 
 Two `@defgroup` ids are still duplicated, `moonlive_asm_riscv` and `moonlive_asm_xtensa`, each declared in a per-ISA header. Doxygen merges same-named groups, so one absorbs the other's page, which is the fault that took `drivers_PinList.md` off the site until the core parser's group was renamed. Nothing reports it yet.
 
-Seven areas are at **0**: `light/drivers.md`, `light/effects.md`, `light/moonlive.md`, `light/supporting.md`, `core/supporting.md`, `core/ui.md` and `platform/index.md`. The live ranking is [docgen.md](../../../reference/metrics/docgen.md), which the check writes.
+Seven areas are at **0**: `light/drivers.md`, `light/effects.md`, `light/moonlive.md`, `light/supporting.md`, `core/supporting.md`, `core/ui.md` and `platform/index.md`. The live ranking is [the docgen check on the test page](../../../reference/tests.md#check_docgen), which the check writes.
 
 Red by design. The way to green is solving each file, never widening a tolerance, and once green it stays green because nothing new is exempt by construction.
 

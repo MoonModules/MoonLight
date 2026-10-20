@@ -2,10 +2,6 @@
   "name": "scenario_Fluid_solver",
   "module": "FluidEffect",
   "mode": "mutate",
-  "instances": {
-    "Fluid": "FluidEffect",
-    "Grid": "GridLayout"
-  },
   "also": [
     "Fluid",
     "draw",

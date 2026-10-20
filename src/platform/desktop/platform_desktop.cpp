@@ -3063,7 +3063,7 @@ bool ndiLoad() {
     }
     // NDIlib_initialize returns false when the CPU is unsupported, a real "cannot use it" that must not read as "installed and working".
     if (!ndiInit_()) { ndiSendVideo_ = nullptr; return false; }
-    // NDIlib_destroy pairs with NDIlib_initialize at process exit, since a sender may reopen later in the same run. Only with no sender open: a reboot exits with the render thread still sending, and the process ending is the teardown.
+    // NDIlib_destroy pairs with NDIlib_initialize at process exit, as a sender may reopen in the same run; only with none open, since a reboot exits with the render thread still sending.
     std::atexit([]() { if (ndiDestroy_ && !ndiSender_) ndiDestroy_(); });
     return true;
 }

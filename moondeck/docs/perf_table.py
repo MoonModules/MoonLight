@@ -1,7 +1,4 @@
-"""The scenario performance table MoonDeck's views share: a step's contract and observed numbers as one Markdown table.
-
-The test page the docs serve is drawn from the registry that `gen_tests.py` writes, so nothing here writes a page.
-"""
+"""The scenario performance table MoonDeck's step view shows: a step's contract and observed numbers as one Markdown table."""
 
 def _fmt_us(us: int) -> str:
     """Pretty-print microseconds with a friendly unit (us / ms / s)."""

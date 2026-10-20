@@ -90,14 +90,14 @@ else()
     include(CheckCXXCompilerFlag)
     check_cxx_compiler_flag(-Wfunction-effects MM_HAS_WFUNCTION_EFFECTS)
     if(MM_HAS_WFUNCTION_EFFECTS)
-        # -Wno-error is PERMANENT: the code report counts these sites (docs/reference/metrics/code.md)
+        # -Wno-error is PERMANENT: check_code counts these sites (docs/reference/metrics/code.json)
         # and that count may only fall, while each site stays a judgment (a driver may have to wait
         # on hardware), so failing the build on them would block every other gate.
         add_compile_options(-Wfunction-effects -Wno-error=function-effects)
         # A stack frame over 512 bytes, counted the same way: a task's stack is sized for its deepest call, so one large frame costs every task that reaches it.
-        # Here rather than for every compiler: the code report reads this build's saved findings, and the frame a Release build lays out is the one a task pays for.
+        # Here rather than for every compiler: the code check reads this build's saved findings, and the frame a Release build lays out is the one a task pays for.
         add_compile_options(-Wframe-larger-than=512 -Wno-error=frame-larger-than)
-        # Each file's findings are kept beside its object, so the code report reads the whole tree after an incremental build instead of a clean one.
+        # Each file's findings are kept beside its object, so the code check reads the whole tree after an incremental build instead of a clean one.
         find_package(Python3 COMPONENTS Interpreter QUIET)
         if(Python3_Interpreter_FOUND AND NOT CMAKE_CXX_COMPILER_LAUNCHER)
             set(CMAKE_CXX_COMPILER_LAUNCHER "${Python3_EXECUTABLE};${CMAKE_SOURCE_DIR}/moondeck/build/diag_launcher.py")

@@ -355,7 +355,7 @@ Target keys match `SystemModule.firmware` on a flashed device (`esp32`, `esp32-e
 
 A measured step is compared against its `contract` and also **observed**: each passing run takes the step's tick, free heap and largest block into a rolling window of 32 samples per target, and the statistics over it (p50, p95, min, max, n) say what the step normally costs and how bad its tail is. The window is the machine's own history, so it lives on that machine, in `build/moondeck-logs/observations.json`, and a run leaves every tracked file as it found it.
 
-The scenario file carries a **summary** of the window, published on purpose: `--update-observed` writes this run's statistics into `observed.<target>` (without the samples), and so does a renegotiated contract (`--update-contract`). The test page draws that summary beside the contract, so a reader sees what each board did the last time a bench run was published.
+The scenario file carries a **summary** of the window, published on purpose: `--update-observed` writes the statistics of this machine's window into `observed.<target>` (without the samples), and so does a renegotiated contract (`--update-contract`). The test page draws that summary beside the contract, so a reader sees what each board did the last time a bench run was published.
 
 ```json
 "observed": {

@@ -45,8 +45,8 @@ def test_a_scenario_is_named_by_its_file_stem_and_carries_its_own_steps_in_order
 
 
 def test_a_live_only_scenario_is_a_live_test_of_the_large_size():
-    live = [i for i, t in gen_tests.registry().items() if t["kind"] == "live"]
-    assert live and all(i.startswith("live:") for i in live)
+    live = {i: t for i, t in gen_tests.registry().items() if t["kind"] == "live"}
+    assert live and all(i.startswith("live:") and t["size"] == "large" for i, t in live.items())
 
 
 def test_two_tests_with_one_id_are_refused_since_an_id_names_exactly_one_test(monkeypatch):
@@ -68,15 +68,6 @@ def test_a_test_about_two_subjects_is_in_the_shard_of_each(monkeypatch):
     assert set(by_subject["A"]["tests"]) == set(by_subject["B"]["tests"])
 
 
-def test_writing_leaves_an_index_and_a_shard_per_subject_and_removes_a_stale_one(tmp_path):
-    (tmp_path / "Gone.json").write_text("{}", encoding="utf-8")
-    n = gen_tests.write(tmp_path)
-    index = json.loads((tmp_path / "index.json").read_text(encoding="utf-8"))
-    assert n == len(index["subjects"]) == len(index["files"])
-    assert not (tmp_path / "Gone.json").exists()
-    assert all((tmp_path / f).exists() for f in index["files"].values())
-
-
 def test_a_module_is_grouped_by_the_help_page_it_is_on_and_anything_else_by_the_domain_of_its_tests():
     help_json = {"modules": {"RainbowEffect": {"doc": "light/effects.md#rainboweffect"}, "SystemModule": {"doc": "core/system.md"}},
                  "catalogs": {"light/effects.md": {"title": "Effects"}, "core/system.md": {"title": "System"}}}
@@ -87,10 +78,11 @@ def test_a_module_is_grouped_by_the_help_page_it_is_on_and_anything_else_by_the_
     assert gen_tests.group_of("Uncategorized", {}, help_json) == "Other"
 
 
-def test_every_subject_of_the_repository_has_a_group_and_the_groups_are_few():
+def test_every_subject_of_the_repository_has_a_group_and_the_groups_are_the_help_pages_and_the_kinds_of_test():
     index, _ = gen_tests.shards(gen_tests.registry())
     groups = {v["group"] for v in index["subjects"].values()}
-    assert all(v["group"] for v in index["subjects"].values()) and 4 <= len(groups) <= 14, groups
+    assert all(v["group"] for v in index["subjects"].values()), groups
+    assert {"Core \u00b7 Internals", "Light \u00b7 Effects", "Scripts \u00b7 Python tests", "Scripts \u00b7 Checks", "UI \u00b7 JS tests"} <= groups, groups
 
 
 def _scenario(steps, instances):
@@ -109,7 +101,7 @@ def test_a_scenario_names_its_controls_by_type_through_the_instances_it_declares
     _no_other_kinds(monkeypatch)
     reg = gen_tests.registry()
     assert reg["scenario:scenario_X"]["controls"] == ["NetworkModule.mDNS"]
-    assert gen_tests.by_control(reg) == {"NetworkModule.mDNS": [{"id": "scenario:scenario_X", "title": "scenario_X", "subject": "Network"}]}
+    assert gen_tests.by_control(reg) == {"NetworkModule.mDNS": [{"id": "scenario:scenario_X", "title": "X", "subject": "Network"}]}
 
 
 def test_a_step_naming_an_instance_the_scenario_does_not_declare_is_refused_rather_than_guessed(monkeypatch):
@@ -121,6 +113,21 @@ def test_a_step_naming_an_instance_the_scenario_does_not_declare_is_refused_rath
         gen_tests.registry()
 
 
+def test_a_steps_instance_has_the_type_its_last_state_document_gave_it_and_a_declared_one_a_document_creates_is_refused(monkeypatch):
+    grid = dict(_step("grid", "apply_state", None, None), document={"Layouts": {"Grid": {"type": "GridLayout"}}})
+    wheel = dict(_step("wheel", "apply_state", None, None), document={"Layouts": {"Grid": {"type": "WheelLayout"}}})
+    s = _scenario([grid, _step("wide", "set_control", "Grid", "width"), wheel, _step("spokes", "expect_control", "Grid", "spokes")], {})
+    monkeypatch.setattr(_test_metadata, "collect_unit_files", lambda: [])
+    monkeypatch.setattr(_test_metadata, "collect_scenario_files", lambda: [s])
+    _no_other_kinds(monkeypatch)
+    assert gen_tests.registry()["scenario:scenario_X"]["controls"] == ["GridLayout.width", "WheelLayout.spokes"], "the swap is read as it is at each step"
+    s["instances"] = {"Grid": "WheelLayout"}
+    with pytest.raises(ValueError, match="declares Grid, which step grid creates before any step uses it"):
+        gen_tests.registry()
+    s["steps"].insert(0, _step("boot", "expect_control", "Grid", "width"))   # a module the device already has, used before a document replaces it
+    assert gen_tests.registry()["scenario:scenario_X"]["controls"] == ["GridLayout.width", "WheelLayout.spokes", "WheelLayout.width"]
+
+
 def test_a_step_is_tested_by_the_scenarios_that_set_or_expect_the_control_it_sets_or_expects():
     tests = {"scenario:scenario_A": {"title": "scenario_A", "subjects": ["Drivers"], "controls": ["Drivers.brightness"]},
              "scenario:scenario_B": {"title": "scenario_B", "subjects": ["Layer"], "controls": ["Layer.blendMode"]}}
@@ -128,8 +135,8 @@ def test_a_step_is_tested_by_the_scenarios_that_set_or_expect_the_control_it_set
                                  {"id": "expect", "when": {"manual": "look"}, "then": [{"module": "Layer", "control": "blendMode", "equals": "add"}]},
                                  {"id": "none", "when": {"manual": "look"}}]}}
     assert gen_tests.step_tests(processes, tests) == {
-        "p/set": [{"title": "scenario_A", "href": "reference/tests.html#drivers:scenario:scenario_A"}],
-        "p/expect": [{"title": "scenario_B", "href": "reference/tests.html#layer:scenario:scenario_B"}]}
+        "p/set": [{"title": "A", "href": "reference/tests.html#drivers:scenario:scenario_A"}],
+        "p/expect": [{"title": "B", "href": "reference/tests.html#layer:scenario:scenario_B"}]}
 
 
 def test_a_step_tag_above_a_case_names_the_process_steps_it_proves_without_joining_its_description(tmp_path):
@@ -149,7 +156,7 @@ def test_a_test_that_names_a_step_comes_before_the_ones_that_only_share_its_cont
     tests = {"scenario:scenario_B": {"title": "scenario_B", "subjects": ["Drivers"], "controls": ["Drivers.brightness"]},
              "scenario:scenario_A": {"title": "scenario_A", "subjects": ["Drivers"], "steps": ["p/set"]}}
     processes = {"p": {"steps": [{"id": "set", "when": {"set": {"module": "Drivers", "control": "brightness", "value": 20}}}]}}
-    assert [x["title"] for x in gen_tests.step_tests(processes, tests)["p/set"]] == ["scenario_A", "scenario_B"]
+    assert [x["title"] for x in gen_tests.step_tests(processes, tests)["p/set"]] == ["A", "B"]
 
 
 def test_the_gaps_are_the_device_changing_steps_no_test_covers_the_modules_no_test_is_about_and_the_controls_the_help_lacks():
@@ -228,15 +235,23 @@ def test_the_python_js_and_check_tests_of_this_repository_are_registered_in_grou
     assert {"Scripts · Python tests", "UI · JS tests", "Scripts · Checks"} <= groups
 
 
-def test_a_checks_findings_are_kept_in_one_shape_and_read_back_as_rules_with_counts_and_worst_files(tmp_path):
+def test_a_checks_findings_are_kept_in_one_shape_and_read_back_as_rules_with_counts_and_every_file_with_its_errors(tmp_path):
     sys.path.insert(0, str(Path(gen_tests.__file__).resolve().parents[1] / "check"))
     import _findings
     _findings.write("check_x", {"long function": {"reason": "over 60 lines", "standard": "s.md#a"}, "other": {"reason": "r"}},
                     [{"rule": "long function", "message": "f", "file": "a.cpp", "value": 70}, {"rule": "long function", "message": "g", "file": "a.cpp"},
-                     {"rule": "long function", "message": "h", "file": "b.cpp", "line": 3}], tmp_path)
-    got = _findings.read_all(tmp_path)["check_x"]
+                     {"rule": "long function", "message": "h", "file": "b.cpp", "line": 3, "level": "error"}], tmp_path)
+    got = _findings.read_all(tmp_path, metrics=tmp_path)["check_x"]
     assert got["total"] == 3 and got["rules"]["long function"]["count"] == 3 and got["rules"]["other"]["count"] == 0
-    assert got["files"] == [{"file": "a.cpp", "count": 2}, {"file": "b.cpp", "count": 1}]
+    assert got["files"] == [{"file": "a.cpp", "count": 2}, {"file": "b.cpp", "count": 1, "errors": [{"line": 3, "message": "h"}]}]
+
+
+def test_a_ratcheted_check_that_never_ran_shows_the_counts_committed_with_the_tree(tmp_path):
+    sys.path.insert(0, str(Path(gen_tests.__file__).resolve().parents[1] / "check"))
+    import _findings
+    (tmp_path / "code.json").write_text('{"(total)": 3, "long function": 3}')
+    (tmp_path / "repo-health.json").write_text('{"x": 1}')   # a metric without a check is not one
+    assert _findings.committed_counts(tmp_path) == {"check_code": {"rules": {"long function": {"count": 3}}, "total": 3, "files": [], "committed": True}}
 
 
 def test_each_subject_of_the_index_says_how_many_tests_passed_failed_or_have_no_result_and_what_its_check_found():
@@ -250,8 +265,15 @@ def test_each_subject_of_the_index_says_how_many_tests_passed_failed_or_have_no_
 
 
 def test_a_python_test_reads_as_a_sentence_and_its_file_says_what_it_is():
-    tests = {t["file"]: t for t in gen_tests.registry().values() if t["kind"] == "python"}
     one = next(t for t in gen_tests.registry().values() if t["kind"] == "python" and t["file"].endswith("test_gen_tests.py"))
     assert not one["title"].startswith("test_") and "_" not in one["title"]
     assert gen_tests.file_title("test/python/test_gen_tests.py").startswith("The test registry")
     assert gen_tests.file_title("test/js/moonwalk-device.test.mjs").startswith("MoonWalk on a device")
+
+
+def test_a_subcase_run_counts_for_the_longest_registered_case_it_belongs_to(tmp_path):
+    import test_runs
+    path = tmp_path / "runs.json"
+    test_runs.record({"unit:f::a/b/c": {"status": "fail", "seconds": 0.1}}, path, tree="T1")
+    got = test_runs.published(path, tree="T1", known={"unit:f::a", "unit:f::a/b"}, checks=False)
+    assert set(got) == {"unit:f::a/b"} and got["unit:f::a/b"]["status"] == "fail", "a case whose own name holds a `/` keeps its subcases"

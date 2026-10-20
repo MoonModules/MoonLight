@@ -239,7 +239,7 @@ running MoonLight permanently on a NAS or a Pi.
 `check_prose.py` already named `.js` and `.py` among the files it checks, but `.vale.ini` gave Vale
 no parser for either, so both were skipped in silence: the intent was there and the mechanism was
 not. A tree-sitter view per language closes that, and the count is written to
-[prose.md](../../reference/metrics/prose.md) on every run, beside the other metrics.
+`docs/reference/metrics/prose.json` on every run, beside the other metrics, and shown on [the test page](../../reference/tests.md#check_prose).
 
 The gate stays scoped to ADDED lines, so a change is held to the rules on what it writes.
 The report is the debt behind it, and it ratchets: a rise fails the check.
@@ -1160,7 +1160,7 @@ Confirmed by external review (CodeRabbit, PR #56).
 MoonLight behaviour and fidelity is deliberate. If the FPU-less Xtensa cost is real, that is a
 profiling question first, not a lint fix.
 
-`-Wfunction-effects` reports these but never fails a build; the code report counts them per file, and that count may only fall.
+`-Wfunction-effects` reports these but never fails a build; the code check counts them per file, and that count may only fall.
 
 ### ESP32 clang/LLVM toolchain — extend the clang checks to src/platform/esp32/
 

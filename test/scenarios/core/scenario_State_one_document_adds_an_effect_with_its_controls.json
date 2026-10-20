@@ -2,9 +2,6 @@
   "name": "scenario_State_one_document_adds_an_effect_with_its_controls",
   "module": "HttpServerModule",
   "mode": "mutate",
-  "instances": {
-    "Doc": "RainbowEffect"
-  },
   "steps_proved": [
     "apply-state/apply"
   ],
