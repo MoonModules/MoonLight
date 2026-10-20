@@ -88,7 +88,7 @@ processes:
         say: Keep an idle module to flash only.
         when: { manual: "No global or static state; memory, tasks and peripherals taken in prepare() and given back in release()." }
         detail: |
-          A board carries every module, and most never run: [A module that does not run costs flash](contributing/coding-standards.md#growing-the-codebase).
+          A board carries every module, and most never run: [A module that does not run costs flash](contributing/coding-standards.md#growing-the-codebase). The module contract test (`unit_ModuleContract.cpp`) enforces it for every registered type, and `check_code` counts mutable statics.
       - id: register
         section: Register and prove it
         say: Register the type.
@@ -273,3 +273,41 @@ processes:
       - id: install
         say: Install on a board plugged in over USB.
         when: { manual: "Pick latest as the release: the preview serves your build under it." }
+  - id: change-moonwalk
+    title: Change or add a MoonWalk process
+    actor: contributor
+    goal: A process or a step is written in its stage file, and the map builds without a fault.
+    page: reference/moonwalk.md
+    systems: [MoonWalk]
+    dependsOn: [build-setup]
+    intro: |
+      A process is an entry in a stage file under `moonwalk/`. What each field and each verb means: [writing a process](reference/moonwalk.md#8-writing-a-process).
+    steps:
+      - id: write
+        say: Write the process in its stage file.
+        when: { read: { page: reference/moonwalk.md, section: 8. Writing a process } }
+        detail: |
+          One file per stage, `moonwalk/NN-<stage>.yaml`. An editor checks the file as you type, since its first line names the schema.
+      - id: names
+        say: Name modules and controls as help.json does.
+        when: { manual: "A module is its type, such as GridLayout, and a control its name there." }
+        detail: |
+          The generator refuses a name `help.json` does not know. A step with a `set` or an `add` needs no `then`: the generator derives it.
+      - id: build
+        say: Build the map and read its faults.
+        when: { run: { script: moondeck/docs/gen_moonwalk.py, args: "--out /tmp/moonwalk.json" } }
+        detail: |
+          Each fault names the file and the step. [What it checks](reference/moonwalk.md#9-what-the-generator-checks).
+      - id: preview
+        say: Open it in a device.
+        when: { run: { script: moondeck/run/preview_installer.py } }
+        detail: |
+          Open the device with `?help=local`, and the device loads your working copy of the map: [try it](reference/moonwalk.md#5-try-it). A reload shows each edit.
+      - id: tests
+        say: Run the Python and JS tests.
+        when: { run: { script: moondeck/test/test_host.py } }
+      - id: docs
+        say: Check the documentation.
+        when: { run: { script: moondeck/check/check_docgen.py } }
+        detail: |
+          The size caps are warnings here, and the count may only fall.

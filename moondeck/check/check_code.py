@@ -59,6 +59,7 @@ UI_TYPE = "module type in the UI"
 SPREAD = "name spread"
 STACK = "large stack frame"
 RAW_ALLOC = "raw allocation in light"
+MUTABLE_STATIC = "mutable static state"
 RULES = {"complex function": f"cyclomatic complexity > {MAX_CCN}",
          "long function": f"> {MAX_NLOC} lines of code",
          "deeply nested": f"control flow nested deeper than {MAX_NESTING}",
@@ -71,10 +72,11 @@ RULES = {"complex function": f"cyclomatic complexity > {MAX_CCN}",
          UI_TYPE: "a registered type's name as a string literal in src/ui",
          SPREAD: f"a type named in more than {MAX_SPREAD} files beyond its own",
          STACK: f"a function whose stack frame is over {MAX_FRAME} bytes",
-         RAW_ALLOC: "an array new, malloc or platform::alloc in src/light outside ScratchBuffer"}
+         RAW_ALLOC: "an array new, malloc or platform::alloc in src/light outside ScratchBuffer",
+         MUTABLE_STATIC: "a static variable in src/core or src/light that is not const or constexpr"}
 LIMITS = {"complex function": MAX_CCN, "long function": MAX_NLOC, "deeply nested": MAX_NESTING,
           "long parameter list": MAX_PARAMS, "duplicated block": MIN_CLONE_LINES, "large file": MAX_FILE_LINES, HOT_PATH: 1,
-          PLATFORM: 1, CORE_LIGHT: 1, UI_TYPE: 1, SPREAD: MAX_SPREAD, STACK: MAX_FRAME, RAW_ALLOC: 1}
+          PLATFORM: 1, CORE_LIGHT: 1, UI_TYPE: 1, SPREAD: MAX_SPREAD, STACK: MAX_FRAME, RAW_ALLOC: 1, MUTABLE_STATIC: 1}
 # The catalog move for each smell (Fowler, Refactoring), so a finding says how it is solved; the table is coding-standards § From a finding to a fix.
 FIXES = {"complex function": "a chain on one value becomes a table; a switch on a state becomes one method per state",
          "long function": "Extract Function: a named step a reader can skip",
@@ -88,7 +90,8 @@ FIXES = {"complex function": "a chain on one value becomes a table; a switch on 
          UI_TYPE: "Replace Conditional with Polymorphism: the module declares what the UI needs (a control, a role, a flag) and the UI reads it",
          SPREAD: "Move Function, self-registration: a concept in one place, which callers reach through its role or an interface",
          STACK: "Move the large local into a member or a ScratchBuffer, sized once, so no task's stack pays for it",
-         RAW_ALLOC: "Replace the allocation with a ScratchBuffer member, which owns, sizes and frees it"}
+         RAW_ALLOC: "Replace the allocation with a ScratchBuffer member, which owns, sizes and frees it",
+         MUTABLE_STATIC: "the state becomes the module's own: a member, a ScratchBuffer taken in prepare(), or a caller-owned workspace"}
 
 
 def measure(extra=None):
@@ -328,18 +331,32 @@ _ALLOC_RE = re.compile(r"\bnew\s*(?:\(\s*std::nothrow\s*\)\s*)?[A-Za-z_][\w:<>]*
                        r"|\b(?:malloc|calloc|realloc|heap_caps_malloc|platform::alloc)\s*\(")
 
 
-def raw_alloc_rows() -> list:
-    """Every hand allocation in src/light, which the architecture homes in a ScratchBuffer member; comments do not count."""
+def _line_rows(prefixes: tuple, rule: str, hit) -> list:
+    """Every code line under the prefixes that `hit` accepts once its comment is cut, one row per line."""
     rows = []
     for rel in owned_files():
-        if not rel.startswith("src/light/") or rel.endswith(".js"):
+        if not rel.startswith(prefixes) or rel.endswith(".js"):
             continue
         with open(ROOT / rel, encoding="utf-8", errors="replace") as f:
             for n, line in enumerate(f, 1):
                 code = line.split("//")[0]
-                if _ALLOC_RE.search(code):
-                    rows.append((rel, RAW_ALLOC, f"line {n}: {code.strip()[:60]}", 1))
+                if hit(code):
+                    rows.append((rel, rule, f"line {n}: {code.strip()[:60]}", 1))
     return rows
+
+
+def raw_alloc_rows() -> list:
+    """Every hand allocation in src/light, which the architecture homes in a ScratchBuffer member; comments do not count."""
+    return _line_rows(("src/light/",), RAW_ALLOC, _ALLOC_RE.search)
+
+
+# A static variable declaration: its type and name come before any `(`, so a static function never matches, and a line naming const or constexpr is flash.
+_STATIC_VAR_RE = re.compile(r"^\s*(?:inline\s+)?static\s+(?:inline\s+)?[\w:<>,\s*&]+?[\s*&]\w+\s*(?:\[[^\]]*\]\s*)*(?:=|;|\{)")
+
+
+def mutable_static_rows() -> list:
+    """Every non-const static variable in src/core and src/light, namespace-scope, function-local or class member, each a RAM cost a module that never runs would still pay."""
+    return _line_rows(("src/core/", "src/light/"), MUTABLE_STATIC, lambda code: "const" not in code and _STATIC_VAR_RE.match(code))
 
 
 def area(path: str) -> str:
@@ -481,7 +498,7 @@ def main() -> int:
     dup_rows, duplicated = clone_rows(report) if report else ([], None)
     types = registered_types()
     rows = (findings(funcs) + dup_rows + large_files() + boundary_rows() + ui_type_rows(types) + spread_rows(types)
-            + raw_alloc_rows())
+            + raw_alloc_rows() + mutable_static_rows())
     # The hot path is a full rebuild, so the module view leaves it to the full report as it does clones; check_nonblocking --module is its detailed view.
     try:
         warnings = None if args.module else build_warnings()

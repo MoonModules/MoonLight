@@ -213,7 +213,7 @@ processes:
         say: Take over the easy fixes when it helps.
         when: { manual: "On the second round, when the contributor goes quiet, or sooner when the case calls for it." }
         detail: |
-          Forks allow maintainer edits, so a fix lands as your commit on their branch, after theirs. With maintainer edits allowed, `gh pr checkout` sets the branch to push to the fork while it tracks origin. An editor's sync that ignores the push setting pushes to origin and creates a stray branch here, so after a push compare `gh pr view <n> --json headRefOid` with `HEAD`.
+          Forks allow maintainer edits, so a fix lands as your commit on their branch, after theirs. Commit only once it is tested: the desktop tests always, and an ESP32 build and the bench when the change reaches the platform layer or hardware. With maintainer edits allowed, `gh pr checkout` sets the branch to push to the fork while it tracks origin. An editor's sync that ignores the push setting pushes to origin and creates a stray branch here, so after a push compare `gh pr view <n> --json headRefOid` with `HEAD`.
       - id: conventions
         say: Apply the project's conventions yourself.
         when: { manual: "The local gates' findings, comment and prose style, generated files, where a doc belongs, a compiler flag scoped too wide: on their branch, or as a follow-up commit after the merge." }

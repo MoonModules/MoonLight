@@ -169,6 +169,10 @@ Every driver runs `Correction::apply` on every light, even when the correction c
 The hottest-path rule says that case is a copy: `Correction` knows at rebuild whether it is the identity, and a driver that sends its buffer whole (Network Send, the panel cards) copies the layer's bytes instead of looking each one up.
 The default CIE curve is not the identity at 255, so the skip applies only with the linear curve. It applies to every driver once the sender already sends the output's byte order; network and panel drivers then send one copy, while LED strips still encode bits but drop the per-byte lookup and reordering.
 
+### Per-die color trims, white balance on the output (2026-10-19, from #139)
+
+A trim per LED die corrects a strip's color cast: `balanceRed`, `balanceGreen` and `balanceBlue` turn a die down, and `whiteLevel` trims the white die of an RGBW strip, which the RGB trims cannot reach. [#139](https://github.com/MoonModules/MoonLight/pull/139) built it folded into the same table fill as the brightness curve, so the hot path stays one lookup per channel. It is output calibration for every board, so it is a topic of its own, decided when a strip with a visible cast is on the bench.
+
 ### Drivers' palette and fixture-profile lists, sent once rather than in every view (2026-10-13)
 
 Drivers is the largest root in the state, 35 KB of the Teensy's view where Services is 10 KB, and two lists are 25 KB of it, mostly repetition.

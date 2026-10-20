@@ -1063,14 +1063,19 @@ def test_a_heading_inside_a_fenced_example_is_no_section():
     assert [k for k, _ in _unreferenced_in("src/core/x.h", lines)] == ["src/core/x.h::@technical Real"]
 
 
-def test_without_llvm_the_help_freshness_is_reported_rather_than_ending_the_run(monkeypatch):
-    """A contributor without LLVM still gets the whole report, with one failing line naming the check it could not make."""
+def test_without_llvm_the_help_freshness_is_skipped_and_the_report_is_left_as_it_is(monkeypatch, capsys):
+    """A contributor without LLVM still gets every other rule measured and ratcheted, with one SKIP line naming the rule it could not measure, and the committed report is not rewritten without that rule."""
     import check_docgen
     import gen_help
     monkeypatch.setattr(gen_help, "stale", lambda: (_ for _ in ()).throw(SystemExit("clang not found")))
-    findings = check_docgen._help_freshness()
-    assert findings == [("docs/help/help.json", "help.json stale unchecked: clang not found")]
-    assert check_docgen._blocks(*findings[0])
+    written = []
+    monkeypatch.setattr(check_docgen, "_write_report", lambda *a: written.append(a))
+    monkeypatch.setattr(check_docgen, "_violations", lambda fresh: list(fresh))
+    monkeypatch.setattr(check_docgen, "_appendix_total", lambda: 0)
+    monkeypatch.setattr(sys, "argv", ["check_docgen.py"])
+    assert check_docgen.main() == 0, "the run's exit code reflects only the rules it measured"
+    assert "SKIP help.json freshness: clang not found, so docgen.md is left as it is." in capsys.readouterr().out
+    assert written == []
 
 
 def test_a_control_guide_repeating_its_line_is_reported_and_one_adding_to_it_is_not():
@@ -1243,6 +1248,16 @@ def test_a_process_within_its_word_caps_is_silent(tmp_path, monkeypatch):
                                            "    steps:\n      - {id: s, say: Open it., when: {manual: Do it}, detail: Short.}\n", encoding="utf-8")
     monkeypatch.setattr(gen_moonwalk, "build", lambda root=tmp_path, build=gen_moonwalk.build: build(root))
     assert check_docgen._process_sizes() == []
+
+
+def test_a_process_no_runner_verifies_is_listed_as_information_and_is_no_finding(tmp_path, monkeypatch):
+    import check_docgen
+    import gen_moonwalk
+    (tmp_path / "01-test.yaml").write_text("stage: T\nprocesses:\n  - id: a\n    title: A\n    actor: user\n    goal: G\n"
+                                           "    steps:\n      - {id: s, say: Look., when: {manual: Do it}}\n", encoding="utf-8")
+    monkeypatch.setattr(gen_moonwalk, "build", lambda root=tmp_path, build=gen_moonwalk.build: build(root))
+    assert check_docgen._unverified_processes() == [("moonwalk/01-test.yaml", "a: no step has an automated runner or a condition, so no run proves it works")]
+    assert not any("no runner verifies" in why for _, why in check_docgen._process_sizes())
 
 
 def test_a_stage_file_the_generator_refuses_is_an_error_rather_than_a_traceback(tmp_path, monkeypatch):

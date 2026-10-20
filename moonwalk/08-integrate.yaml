@@ -23,6 +23,7 @@ processes:
       - id: add
         say: Add a module.
         when: { call: { operation: addModule, body: '{"type":"RainbowEffect","parent_id":"Layer"}' } }
+        then: [{ module: RainbowEffect, exists: true }]
         detail: |
           The answer names the module, as `{"ok":true,"name":"Rainbow"}`, and every later call addresses it by that name. A second module of the same type is named `Rainbow-2`.
       - id: controls
@@ -33,6 +34,7 @@ processes:
       - id: set
         say: Set one of its controls.
         when: { call: { operation: setControl, body: '{"module":"Rainbow","control":"speed","value":40}' } }
+        then: [{ module: RainbowEffect, control: speed, equals: 40 }]
         detail: |
           `{"ok":true}` means it applies to the running tree on the next frame. A number rides as a JSON number, and a failed call answers with a reason: [Three things the payload decides](reference/integrating.md#three-things-the-payload-decides).
   - id: apply-state
@@ -54,6 +56,7 @@ processes:
       - id: apply
         say: Apply the document.
         when: { call: { operation: applyState, body: '{"Effects":{"Layer":{"Swirl":{"type":"RainbowEffect","speed":90}}}}' } }
+        then: [{ module: RainbowEffect, control: speed, equals: 90 }]
         detail: |
           The answer counts the changes, or names the first failure and where it is.
   - id: moonlive-api
@@ -91,9 +94,11 @@ processes:
       - id: add
         say: Add a MoonLive effect under the Layer.
         when: { call: { operation: addModule, body: '{"type":"MoonLiveEffect","parent_id":"Layer"}' } }
+        then: [{ module: MoonLiveEffect, exists: true }]
       - id: point
         say: Point it at the script.
         when: { call: { operation: setControl, body: '{"module":"MoonLive","control":"script","value":"hello.mle"}' } }
+        then: [{ module: MoonLiveEffect, control: script, equals: hello.mle }]
       - id: status
         say: Read the compile result in its status.
         when: { call: { operation: getModule, params: { name: MoonLive } } }

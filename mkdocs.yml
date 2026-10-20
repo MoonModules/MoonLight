@@ -89,6 +89,10 @@ markdown_extensions:
       base_path: [!relative $config_dir]
       check_paths: true
 
+# The stage files and their schema are not under docs/, and the map the docs serve is built from them: a change there rebuilds the site.
+watch:
+  - moonwalk
+
 plugins:
   - search
   # A page MoonWalk took over keeps its address: each old URL forwards to its process in the live view, so links from the installer, the README and the help still land.
@@ -228,6 +232,7 @@ nav:
       # how do I drive this from my own code rather than from the page.
       - Integrating: reference/integrating.md
       - REST API: reference/api.md
+      - MoonWalk: reference/moonwalk.md
       # What the steps of MoonWalk's processes rest on, grouped by what the reader is doing: running it, connecting it, keeping it working.
       - Using it:
           - Troubleshooting: reference/troubleshooting.md

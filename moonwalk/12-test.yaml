@@ -1,6 +1,6 @@
 # yaml-language-server: $schema=moonwalk.schema.json
 stage: Test
-summary: The change pinned by tests, scenarios, live runs and clips.
+summary: The change pinned by tests, scenarios and live runs.
 processes:
   - id: add-test
     title: Add a test, and pin a bug
@@ -241,27 +241,3 @@ processes:
         when: { manual: "The scenario, its target, and which way the contract moved." }
     outro: |
       The contract's own `reason` field keeps the why next to the number.
-  - id: perform-clip
-    title: Perform a clip as a UI test
-    actor: contributor
-    goal: The UI does what every published clip shows.
-    systems: [MoonTube]
-    page: reference/testing.md
-    intro: |
-      A clip is a UI scenario. Its run file lists what a person does, such as opening a card or dragging a slider, and each step checks itself by reading the device back over REST. The same run recorded produces the published video, so a failing run means the interface differs from what the video shows. Format and actions: [moontube.md](../moondeck/moontube/moontube.md).
-    steps:
-      - id: start
-        say: Run the desktop app.
-        when: { run: { script: moondeck/run/run_desktop.py } }
-        detail: |
-          A run that drives another surface, such as the installer's preview server, names its own `host`, and one that needs particular hardware names a `requires` capability from the bench registry.
-      - id: clip
-        say: Perform one clip.
-        when: { run: { script: moondeck/moontube/mtvideo.py, args: "--run moontube/clips/<clip>.json" } }
-        detail: |
-          Every state change goes through the affordance a person uses; REST only reads, since a step that POSTs its way to the outcome proves nothing about the interface.
-      - id: lane
-        say: Run every clip as the UI lane.
-        when: { run: { script: moondeck/test/test_host.py, args: "--ui" } }
-        detail: |
-          It runs on request only and is never a gate, at a commit, a merge or a release: it drives a real browser against a running device and costs minutes. It skips rather than fails when nothing answers or no Playwright browser is installed.

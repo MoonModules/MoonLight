@@ -16,6 +16,7 @@ import argparse
 import copy
 import gzip
 import json
+import os
 import re
 import subprocess
 import sys
@@ -47,11 +48,11 @@ OPENAPI = ROOT / "docs" / "reference" / "openapi.yaml"
 
 # Which runner can perform an action, derived here rather than written on each step: the model's table of actions.
 RUNNERS = {
-    "open": ["app", "film", "docs"], "set": ["test", "app", "film", "docs"],
-    "add": ["test", "app", "film", "docs"], "replace": ["test", "app", "film", "docs"],
-    "delete": ["test", "app", "film", "docs"], "clear": ["test", "app", "film", "docs"],
+    "open": ["app", "docs"], "set": ["test", "app", "docs"],
+    "add": ["test", "app", "docs"], "replace": ["test", "app", "docs"],
+    "delete": ["test", "app", "docs"], "clear": ["test", "app", "docs"],
     "apply": ["test", "docs"], "call": ["test", "app", "docs", "agent"], "run": ["agent", "ci", "docs"],
-    "read": ["docs", "app"], "process": ["test", "app", "film", "docs", "agent", "ci"], "manual": ["docs", "app"],
+    "read": ["docs", "app"], "process": ["test", "app", "docs", "agent", "ci"], "manual": ["docs", "app"],
 }
 
 
@@ -77,7 +78,7 @@ def implied_systems(step: dict) -> set[str]:
     found = set()
     if verb == "run" and isinstance(arg, dict):
         script = arg.get("script", "")
-        found |= {"MoonTube"} if script.startswith("moondeck/moontube/") else {"MoonDeck"} if script.startswith("moondeck/") else set()
+        found |= {"MoonDeck"} if script.startswith("moondeck/") else set()
     if verb == "open" and isinstance(arg, dict) and "/install/" in arg.get("url", ""):
         found.add("MoonInstaller")
     module = arg.get("module", "") if isinstance(arg, dict) else ""
@@ -161,6 +162,15 @@ def write(model: dict, out: Path) -> None:
     out.write_text(dumps(m), encoding="utf-8")
 
 
+def derived_then(verb: str, arg) -> list:
+    """What the device shows once a step's action holds, when the verb says it: an add leaves its module, a set leaves its control's value. Empty for any other verb, whose result is not in its action."""
+    if verb == "add":
+        return [{"module": arg["type"], "exists": True}]
+    if verb == "set":
+        return [{"module": arg["module"], "control": arg["control"], "equals": arg["value"]}]
+    return []
+
+
 def download_kb(model: dict) -> int:
     """What a reader downloads to see MoonWalk, in KB: the map as --out writes it, without its prose, and the renderer, each gzipped as a server sends them."""
     sizes = [len(gzip.compress(dumps(split_text(absolute_links(model))[0]).encode("utf-8"))), len(gzip.compress(RENDERER.read_bytes()))]
@@ -184,6 +194,16 @@ def _reader_totals(p: dict) -> dict:
     """The words one reader reads, per option: the process's intro and outro, and the steps they meet."""
     frame = _words(p.get("intro")) + _words(p.get("outro"))
     return {o: frame + sum(_words(st.get("say")) + _words(st.get("detail")) for st in steps) for o, steps in _readers(p).items()}
+
+
+AUTOMATED_RUNNERS = {"test", "ci", "agent"}   # the runners that perform a step without a person: a test, CI, or an agent reading the process
+
+
+def unverified(processes: dict) -> list:
+    """The processes no runner verifies, as (stage, message): none of their steps has an automated runner or a condition the device state answers, so only a person can tell that the process works."""
+    return [(p["stage"], f"{pid}: no step has an automated runner or a condition, so no run proves it works")
+            for pid, p in processes.items()
+            if not any(AUTOMATED_RUNNERS & set(s["runners"]) or s.get("then") for s in p["steps"])]
 
 
 def shared_runs(processes: dict) -> list:
@@ -264,6 +284,7 @@ def build(root: Path = MOONWALK) -> dict:
     import jsonschema
     import yaml
 
+    _ANCHORS.clear()   # a long-running server builds again after the pages changed: their anchors are read afresh
     validator = jsonschema.Draft202012Validator(json.loads(SCHEMA.read_text(encoding="utf-8")))
     errors: list[str] = []
     stages, processes = [], {}
@@ -323,7 +344,11 @@ def build(root: Path = MOONWALK) -> dict:
                 page, _, anchor = arg["page"].partition("#")
                 if not page_exists(page):
                     errors.append(f"{pid}/{s['id']}: page does not exist: docs/{page}")
+                elif anchor and (why := link_error(arg["page"], processes)):
+                    errors.append(f"{pid}/{s['id']}: read step's {why}")
                 from gen_help import heading_id   # imported here, as site_url is
+                if not anchor and arg.get("section") and page_exists(page) and (why := link_error(f"{page}#{heading_id(arg['section'])}", processes)):
+                    errors.append(f"{pid}/{s['id']}: read step's section: {why}")
                 anchor = anchor or (heading_id(arg["section"]) if arg.get("section") else "")
                 s["url"] = page_url(page) + (f"#{anchor}" if anchor else "")
             elif verb == "open" and "url" in arg and "<" not in arg["url"]:
@@ -357,6 +382,8 @@ def build(root: Path = MOONWALK) -> dict:
                         for option in g.get("in", [g.get("equals")]):
                             if option not in inputs[g["input"]].get("enum", []):
                                 errors.append(f"{pid}/{s['id']}: {g['input']} has no option {option}")
+            if "then" not in s and (derived := derived_then(verb, arg)):
+                s["then"] = derived
             targets = [arg] if isinstance(arg, dict) else []
             for t in targets + [e for e in s.get("then", []) if "module" in e]:
                 for type_ in [t[k] for k in ("module", "type") if k in t]:
@@ -372,16 +399,128 @@ def build(root: Path = MOONWALK) -> dict:
                 by_control.setdefault(key, []).append(f"{pid}/{s['id']}")
             if verb == "run" and isinstance(arg, dict) and "script" in arg and not (ROOT / arg["script"]).is_file():
                 errors.append(f"{pid}/{s['id']}: runs no script: {arg['script']}")
+            if verb == "run":
+                errors += [f"{pid}/{s['id']}: {why}" for why in run_errors(arg)]
             if verb == "process" and arg not in processes:
                 errors.append(f"{pid}/{s['id']}: runs no process: {arg}")
-            for b in s.get("onSuccess", []) + s.get("onFailure", []):
-                if b.get("type") == "goto" and b.get("stepId") not in step_ids:
-                    errors.append(f"{pid}/{s['id']}: goto names no step: {b.get('stepId')}")
 
+    for pid, p in processes.items():
+        for step_id, text in prose_texts(p):
+            for target in dict.fromkeys(_MD_LINK_RE.findall(_FENCE_RE.sub("", text))):
+                if why := link_error(target, processes):
+                    errors.append(f"{pid}/{step_id}: {why}" if step_id else f"{pid}: {why}")
     errors += shape_errors(processes)
     if errors:
         raise ValueError("process files:\n  " + "\n  ".join(errors))
     return {"stages": stages, "systems": known, "processes": processes, "byPage": by_page, "byModule": by_module, "byControl": by_control}
+
+
+# ---- references: what a process's prose and commands point at must exist --------------------------
+
+# A link or a picture in prose, its target without a title.
+_MD_LINK_RE = re.compile(r"\]\(([^)\s]+)\)")
+_FENCE_RE = re.compile(r"^(```|~~~).*?^\1[^\n]*$", re.MULTILINE | re.DOTALL)
+_HEADING_RE = re.compile(r"^#{1,6}[ \t]+(.+?)[ \t]*#*[ \t]*$", re.MULTILINE)
+_EXPLICIT_ID_RE = re.compile(r"\{:?[ \t]*#([\w:.-]+)[^}]*\}")
+_HTML_ID_RE = re.compile(r"""\bid=["']([^"']+)["']""")
+_ANCHORS: dict = {}   # file -> its anchors, read once per run
+
+
+def anchors_of(path: Path) -> set:
+    """The anchors of a Markdown file as the docs build renders them: each heading's id (a repeat gets `_1`, `_2`, as the toc extension numbers them), an explicit `{#id}` and an `id="..."` in HTML; a fenced block holds code, so it holds none."""
+    if path in _ANCHORS:
+        return _ANCHORS[path]
+    from gen_help import heading_id   # imported here, as site_url is
+    text = _FENCE_RE.sub("", path.read_text(encoding="utf-8"))
+    found, seen = set(_HTML_ID_RE.findall(text)), {}
+    for m in _HEADING_RE.finditer(text):
+        title = m.group(1)
+        explicit = _EXPLICIT_ID_RE.search(title)
+        if explicit:
+            found.add(explicit.group(1))
+            continue
+        # A code span's text is kept whole, `<target>` included, where HTML outside it is dropped.
+        plain = "".join(part if i % 2 else re.sub(r"<[^>]+>", "", part).replace("*", "")
+                        for i, part in enumerate(re.split(r"`([^`]*)`", re.sub(r"\[([^\]]*)\]\([^)]*\)", r"\1", title))))
+        slug = heading_id(plain)
+        n = seen.get(slug, 0)
+        seen[slug] = n + 1
+        found.add(slug if n == 0 else f"{slug}_{n}")
+    _ANCHORS[path] = found
+    return found
+
+
+def link_error(target: str, processes: dict) -> str | None:
+    """Why a link in a process's prose points nowhere, or None: a site-relative target (relative to docs/, `../` leaving it for the repo) names a file that exists and an anchor that file holds. Web addresses and targets with a `<placeholder>` are the reader's."""
+    if re.match(r"(https?|mailto):", target) or "<" in target or target.startswith("#"):
+        return None
+    path, _, anchor = target.partition("#")
+    path = urllib.parse.unquote(path)
+    if path.startswith("../"):
+        file = Path(os.path.normpath(ROOT / "docs" / path))
+        if not file.is_file():
+            return f"link to a missing file: {target}"
+    elif not page_exists(path):
+        return f"link to a missing page: docs/{path}"
+    else:
+        file = ROOT / "docs" / path
+    if not anchor:
+        return None
+    if path == "moonwalk.md":
+        pid, _, step = anchor.partition("/")
+        return None if pid in processes and (not step or step in [s.get("id") for s in processes[pid].get("steps", [])]) else f"link to no process or step: {target}"
+    from gen_help import CATALOGS
+    if file.suffix != ".md" or path.removeprefix("moonmodules/") in CATALOGS:
+        return None   # a catalog page is generated at build time, so the stub on disk holds none of its anchors
+    return None if anchor in anchors_of(file) else f"link to a missing anchor: {target}"
+
+
+def prose_texts(p: dict):
+    """Every prose text of a process: its intro and outro, and each step's detail, note and manual text, as (step id or None, text)."""
+    yield from ((None, p[k]) for k in PROSE if p.get(k))
+    for s in p.get("steps", []):
+        yield from ((s.get("id"), t) for t in (s.get("detail"), s.get("note"), s["when"].get("manual")) if isinstance(t, str))
+
+
+def declared_options(script: Path) -> set | None:
+    """The `--options` a script declares with add_argument, subparsers' included; None when it declares no argument at all, so its flags cannot be told."""
+    text = script.read_text(encoding="utf-8")
+    calls = re.findall(r"add_argument\(\s*((?:[\"'][^\"']*[\"']\s*,\s*)*[\"'][^\"']*[\"'])", text)
+    if not calls:
+        return None
+    return {o for c in calls for o in re.findall(r"[\"'](--[\w-]+)[\"']", c)} | {"--help"}
+
+
+def _run_lines(arg) -> list:
+    """The scripts a run step invokes with the arguments given to each: (script path relative to the repo, argument text)."""
+    if not isinstance(arg, dict):
+        return []
+    if "script" in arg:
+        return [(arg["script"], arg.get("args", ""))]
+    return [(m.group(1), m.group(2)) for m in re.finditer(r"uv run (\S+\.py)([^;&|]*)", arg.get("command", ""))]
+
+
+def run_errors(arg) -> list:
+    """What a run step names that does not exist: a flag its script does not declare, a scenario with no file and a repo path with no file."""
+    errors = []
+    text = " ".join(filter(None, (arg.get("script", ""), arg.get("args", ""), arg.get("command", "")))) if isinstance(arg, dict) else ""
+    for script, args in _run_lines(arg):
+        file = ROOT / script
+        options = declared_options(file) if file.is_file() else None
+        if options is not None:
+            errors += [f"`{script}` has no option --{flag}" for flag in dict.fromkeys(re.findall(r"(?<![\w-])--([\w-]+)", args)) if f"--{flag}" not in options]
+        if Path(script).name in ("run_scenario.py", "run_live_scenario.py"):
+            for value in re.findall(r"--name[= ]\s*(\S+)", args):
+                for name in [n for n in value.strip("\"'").split(",") if n and "<" not in n]:
+                    if not list((ROOT / "test" / "scenarios").rglob(f"{name}.json")):
+                        errors.append(f"no scenario named {name}: test/scenarios/**/{name}.json")
+    tops = {d.name for d in ROOT.iterdir() if d.is_dir()}
+    for token in text.split():
+        token = token.lstrip("@").strip("\"',;")
+        first = token.split("/", 1)[0]
+        if "/" in token and first in tops and first != "build" and not re.search(r"[<$*]|\.\.\.", token) and not (ROOT / token).exists():
+            errors.append(f"no such path: {token}")
+    return errors
 
 
 # A link or a picture in a process's prose, written relative to docs/ as the MoonWalk page holds it.

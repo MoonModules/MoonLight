@@ -163,18 +163,6 @@
             "$ref": "#/$defs/expectation"
           }
         },
-        "onSuccess": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/branch"
-          }
-        },
-        "onFailure": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/branch"
-          }
-        },
         "detail": {
           "$ref": "#/$defs/markdown"
         }
@@ -458,35 +446,6 @@
           "additionalProperties": false
         }
       ]
-    },
-    "branch": {
-      "type": "object",
-      "required": [
-        "type"
-      ],
-      "additionalProperties": false,
-      "properties": {
-        "type": {
-          "enum": [
-            "goto",
-            "end",
-            "retry"
-          ]
-        },
-        "stepId": {
-          "$ref": "#/$defs/id"
-        },
-        "when": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/expectation"
-          }
-        },
-        "retryLimit": {
-          "type": "integer",
-          "minimum": 1
-        }
-      }
     },
     "actor": {
       "enum": [

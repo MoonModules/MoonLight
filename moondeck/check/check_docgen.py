@@ -1113,13 +1113,17 @@ def _md_hard_wraps(rel: str, text: str):
     return out
 
 
+class _Unmeasurable(Exception):
+    """A rule this host cannot measure; the reason is its message."""
+
+
 def _help_freshness():
-    """The committed help.json against what the headers and cards generate now: a header edit that never reached the file would ship help that contradicts the module."""
+    """The committed help.json against what the headers and cards generate now: a header edit that never reached the file would ship help that contradicts the module. Raises _Unmeasurable where the headers cannot be parsed, on a host without LLVM or libclang."""
     import gen_help
     try:
         stale = gen_help.stale()
-    except (SystemExit, Exception) as e:   # no LLVM, or a parse that failed: reported, so the rest of the report still runs
-        return [("docs/help/help.json", f"{_STALE_HELP_RULE} unchecked: {e}")]
+    except (SystemExit, Exception) as e:   # no LLVM, or a parse that failed
+        raise _Unmeasurable(str(e)) from e
     return ([("docs/help/help.json",
               f"{_STALE_HELP_RULE}: run `uv run moondeck/docs/gen_help.py` and commit the result")]
             if stale else [])
@@ -1230,8 +1234,19 @@ def _process_sizes():
     return out
 
 
-def _violations():
-    out = _help_freshness()
+def _unverified_processes():
+    """The processes no runner verifies, each as (stage file, message): information, not a finding. Most are by hand or judgment, which no test replaces, so a count of them could not fall; the list shows where nothing automated checks a process. None when the stage files do not build, which `_process_sizes` reports."""
+    import gen_moonwalk
+    try:
+        model = gen_moonwalk.build()
+    except ValueError:
+        return []
+    files = {s["id"]: f"moonwalk/{s['file']}" for s in model["stages"]}
+    return [(files[stage], why) for stage, why in gen_moonwalk.unverified(model["processes"])]
+
+
+def _violations(fresh):
+    out = list(fresh)
     out.extend(_process_sizes())
     out.extend(_guide_repeats(_hooks._help_file()))
     out.extend(_help_size(_hooks._help_file()))
@@ -1539,19 +1554,31 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.parse_args()
 
-    found = _violations()
+    try:
+        fresh, measured = _help_freshness(), True
+    except _Unmeasurable as e:
+        # As check_code leaves its hot-path rule: the other rules still ratchet, and the report keeps the last full count rather than losing this rule.
+        print(f"SKIP help.json freshness: {e}, so docgen.md is left as it is.")
+        fresh, measured = [], False
+    found = _violations(fresh)
 
     # The report is the artifact: stdout scrolls away and is truncated, the file is what the
     # reviewer reads, and its git history is the only record of the sweep's trend. Written on
-    # every run with no way to suppress it: the run still prints and still returns its exit
-    # code, so writing it costs a caller nothing and a skipped write loses the number to beat.
+    # every run that measured every rule: the run still prints and returns its exit code, so
+    # writing it costs a caller nothing and a skipped write loses the number to beat.
     appendix = _appendix_total()
-    _write_report(found, appendix)
+    if measured:
+        _write_report(found, appendix)
 
     errors = [f for f in found if _blocks(f[0], f[1])]
     warnings = [f for f in found if not _blocks(f[0], f[1])]
 
     risen = _ratchet(found, appendix)
+    if unverified := _unverified_processes():
+        print(f"Information, not counted: {len(unverified)} process(es) no runner verifies:")
+        for _, why in unverified:
+            print(f"  {why}")
+        print()
     if not found and not risen:
         print(f"Docgen check: clean. Limits: one control {MAX_CONTROL} "
               f"({MAX_CONTROL_VISUAL} visual), one comment line, "

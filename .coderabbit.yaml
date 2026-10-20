@@ -2,10 +2,7 @@ language: "en-US"
 
 reviews:
   profile: "assertive"
-  # Auto-review disabled on purpose: reviews are triggered on demand so they land
-  # when the product owner wants them, within CodeRabbit's hourly review budget.
-  # Comment "@coderabbitai review" (incremental) or "@coderabbitai full review" on
-  # the PR to request one.
+  # Reviews run on request, "@coderabbitai review" (incremental) or "@coderabbitai full review" on the PR, so they land when the product owner wants them, within CodeRabbit's hourly budget.
   auto_review:
     enabled: false
     drafts: false
@@ -17,60 +14,14 @@ reviews:
     - "!**/build/**"
     - "!test/doctest.h"
 
+  # The rules have one home each; CodeRabbit reads them from the files below rather than from a copy here.
   instructions: |
-    This is a high-performance multi-platform C++20 system driving LEDs and DMX fixtures.
-    Primary target is ESP32 (ESP-IDF, no Arduino). Also runs on desktop/RPi/Teensy.
+    Review against CLAUDE.md, docs/contributing/coding-standards.md and docs/contributing/documentation-standards.md, which hold every rule.
 
-    Review against these hard rules (from CLAUDE.md):
-    - Platform boundary: all #ifdef, platform #include, and hardware API calls must be in src/platform/ only. Flag any violation outside that directory.
-    - Hot path (render loop): no heap allocations (new, malloc, push_back, std::string), no blocking (delay, sleep, mutex.lock), prefer integer math over float.
-    - Warnings are errors: -Wall -Wextra -Werror. No suppressions.
-    - MoonModules are single-file .h only (implementation inline).
-    - Code style: #pragma once, constexpr over #define, namespace mm, no "using namespace" in headers.
-    - std::span over pointer+length where applicable.
-    - Buffers allocated as single contiguous blocks outside the hot path.
-
-    Design principles:
-    - Minimalism means simplicity. If a contributor can't understand it in 30 seconds, it's too complex.
-    - Data over objects. Design around data flow, not class hierarchies.
-    - Concrete first, abstract later. No framework before domain logic works.
-    - No unnecessary abstractions, helpers, or utilities for one-time operations.
-
-  path_instructions:
-    - path: "src/platform/**"
-      instructions: |
-        Platform abstraction layer. This is the ONLY place where #ifdef, platform-specific
-        #include, and hardware API calls are allowed. Verify implementations match the
-        API declared in platform.h. Desktop uses std::chrono, std::malloc, BSD sockets.
-
-    - path: "src/core/**"
-      instructions: |
-        Core infrastructure: MoonModule base, Controls, Scheduler, types, color math.
-        Must be platform-independent — no platform includes. Controls bind to class
-        variables by reference. Target <16 bytes per control descriptor on ESP32.
-        Color math must be constexpr, integer-only, no floats.
-
-    - path: "src/light/**"
-      instructions: |
-        Light domain: pipeline, buffers, layers, effects, layouts, drivers.
-        Buffers are raw uint8_t* with configurable channelsPerLight (not RGB structs).
-        Effects write to buffer using channel offsets. Speed controls use BPM (uint8_t).
-        All effects must be at least 2D. ArtNet packets need correct byte order
-        (OpCode/Universe LE, ProtVer/Length BE). Drivers must pace output (FPS limiting).
-        No heap allocations on the hot path (loop methods).
-
-    - path: "test/**"
-      instructions: |
-        Unit and integration tests using doctest. Verify tests cover edge cases
-        and match the specifications in docs/moonmodules/. Tests should not depend
-        on timing or network.
-
-    - path: "CMakeLists.txt"
-      instructions: |
-        Root CMake build. Must use C++20, -Wall -Wextra -Werror. Core library is
-        INTERFACE (header-only). Only platform .cpp files need compilation.
-
-    - path: "moondeck/**"
-      instructions: |
-        MoonDeck dev console and build/test/run scripts. Scripts must resolve
-        ROOT path correctly relative to their location in moondeck/subdir/.
+knowledge_base:
+  code_guidelines:
+    enabled: true
+    filePatterns:
+      - "CLAUDE.md"
+      - "docs/contributing/coding-standards.md"
+      - "docs/contributing/documentation-standards.md"

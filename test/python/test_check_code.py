@@ -275,6 +275,15 @@ def test_a_nothrow_array_new_in_light_is_a_hand_buffer_too(tmp_path, monkeypatch
     assert [r[2] for r in check_code.raw_alloc_rows()] == ["line 1: auto* p = new (std::nothrow) uint8_t[n];"]
 
 
+def test_a_mutable_static_in_core_or_light_is_a_finding_and_a_constant_or_function_is_not(tmp_path, monkeypatch):
+    _tree(tmp_path, monkeypatch, {
+        "src/core/a.h": "static int counter = 0;\nstatic constexpr int kMax = 4;\nstatic const char* kName = \"x\";\n"
+                        "static void helper(int x) {\n    static char buf[16];\n    static_assert(true);\n}\nstatic inline Foo* inst_ = nullptr;\n",
+        "src/platform/b.h": "static int counter = 0;\n"})
+    assert [r[2] for r in check_code.mutable_static_rows()] == ["line 1: static int counter = 0;", "line 5: static char buf[16];",
+                                                               "line 8: static inline Foo* inst_ = nullptr;"]
+
+
 def test_two_overloads_with_large_frames_stay_two_findings(tmp_path, monkeypatch):
     _tree(tmp_path, monkeypatch, {"src/core/a.h": ""})
     monkeypatch.setattr(check_code, "owned_files", lambda: ["src/core/a.h"])

@@ -8,7 +8,7 @@ Step 2 of [Processes, described once](../present/Plan-20261015%20-%20Processes%2
 - **The map is navigable**: on the website and in the app, zoomed out to the whole model, zoomed in by search and filters, and opened at the place the reader is, a docs page or the card open in the app.
 - **A process already done is not offered again**: what the reader has done is known, and the map and the app's suggestions leave it out.
 - **The pages named for an activity are generated from it**: building, testing, integrating, troubleshooting, installing on Linux, updating the firmware, logging an issue and the rest of the how-tos and tutorials. So a process carries its prose as well as its steps.
-- **Every runner reads the same steps**: the docs, the app, the tests, MoonTube and the agents.
+- **Every runner reads the same steps**: the docs, the app, the tests and the agents.
 
 ## The three levels, one per textbook
 
@@ -30,7 +30,7 @@ moonwalk/
   15-release.yaml
 ```
 
-The number orders the backbone, as the MoonTube clips are ordered. **YAML** because a process carries prose: multi-line text, Markdown and comments read well in YAML and badly in JSON strings. MkDocs already depends on PyYAML, so the docs build reads it at no cost. The schema validates YAML and JSON alike.
+The number orders the backbone. **YAML** because a process carries prose: multi-line text, Markdown and comments read well in YAML and badly in JSON strings. MkDocs already depends on PyYAML, so the docs build reads it at no cost. The schema validates YAML and JSON alike.
 
 ```yaml
 stage: First light
@@ -66,17 +66,17 @@ processes:
 
 ## A step
 
-- **`say`**: the instruction, one action, verb first, in at most 8 words: *Power on the device.* It is the docs line, the app's step, the film caption and the test's name, so a reader knows the step at a glance. What happens next goes in its detail.
+- **`say`**: the instruction, one action, verb first, in at most 8 words: *Power on the device.* It is the docs line, the app's step and the test's name, so a reader knows the step at a glance. What happens next goes in its detail.
 - **`actor`**: who performs the step, when it is not the process's actor; the generator fills in the process's otherwise. BPMN's lane: the commit is the product owner's process, and the checks in it are the agent's.
 - **`given`**: preconditions, of four kinds. A process done first (`install`); an expectation on the device; the change touching a path (`{ changed: ["src/**"] }`, the globs GitHub Actions' `on.push.paths` takes, which the agent and CI read from `git diff --name-only`); and the reader's choice (`{ input: platform, equals: Windows }`, or `in: [...]` for several options). The scenarios' `fixture`, `reset` and `top` and a clip's `setup` are all this.
-- **`when`**: one action, by intent rather than gesture, so each runner picks its own gesture: the app points at the card's +, the test applies a state document, MoonTube clicks.
+- **`when`**: one action, by intent rather than gesture, so each runner picks its own gesture: the app points at the card's +, and the test applies a state document.
 
   | Action | Target | Runs in |
   |---|---|---|
-  | `open` | a module (its card), a page of the app, or a URL | app, film, docs |
-  | `set` | module, control, value | test, app, film, docs |
-  | `add`, `replace` | parent module, type | test, app, film, docs |
-  | `delete`, `clear` | module | test, app, film, docs |
+  | `open` | a module (its card), a page of the app, or a URL | app, docs |
+  | `set` | module, control, value | test, app, docs |
+  | `add`, `replace` | parent module, type | test, app, docs |
+  | `delete`, `clear` | module | test, app, docs |
   | `apply` | a state document | test, docs |
   | `call` | an operation of the [REST API](../../reference/api.md) by its operationId, with its parameters and body | test, app, docs, agent |
   | `run` | a MoonDeck script with its arguments, or a shell command | agent, CI, docs |
@@ -148,7 +148,7 @@ The website cannot read a device (an https page cannot call a device's http addr
 - **One generated file**: `gen_moonwalk.py`, beside `gen_help.py`, validates every stage file against the schema and writes `moonwalk.json`: the stages, the processes, the steps, and three indexes, by module, by control and by docs page. A step's runners, derived from its action, stay in the generator's model, which the runners read. It runs in the docs build.
 - **One map, two hosts**: `moonwalk.js` draws `moonwalk.json` with **Cytoscape.js** (MIT, from cdnjs, about 430 KB, so it never enters the firmware). Compound nodes give the three levels: a stage holds its processes, a process holds its steps. The layout is the story map's grid, stages as columns and processes stacked in `dependsOn` order, computed in a few lines rather than by a layout library.
   - **Semantic zoom**: zoomed out shows stages and process titles, zooming in shows the steps and their `say`.
-  - **Search and filters**: text over titles, steps and targets; actor; system; hide what is done. Filters by runner (tested, filmed) wait for the runners' adapters.
+  - **Search and filters**: text over titles, steps and targets; actor; system; hide what is done. Filters by runner (tested) wait for the runners' adapters.
   - **Where you are**: the map opens on the reader's choices, **Here** and **Next**, with the map fitted to them. Here is the processes touching the card in view in the app (the module index) or the page the reader came from on the site (the page index); Next is the next to do. Neither lists what is done. A link naming one process (`?focus=commit`) opens that process.
 - **The process view**: `moonwalk.js` renders a process whole in the map's panel, with the help's renderer: its intro, its steps in their numbered sections with their detail and clips, a choice as a row of options, and its outro. One view on the site and in the app, at `moonwalk.html#<process>`; the map carries the steps, and a process's intro, outro and details load from `moonwalk/text/<process>.json` when its view first opens; a page MoonWalk takes over forwards there. The MoonWalk page carries every process's prose as plain text for search and readers without JavaScript, hidden once the view draws. The parts of a page that are reference rather than steps (a table of ports, a test strategy) stay on a reference page and are linked.
 

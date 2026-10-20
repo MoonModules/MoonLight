@@ -3,7 +3,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { doneOnDevice, nextOf, choicesOf, applies, stepHolds, targetOf, advance, commandOf, took } from "../../docs/assets/moonwalk.js";
+import { doneOnDevice, nextOf, choicesOf, applies, stepHolds, targetOf, advance, commandOf, took, conditionText } from "../../docs/assets/moonwalk.js";
 
 const model = {
     stages: [{ id: "install", processes: ["install"] }, { id: "light", processes: ["grid", "effect", "status-only"] }],
@@ -158,4 +158,20 @@ test("a duration rounds before it splits into minutes, so it never reads 60 seco
     assert.equal(took(59.6), "1m00s");
     assert.equal(took(42.2), "42s");
     assert.equal(took(null), "");
+});
+
+test("a condition reads as the words a reader checks the device against", () => {
+    assert.equal(conditionText([{ module: "RainbowEffect", exists: true }]), "a RainbowEffect module exists");
+    assert.equal(conditionText([{ module: "Drivers", control: "brightness", minimum: 1, maximum: 20 }]), "Drivers brightness is 1 to 20");
+    assert.equal(conditionText([{ module: "Drivers", control: "brightness", maximum: 20 }, { module: "MidiService", control: "share", equals: true }]), "Drivers brightness is at most 20 and MidiService share is true");
+    assert.equal(conditionText([{ status: 200 }]), "");   // what the state cannot answer has no words
+});
+
+test("a select's index also reads as its option's name, so a step that names the option holds", () => {
+    const state = { modules: [{ name: "Midi", type: "MidiService", controls: [{ name: "source", type: "select", value: 1, options: ["browser", "USB", "network"] }] }] };
+    const step = (e) => ({ then: [{ module: "MidiService", control: "source", ...e }] });
+    assert.equal(stepHolds(step({ equals: "USB" }), state), true);
+    assert.equal(stepHolds(step({ equals: "network" }), state), false);
+    assert.equal(stepHolds(step({ notEquals: "USB" }), state), false);
+    assert.equal(stepHolds(step({ equals: 1 }), state), true);   // the index still matches
 });

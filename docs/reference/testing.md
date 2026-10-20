@@ -502,7 +502,7 @@ One live-tier test lives outside the scenario JSON schema because it spans **mul
 
 UI scenarios drive the web interface itself: a run file lists what a person does (open a card, add a module through the picker, drag a slider) and each step checks itself by reading the device back over REST.
 
-The run: [Perform a clip as a UI test](../moonwalk.md#perform-clip).
+How to run one: [MoonTube](https://github.com/MoonModules/MoonLight/blob/main/moondeck/moontube/moontube.md).
 
 The runs live in `moontube/clips/`, the engine in `moondeck/moontube/`. MoonTube sits at the root rather than under `test/`, which every other test family follows. A run file is the source of a published video as much as it is a test, and the series is what someone looks for. Tests are parameterized over the directory, so a new run file is a new test with nothing to wire up. Format and actions: [moontube.md](../../moondeck/moontube/moontube.md).
 

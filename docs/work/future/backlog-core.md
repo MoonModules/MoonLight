@@ -128,6 +128,14 @@ timing test here uses: feed the packet, advance the clock explicitly, assert. Ra
 on PR #96 and deliberately not taken in that pass: it is pre-existing rather than part of that
 diff, and swapping a test's transport is a change that wants its own verification.
 
+## What disable means: release the memory, or keep the module hot (2026-10-20)
+
+The rule says a disabled module keeps its settings only, and deleting a module already releases everything, so the question is whether disable should release too or keep the module hot for an instant resume. The contract test (`unit_ModuleContract.cpp`) lists the modules that keep runtime memory while disabled, Layer and Drivers with their pixel buffers the largest, and fixing them would settle the answer, so they wait for it. The analysis weighs: presets and DemoReel switching many modules, where kept memory grows with what is added rather than what runs; a quick toggle, where hot means an instant resume; the measured re-enable cost of every module, its `prepare()` time, gathered with the contract test's placement; three shapes, release on disable, keep everything hot until delete, or keep the settings and what is slow to rebuild while releasing the large buffers; and how comparable systems treat a disabled or paused element. The product owner decides, and the rule in coding-standards, the contract's lists and the Layer and Drivers fix follow.
+
+## Playlist in core: one sequencer for FSEQ, effects and DemoReel (2026-10-19)
+
+A playlist is a list of items with an optional duration each, played in order or shuffled once per pass, repeated off, one or all, under play, pause, stop, previous and next: the media player's model. Two copies of that sequencing exist: `DemoReelEffect::advance()` cycles effects, and `FseqPlayerEffect` cycles files with its own cursor, shuffle pass and loop mode, written as the same shape. An effects playlist would be the third, so it starts by putting the model in core once, a `Playlist` over core's editable `ListSource` whose owner supplies how to play item *i* and when it ends: the FSEQ player's items are files that end with the track, an effects playlist's are presets applied through the state-document engine that end after their duration, as the presets plan foresees, and DemoReel becomes an effects playlist of effects. The change that builds the effects playlist moves FSEQ's and DemoReel's sequencing into it.
+
 ## A catalog entry extends another (2026-10-18)
 
 A shield is a carrier board plus its own pins, as a Serg shield is a D1-Mini32 with more wired. An optional `extends: "<entry name>"` in the [device catalog](../../../mooninstaller/README.md#the-device-catalog) lets an entry take another's `state`: levels nest (MCU, carrier, device), a child overrides its parent at the same module and control, and modules merge by name.
@@ -1186,10 +1194,6 @@ the sixth silent-zero this tooling has produced, and each looked like a clean tr
 `WarningsAsErrors` stays empty: clang-tidy reports, it does not gate
 ([testing.md § Static analysis](../../reference/testing.md#static-analysis)).
 
-
-### Heap-allocate the `registerType<T>` boot probe (lift a per-module lesson into core)
-
-`ModuleFactory::registerType<T>` stack-constructs a `T probe` at boot to capture `sizeof(T)`. On the main task's ~8 KB stack, a module with large inline members can overflow it and bootloop — a lesson the code records *per module* as a comment rather than fixing once in core: GameOfLifeEffect (`an inline array here caused a P4 stack-overflow bootloop`), HueDriver (`the lightsBuf_ stack-probe lesson`), and AudioService still carries ~5 KB of inline scratch while being factory-registered. This is the [*Complexity lives in core*](../../CLAUDE.md#principles) "lift the rule into core, don't paste it per module" clause: heap-allocate the probe (`MoonModule::operator new` already routes to PSRAM), or capture `sizeof` without constructing at all, so no module author ever has to remember the stack budget. Flagged by the 👾 Reviewer on PR #43. Small, core-only, its own `/plan`.
 
 ### Migrate HueDriver's name buffers to `ScratchBuffer` (finish the ScratchBuffer sweep)
 

@@ -153,10 +153,14 @@ processes:
         when: { manual: "An address or <name>.local; empty waits to be invited." }
         detail: |
           The host is a board sharing the desk, a desk with a network port, or a computer sharing its desk. The service invites the host every second until it answers, so either side may start first. A Mac's Audio MIDI Setup and Windows' rtpMIDI driver invite a board with an empty `host`.
+      - id: share-source
+        say: Take the desk from the USB port.
+        given: [{ input: route, equals: Desk on the network }]
+        when: { set: { module: MidiService, control: source, value: USB } }
       - id: share
         say: Share the desk from its board.
         given: [{ input: route, equals: Desk on the network }]
-        when: { manual: "On that board set source to USB and turn share on." }
+        when: { set: { module: MidiService, control: share, value: true } }
         detail: |
           It then forwards the desk like a network MIDI cable. One host at a time. The host's status says why it was refused: `no desk`, `in use` or `it invites`. [One desk for many boards over OSC](reference/control-surface.md#one-desk-for-several-boards).
       - id: osc

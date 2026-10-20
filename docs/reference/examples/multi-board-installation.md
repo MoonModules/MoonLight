@@ -5,7 +5,7 @@ Its body is a chandelier on ten legs of light, its eyes sit in 3D-printed light 
 It listens to the music around it, takes a step and looks around on every beat, and picks its own colors and moods through the night.
 A handful of small computers run it together on MoonLight, free lighting software made by volunteers.
 
-<video src="../../assets/how-to/multi-board/stadbeest.mp4" width="300" autoplay loop muted playsinline title="The StadBeest walking: ten glowing legs on a chandelier body and two ring-disc eyes"></video>
+<video src="../../assets/reference/examples/multi-board/stadbeest.mp4" width="300" autoplay loop muted playsinline title="The StadBeest walking: ten glowing legs on a chandelier body and two ring-disc eyes"></video>
 
 **What did you think of it?** A few words are enough, and we read every one.
 
@@ -43,9 +43,9 @@ The three looks, as each device's preview shows them; the mouth, one light, brea
 
 | look | legs | eyes |
 |---|---|---|
-| walking | <img src="../../assets/how-to/multi-board/legs-walk.gif" width="240" alt="The legs in the preview: ten tubes, one or two legs lifting at a time in a wave from back to front"> | <img src="../../assets/how-to/multi-board/eye-frog.gif" width="240" alt="The frog eye in the preview: a dark pupil in a palette iris on the ring disc, darting and blinking"> |
-| the orb | <img src="../../assets/how-to/multi-board/legs-orb.gif" width="240" alt="The orb in the preview: a tilted rainbow disc sinking through the ten legs, lit where each leg crosses it"> | <img src="../../assets/how-to/multi-board/eye-orb.gif" width="240" alt="The eye orb in the preview: the same shape's shell crossing the ring disc as it sinks"> |
-| the thrusters | <img src="../../assets/how-to/multi-board/legs-thrusters.gif" width="240" alt="The thrusters in the preview: ten plumes of sparks pouring down the legs, white-yellow at the body and red at the tips"> | <img src="../../assets/how-to/multi-board/eye-sauron.gif" width="240" alt="The burning eye in the preview: an orange and yellow iris around a black slit, red flames at the rim"> |
+| walking | <img src="../../assets/reference/examples/multi-board/legs-walk.gif" width="240" alt="The legs in the preview: ten tubes, one or two legs lifting at a time in a wave from back to front"> | <img src="../../assets/reference/examples/multi-board/eye-frog.gif" width="240" alt="The frog eye in the preview: a dark pupil in a palette iris on the ring disc, darting and blinking"> |
+| the orb | <img src="../../assets/reference/examples/multi-board/legs-orb.gif" width="240" alt="The orb in the preview: a tilted rainbow disc sinking through the ten legs, lit where each leg crosses it"> | <img src="../../assets/reference/examples/multi-board/eye-orb.gif" width="240" alt="The eye orb in the preview: the same shape's shell crossing the ring disc as it sinks"> |
+| the thrusters | <img src="../../assets/reference/examples/multi-board/legs-thrusters.gif" width="240" alt="The thrusters in the preview: ten plumes of sparks pouring down the legs, white-yellow at the body and red at the tips"> | <img src="../../assets/reference/examples/multi-board/eye-sauron.gif" width="240" alt="The burning eye in the preview: an orange and yellow iris around a black slit, red flames at the rim"> |
 
 The legs device leads: its control surface holds the shared settings, and the eyes and the mouth follow it over OSC.
 Every device hears the same music through WLED audio sync, so legs, eyes and mouth move on the same beat.
@@ -59,12 +59,12 @@ The body is built on a chandelier, and the eyes ride on bendable lamp arms, both
 Each eye sits in a 3D-printed bulb body, shaped like a lamp with a screw base.
 A printed top plate screws onto the body and holds the 241-light ring disc.
 
-<img src="../../assets/how-to/multi-board/bulb-body.png" width="300" alt="The 3D-printed eye bulb: a slotted, tapering body on a screw-thread base, open at the top"> <img src="../../assets/how-to/multi-board/bulb-top.png" width="300" alt="The 3D-printed top plate: a flat disc with screw holes that mounts the ring disc onto the bulb body">
+<img src="../../assets/reference/examples/multi-board/bulb-body.png" width="300" alt="The 3D-printed eye bulb: a slotted, tapering body on a screw-thread base, open at the top"> <img src="../../assets/reference/examples/multi-board/bulb-top.png" width="300" alt="The 3D-printed top plate: a flat disc with screw holes that mounts the ring disc onto the bulb body">
 
 Each leg is a tube that holds one LED strip.
 A printed connector joins the top of a tube to the chandelier, and a printed foot closes the bottom, with a slot for the strip's cable.
 
-<img src="../../assets/how-to/multi-board/tube-connector.png" width="150" alt="The 3D-printed tube connector: a hollow sleeve that joins a leg tube to the chandelier"> <img src="../../assets/how-to/multi-board/leg-foot.png" width="300" alt="The 3D-printed foot: a wide round base with a socket and a cable slot for the bottom of a leg tube">
+<img src="../../assets/reference/examples/multi-board/tube-connector.png" width="150" alt="The 3D-printed tube connector: a hollow sleeve that joins a leg tube to the chandelier"> <img src="../../assets/reference/examples/multi-board/leg-foot.png" width="300" alt="The 3D-printed foot: a wide round base with a socket and a cable slot for the bottom of a leg tube">
 
 ---
 
@@ -75,7 +75,7 @@ A part then keeps its own frame rate, effect and brightness limits.
 A failing device takes down one part rather than the piece.
 The layout decides what an effect can show: the legs are ten vertical strips, the eyes are nine concentric rings, and each effect is written for exactly that shape.
 
-<img src="../../assets/how-to/multi-board/sk6812rgbw.png" width="240" alt="SK6812 RGBW strips, the lights of the legs"> <img src="../../assets/how-to/multi-board/rings241.png" width="240" alt="The 241-light ring disc of an eye: nine concentric rings of LEDs">
+<img src="../../assets/reference/examples/multi-board/sk6812rgbw.png" width="240" alt="SK6812 RGBW strips, the lights of the legs"> <img src="../../assets/reference/examples/multi-board/rings241.png" width="240" alt="The 241-light ring disc of an eye: nine concentric rings of LEDs">
 
 The legs run on a LightCrafter 16, a 16-channel LED driver board with Ethernet, using ten of its channels.
 Each eye runs on an ESP32-S3-Zero, small enough to fit inside the printed bulb.
@@ -91,7 +91,7 @@ It takes the first bulb's scripts and its `Services`, `Effects` and `Drivers` co
 
 The StadBeest has three looks, each a pair of [MoonLive](../../moonmodules/light/moonlive.md) scripts, one for the legs and one for the eyes: walking, the orb and the thrusters. Most of what makes them read well is design rather than code.
 
-<img src="../../assets/how-to/multi-board/legs-card.png" width="300" alt="The legs effect card: bpm, swing, lift, stand, sensitivity and pulse"> <img src="../../assets/how-to/multi-board/eye-card.png" width="300" alt="The eye effect card: bpm, sensitivity, pulse, pupil, look and blink">
+<img src="../../assets/reference/examples/multi-board/legs-card.png" width="300" alt="The legs effect card: bpm, swing, lift, stand, sensitivity and pulse"> <img src="../../assets/reference/examples/multi-board/eye-card.png" width="300" alt="The eye effect card: bpm, sensitivity, pulse, pupil, look and blink">
 
 **Draw for the medium.**
 A ring disc has nine rings, from one light in the center to sixty at the edge.
@@ -147,7 +147,7 @@ The full code: [`stadbeest-walk.mle`](https://github.com/MoonModules/MoonLight/b
 
 The first slot of each bank on a [Control](../../moonmodules/core/system.md#control) card is the device's own; from the second on, automap puts the running look's controls on the slots in declaration order.
 
-<img src="../../assets/how-to/multi-board/control-card.png" width="300" alt="The legs device's Control card: each slot labeled after the control it drives, such as pulse, bpm, swing, lift and run">
+<img src="../../assets/reference/examples/multi-board/control-card.png" width="300" alt="The legs device's Control card: each slot labeled after the control it drives, such as pulse, bpm, swing, lift and run">
 
 Every StadBeest effect that hears music declares `bpm`, `sensitivity` and `pulse` first, so those slots mean the same on the legs and on the eyes in every look.
 The rest are the look's own: on the walk `fader4` is `swing`, on the frog eye it is `pupil`.
@@ -204,7 +204,7 @@ flowchart LR
 
 The leader owns the state, and the eyes take it over OSC. The desk is the leader's own, over the network rather than a cable: [a MIDI bridge](#7-driving-it-by-hand-an-akai-apc40-mkii).
 
-<img src="../../assets/how-to/multi-board/osc-leader-card.png" width="300" alt="The leader's OSC card: listen, feedback on, multicast, group 239.255.77.78, feedbackPort 9001"> <img src="../../assets/how-to/multi-board/osc-follower-card.png" width="300" alt="A follower's OSC card: listen on port 9001, feedback off">
+<img src="../../assets/reference/examples/multi-board/osc-leader-card.png" width="300" alt="The leader's OSC card: listen, feedback on, multicast, group 239.255.77.78, feedbackPort 9001"> <img src="../../assets/reference/examples/multi-board/osc-follower-card.png" width="300" alt="A follower's OSC card: listen on port 9001, feedback off">
 
 The steps are [Run a multi-device installation](../../moonwalk.md#multi-device); the StadBeest's values:
 
@@ -229,7 +229,7 @@ Every device runs the [Audio](../../moonmodules/core/services.md#audio) service 
 
 A [MoonLiveService](../../moonmodules/core/services.md#moonliveservice) on the leader runs [`stadbeest-autopilot.mls`](https://github.com/MoonModules/MoonLight/blob/main/moonlive/services/stadbeest-autopilot.mls), which plays the beast through a whole museum night without anyone at the desk.
 
-<img src="../../assets/how-to/multi-board/autopilot-card.png" width="300" alt="The autopilot service card: script, run and seconds">
+<img src="../../assets/reference/examples/multi-board/autopilot-card.png" width="300" alt="The autopilot service card: script, run and seconds">
 
 - **Scenes:** every `seconds`, three minutes by default, it picks a new scene.
   A scene moves on to the next look, walking, the orb or the thrusters, by switching `switch3` to `switch5`.
@@ -286,14 +286,14 @@ The StadBeest uses an ESP32-S3 N16R8 for it, with an [iCON QCon Pro G2](../hardw
 2. Plug the desk into the board's own USB port, the one marked USB, and power the board from its other port.
 3. On the leader's MIDI service, set `source` to network and `host` to the bridge's name, such as `MM-MIDI-rtp.local`, or its address, and pick the desk's `profile` there.
 
-<img src="../../assets/how-to/multi-board/midi-bridge-card.png" width="300" alt="The bridge's MIDI card: source USB, share on, port 5004, status shared with MM-StadBeest"> <img src="../../assets/how-to/multi-board/midi-leader-card.png" width="300" alt="The leader's MIDI card: source network, profile Mackie Control, host 192.168.1.101, port 5004, connected to the bridge">
+<img src="../../assets/reference/examples/multi-board/midi-bridge-card.png" width="300" alt="The bridge's MIDI card: source USB, share on, port 5004, status shared with MM-StadBeest"> <img src="../../assets/reference/examples/multi-board/midi-leader-card.png" width="300" alt="The leader's MIDI card: source network, profile Mackie Control, host 192.168.1.101, port 5004, connected to the bridge">
 
 The bridge is a cable over RTP-MIDI, the standard for MIDI on a network, and keeps no state of its own.
 So the desk works on the leader as if plugged into it.
 The leader greets it, moves its motors, lights its pads with its presets and holds a motor still under a hand.
 A Mackie desk's display shows the leader's display line: the last change for five seconds, then the device's name.
 
-<img src="../../assets/how-to/multi-board/qConControl.jpg" width="300" alt="The iCON QCon through the bridge: its display reads MoonLight, its motorized faders stand at the leader's levels, and two pads glow red">
+<img src="../../assets/reference/examples/multi-board/qConControl.jpg" width="300" alt="The iCON QCon through the bridge: its display reads MoonLight, its motorized faders stand at the leader's levels, and two pads glow red">
 
 An APC40 mkII takes its power from USB, which this board's port does not supply, so it stays on the laptop or goes through an active, powered USB hub.
 
@@ -304,7 +304,7 @@ An APC40 mkII takes its power from USB, which this board's port does not supply,
 The StadBeest brings its own network: a GL.iNet Slate AX (GL-AXT1800) travel router.
 Every device joins its WiFi, and the audio source is wired to it by Ethernet, so the beast runs the same at every venue.
 
-<img src="../../assets/how-to/multi-board/router-and-audio-source.jpg" width="420" alt="The ESP32-S31 CoreBoard in a clear case, its LED matrix showing what it hears, wired by Ethernet to a GL.iNet Slate AX travel router">
+<img src="../../assets/reference/examples/multi-board/router-and-audio-source.jpg" width="420" alt="The ESP32-S31 CoreBoard in a clear case, its LED matrix showing what it hears, wired by Ethernet to a GL.iNet Slate AX travel router">
 
 | Device | Board | Address | Connection | Role |
 |---|---|---|---|---|
@@ -340,7 +340,7 @@ A device that stops hearing a group joins it again after 3 seconds of silence, s
 
 The card beside the StadBeest at the Museumnacht, in Dutch and English, with a QR code to the guide.
 
-<img src="../../assets/how-to/multi-board/qr.png" width="160" alt="A QR code linking to the multi-device installation guide on moonmodules.org">
+<img src="../../assets/reference/examples/multi-board/qr.png" width="160" alt="A QR code linking to the multi-device installation guide on moonmodules.org">
 
 > **Het Stad Beest ontwaakt**
 >

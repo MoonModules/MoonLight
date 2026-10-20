@@ -1,7 +1,9 @@
 # Unit tests, split between core/ and light/ to mirror src/.
 # A test stays in the subfolder whose domain its primary @module belongs to;
 # cross-domain references travel through the @also list, not the directory.
+# module_types.cpp is the registry the device builds, which the module contract test walks type by type.
 add_executable(mm_tests
+    ${CMAKE_SOURCE_DIR}/src/module_types.cpp
     # core/
     unit/core/unit_PartitionTables.cpp
     unit/core/unit_SpscRing.cpp
@@ -106,6 +108,7 @@ add_executable(mm_tests
     unit/core/unit_MoonStatsReport.cpp
     unit/core/unit_SystemModule.cpp
     unit/core/unit_Services.cpp
+    unit/core/unit_ModuleContract.cpp
 
     # light/
     unit/light/unit_AudioService.cpp

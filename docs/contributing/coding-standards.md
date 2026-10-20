@@ -38,7 +38,7 @@ Use project typedefs (`lengthType`, `nrOfLightsType`) consistently so types matc
 ## Growing the codebase
 
 - **Consider extending before creating.** When adding a feature, check whether an existing module extends cleanly; a new file is fine if genuinely cleaner, but justify it.
-- **A module that does not run costs flash, nothing else.** No global or static state, no function-local static (its guard is RAM too), and nothing allocated, spawned or installed at boot or at registration. Memory, tasks and peripherals are taken in `prepare()`, or when the feature is selected, and given back in `release()`. A tick returns at its first check while the feature is off. A `static constexpr` table lives in flash and is fine.
+- **A module that does not run costs flash, nothing else.** Four states. *Not added*: flash only, no RAM, so no global or static state (a function-local static's guard is RAM too) and nothing taken at boot or registration. *Added and disabled*: its settings only, the object with its control values and configuration, small and sized to its content, with no runtime buffers, no tick time and no pins, sockets, tasks or open files. *Added and enabled*: whatever it needs, taken in `prepare()`. *Removed*: nothing left behind. Tick time is zero while disabled, the one exception being the named `respectsEnabled()` list (system modules such as WiFi). A `static constexpr` table lives in flash and is fine. The module contract test (`unit_ModuleContract.cpp`) checks every registered type against these states and `check_code` counts mutable statics; an exception lives on a named list in that test with its reason, and the lists only shrink.
 - **Reference, don't copy.** Prior art (friend repos, datasheets, our own prototype branches) holds proven approaches: study it, take the ideas, write our own code, never copy or trace the structure. Credits live in the [friend-repo digests](../friend-repos/index.md) and in each module's `@attribution`, listed in [the attribution catalog](../reference/attributions.md). A friend repo's contract is read from its default branch after a fetch (`git remote set-head origin --auto`, then `git show origin/HEAD:<path>`), the one its users will have next.
 
 ## Values and types
@@ -163,7 +163,7 @@ A "default" that is one specific board's values is bespoke masquerading as stand
 ### Storage
 
 - **A control binds the address of its member.** Control-backed storage is a plain member array sized by the cap, never a `ScratchBuffer`, which moves on a disable and re-enable.
-- **A large buffer lives on the heap, never inline.** `registerType` builds a throwaway instance on the main task's 8 KB stack, so an inline array that fits the S3 by luck panics the P4.
+- **A large buffer lives on the heap, never inline.** An inline array costs RAM for as long as the module exists, enabled or not. It also makes the object one contiguous allocation that a fragmented heap may not have. A `ScratchBuffer` taken in `prepare()` costs nothing while the module does not run.
 
 ## Tooling and checks
 
@@ -207,6 +207,7 @@ A finding is a named code smell. Every smell has a named, behavior-preserving mo
 | A module type named in the UI | Replace Conditional with Polymorphism: the module declares a control, a role or a flag | the UI knows no module |
 | A stack frame over 512 bytes | Move the large local into a member or a `ScratchBuffer`, sized once | no task's stack pays for it |
 | A buffer taken by hand in the light domain | Replace it with a `ScratchBuffer` member | owned, sized, reported and freed in one place |
+| Mutable static state in core or light | Move the state into the module: a member, a `ScratchBuffer` taken in `prepare()`, or a caller-owned workspace | a module that does not run costs flash only |
 
 Cut first: a branch that chooses between equals is data, a guard is an early return, and nesting is what a reader trips on, more than branch count. The theory behind the moves is Ousterhout's: complexity is dependencies and obscurity, so a deep module with a small interface absorbs it and its callers stay simple. A function may stay over a limit when splitting it would hide a sequence that belongs together. It says so in one line, and its count stays rather than being forced.
 

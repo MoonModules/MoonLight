@@ -7,6 +7,7 @@ const MODEL = new URL("moonwalk/moonwalk.json", ROOT);
 const CYTOSCAPE = "https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.30.4/cytoscape.min.js";
 const LS_DONE = "mm_moonwalk_done";   // the processes this reader marked done, which the state cannot show on a website
 const LS_VIEW = "mm_moonwalk_view";   // the reader's view of the map: actor, columns and hide done, kept per host
+const SS_OPEN = "mm_moonwalk_open";   // the process the reader had open, for this tab: closing the map and opening it again returns to it
 const LS_SPLIT = "mm_moonwalk_split";   // the reader's share for the text beside the map, once they drag it
 const LS_INPUTS = "mm_moonwalk_inputs";   // the reader's choices, such as their platform, kept per input name
 
@@ -69,6 +70,8 @@ const STYLES = `
 .mm-map-off { opacity: 0.45; }
 .mm-map-call { display: flex; gap: 0.5em; align-items: center; margin: 0.2em 0 0.4em; }
 .mm-map-call code { flex: 1; min-width: 0; overflow-x: auto; white-space: nowrap; font-size: 0.9em; padding: 2px 6px; border-radius: 4px; background: var(--mw-line); }
+.mm-map-status { display: flex; align-items: center; gap: 0.6em; margin: 0.8em 0; padding: 0.5em 0.7em; border: 1px solid var(--mw-accent); border-left-width: 5px; border-radius: 6px; background: color-mix(in srgb, var(--mw-accent) 10%, transparent); }
+.mm-map-badge { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 1.6em; height: 1.6em; border-radius: 50%; background: var(--mw-accent); color: #fff; font-size: 0.9em; }
 .mm-map-note { font-weight: normal; color: var(--mw-muted); font-size: 0.9em; }
 .mm-map-show { margin-left: 0.5em; font-weight: normal; border: 1px solid var(--mw-line); background: var(--mw-bg); color: inherit; border-radius: 4px; padding: 1px 8px; font-size: 0.75rem; cursor: pointer; }
 .mm-walk-bar { --mw-line: var(--md-default-fg-color--lightest, #8884); --mw-accent: var(--md-accent-fg-color, #526cfe);
@@ -214,6 +217,21 @@ function style(root) {
     ];
 }
 
+// A condition in words, so a reader sees what the device must show for a step to be done: "a RainbowEffect module exists", "Drivers brightness is 1 to 20". Empty for one the state cannot answer.
+export function conditionText(then) {
+    const words = (then || []).flatMap((e) => {
+        if ("exists" in e) return [e.exists ? `a ${e.module} module exists` : `no ${e.module} module exists`];
+        if (!("control" in e)) return [];
+        const of = `${e.module} ${e.control}`;
+        if ("equals" in e) return [`${of} is ${e.equals}`];
+        if ("notEquals" in e) return [`${of} is not ${e.notEquals}`];
+        if ("minimum" in e && "maximum" in e) return [`${of} is ${e.minimum} to ${e.maximum}`];
+        if ("minimum" in e) return [`${of} is at least ${e.minimum}`];
+        return "maximum" in e ? [`${of} is at most ${e.maximum}`] : [];
+    });
+    return words.join(" and ");
+}
+
 // A step's expectation against a device's state: a control's value or a module that exists. A step names a module by type, so it holds when any module of that type meets it. An HTTP status or a file the state cannot answer, so those give undefined.
 function holds(exp, ofType) {
     const mods = ofType(exp.module) || [];
@@ -224,8 +242,10 @@ function holds(exp, ofType) {
         if (!c) return false;
         // A list counts as its number of rows, so "a network is known" is `notEquals: 0`; equals and notEquals compare as text, since a document's number and the file's number or string mean the same value.
         const value = Array.isArray(c.value) ? c.value.length : c.value;
-        if ("equals" in exp) return String(value) === String(exp.equals);
-        if ("notEquals" in exp) return String(value) !== String(exp.notEquals);
+        // A select's state carries the index of its option, so it also reads as the option's name: `equals: USB` holds for the option named USB.
+        const names = [String(value), ...(Array.isArray(c.options) && Number.isInteger(value) && c.options[value] !== undefined ? [String(c.options[value])] : [])];
+        if ("equals" in exp) return names.includes(String(exp.equals));
+        if ("notEquals" in exp) return !names.includes(String(exp.notEquals));
         // A range compares as numbers, each bound inclusive and either one open.
         const n = Number(value);
         return !Number.isNaN(n) && !(n < exp.minimum) && !(n > exp.maximum);
@@ -465,6 +485,16 @@ function showPanel(panel, model, pid, done, onDone, host = {}) {
     }
     const meta = [model.stages.find((s) => s.id === p.stage)?.title, p.actor, ...(p.systems || [])].join(" · ");
     panel.append(control("h3", {}, p.title), control("p", { className: "mm-map-meta" }, meta), control("p", {}, p.goal));
+    // Done on the device is what the state shows, so it has no checkbox to undo and says on what it rests, at the top where a reader looks for it.
+    if (host.device?.has(pid)) {
+        const why = conditionText(p.steps.flatMap((s) => s.then || []));
+        const card = control("div", { className: "mm-map-status" });
+        const text = control("div");
+        text.append(control("strong", {}, host.doneBy));
+        if (why) text.append(control("div", { className: "mm-map-note" }, `Because ${why}.`));
+        card.append(control("span", { className: "mm-map-badge" }, "\u2714"), text);
+        panel.append(card);
+    }
     if (hasProse(p)) {
         const view = control("div", { className: "mm-map-view" });
         const md = (text) => { const d = control("div"); d.innerHTML = host.helpMarkdown(text); view.append(d); };
@@ -507,6 +537,7 @@ function showPanel(panel, model, pid, done, onDone, host = {}) {
             line.append(s.say);
             if (ACTOR_COLOR[s.actor]) line.style.setProperty("--mw-actor", ACTOR_COLOR[s.actor]);
             if (stepNote(s, p)) line.append(control("span", { className: "mm-map-note" }, stepNote(s, p)));
+            if (conditionText(s.then)) line.append(control("span", { className: "mm-map-note" }, ` Done when ${conditionText(s.then)}.`));
             // In a host that can show a card, a step with a target follows from here: the map gives way to the app and the bar.
             // A step the device already shows done is ticked, as a checklist ticks a finished item, and has nothing to show.
             const run = runOf(s);
@@ -560,8 +591,8 @@ function showPanel(panel, model, pid, done, onDone, host = {}) {
     }
     host.current = pid;
     host.spy?.(panel);
-    // Done on the device is what the state shows, so it has no checkbox to undo; what the state cannot show is the reader's own mark.
-    if (host.device?.has(pid)) { panel.append(control("p", { className: "mm-map-done" }, `\u2714 ${host.doneBy}`)); return; }
+    // What the state cannot show is the reader's own mark.
+    if (host.device?.has(pid)) return;
     const label = control("label", { className: "mm-map-done" });
     const box = control("input", { type: "checkbox", checked: done.has(pid) });
     box.addEventListener("change", () => onDone(pid, box.checked));
@@ -711,7 +742,10 @@ export async function drawMap(host, opts = {}) {
     host_.types = opts.state ? typesOf(opts.state) : null;   // indexed once, for every step the panel ticks
     if (opts.show) host_.follow = (pid, stepId) => opts.onFollow?.(follow(model, pid, stepId, opts));
     // On the site the open process is the page's address, so a link, a search result or a bookmark opens it; every other host's address is its own.
-    const remember = (pid) => { if (opts.ownsAddress) history.replaceState(null, "", pid ? `#${pid}` : location.pathname + location.search); };
+    const remember = (pid) => {
+        if (opts.ownsAddress) history.replaceState(null, "", pid ? `#${pid}` : location.pathname + location.search);
+        else try { pid ? sessionStorage.setItem(SS_OPEN, pid) : sessionStorage.removeItem(SS_OPEN); } catch { /* not remembered: the map opens on its choices */ }
+    };
     const picked = new Set();   // the system chips switched on; none means every system
     // A chip for each system some process touches, so none filters to an empty map.
     const used = new Set(Object.values(model.processes).flatMap((p) => p.systems || []));
@@ -863,7 +897,10 @@ export async function drawMap(host, opts = {}) {
     apply();
     // What the host or the address names, a process or one of its steps, opens; anything else opens on the choices.
     // A redirect from a page MoonWalk took over keeps that page's anchor after the process's, so only the first part counts.
-    const [asked, step] = (opts.open || (opts.ownsAddress ? decodeURIComponent(location.hash.slice(1)).split("#")[0] : "") || focus).split("/");
+    // What the host names wins; else the address on the site, or on another host the process the reader had open in this tab.
+    let kept = "";
+    if (!opts.ownsAddress) try { kept = sessionStorage.getItem(SS_OPEN) || ""; } catch { /* none */ }
+    const [asked, step] = (opts.open || (opts.ownsAddress ? decodeURIComponent(location.hash.slice(1)).split("#")[0] : kept) || focus).split("/");
     if (model.processes[asked]) { open(asked); if (step) toStep(asked, step); }
     else choose();
     // What a host calls when it closes the map: Cytoscape's window listeners and both observers go with it.
