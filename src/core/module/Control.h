@@ -70,7 +70,8 @@ enum class ControlType : uint8_t {
 /// The unit a progress control's value and total count in; the UI sizes the label from it.
 enum class ProgressUnit : uint8_t {
     Bytes,      ///< a byte count, which fits a uint32_t up to 4 GiB
-    KiB         ///< kibibytes, for a store whose byte count overruns a uint32_t
+    KiB,        ///< kibibytes, for a store whose byte count overruns a uint32_t
+    Count       ///< a plain count (frames, items), shown as a number with no byte suffix
 };
 
 class JsonSink;   // forward-declared so the descriptor can hold a pointer

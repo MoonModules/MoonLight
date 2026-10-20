@@ -228,9 +228,11 @@ TEST_CASE("a progress control declares its unit to the UI, bytes unless told oth
     uint32_t used = 1, usedKiB = 1;
     mod.controls().addProgress("flash", used, 4096);
     mod.controls().addProgress("card", usedKiB, 31166976, mm::ProgressUnit::KiB);
+    mod.controls().addProgress("frames", used, 6300, mm::ProgressUnit::Count);
     const auto meta = [&](uint8_t i) { mm::JsonSink sink; mm::writeControlMetadata(sink, mod.controls()[i]); return std::string(sink.data(), sink.size()); };
     CHECK(meta(0) == ",\"total\":4096,\"unit\":\"B\"");
     CHECK(meta(1) == ",\"total\":31166976,\"unit\":\"KiB\"");
+    CHECK(meta(2) == ",\"total\":6300,\"unit\":\"count\"");
 }
 
 // enabled defaults to true; setEnabled flips the universal enable gate (Scheduler and parent containers respect it).
@@ -257,7 +259,7 @@ TEST_CASE("Bool control binding") {
     CHECK(*static_cast<bool*>(ctrl.ptr) == false);
 }
 
-// appearsInUi() defaults to true (every ordinary module shows in the UI) and is overridable to false so infrastructure modules (FilesystemModule, HttpServerModule) can hide, the flag the state serializer reads to skip a module. A base MoonModule and a control-bearing one both appear; only a module that overrides to false hides.
+// appearsInUi() defaults to true (every module shows); overridable to false so infrastructure (FilesystemModule, HttpServerModule) hides, the flag the state serializer reads to skip a module.
 TEST_CASE("MoonModule appearsInUi defaults true, overridable false") {
     TestModule visible;
     CHECK(visible.appearsInUi());       // ordinary module: shown
@@ -270,7 +272,7 @@ TEST_CASE("MoonModule appearsInUi defaults true, overridable false") {
     CHECK_FALSE(asBase->appearsInUi());
 }
 
-// readBool/readUint8, the shared generic control reader (reviewer #8): one implementation so the absent-control default can't disagree between callers (HttpServerModule + MqttModule both read Drivers.on through this). Returns the bound value; returns the caller's default when absent/wrong-type.
+// readBool/readUint8, the shared generic control reader (reviewer #8): one implementation, so HttpServerModule and MqttModule can't disagree on Drivers.on's absent-control default.
 TEST_CASE("MoonModule readBool/readUint8 return the value, or the default when absent") {
     TestModule mod;
     mod.defineControls();   // binds brightness(Uint8), speed(Uint8), enabled(Bool)

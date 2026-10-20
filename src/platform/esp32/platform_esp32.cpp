@@ -117,6 +117,7 @@
 #include "esp_log.h"
 #include "esp_rom_sys.h"     // esp_rom_delay_us (delayUs)
 #include "mdns.h"
+#include "miniz.h"   // tinfl, the decoder zlibInflateAll calls
 #include "driver/gpio.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -2243,5 +2244,21 @@ void TcpServer::close() {
 }
 
 // irRead (IR receive) lives in platform_esp32_ir.cpp, an RMT NEC decoder.
+
+size_t zlibWorkspaceBytes() { return sizeof(tinfl_decompressor); }
+
+/// Inflate one zlib block in a single `tinfl_decompress` call over the whole input and output, against the caller's workspace rather than this task's stack.
+bool zlibInflateAll(void* workspace, const uint8_t* src, size_t srcLen, uint8_t* dst, size_t dstCap, size_t& outLen) {
+    if (!workspace) return false;
+    auto* decomp = static_cast<tinfl_decompressor*>(workspace);
+    tinfl_init(decomp);
+    size_t inBytes = srcLen;
+    size_t outBytes = dstCap;
+    const tinfl_status status = tinfl_decompress(decomp, src, &inBytes, dst, dst, &outBytes,
+                                                  TINFL_FLAG_PARSE_ZLIB_HEADER | TINFL_FLAG_USING_NON_WRAPPING_OUTPUT_BUF);
+    if (status != TINFL_STATUS_DONE) return false;   // HAS_MORE_OUTPUT: the block inflates past dstCap, a file that lied about its size
+    outLen = outBytes;
+    return true;
+}
 
 } // namespace mm::platform

@@ -88,6 +88,8 @@ constexpr bool hasHls = true;
 constexpr bool hasRtsp = true;
 /// False: a desk on the computer reaches the MIDI service through the browser.
 constexpr bool hasUsbMidiHost = false;
+/// False: no grabber on a computer, so only the tests drive the stand-in, as USB MIDI does.
+constexpr bool hasUsbVideo = false;
 /// True: ffmpeg offers several encoders, so the pick is the user's.
 constexpr bool hasEncoderChoice = true;
 /// True: ffmpeg writes the playlist to disk, so the server serves segments as files.
@@ -124,6 +126,9 @@ constexpr uintptr_t codeAddressBits = 0;
 constexpr bool hasSdCard = true;
 /// True: no slot is wired, so SdCardService offers every board preset, for the tests to exercise them.
 constexpr bool previewsSdPresets = true;
+
+/// False: no zlib decoder is linked here; `zlibInflateAll` is a stub.
+constexpr bool hasZlibInflate = false;
 
 } // namespace mm::platform
 

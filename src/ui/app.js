@@ -4846,8 +4846,9 @@ function fmtTime(sec) {
     return parts.join(" ");
 }
 
-// "used / total", each sized by fmtBytes from the unit the device declares.
+// "used / total", each sized by fmtBytes from the unit the device declares; a count unit shows plain numbers.
 function fmtProgressLabel(ctrl) {
+    if (ctrl.unit === "count") return (Number(ctrl.value) || 0) + " / " + (Number(ctrl.total) || 0);
     const scale = ctrl.unit === "KiB" ? 1024 : 1;
     return fmtBytes((Number(ctrl.value) || 0) * scale) + " / " + fmtBytes((Number(ctrl.total) || 0) * scale);
 }

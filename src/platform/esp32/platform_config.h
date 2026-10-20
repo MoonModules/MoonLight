@@ -209,6 +209,13 @@ constexpr bool hasUsbMidiHost = true;
 #else
 constexpr bool hasUsbMidiHost = false;
 #endif
+
+// The UVC host and the JPEG decoder cost flash, so only the images that set the symbol carry them.
+#if defined(CONFIG_MM_USB_VIDEO)
+constexpr bool hasUsbVideo = true;
+#else
+constexpr bool hasUsbVideo = false;
+#endif
 /// False: one hardware encoder, so there is nothing to choose and the control stays hidden.
 constexpr bool hasEncoderChoice = false;
 /// False: segments live in a PSRAM ring, flash wear buying nothing for a file stale within seconds.
@@ -259,6 +266,8 @@ constexpr bool hasSdCard = true;
 #else
 constexpr bool hasSdCard = false;
 #endif
+/// True: `zlibInflateAll` decodes through the ROM's tinfl on every ESP32 board.
+constexpr bool hasZlibInflate = true;
 /// False: SdCardService offers only the board presets this chip can wire.
 constexpr bool previewsSdPresets = false;
 
