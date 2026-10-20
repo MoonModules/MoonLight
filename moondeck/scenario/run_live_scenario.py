@@ -592,7 +592,7 @@ def _fixture_canvas(fixture: list) -> list:
 
 
 def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
-                 update_contract: bool = False,
+                 update_contract: bool = False, update_observed: bool = False,
                  update_reason: str | None = None, named: bool = True,
                  network: str | None = None, boards: dict | None = None) -> dict:
     """Run a scenario against a live device and return results.
@@ -1405,14 +1405,10 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
                 "free_heap": int(heap),
                 "max_alloc_block": int(max_block),
             }
-            existing_obs = step.get("observed", {}).get(obs_target)
-            if update_contract:
-                new_obs = _observed.reset(sample, _today_iso())
-                obs_changed = True
-            else:
-                new_obs, obs_changed = _observed.widen(existing_obs, sample, _today_iso())
-            if obs_changed:
-                step.setdefault("observed", {})[obs_target] = new_obs
+            # The window is this machine's, kept in the local store; the scenario file takes the summary only when asked.
+            local = _observed.record(scenario.get("name", scenario_path.stem), step.get("name", "?"), obs_target, sample, _today_iso(), reset_window=update_contract)
+            if update_observed or update_contract:
+                step.setdefault("observed", {})[obs_target] = _observed.summary(local)
                 wrote_observations[0] = True
 
             # --update-contract: rewrite the contract in the scenario JSON for the
@@ -1531,7 +1527,7 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
                         del contract[obs_target]
                     else:
                         contract[obs_target] = orig
-        print(f"  contract[{obs_target}] NOT written (run failed; observed still saved)")
+        print(f"  contract[{obs_target}] NOT written (run failed)")
 
     if wrote_observations[0] or contract_safe_to_write:
         _observed.save_scenario(scenario_path, scenario)
@@ -1576,6 +1572,9 @@ def main():
                         help="Another board a scenario names in `boards`, such as sender=192.168.1.156; repeat for each.")
     parser.add_argument("--settle", type=float, default=3.0,
                         help="Settle time in seconds between step and measurement")
+    parser.add_argument("--update-observed", action="store_true",
+                        help=("Write this run's observed statistics into the scenario file as its published summary. "
+                              "Without it a run keeps its sample window on this machine and leaves the file alone."))
     parser.add_argument("--update-contract", action="store_true",
                         help=("Renegotiate the per-step performance contract: write "
                               "observed tick/heap into contract[<target>] and stamp "
@@ -1642,7 +1641,7 @@ def main():
             print(f"Scenario not found: {path}")
             continue
         result = run_scenario(client, path, args.settle,
-                              update_contract=args.update_contract,
+                              update_contract=args.update_contract, update_observed=args.update_observed,
                               update_reason=args.reason, named=bool(args.name), network=args.network,
                               boards=boards)
         all_results[result["name"]] = result

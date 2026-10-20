@@ -353,30 +353,22 @@ Target keys match `SystemModule.firmware` on a flashed device (`esp32`, `esp32-e
 
 #### Persistent observations (`observed[<target>]`)
 
-Alongside `contract`, every measurable step keeps a **rolling [min, max] range** per scalar in the `observed.<target>` block. The range only ever *widens*: a measurement inside the current bounds doesn't change the JSON at all (no diff churn on routine runs); a measurement outside the bounds pushes the relevant end out and updates the timestamp.
+A measured step is compared against its `contract` and also **observed**: each passing run takes the step's tick, free heap and largest block into a rolling window of 32 samples per target, and the statistics over it (p50, p95, min, max, n) say what the step normally costs and how bad its tail is. The window is the machine's own history, so it lives on that machine, in `build/moondeck-logs/observations.json`, and a run leaves every tracked file as it found it.
+
+The scenario file carries a **summary** of the window, published on purpose: `--update-observed` writes this run's statistics into `observed.<target>` (without the samples), and so does a renegotiated contract (`--update-contract`). The test page draws that summary beside the contract, so a reader sees what each board did the last time a bench run was published.
 
 ```json
 "observed": {
   "esp32-eth-wifi": {
-    "tick_us":         [80649, 89483],
-    "free_heap":       [95528, 110640],
-    "max_alloc_block": [49152, 53248],
-    "at":              ["2026-06-02", "2026-06-15"]
-  },
-  "esp32-eth": {
-    "tick_us":         [99514, 99514],
-    "free_heap":       [135200, 135200],
-    "max_alloc_block": [49152, 49152],
-    "at":              ["2026-06-02", "2026-06-02"]
+    "tick_us":         {"p50": 84210, "p95": 89483, "min": 80649, "max": 91002, "n": 32},
+    "free_heap":       {"p50": 104220, "p95": 110640, "min": 95528, "max": 110640, "n": 32},
+    "max_alloc_block": {"p50": 53248, "p95": 53248, "min": 49152, "max": 53248, "n": 32},
+    "last_updated":    "2026-06-15"
   }
 }
 ```
 
-Read directions match the contract semantics: tick contract is a *ceiling*, so the **max** of the observed range is the value that could fail it; heap and block contracts are *floors*, so the **min** of the observed range is the failure-side. The `at` field carries `[first_seen, last_updated]` so a stale range stands out (e.g. "last_updated is six months old → re-sweep this target").
-
-Updated by **every** successful run of `run_scenario.py` or `run_live_scenario.py` for the active target, no flag needed. A range that never widens produces no diff. When a contract is renegotiated via `--update-contract` (see below), the observed range *resets* to the new single-point measurement because the previous range belonged to the old contract.
-
-Open any scenario JSON and the range tells you both the typical case (the value sits in the range) and the variance (range width). A wide gap between the max of the observed range and the contract ceiling means there's headroom to tighten the promise; a max creeping up against the ceiling means a regression may be imminent.
+A median is what a step normally costs and cannot be dragged by one contended run, and the tail is the p95, which a real regression moves and a single bad run does not. A window of one sample (`n: 1`) is a first impression, not a baseline. A free heap or largest block of 0 is the desktop saying it has no ceiling, so it never enters a window.
 
 #### Renegotiating a contract
 
@@ -433,7 +425,7 @@ Every `scenario_*.json` carries top-level metadata plus a `description` per step
 }
 ```
 
-`name` matches the filename stem exactly; `module` drives the doc grouping and the MoonDeck filter; `also` lists peer modules. `mode` is `construct` or `mutate` (see above). `fixture` is required for `mutate` scenarios that need to run in-process. `reset` (optional but recommended for mutate scenarios) normalizes controls before measurement so contract assertions aren't coupled to run order. `contract[<target>]` carries the per-target performance contract, see § Performance contracts. `observed[<target>]` carries a rolling `[min, max]` range per metric (tick_us, free_heap, max_alloc_block) plus `at: [first_seen_iso, last_seen_iso]` timestamps, widen-only across runs, so each run extends the range rather than replacing it; see § Persistent observations. Per-step `description` is recommended (a missing one falls back to the step's `name`/`op` in the generated view). Optional top-level `"live_only": true` keeps the scenario out of the in-process runner. Optional per-step `"measure": true` triggers a measurement after the step, checked against the step's `contract`.
+`name` matches the filename stem exactly; `module` drives the doc grouping and the MoonDeck filter; `also` lists peer modules. `mode` is `construct` or `mutate` (see above). `fixture` is required for `mutate` scenarios that need to run in-process. `reset` (optional but recommended for mutate scenarios) normalizes controls before measurement so contract assertions aren't coupled to run order. `contract[<target>]` carries the per-target performance contract, see § Performance contracts. `observed[<target>]` carries the published summary of the observations per metric (tick_us, free_heap, max_alloc_block), written on request; see § Persistent observations. Per-step `description` is recommended (a missing one falls back to the step's `name`/`op` in the generated view). Optional top-level `"live_only": true` keeps the scenario out of the in-process runner. Optional per-step `"measure": true` triggers a measurement after the step, checked against the step's `contract`.
 
 Unknown JSON keys are ignored by both runners (C++ and Python), so adding a new field is safe.
 

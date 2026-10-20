@@ -14,11 +14,11 @@ Decided once, not re-derived per file.
 
 ### Language mechanics
 
-- **`#pragma once`** for header guards. No `#ifndef … #define … #endif`.
-- **`constexpr`** over `#define` for compile-time constants. `#define` is reserved for build-system flags (e.g. `MM_NO_WIFI`) that need to be visible to the preprocessor.
+- **`#pragma once`** for header guards. No `#ifndef … #define … #endif`. Checked by `check_code`, rule `header without #pragma once`.
+- **`constexpr`** over `#define` for compile-time constants. `#define` is reserved for build-system flags (e.g. `MM_NO_WIFI`) that need to be visible to the preprocessor. Checked by `check_code`, rule `#define used as a constant`.
 - **`std::span`** over pointer + length pair in function signatures. The span carries the bound; the caller can't desync.
 - **Namespace `mm`** for everything in the project. Platform code lives in `mm::platform`. Tests live in `mm` (no `mm::test`, keeps the same names visible to test code as to library code).
-- **No `using namespace` in headers.** In a `.cpp`, `using namespace mm;` is allowed at file scope. In a header it pollutes every translation unit that includes it.
+- **No `using namespace` in headers.** In a `.cpp`, `using namespace mm;` is allowed at file scope. In a header it pollutes every translation unit that includes it. Checked by `check_code`, rule `using namespace in a header`.
 - **Include what you use, and compare C strings with `strcmp`.** A file includes every header it names, and a `const char*` compares by content with `strcmp`, while a `std::string` or `std::string_view` compares with `==`. Clang resolves standard headers transitively and merges identical literals, and macOS's libc++ includes `<cstdint>` for you; GCC in CI and Linux's libstdc++ show both faults.
 
 ### Naming
@@ -33,7 +33,7 @@ Use project typedefs (`lengthType`, `nrOfLightsType`) consistently so types matc
 
 - **`static_cast`**: converts a value between related types. Checked at compile time. Use only at system boundaries: byte protocol packing, OS API return values, overflow-prevention with wider intermediates. If you need `static_cast` between project types, make the types match instead.
 - **`reinterpret_cast`**: raw byte or memory access only, such as `reinterpret_cast<const sockaddr*>` for a socket API. It converts nothing and checks nothing, so that is its whole territory.
-- **`dynamic_cast`**: absent by construction. ESP32 builds with `-fno-rtti`, so a base-to-derived question is answered by a virtual method or a role check instead.
+- **`dynamic_cast`**: absent by construction. Checked by `check_code`, rule `dynamic_cast or typeid in firmware`. ESP32 builds with `-fno-rtti`, so a base-to-derived question is answered by a virtual method or a role check instead.
 
 ## Growing the codebase
 
@@ -47,7 +47,7 @@ Use project typedefs (`lengthType`, `nrOfLightsType`) consistently so types matc
 
 **Use `float` only when the value is intrinsically fractional**, geometry positions on a normalized grid, audio amplitudes, ratios that would lose meaning if rounded. Even then, ask whether scaled integers (e.g. fixed-point `uint16_t` for 0..65535 mapping to 0.0..1.0) work. The render loop hits every light every frame; an integer multiply-and-shift dominates a float multiply on ESP32.
 
-**`float` is the widest type in firmware code, and `double` has no place in it.** Xtensa (ESP32 classic) has no hardware FPU for `double`, every `double` operation runs in software emulation, ~30× slower than the same op on `float`. `1.0` is a `double` literal; write `1.0f` when you meant float. A `double` slipping into the render path silently tanks FPS.
+**`float` is the widest type in firmware code, and `double` has no place in it.** Xtensa (ESP32 classic) has no hardware FPU for `double`, every `double` operation runs in software emulation, ~30× slower than the same op on `float`. `1.0` is a `double` literal; write `1.0f` when you meant float. A `double` slipping into the render path silently tanks FPS. Checked by `check_code`, rule `double in firmware code`.
 
 **Store values in their native shape.** When the value is intrinsically numeric, store it as a number. When it is four octets, store it as four octets. **A long-lived string buffer earns nothing from the UI eventually showing the value as text.** Format to string at the output boundary, on the stack, then throw the buffer away. Every "I'll `char foo[12]` it now and snprintf into it" decision freezes a few bytes into the module's permanent footprint. The cheaper alternative is one int and a `snprintf` on a local stack buffer at serialization time. On ESP32 with ~180 KB free heap, dozens of those add up.
 
@@ -185,29 +185,13 @@ Diagnostics as you type come from clangd, using the same `.clang-tidy` CI runs; 
 ### Static checks
 
 - **Hot path check** (`moondeck/check/check_nonblocking.py`): the tick methods carry `MM_NONBLOCKING`, and Clang verifies transitively that nothing they reach allocates or blocks. Each site is a `blocking call on the render path` row in the code report below, so the count may only fall. Each finding stays a judgment: fix it, annotate the callee, or accept it with a scoped reason. An audit must sweep every syscall the path can reach, not the loudest one: a socket timeout is not a fix, it is the size of the freeze. The rule itself: [the architecture](../explanation/architecture/moonmodule.md#hot-path-discipline).
-- **The code report** (`moondeck/check/check_code.py`): every function over a complexity, length, nesting or parameter limit, every block of code found elsewhere, and every file over a length limit. It also counts each crossing of the [platform and domain boundaries](../explanation/architecture/mooncore.md#platform-abstraction). Listed per file in `docs/reference/metrics/code.md`, whose committed counts may only fall, per rule and in total; a touched file clears its own rows.
+- **The code report** (`moondeck/check/check_code.py`): its rules, the limit of each, how a finding is solved and what it last found are on [the test page](../reference/tests.md#check_code), generated from the check itself.
 
 ### From a finding to a fix
 
 A finding is a named code smell. Every smell has a named, behavior-preserving move from the refactoring catalog (Fowler, *Refactoring*), the vocabulary every IDE's refactor menu and every quality platform uses. The commit names the move it made, so a reviewer checks that the move was applied rather than whether the result looks simpler, and two people make the same change.
 
-| Smell, what the report counts | The move | Where it lands |
-|---|---|---|
-| Long function | Extract Function | a named step a reader can skip |
-| Deeply nested | Replace Nested Conditional with Guard Clauses; Extract Function on the inner loop | flat flow, one level at a time |
-| Complex function: a conditional chain on one value | Replace Conditional with a table | data rows, no branches: a Command table |
-| Complex function: a `switch` on a state | Replace Type Code with State: one method per state | the State pattern |
-| Duplicated code | Extract Function, Pull Up Method | one home |
-| Long parameter list | Introduce Parameter Object | one struct |
-| Large file | Extract Class, Move Function | a module per concern |
-| Core reaching into light | Move Function, or an interface in core that light implements | the dependency points inward |
-| Platform code outside `src/platform` | Move Function into the platform layer; `if constexpr` on `platform_config.h` | a target's facts in one layer |
-| A blocking call on the render path | Move the work off the render thread: a worker, a cached value, a deferred apply | the tick only computes |
-| A name spread across files | Move Function, self-registration | a concept in one place |
-| A module type named in the UI | Replace Conditional with Polymorphism: the module declares a control, a role or a flag | the UI knows no module |
-| A stack frame over 512 bytes | Move the large local into a member or a `ScratchBuffer`, sized once | no task's stack pays for it |
-| A buffer taken by hand in the light domain | Replace it with a `ScratchBuffer` member | owned, sized, reported and freed in one place |
-| Mutable static state in core or light | Move the state into the module: a member, a `ScratchBuffer` taken in `prepare()`, or a caller-owned workspace | a module that does not run costs flash only |
+Each rule of `check_code` carries its move, shown with the rule on [the test page](../reference/tests.md#check_code): the smell, the catalog move that solves it, and where the code lands.
 
 Cut first: a branch that chooses between equals is data, a guard is an early return, and nesting is what a reader trips on, more than branch count. The theory behind the moves is Ousterhout's: complexity is dependencies and obscurity, so a deep module with a small interface absorbs it and its callers stay simple. A function may stay over a limit when splitting it would hide a sequence that belongs together. It says so in one line, and its count stays rather than being forced.
 

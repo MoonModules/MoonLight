@@ -69,6 +69,45 @@ def doctest_runs(xml: str, root: Path = ROOT) -> dict:
     return runs
 
 
+def _status(case) -> str:
+    return "fail" if case.find("failure") is not None or case.find("error") is not None else "skip" if case.find("skipped") is not None else "pass"
+
+
+def pytest_runs(xml: Path) -> dict:
+    """The runs in pytest's JUnit file, by id: `python:<file>::<test>`, the dotted classname turned back into the file's path."""
+    runs = {}
+    for case in ET.parse(xml).getroot().iter("testcase"):
+        file = case.get("classname", "").replace(".", "/") + ".py"
+        runs[f"python:{file}::{case.get('name')}"] = {"status": _status(case), "seconds": float(case.get("time") or 0)}
+    return runs
+
+
+def node_runs(xml: Path, titles: dict) -> dict:
+    """The runs in node's JUnit file, which names a test by its title alone: `titles` maps each title to the ids that carry it (from the registry), so a run lands on its test, and on each of them when two files share a title."""
+    runs = {}
+    for case in ET.parse(xml).getroot().iter("testcase"):
+        for test_id in titles.get(case.get("name"), []):
+            runs[test_id] = {"status": _status(case), "seconds": float(case.get("time") or 0)}
+    return runs
+
+
+def scenario_runs(results: list) -> dict:
+    """A scenario run's results, `(kind, name, status, seconds)` each, by id: `scenario:<name>` or, for one that only runs on a device, `live:<name>`."""
+    return {f"{kind}:{name}": {"status": status, "seconds": round(seconds, 3)} for kind, name, status, seconds in results}
+
+
+def check_runs(runs_file: Path | None = None, durations_file: Path | None = None) -> dict:
+    """MoonDeck's record of each check script's last run, by id `check:<script>`: its pass, and the longest of its recent seconds, for a script run without arguments."""
+    recorded = walk_status.read_runs(runs_file or walk_status.ROOT / "build" / "moondeck-logs" / "walk-runs.json")
+    durations = walk_status.read_runs(durations_file or walk_status.ROOT / "build" / "moondeck-logs" / "durations.json")
+    out = {}
+    for key, r in recorded.items():
+        if key.startswith("moondeck/check/check_") and " " not in key and "passed" in r:
+            seconds = walk_status.longest(durations, key)
+            out[f"check:{Path(key).stem}"] = {"status": "pass" if r["passed"] else "fail", "seconds": seconds or 0, "tree": r.get("tree")}
+    return out
+
+
 def record(runs: dict, path: Path = RUNS, tree: str | None = None) -> None:
     """Keep these runs with the tree they saw and when, replacing each test's last one."""
     tree = tree or walk_status.tree_now()
@@ -76,9 +115,9 @@ def record(runs: dict, path: Path = RUNS, tree: str | None = None) -> None:
     walk_status._update(path, lambda data: data.update({i: {**r, "tree": tree, "at": at} for i, r in runs.items()}))
 
 
-def published(path: Path = RUNS, tree: str | None = None, known: set | None = None) -> dict:
+def published(path: Path = RUNS, tree: str | None = None, known: set | None = None, checks: bool = True) -> dict:
     """The runs as the page shows them: each with whether it ran on the working tree as it is now, so an older pass reads as older. A subcase's run (`case/sub`, as doctest names it) counts for the registered test it belongs to: it fails if any fails."""
-    runs = walk_status.read_runs(path)
+    runs = {**walk_status.read_runs(path), **(check_runs() if checks else {})}
     if not runs:
         return {}
     tree = tree or walk_status.tree_now()

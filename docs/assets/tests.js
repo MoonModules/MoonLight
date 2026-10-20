@@ -6,37 +6,54 @@ const REPO = "https://github.com/MoonModules/MoonLight/blob/main/";
 const KINDS = { unit: "Unit", scenario: "Scenario", live: "Live" };
 
 const STYLE = `
-.mm-tests { display: grid; grid-template-columns: minmax(12rem, 18rem) minmax(0, 1fr); gap: 1rem; align-items: start; }
-.mm-tests-bar { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+.mm-tests { display: block; }
+.mm-tests-bar { display: flex; margin-bottom: 0.8rem; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
 .mm-tests-bar input[type="search"] { flex: 1 1 14rem; padding: 4px 8px; border: 1px solid var(--md-default-fg-color--lightest, #8884); border-radius: 4px; background: transparent; color: inherit; font: inherit; }
 .mm-tests-chip { padding: 2px 10px; border: 1px solid var(--md-default-fg-color--lightest, #8884); border-radius: 999px; background: transparent; color: inherit; font: inherit; cursor: pointer; }
 .mm-tests-chip[aria-pressed="true"] { border-color: var(--md-accent-fg-color, #526cfe); color: var(--md-accent-fg-color, #526cfe); }
-.mm-tests-subjects { max-height: 75vh; overflow: auto; border: 1px solid var(--md-default-fg-color--lightest, #8884); border-radius: 6px; }
-.mm-tests-subjects summary { padding: 4px 10px; cursor: pointer; font-weight: bold; }
-.mm-tests-subjects summary .mm-tests-count { font-weight: normal; }
-.mm-tests-subjects ul { margin: 0; padding: 0; list-style: none; }
-.mm-tests-subjects li { display: flex; justify-content: space-between; gap: 0.5rem; padding: 3px 10px 3px 24px; cursor: pointer; }
-.mm-tests-subjects li:hover, .mm-tests-subjects li[aria-current="true"] { background: color-mix(in srgb, var(--md-accent-fg-color, #526cfe) 15%, transparent); }
+.mm-tests-subjects { border: 1px solid var(--md-default-fg-color--lightest, #8884); border-radius: 6px; padding: 0.3rem 0.4rem; }
+.mm-tests .mm-tests-subjects details, .mm-tests .mm-tests-subjects ul, .mm-tests .mm-tests-subjects li { margin: 0; padding: 0; }
+.mm-tests .mm-tests-subjects summary, .mm-tests .mm-tests-subjects li:not(.mm-tests-detail) { display: flex; align-items: baseline; gap: 0.5rem; padding: 0.22rem 0.4rem; line-height: 1.4; list-style: none; cursor: pointer; }
+.mm-tests-subjects summary::-webkit-details-marker { display: none; }
+.mm-tests-subjects summary::after { display: none; }
+.mm-tests details { border: 0 !important; box-shadow: none !important; background: none !important; }   /* the theme draws a details as an admonition: here it is a plain tree node */
+.mm-tests .mm-tests-subjects summary { background: none !important; }
+.mm-tests-subjects summary::before { all: unset; content: "\\25B8"; display: inline-block; flex: none; width: 1em; color: var(--md-default-fg-color--light, #888); }   /* the disclosure triangle, at the left of the line it opens */
+.mm-tests-subjects details[open] > summary::before { content: "\\25BE"; }
+.mm-tests-subjects summary { font-weight: bold; }
+.mm-tests-subject { margin-left: 1.3rem !important; }   /* one indent per level: group, subject, test */
+.mm-tests-subject > summary { font-weight: normal; }
+.mm-tests-subject ul { margin-left: 1.3rem !important; list-style: none; }
+.mm-tests-subjects li:not(.mm-tests-detail):hover, .mm-tests-subjects li[aria-current="true"] { background: color-mix(in srgb, var(--md-accent-fg-color, #526cfe) 15%, transparent); }
+.mm-tests-detail { display: block; padding: 0.2rem 0 0.7rem 1.4rem !important; cursor: default; }
+.mm-tests-gaps { margin-bottom: 0.8rem; }
 .mm-tests-count { color: var(--md-default-fg-color--light, #888); font-size: 0.85em; white-space: nowrap; }
-.mm-tests-list article { margin: 0 0 0.8rem; padding: 0.4rem 0.7rem; border: 1px solid var(--md-default-fg-color--lightest, #8884); border-left: 4px solid var(--mw-kind, #888); border-radius: 6px; }
+.mm-tests-badges { display: inline-flex; gap: 0.3rem; }
+.mm-tests-badge { font-size: 0.8em; padding: 0 6px; border-radius: 999px; white-space: nowrap; }
+.mm-tests-badge.bad { background: #c92a2a; color: #fff; }
+.mm-tests-badge.warn { background: #e8590c; color: #fff; }
+.mm-tests-badge.ok { background: #2f9e44; color: #fff; }
+.mm-tests-badge.none { background: #868e96; color: #fff; }
+.mm-tests-mark { flex: none; width: 1.2em; text-align: center; font-size: 0.85em; }
+.mm-tests-mark.ok { color: #2f9e44; } .mm-tests-mark.bad { color: #c92a2a; } .mm-tests-mark.none { color: #868e96; }
+.mm-tests-name { min-width: 0; overflow-wrap: anywhere; }
+.mm-tests-list article { max-height: 22rem; overflow: auto; margin: 0 0 0.8rem; padding: 0.4rem 0.7rem; border: 1px solid var(--md-default-fg-color--lightest, #8884); border-left: 4px solid var(--mw-kind, #888); border-radius: 6px; }
 .mm-tests-list article[data-kind="unit"] { --mw-kind: #2f9e44; }
 .mm-tests-list article[data-kind="scenario"] { --mw-kind: #1c7ed6; }
 .mm-tests-list article[data-kind="live"] { --mw-kind: #e8590c; }
 .mm-tests-title { font-weight: bold; }
 .mm-tests-meta { color: var(--md-default-fg-color--light, #888); font-size: 0.85em; }
 .mm-tests-list p { margin: 0.3rem 0; }
+.mm-tests-list p.mm-tests-clamp { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; cursor: pointer; }   /* a long description shows three lines, a click shows all */
 .mm-tests-run { display: flex; gap: 0.5rem; align-items: center; }
 .mm-tests-run code { flex: 1; min-width: 0; overflow-x: auto; white-space: nowrap; font-size: 0.85em; }
 .mm-tests-list button { padding: 0 8px; border: 1px solid var(--md-default-fg-color--lightest, #8884); border-radius: 4px; background: transparent; color: inherit; font: inherit; font-size: 0.8em; cursor: pointer; }
 .mm-tests-list table { font-size: 0.85em; margin: 0.2rem 0 0.4rem; }
 .mm-tests-list ol { margin: 0.3rem 0; }
-.mm-tests details { margin: 0; padding: 0; border: 0; box-shadow: none; background: none; }   /* the theme draws a details as an admonition: here it is a plain section */
-.mm-tests details > summary { padding: 4px 1.8rem 4px 10px; background: none; }
-.mm-tests details > summary::before { display: none; }
 .mm-tests-list details { margin: 0.4rem 0; }
-.mm-tests-list details > summary { padding-left: 0; }
 .mm-tests-text { display: none; }
-@media (max-width: 60em) { .mm-tests { grid-template-columns: 1fr; } }
+.mm-tests-card { position: fixed; z-index: 60; font-size: 0.8rem; line-height: 1.55; color: var(--md-default-fg-color, inherit); overflow: auto; padding: 0.5rem 0.9rem; background: var(--md-default-bg-color, #fff); border: 1px solid var(--md-default-fg-color--lightest, #8884); border-radius: 8px; box-shadow: 0 8px 28px #0006; }
+.mm-tests-card[hidden] { display: none; }
 `;
 
 function el(tag, attrs = {}, text) {
@@ -99,14 +116,53 @@ function resultLine(run) {
     return p;
 }
 
-function testCard(id, t, run) {
+// A check's rules with what each last found on the machine that built the page, and the files with the most findings.
+function findingsBlock(f) {
+    const d = el("details");
+    d.append(el("summary", {}, `${f.total} findings under ${Object.values(f.rules).filter((r) => r.count).length} of ${Object.keys(f.rules).length} rules`));
+    const table = el("table");
+    const head = el("tr");
+    for (const h of ["Rule", "Findings", "What it says"]) head.append(el("th", {}, h));
+    table.append(head);
+    for (const [rule, r] of Object.entries(f.rules).sort((a, b) => b[1].count - a[1].count)) {
+        const row = el("tr");
+        const what = el("td", {}, r.reason || "");
+        if (r.fix) what.append(el("br"), el("em", {}, `Move: ${r.fix}`));   // the catalog move that solves a finding, kept with its rule
+        if (r.standard) what.append(" ", el("a", { href: REPO + r.standard, target: "_blank", rel: "noopener" }, "the standard"));
+        row.append(el("td", {}, rule), el("td", {}, String(r.count)), what);
+        table.append(row);
+    }
+    d.append(table);
+    if (f.files.length) d.append(el("p", { className: "mm-tests-meta" }, `Most findings: ${f.files.map((x) => `${x.file} (${x.count})`).join(", ")}`));
+    return d;
+}
+
+// Where something is wrong on a subject: failed tests, and the errors and warnings of a check. Only what is wrong shows.
+function badges(s) {
+    const box = el("span", { className: "mm-tests-badges" });
+    const red = (s.failed || 0) + (s.errors || 0);   // one red number: a test that failed and an error a check found are both something to fix
+    const parts = [[red, "\u2716", "bad", [s.failed && `${s.failed} failed tests`, s.errors && `${s.errors} errors`].filter(Boolean).join(", ")],
+                   [s.warnings, "\u26a0", "warn", `${s.warnings} warnings`], [s.passed, "\u2714", "ok", `${s.passed} tests passed`], [s.norun, "?", "none", `${s.norun} tests with no result on this machine`]];
+    for (const [n, mark, cls, title] of parts) if (n) box.append(el("span", { className: `mm-tests-badge ${cls}`, title }, `${mark} ${n}`));
+    return box;
+}
+
+// What a subject's state is, for the filters: wrong (failed tests or errors), warned, or without a result.
+const states = (s) => [(s.failed || s.errors) && "bad", s.warnings && "warn", s.norun && "none"].filter(Boolean);
+
+function testCard(id, t, run, findings) {
     const card = el("article");
     card.dataset.kind = t.kind;
     card.id = id;
     card.append(el("div", { className: "mm-tests-title" }, t.title));
     card.append(el("div", { className: "mm-tests-meta" }, `${KINDS[t.kind] || t.kind}, ${t.size}`));
     if (run) card.append(resultLine(run));
-    if (t.description) card.append(el("p", {}, t.description));
+    if (t.kind === "check" && findings) card.append(findingsBlock(findings));
+    if (t.description) {
+        const p = el("p", t.description.length > 240 ? { className: "mm-tests-clamp", title: "Click to show all" } : {}, t.description);
+        p.addEventListener("click", () => p.classList.toggle("mm-tests-clamp"));
+        card.append(p);
+    }
     const where = el("p", { className: "mm-tests-meta" });
     where.append(el("a", { href: REPO + t.file + (t.line ? `#L${t.line}` : ""), target: "_blank", rel: "noopener" }, t.line ? `${t.file}:${t.line}` : t.file));
     if (t.subjects.length > 1) where.append(` · also about ${t.subjects.slice(1).join(", ")}`);
@@ -128,6 +184,10 @@ function testCard(id, t, run) {
     return card;
 }
 
+// A test's mark in the tree: how its last run on this machine ended.
+const MARK = { pass: ["\u2714", "ok", "passed"], fail: ["\u2716", "bad", "failed"] };
+const markOf = (run) => MARK[run?.status] || ["?", "none", run?.status === "skip" ? "skipped" : "no result on this machine"];
+
 export async function drawTests(host) {
     if (host.dataset.mounted) return;
     host.dataset.mounted = "1";
@@ -142,110 +202,183 @@ export async function drawTests(host) {
         host.textContent = `The tests could not load: ${e.message}`;
         return;
     }
+    const findings = await fetch(new URL("tests/findings.json", ROOT)).then((r) => (r.ok ? r.json() : {})).catch(() => ({}));
     const runs = await fetch(new URL("tests/runs.json", ROOT)).then((r) => (r.ok ? r.json() : {})).catch(() => ({}));   // none where nothing ran
     document.querySelector(".mm-tests-text")?.remove();   // the plain text is for search and for a reader without JavaScript
 
     const bar = el("div", { className: "mm-tests-bar" });
-    const search = el("input", { type: "search", placeholder: `Search ${Object.keys(index.subjects).length} subjects` });
+    const search = el("input", { type: "search", placeholder: `Search ${Object.keys(index.subjects).length} subjects and the tests you opened` });
     bar.append(search);
-    const on = new Set();
-    for (const [kind, label] of Object.entries(KINDS)) {
-        const chip = el("button", { type: "button", className: "mm-tests-chip" }, label);
-        chip.setAttribute("aria-pressed", "false");
-        chip.addEventListener("click", () => { on.has(kind) ? on.delete(kind) : on.add(kind); chip.setAttribute("aria-pressed", String(on.has(kind))); drawSubjects(); if (current) show(current); });
-        bar.append(chip);
-    }
-    // What no test covers, from gaps.json: fetched when the reader asks, drawn in place of a subject's tests.
+    const kinds = new Set();   // the kind filters
+    const state = new Set();   // the state filters: errors, warnings, no result
+    const chip = (label, title, set, key) => {
+        const b = el("button", { type: "button", className: "mm-tests-chip", title }, label);
+        b.setAttribute("aria-pressed", "false");
+        b.addEventListener("click", () => { set.has(key) ? set.delete(key) : set.add(key); b.setAttribute("aria-pressed", String(set.has(key))); draw(); });
+        return b;
+    };
+    for (const [key, label, title] of [["bad", "Errors", "Failed tests and check errors"], ["warn", "Warnings", "Subjects a check warned about"], ["none", "No result", "Tests with no result on this machine"]]) bar.append(chip(label, title, state, key));
+    for (const [kind, label] of Object.entries(KINDS)) bar.append(chip(label, "", kinds, kind));
+    // What no test covers, from gaps.json: fetched when the reader asks, drawn in a card.
     const gapsButton = el("button", { type: "button", className: "mm-tests-chip", title: "What no test covers" }, "Gaps");
-    gapsButton.addEventListener("click", () => showGaps());
-    bar.append(gapsButton);
-    const subjects = el("div", { className: "mm-tests-subjects" });
-    const list = el("div", { className: "mm-tests-list" });
-    host.replaceChildren(bar, subjects, list);
+    const tree = el("div", { className: "mm-tests-subjects" });
+    host.replaceChildren(bar, tree);
 
-    let current = "";
-    const opened = new Set();   // the groups the reader opened, kept across a redraw
-    const counts = (kinds) => Object.entries(kinds).filter(([k]) => !on.size || on.has(k)).reduce((n, [, v]) => n + v, 0);
-    // The subjects by group, a group a closed section until the reader opens it, or the search or the open subject needs it.
-    function drawSubjects() {
+    // The detail of a test opens inline, under its row, as in a tree view; a click on the row opens or closes it.
+    let pinned = "", pinnedContent = null;
+    const gapsPane = el("div", { className: "mm-tests-list mm-tests-gaps" });
+    bar.after(gapsPane);
+    const shards = new Map();         // subject -> its tests, once fetched
+    const openGroups = new Set(), openSubjects = new Set();   // what the reader opened, kept across a redraw
+    const kindCount = (s) => Object.entries(s.kinds).filter(([k]) => !kinds.size || kinds.has(k)).reduce((n, [, v]) => n + v, 0);
+
+    async function load(subject) {
+        if (shards.has(subject)) return shards.get(subject);
+        const r = await fetch(new URL(`tests/${index.files[subject]}`, ROOT));
+        if (!r.ok) throw new Error(`answered ${r.status}`);
+        const tests = (await r.json()).tests;
+        shards.set(subject, tests);
+        return tests;
+    }
+
+    async function showDetail(key, build) {
+        try { pinnedContent = await build(); } catch (e) { pinnedContent = el("p", {}, `It could not load (${e.message}).`); }
+        pinned = key;
+        draw();
+    }
+
+    function hideDetail() {
+        if (!pinned) return;
+        pinned = "";
+        pinnedContent = null;
+        draw();
+    }
+
+    document.addEventListener("keydown", (ev) => { if (ev.key === "Escape") hideDetail(); });
+
+    const testBuild = (subject, id) => async () => {
+        const t = (await load(subject))[id];
+        const box = el("div");
+        box.append(el("p", { className: "mm-tests-meta" }, subject), testCard(id, t, runs[id], findings[subject]));
+        return box;
+    };
+    // The tests of an opened subject the filters keep: the kind, and for the state filters a test that failed or has no result.
+    function visible(subject) {
+        const tests = shards.get(subject) || {};
+        return Object.entries(tests).filter(([id, t]) => {
+            if (kinds.size && !kinds.has(t.kind)) return false;
+            const status = runs[id]?.status;
+            const wrong = status === "fail" || (t.kind === "check" && findings[subject]?.errors > 0);   // a check that found errors is wrong, though its run passed
+            if (state.has("bad") || state.has("none")) return (state.has("bad") && wrong) || (state.has("none") && status !== "pass" && status !== "fail");
+            return true;
+        });
+    }
+
+    function draw() {
+        gapsPane.replaceChildren(...(pinned === "gaps" && pinnedContent ? [pinnedContent] : []));
         const q = search.value.trim().toLowerCase();
         const groups = new Map();
         for (const [name, s] of Object.entries(index.subjects)) {
-            if ((q && !name.toLowerCase().includes(q)) || !counts(s.kinds)) continue;
+            if (!kindCount(s)) continue;
+            const inside = shards.has(name) && Object.values(shards.get(name)).some((t) => q && t.title.toLowerCase().includes(q));
+            if (q && !name.toLowerCase().includes(q) && !inside) continue;
+            if (state.size) {
+                const wrongHere = state.has("bad") && (s.failed || s.errors), warned = state.has("warn") && s.warnings, bare = state.has("none") && s.norun;
+                if (!wrongHere && !warned && !bare) continue;
+            }
             if (!groups.has(s.group)) groups.set(s.group, []);
             groups.get(s.group).push(name);
         }
-        subjects.replaceChildren();
+        tree.replaceChildren();
         for (const group of [...groups.keys()].sort()) {
             const names = groups.get(group);
-            const d = el("details");
-            d.open = Boolean(q) || opened.has(group) || names.includes(current);
-            d.addEventListener("toggle", () => { d.open ? opened.add(group) : opened.delete(group); });
-            const total = names.reduce((n, s) => n + counts(index.subjects[s].kinds), 0);
-            const summary = el("summary");
-            summary.append(el("span", {}, group), " ", el("span", { className: "mm-tests-count" }, `${names.length} subjects, ${total} tests`));
-            d.append(summary);
-            const ul = el("ul");
+            const g = el("details");
+            g.open = Boolean(q) || state.size > 0 || openGroups.has(group);
+            g.addEventListener("toggle", () => { g.open ? openGroups.add(group) : openGroups.delete(group); });
+            const sums = { failed: 0, errors: 0, warnings: 0, passed: 0, norun: 0 };   // summed over the group; badges() makes the one red number
+            for (const n of names) for (const k of Object.keys(sums)) sums[k] += index.subjects[n][k] || 0;
+            const gs = el("summary");
+            gs.append(el("span", {}, group), " ", el("span", { className: "mm-tests-count" }, `${names.length} subjects, ${names.reduce((n, x) => n + kindCount(index.subjects[x]), 0)} tests`), " ", badges(sums));
+            g.append(gs);
             for (const name of names) {
-                const li = el("li");
-                li.setAttribute("aria-current", String(name === current));
-                li.append(el("span", {}, name), el("span", { className: "mm-tests-count" }, String(counts(index.subjects[name].kinds))));
-                li.addEventListener("click", () => show(name));
-                ul.append(li);
+                const s = index.subjects[name];
+                const sd = el("details", { className: "mm-tests-subject" });
+                sd.open = openSubjects.has(name) || (Boolean(q) && shards.has(name));
+                sd.addEventListener("toggle", () => {
+                    if (sd.open && !openSubjects.has(name)) { openSubjects.add(name); load(name).catch(() => {}).then(draw); }
+                    else if (!sd.open) openSubjects.delete(name);
+                });
+                const ss = el("summary");
+                ss.append(el("span", {}, name), s.title ? el("span", { className: "mm-tests-count" }, s.title) : "", badges(s), el("span", { className: "mm-tests-count" }, String(kindCount(s))));
+                sd.append(ss);
+                const ul = el("ul");
+                for (const [id, t] of visible(name)) {
+                    const [mark, cls, why] = markOf(runs[id]);
+                    const li = el("li");
+                    li.dataset.id = id;
+                    li.setAttribute("aria-current", String(pinned === id));
+                    li.append(el("span", { className: `mm-tests-mark ${cls}`, title: why }, mark), el("span", { className: "mm-tests-name" }, t.title), t.kind === "check" && findings[name] ? badges(findings[name]) : "");
+                    li.addEventListener("click", () => {
+                        if (pinned === id) return hideDetail();   // a second click closes it
+                        history.replaceState(null, "", `#${name.toLowerCase()}:${id}`);
+                        showDetail(id, testBuild(name, id));
+                    });
+                    ul.append(li);
+                    if (pinned === id && pinnedContent) {
+                        const open = el("li", { className: "mm-tests-detail mm-tests-list" });
+                        open.append(pinnedContent);
+                        ul.append(open);
+                    }
+                }
+                if (sd.open && !shards.has(name)) ul.append(el("li", {}, "Loading…"));
+                sd.append(ul);
+                g.append(sd);
             }
-            d.append(ul);
-            subjects.append(d);
+            tree.append(g);
         }
     }
-    async function show(name, testId = "") {
-        current = name;
-        history.replaceState(null, "", `#${name.toLowerCase()}${testId ? `:${testId}` : ""}`);   // the slug the help links to, as the page headings give it
-        drawSubjects();
-        list.replaceChildren(el("p", {}, `Loading ${name}…`));
-        try {
-            const r = await fetch(new URL(`tests/${index.files[name]}`, ROOT));
-            if (!r.ok) throw new Error(`answered ${r.status}`);
-            const shard = await r.json();
-            if (current !== name) return;   // another subject was opened meanwhile
-            list.replaceChildren(el("h2", {}, name));
-            for (const [id, t] of Object.entries(shard.tests)) if (!on.size || on.has(t.kind)) list.append(testCard(id, t, runs[id]));
-            const target = testId && [...list.querySelectorAll("article")].find((a) => a.id === testId);
-            if (target) { target.scrollIntoView({ block: "start" }); target.style.outline = "2px solid var(--md-accent-fg-color, #526cfe)"; }
-        } catch (e) {
-            list.replaceChildren(el("p", {}, `${name}: its tests could not load (${e.message}).`));
-        }
-    }
+
     async function showGaps() {
-        current = "";
         history.replaceState(null, "", "#gaps");
-        drawSubjects();
-        list.replaceChildren(el("p", {}, "Loading the gaps…"));
-        try {
+        showDetail("gaps", async () => {
             const r = await fetch(new URL("tests/gaps.json", ROOT));
             if (!r.ok) throw new Error(`answered ${r.status}`);
-            const g = await r.json();
+            const g = await r.json(), box = el("div");
             const section = (title, note, items) => {
-                list.append(el("h2", {}, `${title} (${items.length})`), el("p", { className: "mm-tests-meta" }, note));
+                box.append(el("h3", {}, `${title} (${items.length})`), el("p", { className: "mm-tests-meta" }, note));
                 const ul = el("ul");
                 for (const x of items) ul.append(x);
-                list.append(ul);
+                box.append(ul);
             };
-            list.replaceChildren();
             section("Steps no test proves", "A step that changes the device and that no test names or shares a control with. Open one to see its process.",
                 g.steps.map((s) => { const li = el("li"); li.append(el("a", { href: new URL(`moonwalk.html#${s.step}`, ROOT).href }, s.step), ` (${s.verb}) ${s.say}`); return li; }));
             section("Modules no test is about", "A module type the help knows, that no test names as its subject or in an also.", g.modules.map((m) => el("li", {}, m)));
             section("Controls a scenario sets that the help does not know", "Type.control pairs a scenario sets or expects, with no entry in the help: a missing help line, or a name that moved.", g.unknownControls.map((c) => el("li", {}, c)));
-        } catch (e) {
-            list.replaceChildren(el("p", {}, `The gaps could not load (${e.message}).`));
-        }
+            return box;
+        });
     }
-    search.addEventListener("input", drawSubjects);
-    drawSubjects();
-    // #subject opens a subject, and #subject:kind:name that test in it, as the help's control links address it; #gaps what no test covers.
-    const [asked, ...rest] = decodeURIComponent(location.hash.slice(1)).split(":");
-    if (asked === "gaps") showGaps();
-    const named = Object.keys(index.files).find((s) => s.toLowerCase() === asked.toLowerCase());
-    if (named) show(named, rest.join(":"));
+    gapsButton.addEventListener("click", () => { if (pinned === "gaps") return hideDetail(); showGaps(); });
+    bar.append(gapsButton);
+
+    search.addEventListener("input", draw);
+    draw();
+    // #subject opens a subject, and #subject:kind:name pins that test's card, as the help's control links address it; #gaps what no test covers.
+    async function follow() {
+        const [asked, ...rest] = decodeURIComponent(location.hash.slice(1)).split(":");
+        if (asked === "gaps") return showGaps();
+        const named = Object.keys(index.files).find((s) => s.toLowerCase() === asked.toLowerCase());
+        if (!named) return;
+        openGroups.add(index.subjects[named].group);
+        openSubjects.add(named);
+        await load(named).catch(() => {});
+        draw();
+        const id = rest.join(":");
+        const row = id && [...tree.querySelectorAll("li")].find((li) => li.dataset.id === id);
+        if (row) { await showDetail(id, testBuild(named, id)); [...tree.querySelectorAll("li")].find((li) => li.dataset.id === id)?.scrollIntoView({ block: "center" }); }
+        else (tree.querySelector(".mm-tests-subject[open]") || tree).scrollIntoView({ block: "start" });
+    }
+    addEventListener("hashchange", () => { if (!location.hash.slice(1).endsWith(pinned) || !pinned) follow(); });
+    await follow();
 }
 
 const mount = document.getElementById("mm-tests");

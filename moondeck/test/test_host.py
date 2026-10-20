@@ -22,6 +22,8 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "moondeck" / "docs"))
+import test_runs  # noqa: E402
 
 # Named here rather than in a requirements file: each is a test's own dependency (pyserial for the flash tests, wled for the /json shim, markdown for the docs checks, requests for the MoonTube recorder, libclang for the help generator, pyyaml and jsonschema for MoonWalk's generator, jsonschema for the device catalog too), and `uv run --with` is how every other script in MoonDeck reaches one.
 PY_DEPS = ("pytest", "pyserial", "markdown", "wled", "requests", "libclang", "pyyaml", "jsonschema")
@@ -58,8 +60,12 @@ def main() -> int:
         cmd = ["uv", "run"]
         for d in PY_DEPS:
             cmd += ["--with", d]
-        cmd += ["pytest", "test/python", "-q"]
+        junit = ROOT / "build" / "moondeck-logs" / "junit-python.xml"   # the results beside the console, to be kept as runs
+        junit.parent.mkdir(parents=True, exist_ok=True)
+        cmd += ["pytest", "test/python", "-q", f"--junitxml={junit}"]
         rc |= run(cmd, "Python (test/python)")
+        if junit.exists():
+            test_runs.record(test_runs.pytest_runs(junit))
 
     if both or args.js:
         # node, not uv: the JS suite is the browser code's own runner. Reported rather than failed
@@ -76,7 +82,14 @@ def main() -> int:
             if not tests:
                 print("\n=== JS (test/js) ===\nSKIP: no test files found", flush=True)
             else:
-                rc |= run(["node", "--test", *tests], "JS (test/js)")
+                junit = ROOT / "build" / "moondeck-logs" / "junit-js.xml"
+                junit.parent.mkdir(parents=True, exist_ok=True)
+                console = "spec" if sys.stdout.isatty() else "tap"   # what node picks on its own, named now that a second reporter writes the results
+                rc |= run(["node", "--test", f"--test-reporter={console}", "--test-reporter-destination=stdout",
+                           "--test-reporter=junit", f"--test-reporter-destination={junit}", *tests], "JS (test/js)")
+                if junit.exists():
+                    import gen_tests
+                    test_runs.record(test_runs.node_runs(junit, gen_tests.js_titles()))
 
     if args.ui:
         cmd = ["uv", "run"]

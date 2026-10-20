@@ -1,0 +1,13 @@
+# documentation-standards.md: say what the list holds. A closer that says there is more, without saying what, leaves the reader
+# guessing what the rest is.
+extends: existence
+message: "'%s' says there is more without saying what: name it or end the list."
+level: warning
+ignorecase: true
+nonword: true
+tokens:
+  - 'etc\.?'
+  - 'and so on'
+  - 'and more'
+  - 'and so forth'
+  - 'and the like'

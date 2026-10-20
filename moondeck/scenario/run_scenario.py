@@ -22,6 +22,7 @@ import os
 import re
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 # A REDIRECTED Windows stdout takes the locale encoding, cp1252, and this runner relays the output
@@ -45,6 +46,7 @@ sys.path.insert(0, str(ROOT / "moondeck" / "docs"))
 import _test_metadata as test_meta  # noqa: E402
 sys.path.insert(0, str(ROOT / "moondeck" / "scenario"))
 import _observed  # noqa: E402
+import test_runs  # noqa: E402
 
 
 
@@ -173,7 +175,7 @@ SKIPPED = 2
 
 
 def _run_one(path: Path, update_contract: bool, update_reason: str | None,
-             no_write: bool = False) -> int:
+             no_write: bool = False, update_observed: bool = False) -> int:
     """Run one scenario. Always parses MEASURE lines and writes
     observed.<target> blocks back into the scenario JSON (every run produces a
     drift record). With --update-contract, also rewrites the contract.
@@ -234,14 +236,11 @@ def _run_one(path: Path, update_contract: bool, update_reason: str | None,
         # is its tail, neither of which a single contended run can move far. When
         # --update-contract was passed, reset to the current single point (the window
         # described the PREVIOUS contract). See moondeck/scenario/_observed.py.
-        existing_obs = step.get("observed", {}).get(target)
-        if update_contract:
-            new_obs = _observed.reset(observations[name], today)
-            obs_changed = True
-        else:
-            new_obs, obs_changed = _observed.widen(existing_obs, observations[name], today)
-        if obs_changed:
-            step.setdefault("observed", {})[target] = new_obs
+        # The window is this machine's: it goes to the local store on every passing run. The scenario file takes the summary only
+        # when it is asked to (--update-observed, or a renegotiated contract), so a run leaves the tree as it found it.
+        local = _observed.record(scenario.get("name", path.stem), name, target, observations[name], today, reset_window=update_contract)
+        if update_observed or update_contract:
+            step.setdefault("observed", {})[target] = _observed.summary(local)
             touched_observed += 1
 
         # Only renegotiate the contract when --update-contract was passed. The
@@ -294,7 +293,14 @@ def _run_one(path: Path, update_contract: bool, update_reason: str | None,
 
 def _run_many(paths, args) -> int:
     """Run every scenario and print the same pass/fail/skip summary mm_scenarios prints."""
-    codes = [_run_one(p, args.update_contract, args.reason, args.no_write) for p in paths]
+    codes, results = [], []
+    for p in paths:
+        started = time.time()
+        code = _run_one(p, args.update_contract, args.reason, args.no_write, args.update_observed)
+        codes.append(code)
+        live = bool(json.loads(p.read_text(encoding="utf-8")).get("live_only"))
+        results.append(("live" if live else "scenario", p.stem, "skip" if code == SKIPPED else "pass" if code == 0 else "fail", time.time() - started))
+    test_runs.record(test_runs.scenario_runs(results))   # each scenario's last result, with the tree it saw
     skipped = sum(1 for c in codes if c == SKIPPED)
     failed = sum(1 for c in codes if c not in (0, SKIPPED))
     print(f"=== {len(codes)} scenario(s), {len(codes) - failed - skipped} passed, "
@@ -314,6 +320,9 @@ def main():
                              "tree it just checked, which makes it look like it needs running "
                              "again, and puts an observation diff in every commit. Run without "
                              "the flag to refresh the recorded numbers.")
+    parser.add_argument("--update-observed", action="store_true",
+                        help=("Write this run's observed statistics into the scenario file as its published "
+                              "summary. Without it a run keeps its sample window on this machine and leaves the file alone."))
     parser.add_argument("--update-contract", action="store_true",
                         help=("Renegotiate the per-step performance contract: write "
                               "observed tick/heap into contract[<host-target>] and "

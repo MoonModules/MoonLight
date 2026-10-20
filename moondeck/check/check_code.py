@@ -26,6 +26,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _ratchet import committed, risen  # noqa: E402
+import _findings  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 REPORT = ROOT / "docs" / "reference" / "metrics" / "code.md"
@@ -60,6 +61,11 @@ SPREAD = "name spread"
 STACK = "large stack frame"
 RAW_ALLOC = "raw allocation in light"
 MUTABLE_STATIC = "mutable static state"
+NO_PRAGMA = "header without #pragma once"
+HEADER_USING = "using namespace in a header"
+FIRMWARE_DOUBLE = "double in firmware code"
+DEFINE_CONSTANT = "#define used as a constant"
+RTTI = "dynamic_cast or typeid in firmware"
 RULES = {"complex function": f"cyclomatic complexity > {MAX_CCN}",
          "long function": f"> {MAX_NLOC} lines of code",
          "deeply nested": f"control flow nested deeper than {MAX_NESTING}",
@@ -73,10 +79,16 @@ RULES = {"complex function": f"cyclomatic complexity > {MAX_CCN}",
          SPREAD: f"a type named in more than {MAX_SPREAD} files beyond its own",
          STACK: f"a function whose stack frame is over {MAX_FRAME} bytes",
          RAW_ALLOC: "an array new, malloc or platform::alloc in src/light outside ScratchBuffer",
-         MUTABLE_STATIC: "a static variable in src/core or src/light that is not const or constexpr"}
+         MUTABLE_STATIC: "a static variable in src/core or src/light that is not const or constexpr",
+         NO_PRAGMA: "a header under src/ with no #pragma once, or one that guards with #ifndef",
+         HEADER_USING: "a using namespace directive in a header under src/",
+         FIRMWARE_DOUBLE: "the type double in a firmware file, where only float is native",
+         DEFINE_CONSTANT: "a #define of a number or a string that no #if tests, outside src/platform: a constant, not a build flag",
+         RTTI: "dynamic_cast or typeid in firmware, which builds with -fno-rtti"}
 LIMITS = {"complex function": MAX_CCN, "long function": MAX_NLOC, "deeply nested": MAX_NESTING,
           "long parameter list": MAX_PARAMS, "duplicated block": MIN_CLONE_LINES, "large file": MAX_FILE_LINES, HOT_PATH: 1,
-          PLATFORM: 1, CORE_LIGHT: 1, UI_TYPE: 1, SPREAD: MAX_SPREAD, STACK: MAX_FRAME, RAW_ALLOC: 1, MUTABLE_STATIC: 1}
+          PLATFORM: 1, CORE_LIGHT: 1, UI_TYPE: 1, SPREAD: MAX_SPREAD, STACK: MAX_FRAME, RAW_ALLOC: 1, MUTABLE_STATIC: 1,
+          NO_PRAGMA: 1, HEADER_USING: 1, FIRMWARE_DOUBLE: 1, DEFINE_CONSTANT: 1, RTTI: 1}
 # The catalog move for each smell (Fowler, Refactoring), so a finding says how it is solved; the table is coding-standards § From a finding to a fix.
 FIXES = {"complex function": "a chain on one value becomes a table; a switch on a state becomes one method per state",
          "long function": "Extract Function: a named step a reader can skip",
@@ -91,7 +103,12 @@ FIXES = {"complex function": "a chain on one value becomes a table; a switch on 
          SPREAD: "Move Function, self-registration: a concept in one place, which callers reach through its role or an interface",
          STACK: "Move the large local into a member or a ScratchBuffer, sized once, so no task's stack pays for it",
          RAW_ALLOC: "Replace the allocation with a ScratchBuffer member, which owns, sizes and frees it",
-         MUTABLE_STATIC: "the state becomes the module's own: a member, a ScratchBuffer taken in prepare(), or a caller-owned workspace"}
+         MUTABLE_STATIC: "the state becomes the module's own: a member, a ScratchBuffer taken in prepare(), or a caller-owned workspace",
+         NO_PRAGMA: "start the header with #pragma once, the project's one guard",
+         HEADER_USING: "name what is used, or put the using in the .cpp, where it pollutes no other translation unit",
+         FIRMWARE_DOUBLE: "use float, or an integer type for a count or a percentage; Xtensa runs a double in software, about 30 times slower",
+         DEFINE_CONSTANT: "constexpr: it has a type and a scope, and the preprocessor keeps #define for the flags it tests",
+         RTTI: "a virtual method or a role check answers a base-to-derived question; the build has no runtime type information"}
 
 
 def measure(extra=None):
@@ -360,6 +377,80 @@ def mutable_static_rows() -> list:
     return _line_rows(("src/core/", "src/light/"), MUTABLE_STATIC, lambda code: not _CONST_RE.search(code) and _STATIC_VAR_RE.match(code))
 
 
+_GUARD_RE = re.compile(r"^\s*#\s*ifndef\s+\w+_(?:H|HPP|H_)\b", re.MULTILINE)
+_USING_RE = re.compile(r"^\s*using\s+namespace\b")
+_DOUBLE_RE = re.compile(r"\bdouble\b")
+
+
+def header_findings(rel: str, text: str) -> list:
+    """The two header rules of one file under src/: it guards with `#pragma once`, and it never says `using namespace`."""
+    if not (rel.startswith("src/") and rel.endswith(".h")) or rel.startswith(("src/platform/desktop/vendor/", "src/ui/")):
+        return []
+    rows = []
+    if "#pragma once" not in text or _GUARD_RE.search(text):
+        rows.append((rel, NO_PRAGMA, "guards with #ifndef or not at all", 1))
+    for n, line in enumerate(text.splitlines(), 1):
+        if _USING_RE.match(line.split("//")[0]):
+            rows.append((rel, HEADER_USING, f"line {n}: {line.strip()[:60]}", 1))
+    return rows
+
+
+def double_findings(rel: str, lines) -> list:
+    """Every line naming the type `double` in one firmware file; the host's own platform code and vendored files are not firmware."""
+    if not rel.startswith("src/") or rel.startswith(("src/platform/desktop/", "src/ui/")) or not rel.endswith((".h", ".cpp")):
+        return []
+    rows = []
+    for n, line in enumerate(lines, 1):
+        code = re.sub(r'"(?:[^"\\]|\\.)*"', '""', line.split("//")[0])   # a word in a string or a comment is no type
+        if _DOUBLE_RE.search(code):
+            rows.append((rel, FIRMWARE_DOUBLE, f"line {n}: {code.strip()[:60]}", 1))
+    return rows
+
+
+_DEFINE_LITERAL_RE = re.compile(r'^\s*#\s*define\s+(\w+)\s+\(?-?(?:0x[0-9a-fA-F]+|\d[\d.]*[uUlLfF]*|"[^"]*")\)?\s*(?://.*)?$')
+_FLAG_TEST_RE = re.compile(r"^\s*#\s*(?:if|ifdef|ifndef|elif)\b(.*)$")
+_RTTI_RE = re.compile(r"\b(?:dynamic_cast|typeid)\b")
+
+
+def tested_names(texts) -> set:
+    """The names any #if, #ifdef, #ifndef or #elif in the files mentions: a macro the preprocessor tests is a flag."""
+    names = set()
+    for text in texts:
+        for line in text.splitlines():
+            if m := _FLAG_TEST_RE.match(line):
+                names |= set(re.findall(r"\w+", m.group(1)))
+    return names
+
+
+def define_findings(rel: str, lines, tested: set) -> list:
+    """Every `#define NAME <number or string>` in one firmware file that no #if tests, outside the platform layer: a constant written as a macro."""
+    if not rel.startswith("src/") or rel.startswith(("src/platform/", "src/ui/")) or not rel.endswith((".h", ".cpp")):
+        return []
+    rows = []
+    for n, line in enumerate(lines, 1):
+        if (m := _DEFINE_LITERAL_RE.match(line)) and m.group(1) not in tested:
+            rows.append((rel, DEFINE_CONSTANT, f"line {n}: {line.strip()[:60]}", 1))
+    return rows
+
+
+def rtti_findings(rel: str, lines) -> list:
+    """Every `dynamic_cast` or `typeid` in one firmware file; the build has no runtime type information."""
+    if not rel.startswith("src/") or rel.startswith(("src/platform/desktop/", "src/ui/")) or not rel.endswith((".h", ".cpp")):
+        return []
+    return [(rel, RTTI, f"line {n}: {line.strip()[:60]}", 1) for n, line in enumerate(lines, 1) if _RTTI_RE.search(line.split("//")[0])]
+
+
+def style_rows() -> list:
+    """The header, `double`, constant-macro and RTTI rules over every firmware file we own."""
+    texts = {rel: (ROOT / rel).read_text(encoding="utf-8", errors="replace") for rel in owned_files() if rel.startswith("src/") and rel.endswith((".h", ".cpp"))}
+    tested = tested_names(texts.values())
+    rows = []
+    for rel, text in texts.items():
+        lines = text.splitlines()
+        rows += header_findings(rel, text) + double_findings(rel, lines) + define_findings(rel, lines, tested) + rtti_findings(rel, lines)
+    return rows
+
+
 def area(path: str) -> str:
     """The area a file counts under, the second directory level under src/."""
     parts = path.split("/")
@@ -455,7 +546,7 @@ def write_report(rows, duplicated=None) -> None:
     for rule in sorted(by_rule, key=lambda r: (-by_rule[r], r)):
         out.append(f"| {rule} | {by_rule[rule]} |")
     out += ["", "## How a finding is solved", "",
-            "Each rule is a code smell with a named move from the refactoring catalog, the table in [coding standards, from a finding to a fix](../../contributing/coding-standards.md#from-a-finding-to-a-fix). The commit names the move.", ""]
+            "Each rule is a code smell with a named move from the refactoring catalog, shown with the rule on [the test page](../tests.md#check_code). The commit names the move.", ""]
     for rule in RULES:
         out.append(f"- **{rule}** ({RULES[rule]}): {FIXES[rule]}.")
     out += ["", "## By area", "", "| Area | Findings |", "|---|---:|"]
@@ -499,7 +590,7 @@ def main() -> int:
     dup_rows, duplicated = clone_rows(report) if report else ([], None)
     types = registered_types()
     rows = (findings(funcs) + dup_rows + large_files() + boundary_rows() + ui_type_rows(types) + spread_rows(types)
-            + raw_alloc_rows() + mutable_static_rows())
+            + raw_alloc_rows() + mutable_static_rows() + style_rows())
     # The hot path is a full rebuild, so the module view leaves it to the full report as it does clones; check_nonblocking --module is its detailed view.
     try:
         warnings = None if args.module else build_warnings()
@@ -522,6 +613,10 @@ def main() -> int:
         print(_table(rows))
         return 0
 
+    # The findings in the one shape every check keeps, whatever else this run does with its report.
+    if _findings.is_real(REPORT):
+        _findings.write("check_code", {r: {"reason": RULES[r], "fix": FIXES[r], "standard": "docs/contributing/coding-standards.md#static-checks"} for r in RULES},
+                        [{"rule": rule, "message": name, "file": file, "value": value} for file, rule, name, value in rows])
     base = committed_counts()
     if hot is None:
         # A host without Clang 20's -Wfunction-effects cannot count the hot path: every other rule still ratchets, and the report keeps the last full count rather than losing that rule.

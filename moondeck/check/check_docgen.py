@@ -1273,6 +1273,7 @@ def _violations(fresh):
 REPORT = ROOT / "docs" / "reference" / "metrics" / "docgen.md"
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _ratchet import committed as committed_report, risen as risen_against  # noqa: E402
+import _findings  # noqa: E402
 
 
 # Which summary page owns a source folder, mirroring the zoom diagram in
@@ -1561,6 +1562,11 @@ def main() -> int:
         print(f"SKIP help.json freshness: {e}, so docgen.md is left as it is.")
         fresh, measured = [], False
     found = _violations(fresh)
+    # The findings in the one shape every check keeps, whatever else this run does with its report.
+    if _findings.is_real(REPORT):
+        _findings.write("check_docgen", {n: {"reason": _rule_label(n), "standard": "docs/contributing/documentation-standards.md"} for n in _RULE_NAMES},
+                        [{"rule": _rule_name(why), "message": why, "file": key.split("::")[0], "level": "error" if _blocks(key, why) else "warning",
+                          **({"line": int(m.group(1))} if (m := re.search(r"line (\d+)", key)) else {})} for key, why in found])
 
     # The report is the artifact: stdout scrolls away and is truncated, the file is what the
     # reviewer reads, and its git history is the only record of the sweep's trend. Written on

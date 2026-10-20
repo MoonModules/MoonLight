@@ -85,6 +85,46 @@ def _case_name_templates(text: str) -> list:
     return out
 
 
+_JS_TEST_RE = re.compile(r"^\s*test\(\s*([\"'`])((?:\\.|(?!\1).)*)\1", re.MULTILINE)
+
+
+def python_tests() -> list:
+    """Every `test_*` function under test/python as (file, name, line, first docstring line)."""
+    import ast
+    out = []
+    for path in sorted((ROOT / "test" / "python").glob("test_*.py")):
+        for node in ast.parse(path.read_text(encoding="utf-8")).body:
+            if isinstance(node, ast.FunctionDef) and node.name.startswith("test_"):
+                out.append((_rel(path), node.name, node.lineno, (ast.get_docstring(node) or "").split("\n")[0]))
+    return out
+
+
+def js_tests() -> list:
+    """Every top-level `test("title", …)` under test/js as (file, title, line)."""
+    out = []
+    for path in sorted((ROOT / "test" / "js").rglob("*.test.mjs")):
+        text = path.read_text(encoding="utf-8")
+        out += [(_rel(path), m.group(2).replace("\\'", "'").replace('\\"', '"'), text[:m.start()].count("\n") + 1) for m in _JS_TEST_RE.finditer(text)]
+    return out
+
+
+def js_titles() -> dict:
+    """The ids of the JS tests by title, which node's JUnit file names a test by."""
+    out: dict = {}
+    for file, title, _ in js_tests():
+        out.setdefault(title, []).append(f"js:{file}::{title}")
+    return out
+
+
+def check_scripts() -> list:
+    """Every `check_*.py` under moondeck/check as (file, stem, what it checks), the first line of its docstring."""
+    import ast
+    out = []
+    for path in sorted((ROOT / "moondeck" / "check").glob("check_*.py")):
+        out.append((_rel(path), path.stem, (ast.get_docstring(ast.parse(path.read_text(encoding="utf-8"))) or "").split("\n")[0]))
+    return out
+
+
 def registry() -> dict:
     """Every test by its derived id: the kind, the file and the test's own name, so a rename is a new test."""
     tests: dict = {}
@@ -128,6 +168,20 @@ def registry() -> dict:
                 if steps:
                     entry["steps"] = steps
                 add(f"unit:{entry['file']}::{name}", entry)
+    for file, name, line, doc in python_tests():
+        entry = {"kind": "python", "size": "small", "title": name.removeprefix("test_").replace("_", " "), "file": file, "line": line, "subjects": [Path(file).stem.removeprefix("test_")],
+                 "run": {"script": "moondeck/test/test_host.py", "args": "--python"}}
+        if doc:
+            entry["description"] = doc
+        add(f"python:{file}::{name}", entry)
+    for file, title, line in js_tests():
+        add(f"js:{file}::{title}", {"kind": "js", "size": "small", "title": title, "file": file, "line": line, "subjects": [Path(file).name.removesuffix(".test.mjs")],
+                                    "run": {"script": "moondeck/test/test_host.py", "args": "--js"}})
+    for file, stem, doc in check_scripts():
+        entry = {"kind": "check", "size": "medium", "title": stem.removeprefix("check_").replace("_", " ").capitalize() + " check", "file": file, "subjects": [stem], "run": {"script": file}}
+        if doc:
+            entry["description"] = doc
+        add(f"check:{stem}", entry)
     for f in meta.collect_scenario_files():
         live = f["live_only"]
         entry = {"kind": "live" if live else "scenario", "size": "large" if live else "medium", "title": f["name"],
@@ -154,6 +208,13 @@ def group_of(subject: str, tests: dict, help_json: dict) -> str:
     page = help_json["modules"].get(subject, {}).get("doc", "").split("#")[0]
     if page in help_json["catalogs"]:
         return f"{page.split('/')[0].capitalize()} \u00b7 {help_json['catalogs'][page]['title']}"
+    kinds = {e.get("kind") for e in tests.values()}
+    if "check" in kinds:   # a check and the Python tests named for it are one subject, listed with the checks
+        return "Scripts \u00b7 Checks"
+    if kinds == {"python"}:
+        return "Scripts \u00b7 Python tests"
+    if kinds == {"js"}:
+        return "UI \u00b7 JS tests"
     domain = next((d for f in sorted(e["file"] for e in tests.values()) for d in ("core", "light") if f"/{d}/" in f), None)
     return f"{domain.capitalize()} \u00b7 Internals" if domain else "Other"
 
@@ -236,6 +297,38 @@ def shards(tests: dict, help_json: dict | None = None) -> tuple[dict, dict]:
                           for s, t in sorted(by_subject.items())},
              "tests": len(tests)}
     return index, {s: {"subject": s, "tests": dict(sorted(t.items()))} for s, t in sorted(by_subject.items())}
+
+
+def file_title(rel: str) -> str:
+    """What a test file says it is: a Python file's docstring line, a JS file's first comment line; empty when it says nothing."""
+    path = ROOT / rel
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError:
+        return ""
+    if rel.endswith(".py"):
+        import ast
+        return (ast.get_docstring(ast.parse(text)) or "").split("\n")[0]
+    if rel.endswith(".mjs"):
+        return next((line.lstrip("/ ").strip() for line in text.splitlines() if line.startswith("//")), "")
+    return ""
+
+
+def annotate(index: dict, by_subject: dict, runs: dict, findings: dict) -> None:
+    """The state of each subject of the index, so the list shows it before a subject is opened: how many tests last passed, failed or have no result on this machine, and the errors and warnings a check last found. Only counts above zero are added, and the results only where something ran."""
+    for subject, entry in index["subjects"].items():
+        tests = by_subject[subject]["tests"]
+        status = [runs.get(test_id, {}).get("status") for test_id in tests]
+        found = findings.get(subject, {})
+        counts = {"errors": found.get("errors", 0), "warnings": found.get("warnings", 0)}
+        if runs:
+            counts |= {"passed": status.count("pass"), "failed": status.count("fail"), "norun": sum(1 for s in status if s not in ("pass", "fail"))}
+        entry.update({k: n for k, n in counts.items() if n})
+        first = next(iter(tests.values()), {})
+        if first.get("kind") in ("python", "js") and (title := file_title(first["file"])):
+            entry["title"] = title
+        if check := next((t for t in tests.values() if t["kind"] == "check"), None):
+            entry["title"] = check["title"]   # a check script is named by what it checks, its docstring is the card's description
 
 
 def text() -> str:

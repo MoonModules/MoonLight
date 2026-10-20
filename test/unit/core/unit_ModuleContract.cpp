@@ -21,7 +21,8 @@
 
 namespace {
 
-struct Known { const char* type; const char* reason; };
+// `hostDependent` marks a type whose result depends on the host: it is listed because it breaks where it is measurable, and passing elsewhere is no reason to leave the list.
+struct Known { const char* type; const char* reason; bool hostDependent = false; };
 
 // Types that cannot be placed on a desktop run, each skipped for the reason given.
 const std::vector<Known> kNotPlaced = {
@@ -32,7 +33,7 @@ const std::vector<Known> kKeepsMemory = {
     {"Effects", "its Layer keeps the pixel buffer while disabled"},
     {"Layer", "its pixel buffer_ is a plain Buffer that release() does not free"},
     {"Drivers", "outputBuffer_ is a plain Buffer that release() does not free"},
-    {"NdiDriver", "release() is overridden without chaining to the base, so the rgb_ and corrScratch_ scratch buffers stay"},
+    {"NdiDriver", "release() is overridden without chaining to the base, so the rgb_ and corrScratch_ scratch buffers stay, where the NDI library loads and the buffers exist", true},
 };
 
 // Types whose enabled flag does not gate them, which the lifecycle then cannot switch off.
@@ -55,7 +56,7 @@ const std::vector<Known> kHoldsAllocation = {
     {"RandomMapModifier", "the permutation is taken with a raw platform::alloc and freed only in the destructor"},
     {"NetworkSendDriver", "corrected_ is a plain Buffer, outside the scratch list that release() frees"},
     {"PanelCardDriver", "corrected_ is a plain Buffer, outside the scratch list that release() frees"},
-    {"NdiDriver", "release() is overridden without chaining to the base, so its scratch buffers stay"},
+    {"NdiDriver", "release() is overridden without chaining to the base, so its scratch buffers stay, where the NDI library loads and the buffers exist", true},
 };
 
 // Types leaving an allocation behind once removed.
@@ -75,6 +76,7 @@ const std::vector<Known> kTooBig = {
     {"ControlModule", "the surface, touch and resend tables sit inline"},
     {"AudioService", "the 512-sample block, its windowed copy and the magnitude table sit inline"},
     {"PinsModule", "the 64-claim snapshot table sits inline"},
+    {"FseqPlayerEffect", "its playlist of tracks sits inline, close enough to the budget that a host's layout decides which side it lands on", true},
 };
 
 // Two inline kilobytes, since nine in ten modules fit, so a larger table or buffer inside the object stands out as the exception.
@@ -196,7 +198,7 @@ void enforce(const std::vector<Known>& list, const char* what, Pass pass) {
         const bool ok = pass(r);
         const Known* k = find(list, r.type);
         if (!ok && !k) { CHECK_MESSAGE(false, r.type << " " << std::string(what)); }
-        if (ok && k) { CHECK_MESSAGE(false, r.type << " passes now, so it leaves its list"); }
+        if (ok && k && !k->hostDependent) { CHECK_MESSAGE(false, r.type << " passes now, so it leaves its list"); }
     }
     for (const Known& k : list) {
         bool registered = false;
@@ -209,9 +211,11 @@ void enforce(const std::vector<Known>& list, const char* what, Pass pass) {
 
 // Every registered type is placed and run, or named in the not-placed list with its reason.
 TEST_CASE("every registered module type is placed or listed as not placeable") {
-    CHECK(survey().size() == mm::ModuleFactory::typeCount());
+    // The survey registers the types the first time it runs, so it runs before the count is read: a compiler may evaluate either side of the comparison first.
+    const std::vector<Row>& rows = survey();
+    CHECK(rows.size() == mm::ModuleFactory::typeCount());
     CHECK(mm::ModuleFactory::typeCount() < 255);
-    for (const Row& r : survey()) {
+    for (const Row& r : rows) {
         const Known* k = find(kNotPlaced, r.type);
         if (!r.placed && !k) { CHECK_MESSAGE(false, r.type << " could not be placed"); }
         if (r.placed && k) { CHECK_MESSAGE(false, r.type << " is placed now, so it leaves the list"); }

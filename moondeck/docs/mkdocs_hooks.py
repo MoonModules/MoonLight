@@ -23,6 +23,8 @@ if str(_HERE) not in sys.path:
 from _test_metadata import ROOT  # noqa: E402
 import gen_tests  # noqa: E402
 import test_runs  # noqa: E402
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "check"))
+import _findings  # noqa: E402
 from gen_help import ATTRIBUTIONS, catalog_rows, display_name  # noqa: E402
 from gen_moonwalk import build as build_moonwalk, absolute_links, dumps as moonwalk_json, render_text as moonwalk_text, split_text as split_moonwalk  # noqa: E402
 
@@ -239,10 +241,13 @@ def on_files(files, config):
     # The test registry, sharded by subject: tests.js reads the index and fetches the shard of the subject a reader opens.
     index, by_subject = gen_tests.shards(gen_tests.registry())
     index["files"] = {s: gen_tests.file_name(s) for s in by_subject}
+    runs = test_runs.published(known=set(gen_tests.registry()))
+    gen_tests.annotate(index, by_subject, runs, _findings.read_all())
     _add("tests/index.json", json.dumps(index, ensure_ascii=False, separators=(",", ":")))
     for subject, shard in by_subject.items():
         _add(f"tests/{gen_tests.file_name(subject)}", json.dumps(shard, ensure_ascii=False, separators=(",", ":")))
-    _add("tests/runs.json", json.dumps(test_runs.published(known=set(gen_tests.registry())), separators=(",", ":")))   # this machine's last results, empty where nothing ran
+    _add("tests/runs.json", json.dumps(runs, separators=(",", ":")))   # this machine's last results, empty where nothing ran
+    _add("tests/findings.json", json.dumps(_findings.read_all(), ensure_ascii=False, separators=(",", ":")))   # what each check last found on this machine
     _add("tests/gaps.json", json.dumps(gen_tests.gaps(_walk()["processes"], _help_file()), ensure_ascii=False, separators=(",", ":")))   # what no test covers
     _add("tests/steps.json", json.dumps(gen_tests.step_tests(_walk()["processes"]), ensure_ascii=False, separators=(",", ":")))   # the tests of each process step, for the map to show
     # MoonWalk's journey map, from the stage files under moonwalk/, and each process's prose beside it, which the view fetches when the process opens; links absolute, since the view renders them on a device's page too. An invalid file fails the build.

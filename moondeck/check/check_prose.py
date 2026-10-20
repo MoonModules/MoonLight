@@ -66,6 +66,7 @@ ROOT = Path(__file__).resolve().parent.parent.parent
 REPORT = ROOT / "docs" / "reference" / "metrics" / "prose.md"
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _ratchet import committed as committed_report, risen as risen_against  # noqa: E402
+import _findings  # noqa: E402
 
 # What the whole-tree report covers. The gate itself reads every suffix in SUFFIXES; these are the
 # trees whose prose is OURS, which is the same question EXEMPT answers for the diff.
@@ -133,6 +134,7 @@ def write_report():
         return None
 
     by_rule, by_file, total = {}, {}, 0
+    found = []   # every finding, for the one shape every check keeps
     for path, alerts in report.items():
         rel = os.path.relpath(path, ROOT) if os.path.isabs(path) else path
         # The same exemptions as the gate: a generated page present on disk after a docs build counted its source's prose a second time.
@@ -143,6 +145,8 @@ def write_report():
         for a in alerts:
             by_rule[a.get("Check", "?")] = by_rule.get(a.get("Check", "?"), 0) + 1
             total += 1
+            found.append({"rule": a.get("Check", "?"), "message": a.get("Message", ""), "file": rel, "line": a.get("Line"),
+                          "level": "error" if a.get("Severity") == "error" else "warning"})
 
     lines = [
         "# Prose report",
@@ -168,6 +172,12 @@ def write_report():
         lines.append(f"| `{rel}` | {n} |")
     REPORT.parent.mkdir(parents=True, exist_ok=True)
     REPORT.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    rules = {}
+    for style in sorted((ROOT / ".vale" / "styles" / "MoonLight").glob("*.yml")):
+        said = re.search(r"(?m)^message:\s*['\"]?(.+?)['\"]?\s*$", style.read_text(encoding="utf-8"))
+        rules[f"MoonLight.{style.stem}"] = {"reason": said.group(1) if said else style.stem, "standard": "docs/contributing/documentation-standards.md"}
+    if _findings.is_real(REPORT):
+        _findings.write("check_prose", rules, [f for f in found if f["rule"] in rules] + [dict(f, rule="other") for f in found if f["rule"] not in rules])
     return by_rule, total
 
 

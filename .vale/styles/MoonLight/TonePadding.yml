@@ -1,0 +1,14 @@
+# documentation-standards.md: "No sentence whose job is tone." Politeness and throat-clearing carry no fact the reader needs.
+extends: existence
+message: "'%s' is tone, not a fact: cut it and state what is true or what to do."
+level: warning
+ignorecase: true
+tokens:
+  - please
+  - feel free to
+  - note that
+  - it should be noted
+  - it is worth noting
+  - keep in mind that
+  - don't hesitate
+  - as you can see

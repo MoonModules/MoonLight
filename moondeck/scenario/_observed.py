@@ -2,7 +2,7 @@
 plus the statistics derived from it.
 
 Both runners (moondeck/scenario/run_scenario.py and run_live_scenario.py) persist
-per-target measurements for each scalar in the observed block.
+per-target measurements for each scalar, kept in a local store (see `record`), with a summary published into the scenario file only on request.
 
 WHY NOT [min, max]. The previous shape was a widen-only range, and widen-only is the
 flaw: nothing ever narrows it, so the max converges on the worst thing that ever
@@ -53,6 +53,10 @@ and an empty window, so the file is uniform and the absence of data is explicit 
 than implied by a stale pair of numbers.
 """
 from __future__ import annotations
+
+import json
+import os
+from pathlib import Path
 
 
 _FIELDS = ("tick_us", "free_heap", "max_alloc_block")
@@ -135,12 +139,8 @@ def widen(existing: dict | None, sample: dict, today: str) -> tuple[dict, bool]:
     the window has to be persisted for the next run to build on it, and a caller that
     skips the write drops the measurement entirely.
 
-    This does mean a scenario file is rewritten on every run that measures it, which the
-    previous [min, max] shape avoided by being a no-op for in-bounds values. That trade
-    is deliberate and it is the price of percentiles: a statistic over a window can only
-    exist if the window survives, and a range that never narrows was the actual defect
-    (see the module docstring). The diff stays small -- one line per field plus the
-    window -- and `at` shows when a file last moved.
+    The window is returned for the caller to keep: `record` keeps it in the machine's own store, and only a summary
+    of it is ever published into a scenario file, on request.
     """
     block = dict(existing) if isinstance(existing, dict) else {}
     recorded = False
@@ -171,6 +171,47 @@ def reset(sample: dict, today: str) -> dict:
              for f in _FIELDS if f in sample}
     block["last_updated"] = today
     return block
+
+
+# Where the sample windows live: on the machine that measured them, under the build folder, never committed. A window is a
+# machine's own history, and writing it into the scenario file made every passing run rewrite a tracked file. The scenario
+# file keeps the contract it is compared against and, when a bench run is published with --update-observed, a summary.
+STORE = Path(__file__).resolve().parents[2] / "build" / "moondeck-logs" / "observations.json"
+
+
+def _read_store(path: Path = STORE) -> dict:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def record(scenario: str, step: str, target: str, sample: dict, today: str, reset_window: bool = False, path: Path = STORE) -> dict:
+    """Take one measurement into this machine's window for a scenario step on a target, and return the block, samples included.
+
+    `reset_window` starts the window over from this sample, as a renegotiated contract does, since the old window described the old promise."""
+    store = _read_store(path)
+    key = f"{scenario}/{step}/{target}"
+    if reset_window:
+        block, changed = reset(sample, today), True
+    else:
+        block, changed = widen(store.get(key), sample, today)
+    if changed:
+        store[key] = block
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_name(path.name + ".tmp")
+        tmp.write_text(json.dumps(store, indent=1, sort_keys=True) + "\n", encoding="utf-8")
+        os.replace(tmp, path)
+    return block
+
+
+def summary(block: dict) -> dict:
+    """The block a scenario file publishes: the statistics without the samples behind them, so it stays small and a diff shows numbers, not windows."""
+    out = {f: {k: v for k, v in block[f].items() if k != "samples"} for f in _FIELDS if isinstance(block.get(f), dict)}
+    if "last_updated" in block:
+        out["last_updated"] = block["last_updated"]
+    return out
 
 
 def empty(fields: tuple[str, ...] = _FIELDS) -> dict:

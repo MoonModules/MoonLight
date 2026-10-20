@@ -18,6 +18,12 @@ import gen_tests  # noqa: E402
 SCHEMA = json.loads((Path(gen_tests.__file__).parent / "tests.schema.json").read_text(encoding="utf-8"))
 
 
+def _no_other_kinds(monkeypatch):
+    """A test that fakes unit tests and scenarios leaves out the Python, JS and check tests this repository registers."""
+    for listing in ("python_tests", "js_tests", "check_scripts"):
+        monkeypatch.setattr(gen_tests, listing, lambda: [])
+
+
 def test_the_registry_of_this_repository_is_valid_against_its_schema():
     jsonschema.Draft202012Validator(SCHEMA).validate({"tests": gen_tests.registry()})
 
@@ -47,6 +53,7 @@ def test_two_tests_with_one_id_are_refused_since_an_id_names_exactly_one_test(mo
     twice = {"path": Path(_test_metadata.UNIT_DIR / "unit_X.cpp"), "module": "M", "also": [], "cases": [("same", None), ("same", None)], "case_lines": [1, 2], "case_steps": [[], []]}
     monkeypatch.setattr(_test_metadata, "collect_unit_files", lambda: [twice])
     monkeypatch.setattr(_test_metadata, "collect_scenario_files", lambda: [])
+    _no_other_kinds(monkeypatch)
     with pytest.raises(ValueError, match="two tests share the id"):
         gen_tests.registry()
 
@@ -55,6 +62,7 @@ def test_a_test_about_two_subjects_is_in_the_shard_of_each(monkeypatch):
     two = {"path": Path(_test_metadata.UNIT_DIR / "unit_X.cpp"), "module": "A", "also": ["B"], "cases": [("it works", "why")], "case_lines": [3], "case_steps": [[]]}
     monkeypatch.setattr(_test_metadata, "collect_unit_files", lambda: [two])
     monkeypatch.setattr(_test_metadata, "collect_scenario_files", lambda: [])
+    _no_other_kinds(monkeypatch)
     index, by_subject = gen_tests.shards(gen_tests.registry(), {"modules": {}, "catalogs": {}})
     assert {s: v["kinds"] for s, v in index["subjects"].items()} == {"A": {"unit": 1}, "B": {"unit": 1}} and index["tests"] == 1
     assert set(by_subject["A"]["tests"]) == set(by_subject["B"]["tests"])
@@ -98,6 +106,7 @@ def test_a_scenario_names_its_controls_by_type_through_the_instances_it_declares
     s = _scenario([_step("a", "set_control", "Net", "mDNS"), _step("b", "expect_control", "Net", "mDNS"), _step("c", "reboot", None, None)], {"Net": "NetworkModule"})
     monkeypatch.setattr(_test_metadata, "collect_unit_files", lambda: [])
     monkeypatch.setattr(_test_metadata, "collect_scenario_files", lambda: [s])
+    _no_other_kinds(monkeypatch)
     reg = gen_tests.registry()
     assert reg["scenario:scenario_X"]["controls"] == ["NetworkModule.mDNS"]
     assert gen_tests.by_control(reg) == {"NetworkModule.mDNS": [{"id": "scenario:scenario_X", "title": "scenario_X", "subject": "Network"}]}
@@ -107,6 +116,7 @@ def test_a_step_naming_an_instance_the_scenario_does_not_declare_is_refused_rath
     s = _scenario([_step("a", "set_control", "Mystery", "x")], {})
     monkeypatch.setattr(_test_metadata, "collect_unit_files", lambda: [])
     monkeypatch.setattr(_test_metadata, "collect_scenario_files", lambda: [s])
+    _no_other_kinds(monkeypatch)
     with pytest.raises(ValueError, match="names the instance Mystery, which the scenario does not declare"):
         gen_tests.registry()
 
@@ -175,7 +185,7 @@ def test_a_recorded_run_is_current_only_on_the_tree_it_saw(tmp_path):
     test_runs.record({"unit:f::a": {"status": "pass", "seconds": 0.1}}, path, tree="T1")
     assert test_runs.published(path, tree="T1")["unit:f::a"]["current"] is True
     assert test_runs.published(path, tree="T2")["unit:f::a"]["current"] is False
-    assert test_runs.published(tmp_path / "none.json", tree="T1") == {}
+    assert test_runs.published(tmp_path / "none.json", tree="T1", checks=False) == {}
 
 
 def test_doctests_one_output_file_is_told_into_its_console_text_and_its_junit_document():
@@ -184,3 +194,64 @@ def test_doctests_one_output_file_is_told_into_its_console_text_and_its_junit_do
     console, xml = test_runs.split_doctest_output(text)
     assert xml == "<testsuites><testsuite/></testsuites>" and "TEST CASE: x" in console and "<testsuites" not in console
     assert test_runs.split_doctest_output("no results here") == ("no results here", "")
+
+
+def test_pytest_and_node_junit_files_become_runs_by_id_and_a_title_two_files_share_lands_on_both(tmp_path):
+    import test_runs
+    py = tmp_path / "p.xml"
+    py.write_text('<testsuites><testsuite><testcase classname="test.python.test_a" name="test_it" time="0.2"/>'
+                  '<testcase classname="test.python.test_a" name="test_bad" time="0.1"><failure/></testcase></testsuite></testsuites>', encoding="utf-8")
+    assert test_runs.pytest_runs(py) == {"python:test/python/test_a.py::test_it": {"status": "pass", "seconds": 0.2},
+                                         "python:test/python/test_a.py::test_bad": {"status": "fail", "seconds": 0.1}}
+    node = tmp_path / "n.xml"
+    node.write_text('<testsuites><testcase name="a title" time="0.01" classname="test"/><testcase name="unknown" time="0" classname="test"/></testsuites>', encoding="utf-8")
+    titles = {"a title": ["js:test/js/a.test.mjs::a title", "js:test/js/b.test.mjs::a title"]}
+    assert set(test_runs.node_runs(node, titles)) == {"js:test/js/a.test.mjs::a title", "js:test/js/b.test.mjs::a title"}
+
+
+def test_scenario_results_and_a_checks_last_run_become_runs_by_id(tmp_path):
+    import json
+    import test_runs
+    assert test_runs.scenario_runs([("scenario", "scenario_A", "pass", 1.23456), ("live", "scenario_B", "skip", 0.0)]) == {
+        "scenario:scenario_A": {"status": "pass", "seconds": 1.235}, "live:scenario_B": {"status": "skip", "seconds": 0.0}}
+    runs, dur = tmp_path / "r.json", tmp_path / "d.json"
+    runs.write_text(json.dumps({"moondeck/check/check_x.py": {"passed": False, "tree": "T"}, "moondeck/check/check_y.py --fast": {"passed": True}}), encoding="utf-8")
+    dur.write_text(json.dumps({"moondeck/check/check_x.py": [3.0, 5.0]}), encoding="utf-8")
+    assert test_runs.check_runs(runs, dur) == {"check:check_x": {"status": "fail", "seconds": 5.0, "tree": "T"}}
+
+
+def test_the_python_js_and_check_tests_of_this_repository_are_registered_in_groups_of_their_own():
+    reg = gen_tests.registry()
+    assert {t["kind"] for t in reg.values()} >= {"unit", "scenario", "live", "python", "js", "check"}
+    index, _ = gen_tests.shards(reg)
+    groups = {v["group"] for v in index["subjects"].values()}
+    assert {"Scripts · Python tests", "UI · JS tests", "Scripts · Checks"} <= groups
+
+
+def test_a_checks_findings_are_kept_in_one_shape_and_read_back_as_rules_with_counts_and_worst_files(tmp_path):
+    sys.path.insert(0, str(Path(gen_tests.__file__).resolve().parents[1] / "check"))
+    import _findings
+    _findings.write("check_x", {"long function": {"reason": "over 60 lines", "standard": "s.md#a"}, "other": {"reason": "r"}},
+                    [{"rule": "long function", "message": "f", "file": "a.cpp", "value": 70}, {"rule": "long function", "message": "g", "file": "a.cpp"},
+                     {"rule": "long function", "message": "h", "file": "b.cpp", "line": 3}], tmp_path)
+    got = _findings.read_all(tmp_path)["check_x"]
+    assert got["total"] == 3 and got["rules"]["long function"]["count"] == 3 and got["rules"]["other"]["count"] == 0
+    assert got["files"] == [{"file": "a.cpp", "count": 2}, {"file": "b.cpp", "count": 1}]
+
+
+def test_each_subject_of_the_index_says_how_many_tests_passed_failed_or_have_no_result_and_what_its_check_found():
+    index = {"subjects": {"A": {"kinds": {"unit": 2}}, "check_x": {"kinds": {"check": 1}}, "C": {"kinds": {"unit": 1}}}}
+    by_subject = {"A": {"tests": {"unit:a1": {}, "unit:a2": {}}}, "check_x": {"tests": {"check:check_x": {}}}, "C": {"tests": {"unit:c1": {}}}}
+    runs = {"unit:a1": {"status": "fail"}, "unit:a2": {"status": "pass"}, "unit:c1": {"status": "pass"}}
+    gen_tests.annotate(index, by_subject, runs, {"check_x": {"errors": 2, "warnings": 5}})
+    assert index["subjects"]["A"] == {"kinds": {"unit": 2}, "failed": 1, "passed": 1}
+    assert index["subjects"]["check_x"] == {"kinds": {"check": 1}, "errors": 2, "warnings": 5, "norun": 1}
+    assert index["subjects"]["C"] == {"kinds": {"unit": 1}, "passed": 1}
+
+
+def test_a_python_test_reads_as_a_sentence_and_its_file_says_what_it_is():
+    tests = {t["file"]: t for t in gen_tests.registry().values() if t["kind"] == "python"}
+    one = next(t for t in gen_tests.registry().values() if t["kind"] == "python" and t["file"].endswith("test_gen_tests.py"))
+    assert not one["title"].startswith("test_") and "_" not in one["title"]
+    assert gen_tests.file_title("test/python/test_gen_tests.py").startswith("The test registry")
+    assert gen_tests.file_title("test/js/moonwalk-device.test.mjs").startswith("MoonWalk on a device")

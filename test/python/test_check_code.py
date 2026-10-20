@@ -291,3 +291,43 @@ def test_two_overloads_with_large_frames_stay_two_findings(tmp_path, monkeypatch
         f"{tmp_path}/src/core/a.h:10:1: warning: stack frame size (700) exceeds limit (512) in 'void mm::f(int)' [-Wframe-larger-than]",
         f"{tmp_path}/src/core/a.h:20:1: warning: stack frame size (800) exceeds limit (512) in 'void mm::f(float)' [-Wframe-larger-than]"])
     assert sorted(r[3] for r in check_code.stack_rows(out)) == [700, 800]
+
+
+def test_a_header_must_guard_with_pragma_once_and_never_say_using_namespace():
+    import check_code as c
+    assert c.header_findings("src/core/A.h", "#pragma once\nnamespace mm {}\n") == []
+    assert [r[1] for r in c.header_findings("src/core/A.h", "#ifndef A_H\n#define A_H\n#endif\n")] == [c.NO_PRAGMA]
+    assert [r[1] for r in c.header_findings("src/core/A.h", "#pragma once\nusing namespace mm;\n")] == [c.HEADER_USING]
+    assert c.header_findings("src/core/A.cpp", "using namespace mm;\n") == []   # a .cpp may, at file scope
+    assert c.header_findings("src/ui/x.h", "no guard") == []
+
+
+def test_the_type_double_is_a_finding_in_firmware_and_a_word_in_a_string_or_a_comment_is_not():
+    import check_code as c
+    assert [r[1] for r in c.double_findings("src/core/A.h", ["double v = 1;\n"])] == [c.FIRMWARE_DOUBLE]
+    assert c.double_findings("src/core/A.h", ['const char* s = "a double test"; // a double comment\n']) == []
+    assert c.double_findings("src/platform/desktop/p.cpp", ["double v;\n"]) == []   # the host's own code is not firmware
+
+
+def test_every_rule_the_coding_standards_say_check_code_checks_is_a_rule_it_reports():
+    import re
+    import check_code as c
+    text = (Path(__file__).resolve().parents[2] / "docs" / "contributing" / "coding-standards.md").read_text(encoding="utf-8")
+    marks = re.findall(r"Checked by `check_code`, rule `([^`]+)`", text)
+    assert len(marks) >= 3
+    assert [m for m in marks if m not in c.RULES] == []
+
+
+def test_a_constant_written_as_a_macro_is_a_finding_and_a_macro_the_preprocessor_tests_is_a_flag():
+    import check_code as c
+    tested = c.tested_names(["#ifdef MM_FLAG\n#endif\n#if defined(OTHER) && X > 1\n#endif\n"])
+    assert tested >= {"MM_FLAG", "OTHER", "X"}
+    assert [r[1] for r in c.define_findings("src/core/A.h", ["#define MM_MAX_GPIO 63\n"], tested)] == [c.DEFINE_CONSTANT]
+    assert c.define_findings("src/core/A.h", ["#define MM_FLAG 1\n", "#define MM_SQUARE(x) ((x)*(x))\n"], tested) == []
+    assert c.define_findings("src/platform/esp32/p.h", ["#define A 1\n"], tested) == []   # the platform layer owns its flags
+
+
+def test_dynamic_cast_and_typeid_are_findings_in_firmware_and_a_comment_saying_them_is_not():
+    import check_code as c
+    assert [r[1] for r in c.rtti_findings("src/core/A.cpp", ["auto* d = dynamic_cast<D*>(b);\n"])] == [c.RTTI]
+    assert c.rtti_findings("src/core/A.cpp", ["// absent: no dynamic_cast here\n"]) == []
