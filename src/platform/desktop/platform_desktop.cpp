@@ -133,6 +133,7 @@
 /// A host has no second card, so a subfolder of the one real root stands in. `sdMounted_` gates it as a missing card would, and format is a wipe-and-recreate.
 
 #include "platform/platform.h"
+#include "platform/usbvideo_frames.h"   // areaAverage: the shrink the device backend also uses
 #include "core/util/FirmwareImage.h"  // identify/moonBaseRejection: shared image vetting
 #include "core/util/H264Bitstream.h"  // where the encoder's frames begin and end
 
@@ -2878,14 +2879,11 @@ struct TestGrabber {
     std::atomic<bool> decodeFails{false};
     std::atomic<bool> open{false};
     std::atomic<uint32_t> decoded{0}, failed{0};
+    std::vector<uint8_t> frame;   ///< the synthesized source, rebuilt only when its size or color moves
+    uint8_t frameRgb[3] = {};
 } g_grabber;
 // How far `have` is from `want`, so the nearest advertised mode can be picked without <cstdlib>.
 long apart(long have, long want) { return have > want ? have - want : want - have; }
-// Halve `w` x `h` until it fits `maxW` x `maxH`, which is the scaling the decode hardware offers; false when even one pixel does not fit.
-bool halveToFit(uint16_t& w, uint16_t& h, uint16_t maxW, uint16_t maxH) {
-    while ((w > maxW || h > maxH) && w > 1 && h > 1) { w = uint16_t(w / 2); h = uint16_t(h / 2); }
-    return w <= maxW && h <= maxH;
-}
 }  // namespace
 
 uint32_t videoCaptureFormatGeneration() MM_NONBLOCKING { return g_grabber.generation.load(); }
@@ -2921,16 +2919,19 @@ bool videoCaptureDecodeInto(VideoCaptureHandle& h, uint8_t* dst, uint16_t maxWid
                             uint16_t& outWidth, uint16_t& outHeight) {
     if (!h.impl || !g_grabber.open) return false;
     if (g_grabber.decodeFails) { g_grabber.failed++; return false; }
-    uint16_t w = g_grabber.openW, hh = g_grabber.openH;
-    if (!halveToFit(w, hh, maxWidth, maxHeight)) { g_grabber.failed++; return false; }
-    const uint8_t r = g_grabber.r, g = g_grabber.g, b = g_grabber.b;
-    for (size_t i = 0, px = size_t(w) * hh; i < px; i++) {
-        dst[i * 3 + 0] = r;
-        dst[i * 3 + 1] = g;
-        dst[i * 3 + 2] = b;
+    if (!maxWidth || !maxHeight) { g_grabber.failed++; return false; }
+    // A frame at the mode the device opened, averaged onto the whole picture. It runs the same code the device backend does, so the host proves that path rather than a shortcut past it.
+    const uint16_t w = g_grabber.openW, hh = g_grabber.openH;
+    const uint8_t rgb[3] = {g_grabber.r, g_grabber.g, g_grabber.b};
+    const size_t need = static_cast<size_t>(w) * hh * 3;
+    if (g_grabber.frame.size() != need || std::memcmp(g_grabber.frameRgb, rgb, 3) != 0) {
+        g_grabber.frame.resize(need);
+        for (size_t i = 0; i < need; i += 3) std::memcpy(g_grabber.frame.data() + i, rgb, 3);
+        std::memcpy(g_grabber.frameRgb, rgb, 3);
     }
-    outWidth = w;
-    outHeight = hh;
+    usbvideo::areaAverage(g_grabber.frame.data(), static_cast<size_t>(w) * 3, w, hh, maxWidth, maxHeight, dst);
+    outWidth = maxWidth;
+    outHeight = maxHeight;
     g_grabber.decoded++;
     return true;
 }

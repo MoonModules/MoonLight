@@ -30,7 +30,7 @@ A picture source is an option of the Picture service's `source`, in `src/core/se
 
 ```cpp
 uint8_t* px = beginWrite();          // the back picture, width x height x 3 bytes, top row first
-decodeInto(px, width, height);       // your source: a decoder writes here directly, nothing is copied
+decodeInto(px, width, height);       // your source: the pixels land here, uncopied where its decoder can
 endWrite();                          // swap it to the front and bump the generation
 ```
 

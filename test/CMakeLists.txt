@@ -15,6 +15,7 @@ add_executable(mm_tests
     unit/core/unit_Color.cpp
     unit/core/unit_math8.cpp
     unit/core/unit_math16.cpp
+    unit/core/unit_usbvideo_frames.cpp
     unit/core/unit_noise.cpp
     unit/core/unit_fields.cpp
     unit/core/unit_crc.cpp
