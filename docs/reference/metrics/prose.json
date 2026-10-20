@@ -1,6 +1,6 @@
 {
- "(total)": 2357,
- "MoonLight.EmDash": 1118,
+ "(total)": 2354,
+ "MoonLight.EmDash": 1117,
  "MoonLight.LinkText": 7,
  "MoonLight.NegatedHeading": 9,
  "MoonLight.SelfReference": 19,
@@ -9,5 +9,5 @@
  "MoonLight.Temporal": 188,
  "MoonLight.TonePadding": 1,
  "MoonLight.VagueClose": 28,
- "MoonLight.Weasel": 619
+ "MoonLight.Weasel": 617
 }

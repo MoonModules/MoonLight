@@ -55,7 +55,7 @@ def _fps_range_from_observed_range(v) -> str:
     Reads the current observation shape (a dict of statistics over a rolling sample
     window, moondeck/scenario/_observed.py) and renders p50 to p95: the typical cost and
     the tail. NOT min to max, which spans one lucky run to the worst excursion ever
-    recorded and reads as a much wider performance envelope than the code actually has.
+    recorded and reads as a much wider performance envelope than the code has.
     The older [min, max] list is still accepted so a file written before the change
     renders rather than raising."""
     if v is None:
@@ -75,7 +75,7 @@ def _fps_range_from_observed_range(v) -> str:
 
 
 def _heap_contract_cell(v) -> str:
-    """Contract heap/block floor → '≥ N KB'. None → '—'. 0 → 'unlimited'
+    """Contract heap/block floor → '≥ N KB'. None → NO_VALUE. 0 → 'unlimited'
     (the desktop platform reports free_heap=0 / max_alloc_block=0 to mean
     "no meaningful ceiling"; rendering them as missing was misleading)."""
     if v is None:
@@ -95,7 +95,7 @@ def _observed_pair(v):
 
     For the dict, the pair is p50 to p95: the typical value and its tail. Min to max
     would span one lucky run to the worst excursion ever recorded, which reads as a far
-    wider envelope than the code actually has. n=0 (never measured on this target, e.g.
+    wider envelope than the code has. n=0 (never measured on this target, e.g.
     another OS) returns None, so the cell shows a dash rather than a fabricated zero.
     """
     if v is None:

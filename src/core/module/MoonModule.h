@@ -226,9 +226,10 @@ public:
     static bool safeMode() { return failedBoots() >= kSafeModeRestarts; }
     /// Whether safe mode holds this module, counting it as disabled while its saved flag stays, for one that can crash the device or overload its supply.
     virtual bool heldInSafeMode() const { return false; }
-    /// Set the flag, firing the transition hook only on a real change.
+    /// Set the flag, firing the transition hook only on a real change, with the workers parked first, as every structural mutator does.
     void setEnabled(bool e) {
         if (enabled_ == e) return;
+        quiesceForMutation();   // a worker may be in this module's tick, and onEnabled may release what that tick uses
         enabled_ = e;
         if (e && role() == ModuleRole::Effect) lastEnabledEffect_ = this;
         onEnabled(e);
