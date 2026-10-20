@@ -135,13 +135,20 @@ CLANG_ARGS = ["-x", "c++", "-std=c++20", "-DNDEBUG", f"-I{ROOT / 'src'}",
               f"-I{ROOT / 'src' / 'platform' / 'desktop'}", "-Wno-unknown-warning-option"]
 
 
+class ToolchainMissing(Exception):
+    """libclang or the LLVM that carries it is not on this host: the help cannot be generated here, which is no fault of the help."""
+
+
 def load_clang():
     """libclang and the flags that find the standard headers. The library comes from the LLVM `check_clang_query` uses when one is installed, else from the `libclang` wheel; the resource dir comes from that LLVM's clang, as the wheel ships no headers."""
-    import clang.cindex as ci
+    try:
+        import clang.cindex as ci
+    except ImportError as e:
+        raise ToolchainMissing(f"libclang for Python is not installed: {e}") from e
     from check_clang_tidy import _find_tool, _toolchain_args
     anchor = _find_tool("clang-query") or _find_tool("clang")
     if not anchor:
-        sys.exit("clang not found: install LLVM (brew install llvm, apt install clang).")
+        raise ToolchainMissing("clang not found: install LLVM (brew install llvm, apt install clang).")
     llvm = Path(anchor).resolve().parent.parent
     lib = next(iter(sorted((llvm / "lib").glob("libclang.*"))), None)
     if lib:
@@ -420,13 +427,13 @@ def heading_id(text: str) -> str:
 
 
 def tests_url(cls_name: str, ref: str) -> str | None:
-    """The module's section in the test inventory, whose test names read as its behavior, when its test file names an `@module`; else the file on GitHub."""
+    """The module's entry in the test registry, whose test names read as its behavior, when its test file names an `@module`; else the file on GitHub."""
     stem = re.sub(r"(Effect|Modifier|Layout|Driver|Service)$", "", cls_name)
     for name in dict.fromkeys((cls_name, stem)):
         hits = sorted((ROOT / "test").rglob(f"unit_{name}.cpp"))
         if hits:
             module = parse_unit_file(hits[0]).get("module")
-            return SITE + "reference/tests/unit-tests.html#" + heading_id(module) if module else REPO + ref + "/" + hits[0].relative_to(ROOT).as_posix()
+            return SITE + "reference/tests.html#" + heading_id(module) if module else REPO + ref + "/" + hits[0].relative_to(ROOT).as_posix()
     return None
 
 
@@ -452,6 +459,8 @@ def module_help(cls, doc: str, ref: str) -> dict:
 
 def generate(ref: str = "main") -> tuple[dict, dict]:
     """The help file, and a report: the controls with no line, the attributions the catalog lacks and the clips with no file."""
+    import gen_tests
+    scenario_controls = gen_tests.by_control()
     ci, extra = load_clang()
     _CLANG[:] = [ci, extra]
     tu = ci.Index.create().parse(str(ROOT / REGISTRY), args=CLANG_ARGS + extra)
@@ -481,6 +490,10 @@ def generate(ref: str = "main") -> tuple[dict, dict]:
             entry["attribution"], unlisted = resolve_attribution(entry["attribution"], attributions)
             if unlisted:
                 report["unlisted"][type_name] = unlisted
+        for control, h in entry.get("controls", {}).items():
+            # The scenarios that set or expect the control, so its help says what proves it: a few, each linking its entry on the test page.
+            if found := scenario_controls.get(f"{type_name}.{control}"):
+                h["tests"] = [{"title": s["title"], "url": f"{SITE}reference/tests.html#{heading_id(s['subject'])}:{s['id']}"} for s in found[:3]]
         modules[type_name] = entry
         missing = [c for c, h in entry.get("controls", {}).items() if not h.get("line")]
         if missing or not entry.get("line"):
@@ -525,7 +538,10 @@ def main() -> int:
     ap.add_argument("--ref", default="main", help="Git ref the source and test links point at.")
     ap.add_argument("--out", default=str(HELP))
     args = ap.parse_args()
-    data, report = generate(args.ref)
+    try:
+        data, report = generate(args.ref)
+    except ToolchainMissing as e:
+        sys.exit(str(e))
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(render(data), encoding="utf-8")

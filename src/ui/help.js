@@ -125,8 +125,16 @@ export function moduleHelp(help, docPath, walks = []) {
 }
 
 // A control's help as Material's helper text, a line under the field rather than a hover tooltip, which fails on touch; any more opens from the line, the MoonWalk steps that set the control with it.
+// A control's tests as links: the scenarios that set or expect it, each opening its entry on the test page.
+function testAnchor(t) {
+    const a = document.createElement("a");
+    a.href = safeUrl(t.url) || "#"; a.target = "_blank"; a.rel = "noopener";
+    a.textContent = `Test: ${String(t.title).replace(/^scenario_/, "").replace(/_/g, " ")}`;
+    return a;
+}
+
 export function controlHelp(row, help, walks = []) {
-    const anchors = walks.map(walkAnchor);
+    const anchors = [...walks.map(walkAnchor), ...(help?.tests || []).map(testAnchor)];
     if (!help?.line && !anchors.length) return;
     let el;
     if (!help?.line) {

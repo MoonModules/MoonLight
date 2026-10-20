@@ -2,6 +2,9 @@
   "name": "scenario_GridLayout_resize",
   "module": "GridLayout",
   "mode": "mutate",
+  "instances": {
+    "Grid": "GridLayout"
+  },
   "also": [
     "MultiplyModifier",
     "Layer"

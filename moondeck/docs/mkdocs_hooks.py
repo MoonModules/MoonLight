@@ -1,6 +1,6 @@
 """MkDocs build hooks. Wired via `hooks:` in mkdocs.yml. Three jobs:
 
-1. on_files: synthesize `reference/tests/unit-tests.md` + `reference/tests/scenario-tests.md` into MkDocs' virtual file tree from the test files (via `_test_metadata.py`, the same parser the CLI generator + MoonDeck use). So the inventory pages are NOT committed to the repo and can't drift, rebuilt from source every build. The per-effect `[Tests]` links in the catalog pages point at these pages; kept as plain one-line links so the effect cards stay compact (a link, not a case dump).
+1. on_files: publish the test registry (`tests/index.json` and a shard per subject, from `gen_tests.py`), the help the deck reads and the catalog pages drawn from help.json, and MoonWalk's map.
 
 2. on_page_markdown: repoint links that escape docs/ into repo files (`../src/*.h`, `../CLAUDE.md`, `../moondeck/*`) to absolute GitHub blob URLs, since the site can't host `src/` (pre-Doxide) and a relative link would 404.
 
@@ -20,12 +20,9 @@ _HERE = Path(__file__).resolve().parent
 if str(_HERE) not in sys.path:
     sys.path.insert(0, str(_HERE))
 
-from _test_metadata import (  # noqa: E402
-    ROOT,
-    collect_unit_files,
-    collect_scenario_files,
-)
-from generate_test_docs import render_unit_tests, render_scenarios  # noqa: E402
+from _test_metadata import ROOT  # noqa: E402
+import gen_tests  # noqa: E402
+import test_runs  # noqa: E402
 from gen_help import ATTRIBUTIONS, catalog_rows, display_name  # noqa: E402
 from gen_moonwalk import build as build_moonwalk, absolute_links, dumps as moonwalk_json, render_text as moonwalk_text, split_text as split_moonwalk  # noqa: E402
 
@@ -233,14 +230,21 @@ def on_files(files, config):
             files.remove(existing)
         files.append(f)
 
-    _add("reference/tests/unit-tests.md", render_unit_tests(collect_unit_files()))
     # The card deck renders help with the app's own help.js, served beside assets/help-deck.js, so a card on the site reads as the module's help does on a device. One deck per catalog page.
     _add("assets/help.js", (ROOT / "src" / "ui" / "help.js").read_text(encoding="utf-8"))
     # A catalog page whose markdown is gone is generated from help.json, under the same name, so every link and anchor into it holds.
     for page in _help_file().get("catalogs", {}):
         if not (ROOT / "docs" / "moonmodules" / page).exists():
             _add(f"moonmodules/{page}", generated_catalog(f"moonmodules/{page}"))
-    _add("reference/tests/scenario-tests.md", render_scenarios(collect_scenario_files()))
+    # The test registry, sharded by subject: tests.js reads the index and fetches the shard of the subject a reader opens.
+    index, by_subject = gen_tests.shards(gen_tests.registry())
+    index["files"] = {s: gen_tests.file_name(s) for s in by_subject}
+    _add("tests/index.json", json.dumps(index, ensure_ascii=False, separators=(",", ":")))
+    for subject, shard in by_subject.items():
+        _add(f"tests/{gen_tests.file_name(subject)}", json.dumps(shard, ensure_ascii=False, separators=(",", ":")))
+    _add("tests/runs.json", json.dumps(test_runs.published(known=set(gen_tests.registry())), separators=(",", ":")))   # this machine's last results, empty where nothing ran
+    _add("tests/gaps.json", json.dumps(gen_tests.gaps(_walk()["processes"], _help_file()), ensure_ascii=False, separators=(",", ":")))   # what no test covers
+    _add("tests/steps.json", json.dumps(gen_tests.step_tests(_walk()["processes"]), ensure_ascii=False, separators=(",", ":")))   # the tests of each process step, for the map to show
     # MoonWalk's journey map, from the stage files under moonwalk/, and each process's prose beside it, which the view fetches when the process opens; links absolute, since the view renders them on a device's page too. An invalid file fails the build.
     walk, texts = split_moonwalk(absolute_links(_walk()))
     _add("moonwalk/moonwalk.json", moonwalk_json(walk))
@@ -392,6 +396,9 @@ def attributed_by(markdown: str) -> str:
 def on_page_markdown(markdown, page, config, files):
     """Repoint out-of-docs source links to GitHub blob URLs, follow a written catalog page with its deck, and give the attribution catalog its pictures and the modules naming each entry."""
     # The MoonWalk page carries every process's prose as plain text, which search indexes and a reader without JavaScript reads; moonwalk.js hides it once the live view draws. Appended first, so its links leaving docs/ are rewritten like the page's own.
+    # The test page carries every test's name as plain text, which search indexes and a reader without JavaScript reads; tests.js removes it once it draws.
+    if page.file.src_uri == "reference/tests.md":
+        markdown += '\n<div class="mm-tests-text" markdown>\n\n' + gen_tests.text() + '\n</div>\n'
     if page.file.src_uri == "moonwalk.md":
         markdown += '\n<div class="mm-walk-text" markdown>\n\n' + moonwalk_text(_walk()) + '\n</div>\n'
     markdown = _rewrite_out_of_docs_links(markdown, page.file.src_uri)

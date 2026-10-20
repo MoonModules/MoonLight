@@ -2,6 +2,10 @@
   "name": "scenario_Control_a_palette_preset_changes_only_the_palette",
   "module": "ControlModule",
   "mode": "mutate",
+  "instances": {
+    "Drivers": "Drivers",
+    "ScnLook": "RainbowEffect"
+  },
   "also": [
     "Drivers",
     "Scheduler"
@@ -179,7 +183,7 @@
             "min": 5,
             "max": 14,
             "n": 32,
-            "samples": [6, 6, 6, 5, 5, 13, 6, 5, 11, 8, 8, 8, 8, 8, 9, 14, 8, 8, 8, 11, 8, 11, 9, 8, 8, 14, 7, 12, 13, 8, 8, 8]
+            "samples": [6, 6, 5, 5, 13, 6, 5, 11, 8, 8, 8, 8, 8, 9, 14, 8, 8, 8, 11, 8, 11, 9, 8, 8, 14, 7, 12, 13, 8, 8, 8, 8]
           },
           "last_updated": "2026-10-19"
         },

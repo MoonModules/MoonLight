@@ -1,0 +1,121 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://moonmodules.org/MoonLight/tests/tests.schema.json",
+  "title": "The test engine's records",
+  "description": "Draft for approval. The registry (what exists, generated and published like help.json), a run (what happened, kept under build/), a finding and its rule (what a check reported, in the shape of SARIF). A test's id is derived, never declared.",
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^(unit|scenario|live|python|js|check):[^\\s].*$",
+      "description": "kind:path::name for unit, python and js (the file and the test's own name), kind:name for a scenario (its file stem) and a check (its script), and scenario:name#step for one scenario step. Derived from the test, so a rename is a new test and git is its history."
+    },
+    "subject": {
+      "type": "string",
+      "description": "What a test is about: a module type as help.json names it, or a class or script where it is not a type. Links to the help and MoonWalk exist where the subject is a type."
+    },
+    "test": {
+      "type": "object",
+      "required": ["kind", "title", "file"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "enum": ["unit", "scenario", "live", "python", "js", "check"] },
+        "size": { "enum": ["small", "medium", "large"], "description": "Google's test sizes: small in one process, medium on the desktop with a server, large on hardware or a network." },
+        "title": { "type": "string", "description": "A unit test's sentence, a scenario's name, a check's one line." },
+        "description": { "type": "string" },
+        "file": { "type": "string", "description": "The path of the test, relative to the repository." },
+        "line": { "type": "integer", "minimum": 1 },
+        "subjects": { "type": "array", "items": { "$ref": "#/$defs/subject" }, "description": "From a unit test's @module and @also, and a scenario's module and also." },
+        "controls": { "type": "array", "items": { "type": "string", "pattern": "^\\w+\\.\\w+$" }, "description": "Type.control, from a scenario's set_control and expect_control steps through its declared instances." },
+        "steps": { "type": "array", "items": { "type": "string", "pattern": "^[a-z0-9-]+/[a-z0-9-]+$" }, "description": "process/step ids the test proves, named in the test (a steps_proved key, a @step tag); the generator checks they exist." },
+        "sequence": {
+          "type": "array",
+          "description": "A scenario's own steps in order: what it does and what each step is for. They are not process steps.",
+          "items": {
+            "type": "object",
+            "required": ["name"],
+            "additionalProperties": false,
+            "properties": {
+              "name": { "type": "string" },
+              "op": { "type": "string" },
+              "description": { "type": "string" },
+              "measure": { "const": true },
+              "perf": {
+                "type": "object",
+                "description": "A measured step's numbers per target: the contract it is held to and the range it was observed in. The samples stay out; step 7 of the plan moves the observations into the run record.",
+                "additionalProperties": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "contract": { "type": "object" },
+                    "observed": { "type": "object" }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "run": { "type": "object", "required": ["script"], "additionalProperties": false, "properties": { "script": { "type": "string" }, "args": { "type": "string" } }, "description": "The MoonDeck call that runs it." }
+      }
+    },
+    "run": {
+      "type": "object",
+      "required": ["id", "tree", "status"],
+      "additionalProperties": false,
+      "description": "One run of one test, kept under build/ and never committed. JUnit XML is read into it where a runner writes it.",
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "tree": { "type": "string", "description": "The git tree id the run saw, as walk_status records it: a pass counts while the files it covers are unchanged." },
+        "status": { "enum": ["pass", "fail", "skip"] },
+        "seconds": { "type": "number", "minimum": 0 },
+        "at": { "type": "string", "format": "date-time" },
+        "measurements": { "type": "array", "items": { "$ref": "#/$defs/measurement" } }
+      }
+    },
+    "measurement": {
+      "type": "object",
+      "required": ["target", "metric", "value"],
+      "additionalProperties": false,
+      "description": "A scenario's observation: what was measured on which target. Not pass or fail. The contract it is compared against stays committed beside the scenario, as a golden file does.",
+      "properties": {
+        "target": { "type": "string" },
+        "metric": { "enum": ["tick_us", "free_heap", "max_alloc_block", "fps", "lights"] },
+        "value": { "type": "number" },
+        "window": { "type": "array", "items": { "type": "number" }, "maxItems": 32 }
+      }
+    },
+    "rule": {
+      "type": "object",
+      "required": ["id", "check", "reason"],
+      "additionalProperties": false,
+      "description": "In the shape of SARIF's reportingDescriptor: the rule, its reason and its page, so the standards pages generate from the rules.",
+      "properties": {
+        "id": { "type": "string" },
+        "check": { "$ref": "#/$defs/id" },
+        "reason": { "type": "string" },
+        "standard": { "type": "string", "description": "The standards page and anchor that holds the rule." },
+        "level": { "enum": ["error", "warning", "note"] }
+      }
+    },
+    "finding": {
+      "type": "object",
+      "required": ["ruleId", "level", "message"],
+      "additionalProperties": false,
+      "description": "In the shape of a SARIF result.",
+      "properties": {
+        "ruleId": { "type": "string" },
+        "level": { "enum": ["error", "warning", "note"] },
+        "message": { "type": "string" },
+        "file": { "type": "string" },
+        "line": { "type": "integer", "minimum": 1 }
+      }
+    }
+  },
+  "type": "object",
+  "required": ["tests"],
+  "additionalProperties": false,
+  "description": "The registry: every test by its id.",
+  "properties": {
+    "generated": { "type": "string" },
+    "tests": { "type": "object", "propertyNames": { "$ref": "#/$defs/id" }, "additionalProperties": { "$ref": "#/$defs/test" } }
+  }
+}

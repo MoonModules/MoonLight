@@ -1,6 +1,11 @@
 {
   "name": "scenario_Network_hardware_reconfigures_live",
   "mode": "mutate",
+  "instances": {
+    "Ethernet": "EthernetModule",
+    "Mqtt": "MqttModule",
+    "Network": "NetworkModule"
+  },
   "description": "The network settings a desktop cannot answer for: an Ethernet PHY cycled on real silicon, mDNS announcing over a real radio, and Home Assistant discovery announced and retracted against a real broker. The render loop has to survive every one of them.",
   "also": [
     "NetworkModule",

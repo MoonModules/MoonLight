@@ -7,6 +7,11 @@
     "GridLayout"
   ],
   "mode": "mutate",
+  "instances": {
+    "Grid": "GridLayout",
+    "NetworkReceive": "NetworkReceiveEffect",
+    "Send": "NetworkSendDriver"
+  },
   "live_only": true,
   "boards": [
     "sender"

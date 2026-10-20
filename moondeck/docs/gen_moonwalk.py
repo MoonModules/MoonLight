@@ -410,6 +410,9 @@ def build(root: Path = MOONWALK) -> dict:
                 if why := link_error(target, processes):
                     errors.append(f"{pid}/{step_id}: {why}" if step_id else f"{pid}: {why}")
     errors += shape_errors(processes)
+    if root == MOONWALK:   # the repository's own tests name its own steps; a map built from other files is judged on its own
+        import gen_tests   # imported here, as the tests name process steps and read the map for them
+        errors += gen_tests.unknown_steps(processes)
     if errors:
         raise ValueError("process files:\n  " + "\n  ".join(errors))
     return {"stages": stages, "systems": known, "processes": processes, "byPage": by_page, "byModule": by_module, "byControl": by_control}

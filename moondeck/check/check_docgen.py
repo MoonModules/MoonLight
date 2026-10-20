@@ -1122,7 +1122,7 @@ def _help_freshness():
     import gen_help
     try:
         stale = gen_help.stale()
-    except (SystemExit, Exception) as e:   # no LLVM, or a parse that failed
+    except gen_help.ToolchainMissing as e:   # no LLVM here: any other failure is the help's own and stays a failure
         raise _Unmeasurable(str(e)) from e
     return ([("docs/help/help.json",
               f"{_STALE_HELP_RULE}: run `uv run moondeck/docs/gen_help.py` and commit the result")]

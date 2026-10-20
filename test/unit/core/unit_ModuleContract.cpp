@@ -152,9 +152,9 @@ Row place(uint8_t index) {
         s.prepareTree();
         for (int i = 0; i < 3; i++) { mm::platform::setTestNowMs(now); s.tick(); now += 1100; }
         row.dynamicAfter = dynamicTotal(*m);
-        // A module standing in the tree before the add has no add to measure from.
+        // A module added by document is measured from before its add, less its own objects. A standalone one stood in the tree before beforeAdd was taken, so its objects are already in that baseline and only what it holds beyond them counts; its setup-time allocations are in the baseline too and are not covered. A module standing in the tree before the add has no add to measure from.
         if (byDocument || standalone)
-            row.heldAfterDisable = static_cast<long>(mm::platform::allocatedBytes()) - static_cast<long>(beforeAdd) - static_cast<long>(objectBytes(*m));
+            row.heldAfterDisable = static_cast<long>(mm::platform::allocatedBytes()) - static_cast<long>(beforeAdd) - (byDocument ? static_cast<long>(objectBytes(*m)) : 0L);
         // Removed the way the API's DELETE removes it, a top-level module leaving with its tree; a module the API refuses to remove (PreviewDriver) is out of this check.
         if (byDocument && m->userEditable()) {
             const char* parent = role == mm::ModuleRole::Layout ? "Layouts" : role == mm::ModuleRole::Driver ? "Drivers" : role == mm::ModuleRole::Service ? "Services" : role == mm::ModuleRole::Layer ? "Effects" : nullptr;

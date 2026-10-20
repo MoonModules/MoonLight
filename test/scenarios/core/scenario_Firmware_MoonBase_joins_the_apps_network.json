@@ -2,6 +2,9 @@
   "name": "scenario_Firmware_MoonBase_joins_the_apps_network",
   "module": "FirmwareUpdateModule",
   "mode": "mutate",
+  "instances": {
+    "Network": "NetworkModule"
+  },
   "also": [
     "NetworkModule",
     "WiFiModule"

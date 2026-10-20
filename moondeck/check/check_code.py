@@ -351,12 +351,13 @@ def raw_alloc_rows() -> list:
 
 
 # A static variable declaration: its type and name come before any `(`, so a static function never matches, and a line naming const or constexpr is flash.
+_CONST_RE = re.compile(r"\b(?:const|constexpr)\b")   # the whole word, so a name such as `constraint` or `constructor` is no flash
 _STATIC_VAR_RE = re.compile(r"^\s*(?:inline\s+)?static\s+(?:inline\s+)?[\w:<>,\s*&]+?[\s*&]\w+\s*(?:\[[^\]]*\]\s*)*(?:=|;|\{)")
 
 
 def mutable_static_rows() -> list:
     """Every non-const static variable in src/core and src/light, namespace-scope, function-local or class member, each a RAM cost a module that never runs would still pay."""
-    return _line_rows(("src/core/", "src/light/"), MUTABLE_STATIC, lambda code: "const" not in code and _STATIC_VAR_RE.match(code))
+    return _line_rows(("src/core/", "src/light/"), MUTABLE_STATIC, lambda code: not _CONST_RE.search(code) and _STATIC_VAR_RE.match(code))
 
 
 def area(path: str) -> str:

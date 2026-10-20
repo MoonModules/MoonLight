@@ -2,6 +2,10 @@
   "name": "scenario_peripheral_switch",
   "module": "ParallelLedDriver",
   "mode": "mutate",
+  "instances": {
+    "Grid": "GridLayout",
+    "ParallelLed": "ParallelLedDriver"
+  },
   "also": [
     "I80Peripheral",
     "MoonI80Peripheral",

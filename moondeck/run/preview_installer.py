@@ -301,6 +301,9 @@ def main() -> int:
                 out = Path(STAGE_DIR) / "moonwalk" / "moonwalk.json"
                 regenerate(out)
                 return str(out)
+            if route == "/tests/steps.json":
+                subprocess.run(["uv", "run", str(ROOT / "moondeck" / "docs" / "gen_tests.py"), "--out", str(Path(STAGE_DIR) / "tests"), "--steps-only"], check=False)   # as the stage files and the tests are now, through uv like the map, so this server needs none of the generator's packages
+                return str(Path(STAGE_DIR) / "tests" / "steps.json")
             return super().translate_path(path)
 
     handler = CorsHandler

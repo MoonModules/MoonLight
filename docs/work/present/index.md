@@ -20,3 +20,4 @@ A file here that no longer has work behind it is either finished, and belongs in
 | Audio codec | in PR 129, M3 unverified |
 | ESP32-C3 and the Athom bulb | open, waiting on the bulb |
 | Input mapping, Gamepads and MIDI desks, Presets as state documents, Code ratchets | partial |
+| Test engine | for approval, not started |

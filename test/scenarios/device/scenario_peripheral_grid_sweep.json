@@ -2,6 +2,9 @@
   "name": "scenario_peripheral_grid_sweep",
   "module": "ParallelLedDriver",
   "mode": "mutate",
+  "instances": {
+    "Grid": "GridLayout"
+  },
   "also": [
     "I80Peripheral",
     "MoonI80Peripheral",

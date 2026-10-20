@@ -21,7 +21,7 @@ UNIT_DIR = ROOT / "test" / "unit"
 SCENARIO_DIR = ROOT / "test" / "scenarios"
 
 # Match `TEST_CASE("name")` or `TEST_CASE("name" * doctest::skip())`. Captures the name.
-TEST_CASE_RE = re.compile(r'^TEST_CASE\s*\(\s*"([^"]+)"', re.MULTILINE)
+TEST_CASE_RE = re.compile(r'^TEST_CASE\s*\(\s*"((?:[^"\\]|\\.)*)"', re.MULTILINE)   # a name may hold an escaped quote, which doctest sees unescaped
 
 
 def parse_unit_file(path: Path) -> dict:
@@ -55,23 +55,31 @@ def parse_unit_file(path: Path) -> dict:
             file_description_lines.append(body[len("@description "):].strip())
 
     cases: list[tuple[str, str | None]] = []
+    case_lines: list[int] = []   # the 1-based line of each TEST_CASE, in the order of `cases`
+    case_steps: list[list[str]] = []   # the process steps each case proves, in the order of `cases`
     for m in TEST_CASE_RE.finditer(text):
-        case_name = m.group(1)
+        case_name = re.sub(r'\\(["\\])', r'\1', m.group(1))
         line_idx = text[:m.start()].count("\n")  # 0-based index of the TEST_CASE line
         # Walk back over consecutive `//` (non-`@`) lines so a multi-line
         # comment block above the TEST_CASE renders as one full description.
         # Previously only the last line was captured, truncating leading clauses.
         desc_lines: list[str] = []
+        steps: list[str] = []   # `// @step process/step` lines in the block name the process steps the case proves
         i = line_idx - 1
         while i >= 0:
             prev = lines[i].strip()
-            if not prev.startswith("//") or prev.startswith("// @"):
+            if prev.startswith("// @step "):
+                steps += [s.strip() for s in prev[len("// @step "):].split(",") if s.strip()]
+            elif not prev.startswith("//") or prev.startswith("// @"):
                 break
-            desc_lines.append(prev[2:].strip())
+            else:
+                desc_lines.append(prev[2:].strip())
             i -= 1
         desc_lines.reverse()
         desc: str | None = " ".join(desc_lines) if desc_lines else None
         cases.append((case_name, desc))
+        case_lines.append(line_idx + 1)
+        case_steps.append(steps)
 
     return {
         "path": path,
@@ -79,6 +87,8 @@ def parse_unit_file(path: Path) -> dict:
         "also": also,
         "file_description": " ".join(file_description_lines).strip() or None,
         "cases": cases,
+        "case_lines": case_lines,
+        "case_steps": case_steps,
     }
 
 
@@ -95,6 +105,8 @@ def parse_scenario_file(path: Path) -> dict:
             "description": step.get("description"),
             "op": step.get("op", ""),
             "measure": bool(step.get("measure")),
+            "id": step.get("id"),
+            "key": step.get("key"),
             "contract": step.get("contract") or {},
             "observed": step.get("observed") or {},
         })
@@ -102,6 +114,8 @@ def parse_scenario_file(path: Path) -> dict:
         "path": path,
         "module": data.get("module"),
         "also": data.get("also", []) or [],
+        "instances": data.get("instances", {}) or {},
+        "steps_proved": data.get("steps_proved", []) or [],
         "name": data.get("name", path.stem),
         "description": data.get("description", ""),
         "mode": data.get("mode", "construct"),

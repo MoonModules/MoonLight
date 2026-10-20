@@ -44,7 +44,7 @@ One source tree drives ESP32, Teensy, Raspberry Pi, macOS, Windows and Linux.
 
     Every behavior is pinned by a test. When a bug is fixed, a test proves it.
 
-    [Unit tests](reference/tests/unit-tests.md) · [Scenario tests](reference/tests/scenario-tests.md)
+    [Tests](reference/tests.md)
 
 -   :material-code-braces: **Go deeper**
 

@@ -5,6 +5,10 @@
     "NetworkReceiveEffect"
   ],
   "mode": "mutate",
+  "instances": {
+    "Grid": "GridLayout",
+    "Send": "NetworkSendDriver"
+  },
   "live_only": true,
   "boards": [
     "sender",

@@ -2,6 +2,9 @@
   "name": "scenario_Firmware_reports_what_is_running",
   "module": "FirmwareUpdateModule",
   "mode": "mutate",
+  "instances": {
+    "Firmware": "FirmwareUpdateModule"
+  },
   "also": [
     "SystemModule"
   ],

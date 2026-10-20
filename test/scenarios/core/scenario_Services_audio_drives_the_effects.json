@@ -2,6 +2,9 @@
   "name": "scenario_Services_audio_drives_the_effects",
   "module": "AudioService",
   "mode": "mutate",
+  "instances": {
+    "Audio": "AudioService"
+  },
   "also": [
     "Services"
   ],

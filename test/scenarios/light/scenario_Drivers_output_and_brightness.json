@@ -2,6 +2,9 @@
   "name": "scenario_Drivers_output_and_brightness",
   "module": "Drivers",
   "mode": "mutate",
+  "instances": {
+    "Drivers": "Drivers"
+  },
   "also": [
     "PreviewDriver",
     "FixtureProfilesModule"
@@ -107,7 +110,7 @@
             "min": 6,
             "max": 15,
             "n": 32,
-            "samples": [7, 7, 7, 6, 8, 15, 8, 7, 7, 7, 7, 7, 7, 7, 7, 8, 7, 8, 8, 7, 7, 7, 7, 7, 7, 6, 11, 10, 10, 7, 8, 7]
+            "samples": [7, 7, 6, 8, 15, 8, 7, 7, 7, 7, 7, 7, 7, 7, 8, 7, 8, 8, 7, 7, 7, 7, 7, 7, 6, 11, 10, 10, 7, 8, 7, 7]
           },
           "last_updated": "2026-10-19"
         },

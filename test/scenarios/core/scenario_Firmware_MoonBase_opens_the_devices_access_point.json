@@ -2,6 +2,9 @@
   "name": "scenario_Firmware_MoonBase_opens_the_devices_access_point",
   "module": "FirmwareUpdateModule",
   "mode": "mutate",
+  "instances": {
+    "Network": "NetworkModule"
+  },
   "also": [
     "AccessPointModule",
     "NetworkModule",

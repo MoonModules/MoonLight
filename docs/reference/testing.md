@@ -1,11 +1,6 @@
 # Testing
 
-What we test and how. The detailed inventory of every test lives in two auto-generated files:
-
-- **[Unit tests](tests/unit-tests.md)**: one row per `TEST_CASE`, grouped by module. Generated from `test/unit/{core,light}/unit_*.cpp`.
-- **[Scenario tests](tests/scenario-tests.md)**: one section per scenario JSON, grouped by module. Generated from `test/scenarios/{core,light,device}/scenario_*.json`. Each scenario runs in two tiers (in-process + live) unless flagged `live_only` (construct-mode scenarios are also skipped on live, since `main.cpp` owns the live shape).
-
-Both are produced by `moondeck/docs/generate_test_docs.py`; the source of truth is the test files themselves (steps to add one: [Add a test, and pin a bug](../moonwalk.md#add-test)).
+What we test and how. The inventory of every test is [the test page](tests.md), drawn from a registry the docs build generates from the test files (`moondeck/docs/gen_tests.py`): one entry per `TEST_CASE` and per scenario JSON, by subject. A scenario runs in two tiers (in-process + live) unless flagged `live_only` (construct-mode scenarios run only in-process). The source of truth is the test files themselves (steps to add one: [Add a test, and pin a bug](../moonwalk.md#add-test)).
 
 ## Testing strategy
 
@@ -446,18 +441,18 @@ Unknown JSON keys are ignored by both runners (C++ and Python), so adding a new 
 
 ```text
 moondeck/docs/
-├── _test_metadata.py        # one parser used by both consumers below
-└── generate_test_docs.py    # writes docs/tests/unit-tests.md + scenario-tests.md
+├── _test_metadata.py        # one parser used by the consumers below
+└── gen_tests.py             # the registry the test page reads
 moondeck/moondeck.py          # serves the same data as HTML in MoonDeck views
 ```
 
-Both the markdown generator and the MoonDeck endpoints (`/api/test-modules`, `/api/unit-tests/<Module>`, `/api/scenarios/<name>`) import from `_test_metadata.py`. Adding a new metadata field (e.g. `@since`) means one edit there; both consumers pick it up.
+Both the registry generator and the MoonDeck endpoints (`/api/test-modules`, `/api/unit-tests/<Module>`, `/api/scenarios/<name>`) import from `_test_metadata.py`. Adding a new metadata field (e.g. `@since`) means one edit there; both consumers pick it up.
 
-The generator runs after a test file changes, as [Add a test, and pin a bug](../moonwalk.md#add-test) does. Its `--check` exits non-zero when the docs are stale, for CI.
+The registry is generated at every docs build, so it cannot drift from the test files.
 
 ## Unit tests
 
-Inventory: **[docs/tests/unit-tests.md](tests/unit-tests.md)** (auto-generated, grouped by `@module`).
+Inventory: [the test page](tests.md), by `@module`.
 
 Steps to run them: [Add a test, and pin a bug](../moonwalk.md#add-test). In MoonDeck, the Desktop tab's Unit Test card filters by the shared module dropdown, and Tests shows the per-module inventory.
 
@@ -465,7 +460,7 @@ Output is summary-only on a full run (the doctest `-s` flag is added only on fil
 
 ## In-process scenarios
 
-Inventory: **[docs/tests/scenario-tests.md](tests/scenario-tests.md)** (auto-generated, grouped by `module`).
+Inventory: [the test page](tests.md), by `module`.
 
 Steps to run them: [Run a scenario in-process on the desktop](../moonwalk.md#run-scenario). In MoonDeck, the Scenarios card shares the module dropdown with the Unit Test card, and Steps shows the per-scenario step list.
 

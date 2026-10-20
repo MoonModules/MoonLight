@@ -558,6 +558,13 @@ function showPanel(panel, model, pid, done, onDone, host = {}) {
                 line.append(b);
             }
             block.append(line);
+            // The scenarios that set or expect what this step sets, so the step shows what proves it.
+            const proofs = host.tests?.[`${pid}/${s.id}`];
+            if (proofs?.length) {
+                const p = control("p", { className: "mm-map-note" }, "Tested by ");
+                proofs.forEach((x, i) => { if (i) p.append(" \u00b7 "); p.append(control("a", { href: new URL(x.href, host.site || ROOT).href, target: "_blank", rel: "noopener" }, x.title.replace(/^scenario_/, "").replace(/_/g, " "))); });
+                block.append(p);
+            }
             // A step that runs a subprocess opens it, as a choice opens a process.
             const sub = model.processes[s.when?.process];
             if (sub && host.open) {
@@ -725,6 +732,8 @@ export async function drawMap(host, opts = {}) {
         canvas.textContent = `The map could not load: ${e.message}`;
         return;
     }
+    // The tests of each step, by the control they share with it; a site without them draws the map all the same.
+    const tests = await fetch(new URL("tests/steps.json", ROOT)).then((r) => (r.ok ? r.json() : {})).catch(() => ({}));
     // The help's renderer, so a process reads as a module's help does; imported here rather than at the top, so a test reads this module's rules without a served site.
     const { helpMarkdown } = await import("./help.js");
     // Done is the device's state and the reader's marks together; the device's part is not the reader's to unmark.
@@ -735,6 +744,7 @@ export async function drawMap(host, opts = {}) {
     const done = new Set([...marks, ...device]);
     const host_ = { device, newTab: opts.newTab, site: opts.site, root: host, helpMarkdown, choices: opts.choices, doneBy: opts.state ? "Done on this device" : "Done: its scripts last passed" };
     host_.state = opts.state;
+    host_.tests = tests;
     host_.hideOff = hideOff.checked;
     hideOff.addEventListener("change", () => { host_.hideOff = hideOff.checked; host_.relayout?.(); if (host_.current) showPanel(panel, model, host_.current, done, mark, host_); });
     host_.steps = opts.steps;

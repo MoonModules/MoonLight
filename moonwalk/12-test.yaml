@@ -74,12 +74,6 @@ processes:
         when: { run: { script: moondeck/test/test_host.py, args: "--js" } }
         detail: |
           It reports SKIP rather than failing when node is absent.
-      - id: inventory
-        say: Regenerate the test inventory.
-        given: [{ input: kind, in: [Module logic, Full pipeline] }]
-        when: { run: { script: moondeck/docs/generate_test_docs.py } }
-        detail: |
-          The inventory under `docs/reference/tests/` is generated from the test files. `--check` exits non-zero when it is stale.
     outro: |
       A bug fix ships with the test that failed before it.
   - id: run-scenario
@@ -89,7 +83,7 @@ processes:
     systems: [MoonDeck]
     page: reference/testing.md
     intro: |
-      A scenario replays a JSON script against the whole pipeline inside the test binary and checks each measured step against its contract. The inventory is [Scenario tests](reference/tests/scenario-tests.md).
+      A scenario replays a JSON script against the whole pipeline inside the test binary and checks each measured step against its contract. What each one proves is on [the test page](reference/tests.md).
     steps:
       - id: build
         say: Build the desktop tests.

@@ -1067,7 +1067,7 @@ def test_without_llvm_the_help_freshness_is_skipped_and_the_report_is_left_as_it
     """A contributor without LLVM still gets every other rule measured and ratcheted, with one SKIP line naming the rule it could not measure, and the committed report is not rewritten without that rule."""
     import check_docgen
     import gen_help
-    monkeypatch.setattr(gen_help, "stale", lambda: (_ for _ in ()).throw(SystemExit("clang not found")))
+    monkeypatch.setattr(gen_help, "stale", lambda: (_ for _ in ()).throw(gen_help.ToolchainMissing("clang not found")))
     written = []
     monkeypatch.setattr(check_docgen, "_write_report", lambda *a: written.append(a))
     monkeypatch.setattr(check_docgen, "_violations", lambda fresh: list(fresh))

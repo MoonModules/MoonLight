@@ -138,6 +138,7 @@ A step is one block in the panel, and a row on the map. Its parts, in order:
 3. **The state.** "✔ done" when the device shows it, as section 2 describes. Otherwise the button the kind gives, below.
 4. **What to do.** The step's call to copy, a link, or the prose.
 5. **The detail,** written text that explains the step, with links and examples.
+6. **"Tested by",** under the step: the scenarios and unit tests that prove it. A test that names the step itself comes first (`steps_proved` in a scenario, `// @step process/step` above a unit test), then the scenarios that set or expect the control the step sets. Each opens its entry on [the test page](../tests.md).
 
 A chapter heading starts a group of steps. It is numbered by the chapters that hold a step that applies, and grayed when all of its steps are grayed.
 
@@ -356,6 +357,7 @@ Two things read the stage files and check them: the generator, `gen_moonwalk.py`
 | **Scripts and scenarios** | a `run` step's script is not in the repository, its `--name` is not a scenario, or a path it names does not exist (unless a build makes it) |
 | **Processes** | a `process` step runs a process that does not exist |
 | **Links in the prose** | a link in an intro, an outro, a detail or a note leaves a page or an anchor that does not exist |
+| **Tests naming steps** | a test names a process step that no process has, so a renamed step cannot leave a dead claim |
 
 #### What `check_docgen` warns about
 

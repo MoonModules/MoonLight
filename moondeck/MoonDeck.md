@@ -783,7 +783,7 @@ uv run moondeck/scenario/run_scenario.py --name scenario_Effects_pipeline_builds
 
 Scenarios are JSON files in `test/scenarios/`. Use the dropdown to run a single scenario or leave it on **all** to run the full suite.
 
-For a full description of each scenario, see the [scenario inventory](/api/docs/reference/tests/scenario-tests.md), auto-generated from the JSON files.
+For a full description of each scenario, see the [test page](https://moonmodules.org/MoonLight/reference/tests.html), auto-generated from the JSON files.
 
 ### history_report
 
@@ -883,7 +883,7 @@ Executes scenario steps (apply_state documents, set_control, measure) via the RE
 
 A run leaves the device as it found it. Modules a scenario cleared come back, a replaced module is swapped back to its type under its own name, and every control it wrote is put back, `enabled` included. Passwords are the exception, because the device returns them obfuscated.
 
-For a full description of each scenario, see the [scenario inventory](/api/docs/reference/tests/scenario-tests.md), auto-generated from the JSON files.
+For a full description of each scenario, see the [test page](https://moonmodules.org/MoonLight/reference/tests.html), auto-generated from the JSON files.
 
 ### ui_measure
 
