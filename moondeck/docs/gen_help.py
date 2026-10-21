@@ -430,7 +430,8 @@ def tests_url(cls_name: str, ref: str) -> str | None:
     """The module's entry in the test registry, whose test names read as its behavior, when its test file names an `@module`; else the file on GitHub."""
     stem = re.sub(r"(Effect|Modifier|Layout|Driver|Service)$", "", cls_name)
     for name in dict.fromkeys((cls_name, stem)):
-        hits = sorted((ROOT / "test").rglob(f"unit_{name}.cpp"))
+        # Compared by exact name: a glob matches case-insensitively on macOS and not on Linux, so the help would depend on the host.
+        hits = sorted(p for p in (ROOT / "test").rglob("unit_*.cpp") if p.name == f"unit_{name}.cpp")
         if hits:
             module = parse_unit_file(hits[0]).get("module")
             return SITE + "reference/tests.html#" + heading_id(module) if module else REPO + ref + "/" + hits[0].relative_to(ROOT).as_posix()

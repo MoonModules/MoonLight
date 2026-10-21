@@ -6,6 +6,8 @@
 #include "light/drivers/ColorLight5A75Packet.h"   // the first wire format (byte layout lives there)
 #include "platform/platform.h"
 
+#include <atomic>
+
 namespace mm {
 
 /// Streams the buffer to ColorLight 5A-75 receiving cards as raw Ethernet, taking the place of the sending card that normally feeds them.
@@ -378,12 +380,12 @@ private:
     uint8_t packet_[COLORLIGHT_MAX_FRAME] = {};
     /// millis() of the last frame sent: the `fps` limiter's reference.
     uint32_t lastSendTime_ = 0;
-    /// Frames the MAC accepted since boot; the difference per second is the rate shown.
-    uint32_t framesSent_ = 0;
+    /// Frames the MAC accepted since boot, counted on the encode task and read by tick1s; the difference per second is the rate shown.
+    std::atomic<uint32_t> framesSent_{0};
     /// framesSent_ at the last status write: subtracting gives the rate without a timer.
     uint32_t framesReported_ = 0;
     /// Frames the MAC refused since boot, cumulative, since a rate hides a slow trickle.
-    uint32_t framesDroppedTotal_ = 0;
+    std::atomic<uint32_t> framesDroppedTotal_{0};
     /// Backing store for the status line, sized for the longest one, the split-drop report.
     char statusBuf_[96] = {};
     /// Whether a restart was already attempted for the current wedge; one attempt per wedge.
