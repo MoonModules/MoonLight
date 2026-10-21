@@ -6,7 +6,7 @@ processes:
     title: Contribute a pull request
     actor: contributor
     goal: One topic, at most 400 changed lines and ten files, based on main, its checks passed.
-    page: contributing/principles-and-process.md
+    page: contributing/index.md
     intro: |
       What a review would otherwise ask, met before the pull request opens: four outside pull requests each spent a review round on these points.
     steps:
@@ -167,7 +167,7 @@ processes:
         when: { manual: "Take it when the tick path changed. Compare the tick matrix with main's." }
       - id: readme
         say: Update the README when setup changed.
-        when: { manual: "README.md at the repo root, and docs/index.md where it says the same." }
+        when: { manual: "README.md at the repo root; the site's home embeds it." }
         detail: |
           Setup means building, flashing or the first run.
       - id: merge

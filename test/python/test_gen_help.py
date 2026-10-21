@@ -3,14 +3,10 @@
 The app shows these strings per module and per control, so each rule here is something a user reads: which sentence is the one line, where a control's help comes from, and that every link in it works from a device's own page."""
 
 import re
-import sys
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-
-ROOT = Path(__file__).resolve().parent.parent.parent
-sys.path.insert(0, str(ROOT / "moondeck" / "docs"))
 
 import gen_help  # noqa: E402
 

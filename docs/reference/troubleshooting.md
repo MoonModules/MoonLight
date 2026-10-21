@@ -32,9 +32,17 @@ Work through [Diagnose dark or flickering lights](../moonwalk.md#diagnose-lights
 
 ## Stray pixels, or wrong colors on lights that should be off
 
-Almost always electrical rather than firmware, on a 3.3 V board driving 5 V WS2812 directly.
+Almost always electrical rather than firmware, on a 3.3 V board driving 5 V WS2812 directly. WS2812 wants a logic-high near 0.7 × VDD (about 3.5 V on a 5 V strip) and the ESP32 drives only 3.3 V, so individual bits sit at the margin and noise tips them.
 
-The diagnosis path, which eliminates the firmware before anyone reaches for a soldering iron, is [LED signal integrity](../explanation/led-signal-integrity.md).
+Confirm the firmware is innocent before reaching for the soldering iron: [Diagnose dark or flickering lights](../moonwalk.md#diagnose-lights). When its checks come back clean, the fix is electrical, in rough order of effectiveness:
+
+- **Add a 3.3 → 5 V level shifter** on the data line (a 74HCT125 or 74AHCT125), the single most effective fix: it restores the logic-high margin the LEDs expect.
+- **Add a ~330 Ω series resistor** at the GPIO, close to the board, to damp reflections.
+- **Shorten or shield the data wire**, and keep it away from the power leads and the antenna.
+- **Share a solid, thick common ground** between the strip's supply and the board.
+- If the TX power check implicated RF coupling, set a per-board `Network.txPowerSetting` cap, the `deviceModels.json` mechanism the ESP32-S3 N16R8 Dev uses.
+
+How the bench found this is in [lessons.md](../work/past/lessons.md).
 
 ## Colors are wrong everywhere
 

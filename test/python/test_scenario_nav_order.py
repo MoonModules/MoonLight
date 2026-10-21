@@ -6,11 +6,9 @@ app.js, and these pin that it is read rather than restated: a second copy would 
 time someone reorders the nav and does not think to look in a Python file.
 """
 
-import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "moondeck" / "docs"))
 
 import _test_metadata as meta  # noqa: E402
 

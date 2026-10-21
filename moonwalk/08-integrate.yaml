@@ -390,7 +390,7 @@ processes:
         given: [{ input: platform, equals: Home Assistant }]
         when: { manual: "Home Assistant finds it on its own over the WLED path." }
         detail: |
-          It lists the device as a light with color, palette and brightness, with 💫 in its name marking it as MoonLight. This path needs no broker.
+          What it lists, and why this path needs no broker: [How HA creates the entity](reference/home-automation.md#how-ha-creates-the-entity).
       - id: broker
         section: Connect the broker
         say: Set the broker on the MQTT card.
@@ -403,7 +403,7 @@ processes:
         given: [{ input: platform, equals: Home Assistant over MQTT }]
         when: { set: { module: MqttModule, control: haDiscovery, value: true } }
         detail: |
-          Home Assistant then creates a light entity with on/off and brightness, grayed out when the device is offline. Never hand-configure Home Assistant's generic MQTT light against `homeassistant/light/...`.
+          The entity it creates, and the generic MQTT light not to configure: [How HA creates the entity](reference/home-automation.md#how-ha-creates-the-entity).
       - id: ha-verify
         say: Check the device's topics reach Home Assistant.
         given: [{ input: platform, equals: Home Assistant over MQTT }]
@@ -455,7 +455,7 @@ processes:
         given: [{ input: platform, equals: Hue lights }]
         when: { add: { module: Drivers, type: HueDriver } }
         detail: |
-          Enter the bridge's IP in `bridgeIp`. Find it in the Hue app or at [discovery.meethue.com](https://discovery.meethue.com). Hue is a rate-limited hub of about 10 commands a second, so the result is smooth ambient color, not strobing. Behavior and controls: [Drivers, Hue](moonmodules/light/drivers.md#hue).
+          Enter the bridge's IP in `bridgeIp`. Find it in the Hue app or at [discovery.meethue.com](https://discovery.meethue.com). Why the result is ambient color rather than strobing: [Drive Hue lights](reference/home-automation.md#drive-hue-lights). Behavior and controls: [Drivers, Hue](moonmodules/light/drivers.md#hue).
       - id: hue-link
         say: Press the link button on the bridge.
         given: [{ input: platform, equals: Hue lights }]
@@ -471,13 +471,13 @@ processes:
         given: [{ input: platform, equals: Hue lights }]
         when: { manual: "Use the driver's room and light controls." }
         detail: |
-          All bulbs, one room or a single light. Only reachable Extended color lights are driven: white-only bulbs, plugs and powered-off lights are skipped.
+          All bulbs, one room or a single light; which bulbs it skips: [Drive Hue lights](reference/home-automation.md#drive-hue-lights).
       - id: hue-layout
         say: Size the layout as one column of bulbs.
         given: [{ input: platform, equals: Hue lights }]
         when: { open: { module: Layouts } }
         detail: |
-          Use width 1 and height equal to the number of Hue lights. Each pixel of the column maps to one bulb in order, so a 1D effect such as a rainbow or a chase reads across the bulbs.
+          Use width 1 and height equal to the number of Hue lights: [why one column](reference/home-automation.md#drive-hue-lights).
       - id: hue-effect
         say: Run an effect.
         given: [{ input: platform, equals: Hue lights }]

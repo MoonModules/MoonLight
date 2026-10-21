@@ -12,13 +12,8 @@ that had stopped reading anything at all.
 """
 
 import sys
-from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent.parent
-sys.path.insert(0, str(ROOT / "moondeck" / "check"))
-sys.path.insert(0, str(ROOT / "moondeck" / "docs"))
-
-from check_docgen import _header_rules  # noqa: E402
+from check_docgen import _header_rules
 
 
 def test_a_wrapped_sentence_in_a_class_comment_is_a_finding():

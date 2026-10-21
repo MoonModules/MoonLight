@@ -20,9 +20,11 @@ const isList = p => p.split("\n").every(l => /^- /.test(l));
 const list = p => `<ul>${p.split("\n").map(l => `<li>${inline(l.slice(2))}</li>`).join("")}</ul>`;
 const HEADING = /^(#{2,4}) (.+)$/;
 const MEDIA = /^!\[([^\]]*)\]\((https:\/\/[^)\s"]+)\)$/;
+// A MoonTube clip, a .webm, has its poster beside it: the frame Safari shows before the clip loads.
 function media(alt, src) {
+    const poster = src.endsWith(".webm") ? ` poster="${src.slice(0, -5)}.jpg"` : "";
     return /\.(webm|mp4)$/.test(src)
-        ? `<video src="${src}" controls playsinline title="${alt}"></video>`
+        ? `<video src="${src}"${poster} controls playsinline title="${alt}"></video>`
         : `<img src="${src}" alt="${alt}">`;
 }
 function block(p) {
@@ -161,7 +163,7 @@ export function controlHelp(row, help, walks = []) {
     row.appendChild(el);
 }
 
-// Role and dimension emoji, derived here rather than repeated in every module's tags(); their meaning is documented in docs/tutorials/how-moonlight-works.md, "The emoji on every card".
+// Role and dimension emoji, derived here rather than repeated in every module's tags(); their meaning is documented in docs/explanation/how-moonlight-works.md, "The emoji on every card".
 export const ROLE_EMOJI = {
     effect:     "🔥",
     driver:     "☸️",

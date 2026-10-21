@@ -72,6 +72,15 @@ def publish(raw: Path, out: Path, speed: float, width: int, crf: int) -> bool:
     return True
 
 
+def poster(clip: Path, at: float = 1.0) -> bool:
+    """Write the clip's poster beside it, `<name>.jpg`, a frame `at` seconds in: the picture a page shows before the clip loads, which Safari needs on a page swapped in without a reload."""
+    if shutil.which("ffmpeg") is None:
+        print("ffmpeg not on PATH: no poster")
+        return False
+    cmd = ["ffmpeg", "-v", "error", "-y", "-ss", f"{at:g}", "-i", str(clip), "-frames:v", "1", "-q:v", "4", str(clip.with_suffix(".jpg"))]
+    return subprocess.run(cmd, check=False).returncode == 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--run", required=True,
@@ -294,6 +303,7 @@ def main() -> int:
         width = args.width if args.width is not None else run.width
         if publish(out, pub, speed, width, args.crf):
             published = True
+            poster(pub)
             ksize = pub.stat().st_size // 1024
             print(f"{pub.relative_to(ROOT)}  ({ksize} KB, {speed:g}x "
                   f"{width}px - tracked, embed this one)")

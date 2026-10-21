@@ -26,7 +26,7 @@ This is the case study of one multi-device installation. The steps for your own 
 >
 > Start with the first, see it run, and add the next step only when you miss it. The autopilot, the desk, the looks and the mouth came last, one at a time.
 
-> New here? Start with **[Install MoonLight](../../moonwalk.md#install)** and **[your first script](../../tutorials/first-script.md)**. What follows assumes devices that run MoonLight on one network.
+> New here? Start with **[Install MoonLight](../../moonwalk.md#install)** and **[your first script](../../moonwalk.md#first-script)**. What follows assumes devices that run MoonLight on one network.
 
 ---
 
@@ -139,7 +139,7 @@ So they look the same way at the same moment, with no message between them.
 **Use them yourself.**
 The six looks and the autopilot are part of MoonLight's [script library](https://github.com/MoonModules/MoonLight/tree/main/moonlive).
 Every device running MoonLight lists them in its script picker and downloads one when it is chosen.
-The full code: [`stadbeest-walk.mle`](https://github.com/MoonModules/MoonLight/blob/main/moonlive/effects/stadbeest/stadbeest-walk.mle), [`stadbeest-orb.mle`](https://github.com/MoonModules/MoonLight/blob/main/moonlive/effects/stadbeest/stadbeest-orb.mle), [`stadbeest-thrusters.mle`](https://github.com/MoonModules/MoonLight/blob/main/moonlive/effects/stadbeest/stadbeest-thrusters.mle), [`stadbeest-frog-eye.mle`](https://github.com/MoonModules/MoonLight/blob/main/moonlive/effects/stadbeest/stadbeest-frog-eye.mle), [`stadbeest-eye-orb.mle`](https://github.com/MoonModules/MoonLight/blob/main/moonlive/effects/stadbeest/stadbeest-eye-orb.mle), [`stadbeest-sauron.mle`](https://github.com/MoonModules/MoonLight/blob/main/moonlive/effects/stadbeest/stadbeest-sauron.mle) and [`stadbeest-autopilot.mls`](https://github.com/MoonModules/MoonLight/blob/main/moonlive/services/stadbeest-autopilot.mls); to write your own, start with [your first script](../../tutorials/first-script.md).
+The full code: [`stadbeest-walk.mle`](https://github.com/MoonModules/MoonLight/blob/main/moonlive/effects/stadbeest/stadbeest-walk.mle), [`stadbeest-orb.mle`](https://github.com/MoonModules/MoonLight/blob/main/moonlive/effects/stadbeest/stadbeest-orb.mle), [`stadbeest-thrusters.mle`](https://github.com/MoonModules/MoonLight/blob/main/moonlive/effects/stadbeest/stadbeest-thrusters.mle), [`stadbeest-frog-eye.mle`](https://github.com/MoonModules/MoonLight/blob/main/moonlive/effects/stadbeest/stadbeest-frog-eye.mle), [`stadbeest-eye-orb.mle`](https://github.com/MoonModules/MoonLight/blob/main/moonlive/effects/stadbeest/stadbeest-eye-orb.mle), [`stadbeest-sauron.mle`](https://github.com/MoonModules/MoonLight/blob/main/moonlive/effects/stadbeest/stadbeest-sauron.mle) and [`stadbeest-autopilot.mls`](https://github.com/MoonModules/MoonLight/blob/main/moonlive/services/stadbeest-autopilot.mls); to write your own, start with [your first script](../../moonwalk.md#first-script).
 
 ---
 

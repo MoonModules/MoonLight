@@ -8,7 +8,6 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "moondeck" / "docs"))
 
 import walk_status  # noqa: E402
 from walk_status import matches, run_key, status, tree_now  # noqa: E402

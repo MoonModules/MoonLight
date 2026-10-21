@@ -9,7 +9,6 @@ script now writes last_port against the flashed device's MAC directly.
 Run: `uv run --with pytest pytest test/python -q`.
 """
 
-import importlib
 import json
 import sys
 from pathlib import Path

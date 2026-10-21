@@ -40,7 +40,7 @@ The expander buys pins, not memory: the register is serial-in, so the DMA frame 
 
 ## Testing the wire with the loopback
 
-`loopbackTest` sends a known pattern out of a strand and reads it back through a jumper to `loopbackRxPin`, with its verdict in the status field. A `PASS` means the chip and the peripheral are clean, so flicker that remains is [signal integrity](../../explanation/led-signal-integrity.md).
+`loopbackTest` sends a known pattern out of a strand and reads it back through a jumper to `loopbackRxPin`, with its verdict in the status field. A `PASS` means the chip and the peripheral are clean, so flicker that remains is [signal integrity](../troubleshooting.md#stray-pixels-or-wrong-colors-on-lights-that-should-be-off).
 
 Wired directly, jumper a data GPIO straight to `loopbackRxPin`.
 

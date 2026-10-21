@@ -11,7 +11,6 @@ from pathlib import Path
 import jsonschema
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "moondeck" / "docs"))
 import _test_metadata  # noqa: E402
 import gen_tests  # noqa: E402
 

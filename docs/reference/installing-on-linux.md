@@ -114,5 +114,5 @@ The realistic limits are architecture and memory, not the kind of device. It nee
 ## Where to go next
 
 - [Install MoonLight](../moonwalk.md#install): the same program on an ESP32.
-- [How MoonLight works](../tutorials/how-moonlight-works.md): layouts, layers, effects and drivers.
+- [How MoonLight works](../explanation/how-moonlight-works.md): layouts, layers, effects and drivers.
 - [Build, run and test on the desktop](../moonwalk.md#desktop-build-test): building, testing and packaging from source.

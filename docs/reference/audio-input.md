@@ -2,6 +2,8 @@
 
 Audio-reactive effects read the [Audio](../moonmodules/core/services.md#audio) service, which listens to a wired microphone or to what a computer plays. Wire the source, then set the levels.
 
+Steps: [Set up audio input](../moonwalk.md#audio-input).
+
 ## Microphone wiring
 
 An `I2S` microphone has three wires: the bit clock, the word select and the data line. The INMP441 and most MEMS microphones are of this kind, as are line-in ADCs. Enter the three GPIOs as `sckPin`, `wsPin` and `sdPin`.
@@ -18,25 +20,9 @@ On an ESP32 the Local source idles until real GPIOs are entered. On the desktop 
 
 `floor` is the silence threshold, and it depends on the part and the room. A learner that studies an empty room maps its noise floor onto the whole display and shows silence at full scale. The default `gain` suits a quiet MEMS microphone, so a loopback device needs it turned down hard or everything clips.
 
-Steps: [Set up audio input](../moonwalk.md#audio-input).
-
 ## Capturing what the machine plays
 
-Pick the loopback source in `device`. How to get one depends on the operating system.
-
-### macOS
-
-macOS has no native loopback. [BlackHole](https://existential.audio/blackhole/) with a **Multi-Output Device** from Audio MIDI Setup, speakers first and BlackHole second with drift correction on BlackHole, set as the system output, keeps the speakers playing while an identical copy lands in BlackHole, which `device` captures.
-
-The Mac's volume keys go dead on a multi-output device, so set the volume in the player.
-
-### Windows
-
-Windows usually needs nothing: enable **Stereo Mix** in the Recording tab and pick it in `device`. Where a driver lacks it, VB-Cable is the fallback.
-
-### Linux
-
-PulseAudio and PipeWire expose a **Monitor of** the output as a source. Pick it in `device`.
+Pick the loopback source in `device`. macOS has no native loopback, so it takes [BlackHole](https://existential.audio/blackhole/) behind a Multi-Output Device. Windows usually offers Stereo Mix, with VB-Cable as the fallback. PulseAudio and PipeWire list a Monitor of the output as a source. [Set up audio input](../moonwalk.md#audio-input) walks each one.
 
 ## Driving a fleet of devices
 

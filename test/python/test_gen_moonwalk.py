@@ -3,13 +3,11 @@
 Each rule here is something the map or a runner relies on: every stage file in the repo is valid, a process names only processes that exist, a name YAML would turn into a boolean is refused, and a step's runners follow from its action."""
 
 import shutil
-import sys
 from pathlib import Path
 
 import pytest
 
 ROOT = Path(__file__).resolve().parent.parent.parent
-sys.path.insert(0, str(ROOT / "moondeck" / "docs"))
 
 import gen_moonwalk  # noqa: E402
 
@@ -163,7 +161,7 @@ def test_the_prose_is_plain_text_under_the_map_with_the_process_id_as_its_addres
 def test_the_map_carries_its_links_absolute_for_a_device_page():
     model = gen_moonwalk.absolute_links(gen_moonwalk.build())
     intro = model["processes"]["first-light-show"]["intro"]
-    assert "(https://moonmodules.org/MoonLight/tutorials/how-moonlight-works.html)" in intro
+    assert "(https://moonmodules.org/MoonLight/explanation/how-moonlight-works.html)" in intro
     detail = {s["id"]: s for s in model["processes"]["first-light-show"]["steps"]}["grid-size"]["detail"]
     assert "(https://moonmodules.org/MoonLight/assets/moontube/05-layouts.webm)" in detail
 

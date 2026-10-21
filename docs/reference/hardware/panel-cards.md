@@ -2,7 +2,7 @@
 
 You bought a panel receiving card, most likely a **ColorLight** one, the family MoonLight supports. The steps are in [Drive LED panels through a receiving card](../../moonwalk.md#panel-cards), with [Set the panels up in LEDVision](../../moonwalk.md#panel-card-ledvision) and [Clear the v13 flicker](../../moonwalk.md#panel-card-downgrade) beside it. Below is what those steps lean on: why the link matters, which board, what the settings mean, and what to check when the wall stays dark.
 
-> New here? Start with **[Install MoonLight](../../moonwalk.md#install)**, then **[How MoonLight works](../../tutorials/how-moonlight-works.md)**.
+> New here? Start with **[Install MoonLight](../../moonwalk.md#install)**, then **[How MoonLight works](../../explanation/how-moonlight-works.md)**.
 
 ---
 

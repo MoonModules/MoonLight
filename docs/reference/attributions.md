@@ -2,6 +2,10 @@
 
 The people, projects and published algorithms whose work shaped MoonLight. We study their thinking with respect and write our own code against our architecture. A module's `@attribution` names an entry by any of its names, a person and their company or handle written as one entry, and the module's help links it there. A picture is a Wikimedia Commons file, named after the link as `File:<name>`, and an entry linking GitHub shows its avatar. A name not listed yet is still allowed: it shows as written until it is added here. The modules that name an entry are read from their headers when the site is built. Any other source file's `@attribution` line counts too, so code that is no module credits where its idea lives. The deck filters by kind: 🧑 a person, 🏢 a company or shop, 🧰 a project or library, 📜 a standard or protocol, 🧮 an algorithm, 🎨 an art form or culture.
 
+Almost none of this was invented here, and every borrowed idea is credited in the source file that carries it.
+
+<video src="../assets/moontube/13-attribution.webm" controls playsinline width="720" title="The people we learned from, and the algorithms we build on."></video>
+
 | Name | Kind | Known for |
 |------|------|-----------|
 | [4wheeljive](https://github.com/4wheeljive) | 🧑 | Jeff Holman: flow fields, from a Petrick concept. |

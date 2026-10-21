@@ -1,9 +1,3 @@
----
-hide:
-  - navigation
-  - toc
----
-
 # MoonWalk { .mm-visually-hidden }
 
 Pick a task from **Next**, or click a process on the map, to read its steps beside the map; search or filter to find one. Ready to install? Open the [web installer](https://moonmodules.org/MoonLight/install/).

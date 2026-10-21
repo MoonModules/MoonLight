@@ -103,7 +103,7 @@ processes:
           A ratchet against the counts committed in `docs/reference/metrics/docgen.json`, per rule and in total: [check_docgen](../moondeck/MoonDeck.md#check_docgen).
       - id: taglines
         say: Check the front pages agree on the platforms.
-        given: [{ changed: [README.md, docs/index.md, CLAUDE.md] }]
+        given: [{ changed: [README.md, CLAUDE.md] }]
         when: { run: { script: moondeck/check/check_taglines.py } }
   - id: commit-code
     title: The code checks

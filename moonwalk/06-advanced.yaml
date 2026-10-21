@@ -9,7 +9,7 @@ processes:
     systems: [MoonLive]
     dependsOn: [first-light-show]
     intro: |
-      No toolchain, no rebuild, no reflash and no reboot: a script saved in the browser compiles on the device and runs as native code seconds later. The language is [MoonLive](moonmodules/light/moonlive.md); a guided first script, four lines growing into a pattern, is the [first-script tutorial](tutorials/first-script.md).
+      No toolchain, no rebuild, no reflash and no reboot: a script saved in the browser compiles on the device and runs as native code seconds later. The language is [MoonLive](moonmodules/light/moonlive.md); a guided first script, four lines growing into a pattern, is [Write your first script](tutorials/first-script.md).
     steps:
       - id: add
         section: Add it
@@ -31,18 +31,20 @@ processes:
         say: Write the effect.
         when: { manual: "A class with a tick() that paints; Ctrl/Cmd+S saves." }
         detail: |
-          `fill()` paints every light the same; `setRGB(i, r, g, b)` paints light i of `lightCount`. Clicking away saves too. Saving recompiles and swaps the effect in live; a half-typed line compiles only when you save.
+          `fill()` paints every light the same; `setRGB(i, r, g, b)` paints light i of `width * height * depth`: [four lines to start from](tutorials/first-script.md#four-lines), then [make it move](tutorials/first-script.md#make-it-move) and [paint per light](tutorials/first-script.md#paint-per-light). Clicking away saves too. Saving recompiles and swaps the effect in live; a half-typed line compiles only when you save.
       - id: controls
         say: Give it controls.
         when: { manual: "Each is a member with an addControl in defineControls()." }
         detail: |
-          It appears on the card as a slider: `addControl("speed", speed, 1, 120)` for a byte speed. A script's control is a real control, the same kind a compiled effect declares: it persists across a reboot and answers over the API.
+          It appears on the card as a slider: `addControl("speed", speed, 1, 120)` for a byte speed, as in [give yourself a knob](tutorials/first-script.md#give-yourself-a-knob). A script's control is a real control, the same kind a compiled effect declares: it persists across a reboot and answers over the API.
       - id: errors
         section: When it fails
         say: Fix it when it does not compile.
         when: { manual: "The card shows the error; save the fix." }
         detail: |
-          The device keeps running, and the effect comes back once the script compiles.
+          The device keeps running, and the effect comes back once the script compiles: [break it on purpose](tutorials/first-script.md#when-the-compile-fails) to see it.
+    outro: |
+      The language, with every function and type: [MoonLive](moonmodules/light/moonlive.md). What to write once you can write anything: [Making beautiful effects](explanation/generative-effects.md).
   - id: panel-cards
     title: Drive LED panels through a receiving card
     actor: user
@@ -318,7 +320,7 @@ processes:
         given: [{ input: driver, in: [RmtLedDriver, ParallelLedDriver] }]
         when: { manual: "Jumper a data GPIO to loopbackRxPin and switch loopbackTest on." }
         detail: |
-          It is in the developer view, and the verdict shows in the status field. A PASS means the chip and the peripheral are clean, so flicker that remains is [signal integrity](explanation/led-signal-integrity.md). Through a 74HCT595 the jumper comes from a register output, behind a level shifter: [Testing the wire with the loopback](reference/hardware/led-drivers.md#testing-the-wire-with-the-loopback).
+          It is in the developer view, and the verdict shows in the status field. A PASS means the chip and the peripheral are clean, so flicker that remains is [signal integrity](reference/troubleshooting.md#stray-pixels-or-wrong-colors-on-lights-that-should-be-off). Through a 74HCT595 the jumper comes from a register output, behind a level shifter: [Testing the wire with the loopback](reference/hardware/led-drivers.md#testing-the-wire-with-the-loopback).
     outro: |
       A 12 V WS2811 in low-speed mode needs the `400kHz WS2811` timing on RMT LED. Audio and video have their own processes: [Set up audio input](moonwalk.md#audio-input) and [Watch the output as video](moonwalk.md#watch-output).
   - id: multi-device
@@ -457,12 +459,12 @@ processes:
         say: Set floor above the room's silence.
         when: { manual: "Raise floor until a quiet room reads still." }
         detail: |
-          Raise it until a quiet room reads still. A learner that studies an empty room maps its noise floor onto the whole display and shows silence at full scale. [Setting the levels](reference/audio-input.md#setting-the-levels).
+          Why an empty room can read at full scale: [Setting the levels](reference/audio-input.md#setting-the-levels).
       - id: gain
         say: Set gain when levels is manual.
         when: { manual: "Move gain; it shows when levels is manual." }
         detail: |
-          The default suits a quiet MEMS microphone, so turn it down hard for a loopback device or everything clips.
+          A loopback device needs it turned down hard: [Setting the levels](reference/audio-input.md#setting-the-levels).
     outro: |
       One machine's audio can drive every device: [send it over the network](reference/audio-input.md#driving-a-fleet-of-devices).
   - id: watch-output
@@ -487,14 +489,14 @@ processes:
         given: [{ input: protocol, in: [HLS, RTSP] }]
         when: { manual: "Any 5.x or newer on the PATH." }
         detail: |
-          macOS: `brew install ffmpeg`. Windows: `winget install ffmpeg`. Debian, Ubuntu and Raspberry Pi OS: `sudo apt install ffmpeg`. Without it the driver's status reads `ffmpeg not found`. The ESP32-P4 needs none of this: its own H.264 block encodes. [Installing ffmpeg](reference/watching-the-output.md#installing-ffmpeg).
+          The command for each OS: [Installing ffmpeg](reference/watching-the-output.md#installing-ffmpeg). The ESP32-P4 needs none: its own H.264 block encodes.
       - id: ndi-runtime
         section: Install what the driver needs
         say: Install the NDI runtime.
         given: [{ input: protocol, equals: NDI }]
         when: { open: { url: "https://ndi.video/tools/" } }
         detail: |
-          NDI Tools on macOS and Windows, the NDI SDK on Linux. Until it is installed the driver reports `NDI runtime not installed`. [Where each OS finds it](reference/watching-the-output.md#installing-the-ndi-runtime).
+          Where each OS finds it: [Installing the NDI runtime](reference/watching-the-output.md#installing-the-ndi-runtime).
       - id: add-ndi
         section: Add the driver
         say: Add the NDI driver.
@@ -518,20 +520,20 @@ processes:
         given: [{ input: protocol, equals: NDI }]
         when: { manual: "NDI Video Monitor from NDI Tools, or an NDI Source in OBS through the DistroAV plugin." }
         detail: |
-          MoonLight appears under the driver's `sourceName`, or the device's own name when that is blank.
+          The name it appears under: [Installing the NDI runtime](reference/watching-the-output.md#installing-the-ndi-runtime).
       - id: play-hls
         section: Play it
         say: Open the HLS url in a player.
         given: [{ input: protocol, equals: HLS }]
         when: { manual: "Open the url the driver shows in VLC or Safari, or hand it to an Apple TV." }
         detail: |
-          HLS buffers whole segments, so the picture runs two to five seconds behind the lights. For a view that keeps up, use RTSP.
+          Why it runs seconds behind: [Playing an HLS stream](reference/watching-the-output.md#playing-an-hls-stream).
       - id: play-rtsp
         section: Play it
         say: Play the RTSP url with ffplay.
         given: [{ input: protocol, equals: RTSP }]
         when: { manual: "ffplay -fflags nobuffer -flags low_delay rtsp://<device>:554/" }
         detail: |
-          Any RTSP player opens the url. VLC buffers about a second by default; `vlc --network-caching=100 rtsp://<device>:554/` shortens it. One viewer plays at a time. [Scaling it up, and when it stays silent](reference/watching-the-output.md#playing-an-rtsp-stream).
+          VLC, scaling it up for a monitor, and when it stays silent: [Playing an RTSP stream](reference/watching-the-output.md#playing-an-rtsp-stream).
     outro: |
       The picture size follows `scale` and `targetFps`: [sizing the picture](reference/watching-the-output.md#sizing-the-picture).

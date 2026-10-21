@@ -1,11 +1,12 @@
-"""Every test keeps the checks' findings out of the repository's own findings folder, which a real run of a check fills."""
+"""Every test imports the checks and the docs build by module name, and keeps the checks' findings out of the repository's own findings folder, which a real run of a check fills."""
 
 import sys
 from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "moondeck" / "check"))
+for folder in ("check", "docs"):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "moondeck" / folder))
 
 
 @pytest.fixture(autouse=True)

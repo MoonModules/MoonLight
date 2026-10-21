@@ -3,7 +3,6 @@
 `_slug()` delegates to `markdown.extensions.toc.slugify` (the exact function MkDocs' toc uses), so this both guards that delegation and documents the contract. If `_slug` is ever re-hand-rolled, the unicode and consecutive-separator cases below catch the drift.
 """
 
-import sys
 from pathlib import Path
 
 import pytest
@@ -13,7 +12,6 @@ markdown = pytest.importorskip("markdown")
 from markdown.extensions.toc import slugify  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent.parent
-sys.path.insert(0, str(ROOT / "moondeck" / "docs"))
 
 from mkdocs_hooks import _slug  # noqa: E402
 

@@ -25,7 +25,7 @@ A symptom rather than a question belongs in [Troubleshooting](troubleshooting.md
 
 ## Effects and scripting
 
-- **Can I write my own effect?** Yes, in MoonLive, on the device, live. See [Write your first script](../tutorials/first-script.md).
+- **Can I write my own effect?** Yes, in MoonLive, on the device, live. See [Write a MoonLive effect](../moonwalk.md#first-script).
 - **How do I save a look?** Presets. See [Presets](presets.md).
 - **Can I drive it from a control surface or a DAW?** Over MIDI, OSC and DMX. See [Control surface](control-surface.md).
 

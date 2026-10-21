@@ -3531,7 +3531,7 @@
   },
   "RmtLedDriver": {
    "line": "Addressable WS2812B-class LEDs on a handful of strands, clocked by the chip's RMT peripheral.",
-   "summary": "The classic choice, and the one that needs no DMA peripheral: for more than a few strands see [ParallelLed](https://moonmodules.org/MoonLight/moonmodules/light/drivers.html#parallelled). Flicker on LEDs that should be off is signal integrity rather than firmware, and [the signal integrity playbook](https://moonmodules.org/MoonLight/explanation/led-signal-integrity.html) walks the checks.",
+   "summary": "The classic choice, and the one that needs no DMA peripheral: for more than a few strands see [ParallelLed](https://moonmodules.org/MoonLight/moonmodules/light/drivers.html#parallelled). Flicker on LEDs that should be off is signal integrity rather than firmware, and [the signal integrity playbook](https://moonmodules.org/MoonLight/reference/troubleshooting.html#stray-pixels-or-wrong-colors-on-lights-that-should-be-off) walks the checks.",
    "attribution": "[hpwit](https://github.com/hpwit), [WLED](https://github.com/wled/WLED), [FastLED](https://github.com/FastLED/FastLED)",
    "image": "https://moonmodules.org/MoonLight/assets/light/drivers/RmtLedDriver.png",
    "controls": {

@@ -13,15 +13,15 @@ processes:
         say: Watch the tour of MoonLight.
         when: { open: { url: "https://youtu.be/F_YgmiUyWVQ" } }
         detail: |
-          Every clip in one chaptered video. The opening clip on [the home page](index.md) says why MoonLight was rebuilt, who wrote it, and the principles it kept.
+          Every clip in one chaptered video. The opening clip on [Getting started](getting-started.md) says why MoonLight was rebuilt, who wrote it, and the principles it kept.
       - id: what-it-is
         say: Read what MoonLight is.
-        when: { read: { page: index.md, section: What it is } }
+        when: { read: { page: explanation/how-moonlight-works.md } }
         detail: |
           A show is a stack of simple blocks: a layout, effects, modifiers and a driver. Every setting applies live.
       - id: catalog
         say: Browse the effects, layouts and drivers.
-        when: { read: { page: moonmodules/light/index.md } }
+        when: { read: { page: moonmodules/light/effects.md } }
         detail: |
           [Drivers](moonmodules/light/drivers.md) says whether your lights are supported: LED strips, panels, Art-Net and DMX fixtures. Measured frame rates per device: [Performance](reference/performance.md).
   - id: install
@@ -230,7 +230,7 @@ processes:
 
           The window MoonLight runs in, a console on Windows or your terminal, **is** the application. It shows the log, and closing it stops MoonLight. The line that matters on a first run is `MoonLight is running: http://localhost:8080/`. The address printed below it is the same interface, reachable from your phone or another machine on your network.
 
-          On a first install you get a default grid and a running effect, enough to confirm everything works. [How MoonLight works](tutorials/how-moonlight-works.md) explains the Layouts, Effects and Drivers down the left-hand side.
+          On a first install you get a default grid and a running effect, enough to confirm everything works. [How MoonLight works](explanation/how-moonlight-works.md) explains the Layouts, Effects and Drivers down the left-hand side.
 
           Two options worth knowing: `--no-browser` stops it opening a browser (for a headless machine), and `--port <n>` serves somewhere other than 8080.
       - id: open-container
@@ -281,7 +281,7 @@ processes:
     outro: |
       ## Where to go next
 
-      - **[How MoonLight works](tutorials/how-moonlight-works.md)**: the interface, and the Layouts, Effects and Drivers model.
+      - **[How MoonLight works](explanation/how-moonlight-works.md)**: the interface, and the Layouts, Effects and Drivers model.
       - **[Driving LED panels with a receiving card](reference/hardware/panel-cards.md)**: turn this desktop into the sending card for an LED wall.
       - **[Keep it running on a Linux board](moonwalk.md#run-linux-board)**: a Pi or a NanoPi that starts MoonLight on every boot.
 

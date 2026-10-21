@@ -18,11 +18,11 @@ A high-performance system driving large LED installations and DMX fixtures. One 
 
 4. **Guardrails everywhere.** Every behavior is pinned by tests whose descriptions read as functional documentation. Every commit is measured, so growth and regression are visible as they happen. Judgment is reviewed; everything else is checked per event below. The final guardrail is physical: verified means it ran on real hardware, with the product owner's eyes as the measurement.
 
-5. **Continuous improvement.** Fix a defect when you meet it, in the change that met it. We are responsible for every line in the repository, and the repo improves by each change leaving its own files better. "Pre-existing" and "not mine" say nothing about whether the code is right.
+5. **Continuous improvement.** Fix a defect when you meet it, in the change that met it. We are responsible for every line in the repository, and the repo improves by each change leaving every file it meets better. "Pre-existing" and "not mine" say nothing about whether the code is right.
 
     **Never say "it is not mine".** For anything a check finds and a one-line edit fixes, a British spelling, a typo, an em-dash, fix it in the same edit. Saying it costs more of the product owner's time than fixing it.
 
-    **Scope: the files this change is already editing, not the repo.** "In passing" means a file already open for another reason. A repo-wide sweep is its own change with its own review. A blanket find-and-replace is also how a symbol gets renamed by accident, so read what an edit touches before making it.
+    **Scope: every defect the change meets, in whichever file.** A defect met while working is fixed in the same change and named in its commit message. A sweep that goes looking for a class of defects across the repo is its own change with its own review. A blanket find-and-replace is also how a symbol gets renamed by accident, so read what an edit touches before making it.
 
 6. **Robustness.** Unbreakable in use: any input, any order, any size. Degrade visibly, never crash, and every discovered crash becomes a test. Every setting applies live ([live reconfiguration](docs/explanation/architecture/moonmodule.md#live-reconfiguration-every-change-applies-on-the-next-frame)). Out of scope: power loss, brown-out, corrupted updates.
 
@@ -46,7 +46,7 @@ The product owner is the critical success factor. They review every line before 
 
 **A question is answered, not acted on.** Answer it and stop; changes happen after explicit agreement.
 
-**Scope is what was asked, and nothing adjacent.** An agent is useful per response and drifts per session: every answer ending with one more recommendation looks helpful alone, and thirty of them grow a file nobody asked for. Work spotted while working is named in one sentence at the end and left undone.
+**Scope is what was asked, and nothing adjacent.** An agent is useful per response and drifts per session: every answer ending with one more recommendation looks helpful alone, and thirty of them grow a file nobody asked for. Work spotted while working is named in one sentence at the end and left undone; a defect is fixed, as principle 5 says.
 
 **A follow-up is offered once.** Declined or ignored means dropped.
 
@@ -80,7 +80,7 @@ The product owner is the critical success factor. They review every line before 
 
 ## The Process
 
-Every activity is a [MoonWalk](docs/moonwalk.md) process, the one home of its steps; what follows are the rules that bind beyond one process. The product owner initiates every event and every gate list. A conditional check runs only when its trigger matches; an applicable-but-skipped check needs a one-line reason in the commit or PR. Each cycle subtracts as well as adds.
+Every activity is a [MoonWalk](docs/moonwalk.md) process, the one home of its steps; what follows are the rules that bind beyond one process. An agent reads the process before acting on it, and its memory points to the process rather than copying a step. The product owner initiates every event and every gate list. A conditional check runs only when its trigger matches; an applicable-but-skipped check needs a one-line reason in the commit or PR. Each cycle subtracts as well as adds.
 
 ### Main and branch
 

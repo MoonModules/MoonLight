@@ -156,7 +156,7 @@ Verify that every front page states what MoonLight runs on in the same words.
 uv run moondeck/check/check_taglines.py
 ```
 
-The front pages are `README.md`, `docs/index.md` and `CLAUDE.md`, listed in the script; a new front page joins that list the day it is written.
+The front pages are `README.md` and `CLAUDE.md`, listed in the script; the site's home embeds README, and a new front page joins that list the day it is written.
 
 ### check_prose
 

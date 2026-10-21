@@ -222,26 +222,26 @@ processes:
         say: Fill in the launcher.
         when: { manual: "Set send to <device-ip>:9000, osc-port to 9001 and load to the session file." }
         detail: |
-          `9000` is the device's ear, `9001` the surface's ear, and swapping them is the one place people go wrong. Leave `read-only` off to rearrange the layout later.
+          What each field means, and the one place people go wrong: [The launcher](reference/control-surface.md#the-launcher).
       - id: listen
         section: Turn the device's side on
         say: Turn on listen and feedback.
         when: { open: { module: OscService } }
         detail: |
-          Without `listen` the device ignores the surface. Set `feedbackPort` to `9001`, matching `osc-port`, and `port` to `9000`. Leave `hosts` empty with `addressing` on `unicast`: it answers whoever last wrote.
+          Set `feedbackPort` to `9001` and `port` to `9000`; each control and why: [The device's side](reference/control-surface.md#the-devices-side).
       - id: start
         say: Press start.
         when: { manual: "The surface appears. Move a fader and the device reacts; move something in the MoonLight UI and the faders follow." }
         detail: |
           ![The shipped Open Stage Control session beside MoonLight's own Control card](assets/core/OscService-open-stage-control.png)
 
-          `switch1` drives the master on/off and `fader1` the global brightness. From the second slot on, an unassigned slot follows the effect enabled last.
+          What each switch and fader drives: [What this gives you](reference/control-surface.md#what-this-gives-you).
       - id: phone
         section: Use it from a phone
         say: Browse to the computer's port 8080.
         when: { manual: "On any phone or tablet on the same network open http://<computer-running-open-stage-control>:8080." }
         detail: |
-          Open Stage Control serves the surface as a web page, and its console names the port. If MoonLight's own UI is on 8080 on that machine, give Open Stage Control another port in its launcher.
+          When MoonLight's own UI is on 8080 on that machine: [A phone as the surface](reference/control-surface.md#a-phone-as-the-surface).
     outro: |
       You still turn `listen` and `feedback` on at the device. When nothing moves: [when you see nothing](reference/control-surface.md#when-the-surface-does-nothing).
   - id: hold-to-play

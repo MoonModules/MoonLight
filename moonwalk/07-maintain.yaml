@@ -182,7 +182,7 @@ processes:
         say: Lower the WiFi TX power toward 2 dBm.
         when: { set: { module: WiFiModule, control: txPowerSetting, value: 2 } }
         detail: |
-          If the flicker shrinks with TX power, it is radio coupling into the data wire. Unchanged across the whole sweep from 20 dBm, it is not the radio: it is the physical data path. When all three checks come back clean, the fix is electrical: [LED signal integrity](explanation/led-signal-integrity.md).
+          If the flicker shrinks with TX power, it is radio coupling into the data wire. Unchanged across the whole sweep from 20 dBm, it is not the radio: it is the physical data path. When all three checks come back clean, the fix is electrical: [LED signal integrity](reference/troubleshooting.md#stray-pixels-or-wrong-colors-on-lights-that-should-be-off).
   - id: log-issue
     title: Log an issue
     actor: user

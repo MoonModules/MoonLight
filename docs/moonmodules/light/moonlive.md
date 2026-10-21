@@ -61,7 +61,7 @@ void tick() {
 `byte bpm = 30;` is state the script owns: visible in every function, surviving every tick. Naming it in `defineControls()` with `addControl("bpm", bpm, 1, 240)` also puts it on the UI as a slider, which is the same call a compiled module makes. A member no `addControl` names stays private to the script, which is how a stateful effect holds a value the user should not see.
 
 The default comes from the declaration, the range from the call, and the quoted name is the UI label, free to differ from the member's name.
-`addSelect("shape", shape, "disc|ball|egg")` makes a dropdown instead: `shape` holds 0, 1 or 2, the index of the name picked. The quoted names count against the script's 128 bytes of strings, and the engine keeps every dropdown's names together in 96 bytes, each name with one byte for its end, up to 16 names in all.
+`addSelect("shape", shape, "disc|ball|egg")` makes a dropdown instead: `shape` holds 0, 1 or 2, the index of the name picked. The quoted names count against the script's 128 bytes of strings. The engine keeps every dropdown's names together in 96 bytes, each name with one byte for its end, up to 16 names in all.
 
 ### A member can be written
 
@@ -78,7 +78,7 @@ if (heat[i] > 40) { setRGB(i, 255, 90, 0); }
 else { setRGB(i, 0, 0, 0); }
 ```
 
-Conditions join with `&&` and `||` and negate with `!`, as in C++: `&&` binds tighter than `||`, parentheses group, and evaluation stops at the first side that decides the answer, so `if (i > 0 && heat[i - 1] > 40)` never reads before the array.
+Conditions join with `&&` and `||` and negate with `!`, as in C++: `&&` binds tighter than `||`, and parentheses group. Evaluation stops at the first side that decides the answer, so `if (i > 0 && heat[i - 1] > 40)` never reads before the array.
 A bare value is true when it is not zero, so `if (audioBeat())` reads as it says.
 A condition decides a branch rather than being a value, so `int both = a && b;` is refused.
 
@@ -101,7 +101,7 @@ An index is an arbitrary expression such as `heat[i * 2 + 1]`, and one outside t
 A script computes indices from live control values, so out of range is an ordinary run-time state.
 The fixture shows a repeated last light rather than crashing.
 
-All of a class's members share a small fixed budget (`kCtrlBytes`), so a class that declares more than fits is a compile error naming the arena, not a failed allocation while a fixture runs.
+All of a class's members share a small fixed budget (`kCtrlBytes`). A class that declares more than fits is a compile error naming the arena, not a failed allocation while a fixture runs.
 
 `effects/particles/ember.mle` is the worked example: a heat array that decays and re-ignites, so what it draws this frame depends on the last one. That is the line between an effect that evaluates a formula and one that runs a simulation, and it is the reason arrays exist. `plasma.mle` would look identical if every frame started from scratch; `ember.mle` would go dark.
 
@@ -124,7 +124,7 @@ class RainEffect {
 }
 ```
 
-`dimensions()` returns 1, 2 or 3, and it decides how the layer EXTRUDES the script. A script that returns 1 paints the x=0 column and the framework fans it across the width; one that returns 2 paints the z=0 slice and the framework copies it through the depth. So a script fills a rig it never indexed, and a wrong answer is visible: declare 1 and paint a picture, and only the first column survives. A script that stays silent is treated as 2, which is what every script rendered as before this existed.
+`dimensions()` returns 1, 2 or 3, and it decides how the layer EXTRUDES the script. A script that returns 1 paints the x=0 column, and the framework fans it across the width. One that returns 2 paints the z=0 slice, and the framework copies it through the depth. So a script fills a rig it never indexed, and a wrong answer is visible: declare 1 and paint a picture, and only the first column survives. A script that stays silent is treated as 2.
 
 `tags()` returns the emoji shown beside the script, so a row in the picker reads like a compiled effect's. The vocabulary is shared with the compiled modules: 🎶 reacts to frequency, ✨ particles, 🎯 aims moving heads. A script that declares none shows 📝, the mark of a scripted effect.
 

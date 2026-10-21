@@ -1,6 +1,6 @@
 # Small boards: RP2350, RP2040 and Nordic
 
-The microcontroller boards MoonLight's next ports target, and where to buy them in the EU. **No MoonLight firmware runs on these boards.** They are the targets of the next ports, and a board moves from here to a page of its own when its port ships. The Teensy 4.1 has [its own page](teensy-4-1.md).
+The microcontroller boards MoonLight's next ports target, and where to buy them in the EU. **No MoonLight firmware runs on these boards.** They are the targets of the next ports, and a board moves from here to a page of its own when its port ships. The Teensy 4.1 has [its own page](../../reference/hardware/teensy-4-1.md).
 
 Prices are from 2026-10-11 and include Dutch VAT unless marked ex. AliExpress is worth it only for Waveshare, Seeed and WeAct boards through their official stores, checking the seller per listing; Raspberry Pi and Nordic have no official store there.
 
