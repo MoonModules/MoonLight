@@ -1126,7 +1126,7 @@ def _help_freshness():
         raise _Unmeasurable(str(e)) from e
     # The first lines of the difference, so a stale file says what moved: a header edit, or a host whose headers parse differently.
     return ([("docs/help/help.json",
-              f"{_STALE_HELP_RULE}: run `uv run moondeck/docs/gen_help.py` and commit the result. It differs in:\n      " + "\n      ".join(stale[2:14]))]
+              f"{_STALE_HELP_RULE}: run `uv run moondeck/docs/gen_help.py` and commit the result. It differs in:\n      " + "\n      ".join(stale[:12]))]
             if stale else [])
 
 

@@ -78,7 +78,7 @@ TEST_CASE("a firmware upload without a Content-Length is refused with 411, as ev
 }
 
 // A name past what a module holds is refused on every route that names one, rather than cut short into a name that could match another module.
-TEST_CASE("a module route whose name does not fit is refused with 400 on move, replace and delete alike") {
+TEST_CASE("a module route whose name does not fit is refused with 400 on move, replace, delete and read alike") {
     mm::Scheduler s;
     auto* rack = new Rack();
     rack->setName("Rack");
@@ -91,6 +91,10 @@ TEST_CASE("a module route whose name does not fit is refused with 400 on move, r
     CHECK(request(http, withBody(("POST /api/modules/" + longName + "/move").c_str(), "{\"to\":0}")).rfind("HTTP/1.1 400", 0) == 0);
     CHECK(request(http, withBody(("POST /api/modules/" + longName + "/replace").c_str(), "{\"type\":\"RouteDial\"}")).rfind("HTTP/1.1 400", 0) == 0);
     CHECK(request(http, "DELETE /api/modules/" + longName + " HTTP/1.1\r\n\r\n").rfind("HTTP/1.1 400", 0) == 0);
+    const std::string pastAName(mm::MoonModule::kNameLen + 4, 'y');   // fits the route, not a module's name
+    CHECK(request(http, "GET /api/modules/" + pastAName + " HTTP/1.1\r\n\r\n").rfind("HTTP/1.1 400", 0) == 0);
+    CHECK(request(http, "DELETE /api/modules/" + pastAName + " HTTP/1.1\r\n\r\n").rfind("HTTP/1.1 400", 0) == 0);
+    CHECK(request(http, "GET /api/modules/Rack HTTP/1.1\r\n\r\n").rfind("HTTP/1.1 200", 0) == 0);
     http.release();
     s.deleteTree(rack);
 }

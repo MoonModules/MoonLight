@@ -530,11 +530,11 @@ def render(data: dict) -> str:
 
 
 def stale() -> list:
-    """How the committed file differs from what the headers generate now, as unified diff lines; empty when it is fresh."""
+    """How the committed file differs from what the headers generate now, as the unified diff's hunk lines without its two header lines; empty when it is fresh."""
     import difflib
     now = render(generate()[0]).splitlines()
     was = HELP.read_text(encoding="utf-8").splitlines() if HELP.exists() else []
-    return list(difflib.unified_diff(was, now, "docs/help/help.json (committed)", "docs/help/help.json (generated)", n=1, lineterm=""))
+    return list(difflib.unified_diff(was, now, n=1, lineterm=""))[2:]
 
 
 def main() -> int:

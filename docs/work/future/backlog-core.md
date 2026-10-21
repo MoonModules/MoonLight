@@ -2,6 +2,10 @@
 
 Forward-looking to-build items for the **core / infrastructure** domain (`src/core/`, `src/platform/`, build, CI, network, persistence, UI). The light-domain counterpart is [backlog-light.md](backlog-light.md); items that genuinely span both are in [backlog-mixed.md](backlog-mixed.md). Index + overview: [README.md](index.md). Completed items are removed.
 
+### Headers link the docs by page, not by host (2026-10-21, from the PR 150 review)
+
+Seventeen headers under `src/` carry absolute `https://moonmodules.org/MoonLight/...` links, so a docs move edits firmware sources and marks every firmware stale, as PR 150's move from `how-to/` to `reference/` did. A header names the page site-relative (`reference/hardware/panel-cards.md#...`) and `gen_help.py` resolves the host once, so the next docs move touches no source file.
+
 ### A Progress total rides the value patch (2026-10-19)
 
 A Progress control's total travels only in `writeControlMetadata` (Control.cpp), so a changed total needs a schema resync, which `rebuildControls()` triggers because `aux` is in the schema hash.

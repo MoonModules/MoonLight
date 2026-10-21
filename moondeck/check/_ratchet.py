@@ -38,12 +38,17 @@ def current_counts(path: Path) -> dict | None:
     return json.loads(path.read_text(encoding="utf-8")) if path.exists() else None
 
 
-def record(path: Path, counts: dict) -> None:
-    """Keep this run's counts in `path`, sorted so a diff shows only what moved, swapped in whole so a reader never meets half a file."""
+def write_json(path: Path, doc) -> None:
+    """Write `doc` to `path` as JSON, swapped in whole so a reader never meets half a file."""
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(path.name + ".tmp")
-    tmp.write_text(json.dumps(dict(sorted(counts.items())), indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
+    tmp.write_text(json.dumps(doc, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
     os.replace(tmp, path)
+
+
+def record(path: Path, counts: dict) -> None:
+    """Keep this run's counts in `path`, sorted so a diff shows only what moved."""
+    write_json(path, dict(sorted(counts.items())))
 
 
 def risen(base: dict | None, now: dict) -> list:

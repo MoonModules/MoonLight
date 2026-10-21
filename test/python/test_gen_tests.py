@@ -251,7 +251,7 @@ def test_a_ratcheted_check_that_never_ran_shows_the_counts_committed_with_the_tr
     import _findings
     (tmp_path / "code.json").write_text('{"(total)": 3, "long function": 3}')
     (tmp_path / "repo-health.json").write_text('{"x": 1}')   # a metric without a check is not one
-    assert _findings.committed_counts(tmp_path) == {"check_code": {"rules": {"long function": {"count": 3}}, "total": 3, "files": [], "committed": True}}
+    assert _findings.page_counts(tmp_path) == {"check_code": {"rules": {"long function": {"count": 3}}, "total": 3, "files": [], "committed": True}}
 
 
 def test_each_subject_of_the_index_says_how_many_tests_passed_failed_or_have_no_result_and_what_its_check_found():

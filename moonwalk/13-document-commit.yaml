@@ -123,11 +123,17 @@ processes:
         given: [{ changed: [src/**, test/**, "!test/js/**", "!test/python/**"] }]
         when: { process: desktop-tests }
       - id: esp32-fresh
-        say: Check the classic firmware is up to date.
-        given: [{ changed: [src/**, "!src/platform/desktop/**", moonbase/**] }]
+        say: Check the S3 firmware is up to date.
+        given: [{ changed: [src/**, "!src/platform/desktop/**"] }]
+        when: { run: { script: moondeck/check/check_esp32_built.py, args: "--firmware esp32s3-n16r8" } }
+        detail: |
+          It compares the binary against every source in a tenth of a second, and catches the edit that was never compiled. One firmware is the gate, the S3, since it compiles the most of the light domain (the panel cards and the LCD drivers the classic leaves out) and the release builds every shipped variant; a change to a per-variant sdkconfig fragment, the executable-memory path or host-ISA code needs every shipped variant built, since the release is otherwise the first to build the rest. A stale one is rebuilt on the product owner's go, [one at a time](moonwalk.md#esp32-build-flash).
+      - id: esp32-fresh-moonbase
+        say: Check the classic firmware and MoonBase are current.
+        given: [{ changed: [moonbase/**] }]
         when: { run: { script: moondeck/check/check_esp32_built.py, args: "--firmware esp32" } }
         detail: |
-          It compares the binary and its MoonBase against every source in a tenth of a second, and catches the edit that was never compiled. One firmware is the gate, the classic, since the code is shared across the chips and the release builds every shipped variant; a change to a per-variant sdkconfig fragment, the executable-memory path or host-ISA code needs every shipped variant built, since the release is otherwise the first to build the rest. A stale one is rebuilt on the product owner's go, [one at a time](moonwalk.md#esp32-build-flash).
+          The classic is the firmware that carries the MoonBase image, so a MoonBase change is checked there.
       - id: no-jit
         say: Build the desktop without the MoonLive backend.
         given: [{ changed: ["src/*/moonlive/**"] }]

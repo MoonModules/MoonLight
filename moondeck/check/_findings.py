@@ -9,9 +9,12 @@ file and a line. The record lives under the build folder with the other run reco
 from __future__ import annotations
 
 import json
-import os
+import sys
 from collections import Counter
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import _ratchet  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 DIR = ROOT / "build" / "moondeck-logs" / "findings"
@@ -29,15 +32,12 @@ def write(check: str, rules: dict, findings: list, directory: Path | None = None
     doc = {"check": check,
            "rules": {r: {**meta, "count": counts.get(r, 0)} for r, meta in rules.items()},
            "findings": [{"level": "warning", **f} for f in findings]}
-    directory.mkdir(parents=True, exist_ok=True)
     path = directory / f"{check}.json"
-    tmp = path.with_name(path.name + ".tmp")
-    tmp.write_text(json.dumps(doc, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
-    os.replace(tmp, path)
+    _ratchet.write_json(path, doc)
     return path
 
 
-def committed_counts(directory: Path | None = None) -> dict:
+def page_counts(directory: Path | None = None) -> dict:
     """The counts a ratcheted check keeps with the tree (docs/reference/metrics/<name>.json for check_<name>), by check name: what a page built where the check never ran shows, rules and totals without files."""
     out = {}
     for path in sorted((directory or ROOT / "docs" / "reference" / "metrics").glob("*.json")):
@@ -54,7 +54,7 @@ def committed_counts(directory: Path | None = None) -> dict:
 
 def read_all(directory: Path | None = None, metrics: Path | None = None) -> dict:
     """Every check's last findings by check name, as a page shows them: its rules with counts, and every file with its count and its errors in full. A ratcheted check that never ran here shows the counts committed in `metrics`, the repository's own when not given."""
-    out = committed_counts(metrics)
+    out = page_counts(metrics)
     for path in sorted((directory or DIR).glob("*.json")):
         try:
             doc = json.loads(path.read_text(encoding="utf-8"))

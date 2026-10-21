@@ -163,6 +163,13 @@ Record before and after in performance.md per target.
 
 ## Drivers
 
+### A control change reaches a driver at the frame boundary (2026-10-21, from the PR 150 thread audit)
+
+With the render split on, a driver's `tick()` runs on the encode task while its `onControlChanged`, `onCorrectionChanged`, `tick20ms` and `tick1s` run on the main loop, and only structural changes and `setEnabled` park the encode task first.
+An audit of `src/light/drivers/` found the main loop writing state the encode task reads: `DriverBase`'s `correction_` (rebuilt on a control change, ramped by `tick20ms`, `motionHeld` set by `tick1s`), `effectiveBrightness_`, the `wire_` buffer a channel-count change reallocates, the `start` and `count` window; HueDriver's pairing and light tables; NetworkSendDriver's `dest_` addresses on the inline send path and its `corrected_` buffer; PwmLightDriver's `lights_` and `duty_`; RmtLedDriver's and ParallelLedDriver's whole geometry through `parseConfig` and `reinit`, ParallelLedDriver calling `parseConfig` and `setStatus` from the encode task itself; RtspDriver's and ParallelLedDriver's `setStatus` from `tick()`; PreviewDriver's `downscale_` and `keptIdxAllocFailed_`.
+The textbook move is the one live reconfiguration already promises, a change applied on the next frame: the main loop records the change, and `Drivers::tick` applies it at the frame boundary, after `quiesceEncode()` and before it notifies the worker, so a driver's state has one writer at a time. The thread sanitizer lane reports none of these today, since no test changes a control while the encode task runs; the first test that does pins the move.
+The same pass covers ParallelLedDriver's `peripheral` swap, which disengages the render split through the quiesce hook and, as `peripheral` is not in its `affectsPrepare`, leaves it off until another prepare runs.
+
 ### An identity correction is one copy (2026-10-14)
 
 Every driver runs `Correction::apply` on every light, even when the correction changes nothing: brightness 255 (global and local), the linear curve, a fixture profile whose channels match the layer's, and no dimmer, white or motion channels.
