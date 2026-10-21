@@ -179,16 +179,16 @@ bool startCapture(Picture& p, uint32_t& was) {
 }
 }  // namespace
 
-// A 640 x 480 grabber on a 256 x 256 picture: halved to 160 x 120, every pixel the color it decoded.
-TEST_CASE("the usb capture source publishes the grabber's frames, scaled to fit the picture") {
+// The whole picture, as the test pattern fills it. A 4:3 frame fills a 2:1 picture rather than leaving it short.
+TEST_CASE("the usb capture source publishes the grabber's frames at the size the picture is set to") {
     Grabber g(640, 480, 30, 10, 200, 90);
-    Picture p(256, 256);
+    Picture p(200, 100);
     uint32_t was = 0;
     REQUIRE(startCapture(p, was));
     const mm::PictureFrame f = current();
-    CHECK(f.width == 160);
-    CHECK(f.height == 120);
-    const uint8_t* px = pixel(f, 80, 60);
+    CHECK(f.width == 200);
+    CHECK(f.height == 100);
+    const uint8_t* px = pixel(f, 100, 50);
     CHECK(px[0] == 10);
     CHECK(px[1] == 200);
     CHECK(px[2] == 90);
@@ -228,7 +228,7 @@ TEST_CASE("the capture status counts the frames that landed and those lost") {
     uint32_t was = 0;
     REQUIRE(startCapture(p, was));
     const std::string line = captureStatus(p.svc);
-    CHECK(line.rfind("40 x 30, ", 0) == 0);   // 320 x 240 halved three times to fit 64 x 48
+    CHECK(line.rfind("64 x 48, ", 0) == 0);   // the picture's own size, whatever the grabber streams
     CHECK(line.find(" frames, 0 lost") != std::string::npos);
     CHECK(line.find(" 0 frames") == std::string::npos);   // the picture that arrived is counted
     CHECK(line.find("one picture") == std::string::npos);

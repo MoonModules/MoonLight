@@ -2,6 +2,7 @@
 
 #include "light/effects/EffectBase.h"
 #include "core/services/PictureService.h"   // the picture it samples, as audio effects include AudioService
+#include "core/util/AreaSample.h"            // cellSpan, areaMean: the shrink every sampler shares
 
 namespace mm {
 
@@ -105,7 +106,7 @@ public:
 
 private:
     /// One axis of a cell's source rectangle, [lo, hi) in picture pixels; empty outside a fitted picture.
-    struct Range { uint16_t lo, hi; };
+    using Range = Span;
 
     /// An edge cell's range at `deep` picture lines in: the first reaches inward from 0, the last back from the end.
     static void reachEdge(int32_t k, int32_t used, uint32_t pic, uint32_t deep, uint32_t& lo, uint32_t& hi) {
@@ -126,9 +127,10 @@ private:
         for (uint32_t i = 0; i < n; i++) {
             const int32_t k = static_cast<int32_t>(i) - offset;
             if (k < 0 || k >= used) { out[i] = {0, 0}; continue; }
-            uint32_t lo = static_cast<uint32_t>(k) * pic / static_cast<uint32_t>(used), hi = (static_cast<uint32_t>(k) + 1) * pic / static_cast<uint32_t>(used);
+            const Span base = cellSpan(static_cast<uint32_t>(k), static_cast<uint32_t>(used), pic);
+            uint32_t lo = base.lo, hi = base.hi;
             if (deep) reachEdge(k, used, pic, deep, lo, hi);
-            if (hi <= lo) hi = lo + 1;   // a picture smaller than the grid: neighboring cells share a pixel
+            if (hi <= lo) hi = lo + 1;   // an edge reaching inward can land on its own start
             out[i] = {static_cast<uint16_t>(lo), static_cast<uint16_t>(hi)};
         }
     }
@@ -201,27 +203,7 @@ private:
 
     /// The rectangle's mean in linear light (square, average, root: gamma 2 for the display curve), from at most four reads per axis.
     static RGB average(const PictureFrame& f, Range c, Range r) {
-        const uint32_t sx = (c.hi - c.lo + 3u) / 4u, sy = (r.hi - r.lo + 3u) / 4u;
-        uint32_t sum[3] = {0, 0, 0}, n = 0;
-        for (uint32_t y = r.lo; y < r.hi; y += sy)
-            for (uint32_t x = c.lo; x < c.hi; x += sx) {
-                const RGB p = at(f, x, y);
-                sum[0] += static_cast<uint32_t>(p.r) * p.r;
-                sum[1] += static_cast<uint32_t>(p.g) * p.g;
-                sum[2] += static_cast<uint32_t>(p.b) * p.b;
-                n++;
-            }
-        return RGB{isqrt(sum[0] / n), isqrt(sum[1] / n), isqrt(sum[2] / n)};
-    }
-
-    /// The integer square root of a value below 65,536, the bitwise method.
-    static uint8_t isqrt(uint32_t v) {
-        uint32_t root = 0;
-        for (uint32_t bit = 1u << 14; bit; bit >>= 2) {
-            if (v >= root + bit) { v -= root + bit; root = (root >> 1) + bit; }
-            else root >>= 1;
-        }
-        return static_cast<uint8_t>(root);
+        return areaMean(f.rgb, static_cast<size_t>(f.width) * 3u, c, r);
     }
 
     ScratchBuffer<uint16_t> state_{*this};   ///< 8.8 per channel per cell, only while smoothing
