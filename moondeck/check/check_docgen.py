@@ -108,6 +108,7 @@ _UNREFERENCED_RULE = "unreferenced appendix section"
 _HARD_WRAP_RULE = "hard wrap"
 _STALE_HELP_RULE = "help.json stale"
 _PROCESS_SIZE_RULE = "process over its caps"
+_PROCESS_REPEAT_RULE = "steps repeated across processes"   # a run two processes share, which one process both call holds once
 _MOONWALK_BUILD_RULE = "MoonWalk does not build"   # a stage file the generator refuses: an error, since the map and the site fail with it
 _RESTATES_RULE = "control restates the UI"
 # A control's longer help, its `@guide` section, adds what its line cannot hold: what each option does, a consequence, a reason. Words shared with the line show a repeat mechanically.
@@ -153,8 +154,8 @@ def _blocks(key: str, why: str = "") -> bool:
     implementation file publishes nothing: its comments are a note to the next reader, and an
     over-long one is worth fixing without being worth stopping a commit for.
 
-    Keeping both in one report is the point. A warning that vanishes is a warning nobody fixes,
-    so the count stays visible per area and the sweep still closes it; what changes is that the
+    Keeping both in one record is the point. A warning that vanishes is a warning nobody fixes,
+    so the count stays visible and the sweep still closes it; what changes is that the
     remaining implementation-file work cannot hold a header's commit hostage.
 
     TEMPORARY, and it names its own removal: this is a staging device for the sweep, not a claim
@@ -174,7 +175,7 @@ def _blocks(key: str, why: str = "") -> bool:
         return True
     if why.startswith(_LINE_LENGTH_RULES) and "chars >" in why:
         return False
-    if why.startswith((_UNREFERENCED_RULE, _SPLIT_PARAGRAPH_RULE, _PROCESS_SIZE_RULE)):
+    if why.startswith((_UNREFERENCED_RULE, _SPLIT_PARAGRAPH_RULE, _PROCESS_SIZE_RULE, _PROCESS_REPEAT_RULE)):
         return False
     return _generates_a_page(key.partition("::")[0])
 
@@ -224,7 +225,7 @@ _RULE_NAMES = (
     "class comment", "member comment", "no image", "image is", "one control",
     "doc sentence", "hard wrap", "split paragraph", _STALE_HELP_RULE,
     _RESTATES_RULE, _GUIDE_REPEATS_RULE, _HELP_SIZE_RULE, _GUIDE_NAMES_CONTROL_RULE, _HELP_LINE_RULE,
-    _TAG_GROUP_RULE, _NOTE_ON_DECL_RULE, _PROCESS_SIZE_RULE,
+    _TAG_GROUP_RULE, _NOTE_ON_DECL_RULE, _PROCESS_SIZE_RULE, _PROCESS_REPEAT_RULE,
 )
 
 
@@ -260,6 +261,7 @@ _RULE_LABELS = {
     _TAG_GROUP_RULE: "tag emoji on one module",
     _NOTE_ON_DECL_RULE: "// notes on declarations",
     _PROCESS_SIZE_RULE: "processes over their caps",
+    _PROCESS_REPEAT_RULE: "steps repeated across processes",
 }
 
 
@@ -1111,15 +1113,20 @@ def _md_hard_wraps(rel: str, text: str):
     return out
 
 
+class _Unmeasurable(Exception):
+    """A rule this host cannot measure; the reason is its message."""
+
+
 def _help_freshness():
-    """The committed help.json against what the headers and cards generate now: a header edit that never reached the file would ship help that contradicts the module."""
+    """The committed help.json against what the headers and cards generate now: a header edit that never reached the file would ship help that contradicts the module. Raises _Unmeasurable where the headers cannot be parsed, on a host without LLVM or libclang."""
     import gen_help
     try:
         stale = gen_help.stale()
-    except (SystemExit, Exception) as e:   # no LLVM, or a parse that failed: reported, so the rest of the report still runs
-        return [("docs/help/help.json", f"{_STALE_HELP_RULE} unchecked: {e}")]
+    except gen_help.ToolchainMissing as e:   # no LLVM here: any other failure is the help's own and stays a failure
+        raise _Unmeasurable(str(e)) from e
+    # The first lines of the difference, so a stale file says what moved: a header edit, or a host whose headers parse differently.
     return ([("docs/help/help.json",
-              f"{_STALE_HELP_RULE}: run `uv run moondeck/docs/gen_help.py` and commit the result")]
+              f"{_STALE_HELP_RULE}: run `uv run moondeck/docs/gen_help.py` and commit the result. It differs in:\n      " + "\n      ".join(stale[:12]))]
             if stale else [])
 
 
@@ -1221,14 +1228,26 @@ def _process_sizes():
         return [("moonwalk/", f"{_MOONWALK_BUILD_RULE}: {e}")]   # the generator names each file and its fault
     files = {s["id"]: f"moonwalk/{s['file']}" for s in model["stages"]}
     out = [(files[stage], f"{_PROCESS_SIZE_RULE}: {why}") for stage, why in gen_moonwalk.size_warnings(model["processes"])]
+    out += [(files[stage], f"{_PROCESS_REPEAT_RULE}: {why}") for stage, why in gen_moonwalk.shared_runs(model["processes"])]
     kb = gen_moonwalk.download_kb(model)
     if kb > gen_moonwalk.MAX_DOWNLOAD_KB:
         out.append(("docs/assets/moonwalk.js", f"{_PROCESS_SIZE_RULE}: the map and its renderer download {kb} KB gzipped > {gen_moonwalk.MAX_DOWNLOAD_KB}; the map carries less"))
     return out
 
 
-def _violations():
-    out = _help_freshness()
+def _unverified_processes():
+    """The processes no runner verifies, each as (stage file, message): information, not a finding. Most are by hand or judgment, which no test replaces, so a count of them could not fall; the list shows where nothing automated checks a process. None when the stage files do not build, which `_process_sizes` reports."""
+    import gen_moonwalk
+    try:
+        model = gen_moonwalk.build()
+    except ValueError:
+        return []
+    files = {s["id"]: f"moonwalk/{s['file']}" for s in model["stages"]}
+    return [(files[stage], why) for stage, why in gen_moonwalk.unverified(model["processes"])]
+
+
+def _violations(fresh):
+    out = list(fresh)
     out.extend(_process_sizes())
     out.extend(_guide_repeats(_hooks._help_file()))
     out.extend(_help_size(_hooks._help_file()))
@@ -1252,209 +1271,10 @@ def _violations():
     return out
 
 
-REPORT = ROOT / "docs" / "reference" / "metrics" / "docgen.md"
+COUNTS = ROOT / "docs" / "reference" / "metrics" / "docgen.json"   # the counts the ratchet compares; the test page shows the findings
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _ratchet import committed as committed_report, risen as risen_against  # noqa: E402
-
-
-# Which summary page owns a source folder, mirroring the zoom diagram in
-# documentation-standards.md. A sweep runs page by page, so the report groups by the same unit:
-# the question "how far is the sweep" is answered per area, not per file.
-#
-# Longest prefix wins, so `light/moonlive` beats `light`. A path matching nothing is "unassigned",
-# which is itself the finding: a header no summary page owns reaches no reader.
-DOC_AREAS = (
-    ("src/core/system",           "core/system.md"),
-    ("src/core/services",         "core/services.md"),
-    ("src/core/module",           "core/system.md"),
-    ("src/core/util",             "core/supporting.md"),
-    # The numeric vocabulary is the LIGHT domain's, whatever directory it sits in: effects and
-    # scripts write against it and the control surface never touches it. A directory prefix put
-    # five headers and 240 findings on the control page, where the sweep would have documented
-    # them under a heading no reader of that page is looking for. Longest prefix wins, so these
-    # file-level entries override the `src/core/util` line above.
-    ("src/core/util/math16.h",      "light/power-functions.md"),
-    ("src/core/util/math8.h",       "light/power-functions.md"),
-    ("src/core/util/noise.h",       "light/power-functions.md"),
-    ("src/core/util/oscillators.h", "light/power-functions.md"),
-    ("src/core/util/color.h",       "light/power-functions.md"),
-    ("src/core/moonlive",         "light/moonlive.md"),
-    ("src/light/moonlive",        "light/moonlive.md"),
-    ("src/light/effects",         "light/effects.md"),
-    ("src/light/layouts",         "light/layouts.md"),
-    ("src/light/modifiers",       "light/modifiers.md"),
-    ("src/light/drivers",         "light/drivers.md"),
-    ("src/light/powerfunctions",  "light/power-functions.md"),
-    ("src/light/layers",          "light/supporting.md"),
-    ("src/light/util",            "light/supporting.md"),
-    ("src/ui",                    "core/ui.md"),
-    ("src/platform",              "platform/index.md"),
-    # The composition roots and the second boot image. `main.cpp` wires the module tree and
-    # registers every docPath on the system page, the ESP32 entry point calls into it, and
-    # MoonBase is the firmware-update surface that page documents.
-    ("src/main.cpp",              "core/system.md"),
-    ("esp32/main",                "core/system.md"),
-    ("moonbase/main",             "core/system.md"),
-    # A MoonLive backend tool: it compiles a script through one real assembler and prints
-    # the bytes, which is what `check_encodings.py` drives.
-    ("moondeck/moonlive",         "light/moonlive.md"),
-)
-
-
-def _doc_area(path: str) -> str:
-    """The summary page that owns `path`, or a bucket for what no page covers."""
-    best = ""
-    area = ""
-    for prefix, page in DOC_AREAS:
-        if path.startswith(prefix) and len(prefix) > len(best):
-            best, area = prefix, page
-    if area:
-        return area
-    if path.startswith("test/"):
-        return "(tests, no card)"
-    return "(unassigned)"
-
-
-def _write_report(found, appendix=None) -> None:
-    """The current state as a tracked page, so its git history is the trend.
-
-    The baseline records WHICH cards are tolerated. This records HOW MUCH is left, per page
-    and per rule, so `git log -p docs/reference/metrics/docgen.md` answers whether the
-    documentation is getting better. Same shape as repo-health.md, for the same reason.
-    """
-    from collections import Counter, defaultdict
-    by_page = defaultdict(list)
-    for key, why in found:
-        page, _, title = key.partition("::")
-        by_page[page].append((title, why))
-    errs = [f for f in found if _blocks(f[0], f[1])]
-    warns = [f for f in found if not _blocks(f[0], f[1])]
-    rules = Counter(_rule_name(why) for _, why in found)
-    rules_e = Counter(_rule_name(why) for _, why in errs)
-    rules_w = Counter(_rule_name(why) for _, why in warns)
-
-    out = ["# Docgen", "",
-           "Generated by [`moondeck/check/check_docgen.py`](../../../moondeck/check/check_docgen.py) "
-           "on every run. **Do not edit by hand.**", "",
-           "Every place the generated documentation breaks the shape [the standards]"
-           "(../../contributing/documentation-standards.md#the-card) define. Current state only: "
-           "the trend is this file's git history. The list only shrinks.", "",
-           f"**{len(errs)} error(s)** and **{len(warns)} warning(s)** "
-           f"across {len(by_page)} page(s).", "",
-           *([f"**{appendix} appendix line(s)** after `@technical`. This only falls as well: a cleanup "
-              "cuts first, and moves only what neither the code, the test name nor the spec says.", ""]
-             if appendix is not None else []),
-           "An error is in a file that generates a documentation page, a header or a catalog page, "
-           "so the finding is a defect in what gets published and it fails the gate. A warning is "
-           "worth fixing without being worth stopping a commit for: any finding in an implementation "
-           "file, which publishes nothing, and the rules still staged as counts in a header too, the "
-           "over-wide line and the appendix section nothing refers to. Both are counted here, "
-           "because a warning nobody sees is a warning nobody fixes.", "",
-           "The split is temporary. It stages the sweep rather than ranking the two kinds of "
-           "comment, so when the warning column reaches zero it goes and every finding blocks.", "",
-           "## By rule", "", "| Rule | Errors | Warnings |", "|---|---:|---:|"]
-    # Errors first, since that is the number a gate turns on: a rule with more warnings than
-    # errors would otherwise outrank the one actually blocking the commit.
-    for rule in sorted(rules, key=lambda r: (-rules_e.get(r, 0), -rules_w.get(r, 0), r)):
-        out.append(f"| {_rule_label(rule)} | {rules_e.get(rule, 0)} | {rules_w.get(rule, 0)} |")
-    # By the unit a sweep actually runs in: one summary page and the headers it owns.
-    areas = defaultdict(int)
-    areas_e = defaultdict(int)
-    areas_w = defaultdict(int)
-    for page, items in by_page.items():
-        if page.endswith(".md"):
-            continue
-        area = _doc_area(page)
-        areas[area] += len(items)
-        # Per FINDING, through _blocks: a file is not wholly one severity, because a header's
-        # line-length finding warns while its neighbors block.
-        for _, why in items:
-            (areas_e if _blocks(page, why) else areas_w)[area] += 1
-    if areas:
-        out += ["", "## By documentation area", "",
-                "The unit a sweep runs in: one summary page and the headers it owns, as the "
-                "[hierarchy zoom](../../contributing/documentation-standards.md"
-                "#zooming-in-on-the-green-boxes) lays them out. A page is swept when its errors "
-                "reach zero; its warnings say how much implementation-file cleanup is left "
-                "behind that.", "",
-                "| Summary page | Errors | Warnings |", "|---|---:|---:|"]
-        for area in sorted(areas, key=lambda a: (-areas_e[a], -areas[a], a)):
-            out.append(f"| `{area}` | {areas_e[area]} | {areas_w[area]} |")
-    cards = {k: v for k, v in by_page.items() if k.endswith(".md")}
-    headers = {k: v for k, v in by_page.items() if not k.endswith(".md")}
-    if cards:
-        out += ["", "## Catalog pages", "", "| File | Findings |", "|---|---:|"]
-        for page in sorted(cards, key=lambda k: (-len(cards[k]), k)):
-            out.append(f"| `{page}` | {len(cards[page])} |")
-
-    # PER AREA, because the area is the unit a sweep runs in and the question a reader has is
-    # "what would I open first". A flat list of 300 files answered that only by being read whole,
-    # and the per-finding dump under it was 90% of a 4,200-line page: a log rather than a report.
-    # Each area gets its own files ranked, a tail line for the long thin end, and its rule mix.
-    # What a single finding says is what the check PRINTS; this page is where the work is planned.
-    out += ["", "## Where the work is", "",
-            "Per area, since that is the unit a sweep runs in: the files ranked, then the rule mix. "
-            "A file's own findings are in the check's output, which names every one.", ""]
-    per_area = defaultdict(dict)
-    for page, items in headers.items():
-        per_area[_doc_area(page)][page] = items
-    for area in sorted(per_area, key=lambda a: (-sum(len(v) for v in per_area[a].values()), a)):
-        files = per_area[area]
-        total = sum(len(v) for v in files.values())
-        # Ranked WITHIN each kind, and each kind gets its own head, so the biggest warning file
-        # cannot be buried in the tail behind ten smaller errors. An 88-finding implementation
-        # file is worth seeing even though it does not block.
-        # Counted through _blocks, which reads the REASON as well as the file: a header's
-        # line-length finding warns, so a file holding only those is a warning file. Grouping
-        # on the file alone labeled 74 such files "error" under a report saying 0 errors.
-        def _blocking(page, items):
-            return [f for f in items if _blocks(page, f[1])]
-        errs_a = sum(len(_blocking(k, v)) for k, v in files.items())
-        out += [f"### {area}", "",
-                f"**{errs_a} error(s)** and **{total - errs_a} warning(s)** "
-                f"across {len(files)} file(s).", "",
-                "| Findings | File | |", "|---:|---|---|"]
-        HEAD = 10
-        for kind, blocking in (("error", True), ("warning", False)):
-            counts = {k: len([f for f in v if bool(_blocks(k, f[1])) == blocking])
-                      for k, v in files.items()}
-            group = sorted((k for k in files if counts[k]), key=lambda k: (-counts[k], k))
-            for page in group[:HEAD]:
-                out.append(f"| {counts[page]} | `{page}` | {kind} |")
-            tail = group[HEAD:]
-            if tail:
-                n = sum(counts[p] for p in tail)
-                lo, hi = min(counts[p] for p in tail), max(counts[p] for p in tail)
-                span = f"{lo}" if lo == hi else f"{lo}-{hi}"
-                out.append(f"| {span} each | *{len(tail)} more {kind} files, {n} findings* | |")
-        # Every ERRORING file's findings in full, right where the work is planned. An error
-        # blocks a commit, so the one question its reader has is what to fix, and a summary
-        # sends them back to a stdout that has scrolled away. Warnings stay counted rather
-        # than listed: 3135 of them is the log this page was rewritten to stop being.
-        for page in sorted(files):
-            errs_f = [f for f in files[page] if _blocks(page, f[1])]
-            if not errs_f:
-                continue
-            out += [f"#### `{page}`", ""]
-            for key, why in sorted(errs_f, key=lambda f: f[1]):
-                where = key.rpartition("::")[2] if "::" in key else ""
-                out.append(f"- {where + ': ' if where else ''}{why}")
-            out += [""]
-
-        mix = Counter(_rule_name(why) for k, v in files.items()
-                      for _, why in v if _blocks(k, why))
-        mix_w = Counter(_rule_name(why) for k, v in files.items()
-                        for _, why in v if not _blocks(k, why))
-        out += [""]
-        if mix:
-            out += ["By rule, errors: "
-                    + ", ".join(f"{n} {_rule_label(r)}" for r, n in mix.most_common()) + ".", ""]
-        if mix_w:
-            out += ["By rule, warnings: "
-                    + ", ".join(f"{n} {_rule_label(r)}" for r, n in mix_w.most_common()) + ".", ""]
-    REPORT.parent.mkdir(parents=True, exist_ok=True)
-    REPORT.write_text("\n".join(out) + "\n", encoding="utf-8")
-    print(f"Docgen report: {len(found)} finding(s) written to {REPORT.relative_to(ROOT)}")
+import _ratchet as ratchet  # noqa: E402   # as `ratchet`, since `_ratchet` below is this check's comparison
+import _findings  # noqa: E402
 
 
 def _report(entries, heading: str) -> None:
@@ -1477,78 +1297,80 @@ def _report(entries, heading: str) -> None:
 
 
 def _committed_counts():
-    """Every rule's warning count in the COMMITTED report, or None when there is no baseline.
+    """Every rule's warning count the last commit recorded, or None when there is no baseline."""
+    return ratchet.committed_counts(COUNTS)
 
-    The report is tracked, so the last commit's copy is the number to beat. Read from git rather
-    than from the working tree, because the run rewrites the file before the comparison happens.
+
+def _counts(found, appendix=None) -> dict:
+    """The counts the ratchet compares: the warnings per rule and in total, and the appendix lines.
+
+    LABELED, as the findings record names them, so the counts file and the test page name a rule alike. The
+    total is its own entry, because a per-rule comparison alone misses a rule that is below the
+    baseline and still rising: one under budget can absorb a new finding silently.
     """
-    text = committed_report(REPORT)
-    if text is None:
-        return None
-    counts = {}
-    # Only the `## By rule` table: the area and file tables share its column shape, and a row from
-    # either would enter the baseline as a rule that can never appear in `now`.
-    in_rules = False
-    for line in text.split("\n"):
-        if line.startswith("## "):
-            in_rules = line.strip() == "## By rule"
-        m = re.match(r"^\| (.+?) \| (\d+) \| (\d+) \|$", line.strip())
-        if in_rules and m and m.group(1) != "Rule":
-            counts[m.group(1)] = int(m.group(3))
-        # The TOTAL as its own entry, because a per-rule comparison alone misses a rule that is
-        # below the baseline and still rising: one under budget can absorb a new finding silently.
-        m = re.match(r"^\*\*\d+ error\(s\)\*\* and \*\*(\d+) warning\(s\)\*\* across", line.strip())
-        if m and "(total)" not in counts:
-            counts["(total)"] = int(m.group(1))
-        m = re.match(r"^\*\*(\d+) appendix line\(s\)\*\*", line.strip())
-        if m:
-            counts["(appendix lines)"] = int(m.group(1))
-    return counts or None
+    from collections import Counter
+    warned = [(key, why) for key, why in found if not _blocks(key, why)]
+    now = Counter(_rule_label(_rule_name(why)) for _, why in warned)
+    now["(total)"] = len(warned)
+    if appendix is not None:
+        now["(appendix lines)"] = appendix
+    return dict(now)
 
 
 def _ratchet(found, appendix=None) -> list:
-    """Which rules rose against the committed report. The list only shrinks.
+    """Which rules rose against the committed counts. The list only shrinks.
 
     A warning is staged work, and staged work that grows is not a sweep. Per RULE rather than on
     the total alone, because a total hides one rule paying for another: splitting a long line
     lowers the width count and raises the block count, which is the move the run cap exists to
     refuse.
     """
-    from collections import Counter
     base = _committed_counts()
     if base is None:
         return []
-    # LABELLED, matching how the report writes them: `_rule_name` returns the internal key
-    # ("code comment") while the table carries the display label ("multi-line comment blocks"),
-    # and comparing the two key spaces silently compares nothing.
-    now = Counter(_rule_label(_rule_name(why)) for key, why in found if not _blocks(key, why))
-    now["(total)"] = sum(1 for key, why in found if not _blocks(key, why))
+    now = _counts(found, appendix)
     # The appendix is its own row, because warnings that fall while the appendix grows were moved, not cut; a baseline without the row is a first run for it.
     base = dict(base)
-    if appendix is not None and "(appendix lines)" in base:
-        now["(appendix lines)"] = appendix
-    else:
-        base.pop("(appendix lines)", None)
-    return risen_against(base, now)
+    if "(appendix lines)" not in base:
+        now.pop("(appendix lines)", None)
+    elif "(appendix lines)" not in now:
+        base.pop("(appendix lines)")
+    return ratchet.risen(base, now)
 
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.parse_args()
 
-    found = _violations()
+    try:
+        fresh, measured = _help_freshness(), True
+    except _Unmeasurable as e:
+        # As check_code leaves its hot-path rule: the other rules still ratchet, and the counts keep the last full run rather than losing this rule.
+        print(f"SKIP help.json freshness: {e}, so docgen.json is left as it is.")
+        fresh, measured = [], False
+    found = _violations(fresh)
+    # The findings in the one shape every check keeps, which the test page shows.
+    if _findings.is_real(COUNTS):
+        # Each rule by its label, the name the counts carry too; the freshness of help.json is left out where it could not be measured, rather than recorded as zero.
+        _findings.write("check_docgen", {_rule_label(n): {"standard": "docs/contributing/documentation-standards.md"} for n in _RULE_NAMES if measured or n != _STALE_HELP_RULE},
+                        [{"rule": _rule_label(_rule_name(why)), "message": why, "file": key.split("::")[0], "level": "error" if _blocks(key, why) else "warning",
+                          **({"line": int(m.group(1))} if (m := re.search(r"line (\d+)", key)) else {})} for key, why in found])
 
-    # The report is the artifact: stdout scrolls away and is truncated, the file is what the
-    # reviewer reads, and its git history is the only record of the sweep's trend. Written on
-    # every run with no way to suppress it: the run still prints and still returns its exit
-    # code, so writing it costs a caller nothing and a skipped write loses the number to beat.
+    # The counts are the number to beat, and their git history is the sweep's trend. Recorded on
+    # every run that measured every rule: a skipped write loses the number to beat.
     appendix = _appendix_total()
-    _write_report(found, appendix)
+    if measured:
+        ratchet.record(COUNTS, _counts(found, appendix))
 
     errors = [f for f in found if _blocks(f[0], f[1])]
     warnings = [f for f in found if not _blocks(f[0], f[1])]
 
     risen = _ratchet(found, appendix)
+    if unverified := _unverified_processes():
+        print(f"Information, not counted: {len(unverified)} process(es) no runner verifies:")
+        for _, why in unverified:
+            print(f"  {why}")
+        print()
     if not found and not risen:
         print(f"Docgen check: clean. Limits: one control {MAX_CONTROL} "
               f"({MAX_CONTROL_VISUAL} visual), one comment line, "
@@ -1557,7 +1379,7 @@ def main() -> int:
 
     print(f"Docgen check: {len(errors)} error(s), {len(warnings)} warning(s).\n")
     if risen:
-        print("ROSE against the committed report. These only shrink:")
+        print("ROSE against the committed counts. These only shrink:")
         for rule, was, now in risen:
             print(f"  {rule}: {was} -> {now}")
             if rule == "(appendix lines)":

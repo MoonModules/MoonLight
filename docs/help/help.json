@@ -47,10 +47,22 @@
    "controls": {
     "blendMode": {
      "line": "How this layer combines with the layers below it.",
-     "more": "Multiply darkens what is beneath it, additive adds light, and alpha blends by opacity."
+     "more": "Multiply darkens what is beneath it, additive adds light, and alpha blends by opacity.",
+     "tests": [
+      {
+       "title": "Layers stack and blend live",
+       "url": "https://moonmodules.org/MoonLight/reference/tests.html#effects:scenario:scenario_Layers_stack_and_blend_live"
+      }
+     ]
     },
     "opacity": {
-     "line": "How strongly this layer shows, from invisible to full."
+     "line": "How strongly this layer shows, from invisible to full.",
+     "tests": [
+      {
+       "title": "Layers stack and blend live",
+       "url": "https://moonmodules.org/MoonLight/reference/tests.html#effects:scenario:scenario_Layers_stack_and_blend_live"
+      }
+     ]
     }
    },
    "role": "layer",
@@ -65,20 +77,56 @@
    "controls": {
     "on": {
      "line": "Master power.",
-     "more": "Off scales the output to black and keeps `brightness`, so switching on restores the level. The UI, infrared, the WLED app, Home Assistant and MQTT all drive it."
+     "more": "Off scales the output to black and keeps `brightness`, so switching on restores the level. The UI, infrared, the WLED app, Home Assistant and MQTT all drive it.",
+     "tests": [
+      {
+       "title": "Drivers output and brightness",
+       "url": "https://moonmodules.org/MoonLight/reference/tests.html#drivers:scenario:scenario_Drivers_output_and_brightness"
+      }
+     ]
     },
     "relayPins": {
      "line": "GPIOs switching the LED power supply, closed while `on` and brightness is above 0."
     },
     "brightness": {
      "line": "Global output brightness, multiplied with each driver's `localBrightness`.",
-     "more": "It starts low, so a fresh device on USB 5 V never browns out at full white."
+     "more": "It starts low, so a fresh device on USB 5 V never browns out at full white.",
+     "tests": [
+      {
+       "title": "Control a palette preset changes only the palette",
+       "url": "https://moonmodules.org/MoonLight/reference/tests.html#controlmodule:scenario:scenario_Control_a_palette_preset_changes_only_the_palette"
+      },
+      {
+       "title": "Control presets capture and restore",
+       "url": "https://moonmodules.org/MoonLight/reference/tests.html#controlmodule:scenario:scenario_Control_presets_capture_and_restore"
+      },
+      {
+       "title": "Drivers output and brightness",
+       "url": "https://moonmodules.org/MoonLight/reference/tests.html#drivers:scenario:scenario_Drivers_output_and_brightness"
+      }
+     ]
     },
     "palette": {
-     "line": "What effects sample from: a built-in palette or a scripted `.mlp` one."
+     "line": "What effects sample from: a built-in palette or a scripted `.mlp` one.",
+     "tests": [
+      {
+       "title": "Control a palette preset changes only the palette",
+       "url": "https://moonmodules.org/MoonLight/reference/tests.html#controlmodule:scenario:scenario_Control_a_palette_preset_changes_only_the_palette"
+      },
+      {
+       "title": "Palettes a script drives the effects",
+       "url": "https://moonmodules.org/MoonLight/reference/tests.html#drivers:scenario:scenario_Palettes_a_script_drives_the_effects"
+      }
+     ]
     },
     "paletteScript": {
-     "line": "The scripted palette's file, which `palette` picks."
+     "line": "The scripted palette's file, which `palette` picks.",
+     "tests": [
+      {
+       "title": "Palettes a script drives the effects",
+       "url": "https://moonmodules.org/MoonLight/reference/tests.html#drivers:scenario:scenario_Palettes_a_script_drives_the_effects"
+      }
+     ]
     },
     "motionHold": {
      "line": "How long a powered-off rig keeps tracking before its heads go still, in seconds.",
@@ -122,7 +170,7 @@
    "dim": 0,
    "doc": "light/supporting.md#fixtureprofiles",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/drivers/FixtureProfilesModule.h",
-   "tests": "https://moonmodules.org/MoonLight/reference/tests/unit-tests.html#fixtureprofilesmodule"
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#fixtureprofilesmodule"
   },
   "CarLightsLayout": {
    "line": "A pair of car headlights: concentric rings of lights placed like a car's front lamps.",
@@ -229,7 +277,7 @@
    "dim": 0,
    "doc": "light/layouts.md#moonlive",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/moonlive/MoonLiveLayout.h",
-   "tests": "https://moonmodules.org/MoonLight/reference/tests/unit-tests.html#moonlivelayout"
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#moonlivelayout"
   },
   "PanelsLayout": {
    "line": "An M × N grid of matrix panels, tiled into one large display for a video wall.",
@@ -306,16 +354,56 @@
    "image": "https://moonmodules.org/MoonLight/assets/light/layouts/GridLayout.gif",
    "controls": {
     "width": {
-     "line": "The grid's extent on x."
+     "line": "The grid's extent on x.",
+     "tests": [
+      {
+       "title": "Effects pipeline builds and renders",
+       "url": "https://moonmodules.org/MoonLight/reference/tests.html#effects:scenario:scenario_Effects_pipeline_builds_and_renders"
+      },
+      {
+       "title": "Effects teardown under a running pipeline",
+       "url": "https://moonmodules.org/MoonLight/reference/tests.html#uncategorized:scenario:scenario_Effects_teardown_under_a_running_pipeline"
+      },
+      {
+       "title": "Fluid solver",
+       "url": "https://moonmodules.org/MoonLight/reference/tests.html#fluideffect:live:scenario_Fluid_solver"
+      }
+     ]
     },
     "height": {
-     "line": "Its extent on y."
+     "line": "Its extent on y.",
+     "tests": [
+      {
+       "title": "Fluid solver",
+       "url": "https://moonmodules.org/MoonLight/reference/tests.html#fluideffect:live:scenario_Fluid_solver"
+      },
+      {
+       "title": "GridLayout resize",
+       "url": "https://moonmodules.org/MoonLight/reference/tests.html#gridlayout:live:scenario_GridLayout_resize"
+      },
+      {
+       "title": "Layers stack and blend live",
+       "url": "https://moonmodules.org/MoonLight/reference/tests.html#effects:scenario:scenario_Layers_stack_and_blend_live"
+      }
+     ]
     },
     "depth": {
-     "line": "Its extent on z, 1 for a flat panel."
+     "line": "Its extent on z, 1 for a flat panel.",
+     "tests": [
+      {
+       "title": "Fluid solver",
+       "url": "https://moonmodules.org/MoonLight/reference/tests.html#fluideffect:live:scenario_Fluid_solver"
+      }
+     ]
     },
     "serpentine": {
-     "line": "Every other row runs in reverse, for a snaked strip."
+     "line": "Every other row runs in reverse, for a snaked strip.",
+     "tests": [
+      {
+       "title": "NetworkReceive two boards",
+       "url": "https://moonmodules.org/MoonLight/reference/tests.html#networkreceiveeffect:live:scenario_NetworkReceive_two_boards"
+      }
+     ]
     }
    },
    "role": "layout",
@@ -323,7 +411,7 @@
    "dim": 3,
    "doc": "light/layouts.md#grid",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/layouts/GridLayout.h",
-   "tests": "https://moonmodules.org/MoonLight/reference/tests/unit-tests.html#gridlayout"
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#gridlayout"
   },
   "GridBlacksLayout": {
    "line": "A grid with dark columns held black in every row, for a sealed panel that must stay dark down a strip, or a slat wall.",
@@ -355,7 +443,7 @@
    "dim": 3,
    "doc": "light/layouts.md#gridblacks",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/layouts/GridBlacksLayout.h",
-   "tests": "https://moonmodules.org/MoonLight/reference/tests/unit-tests.html#gridblackslayout"
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#gridblackslayout"
   },
   "PanelLayout": {
    "line": "A 2D matrix panel with full wiring control: the axis order, the direction per axis, and serpentine.",
@@ -443,7 +531,7 @@
    "dim": 2,
    "doc": "light/layouts.md#rings241",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/layouts/Rings241Layout.h",
-   "tests": "https://moonmodules.org/MoonLight/reference/tests/unit-tests.html#rings241layout"
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#rings241layout"
   },
   "SingleColumnLayout": {
    "line": "A vertical line of lights at a fixed x, the 1D column.",
@@ -468,7 +556,7 @@
    "dim": 1,
    "doc": "light/layouts.md#singlecolumn",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/layouts/SingleColumnLayout.h",
-   "tests": "https://moonmodules.org/MoonLight/reference/tests/unit-tests.html#singlecolumnlayout"
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#singlecolumnlayout"
   },
   "SingleRowLayout": {
    "line": "A horizontal line of lights at a fixed y: the 1D row, a bare strip laid straight.",
@@ -507,7 +595,7 @@
    "dim": 3,
    "doc": "light/layouts.md#sphere",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/layouts/SphereLayout.h",
-   "tests": "https://moonmodules.org/MoonLight/reference/tests/unit-tests.html#spherelayout"
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#spherelayout"
   },
   "SpiralLayout": {
    "line": "A conical spiral: lights winding up a cone from a wide base to a point.",
@@ -559,7 +647,13 @@
    "image": "https://moonmodules.org/MoonLight/assets/light/layouts/WheelLayout.gif",
    "controls": {
     "spokes": {
-     "line": "How many spokes radiate from the hub."
+     "line": "How many spokes radiate from the hub.",
+     "tests": [
+      {
+       "title": "Layers stack and blend live",
+       "url": "https://moonmodules.org/MoonLight/reference/tests.html#effects:scenario:scenario_Layers_stack_and_blend_live"
+      }
+     ]
     },
     "ledsPerSpoke": {
      "line": "How many lights each spoke carries."
@@ -570,7 +664,7 @@
    "dim": 2,
    "doc": "light/layouts.md#wheel",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/layouts/WheelLayout.h",
-   "tests": "https://moonmodules.org/MoonLight/reference/tests/unit-tests.html#wheellayout"
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#wheellayout"
   },
   "AudioSpectrumEffect": {
    "line": "The 16 mic frequency bands spread across X, each column lit bottom-up by its magnitude.",
@@ -579,7 +673,13 @@
    "image": "https://moonmodules.org/MoonLight/assets/light/effects/AudioSpectrumEffect.gif",
    "controls": {
     "colorMode": {
-     "line": "Bars colored by height, the VU look, or per band, a rainbow."
+     "line": "Bars colored by height, the VU look, or per band, a rainbow.",
+     "tests": [
+      {
+       "title": "Effects teardown under a running pipeline",
+       "url": "https://moonmodules.org/MoonLight/reference/tests.html#uncategorized:scenario:scenario_Effects_teardown_under_a_running_pipeline"
+      }
+     ]
     }
    },
    "role": "effect",
@@ -661,7 +761,7 @@
    "dim": 2,
    "doc": "light/effects.md#beatripples",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/BeatRipplesEffect.h",
-   "tests": "https://moonmodules.org/MoonLight/reference/tests/unit-tests.html#beatrippleseffect"
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#beatrippleseffect"
   },
   "BlurzEffect": {
    "line": "Audio-reactive blurred dots: one frequency band per frame lights a dot, then the whole frame is blurred for soft trails.",
@@ -687,7 +787,7 @@
    "dim": 2,
    "doc": "light/effects.md#blurz",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/BlurzEffect.h",
-   "tests": "https://moonmodules.org/MoonLight/reference/tests/unit-tests.html#blurzeffect"
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#blurzeffect"
   },
   "BouncingBallsEffect": {
    "line": "A row of balls per column bounce under gravity, each losing energy on impact and relaunching when it stops.",
@@ -707,7 +807,7 @@
    "dim": 2,
    "doc": "light/effects.md#bouncingballs",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/BouncingBallsEffect.h",
-   "tests": "https://moonmodules.org/MoonLight/reference/tests/unit-tests.html#bouncingballseffect"
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#bouncingballseffect"
   },
   "DemoReelEffect": {
    "line": "Plays every other registered effect in turn, auto-advancing on a timer, so one Layer cycles the whole library hands-free.",
@@ -733,7 +833,7 @@
    "dim": 3,
    "doc": "light/effects.md#demoreel",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/DemoReelEffect.h",
-   "tests": "https://moonmodules.org/MoonLight/reference/tests/unit-tests.html#demoreeleffect"
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#demoreeleffect"
   },
   "DistortionWavesEffect": {
    "line": "Two interfering sine waves beat against each other into a moire color field.",
@@ -756,7 +856,7 @@
    "dim": 2,
    "doc": "light/effects.md#distortionwaves",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/DistortionWavesEffect.h",
-   "tests": "https://moonmodules.org/MoonLight/reference/tests/unit-tests.html#distortionwaveseffect"
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#distortionwaveseffect"
   },
   "FireEffect": {
    "line": "A Fire2012-style heat field: sparks at the base rise and cool through the active palette, coldest at its low end.",
@@ -776,7 +876,7 @@
    "dim": 2,
    "doc": "light/effects.md#fire",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/FireEffect.h",
-   "tests": "https://moonmodules.org/MoonLight/reference/tests/unit-tests.html#fireeffect"
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#fireeffect"
   },
   "FixedRectangleEffect": {
    "line": "A solid color filling a positioned box within the grid, with an optional alternating-white checker on the box's pixels.",
@@ -823,7 +923,7 @@
    "dim": 3,
    "doc": "light/effects.md#fixedrectangle",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/FixedRectangleEffect.h",
-   "tests": "https://moonmodules.org/MoonLight/reference/tests/unit-tests.html#fixedrectangleeffect"
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#fixedrectangleeffect"
   },
   "FreqMatrixEffect": {
    "line": "A 1D scrolling frequency display: each frame shifts the strip and injects a new pixel at one end.",
@@ -855,7 +955,7 @@
    "dim": 1,
    "doc": "light/effects.md#freqmatrix",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/FreqMatrixEffect.h",
-   "tests": "https://moonmodules.org/MoonLight/reference/tests/unit-tests.html#freqmatrixeffect"
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#freqmatrixeffect"
   },
   "FreqSawsEffect": {
    "line": "Audio-reactive sawtooth waves: each column maps to a frequency band whose loudness drives a per-band oscillator speed.",
@@ -890,7 +990,7 @@
    "dim": 2,
    "doc": "light/effects.md#freqsaws",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/FreqSawsEffect.h",
-   "tests": "https://moonmodules.org/MoonLight/reference/tests/unit-tests.html#freqsawseffect"
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#freqsawseffect"
   },
   "FseqPlayerEffect": {
    "line": "Plays FSEQ animation files from the filesystem onto this effect's layer, with a playlist and the standard transport controls.",
@@ -946,7 +1046,7 @@
    "dim": 3,
    "doc": "light/effects.md#fseqplayer",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/FseqPlayerEffect.h",
-   "tests": "https://moonmodules.org/MoonLight/reference/tests/unit-tests.html#fseqplayereffect"
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#fseqplayereffect"
   },
   "GameOfLifeEffect": {
    "line": "Conway's cellular automaton generalized to 2D and 3D, with selectable rulesets and a custom `B#/S#` rule.",
@@ -1009,7 +1109,7 @@
    "dim": 3,
    "doc": "light/effects.md#gameoflife",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/GameOfLifeEffect.h",
-   "tests": "https://moonmodules.org/MoonLight/reference/tests/unit-tests.html#gameoflifeeffect"
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#gameoflifeeffect"
   },
   "GEQEffect": {
    "line": "A flat graphic equalizer: the 16 audio bands rise as vertical bars from the bottom.",
@@ -1035,7 +1135,7 @@
    "dim": 2,
    "doc": "light/effects.md#geq",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/GEQEffect.h",
-   "tests": "https://moonmodules.org/MoonLight/reference/tests/unit-tests.html#geqeffect"
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#geqeffect"
   },
   "GEQ3DEffect": {
    "line": "A 3D-perspective graphic equalizer: audio bands rise as bars with faked depth.",
@@ -1067,7 +1167,7 @@
    "dim": 2,
    "doc": "light/effects.md#geq3d",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/GEQ3DEffect.h",
-   "tests": "https://moonmodules.org/MoonLight/reference/tests/unit-tests.html#geq3deffect"
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#geq3deffect"
   },
   "LavaLampEffect": {
    "line": "Three slow metaball blobs that rise and merge, colored by the active palette.",
@@ -1139,7 +1239,7 @@
    "dim": 2,
    "doc": "light/effects.md#lissajous",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/LissajousEffect.h",
-   "tests": "https://moonmodules.org/MoonLight/reference/tests/unit-tests.html#lissajouseffect"
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#lissajouseffect"
   },
   "MetaballsEffect": {
    "line": "Blobs orbit and merge smoothly, where the summed field of all balls picks each pixel's color and brightness.",
@@ -1165,7 +1265,7 @@
    "dim": 2,
    "doc": "light/effects.md#metaballs",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/MetaballsEffect.h",
-   "tests": "https://moonmodules.org/MoonLight/reference/tests/unit-tests.html#metaballseffect"
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#metaballseffect"
   },
   "MoonLiveEffect": {
    "line": "An effect written as text on the running device, compiled to native code on the next tick.",
@@ -1197,7 +1297,13 @@
     },
     "mapped_by": {
      "line": "Whether the sender or the receiver maps the frame onto the wiring.",
-     "more": "**receiver**: frames arrive row by row and this board applies its wiring. **sender**: a [NetworkSend](https://moonmodules.org/MoonLight/moonmodules/light/drivers.html#networksend) sends wiring order, keeping byte order, brightness 255 and the linear curve."
+     "more": "**receiver**: frames arrive row by row and this board applies its wiring. **sender**: a [NetworkSend](https://moonmodules.org/MoonLight/moonmodules/light/drivers.html#networksend) sends wiring order, keeping byte order, brightness 255 and the linear curve.",
+     "tests": [
+      {
+       "title": "NetworkReceive two boards",
+       "url": "https://moonmodules.org/MoonLight/reference/tests.html#networkreceiveeffect:live:scenario_NetworkReceive_two_boards"
+      }
+     ]
     },
     "packets_per_s": {
      "line": "Packets received in the last second, read-only."
@@ -1211,7 +1317,7 @@
    "dim": 3,
    "doc": "light/effects.md#networkreceive",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/NetworkReceiveEffect.h",
-   "tests": "https://moonmodules.org/MoonLight/reference/tests/unit-tests.html#networkreceiveeffect"
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#networkreceiveeffect"
   },
   "NoiseEffect": {
    "line": "A gradient-noise field indexed straight into the palette, the plainest way to turn noise into light.",
@@ -1235,7 +1341,7 @@
    "dim": 3,
    "doc": "light/effects.md#noise",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/NoiseEffect.h",
-   "tests": "https://moonmodules.org/MoonLight/reference/tests/unit-tests.html#noiseeffect"
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#noiseeffect"
   },
   "NoiseMeterEffect": {
    "line": "An audio VU meter rendered as a noise bar, where the volume sets how many rows light from the bottom.",
@@ -1255,7 +1361,7 @@
    "dim": 1,
    "doc": "light/effects.md#noisemeter",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/NoiseMeterEffect.h",
-   "tests": "https://moonmodules.org/MoonLight/reference/tests/unit-tests.html#noisemetereffect"
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#noisemetereffect"
   },
   "PaintBrushEffect": {
    "line": "Audio-reactive brush strokes: lines whose 3D endpoints oscillate on the beat over a fading field.",
@@ -1287,7 +1393,7 @@
    "dim": 3,
    "doc": "light/effects.md#paintbrush",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/PaintBrushEffect.h",
-   "tests": "https://moonmodules.org/MoonLight/reference/tests/unit-tests.html#paintbrusheffect"
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#paintbrusheffect"
   },
   "ParticlesEffect": {
    "line": "A swarm of drifting particles with persistent fading trails.",
@@ -1313,7 +1419,7 @@
    "dim": 2,
    "doc": "light/effects.md#particles",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/ParticlesEffect.h",
-   "tests": "https://moonmodules.org/MoonLight/reference/tests/unit-tests.html#particleseffect"
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#particleseffect"
   },
   "PictureEffect": {
    "line": "The active [Picture service](https://moonmodules.org/MoonLight/moonmodules/core/services.html#picture)'s picture on the layer, so a picture of any size shows on a layout of any size.",
@@ -1345,7 +1451,7 @@
    "dim": 2,
    "doc": "light/effects.md#picture",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/PictureEffect.h",
-   "tests": "https://moonmodules.org/MoonLight/reference/tests/unit-tests.html#pictureeffect"
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#pictureeffect"
   },
   "PlasmaEffect": {
    "line": "Summed sine waves on orthogonal and diagonal axes make large rolling blobs, in 3D on volumetric layouts.",
@@ -1371,7 +1477,7 @@
    "dim": 3,
    "doc": "light/effects.md#plasma",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/PlasmaEffect.h",
-   "tests": "https://moonmodules.org/MoonLight/reference/tests/unit-tests.html#plasmaeffect"
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#plasmaeffect"
   },
   "PraxisEffect": {
    "line": "An algorithmic palette pattern driven by two beat oscillators, a macro and a micro mutator, whose frequencies and ranges reshape the hue field over time.",
@@ -1406,7 +1512,7 @@
    "dim": 2,
    "doc": "light/effects.md#praxis",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/PraxisEffect.h",
-   "tests": "https://moonmodules.org/MoonLight/reference/tests/unit-tests.html#praxiseffect"
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#praxiseffect"
   },
   "PulseEffect": {
    "line": "Shells expand from a drifting origin, one per beat: a pair of fronts on a strip, a ring on a panel, a sphere in a volume.",
@@ -1448,7 +1554,21 @@
    "image": "https://moonmodules.org/MoonLight/assets/light/effects/RainbowEffect.gif",
    "controls": {
     "speed": {
-     "line": "Animation BPM: one full hue cycle per beat."
+     "line": "Animation BPM: one full hue cycle per beat.",
+     "tests": [
+      {
+       "title": "Control a palette preset changes only the palette",
+       "url": "https://moonmodules.org/MoonLight/reference/tests.html#controlmodule:scenario:scenario_Control_a_palette_preset_changes_only_the_palette"
+      },
+      {
+       "title": "Effects teardown under a running pipeline",
+       "url": "https://moonmodules.org/MoonLight/reference/tests.html#uncategorized:scenario:scenario_Effects_teardown_under_a_running_pipeline"
+      },
+      {
+       "title": "State one document adds an effect with its controls",
+       "url": "https://moonmodules.org/MoonLight/reference/tests.html#httpservermodule:scenario:scenario_State_one_document_adds_an_effect_with_its_controls"
+      }
+     ]
     }
    },
    "role": "effect",
@@ -1456,7 +1576,7 @@
    "dim": 2,
    "doc": "light/effects.md#rainbow",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/RainbowEffect.h",
-   "tests": "https://moonmodules.org/MoonLight/reference/tests/unit-tests.html#rainboweffect"
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#rainboweffect"
   },
   "RandomEffect": {
    "line": "Lights one random light per frame in a random palette color over a fading background: a sparse, palette-tinted sparkle.",
@@ -1472,7 +1592,7 @@
    "dim": 3,
    "doc": "light/effects.md#random",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/RandomEffect.h",
-   "tests": "https://moonmodules.org/MoonLight/reference/tests/unit-tests.html#randomeffect"
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#randomeffect"
   },
   "RingsEffect": {
    "line": "Expanding concentric rings from random centers, with additive overlap and calm defaults.",
@@ -1542,7 +1662,7 @@
    "dim": 3,
    "doc": "light/effects.md#rubikscube",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/RubiksCubeEffect.h",
-   "tests": "https://moonmodules.org/MoonLight/reference/tests/unit-tests.html#rubikscubeeffect"
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#rubikscubeeffect"
   },
   "SineEffect": {
    "line": "Red, green and blue each follow a sine along one axis at a third of a turn apart: a glowing, scrolling color box.",
@@ -1564,7 +1684,7 @@
    "dim": 3,
    "doc": "light/effects.md#sine",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/SineEffect.h",
-   "tests": "https://moonmodules.org/MoonLight/reference/tests/unit-tests.html#sineeffect"
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#sineeffect"
   },
   "SolidEffect": {
    "line": "A flat fill with five color modes: a plain RGB(W) color, the palette spread across the lights, one RMS-averaged palette color, or the palette banded along rows or columns.",
@@ -1601,7 +1721,7 @@
    "dim": 3,
    "doc": "light/effects.md#solid",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/SolidEffect.h",
-   "tests": "https://moonmodules.org/MoonLight/reference/tests/unit-tests.html#solideffect"
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#solideffect"
   },
   "SdfShapesEffect": {
    "line": "A circle and a box orbit and melt into each other, drawn as signed distance fields rather than outlines.",
@@ -1647,22 +1767,46 @@
      "line": "Noise cells across the grid; low is broad, high is fine."
     },
     "layers": {
-     "line": "How many fields are composited, and the main cost knob."
+     "line": "How many fields are composited, and the main cost knob.",
+     "tests": [
+      {
+       "title": "Aurora fps",
+       "url": "https://moonmodules.org/MoonLight/reference/tests.html#auroraeffect:live:scenario_Aurora_fps"
+      }
+     ]
     },
     "warp": {
-     "line": "How far the field displaces its own sample angle."
+     "line": "How far the field displaces its own sample angle.",
+     "tests": [
+      {
+       "title": "Aurora fps",
+       "url": "https://moonmodules.org/MoonLight/reference/tests.html#auroraeffect:live:scenario_Aurora_fps"
+      }
+     ]
     },
     "twist": {
      "line": "How much the radius shears the angle, giving the curtains their lean."
     },
     "segments": {
-     "line": "Kaleidoscope wedges; 1 leaves the composition unfolded."
+     "line": "Kaleidoscope wedges; 1 leaves the composition unfolded.",
+     "tests": [
+      {
+       "title": "Aurora fps",
+       "url": "https://moonmodules.org/MoonLight/reference/tests.html#auroraeffect:live:scenario_Aurora_fps"
+      }
+     ]
     },
     "contrast": {
      "line": "How much of the field lights; low is cloud, high is sharp."
     },
     "octaves": {
-     "line": "Detail within each layer, multiplying the cost knob."
+     "line": "Detail within each layer, multiplying the cost knob.",
+     "tests": [
+      {
+       "title": "Aurora fps",
+       "url": "https://moonmodules.org/MoonLight/reference/tests.html#auroraeffect:live:scenario_Aurora_fps"
+      }
+     ]
     }
    },
    "role": "effect",
@@ -1670,7 +1814,7 @@
    "dim": 3,
    "doc": "light/effects.md#aurora",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/AuroraEffect.h",
-   "tests": "https://moonmodules.org/MoonLight/reference/tests/unit-tests.html#auroraeffect"
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#auroraeffect"
   },
   "PolarNoiseEffect": {
    "line": "A warped noise field addressed by angle and radius, folded into a kaleidoscope.",
@@ -1754,7 +1898,13 @@
    "image": "https://moonmodules.org/MoonLight/assets/light/effects/FluidEffect.gif",
    "controls": {
     "jets": {
-     "line": "How many places light is poured in."
+     "line": "How many places light is poured in.",
+     "tests": [
+      {
+       "title": "Fluid solver",
+       "url": "https://moonmodules.org/MoonLight/reference/tests.html#fluideffect:live:scenario_Fluid_solver"
+      }
+     ]
     },
     "force": {
      "line": "How hard each jet pushes the medium."
@@ -1766,10 +1916,22 @@
      "line": "How much the medium drags on itself; high is syrup, low smoke."
     },
     "persistence": {
-     "line": "How long dye survives, as a half-life."
+     "line": "How long dye survives, as a half-life.",
+     "tests": [
+      {
+       "title": "Fluid solver",
+       "url": "https://moonmodules.org/MoonLight/reference/tests.html#fluideffect:live:scenario_Fluid_solver"
+      }
+     ]
     },
     "iterations": {
-     "line": "Pressure-solve effort, and the cost knob."
+     "line": "Pressure-solve effort, and the cost knob.",
+     "tests": [
+      {
+       "title": "Fluid solver",
+       "url": "https://moonmodules.org/MoonLight/reference/tests.html#fluideffect:live:scenario_Fluid_solver"
+      }
+     ]
     }
    },
    "role": "effect",
@@ -1777,7 +1939,7 @@
    "dim": 3,
    "doc": "light/effects.md#fluid",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/FluidEffect.h",
-   "tests": "https://moonmodules.org/MoonLight/reference/tests/unit-tests.html#fluid"
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#fluid"
   },
   "NebulaEffect": {
    "line": "A noise field decides where light is born, a curl flow decides where it goes, and the cloud keeps folding into itself.",
@@ -1804,7 +1966,13 @@
      "line": "How long light survives in the flow, as a half-life."
     },
     "octaves": {
-     "line": "Detail within the field, and its cost knob."
+     "line": "Detail within the field, and its cost knob.",
+     "tests": [
+      {
+       "title": "Layers stack and blend live",
+       "url": "https://moonmodules.org/MoonLight/reference/tests.html#effects:scenario:scenario_Layers_stack_and_blend_live"
+      }
+     ]
     },
     "fieldScale": {
      "line": "Compute the field at a fraction of the grid and stretch it."
@@ -1846,7 +2014,7 @@
    "dim": 3,
    "doc": "light/effects.md#trails",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/TrailsEffect.h",
-   "tests": "https://moonmodules.org/MoonLight/reference/tests/unit-tests.html#trailseffect"
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#trailseffect"
   },
   "ColorTrailsEffect": {
    "line": "Emitters pouring color into a flow that carries and folds it.",
@@ -1887,7 +2055,7 @@
    "dim": 3,
    "doc": "light/effects.md#colortrails",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/ColorTrailsEffect.h",
-   "tests": "https://moonmodules.org/MoonLight/reference/tests/unit-tests.html#colortrailseffect"
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#colortrailseffect"
   },
   "TunnelEffect": {
    "line": "A texture mapped onto the inside of an infinite tube, so the viewer appears to fly down it forever.",
@@ -2123,7 +2291,7 @@
    "dim": 2,
    "doc": "light/effects.md#fixedpoint",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/FixedPointEffect.h",
-   "tests": "https://moonmodules.org/MoonLight/reference/tests/unit-tests.html#fixedpointeffect"
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#fixedpointeffect"
   },
   "MovingHeadEffect": {
    "line": "Aims a rig of moving heads as one instrument, where `formation` decides how the heads relate.",
@@ -2172,7 +2340,7 @@
    "dim": 3,
    "doc": "light/effects.md#movinghead",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/MovingHeadEffect.h",
-   "tests": "https://moonmodules.org/MoonLight/reference/tests/unit-tests.html#movingheadeffect"
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#movingheadeffect"
   },
   "FlyingToastersEffect": {
    "line": "The classic screensaver on a light wall: chrome toasters with flapping wings and slices of toast drift diagonally across the dark, forever.",
@@ -2241,7 +2409,7 @@
    "dim": 2,
    "doc": "light/effects.md#spaceinvaders",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/SpaceInvadersEffect.h",
-   "tests": "https://moonmodules.org/MoonLight/reference/tests/unit-tests.html#spaceinvaderseffect"
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#spaceinvaderseffect"
   },
   "SpriteFountainEffect": {
    "line": "A fountain that throws the project's whole sprite cast, launched from the floor on a sweeping nozzle and falling back under gravity.",
@@ -2312,7 +2480,7 @@
    "dim": 2,
    "doc": "light/effects.md#pong",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/PongEffect.h",
-   "tests": "https://moonmodules.org/MoonLight/reference/tests/unit-tests.html#pongeffect"
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#pongeffect"
   },
   "BreakoutEffect": {
    "line": "A paddle knocking down a wall of bricks, the attract mode of the 1976 original where the machine plays itself.",
@@ -2347,7 +2515,7 @@
    "dim": 2,
    "doc": "light/effects.md#breakout",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/BreakoutEffect.h",
-   "tests": "https://moonmodules.org/MoonLight/reference/tests/unit-tests.html#breakouteffect"
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#breakouteffect"
   },
   "BallpitEffect": {
    "line": "Falling balls that pile up and shove each other aside.",
@@ -2487,7 +2655,7 @@
    "dim": 3,
    "doc": "light/effects.md#spheremove",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/SphereMoveEffect.h",
-   "tests": "https://moonmodules.org/MoonLight/reference/tests/unit-tests.html#spheremoveeffect"
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#spheremoveeffect"
   },
   "SpiralEffect": {
    "line": "A rotating spiral built from each pixel's angle and distance from the center.",
@@ -2535,7 +2703,7 @@
    "dim": 2,
    "doc": "light/effects.md#starfield",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/StarFieldEffect.h",
-   "tests": "https://moonmodules.org/MoonLight/reference/tests/unit-tests.html#starfieldeffect"
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#starfieldeffect"
   },
   "StarSkyEffect": {
    "line": "Twinkling stars at random light positions, each fading in and out independently over a dark background.",
@@ -2558,7 +2726,7 @@
    "dim": 3,
    "doc": "light/effects.md#starsky",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/StarSkyEffect.h",
-   "tests": "https://moonmodules.org/MoonLight/reference/tests/unit-tests.html#starskyeffect"
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#starskyeffect"
   },
   "TetrixEffect": {
    "line": "Falling Tetris-style blocks: each column drops a brick that lands on the growing stack, fills the column, then clears and restarts.",
@@ -2581,7 +2749,7 @@
    "dim": 2,
    "doc": "light/effects.md#tetrix",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/TetrixEffect.h",
-   "tests": "https://moonmodules.org/MoonLight/reference/tests/unit-tests.html#tetrixeffect"
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#tetrixeffect"
   },
   "TextEffect": {
    "line": "Renders a multi-line string in a bitmap font, static by default or as a wrapping marquee.",
@@ -2609,7 +2777,7 @@
    "dim": 2,
    "doc": "light/effects.md#text",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/TextEffect.h",
-   "tests": "https://moonmodules.org/MoonLight/reference/tests/unit-tests.html#texteffect"
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#texteffect"
   },
   "WaveEffect": {
    "line": "An oscilloscope waveform scrolls across the grid with a fading trail.",
@@ -2631,7 +2799,7 @@
    "dim": 2,
    "doc": "light/effects.md#wave",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/WaveEffect.h",
-   "tests": "https://moonmodules.org/MoonLight/reference/tests/unit-tests.html#waveeffect"
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#waveeffect"
   },
   "BlockModifier": {
    "line": "Expands a 1D effect into concentric square rings: its position along the strip becomes the ring, so a gradient draws nested squares.",
@@ -2644,7 +2812,7 @@
    "kind": "static",
    "doc": "light/modifiers.md#block",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/modifiers/BlockModifier.h",
-   "tests": "https://moonmodules.org/MoonLight/reference/tests/unit-tests.html#blockmodifier"
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#blockmodifier"
   },
   "CheckerboardModifier": {
    "line": "Masks the layer in a checkerboard: the lights on the \"off\" squares stay dark, the rest show the effect unchanged.",
@@ -2652,7 +2820,13 @@
    "image": "https://moonmodules.org/MoonLight/assets/light/modifiers/CheckerboardModifier.gif",
    "controls": {
     "size": {
-     "line": "The edge of a checker square, in lights."
+     "line": "The edge of a checker square, in lights.",
+     "tests": [
+      {
+       "title": "Modifiers reshape the mapping",
+       "url": "https://moonmodules.org/MoonLight/reference/tests.html#uncategorized:scenario:scenario_Modifiers_reshape_the_mapping"
+      }
+     ]
     },
     "invert": {
      "line": "Swap which squares show the effect and which stay dark."
@@ -2664,7 +2838,7 @@
    "kind": "static",
    "doc": "light/modifiers.md#checkerboard",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/modifiers/CheckerboardModifier.h",
-   "tests": "https://moonmodules.org/MoonLight/reference/tests/unit-tests.html#checkerboardmodifier"
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#checkerboardmodifier"
   },
   "MoonLiveModifier": {
    "line": "The coordinate transform written as text on the running device: mirror the pattern, shift it, swap its axes.",
@@ -2695,7 +2869,7 @@
    "kind": "static",
    "doc": "light/modifiers.md#moonlive",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/moonlive/MoonLiveModifier.h",
-   "tests": "https://moonmodules.org/MoonLight/reference/tests/unit-tests.html#moonlivemodifier"
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#moonlivemodifier"
   },
   "CircleModifier": {
    "line": "Expands a 1D effect into concentric circular rings: its position along the strip becomes the radius, so a gradient draws nested circles.",
@@ -2708,7 +2882,7 @@
    "kind": "static",
    "doc": "light/modifiers.md#circle",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/modifiers/CircleModifier.h",
-   "tests": "https://moonmodules.org/MoonLight/reference/tests/unit-tests.html#circlemodifier"
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#circlemodifier"
   },
   "MirrorModifier": {
    "line": "Folds the far half of the box back onto the near half, mirroring the image across its center on each axis you choose.",
@@ -2719,7 +2893,13 @@
      "line": "Mirror across the center along x."
     },
     "mirrorY": {
-     "line": "Mirror across the center along y."
+     "line": "Mirror across the center along y.",
+     "tests": [
+      {
+       "title": "Modifiers reshape the mapping",
+       "url": "https://moonmodules.org/MoonLight/reference/tests.html#uncategorized:scenario:scenario_Modifiers_reshape_the_mapping"
+      }
+     ]
     },
     "mirrorZ": {
      "line": "Mirror across the center along z."
@@ -2731,7 +2911,7 @@
    "kind": "static",
    "doc": "light/modifiers.md#mirror",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/modifiers/MirrorModifier.h",
-   "tests": "https://moonmodules.org/MoonLight/reference/tests/unit-tests.html#mirrormodifier"
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#mirrormodifier"
   },
   "MultiplyModifier": {
    "line": "Tiles the image across the box, a number of times per axis, and can mirror every other tile into a kaleidoscope.",
@@ -2739,7 +2919,13 @@
    "image": "https://moonmodules.org/MoonLight/assets/light/modifiers/MultiplyModifier.gif",
    "controls": {
     "multiplyX": {
-     "line": "Tiles along x, one meaning none."
+     "line": "Tiles along x, one meaning none.",
+     "tests": [
+      {
+       "title": "Modifiers reshape the mapping",
+       "url": "https://moonmodules.org/MoonLight/reference/tests.html#uncategorized:scenario:scenario_Modifiers_reshape_the_mapping"
+      }
+     ]
     },
     "multiplyY": {
      "line": "Tiles along y, one meaning none."
@@ -2748,7 +2934,13 @@
      "line": "Tiles along z, one meaning none."
     },
     "mirrorX": {
-     "line": "Reflect every other tile along x."
+     "line": "Reflect every other tile along x.",
+     "tests": [
+      {
+       "title": "Modifiers reshape the mapping",
+       "url": "https://moonmodules.org/MoonLight/reference/tests.html#uncategorized:scenario:scenario_Modifiers_reshape_the_mapping"
+      }
+     ]
     },
     "mirrorY": {
      "line": "Reflect every other tile along y."
@@ -2763,7 +2955,7 @@
    "kind": "static",
    "doc": "light/modifiers.md#multiply",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/modifiers/MultiplyModifier.h",
-   "tests": "https://moonmodules.org/MoonLight/reference/tests/unit-tests.html#multiplymodifier"
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#multiplymodifier"
   },
   "PinwheelModifier": {
    "line": "Remaps the grid into petals around the center, so a line or a 2D effect turns into a rotating flower or spokes.",
@@ -2793,7 +2985,7 @@
    "kind": "static",
    "doc": "light/modifiers.md#pinwheel",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/modifiers/PinwheelModifier.h",
-   "tests": "https://moonmodules.org/MoonLight/reference/tests/unit-tests.html#pinwheelmodifier"
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#pinwheelmodifier"
   },
   "RandomMapModifier": {
    "line": "Moves every light to another, each one exactly once, and reshuffles on a beat: the arrangement scrambles while the content stays.",
@@ -2810,7 +3002,7 @@
    "kind": "animated",
    "doc": "light/modifiers.md#randommap",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/modifiers/RandomMapModifier.h",
-   "tests": "https://moonmodules.org/MoonLight/reference/tests/unit-tests.html#randommapmodifier"
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#randommapmodifier"
   },
   "RegionModifier": {
    "line": "Crops the layer to a rectangle given in percentages of each axis, so it holds when the layout is resized; outside it is dark.",
@@ -2842,7 +3034,7 @@
    "kind": "static",
    "doc": "light/modifiers.md#region",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/modifiers/RegionModifier.h",
-   "tests": "https://moonmodules.org/MoonLight/reference/tests/unit-tests.html#regionmodifier"
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#regionmodifier"
   },
   "RippleXZModifier": {
    "line": "Collapses an axis to a single plane, so an effect drawn along the other axes ripples across the whole box.",
@@ -2865,7 +3057,7 @@
    "kind": "static",
    "doc": "light/modifiers.md#ripplexz",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/modifiers/RippleXZModifier.h",
-   "tests": "https://moonmodules.org/MoonLight/reference/tests/unit-tests.html#ripplexzmodifier"
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#ripplexzmodifier"
   },
   "RotateModifier": {
    "line": "Turns the 2D image around its center, continuously, at the speed you set.",
@@ -2882,7 +3074,7 @@
    "kind": "dynamic",
    "doc": "light/modifiers.md#rotate",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/modifiers/RotateModifier.h",
-   "tests": "https://moonmodules.org/MoonLight/reference/tests/unit-tests.html#rotatemodifier"
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#rotatemodifier"
   },
   "TransposeModifier": {
    "line": "Swaps a pair of axes and can flip each one, so the image rotates or mirrors without the effect redrawing.",
@@ -2914,7 +3106,7 @@
    "kind": "static",
    "doc": "light/modifiers.md#transpose",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/modifiers/TransposeModifier.h",
-   "tests": "https://moonmodules.org/MoonLight/reference/tests/unit-tests.html#transposemodifier"
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#transposemodifier"
   },
   "HueDriver": {
    "line": "Drives Philips Hue bulbs as pixels: each color bulb in the driver's window becomes one pixel, pushed to the bridge over its HTTP API.",
@@ -2949,7 +3141,7 @@
    "dim": 0,
    "doc": "light/drivers.md#hue",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/drivers/HueDriver.h",
-   "tests": "https://moonmodules.org/MoonLight/reference/tests/unit-tests.html#huedriver"
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#huedriver"
   },
   "NetworkSendDriver": {
    "line": "Streams the buffer over UDP as Art-Net, E1.31 or DDP, its packets paced so receivers keep up, to Falcon and Advatek controllers, xLights and LedFx.",
@@ -2980,11 +3172,27 @@
      "line": "The profile name an older config saved, read once and then emptied."
     },
     "protocol": {
-     "line": "The wire protocol: Art-Net, E1.31 or DDP; the port follows."
+     "line": "The wire protocol: Art-Net, E1.31 or DDP; the port follows.",
+     "tests": [
+      {
+       "title": "NetworkReceive two boards",
+       "url": "https://moonmodules.org/MoonLight/reference/tests.html#networkreceiveeffect:live:scenario_NetworkReceive_two_boards"
+      },
+      {
+       "title": "NetworkSend one sender many receivers",
+       "url": "https://moonmodules.org/MoonLight/reference/tests.html#networksenddriver:live:scenario_NetworkSend_one_sender_many_receivers"
+      }
+     ]
     },
     "addressing": {
      "line": "How packets travel: unicast, Art-Net broadcast or E1.31 multicast.",
-     "more": "Art-Net 4 requires unicast; broadcast loads every host. E1.31 `multicast` needs [IGMP snooping](https://moonmodules.org/MoonLight/explanation/architecture/moonlight.html#multicast-and-igmp-snooping), and the status says when it is dropped."
+     "more": "Art-Net 4 requires unicast; broadcast loads every host. E1.31 `multicast` needs [IGMP snooping](https://moonmodules.org/MoonLight/explanation/architecture/moonlight.html#multicast-and-igmp-snooping), and the status says when it is dropped.",
+     "tests": [
+      {
+       "title": "NetworkSend one sender many receivers",
+       "url": "https://moonmodules.org/MoonLight/reference/tests.html#networksenddriver:live:scenario_NetworkSend_one_sender_many_receivers"
+      }
+     ]
     },
     "hosts": {
      "line": "Receiver addresses or names, in fan-out order; blank idles.",
@@ -3036,14 +3244,20 @@
    "image": "https://moonmodules.org/MoonLight/assets/light/drivers/PreviewDriver.png",
    "controls": {
     "targetFps": {
-     "line": "The rate the preview aims for: lower for detail, raise for smoothness."
+     "line": "The rate the preview aims for: lower for detail, raise for smoothness.",
+     "tests": [
+      {
+       "title": "Effects teardown under a running pipeline",
+       "url": "https://moonmodules.org/MoonLight/reference/tests.html#uncategorized:scenario:scenario_Effects_teardown_under_a_running_pipeline"
+      }
+     ]
     }
    },
    "role": "driver",
    "dim": 0,
    "doc": "light/drivers.md#preview",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/drivers/PreviewDriver.h",
-   "tests": "https://moonmodules.org/MoonLight/reference/tests/unit-tests.html#previewdriver"
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#previewdriver"
   },
   "NdiDriver": {
    "line": "Publishes the layer as an NDI video source that OBS, Resolume, TouchDesigner or any NDI receiver finds by name on the network.",
@@ -3052,7 +3266,7 @@
    "guide": [
     {
      "title": "The NDI runtime",
-     "text": "You install it yourself; without it the driver says so and nothing else changes. The steps: [installing the NDI runtime](https://moonmodules.org/MoonLight/how-to/watching-the-output.html#installing-the-ndi-runtime)."
+     "text": "You install it yourself; without it the driver says so and nothing else changes. The steps: [installing the NDI runtime](https://moonmodules.org/MoonLight/reference/watching-the-output.html#installing-the-ndi-runtime)."
     },
     {
      "title": "Receivers",
@@ -3060,7 +3274,7 @@
     },
     {
      "title": "Status line",
-     "text": "| It says | It means |\n|---|---|\n| `NDI runtime not installed` | Install it, per the how-to page |\n| `could not create the NDI source` | The runtime is there but refused, usually a name clash with another source |\n| `sending <w>x<h> at <n> fps` | Live; look for it in your receiver |"
+     "text": "| It says | It means |\n|---|---|\n| `NDI runtime not installed` | Install it: [Watch the output as video](https://moonmodules.org/MoonLight/moonwalk.html#watch-output) |\n| `could not create the NDI source` | The runtime is there but refused, usually a name clash with another source |\n| `sending <w>x<h> at <n> fps` | Live; look for it in your receiver |"
     }
    ],
    "image": "https://moonmodules.org/MoonLight/assets/light/drivers/NdiDriver.png",
@@ -3093,7 +3307,7 @@
    "dim": 0,
    "doc": "light/drivers.md#ndi",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/drivers/NdiDriver.h",
-   "tests": "https://moonmodules.org/MoonLight/reference/tests/unit-tests.html#ndidriver"
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#ndidriver"
   },
   "HlsDriver": {
    "line": "Streams the layer as H.264 over HLS from the device's own HTTP server, which a TV, VLC or a browser can play.",
@@ -3102,7 +3316,7 @@
    "guide": [
     {
      "title": "ffmpeg",
-     "text": "It runs on the desktop, where you install ffmpeg yourself and then open the stream ([how-to](https://moonmodules.org/MoonLight/how-to/watching-the-output.html#installing-ffmpeg))."
+     "text": "It runs on the desktop, where you install ffmpeg yourself and then open the stream ([Watching the output](https://moonmodules.org/MoonLight/reference/watching-the-output.html#installing-ffmpeg))."
     },
     {
      "title": "On the ESP32-P4",
@@ -3148,7 +3362,7 @@
    "dim": 0,
    "doc": "light/drivers.md#hls",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/drivers/HlsDriver.h",
-   "tests": "https://moonmodules.org/MoonLight/reference/tests/unit-tests.html#hlsdriver"
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#hlsdriver"
   },
   "RtspDriver": {
    "line": "Serves the layer as an H.264 stream a player pulls over RTSP, with a fraction of the delay HLS carries.",
@@ -3157,11 +3371,11 @@
    "guide": [
     {
      "title": "Playing it",
-     "text": "Open the `url` in VLC or ffplay ([how-to](https://moonmodules.org/MoonLight/how-to/watching-the-output.html#playing-an-rtsp-stream)). The second of RTSP and HLS to start reports that the encoder is in use."
+     "text": "Open the `url` in VLC or ffplay ([Watching the output](https://moonmodules.org/MoonLight/reference/watching-the-output.html#playing-an-rtsp-stream)). The second of RTSP and HLS to start reports that the encoder is in use."
     },
     {
      "title": "One viewer at a time",
-     "text": "A new connection takes the session over, and the displaced viewer sees its connection close. A network that blocks the UDP port the viewer names leaves the stream silent ([how-to](https://moonmodules.org/MoonLight/how-to/watching-the-output.html#when-an-rtsp-stream-stays-silent))."
+     "text": "A new connection takes the session over, and the displaced viewer sees its connection close. A network that blocks the UDP port the viewer names leaves the stream silent ([Watching the output](https://moonmodules.org/MoonLight/reference/watching-the-output.html#when-an-rtsp-stream-stays-silent))."
     },
     {
      "title": "The delay that remains",
@@ -3210,7 +3424,7 @@
    "guide": [
     {
      "title": "Why 1 Gbit",
-     "text": "The cards need 1000 Mbps for wire time, not bandwidth: they latch on the sync frame, so a whole frame must arrive inside the inter-frame window. At 100 Mbit expect tearing or wrong rows; the driver warns but still sends ([how-to](https://moonmodules.org/MoonLight/how-to/panel-cards.html#the-one-hardware-fact-that-decides-everything))."
+     "text": "The cards need 1000 Mbps for wire time, not bandwidth: they latch on the sync frame, so a whole frame must arrive inside the inter-frame window. At 100 Mbit expect tearing or wrong rows; the driver warns but still sends ([Panel cards](https://moonmodules.org/MoonLight/reference/hardware/panel-cards.html#the-one-hardware-fact-that-decides-everything))."
     }
    ],
    "image": "https://moonmodules.org/MoonLight/assets/light/drivers/PanelCardDriver.png",
@@ -3236,11 +3450,11 @@
     },
     "firmware": {
      "line": "The card firmware; a wrong one and the wall barely updates.",
-     "more": "v13 and newer acts on the second copy of brightness and sync, which go out twice; v12 and older on the first ([how-to](https://moonmodules.org/MoonLight/how-to/panel-cards.html#7-card-firmware-and-the-flicker))."
+     "more": "v13 and newer acts on the second copy of brightness and sync, which go out twice; v12 and older on the first ([Panel cards](https://moonmodules.org/MoonLight/reference/hardware/panel-cards.html#7-card-firmware-and-the-flicker))."
     },
     "interface": {
      "line": "The network adapter the frames go out on.",
-     "more": "`none (capture only)` records frames without sending. Sending needs root or `CAP_NET_RAW` on Linux, BPF on macOS, Npcap on Windows ([steps](https://moonmodules.org/MoonLight/how-to/panel-cards.html#6-from-a-desktop))."
+     "more": "`none (capture only)` records frames without sending. Sending needs root or `CAP_NET_RAW` on Linux, BPF on macOS, Npcap on Windows ([steps](https://moonmodules.org/MoonLight/reference/hardware/panel-cards.html#6-from-a-desktop))."
     },
     "start": {
      "line": "The first light of the shared buffer this driver reads."
@@ -3257,7 +3471,7 @@
    "dim": 0,
    "doc": "light/drivers.md#panelcard",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/drivers/PanelCardDriver.h",
-   "tests": "https://moonmodules.org/MoonLight/reference/tests/unit-tests.html#panelcarddriver"
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#panelcarddriver"
   },
   "Hub75Driver": {
    "line": "Drives HUB75 LED panels straight from the board's own pins, with no receiving card in between.",
@@ -3266,7 +3480,7 @@
    "guide": [
     {
      "title": "Which of the two paths",
-     "text": "A receiving card ([PanelCard](https://moonmodules.org/MoonLight/moonmodules/light/drivers.html#panelcard)) earns its place above roughly 16,384 pixels; below that this driver is the small end of the split. [The HUB75 how-to](https://moonmodules.org/MoonLight/how-to/hub75-panels.html#which-of-the-two-paths) has the choice."
+     "text": "A receiving card ([PanelCard](https://moonmodules.org/MoonLight/moonmodules/light/drivers.html#panelcard)) earns its place above roughly 16,384 pixels; below that this driver is the small end of the split. [HUB75 panels](https://moonmodules.org/MoonLight/reference/hardware/hub75-panels.html#which-of-the-two-paths) has the choice."
     }
    ],
    "image": "https://moonmodules.org/MoonLight/assets/light/drivers/Hub75Driver.png",
@@ -3289,7 +3503,7 @@
     },
     "board": {
      "line": "The board's wiring: picking one fills the fourteen pins, Custom keeps yours.",
-     "more": "A published map hides the pin rows, which stay bound. A pin on flash or PSRAM is refused. Boards and the R1/G1/B1 naming trap: [the how-to](https://moonmodules.org/MoonLight/how-to/hub75-panels.html#which-board)."
+     "more": "A published map hides the pin rows, which stay bound. A pin on flash or PSRAM is refused. Boards and the R1/G1/B1 naming trap: [HUB75 panels](https://moonmodules.org/MoonLight/reference/hardware/hub75-panels.html#which-board)."
     },
     "peripheral": {
      "line": "The silicon block that drives the panel, LCD_CAM or Parlio, where the chip has both.",
@@ -3317,7 +3531,7 @@
   },
   "RmtLedDriver": {
    "line": "Addressable WS2812B-class LEDs on a handful of strands, clocked by the chip's RMT peripheral.",
-   "summary": "The classic choice, and the one that needs no DMA peripheral: for more than a few strands see [ParallelLed](https://moonmodules.org/MoonLight/moonmodules/light/drivers.html#parallelled). Flicker on LEDs that should be off is signal integrity rather than firmware, and [the signal integrity playbook](https://moonmodules.org/MoonLight/how-to/led-signal-integrity.html) walks the checks.",
+   "summary": "The classic choice, and the one that needs no DMA peripheral: for more than a few strands see [ParallelLed](https://moonmodules.org/MoonLight/moonmodules/light/drivers.html#parallelled). Flicker on LEDs that should be off is signal integrity rather than firmware, and [the signal integrity playbook](https://moonmodules.org/MoonLight/reference/troubleshooting.html#stray-pixels-or-wrong-colors-on-lights-that-should-be-off) walks the checks.",
    "attribution": "[hpwit](https://github.com/hpwit), [WLED](https://github.com/wled/WLED), [FastLED](https://github.com/FastLED/FastLED)",
    "image": "https://moonmodules.org/MoonLight/assets/light/drivers/RmtLedDriver.png",
    "controls": {
@@ -3423,7 +3637,7 @@
    "dim": 0,
    "doc": "light/drivers.md#pwm-light",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/drivers/PwmLightDriver.h",
-   "tests": "https://moonmodules.org/MoonLight/reference/tests/unit-tests.html#pwmlightdriver"
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#pwmlightdriver"
   },
   "ParallelLedDriver": {
    "line": "WS2812B-class LEDs on up to 16 strands clocked out at once by a DMA peripheral, which makes a large wall possible.",
@@ -3432,7 +3646,7 @@
    "guide": [
     {
      "title": "Which peripheral",
-     "text": "Start with `i80`. Choose `MoonI80` for frames too big for memory or a pin expander, `Parlio` on a P4, `GPIO-DMA` on a Teensy 4.1. [The LED driver how-to](https://moonmodules.org/MoonLight/how-to/led-drivers.html#which-one) has the chips, limits and wiring."
+     "text": "Start with `i80`. Choose `MoonI80` for frames too big for memory or a pin expander, `Parlio` on a P4, `GPIO-DMA` on a Teensy 4.1. [LED drivers](https://moonmodules.org/MoonLight/reference/hardware/led-drivers.html#which-one) has the chips, limits and wiring."
     }
    ],
    "image": "https://moonmodules.org/MoonLight/assets/light/drivers/ParallelLedDriver.png",
@@ -3470,15 +3684,33 @@
      "line": "What one frame costs on the wire: the pipeline's headroom."
     },
     "peripheral": {
-     "line": "The DMA peripheral that clocks the strands out, filtered to what the chip supports."
+     "line": "The DMA peripheral that clocks the strands out, filtered to what the chip supports.",
+     "tests": [
+      {
+       "title": "peripheral switch",
+       "url": "https://moonmodules.org/MoonLight/reference/tests.html#parallelleddriver:live:scenario_peripheral_switch"
+      }
+     ]
     },
     "doubleBuffer": {
      "line": "Encode the next frame while this one clocks out, where supported.",
-     "more": "Leave it on: a tick costs the longer of encode and wire, not their sum, for one extra DMA buffer and 8 to 20 ms of latency. A board without room falls back to one buffer."
+     "more": "Leave it on: a tick costs the longer of encode and wire, not their sum, for one extra DMA buffer and 8 to 20 ms of latency. A board without room falls back to one buffer.",
+     "tests": [
+      {
+       "title": "peripheral switch",
+       "url": "https://moonmodules.org/MoonLight/reference/tests.html#parallelleddriver:live:scenario_peripheral_switch"
+      }
+     ]
     },
     "pinExpander": {
      "line": "A 74HCT595 per data pin: each pin then drives 8 strands.",
-     "more": "It buys pins, not memory: the frame grows eightfold, about 1.1 KB per light, up to 64 strands. `i80` stops at about 96 lights per strand, `MoonI80` drives 128."
+     "more": "It buys pins, not memory: the frame grows eightfold, about 1.1 KB per light, up to 64 strands. `i80` stops at about 96 lights per strand, `MoonI80` drives 128.",
+     "tests": [
+      {
+       "title": "peripheral switch",
+       "url": "https://moonmodules.org/MoonLight/reference/tests.html#parallelleddriver:live:scenario_peripheral_switch"
+      }
+     ]
     },
     "latchPin": {
      "line": "The 74HCT595 latch (RCLK) pin, needed with the expander."
@@ -3494,7 +3726,7 @@
     },
     "loopbackStrand": {
      "line": "Strand carrying the test pattern, expander mode only.",
-     "more": "Strand 0 is Q7, strand S is Q(7 - S%8): jumper it to `loopbackRxPin`. The '595 is 5 V: divide it ([how-to](https://moonmodules.org/MoonLight/how-to/led-drivers.html#testing-the-wire-with-the-loopback))."
+     "more": "Strand 0 is Q7, strand S is Q(7 - S%8): jumper it to `loopbackRxPin`. The '595 is 5 V: divide it ([LED drivers](https://moonmodules.org/MoonLight/reference/hardware/led-drivers.html#testing-the-wire-with-the-loopback))."
     },
     "loopbackIntrusive": {
      "line": "ON rides the live pipeline, OFF rebuilds a private bus."
@@ -3534,7 +3766,13 @@
    "controls": {
     "deviceName": {
      "line": "The name behind mDNS, the access point and DHCP.",
-     "more": "Anything but letters, digits and hyphens is coerced to a valid hostname, and a rename reaches the network within a tick."
+     "more": "Anything but letters, digits and hyphens is coerced to a valid hostname, and a rename reaches the network within a tick.",
+     "tests": [
+      {
+       "title": "System identity survives reboot",
+       "url": "https://moonmodules.org/MoonLight/reference/tests.html#systemmodule:scenario:scenario_System_identity_survives_reboot"
+      }
+     ]
     },
     "deviceModel": {
      "line": "The board model, which selects the installer's catalog entry.",
@@ -3605,7 +3843,7 @@
    "dim": 0,
    "doc": "core/system.md#system",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/core/system/SystemModule.h",
-   "tests": "https://moonmodules.org/MoonLight/reference/tests/unit-tests.html#systemmodule"
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#systemmodule"
   },
   "ControlModule": {
    "line": "A control desk of switches, encoders, faders and preset pads that puts the device into a named state.",
@@ -3617,11 +3855,11 @@
     },
     {
      "title": "Presets",
-     "text": "Click a pad to apply its preset, drag to rearrange. A pad is tinted by its role: layout blue, effects violet, driver green, service amber. [The how-to](https://moonmodules.org/MoonLight/how-to/presets.html) has the rest."
+     "text": "Click a pad to apply its preset, drag to rearrange. A pad is tinted by its role: layout blue, effects violet, driver green, service amber. [Presets](https://moonmodules.org/MoonLight/reference/presets.html) has the rest."
     },
     {
      "title": "Home Assistant",
-     "text": "Only effects presets reach Home Assistant, so a hub never rewires pins or geometry. [The how-to](https://moonmodules.org/MoonLight/how-to/home-automation.html#presets-in-home-assistant) has the setup."
+     "text": "Only effects presets reach Home Assistant, so a hub never rewires pins or geometry. [Home automation](https://moonmodules.org/MoonLight/reference/home-automation.html#presets-in-home-assistant) has the setup."
     }
    ],
    "image": "https://moonmodules.org/MoonLight/assets/core/ControlModule.png",
@@ -3654,7 +3892,7 @@
    "dim": 0,
    "doc": "core/system.md#control",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/core/system/ControlModule.h",
-   "tests": "https://moonmodules.org/MoonLight/reference/tests/unit-tests.html#controlmodule"
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#controlmodule"
   },
   "Services": {
    "line": "The container for the user-added Service modules, the capability bridges a device provides or consumes.",
@@ -3663,7 +3901,7 @@
    "dim": 0,
    "doc": "core/services.md",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/core/services/Services.h",
-   "tests": "https://moonmodules.org/MoonLight/reference/tests/unit-tests.html#services"
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#services"
   },
   "AudioService": {
    "line": "The audio source the audio-reactive effects read: a level, sixteen bands and the peak.",
@@ -3676,13 +3914,19 @@
     },
     {
      "title": "Wiring and capture",
-     "text": "Microphone wiring, setting the levels and capturing what a machine plays are in [the how-to](https://moonmodules.org/MoonLight/how-to/audio-input.html)."
+     "text": "Microphone wiring, setting the levels and capturing what a machine plays are in [Audio input](https://moonmodules.org/MoonLight/reference/audio-input.html)."
     }
    ],
    "image": "https://moonmodules.org/MoonLight/assets/core/AudioService.png",
    "controls": {
     "mode": {
-     "line": "The source: a synthesized signal, the network, or its own input."
+     "line": "The source: a synthesized signal, the network, or its own input.",
+     "tests": [
+      {
+       "title": "Services audio drives the effects",
+       "url": "https://moonmodules.org/MoonLight/reference/tests.html#audioservice:scenario:scenario_Services_audio_drives_the_effects"
+      }
+     ]
     },
     "micMode": {
      "line": "Which kind of microphone is wired, I2S or two-wire PDM.",
@@ -3711,7 +3955,13 @@
      "line": "The capture input, `default` following the system setting."
     },
     "sampleRate": {
-     "line": "The mic or ADC sample rate."
+     "line": "The mic or ADC sample rate.",
+     "tests": [
+      {
+       "title": "Services audio drives the effects",
+       "url": "https://moonmodules.org/MoonLight/reference/tests.html#audioservice:scenario:scenario_Services_audio_drives_the_effects"
+      }
+     ]
     },
     "levels": {
      "line": "Who sets the display window: the two sliders, or the learner.",
@@ -3723,7 +3973,13 @@
     },
     "gain": {
      "line": "The window's width, a higher value running the display hotter.",
-     "more": "The default suits a quiet MEMS mic, so turn it down hard for a loopback device or everything clips."
+     "more": "The default suits a quiet MEMS mic, so turn it down hard for a loopback device or everything clips.",
+     "tests": [
+      {
+       "title": "Services audio drives the effects",
+       "url": "https://moonmodules.org/MoonLight/reference/tests.html#audioservice:scenario:scenario_Services_audio_drives_the_effects"
+      }
+     ]
     },
     "send audio": {
      "line": "Send the local analysis as audio-sync packets."
@@ -3756,7 +4012,7 @@
    "dim": 0,
    "doc": "core/services.md#audio",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/core/services/AudioService.h",
-   "tests": "https://moonmodules.org/MoonLight/reference/tests/unit-tests.html#audioservice"
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#audioservice"
   },
   "PictureService": {
    "line": "The picture the Picture effect samples onto the lights, from one source at a time.",
@@ -3781,7 +4037,7 @@
    "dim": 0,
    "doc": "core/services.md#picture",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/core/services/PictureService.h",
-   "tests": "https://moonmodules.org/MoonLight/reference/tests/unit-tests.html#pictureservice"
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#pictureservice"
   },
   "OscService": {
    "line": "Receives OSC over the network and writes it onto this device's controls, so a fader in Resolume, TouchDesigner or TouchOSC drives MoonLight.",
@@ -3789,11 +4045,11 @@
    "guide": [
     {
      "title": "Getting a surface working",
-     "text": "Turn on listening, and on feedback so the faders follow the device. A phone or tablet needs a free app and one session file.\n\n[The how-to](https://moonmodules.org/MoonLight/how-to/control-surface.html#a-phone-or-tablet-over-osc) has the steps."
+     "text": "Turn on listening, and on feedback so the faders follow the device. A phone or tablet needs a free app and one session file.\n\n[Control a device over OSC](https://moonmodules.org/MoonLight/moonwalk.html#osc-control) has the steps."
     },
     {
      "title": "The addresses",
-     "text": "The addresses are a public contract, so a layout built on them keeps working. Send `/mm/hello` and the device sends every value again. [The how-to](https://moonmodules.org/MoonLight/how-to/control-surface.html#the-osc-addresses) lists them."
+     "text": "The addresses are a public contract, so a layout built on them keeps working. Send `/mm/hello` and the device sends every value again. [Control surfaces](https://moonmodules.org/MoonLight/reference/control-surface.html#the-osc-addresses) lists them."
     }
    ],
    "image": "https://moonmodules.org/MoonLight/assets/core/OscService.png",
@@ -3829,7 +4085,7 @@
    "dim": 0,
    "doc": "core/services.md#osc",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/core/services/OscService.h",
-   "tests": "https://moonmodules.org/MoonLight/reference/tests/unit-tests.html#oscservice"
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#oscservice"
   },
   "I2cBusModule": {
    "line": "The board's I2C bus: its two pins, opened once and shared by every device on it, with a scan that detects them.",
@@ -3859,7 +4115,7 @@
    "dim": 0,
    "doc": "core/system.md#i2c-bus",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/core/system/I2cBusModule.h",
-   "tests": "https://moonmodules.org/MoonLight/reference/tests/unit-tests.html#i2cbusmodule"
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#i2cbusmodule"
   },
   "TasksModule": {
    "line": "A read-only diagnostic showing what runs where: the tasks, and the modules inside each.",
@@ -3886,7 +4142,7 @@
    "dim": 0,
    "doc": "core/system.md#tasks",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/core/system/TasksModule.h",
-   "tests": "https://moonmodules.org/MoonLight/reference/tests/unit-tests.html#tasksmodule"
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#tasksmodule"
   },
   "PinsModule": {
    "line": "A read-only map of which module owns each GPIO, for what role, and whether the pin is safe for it.",
@@ -3907,7 +4163,7 @@
    "dim": 0,
    "doc": "core/system.md#pins",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/core/system/PinsModule.h",
-   "tests": "https://moonmodules.org/MoonLight/reference/tests/unit-tests.html#pinsmodule"
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#pinsmodule"
   },
   "ButtonService": {
    "line": "A list of push buttons, each on its own GPIO, each driving a control.",
@@ -3935,7 +4191,7 @@
    "dim": 0,
    "doc": "core/services.md#button",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/core/services/ButtonService.h",
-   "tests": "https://moonmodules.org/MoonLight/reference/tests/unit-tests.html#buttonservice"
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#buttonservice"
   },
   "GamepadService": {
    "line": "A gamepad's buttons and sticks, each driving a control through the same rows every input service uses.",
@@ -3943,7 +4199,7 @@
    "guide": [
     {
      "title": "Finding the pad",
-     "text": "A browser lists a pad only once a button is pressed with the page open. Chrome and Firefox also need a secure page, which a board's own page is not until marked once.\n\n[The how-to](https://moonmodules.org/MoonLight/how-to/control-surface.html#a-midi-desk-or-a-gamepad-through-the-browser) has the steps."
+     "text": "A browser lists a pad only once a button is pressed with the page open. Chrome and Firefox also need a secure page, which a board's own page is not until marked once.\n\n[Connect a control surface](https://moonmodules.org/MoonLight/moonwalk.html#control-surface) has the steps."
     },
     {
      "title": "Learning an input",
@@ -3965,7 +4221,7 @@
    "dim": 0,
    "doc": "core/services.md#gamepad",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/core/services/GamepadService.h",
-   "tests": "https://moonmodules.org/MoonLight/reference/tests/unit-tests.html#gamepadservice"
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#gamepadservice"
   },
   "MidiService": {
    "line": "A MIDI control desk driving the control surface, in the Mackie Control or the Akai APC40 mkII layout.",
@@ -3973,7 +4229,7 @@
    "guide": [
     {
      "title": "Where the desk plugs in",
-     "text": "The browser reads a desk on a secure page only: the desktop app's `localhost` is, a board's own page needs marking once. A desk on USB or the network works on any page.\n\n[The how-to](https://moonmodules.org/MoonLight/how-to/control-surface.html#a-midi-desk-or-a-gamepad-through-the-browser) has the steps."
+     "text": "The browser reads a desk on a secure page only: the desktop app's `localhost` is, a board's own page needs marking once. A desk on USB or the network works on any page.\n\n[Connect a control surface](https://moonmodules.org/MoonLight/moonwalk.html#control-surface) has the steps."
     },
     {
      "title": "The Akai APC40 mkII",
@@ -4047,7 +4303,7 @@
    "dim": 0,
    "doc": "core/services.md#analog",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/core/services/AnalogService.h",
-   "tests": "https://moonmodules.org/MoonLight/reference/tests/unit-tests.html#analogservice"
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#analogservice"
   },
   "InfraredService": {
    "line": "An infrared receiver whose learned remote keys drive other modules' controls.",
@@ -4077,7 +4333,7 @@
    "dim": 0,
    "doc": "core/services.md#infrared",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/core/services/InfraredService.h",
-   "tests": "https://moonmodules.org/MoonLight/reference/tests/unit-tests.html#infraredservice"
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#infraredservice"
   },
   "MoonLiveService": {
    "line": "A MoonLive script that reads hardware and drives controls, the input twin of a scripted effect.",
@@ -4099,7 +4355,7 @@
    "dim": 0,
    "doc": "core/services.md#moonliveservice",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/core/services/MoonLiveService.h",
-   "tests": "https://moonmodules.org/MoonLight/reference/tests/unit-tests.html#moonliveservice"
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#moonliveservice"
   },
   "FileManagerModule": {
    "line": "Browse and manage the device filesystem: a folder tree with an inline text editor.",
@@ -4115,7 +4371,7 @@
     },
     {
      "title": "Backup and restore",
-     "text": "Backup downloads the device's files as one `.json` bundle, and Restore uploads one back. Keep the bundle private: it contains the WiFi password. [The how-to](https://moonmodules.org/MoonLight/how-to/backup-and-restore.html) walks through both."
+     "text": "Backup downloads the device's files as one `.json` bundle, and Restore uploads one back. Keep the bundle private: it contains the WiFi password. [Back up and restore a device](https://moonmodules.org/MoonLight/moonwalk.html#backup-restore) walks through both."
     }
    ],
    "image": "https://moonmodules.org/MoonLight/assets/core/FileManagerModule.png",
@@ -4134,7 +4390,7 @@
    "dim": 0,
    "doc": "core/system.md#file-manager",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/core/system/FileManagerModule.h",
-   "tests": "https://moonmodules.org/MoonLight/reference/tests/unit-tests.html#filemanagermodule"
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#filemanagermodule"
   },
   "SdCardService": {
    "line": "A board's microSD slot, where one is wired: its wiring, a usage gauge and a format button.",
@@ -4195,7 +4451,7 @@
    "dim": 0,
    "doc": "core/services.md#sd-card",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/core/services/SdCardService.h",
-   "tests": "https://moonmodules.org/MoonLight/reference/tests/unit-tests.html#sdcardservice"
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#sdcardservice"
   },
   "FirmwareUpdateModule": {
    "line": "Over-the-air firmware flashing: what is installed, and how an install goes.",
@@ -4218,7 +4474,13 @@
      "line": "Which image the card describes, drawn as two tabs."
     },
     "version": {
-     "line": "The installed version."
+     "line": "The installed version.",
+     "tests": [
+      {
+       "title": "Firmware reports what is running",
+       "url": "https://moonmodules.org/MoonLight/reference/tests.html#firmwareupdatemodule:scenario:scenario_Firmware_reports_what_is_running"
+      }
+     ]
     },
     "build": {
      "line": "The git id, then the build date."
@@ -4227,7 +4489,7 @@
      "line": "The build variant; on the MoonBase tab, its chip."
     },
     "partition": {
-     "line": "The image against the size of its slot.",
+     "line": "The installed image against the size of its slot, which a new image must fit.",
      "more": "The bar doubles as the install bar: it fills with the incoming image mid-install."
     }
    },
@@ -4235,7 +4497,7 @@
    "dim": 0,
    "doc": "core/system.md#firmware-update",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/core/system/FirmwareUpdateModule.h",
-   "tests": "https://moonmodules.org/MoonLight/reference/tests/unit-tests.html#firmwareupdatemodule"
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#firmwareupdatemodule"
   },
   "MoonCloudModule": {
    "line": "The container for everything MoonLight does with a server MoonModules runs.",
@@ -4253,7 +4515,7 @@
    "dim": 0,
    "doc": "core/system.md#mooncloud",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/core/system/MoonCloudModule.h",
-   "tests": "https://moonmodules.org/MoonLight/reference/tests/unit-tests.html#mooncloudmodule"
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#mooncloudmodule"
   },
   "MoonStatsModule": {
    "line": "One opt-in report about this install, sent once per install or upgrade, so development effort goes where the users are.",
@@ -4268,7 +4530,13 @@
    "controls": {
     "consent": {
      "line": "Whether this install may report.",
-     "more": "Nothing is sent and no identifier is computed while it is off."
+     "more": "Nothing is sent and no identifier is computed while it is off.",
+     "tests": [
+      {
+       "title": "MoonCloud consent is off until asked",
+       "url": "https://moonmodules.org/MoonLight/reference/tests.html#mooncloudmodule:scenario:scenario_MoonCloud_consent_is_off_until_asked"
+      }
+     ]
     },
     "reportedVersion": {
      "line": "The version that last reported.",
@@ -4286,7 +4554,7 @@
    "dim": 0,
    "doc": "core/system.md#stats",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/core/system/MoonStatsModule.h",
-   "tests": "https://moonmodules.org/MoonLight/reference/tests/unit-tests.html#moonstatsmodule"
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#moonstatsmodule"
   },
   "MoonTalkModule": {
    "line": "A public message board between MoonLight devices, off until you turn it on.",
@@ -4302,7 +4570,13 @@
    "controls": {
     "consent": {
      "line": "Whether posting and reading are on.",
-     "more": "Nothing is published or read while it is off."
+     "more": "Nothing is published or read while it is off.",
+     "tests": [
+      {
+       "title": "MoonCloud consent is off until asked",
+       "url": "https://moonmodules.org/MoonLight/reference/tests.html#mooncloudmodule:scenario:scenario_MoonCloud_consent_is_off_until_asked"
+      }
+     ]
     },
     "shareName": {
      "line": "Whether your device name rides along, a separate decision.",
@@ -4320,7 +4594,7 @@
    "dim": 0,
    "doc": "core/system.md#talk",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/core/system/MoonTalkModule.h",
-   "tests": "https://moonmodules.org/MoonLight/reference/tests/unit-tests.html#moontalkmodule"
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#moontalkmodule"
   },
   "ImprovProvisioningModule": {
    "line": "Browser-driven WiFi provisioning over serial: the web installer hands the WiFi credentials to a fresh device.",
@@ -4349,7 +4623,7 @@
    "guide": [
     {
      "title": "Which route",
-     "text": "Home Assistant finds the device over the WLED integration with no broker. Use MQTT for Homebridge, a broker-only network or another hub. [The how-to](https://moonmodules.org/MoonLight/how-to/home-automation.html#the-mqtt-topics) lists the topics."
+     "text": "Home Assistant finds the device over the WLED integration with no broker. Use MQTT for Homebridge, a broker-only network or another hub. [Home automation](https://moonmodules.org/MoonLight/reference/home-automation.html#the-mqtt-topics) lists the topics."
     },
     {
      "title": "Getting it connected",
@@ -4373,7 +4647,13 @@
     },
     "haDiscovery": {
      "line": "Announce a Home Assistant discovery light, opt-in.",
-     "more": "Off by default: Home Assistant already finds the device over the WLED integration, and both would list it twice. Turn it on for broker-only or cross-subnet setups. The firmware update entity follows the same switch."
+     "more": "Off by default: Home Assistant already finds the device over the WLED integration, and both would list it twice. Turn it on for broker-only or cross-subnet setups. The firmware update entity follows the same switch.",
+     "tests": [
+      {
+       "title": "Network hardware reconfigures live",
+       "url": "https://moonmodules.org/MoonLight/reference/tests.html#uncategorized:live:scenario_Network_hardware_reconfigures_live"
+      }
+     ]
     },
     "mqtt_status": {
      "line": "Where the connection stands, from disabled and idle through connected, or the error."
@@ -4383,7 +4663,7 @@
    "dim": 0,
    "doc": "core/system.md#mqtt",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/core/system/MqttModule.h",
-   "tests": "https://moonmodules.org/MoonLight/reference/tests/unit-tests.html#mqttmodule"
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#mqttmodule"
   },
   "DevicesModule": {
    "line": "Discovers other devices on the LAN, MoonLight and WLED among them, and lists them, this one included and marked as such.",
@@ -4398,7 +4678,13 @@
    "controls": {
     "addressing": {
      "line": "How presence travels: multicast, or multicast and broadcast.",
-     "more": "Broadcast is the default, since WLED devices hear it too."
+     "more": "Broadcast is the default, since WLED devices hear it too.",
+     "tests": [
+      {
+       "title": "Network identity and discovery",
+       "url": "https://moonmodules.org/MoonLight/reference/tests.html#networkmodule:scenario:scenario_Network_identity_and_discovery"
+      }
+     ]
     },
     "devices": {
      "line": "The discovered devices; a row expands to its details."
@@ -4421,17 +4707,41 @@
    "image": "https://moonmodules.org/MoonLight/assets/core/NetworkModule.png",
    "controls": {
     "mode": {
-     "line": "The interface in use."
+     "line": "The interface in use.",
+     "tests": [
+      {
+       "title": "AccessPoint first setup from its own network",
+       "url": "https://moonmodules.org/MoonLight/reference/tests.html#accesspointmodule:live:scenario_AccessPoint_first_setup_from_its_own_network"
+      },
+      {
+       "title": "AccessPoint protected and always on",
+       "url": "https://moonmodules.org/MoonLight/reference/tests.html#accesspointmodule:live:scenario_AccessPoint_protected_and_always_on"
+      },
+      {
+       "title": "Firmware MoonBase joins the apps network",
+       "url": "https://moonmodules.org/MoonLight/reference/tests.html#firmwareupdatemodule:live:scenario_Firmware_MoonBase_joins_the_apps_network"
+      }
+     ]
     },
     "mDNS": {
-     "line": "The `<name>.local` hostname, on IPv4 and IPv6."
+     "line": "The `<name>.local` hostname, on IPv4 and IPv6.",
+     "tests": [
+      {
+       "title": "Network hardware reconfigures live",
+       "url": "https://moonmodules.org/MoonLight/reference/tests.html#uncategorized:live:scenario_Network_hardware_reconfigures_live"
+      },
+      {
+       "title": "Network identity and discovery",
+       "url": "https://moonmodules.org/MoonLight/reference/tests.html#networkmodule:scenario:scenario_Network_identity_and_discovery"
+      }
+     ]
     }
    },
    "role": "generic",
    "dim": 0,
    "doc": "core/system.md#network",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/core/system/NetworkModule.h",
-   "tests": "https://moonmodules.org/MoonLight/reference/tests/unit-tests.html#networkmodule"
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#networkmodule"
   },
   "EthernetModule": {
    "line": "The wired interface: which board's wiring it uses, and how it gets an address.",
@@ -4449,7 +4759,13 @@
      "more": "Custom shows every pin; a fixed interface has no choice."
     },
     "ethType": {
-     "line": "The PHY chip, seeded per chip and overridden by the catalog."
+     "line": "The PHY chip, seeded per chip and overridden by the catalog.",
+     "tests": [
+      {
+       "title": "Network hardware reconfigures live",
+       "url": "https://moonmodules.org/MoonLight/reference/tests.html#uncategorized:live:scenario_Network_hardware_reconfigures_live"
+      }
+     ]
     },
     "ethPhyAddr": {
      "line": "The PHY's address on the management bus.",
@@ -4511,7 +4827,13 @@
    "controls": {
     "address": {
      "line": "Where to reach the device on its new network, by address.",
-     "more": "It shows after a join from the access point. Open the link in a browser, since a phone's sign-in screen has no address bar."
+     "more": "It shows after a join from the access point. Open the link in a browser, since a phone's sign-in screen has no address bar.",
+     "tests": [
+      {
+       "title": "AccessPoint first setup from its own network",
+       "url": "https://moonmodules.org/MoonLight/reference/tests.html#accesspointmodule:live:scenario_AccessPoint_first_setup_from_its_own_network"
+      }
+     ]
     },
     "localName": {
      "line": "The same, by the `.local` name."
@@ -4546,7 +4868,7 @@
    "dim": 0,
    "doc": "core/system.md#wifi",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/core/system/WiFiModule.h",
-   "tests": "https://moonmodules.org/MoonLight/reference/tests/unit-tests.html#wifimodule"
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#wifimodule"
   },
   "AccessPointModule": {
    "line": "The device's own WiFi network, at `4.3.2.1`: joining it opens the UI by itself, as a sign-in screen.",
@@ -4565,21 +4887,37 @@
    "controls": {
     "opens": {
      "line": "When it opens: on failure, always, or first setup only.",
-     "more": "A join in progress holds it back, since one radio serves both; first setup stays open until a network or Ethernet is set."
+     "more": "A join in progress holds it back, since one radio serves both; first setup stays open until a network or Ethernet is set.",
+     "tests": [
+      {
+       "title": "AccessPoint first setup from its own network",
+       "url": "https://moonmodules.org/MoonLight/reference/tests.html#accesspointmodule:live:scenario_AccessPoint_first_setup_from_its_own_network"
+      },
+      {
+       "title": "AccessPoint protected and always on",
+       "url": "https://moonmodules.org/MoonLight/reference/tests.html#accesspointmodule:live:scenario_AccessPoint_protected_and_always_on"
+      }
+     ]
     },
     "name": {
      "line": "The network name: `MM-` and four MAC digits.",
      "more": "Anonymous, so the air does not say whose device it is."
     },
     "clients": {
-     "line": "The devices on it."
+     "line": "The devices on it.",
+     "tests": [
+      {
+       "title": "AccessPoint protected and always on",
+       "url": "https://moonmodules.org/MoonLight/reference/tests.html#accesspointmodule:live:scenario_AccessPoint_protected_and_always_on"
+      }
+     ]
     }
    },
    "role": "generic",
    "dim": 0,
    "doc": "core/system.md#access-point",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/core/system/AccessPointModule.h",
-   "tests": "https://moonmodules.org/MoonLight/reference/tests/unit-tests.html#accesspointmodule"
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#accesspointmodule"
   },
   "FilesystemModule": {
    "line": "The persistence engine: it writes control values to `/.config/*.json` and restores them on boot, so settings survive a reboot.",

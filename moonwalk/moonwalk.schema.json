@@ -163,18 +163,6 @@
             "$ref": "#/$defs/expectation"
           }
         },
-        "onSuccess": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/branch"
-          }
-        },
-        "onFailure": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/branch"
-          }
-        },
         "detail": {
           "$ref": "#/$defs/markdown"
         }
@@ -265,25 +253,26 @@
         },
         "call": {
           "type": "object",
+          "description": "An operation of the device's REST API, docs/reference/openapi.yaml, named by its operationId; the build checks it exists and adds its method and path.",
           "required": [
-            "method",
-            "path"
+            "operation"
           ],
           "additionalProperties": false,
           "properties": {
-            "method": {
-              "enum": [
-                "GET",
-                "POST",
-                "PATCH",
-                "PUT",
-                "DELETE"
-              ]
-            },
-            "path": {
+            "operation": {
               "type": "string"
             },
-            "body": {}
+            "params": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              },
+              "description": "Its path and query parameters by name, filled into the path."
+            },
+            "body": {
+              "type": "string",
+              "description": "The request body, written as the reader sends it."
+            }
           }
         },
         "run": {
@@ -457,35 +446,6 @@
           "additionalProperties": false
         }
       ]
-    },
-    "branch": {
-      "type": "object",
-      "required": [
-        "type"
-      ],
-      "additionalProperties": false,
-      "properties": {
-        "type": {
-          "enum": [
-            "goto",
-            "end",
-            "retry"
-          ]
-        },
-        "stepId": {
-          "$ref": "#/$defs/id"
-        },
-        "when": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/expectation"
-          }
-        },
-        "retryLimit": {
-          "type": "integer",
-          "minimum": 1
-        }
-      }
     },
     "actor": {
       "enum": [

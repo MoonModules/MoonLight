@@ -26,3 +26,10 @@ def test_only_the_version_field_changes(tmp_path):
     rv.set_version("7.0.0-dev", f)
     assert f.read_text() == '{\n  "name": "MoonLight",\n  "version": "7.0.0-dev",\n  "description": "x"\n}\n'
     assert json.loads(f.read_text())["version"] == "7.0.0-dev"
+
+
+def test_the_api_version_moves_with_the_firmware_version(tmp_path):
+    spec = tmp_path / "openapi.yaml"
+    spec.write_text("openapi: 3.1.0\ninfo:\n  title: T\n  version: 6.1.0-dev\npaths: {}\n", encoding="utf-8")
+    rv.set_api_version("7.0.0-dev", spec)
+    assert "  version: 7.0.0-dev\n" in spec.read_text(encoding="utf-8") and "openapi: 3.1.0" in spec.read_text(encoding="utf-8")

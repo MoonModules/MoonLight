@@ -142,14 +142,14 @@ test("a heading renders one level under the view's own", () => {
     assert.equal(helpMarkdown("## What you built\n\nA layout."), "<h4>What you built</h4><br><br>A layout.");
 });
 
-test("a clip on its own line plays, a picture shows, and anything not https stays text", () => {
-    assert.equal(helpMarkdown("![A grid](https://moonmodules.org/a.webm)"), '<video src="https://moonmodules.org/a.webm" controls playsinline title="A grid"></video>');
+test("a clip on its own line plays with its poster, a picture shows, and anything not https stays text", () => {
+    assert.equal(helpMarkdown("![A grid](https://moonmodules.org/a.webm)"), '<video src="https://moonmodules.org/a.webm" poster="https://moonmodules.org/a.jpg" controls playsinline title="A grid"></video>');
     assert.equal(helpMarkdown("![A card](https://moonmodules.org/a.png)"), '<img src="https://moonmodules.org/a.png" alt="A card">');
     assert.equal(helpMarkdown("![x](javascript:alert(1))"), "![x](javascript:alert(1))");
 });
 
 test("a clip that ends the text still plays", () => {
-    assert.equal(helpMarkdown("Watch it.\n\n![A wall](https://moonmodules.org/b.webm)\n"), 'Watch it.<br><br><video src="https://moonmodules.org/b.webm" controls playsinline title="A wall"></video>');
+    assert.equal(helpMarkdown("Watch it.\n\n![A wall](https://moonmodules.org/b.webm)\n"), 'Watch it.<br><br><video src="https://moonmodules.org/b.webm" poster="https://moonmodules.org/b.jpg" controls playsinline title="A wall"></video>');
 });
 
 test("a fenced block keeps its text as written, escaped and unformatted", () => {

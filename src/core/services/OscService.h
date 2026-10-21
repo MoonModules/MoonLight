@@ -26,11 +26,11 @@ namespace mm {
 ///
 /// Turn on listening, and on feedback so the faders follow the device. A phone or tablet needs a free app and one session file.
 ///
-/// [The how-to](https://moonmodules.org/MoonLight/how-to/control-surface.html#a-phone-or-tablet-over-osc) has the steps.
+/// [Control a device over OSC](https://moonmodules.org/MoonLight/moonwalk.html#osc-control) has the steps.
 ///
 /// ## The addresses
 ///
-/// The addresses are a public contract, so a layout built on them keeps working. Send `/mm/hello` and the device sends every value again. [The how-to](https://moonmodules.org/MoonLight/how-to/control-surface.html#the-osc-addresses) lists them.
+/// The addresses are a public contract, so a layout built on them keeps working. Send `/mm/hello` and the device sends every value again. [Control surfaces](https://moonmodules.org/MoonLight/reference/control-surface.html#the-osc-addresses) lists them.
 ///
 /// @technical
 ///

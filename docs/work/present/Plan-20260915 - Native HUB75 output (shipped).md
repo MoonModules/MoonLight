@@ -4,7 +4,7 @@ Answers [issue #102](https://github.com/MoonModules/MoonLight/issues/102). Phase
 
 ## The gap
 
-MoonLight drives HUB75 panels one way: [PanelCardDriver](../../../src/light/drivers/PanelCardDriver.h) emits ColorLight frames over raw Ethernet to a 5A-75B/E receiving card, which does the HUB75 driving. That path is excellent above roughly 16,384 pixels and it is what the [panel-cards guide](../../how-to/panel-cards.md) documents.
+MoonLight drives HUB75 panels one way: [PanelCardDriver](../../../src/light/drivers/PanelCardDriver.h) emits ColorLight frames over raw Ethernet to a 5A-75B/E receiving card, which does the HUB75 driving. That path is excellent above roughly 16,384 pixels and it is what the [panel-cards guide](../../reference/hardware/panel-cards.md) documents.
 
 Below that size it is the wrong shape. The user buys a receiving card, configures it with LEDvision (a Windows tool, not ours), and runs a dedicated Ethernet link, all to light one 64×64 panel that a $10 board could drive from its own pins. WLED does this natively; MoonLight does not. That is the gap, and it is the whole of Phase 1.
 
@@ -146,7 +146,7 @@ This is the same class of work as [ParallelSlots.h](../../../src/light/drivers/P
 3. **`Hub75Driver`.** Controls, pin claims through the existing `PinsModule` registry, status line reporting geometry and achieved refresh, registration in `main.cpp`.
 4. **A backend registry, then the PARLIO backend.** The seam built in step 1 picks its peripheral internally; this turns it into an interface the driver selects, mirroring `LedPeripheral` without reusing it (that one is WS2812-shaped — same pattern, own interface). Then PARLIO behind it, and the `peripheral` select on the card. This REVISES step 1 rather than only adding to it.
 5. **Board catalog entries**: Adafruit S3 Portal, Waveshare RGB Matrix, Lilygo S3, ESP32-S3-16MB-PSRAM. Catalog data in `deviceModels.json`, not driver work, and it is what makes the feature findable.
-6. **Docs**: a how-to beside [panel-cards.md](../../how-to/panel-cards.md), the driver's catalog card, and a line in panel-cards.md saying which of the two paths a given wall wants.
+6. **Docs**: a how-to beside [panel-cards.md](../../reference/hardware/panel-cards.md), the driver's catalog card, and a line in panel-cards.md saying which of the two paths a given wall wants.
 
 Steps 1-3 are the shippable unit. Steps 4-6 each stand alone.
 

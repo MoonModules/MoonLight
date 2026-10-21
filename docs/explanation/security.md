@@ -8,7 +8,7 @@ MoonLight trusts its local network. Every client that reaches a device can read 
 
 ## The trust boundary is the network
 
-A device serves one plain HTTP port: 80 on a board, 8080 on a desktop. The REST API, the `/ws` state socket and the `/wsp` preview socket all live there, and every route answers every client. A client can set any control, add or delete modules, read and write files, install firmware, reboot the device and reset it to factory settings. The routes: [integrating](../reference/integrating.md).
+A device serves one plain HTTP port: 80 on a board, 8080 on a desktop. The REST API, the `/ws` state socket and the `/wsp` preview socket all live there, and every route answers every client. A client can set any control, add or delete modules, read and write files, install firmware, reboot the device and reset it to factory settings. The routes: [the REST API](../reference/api.md).
 
 Every response carries `Access-Control-Allow-Origin: *`, so a web page on another origin can call the API too. That lets the [web installer](architecture/mooninstaller.md) and MoonDeck talk to devices. It also lets any page open in a browser on the same network do the same.
 
@@ -38,7 +38,7 @@ A client on the device's own access point (subnet 4.3.2.0/24) sees every passwor
 
 The access point uses the first known WiFi network's password, so it is as private as that network. The rule, the `opens` setting and the power-cycle gesture that opens it for one boot without a password: [the access point](../moonmodules/core/system.md#access-point).
 
-A [backup](../how-to/backup-and-restore.md) holds every file, `/.config` included, so it carries the WiFi passwords in plain text. A state document and a [preset](../how-to/presets.md#what-a-preset-holds) carry no secret, and applying one keeps the stored secrets.
+A [backup](../reference/backup-and-restore.md) holds every file, `/.config` included, so it carries the WiFi passwords in plain text. A state document and a [preset](../reference/presets.md#what-a-preset-holds) carry no secret, and applying one keeps the stored secrets.
 
 ## Firmware
 
@@ -56,7 +56,7 @@ File paths are decoded first, then refused if they contain `..`, so every path s
 
 [Improv](../moonmodules/core/system.md#improv-provisioning) over USB serial sets the WiFi credentials and applies a state document. It needs physical access to the USB port, and it trusts whoever has it. Bluetooth is compiled out.
 
-Safe mode, factory reset and the access point's one-boot open gesture are recovery paths for the person holding the device. The [troubleshooting page](../how-to/troubleshooting.md) shows each.
+Safe mode, factory reset and the access point's one-boot open gesture are recovery paths for the person holding the device. The [troubleshooting page](../reference/troubleshooting.md) shows each.
 
 ## What leaves the device
 

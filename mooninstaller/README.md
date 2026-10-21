@@ -18,7 +18,7 @@ One entry per piece of hardware, with the state document that sets it up: the do
 - **Loopback pins are the self-test jumper**, apart from the operating `pins`: `loopbackTxPin` and `loopbackRxPin`. Without them the test transmits on `pins[0]`.
 - **Drivers come from the catalog.** The firmware creates only `Preview` at boot, so a device carries only the outputs its board has.
 - **Only what the hardware fixes.** A bare board leaves out the pins its user wires. A vendor's entry carries its `System` and its default LED driver until a peripheral has its own spec and a test.
-- **An image is our own copy**, checked in under `docs/assets/deviceModels/` with the vendor's permission, since the installer runs from its own site.
+- **An image is our own copy**, checked in under `docs/assets/deviceModels/` with the vendor's permission, since the installer runs from its own site. It is the vendor's pin layout where one exists rather than a product photo, scaled to about 2000 px wide, since pins are read from it.
 
 The picker draws a card per entry from its `image`, `description`, `url`, `supported` and `planned`:
 

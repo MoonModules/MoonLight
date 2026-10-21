@@ -1273,8 +1273,9 @@ size_t  ethTestCount_ = 0;
 bool    ethTestSendFails_ = false;
 uint16_t ethTestLinkSpeed_ = 1000;   // desktop reports gigabit unless a test says otherwise
 int      ethRawClaims_ = 0;          // drivers holding the link for direct L2 use
-uint32_t ethSendFails_ = 0;          // consecutive ethSendRaw failures (the streak)
-uint32_t ethFailTotal_ = 0;          // cumulative since boot; what ethSendFailCounts reports
+// Atomic as on the ESP32: a driver sends from the encode task while its tick1s reads the streak on the main loop.
+std::atomic<uint32_t> ethSendFails_{0};    // consecutive ethSendRaw failures (the streak)
+std::atomic<uint32_t> ethFailTotal_{0};    // cumulative since boot; what ethSendFailCounts reports
 uint32_t ethRestarts_ = 0;           // ethRestartTx() calls, for the once-per-wedge test
 bool     ethRestartFails_ = false;   // simulated recovery failure
 // The bound raw socket, or -1 for capture mode (the default, and all any test sees).
@@ -3063,7 +3064,7 @@ bool ndiLoad() {
     }
     // NDIlib_initialize returns false when the CPU is unsupported, a real "cannot use it" that must not read as "installed and working".
     if (!ndiInit_()) { ndiSendVideo_ = nullptr; return false; }
-    // NDIlib_destroy pairs with NDIlib_initialize at process exit, since a sender may reopen later in the same run. Only with no sender open: a reboot exits with the render thread still sending, and the process ending is the teardown.
+    // NDIlib_destroy pairs with NDIlib_initialize at process exit, as a sender may reopen in the same run; only with none open, since a reboot exits with the render thread still sending.
     std::atexit([]() { if (ndiDestroy_ && !ndiSender_) ndiDestroy_(); });
     return true;
 }

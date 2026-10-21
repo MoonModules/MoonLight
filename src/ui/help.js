@@ -20,9 +20,11 @@ const isList = p => p.split("\n").every(l => /^- /.test(l));
 const list = p => `<ul>${p.split("\n").map(l => `<li>${inline(l.slice(2))}</li>`).join("")}</ul>`;
 const HEADING = /^(#{2,4}) (.+)$/;
 const MEDIA = /^!\[([^\]]*)\]\((https:\/\/[^)\s"]+)\)$/;
+// A MoonTube clip, a .webm, has its poster beside it: the frame Safari shows before the clip loads.
 function media(alt, src) {
+    const poster = src.endsWith(".webm") ? ` poster="${src.slice(0, -5)}.jpg"` : "";
     return /\.(webm|mp4)$/.test(src)
-        ? `<video src="${src}" controls playsinline title="${alt}"></video>`
+        ? `<video src="${src}"${poster} controls playsinline title="${alt}"></video>`
         : `<img src="${src}" alt="${alt}">`;
 }
 function block(p) {
@@ -124,9 +126,19 @@ export function moduleHelp(help, docPath, walks = []) {
     return box;
 }
 
+// A control's tests as links: the scenarios that set or expect it, each opening its entry on the test page; an unsafe address gets no link.
+function testAnchor(t) {
+    const href = safeUrl(t.url);
+    if (!href) return null;
+    const a = document.createElement("a");
+    a.href = href; a.target = "_blank"; a.rel = "noopener";
+    a.textContent = `Test: ${t.title}`;
+    return a;
+}
+
 // A control's help as Material's helper text, a line under the field rather than a hover tooltip, which fails on touch; any more opens from the line, the MoonWalk steps that set the control with it.
 export function controlHelp(row, help, walks = []) {
-    const anchors = walks.map(walkAnchor);
+    const anchors = [...walks.map(walkAnchor), ...(help?.tests || []).map(testAnchor).filter(Boolean)];
     if (!help?.line && !anchors.length) return;
     let el;
     if (!help?.line) {
@@ -151,7 +163,7 @@ export function controlHelp(row, help, walks = []) {
     row.appendChild(el);
 }
 
-// Role and dimension emoji, derived here rather than repeated in every module's tags(); their meaning is documented in docs/tutorials/how-moonlight-works.md, "The emoji on every card".
+// Role and dimension emoji, derived here rather than repeated in every module's tags(); their meaning is documented in docs/explanation/how-moonlight-works.md, "The emoji on every card".
 export const ROLE_EMOJI = {
     effect:     "🔥",
     driver:     "☸️",

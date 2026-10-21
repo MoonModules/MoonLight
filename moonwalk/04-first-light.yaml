@@ -9,7 +9,7 @@ processes:
     systems: [MoonCore]
     dependsOn: [install]
     intro: |
-      The top of the list is the device's own: read-outs and connection settings, and the first place to look when something seems off. What every card is and how they fit together is [How MoonLight works](tutorials/how-moonlight-works.md).
+      The top of the list is the device's own: read-outs and connection settings, and the first place to look when something seems off. What every card is and how they fit together is [How MoonLight works](explanation/how-moonlight-works.md).
     steps:
       - id: system
         section: The device
@@ -20,7 +20,7 @@ processes:
 
           ![The System module](assets/gettingstarted/02-05-UI-System.png)
 
-          A device with a microphone also shows its **Audio** service, which is how audio-reactive effects hear the music.
+          A device with a microphone lists an **Audio** service under Services, which is how audio-reactive effects hear the music.
       - id: firmware
         say: Open Firmware.
         when: { open: { module: FirmwareUpdateModule } }
@@ -47,7 +47,7 @@ processes:
     systems: [MoonLight]
     dependsOn: [first-look]
     intro: |
-      A layout that matches your lights, an effect on it, and the result sent out to them. What the cards are and how they fit together is [How MoonLight works](tutorials/how-moonlight-works.md).
+      A layout that matches your lights, an effect on it, and the result sent out to them. What the cards are and how they fit together is [How MoonLight works](explanation/how-moonlight-works.md).
 
       It all happens live in the device's web interface: nothing compiles, saves or reboots. A board with no lights attached works too, since the 3D preview shows the same.
     steps:
@@ -105,8 +105,8 @@ processes:
     outro: |
       ## Where to go next
 
-      - **Stack effects, blend layers and reshape with a modifier**: [How MoonLight works](tutorials/how-moonlight-works.md#3-the-light-pipeline) explains each, and its clips show them.
-      - **[Making beautiful effects](tutorials/generative-effects.md)** is about the effects themselves: why noise looks organic and how a field turns into something worth watching.
+      - **Stack effects, blend layers and reshape with a modifier**: [How MoonLight works](explanation/how-moonlight-works.md#3-the-light-pipeline) explains each, and its clips show them.
+      - **[Making beautiful effects](explanation/generative-effects.md)** is about the effects themselves: why noise looks organic and how a field turns into something worth watching.
       - **[Build your own MoonModules](tutorials/build-your-own-moonmodules.md)** is about writing one in C++ when the catalog does not have what you want.
   - id: turn-help-on
     title: Turn help on in the app

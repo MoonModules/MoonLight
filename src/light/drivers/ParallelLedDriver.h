@@ -23,7 +23,7 @@ namespace mm {
 ///
 /// ## Which peripheral
 ///
-/// Start with `i80`. Choose `MoonI80` for frames too big for memory or a pin expander, `Parlio` on a P4, `GPIO-DMA` on a Teensy 4.1. [The LED driver how-to](https://moonmodules.org/MoonLight/how-to/led-drivers.html#which-one) has the chips, limits and wiring.
+/// Start with `i80`. Choose `MoonI80` for frames too big for memory or a pin expander, `Parlio` on a P4, `GPIO-DMA` on a Teensy 4.1. [LED drivers](https://moonmodules.org/MoonLight/reference/hardware/led-drivers.html#which-one) has the chips, limits and wiring.
 ///
 /// @technical
 ///
@@ -106,7 +106,7 @@ public:
     /// TX pin override for the test; unset uses lane 0.
     int8_t   loopbackTxPin = -1;
     /// Strand carrying the test pattern, expander mode only.
-    /// @guide Strand 0 is Q7, strand S is Q(7 - S%8): jumper it to `loopbackRxPin`. The '595 is 5 V: divide it ([how-to](https://moonmodules.org/MoonLight/how-to/led-drivers.html#testing-the-wire-with-the-loopback)).
+    /// @guide Strand 0 is Q7, strand S is Q(7 - S%8): jumper it to `loopbackRxPin`. The '595 is 5 V: divide it ([LED drivers](https://moonmodules.org/MoonLight/reference/hardware/led-drivers.html#testing-the-wire-with-the-loopback)).
     uint8_t  loopbackStrand = 0;
     /// ON rides the live pipeline, OFF rebuilds a private bus.
     bool     loopbackIntrusive = false;

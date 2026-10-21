@@ -3,14 +3,10 @@
 The app shows these strings per module and per control, so each rule here is something a user reads: which sentence is the one line, where a control's help comes from, and that every link in it works from a device's own page."""
 
 import re
-import sys
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-
-ROOT = Path(__file__).resolve().parent.parent.parent
-sys.path.insert(0, str(ROOT / "moondeck" / "docs"))
 
 import gen_help  # noqa: E402
 
@@ -344,7 +340,7 @@ HELP = {"line": "A picture on the layer.",
         "controls": {"fit": {"line": "Keep the aspect.", "more": "Long."}, "file": {"line": "FSEQ only."}},
         "doc": "light/effects.md#picture",
         "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/PictureEffect.h",
-        "tests": "https://moonmodules.org/MoonLight/reference/tests/unit-tests.html#pictureeffect"}
+        "tests": "https://moonmodules.org/MoonLight/reference/tests.html#pictureeffect"}
 
 
 def test_the_attribution_catalog_shows_avatars_and_the_modules_that_name_each_entry(monkeypatch):
@@ -384,11 +380,11 @@ def test_a_module_reads_as_plain_markdown_under_its_deck():
     assert "- `fit`: Keep the aspect." in out and "- `file`: FSEQ only." in out
     assert "Attribution: Gomez 2000" in out
     assert "[Source](https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/PictureEffect.h)" in out   # the header on GitHub
-    assert "[Tests](../../reference/tests/unit-tests.md#pictureeffect)" in out   # the site's own page, by @module
+    assert "[Tests](../../reference/tests.md#pictureeffect)" in out   # the site's own page, by @module
 
 
 def test_a_modules_tests_link_opens_its_section_in_the_test_inventory():
-    assert gen_help.tests_url("PictureEffect", "main") == "https://moonmodules.org/MoonLight/reference/tests/unit-tests.html#pictureeffect"
+    assert gen_help.tests_url("PictureEffect", "main") == "https://moonmodules.org/MoonLight/reference/tests.html#pictureeffect"
     assert gen_help.tests_url("NoSuchThing", "main") is None
 
 

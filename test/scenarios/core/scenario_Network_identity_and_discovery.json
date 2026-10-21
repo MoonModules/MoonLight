@@ -2,6 +2,10 @@
   "name": "scenario_Network_identity_and_discovery",
   "module": "NetworkModule",
   "mode": "mutate",
+  "instances": {
+    "Devices": "DevicesModule",
+    "Network": "NetworkModule"
+  },
   "also": [
     "DevicesModule",
     "SystemModule"

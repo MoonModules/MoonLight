@@ -433,6 +433,7 @@ TEST_CASE("every script example in the docs compiles") {
         repo / "moonlive" / "README.md",
         // The language reference; a layout's or a modifier's examples are the shipped scripts in moonlive/, compiled by the test above.
         repo / "docs" / "moonmodules" / "light" / "moonlive.md",
+        repo / "docs" / "tutorials" / "first-script.md",
     };
 
     int checked = 0;

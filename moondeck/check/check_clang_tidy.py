@@ -29,6 +29,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import _findings  # noqa: E402
+
 # Third-party code that lives inside our tree. Findings here are upstream's to fix.
 VENDORED = ("test/doctest.h", "src/platform/desktop/vendor/miniaudio.h")
 
@@ -251,6 +254,12 @@ def main():
     commit = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=ROOT,
                             capture_output=True, text=True).stdout.strip()
     print(render(rows, commit))
+
+    # Only the full, unfiltered run is the record: a module or one check shows part of it.
+    if not (args.module or args.check):
+        _findings.write("check_clang_tidy",
+                        {c: {"reason": "clang-tidy check, configured in .clang-tidy"} for c in sorted({r["check"] for r in rows})},
+                        [{"rule": r["check"], "message": r["msg"], "file": r["file"], "line": int(r["line"])} for r in rows])
 
     return 1 if (args.fail_on_findings and rows) else 0
 

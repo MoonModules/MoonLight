@@ -8,6 +8,7 @@
       "esp32-eth"
     ],
     "image": "assets/deviceModels/esp32-olimex-gateway.png",
+    "description": "Ethernet takes 0, 17, 18, 19, 21, 22, 25, 26 and 27, so LED outputs go on 4, 13 and 14 (the microSD's pins, free while no SD card is used), 16, 32 or 33.",
     "url": "https://www.olimex.com/Products/IoT/ESP32/ESP32-GATEWAY/open-source-hardware",
     "supported": [
       "LEDs",

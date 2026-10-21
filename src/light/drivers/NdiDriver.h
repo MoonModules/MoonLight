@@ -22,7 +22,7 @@ namespace mm {
 ///
 /// ## The NDI runtime
 ///
-/// You install it yourself; without it the driver says so and nothing else changes. The steps: [installing the NDI runtime](https://moonmodules.org/MoonLight/how-to/watching-the-output.html#installing-the-ndi-runtime).
+/// You install it yourself; without it the driver says so and nothing else changes. The steps: [installing the NDI runtime](https://moonmodules.org/MoonLight/reference/watching-the-output.html#installing-the-ndi-runtime).
 ///
 /// ## Receivers
 ///
@@ -32,7 +32,7 @@ namespace mm {
 ///
 /// | It says | It means |
 /// |---|---|
-/// | `NDI runtime not installed` | Install it, per the how-to page |
+/// | `NDI runtime not installed` | Install it: [Watch the output as video](https://moonmodules.org/MoonLight/moonwalk.html#watch-output) |
 /// | `could not create the NDI source` | The runtime is there but refused, usually a name clash with another source |
 /// | `sending <w>x<h> at <n> fps` | Live; look for it in your receiver |
 ///

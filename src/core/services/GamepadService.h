@@ -32,7 +32,7 @@ inline constexpr uint8_t kGamepadInputCount = sizeof(kGamepadInputs) / sizeof(kG
 ///
 /// A browser lists a pad only once a button is pressed with the page open. Chrome and Firefox also need a secure page, which a board's own page is not until marked once.
 ///
-/// [The how-to](https://moonmodules.org/MoonLight/how-to/control-surface.html#a-midi-desk-or-a-gamepad-through-the-browser) has the steps.
+/// [Connect a control surface](https://moonmodules.org/MoonLight/moonwalk.html#control-surface) has the steps.
 ///
 /// ## Learning an input
 ///

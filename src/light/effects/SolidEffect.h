@@ -61,7 +61,6 @@ public:
 
     /// Allocate the band modes' wheel-index table, kept off the inline footprint.
     void prepare() override {
-        // On the heap, since the registerType probe builds a throwaway instance on an 8 KB stack.
         validIndices_.resize(256);
     }
 

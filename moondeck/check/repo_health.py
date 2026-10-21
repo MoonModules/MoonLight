@@ -568,7 +568,7 @@ def load_reference(tag):
 def gains(new, ref, since="", code=(None, None)):
     """The numbers a user feels, as (metric, unit, reference, now), for each one both snapshots hold; a firmware the release lacks comes with reference None.
 
-    A target's flash counts only when it was rebuilt after `since`, the release date: a number carried forward unchanged would read as no growth. `code` is the code report's total at the release and now.
+    A target's flash counts only when it was rebuilt after `since`, the release date: a number carried forward unchanged would read as no growth. `code` is the code check's total at the release and now.
     """
     rows = []
     measured = new.get("measured", {})
@@ -608,12 +608,13 @@ def _tag_date(tag):
 
 
 def _code_findings(tag):
-    """The code report's total at `tag` and in the working tree, None where there is no report."""
+    """The code findings' total at `tag` and in the working tree, from the counts beside the report, None where there are none."""
+    import _ratchet
     import check_code
-    rel = check_code.REPORT.relative_to(ROOT).as_posix()
+    rel = check_code.COUNTS.relative_to(ROOT).as_posix()
     out = subprocess.run(["git", "show", f"{tag}:{rel}"], cwd=ROOT, capture_output=True, text=True, timeout=10)
-    was = (check_code.counts_in(out.stdout) or {}).get("(total)") if out.returncode == 0 else None
-    now = (check_code.counts_in(_read(check_code.REPORT)) or {}).get("(total)") if check_code.REPORT.exists() else None
+    was = json.loads(out.stdout).get("(total)") if out.returncode == 0 else None
+    now = (_ratchet.current_counts(check_code.COUNTS) or {}).get("(total)")
     return was, now
 
 
@@ -632,7 +633,7 @@ def render_gains(new, ref, tag):
         change = (f"{diff / 1024:+.1f} KB" if unit == "KB" else f"{diff:+,}") + pct
         L.append(f"| {metric} | {_gain_cell(unit, was)} | {_gain_cell(unit, now)} | {change} |")
     L += ["", (f"Against the release `{tag}`, the fixed point a user compares with; the tables below compare against the last commit. "
-               f"A firmware not rebuilt since `{tag}` is left out, and a measure the release did not record yet, such as the code report, joins from the next one."), ""]
+               f"A firmware not rebuilt since `{tag}` is left out, and a measure the release did not record yet, such as the code check, joins from the next one."), ""]
     return L
 
 

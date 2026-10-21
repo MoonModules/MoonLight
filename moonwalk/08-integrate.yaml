@@ -1,0 +1,488 @@
+# yaml-language-server: $schema=moonwalk.schema.json
+stage: Integrate
+summary: A script, a program or a hub driving a device over its API.
+processes:
+  - id: http-api
+    title: Script against the HTTP API
+    actor: user
+    goal: A script adds a module and sets its controls over HTTP.
+    page: reference/integrating.md
+    intro: |
+      Anything the interface does, a script does over HTTP: the browser page is one client of the API among others. Every route and what it answers: [the REST API reference](reference/api.md). The examples were run against a device; `<device>` is its address, as `192.168.1.42` or `moonlight.local`.
+    steps:
+      - id: find
+        say: Address the device by its mDNS name.
+        when: { manual: "http://<deviceName>.local, the name on the System card." }
+        detail: |
+          A hardcoded address breaks when DHCP moves the device. Every device advertises its name: [Finding devices](reference/integrating.md#finding-devices).
+      - id: types
+        say: Read the module types the device knows.
+        when: { call: { operation: listTypes } }
+        detail: |
+          It names every type you can add and what may parent it.
+      - id: add
+        say: Add a module.
+        when: { call: { operation: addModule, body: '{"type":"RainbowEffect","parent_id":"Layer"}' } }
+        then: [{ module: RainbowEffect, exists: true }]
+        detail: |
+          The answer names the module, as `{"ok":true,"name":"Rainbow"}`, and every later call addresses it by that name. A second module of the same type is named `Rainbow-2`.
+      - id: controls
+        say: Read its controls by name.
+        when: { call: { operation: getModule, params: { name: Rainbow } } }
+        detail: |
+          The reply lists every control with its name, type and current value: [What a control is called](reference/integrating.md#what-a-control-is-called).
+      - id: set
+        say: Set one of its controls.
+        when: { call: { operation: setControl, body: '{"module":"Rainbow","control":"speed","value":40}' } }
+        then: [{ module: RainbowEffect, control: speed, equals: 40 }]
+        detail: |
+          `{"ok":true}` means it applies to the running tree on the next frame. A number rides as a JSON number, and a failed call answers with a reason: [Three things the payload decides](reference/integrating.md#three-things-the-payload-decides).
+  - id: apply-state
+    title: Set everything at once with a state document
+    actor: user
+    goal: Many modules and controls set in one call, from one document.
+    page: reference/integrating.md
+    intro: |
+      A state document is the part of the module tree you want, keyed by module name, and also how a configuration moves between devices. Its rules: [Setting everything at once](reference/integrating.md#setting-everything-at-once).
+    steps:
+      - id: read
+        say: Read a module back as a document.
+        when: { call: { operation: getModuleDocument, params: { name: Effects } } }
+        detail: |
+          With its path from the top level around it, as a card's `{ }` button shows it, secrets left out.
+      - id: write
+        say: Write the part of the tree to change.
+        when: { manual: "A value sets a control; an object is a child module; null removes one." }
+      - id: apply
+        say: Apply the document.
+        when: { call: { operation: applyState, body: '{"Effects":{"Layer":{"Swirl":{"type":"RainbowEffect","speed":90}}}}' } }
+        then: [{ module: RainbowEffect, control: speed, equals: 90 }]
+        detail: |
+          The answer counts the changes, or names the first failure and where it is.
+  - id: moonlive-api
+    title: Run a MoonLive script over the API
+    actor: user
+    goal: A script written from your editor compiles and runs on the device, with its controls set over HTTP.
+    systems: [MoonLive]
+    page: reference/integrating.md
+    intro: |
+      A script is a file on the device and a control that names it, so running one remotely is a write and a set. This whole sequence was run against a device. The language: [MoonLive](moonmodules/light/moonlive.md).
+    steps:
+      - id: list
+        say: List the scripts already there.
+        when: { call: { operation: listScripts } }
+        detail: |
+          `dir` is the factory catalog, compiled into the firmware.
+      - id: write
+        say: Write the script to the device.
+        when: { call: { operation: writeFile, params: { path: /moonlive/hello.mle } } }
+        detail: |
+          The body is the script; the folder is created if it is missing.
+
+          ```
+          class HelloEffect {
+            byte hue = 0;
+            void defineControls() { addControl("hue", hue, 0, 255); }
+            void tick() { fill(paletteRGB(hue, 255)); }
+          }
+          ```
+
+          Write to `/moonlive`, the user's folder, which **shadows** `/.moonlive`, the factory catalog served from flash: a user file of the same name wins. That is how a shipped script gets overridden, and equally how a factory update becomes invisible.
+      - id: read
+        say: Read it back.
+        when: { call: { operation: readFile, params: { path: /moonlive/hello.mle } } }
+      - id: add
+        say: Add a MoonLive effect under the Layer.
+        when: { call: { operation: addModule, body: '{"type":"MoonLiveEffect","parent_id":"Layer"}' } }
+        then: [{ module: MoonLiveEffect, exists: true }]
+      - id: point
+        say: Point it at the script.
+        when: { call: { operation: setControl, body: '{"module":"MoonLive","control":"script","value":"hello.mle"}' } }
+        then: [{ module: MoonLiveEffect, control: script, equals: hello.mle }]
+      - id: status
+        say: Read the compile result in its status.
+        when: { call: { operation: getModule, params: { name: MoonLive } } }
+        detail: |
+          A byte count means it compiled. A failure gives a message with an offset, as `a script is a class: expected class <Name> { … } @0`.
+      - id: control
+        say: Set the script's own controls.
+        when: { call: { operation: setControl, body: '{"module":"MoonLive","control":"hue","value":128}' } }
+        detail: |
+          They appear on the module once the script compiles. Writing the file again recompiles it on the next frame and keeps each control's live value, so a script is iterated on from an editor without touching the module.
+  - id: smart-home-hub
+    title: Set up a smart-home hub
+    actor: user
+    goal: A running hub and MQTT broker the device can join, on Windows, a Raspberry Pi or a Mac.
+    systems: [MoonCore]
+    page: reference/home-automation.md
+    inputs:
+      type: object
+      properties:
+        hub: { type: string, enum: [Home Assistant on Windows (Hyper-V), Homebridge on a Raspberry Pi, Homebridge on macOS, Homebridge on Windows], description: "Which hub, on which machine?" }
+    intro: |
+      Home Assistant is the recommended path, with the HomeKit bridge included; standalone Homebridge serves Apple Home alone, and a Raspberry Pi is its natural permanent home. Wired Ethernet on a Home Assistant host is strongly recommended: a WiFi-bridged VM drops for a few seconds every few minutes, and the entities flap to unavailable. For ProxMox, ESXi, KVM, VirtualBox or a Raspberry Pi 4 or 5, [installation.home-assistant.io](https://www.home-assistant.io/installation/) has the image and the steps. The facts behind each step: [Home automation](reference/home-automation.md#set-up-the-infrastructure).
+    steps:
+      - id: hv-enable
+        section: Install Home Assistant OS
+        say: Enable Hyper-V.
+        given: [{ input: hub, equals: Home Assistant on Windows (Hyper-V) }]
+        when: { manual: "Open Turn Windows features on or off, tick Hyper-V with both sub-items and reboot." }
+        detail: |
+          Windows 10 or 11 Pro or Enterprise ships Hyper-V; the Home editions do not. Check with `systeminfo | findstr /I "Hyper-V"`: lines ending in `Yes` mean the CPU supports it and BIOS virtualization is on.
+      - id: hv-image
+        say: Download the Home Assistant OS Hyper-V image.
+        given: [{ input: hub, equals: Home Assistant on Windows (Hyper-V) }]
+        when: { open: { url: "https://github.com/home-assistant/operating-system/releases" } }
+        detail: |
+          Take the `haos_ova-*.vhdx.zip` for Hyper-V and unzip it where the VM disk stays, such as `C:\Hyper-V\HAOS\`.
+      - id: hv-switch
+        say: Create an external virtual switch.
+        given: [{ input: hub, equals: Home Assistant on Windows (Hyper-V) }]
+        when: { manual: "Hyper-V Manager, Virtual Switch Manager, New virtual switch, External, on the Ethernet adapter." }
+        detail: |
+          Untick *Allow management operating system to share*. The VM then sits on the LAN with its own DHCP lease, with no NAT. If VirtualBox ran an earlier HA VM, disable its `VBoxSVC` autostart in Task Manager, Startup: its WiFi-bridge driver causes the flapping.
+      - id: hv-vm
+        say: Create the virtual machine.
+        given: [{ input: hub, equals: Home Assistant on Windows (Hyper-V) }]
+        when: { manual: "Hyper-V Manager, New, Virtual Machine." }
+        detail: |
+          Name it `HomeAssistant`, pick **Generation 2** and at least **2 GB RAM** (4 GB is comfortable). Attach the network to the external switch, choose **Use an existing virtual hard disk** and point at the unzipped `.vhdx`.
+      - id: hv-secure-boot
+        say: Disable Secure Boot.
+        given: [{ input: hub, equals: Home Assistant on Windows (Hyper-V) }]
+        when: { manual: "Right-click the VM, Settings, Security, untick Enable Secure Boot." }
+        detail: |
+          The HAOS shim is not in the Microsoft template.
+      - id: hv-start
+        say: Start the VM and finish onboarding.
+        given: [{ input: hub, equals: Home Assistant on Windows (Hyper-V) }]
+        when: { open: { url: "http://homeassistant.local:8123" } }
+        detail: |
+          The first run takes about 2 minutes. When the console shows `homeassistant login:`, open the page, or the LAN IP the console prints, and complete the onboarding wizard.
+      - id: hv-awake
+        section: Keep the host running
+        say: Stop the host from sleeping.
+        given: [{ input: hub, equals: Home Assistant on Windows (Hyper-V) }]
+        when: { manual: "In an admin PowerShell, run the commands in the detail." }
+        detail: |
+          A suspend pauses Hyper-V and every entity reads unavailable until the host wakes.
+
+          ```powershell
+          powercfg /a
+          powercfg /change standby-timeout-ac 0
+          powercfg /hibernate off
+          ```
+
+          `/a` lists the sleep states the host supports. `/hibernate off` also disables Hybrid Sleep and Fast Startup. Modern-standby hosts respect `standby-timeout-ac 0` too. On a laptop, close-lid must stop sending the sleep signal:
+
+          ```powershell
+          powercfg /setacvalueindex SCHEME_CURRENT SUB_BUTTONS LIDACTION 0
+          powercfg /setactive SCHEME_CURRENT
+          ```
+      - id: hv-auto
+        say: Set the VM's start and stop actions.
+        given: [{ input: hub, equals: Home Assistant on Windows (Hyper-V) }]
+        when: { manual: "Hyper-V Manager, HomeAssistant, Settings, Management." }
+        detail: |
+          **Automatic Start Action:** Always start this virtual machine automatically, with a startup delay of 60 s so the vSwitch is up first. A Windows reboot then brings HA back untouched.
+
+          **Automatic Stop Action:** Save the virtual machine state. A planned shutdown suspends HA cleanly and resumes it on the next boot, which avoids a cold start with the SQLite database in an uncertain state.
+      - id: ha-mosquitto
+        section: Add the broker
+        say: Install the Mosquitto broker add-on.
+        given: [{ input: hub, equals: Home Assistant on Windows (Hyper-V) }]
+        when: { manual: "Settings, Add-ons, Add-on Store, Mosquitto broker, Install, Start, then turn on Start on boot and Watchdog." }
+        detail: |
+          The add-on runs an MQTT 3.1.1 broker at `<HA-IP>:1883` and uses HA users as MQTT credentials, with no `mosquitto.conf` editing. Create a user for the device under Settings, People, Users, Add user: a name such as `mqttuser`, *Can only log in from the local network* ticked, a password.
+
+          HA usually adds the MQTT integration, its client to the broker, on the first start. If not: Settings, Devices & Services, Add Integration, MQTT, host `core-mosquitto`, port `1883`, that user's credentials.
+      - id: zigbee
+        section: Optional
+        say: Reach a USB Zigbee coordinator.
+        given: [{ input: hub, equals: Home Assistant on Windows (Hyper-V) }]
+        when: { process: zigbee-over-tcp }
+      - id: pi-broker
+        section: Install the broker
+        say: Install Mosquitto.
+        given: [{ input: hub, equals: Homebridge on a Raspberry Pi }]
+        when: { run: { command: "sudo apt update && sudo apt install -y mosquitto mosquitto-clients" } }
+        detail: |
+          On Raspberry Pi OS or any Debian-based distro. The package starts a `mosquitto` systemd service.
+      - id: pi-listener
+        say: Open the LAN listener.
+        given: [{ input: hub, equals: Homebridge on a Raspberry Pi }]
+        when: { manual: "Create /etc/mosquitto/conf.d/moonlight.conf, then run sudo systemctl restart mosquitto." }
+        detail: |
+          Mosquitto 2.x listens on `localhost` only by default, and the device reaches the broker over the LAN:
+
+          ```
+          listener 1883 0.0.0.0
+          allow_anonymous true
+          ```
+
+          `allow_anonymous true` suits a home LAN; add a password file if the broker is exposed more widely.
+      - id: pi-homebridge
+        section: Install Homebridge
+        say: Install Homebridge from the Debian repository.
+        given: [{ input: hub, equals: Homebridge on a Raspberry Pi }]
+        when: { open: { url: "https://github.com/homebridge/homebridge/wiki/Install-Homebridge-on-Raspbian" } }
+        detail: |
+          It runs as a systemd service with the Config UI at `http://<pi-ip>:8581`. Both services persist across reboots by default; `sudo systemctl enable mosquitto homebridge` makes it explicit.
+      - id: mac-broker
+        section: Install the broker
+        say: Install Mosquitto.
+        given: [{ input: hub, equals: Homebridge on macOS }]
+        when: { run: { command: "brew install mosquitto" } }
+      - id: mac-config
+        say: Write the LAN listener config.
+        given: [{ input: hub, equals: Homebridge on macOS }]
+        when: { run: { command: "printf 'listener 1883 0.0.0.0\\nallow_anonymous true\\n' > test.conf" } }
+        detail: |
+          Mosquitto 2.x binds only to `localhost` by default; this opens the LAN listener.
+      - id: mac-run
+        say: Run Mosquitto in the foreground.
+        given: [{ input: hub, equals: Homebridge on macOS }]
+        when: { run: { command: "\"$(brew --prefix)/sbin/mosquitto\" -v -c test.conf" } }
+        detail: |
+          Every packet shows; Ctrl-C stops it. The device reaches the broker at your Mac's LAN IP, and Homebridge reaches it on loopback. Allow `mosquitto` through the macOS firewall on `1883` if prompted.
+      - id: mac-homebridge
+        section: Install Homebridge
+        say: Install Homebridge.
+        given: [{ input: hub, equals: Homebridge on macOS }]
+        when: { open: { url: "https://homebridge.io" } }
+        detail: |
+          The site has the macOS installer; `npm i -g homebridge homebridge-config-ui-x` is the CLI route. Start it with `homebridge` in a terminal, or from the menu-bar app.
+      - id: mac-teardown
+        section: Tear it down
+        say: Stop Mosquitto and Homebridge.
+        given: [{ input: hub, equals: Homebridge on macOS }]
+        when: { manual: "Ctrl-C the foreground mosquitto and quit Homebridge." }
+        detail: |
+          Nothing persists as a service.
+      - id: win-broker
+        section: Install the broker
+        say: Install Mosquitto.
+        given: [{ input: hub, equals: Homebridge on Windows }]
+        when: { run: { command: "winget install EclipseFoundation.Mosquitto" } }
+        detail: |
+          The installer registers a Windows service and puts the tools under `C:\Program Files\mosquitto\`.
+      - id: win-config
+        say: Write the LAN listener config.
+        given: [{ input: hub, equals: Homebridge on Windows }]
+        when: { manual: "Create test.conf with the two lines in the detail." }
+        detail: |
+          For a test, run Mosquitto in the foreground. Mosquitto 2.x binds only to `localhost` unless told otherwise, so `test.conf` opens the LAN listener:
+
+          ```
+          listener 1883 0.0.0.0
+          allow_anonymous true
+          ```
+      - id: win-run
+        say: Run Mosquitto in the foreground.
+        given: [{ input: hub, equals: Homebridge on Windows }]
+        when: { manual: "Stop the service, then run the broker with test.conf." }
+        detail: |
+          ```powershell
+          net stop mosquitto
+          & 'C:\Program Files\mosquitto\mosquitto.exe' -v -c test.conf
+          ```
+
+          The first time, allow `mosquitto.exe` through Windows Defender Firewall on `1883`: accept the prompt, or add an inbound rule for TCP 1883.
+      - id: win-homebridge
+        section: Install Homebridge
+        say: Install Homebridge for Windows.
+        given: [{ input: hub, equals: Homebridge on Windows }]
+        when: { open: { url: "https://github.com/homebridge/homebridge/wiki/Install-Homebridge-on-Windows-10-11" } }
+        detail: |
+          It runs as a service with the Config UI at `http://localhost:8581`.
+      - id: win-teardown
+        section: Tear it down
+        say: Stop Mosquitto and Homebridge.
+        given: [{ input: hub, equals: Homebridge on Windows }]
+        when: { manual: "Ctrl-C the foreground mosquitto and stop the Homebridge service." }
+        detail: |
+          Leave the broker service stopped, or disable it in **Services**; stop Homebridge from the Config UI or **Services**.
+    outro: |
+      The hub and broker run. Continue with [Bring the device into a smart home](moonwalk.md#smart-home).
+  - id: zigbee-over-tcp
+    title: Reach a USB Zigbee coordinator from a Hyper-V VM
+    actor: user
+    goal: A Zigbee coordinator on the Windows host served to Zigbee2MQTT in the Home Assistant VM over TCP.
+    systems: [MoonCore]
+    page: reference/home-automation.md
+    intro: |
+      Hyper-V has no USB passthrough, so a coordinator plugged into the Windows host cannot be handed to the HAOS VM as it can on ProxMox or a bare-metal Pi. The coordinator's serial port goes over the network instead, and Zigbee2MQTT points at that.
+    steps:
+      - id: bridge
+        say: Install the serial-to-TCP bridge on the host.
+        when: { run: { command: "mkdir C:\\zigbee-bridge; cd C:\\zigbee-bridge; Invoke-WebRequest https://moonmodules.org/MoonLight/reference/examples/serial-tcp-bridge.py -OutFile serial-tcp-bridge.py; python -m venv .venv; .venv\\Scripts\\pip install pyserial" } }
+        detail: |
+          [serial-tcp-bridge.py](reference/examples/serial-tcp-bridge.py) opens the COM port, listens on a TCP port and copies bytes both ways. It serves **one client at a time** (a coordinator is single-consumer; a new connection replaces the old one), runs **115200 8N1 with no flow control**, and logs the bytes moved in each direction per connection, which makes the failure in [Home automation](reference/home-automation.md#troubleshooting) diagnosable. Try it by hand first: `.venv\Scripts\python serial-tcp-bridge.py --port COM9 --tcp 20108`. On Linux, `ser2net` does the same.
+      - id: z2m
+        say: Point Zigbee2MQTT at the bridge.
+        when: { manual: "In the Zigbee2MQTT add-on configuration, replace the serial port with the host's LAN address." }
+        detail: |
+          ```yaml
+          serial:
+            port: tcp://<host-lan-ip>:20108
+            adapter: zstack        # zstack for CC2652/CC2531, ember for EFR32
+            baudrate: 115200
+          ```
+      - id: service
+        say: Run the bridge as a Windows service.
+        when: { manual: "NSSM wraps any executable as a service; run the commands in the detail in an admin PowerShell." }
+        detail: |
+          Without a service, a host reboot leaves Home Assistant with no Zigbee. Install [NSSM](https://nssm.cc/) first.
+
+          ```powershell
+          nssm install ZigbeeBridge "C:\zigbee-bridge\.venv\Scripts\python.exe" "-u C:\zigbee-bridge\serial-tcp-bridge.py --port COM9 --tcp 20108"
+          nssm set ZigbeeBridge AppDirectory "C:\zigbee-bridge"
+          nssm set ZigbeeBridge AppStdout "C:\zigbee-bridge\bridge.log"
+          nssm set ZigbeeBridge AppStderr "C:\zigbee-bridge\bridge.log"
+          nssm set ZigbeeBridge AppRotateFiles 1
+          nssm set ZigbeeBridge AppExit Default Restart
+          nssm set ZigbeeBridge Start SERVICE_AUTO_START
+          ```
+
+          `AppExit Default Restart` retries at boot until the USB device has enumerated.
+      - id: suspend
+        say: Turn off USB selective suspend.
+        when: { manual: "Clear the power plan setting and the root hub checkbox in an admin PowerShell." }
+        detail: |
+          Windows powers down an idle USB port, and the coordinator then stops answering with no error anywhere.
+
+          ```powershell
+          powercfg /setacvalueindex SCHEME_CURRENT 2a737441-1930-4402-8d77-b2bebba308a3 48e6b7a6-50f5-4782-a5d4-53bb8f07e226 0
+          powercfg /setdcvalueindex SCHEME_CURRENT 2a737441-1930-4402-8d77-b2bebba308a3 48e6b7a6-50f5-4782-a5d4-53bb8f07e226 0
+          powercfg /setactive SCHEME_CURRENT
+          Get-CimInstance -Namespace root\wmi -ClassName MSPower_DeviceEnable |
+            Where-Object { $_.InstanceName -match 'ROOT_HUB' } |
+            ForEach-Object { $_.Enable = $false; Set-CimInstance -InputObject $_ }
+          ```
+      - id: fast-startup
+        say: Confirm Fast Startup is off.
+        when: { run: { command: "powercfg /hibernate off" } }
+        detail: |
+          [Stop the host from sleeping](moonwalk.md#smart-home-hub) ran it already; run it again to be sure. With Fast Startup on, **Shut down** resumes a saved kernel session and does not power-cycle a wedged coordinator; **Restart** does.
+  - id: smart-home
+    title: Bring the device into a smart home
+    actor: user
+    goal: On/off, brightness and color from Home Assistant, Apple Home or Homebridge.
+    systems: [MoonCore]
+    page: reference/home-automation.md
+    inputs:
+      type: object
+      properties:
+        platform: { type: string, enum: [Home Assistant, Home Assistant over MQTT, Homebridge, Hue lights], description: "Which platform?" }
+    intro: |
+      Home Assistant and Homebridge drive the device from their app, voice assistant and automations. Hue lights run the other way: the device drives your Hue bulbs as the pixels of an effect. The hub and broker run already; installing them, the MQTT topics and the troubleshooting: [Home automation](reference/home-automation.md).
+    steps:
+      - id: hub
+        section: Set up the hub
+        say: Set up a hub if you have none.
+        given: [{ input: platform, in: [Home Assistant, Home Assistant over MQTT, Homebridge] }]
+        when: { process: smart-home-hub }
+        detail: |
+          Optional for Home Assistant's default WLED path, which needs no broker; the MQTT paths need the hub and broker running.
+      - id: ha-find
+        section: Adopt in Home Assistant
+        say: Look for the device in Home Assistant.
+        given: [{ input: platform, equals: Home Assistant }]
+        when: { manual: "Home Assistant finds it on its own over the WLED path." }
+        detail: |
+          What it lists, and why this path needs no broker: [How HA creates the entity](reference/home-automation.md#how-ha-creates-the-entity).
+      - id: broker
+        section: Connect the broker
+        say: Set the broker on the MQTT card.
+        given: [{ input: platform, in: [Home Assistant over MQTT, Homebridge] }]
+        when: { open: { module: MqttModule } }
+        detail: |
+          Set `broker` to the broker's hostname or LAN IP, never `127.0.0.1`, which is loopback on the broker's own host. For Home Assistant's broker it is the IP its console prints. Set `port`, usually `1883`, and `username` and `password` when the broker requires them, for Home Assistant the user created for MQTT.
+      - id: ha-discovery
+        say: Turn haDiscovery on.
+        given: [{ input: platform, equals: Home Assistant over MQTT }]
+        when: { set: { module: MqttModule, control: haDiscovery, value: true } }
+        detail: |
+          The entity it creates, and the generic MQTT light not to configure: [How HA creates the entity](reference/home-automation.md#how-ha-creates-the-entity).
+      - id: ha-verify
+        say: Check the device's topics reach Home Assistant.
+        given: [{ input: platform, equals: Home Assistant over MQTT }]
+        when: { manual: "MQTT integration, Configure, Listen to topic: MoonLight/#." }
+        detail: |
+          The device's on, brightness and hsv topics appear.
+      - id: hb-verify
+        say: Check the device's topics reach the broker.
+        given: [{ input: platform, equals: Homebridge }]
+        when: { run: { command: "mosquitto_sub -t 'MoonLight/#' -v" } }
+        detail: |
+          The device's on, brightness and hsv topics and its retained name appear. Its MAC suffix, the last 6 hex digits, is in the topics: you need it in the accessory.
+      - id: ha-homekit
+        section: Reach Apple Home
+        say: Add the HomeKit Bridge integration.
+        given: [{ input: platform, in: [Home Assistant, Home Assistant over MQTT] }]
+        when: { manual: "Settings, Devices & Services, Add Integration, HomeKit Bridge." }
+        detail: |
+          Optional, to reach Apple Home. Pick **Include selected entities** and tick the MoonLight light.
+      - id: ha-pair
+        say: Scan the code in the Home app.
+        given: [{ input: platform, in: [Home Assistant, Home Assistant over MQTT] }]
+        when: { manual: "Add Accessory, More options, HA HomeKit Bridge." }
+        detail: |
+          Home Assistant prints the QR code and a PIN; scan the code or enter the PIN.
+      - id: hb-plugin
+        say: Install the homebridge-mqttthing plugin.
+        given: [{ input: platform, equals: Homebridge }]
+        when: { manual: "From the Config UI Plugins screen, or with `npm i -g homebridge-mqttthing`." }
+      - id: hb-accessory
+        say: Add the lightbulb accessory to Homebridge.
+        given: [{ input: platform, equals: Homebridge }]
+        when: { read: { page: reference/home-automation.md, section: The Homebridge accessory } }
+        detail: |
+          Add it in the Config UI Config editor or in `~/.homebridge/config.json`. Set `url` to `mqtt://<broker>:1883`, or `mqtt://127.0.0.1:1883` when Homebridge and the broker share a host. Replace `563cfe` in every topic with your MAC suffix, and match `username` and `password` to the broker or remove them.
+      - id: hb-restart
+        say: Restart Homebridge.
+        given: [{ input: platform, equals: Homebridge }]
+        when: { manual: "The accessory is listed in the Config UI." }
+      - id: hb-pair
+        say: Pair the bridge in the Home app.
+        given: [{ input: platform, equals: Homebridge }]
+        when: { manual: "Add Accessory, More options, the Homebridge bridge." }
+        detail: |
+          Use the PIN Homebridge prints on start. The device appears as a light with on/off, brightness and a color wheel that steps through palettes.
+      - id: hue-driver
+        section: Drive Hue lights
+        say: Add a Hue driver to Drivers.
+        given: [{ input: platform, equals: Hue lights }]
+        when: { add: { module: Drivers, type: HueDriver } }
+        detail: |
+          Enter the bridge's IP in `bridgeIp`. Find it in the Hue app or at [discovery.meethue.com](https://discovery.meethue.com). Why the result is ambient color rather than strobing: [Drive Hue lights](reference/home-automation.md#drive-hue-lights). Behavior and controls: [Drivers, Hue](moonmodules/light/drivers.md#hue).
+      - id: hue-link
+        say: Press the link button on the bridge.
+        given: [{ input: platform, equals: Hue lights }]
+        when: { manual: "It opens a 30-second pairing window." }
+      - id: hue-pair
+        say: Press pair within 30 seconds.
+        given: [{ input: platform, equals: Hue lights }]
+        when: { open: { module: HueDriver } }
+        detail: |
+          The device claims an app key, stored on the driver as `appKey`, once. The status line reads `paired, N lights`.
+      - id: hue-pick
+        say: Pick the room and light to drive.
+        given: [{ input: platform, equals: Hue lights }]
+        when: { manual: "Use the driver's room and light controls." }
+        detail: |
+          All bulbs, one room or a single light; which bulbs it skips: [Drive Hue lights](reference/home-automation.md#drive-hue-lights).
+      - id: hue-layout
+        say: Size the layout as one column of bulbs.
+        given: [{ input: platform, equals: Hue lights }]
+        when: { open: { module: Layouts } }
+        detail: |
+          Use width 1 and height equal to the number of Hue lights: [why one column](reference/home-automation.md#drive-hue-lights).
+      - id: hue-effect
+        say: Run an effect.
+        given: [{ input: platform, equals: Hue lights }]
+        when: { manual: "Any effect on the layer drives the bulbs." }
+        detail: |
+          Global brightness and color order apply as on a strip; brightness 0 turns a bulb off.
+    outro: |
+      The topics the platforms use, presets in Home Assistant and troubleshooting: [Home automation](reference/home-automation.md).

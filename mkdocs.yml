@@ -89,16 +89,49 @@ markdown_extensions:
       base_path: [!relative $config_dir]
       check_paths: true
 
+# The stage files and their schema are not under docs/, and the map the docs serve is built from them: a change there rebuilds the site.
+watch:
+  - moonwalk
+
 plugins:
   - search
   # A page MoonWalk took over keeps its address: each old URL forwards to its process in the live view, so links from the installer, the README and the help still land.
   - redirects:
       redirect_maps:
+        reference/tests/unit-tests.md: reference/tests.md
+        reference/tests/scenario-tests.md: reference/tests.md
+        reference/metrics/code.md: reference/tests.md#check_code
+        reference/metrics/docgen.md: reference/tests.md#check_docgen
+        reference/metrics/prose.md: reference/tests.md#check_prose
         tutorials/first-light-show.md: moonwalk.md#first-light-show
         how-to/installing-to-desktop.md: moonwalk.md#install
         how-to/building.md: moonwalk.md#desktop-build-test
-        gettingstarted.md: moonwalk.md#install
+        gettingstarted.md: getting-started.md
+        moonmodules/light/index.md: explanation/how-moonlight-works.md
+        reference/hardware/small-boards.md: work/future/small-boards.md
+        tutorials/how-moonlight-works.md: explanation/how-moonlight-works.md
+        tutorials/generative-effects.md: explanation/generative-effects.md
         how-to/updating-firmware.md: moonwalk.md#update-firmware
+        # The how-to folder became MoonWalk's processes; each page's facts moved to reference/, and its old address keeps working.
+        how-to/installing-on-linux.md: reference/installing-on-linux.md
+        how-to/adding-a-stream-source.md: reference/adding-a-stream-source.md
+        how-to/audio-input.md: reference/audio-input.md
+        how-to/watching-the-output.md: reference/watching-the-output.md
+        how-to/control-surface.md: reference/control-surface.md
+        how-to/home-automation.md: reference/home-automation.md
+        how-to/presets.md: reference/presets.md
+        how-to/migrating-over-the-air.md: reference/migrating-over-the-air.md
+        how-to/backup-and-restore.md: reference/backup-and-restore.md
+        how-to/troubleshooting.md: reference/troubleshooting.md
+        how-to/faq.md: reference/faq.md
+        how-to/logging-an-issue.md: reference/logging-an-issue.md
+        how-to/panel-cards.md: reference/hardware/panel-cards.md
+        how-to/led-drivers.md: reference/hardware/led-drivers.md
+        how-to/hub75-panels.md: reference/hardware/hub75-panels.md
+        how-to/hold-to-play.md: reference/examples/hold-to-play.md
+        how-to/multi-board-installation.md: reference/examples/multi-board-installation.md
+        how-to/led-signal-integrity.md: reference/troubleshooting.md#stray-pixels-or-wrong-colors-on-lights-that-should-be-off
+        explanation/led-signal-integrity.md: reference/troubleshooting.md#stray-pixels-or-wrong-colors-on-lights-that-should-be-off
 
 # The site's styles: colored headings, the card deck, the clips.
 extra_css:
@@ -111,9 +144,12 @@ extra_javascript:
   # MoonWalk's journey map (assets/moonwalk.js): its button on every page, and the map on moonwalk.md.
   - path: assets/moonwalk.js
     type: module
+  # The test page (assets/tests.js): a module that mounts on the page holding #mm-tests.
+  - path: assets/tests.js
+    type: module
 
-# Build-time hooks (moondeck/docs/mkdocs_hooks.py): generate the test-inventory pages
-# from the test files (never committed → can't drift), render each catalog page's
+# Build-time hooks (moondeck/docs/mkdocs_hooks.py): publish the test registry
+# from the test files (never committed, so it cannot drift), render each catalog page's
 # prose ### blocks as a 4-column table, and rewrite out-of-docs source links to
 # GitHub URLs. See the module docstring.
 hooks:
@@ -149,103 +185,60 @@ nav:
   - Home: index.md
   # A top-level tab. Installers already shipped link gettingstarted.html for help, a contract the redirect above keeps.
   - Getting started:
-      - MoonWalk: moonwalk.md
+      - Getting started: getting-started.md
+      # What a new user reads after the first install: the cards, the pipeline, live changes.
+      - How MoonLight works: explanation/how-moonlight-works.md
       # The web installer is a separate app deployed at /install/ (staged verbatim by the
       # release workflow, not built by MkDocs). A full URL (not a site-relative path) so
       # MkDocs treats it as the external resource it is.
       - Web installer: https://moonmodules.org/MoonLight/install/
-      # What MoonCloud IS to a user, kept apart from how it is built (Architecture > MoonCloud).
-      # Two pages, two audiences: the device card deep-links this one from its consent prompt
-      # (app.js, mooncloud.html#why-you-might-like-this), so its URL is a shipped contract.
-      - MoonCloud: explanation/mooncloud.md
-      # Answers to what people hit on a first run, each from someone's bench. Under Getting
-      # started rather than How-to, because the reader asking is on their first hour.
-      - FAQ: how-to/faq.md
-      - Log an issue: how-to/logging-an-issue.md
-  # The FOLDER under docs/ is the Diataxis type: tutorials/, how-to/, explanation/,
-  # reference/. The nav labels stay reader-facing, so the path tells a writer where a page
-  # belongs while a reader never meets the word "explanation". The rules (contributing/)
-  # and legal/ sit outside the grid on purpose — see contributing/documentation-standards.md.
-  # ONE learning path, in the order a reader walks it: what it is, then building a show,
-  # then making it beautiful, then writing your own. The install pages left for how-to/:
-  # putting MoonLight on a machine is a task somebody already has, not a lesson.
-  - Tutorials:
-      - How MoonLight works: tutorials/how-moonlight-works.md
+      # Answers to what people hit on a first run, each from someone's bench: the first hour's reader asks.
+      - FAQ: reference/faq.md
+      - Troubleshooting: reference/troubleshooting.md
+      - Log an issue: reference/logging-an-issue.md
+      - Contributing: contributing/index.md
+      # The two tutorials: a first MoonLive script, typed into the browser, and a first C++ effect for a developer new to the code.
       - Write your first script: tutorials/first-script.md
-      - Making beautiful effects: tutorials/generative-effects.md
       - Build your own MoonModules: tutorials/build-your-own-moonmodules.md
-  # Diataxis keeps how-to guides apart from tutorials: a tutorial is a lesson for someone
-  # learning, a how-to solves a task the reader already has.
-  # Grouped by what the reader is trying to DO: get it running, wire the output, connect it
-  # to something, keep it working.
-  - How-to guides:
-      - Running on a Linux machine: how-to/installing-on-linux.md
-      - Adding a picture or channel-data source: how-to/adding-a-stream-source.md
-      - Driving LED panels with a receiving card: how-to/panel-cards.md
-      - Wiring a microphone or capturing audio: how-to/audio-input.md
-      - Choosing and wiring an LED driver: how-to/led-drivers.md
-      - Driving a HUB75 panel: how-to/hub75-panels.md
-      - Watching the output as video: how-to/watching-the-output.md
-      - LED signal integrity: how-to/led-signal-integrity.md
-      - Connecting a control surface: how-to/control-surface.md
-      - Playing an effect while a button is held: how-to/hold-to-play.md
-      - The StadBeest, a multi-device installation: how-to/multi-board-installation.md
-      - Home automation: how-to/home-automation.md
-      - Presets: how-to/presets.md
-      - Migrating over the air: how-to/migrating-over-the-air.md
-      - Back up and restore: how-to/backup-and-restore.md
-      - Troubleshooting: how-to/troubleshooting.md
-  - Lights:
-      - Overview: moonmodules/light/index.md
-      - Effects: moonmodules/light/effects.md
-      - Layouts: moonmodules/light/layouts.md
-      - Modifiers: moonmodules/light/modifiers.md
-      - Drivers: moonmodules/light/drivers.md
-      - MoonLive: moonmodules/light/moonlive.md
-      - Power functions: moonmodules/light/power-functions.md
-      - Supporting: moonmodules/light/supporting.md
-  - Core:
-      - System: moonmodules/core/system.md
-      - Services: moonmodules/core/services.md
-      - Supporting: moonmodules/core/supporting.md
-      - Web UI: moonmodules/core/ui.md
-  - Architecture:
-      # "Overview", not the section's own name: the tab already says Architecture, and a first
-      # child repeating it reads as a page about the tab rather than the way into it. The
-      # convention is for INDEX pages only: a section whose first child is real content keeps
-      # that page's own title, which says what it is ("Install & first light", "Testing strategy").
-      - Overview: explanation/architecture/index.md
-      - MoonModule: explanation/architecture/moonmodule.md
-      - MoonCore: explanation/architecture/mooncore.md
-      # The reference half of MoonCore's platform abstraction, so it sits beside it rather than
-      # carrying a tab of its own.
-      - Platform: moonmodules/platform/index.md
-      - MoonLight: explanation/architecture/moonlight.md
-      - MoonLive: explanation/architecture/moonlive.md
-      - MoonBase: explanation/architecture/moonbase.md
-      - MoonInstaller: explanation/architecture/mooninstaller.md
-      - MoonCloud: explanation/architecture/mooncloud.md
-      - MoonDeck: explanation/architecture/moondeck.md
-      - Why we write our own code: explanation/why-we-write-our-own.md
       - Security: explanation/security.md
+      - Privacy policy: legal/privacy-policy.md
+  # The pages drawn from the code and the tests rather than written, each a tab of its own and so page-wide (mkdocs_hooks.on_page_markdown): the catalogs, the processes, the tests and the credits.
+  - Effects: moonmodules/light/effects.md
+  - Modifiers: moonmodules/light/modifiers.md
+  - Layouts: moonmodules/light/layouts.md
+  - Drivers: moonmodules/light/drivers.md
+  - Services: moonmodules/core/services.md
+  - System: moonmodules/core/system.md
+  - MoonWalk: moonwalk.md
+  - Tests: reference/tests.md
+  - Attributions: reference/attributions.md
+  # The FOLDER under docs/ is the Diataxis type: tutorials/, explanation/ and reference/, with the how-tos as MoonWalk's processes. The nav labels stay reader-facing, so the path tells a writer where a page belongs while a reader never meets the word "explanation". The rules (contributing/) and legal/ sit outside the grid on purpose: contributing/documentation-standards.md.
+  # Users and integrators: running it, connecting it, the hardware it runs on.
   - Reference:
-      # First in Reference because it answers the question a user arrives with:
-      # how do I drive this from my own code rather than from the page.
-      - Integrating: reference/integrating.md
-      - Testing strategy: reference/testing.md
-      - Performance: reference/performance.md
-      # The CMake layout, moved out of the how-to: a tree to look up, not a step to follow.
-      - Build system: reference/build-system.md
-      - Migrating (breaking changes): reference/MIGRATING.md
-      - Attributions: reference/attributions.md
-      # Generated by moondeck/check/repo_health.py on every KPI-gate run — the size/LOC/
-      # docs ratchet. Next to Performance because both are measured state, not prose.
-      - Repo health: reference/metrics/repo-health.md
-      # Generated by check_docgen.py --report: what the documentation sweep has left.
-      - Docgen: reference/metrics/docgen.md
-      - Prose: reference/metrics/prose.md
-      - Unit tests: reference/tests/unit-tests.md
-      - Scenario tests: reference/tests/scenario-tests.md
+      # What the steps of MoonWalk's processes rest on, grouped by what the reader is doing: running it, connecting it, keeping it working.
+      - Using it:
+          - Running on a Linux machine: reference/installing-on-linux.md
+          - Presets: reference/presets.md
+          - Back up and restore: reference/backup-and-restore.md
+          - Migrating over the air: reference/migrating-over-the-air.md
+          - Control surfaces: reference/control-surface.md
+          - Home automation: reference/home-automation.md
+          - Audio input: reference/audio-input.md
+          - Watching the output as video: reference/watching-the-output.md
+          # What MoonCloud IS to a user, kept apart from how it is built (Developers > Architecture > MoonCloud). The device card deep-links this one from its consent prompt (app.js, mooncloud.html#why-you-might-like-this), so its URL is a shipped contract.
+          - MoonCloud: explanation/mooncloud.md
+          # Its reader is a user upgrading: the action to take per break.
+          - Migrating (breaking changes): reference/MIGRATING.md
+      # The question a user arrives with: how do I drive this from my own code rather than from the page.
+      - Scripting and integrating:
+          - MoonLive: moonmodules/light/moonlive.md
+          - Making beautiful effects: explanation/generative-effects.md
+          - Integrating: reference/integrating.md
+          - REST API: reference/api.md
+      - Light pipeline modules: moonmodules/light/supporting.md
+      - Examples:
+          - Playing an effect while a button is held: reference/examples/hold-to-play.md
+          - The StadBeest, a multi-device installation: reference/examples/multi-board-installation.md
       - Hardware:
           - Firmware variants and memory: reference/hardware/firmware-variants.md
           - GPIO usage per MCU: reference/hardware/gpio-usage.md
@@ -254,16 +247,42 @@ nav:
           - MHC-WLED ESP32-P4 shield: reference/hardware/mhc-wled-esp32-p4-shield.md
           - Waveshare ESP32-P4-ETH: reference/hardware/esp32-p4-eth.md
           - Teensy 4.1: reference/hardware/teensy-4-1.md
-          - Small boards (RP2350, RP2040, Nordic): reference/hardware/small-boards.md
           - Light fixtures and DMX nodes: reference/hardware/light-fixtures.md
           - Control surfaces: reference/hardware/control-surfaces.md
-  # The rules bind a contributor rather than serving a reader need, so they sit outside
-  # the Diataxis grid (contributing/documentation-standards.md § The hierarchy).
-  - Contributing:
-      - Principles & process: contributing/principles-and-process.md
-      - Coding standards: contributing/coding-standards.md
-      - Documentation standards: contributing/documentation-standards.md
-  - Legal:
-      - Privacy policy: legal/privacy-policy.md
+          - LED drivers: reference/hardware/led-drivers.md
+          - HUB75 panels: reference/hardware/hub75-panels.md
+          - Receiving cards for LED panels: reference/hardware/panel-cards.md
+  # Contributors: how it is built, the rules, and the references a change needs.
+  - Developers:
+      - Architecture:
+          # "Overview", not the section's own name: a first child repeating the section reads as a page about it rather than the way in.
+          - Overview: explanation/architecture/index.md
+          - MoonModule: explanation/architecture/moonmodule.md
+          - MoonCore: explanation/architecture/mooncore.md
+          # The reference half of MoonCore's platform abstraction, beside it.
+          - Platform: moonmodules/platform/index.md
+          - Core internals: moonmodules/core/supporting.md
+          - MoonLight: explanation/architecture/moonlight.md
+          - MoonLive: explanation/architecture/moonlive.md
+          - MoonBase: explanation/architecture/moonbase.md
+          - MoonInstaller: explanation/architecture/mooninstaller.md
+          - MoonCloud: explanation/architecture/mooncloud.md
+          - MoonDeck: explanation/architecture/moondeck.md
+          - Web UI: moonmodules/core/ui.md
+      - Why we write our own code: explanation/why-we-write-our-own.md
+      - Power functions: moonmodules/light/power-functions.md
+      - Picture and channel-data sources: reference/adding-a-stream-source.md
+      - Testing strategy: reference/testing.md
+      - Performance: reference/performance.md
+      # The CMake layout: a tree to look up, not a step to follow.
+      - Build system: reference/build-system.md
+      # Generated by moondeck/check/repo_health.py on every KPI-gate run, next to Performance because both are measured state.
+      - Repo health: reference/metrics/repo-health.md
+      - MoonWalk reference: reference/moonwalk.md
+      # The rules bind a contributor rather than serving a reader need (contributing/documentation-standards.md § The hierarchy); the way in is Getting started > Contributing.
+      - Rules:
+          - Principles & process: contributing/principles-and-process.md
+          - Coding standards: contributing/coding-standards.md
+          - Documentation standards: contributing/documentation-standards.md
 
 # The catalog pages above are drawn from the module headers through docs/help/help.json, and each card links its header on GitHub, the technical reference.

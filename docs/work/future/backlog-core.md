@@ -2,6 +2,10 @@
 
 Forward-looking to-build items for the **core / infrastructure** domain (`src/core/`, `src/platform/`, build, CI, network, persistence, UI). The light-domain counterpart is [backlog-light.md](backlog-light.md); items that genuinely span both are in [backlog-mixed.md](backlog-mixed.md). Index + overview: [README.md](index.md). Completed items are removed.
 
+### Headers link the docs by page, not by host (2026-10-21, from the PR 150 review)
+
+Seventeen headers under `src/` carry absolute `https://moonmodules.org/MoonLight/...` links, so a docs move edits firmware sources and marks every firmware stale, as PR 150's move from `how-to/` to `reference/` did. A header names the page site-relative (`reference/hardware/panel-cards.md#...`) and `gen_help.py` resolves the host once, so the next docs move touches no source file.
+
 ### A Progress total rides the value patch (2026-10-19)
 
 A Progress control's total travels only in `writeControlMetadata` (Control.cpp), so a changed total needs a schema resync, which `rebuildControls()` triggers because `aux` is in the schema hash.
@@ -134,6 +138,14 @@ timing test here uses: feed the packet, advance the clock explicitly, assert. Ra
 on PR #96 and deliberately not taken in that pass: it is pre-existing rather than part of that
 diff, and swapping a test's transport is a change that wants its own verification.
 
+## What disable means: release the memory, or keep the module hot (2026-10-20)
+
+The rule says a disabled module keeps its settings only, and deleting a module already releases everything, so the question is whether disable should release too or keep the module hot for an instant resume. The contract test (`unit_ModuleContract.cpp`) lists the modules that keep runtime memory while disabled, Layer and Drivers with their pixel buffers the largest, and fixing them would settle the answer, so they wait for it. The analysis weighs: presets and DemoReel switching many modules, where kept memory grows with what is added rather than what runs; a quick toggle, where hot means an instant resume; the measured re-enable cost of every module, its `prepare()` time, gathered with the contract test's placement; three shapes, release on disable, keep everything hot until delete, or keep the settings and what is slow to rebuild while releasing the large buffers; and how comparable systems treat a disabled or paused element. The product owner decides, and the rule in coding-standards, the contract's lists and the Layer and Drivers fix follow.
+
+## Playlist in core: one sequencer for FSEQ, effects and DemoReel (2026-10-19)
+
+A playlist is a list of items with an optional duration each, played in order or shuffled once per pass, repeated off, one or all, under play, pause, stop, previous and next: the media player's model. Two copies of that sequencing exist: `DemoReelEffect::advance()` cycles effects, and `FseqPlayerEffect` cycles files with its own cursor, shuffle pass and loop mode, written as the same shape. An effects playlist would be the third, so it starts by putting the model in core once, a `Playlist` over core's editable `ListSource` whose owner supplies how to play item *i* and when it ends: the FSEQ player's items are files that end with the track, an effects playlist's are presets applied through the state-document engine that end after their duration, as the presets plan foresees, and DemoReel becomes an effects playlist of effects. The change that builds the effects playlist moves FSEQ's and DemoReel's sequencing into it.
+
 ## A catalog entry extends another (2026-10-18)
 
 A shield is a carrier board plus its own pins, as a Serg shield is a D1-Mini32 with more wired. An optional `extends: "<entry name>"` in the [device catalog](../../../mooninstaller/README.md#the-device-catalog) lets an entry take another's `state`: levels nest (MCU, carrier, device), a child overrides its parent at the same module and control, and modules merge by name.
@@ -231,7 +243,7 @@ running MoonLight permanently on a NAS or a Pi.
 `check_prose.py` already named `.js` and `.py` among the files it checks, but `.vale.ini` gave Vale
 no parser for either, so both were skipped in silence: the intent was there and the mechanism was
 not. A tree-sitter view per language closes that, and the count is written to
-[prose.md](../../reference/metrics/prose.md) on every run, beside the other metrics.
+`docs/reference/metrics/prose.json` on every run, beside the other metrics, and shown on [the test page](../../reference/tests.md#check_prose).
 
 The gate stays scoped to ADDED lines, so a change is held to the rules on what it writes.
 The report is the debt behind it, and it ratchets: a rise fails the check.
@@ -803,7 +815,7 @@ Cold path today, so a tidy-up rather than a cost.
 
 ### Filesystem-change notification (live preset refresh) — undesigned
 
-ControlModule rebuilds its preset list by rescanning `/.config/presets`, and that rescan runs at startup and after every save, rename, delete and reorder. So a preset file **uploaded or deleted through the File Manager** appears only once the module next rescans (a reboot, or any preset action on the surface), not the instant the file lands. Documented as the actual behaviour in [the Control card](../../how-to/presets.md).
+ControlModule rebuilds its preset list by rescanning `/.config/presets`, and that rescan runs at startup and after every save, rename, delete and reorder. So a preset file **uploaded or deleted through the File Manager** appears only once the module next rescans (a reboot, or any preset action on the surface), not the instant the file lands. Documented as the actual behaviour in [the Control card](../../reference/presets.md).
 
 The fix is a **core-neutral filesystem-change notification**: FileManagerModule (or the `platform::fs*` write paths) signals "this path changed", and a module with a folder it cares about re-reads. Deliberately not built yet — it is a new core seam serving one caller today, which is the shape [architecture.md § Core primitives, not one-offs](../../explanation/architecture/index.md#core-and-light-domain) warns about. **Build trigger**: a second consumer appears (a scripted-effect folder for MoonLive is the likely one, since live scripts uploaded as files have exactly the same staleness), or the manual-refresh step proves annoying in real use.
 
@@ -1152,7 +1164,7 @@ Confirmed by external review (CodeRabbit, PR #56).
 MoonLight behaviour and fidelity is deliberate. If the FPU-less Xtensa cost is real, that is a
 profiling question first, not a lint fix.
 
-`-Wfunction-effects` reports these but never fails a build; the code report counts them per file, and that count may only fall.
+`-Wfunction-effects` reports these but never fails a build; the code check counts them per file, and that count may only fall.
 
 ### ESP32 clang/LLVM toolchain — extend the clang checks to src/platform/esp32/
 
@@ -1192,10 +1204,6 @@ the sixth silent-zero this tooling has produced, and each looked like a clean tr
 `WarningsAsErrors` stays empty: clang-tidy reports, it does not gate
 ([testing.md § Static analysis](../../reference/testing.md#static-analysis)).
 
-
-### Heap-allocate the `registerType<T>` boot probe (lift a per-module lesson into core)
-
-`ModuleFactory::registerType<T>` stack-constructs a `T probe` at boot to capture `sizeof(T)`. On the main task's ~8 KB stack, a module with large inline members can overflow it and bootloop — a lesson the code records *per module* as a comment rather than fixing once in core: GameOfLifeEffect (`an inline array here caused a P4 stack-overflow bootloop`), HueDriver (`the lightsBuf_ stack-probe lesson`), and AudioService still carries ~5 KB of inline scratch while being factory-registered. This is the [*Complexity lives in core*](../../CLAUDE.md#principles) "lift the rule into core, don't paste it per module" clause: heap-allocate the probe (`MoonModule::operator new` already routes to PSRAM), or capture `sizeof` without constructing at all, so no module author ever has to remember the stack budget. Flagged by the 👾 Reviewer on PR #43. Small, core-only, its own `/plan`.
 
 ### Migrate HueDriver's name buffers to `ScratchBuffer` (finish the ScratchBuffer sweep)
 
@@ -1577,7 +1585,7 @@ Two cases in `test/unit/core/unit_AudioService_sync.cpp` fail intermittently, bo
 
 **Why it matters:** the gate scripts run the suite on every commit and merge, so a 1-in-10 flake interrupts gate lists often enough to train the reader to re-run instead of investigate — the habit that hides a real regression later.
 
-**Fix (do not paper over it):** treat the two cases separately. For the receive path, bind an **ephemeral** port (bind 0, read the assigned port back) so two runs can never contend. For the send path, first determine *why* the lazy open fails under repetition — whether the broadcast connect is refused or the latch is left set by an earlier case in the same process. A retry wrapper or a sleep is explicitly the wrong fix: it hides the next genuine failure too. `unit_NetworkReceiveEffect*` and `unit_SineEffect` share the fixed-port shape and deserve the same treatment while the fix is fresh.
+**Fix (do not paper over it):** treat the two cases separately. For the receive path, bind an **ephemeral** port (bind 0, read the assigned port back) so two runs can never contend. For the send path, first determine *why* the lazy open fails under repetition: whether the broadcast connect is refused or the latch is left set by an earlier case in the same process. A retry wrapper or a sleep is explicitly the wrong fix: it hides the next genuine failure too. `unit_NetworkReceiveEffect*` (a real UDP round trip on localhost) and `unit_SineEffect` (timing) flake the same way, about 1 full run in 3, and deserve the same treatment while the fix is fresh.
 
 ## ModuleFactory: registration can fail silently (uint8_t ceiling, unchecked bool)
 

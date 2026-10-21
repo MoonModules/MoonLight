@@ -154,3 +154,26 @@ TEST_CASE("two crashes in a row hold a module that asks for it and keep its save
     parent.removeChild(&plain);
     parent.removeChild(&risky);
 }
+
+namespace {
+// A module whose own worker counts each park, the way a module that ticks a subtree on a task parks it before the subtree changes.
+class Parking : public Counting {
+public:
+    uint32_t parks = 0;
+    void quiesce() override { parks++; }
+};
+} // namespace
+
+// A worker on another core may be in the module's tick, and onEnabled may release what it uses, so a switch parks the workers first.
+TEST_CASE("switching a module parks its workers first, and setting the same flag parks nothing") {
+    Parking m;
+    m.setEnabled(true);
+    CHECK(m.parks == 0);
+    m.setEnabled(false);
+    CHECK(m.parks == 1);
+    CHECK_FALSE(m.enabled());
+    m.setEnabled(false);
+    CHECK(m.parks == 1);
+    m.setEnabled(true);
+    CHECK(m.parks == 2);
+}

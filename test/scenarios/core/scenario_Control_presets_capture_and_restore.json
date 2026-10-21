@@ -2,6 +2,10 @@
   "name": "scenario_Control_presets_capture_and_restore",
   "module": "ControlModule",
   "mode": "mutate",
+  "instances": {
+    "Control": "ControlModule",
+    "Drivers": "Drivers"
+  },
   "also": [
     "Drivers"
   ],

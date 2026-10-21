@@ -12,13 +12,8 @@ that had stopped reading anything at all.
 """
 
 import sys
-from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent.parent
-sys.path.insert(0, str(ROOT / "moondeck" / "check"))
-sys.path.insert(0, str(ROOT / "moondeck" / "docs"))
-
-from check_docgen import _header_rules  # noqa: E402
+from check_docgen import _header_rules
 
 
 def test_a_wrapped_sentence_in_a_class_comment_is_a_finding():
@@ -564,9 +559,9 @@ def test_a_lead_is_measured_as_a_block_so_chopping_does_not_satisfy_it():
         "no single line is over the cap, which is the point of measuring the block"
 
 
-def test_the_ratchet_refuses_a_rule_that_rose_against_the_committed_report(monkeypatch):
-    """A warning is staged work, and staged work that grows is not a sweep. The committed report
-    is the number to beat, per RULE and on the total: per rule alone misses a rule still under
+def test_the_ratchet_refuses_a_rule_that_rose_against_the_committed_counts(monkeypatch):
+    """A warning is staged work, and staged work that grows is not a sweep. The committed counts
+    are the number to beat, per RULE and on the total: per rule alone misses a rule still under
     its own baseline while the total rises, and the total alone hides one rule paying for
     another, which is what splitting a long line does to the width and block counts.
 
@@ -590,12 +585,8 @@ def test_the_ratchet_refuses_a_rule_that_rose_against_the_committed_report(monke
     # The labels the report writes ARE the keys the comparison uses, in both directions.
     assert check_docgen._rule_label(check_docgen._rule_name(block)) in base
 
-    # And the real parser finds the tracked report's numbers, or the comparison reads nothing.
-    monkeypatch.undo()
-    counts = check_docgen._committed_counts()
-    assert counts is None or "(total)" in counts, counts
-    # Only the `## By rule` table feeds the baseline: an area row would be a rule that never appears.
-    assert counts is None or not any(k.startswith("`") for k in counts), counts
+    # And what a run records is what the comparison reads: the labels, the total and the appendix.
+    assert check_docgen._counts([(cpp, block)] * 2, 7) == {"multi-line comment blocks": 2, "(total)": 2, "(appendix lines)": 7}
 
 
 def test_the_appendix_is_measured_from_technical_to_the_end_of_its_run():
@@ -987,35 +978,6 @@ def test_a_struct_inside_a_free_function_is_exempt():
     assert not [w for w in whys if "has no ///" in w], whys
 
 
-def test_every_source_folder_maps_to_a_summary_page():
-    """The report groups findings by the page a sweep runs against, so a folder that maps to
-    nothing would silently vanish from that view. Pinned per domain folder: the mapping is the
-    machine-readable half of the hierarchy zoom in documentation-standards.md."""
-    import check_docgen, pathlib
-    root = pathlib.Path(check_docgen.ROOT)
-    for domain in ("core", "light"):
-        for folder in sorted((root / "src" / domain).iterdir()):
-            if not folder.is_dir():
-                continue
-            rel = f"src/{domain}/{folder.name}/X.h"
-            area = check_docgen._doc_area(rel)
-            assert area.endswith(".md"), f"{rel} -> {area}"
-
-
-def test_a_path_outside_the_card_surface_is_bucketed_not_lost():
-    """The tests carry no card by design, so they get a named bucket rather than a summary
-    page. Anything else is `(unassigned)`, which is the finding: a header no page owns
-    reaches no reader. The platform layer USED to sit in a bucket here and now has its own
-    page, which is what a bucket is for: naming the gap until it is filled."""
-    import check_docgen
-    assert check_docgen._doc_area("src/platform/platform.h") == "platform/index.md"
-    assert check_docgen._doc_area("test/unit/core/x.cpp") == "(tests, no card)"
-    # A path under no DOC_AREAS prefix at all. `moonbase/main` stood here until it was
-    # assigned to core/system.md, which is the bucket working as intended rather than a
-    # regression: an example that gets a page is replaced, not restored.
-    assert check_docgen._doc_area("tools/nowhere/x.cpp") == "(unassigned)"
-
-
 def test_the_scan_includes_tests():
     """A test is C++ we own, and these rules are about how code READS rather than about what
     gets published, so `test/` is in scope like any other source. Pinned because excluding it
@@ -1063,14 +1025,19 @@ def test_a_heading_inside_a_fenced_example_is_no_section():
     assert [k for k, _ in _unreferenced_in("src/core/x.h", lines)] == ["src/core/x.h::@technical Real"]
 
 
-def test_without_llvm_the_help_freshness_is_reported_rather_than_ending_the_run(monkeypatch):
-    """A contributor without LLVM still gets the whole report, with one failing line naming the check it could not make."""
+def test_without_llvm_the_help_freshness_is_skipped_and_the_report_is_left_as_it_is(monkeypatch, capsys):
+    """A contributor without LLVM still gets every other rule measured and ratcheted, with one SKIP line naming the rule it could not measure, and the committed counts are not rewritten without that rule."""
     import check_docgen
     import gen_help
-    monkeypatch.setattr(gen_help, "stale", lambda: (_ for _ in ()).throw(SystemExit("clang not found")))
-    findings = check_docgen._help_freshness()
-    assert findings == [("docs/help/help.json", "help.json stale unchecked: clang not found")]
-    assert check_docgen._blocks(*findings[0])
+    monkeypatch.setattr(gen_help, "stale", lambda: (_ for _ in ()).throw(gen_help.ToolchainMissing("clang not found")))
+    written = []
+    monkeypatch.setattr(check_docgen.ratchet, "record", lambda *a: written.append(a))
+    monkeypatch.setattr(check_docgen, "_violations", lambda fresh: list(fresh))
+    monkeypatch.setattr(check_docgen, "_appendix_total", lambda: 0)
+    monkeypatch.setattr(sys, "argv", ["check_docgen.py"])
+    assert check_docgen.main() == 0, "the run's exit code reflects only the rules it measured"
+    assert "SKIP help.json freshness: clang not found, so docgen.json is left as it is." in capsys.readouterr().out
+    assert written == []
 
 
 def test_a_control_guide_repeating_its_line_is_reported_and_one_adding_to_it_is_not():
@@ -1243,6 +1210,16 @@ def test_a_process_within_its_word_caps_is_silent(tmp_path, monkeypatch):
                                            "    steps:\n      - {id: s, say: Open it., when: {manual: Do it}, detail: Short.}\n", encoding="utf-8")
     monkeypatch.setattr(gen_moonwalk, "build", lambda root=tmp_path, build=gen_moonwalk.build: build(root))
     assert check_docgen._process_sizes() == []
+
+
+def test_a_process_no_runner_verifies_is_listed_as_information_and_is_no_finding(tmp_path, monkeypatch):
+    import check_docgen
+    import gen_moonwalk
+    (tmp_path / "01-test.yaml").write_text("stage: T\nprocesses:\n  - id: a\n    title: A\n    actor: user\n    goal: G\n"
+                                           "    steps:\n      - {id: s, say: Look., when: {manual: Do it}}\n", encoding="utf-8")
+    monkeypatch.setattr(gen_moonwalk, "build", lambda root=tmp_path, build=gen_moonwalk.build: build(root))
+    assert check_docgen._unverified_processes() == [("moonwalk/01-test.yaml", "a: no step has an automated runner or a condition, so no run proves it works")]
+    assert not any("no runner verifies" in why for _, why in check_docgen._process_sizes())
 
 
 def test_a_stage_file_the_generator_refuses_is_an_error_rather_than_a_traceback(tmp_path, monkeypatch):

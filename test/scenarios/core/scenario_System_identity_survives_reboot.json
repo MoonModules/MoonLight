@@ -2,6 +2,9 @@
   "name": "scenario_System_identity_survives_reboot",
   "module": "SystemModule",
   "mode": "mutate",
+  "instances": {
+    "System": "SystemModule"
+  },
   "also": [
     "FilesystemModule"
   ],

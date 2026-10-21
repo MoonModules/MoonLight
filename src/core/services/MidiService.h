@@ -34,7 +34,7 @@ namespace mm {
 ///
 /// The browser reads a desk on a secure page only: the desktop app's `localhost` is, a board's own page needs marking once. A desk on USB or the network works on any page.
 ///
-/// [The how-to](https://moonmodules.org/MoonLight/how-to/control-surface.html#a-midi-desk-or-a-gamepad-through-the-browser) has the steps.
+/// [Connect a control surface](https://moonmodules.org/MoonLight/moonwalk.html#control-surface) has the steps.
 ///
 /// ## The Akai APC40 mkII
 ///

@@ -34,6 +34,7 @@ ROOT = Path(__file__).resolve().parent.parent.parent
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import check_clang_query  # noqa: E402  — the module→files resolver, one owner
+import _findings  # noqa: E402
 
 # Worst first. CodeQL reports two different severity scales: `security_severity_level` on the
 # security queries (critical/high/medium/low) and `severity` on the quality ones
@@ -148,6 +149,12 @@ def collect(alerts, only=None):
     return sorted(rows, key=lambda r: (_ORDER.get(r["sev"], 99), r["file"], r["line"]))
 
 
+def alert_findings(rows):
+    """The alerts in the shared findings shape: a rule id, a path and line, and the severity as the level (critical, high and error fail; the rest warn)."""
+    return [{"rule": r["rule"], "message": r["msg"], "file": r["file"], "line": r["line"],
+             "level": "error" if r["sev"] in ("critical", "high", "error") else "warning"} for r in rows]
+
+
 def _table(rows, title, show_state=False):
     """One severity-ordered table. Widths come from the data, capped, like the other reports.
 
@@ -255,6 +262,9 @@ def main():
         print(f"Filtered to {args.module}: {', '.join(only)}\n")
 
     rows = collect(alerts, only)
+    # Only the open alerts of the whole repo are the record: a module, a state or --all shows another view.
+    if not (only or args.all or state != "open"):
+        _findings.write("check_codeql", {r: {"reason": "CodeQL query, run in CI (.github/workflows/codeql.yml)"} for r in sorted({x["rule"] for x in rows})}, alert_findings(rows))
     # The branch comes from the alerts themselves; when none matched a scope there is nothing to
     # read it from, so fall back to every alert's ref rather than printing "?".
     refs = {r["ref"] for r in (rows or collect(alerts)) if r["ref"]}

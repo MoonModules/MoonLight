@@ -5,6 +5,7 @@
 #include "core/util/fnv.h"
 #include "platform/platform.h"
 
+#include <atomic>
 #include <cstddef>
 #include <cstring>
 
@@ -225,9 +226,10 @@ public:
     static bool safeMode() { return failedBoots() >= kSafeModeRestarts; }
     /// Whether safe mode holds this module, counting it as disabled while its saved flag stays, for one that can crash the device or overload its supply.
     virtual bool heldInSafeMode() const { return false; }
-    /// Set the flag, firing the transition hook only on a real change.
+    /// Set the flag, firing the transition hook only on a real change, with the workers parked first, as every structural mutator does.
     void setEnabled(bool e) {
         if (enabled_ == e) return;
+        quiesceForMutation();   // a worker may be in this module's tick, and onEnabled may release what that tick uses
         enabled_ = e;
         if (e && role() == ModuleRole::Effect) lastEnabledEffect_ = this;
         onEnabled(e);
@@ -465,13 +467,13 @@ public:
 
     /// Average microseconds per tick over the last second, which parents measure for children.
     uint32_t tickTimeUs() const { return tickTimeUs_; }
-    /// Add one tick's time to the running total.
-    void addAccumUs(uint32_t us) MM_NONBLOCKING { accumUs_ += us; }
+    /// Add one tick's time to the running total, from whichever core ticked it: the drivers tick on the encode task and on the main loop.
+    void addAccumUs(uint32_t us) MM_NONBLOCKING { accumUs_.fetch_add(us, std::memory_order_relaxed); }
 
     /// Average the accumulated time into the published figure, then recurse.
     void publishTiming(uint32_t frameCount) {
-        tickTimeUs_ = frameCount > 0 ? accumUs_ / frameCount : 0;
-        accumUs_ = 0;
+        const uint32_t accum = accumUs_.exchange(0, std::memory_order_relaxed);
+        tickTimeUs_ = frameCount > 0 ? accum / frameCount : 0;
         for (uint8_t i = 0; i < childCount_; i++) {
             children_[i]->publishTiming(frameCount);
         }
@@ -516,7 +518,7 @@ private:
     const char* status_ = nullptr;  ///< the message `status()` reads
     Severity severity_ = Severity::Status;
     uint32_t tickTimeUs_ = 0;
-    uint32_t accumUs_ = 0;
+    std::atomic<uint32_t> accumUs_{0};   ///< a statistic, so relaxed: no other memory is ordered by it
 
     /// The process-wide hooks the transport installs, one function pointer each, as with the persistence hook.
     static inline SchemaChangedFn schemaChangedHook_ = nullptr;

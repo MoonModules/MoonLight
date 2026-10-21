@@ -1,6 +1,8 @@
 # Coding standards
 
-How code in this repo is written. Hard rules and process live in [CLAUDE.md](../CLAUDE.md).
+How code in this repo is written. Hard rules live in [CLAUDE.md](../CLAUDE.md), and every process in [MoonWalk](../moonwalk.md).
+
+A rule here is applied and reviewed at the [MoonWalk](../moonwalk.md) step that links it, as [one home per rule](documentation-standards.md) describes.
 
 How to build and run lives in [MoonWalk's contributor processes](../moonwalk.md#desktop-build-test), and what is tested in [testing.md](../reference/testing.md). Design rationale lives in [the architecture](../explanation/architecture/index.md).
 
@@ -12,17 +14,18 @@ Decided once, not re-derived per file.
 
 ### Language mechanics
 
-- **`#pragma once`** for header guards. No `#ifndef … #define … #endif`.
-- **`constexpr`** over `#define` for compile-time constants. `#define` is reserved for build-system flags (e.g. `MM_NO_WIFI`) that need to be visible to the preprocessor.
+- **`#pragma once`** for header guards. No `#ifndef … #define … #endif`. Checked by `check_code`, rule `header without #pragma once`.
+- **`constexpr`** over `#define` for compile-time constants. `#define` is reserved for build-system flags (e.g. `MM_NO_WIFI`) that need to be visible to the preprocessor. Checked by `check_code`, rule `#define used as a constant`.
 - **`std::span`** over pointer + length pair in function signatures. The span carries the bound; the caller can't desync.
 - **Namespace `mm`** for everything in the project. Platform code lives in `mm::platform`. Tests live in `mm` (no `mm::test`, keeps the same names visible to test code as to library code).
-- **No `using namespace` in headers.** In a `.cpp`, `using namespace mm;` is allowed at file scope. In a header it pollutes every translation unit that includes it.
+- **No `using namespace` in headers.** In a `.cpp`, `using namespace mm;` is allowed at file scope. In a header it pollutes every translation unit that includes it. Checked by `check_code`, rule `using namespace in a header`.
+- **Include what you use, and compare C strings with `strcmp`.** A file includes every header it names, and a `const char*` compares by content with `strcmp`, while a `std::string` or `std::string_view` compares with `==`. Clang resolves standard headers transitively and merges identical literals, and macOS's libc++ includes `<cstdint>` for you; GCC in CI and Linux's libstdc++ show both faults.
 
 ### Naming
 
 - **Semantic variable names.** Name variables for what they represent, beyond their type. `availableHeap` not `available`, `internalHeap` not `internal`, `lutBytes` not `bytes`. A reader should understand the variable without looking at its assignment.
 - **Prefer naming over commenting.** A comment explaining WHAT a line does is usually a naming failure: extract a function, name a constant, add an explaining variable, or rename the thing. A comment explaining WHY stays, because no name carries a constraint ("the DMA cannot read PSRAM at shift clock"). Prior art: *Clean Code* ch. 4 for the naming half, Ousterhout's *A Philosophy of Software Design* for why the why-comment is load-bearing.
-- **Prose, comments and docs follow [documentation-standards.md](documentation-standards.md).** Spelling, em-dashes, markdown wrapping, what a comment is for, and the MoonLive script comment budget live there, together with the page model they serve. `///` comments are the boundary case: the syntax rules below are ours, everything they SAY follows that page, because they generate it.
+- **Prose, comments and docs follow [documentation-standards.md](documentation-standards.md).** Spelling, em-dashes, markdown wrapping, what a comment is for, and the MoonLive script comment budget live there, together with the page model they serve. `///` comments follow that page too, their syntax and what they say, because they generate it.
 
 ### Casts
 
@@ -30,12 +33,13 @@ Use project typedefs (`lengthType`, `nrOfLightsType`) consistently so types matc
 
 - **`static_cast`**: converts a value between related types. Checked at compile time. Use only at system boundaries: byte protocol packing, OS API return values, overflow-prevention with wider intermediates. If you need `static_cast` between project types, make the types match instead.
 - **`reinterpret_cast`**: raw byte or memory access only, such as `reinterpret_cast<const sockaddr*>` for a socket API. It converts nothing and checks nothing, so that is its whole territory.
-- **`dynamic_cast`**: absent by construction. ESP32 builds with `-fno-rtti`, so a base-to-derived question is answered by a virtual method or a role check instead.
+- **`dynamic_cast`**: absent by construction. Checked by `check_code`, rule `dynamic_cast or typeid in firmware`. ESP32 builds with `-fno-rtti`, so a base-to-derived question is answered by a virtual method or a role check instead.
 
 ## Growing the codebase
 
 - **Consider extending before creating.** When adding a feature, check whether an existing module extends cleanly; a new file is fine if genuinely cleaner, but justify it.
-- **Reference, don't copy.** Prior art (friend repos, datasheets, our own prototype branches) holds proven approaches: study it, take the ideas, write our own code, never copy or trace the structure. Credits live in the [friend-repo digests](../friend-repos/index.md) and in each module's `@attribution`, listed in [the attribution catalog](../reference/attributions.md).
+- **A module that does not run costs flash, nothing else.** Four states. *Not added*: flash only, no RAM, so no global or static state (a function-local static's guard is RAM too) and nothing taken at boot or registration. *Added and disabled*: its settings only, the object with its control values and configuration, small and sized to its content. It holds no runtime buffers, no tick time and no pins, sockets, tasks or open files. *Added and enabled*: whatever it needs, taken in `prepare()`. *Removed*: nothing left behind. Tick time is zero while disabled, the one exception being the named `respectsEnabled()` list (system modules such as WiFi). A `static constexpr` table lives in flash and is fine. The module contract test (`unit_ModuleContract.cpp`) checks every registered type against these states, and `check_code` counts mutable statics. An exception lives on a named list in that test with its reason, and the lists only shrink.
+- **Reference, don't copy.** Prior art (friend repos, datasheets, our own prototype branches) holds proven approaches: study it, take the ideas, write our own code, never copy or trace the structure. Credits live in the [friend-repo digests](../friend-repos/index.md) and in each module's `@attribution`, listed in [the attribution catalog](../reference/attributions.md). A friend repo's contract is read from its default branch after a fetch (`git remote set-head origin --auto`, then `git show origin/HEAD:<path>`), the one its users will have next.
 
 ## Values and types
 
@@ -43,7 +47,7 @@ Use project typedefs (`lengthType`, `nrOfLightsType`) consistently so types matc
 
 **Use `float` only when the value is intrinsically fractional**, geometry positions on a normalized grid, audio amplitudes, ratios that would lose meaning if rounded. Even then, ask whether scaled integers (e.g. fixed-point `uint16_t` for 0..65535 mapping to 0.0..1.0) work. The render loop hits every light every frame; an integer multiply-and-shift dominates a float multiply on ESP32.
 
-**`float` is the widest type in firmware code, and `double` has no place in it.** Xtensa (ESP32 classic) has no hardware FPU for `double`, every `double` operation runs in software emulation, ~30× slower than the same op on `float`. `1.0` is a `double` literal; write `1.0f` when you meant float. A `double` slipping into the render path silently tanks FPS.
+**`float` is the widest type in firmware code, and `double` has no place in it.** Xtensa (ESP32 classic) has no hardware FPU for `double`, every `double` operation runs in software emulation, ~30× slower than the same op on `float`. `1.0` is a `double` literal; write `1.0f` when you meant float. A `double` slipping into the render path silently tanks FPS. Checked by `check_code`, rule `double in firmware code`.
 
 **Store values in their native shape.** When the value is intrinsically numeric, store it as a number. When it is four octets, store it as four octets. **A long-lived string buffer earns nothing from the UI eventually showing the value as text.** Format to string at the output boundary, on the stack, then throw the buffer away. Every "I'll `char foo[12]` it now and snprintf into it" decision freezes a few bytes into the module's permanent footprint. The cheaper alternative is one int and a `snprintf` on a local stack buffer at serialization time. On ESP32 with ~180 KB free heap, dozens of those add up.
 
@@ -85,6 +89,12 @@ carry_ += rate * time_.advance(elapsed());     // particles::FrameTime, 256 = on
 **Ask whether something upstream already scales it.** Do not scale a quantity twice. A fade requested through `Layer::fadeToBlackBy` is already scaled by the Layer, so an effect passes a rate and does nothing else. A fade requested only on frames that pass a wallclock gate gets throttled by the gate AND by the scale. When in doubt, write the two-rate test first.
 
 **A compounding spatial operation is not a rate.** `draw::blur` applied twice at half strength is not one blur at full strength. The carry pattern above does not transfer to it. Gate it in time and leave it at full strength.
+
+**A constant divisor is free; a runtime one in a per-light loop is not.** The compiler turns a constant divide into a multiply-high and a shift. A reciprocal for a runtime divisor needs a proven range over the caller's inputs, or the divide stays.
+
+**A host benchmark ranks nothing for Xtensa.** Compile a probe with the target compiler (`-O2 -S`), count its instructions, branches, calls and stack traffic, then flash the one winner. An arity is a template parameter, never a runtime argument.
+
+**A FreeRTOS wait is at least one tick.** `CONFIG_FREERTOS_HZ` is 100, so `pdMS_TO_TICKS` below 10 ms is 0 and a wait with it spins the task.
 
 ## Shaping a module
 
@@ -150,6 +160,11 @@ When a `switch (type)` outside the type's home file is legitimate: the caller ha
 
 A "default" that is one specific board's values is bespoke masquerading as standard. Make the capability opt-in and require each consumer to state its own values, so a missing declaration fails loudly instead of inheriting a stranger's wiring. Never auto-run a peripheral whose init can block on absent hardware. The design rationale, the MCU to deviceModel provenance model, is in [architecture.md, config provenance](../explanation/architecture/mooninstaller.md#config-provenance-mcu-devicemodel).
 
+### Storage
+
+- **A control binds the address of its member.** Control-backed storage is a plain member array sized by the cap, never a `ScratchBuffer`, which moves on a disable and re-enable.
+- **A large buffer lives on the heap, never inline.** An inline array costs RAM for as long as the module exists, enabled or not. It also makes the object one contiguous allocation that a fragmented heap may not have. A `ScratchBuffer` taken in `prepare()` costs nothing while the module does not run.
+
 ## Tooling and checks
 
 ### Running Python
@@ -169,35 +184,20 @@ Diagnostics as you type come from clangd, using the same `.clang-tidy` CI runs; 
 
 ### Static checks
 
-- **Hot path check** (`moondeck/check/check_nonblocking.py`): the tick methods carry `MM_NONBLOCKING`, and Clang verifies transitively that nothing they reach allocates or blocks. Each site is a `blocking call on the render path` row in the code report below, so the count may only fall. Each finding stays a judgment: fix it, annotate the callee, or accept it with a scoped reason. An audit must sweep every syscall the path can reach, not the loudest one: a socket timeout is not a fix, it is the size of the freeze. The rule itself: [the architecture](../explanation/architecture/moonmodule.md#hot-path-discipline).
-- **The code report** (`moondeck/check/check_code.py`): every function over a complexity, length, nesting or parameter limit, every block of code found elsewhere, and every file over a length limit. It also counts each crossing of the [platform and domain boundaries](../explanation/architecture/mooncore.md#platform-abstraction). Listed per file in `docs/reference/metrics/code.md`, whose committed counts may only fall, per rule and in total; a touched file clears its own rows.
+- **Hot path check** (`moondeck/check/check_nonblocking.py`): the tick methods carry `MM_NONBLOCKING`, and Clang verifies transitively that nothing they reach allocates or blocks. Each site is a `blocking call on the render path` finding of the code check below, so the count may only fall. Each finding stays a judgment: fix it, annotate the callee, or accept it with a scoped reason. An audit must sweep every syscall the path can reach, not the loudest one: a socket timeout is not a fix, it is the size of the freeze. The rule itself: [the architecture](../explanation/architecture/moonmodule.md#hot-path-discipline).
+- **The code check** (`moondeck/check/check_code.py`): its rules, the limit of each, how a finding is solved and what it last found are on [the test page](../reference/tests.md#check_code), generated from the check itself.
 
 ### From a finding to a fix
 
 A finding is a named code smell. Every smell has a named, behavior-preserving move from the refactoring catalog (Fowler, *Refactoring*), the vocabulary every IDE's refactor menu and every quality platform uses. The commit names the move it made, so a reviewer checks that the move was applied rather than whether the result looks simpler, and two people make the same change.
 
-| Smell, what the report counts | The move | Where it lands |
-|---|---|---|
-| Long function | Extract Function | a named step a reader can skip |
-| Deeply nested | Replace Nested Conditional with Guard Clauses; Extract Function on the inner loop | flat flow, one level at a time |
-| Complex function: a conditional chain on one value | Replace Conditional with a table | data rows, no branches: a Command table |
-| Complex function: a `switch` on a state | Replace Type Code with State: one method per state | the State pattern |
-| Duplicated code | Extract Function, Pull Up Method | one home |
-| Long parameter list | Introduce Parameter Object | one struct |
-| Large file | Extract Class, Move Function | a module per concern |
-| Core reaching into light | Move Function, or an interface in core that light implements | the dependency points inward |
-| Platform code outside `src/platform` | Move Function into the platform layer; `if constexpr` on `platform_config.h` | a target's facts in one layer |
-| A blocking call on the render path | Move the work off the render thread: a worker, a cached value, a deferred apply | the tick only computes |
-| A name spread across files | Move Function, self-registration | a concept in one place |
-| A module type named in the UI | Replace Conditional with Polymorphism: the module declares a control, a role or a flag | the UI knows no module |
-| A stack frame over 512 bytes | Move the large local into a member or a `ScratchBuffer`, sized once | no task's stack pays for it |
-| A buffer taken by hand in the light domain | Replace it with a `ScratchBuffer` member | owned, sized, reported and freed in one place |
+Each rule of `check_code` carries its move, shown with the rule on [the test page](../reference/tests.md#check_code): the smell, the catalog move that solves it, and where the code lands.
 
 Cut first: a branch that chooses between equals is data, a guard is an early return, and nesting is what a reader trips on, more than branch count. The theory behind the moves is Ousterhout's: complexity is dependencies and obscurity, so a deep module with a small interface absorbs it and its callers stay simple. A function may stay over a limit when splitting it would hide a sequence that belongs together. It says so in one line, and its count stays rather than being forced.
 
 ### When checks run
 
-Which checks run at which lifecycle event is defined once, in the [Commit](../CLAUDE.md#commit), [Merge](../CLAUDE.md#merge) and [Release](../CLAUDE.md#release) tables. One command per check, each with an objective path trigger, so a change runs only the checks it makes applicable. CI runs the same checks on every PR ([.github/workflows/](../.github/workflows/)).
+Which checks run at which lifecycle event is defined once, in the [commit](../moonwalk.md#commit), [pre-merge](../moonwalk.md#pre-merge) and [release](../moonwalk.md#release) processes. One command per check, each with an objective path trigger, so a change runs only the checks it makes applicable. CI runs the same checks on every PR ([.github/workflows/](../.github/workflows/)).
 
 ### Tests
 
@@ -216,6 +216,7 @@ Hard-won discipline for diagnosing hardware and infrastructure failures, distill
 - **Stop at the first failed fix on a working path.** Revert to the known-good state at attempt two rather than re-engineering a seam that already worked (§ *Anti-stalling* in CLAUDE.md).
 - **A generated artifact's ground truth is the rendered output, not a re-derivation.** Verify a doc anchor against the built HTML (`grep id=` the `.html`), not a reimplementation of the slug algorithm; verify an emitted machine instruction against the real toolchain's disassembler before flashing.
 - **A cross-boundary fact duplicated in code drifts silently; gate it.** A `docPath` in `main.cpp` pointing at a docs page, a firmware projection mirroring a build dict. The moment a check can resolve it against ground truth, that check is cheaper than the drift.
-
-Moved to [documentation-standards.md § Module pages](documentation-standards.md#module-pages): the two reader surfaces, the `///` rules, and how `docs/moonmodules/` mirrors `src/`. It is a documentation rule rather than a coding one, and it sits beside the prose rules it depends on.
+- **Ask what would make a measurement read zero while the thing happens**: a symmetry, the background, a cached build. Then run it against code known to have the defect.
+- **Never pipe a build.** A pipe reports the last command's exit status, so a failed build reads as 0: redirect the output to a file and read `$?`.
+- **A destructive edit acts on fresh state.** Re-query right before a delete or an overwrite, since a listing from earlier is stale once the product owner acts in parallel. A scripted edit ends at its block's own end, asserts it matched once, and is read back as the full diff of the path it edited (`git diff -- <path>`).
 

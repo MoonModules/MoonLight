@@ -1,0 +1,804 @@
+openapi: 3.1.0
+info:
+  title: MoonLight device API
+  version: 6.1.0-dev
+  summary: The HTTP routes a MoonLight device serves, on port 80 on a board and 8080 on a desktop.
+  description: |
+    Every route answers every client and allows any origin; an `OPTIONS` request on any path answers 204 as the CORS preflight.
+    A request body is read as JSON whatever its `Content-Type` says, and a number rides as a JSON number.
+    A malformed `Content-Length` answers 400 and an oversized one 413, an unknown path 404 and an unknown method 405.
+    The live state and the preview travel over the `/ws` and `/wsp` WebSockets, described in [Integrating](integrating.html#websocket).
+  license:
+    name: GPL-3.0-or-later
+    identifier: GPL-3.0-or-later
+servers:
+  - url: http://{device}
+    variables:
+      device:
+        default: moonlight.local
+        description: The device's address or mDNS name.
+tags:
+  - name: State
+    description: The module tree as a whole, read and written as one document.
+  - name: Modules
+    description: One module at a time, addressed by its name.
+  - name: Lists
+    description: The rows of an editable list control, such as the presets or WiFi's known networks.
+  - name: Files
+    description: The device filesystem, and a card mounted at `/sd`.
+  - name: Firmware
+    description: Firmware and MoonBase installs, and the reboot.
+  - name: System
+    description: Metrics, the type catalog and the MoonLive script catalog.
+  - name: WLED compatibility
+    description: The WLED-shaped routes the WLED apps and Home Assistant read.
+  - name: Media
+    description: The HLS stream the HLS driver writes.
+
+paths:
+  /api/state:
+    get:
+      tags: [State]
+      operationId: getState
+      summary: The whole module tree, as the page renders it.
+      responses:
+        "200":
+          description: Every top-level module with its controls and children.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  modules:
+                    type: array
+                    items: { $ref: "#/components/schemas/Module" }
+    patch:
+      tags: [State]
+      operationId: applyState
+      summary: Applies a state document as a JSON Merge Patch (RFC 7386); its rules are in Integrating.
+      requestBody: { $ref: "#/components/requestBodies/StateDocument" }
+      responses: &stateResponses
+        "200": { $ref: "#/components/responses/StateResult" }
+        "400": { $ref: "#/components/responses/StateResult" }
+        "411": { $ref: "#/components/responses/Error" }
+        "413": { $ref: "#/components/responses/Error" }
+        "503": { $ref: "#/components/responses/Error" }
+        "507": { $ref: "#/components/responses/Error" }
+    post:
+      tags: [State]
+      operationId: applyStatePost
+      summary: The same as PATCH, for a client that cannot send PATCH.
+      requestBody: { $ref: "#/components/requestBodies/StateDocument" }
+      responses: *stateResponses
+
+  /api/system:
+    get:
+      tags: [System]
+      operationId: getSystem
+      summary: Frame rate, tick time, memory, uptime and per-module timing.
+      responses:
+        "200":
+          description: The device's live metrics.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/System" }
+
+  /api/types:
+    get:
+      tags: [System]
+      operationId: listTypes
+      summary: Every module type this build knows, with its role, the children it accepts and its defaults.
+      responses:
+        "200":
+          description: The type catalog.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  types:
+                    type: array
+                    items: { $ref: "#/components/schemas/TypeInfo" }
+
+  /api/scripts:
+    get:
+      tags: [System]
+      operationId: listScripts
+      summary: The factory MoonLive scripts by role, and the tag to fetch their sources from.
+      responses:
+        "200":
+          description: The script catalog.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ScriptCatalog" }
+
+  /api/control:
+    post:
+      tags: [Modules]
+      operationId: setControl
+      summary: Sets one control of one module.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [module, control, value]
+              properties:
+                module: { type: string, description: The module's name. }
+                control: { type: string, description: The control's name. }
+                value: { description: "The new value, typed as the control is." }
+            example: { module: Rainbow, control: speed, value: 40 }
+      responses:
+        "200": { $ref: "#/components/responses/Ok" }
+        "400": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /api/modules:
+    post:
+      tags: [Modules]
+      operationId: addModule
+      summary: Adds a module under a parent and returns the name it was given.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [type, parent_id]
+              properties:
+                type: { type: string, description: "The module type, as /api/types names it." }
+                parent_id: { type: string, description: The parent module's name. }
+                id: { type: string, maxLength: 15, description: The name to give it; the type's default name when absent. }
+            example: { type: RainbowEffect, parent_id: Layer }
+      responses:
+        "200":
+          description: The module is added.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { const: true }
+                  name: { type: string, description: The name every later call addresses it by. }
+        "400": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+
+  /api/modules/{name}:
+    parameters: [{ $ref: "#/components/parameters/ModuleName" }]
+    get:
+      tags: [Modules]
+      operationId: getModule
+      summary: One module as /api/state carries it.
+      responses:
+        "200":
+          description: The module with its controls and children.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Module" }
+        "404": { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [Modules]
+      operationId: deleteModule
+      summary: Removes a module and its children.
+      responses:
+        "200": { $ref: "#/components/responses/Ok" }
+        "400": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /api/modules/{name}/document:
+    parameters: [{ $ref: "#/components/parameters/ModuleName" }]
+    get:
+      tags: [Modules]
+      operationId: getModuleDocument
+      summary: One module as a state document rooted at the top level, which PATCH /api/state applies back.
+      responses:
+        "200":
+          description: The module's state document, secrets left out.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StateDocument" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /api/modules/{name}/move:
+    parameters: [{ $ref: "#/components/parameters/ModuleName" }]
+    post:
+      tags: [Modules]
+      operationId: moveModule
+      summary: Moves a module to another position among its siblings.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [to]
+              properties:
+                to: { type: integer, minimum: 0, description: "The new position, counted from 0." }
+      responses:
+        "200":
+          description: The module is at that position; `noop` says it was there already.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { const: true }
+                  noop: { type: boolean }
+        "400": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /api/modules/{name}/replace:
+    parameters: [{ $ref: "#/components/parameters/ModuleName" }]
+    post:
+      tags: [Modules]
+      operationId: replaceModule
+      summary: Swaps a module for another type in the same slot.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [type]
+              properties:
+                type: { type: string, description: The new module type. }
+                name: { type: string, description: "The new name; else a custom current name is kept, else the type's default." }
+      responses:
+        "200": { $ref: "#/components/responses/Ok" }
+        "400": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+
+  /api/list/{module}/{control}:
+    parameters:
+      - { $ref: "#/components/parameters/ListModule" }
+      - { $ref: "#/components/parameters/ListControl" }
+    post:
+      tags: [Lists]
+      operationId: addListRow
+      summary: Appends a row and returns its stable id.
+      responses:
+        "200":
+          description: The row is added.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { const: true }
+                  id: { type: integer, description: "The row's id, which later calls name." }
+        "400": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+
+  /api/list/{module}/{control}/{row}:
+    parameters:
+      - { $ref: "#/components/parameters/ListModule" }
+      - { $ref: "#/components/parameters/ListControl" }
+      - { $ref: "#/components/parameters/ListRow" }
+    patch:
+      tags: [Lists]
+      operationId: editListRow
+      summary: Edits one field of a row, or moves the row.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - type: object
+                  required: [field, value]
+                  properties:
+                    field: { type: string, description: The field to set. }
+                    value: { description: Its new value. }
+                - type: object
+                  required: [to]
+                  properties:
+                    to: { type: integer, minimum: 0, maximum: 255, description: The row's new position. }
+      responses:
+        "200": { $ref: "#/components/responses/Ok" }
+        "400": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [Lists]
+      operationId: deleteListRow
+      summary: Removes a row.
+      responses:
+        "200": { $ref: "#/components/responses/Ok" }
+        "400": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /api/list/{module}/{control}/{row}/apply:
+    parameters:
+      - { $ref: "#/components/parameters/ListModule" }
+      - { $ref: "#/components/parameters/ListControl" }
+      - { $ref: "#/components/parameters/ListRow" }
+    post:
+      tags: [Lists]
+      operationId: applyListRow
+      summary: Runs a row's action, such as applying a preset.
+      responses:
+        "200": { $ref: "#/components/responses/Ok" }
+        "400": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /api/dir:
+    parameters: [{ $ref: "#/components/parameters/FilePath" }]
+    get:
+      tags: [Files]
+      operationId: listDir
+      summary: One directory's children, one level deep.
+      parameters:
+        - name: hidden
+          in: query
+          description: "`1` includes the entries whose name starts with a dot."
+          schema: { type: integer, enum: [1] }
+      responses:
+        "200":
+          description: The directory's entries.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/DirEntry" }
+        "400": { $ref: "#/components/responses/Error" }
+    post:
+      tags: [Files]
+      operationId: makeDir
+      summary: Creates a directory.
+      responses:
+        "200": { $ref: "#/components/responses/Ok" }
+        "400": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [Files]
+      operationId: removeEntry
+      summary: Removes a file, or a directory and everything in it.
+      responses:
+        "200": { $ref: "#/components/responses/Ok" }
+        "400": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
+
+  /api/file:
+    parameters: [{ $ref: "#/components/parameters/FilePath" }]
+    get:
+      tags: [Files]
+      operationId: readFile
+      summary: One file's contents; `/.config` answers 403 to a client on the access point.
+      responses:
+        "200":
+          description: The file's bytes.
+          content:
+            text/plain: {}
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
+        "503": { $ref: "#/components/responses/Error" }
+        "507": { $ref: "#/components/responses/Error" }
+    post:
+      tags: [Files]
+      operationId: writeFile
+      summary: Writes a file atomically, at most 256 KB on flash; a written `/.config` file applies live.
+      requestBody:
+        required: true
+        content:
+          application/octet-stream: {}
+      responses:
+        "200": { $ref: "#/components/responses/Ok" }
+        "400": { $ref: "#/components/responses/Error" }
+        "411": { $ref: "#/components/responses/Error" }
+        "413": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
+        "503": { $ref: "#/components/responses/Error" }
+        "507": { $ref: "#/components/responses/Error" }
+
+  /api/reboot:
+    post:
+      tags: [Firmware]
+      operationId: reboot
+      summary: Saves pending changes and restarts the device.
+      responses:
+        "200": { $ref: "#/components/responses/Ok" }
+
+  /api/firmware/url:
+    post:
+      tags: [Firmware]
+      operationId: installFirmwareUrl
+      summary: Installs firmware the device fetches itself; with a MoonBase it reboots into MoonBase to install.
+      requestBody: { $ref: "#/components/requestBodies/Url" }
+      responses:
+        "202":
+          description: The install has started; `moonbase` says it continues in MoonBase.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { const: true }
+                  moonbase: { type: boolean }
+        "400": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
+        "501": { $ref: "#/components/responses/Error" }
+
+  /api/firmware/upload:
+    post:
+      tags: [Firmware]
+      operationId: uploadFirmware
+      summary: Installs an uploaded firmware image and reboots into it.
+      requestBody: { $ref: "#/components/requestBodies/Image" }
+      responses:
+        "200": { $ref: "#/components/responses/Ok" }
+        "409": { $ref: "#/components/responses/Error" }
+        "411": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
+        "501": { $ref: "#/components/responses/Error" }
+
+  /api/firmware/moonbase:
+    post:
+      tags: [Firmware]
+      operationId: bootMoonBase
+      summary: Reboots into MoonBase with nothing staged, ready to take an image.
+      responses:
+        "200":
+          description: The device is rebooting into MoonBase.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { const: true }
+                  moonbase: { const: true }
+        "409": { $ref: "#/components/responses/Error" }
+
+  /api/firmware/moonbase-update-url:
+    post:
+      tags: [Firmware]
+      operationId: installMoonBaseUrl
+      summary: Installs a new MoonBase the device fetches itself.
+      requestBody: { $ref: "#/components/requestBodies/Url" }
+      responses:
+        "202": { $ref: "#/components/responses/Ok" }
+        "400": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
+        "501": { $ref: "#/components/responses/Error" }
+
+  /api/firmware/moonbase-update:
+    post:
+      tags: [Firmware]
+      operationId: uploadMoonBase
+      summary: Installs an uploaded MoonBase image, leaving the running app as it is.
+      requestBody: { $ref: "#/components/requestBodies/Image" }
+      responses:
+        "200": { $ref: "#/components/responses/Ok" }
+        "409": { $ref: "#/components/responses/Error" }
+        "411": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
+        "501": { $ref: "#/components/responses/Error" }
+
+  /hls/{file}:
+    get:
+      tags: [Media]
+      operationId: getHlsFile
+      summary: One HLS playlist or segment, uncached.
+      parameters:
+        - name: file
+          in: path
+          required: true
+          description: A flat file name, such as `stream.m3u8`.
+          schema: { type: string, maxLength: 80 }
+      responses:
+        "200":
+          description: The playlist or segment.
+          content:
+            application/vnd.apple.mpegurl: {}
+            video/mp2t: {}
+            video/mp4: {}
+        "400": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /json:
+    get:
+      tags: [WLED compatibility]
+      operationId: getWledDevice
+      summary: The WLED state, info, effects and palettes in one, as Home Assistant's WLED integration reads it.
+      responses:
+        "200":
+          description: The WLED device object.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  state: { $ref: "#/components/schemas/WledState" }
+                  info: { type: object }
+                  effects: { type: array, items: { type: string } }
+                  palettes: { type: array, items: { type: string } }
+
+  /json/info:
+    get:
+      tags: [WLED compatibility]
+      operationId: getWledInfo
+      summary: The WLED info the WLED apps validate a discovered device with.
+      responses:
+        "200":
+          description: The WLED info object.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WledInfo" }
+
+  /json/state:
+    get:
+      tags: [WLED compatibility]
+      operationId: getWledState
+      summary: On-off, brightness, the active preset and the palette color.
+      responses:
+        "200": { $ref: "#/components/responses/WledState" }
+    post:
+      tags: [WLED compatibility]
+      operationId: setWledState
+      summary: Sets on-off, brightness or a preset, and answers the resulting state.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                "on": { type: boolean, description: Master power. }
+                bri: { type: integer, minimum: 0, maximum: 255, description: Brightness. }
+                ps: { type: integer, description: A preset slot as /presets.json numbers it. }
+      responses:
+        "200": { $ref: "#/components/responses/WledState" }
+
+  /json/si:
+    get:
+      tags: [WLED compatibility]
+      operationId: getWledStateInfo
+      summary: The WLED state and info in one call.
+      responses:
+        "200":
+          description: The state and info objects.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  state: { $ref: "#/components/schemas/WledState" }
+                  info: { $ref: "#/components/schemas/WledInfo" }
+
+  /presets.json:
+    get:
+      tags: [WLED compatibility]
+      operationId: getWledPresets
+      summary: The look presets in WLED's format, keyed by a slot counted from 1.
+      responses:
+        "200":
+          description: 'Slot to `{"n": name}`, or `{"0": {}}` when there is none.'
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: object
+                  properties:
+                    n: { type: string }
+
+components:
+  parameters:
+    ModuleName:
+      name: name
+      in: path
+      required: true
+      description: The module's name, percent-encoded.
+      schema: { type: string, maxLength: 15 }
+    ListModule:
+      name: module
+      in: path
+      required: true
+      description: The name of the module holding the list.
+      schema: { type: string }
+    ListControl:
+      name: control
+      in: path
+      required: true
+      description: The list control's name.
+      schema: { type: string }
+    ListRow:
+      name: row
+      in: path
+      required: true
+      description: The row's id, or its name in a list whose names are unique.
+      schema: { type: string }
+    FilePath:
+      name: path
+      in: query
+      required: true
+      description: The path on the device, rooted at its filesystem; `..` is refused.
+      schema: { type: string }
+
+  requestBodies:
+    StateDocument:
+      required: true
+      description: A state document, at most 32 KB.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/StateDocument" }
+          example: { Effects: { Layer: { Swirl: { type: RainbowEffect, speed: 90 } } } }
+    Url:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [url]
+            properties:
+              url: { type: string, pattern: "^https?://", description: The image to fetch. }
+    Image:
+      required: true
+      description: The binary image, sent with a Content-Length.
+      content:
+        application/octet-stream: {}
+
+  responses:
+    Ok:
+      description: Done.
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              ok: { const: true }
+    Error:
+      description: 'The reason, as `{"error": ...}`.'
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error: { type: string }
+    StateResult:
+      description: The document's result; a refusal names the first failure and where it is.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/StateResult" }
+    WledState:
+      description: The WLED state object.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/WledState" }
+
+  schemas:
+    StateDocument:
+      type: object
+      description: Part of the module tree keyed by module name; a value sets a control, an object is a child module, `null` removes one.
+      additionalProperties: true
+    StateResult:
+      type: object
+      properties:
+        ok: { const: true }
+        changes: { type: integer, description: How many changes applied. }
+        deferred: { type: integer, description: Script controls set after the rebuild compiles their script. }
+        error: { type: string }
+        at: { type: string, description: The dotted path of the first failure. }
+    Module:
+      type: object
+      properties:
+        name: { type: string }
+        type: { type: string }
+        role: { type: string }
+        enabled: { type: boolean }
+        respectsEnabled: { type: boolean, description: False for a module that keeps running whatever `enabled` says. }
+        held: { type: boolean, description: Safe mode holds the module. }
+        tickTimeUs: { type: integer }
+        classSize: { type: integer }
+        dynamicBytes: { type: integer }
+        tags: { type: string }
+        status: { type: string }
+        severity: { type: string, enum: [status, warning, error] }
+        userEditable: { type: boolean, description: Present and false when the module cannot be deleted or replaced. }
+        controls:
+          type: array
+          items: { $ref: "#/components/schemas/Control" }
+        children:
+          type: array
+          items: { $ref: "#/components/schemas/Module" }
+    Control:
+      type: object
+      description: A control's name, type and value, plus the flags and extras its type carries.
+      required: [name, type, value]
+      properties:
+        name: { type: string }
+        type: { type: string }
+        value: { description: The current value; a password is obfuscated. }
+        readonly: { type: boolean }
+        hidden: { type: boolean }
+      additionalProperties: true
+    System:
+      type: object
+      properties:
+        fps: { type: integer }
+        tickTimeUs: { type: integer }
+        freeHeap: { type: integer }
+        freeInternal: { type: integer }
+        maxBlock: { type: integer, description: The largest free internal block. }
+        maxExec: { type: integer, description: The largest free executable block. }
+        allocated: { type: integer }
+        allocPeak: { type: integer }
+        allocBlocks: { type: integer }
+        uptime: { type: integer, description: Seconds since boot. }
+        modules:
+          type: array
+          description: Every module, depth first.
+          items:
+            type: object
+            properties:
+              name: { type: string }
+              us: { type: integer, description: Tick time in microseconds. }
+              classSize: { type: integer }
+              heap: { type: integer }
+              status: { type: string }
+              severity: { type: string, enum: [status, warning, error] }
+    TypeInfo:
+      type: object
+      properties:
+        name: { type: string, description: The factory name a request uses. }
+        displayName: { type: string }
+        role: { type: string }
+        docPath: { type: string }
+        tags: { type: string }
+        dim: { type: integer }
+        acceptsChildRoles: { type: string }
+        defaults: { type: object, description: Control name to default value. }
+    ScriptCatalog:
+      type: object
+      properties:
+        tag: { type: string, description: The git ref the sources are fetched from. }
+        dir: { type: string, description: The factory script directory. }
+        effects: { $ref: "#/components/schemas/ScriptGroup" }
+        layouts: { $ref: "#/components/schemas/ScriptGroup" }
+        modifiers: { $ref: "#/components/schemas/ScriptGroup" }
+        services: { $ref: "#/components/schemas/ScriptGroup" }
+        palettes: { $ref: "#/components/schemas/ScriptGroup" }
+    ScriptGroup:
+      type: object
+      description: Parallel arrays, one entry per script.
+      properties:
+        folder: { type: string }
+        names: { type: array, items: { type: string } }
+        dim: { type: array, items: { type: integer } }
+        tags: { type: array, items: { type: string } }
+        sub: { type: array, items: { type: string } }
+    DirEntry:
+      type: object
+      properties:
+        name: { type: string }
+        isDir: { type: boolean }
+        size: { type: integer }
+    WledState:
+      type: object
+      properties:
+        "on": { type: boolean }
+        bri: { type: integer }
+        ps: { type: integer, description: "The active look preset's slot, or -1." }
+        seg:
+          type: array
+          items:
+            type: object
+            properties:
+              pal: { type: integer }
+              col: { type: array, items: { type: array, items: { type: integer } } }
+      additionalProperties: true
+    WledInfo:
+      type: object
+      properties:
+        name: { type: string }
+        mac: { type: string }
+        leds: { type: object, properties: { count: { type: integer } } }
+        wifi: { type: object, properties: { rssi: { type: integer }, signal: { type: integer } } }
+        brand: { const: WLED }
+        product: { const: MoonModules }

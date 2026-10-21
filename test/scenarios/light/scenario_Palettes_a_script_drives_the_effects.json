@@ -2,6 +2,9 @@
   "name": "scenario_Palettes_a_script_drives_the_effects",
   "module": "Drivers",
   "mode": "mutate",
+  "instances": {
+    "Drivers": "Drivers"
+  },
   "also": [
     "MoonLivePalette",
     "RainbowEffect"
@@ -106,8 +109,7 @@
             "p95": 11,
             "min": 6,
             "max": 12,
-            "n": 32,
-            "samples": [6, 6, 7, 8, 11, 7, 7, 9, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 8, 7, 9, 8, 7, 7, 7, 12, 7, 7, 9, 7, 6, 7]
+            "n": 32
           },
           "last_updated": "2026-10-19"
         }
@@ -174,8 +176,7 @@
             "p95": 8,
             "min": 6,
             "max": 11,
-            "n": 32,
-            "samples": [7, 7, 7, 7, 8, 6, 6, 11, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 6, 7, 7, 7, 7, 8, 7, 6, 8, 7, 7, 7]
+            "n": 32
           },
           "last_updated": "2026-10-19"
         }

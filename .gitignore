@@ -128,10 +128,6 @@ __pycache__/
 # MkDocs — built docs site (rendered fresh in CI, never committed)
 /site/
 
-# Generated test inventory pages — built into the site by moondeck/docs/mkdocs_hooks.py
-# (the CLI generate_test_docs.py can still write them locally, but they are not committed).
-/docs/reference/tests/*.md
-
 
 # Read-only hardware snapshots (flash/NVS dumps pulled off reverse-engineered boards).
 # Root-anchored + dir-scoped, like /build/ above: a bare `.snapshots` would also swallow any

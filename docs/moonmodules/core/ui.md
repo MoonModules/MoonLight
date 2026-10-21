@@ -86,7 +86,7 @@ Each MoonModule renders as a card, with **child cards nested inside their parent
 
 - The parent's own controls render **above** its children; `+ add child` renders **below** them.
   Child cards live in a `.card-children` wrapper appended into the parent card's DOM node (not flat siblings); `renderModuleTree` recurses into the parent card, not into `main`.
-- **`{ }`** opens a popup holding the card as a state document, with **copy**, **save as preset** where a preset module exists, and **diagnostics**, which opens `GET /api/modules/{name}` in a new tab, that module's live JSON for issue reports (see [Log an issue](../../how-to/logging-an-issue.md)). On EVERY card, unlike `✎`/`×` (user-editable children only).
+- **`{ }`** opens a popup holding the card as a state document, with **copy**, **save as preset** where a preset module exists, and **diagnostics**, which opens `GET /api/modules/{name}` in a new tab, that module's live JSON for issue reports (see [Log an issue](../../reference/logging-an-issue.md)). On EVERY card, unlike `✎`/`×` (user-editable children only).
 - **Enabled toggle** in the right-hand action cluster mirrors `MoonModule::enabled()`, a styled
   `<button>` (transparent + muted border, 26×26); state shown by the glyph alone (accent **✓** on, muted **○** off; `data-checked` + `aria-pressed`). Toggling fires `onEnabled()`; the Scheduler skips disabled modules whose `respectsEnabled()` returns true (default).
 - **Emoji tags** next to the name show the same set the type picker uses: role + dimensional (both

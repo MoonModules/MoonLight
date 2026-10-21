@@ -6,21 +6,26 @@ processes:
     title: Contribute a pull request
     actor: contributor
     goal: One topic, at most 400 changed lines and ten files, based on main, its checks passed.
-    page: contributing/principles-and-process.md
+    page: contributing/index.md
     intro: |
       What a review would otherwise ask, met before the pull request opens: four outside pull requests each spent a review round on these points.
     steps:
-      - id: base
+      - id: fork
         section: Prepare the branch
+        say: Fork the repository and branch from main.
+        when: { run: { command: "gh repo fork MoonModules/MoonLight --clone && cd MoonLight && git switch -c <topic>" } }
+        detail: |
+          One branch per pull request in your fork, never your fork's main, so each pull request holds one topic and your main keeps following ours. A larger topic is discussed first, in an issue or on Discord.
+      - id: base
         say: Base the branch on current main.
         when: { run: { command: "git fetch upstream && git rebase upstream/main" } }
         detail: |
-          It carries only its own commits.
+          It carries only its own commits. Rebase before the first push only: once the pull request is open, add commits and merge main in, since a rewritten branch marks the review's threads outdated and loses any maintainer commit the new history leaves out.
       - id: size
         say: Keep it to one small topic.
         when: { run: { command: "git diff --stat upstream/main...HEAD" } }
         detail: |
-          At most 400 changed lines and ten files, tests included: past a few hundred lines a review stops catching defects, and the product owner reviews every line. Generated files are outside the count.
+          At most 400 changed lines and ten files, tests included: past a few hundred lines a review stops catching defects (the SmartBear and Cisco review study; Google's guide on small changes), and the product owner reviews every line. Generated files are outside the count.
 
           A larger topic lands as steps, each its own pull request, which may build on the step before it and is reviewed once that one merges.
       - id: checks
@@ -37,6 +42,8 @@ processes:
         when: { run: { command: "gh pr create --base main" } }
         detail: |
           Push first, and allow edits by maintainers.
+
+          You vouch for every line, agent-written or not, and answer reviewers in your own words; the description says what an agent wrote and what you tested, on which hardware.
 
           With edits allowed, a maintainer makes the mechanical fixes, a dropped generated file or a platform stub, rather than asking for another round.
       - id: ci
@@ -74,9 +81,9 @@ processes:
           Workflow `test.yml`, on Linux. AddressSanitizer finds use-after-free, ThreadSanitizer finds data races, and RealtimeSanitizer reports allocation or blocking on the render path without failing the run. The local script runs ASan on macOS.
       - id: prose
         say: Lint the prose a pull request adds.
-        when: { manual: "Workflow prose.yml runs Vale over .md, source comments and the Vale rules, and annotates the added lines." }
+        when: { run: { script: moondeck/check/check_prose.py } }
         detail: |
-          Only an error such as an em-dash or a British spelling is annotated. The job never fails the pull request. The local gate is `check_prose`.
+          Workflow `prose.yml` runs Vale over the lines a pull request adds and annotates only an error such as an em-dash or a British spelling; it never fails the pull request. The local gate is this script.
       - id: generated
         say: Check a fork's generated files.
         when: { manual: "Workflow generated-files.yml names each metrics or scenario file it changes." }
@@ -130,7 +137,7 @@ processes:
         say: Address every review finding.
         when: { process: review-finding }
         detail: |
-          The external review's and the Reviewer's alike.
+          The external review's and the Reviewer's alike. CodeRabbit reviews on request only, within its hourly budget, so the product owner asks for it on the pull request: `@coderabbitai review`.
       - id: checks
         section: Checks
         say: Run the commit checks over the branch.
@@ -160,7 +167,7 @@ processes:
         when: { manual: "Take it when the tick path changed. Compare the tick matrix with main's." }
       - id: readme
         say: Update the README when setup changed.
-        when: { read: { page: index.md } }
+        when: { manual: "README.md at the repo root; the site's home embeds it." }
         detail: |
           Setup means building, flashing or the first run.
       - id: merge
@@ -181,20 +188,32 @@ processes:
         section: Read it
         say: Check the four blocking items.
         when: { manual: "One topic, CI green, new behavior pinned by a test, and nothing unsafe: a crash, a write past a buffer, a security hole. Nothing else blocks." }
+      - id: history
+        say: Check the contributor's earlier pull requests.
+        when: { run: { command: "gh pr list --author <login> --state all" } }
+        detail: |
+          Read the review comments on their earlier pull requests, the closest topic first, and check each point is followed up here. A point carried over unanswered is named in the review, not asked again as new.
+      - id: standards
+        say: Check it against the author's process and standards.
+        when: { manual: "Each step of the process the author walked, and the coding and documentation standards its steps link to." }
+        detail: |
+          The reviewer checks the same steps the author followed, so a rule lives once: [Write a MoonModule](moonwalk.md#write-module), [Add a test](moonwalk.md#add-test), [Document the change](moonwalk.md#document).
       - id: test
         say: Test the branch on the desktop.
-        when: { run: { script: moondeck/build/build_desktop.py, args: "--tests" } }
+        when: { process: desktop-tests }
         detail: |
           In a worktree of the pull request's head (`git fetch origin pull/<n>/head:pr<n>`, then `git worktree add`), so your own checkout and its index stay untouched. A fork's pull request may not run every CI job.
       - id: first-review
         section: Review it
-        say: Ask the contributor to fix their code.
-        when: { manual: "Thank them first, then name at most three blocking items, each with what fixes it." }
+        say: Comment on the pull request.
+        when: { manual: "Thanks, at most three blocking items, and who follows up." }
+        detail: |
+          Thank them first, then name each blocking item with what fixes it, and whether the contributor or a maintainer commit follows up. Link [MoonWalk](https://moonmodules.org/MoonLight/moonwalk.html) for the processes behind the review. An agent drafts the comment; the product owner reads it and posts.
       - id: take-over
         say: Take over the easy fixes when it helps.
         when: { manual: "On the second round, when the contributor goes quiet, or sooner when the case calls for it." }
         detail: |
-          Forks allow maintainer edits, so a fix lands as your commit on their branch, after theirs.
+          Forks allow maintainer edits, so a fix lands as your commit on their branch, after theirs. Commit only once it is tested: the desktop tests always, and an ESP32 build and the bench when the change reaches the platform layer or hardware. With maintainer edits allowed, `gh pr checkout` sets the branch to push to the fork while it tracks origin. An editor's sync that ignores the push setting pushes to origin and creates a stray branch here, so after a push compare `gh pr view <n> --json headRefOid` with `HEAD`.
       - id: conventions
         say: Apply the project's conventions yourself.
         when: { manual: "The local gates' findings, comment and prose style, generated files, where a doc belongs, a compiler flag scoped too wide: on their branch, or as a follow-up commit after the merge." }
