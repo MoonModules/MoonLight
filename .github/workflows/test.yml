@@ -69,13 +69,16 @@ jobs:
       # readable in the log instead of folded into a single count. Named here rather than split into
       # its own step so the compiler still runs exactly once.
       - name: every MoonLive script is valid C++
-        run: uv run --with pytest pytest test/python/test_scripts_are_cpp.py -v
+        run: uv run --with pytest pytest test/python/test_scripts_are_cpp.py -v --junitxml=results/junit-scripts.xml
       # The rest, quietly. This directory is excluded because the step above already ran it: a bare
       # `pytest test/python` here would compile all 34 scripts a second time.
       - name: pytest
         run: >
           uv run --with pytest --with pyserial --with markdown --with wled --with pyyaml --with jsonschema
-          pytest test/python -q --ignore=test/python/test_scripts_are_cpp.py
+          pytest test/python -q --ignore=test/python/test_scripts_are_cpp.py --junitxml=results/junit-python.xml
+      # Each failing test annotated where it fails, and the counts in the job summary, through workflow commands: no token, so a fork's pull request gets them too.
+      - if: always()
+        run: uv run moondeck/ci/github_annotations.py --junit results/*.xml
 
   js:
     runs-on: ubuntu-latest
@@ -86,7 +89,14 @@ jobs:
       # Node's built-in test runner — no npm install, no package.json. The glob
       # form is required: a bare directory arg is treated as a module to execute.
       - name: node --test
-        run: node --test "test/js/**/*.test.mjs"
+        run: |
+          mkdir -p results
+          node --test --test-reporter=spec --test-reporter-destination=stdout \
+            --test-reporter=junit --test-reporter-destination=results/junit-js.xml "test/js/**/*.test.mjs"
+      - uses: astral-sh/setup-uv@v3
+      # Each failing test annotated where it fails, and the counts in the job summary, through workflow commands: no token, so a fork's pull request gets them too.
+      - if: always()
+        run: uv run moondeck/ci/github_annotations.py --junit results/*.xml
 
   # The Teensy 4.1 firmwares, built on every PR: a change to a platform seam the Teensy must implement fails here, not on the bench.
   # The HEX images are kept as an artifact, so a PR's build can be flashed and tried before it merges.
@@ -177,7 +187,16 @@ jobs:
           # third-party static init; keep the signal on what we're actually looking for.
           #
           # RTSan does NOT halt: the render path's known blocking calls are counted in
-          # docs/reference/metrics/code.md and backlogged as architecture work, so halting would
+          # check_code (docs/reference/metrics/code.json) and backlogged as architecture work, so halting would
           # fail this lane on every run. It reports; the log is the signal.
-          ASAN_OPTIONS=detect_leaks=0 TSAN_OPTIONS=halt_on_error=1 \
-            RTSAN_OPTIONS=halt_on_error=0 ./build/san/test/mm_tests
+          # The address lane writes the unit results as JUnit for the annotations: one lane is enough.
+          results=""
+          if [ "${{ matrix.kind }}" = "address" ]; then
+            mkdir -p results
+            results="--reporters=junit --out=results/junit-unit.xml"
+          fi
+          # TSan reports every race of the run and still fails it (exit code 66): halting at the first hid the next one behind each fix.
+          ASAN_OPTIONS=detect_leaks=0 TSAN_OPTIONS=halt_on_error=0 \
+            RTSAN_OPTIONS=halt_on_error=0 ./build/san/test/mm_tests $results
+      - if: always() && matrix.kind == 'address'
+        run: uv run moondeck/ci/github_annotations.py --junit results/*.xml

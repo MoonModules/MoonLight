@@ -59,6 +59,7 @@ ROOT = Path(__file__).resolve().parent.parent.parent
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import check_clang_tidy  # noqa: E402  — reuse its build-dir and toolchain logic, one owner
+import _findings  # noqa: E402
 
 # Bytes per element for the types we actually declare arrays of. Anything unlisted (a struct,
 # an enum, a class) falls back to 4: this report is about ORDER OF MAGNITUDE, and guessing a
@@ -922,6 +923,19 @@ def render_heap(rows, max_rows=0):
     return L + table("ALLOCATE", alloc) + table("FREE", free)
 
 
+def rule_findings(name, rows):
+    """One rule's rows in the shared findings shape. The comments rule records the declarations that lack a `///`."""
+    if name == "arrays":
+        return [{"rule": name, "file": r["file"], "line": r["line"], "value": r["bytes"],
+                 "message": f"{r['name']} {r['elem']}[{r['count']}] is {r['bytes']} bytes"} for r in rows]
+    if name == "scratch":
+        return [{"rule": name, "file": r["file"], "line": r["line"], "message": f"{r['name']} ({r['elem']})"} for r in rows]
+    if name == "comments":
+        return [{"rule": name, "file": r["file"], "line": r["line"], "message": f"{r['name']} has no `///` comment"}
+                for r in rows if not r["doc_words"]]
+    return [{"rule": name, "file": r["file"], "line": r["line"], "message": " ".join(f"{r['what']} {r['target']} in {r['fn']}".split())} for r in rows]
+
+
 def _matcher_rejected(out):
     """True when clang-query refused the matcher rather than finding nothing.
 
@@ -983,6 +997,7 @@ def main():
         print("No src/ translation units in the compilation database.", file=sys.stderr)
         return 2
 
+    found = []
     for name in ([args.rule] if args.rule else sorted(RULES)):
         rule = RULES[name]
         out = _run_rule(rule, tus, build_dir, tool)
@@ -1036,6 +1051,7 @@ def main():
             rows = collect_heap(out)
         if only:
             rows = [r for r in rows if r["file"] in only]
+        found += rule_findings(name, rows)
         body = (render_arrays(rows, args.min_bytes, args.max_rows) if name == "arrays"
                 else render_scratch(rows, args.max_rows) if name == "scratch"
                 else render_comments(rows, args.max_rows) if name == "comments"
@@ -1043,6 +1059,9 @@ def main():
         print("\n".join(body))
         print()
 
+    # Only the full view is the record: a module, one rule or a size threshold shows part of it.
+    if not (args.module or args.rule or args.min_bytes != DEFAULT_MIN_BYTES):
+        _findings.write("check_clang_query", {n: {"reason": RULES[n]["title"]} for n in RULES}, found)
     return 0
 
 

@@ -2,7 +2,7 @@
 
 One file per plan being built now, as `Plan-YYYYMMDD - <title>.md`.
 
-A plan is written in plan mode, approved before work starts, and edited as reality changes. **Its life ends at its PR**: the plan becomes the PR description and the file is deleted in that same PR ([CLAUDE.md, Branch](../../../CLAUDE.md#branch)). The merged PR is then the design record, and it carries the diff the plan describes.
+A plan is written in plan mode, approved before work starts, and edited as reality changes. **Its life ends at its PR**: the plan becomes the PR description and the file is deleted in that same PR ([CLAUDE.md, Branch](../../../CLAUDE.md#main-and-branch)). The merged PR is then the design record, and it carries the diff the plan describes.
 
 A file here that no longer has work behind it is either finished, and belongs in its PR, or abandoned, and belongs deleted.
 
@@ -20,3 +20,4 @@ A file here that no longer has work behind it is either finished, and belongs in
 | Audio codec | in PR 129, M3 unverified |
 | ESP32-C3 and the Athom bulb | open, waiting on the bulb |
 | Input mapping, Gamepads and MIDI desks, Presets as state documents, Code ratchets | partial |
+| Test engine | built in PR 150, all ten steps |

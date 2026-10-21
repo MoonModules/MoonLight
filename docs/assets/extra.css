@@ -148,3 +148,4 @@
 .mm-deck-compact .md-typeset .mm-pcard p, .md-typeset .mm-deck-compact .mm-pcard p { -webkit-line-clamp: 2; }
 /* A screenshot of a module's controls shows whole, scaled into the frame; an animation fills it. */
 .mm-pcard-front img[src$=".png"] { object-fit: contain; }
+.md-typeset .grid.cards img { width: 100%; max-height: 10rem; object-fit: cover; object-position: top; border-radius: 4px; }   /* a card's picture is a glimpse of the page it links, the same height in every card */

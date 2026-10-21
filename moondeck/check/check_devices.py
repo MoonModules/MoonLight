@@ -27,6 +27,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(ROOT / "moondeck" / "build"))
 from firmwares import FIRMWARES, TARGET_TO_FAMILY, chip_family  # noqa: E402
+sys.path.insert(0, str(ROOT / "moondeck" / "check"))
+import _findings  # noqa: E402
 CATALOG = ROOT / "mooninstaller" / "deviceModels.json"
 SCHEMA = ROOT / "mooninstaller" / "deviceModels.schema.json"
 MODULE_TYPES_CPP = ROOT / "src" / "module_types.cpp"
@@ -118,18 +120,45 @@ def top_level_names():
     return {named.get(t, t[:-len("Module")] if t.endswith("Module") else t) for t in types}
 
 
+# Each rule is one kind of mistake the catalog or the firmware tables it restates can hold; a finding is one error the run reports.
+RULES = {
+    "preset drift": {"reason": "An Ethernet preset row restates a chip default, and the two must agree or a provisioned board reseeds to Custom.", "fix": "Make kEthPresets and ethConfigDefault carry the same pins."},
+    "unreadable source": {"reason": "A table or file the check reads could not be parsed, so the rules that depend on it cannot run.", "fix": "Restore the table's shape the check expects."},
+    "schema violation": {"reason": "An entry breaks the shape in deviceModels.schema.json.", "fix": "Correct the field the message names."},
+    "duplicate name": {"reason": "The name is the identity key, so two entries cannot share it.", "fix": "Rename one entry."},
+    "unknown chip": {"reason": "The chip is not a family the installer detects.", "fix": "Use a family from the firmware registry."},
+    "unknown firmware": {"reason": "A firmware named by an entry is not in the firmware registry.", "fix": "Name a firmware from moondeck/build/firmwares.py."},
+    "chip mismatch": {"reason": "A firmware installs onto a different chip family than the entry's chip.", "fix": "Pick a firmware for the entry's chip."},
+    "missing image": {"reason": "The entry's image path does not resolve under docs/.", "fix": "Add the image or correct the path."},
+    "unknown state root": {"reason": "A state root is not a top-level module the device boots with.", "fix": "Use a root main.cpp creates."},
+    "unregistered module type": {"reason": "A state member names a type the factory does not register.", "fix": "Use a type registered in module_types.cpp."},
+    "device identity": {"reason": "System.deviceModel is the entry's identity and must be set and equal the entry name.", "fix": "Set System.deviceModel to the entry name."},
+    "pins on non-light driver": {"reason": "A pins control only has meaning on a light driver.", "fix": "Move pins to a light driver."},
+    "expander wiring": {"reason": "A 74HCT595 pin expander with bad wiring fails on a bench as dark LEDs, not loudly.", "fix": "Give the expander a latch pin of its own and 1..8 data pins."},
+    "unknown board preset": {"reason": "A board preset is not a label the firmware's preset table holds.", "fix": "Use a label from EthernetModule.h or SdCardService.h."},
+    "ethernet pinning": {"reason": "Ethernet is pinned explicitly, never inherited from a per-chip default.", "fix": "Give ethType an integer and list the board-wiring pins (-1 for an unused one)."},
+}
+CATALOG_REL = "mooninstaller/deviceModels.json"
+
+
 def main():
     errors = []
+    found = []
+
+    def fail(rule, message):
+        errors.append(message)
+        found.append({"rule": rule, "message": message, "file": CATALOG_REL, "level": "error"})
+
     eth_presets = preset_labels(ETHERNET_MODULE, "kEthPresets")
     sd_presets = preset_labels(SD_CARD_MODULE, "kSdPresets")
     for label, field, was, now in eth_preset_drift():
-        errors.append(f"EthernetModule.h kEthPresets {label!r}: {field} is {now}, but "
+        fail("preset drift", f"EthernetModule.h kEthPresets {label!r}: {field} is {now}, but "
                       f"platform_config.h's ethConfigDefault says {was}: the preset restates the "
                       f"chip default, so the two must agree or a provisioned board reseeds to Custom")
     if not eth_presets:
-        errors.append("EthernetModule.h: could not read the kEthPresets table, so the ethBoard check cannot run")
+        fail("unreadable source", "EthernetModule.h: could not read the kEthPresets table, so the ethBoard check cannot run")
     if not sd_presets:
-        errors.append("SdCardService.h: could not read the kSdPresets table, so the SD board check cannot run")
+        fail("unreadable source", "SdCardService.h: could not read the kSdPresets table, so the SD board check cannot run")
 
     try:
         catalog = json.loads(CATALOG.read_text(encoding="utf-8"))
@@ -146,15 +175,16 @@ def main():
         path = list(err.absolute_path)
         entry = catalog[path[0]] if path and isinstance(catalog, list) else None
         who = f'"{entry["name"]}"' if isinstance(entry, dict) and isinstance(entry.get("name"), str) else f"entry {path[0]}" if path else "the catalog"
-        errors.append(f"{who}: {'/'.join(map(str, path[1:])) or 'entry'}: {err.message}")
+        fail("schema violation", f"{who}: {'/'.join(map(str, path[1:])) or 'entry'}: {err.message}")
     if not isinstance(catalog, list):
+        _findings.write("check_devices", RULES, found)
         print("\n".join(errors))
         sys.exit(1)
 
     factory_types = registered_types()
     top_names = top_level_names()
     if not top_names:
-        errors.append("main.cpp: could not read the top-level modules, so the state roots cannot be checked")
+        fail("unreadable source", "main.cpp: could not read the top-level modules, so the state roots cannot be checked")
     names_seen = set()
 
     for i, e in enumerate(catalog):
@@ -169,7 +199,7 @@ def main():
         # The schema reported a name that is no string; the checks below key on one, so it stays out of them.
         if isinstance(name, str):
             if name in names_seen:
-                errors.append(f"{where}: duplicate device name")
+                fail("duplicate name", f"{where}: duplicate device name")
             names_seen.add(name)
 
         # --- chip: the family the installer detects and the manifests name, and the one every firmware installs onto ---
@@ -178,17 +208,17 @@ def main():
         families = set(TARGET_TO_FAMILY.values())
         # A string first: a list or an object is unhashable, and the set membership test would raise rather than report.
         if "chip" in e and (not isinstance(chip, str) or chip not in families):
-            errors.append(f"{where}: chip {chip!r} is not a known family {sorted(families)}")
+            fail("unknown chip", f"{where}: chip {chip!r} is not a known family {sorted(families)}")
         elif isinstance(fws, list):
             for fw in fws:
                 if isinstance(fw, str) and fw not in FIRMWARES:
-                    errors.append(f"{where}: firmware {fw!r} is not in the firmware registry (moondeck/build/firmwares.py)")
+                    fail("unknown firmware", f"{where}: firmware {fw!r} is not in the firmware registry (moondeck/build/firmwares.py)")
                 elif isinstance(fw, str) and chip_family(fw) != chip:
-                    errors.append(f"{where}: firmware {fw!r} installs onto {chip_family(fw)}, not {chip}")
+                    fail("chip mismatch", f"{where}: firmware {fw!r} installs onto {chip_family(fw)}, not {chip}")
 
         img = e.get("image")
         if isinstance(img, str) and img.startswith("assets/deviceModels/") and not (DOCS / img).exists():
-            errors.append(f"{where}: image '{img}' does not exist on disk")
+            fail("missing image", f"{where}: image '{img}' does not exist on disk")
 
         # --- state: the document PATCH /api/state takes; its shape is the schema's, its modules are checked against the firmware here ---
         state = e.get("state")
@@ -212,7 +242,7 @@ def main():
             if not isinstance(node, dict):
                 continue   # the schema reported it
             if top_names and root not in top_names:
-                errors.append(f"{where}: state root '{root}' is not a top-level module (known: {sorted(top_names)})")
+                fail("unknown state root", f"{where}: state root '{root}' is not a top-level module (known: {sorted(top_names)})")
                 continue
             _walk(root, node, None)
         board_control_seen = False
@@ -220,25 +250,25 @@ def main():
             mtype = m["type"]
             mid = m["id"]
             if mtype is not None and mtype not in factory_types:
-                errors.append(f"{where}: state member '{mid}' has type '{mtype}', which is not factory-registered")
+                fail("unregistered module type", f"{where}: state member '{mid}' has type '{mtype}', which is not factory-registered")
 
             controls = m["controls"]
             # System.deviceModel control must equal the entry name (the identity key).
             if mid == "System" and "deviceModel" in controls:
                 board_control_seen = True
                 if controls["deviceModel"] != name:
-                    errors.append(f"{where}: System.deviceModel control '{controls['deviceModel']}' "
+                    fail("device identity", f"{where}: System.deviceModel control '{controls['deviceModel']}' "
                                   f"!= entry name '{name}'")
             # A `pins` control only makes sense on a light driver: an LED driver, or PWM Light, one pin per channel.
             if "pins" in controls and not (str(mtype).endswith("LedDriver") or mtype == "PwmLightDriver"):
-                errors.append(f"{where}: state member '{mid}' has a 'pins' control but is not a light driver")
+                fail("pins on non-light driver", f"{where}: state member '{mid}' has a 'pins' control but is not a light driver")
 
             # 74HCT595 pin expander (pinExpander = is the board fitted?). The wiring
             # invariants are what a bad catalog entry gets wrong, and they fail on a bench with dark
             # LEDs rather than loudly, so pin them here.
             if controls.get("pinExpander"):
                 if "latchPin" not in controls:
-                    errors.append(f"{where}: pinExpander (74HCT595) needs a 'latchPin'")
+                    fail("expander wiring", f"{where}: pinExpander (74HCT595) needs a 'latchPin'")
                 # The data-pin count is a property of the BOARD (how many '595 sockets are
                 # populated), not of the bus: the driver pads the bus width itself. The ceiling is the
                 # runtime's, not an arbitrary one: every pin fans out to 8 strands through its register,
@@ -246,7 +276,7 @@ def main():
                 # ever be driven ("too many strands (pins x 8 through the expander)").
                 pins = [p.strip() for p in str(controls.get("pins", "")).split(",") if p.strip()]
                 if not 1 <= len(pins) <= 8:
-                    errors.append(f"{where}: pinExpander (74HCT595) needs 1..8 data pins "
+                    fail("expander wiring", f"{where}: pinExpander (74HCT595) needs 1..8 data pins "
                                   f"(one per populated register; 8 x 8 taps = the 64-strand ceiling), "
                                   f"got {len(pins)}")
                 # The latch rides a DATA LANE (the peripheral gives only one clock), so it must not share a
@@ -264,14 +294,14 @@ def main():
                             return None
                     latch_n = _gpio(latch)
                     if latch_n is None:
-                        errors.append(f"{where}: latchPin ({latch!r}) is not a valid GPIO number")
+                        fail("expander wiring", f"{where}: latchPin ({latch!r}) is not a valid GPIO number")
                     else:
                         for other in ("clockPin", "dcPin"):
                             if _gpio(controls.get(other)) == latch_n:
-                                errors.append(f"{where}: latchPin ({latch_n}) collides with {other}: "
+                                fail("expander wiring", f"{where}: latchPin ({latch_n}) collides with {other}: "
                                               f"the latch needs its own GPIO")
                         if latch_n in [_gpio(pn) for pn in pins]:
-                            errors.append(f"{where}: latchPin ({latch_n}) is also a data pin: "
+                            fail("expander wiring", f"{where}: latchPin ({latch_n}) is also a data pin: "
                                           f"the latch needs its own GPIO")
 
             # Ethernet is explicit, not defaulted: a board that turns Ethernet ON (EthernetModule with
@@ -285,25 +315,25 @@ def main():
             if mtype == "SdCardService" and "board" in controls:
                 board = controls["board"]
                 if not isinstance(board, str):
-                    errors.append(f"{where}: SdCardService board must be the preset LABEL as a string, got {board!r}")
+                    fail("unknown board preset", f"{where}: SdCardService board must be the preset LABEL as a string, got {board!r}")
                 elif board not in sd_presets:
-                    errors.append(f"{where}: SdCardService board {board!r} is not a preset in SdCardService.h (known: {sorted(sd_presets)})")
+                    fail("unknown board preset", f"{where}: SdCardService board {board!r} is not a preset in SdCardService.h (known: {sorted(sd_presets)})")
             if mtype == "EthernetModule":
                 # PRESENCE, not truthiness: a JSON `null` reads as None like a missing key, and the
                 # installer treats a present-but-null value as a named preset (null !== "Custom").
                 board = controls["ethBoard"] if "ethBoard" in controls else None
                 if "ethBoard" in controls:
                     if not isinstance(board, str):
-                        errors.append(f"{where}: EthernetModule ethBoard must be the preset LABEL as a string, got {board!r}")
+                        fail("unknown board preset", f"{where}: EthernetModule ethBoard must be the preset LABEL as a string, got {board!r}")
                     elif board not in eth_presets:
-                        errors.append(f"{where}: EthernetModule ethBoard {board!r} is not a preset in EthernetModule.h (known: {sorted(eth_presets)})")
+                        fail("unknown board preset", f"{where}: EthernetModule ethBoard {board!r} is not a preset in EthernetModule.h (known: {sorted(eth_presets)})")
                 et = controls.get("ethType")
                 # ethType must be an int (a JSON string like "2" would silently skip the rule below and
                 # also isn't what the device deserializes into the Select), so reject a stringified value.
                 # `bool` is an int subclass, so exact-type-check (as flashBaud does) or a JSON `true`
                 # would pass as ethType 1 (LAN8720).
                 if et is not None and type(et) is not int:
-                    errors.append(f"{where}: EthernetModule ethType must be an integer, got {et!r}")
+                    fail("ethernet pinning", f"{where}: EthernetModule ethType must be an integer, got {et!r}")
                 # A named preset IS the explicit pinning: the map lives in EthernetModule.h, under
                 # the same review as any other firmware constant, rather than repeated per board.
                 if type(et) is int and et != 0 and board in (None, "Custom"):
@@ -318,7 +348,7 @@ def main():
                     }.get(et, [])
                     missing = [p for p in required if p not in controls]
                     if missing:
-                        errors.append(f"{where}: EthernetModule sets ethType={et} but omits board-wiring "
+                        fail("ethernet pinning", f"{where}: EthernetModule sets ethType={et} but omits board-wiring "
                                       f"pin(s) {missing}: Ethernet must be pinned explicitly, not "
                                       f"inherited from a per-chip default (use -1 for a genuinely "
                                       f"unused pin)")
@@ -326,8 +356,9 @@ def main():
         # Every entry must carry the deviceModel identity (System.deviceModel). An empty `state`
         # is also a failure, since it has no identity at all.
         if not board_control_seen:
-            errors.append(f"{where}: state sets no System.deviceModel identity")
+            fail("device identity", f"{where}: state sets no System.deviceModel identity")
 
+    _findings.write("check_devices", RULES, found)
     # Report (mirrors check_specs.py's shape).
     print(f"Device check: {len(catalog)} devices, {len(errors)} issue(s)")
     if errors:

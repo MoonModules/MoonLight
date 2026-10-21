@@ -1,10 +1,24 @@
 # Performance & Memory
 
-MoonLight's per-step **performance contracts** live in the scenario JSONs. Each `test/scenarios/*.json` step carries a per-target `contract` block (`tick_us` ceiling and `free_heap` floor) and an `observed` block (the latest reading per target). The scenarios are the source of truth and the assertion surface: every PR runs against them. [testing.md § Performance contracts](testing.md#performance-contracts-contracttarget) covers the contract semantics and the renegotiation workflow. The headline numbers are in [README.md § Performance](../README.md#performance).
+MoonLight's per-step **performance contracts** live in the scenario JSONs. Each `test/scenarios/*.json` step carries a per-target `contract` block (`tick_us` ceiling and `free_heap` floor) and an `observed` block (the latest reading per target). The scenarios are the source of truth and the assertion surface: every PR runs against them. [testing.md § Performance contracts](testing.md#performance-contracts-contracttarget) covers the contract semantics and the renegotiation workflow. The headline numbers are [below](#headline-numbers).
 
 What scenarios cannot carry lives here: structural sizes (`sizeof`), build-variant deltas, and the WiFi and Ethernet physics that explain where a contract lands.
 
 **Render-loop model.** The Layer's buffer **persists** from frame to frame: `Layer::tick()` keeps what the effects drew (the FastLED/WLED/MoonLight convention; see [MoonLight, buffer persistence](../explanation/architecture/moonlight.md#buffer-persistence-the-layer-keeps-what-it-drew)). Fading is one **collected fade**: `Layer::fadeToBlackBy` takes the minimum of the requested amounts and applies one buffer pass per frame, so several fading effects share one pass. That pass is one linear sweep over the buffer, small next to per-light effect compute and the output driver.
+
+## Headline numbers
+
+A full render pipeline (effect, modifier, Art-Net output) on real hardware, at 128x128:
+
+| Device | Lights | FPS |
+|---|---:|---:|
+| Desktop | 16,384 | 9,708 |
+| Olimex `esp32` | 16,384 | 11 |
+| LOLIN S3 N16R8 | 16,384 | 6 |
+
+Smaller grids run far faster: a classic ESP32 holds over 1,500 FPS at 16x16 and 81 FPS at 64x64. Pick an Ethernet device when frame rate matters, and an S3 when you need PSRAM headroom for large buffers.
+
+The per-grid and per-device tables below add free-heap figures and why WiFi costs what it does.
 
 ---
 
@@ -121,7 +135,7 @@ P4 and S3 rows are open.
 
 ## ESP32: Olimex Gateway Rev G (internal RAM only, 320 KB)
 
-Per-step tick and heap live in `contract.esp32-eth-wifi` and `contract.esp32-eth` across the scenarios, and the [README perf table](../README.md#performance) holds the headline grid×board matrix.
+Per-step tick and heap live in `contract.esp32-eth-wifi` and `contract.esp32-eth` across the scenarios, and the [headline numbers](#headline-numbers) hold the grid×board matrix.
 
 ### Run-to-run variance
 
@@ -191,7 +205,7 @@ LUT is half desktop size (uint16_t vs uint32_t per entry). The 1:1 (no-modifier)
 |---|---|---|
 | Total tick | ~164 ms / 6 FPS | Dominated by ArtNet at the 8 dBm cap |
 | ArtNetSend | ~93 ms (97 UDP packets) | ~960 µs/packet, against 38 ms in total on the Olimex `esp32-eth-wifi`; the 8 dBm cap is the cause (below) |
-| Free internal RAM | ~240 KB | The comparable, scarce resource, and the S3 number in the README perf table. Flat (~238–240 KB) across all grid sizes, since the Layer buffer and LUT live in PSRAM. |
+| Free internal RAM | ~240 KB | The comparable, scarce resource, and the S3 number in the headline table. Flat (~238–240 KB) across all grid sizes, since the Layer buffer and LUT live in PSRAM. |
 | Free heap (incl. PSRAM) | ~8,163 KB | The PSRAM-merged total (`totalHeap` reports 8 MB combined). Internal RAM is the limit, so this total says little. |
 | maxBlock (internal) | ~164 KB | Internal-RAM largest contiguous block, the scarce-resource KPI. `maxAllocBlock` (any memory) reports ~8 MB on PSRAM boards, so SystemModule and scenario_runner use `maxInternalAllocBlock`. |
 | Layer buffer | 92 KB | In PSRAM (auto by heap_caps preference) |

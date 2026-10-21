@@ -22,6 +22,7 @@ import os
 import re
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 # A REDIRECTED Windows stdout takes the locale encoding, cp1252, and this runner relays the output
@@ -45,6 +46,7 @@ sys.path.insert(0, str(ROOT / "moondeck" / "docs"))
 import _test_metadata as test_meta  # noqa: E402
 sys.path.insert(0, str(ROOT / "moondeck" / "scenario"))
 import _observed  # noqa: E402
+import test_runs  # noqa: E402
 
 
 
@@ -172,14 +174,10 @@ _MEASURE_RE = re.compile(
 SKIPPED = 2
 
 
-def _run_one(path: Path, update_contract: bool, update_reason: str | None,
-             no_write: bool = False) -> int:
-    """Run one scenario. Always parses MEASURE lines and writes
-    observed.<target> blocks back into the scenario JSON (every run produces a
-    drift record). With --update-contract, also rewrites the contract.
-
-    Symmetric with the live runner's behaviour — observations persist always,
-    contracts only when renegotiated."""
+def _run_one(path: Path, update_contract: bool, update_reason: str | None, update_observed: bool = False) -> int:
+    """Run one scenario and keep each measured step's sample window on this machine. The scenario file changes only with
+    --update-observed, which writes the window's statistics, or --update-contract, which renegotiates the contract; the
+    live runner does the same."""
     # Capture + tee: stream to stdout while collecting MEASURE lines.
     # Pin the runner's filesystem root into the build tree. The runner performs real writes, and
     # its default root is the OS per-user data directory unless the working directory happens to be
@@ -229,19 +227,11 @@ def _run_one(path: Path, update_contract: bool, update_reason: str | None,
         name = step.get("name")
         if name not in observations:
             continue
-        # observed.<target> keeps a rolling window of samples per scalar and reports
-        # p50/p95/min/max/n over it: the median is what the step normally costs and p95
-        # is its tail, neither of which a single contended run can move far. When
-        # --update-contract was passed, reset to the current single point (the window
-        # described the PREVIOUS contract). See moondeck/scenario/_observed.py.
-        existing_obs = step.get("observed", {}).get(target)
-        if update_contract:
-            new_obs = _observed.reset(observations[name], today)
-            obs_changed = True
-        else:
-            new_obs, obs_changed = _observed.widen(existing_obs, observations[name], today)
-        if obs_changed:
-            step.setdefault("observed", {})[target] = new_obs
+        # The window is this machine's: it goes to the local store on every passing run. The scenario file takes the summary only
+        # when it is asked to (--update-observed, or a renegotiated contract), so a run leaves the tree as it found it.
+        local = _observed.record(scenario.get("name", path.stem), name, target, observations[name], today, reset_window=update_contract)
+        if update_observed or update_contract:
+            step.setdefault("observed", {})[target] = _observed.summary(local)
             touched_observed += 1
 
         # Only renegotiate the contract when --update-contract was passed. The
@@ -272,15 +262,6 @@ def _run_one(path: Path, update_contract: bool, update_reason: str | None,
             step.setdefault("contract", {})[target] = new_block
             touched_contract += 1
 
-    # --no-write: report the drift, change nothing. A gate must leave the tree exactly as it
-    # found it, or the run invalidates its own result.
-    if no_write:
-        if touched_observed or touched_contract:
-            print(f"  (drift in {path.name}: observed[{target}] x {touched_observed}"
-                  f"{f', contract x {touched_contract}' if touched_contract else ''};"
-                  f" run without --no-write to record it)")
-        return 0
-
     if touched_observed or touched_contract:
         _observed.save_scenario(path, scenario)
         what = []
@@ -294,7 +275,14 @@ def _run_one(path: Path, update_contract: bool, update_reason: str | None,
 
 def _run_many(paths, args) -> int:
     """Run every scenario and print the same pass/fail/skip summary mm_scenarios prints."""
-    codes = [_run_one(p, args.update_contract, args.reason, args.no_write) for p in paths]
+    codes, results = [], []
+    for p in paths:
+        started = time.time()
+        code = _run_one(p, args.update_contract, args.reason, args.update_observed)
+        codes.append(code)
+        live = bool(json.loads(p.read_text(encoding="utf-8")).get("live_only"))
+        results.append(("live" if live else "scenario", p.stem, "skip" if code == SKIPPED else "pass" if code == 0 else "fail", time.time() - started))
+    test_runs.record(test_runs.scenario_runs(results))   # each scenario's last result, with the tree it saw
     skipped = sum(1 for c in codes if c == SKIPPED)
     failed = sum(1 for c in codes if c not in (0, SKIPPED))
     print(f"=== {len(codes)} scenario(s), {len(codes) - failed - skipped} passed, "
@@ -308,12 +296,9 @@ def main():
                         help="Scenario name (file stem). Runs all if omitted.")
     parser.add_argument("--module", default=None,
                         help="Module filter. Runs only scenarios that match.")
-    parser.add_argument("--no-write", action="store_true",
-                        help="run and report, but do not write observations back into the "
-                             "scenario JSON. What the GATES use: a gate that writes dirties the "
-                             "tree it just checked, which makes it look like it needs running "
-                             "again, and puts an observation diff in every commit. Run without "
-                             "the flag to refresh the recorded numbers.")
+    parser.add_argument("--update-observed", action="store_true",
+                        help=("Write the statistics of this machine's sample window into the scenario file as its published "
+                              "summary. Without it a run keeps its sample window on this machine and leaves the file alone."))
     parser.add_argument("--update-contract", action="store_true",
                         help=("Renegotiate the per-step performance contract: write "
                               "observed tick/heap into contract[<host-target>] and "
@@ -342,7 +327,7 @@ def main():
         if module_filter and scenario_file not in test_meta.paths_for_module(module_filter):
             print(f"Scenario {args.name} does not match module {module_filter}.")
             sys.exit(1)
-        sys.exit(_run_one(scenario_file, args.update_contract, args.reason, args.no_write))
+        sys.exit(_run_many([scenario_file], args))   # one scenario runs as a suite of one, so it records its run as the suite does
 
     if module_filter:
         paths = test_meta.paths_for_module(module_filter)

@@ -326,7 +326,7 @@ Non-negotiable:
 - Effects always write to their layer's logical buffer. Never to output, never to physical coordinates.
 - Drivers always own the output path (blending, mapping, brightness correction, channel reordering).
 - Layer buffer is mandatory: if it doesn't fit, reduce dimensions until it does ("at least see something").
-- A light module's buffer is a `ScratchBuffer` member, which sizes it, reports it in `dynamicBytes()` and frees it in `release()`, so no allocation is held unreported or leaked. The [code report](../../reference/metrics/code.md) counts each buffer still taken by hand, and that count only falls.
+- A light module's buffer is a `ScratchBuffer` member, which sizes it, reports it in `dynamicBytes()` and frees it in `release()`, so no allocation is held unreported or leaked. The [code check](../../reference/tests.md#check_code) counts each buffer still taken by hand, and that count only falls.
 
 ### Per-module reporting
 
@@ -335,3 +335,19 @@ Every MoonModule self-reports `classSize()` / `dynamicBytes()` / `tickTimeUs()` 
 ### Scaling to available memory
 
 What each class of device can run is tabulated in [firmware variants](../../reference/hardware/firmware-variants.md#scaling-to-available-memory). The architecture does not assume PSRAM is present. Buffer counts and sizes are determined at runtime based on available memory and reallocated when configuration changes.
+
+## The classes underneath
+
+The light-domain machinery the catalog modules lean on that is no module itself, each linked to its header.
+
+- **[Buffer](../../../src/light/layers/Buffer.h)**: the contiguous light data every effect writes and every driver reads.
+- **[MappingLUT](../../../src/light/layers/MappingLUT.h)**: the table mapping each logical light to the physical lights it drives, one, none or many, with no table at all on the sequential identity fast path.
+- **[Scripted palette](../../../src/light/moonlive/MoonLivePalette.h)**: a palette authored as code rather than stored as data.
+- **[Script particle pool](../../../src/light/moonlive/MoonLiveParticles.h)**: one scripted module's particle pool, with the frame clock that makes the physics run evenly.
+- **[Effect base](../../../src/light/effects/EffectBase.h)**: what every effect shares; the [effects catalog](../../moonmodules/light/effects.md) is built on it.
+- **[Modifier base](../../../src/light/modifiers/ModifierBase.h)**: what every modifier shares; the [modifiers catalog](../../moonmodules/light/modifiers.md) is built on it.
+- **[Driver base](../../../src/light/drivers/DriverBase.h)**: what every driver shares, the output correction and the source window; the [drivers catalog](../../moonmodules/light/drivers.md) is built on it.
+- **[Layout base](../../../src/light/layouts/LayoutBase.h)**: what every layout shares; the [layouts catalog](../../moonmodules/light/layouts.md) is built on it.
+- **[Slot encoder](../../../src/light/drivers/ParallelSlots.h)**: the WS2812 encode for parallel buses, the contract between a parallel driver and its peripheral.
+- **[Pin list](../../../src/light/drivers/PinList.h)**: the light-domain half of pin and count list parsing for multi-output LED drivers.
+- **[Parallel LED driver](../../moonmodules/light/drivers.md#parallelled)**: the driver every parallel peripheral plugs into.

@@ -33,11 +33,11 @@ namespace mm {
 ///
 /// ## Presets
 ///
-/// Click a pad to apply its preset, drag to rearrange. A pad is tinted by its role: layout blue, effects violet, driver green, service amber. [The how-to](https://moonmodules.org/MoonLight/how-to/presets.html) has the rest.
+/// Click a pad to apply its preset, drag to rearrange. A pad is tinted by its role: layout blue, effects violet, driver green, service amber. [Presets](https://moonmodules.org/MoonLight/reference/presets.html) has the rest.
 ///
 /// ## Home Assistant
 ///
-/// Only effects presets reach Home Assistant, so a hub never rewires pins or geometry. [The how-to](https://moonmodules.org/MoonLight/how-to/home-automation.html#presets-in-home-assistant) has the setup.
+/// Only effects presets reach Home Assistant, so a hub never rewires pins or geometry. [Home automation](https://moonmodules.org/MoonLight/reference/home-automation.html#presets-in-home-assistant) has the setup.
 ///
 /// @technical
 ///

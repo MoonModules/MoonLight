@@ -1,6 +1,6 @@
 # yaml-language-server: $schema=moonwalk.schema.json
 stage: Test
-summary: The change pinned by tests, scenarios, live runs and clips.
+summary: The change pinned by tests, scenarios and live runs.
 processes:
   - id: add-test
     title: Add a test, and pin a bug
@@ -50,10 +50,10 @@ processes:
         when: { manual: "Create test/js/<topic>.test.mjs for Node's built-in runner; no package.json is needed." }
       - id: build
         say: Build the desktop tests.
-        given: [{ input: kind, in: [Module logic, Full pipeline] }]
+        given: [{ input: kind, equals: Module logic }]
         when: { run: { script: moondeck/build/build_desktop.py, args: "--tests" } }
         detail: |
-          It builds `mm_tests` and `mm_scenarios` only, not the app.
+          It builds `mm_tests` and `mm_scenarios` only, not the app. A full pipeline builds inside the scenario run.
       - id: run-unit
         say: Run the unit tests.
         given: [{ input: kind, equals: Module logic }]
@@ -74,12 +74,6 @@ processes:
         when: { run: { script: moondeck/test/test_host.py, args: "--js" } }
         detail: |
           It reports SKIP rather than failing when node is absent.
-      - id: inventory
-        say: Regenerate the test inventory.
-        given: [{ input: kind, in: [Module logic, Full pipeline] }]
-        when: { run: { script: moondeck/docs/generate_test_docs.py } }
-        detail: |
-          The inventory under `docs/reference/tests/` is generated from the test files. `--check` exits non-zero when it is stale.
     outro: |
       A bug fix ships with the test that failed before it.
   - id: run-scenario
@@ -89,7 +83,7 @@ processes:
     systems: [MoonDeck]
     page: reference/testing.md
     intro: |
-      A scenario replays a JSON script against the whole pipeline inside the test binary and checks each measured step against its contract. The inventory is [Scenario tests](reference/tests/scenario-tests.md).
+      A scenario replays a JSON script against the whole pipeline inside the test binary and checks each measured step against its contract. What each one proves is on [the test page](reference/tests.md).
     steps:
       - id: build
         say: Build the desktop tests.
@@ -136,7 +130,7 @@ processes:
       - id: find-board
         say: Find the board's address.
         given: [{ input: target, equals: Board }]
-        when: { manual: "In MoonDeck's Live tab, choose the network and press Discover, or take the address from the registry." }
+        when: { manual: "Pick the network in the sidebar's network bar, then in the Live tab press Discover and check the boards; or take the address from the registry." }
         detail: |
           The Live Scenarios card runs the selected scenario against every checked device.
       - id: run
@@ -167,8 +161,13 @@ processes:
     steps:
       - id: approval
         say: Ask the product owner before flashing.
-        when: { manual: "Build and flash only on approval, with the desktop already clean. Probe the serial ports again first, since they drift between sessions." }
-      - id: ports
+        when: { manual: "Build and flash only on approval, with the desktop already clean." }
+      - id: flash
+        say: Build and flash the board.
+        when: { process: esp32-build-flash }
+        detail: |
+          Probe the serial ports again first, since they drift between sessions.
+      - id: boards
         section: Prepare the bench
         say: Open MoonDeck's Live tab.
         when: { manual: "Select the LAN, press Discover and check the boards that should run." }
@@ -236,27 +235,3 @@ processes:
         when: { manual: "The scenario, its target, and which way the contract moved." }
     outro: |
       The contract's own `reason` field keeps the why next to the number.
-  - id: perform-clip
-    title: Perform a clip as a UI test
-    actor: contributor
-    goal: The UI does what every published clip shows.
-    systems: [MoonTube]
-    page: reference/testing.md
-    intro: |
-      A clip is a UI scenario. Its run file lists what a person does, such as opening a card or dragging a slider, and each step checks itself by reading the device back over REST. The same run recorded produces the published video, so a failing run means the interface differs from what the video shows. Format and actions: [moontube.md](../moondeck/moontube/moontube.md).
-    steps:
-      - id: start
-        say: Run the desktop app.
-        when: { run: { script: moondeck/run/run_desktop.py } }
-        detail: |
-          A run that drives another surface, such as the installer's preview server, names its own `host`, and one that needs particular hardware names a `requires` capability from the bench registry.
-      - id: clip
-        say: Perform one clip.
-        when: { run: { script: moondeck/moontube/mtvideo.py, args: "--run moontube/clips/<clip>.json" } }
-        detail: |
-          Every state change goes through the affordance a person uses; REST only reads, since a step that POSTs its way to the outcome proves nothing about the interface.
-      - id: lane
-        say: Run every clip as the UI lane.
-        when: { run: { script: moondeck/test/test_host.py, args: "--ui" } }
-        detail: |
-          It runs on request only and is never a gate, at a commit, a merge or a release: it drives a real browser against a running device and costs minutes. It skips rather than fails when nothing answers or no Playwright browser is installed.

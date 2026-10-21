@@ -13,16 +13,16 @@ processes:
     steps:
       - id: merge-checks
         section: Checks
-        say: Run the merge gates on the tagged commit.
-        when: { process: pre-merge }
+        say: Run every commit check on the tagged commit.
+        when: { process: commit }
         detail: |
-          They run the commit checks with their triggers ignored.
+          Every check runs, its trigger ignored, since this is the event where the binary ships; MoonDeck's `/api/gates?every=1` lists them that way. Pre-merge's Reviewer, title and CodeRabbit steps read a branch, which a tagged commit on main is not.
       - id: firmwares
         say: Build every shipped ESP32 firmware.
         actor: contributor
-        when: { manual: "build_esp32.py --firmware <name>, once per shipped variant." }
+        when: { run: { script: moondeck/build/build_esp32.py, args: "--firmware <name>" } }
         detail: |
-          The shipped variants are the registry's rows marked `ships` in `moondeck/build/firmwares.py`, built [one at a time](moonwalk.md#esp32-build-flash).
+          Once per shipped variant: the rows marked `ships` in `FIRMWARES` in `moondeck/build/build_esp32.py`, which `firmwares.py` joins into the one registry, built [one at a time](moonwalk.md#esp32-build-flash).
       - id: hardware
         section: Judgment
         say: Test it on real hardware.
@@ -34,11 +34,11 @@ processes:
         say: Write the release notes.
         when: { manual: "What a user notices, from the commits since the last tag." }
       - id: smoke
-        say: Smoke-test every platform on a minor bump.
-        when: { manual: "A major bump too. Install and run it on each desktop OS and a board per chip family." }
+        say: Smoke-test all platforms on minor and major bumps.
+        when: { manual: "Install and run it on each desktop OS and a board per chip family." }
       - id: tag
         section: Ship
         say: Tag the release.
         when: { run: { command: "git tag vX.Y.Z && git push --tags" } }
         detail: |
-          The release workflow builds, publishes and deploys the site. A `vX.Y.Z-rcN` tag publishes a GitHub release flagged pre-release, offered to readers who pick the pre-release channel; everyone else stays on stable.
+          The release workflow builds, publishes and deploys the site. A `vX.Y.Z-rcN` tag publishes a GitHub release flagged pre-release, offered to readers who pick the pre-release channel; everyone else stays on stable. The moving `latest` pre-release is named by the bare version, `X.Y.Z-dev.N`: the app builds the asset's filename from that name, so a `v` prefix hides the update badge.

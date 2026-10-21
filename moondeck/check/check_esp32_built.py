@@ -30,6 +30,25 @@ ROOT = Path(__file__).resolve().parent.parent.parent
 
 sys.path.insert(0, str(ROOT / "moondeck" / "build"))
 from build_esp32 import APP_BIN, FIRMWARES, MOONBASE_BIN  # noqa: E402
+sys.path.insert(0, str(ROOT / "moondeck" / "check"))
+import _findings  # noqa: E402
+
+RULES = {
+    "missing binary": {"reason": "No firmware image exists to flash or measure.", "fix": "Build it with build_esp32.py."},
+    "stale binary": {"reason": "A source that feeds the image is newer than the image, so it lacks what is on disk.", "fix": "Rebuild with build_esp32.py."},
+    "stale moonbase image": {"reason": "A moonbase/ source is newer than the MoonBase image.", "fix": "Rebuild with build_esp32.py."},
+    "old binary": {"reason": "The image is older than the age the run asked for.", "fix": "Rebuild with build_esp32.py."},
+}
+
+
+def record(firmware, found):
+    """Keep this run's verdict on the one firmware it looked at, beside the others' last verdicts: a run checks one firmware, the record holds every firmware's."""
+    import json
+    try:
+        kept = json.loads((_findings.DIR / "check_esp32_built.json").read_text(encoding="utf-8"))["findings"]
+    except (OSError, ValueError, KeyError):
+        kept = []
+    _findings.write("check_esp32_built", RULES, [f for f in kept if f.get("firmware") != firmware] + [dict(f, firmware=firmware) for f in found])
 
 # What feeds an ESP32 image. Kept in step with this check's trigger in
 # CLAUDE.md § Commit: both answer "could this change alter the firmware?".
@@ -156,6 +175,7 @@ def main():
     build_cmd = f"uv run moondeck/build/build_esp32.py --firmware {args.firmware}"
 
     if not binary.exists():
+        record(args.firmware, [{"rule": "missing binary", "message": f"{args.firmware}: no firmware binary", "file": binary.relative_to(ROOT).as_posix(), "level": "error"}])
         print(f"No firmware binary for {args.firmware}.")
         print(f"  expected: {binary.relative_to(ROOT)}")
         print(f"  build it: {build_cmd}")
@@ -167,6 +187,7 @@ def main():
 
     if newest_path is not None and newest_mtime > built:
         stale_by = (newest_mtime - built) / 60
+        record(args.firmware, [{"rule": "stale binary", "message": f"{args.firmware}: {newest_path.relative_to(ROOT)} is {stale_by:.0f} min newer than the binary", "file": newest_path.relative_to(ROOT).as_posix(), "level": "error"}])
         print(f"Firmware for {args.firmware} is STALE: a source file is newer than the binary.")
         print(f"  binary : {binary.relative_to(ROOT)} (built {age_h:.1f}h ago)")
         print(f"  newer  : {newest_path.relative_to(ROOT)} ({stale_by:.0f} min after the build)")
@@ -180,6 +201,7 @@ def main():
     if spec.get("moonbase"):
         mb_bin = ROOT / "build" / f"moonbase-{spec['chip']}" / MOONBASE_BIN
         if not mb_bin.exists():
+            record(args.firmware, [{"rule": "missing binary", "message": f"{args.firmware}: no MoonBase image", "file": mb_bin.relative_to(ROOT).as_posix(), "level": "error"}])
             print(f"No MoonBase image for {args.firmware}.")
             print(f"  expected: {mb_bin.relative_to(ROOT)}")
             print(f"  build it: {build_cmd}")
@@ -189,16 +211,19 @@ def main():
                          if f.is_file() and f.suffix in SOURCE_SUFFIXES
                          and not SKIP_PARTS.intersection(f.parts)), default=0)
         if mb_newest > mb_built:
+            record(args.firmware, [{"rule": "stale moonbase image", "message": f"{args.firmware}: a moonbase/ source is newer than the MoonBase image", "file": mb_bin.relative_to(ROOT).as_posix(), "level": "error"}])
             print(f"MoonBase image for {args.firmware} is STALE: a moonbase/ source is newer.")
             print(f"  rebuild: {build_cmd}")
             return 1
 
     if args.max_age_hours and age_h > args.max_age_hours:
+        record(args.firmware, [{"rule": "old binary", "message": f"{args.firmware}: built {age_h:.1f}h ago, over the {args.max_age_hours}h limit", "file": binary.relative_to(ROOT).as_posix(), "level": "error"}])
         print(f"Firmware for {args.firmware} is older than {args.max_age_hours}h "
               f"({age_h:.1f}h) — no source is newer, but the age rule asks for a rebuild.")
         print(f"  rebuild: {build_cmd}")
         return 1
 
+    record(args.firmware, [])
     print(f"Firmware for {args.firmware} is up to date "
           f"(built {age_h:.1f}h ago, newer than every source).")
     return 0

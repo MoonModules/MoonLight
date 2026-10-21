@@ -478,7 +478,7 @@ In MoonDeck.md with no card: check_prose, bench_kernels, gen_help, ui_measure, u
 - Written in: logging-an-issue.md:1-101 (full); README.md:218-225 (mention); SECURITY.md (full for vulnerabilities).
 - Executed by: human. Verified by: nothing.
 - Touches: the `{ }` link on every card, System `bootReason`, Firmware `version`.
-- Gaps: **GitHub has no issue template**, so the checklist and the card list are reachable only through the docs page. Step 19 of the plan (an issue form generated from the process file) is the fix.
+- Gaps: **GitHub has no issue template**, so the checklist and the card list are reachable only through the docs page. Step 22 of the plan (an issue form generated from the process file) is the fix.
 
 #### Bump the ESP-IDF pin, adopt a v6.x change
 - Steps: bump PINNED_IDF_COMMIT and PINNED_IDF_VERSION in setup_esp_idf.py and the Docker tag plus cache key in release.yml; re-clone or check out; full ESP32 build and hardware re-test; each ecosystem adoption is its own commit with its own re-test, inside the v6.0 floor.

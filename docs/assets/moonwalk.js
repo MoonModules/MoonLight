@@ -7,6 +7,7 @@ const MODEL = new URL("moonwalk/moonwalk.json", ROOT);
 const CYTOSCAPE = "https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.30.4/cytoscape.min.js";
 const LS_DONE = "mm_moonwalk_done";   // the processes this reader marked done, which the state cannot show on a website
 const LS_VIEW = "mm_moonwalk_view";   // the reader's view of the map: actor, columns and hide done, kept per host
+const SS_OPEN = "mm_moonwalk_open";   // the process the reader had open, for this tab: closing the map and opening it again returns to it
 const LS_SPLIT = "mm_moonwalk_split";   // the reader's share for the text beside the map, once they drag it
 const LS_INPUTS = "mm_moonwalk_inputs";   // the reader's choices, such as their platform, kept per input name
 
@@ -69,6 +70,8 @@ const STYLES = `
 .mm-map-off { opacity: 0.45; }
 .mm-map-call { display: flex; gap: 0.5em; align-items: center; margin: 0.2em 0 0.4em; }
 .mm-map-call code { flex: 1; min-width: 0; overflow-x: auto; white-space: nowrap; font-size: 0.9em; padding: 2px 6px; border-radius: 4px; background: var(--mw-line); }
+.mm-map-status { display: flex; align-items: center; gap: 0.6em; margin: 0.8em 0; padding: 0.5em 0.7em; border: 1px solid var(--mw-accent); border-left-width: 5px; border-radius: 6px; background: color-mix(in srgb, var(--mw-accent) 10%, transparent); }
+.mm-map-badge { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 1.6em; height: 1.6em; border-radius: 50%; background: var(--mw-accent); color: #fff; font-size: 0.9em; }
 .mm-map-note { font-weight: normal; color: var(--mw-muted); font-size: 0.9em; }
 .mm-map-show { margin-left: 0.5em; font-weight: normal; border: 1px solid var(--mw-line); background: var(--mw-bg); color: inherit; border-radius: 4px; padding: 1px 8px; font-size: 0.75rem; cursor: pointer; }
 .mm-walk-bar { --mw-line: var(--md-default-fg-color--lightest, #8884); --mw-accent: var(--md-accent-fg-color, #526cfe);
@@ -169,7 +172,7 @@ function elements(model, by, keep = () => true) {
             out.push({ data: { id: nid, pid, parent: `col:${column.id}`, label: p.title, kind: "process", actor: p.actor, stepped: steps.length > 0 },
                        position: { x: x * COL, y } });
             steps.forEach((s, k) => {
-                out.push({ data: { id: `${nid}/${s.id}`, pid, parent: nid, label: s.say, kind: "step", actor: s.actor },
+                out.push({ data: { id: `${nid}/${s.id}`, pid, sid: s.id, parent: nid, label: s.say, kind: "step", actor: s.actor },
                            position: { x: x * COL, y: y + (k + 1) * STEP_H } });
                 if (k) out.push({ data: { id: `next:${nid}/${k}`, source: `${nid}/${steps[k - 1].id}`, target: `${nid}/${s.id}`, kind: "next" } });
             });
@@ -214,6 +217,21 @@ function style(root) {
     ];
 }
 
+// A condition in words, so a reader sees what the device must show for a step to be done: "a RainbowEffect module exists", "Drivers brightness is 1 to 20". Empty for one the state cannot answer.
+export function conditionText(then) {
+    const words = (then || []).flatMap((e) => {
+        if ("exists" in e) return [e.exists ? `a ${e.module} module exists` : `no ${e.module} module exists`];
+        if (!("control" in e)) return [];
+        const of = `${e.module} ${e.control}`;
+        if ("equals" in e) return [`${of} is ${e.equals}`];
+        if ("notEquals" in e) return [`${of} is not ${e.notEquals}`];
+        if ("minimum" in e && "maximum" in e) return [`${of} is ${e.minimum} to ${e.maximum}`];
+        if ("minimum" in e) return [`${of} is at least ${e.minimum}`];
+        return "maximum" in e ? [`${of} is at most ${e.maximum}`] : [];
+    });
+    return words.join(" and ");
+}
+
 // A step's expectation against a device's state: a control's value or a module that exists. A step names a module by type, so it holds when any module of that type meets it. An HTTP status or a file the state cannot answer, so those give undefined.
 function holds(exp, ofType) {
     const mods = ofType(exp.module) || [];
@@ -224,8 +242,10 @@ function holds(exp, ofType) {
         if (!c) return false;
         // A list counts as its number of rows, so "a network is known" is `notEquals: 0`; equals and notEquals compare as text, since a document's number and the file's number or string mean the same value.
         const value = Array.isArray(c.value) ? c.value.length : c.value;
-        if ("equals" in exp) return String(value) === String(exp.equals);
-        if ("notEquals" in exp) return String(value) !== String(exp.notEquals);
+        // A select's state carries the index of its option, so it also reads as the option's name: `equals: USB` holds for the option named USB.
+        const names = [String(value), ...(Array.isArray(c.options) && Number.isInteger(value) && c.options[value] !== undefined ? [String(c.options[value])] : [])];
+        if ("equals" in exp) return names.includes(String(exp.equals));
+        if ("notEquals" in exp) return !names.includes(String(exp.notEquals));
         // A range compares as numbers, each bound inclusive and either one open.
         const n = Number(value);
         return !Number.isNaN(n) && !(n < exp.minimum) && !(n > exp.maximum);
@@ -270,14 +290,22 @@ export function doneOnDevice(model, stateDoc) {
     return done;
 }
 
-// The processes a contributor's runs show done: every step the change triggers has a pass that still holds, and there is at least one. `steps` is what MoonDeck's /api/gates reports per process, each step triggered or not and fresh or not.
+// Script steps together, as one process's or one subprocess's: triggered when any is, fresh when every triggered one is and there is at least one.
+function together(list) {
+    const needed = list.filter((s) => s.triggered);
+    return { triggered: needed.length > 0, fresh: needed.length > 0 && needed.every((s) => s.fresh), running: needed.some((s) => s.running) };
+}
+
+// A step's status from MoonDeck's /api/gates (`steps`, per process, each script step triggered or not and fresh or not): its own run, or for a step that runs a subprocess, that subprocess's steps together. Undefined for a step that runs no script.
+export function gateOf(steps, pid, s) {
+    const sub = s.when?.process;
+    if (sub) return steps?.[sub]?.length ? together(steps[sub]) : undefined;
+    return steps?.[pid]?.find((r) => r.process === pid && r.id === s.id);   // a process's list holds its subprocesses' steps too, keyed by their own process
+}
+
+// The processes a contributor's runs show done: every step the change triggers has a pass that still holds, and there is at least one.
 export function doneBySteps(steps) {
-    const done = new Set();
-    for (const [pid, list] of Object.entries(steps || {})) {
-        const needed = list.filter((s) => s.triggered);
-        if (needed.length && needed.every((s) => s.fresh)) done.add(pid);
-    }
-    return done;
+    return new Set(Object.entries(steps || {}).filter(([, list]) => together(list).fresh).map(([pid]) => pid));
 }
 
 // A run's duration as a reader takes it in: `42s`, `3m05s`.
@@ -384,11 +412,9 @@ function stepNote(s, p) {
     return notes.length ? ` (${notes.join("; ")})` : "";
 }
 
-// A step's call as a reader types it: a MoonDeck script with its arguments, or a command; null for a step that runs nothing.
+// A step's call as a reader types it, a MoonDeck script with its arguments, a command or the curl line of an API call, which the generator writes once into the map; null for a step that runs nothing.
 export function commandOf(step) {
-    const r = step.when?.run;
-    if (!r) return null;
-    return r.script ? `uv run ${r.script}${r.args ? ` ${r.args}` : ""}` : r.command || null;
+    return step.command ?? null;
 }
 
 // The call as code with a button that copies it. Where the browser keeps the clipboard from an insecure page, as on a device's own http address, the button selects the text for a manual copy.
@@ -459,6 +485,16 @@ function showPanel(panel, model, pid, done, onDone, host = {}) {
     }
     const meta = [model.stages.find((s) => s.id === p.stage)?.title, p.actor, ...(p.systems || [])].join(" · ");
     panel.append(control("h3", {}, p.title), control("p", { className: "mm-map-meta" }, meta), control("p", {}, p.goal));
+    // Done on the device is what the state shows, so it has no checkbox to undo and says on what it rests, at the top where a reader looks for it.
+    if (host.device?.has(pid)) {
+        const why = conditionText(p.steps.flatMap((s) => s.then || []));
+        const card = control("div", { className: "mm-map-status" });
+        const text = control("div");
+        text.append(control("strong", {}, host.doneBy));
+        if (why) text.append(control("div", { className: "mm-map-note" }, `Because ${why}.`));
+        card.append(control("span", { className: "mm-map-badge" }, "\u2714"), text);
+        panel.append(card);
+    }
     if (hasProse(p)) {
         const view = control("div", { className: "mm-map-view" });
         const md = (text) => { const d = control("div"); d.innerHTML = host.helpMarkdown(text); view.append(d); };
@@ -479,7 +515,7 @@ function showPanel(panel, model, pid, done, onDone, host = {}) {
         host.offChoice?.(p, chosen);   // the map grays out the steps of the options not chosen
         // A step that does not apply, for another choice or not needed for this change, is grayed as on the map, or left out when the reader hides them.
         const steps = p.steps || [];
-        const runOf = (s) => host.steps?.[pid]?.find((r) => r.id === s.id);
+        const runOf = (s) => gateOf(host.steps, pid, s);
         const off = steps.map((s) => !applies(s, chosen) || runOf(s)?.triggered === false);
         let current = null;
         const sectionOf = steps.map((s) => (current = s.section || current));
@@ -501,6 +537,7 @@ function showPanel(panel, model, pid, done, onDone, host = {}) {
             line.append(s.say);
             if (ACTOR_COLOR[s.actor]) line.style.setProperty("--mw-actor", ACTOR_COLOR[s.actor]);
             if (stepNote(s, p)) line.append(control("span", { className: "mm-map-note" }, stepNote(s, p)));
+            if (conditionText(s.then)) line.append(control("span", { className: "mm-map-note" }, ` Done when ${conditionText(s.then)}.`));
             // In a host that can show a card, a step with a target follows from here: the map gives way to the app and the bar.
             // A step the device already shows done is ticked, as a checklist ticks a finished item, and has nothing to show.
             const run = runOf(s);
@@ -521,8 +558,21 @@ function showPanel(panel, model, pid, done, onDone, host = {}) {
                 line.append(b);
             }
             block.append(line);
-            const how = howTo(s) || linkOf(s, host);
-            if (how) block.append(how);
+            // The scenarios that set or expect what this step sets, so the step shows what proves it.
+            const proofs = host.tests?.[`${pid}/${s.id}`];
+            if (proofs?.length) {
+                const p = control("p", { className: "mm-map-note" }, "Tested by ");
+                proofs.forEach((x, i) => { if (i) p.append(" \u00b7 "); p.append(control("a", { href: new URL(x.href, host.site || ROOT).href, target: "_blank", rel: "noopener" }, x.title)); });
+                block.append(p);
+            }
+            // A step that runs a subprocess opens it, as a choice opens a process.
+            const sub = model.processes[s.when?.process];
+            if (sub && host.open) {
+                const into = control("p", { className: "mm-map-next" }, sub.title);
+                into.addEventListener("click", () => host.open(s.when.process));
+                block.append(into);
+            }
+            for (const how of [howTo(s), linkOf(s, host)]) if (how) block.append(how);   // a call shows both: the line to send and its entry on the REST API page
             if (s.detail) { const d = control("div"); d.innerHTML = host.helpMarkdown(s.detail); block.append(d); }
             view.append(block);
         });
@@ -540,8 +590,7 @@ function showPanel(panel, model, pid, done, onDone, host = {}) {
                 const li = control("li");
                 li.append(s.say, stepNote(s, p));
                 li.dataset.step = s.id;
-                const how = howTo(s) || linkOf(s, host);
-                if (how) li.append(how);
+                for (const how of [howTo(s), linkOf(s, host)]) if (how) li.append(how);
                 ol.append(li);
             }
             panel.append(ol);
@@ -549,8 +598,8 @@ function showPanel(panel, model, pid, done, onDone, host = {}) {
     }
     host.current = pid;
     host.spy?.(panel);
-    // Done on the device is what the state shows, so it has no checkbox to undo; what the state cannot show is the reader's own mark.
-    if (host.device?.has(pid)) { panel.append(control("p", { className: "mm-map-done" }, `\u2714 ${host.doneBy}`)); return; }
+    // What the state cannot show is the reader's own mark.
+    if (host.device?.has(pid)) return;
     const label = control("label", { className: "mm-map-done" });
     const box = control("input", { type: "checkbox", checked: done.has(pid) });
     box.addEventListener("change", () => onDone(pid, box.checked));
@@ -683,6 +732,8 @@ export async function drawMap(host, opts = {}) {
         canvas.textContent = `The map could not load: ${e.message}`;
         return;
     }
+    // The tests of each step, by the control they share with it; a site without them draws the map all the same.
+    const tests = await fetch(new URL("tests/steps.json", ROOT)).then((r) => (r.ok ? r.json() : {})).catch(() => ({}));
     // The help's renderer, so a process reads as a module's help does; imported here rather than at the top, so a test reads this module's rules without a served site.
     const { helpMarkdown } = await import("./help.js");
     // Done is the device's state and the reader's marks together; the device's part is not the reader's to unmark.
@@ -693,6 +744,7 @@ export async function drawMap(host, opts = {}) {
     const done = new Set([...marks, ...device]);
     const host_ = { device, newTab: opts.newTab, site: opts.site, root: host, helpMarkdown, choices: opts.choices, doneBy: opts.state ? "Done on this device" : "Done: its scripts last passed" };
     host_.state = opts.state;
+    host_.tests = tests;
     host_.hideOff = hideOff.checked;
     hideOff.addEventListener("change", () => { host_.hideOff = hideOff.checked; host_.relayout?.(); if (host_.current) showPanel(panel, model, host_.current, done, mark, host_); });
     host_.steps = opts.steps;
@@ -700,7 +752,10 @@ export async function drawMap(host, opts = {}) {
     host_.types = opts.state ? typesOf(opts.state) : null;   // indexed once, for every step the panel ticks
     if (opts.show) host_.follow = (pid, stepId) => opts.onFollow?.(follow(model, pid, stepId, opts));
     // On the site the open process is the page's address, so a link, a search result or a bookmark opens it; every other host's address is its own.
-    const remember = (pid) => { if (opts.ownsAddress) history.replaceState(null, "", pid ? `#${pid}` : location.pathname + location.search); };
+    const remember = (pid) => {
+        if (opts.ownsAddress) history.replaceState(null, "", pid ? `#${pid}` : location.pathname + location.search);
+        else try { pid ? sessionStorage.setItem(SS_OPEN, pid) : sessionStorage.removeItem(SS_OPEN); } catch { /* not remembered: the map opens on its choices */ }
+    };
     const picked = new Set();   // the system chips switched on; none means every system
     // A chip for each system some process touches, so none filters to an empty map.
     const used = new Set(Object.values(model.processes).flatMap((p) => p.systems || []));
@@ -714,7 +769,7 @@ export async function drawMap(host, opts = {}) {
         chips.append(chip);
     }
     // A step that does not apply, for the reader's choice or not needed for this change, leaves the layout when the reader hides them.
-    const keepStep = (pid, s) => !hideOff.checked || (applies(s, chosenOf(model.processes[pid], opts.choices)) && opts.steps?.[pid]?.find((r) => r.id === s.id)?.triggered !== false);
+    const keepStep = (pid, s) => !hideOff.checked || (applies(s, chosenOf(model.processes[pid], opts.choices)) && gateOf(opts.steps, pid, s)?.triggered !== false);
     const cy = window.cytoscape({ container: canvas, elements: elements(model, by.value, keepStep), style: style(host), layout: { name: "preset" }, minZoom: 0.05, maxZoom: 3, autoungrabify: true });   // the layout is the model's order, so a block taps but never drags
     const nodesOf = (pid) => cy.nodes().filter((n) => n.data("pid") === pid);
     // A drag that starts on a block pans the map, as one on the background does; a tap without moving still opens the block.
@@ -748,7 +803,8 @@ export async function drawMap(host, opts = {}) {
         });
         // A script step the change does not need grays out, and one whose pass still holds is done, over its process's own mark.
         cy.nodes("[kind='step']").forEach((n) => {
-            const r = opts.steps?.[n.data("pid")]?.find((x) => n.id().endsWith(`/${x.id}`));
+            const s = model.processes[n.data("pid")].steps.find((st) => st.id === n.data("sid"));
+            const r = gateOf(opts.steps, n.data("pid"), s);
             if (r) n.toggleClass("mm-skip", !r.triggered).toggleClass("done", r.fresh);
         });
         return visible;
@@ -820,8 +876,9 @@ export async function drawMap(host, opts = {}) {
         showPanel(panel, model, pid, done, mark, host_);
         fit(target.union(target.children()));
     };
+    host_.open = open;
     cy.on("tap", "node[kind='process']", (ev) => { if (!tapped()) return; remember(ev.target.data("pid")); showPanel(panel, model, ev.target.data("pid"), done, mark, host_); });
-    cy.on("tap", "node[kind='step']", (ev) => { if (!tapped()) return; const pid = ev.target.data("pid"); remember(pid); toStep(pid, ev.target.id().split("/").pop()); });
+    cy.on("tap", "node[kind='step']", (ev) => { if (!tapped()) return; const pid = ev.target.data("pid"); remember(pid); toStep(pid, ev.target.data("sid")); });
 
     // Where the reader is: the processes touching the cards in view, or the page they came from. A link naming one process opens it; anything else opens on the choices.
     const focus = opts.ownsAddress ? new URLSearchParams(location.search).get("focus") || "" : "";
@@ -850,7 +907,10 @@ export async function drawMap(host, opts = {}) {
     apply();
     // What the host or the address names, a process or one of its steps, opens; anything else opens on the choices.
     // A redirect from a page MoonWalk took over keeps that page's anchor after the process's, so only the first part counts.
-    const [asked, step] = (opts.open || (opts.ownsAddress ? decodeURIComponent(location.hash.slice(1)).split("#")[0] : "") || focus).split("/");
+    // What the host names wins; else the address on the site, or on another host the process the reader had open in this tab.
+    let kept = "";
+    if (!opts.ownsAddress) try { kept = sessionStorage.getItem(SS_OPEN) || ""; } catch { /* none */ }
+    const [asked, step] = (opts.open || (opts.ownsAddress ? decodeURIComponent(location.hash.slice(1)).split("#")[0] : kept) || focus).split("/");
     if (model.processes[asked]) { open(asked); if (step) toStep(asked, step); }
     else choose();
     // What a host calls when it closes the map: Cytoscape's window listeners and both observers go with it.

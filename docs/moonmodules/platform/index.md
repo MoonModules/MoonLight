@@ -72,4 +72,4 @@ Two headers serve every target: [the Ethernet wiring](../../../src/platform/eth_
 
 ## What does not belong here
 
-A vendor SDK call in core or the light domain. A `#ifdef ESP32` outside this folder. A module that reads a chip register directly. Each is the same mistake: a target fact escaping the layer that exists to hold it, and [the code report](../../reference/metrics/code.md) counts it, at zero.
+A vendor SDK call in core or the light domain. A `#ifdef ESP32` outside this folder. A module that reads a chip register directly. Each is the same mistake: a target fact escaping the layer that exists to hold it, and [the code check](../../reference/tests.md#check_code) counts it, at zero.

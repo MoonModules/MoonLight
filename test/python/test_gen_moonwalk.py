@@ -3,13 +3,11 @@
 Each rule here is something the map or a runner relies on: every stage file in the repo is valid, a process names only processes that exist, a name YAML would turn into a boolean is refused, and a step's runners follow from its action."""
 
 import shutil
-import sys
 from pathlib import Path
 
 import pytest
 
 ROOT = Path(__file__).resolve().parent.parent.parent
-sys.path.insert(0, str(ROOT / "moondeck" / "docs"))
 
 import gen_moonwalk  # noqa: E402
 
@@ -24,7 +22,7 @@ def test_the_repo_stage_files_build_into_one_map():
     model = gen_moonwalk.build()
     assert [s["id"] for s in model["stages"]][:2] == ["install", "first-light"]
     assert model["processes"]["first-light-show"]["stage"] == "first-light"
-    assert "run-linux-board" in model["byPage"]["how-to/installing-on-linux.html"]
+    assert "run-linux-board" in model["byPage"]["reference/installing-on-linux.html"]
 
 
 def test_a_step_runs_in_the_runners_its_action_allows():
@@ -163,7 +161,7 @@ def test_the_prose_is_plain_text_under_the_map_with_the_process_id_as_its_addres
 def test_the_map_carries_its_links_absolute_for_a_device_page():
     model = gen_moonwalk.absolute_links(gen_moonwalk.build())
     intro = model["processes"]["first-light-show"]["intro"]
-    assert "(https://moonmodules.org/MoonLight/tutorials/how-moonlight-works.html)" in intro
+    assert "(https://moonmodules.org/MoonLight/explanation/how-moonlight-works.html)" in intro
     detail = {s["id"]: s for s in model["processes"]["first-light-show"]["steps"]}["grid-size"]["detail"]
     assert "(https://moonmodules.org/MoonLight/assets/moontube/05-layouts.webm)" in detail
 
@@ -243,6 +241,17 @@ def test_a_process_with_more_steps_than_a_reader_follows_is_a_warning_to_fold_th
     assert gen_moonwalk.size_warnings(processes) == [("test", "a: 11 steps > 10; fold steps into a subprocess")]
 
 
+def test_two_steps_in_a_row_that_two_processes_share_are_a_warning_to_call_one_process(tmp_path):
+    steps = "      - {id: b, say: Build it., when: {run: {script: moondeck/build/build_desktop.py}}}\n      - {id: t, say: Test it., when: {run: {script: moondeck/test/test_desktop.py}}}\n"
+    body = "stage: T\nprocesses:\n" + "".join(f"  - id: {p}\n    title: P\n    actor: user\n    goal: G\n    steps:\n" + steps for p in ("a", "c"))
+    processes = gen_moonwalk.build(stage(tmp_path, body))["processes"]
+    assert gen_moonwalk.shared_runs(processes) == [("test", "c: 2 steps repeat a's (b, t); make them one process both call")]
+
+
+def test_a_repo_process_repeats_no_run_of_another():
+    assert gen_moonwalk.shared_runs(gen_moonwalk.build()["processes"]) == []
+
+
 def test_a_stage_with_more_processes_than_a_column_holds_is_a_warning_to_split_it(tmp_path):
     body = "stage: T\nprocesses:\n" + "".join(f"  - {{id: p{i}, title: P, actor: user, goal: G}}\n" for i in range(9))
     processes = gen_moonwalk.build(stage(tmp_path, body))["processes"]
@@ -254,7 +263,7 @@ def test_the_map_leaves_a_process_prose_to_its_own_file_fetched_when_the_view_op
     install = walk["processes"]["install"]
     assert install["text"] is True and "intro" not in install and all("detail" not in s for s in install["steps"])
     assert texts["install"]["intro"] and texts["install"]["details"]["keep"]
-    assert "text" not in walk["processes"]["run-linux-board"] and "run-linux-board" not in texts   # a process with no prose of its own links its page
+    assert "text" not in walk["processes"]["commit-web"] and "commit-web" not in texts   # a process with no prose of its own links its page
 
 
 def test_writing_the_map_replaces_the_prose_of_a_process_that_is_gone(tmp_path):
@@ -268,7 +277,7 @@ def test_writing_the_map_replaces_the_prose_of_a_process_that_is_gone(tmp_path):
 def test_a_step_that_opens_an_address_or_reads_a_page_links_there():
     steps = {s["id"]: s for p in gen_moonwalk.build()["processes"].values() for s in p.get("steps", [])}
     assert steps["open-installer"]["url"] == "https://moonmodules.org/MoonLight/install/"
-    assert steps["signal"]["url"] == "how-to/led-signal-integrity.html"
+    assert steps["migrating"]["url"] == "reference/MIGRATING.html"
 
 
 def test_a_step_reading_a_missing_page_is_refused(tmp_path):
@@ -287,12 +296,195 @@ def test_a_title_past_its_cap_or_a_goal_of_two_sentences_is_refused(tmp_path):
         gen_moonwalk.build(two)
 
 
-def test_a_step_calling_a_missing_process_or_jumping_to_a_missing_step_is_refused(tmp_path):
+def test_a_step_running_a_missing_process_is_refused(tmp_path):
     call = stage(tmp_path, "stage: T\nprocesses:\n  - id: a\n    title: A\n    actor: user\n    goal: G\n    steps:\n"
                            "      - {id: s, say: Run it., when: {process: nowhere}}\n")
     with pytest.raises(ValueError, match="runs no process: nowhere"):
         gen_moonwalk.build(call)
-    jump = stage(tmp_path, "stage: T\nprocesses:\n  - id: a\n    title: A\n    actor: user\n    goal: G\n    steps:\n"
-                           "      - {id: s, say: Check it., when: {manual: Look}, onFailure: [{type: goto, stepId: gone}]}\n")
-    with pytest.raises(ValueError, match="goto names no step: gone"):
-        gen_moonwalk.build(jump)
+
+
+def test_the_commit_checks_fold_into_one_subprocess_per_trigger_group_each_within_its_caps():
+    processes = gen_moonwalk.build()["processes"]
+    groups = {"docs": "commit-docs", "code": "commit-code", "web": "commit-web", "scripts": "commit-scripts"}
+    parent = {s["id"]: s for s in processes["commit"]["steps"]}
+    assert {sid: parent[sid]["when"].get("process") for sid in groups} == groups
+    assert all("given" not in parent[sid] for sid in groups)   # a group triggers nothing itself: its steps' paths decide
+    # Every check keeps its id, so a run record and a link keyed on it still find it.
+    ids = [s["id"] for pid in ["commit", *groups.values(), "desktop-tests"] for s in processes[pid]["steps"] if "run" in s["when"]]
+    assert sorted(ids) == sorted(["specs", "prose", "commit", "docs", "docgen", "taglines", "code", "build-desktop", "build-tests", "test", "scenarios",
+                                  "esp32-fresh", "esp32-fresh-moonbase", "no-jit", "kpi", "js", "devices", "python", "firmwares", "improv"])
+    over = [w for w in gen_moonwalk.size_warnings(processes) if w[0] == "document-commit"]
+    assert over == []   # the parent, each group and the stage within their caps
+
+
+CALL = "stage: T\nprocesses:\n  - id: a\n    title: A\n    actor: user\n    goal: G\n    steps:\n      - {id: s, say: Call it., when: {call: %s}}\n"
+
+
+def test_a_call_names_an_operation_of_the_rest_api_or_it_is_refused(tmp_path):
+    with pytest.raises(ValueError, match="calls no operation of the REST API: setControls"):
+        gen_moonwalk.build(stage(tmp_path, CALL % "{operation: setControls}"))
+    with pytest.raises(ValueError, match="getModule takes no parameter module"):
+        gen_moonwalk.build(stage(tmp_path, CALL % "{operation: getModule, params: {module: Rainbow}}"))
+
+
+def test_a_call_gets_its_method_its_path_with_the_parameters_filled_in_and_its_entry_on_the_rest_api_page(tmp_path):
+    step = gen_moonwalk.build(stage(tmp_path, CALL % "{operation: getModule, params: {name: Rainbow}}"))["processes"]["a"]["steps"][0]
+    assert (step["when"]["call"]["method"], step["when"]["call"]["path"]) == ("GET", "/api/modules/Rainbow")
+    assert step["url"] == "reference/api.html#operation/getModule"
+    query = gen_moonwalk.build(stage(tmp_path, CALL % "{operation: readFile, params: {path: /moonlive/hello.mle}}"))["processes"]["a"]["steps"][0]
+    assert gen_moonwalk.command_of(query) == "curl 'http://<device>/api/file?path=/moonlive/hello.mle'"   # a query parameter rides after the path
+    upload = gen_moonwalk.build(stage(tmp_path, CALL % "{operation: writeFile, params: {path: /moonlive/hello.mle}}"))["processes"]["a"]["steps"][0]
+    assert gen_moonwalk.command_of(upload) == "curl -X POST 'http://<device>/api/file?path=/moonlive/hello.mle' --data-binary @<file> -H \"Expect:\""   # a file's bytes, as the route takes them
+
+
+def test_a_step_carries_the_line_a_reader_copies_written_once_by_the_generator(tmp_path):
+    run = "stage: T\nprocesses:\n  - id: a\n    title: A\n    actor: user\n    goal: G\n    steps:\n      - {id: s, say: Build it., when: {run: {script: moondeck/build/build_desktop.py, args: --tests}}}\n      - {id: c, say: Open a PR., when: {run: {command: gh pr create --base main}}}\n      - {id: m, say: Stage it., when: {manual: Stage.}}\n"
+    steps = {s["id"]: s for s in gen_moonwalk.build(stage(tmp_path, run))["processes"]["a"]["steps"]}
+    assert steps["s"]["command"] == "uv run moondeck/build/build_desktop.py --tests"
+    assert steps["c"]["command"] == "gh pr create --base main" and "command" not in steps["m"]
+    post = gen_moonwalk.build(stage(tmp_path, CALL % "{operation: setControl, body: '{\"value\":\"it''s\"}'}"))["processes"]["a"]["steps"][0]
+    assert post["command"] == "curl -X POST 'http://<device>/api/control' -d '{\"value\":\"it'\\''s\"}'"   # a quote in the body survives the shell
+
+
+def test_a_call_encodes_its_values_keeps_a_placeholder_and_refuses_a_missing_path_parameter(tmp_path):
+    spaced = gen_moonwalk.build(stage(tmp_path, CALL % "{operation: getModule, params: {name: Dial A}}"))["processes"]["a"]["steps"][0]
+    assert spaced["when"]["call"]["path"] == "/api/modules/Dial%20A"
+    held = gen_moonwalk.build(stage(tmp_path, CALL % "{operation: readFile, params: {path: /moonlive/<name>.mle}}"))["processes"]["a"]["steps"][0]
+    assert held["when"]["call"]["path"] == "/api/file?path=/moonlive/<name>.mle"   # the reader fills it in
+    with pytest.raises(ValueError, match="applyListRow needs parameter row"):
+        gen_moonwalk.build(stage(tmp_path, CALL % "{operation: applyListRow, params: {module: Control, control: presets}}"))
+
+
+PROSE_STEP = ("stage: T\nprocesses:\n  - id: a\n    title: A\n    actor: user\n    goal: G\n    intro: |\n      %s\n    steps:\n"
+              "      - {id: s, say: Do it., when: {manual: Do it}, detail: \"%s\"}\n")
+
+
+def prose(tmp_path, intro="Plain.", detail="Plain."):
+    """A stage whose process has this intro and this step detail."""
+    return stage(tmp_path, PROSE_STEP % (intro, detail))
+
+
+def test_a_link_in_a_process_prose_to_a_missing_page_is_refused(tmp_path):
+    with pytest.raises(ValueError, match=r"a: link to a missing page: docs/reference/nowhere.md"):
+        gen_moonwalk.build(prose(tmp_path, intro="See [it](reference/nowhere.md)."))
+    with pytest.raises(ValueError, match=r"a/s: link to a missing page: docs/reference/nowhere.md"):
+        gen_moonwalk.build(prose(tmp_path, detail="See [it](reference/nowhere.md)."))
+
+
+def test_a_link_to_an_anchor_its_page_lacks_is_refused_and_a_heading_is_one(tmp_path):
+    with pytest.raises(ValueError, match=r"link to a missing anchor: reference/integrating.md#no-such-heading"):
+        gen_moonwalk.build(prose(tmp_path, intro="See [it](reference/integrating.md#no-such-heading)."))
+    gen_moonwalk.build(prose(tmp_path, intro="See [it](reference/integrating.md#finding-devices)."))
+
+
+def test_a_link_to_a_process_or_step_on_the_moonwalk_page_names_one_that_exists(tmp_path):
+    with pytest.raises(ValueError, match=r"link to no process or step: moonwalk.md#nowhere"):
+        gen_moonwalk.build(prose(tmp_path, intro="See [it](moonwalk.md#nowhere)."))
+    with pytest.raises(ValueError, match=r"link to no process or step: moonwalk.md#a/nowhere"):
+        gen_moonwalk.build(prose(tmp_path, intro="See [it](moonwalk.md#a/nowhere)."))
+    gen_moonwalk.build(prose(tmp_path, intro="See [process](moonwalk.md#a) and [step](moonwalk.md#a/s)."))
+
+
+def test_a_link_leaving_docs_names_a_repo_file_that_exists(tmp_path):
+    with pytest.raises(ValueError, match=r"link to a missing file: ../moondeck/Nowhere.md"):
+        gen_moonwalk.build(prose(tmp_path, intro="See [it](../moondeck/Nowhere.md#x)."))
+    with pytest.raises(ValueError, match=r"link to a missing anchor: ../moondeck/MoonDeck.md#no-such-script"):
+        gen_moonwalk.build(prose(tmp_path, intro="See [it](../moondeck/MoonDeck.md#no-such-script)."))
+    gen_moonwalk.build(prose(tmp_path, intro="See [it](../moondeck/MoonDeck.md#check_docgen)."))
+
+
+def test_a_web_address_a_placeholder_and_a_generated_catalog_anchor_are_not_checked(tmp_path):
+    gen_moonwalk.build(prose(tmp_path, intro="See [web](https://example.org/x#y), [mail](mailto:a@b.c) and [fill](reference/<page>.md#z) and [catalog](moonmodules/core/system.md#control)."))
+
+
+def test_a_read_step_names_an_anchor_its_page_holds(tmp_path):
+    step = ("stage: T\nprocesses:\n  - id: a\n    title: A\n    actor: user\n    goal: G\n    steps:\n"
+            "      - {id: s, say: Read it., when: {read: {page: 'reference/integrating.md#%s'}}}\n")
+    with pytest.raises(ValueError, match=r"a/s: read step's link to a missing anchor: reference/integrating.md#nowhere"):
+        gen_moonwalk.build(stage(tmp_path, step % "nowhere"))
+    gen_moonwalk.build(stage(tmp_path, step % "finding-devices"))
+
+
+def test_a_pages_anchors_are_its_headings_explicit_ids_and_html_ids_but_not_code_in_a_fence(tmp_path):
+    page = tmp_path / "p.md"
+    page.write_text("# Title\n\n## A `code<x>` head\n\n## Again\n\n## Again\n\n## Named {#custom}\n\n<a id=\"html\"></a>\n\n```\n# not a heading\n```\n", encoding="utf-8")
+    assert gen_moonwalk.anchors_of(page) == {"title", "a-codex-head", "again", "again_1", "custom", "html"}
+
+
+def run_step(run: str) -> str:
+    """A stage whose one step runs this `run` mapping."""
+    return ("stage: T\nprocesses:\n  - id: a\n    title: A\n    actor: user\n    goal: G\n    steps:\n"
+            "      - {id: s, say: Run it., when: {run: %s}}\n" % run)
+
+
+def test_a_run_step_passes_only_flags_its_script_declares(tmp_path):
+    with pytest.raises(ValueError, match=r"a/s: `moondeck/test/test_host.py` has no option --nope"):
+        gen_moonwalk.build(stage(tmp_path, run_step("{script: moondeck/test/test_host.py, args: '--python --nope'}")))
+    with pytest.raises(ValueError, match=r"a/s: `moondeck/test/test_host.py` has no option --nope"):
+        gen_moonwalk.build(stage(tmp_path, run_step("{command: 'uv run moondeck/test/test_host.py --nope=1 && echo done'}")))
+    gen_moonwalk.build(stage(tmp_path, run_step("{script: moondeck/test/test_host.py, args: '--python'}")))
+    gen_moonwalk.build(stage(tmp_path, run_step("{command: 'curl --data-binary @x.bin http://<device>/'}")))   # not a MoonDeck script
+
+
+def test_a_script_declaring_options_in_several_spellings_is_read(tmp_path):
+    script = tmp_path / "s.py"
+    script.write_text("p.add_argument('-q', '--quiet')\np.add_argument(\n    \"--out\", type=int)\n", encoding="utf-8")
+    assert gen_moonwalk.declared_options(script) == {"--quiet", "--out", "--help"}
+    script.write_text("print('no arguments')\n", encoding="utf-8")
+    assert gen_moonwalk.declared_options(script) is None
+
+
+def test_a_scenario_run_names_a_scenario_whose_file_exists(tmp_path):
+    with pytest.raises(ValueError, match=r"a/s: no scenario named no-such-scenario"):
+        gen_moonwalk.build(stage(tmp_path, run_step("{script: moondeck/scenario/run_scenario.py, args: '--name scenario_Control_presets_capture_and_restore,no-such-scenario'}")))
+    gen_moonwalk.build(stage(tmp_path, run_step("{script: moondeck/scenario/run_scenario.py, args: '--name <name>'}")))
+
+
+def test_a_repo_path_in_a_run_step_exists_unless_a_build_makes_it(tmp_path):
+    with pytest.raises(ValueError, match=r"a/s: no such path: moontube/clips/99-nowhere.json"):
+        gen_moonwalk.build(stage(tmp_path, run_step("{command: 'uv run moondeck/moontube/mtrun.py moontube/clips/99-nowhere.json'}")))
+    with pytest.raises(ValueError, match=r"a/s: no such path: docs/nowhere.bin"):
+        gen_moonwalk.build(stage(tmp_path, run_step("{command: 'curl --data-binary @docs/nowhere.bin http://<device>/'}")))
+    gen_moonwalk.build(stage(tmp_path, run_step("{command: 'curl --data-binary @build/out.bin http://<device>/'}")))
+
+
+def derived_steps(tmp_path, *steps):
+    """The built steps of a process holding these step lines."""
+    body = "stage: T\nprocesses:\n  - id: a\n    title: A\n    actor: user\n    goal: G\n    steps:\n" + "".join(f"      - {s}\n" for s in steps)
+    return {s["id"]: s for s in gen_moonwalk.build(stage(tmp_path, body))["processes"]["a"]["steps"]}
+
+
+def test_an_add_step_derives_that_its_module_exists(tmp_path):
+    s = derived_steps(tmp_path, "{id: s, say: Add a Rainbow., when: {add: {module: Effects, type: RainbowEffect}}}")["s"]
+    assert s["then"] == [{"module": "RainbowEffect", "exists": True}]
+
+
+def test_a_set_step_derives_that_its_control_equals_the_value(tmp_path):
+    s = derived_steps(tmp_path, "{id: s, say: Dim it., when: {set: {module: Drivers, control: brightness, value: 20}}}")["s"]
+    assert s["then"] == [{"module": "Drivers", "control": "brightness", "equals": 20}]
+
+
+def test_a_written_then_is_kept(tmp_path):
+    s = derived_steps(tmp_path, "{id: s, say: Dim it., when: {set: {module: Drivers, control: brightness, value: 20}}, then: [{module: Drivers, control: brightness, maximum: 20}]}")["s"]
+    assert s["then"] == [{"module": "Drivers", "control": "brightness", "maximum": 20}]
+
+
+def test_a_call_derives_nothing_since_its_result_is_not_in_its_action(tmp_path):
+    steps = derived_steps(tmp_path,
+                          "{id: add, say: Add one., when: {call: {operation: addModule, body: '{\"type\":\"RainbowEffect\",\"parent_id\":\"Layer\"}'}}}",
+                          "{id: set, say: Set one., when: {call: {operation: setControl, body: '{\"module\":\"Drivers\",\"control\":\"brightness\",\"value\":20}'}}}")
+    assert "then" not in steps["add"] and "then" not in steps["set"]
+
+
+def test_a_process_no_runner_performs_is_reported_and_one_with_a_script_a_set_or_a_condition_is_not(tmp_path):
+    model = gen_moonwalk.build(stage(tmp_path, "stage: T\nprocesses:\n"
+                                     "  - id: by-hand\n    title: A\n    actor: user\n    goal: G\n    steps:\n      - {id: s, say: Look., when: {manual: Look}}\n"
+                                     "  - id: by-script\n    title: B\n    actor: user\n    goal: G\n    steps:\n      - {id: s, say: Run it., when: {run: {script: moondeck/build/build_desktop.py}}}\n"))
+    assert [why for _, why in gen_moonwalk.unverified(model["processes"])] == ["by-hand: no step has an automated runner or a condition, so no run proves it works"]
+
+
+def test_a_read_step_naming_a_section_the_page_lacks_is_refused(tmp_path):
+    with pytest.raises(ValueError, match=r"a/s: read step's section: link to a missing anchor: reference/moonwalk.md#no-such-section"):
+        gen_moonwalk.build(stage(tmp_path, "stage: T\nprocesses:\n  - id: a\n    title: A\n    actor: user\n    goal: G\n    steps:\n"
+                                           "      - {id: s, say: Read it., when: {read: {page: reference/moonwalk.md, section: No such section}}}\n"))
+

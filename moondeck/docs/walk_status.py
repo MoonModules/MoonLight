@@ -146,7 +146,7 @@ def step_run(model: dict, ref: str) -> dict | None:
 
 def status(model: dict, runs: dict, durations: dict | None = None, root: Path = ROOT, now: str | None = None,
            base: str | None = None, every: bool = False) -> dict:
-    """Per process that runs scripts, each step's status: triggered by the change, whether its last pass still holds, and the longest of its recent runs with whether that is slow.
+    """Per process that runs scripts, each step's status: triggered by the change, whether its last pass still holds, and the longest of its recent runs with whether that is slow. A step that runs a subprocess stands for the subprocess's steps, each keyed by its own process and step id, as a call graph is flattened: a process reached twice, or through a cycle, is read once.
 
     The change is the working tree against HEAD, a commit's; with `base`, against where the branch left it (`main`), a merge's; `every` triggers every step, a release's.
     """
@@ -154,28 +154,44 @@ def status(model: dict, runs: dict, durations: dict | None = None, root: Path = 
     since_base = _git("merge-base", base, "HEAD", root=root) if base else "HEAD"
     touched = changed_between(_git("rev-parse", f"{since_base}^{{tree}}", root=root), now, root)
     since = {}   # the paths changed since each recorded run's tree, computed once per tree
+
+    def globs_of(s: dict) -> list:
+        return [x for g in s.get("given", []) if isinstance(g, dict) for x in g.get("changed", [])]
+
+    def one(pid: str, s: dict, run: dict, guards: tuple) -> dict:
+        # The step's own paths and every calling step's, all of which a change must touch, as a guarded call runs only when its guard holds.
+        sets = [g for g in (*guards, globs_of(s)) if g]
+        covers = (lambda paths: all(any(matches(q, g) for q in paths) for g in sets)) if sets else bool
+        key = run_key(run["script"], run.get("args", ""))
+        last = runs.get(key)
+        fresh = False
+        if last and last.get("passed") and last.get("tree"):
+            if last["tree"] not in since:
+                try:
+                    since[last["tree"]] = changed_between(last["tree"], now, root)
+                except subprocess.CalledProcessError:
+                    since[last["tree"]] = None   # a tree git has pruned: the pass proves nothing
+            fresh = since[last["tree"]] is not None and not covers(since[last["tree"]])
+        seconds = longest(durations or {}, key)
+        return {"id": s["id"], "process": pid, "script": run["script"], "args": run.get("args", ""), "triggered": every or covers(touched),
+                "fresh": fresh, "seconds": seconds, "slow": seconds is not None and seconds > SLOW_SECONDS}
+
+    def steps_of(pid: str, seen: set, guards: tuple = ()) -> list:
+        if pid in seen or pid not in model["processes"]:
+            return []
+        seen.add(pid)
+        out = []
+        for s in model["processes"][pid].get("steps", []):
+            when = s.get("when") or {}
+            if runnable(when.get("run")):
+                out.append(one(pid, s, when["run"], guards))
+            elif isinstance(when.get("process"), str):
+                out += steps_of(when["process"], seen, (*guards, globs_of(s)))
+        return out
+
     out = {}
-    for pid, p in model["processes"].items():
-        steps = []
-        for s in p.get("steps", []):
-            run = (s.get("when") or {}).get("run")
-            if not runnable(run):
-                continue
-            globs = [x for g in s.get("given", []) if isinstance(g, dict) for x in g.get("changed", [])]
-            covers = (lambda paths: any(matches(q, globs) for q in paths)) if globs else bool
-            key = run_key(run["script"], run.get("args", ""))
-            last = runs.get(key)
-            fresh = False
-            if last and last.get("passed") and last.get("tree"):
-                if last["tree"] not in since:
-                    try:
-                        since[last["tree"]] = changed_between(last["tree"], now, root)
-                    except subprocess.CalledProcessError:
-                        since[last["tree"]] = None   # a tree git has pruned: the pass proves nothing
-                fresh = since[last["tree"]] is not None and not covers(since[last["tree"]])
-            seconds = longest(durations or {}, key)
-            steps.append({"id": s["id"], "process": pid, "script": run["script"], "args": run.get("args", ""), "triggered": every or covers(touched),
-                          "fresh": fresh, "seconds": seconds, "slow": seconds is not None and seconds > SLOW_SECONDS})
+    for pid in model["processes"]:
+        steps = steps_of(pid, set())
         if steps:
             out[pid] = steps
     return out

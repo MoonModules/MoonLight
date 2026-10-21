@@ -63,54 +63,26 @@ def added_lines(base):
 
 
 ROOT = Path(__file__).resolve().parent.parent.parent
-REPORT = ROOT / "docs" / "reference" / "metrics" / "prose.md"
+COUNTS = ROOT / "docs" / "reference" / "metrics" / "prose.json"   # the counts the ratchet compares; the test page shows the findings
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _ratchet import committed as committed_report, risen as risen_against  # noqa: E402
+import _ratchet  # noqa: E402
+import _findings  # noqa: E402
 
-# What the whole-tree report covers. The gate itself reads every suffix in SUFFIXES; these are the
+# What the whole-tree count covers. The gate itself reads every suffix in SUFFIXES; these are the
 # trees whose prose is OURS, which is the same question EXEMPT answers for the diff.
 REPORT_ROOTS = ("src/", "moondeck/", "mooninstaller/", "test/", "docs/", "moonwalk/", "CLAUDE.md", "README.md")
 
 
-def committed_counts():
-    """Every rule's count in the COMMITTED report, or None when there is no baseline yet.
-
-    Read from git rather than from the working tree, because `write_report` rewrites the file before the comparison happens.
-    Same shape as check_docgen's ratchet, for the same reason: a number nobody compares against is a number that rises in silence.
-    """
-    text = committed_report(REPORT)
-    if text is None:
-        return None
-    counts, in_rules = {}, False
-    for line in text.split("\n"):
-        # Only the `| rule | findings |` table: the worst-files table shares its column shape, and a
-        # row from it would enter the baseline as a rule that can never appear in the new counts.
-        if line.startswith("| rule |"):
-            in_rules = True
-            continue
-        if in_rules and line.startswith("## "):
-            break
-        if in_rules and line.startswith("| `"):
-            cells = [c.strip() for c in line.strip("|").split("|")]
-            if len(cells) == 2 and cells[1].isdigit():
-                counts[cells[0].strip("`")] = int(cells[1])
-    return counts or None
-
-
 def ratchet(by_rule: dict, total: int) -> list:
-    """Rules whose count ROSE against the committed report, worst first.
+    """Rules whose count ROSE against the committed counts, worst first.
 
     Per rule as well as per total, because a total hides one rule paying for another: an em-dash swept out of ten files while a new weasel word lands in twenty reads as progress.
     """
-    was = committed_counts()
-    if was is None:
-        return []
-    base = dict(was, **{"(total)": sum(was.values())})
-    return risen_against(base, dict(by_rule, **{"(total)": total}))
+    return _ratchet.risen(_ratchet.committed_counts(COUNTS), dict(by_rule, **{"(total)": total}))
 
 
-def write_report():
-    """Count every finding in the tree, by rule, into docs/reference/metrics/prose.md.
+def count_tree():
+    """Count every finding in the tree, by rule, into docs/reference/metrics/prose.json and the findings record.
 
     Whole files rather than a diff, so the number is the debt itself rather than what one change added.
     Vale is run once over the roots below; a per-file loop cost minutes for the same answer.
@@ -119,63 +91,49 @@ def write_report():
                        capture_output=True, text=True, cwd=ROOT)
     # VALIDATE BEFORE PARSING. `--no-exit` makes Vale exit 0 on findings, so a non-zero status here
     # is a real failure (a bad config, a missing style) and its stdout is empty or partial. Treating
-    # an empty stdout as `{}` wrote a report of ZERO findings and the ratchet read that as the debt
+    # an empty stdout as `{}` recorded ZERO findings and the ratchet read that as the debt
     # being swept, which is the silent-zero this file guards against everywhere else.
     if r.returncode != 0 or not r.stdout.strip():
         return None
     try:
         report = json.loads(r.stdout)
     except json.JSONDecodeError:
-        # A broken run must not overwrite a good report, and must not read as one either: the
+        # A broken run must not overwrite good counts, and must not read as them either: the
         # caller fails on None rather than skipping the comparison.
         return None
     if not isinstance(report, dict):
         return None
 
-    by_rule, by_file, total = {}, {}, 0
+    by_rule, total = {}, 0
+    found = []   # every finding, for the one shape every check keeps
     for path, alerts in report.items():
         rel = os.path.relpath(path, ROOT) if os.path.isabs(path) else path
         # The same exemptions as the gate: a generated page present on disk after a docs build counted its source's prose a second time.
         if rel.startswith(EXEMPT):
             continue
-        if alerts:
-            by_file[rel] = len(alerts)
         for a in alerts:
             by_rule[a.get("Check", "?")] = by_rule.get(a.get("Check", "?"), 0) + 1
             total += 1
+            # A warning whatever Vale's level: the tree's debt fails nothing, only an error on an added line does, so `error` keeps the one meaning "fails the check".
+            found.append({"rule": a.get("Check", "?"), "message": a.get("Message", ""), "file": rel, "line": a.get("Line")})
 
-    lines = [
-        "# Prose report",
-        "",
-        "Every prose finding in the tree, by rule. Generated by",
-        "[`moondeck/check/check_prose.py`](../../../moondeck/check/check_prose.py) on every run.",
-        "**Do not edit by hand.**",
-        "",
-        "The gate is scoped to the lines a change ADDS, so a change is judged on its own prose.",
-        "This number is the debt behind that gate, and it RATCHETS: a rise fails the check, the way",
-        "docgen.md does. A comment is prose wherever it lives, so a `//` in the web interface and a",
-        "`#` in a script are counted beside a `///` in a header.",
-        "",
-        f"**{total} finding(s)** across {len(by_file)} file(s).",
-        "",
-        "| rule | findings |",
-        "|---|---|",
-    ]
-    for rule, n in sorted(by_rule.items(), key=lambda kv: -kv[1]):
-        lines.append(f"| `{rule}` | {n} |")
-    lines += ["", "## Worst files", "", "| file | findings |", "|---|---|"]
-    for rel, n in sorted(by_file.items(), key=lambda kv: -kv[1])[:20]:
-        lines.append(f"| `{rel}` | {n} |")
-    REPORT.parent.mkdir(parents=True, exist_ok=True)
-    REPORT.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    _ratchet.record(COUNTS, dict(by_rule, **{"(total)": total}))
+    rules = {}
+    for style in sorted((ROOT / ".vale" / "styles" / "MoonLight").glob("*.yml")):
+        said = re.search(r"(?m)^message:\s*['\"]?(.+?)['\"]?\s*$", style.read_text(encoding="utf-8"))
+        rules[f"MoonLight.{style.stem}"] = {"reason": said.group(1).replace("%s", "\u2026") if said else style.stem, "standard": "docs/contributing/documentation-standards.md"}
+    rules["other"] = {"reason": "A rule of Vale's own, outside .vale/styles/MoonLight", "standard": "docs/contributing/documentation-standards.md"}
+    if _findings.is_real(COUNTS):
+        _findings.write("check_prose", rules, [f for f in found if f["rule"] in rules] + [dict(f, rule="other") for f in found if f["rule"] not in rules])
     return by_rule, total
 
 
 def main():
     # Against main when on a branch, else the working tree: the check means "what am I adding".
+    # A base given (CI passes the pull request's) is used as it is; without one, a checkout with no local main reads the working tree.
     base = "main...HEAD" if len(sys.argv) < 2 else sys.argv[1]
-    if subprocess.run(["git", "rev-parse", "--verify", "main"],
-                      capture_output=True).returncode != 0:
+    if len(sys.argv) < 2 and subprocess.run(["git", "rev-parse", "--verify", "main"],
+                                            capture_output=True).returncode != 0:
         base = "HEAD"
 
     if shutil.which("vale") is None:
@@ -237,14 +195,14 @@ def main():
     # which is indistinguishable from a swept tree. So lint a fixture that MUST fail: if Vale finds
     # nothing in a line carrying an em-dash and a British spelling, the setup is broken rather than
     # the tree. A zero is only trustworthy once something that should fire, fires.
-    # ONE PROBE PER VIEW, because each is a separate way to read nothing. The report counts every
+    # ONE PROBE PER VIEW, because each is a separate way to read nothing. The count covers every
     # language, and the ratchet below reads a fall as progress: a broken `javascript` view drops
     # about eleven hundred findings, which is a sweep to anything that only reads the number.
     # Written to a REAL FILE, never piped with `--ext`: that flag treats the input as plain text and
     # never consults the config's View at all, so a probe built on it stays green while the view it
     # claims to test is broken. Measured by breaking the view on purpose and watching it pass.
     #
-    # One probe per language the report counts. Only the C family needs a View, but a `.js` or `.py`
+    # One probe per language the count covers. Only the C family needs a View, but a `.js` or `.py`
     # reaching Vale at all depends on its own section of .vale.ini, and a section deleted by accident
     # drops eleven hundred findings that the ratchet below would read as a sweep.
     PROBES = (
@@ -269,25 +227,23 @@ def main():
             print(f"  A {ext} fixture carrying an em-dash and a British spelling produced "
                   f"{hits} alert(s), expected 2.")
             print(f"  Vale is not reading {ext} comments: check {view} in .vale.ini.")
-            print(f"  Every {ext} file reads as clean until this passes, and the report below "
+            print(f"  Every {ext} file reads as clean until this passes, and the count below "
                   f"would record that as a sweep.")
             return 1
 
-    # THE STANDING DEBT, written where the other metrics live. The gate above is scoped to added
-    # lines, which is what keeps a change honest about its own prose; it says nothing about what the
-    # tree already carries. Those two numbers answer different questions and the second one had no
-    # home, so 1104 findings in the scripts and the web interface were invisible until the views in
-    # .vale.ini were written. A report nobody can see is a number nobody fixes.
-    counted = write_report()
-    # AND RATCHETED. Writing the number without comparing it lets the debt rise in silence, which is
-    # the state this report was written to end: docgen.md has held its line this way for months.
+    # THE STANDING DEBT, counted where the other metrics live and shown on the test page. The gate
+    # above is scoped to added lines, which is what keeps a change honest about its own prose; it
+    # says nothing about what the tree already carries. A number nobody can see is a number nobody fixes.
+    counted = count_tree()
+    # AND RATCHETED. Recording the number without comparing it lets the debt rise in silence, as
+    # check_docgen's counts hold their line.
     if counted is None:
-        print("Prose check: the whole-tree report could not be produced, so the number in\n"
-              "  docs/reference/metrics/prose.md is unverified. Check that `vale` runs.")
+        print("Prose check: the whole tree could not be counted, so the number in\n"
+              "  docs/reference/metrics/prose.json is unverified. Check that `vale` runs.")
         return 1
     risen = ratchet(*counted)
     if risen:
-        print("PROSE FINDINGS ROSE against the committed report. The list only shrinks:")
+        print("PROSE FINDINGS ROSE against the committed counts. The list only shrinks:")
         for rule, was, now in risen:
             print(f"  {rule}: {was} -> {now}")
         print("  Fix them, or say in the commit why the rule itself changed.\n")
@@ -295,7 +251,7 @@ def main():
     findings = sorted(set(findings))
     if not findings:
         print("Prose check: clean in added lines.")
-        # A clean diff is not a clean tree: the ratchet above still decides, or the report could
+        # A clean diff is not a clean tree: the ratchet above still decides, or the count could
         # rise on a line this change rewrote without adding.
         return 1 if risen else 0
 
@@ -303,7 +259,7 @@ def main():
     for f in findings:
         print("  " + f)
     print("\nRules: docs/contributing/documentation-standards.md, enforced by .vale/styles/MoonLight/.")
-    # Only an ERROR blocks; warnings and suggestions inform. A risen report blocks too: the number
+    # Only an ERROR blocks; warnings and suggestions inform. A risen count blocks too: the number
     # in the tracked file is the promise, and it only falls.
     return 1 if (errors or risen) else 0
 

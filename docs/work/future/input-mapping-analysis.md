@@ -251,7 +251,7 @@ category confusing:
 - **Ultrasonic (HC-SR04)** is a trigger pulse plus an echo whose *width* is the distance. Neither
   I2C nor a plain read: it needs a **pulse-timing seam** that does not exist. The textbook answer on
   ESP32 is the same PCNT/RMT machinery an encoder wants, so the two features share a dependency.
-- **ToF / radar** is I2C, so it rides the layer above.
+- **ToF** is I2C, so it rides the layer above. A **mmWave radar** such as the HLK-LD2450 is UART, so it needs the UART seam the [audio-reactive plan](../present/Plan-20261013%20-%20Audio%20reactive%20live%20performance.md) names.
 
 **I2S is audio-shaped, and should stay that way.** The platform's I2S surface is `audioMicInit` /
 `audioMicRead`, deliberately named for what it does rather than for the peripheral, and

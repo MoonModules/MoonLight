@@ -1,11 +1,6 @@
 # Testing
 
-What we test and how. The detailed inventory of every test lives in two auto-generated files:
-
-- **[Unit tests](tests/unit-tests.md)**: one row per `TEST_CASE`, grouped by module. Generated from `test/unit/{core,light}/unit_*.cpp`.
-- **[Scenario tests](tests/scenario-tests.md)**: one section per scenario JSON, grouped by module. Generated from `test/scenarios/{core,light,device}/scenario_*.json`. Each scenario runs in two tiers (in-process + live) unless flagged `live_only` (construct-mode scenarios are also skipped on live, since `main.cpp` owns the live shape).
-
-Both are produced by `moondeck/docs/generate_test_docs.py`; the source of truth is the test files themselves (steps to add one: [Add a test, and pin a bug](../moonwalk.md#add-test)).
+What we test and how. The inventory of every test is [the test page](tests.md), drawn from a registry the docs build generates from the test files (`moondeck/docs/gen_tests.py`): one entry per `TEST_CASE` and per scenario JSON, by subject. A scenario runs in two tiers (in-process + live) unless flagged `live_only` (construct-mode scenarios run only in-process). The source of truth is the test files themselves (steps to add one: [Add a test, and pin a bug](../moonwalk.md#add-test)).
 
 ## Testing strategy
 
@@ -132,7 +127,7 @@ A test lives under the subfolder of its **primary** `@module`'s source domain (e
 
 ### Host-side tests (Python + JS)
 
-The C++ unit and scenario suites can't reach the **Python** (MoonDeck, build scripts) or **JS** (web installer) code, so those get their own host-side unit tier. It is `test/python/` (pytest) and `test/js/` (Node's built-in runner; no `package.json`/`npm install`), both run by [test_host](../../moondeck/MoonDeck.md#test_host). Both run in `.github/workflows/test.yml` on every PR and are commit checks (CLAUDE.md § Commit) when `moondeck/`, `moonlive/`, `src/ui` or `mooninstaller/` change. Python test files carry their deps in a PEP-723 `# /// script` block (the repo's convention, there's no central `pyproject.toml`). Pyserial is a dep only because `improv_provision.py`'s import guard exits without it, not because the frame logic needs it.
+The C++ unit and scenario suites cover the C++ code, and the **Python** (MoonDeck, build scripts) and **JS** (web installer) code has its own host-side unit tier. It is `test/python/` (pytest) and `test/js/` (Node's built-in runner; no `package.json`/`npm install`), both run by [test_host](../../moondeck/MoonDeck.md#test_host). Both run in `.github/workflows/test.yml` on a pull request whose changed paths match that workflow's filter, and are commit checks; which paths trigger them is [the commit process](../moonwalk.md#commit). Python test files carry their deps in a PEP-723 `# /// script` block (the repo's convention, there's no central `pyproject.toml`). Pyserial is a dep only because `improv_provision.py`'s import guard exits without it, not because the frame logic needs it.
 
 #### What's covered today: the Improv frame wire format
 
@@ -264,9 +259,7 @@ Its steps fill `{network.ssid}`, `{network.password}` and `{device}` from it, so
 The runner puts the computer back on that network whatever happens.
 `"on_request": true` keeps the scenario out of a run of all of them, since it takes the computer off its network for a few minutes.
 
-```bash
-uv run moondeck/scenario/run_live_scenario.py --host MM-Bench.local --network Home --name scenario_AccessPoint_first_setup_from_its_own_network
-```
+The run: [Run a scenario against a live device](../moonwalk.md#run-live-scenario), with `--network`; the flags are in [MoonDeck.md](../../moondeck/MoonDeck.md#live_scenario).
 
 #### Several boards
 
@@ -274,9 +267,7 @@ A scenario naming `"boards": ["sender", ...]` drives those boards too, each mapp
 
 A `measure` step's `read` list names extra values to report: `"Module.control"` from the state, `"Module.tick"` for a module's tick time, or `"fps"`; `"<name>:"` in front reads another board, such as `"sender:fps"`. The run ends with one row per such step, which is what a sweep is read from.
 
-```bash
-uv run moondeck/scenario/run_live_scenario.py --host 192.168.1.158 --board sender=192.168.1.156 --name scenario_NetworkReceive_two_boards
-```
+The run passes `--board sender=<host>` per board: [MoonDeck.md](../../moondeck/MoonDeck.md#live_scenario).
 
 ### Scenario modes (construct vs mutate)
 
@@ -362,30 +353,22 @@ Target keys match `SystemModule.firmware` on a flashed device (`esp32`, `esp32-e
 
 #### Persistent observations (`observed[<target>]`)
 
-Alongside `contract`, every measurable step keeps a **rolling [min, max] range** per scalar in the `observed.<target>` block. The range only ever *widens*: a measurement inside the current bounds doesn't change the JSON at all (no diff churn on routine runs); a measurement outside the bounds pushes the relevant end out and updates the timestamp.
+A measured step is compared against its `contract` and also **observed**: each passing run takes the step's tick, free heap and largest block into a rolling window of 32 samples per target, and the statistics over it (p50, p95, min, max, n) say what the step normally costs and how bad its tail is. The window is the machine's own history, so it lives on that machine, in `build/moondeck-logs/observations.json`, and a run leaves every tracked file as it found it.
+
+The scenario file carries a **summary** of the window, published on purpose: `--update-observed` writes the statistics of this machine's window into `observed.<target>` (without the samples), and so does a renegotiated contract (`--update-contract`). The test page draws that summary beside the contract, so a reader sees what each board did the last time a bench run was published.
 
 ```json
 "observed": {
   "esp32-eth-wifi": {
-    "tick_us":         [80649, 89483],
-    "free_heap":       [95528, 110640],
-    "max_alloc_block": [49152, 53248],
-    "at":              ["2026-06-02", "2026-06-15"]
-  },
-  "esp32-eth": {
-    "tick_us":         [99514, 99514],
-    "free_heap":       [135200, 135200],
-    "max_alloc_block": [49152, 49152],
-    "at":              ["2026-06-02", "2026-06-02"]
+    "tick_us":         {"p50": 84210, "p95": 89483, "min": 80649, "max": 91002, "n": 32},
+    "free_heap":       {"p50": 104220, "p95": 110640, "min": 95528, "max": 110640, "n": 32},
+    "max_alloc_block": {"p50": 53248, "p95": 53248, "min": 49152, "max": 53248, "n": 32},
+    "last_updated":    "2026-06-15"
   }
 }
 ```
 
-Read directions match the contract semantics: tick contract is a *ceiling*, so the **max** of the observed range is the value that could fail it; heap and block contracts are *floors*, so the **min** of the observed range is the failure-side. The `at` field carries `[first_seen, last_updated]` so a stale range stands out (e.g. "last_updated is six months old → re-sweep this target").
-
-Updated by **every** successful run of `run_scenario.py` or `run_live_scenario.py` for the active target, no flag needed. A range that never widens produces no diff. When a contract is renegotiated via `--update-contract` (see below), the observed range *resets* to the new single-point measurement because the previous range belonged to the old contract.
-
-Open any scenario JSON and the range tells you both the typical case (the value sits in the range) and the variance (range width). A wide gap between the max of the observed range and the contract ceiling means there's headroom to tighten the promise; a max creeping up against the ceiling means a regression may be imminent.
+A median is what a step normally costs and cannot be dragged by one contended run, and the tail is the p95, which a real regression moves and a single bad run does not. A window of one sample (`n: 1`) is a first impression, not a baseline. A free heap or largest block of 0 is the desktop saying it has no ceiling, so it never enters a window.
 
 #### Renegotiating a contract
 
@@ -442,7 +425,7 @@ Every `scenario_*.json` carries top-level metadata plus a `description` per step
 }
 ```
 
-`name` matches the filename stem exactly; `module` drives the doc grouping and the MoonDeck filter; `also` lists peer modules. `mode` is `construct` or `mutate` (see above). `fixture` is required for `mutate` scenarios that need to run in-process. `reset` (optional but recommended for mutate scenarios) normalizes controls before measurement so contract assertions aren't coupled to run order. `contract[<target>]` carries the per-target performance contract, see § Performance contracts. `observed[<target>]` carries a rolling `[min, max]` range per metric (tick_us, free_heap, max_alloc_block) plus `at: [first_seen_iso, last_seen_iso]` timestamps, widen-only across runs, so each run extends the range rather than replacing it; see § Persistent observations. Per-step `description` is recommended (a missing one falls back to the step's `name`/`op` in the generated view). Optional top-level `"live_only": true` keeps the scenario out of the in-process runner. Optional per-step `"measure": true` triggers a measurement after the step, checked against the step's `contract`.
+`name` matches the filename stem exactly; `module` drives the doc grouping and the MoonDeck filter; `also` lists peer modules. `mode` is `construct` or `mutate` (see above). `fixture` is required for `mutate` scenarios that need to run in-process. `reset` (optional but recommended for mutate scenarios) normalizes controls before measurement so contract assertions aren't coupled to run order. `contract[<target>]` carries the per-target performance contract, see § Performance contracts. `observed[<target>]` carries the published summary of the observations per metric (tick_us, free_heap, max_alloc_block), written on request; see § Persistent observations. Per-step `description` is recommended (a missing one falls back to the step's `name`/`op` in the generated view). Optional top-level `"live_only": true` keeps the scenario out of the in-process runner. Optional per-step `"measure": true` triggers a measurement after the step, checked against the step's `contract`.
 
 Unknown JSON keys are ignored by both runners (C++ and Python), so adding a new field is safe.
 
@@ -450,25 +433,18 @@ Unknown JSON keys are ignored by both runners (C++ and Python), so adding a new 
 
 ```text
 moondeck/docs/
-├── _test_metadata.py        # one parser used by both consumers below
-└── generate_test_docs.py    # writes docs/tests/unit-tests.md + scenario-tests.md
+├── _test_metadata.py        # one parser used by the consumers below
+└── gen_tests.py             # the registry the test page reads
 moondeck/moondeck.py          # serves the same data as HTML in MoonDeck views
 ```
 
-Both the markdown generator and the MoonDeck endpoints (`/api/test-modules`, `/api/unit-tests/<Module>`, `/api/scenarios/<name>`) import from `_test_metadata.py`. Adding a new metadata field (e.g. `@since`) means one edit there; both consumers pick it up.
+Both the registry generator and the MoonDeck endpoints (`/api/test-modules`, `/api/unit-tests/<Module>`, `/api/scenarios/<name>`) import from `_test_metadata.py`. Adding a new metadata field (e.g. `@since`) means one edit there; both consumers pick it up.
 
-Run the generator after touching any test file:
-
-```bash
-uv run moondeck/docs/generate_test_docs.py            # writes both docs
-uv run moondeck/docs/generate_test_docs.py --check    # exits non-zero on drift (CI-friendly)
-```
-
-`--check` exits non-zero when the docs are stale, a contributor who adds a `TEST_CASE` without re-running the generator gets flagged. Run it in CI or before a commit to keep the generated docs in sync.
+The registry is generated at every docs build, so it cannot drift from the test files.
 
 ## Unit tests
 
-Inventory: **[docs/tests/unit-tests.md](tests/unit-tests.md)** (auto-generated, grouped by `@module`).
+Inventory: [the test page](tests.md), by `@module`.
 
 Steps to run them: [Add a test, and pin a bug](../moonwalk.md#add-test). In MoonDeck, the Desktop tab's Unit Test card filters by the shared module dropdown, and Tests shows the per-module inventory.
 
@@ -476,7 +452,7 @@ Output is summary-only on a full run (the doctest `-s` flag is added only on fil
 
 ## In-process scenarios
 
-Inventory: **[docs/tests/scenario-tests.md](tests/scenario-tests.md)** (auto-generated, grouped by `module`).
+Inventory: [the test page](tests.md), by `module`.
 
 Steps to run them: [Run a scenario in-process on the desktop](../moonwalk.md#run-scenario). In MoonDeck, the Scenarios card shares the module dropdown with the Unit Test card, and Steps shows the per-scenario step list.
 
@@ -513,10 +489,7 @@ One live-tier test lives outside the scenario JSON schema because it spans **mul
 
 UI scenarios drive the web interface itself: a run file lists what a person does (open a card, add a module through the picker, drag a slider) and each step checks itself by reading the device back over REST.
 
-```bash
-uv run moondeck/test/test_host.py --ui                     # the whole lane
-uv run moondeck/moontube/mtvideo.py --run moontube/clips/06-layers.json
-```
+How to run one: [MoonTube](https://github.com/MoonModules/MoonLight/blob/main/moondeck/moontube/moontube.md).
 
 The runs live in `moontube/clips/`, the engine in `moondeck/moontube/`. MoonTube sits at the root rather than under `test/`, which every other test family follows. A run file is the source of a published video as much as it is a test, and the series is what someone looks for. Tests are parameterized over the directory, so a new run file is a new test with nothing to wire up. Format and actions: [moontube.md](../../moondeck/moontube/moontube.md).
 

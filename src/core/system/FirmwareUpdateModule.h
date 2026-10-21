@@ -215,7 +215,7 @@ private:
     char     buildStr_[48]   = {};
     /// The build variant; on the MoonBase tab, its chip.
     char     firmwareStr_[24] = {};
-    /// The image against the size of its slot.
+    /// The installed image against the size of its slot, which a new image must fit.
     /// @guide The bar doubles as the install bar: it fills with the incoming image mid-install.
     uint32_t firmwareSizeVal_ = 0;
     uint32_t totalFlashVal_   = 0;   ///< app partition size
@@ -224,7 +224,7 @@ private:
     /// The git id, then the build date.
     char     moonbaseBuildStr_[36] = {};
     bool     moonbaseOutdated_ = false;    ///< it differs from this app's version
-    /// The image against the size of its slot.
+    /// The installed image against the size of its slot, which a new image must fit.
     /// @guide The bar doubles as the install bar: it fills with the incoming image mid-install.
     uint32_t moonbaseSizeVal_  = 0;
     uint32_t moonbaseTotalVal_ = 0;        ///< the factory slot's size

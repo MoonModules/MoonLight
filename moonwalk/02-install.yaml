@@ -13,15 +13,15 @@ processes:
         say: Watch the tour of MoonLight.
         when: { open: { url: "https://youtu.be/F_YgmiUyWVQ" } }
         detail: |
-          Every clip in one chaptered video. The opening clip on [the home page](index.md) says why MoonLight was rebuilt, who wrote it, and the principles it kept.
+          Every clip in one chaptered video. The opening clip on [Getting started](getting-started.md) says why MoonLight was rebuilt, who wrote it, and the principles it kept.
       - id: what-it-is
         say: Read what MoonLight is.
-        when: { read: { page: index.md, section: What it is } }
+        when: { read: { page: explanation/how-moonlight-works.md } }
         detail: |
           A show is a stack of simple blocks: a layout, effects, modifiers and a driver. Every setting applies live.
       - id: catalog
         say: Browse the effects, layouts and drivers.
-        when: { read: { page: moonmodules/light/index.md } }
+        when: { read: { page: moonmodules/light/effects.md } }
         detail: |
           [Drivers](moonmodules/light/drivers.md) says whether your lights are supported: LED strips, panels, Art-Net and DMX fixtures. Measured frame rates per device: [Performance](reference/performance.md).
   - id: install
@@ -46,14 +46,14 @@ processes:
         detail: |
           ![The web installer](assets/gettingstarted/01-01-installer-start.png)
 
+          For a board, open it in Chrome, Edge or Opera: Firefox and Safari lack the Web Serial and WebHID flashing needs.
+
           The Release picker offers stable releases and `latest`, a build published on every merge to main; leave it on the newest stable unless you want the newest unreleased changes.
       - id: plug-in
         say: Plug your board in with a data cable.
         given: [{ input: platform, in: [ESP32, Teensy] }]
-        when: { manual: "Use Chrome, Edge or Opera." }
+        when: { manual: "A cable that carries data, into this computer." }
         detail: |
-          Firefox and Safari lack the Web Serial and WebHID flashing needs.
-
           ![The installer: picking a release, a firmware, and a board from the gallery](assets/moontube/01-install-esp32.webm)
       - id: pick-port
         section: Pick the board
@@ -85,7 +85,7 @@ processes:
 
           ![Device setup](assets/gettingstarted/01-06-device-setup.png)
 
-          Tick **Erase chip first** only to start clean or to switch firmware ([MIGRATING](reference/MIGRATING.md)). It wipes every setting, so [back the device up](how-to/backup-and-restore.md) first.
+          Tick **Erase chip first** only to start clean or to switch firmware ([MIGRATING](reference/MIGRATING.md)). It wipes every setting, so [back the device up](reference/backup-and-restore.md) first.
       - id: flash
         say: Click Install.
         given: [{ input: platform, equals: ESP32 }]
@@ -142,14 +142,14 @@ processes:
 
           ![The SmartScreen download dialog, with the Delete dropdown open showing Keep anyway](assets/tutorials/windows-02-keep-anyway.png)
 
-          MoonLight is not code-signed, so every new build starts with no reputation and gets this warning. Defender removed it, or the download failed? See [Windows flags the download](how-to/troubleshooting.md#windows-flags-the-download).
+          MoonLight is not code-signed, so every new build starts with no reputation and gets this warning. Defender removed it, or the download failed? See [Windows flags the download](reference/troubleshooting.md#windows-flags-the-download).
       - id: setup
         section: Install and start it
         say: Run the setup you kept.
         given: [{ input: platform, equals: Windows }]
         when: { manual: "Double-click it and press Install." }
         detail: |
-          Keeping it was the trust decision, so Windows does not ask again. It installs **for your user only**, into `%LOCALAPPDATA%\Programs\MoonLight`, which is why it never asks for an administrator password. It needs about 1.3 MB.
+          It installs **for your user only**, into `%LOCALAPPDATA%\Programs\MoonLight`, which is why it never asks for an administrator password.
 
           ![The MoonLight setup dialog, showing the install location under AppData Local Programs](assets/tutorials/windows-03-setup.png)
 
@@ -181,7 +181,7 @@ processes:
         section: Install and start it
         say: Install the .deb package.
         given: [{ input: platform, equals: Linux }]
-        when: { run: { command: "sudo apt install ./moonlight_*_$(dpkg --print-architecture).deb" } }
+        when: { run: { command: "cd ~/Downloads && sudo apt install ./moonlight_*_$(dpkg --print-architecture).deb" } }
         detail: |
           The releases carry `_amd64.deb` for `x86_64` and `_arm64.deb` for `aarch64` (`uname -m` says which), for Debian, Ubuntu and Raspberry Pi OS with glibc 2.35 or later. On a headless board, fetch the right file over ssh:
 
@@ -204,7 +204,7 @@ processes:
         detail: |
           It runs with host networking and a volume for its settings.
 
-          One image carries amd64 and arm64, so a board and a server pull the same tag. Host networking is what lets mDNS and Art-Net broadcast reach your fixtures, and `--restart unless-stopped` brings it back after every reboot. Why each flag, and what to do when the container exits at once: [Docker](how-to/installing-on-linux.md#docker).
+          One image carries amd64 and arm64, so a board and a server pull the same tag. Host networking is what lets mDNS and Art-Net broadcast reach your fixtures, and `--restart unless-stopped` brings it back after every reboot. Why each flag, and what to do when the container exits at once: [Docker](reference/installing-on-linux.md#docker). From a source checkout, `docker compose up -d` builds the image and serves it on port 8081: [From a source checkout, with Compose](reference/installing-on-linux.md#from-a-source-checkout-with-compose).
       - id: open-device
         section: That is it
         say: Click the device's link in the installer.
@@ -230,7 +230,7 @@ processes:
 
           The window MoonLight runs in, a console on Windows or your terminal, **is** the application. It shows the log, and closing it stops MoonLight. The line that matters on a first run is `MoonLight is running: http://localhost:8080/`. The address printed below it is the same interface, reachable from your phone or another machine on your network.
 
-          On a first install you get a default grid and a running effect, enough to confirm everything works. [How MoonLight works](tutorials/how-moonlight-works.md) explains the Layouts, Effects and Drivers down the left-hand side.
+          On a first install you get a default grid and a running effect, enough to confirm everything works. [How MoonLight works](explanation/how-moonlight-works.md) explains the Layouts, Effects and Drivers down the left-hand side.
 
           Two options worth knowing: `--no-browser` stops it opening a browser (for a headless machine), and `--port <n>` serves somewhere other than 8080.
       - id: open-container
@@ -249,7 +249,7 @@ processes:
 
           | Where it runs | Your settings |
           |---|---|
-          | ESP32 | On the device. **Erase chip first** clears them: [back them up](how-to/backup-and-restore.md) before ticking it. |
+          | ESP32 | On the device. **Erase chip first** clears them: [back them up](reference/backup-and-restore.md) before ticking it. |
           | Teensy | In 1 MB of the program flash. |
           | Windows | `%LOCALAPPDATA%\MoonLight`: paste it into Explorer's address bar. Uninstalling leaves it. |
           | macOS | `~/Library/Application Support/MoonLight`. |
@@ -281,11 +281,11 @@ processes:
     outro: |
       ## Where to go next
 
-      - **[How MoonLight works](tutorials/how-moonlight-works.md)**: the interface, and the Layouts, Effects and Drivers model.
-      - **[Driving LED panels with a receiving card](how-to/panel-cards.md)**: turn this desktop into the sending card for an LED wall.
+      - **[How MoonLight works](explanation/how-moonlight-works.md)**: the interface, and the Layouts, Effects and Drivers model.
+      - **[Driving LED panels with a receiving card](reference/hardware/panel-cards.md)**: turn this desktop into the sending card for an LED wall.
       - **[Keep it running on a Linux board](moonwalk.md#run-linux-board)**: a Pi or a NanoPi that starts MoonLight on every boot.
 
-      Something not working on a first run? See [Troubleshooting](how-to/troubleshooting.md#a-first-run-on-a-computer-or-in-a-container).
+      Something not working on a first run? See [Troubleshooting](reference/troubleshooting.md#a-first-run-on-a-computer-or-in-a-container).
   - id: install-windows-zip
     title: Install MoonLight on Windows from the zip
     actor: user
@@ -333,17 +333,15 @@ processes:
           | `1A86` | WCH CH340, CH341 | LOLIN D32, NodeMCU-ESP32 clones, some Olimex | WCH's CH341SER; Windows Update usually brings it, after `pnputil /scan-devices` from an elevated PowerShell |
           | `10C4` | Silicon Labs CP2102, CP2102N | ESP32-S3 DevKitC, ESP32-S31 CoreBoard, newer kits | the [Silicon Labs Universal driver](https://www.silabs.com/documents/public/software/CP210x_Universal_Windows_Driver.zip), which Windows Update rarely has |
           | `0403` | FTDI FT2232, FT230X | some Olimex Gateways, older WROVER kits | Windows Update installs it |
+      - id: download
+        say: Download and unpack the CP210x driver.
+        when: { run: { command: "Invoke-WebRequest \"https://www.silabs.com/documents/public/software/CP210x_Universal_Windows_Driver.zip\" -OutFile \"$env:TEMP\\cp210x_driver.zip\"; Expand-Archive \"$env:TEMP\\cp210x_driver.zip\" \"$env:TEMP\\cp210x_driver\" -Force" } }
+        detail: |
+          For a CH340 or an FTDI chip skip this: `pnputil /scan-devices` from an elevated PowerShell lets Windows Update bring the driver.
       - id: install
         say: Install it, from an elevated PowerShell.
         when: { run: { command: "pnputil /add-driver $env:TEMP\\cp210x_driver\\silabser.inf /install" } }
         detail: |
-          For the CP210x, download and unpack the Universal driver first:
-
-          ```
-          Invoke-WebRequest "https://www.silabs.com/documents/public/software/CP210x_Universal_Windows_Driver.zip" -OutFile "$env:TEMP\cp210x_driver.zip"
-          Expand-Archive "$env:TEMP\cp210x_driver.zip" "$env:TEMP\cp210x_driver" -Force
-          ```
-
           A few seconds later the board appears as `Silicon Labs CP210x USB to UART Bridge (COM…)`, and both pickers list it without a restart.
       - id: still-nothing
         say: Clear the known causes of a missing port.
@@ -352,28 +350,99 @@ processes:
           - **A stale COM port** from an earlier attempt, visible in Device Manager under *Show hidden devices*, can block a new one: remove it with `pnputil /remove-device "USB\VID_…"`, elevated, and plug in again.
           - **A wedged CH340 driver** shows `Status: Unknown` though installed: `pnputil /delete-driver oem*.inf /uninstall /force` for the WCH driver, plug in again, and let Windows Update fetch a fresh one.
           - **A charge-only cable** carries power without data and enumerates for a moment, then vanishes. Try a cable you know carries data, in a rear USB 2 port.
+  - id: prepare-linux-board
+    title: Prepare a Linux board for MoonLight
+    actor: user
+    goal: A Pi or NanoPi with a fresh OS image is reachable over ssh and up to date.
+    systems: [MoonCore]
+    page: reference/installing-on-linux.md
+    intro: |
+      For the package, a build from source, or Docker. Everything assumes a Debian-based system (Debian, Ubuntu, Raspberry Pi OS, Armbian); on another distribution, translate the package names. Allow an hour the first time, most of it waiting.
+    steps:
+      - id: image
+        say: Write a Debian-based OS image to the card.
+        when: { manual: "Use Raspberry Pi Imager or balenaEtcher, with an 8 GB card or larger." }
+        detail: |
+          For a Raspberry Pi, [Raspberry Pi OS Lite](https://www.raspberrypi.com/software/): the desktop build leaves less memory for the compile. For a NanoPi, the Debian image from the board's [FriendlyELEC wiki page](https://wiki.friendlyelec.com/wiki/index.php/NanoPi_R28S#Flashing_the_OS_to_the_microSD_card), under `01_Official images/01_SD card images`. Skip FriendlyWrt: it is router firmware with a different package manager. [Armbian](https://www.armbian.com/download/) covers many boards from one project.
+
+          On a Raspberry Pi, open Imager's settings before writing: set the username, hostname and WiFi, and enable SSH. Raspberry Pi OS ships with SSH off and no default user, so a card written without those boots to a machine you cannot reach.
+      - id: boot
+        say: Insert the card, connect the cable, power on.
+        when: { manual: "Give it 10 to 20 minutes." }
+        detail: |
+          The first boot resizes the filesystem and may reboot itself.
+      - id: find
+        say: Find the board on the network.
+        when: { run: { command: "ping raspberrypi.local" } }
+        detail: |
+          Use `NanoPi-R28S.local` for a NanoPi, or `arp -a` for everything the network has seen. Your router's client list is the fallback when mDNS does not resolve. A name that never resolves means the board has no mDNS responder, so `.local` fails while the IP answers. Raspberry Pi OS ships one; a minimal Debian or FriendlyELEC image often does not.
+      - id: login
+        say: Log in over ssh.
+        when: { run: { command: "ssh <you>@<hostname>.local" } }
+        detail: |
+          Raspberry Pi OS: the user you set in Imager. FriendlyELEC Debian: `ssh pi@NanoPi-R28S`, user pi, password pi. By address when neither name resolves: `ssh pi@192.168.1.156`. Without network access, attach a keyboard and monitor: `sudo nmtui` configures WiFi and addresses (on a NanoPi also the second port), and `ip ad` shows what the board has.
+
+          A wall of `setlocale: LC_CTYPE: cannot change locale (UTF-8)` warnings is harmless: macOS sends its own `LC_CTYPE` to a board that has no locale by that name.
+      - id: locale
+        say: Silence the locale warnings.
+        when: { run: { command: "sudo apt install -y locales && sudo locale-gen en_US.UTF-8" } }
+      - id: password
+        say: Change the default password.
+        when: { run: { command: "passwd" } }
+      - id: mdns
+        say: Install the mDNS responder.
+        when: { run: { command: "sudo apt install -y avahi-daemon" } }
+        detail: |
+          Only when `.local` did not resolve: the name then works from the next boot.
+      - id: update
+        say: Update the system.
+        when: { run: { command: "sudo apt update && sudo apt upgrade -y" } }
+      - id: build
+        say: Or build MoonLight from source.
+        when: { process: desktop-build-test }
+        detail: |
+          Only when the package does not suit: an older glibc than 2.35, or developing on the board. Then [build and run it](moonwalk.md#desktop-build-test). It takes a few minutes on a Pi 4 or a NanoPi, longer on older boards.
+
+          A board with 1 GB of RAM or less can run out of memory while compiling; the compiler is killed rather than reporting an error. Add swap: edit `/etc/dphys-swapfile` to raise `CONF_SWAPSIZE`, then `sudo dphys-swapfile swapoff && sudo dphys-swapfile setup && sudo dphys-swapfile swapon`. Editing alone changes nothing; `setup` regenerates the file.
   - id: run-linux-board
     title: Keep MoonLight running on a Linux board
     actor: user
     goal: An always-on Pi or NanoPi runs MoonLight after every reboot.
     systems: [MoonCore]
-    page: how-to/installing-on-linux.md
+    page: reference/installing-on-linux.md
     steps:
       - id: install
         say: Install the package on the board.
         when: { process: install }
       - id: unit
         say: Write a systemd unit for MoonLight.
-        when: { read: { page: how-to/installing-on-linux.md, section: Keeping it running after a reboot } }
+        when: { manual: "Save it as /etc/systemd/system/moonlight.service." }
+        detail: |
+          ```ini
+          [Unit]
+          Description=MoonLight
+          After=network-online.target
+          Wants=network-online.target
+
+          [Service]
+          ExecStart=/usr/bin/MoonLight
+          Restart=always
+          RestartSec=5
+          User=pi
+
+          [Install]
+          WantedBy=multi-user.target
+          ```
+
+          `Restart=always` covers a crash as well as a reboot. Adjust `User`, and the path for a source build: where you built, such as `/home/pi/MoonLight/build/MoonLight`. A container does this with `--restart unless-stopped` instead.
       - id: enable
         say: Enable the service at boot.
         when: { run: { command: "sudo systemctl enable --now moonlight" } }
       - id: status
         say: Check the service runs.
         when: { run: { command: "systemctl status moonlight" } }
-      - id: shutdown
-        say: Shut the board down cleanly.
-        when: { run: { command: "sudo shutdown now" } }
+        detail: |
+          To stop the board cleanly later: `sudo shutdown now`. The service comes back at the next boot.
   - id: join-access-point
     title: Join your WiFi through the device's own network
     actor: user

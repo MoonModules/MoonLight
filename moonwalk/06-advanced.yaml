@@ -1,6 +1,6 @@
 # yaml-language-server: $schema=moonwalk.schema.json
 stage: Advanced use
-summary: Scripts, panels, drivers, many devices and the API.
+summary: Scripts, panels, drivers and many devices.
 processes:
   - id: first-script
     title: Write a MoonLive effect
@@ -9,7 +9,7 @@ processes:
     systems: [MoonLive]
     dependsOn: [first-light-show]
     intro: |
-      No toolchain, no rebuild, no reflash and no reboot: a script saved in the browser compiles on the device and runs as native code seconds later. The language is [MoonLive](moonmodules/light/moonlive.md); a guided first script, four lines growing into a pattern, is the [first-script tutorial](tutorials/first-script.md).
+      No toolchain, no rebuild, no reflash and no reboot: a script saved in the browser compiles on the device and runs as native code seconds later. The language is [MoonLive](moonmodules/light/moonlive.md); a guided first script, four lines growing into a pattern, is [Write your first script](tutorials/first-script.md).
     steps:
       - id: add
         section: Add it
@@ -31,24 +31,26 @@ processes:
         say: Write the effect.
         when: { manual: "A class with a tick() that paints; Ctrl/Cmd+S saves." }
         detail: |
-          `fill()` paints every light the same; `setRGB(i, r, g, b)` paints light i of `lightCount`. Clicking away saves too. Saving recompiles and swaps the effect in live; a half-typed line compiles only when you save.
+          `fill()` paints every light the same; `setRGB(i, r, g, b)` paints light i of `width * height * depth`: [four lines to start from](tutorials/first-script.md#four-lines), then [make it move](tutorials/first-script.md#make-it-move) and [paint per light](tutorials/first-script.md#paint-per-light). Clicking away saves too. Saving recompiles and swaps the effect in live; a half-typed line compiles only when you save.
       - id: controls
         say: Give it controls.
         when: { manual: "Each is a member with an addControl in defineControls()." }
         detail: |
-          It appears on the card as a slider: `addControl("speed", speed, 1, 120)` for a byte speed. A script's control is a real control, the same kind a compiled effect declares: it persists across a reboot and answers over the API.
+          It appears on the card as a slider: `addControl("speed", speed, 1, 120)` for a byte speed, as in [give yourself a knob](tutorials/first-script.md#give-yourself-a-knob). A script's control is a real control, the same kind a compiled effect declares: it persists across a reboot and answers over the API.
       - id: errors
         section: When it fails
         say: Fix it when it does not compile.
         when: { manual: "The card shows the error; save the fix." }
         detail: |
-          The device keeps running, and the effect comes back once the script compiles.
+          The device keeps running, and the effect comes back once the script compiles: [break it on purpose](tutorials/first-script.md#when-the-compile-fails) to see it.
+    outro: |
+      The language, with every function and type: [MoonLive](moonmodules/light/moonlive.md). What to write once you can write anything: [Making beautiful effects](explanation/generative-effects.md).
   - id: panel-cards
     title: Drive LED panels through a receiving card
     actor: user
     goal: A ColorLight wall lit from an ESP32 or a desktop.
     systems: [MoonLight]
-    page: how-to/panel-cards.md
+    page: reference/hardware/panel-cards.md
     inputs:
       type: object
       properties:
@@ -57,7 +59,7 @@ processes:
           enum: [ESP32, Windows, Linux, macOS]
           description: Where does MoonLight run?
     intro: |
-      MoonLight takes the sending card's place: it renders the effect and sends the frames to the receiving card over raw Ethernet, with no PC and no sending card. Gigabit matters for wire time, not bandwidth: [why](how-to/panel-cards.md#the-one-hardware-fact-that-decides-everything).
+      MoonLight takes the sending card's place: it renders the effect and sends the frames to the receiving card over raw Ethernet, with no PC and no sending card. Gigabit matters for wire time, not bandwidth: [why](reference/hardware/panel-cards.md#the-one-hardware-fact-that-decides-everything).
     steps:
       - id: ledvision
         say: Set the panels up in LEDVision.
@@ -68,7 +70,7 @@ processes:
         say: Wire the controller, card and panels.
         when: { manual: "Ethernet to the card, HUB75 ribbons to the panels, 5 V to both." }
         detail: |
-          Cat5e or Cat6 from the controller to the card's input port. The card's second RJ45 port daisy-chains to the next cabinet. Size the supply from the panels' own datasheet: a sagging 5 V rail shows as flicker, color shifts or resets. A P4 or S3 is 100 Mbit and wants a gigabit switch between it and the card; an S31 connects straight. [Boards](how-to/panel-cards.md#3-pick-a-board).
+          Cat5e or Cat6 from the controller to the card's input port. The card's second RJ45 port daisy-chains to the next cabinet. Size the supply from the panels' own datasheet: a sagging 5 V rail shows as flicker, color shifts or resets. A P4 or S3 is 100 Mbit and wants a gigabit switch between it and the card; an S31 connects straight. [Boards](reference/hardware/panel-cards.md#3-pick-a-board).
       - id: flash
         say: Flash an S31, P4 or S3 board.
         given: [{ input: where, equals: ESP32 }]
@@ -99,7 +101,7 @@ processes:
         say: Add a Grid layout.
         when: { add: { module: Layouts, type: GridLayout } }
         detail: |
-          Set its width and height to the wall, so two 128x64 panels stacked make a 128x128 grid. The driver reads only the wall's size and sends rows; panel order was settled on the card. [Why, and when the Panels layout fits](how-to/panel-cards.md#4-describe-the-wall).
+          Set its width and height to the wall, so two 128x64 panels stacked make a 128x128 grid. The driver reads only the wall's size and sends rows; panel order was settled on the card. [Why, and when the Panels layout fits](reference/hardware/panel-cards.md#4-describe-the-wall).
       - id: effect
         say: Pick an effect.
         when: { open: { module: Effects } }
@@ -115,7 +117,7 @@ processes:
         say: Set format to ColorLight 5A-75.
         when: { set: { module: PanelCardDriver, control: format, value: "ColorLight 5A-75" } }
         detail: |
-          The 5A-75B and 5A-75E use the same wire format. Set `firmware` to match the card: `v12 and older` is the default and fits a downgraded card, `v13 and newer` a stock one. [Card firmware](how-to/panel-cards.md#7-card-firmware-and-the-flicker).
+          The 5A-75B and 5A-75E use the same wire format. Set `firmware` to match the card: `v12 and older` is the default and fits a downgraded card, `v13 and newer` a stock one. [Card firmware](reference/hardware/panel-cards.md#7-card-firmware-and-the-flicker).
       - id: interface
         say: Set interface to your adapter.
         given: [{ input: where, in: [Windows, Linux, macOS] }]
@@ -129,7 +131,7 @@ processes:
         say: Read the status line.
         when: { manual: "It reads a link speed and a packet rate, such as 1000 Mbit - 5200 packets/s." }
         detail: |
-          A `100 Mbit` warning still sends, fine for a small wall. `no ethernet link` means cable, card power or the wrong port. Panels dark with a healthy status: [when it does not light up](how-to/panel-cards.md#8-when-it-does-not-light-up).
+          A `100 Mbit` warning still sends, fine for a small wall. `no ethernet link` means cable, card power or the wrong port. Panels dark with a healthy status: [when it does not light up](reference/hardware/panel-cards.md#8-when-it-does-not-light-up).
     outro: |
       The card owns panel order and the picture is MoonLight's. A card on firmware v13 flickers with network activity, whichever sender drives it: [downgrade it](moonwalk.md#panel-card-downgrade).
   - id: panel-card-ledvision
@@ -137,7 +139,7 @@ processes:
     actor: user
     goal: The receiving card knows its panels, and a LEDVision test pattern fills the wall correctly.
     systems: [MoonLight]
-    page: how-to/panel-cards.md
+    page: reference/hardware/panel-cards.md
     intro: |
       The card stores its panel size, count and driver IC, written once with ColorLight's LEDVision on Windows. MoonLight then needs no panel wiring settings. Use an 8.x build: this project's wall runs 8.8, and a video walkthrough uses 8.5. Labels move between versions, so treat the shape as right and the wording as approximate.
     steps:
@@ -182,9 +184,9 @@ processes:
     actor: user
     goal: A card on the older firmware, steady during network activity.
     systems: [MoonLight]
-    page: how-to/panel-cards.md
+    page: reference/hardware/panel-cards.md
     intro: |
-      A card on firmware v13 with v8.x hardware flickers in time with network activity, under every sender, and no sending-side setting avoids it. Flicker that grows with brightness is power instead, and a downgrade changes nothing there. Use LEDUpgrade 4.0 with firmware 11.09, which ships in its preset list. [Why this pairing](how-to/panel-cards.md#7-card-firmware-and-the-flicker).
+      A card on firmware v13 with v8.x hardware flickers in time with network activity, under every sender, and no sending-side setting avoids it. Flicker that grows with brightness is power instead, and a downgrade changes nothing there. Use LEDUpgrade 4.0 with firmware 11.09, which ships in its preset list. [Why this pairing](reference/hardware/panel-cards.md#7-card-firmware-and-the-flicker).
     steps:
       - id: connect
         say: Connect the card directly to the machine.
@@ -229,18 +231,18 @@ processes:
   - id: driver-setup
     title: Set up a driver or service for the hardware
     actor: user
-    goal: The right LED driver, HUB75 panel, audio input or video output, with its few fixed settings.
+    goal: The right LED driver or HUB75 panel, with its few fixed settings.
     systems: [MoonLight]
-    page: how-to/led-drivers.md
+    page: reference/hardware/led-drivers.md
     inputs:
       type: object
       properties:
         driver:
           type: string
-          enum: [RmtLedDriver, ParallelLedDriver]
-          description: Which LED driver do you add?
+          enum: [RmtLedDriver, ParallelLedDriver, Hub75Driver]
+          description: Which driver do you add?
     intro: |
-      An addressable strip (WS2812B, SK6812, WS2811) goes out through one driver on the Drivers card. Which driver fits, where each runs and what limits apply: [Choosing and wiring an LED driver](how-to/led-drivers.md).
+      An addressable strip (WS2812B, SK6812, WS2811) goes out through one driver on the Drivers card. Which driver fits, where each runs and what limits apply: [Choosing and wiring an LED driver](reference/hardware/led-drivers.md).
     steps:
       - id: open
         say: Open Drivers.
@@ -256,39 +258,86 @@ processes:
         when: { add: { module: Drivers, type: ParallelLedDriver } }
         given: [{ input: driver, equals: ParallelLedDriver }]
         detail: |
-          Parallel LED drives many strands. Pick its `peripheral` from [Which one](how-to/led-drivers.md#which-one); start with `i80`.
+          Parallel LED drives many strands. Pick its `peripheral` from [Which one](reference/hardware/led-drivers.md#which-one); start with `i80`.
+      - id: add-hub75
+        say: Add the HUB75 driver.
+        when: { add: { module: Drivers, type: Hub75Driver } }
+        given: [{ input: driver, equals: Hub75Driver }]
+        detail: |
+          It needs an S3, P4 or S31. [Which of the two paths](reference/hardware/hub75-panels.md#which-of-the-two-paths) a panel takes, with or without a receiving card.
+      - id: board
+        say: Pick your board.
+        when: { manual: "Pick a board in the board select." }
+        given: [{ input: driver, equals: Hub75Driver }]
+        detail: |
+          A published map fills the pins and hides their rows. Custom or a generic chip set shows them, to type the GPIO for each line. [Boards and the R1/G1/B1 naming trap](reference/hardware/hub75-panels.md#which-board).
+      - id: scan
+        say: Set scanRate from the panel's label.
+        when: { manual: "Pick the panel's scan in scanRate." }
+        given: [{ input: driver, equals: Hub75Driver }]
+        detail: |
+          Read it off the label or listing, not calculated: two panels of the same size can scan differently. [Settings the panel cannot tell you](reference/hardware/hub75-panels.md#settings-the-panel-cannot-tell-you).
+      - id: peripheral
+        say: Pick the peripheral.
+        when: { manual: "Pick LCD_CAM or Parlio in peripheral." }
+        given: [{ input: driver, equals: Hub75Driver }]
+        detail: |
+          It matters on a P4, which has one LCD_CAM and one Parlio: a board already driving LED strips from one needs the panel on the other.
+      - id: edge
+        say: Flip clockEdge when columns shift.
+        when: { manual: "Switch clockEdge to the other edge." }
+        given: [{ input: driver, equals: Hub75Driver }]
+        detail: |
+          Every pixel one column over means the other edge. If a panel flickers, report the `refresh` reading.
       - id: pins
         say: Enter the data pins.
+        given: [{ input: driver, in: [RmtLedDriver, ParallelLedDriver] }]
         when: { manual: "Type the GPIOs in pins, one per strand, separated by commas." }
       - id: count
         say: Enter the lights per strand.
+        given: [{ input: driver, in: [RmtLedDriver, ParallelLedDriver] }]
         when: { manual: "Type the count for each pin in ledsPerPin; a strand holds at most 2,048 lights." }
       - id: brightness
         say: Set the brightness.
+        given: [{ input: driver, in: [RmtLedDriver, ParallelLedDriver] }]
         when: { manual: "Move localBrightness; the strip follows on the next frame." }
+      - id: expander
+        section: More strands than pins
+        say: Turn pinExpander on.
+        given: [{ input: driver, equals: ParallelLedDriver }]
+        when: { set: { module: ParallelLedDriver, control: pinExpander, value: true } }
+        detail: |
+          On an S3, P4 or S31 with `i80` or `MoonI80` as the `peripheral`, each data pin then drives one 74HCT595 register and its 8 outputs drive 8 strands. [Wiring the expander](reference/hardware/led-drivers.md#wiring-a-74hct595-pin-expander).
+      - id: latch
+        say: Enter the latch pin.
+        given: [{ input: driver, equals: ParallelLedDriver }]
+        when: { manual: "Type the GPIO wired to the registers' latch into latchPin." }
+        detail: |
+          The expander buys pins, not memory: the DMA frame grows eightfold.
       - id: test
         section: Test the wire
         say: Turn on the loopback test.
+        given: [{ input: driver, in: [RmtLedDriver, ParallelLedDriver] }]
         when: { manual: "Jumper a data GPIO to loopbackRxPin and switch loopbackTest on." }
         detail: |
-          It is in the developer view, and the verdict shows in the status field. A PASS means the chip and the peripheral are clean, so flicker that remains is [signal integrity](how-to/led-signal-integrity.md). Through a 74HCT595 the jumper comes from a register output, behind a level shifter: [Testing the wire with the loopback](how-to/led-drivers.md#testing-the-wire-with-the-loopback).
+          It is in the developer view, and the verdict shows in the status field. A PASS means the chip and the peripheral are clean, so flicker that remains is [signal integrity](reference/troubleshooting.md#stray-pixels-or-wrong-colors-on-lights-that-should-be-off). Through a 74HCT595 the jumper comes from a register output, behind a level shifter: [Testing the wire with the loopback](reference/hardware/led-drivers.md#testing-the-wire-with-the-loopback).
     outro: |
-      A 12 V WS2811 in low-speed mode needs the `400kHz WS2811` timing on RMT LED. Other hardware has its own pages: [HUB75 panels](how-to/hub75-panels.md), [audio input](how-to/audio-input.md) and [watching the output](how-to/watching-the-output.md).
+      A 12 V WS2811 in low-speed mode needs the `400kHz WS2811` timing on RMT LED. Audio and video have their own processes: [Set up audio input](moonwalk.md#audio-input) and [Watch the output as video](moonwalk.md#watch-output).
   - id: multi-device
     title: Run a multi-device installation
     actor: user
     goal: Several devices act as one piece, with shared controls and one beat.
     systems: [MoonCore, MoonLight]
-    page: how-to/multi-board-installation.md
+    page: reference/examples/multi-board-installation.md
     intro: |
-      An installation is several MoonLight devices that act as one piece. Start with one device and one effect, add a second that hears the same music, and add the link only when you miss it. The worked example is [the StadBeest](how-to/multi-board-installation.md).
+      An installation is several MoonLight devices that act as one piece. Start with one device and one effect, add a second that hears the same music, and add the link only when you miss it. The worked example is [the StadBeest](reference/examples/multi-board-installation.md).
     steps:
       - id: network
         section: Prepare
         say: Put every device on one network.
-        when: { open: { module: NetworkModule } }
+        when: { manual: "On the router, reserve an address per device and turn IGMP snooping off." }
         detail: |
-          Give the devices an address reservation each, so addresses stay put. Turn IGMP snooping off on the router: a router that snoops without asking again forgets group members, and audio or OSC then drops out every few seconds. For a network you do not control, set `addressing` to `unicast` and list the devices in `hosts`, since unicast is acknowledged and retried.
+          Reserved addresses stay put. A router that snoops without asking again forgets group members, and audio or OSC then drops out every few seconds.
       - id: layout
         say: Give each part its own device and layout.
         when: { open: { module: Layouts } }
@@ -310,6 +359,8 @@ processes:
         when: { open: { module: OscService } }
         detail: |
           Set `feedback` on, `addressing` multicast, `group` the default `239.255.77.78`, `feedbackPort` 9001. Every slot that changes on the leader goes out as `/mm/fader/N`, `/mm/encoder/N` or `/mm/switch/N`. The leader listens on 9000, so it never hears its own feedback.
+
+          For one desk and a few known boards, set `addressing` to `unicast` and list the boards in `hosts`, such as `192.168.1.139, MM-testbench-S3.local`: each gets its own copy. For any number of boards, keep multicast; a second rig takes another `group`.
       - id: followers
         say: Make the other devices followers.
         when: { open: { module: OscService } }
@@ -318,56 +369,171 @@ processes:
       - id: music
         section: Add the music
         say: Send one source of music to all devices.
-        when: { open: { module: AudioService } }
+        when: { set: { module: AudioService, control: mode, value: "receive network" } }
         detail: |
-          Set every device's Audio to receive and let one machine send WLED audio sync: a device with a microphone, or a computer running MoonLight. One source means one beat. Effects that read `audioPeakHz()` at the beat look the same way on every device without a message between them.
+          On the one sender keep `mode` at `local audio` and turn `send audio` on (a device with a microphone, or a computer running MoonLight). One source means one beat. Effects that read `audioPeakHz()` at the beat look the same way on every device without a message between them.
       - id: unattended
         say: Add a script service on the leader.
         when: { add: { module: Services, type: MoonLiveService } }
         detail: |
-          A script service writes the shared slots with `setControl("fader2", value)`, as a person moves a fader, one slot at a time with a pause between writes so no burst reaches the network. Put its `run` switch on a slot, so off hands the installation back to people and desks.
+          A script service writes the shared slots with `setControl("fader2", value)`, as a person moves a fader, one slot at a time with a pause between writes so no burst reaches the network. Declare a `run` switch in the script with `addControl` and assign it to a slot on the Control card, so off hands the installation back to people and desks.
       - id: desk
         say: Plug a desk into the leader.
         when: { open: { module: MidiService } }
         detail: |
-          A desk on the leader moves every device, since its changes go out over OSC. Use [a control surface](how-to/control-surface.md) in the browser. Or put the desk on a small bridge device with `source` USB and `share` on, and set the leader's `source` to network with the bridge as `host`.
+          A desk on the leader moves every device, since its changes go out over OSC. Use [a control surface](reference/control-surface.md) in the browser. Or put the desk on a small bridge device with `source` USB and `share` on, and set the leader's `source` to network with the bridge as `host`.
       - id: update
         section: Keep it running
         say: Update devices one at a time.
         when: { process: update-firmware }
         detail: |
           Compare the image size with the `partition` total on the Firmware card first. Over the API: [Update a running board over the network](moonwalk.md#ota-board). See each device run before the next.
-  - id: http-api
-    title: Script against the HTTP API
+  - id: audio-input
+    title: Set up audio input
     actor: user
-    goal: Add a module, set a control, apply a document and find the device over HTTP.
-    systems: [MoonCore]
-    page: reference/integrating.md
+    goal: Audio-reactive effects hear a microphone or what the computer plays, at levels that read still in silence.
+    systems: [MoonLight]
+    page: reference/audio-input.md
+    inputs:
+      type: object
+      properties:
+        source:
+          type: string
+          enum: [A microphone on a board, The computer's audio on macOS, The computer's audio on Windows, The computer's audio on Linux]
+          description: What should the effects hear?
     intro: |
-      Anything the interface does, a script does over HTTP: the browser page is one client of the API among others. Every endpoint and what each answers: [Integrating](reference/integrating.md).
+      Audio-reactive effects read the [Audio](moonmodules/core/services.md#audio) service. Wire a microphone or capture what the machine plays, then set the levels.
     steps:
-      - id: find
-        say: Address the device by its mDNS name.
-        when: { manual: "http://<deviceName>.local, the name on the System card." }
+      - id: open
+        say: Open the Audio service.
+        when: { open: { module: AudioService } }
+      - id: mode
+        say: Set mode to local audio.
+        when: { set: { module: AudioService, control: mode, value: "local audio" } }
         detail: |
-          A hardcoded address breaks when DHCP moves the device. Every device advertises its name: [Finding devices](reference/integrating.md#finding-devices).
-      - id: types
-        say: Read the module types the device knows.
-        when: { call: { method: GET, path: /api/types } }
+          The input, its device and the level controls show only in this mode.
+      - id: wire
+        section: Pick the source
+        say: Enter the microphone's GPIOs.
+        given: [{ input: source, equals: A microphone on a board }]
+        when: { manual: "Type sckPin, wsPin and sdPin for an I2S microphone, or set micMode to PDM and type wsPin and sdPin." }
         detail: |
-          It names every type you can add and what may parent it.
-      - id: add
-        say: Add a module.
-        when: { call: { method: POST, path: /api/modules, body: { type: "<Type>", parent_id: "<parent>" } } }
+          An ADC or codec in front of the microphone also needs `mclkPin`. [Microphone wiring](reference/audio-input.md#microphone-wiring).
+      - id: blackhole
+        section: Pick the source
+        say: Install BlackHole.
+        given: [{ input: source, equals: The computer's audio on macOS }]
+        when: { open: { url: "https://existential.audio/blackhole/" } }
         detail: |
-          For example a `RainbowEffect` under `Layer`. The answer names the module, and every later call addresses it by that name.
-      - id: set
-        say: Set one of its controls.
-        when: { call: { method: POST, path: /api/control, body: { module: "<name>", control: "<control>", value: "<value>" } } }
+          macOS has no native loopback.
+      - id: multi-output
+        say: Create a Multi-Output Device.
+        given: [{ input: source, equals: The computer's audio on macOS }]
+        when: { manual: "In Audio MIDI Setup, add your speakers first and BlackHole second, with drift correction on BlackHole." }
+      - id: output
+        say: Set it as the system output.
+        given: [{ input: source, equals: The computer's audio on macOS }]
+        when: { manual: "The speakers keep playing while an identical copy lands in BlackHole." }
         detail: |
-          A number rides as a JSON number: `"value":40` sets 40, where `"value":"40"` parses to 0. `GET /api/modules/<name>` lists the controls by name.
-      - id: document
-        say: Apply a state document.
-        when: { call: { method: PATCH, path: /api/state, body: "<document>" } }
+          The Mac's volume keys go dead on a multi-output device, so set the volume in the player.
+      - id: stereo-mix
+        section: Pick the source
+        say: Enable Stereo Mix.
+        given: [{ input: source, equals: The computer's audio on Windows }]
+        when: { manual: "In the Recording tab of the sound settings." }
         detail: |
-          The part of the tree you want, keyed by module name, in one call: controls, new modules and removals. A failed call answers with a reason: [Setting everything at once](reference/integrating.md#setting-everything-at-once).
+          Where a driver lacks it, VB-Cable is the fallback.
+      - id: monitor
+        section: Pick the source
+        say: Find the Monitor of your output.
+        given: [{ input: source, equals: The computer's audio on Linux }]
+        when: { manual: "PulseAudio and PipeWire list a Monitor of the output as a source." }
+      - id: device
+        say: Pick the loopback in device.
+        given: [{ input: source, in: [The computer's audio on macOS, The computer's audio on Windows, The computer's audio on Linux] }]
+        when: { manual: "Pick the loopback source in device." }
+        detail: |
+          On the desktop it captures the picked device right away.
+      - id: floor
+        section: Set the levels
+        say: Set floor above the room's silence.
+        when: { manual: "Raise floor until a quiet room reads still." }
+        detail: |
+          Why an empty room can read at full scale: [Setting the levels](reference/audio-input.md#setting-the-levels).
+      - id: gain
+        say: Set gain when levels is manual.
+        when: { manual: "Move gain; it shows when levels is manual." }
+        detail: |
+          A loopback device needs it turned down hard: [Setting the levels](reference/audio-input.md#setting-the-levels).
+    outro: |
+      One machine's audio can drive every device: [send it over the network](reference/audio-input.md#driving-a-fleet-of-devices).
+  - id: watch-output
+    title: Watch the output as video
+    actor: user
+    goal: The lights open as a live video stream in a player on your computer.
+    systems: [MoonLight]
+    page: reference/watching-the-output.md
+    inputs:
+      type: object
+      properties:
+        protocol:
+          type: string
+          enum: [NDI, HLS, RTSP]
+          description: Which video protocol do you use?
+    intro: |
+      NDI feeds OBS, Resolume or TouchDesigner, HLS feeds VLC, a browser or an Apple TV, and RTSP feeds VLC or `ffplay`. Each needs one install on a desktop, and then a player opens the stream.
+    steps:
+      - id: ffmpeg
+        section: Install what the driver needs
+        say: Install ffmpeg.
+        given: [{ input: protocol, in: [HLS, RTSP] }]
+        when: { manual: "Any 5.x or newer on the PATH." }
+        detail: |
+          The command for each OS: [Installing ffmpeg](reference/watching-the-output.md#installing-ffmpeg). The ESP32-P4 needs none: its own H.264 block encodes.
+      - id: ndi-runtime
+        section: Install what the driver needs
+        say: Install the NDI runtime.
+        given: [{ input: protocol, equals: NDI }]
+        when: { open: { url: "https://ndi.video/tools/" } }
+        detail: |
+          Where each OS finds it: [Installing the NDI runtime](reference/watching-the-output.md#installing-the-ndi-runtime).
+      - id: add-ndi
+        section: Add the driver
+        say: Add the NDI driver.
+        given: [{ input: protocol, equals: NDI }]
+        when: { add: { module: Drivers, type: NdiDriver } }
+      - id: add-hls
+        section: Add the driver
+        say: Add the HLS driver.
+        given: [{ input: protocol, equals: HLS }]
+        when: { add: { module: Drivers, type: HlsDriver } }
+        detail: |
+          Its `encoder` control picks the encoder ffmpeg runs; a hardware encoder suits a large grid. [Picking an encoder](reference/watching-the-output.md#picking-an-encoder).
+      - id: add-rtsp
+        section: Add the driver
+        say: Add the RTSP driver.
+        given: [{ input: protocol, equals: RTSP }]
+        when: { add: { module: Drivers, type: RtspDriver } }
+      - id: play-ndi
+        section: Play it
+        say: Open an NDI receiver.
+        given: [{ input: protocol, equals: NDI }]
+        when: { manual: "NDI Video Monitor from NDI Tools, or an NDI Source in OBS through the DistroAV plugin." }
+        detail: |
+          The name it appears under: [Installing the NDI runtime](reference/watching-the-output.md#installing-the-ndi-runtime).
+      - id: play-hls
+        section: Play it
+        say: Open the HLS url in a player.
+        given: [{ input: protocol, equals: HLS }]
+        when: { manual: "Open the url the driver shows in VLC or Safari, or hand it to an Apple TV." }
+        detail: |
+          Why it runs seconds behind: [Playing an HLS stream](reference/watching-the-output.md#playing-an-hls-stream).
+      - id: play-rtsp
+        section: Play it
+        say: Play the RTSP url with ffplay.
+        given: [{ input: protocol, equals: RTSP }]
+        when: { manual: "ffplay -fflags nobuffer -flags low_delay rtsp://<device>:554/" }
+        detail: |
+          VLC, scaling it up for a monitor, and when it stays silent: [Playing an RTSP stream](reference/watching-the-output.md#playing-an-rtsp-stream).
+    outro: |
+      The picture size follows `scale` and `targetFps`: [sizing the picture](reference/watching-the-output.md#sizing-the-picture).

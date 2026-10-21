@@ -1,8 +1,8 @@
 # Documentation standards
 
-How the project writes prose: docs, comments, and the pages generated from them. For developers, the people who write those. Code rules are in [coding-standards.md](coding-standards.md). The two meet at `///` comments, which are code by location and documentation by purpose: their syntax is a coding-standards rule, everything they say follows this page.
+How the project writes prose: docs, comments, and the pages generated from them. For developers, the people who write those. Code rules are in [coding-standards.md](coding-standards.md). The two meet at `///` comments, which are code by location and documentation by purpose: their rules, syntax and content alike, are on this page.
 
-Every rule has one home. Another document links here rather than restating, because two copies become two different rules.
+Every rule has one home. Another document links here rather than restating, because two copies become two different rules. A [MoonWalk](../moonwalk.md) step that applies a rule links it: the author applies it at that step, and a reviewer checks the work against the same steps.
 
 It starts with the four kinds of page and which one each of ours is. Then how a page is written, then the two pages every module has. It ends with comments: the smallest scale, and the one place code and prose meet.
 
@@ -15,7 +15,7 @@ flowchart TB
     entry["<b>README.md</b> · <b>index.md</b><br/><i>what it is, what to do next</i>"]
 
     tut["<b>tutorial</b><br/>tutorials/<br/><i>a lesson to follow</i>"]
-    how["<b>how-to</b><br/>how-to/<br/><i>one task you already have</i>"]
+    how["<b>how-to</b><br/>moonwalk/ · moonwalk.md<br/><i>one task you already have</i>"]
     exp["<b>explanation</b><br/>explanation/<br/><i>why it is shaped this way</i>"]
     ref["<b>reference</b><br/>reference/ · moonmodules/<br/><i>facts, fast</i>"]
 
@@ -120,13 +120,13 @@ Every page serves one of four reader needs, and only one. This is [Diátaxis](ht
 | | Doing | Understanding |
 |---|---|---|
 | **Learning** | **Tutorial**: a lesson to follow. `tutorials/`, and MoonTube's clips. | **Explanation**: why it is shaped this way. `explanation/`. |
-| **Working** | **How-to**: one task you already have. `how-to/`. | **Reference**: facts, fast. `reference/`, the catalog rows, the headers. |
+| **Working** | **How-to**: one task you already have. A [MoonWalk](../moonwalk.md) process, `moonwalk/*.yaml`. | **Reference**: facts, fast. `reference/`, the catalog rows, the headers. |
 
-**The folder under `docs/` is the type.** A page's path says which cell it sits in. So `how-to/installing-on-linux.md` is a how-to by location, and a reader never has to be told. The nav labels stay reader-facing ("Understanding MoonLight" over "Explanation"), because the type is a writer's tool.
+**The folder is the type.** A page's path says which cell it sits in, and a how-to is a process in `moonwalk/` rather than a page. So `reference/installing-on-linux.md` holds facts by location, and its steps are the [Prepare a Linux board](../moonwalk.md#prepare-linux-board) process. The nav labels stay reader-facing ("Understanding MoonLight" over "Explanation"), because the type is a writer's tool.
 
 The test for any page is the cell it sits in. A tutorial that stops to explain, or a reference that starts to teach, is two pages: move the other half to where it belongs.
 
-Two kinds of page sit outside the grid on purpose. **The rules** ([CLAUDE.md](../../CLAUDE.md), [coding-standards.md](coding-standards.md), this page) live in `contributing/`, are for contributors, and bind every change. `legal/` sits outside it too. **Work not yet in the code** lives under `docs/work/`, and nothing there describes the system as it is. `future` is what does not exist, `present` is being built and deleted at its PR, `past` is what shipped.
+Two kinds of page sit outside the grid on purpose. **The rules**, [coding-standards.md](coding-standards.md) and this page in `contributing/` and [CLAUDE.md](../../CLAUDE.md) at the repo root, are for contributors and bind every change. `legal/` sits outside it too. **Work not yet in the code** lives under `docs/work/`, and nothing there describes the system as it is. `future` is what does not exist, `present` is being built and deleted at its PR, `past` is what shipped.
 
 Two scales below a page. **A module** has one reference card and one header (see [Module pages](#module-pages)); **a line of code** carries its own reason in a comment (see [Comments](#comments)).
 
@@ -152,7 +152,7 @@ Two scales below a page. **A module** has one reference card and one header (see
 - **Say it, then stop: about 30 words.** One or two sentences a reader can act on, and a reason only when the point is surprising or has been got wrong before. Past that a reader skims, and a skimmed statement is not followed.
 - **Write for the reader who will follow it**, not the one arguing with it. A trap that only bites whoever maintains the tooling belongs in the tooling.
 - **Ask, do not argue.** A request states what you want and why, then stops. Quoting the other side's code back to them and pre-empting every objection is pressure, and earns a reply shorter than the message. Ask the one question that decides the rest.
-- **A sentence is one thought.** Past twenty words it is usually two, joined by a comma or a colon that a full stop should have been. Instructions in particular: one step, one sentence, and the reader's eyes never lose the line.
+- **A sentence is one thought.** Past thirty words it is two, joined by a comma or a colon that a full stop should have been. Instructions in particular: one step, one sentence, and the reader's eyes never lose the line.
 - **The text never refers to itself.** "This page", "this recipe", "as described above", "in the following section": each one is the author stepping in front of the content. Say the thing; the reader knows where they are.
 - **A diagram beats the paragraph that describes it.** Draw a structure, a flow or a hierarchy as a [Mermaid](https://mermaid.js.org/) diagram: it renders on the site and on GitHub, and it diffs as text. A screenshot does the same where the point is what a reader sees. Both follow the example rule: they replace prose rather than decorate it.
 - **One example, only where the prose alone would be misread.** A code block earns its place by preventing a wrong reading; a second example is the author enjoying the subject.
@@ -163,7 +163,7 @@ Two scales below a page. **A module** has one reference card and one header (see
 - **American English spelling, everywhere**: identifiers, wire keys, comments, docs, UI strings. A grep for one dialect silently misses the other, and a drifting wire key breaks a contract with no compile error. A proper noun keeps its own spelling.
 - **No em-dashes in prose.** Use a comma, colon, parentheses, or a full stop. A literal one in a UI string or test fixture stays.
 - **No hard line wraps in markdown.** Let the editor soft-wrap, so a one-word edit is a one-word diff.
-- **Convert as you touch.** Spelling and em-dash fixes ride the change that opens the file, never a repo-wide sweep. `check_prose.py` checks added lines only, for the same reason.
+- **Convert as you touch.** Spelling and em-dash fixes ride the change that opens the file; a repo-wide sweep is a change of its own, reviewed as one. `check_prose.py` checks added lines only, for the same reason.
 
 ### The words for hardware
 
@@ -187,7 +187,7 @@ A unit is a device even when it is one bare board: "the bridge device", "the dev
 1. **A catalog card**, for the end user. One card in its group's deck, drawn from the module's help: its picture, name and line on the face, its help and controls on the back.
 2. **The header**, for the developer. Its `///` comments are the technical reference, read in the repo or on GitHub.
 
-`docs/moonmodules/` mirrors `src/`: a `core/` and a `light/` subtree, one flat page per group. The tree is `<core|light>/<type>/Module`, flat within a type, and **library is a tag, not a folder level**. In code and assets it rides in `tags()` and in docs in the page name, so `effects.md` splits to `effects_<library>.md` only when a section outgrows it. A blended-lineage module then needs no file move, and a mis-filing is a one-line edit. Test inventories have their own generator, [`generate_test_docs.py`](../moondeck/docs/generate_test_docs.py), because unit tests are macros and scenarios are JSON.
+`docs/moonmodules/` mirrors `src/`: a `core/` and a `light/` subtree, one flat page per group. The tree is `<core|light>/<type>/Module`, flat within a type, and **library is a tag, not a folder level**. In code and assets it rides in `tags()` and in docs in the page name, so `effects.md` splits to `effects_<library>.md` only when a section outgrows it. A blended-lineage module then needs no file move, and a mis-filing is a one-line edit. The tests have their own registry, [`gen_tests.py`](../../moondeck/docs/gen_tests.py), because unit tests are macros and scenarios are JSON.
 
 **Reference a module generically** outside its own home: say "a modifier", not `FooModifier`. A module's home is its `.h`, its catalog card, its registration, and its tests. Naming it elsewhere multiplies rename cost.
 
@@ -210,7 +210,7 @@ A header reaches Vale through a **View**, `.vale/styles/config/views/CComments.y
 These rules cover every comment the project writes, in whatever language: a `///` in a header, a `//` beside a line of the web interface, a `#` in a MoonDeck script. The prose gate reads all three, by two different routes. A C-family file needs the `CComments` View, since Vale has no parser for C and skips the file without one. That View hands back the comment nodes alone, so an identifier is never read as prose. JavaScript and Python need no View: Vale reads those as plain text. Both routes report the same findings, measured by breaking a View on purpose and watching the count hold.
 
 - **Comments say WHY.** Restating what the line does is noise, and usually a naming failure: see [prefer naming over commenting](coding-standards.md#writing-a-line-of-code).
-- **One line, above the code it explains.** A second line is the author still talking. A class `///` gets about ten lines, and each `##` section of an `@technical` appendix about ten; over that, cut. A file whose comments outnumber its code has stopped being a header.
+- **One line, above the code it explains.** A second line is the author still talking. A file whose comments outnumber its code has stopped being a header.
 - **Settle the `///` first, then the `//`.** The doc comment is what a reader sees on hover and in the app's help, so it is where the explanation belongs. A `//` block below one that repeats it is deleted rather than shortened, and most of them turn out to be exactly that. Working the other way round collapses a `//` into one careful line, then deletes it an hour later once the `///` above says the same thing.
 - **Keep the constraint, cut the exposition.** A constraint cannot be recovered from the code: the latch is 300 us, the DMA cannot read PSRAM at shift clock. What was tried first, and why this pattern over another, goes in the commit message.
 - **Removing a comment needs the same justification as removing code**: outdated, wrong, or it only restated the code. Never strip to hit a length target, and never delete a reason you cannot reconstruct.
@@ -251,15 +251,13 @@ A card is read across a row; a member comment is read beside the thing it descri
 
 **One rule set, both kinds of file.** An implementation file follows exactly the limits above. What differs is that its findings are warnings where a header's are errors, because a header's comments are the published page. Three of these were once scoped to headers alone, and each reason turned out to be false. A `.cpp` carries a file lead with its own `@technical` appendix, just as a header does. A `.cpp` declares classes, 238 of them here. And a header is read as source far more often than as a rendered page, so its line width reaches a reader exactly as an implementation file's does. Two columns of limits drift apart, and the deduction is what keeps them honest.
 
-The first five cut and the last adds, deliberately: the result is a short line on everything rather than an essay on a few things. The word limit counts a SENTENCE rather than a line, because the no-wrap rule makes a line a paragraph. Three short sentences on one line are correct, and one rambling sentence is not. Thirty is where a machine stops a commit, while twenty above is what to aim for when writing. Measured over the tree, a cap of 20 fired on the median sentence and 30 leaves it alone. Vale carries the same 30 as a suggestion, so one number means one thing in both tools.
+The first five cut and the last adds, deliberately: the result is a short line on everything rather than an essay on a few things. The word limit counts a SENTENCE rather than a line, because the no-wrap rule makes a line a paragraph. Three short sentences on one line are correct, and one rambling sentence is not. Thirty rather than twenty because, measured over the tree, a cap of 20 fired on the median sentence. Vale carries the same 30 as a suggestion, so one number means one thing in both tools.
 
 **The appendix budget counts a SECTION, not the whole appendix.** A single total punishes a file for having several distinct topics. The cheapest way to satisfy one is to delete a section rather than tighten the prose. Ten lines per `##` section asks each one to be disciplined and lets a file carry as many as it genuinely has. That is what an implementation file needs: the platform backends each hold a handful of separately diagnosed findings, and one shared budget could only force them out of the tree. A fenced block does not count, the same exemption the no-wrap rule makes. A protocol listing is as long as the thing it describes, and counting its lines would ask an author to delete wire format to fit a prose budget.
 
 **No hard wrap in a comment, for the reason markdown gives.** Let the editor soft-wrap, so a one-word edit is a one-word diff rather than a reflowed paragraph. The one-line budget already forbids this on a header's member or code comment. So the rule bites where a block is allowed to be multi-line. That is the class comment, the `@technical` appendix, and any multi-line run in an implementation file. A list item, a heading, a table row and a fenced block are structure rather than a wrapped sentence, and each is left alone. This one holds everywhere, because its reason is the diff rather than the page. A split sentence reflows every line it spans when a word changes, which costs a reviewer the same in either file. A paragraph goes the same way: the sentences of one topic are one paragraph, and a paragraph is one line. Markdown joins them anyway, and a reader takes separate lines as separate topics. Past the cap the paragraph is cut until it fits, never split into sentence lines or line-sized chunks.
 
-**Use `//` sparingly.** A comment restating what the code does is a naming failure, and the fix is a better name rather than a better sentence. What survives is the WHY a reader cannot recover from the code.
-
-**`//` carries the same one-line budget as `///` in a header, and that is what makes the `///` cap mean anything.** Without it the one-line rule moves text rather than removing it. A fifty-line member comment re-spelled as `//` satisfies every other rule and leaves the file exactly as long. One line is room to say why, and past that the text is cut first. The `//` block above the first class is exempt, being the sibling of the class comment.
+**`//` carries the same one-line budget as `///` in a header, and that is what makes the `///` cap mean anything.** Without it the one-line rule moves text rather than removing it. A fifty-line member comment re-spelled as `//` satisfies every other rule and leaves the file exactly as long. One line is room to say why, and past that the text is cut first. The file's lead `//` block is exempt, being the sibling of the class comment.
 
 **An implementation file is asked for no member docs.** This one is a detector limit rather than a rule difference. "Public" is read from the shape of a declaration, which cannot see an anonymous namespace or a function body. In a header that approximation holds, because a header's declarations mostly are the public API and each is documented. In a `.cpp` it matched the fields of file-local structs and plain locals, asking a variable named `got` for a doc comment, so the rule stops at the header. A field that needs explaining carries a trailing `//`, which is what those already did.
 
@@ -267,7 +265,7 @@ The first five cut and the last adds, deliberately: the result is a short line o
 
 **A finding in a header is an error; one in an implementation file is a warning, with one rule in each direction.** No-hard-wrap blocks in both kinds of file: the tree is at zero findings, so there is nothing left to stage. The line-length cap warns in both, because it is new and its findings are lines nobody wrote wrongly. A staged rule joins the others as the tree meets it. A header's comments are the published page, so a defect there ships, while a `.cpp` publishes nothing and its comments are a note to the next reader. Both are counted and both are reported, because a warning nobody sees is a warning nobody fixes. The split stages the sweep rather than ranking the two kinds of comment, so it goes and everything blocks once the warning column reaches zero. That is how Vale's own config promotes a page to error as the sweep finishes it.
 
-Enforced by [`check_docgen.py`](../moondeck/check/check_docgen.py) over every header under `src/`, the vendored ones excepted.
+Enforced by [`check_docgen.py`](../moondeck/check/check_docgen.py) over every header and implementation file under `src/`, `test/`, `esp32/main/`, `moonbase/main/`, `moondeck/moonlive/` and `teensy/`, the vendored ones excepted.
 
 
 ### Writing a `///` the help reads

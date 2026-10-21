@@ -26,11 +26,11 @@ namespace mm {
 ///
 /// ## Playing it
 ///
-/// Open the `url` in VLC or ffplay ([how-to](https://moonmodules.org/MoonLight/how-to/watching-the-output.html#playing-an-rtsp-stream)). The second of RTSP and HLS to start reports that the encoder is in use.
+/// Open the `url` in VLC or ffplay ([Watching the output](https://moonmodules.org/MoonLight/reference/watching-the-output.html#playing-an-rtsp-stream)). The second of RTSP and HLS to start reports that the encoder is in use.
 ///
 /// ## One viewer at a time
 ///
-/// A new connection takes the session over, and the displaced viewer sees its connection close. A network that blocks the UDP port the viewer names leaves the stream silent ([how-to](https://moonmodules.org/MoonLight/how-to/watching-the-output.html#when-an-rtsp-stream-stays-silent)).
+/// A new connection takes the session over, and the displaced viewer sees its connection close. A network that blocks the UDP port the viewer names leaves the stream silent ([Watching the output](https://moonmodules.org/MoonLight/reference/watching-the-output.html#when-an-rtsp-stream-stays-silent)).
 ///
 /// ## The delay that remains
 ///

@@ -6,6 +6,8 @@
 #include "light/drivers/ColorLight5A75Packet.h"   // the first wire format (byte layout lives there)
 #include "platform/platform.h"
 
+#include <atomic>
+
 namespace mm {
 
 /// Streams the buffer to ColorLight 5A-75 receiving cards as raw Ethernet, taking the place of the sending card that normally feeds them.
@@ -19,7 +21,7 @@ namespace mm {
 ///
 /// ## Why 1 Gbit
 ///
-/// The cards need 1000 Mbps for wire time, not bandwidth: they latch on the sync frame, so a whole frame must arrive inside the inter-frame window. At 100 Mbit expect tearing or wrong rows; the driver warns but still sends ([how-to](https://moonmodules.org/MoonLight/how-to/panel-cards.html#the-one-hardware-fact-that-decides-everything)).
+/// The cards need 1000 Mbps for wire time, not bandwidth: they latch on the sync frame, so a whole frame must arrive inside the inter-frame window. At 100 Mbit expect tearing or wrong rows; the driver warns but still sends ([Panel cards](https://moonmodules.org/MoonLight/reference/hardware/panel-cards.html#the-one-hardware-fact-that-decides-everything)).
 ///
 /// @technical
 ///
@@ -48,10 +50,10 @@ public:
     enum Firmware : uint8_t { kFirmwareV12, kFirmwareV13, kFirmwareCount };
 
     /// The card firmware; a wrong one and the wall barely updates.
-    /// @guide v13 and newer acts on the second copy of brightness and sync, which go out twice; v12 and older on the first ([how-to](https://moonmodules.org/MoonLight/how-to/panel-cards.html#7-card-firmware-and-the-flicker)).
+    /// @guide v13 and newer acts on the second copy of brightness and sync, which go out twice; v12 and older on the first ([Panel cards](https://moonmodules.org/MoonLight/reference/hardware/panel-cards.html#7-card-firmware-and-the-flicker)).
     uint8_t firmware = kFirmwareV12;
     /// The network adapter the frames go out on.
-    /// @guide `none (capture only)` records frames without sending. Sending needs root or `CAP_NET_RAW` on Linux, BPF on macOS, Npcap on Windows ([steps](https://moonmodules.org/MoonLight/how-to/panel-cards.html#6-from-a-desktop)).
+    /// @guide `none (capture only)` records frames without sending. Sending needs root or `CAP_NET_RAW` on Linux, BPF on macOS, Npcap on Windows ([steps](https://moonmodules.org/MoonLight/reference/hardware/panel-cards.html#6-from-a-desktop)).
     uint8_t interfaceSel_ = 0;
     /// The label behind the selected row, so a reordered list restores the same NIC.
     char chosenIf_[64] = {};
@@ -378,12 +380,12 @@ private:
     uint8_t packet_[COLORLIGHT_MAX_FRAME] = {};
     /// millis() of the last frame sent: the `fps` limiter's reference.
     uint32_t lastSendTime_ = 0;
-    /// Frames the MAC accepted since boot; the difference per second is the rate shown.
-    uint32_t framesSent_ = 0;
+    /// Frames the MAC accepted since boot, counted on the encode task and read by tick1s; the difference per second is the rate shown.
+    std::atomic<uint32_t> framesSent_{0};
     /// framesSent_ at the last status write: subtracting gives the rate without a timer.
     uint32_t framesReported_ = 0;
     /// Frames the MAC refused since boot, cumulative, since a rate hides a slow trickle.
-    uint32_t framesDroppedTotal_ = 0;
+    std::atomic<uint32_t> framesDroppedTotal_{0};
     /// Backing store for the status line, sized for the longest one, the split-drop report.
     char statusBuf_[96] = {};
     /// Whether a restart was already attempted for the current wedge; one attempt per wedge.

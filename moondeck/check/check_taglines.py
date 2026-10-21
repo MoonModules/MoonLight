@@ -1,16 +1,14 @@
 #!/usr/bin/env -S uv run --script
 """One fact, one wording: the platform list must read identically wherever it appears.
 
-README.md, docs/index.md and CLAUDE.md each open by saying what MoonLight runs on, for three
-different readers: someone deciding whether to try it, someone already on the docs site, and an
-agent about to change the code. Three audiences is a reason for three PAGES, not for three
-different answers to the same question, and they had drifted into four orderings of the same six
-platforms ("Windows, macOS or Linux" against "macOS, Windows, Linux", "RPi" against
-"Raspberry Pi"), one of which also demoted five of the six to secondary. They are all targets.
+README.md and CLAUDE.md each open by saying what MoonLight runs on, for two readers: someone
+deciding whether to try it and an agent about to change the code. The site's home embeds README,
+so it carries README's sentence. Two audiences is a reason for two pages, not for two answers to
+the same question: the six platforms are all targets, in one order and one spelling.
 
-An include would be the obvious fix and does not work here: MkDocs can pull a snippet into
-docs/index.md, but GitHub renders README.md itself and would show the include directive. So the
-one home is enforced rather than mechanical, which is what this check is.
+An include would make the second page mechanical too, and does not work here: GitHub renders
+README.md and CLAUDE.md itself and would show the include directive. So the one wording is
+enforced rather than mechanical, which is what this check is.
 
 Deliberately NOT a general prose comparison. It pins one sentence, the one that states a fact
 about the product rather than an opinion about it, and leaves each page its own voice around it.
@@ -24,13 +22,17 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent.parent
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import _findings  # noqa: E402
+
+RULES = {"tagline out of step": {"reason": "A front page does not carry the canonical platform sentence.", "fix": "Say the platform list the same way in each front page, or change TAGLINE and update them together.", "standard": "docs/contributing/documentation-standards.md"}}
 
 # The canonical sentence. Changing it here is the whole edit: the check then names every file
 # that still carries the old wording.
 TAGLINE = "One source tree drives ESP32, Teensy, Raspberry Pi, macOS, Windows and Linux."
 
-# Every file that states it. A new front page belongs in this list on the day it is written.
-FILES = ("README.md", "docs/index.md", "CLAUDE.md")
+# Every file that states it. A new front page belongs in this list on the day it is written; the site's home embeds README, so it carries README's sentence rather than its own.
+FILES = ("README.md", "CLAUDE.md")
 
 
 def main():
@@ -42,6 +44,8 @@ def main():
             continue
         if TAGLINE not in path.read_text(encoding="utf-8"):
             missing.append((rel, "does not carry the canonical platform sentence"))
+
+    _findings.write("check_taglines", RULES, [{"rule": "tagline out of step", "message": why, "file": rel, "level": "error"} for rel, why in missing])
 
     if missing:
         print(f"Tagline check: {len(missing)} file(s) out of step.\n")

@@ -30,6 +30,14 @@ import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import _findings  # noqa: E402
+
+RULES = {
+    "address sanitizer": {"reason": "The unit suite fails under AddressSanitizer: a use-after-free or memory error.", "fix": "Run `check_sanitizers.py --kind address` and read the report.", "standard": "docs/contributing/coding-standards.md"},
+    "thread sanitizer": {"reason": "The unit suite fails under ThreadSanitizer: a data race between threads.", "fix": "Run `check_sanitizers.py --kind thread` on Linux and read the report.", "standard": "docs/contributing/coding-standards.md"},
+}
+RULE_OF = {"address": "address sanitizer", "thread": "thread sanitizer"}
 
 # The one toolchain whose sanitizer runtime works on macOS (see the module docstring).
 BREW_LLVM = Path("/opt/homebrew/opt/llvm/bin")
@@ -130,6 +138,10 @@ def main() -> int:
     # entirely and hide a race behind a use-after-free. They are independent signals; report both.
     results = [run_one(k, args.filter or None) for k in kinds]
     ok = all(results)
+    if not args.filter:   # a filtered run is part of the suite, so only the whole one is the record
+        _findings.write("check_sanitizers", RULES,
+                        [{"rule": RULE_OF[k], "message": f"mm_tests fails under the {k} sanitizer", "level": "error"}
+                         for k, passed in zip(kinds, results) if not passed])
     print("\nSanitizers:", "PASS" if ok else "FAIL")
     return 0 if ok else 1
 

@@ -65,7 +65,7 @@ Writing your own implementation of a known idea can land in either column, and w
 
 Credit is the fifth row, and it needs care for a mechanical reason: rewriting removes the easiest form of attribution there is. Take a dependency and the author's name appears in the manifest automatically, as a side effect of the build. Write it yourself and that disappears, even when the idea, the approach or the algorithm came straight from someone else's work. So it has to be deliberate, named where it can be checked against the source. That is the README's Credits, each module's `@attribution` in [the attribution catalog](../reference/attributions.md), and the [friend-repo digests](../friend-repos/index.md).
 
-If something here came from your work and is not credited where it should be, [open an issue](../how-to/logging-an-issue.md) or find us on [Discord](https://discord.gg/TC8NSUSCdV). We would much rather hear it directly.
+If something here came from your work and is not credited where it should be, [open an issue](../reference/logging-an-issue.md) or find us on [Discord](https://discord.gg/TC8NSUSCdV). We would much rather hear it directly.
 
 ## ESP-IDF directly, rather than Arduino
 
@@ -88,3 +88,16 @@ The platform abstraction layer replaces what libraries typically provide. Today 
 | [ArduinoJson](https://github.com/bblanchon/ArduinoJson) | Works on ESP-IDF, but heavy: dynamic allocation, large footprint. | Own `JsonSink`, which serves both the API and persistence: each module's state is written as a flat `/.config/<TypeName>.json` and read back through `loadSubtree`. |
 
 When a library is genuinely needed (e.g. FastLED for specific hardware support), it lives inside `src/platform/` and is not referenced from core or light-domain code.
+
+## Where it comes from
+
+This is the current iteration of years of LED and light-system development, and each prior project proved ideas this one builds on:
+
+| Project | Description | Repo |
+|---------|-------------|------|
+| **WLED** | Open-source LED firmware (user and contributor since 2021) | [Aircoookie/WLED](https://github.com/Aircoookie/WLED) |
+| **WLED-MoonModules** | WLED fork with advanced features | [MoonModules/WLED](https://github.com/MoonModules/WLED) |
+| **StarLight** | Standalone LED firmware | [ewowi/StarLight](https://github.com/ewowi/StarLight) |
+| **MoonLight** | Ground-up build: 60+ effects, memory-optimized mapping, 11 driver types | [ewowi/MoonLight](https://github.com/ewowi/MoonLight) |
+
+We built and maintained these, so MoonLight rests on our own hands-on experience. Their lessons are distilled in [`docs/work/past/`](../work/past/index.md). We carry the ideas forward and write our own code, crediting by name whoever inspired a feature.

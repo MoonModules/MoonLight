@@ -3,7 +3,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { doneOnDevice, nextOf, choicesOf, applies, stepHolds, targetOf, advance, commandOf, took } from "../../docs/assets/moonwalk.js";
+import { doneOnDevice, nextOf, choicesOf, applies, stepHolds, targetOf, advance, commandOf, took, conditionText } from "../../docs/assets/moonwalk.js";
 
 const model = {
     stages: [{ id: "install", processes: ["install"] }, { id: "light", processes: ["grid", "effect", "status-only"] }],
@@ -97,6 +97,23 @@ test("a contributor's process is done when every step the change needs has a pas
     assert.deepEqual([...doneBySteps(steps(false))], []);
 });
 
+test("a step running a subprocess stands for its steps: needed when any is, passed when every needed one is", async () => {
+    const { gateOf } = await import("../../docs/assets/moonwalk.js");
+    const group = { id: "code", when: { process: "commit-code" } };
+    const gates = (buildFresh, testsTriggered) => ({
+        commit: [{ id: "specs", process: "commit", triggered: true, fresh: true }, { id: "code", process: "commit-code", triggered: true, fresh: buildFresh }],
+        "commit-code": [{ id: "code", process: "commit-code", triggered: true, fresh: buildFresh }, { id: "test", process: "commit-code", triggered: testsTriggered, fresh: false }],
+    });
+    assert.deepEqual(gateOf(gates(true, false), "commit", group), { triggered: true, fresh: true, running: false });
+    assert.equal(gateOf(gates(true, true), "commit", group).fresh, false);   // a needed step without a pass holds the group back
+    assert.equal(gateOf(gates(false, false), "commit", group).fresh, false);
+    const idle = { commit: [], "commit-code": [{ id: "code", process: "commit-code", triggered: false, fresh: false }] };
+    assert.equal(gateOf(idle, "commit", group).triggered, false);   // not needed for this change
+    assert.equal(gateOf(gates(true, false), "commit", { id: "specs", when: { run: { script: "x" } } }).fresh, true);   // a script step is its own run
+    assert.equal(gateOf(gates(true, false), "commit", { id: "code", when: { run: { script: "x" } } }), undefined);    // a subprocess's step of the same id is not this process's
+    assert.equal(gateOf(gates(true, false), "commit", { id: "review", when: { process: "review-finding" } }), undefined);   // a subprocess running no script has no status
+});
+
 test("a step can name several options, and shows for any of them", () => {
     const step = { id: "download", given: [{ input: "platform", in: ["Windows", "macOS", "Linux"] }] };
     assert.equal(applies(step, { platform: "macOS" }), true);
@@ -127,10 +144,8 @@ test("the bar moves past every step the state shows done and stops at the first 
     assert.equal(advance(steps, 0, device(16)), 0);   // opening a card is the reader's Done, even with the width already set
 });
 
-test("a step's call reads as a reader types it: a script through uv with its arguments, or the command itself", () => {
-    assert.equal(commandOf({ when: { run: { script: "moondeck/build/build_desktop.py", args: "--tests" } } }), "uv run moondeck/build/build_desktop.py --tests");
-    assert.equal(commandOf({ when: { run: { script: "moondeck/check/check_specs.py" } } }), "uv run moondeck/check/check_specs.py");
-    assert.equal(commandOf({ when: { run: { command: "gh pr create --base main" } } }), "gh pr create --base main");
+test("a step's call copies as the line the map carries, and a step that runs nothing copies nothing", () => {
+    assert.equal(commandOf({ command: "uv run moondeck/check/check_specs.py", when: { run: { script: "moondeck/check/check_specs.py" } } }), "uv run moondeck/check/check_specs.py");
     assert.equal(commandOf({ when: { manual: "Stage." } }), null);
 });
 
@@ -143,4 +158,20 @@ test("a duration rounds before it splits into minutes, so it never reads 60 seco
     assert.equal(took(59.6), "1m00s");
     assert.equal(took(42.2), "42s");
     assert.equal(took(null), "");
+});
+
+test("a condition reads as the words a reader checks the device against", () => {
+    assert.equal(conditionText([{ module: "RainbowEffect", exists: true }]), "a RainbowEffect module exists");
+    assert.equal(conditionText([{ module: "Drivers", control: "brightness", minimum: 1, maximum: 20 }]), "Drivers brightness is 1 to 20");
+    assert.equal(conditionText([{ module: "Drivers", control: "brightness", maximum: 20 }, { module: "MidiService", control: "share", equals: true }]), "Drivers brightness is at most 20 and MidiService share is true");
+    assert.equal(conditionText([{ status: 200 }]), "");   // what the state cannot answer has no words
+});
+
+test("a select's index also reads as its option's name, so a step that names the option holds", () => {
+    const state = { modules: [{ name: "Midi", type: "MidiService", controls: [{ name: "source", type: "select", value: 1, options: ["browser", "USB", "network"] }] }] };
+    const step = (e) => ({ then: [{ module: "MidiService", control: "source", ...e }] });
+    assert.equal(stepHolds(step({ equals: "USB" }), state), true);
+    assert.equal(stepHolds(step({ equals: "network" }), state), false);
+    assert.equal(stepHolds(step({ notEquals: "USB" }), state), false);
+    assert.equal(stepHolds(step({ equals: 1 }), state), true);   // the index still matches
 });

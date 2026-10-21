@@ -1,0 +1,14 @@
+# documentation-standards.md: say what the list holds. A closer that says there is more, without saying what, leaves the reader
+# guessing what the rest is.
+extends: existence
+message: "'%s' says there is more without saying what: name it or end the list."
+level: warning
+ignorecase: true
+nonword: true
+# A closer ends its list: "and more" before punctuation or the line's end, so "and more robust" is a comparison; the others at a word's end. "etc" starts after a space or a bracket, so the path /etc/ is not a closer.
+tokens:
+  - '(?:^|[\s(])etc\b\.?'
+  - 'and so on\b'
+  - 'and more(?:[.,;:)]|$)'
+  - 'and so forth\b'
+  - 'and the like\b'

@@ -22,7 +22,7 @@ namespace mm {
 ///
 /// ## Which of the two paths
 ///
-/// A receiving card (@ref PanelCardDriver) earns its place above roughly 16,384 pixels; below that this driver is the small end of the split. [The HUB75 how-to](https://moonmodules.org/MoonLight/how-to/hub75-panels.html#which-of-the-two-paths) has the choice.
+/// A receiving card (@ref PanelCardDriver) earns its place above roughly 16,384 pixels; below that this driver is the small end of the split. [HUB75 panels](https://moonmodules.org/MoonLight/reference/hardware/hub75-panels.html#which-of-the-two-paths) has the choice.
 ///
 /// @technical
 ///
@@ -34,7 +34,7 @@ namespace mm {
 class Hub75Driver : public DriverBase {
 public:
     /// The board's wiring: picking one fills the fourteen pins, Custom keeps yours.
-    /// @guide A published map hides the pin rows, which stay bound. A pin on flash or PSRAM is refused. Boards and the R1/G1/B1 naming trap: [the how-to](https://moonmodules.org/MoonLight/how-to/hub75-panels.html#which-board).
+    /// @guide A published map hides the pin rows, which stay bound. A pin on flash or PSRAM is refused. Boards and the R1/G1/B1 naming trap: [HUB75 panels](https://moonmodules.org/MoonLight/reference/hardware/hub75-panels.html#which-board).
     uint8_t boardSel = 0;
 
     int8_t r1 = -1;   ///< Red, upper half-panel.
@@ -375,7 +375,7 @@ private:
         return n;
     }
 
-    /// Are the pin controls the user's to edit, for the board currently selected?
+    /// Are the pin controls the user's to edit, for the selected board?
     bool pinsEditable() const {
         if (boardSel >= boardOptionCount_) return true;   // no board resolved: never hide
         return kBoards[boardIndex_[boardSel]].editable;

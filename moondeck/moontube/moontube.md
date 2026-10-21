@@ -90,7 +90,7 @@ A run has to be REPEATABLE, because the same file is a test. So a step says what
 
 A step that POSTs its way to the outcome proves nothing about the interface, and on camera it shows an effect with no cause. Every action goes through the affordance a person uses: the `+` tab, the picker, the card's own buttons, the real inputs.
 
-The rule covers the tooling around a run, not only its steps. Cleanup is the place it is easiest to break. Deleting a leftover module with a `DELETE` is quick, and it both sets state behind the interface's back and hides a run whose own delete steps are broken. So neither the video tool nor the test fixture writes: a leftover is reported, which fails the test, and the next run's `clear_children` step puts the pipeline right through the UI.
+The rule covers the tooling around a run, not only its steps. Cleanup is the place it is easiest to break. Deleting a leftover module with a `DELETE` is quick, and it both sets state behind the interface's back and hides a run whose own delete steps are broken. So neither the video tool nor the test fixture writes. A leftover is reported, which fails the test, and the next run's `clear_children` step puts the pipeline right through the UI. A clip that leaves what it built on screen records with `mtvideo.py --keep`, since the next clip's reset clears the device.
 
 ## Locators
 
@@ -168,8 +168,10 @@ Sources live under `moontube/`, outputs under `media/`:
     media/video/<name>.webm                 the raw take, ignored
     media/video/<project>.mp4               the finished cut, ignored
     docs/assets/moontube/<name>.webm     the published clip, TRACKED
+    docs/assets/moontube/<name>.jpg      its poster, a frame a second in, TRACKED
+    docs/assets/light/effects-deck.gif   the effects deck, every card animating: mtdeck.py, TRACKED
 
-`media/` holds working output, split by kind (`video/`, `audio/` for the music a project is cut against) and kept out of the repository. The published clip is re-encoded at 2x speed and 960px wide, which is what makes it small enough to track beside the effect GIFs it sits with. Measured on a 49-second take: 1280@1x is 3.3 MB, 960@2x is 872 KB, and speed and scale each take about a third off independently. The codec is nearly irrelevant, because a 3D preview is constantly-changing pixels.
+`media/` holds working output, split by kind (`video/`, `audio/` for the music a project is cut against) and kept out of the repository. `mtdeck.py` records a catalog's card deck from the docs server as the looping GIF README opens on; run it after an effect is added. A page shows the poster until the clip loads, which Safari needs on a page Material swaps in without a reload; the docs build adds it to a clip a page writes, and the help adds it to a clip the help draws, MoonWalk's and the device's. The published clip is re-encoded at 2x speed and 960px wide, which is what makes it small enough to track beside the effect GIFs it sits with. Measured on a 49-second take: 1280@1x is 3.3 MB, 960@2x is 872 KB, and speed and scale each take about a third off independently. The codec is nearly irrelevant, because a 3D preview is constantly-changing pixels.
 
 Speeding the clip up changes the VIDEO, not the run: the test and the clip still describe the same interaction, and a UI demo at recording pace is slower than anyone wants to watch. `--speed`, `--width`, `--crf` tune it; `--no-publish` skips it.
 

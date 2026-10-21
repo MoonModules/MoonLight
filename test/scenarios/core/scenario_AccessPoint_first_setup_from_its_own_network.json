@@ -2,6 +2,11 @@
   "name": "scenario_AccessPoint_first_setup_from_its_own_network",
   "module": "AccessPointModule",
   "mode": "mutate",
+  "instances": {
+    "AccessPoint": "AccessPointModule",
+    "Network": "NetworkModule",
+    "WiFi": "WiFiModule"
+  },
   "live_only": true,
   "also": [
     "WiFiModule",

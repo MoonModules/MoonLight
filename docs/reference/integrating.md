@@ -9,21 +9,20 @@ They are shapes of one question rather than alternatives.
 The browser page is one client of the HTTP API, on the same footing as any other.
 Anything the interface can do a script can do: add an effect, set a control, read the state, upload a script.
 
-The examples below were run against a device rather than read off the source. `<device>` is its address, as `192.168.1.42` or `moonlight.local`.
-
 ## HTTP
 
-## The shortest useful thing
+Every route, with its parameters and answers, is in [the REST API reference](api.md). `GET /api/types` is the one to read first when scripting: it names every type you can add and what may parent it.
 
-```bash
-curl -X POST http://<device>/api/modules -d '{"type":"RainbowEffect","parent_id":"Layer"}'
-# {"ok":true,"name":"Rainbow"}
+## Step by step
 
-curl -X POST http://<device>/api/control -d '{"module":"Rainbow","control":"speed","value":40}'
-# {"ok":true}
-```
+Each recipe is a process in MoonWalk, whose API steps link their route in the reference:
 
-The add returns the **name** the device gave the module, which is what every later call addresses it by. A second module of the same type is named `Rainbow-2`.
+- Add a module and set its controls: [Script against the HTTP API](../moonwalk.md#http-api).
+- Set many modules and controls in one call: [Set everything at once with a state document](../moonwalk.md#apply-state).
+- Write a MoonLive script and run it: [Run a MoonLive script over the API](../moonwalk.md#moonlive-api).
+- List and apply presets: [Save, edit and apply a preset](../moonwalk.md#presets).
+- Back up and restore a device, `/.config` with one file per module plus `/moonlive` for the user's scripts: [Back up and restore a device](../moonwalk.md#backup-restore).
+- Update the firmware by upload, by URL or through MoonBase: [Update a running board over the network](../moonwalk.md#ota-board).
 
 ## Three things the payload decides
 
@@ -33,45 +32,10 @@ The add returns the **name** the device gave the module, which is what every lat
 
 **The body is read as JSON whatever the `Content-Type` says.** `curl` without `-H` works.
 
-## Reading
-
-| Endpoint | Answers |
-|---|---|
-| `GET /api/state` | The whole module tree, which is what the page renders |
-| `GET /api/system` | Name, firmware, chip, uptime, heap, FPS, and per-module tick times |
-| `GET /api/types` | Every module type this build knows, with its role and the children it accepts |
-| `GET /api/modules/<name>` | One module: its type, and every control with its current value |
-| `GET /api/modules/<name>/document` | One module as a state document, rooted at the top level, which `PATCH /api/state` applies back |
-| `GET /api/scripts` | The MoonLive script catalog, by role |
-| `GET /api/dir?path=<dir>` | A directory listing from the device filesystem |
-| `GET /api/file?path=<file>` | One file's contents |
-
-`GET /api/types` is the one to read first when scripting: it names every type you can add and what may parent it.
-
-## Writing
-
-| Endpoint | Body | Does |
-|---|---|---|
-| `POST /api/modules` | `{"type":…,"parent_id":…,"id":…}` | Adds a module named `id`, or after its type when `id` is absent, and returns its name; a name in use answers 409 |
-| `POST /api/control` | `{"module":…,"control":…,"value":…}` | Sets one control |
-| `PATCH /api/state` | a state document | Sets any part of the tree in one call: controls, new modules, removals |
-| `DELETE /api/modules/<name>` | | Removes a module and its children |
-| `DELETE /api/dir?path=<path>` | | Removes a file, or a directory and everything in it |
-| `POST /api/modules/<name>/replace` | `{"type":…,"name":…}` | Swaps a module for another type in the same slot, named `name`, else its own custom name, else the new type's |
-| `POST /api/modules/<name>/move` | | Reorders a module among its siblings |
-| `POST /api/list/<module>/<control>/<row>/apply` | | Runs a list row's action, such as applying a preset; `<row>` is its id, or its name in a list whose names are unique |
-| `POST /api/file?path=<file>` | the file body | Writes a file, creating parent directories |
-| `POST /api/dir?path=<dir>` | | Creates a directory |
-| `POST /api/reboot` | `{}` | Restarts the device |
-
 ## Setting everything at once
 
 `PATCH /api/state` takes a **state document**: the part of the tree you want, keyed by module name, applied the way JSON Merge Patch ([RFC 7386](https://www.rfc-editor.org/rfc/rfc7386)) applies one.
 Its shape is the module tree, not the interface schema `GET /api/state` returns; `GET /api/modules/<name>/document`, below, reads it back.
-
-```sh
-curl -X PATCH --data '{"Effects": {"Layer": {"Swirl": {"type": "RainbowEffect", "speed": 90}}}}' http://<device>/api/state
-```
 
 - A value sets a control of the module it sits in, with the same checks `POST /api/control` runs.
 - An object is a child module: found by name, created when it is missing and names a `type`, replaced in place when its `type` differs.
@@ -94,17 +58,11 @@ Adding, replacing and removing a module through `/api/modules` applies a one-mem
 A secret stays out of every document, and applying one leaves the secret as it is.
 That is a password control, and a list holding one, whole, such as WiFi's known networks with their names and addresses.
 
-A [preset](../how-to/presets.md) is such a document saved on the device, recalled with one click, and kept across a reboot, and the [gallery](https://github.com/MoonModules/MoonLight-Gallery) shares them.
+A [preset](presets.md) is such a document saved on the device, recalled with one click, and kept across a reboot, and the [gallery](https://github.com/MoonModules/MoonLight-Gallery) shares them.
 
 ## What a control is called
 
-Ask the module:
-
-```bash
-curl http://<device>/api/modules/Rainbow
-```
-
-The reply lists every control with its name, type and current value. Control names are the ones the interface shows, lowercased in the style of `speed`, `multiplyX`, `ethBoard`.
+`GET /api/modules/<name>` lists every control of the module with its name, type and current value. Control names are the ones the interface shows, lowercased in the style of `speed`, `multiplyX`, `ethBoard`.
 
 ## When something goes wrong
 
@@ -114,95 +72,6 @@ A call that returns `{"ok":true}` has been applied to the running tree, on the n
 
 One case is worth knowing: a control write to a module mid-rebuild can briefly refuse the connection.
 The device recovers in well under a second, so a client that retries once sees nothing.
-
-## A MoonLive script, end to end
-
-A script is a file on the device and a control that names it, so writing one remotely is a write and a set. This whole sequence was run against a device.
-
-```bash
-# What is already there. `dir` is the factory catalog, compiled into the firmware.
-curl http://<device>/api/scripts
-
-# Write a script. The directory is created if it is missing.
-curl -X POST "http://<device>/api/file?path=/moonlive/hello.mle" --data-binary '
-class HelloEffect {
-  byte hue = 0;
-  void defineControls() { addControl("hue", hue, 0, 255); }
-  void tick() { fill(paletteRGB(hue, 255)); }
-}'
-
-# Read it back.
-curl "http://<device>/api/file?path=/moonlive/hello.mle"
-
-# Give it something to run in, and point that at the script.
-curl -X POST http://<device>/api/modules -d '{"type":"MoonLiveEffect","parent_id":"Layer"}'
-curl -X POST http://<device>/api/control -d '{"module":"MoonLive","control":"script","value":"hello.mle"}'
-```
-
-Two things follow from the last call.
-The module's status carries the compile result: a byte count on success.
-A failure gives a message with an offset, as `a script is a class: expected class <Name> { … } @0`.
-The script's **own** controls also appear on the module once it compiles, so `hue` above is then set like any other:
-
-```bash
-curl -X POST http://<device>/api/control -d '{"module":"MoonLive","control":"hue","value":128}'
-```
-
-Editing the file again recompiles on the next frame and keeps the control's live value, so a script can be iterated on from an editor without touching the module.
-
-**Two directories, and the order matters.** `/.moonlive` is the factory catalog served from flash, which `GET /api/scripts` lists and a file read cannot reach. `/moonlive` is the user's, on the filesystem, and it **shadows** the factory one.
-A user file of the same name wins, which is how a shipped script gets overridden and equally how a factory update becomes invisible. Write to `/moonlive`.
-
-## Presets
-
-A preset is the answer when a whole configuration matters more than the calls that build it. It is a file at `/.config/presets/<name>.json` holding the tree and its values together, and the Control module is the surface that saves and applies one.
-
-```bash
-# What presets a device has.
-curl "http://<device>/api/dir?path=/.config/presets"
-
-# Read one, which is also how you copy a configuration between devices.
-curl "http://<device>/api/file?path=/.config/presets/stage.json"
-
-# Apply one by name, as a click on its pad does.
-curl -X POST http://<device>/api/list/Control/presets/stage/apply
-```
-
-The list is rebuilt from the folder rather than stored beside it.
-So a preset written straight to `/.config/presets/` appears once the module next rescans: a reboot, or any save, rename or delete on the surface.
-One written through the Control module shows up at once.
-
-## Backup and restore
-
-The device's own configuration is readable as files, one per module, which is what a backup is made of.
-
-```bash
-# Every module's persisted state.
-curl "http://<device>/api/dir?path=/.config"
-
-# One module's.
-curl "http://<device>/api/file?path=/.config/Drivers.json"
-
-# Write it back, to this device or another.
-curl -X POST "http://<device>/api/file?path=/.config/Drivers.json" --data-binary @Drivers.json
-```
-
-A written file applies live, queued for the render task; network settings wait for the next boot, as [Backup and restore](../how-to/backup-and-restore.md) explains. A full backup is `/.config` plus `/moonlive` for the user's scripts, which together are everything a device knows that its firmware does not.
-
-## Firmware
-
-```bash
-# What is running, and what the device thinks is available.
-curl http://<device>/api/system
-
-# Update from a URL the device fetches itself.
-curl -X POST http://<device>/api/firmware/url -d '{"url":"https://…/firmware-esp32s3-n16r8-v6.0.0.bin"}'
-
-# Or push a binary from the machine holding it.
-curl -X POST http://<device>/api/firmware/upload --data-binary @firmware.bin
-```
-
-The MoonBase partition has its own three, in the same shape, for the web interface rather than the firmware: `/api/firmware/moonbase`, `/api/firmware/moonbase-update-url` and `/api/firmware/moonbase-update`.
 
 ## Finding devices
 
@@ -223,10 +92,10 @@ MQTT is a transport over the same apply-core the HTTP path uses. A value set ove
 
 ## WebSocket
 
-`/ws` carries the live state to the interface: the module tree on connect, value patches once a second, and preview frames as they are drawn. That is what makes a second browser tab show a slider move in the first.
+`/ws` carries the live state to the interface: the module tree on connect and value patches once a second. That is what makes a second browser tab show a slider move in the first. `/wsp` carries the preview frames as they are drawn, on a socket of their own so a large frame never delays the state.
 
 It also reads inbound.
-The native WLED app sets brightness and on-off by sending `{"on":true,"bri":128}`, and the device honours that frame.
+The native WLED app sets brightness and on-off by sending `{"on":true,"bri":128}`, and the device honors that frame.
 Anything richer belongs on the HTTP API: the socket's inbound half exists for app compatibility rather than as a general control channel.
 
 ## Which to use

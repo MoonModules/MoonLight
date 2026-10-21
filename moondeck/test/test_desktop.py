@@ -12,6 +12,7 @@ import os
 import platform
 import subprocess
 import sys
+import threading
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent.parent
@@ -19,6 +20,7 @@ ROOT = Path(__file__).resolve().parent.parent.parent
 # @case discovery here. Same parser feeds the doc generator and MoonDeck.
 sys.path.insert(0, str(ROOT / "moondeck" / "docs"))
 import _test_metadata as test_meta  # noqa: E402
+import test_runs  # noqa: E402
 
 
 def _host_build_dir() -> Path:
@@ -60,6 +62,10 @@ def main():
     # for the full suite, which floods the MoonDeck log). Filtered runs (--module
     # or --test) opt in to `-s` so a single case's assertions stay visible.
     cmd = [str(test_exe)]
+    junit = ROOT / "build" / "moondeck-logs" / "junit-unit.xml"   # the console keeps its output; the results go beside it, as JUnit, to be kept as runs
+    junit.parent.mkdir(parents=True, exist_ok=True)
+    junit.unlink(missing_ok=True)
+    cmd += ["-r=console,junit", f"-o={junit}"]
     filtered = False
 
     if args.module and args.module.lower() != "all":
@@ -93,10 +99,19 @@ def main():
         stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
         bufsize=1, text=True, encoding="utf-8", errors="replace",
     )
+    # doctest takes the console text into the same file as the results, so that file is followed while the run goes and its console text printed as it grows, the way the output streams.
+    stop = threading.Event()
+    follower = threading.Thread(target=test_runs.follow_console, args=(junit, stop, sys.stdout), daemon=True)
+    follower.start()
     for line in proc.stdout:
         sys.stdout.write(line)
         sys.stdout.flush()
-    sys.exit(proc.wait())
+    code = proc.wait()
+    stop.set()
+    follower.join()
+    if junit.exists():
+        test_runs.record(test_runs.doctest_runs(test_runs.split_doctest_output(junit.read_text(encoding="utf-8", errors="replace"))[1]))   # each case's last result, with the tree it saw
+    sys.exit(code)
 
 
 if __name__ == "__main__":

@@ -190,13 +190,16 @@ file(GLOB MOONLIVE_SCRIPTS CONFIGURE_DEPENDS
 string(REPLACE ";" "\n" MOONLIVE_SCRIPT_LIST "${MOONLIVE_SCRIPTS}")
 set(MOONLIVE_STAMP ${CMAKE_BINARY_DIR}/moonlive_scripts.stamp)
 file(CONFIGURE OUTPUT ${MOONLIVE_STAMP} CONTENT "${MOONLIVE_SCRIPT_LIST}\n")
+# The rule's OUTPUT is a stamp in the build tree, not the tracked header, which a clean would delete: the root CMakeLists.txt carries the reason.
+set(MOONLIVE_CATALOG_STAMP ${CMAKE_BINARY_DIR}/moonlive_catalog.stamp)
 add_custom_command(
-    OUTPUT ${MOONLIVE_GEN}/script_catalog.h
+    OUTPUT ${MOONLIVE_CATALOG_STAMP}
     COMMAND ${CMAKE_COMMAND} -DSCRIPT_DIR=${MOONLIVE_DIR} -DOUT=${MOONLIVE_GEN}/script_catalog.h -DPYTHON_CMD=${Python3_EXECUTABLE} -P ${MOONLIVE_GEN}/catalog_scripts.cmake
+    COMMAND ${CMAKE_COMMAND} -E touch ${MOONLIVE_CATALOG_STAMP}
     DEPENDS ${MOONLIVE_SCRIPTS} ${MOONLIVE_STAMP} ${MOONLIVE_GEN}/catalog_scripts.cmake ${MOONLIVE_GEN}/catalog_scripts.py
     COMMENT "Generating MoonLive script catalog"
 )
-add_custom_target(moonlive_catalog DEPENDS ${MOONLIVE_GEN}/script_catalog.h)
+add_custom_target(moonlive_catalog DEPENDS ${MOONLIVE_CATALOG_STAMP})
 
 # Generate build_info.h from library.json + git (carries version, build id, build date, board name).
 #

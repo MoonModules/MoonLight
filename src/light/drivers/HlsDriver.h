@@ -25,7 +25,7 @@ namespace mm {
 ///
 /// ## ffmpeg
 ///
-/// It runs on the desktop, where you install ffmpeg yourself and then open the stream ([how-to](https://moonmodules.org/MoonLight/how-to/watching-the-output.html#installing-ffmpeg)).
+/// It runs on the desktop, where you install ffmpeg yourself and then open the stream ([Watching the output](https://moonmodules.org/MoonLight/reference/watching-the-output.html#installing-ffmpeg)).
 ///
 /// ## On the ESP32-P4
 ///

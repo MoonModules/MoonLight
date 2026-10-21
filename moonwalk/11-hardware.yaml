@@ -42,23 +42,30 @@ processes:
         detail: |
           It takes about 1.5 GB more.
 
-          It runs the upstream installer for the host, `install.sh` or `install.bat`; on Windows that takes about five minutes on a fast link. It also offers to move a drifted checkout onto the pin. The ESP32-S31, a preview target, needs its RISC-V toolchain fetched once more: `cd ~/esp/esp-idf && ./install.sh esp32s31`.
+          It runs the upstream installer for the host, `install.sh` or `install.bat`; on Windows that takes about five minutes on a fast link. It also offers to move a drifted checkout onto the pin. The ESP32-S31, a preview target, needs its RISC-V toolchain fetched once more: `./install.sh esp32s31` in `~/esp/esp-idf`, or `install.bat esp32s31` on Windows.
       - id: build
         section: Each change
         say: Build the firmware for your board.
         when: { run: { script: moondeck/build/build_esp32.py, args: "--firmware <firmware>" } }
         detail: |
-          Pick the variant for your board in MoonDeck's Firmware menu, or pass its key. Build one firmware at a time: the variants share their managed components, so two builds at once corrupt each other. After an sdkconfig or toolchain change, compile for real rather than trusting a freshness check. A MoonBase variant also builds MoonBase: [MoonBase and the partition layout](reference/build-system.md#moonbase-and-the-partition-layout).
+          Pick the variant for your board in MoonDeck's Firmware menu, or pass its key. Build one firmware at a time: the variants share their managed components, so two builds at once corrupt each other. Iterate on the one board that runs the change; the other chip families build at the commit check. After an sdkconfig or toolchain change, compile for real rather than trusting a freshness check. A MoonBase variant also builds MoonBase: [MoonBase and the partition layout](reference/build-system.md#moonbase-and-the-partition-layout).
+      - id: port
+        say: Find the board's serial port.
+        when: { manual: "MoonDeck's Port dropdown lists the ports it sees; on Windows it is a COM name." }
+        detail: |
+          Ports drift between sessions, so read it again each session rather than from memory.
       - id: flash
         say: Flash it over USB.
-        when: { manual: "flash_esp32.py --firmware <name> --port <port>, or the Flash card with the port picked." }
+        when: { run: { script: moondeck/build/flash_esp32.py, args: "--firmware <firmware> --port <port>" } }
         detail: |
-          Probe the ports again first, since they drift between sessions. On Windows the port is a `COM` name, and no port at all means a missing driver: [Install the USB-serial driver on Windows](moonwalk.md#windows-serial-drivers). The web installer flashes the same images, the S31 included.
+          Use the Flash card with the port picked, or the script. Confirm the flash size with esptool's `flash_id` rather than a registry, since a variant built for another size boot-loops. On Windows the port is a `COM` name, and no port at all means a missing driver: [Install the USB-serial driver on Windows](moonwalk.md#windows-serial-drivers). The web installer flashes the same images, the S31 included.
       - id: monitor
         say: Watch its log over USB.
-        when: { manual: "monitor_esp32.py --port <port>, or the Monitor card." }
+        when: { run: { script: moondeck/run/monitor_esp32.py, args: "--port <port>" } }
         detail: |
-          A silent reset is a hardware question before a software one. A watchdog reset with no panic, both CPUs stopped and the program counter inside the panic handler mean the flash cache is gone. That is a pin fault far more often than a code fault, so check the package before theorizing about the code.
+          Use the Monitor card, or the script.
+
+          A silent reset is a hardware question before a software one. A watchdog reset with no panic, both CPUs stopped and the program counter inside the panic handler mean the flash cache is gone. That is a pin fault far more often than a code fault, so check the package before theorizing about the code. Reset a native-USB board (`/dev/cu.usbmodem*`) through esptool's hard reset rather than by toggling DTR and RTS, which its ROM reads as a boot-mode command.
   - id: ota-board
     title: Update a running board over the network
     actor: contributor
@@ -72,6 +79,12 @@ processes:
       properties:
         moonbase: { type: string, enum: [With MoonBase, Without MoonBase], description: "Does the board's variant carry MoonBase?" }
     steps:
+      - id: install-moonbase
+        say: Install MoonBase from the app.
+        given: [{ input: moonbase, equals: With MoonBase }]
+        when: { run: { command: "curl -X POST --http1.1 -H \"Expect:\" --data-binary @build/moonbase-<chip>/MoonLight-moonbase.bin http://<device>/api/firmware/moonbase-update" } }
+        detail: |
+          Once, on a board that has none yet.
       - id: to-moonbase
         say: Reboot the app into MoonBase.
         given: [{ input: moonbase, equals: With MoonBase }]
@@ -100,10 +113,10 @@ processes:
       A flashed board listens for Improv over USB-serial. One run pushes the WiFi credentials and, when you name the device model, its TX-power cap and module tree. The option tables are in [MoonDeck](../moondeck/MoonDeck.md#improv_provision).
     steps:
       - id: port
-        say: Find the board's serial port.
-        when: { manual: "Ports drift between sessions: read the port from the device registry or ask, then confirm it." }
+        say: Confirm the board answers on its port.
+        when: { run: { script: moondeck/build/improv_probe.py, args: "--port <port>" } }
         detail: |
-          Never open a bench port with a bare serial library. Opening it asserts the reset lines on many boards and reboots them, which also fabricates boot chatter that looks like a fault. Use the MoonDeck scripts, and attach a monitor before the event you want to see, never after.
+          The port is the one MoonDeck's Port dropdown shows, or the device's `last_port` in `moondeck/moondeck.json`; ports drift between sessions. Never open a bench port with a bare serial library. Opening it asserts the reset lines on many boards and reboots them, which also fabricates boot chatter that looks like a fault. Use the MoonDeck scripts, and attach a monitor before the event you want to see, never after.
       - id: provision
         say: Provision WiFi and the device model.
         when: { run: { script: moondeck/build/improv_provision.py, args: "--port <port> --device-model \"<Name>\"" } }
@@ -119,16 +132,14 @@ processes:
       - id: reach
         say: Open the board's page.
         when: { open: { url: "http://<ip>/" } }
-      - id: pins
-        say: Change a one-way board from its web page.
-        when: { manual: "Applies when the model's LED pins include GPIO 1 or 3." }
         detail: |
-          When the LED pins include GPIO 1 or 3, the driver claims the UART pins and serial stops receiving. The push is one way, so changing such a board, a QuinLED for one, goes through its web page.
+          When the model's LED pins include GPIO 1 or 3, the driver claims the UART pins and serial stops receiving. The push is one way, so changing such a board, a QuinLED for one, goes through this page.
       - id: smoke
         say: Run the smoke test after provisioning changes.
-        when: { run: { script: moondeck/build/improv_smoke_test.py } }
+        given: [{ changed: ["moondeck/build/improv_*.py", "src/core/util/ImprovOpReassembler.h", "src/platform/esp32/platform_esp32_improv.cpp", "mooninstaller/**"] }]
+        when: { run: { script: moondeck/build/improv_smoke_test.py, args: "--port <port>" } }
         detail: |
-          It probes the board, provisions it and fetches its page. Run it after a change to the Improv parser, the UART listener, the installer page or the `improv_*` scripts.
+          It probes the board, provisions it and fetches its page.
     outro: |
       The board is on the network under its name with its modules in place. Continue with [Build, flash and monitor an ESP32](moonwalk.md#esp32-build-flash) for the next change.
   - id: teensy
@@ -140,7 +151,25 @@ processes:
     intro: |
       One firmware, `teensy41`, uses the board's own Ethernet, or a W5500 module on the 4.1-NE, which has none, found at boot. Pins, wiring and power: [the Teensy 4.1 page](reference/hardware/teensy-4-1.md).
     steps:
+      - id: seat
+        section: Once per board
+        say: Seat the boards, then the wires, GND first.
+        when: { manual: "With everything unpowered." }
+        detail: |
+          The wiring tables are on [the Teensy 4.1 page](reference/hardware/teensy-4-1.md#an-example-setup-on-a-breadboard).
+      - id: rail
+        say: Bridge the bottom rail across its gap.
+        when: { manual: "Check whether the rail is split at column 30, where its printed lines break." }
+        detail: |
+          If it is, bridge both − and + across the gap: the Teensy feeds the rail at column 26 and the W5500 draws at column 54.
+      - id: jumpers
+        say: Keep both MB102 rail jumpers off.
+        when: { manual: "Otherwise the MB102 and the Teensy drive one 3.3 V net from two regulators." }
+      - id: power
+        say: Plug in USB.
+        when: { manual: "The W5500's link LEDs light once the cable is in." }
       - id: setup
+        section: Build and flash
         say: Fetch the SDK into ~/teensy, once.
         when: { run: { script: moondeck/build/setup_teensy.py } }
       - id: build
@@ -149,6 +178,8 @@ processes:
       - id: flash
         say: Flash it over USB, with no button press.
         when: { run: { script: moondeck/build/flash_teensy.py } }
+        detail: |
+          The device boots and the strip lights.
       - id: monitor
         say: Watch its log over USB serial.
         when: { run: { script: moondeck/run/monitor_teensy.py } }

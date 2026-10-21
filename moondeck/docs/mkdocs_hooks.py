@@ -1,10 +1,14 @@
-"""MkDocs build hooks. Wired via `hooks:` in mkdocs.yml. Three jobs:
+"""MkDocs build hooks. Wired via `hooks:` in mkdocs.yml. Five jobs:
 
-1. on_files: synthesize `reference/tests/unit-tests.md` + `reference/tests/scenario-tests.md` into MkDocs' virtual file tree from the test files (via `_test_metadata.py`, the same parser the CLI generator + MoonDeck use). So the inventory pages are NOT committed to the repo and can't drift, rebuilt from source every build. The per-effect `[Tests]` links in the catalog pages point at these pages; kept as plain one-line links so the effect cards stay compact (a link, not a case dump).
+1. on_files: publish the test registry (`tests/index.json` and a shard per subject, from `gen_tests.py`), the help the deck reads and the catalog pages drawn from help.json, and MoonWalk's map.
 
-2. on_page_markdown: repoint links that escape docs/ into repo files (`../src/*.h`, `../CLAUDE.md`, `../moondeck/*`) to absolute GitHub blob URLs, since the site can't host `src/` (pre-Doxide) and a relative link would 404.
+2. on_nav: note the pages that are a tab of their own, which on_page_markdown makes page-wide.
 
-3. on_post_build (serve-only): stage the web installer into the built site under /install/ so the local preview mirrors production's single-origin layout. """
+3. on_page_markdown: repoint links that escape docs/ into repo files (`../src/*.h`, `../CLAUDE.md`, `../moondeck/*`) to absolute GitHub blob URLs, since the site can't host `src/` (pre-Doxide) and a relative link would 404.
+
+4. on_page_content: give every clip its poster, and fix up a page that embeds a repo-root file.
+
+5. on_post_build (serve-only): stage the web installer into the built site under /install/ so the local preview mirrors production's single-origin layout."""
 
 import json
 import logging
@@ -20,14 +24,13 @@ _HERE = Path(__file__).resolve().parent
 if str(_HERE) not in sys.path:
     sys.path.insert(0, str(_HERE))
 
-from _test_metadata import (  # noqa: E402
-    ROOT,
-    collect_unit_files,
-    collect_scenario_files,
-)
-from generate_test_docs import render_unit_tests, render_scenarios  # noqa: E402
+from _test_metadata import ROOT  # noqa: E402
+import gen_tests  # noqa: E402
+import test_runs  # noqa: E402
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "check"))
+import _findings  # noqa: E402
 from gen_help import ATTRIBUTIONS, catalog_rows, display_name  # noqa: E402
-from gen_moonwalk import build as build_moonwalk, absolute_links, render_text as moonwalk_text, split_text as split_moonwalk  # noqa: E402
+from gen_moonwalk import build as build_moonwalk, absolute_links, dumps as moonwalk_json, render_text as moonwalk_text, split_text as split_moonwalk  # noqa: E402
 
 
 # ---- source-link rewrite: docs link OUT to repo files the site can't host ----
@@ -57,7 +60,7 @@ def _repo_url(path: str) -> str:
 
 # Repo top-level dirs/files a doc may link into but the site doesn't host.
 _OUT_OF_DOCS = ("src/", "moondeck/", "test/", "esp32/", "mooninstaller/", "moonwalk/",
-                ".github/", "CLAUDE.md", "README.md", "library.json", "CMakeLists.txt",
+                ".github/", "CLAUDE.md", "README.md", "LICENSE", "library.json", "CMakeLists.txt",
                 ".clang-tidy", ".clangd")
 
 # A markdown link into a repo file the site doesn't host. Two authored shapes, both
@@ -97,8 +100,6 @@ def _rewrite_out_of_docs_links(markdown: str, src_uri: str) -> str:
 
 
 # ---- MkDocs hooks ----
-
-# ---- catalog-page table transform: render prose ### blocks as a MoonLight-style table ----
 
 # The module types whose preview is MOTION, so their image is a .gif rather than a .png:
 # a still frame of a moving effect says almost nothing about it. One home, because three
@@ -225,7 +226,7 @@ def on_pre_build(config):
 
 
 def on_files(files, config):
-    """Inject the build-time pages into the virtual tree: the test inventories, the help the deck reads, and the catalog pages drawn from help.json."""
+    """Inject the build-time pages into the virtual tree: the test registry, the help the deck reads, and the catalog pages drawn from help.json."""
     from mkdocs.structure.files import File
 
     def _add(src_uri: str, content: str):
@@ -235,30 +236,42 @@ def on_files(files, config):
             files.remove(existing)
         files.append(f)
 
-    _add("reference/tests/unit-tests.md", render_unit_tests(collect_unit_files()))
     # The card deck renders help with the app's own help.js, served beside assets/help-deck.js, so a card on the site reads as the module's help does on a device. One deck per catalog page.
     _add("assets/help.js", (ROOT / "src" / "ui" / "help.js").read_text(encoding="utf-8"))
     # A catalog page whose markdown is gone is generated from help.json, under the same name, so every link and anchor into it holds.
     for page in _help_file().get("catalogs", {}):
         if not (ROOT / "docs" / "moonmodules" / page).exists():
             _add(f"moonmodules/{page}", generated_catalog(f"moonmodules/{page}"))
-    _add("reference/tests/scenario-tests.md", render_scenarios(collect_scenario_files()))
+    # The test registry, sharded by subject: tests.js reads the index and fetches the shard of the subject a reader opens.
+    tests, findings = gen_tests.registry(), _findings.read_all()   # each read once per build
+    index, by_subject = gen_tests.shards(tests)
+    index["files"] = {s: gen_tests.file_name(s) for s in by_subject}
+    index["blob"] = _BLOB_BASE + "/"   # the branch being built, so the page's file links reach files main may not have
+    runs = test_runs.published(known=set(tests))
+    gen_tests.annotate(index, by_subject, runs, findings)
+    _add("tests/index.json", json.dumps(index, ensure_ascii=False, separators=(",", ":")))
+    for subject, shard in by_subject.items():
+        _add(f"tests/{gen_tests.file_name(subject)}", json.dumps(shard, ensure_ascii=False, separators=(",", ":")))
+    _add("tests/runs.json", json.dumps(runs, separators=(",", ":")))   # this machine's last results, empty where nothing ran
+    _add("tests/findings.json", json.dumps(findings, ensure_ascii=False, separators=(",", ":")))   # what each check last found on this machine
+    _add("tests/gaps.json", json.dumps(gen_tests.gaps(_walk()["processes"], _help_file(), tests), ensure_ascii=False, separators=(",", ":")))   # what no test covers
+    _add("tests/steps.json", json.dumps(gen_tests.step_tests(_walk()["processes"], tests), ensure_ascii=False, separators=(",", ":")))   # the tests of each process step, for the map to show
     # MoonWalk's journey map, from the stage files under moonwalk/, and each process's prose beside it, which the view fetches when the process opens; links absolute, since the view renders them on a device's page too. An invalid file fails the build.
     walk, texts = split_moonwalk(absolute_links(_walk()))
-    _add("moonwalk/moonwalk.json", json.dumps(walk, ensure_ascii=False))
+    _add("moonwalk/moonwalk.json", moonwalk_json(walk))
     for pid, text in texts.items():
-        _add(f"moonwalk/text/{pid}.json", json.dumps(text, ensure_ascii=False))
+        _add(f"moonwalk/text/{pid}.json", moonwalk_json(text))
 
     return files
 
 
 # Pages that embed a file living at the REPO ROOT via a pymdownx snippet. Their borrowed text spells doc links `docs/explanation/architecture/index.md`, correct from the root (that is where CLAUDE.md is read by agents and on GitHub), but one level too deep once the text is rendered from inside docs/, where it resolves to docs/docs/… and 404s.
-_EMBEDS_REPO_ROOT_FILE = {"contributing/principles-and-process.md"}
+_EMBEDS_REPO_ROOT_FILE = {"contributing/principles-and-process.md", "index.md"}
 
-# `href="docs/<rest>"` → `href="<rest>"`, and the same for the `.md` → `.html` form MkDocs
+# `href="docs/<rest>"` → `href="<rest>"`, and an image's `src` alike, and the same for the `.md` → `.html` form MkDocs
 # has already applied by this stage. Only the `docs/` prefix is dropped; anchor and path
 # ride along untouched.
-_DOCS_PREFIXED_HREF_RE = re.compile(r'href="docs/([^"#]+?)(\.md)?(#[^"]*)?"')
+_DOCS_PREFIXED_HREF_RE = re.compile(r'(href|src)="docs/([^"#]+?)(\.md)?(#[^"]*)?"')
 
 # The same borrowed text also links to files OUTSIDE docs/ (`moondeck/MoonDeck.md`), which have no page on the site at all. `_rewrite_out_of_docs_links` already sends those to the GitHub blob, but it runs at markdown stage where this page is still an unexpanded `--8<--` directive: so the embedded ones need the same treatment here.
 _OUT_OF_DOCS_HREF_RE = re.compile(
@@ -269,19 +282,18 @@ _OUT_OF_DOCS_HREF_RE = re.compile(
 _FIRST_H1_RE = re.compile(r"(<h1[^>]*>)(.*?)(</h1>)", re.S)
 
 
-def _rebase_repo_root_doc_links(html):
-    """Drop the leading `docs/` from links in content embedded from the repo root.
+def _rebase_repo_root_doc_links(html, src_uri):
+    """Turn the leading `docs/` of links in content embedded from the repo root into the climb from the page's own folder to the site root, `../` per folder of `src_uri`.
 
-    Runs on the rendered HTML, not the source markdown: pymdownx expands a `--8<--`
-    snippet during markdown *conversion*, so at on_page_markdown time this page is still
-    just the one-line directive and there is nothing to rewrite yet.
+    Runs on the rendered HTML, not the source markdown: pymdownx expands a `--8<--` snippet during markdown *conversion*, so at on_page_markdown time this page is still just the one-line directive and there is nothing to rewrite yet.
 
     The alternative, rewriting CLAUDE.md's own links to be docs-relative, would break them everywhere they are actually used (an agent reading the file, GitHub's own rendering) to satisfy one embedded copy. Rebasing at build time keeps the source correct at the root and correct on the site.
 
     `.md` becomes `.html` here too. MkDocs normally does that itself, but only for links whose target it resolved during validation, and these did not resolve, precisely because of the `docs/` prefix this function strips. So they arrive still pointing at the source file and would 404 on the built site. """
+    root = "../" * src_uri.count("/")
     def _fix(m):
-        path, _, anchor = m.group(1), m.group(2), m.group(3) or ""
-        return f'href="{path}.html{anchor}"' if _ else f'href="{path}{anchor}"'
+        attr, path, md, anchor = m.group(1), m.group(2), m.group(3), m.group(4) or ""
+        return f'{attr}="{root}{path}{".html" if md else ""}{anchor}"'
     html = _DOCS_PREFIXED_HREF_RE.sub(_fix, html)
     return _OUT_OF_DOCS_HREF_RE.sub(
         lambda m: f'href="{_BLOB_BASE}/{m.group(1)}{m.group(2)}{m.group(3) or ""}"', html)
@@ -306,17 +318,28 @@ class _MuteRebasedLinkWarnings(logging.Filter):
 logging.getLogger("mkdocs.structure.pages").addFilter(_MuteRebasedLinkWarnings())
 
 
+# A clip's `<video>`, which takes the poster MoonTube writes beside it (moondeck/moontube/mtvideo.py `poster`).
+_VIDEO_SRC_RE = re.compile(r'<video (?![^>]*\bposter=)([^>]*?)src="([^"]+)\.webm"')
+
+
+def _with_posters(html):
+    """Give every clip its poster, the frame a browser shows before the clip loads: Safari loads no first frame for a page Material swaps in without a reload."""
+    return _VIDEO_SRC_RE.sub(lambda m: f'<video {m.group(1)}src="{m.group(2)}.webm" poster="{m.group(2)}.jpg"', html)
+
+
 def on_page_content(html, page, config, files):
-    """Post-conversion fixups for a page that embeds a repo-root file: rebase its doc
-    links, and replace the embedded `# <filename>` heading with the page's own title.
+    """Give every clip its poster; for a page that embeds a repo-root file, rebase its doc
+    links and replace the embedded `# <filename>` heading with the page's own title.
 
     The embedded file opens with a heading that names it as a file (`# CLAUDE.md`): right at the repo root and on GitHub, wrong in a docs menu, where the reader wants the subject. Front matter `title:` fixes the nav entry and the browser tab but not the rendered H1, so it is swapped here rather than by editing the source file."""
+    html = _with_posters(html)
     if page.file.src_uri not in _EMBEDS_REPO_ROOT_FILE:
         return html
-    html = _rebase_repo_root_doc_links(html)
+    html = _rebase_repo_root_doc_links(html, page.file.src_uri)
+    # Only a heading that names a file is replaced: a page whose own heading comes first (the home's `# MoonLight`) keeps it.
     if page.title:
         html = _FIRST_H1_RE.sub(
-            lambda m: f"{m.group(1)}{page.title}{m.group(3)}", html, count=1)
+            lambda m: f"{m.group(1)}{page.title}{m.group(3)}" if m.group(2).split("<")[0].strip().endswith(".md") else m.group(0), html, count=1)
     return html
 
 
@@ -392,9 +415,24 @@ def attributed_by(markdown: str) -> str:
     return "\n".join(out)
 
 
+_TAB_PAGES: set[str] = set()
+
+
+def on_nav(nav, config, files):
+    """Note the pages that are a tab of their own. A page outside the nav has no parent either, so the nav, not the parent, names a tab."""
+    _TAB_PAGES.clear()
+    _TAB_PAGES.update(item.file.src_uri for item in nav.items if item.is_page)
+
+
 def on_page_markdown(markdown, page, config, files):
-    """Repoint out-of-docs source links to GitHub blob URLs, follow a written catalog page with its deck, and give the attribution catalog its pictures and the modules naming each entry."""
+    """Repoint out-of-docs source links to GitHub blob URLs, follow a written catalog page with its deck, and give the attribution catalog its pictures and the modules naming each entry. A page that is a tab of its own is page-wide."""
+    # A tab with no pages beside it has nothing for the side navigation to list, so its page takes the width, as a deck of cards or a map wants.
+    if page.file.src_uri in _TAB_PAGES:
+        page.meta.setdefault("hide", ["navigation", "toc"])
     # The MoonWalk page carries every process's prose as plain text, which search indexes and a reader without JavaScript reads; moonwalk.js hides it once the live view draws. Appended first, so its links leaving docs/ are rewritten like the page's own.
+    # The test page carries every test's name as plain text, which search indexes and a reader without JavaScript reads; tests.js removes it once it draws.
+    if page.file.src_uri == "reference/tests.md":
+        markdown += '\n<div class="mm-tests-text" markdown>\n\n' + gen_tests.text() + '\n</div>\n'
     if page.file.src_uri == "moonwalk.md":
         markdown += '\n<div class="mm-walk-text" markdown>\n\n' + moonwalk_text(_walk()) + '\n</div>\n'
     markdown = _rewrite_out_of_docs_links(markdown, page.file.src_uri)

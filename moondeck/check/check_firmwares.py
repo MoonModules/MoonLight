@@ -20,6 +20,14 @@ COMMITTED = ROOT / "mooninstaller" / "firmwares.json"
 # Reuse the generator's projection so the checker and generator can't disagree.
 sys.path.insert(0, str(ROOT / "moondeck" / "build"))
 from generate_firmwares import build_doc  # noqa: E402
+sys.path.insert(0, str(ROOT / "moondeck" / "check"))
+import _findings  # noqa: E402
+
+REL = COMMITTED.relative_to(ROOT).as_posix()
+RULES = {
+    "unreadable list": {"reason": "firmwares.json cannot be read or parsed, so it cannot be compared.", "fix": "Regenerate it with generate_firmwares.py."},
+    "firmware list drift": {"reason": "firmwares.json is a projection of FIRMWARES and differs from it; the release matrix and the manifests read it.", "fix": "uv run moondeck/build/generate_firmwares.py --out mooninstaller/firmwares.json"},
+}
 
 
 def main():
@@ -29,17 +37,20 @@ def main():
     try:
         actual = json.loads(COMMITTED.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as e:
+        _findings.write("check_firmwares", RULES, [{"rule": "unreadable list", "message": str(e), "file": REL, "level": "error"}])
         print(f"Firmware check: cannot read {COMMITTED.relative_to(ROOT)}: {e}")
         sys.exit(1)
 
     # Compare parsed dicts, not bytes — formatting (ensure_ascii, trailing
     # newline) can't cause spurious drift; only the data matters.
     if actual != expected:
+        _findings.write("check_firmwares", RULES, [{"rule": "firmware list drift", "message": f"{REL} differs from the {n} variants of FIRMWARES", "file": REL, "level": "error"}])
         print(f"Firmware check: {n} variants, DRIFT")
         print("  mooninstaller/firmwares.json is stale — regenerate with:")
         print("  uv run moondeck/build/generate_firmwares.py --out mooninstaller/firmwares.json")
         sys.exit(1)
 
+    _findings.write("check_firmwares", RULES, [])
     print(f"Firmware check: {n} variants, 0 issue(s)")
     print("Firmware list valid.")
 
