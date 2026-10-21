@@ -2,7 +2,7 @@
 
 /// The hardware-free half of USB video capture: the UVC payload headers, the mode choice and the shrink onto a picture.
 
-#include "core/util/math16.h"   // isqrt: the tree's integer root, which the box average needs
+#include "core/util/AreaSample.h"   // cellSpan, areaMean: the shrink every sampler shares
 
 #include <cstddef>
 #include <cstdint>
@@ -134,39 +134,17 @@ inline size_t strideFor(uint16_t w, uint16_t h, uint8_t mcuW, uint8_t mcuH, uint
     return 0;
 }
 
-/// The source range an output cell covers, the proportional split the Picture effect's ranges use.
-inline void cellRange(uint32_t i, uint32_t out, uint32_t src, uint32_t& lo, uint32_t& hi) {
-    lo = i * src / out;
-    hi = (i + 1u) * src / out;
-    if (hi <= lo) hi = lo + 1;   // a source smaller than the output: neighbouring cells share a pixel
-}
-
-/// Taps an axis of one cell on the scattered path, so a cell's sum stays well inside 32 bits.
-constexpr uint32_t kTapsPerAxis = 4;
-
-/// Each output pixel the linear-light mean of its rectangle, sampled at a stride: a scattered read
-/// beats a sequential one here, since the arithmetic dominates and a full walk is 2.7x more of it.
+/// Each output pixel the mean of its rectangle, through the shared sampler so one fix reaches both paths.
 inline void areaAverage(const uint8_t* src, size_t stride, uint16_t w, uint16_t h, uint16_t ow,
                         uint16_t oh, uint8_t* dst) {
     for (uint16_t y = 0; y < oh; y++) {
-        uint32_t ylo = 0, yhi = 0;
-        cellRange(y, oh, h, ylo, yhi);
-        const uint32_t sy = (yhi - ylo + kTapsPerAxis - 1) / kTapsPerAxis;
+        const Span ry = cellSpan(y, oh, h);
         for (uint16_t x = 0; x < ow; x++) {
-            uint32_t xlo = 0, xhi = 0;
-            cellRange(x, ow, w, xlo, xhi);
-            const uint32_t sx = (xhi - xlo + kTapsPerAxis - 1) / kTapsPerAxis;
-            uint32_t sum[3] = {0, 0, 0}, taps = 0;
-            for (uint32_t py = ylo; py < yhi; py += sy) {
-                const uint8_t* row = src + static_cast<size_t>(py) * stride;
-                for (uint32_t px = xlo; px < xhi; px += sx) {
-                    const uint8_t* p = row + static_cast<size_t>(px) * 3;
-                    for (int c = 0; c < 3; c++) sum[c] += static_cast<uint32_t>(p[c]) * p[c];
-                    taps++;
-                }
-            }
+            const RGB mean = areaMean(src, stride, cellSpan(x, ow, w), ry);
             uint8_t* out = dst + (static_cast<size_t>(y) * ow + x) * 3;
-            for (int c = 0; c < 3; c++) out[c] = static_cast<uint8_t>(isqrt(sum[c] / taps));
+            out[0] = mean.r;
+            out[1] = mean.g;
+            out[2] = mean.b;
         }
     }
 }
