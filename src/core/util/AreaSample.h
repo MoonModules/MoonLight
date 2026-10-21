@@ -12,8 +12,8 @@ namespace mm {
 
 /// The source pixels one output cell covers, `hi` one past the last.
 struct Span {
-    uint16_t lo = 0;
-    uint16_t hi = 0;
+    uint16_t lo = 0;   ///< the first source pixel the cell covers
+    uint16_t hi = 0;   ///< one past the last, so hi - lo is the count
 };
 
 /// Taps an axis of one cell, so a cell's sum stays well inside 32 bits whatever the source size.

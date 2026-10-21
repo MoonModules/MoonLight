@@ -55,7 +55,7 @@ TEST_CASE("a bright screen edge reaches the edge cell") {
     shrink(src.data(), w, h, ow, oh, dst.data());
     const uint8_t* last = dst.data() + (static_cast<size_t>(oh / 2) * ow + (ow - 1)) * 3;
     CHECK(last[0] > 0);
-    // And the cell's own range really does end at the source's last column.
+    // And the cell's own span ends at the source's last column.
     const Span edge = cellSpan(ow - 1, ow, w);
     CHECK(edge.hi == w);
     CHECK(edge.lo < 630);

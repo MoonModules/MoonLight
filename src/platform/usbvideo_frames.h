@@ -28,18 +28,28 @@ inline size_t headerLenFor(uint8_t flags) {
     return 2u + ((flags & kPts) ? 4u : 0u) + ((flags & kScr) ? 6u : 0u);
 }
 
+/// Whether the flags are a header's: end of header set, no error, no reserved bit.
+inline bool headerFlagsOk(uint8_t flags) { return (flags & kEoh) && !(flags & (kErr | kReserved)); }
+
+/// Whether the SCR's reserved top 5 bits are zero, the strongest single check a header carries.
+inline bool headerScrOk(const uint8_t* h, uint8_t flags, uint8_t len) {
+    return !(flags & kScr) || !(h[len - 1] & 0xF8);
+}
+
+/// Whether the PTS matches the frame's first header, which is constant across one frame's payloads.
+inline bool headerPtsOk(const uint8_t* h, uint8_t flags, const uint8_t* pts) {
+    return !pts || !(flags & kPts) || std::memcmp(h + 2, pts, 4) == 0;
+}
+
 /// Whether `h` is a payload header of exactly `want` bytes; `pts` pins it to the frame's first one.
 inline bool isPayloadHeader(const uint8_t* h, size_t avail, size_t want, const uint8_t* pts) {
     if (avail < 2) return false;
     const uint8_t len = h[0], flags = h[1];
     if (len != want || len != headerLenFor(flags) || avail < len) return false;
-    if (!(flags & kEoh) || (flags & (kErr | kReserved))) return false;
-    // The SCR's top 5 bits are reserved and zero, the strongest single check a header carries.
-    if ((flags & kScr) && (h[len - 1] & 0xF8)) return false;
-    return !pts || !(flags & kPts) || std::memcmp(h + 2, pts, 4) == 0;
+    return headerFlagsOk(flags) && headerScrOk(h, flags, len) && headerPtsOk(h, flags, pts);
 }
 
-/// Whether headers of length `hl` really recur after `first`, which is what rules out a chance match.
+/// Whether headers of length `hl` recur after `first`, which is what rules out a chance match.
 inline bool confirmedRun(const uint8_t* d, size_t len, size_t first, size_t hl) {
     const uint8_t* pts = (d[first + 1] & kPts) ? d + first + 2 : nullptr;
     const size_t stride = first + hl;
@@ -49,20 +59,15 @@ inline bool confirmedRun(const uint8_t* d, size_t len, size_t first, size_t hl) 
     return seen > 0 || first + stride + hl > len;   // a frame too short to confirm is taken as it is
 }
 
-/// Drops the payload headers a bulk frame still carries, answering the compacted length.
-inline size_t stripPayloadHeaders(uint8_t* d, size_t len) {
-    static constexpr size_t kLens[] = {12, 8, 6, 2};   // longest first: the more fields, the surer the match
-    size_t hdr = 0, hl = 0;
-    for (size_t cand : kLens) {
-        for (size_t i = kBulkMps - cand; i + cand <= len; i += kBulkMps) {
-            if (!isPayloadHeader(d + i, len - i, cand, nullptr) || !confirmedRun(d, len, i, cand)) continue;
-            hdr = i;
-            hl = cand;
-            break;
-        }
-        if (hdr) break;
-    }
-    if (!hdr) return len;
+/// The offset of the first confirmed header of length `hl`, or 0 when the frame carries none.
+inline size_t findHeader(const uint8_t* d, size_t len, size_t hl) {
+    for (size_t i = kBulkMps - hl; i + hl <= len; i += kBulkMps)
+        if (isPayloadHeader(d + i, len - i, hl, nullptr) && confirmedRun(d, len, i, hl)) return i;
+    return 0;
+}
+
+/// Close the gaps the headers from `hdr` on leave, answering the compacted length.
+inline size_t compactFrom(uint8_t* d, size_t len, size_t hdr, size_t hl) {
     const size_t payload = hdr + hl;
     uint8_t pts[4] = {};   // copied: the compaction overwrites the header it came from
     const bool hasPts = (d[hdr + 1] & kPts) != 0;
@@ -77,6 +82,16 @@ inline size_t stripPayloadHeaders(uint8_t* d, size_t len) {
     }
     std::memmove(d + w, d + r, len - r);   // whatever follows a missing header is left as delivered
     return w + (len - r);
+}
+
+/// Drops the payload headers a bulk frame still carries, answering the compacted length.
+inline size_t stripPayloadHeaders(uint8_t* d, size_t len) {
+    static constexpr size_t kLens[] = {12, 8, 6, 2};   // longest first: the more fields, the surer the match
+    for (size_t hl : kLens) {
+        const size_t hdr = findHeader(d, len, hl);
+        if (hdr) return compactFrom(d, len, hdr, hl);
+    }
+    return len;
 }
 
 // --- Choosing a mode ----------------------------------------------------------------------------
@@ -96,6 +111,12 @@ inline uint8_t betterFps(uint8_t have, uint8_t row, uint8_t wanted) {
     return row < have ? row : have;
 }
 
+/// Whether a mode covers the ceiling and is no bigger to decode than the best so far.
+inline bool modeFits(const Mode& m, uint16_t width, uint16_t height, uint32_t area, uint32_t bestArea) {
+    if (m.width < width || m.height < height) return false;   // below the ceiling it would be upscaled
+    return !bestArea || area <= bestArea;                     // a bigger picture to decode every frame
+}
+
 /// The smallest mode at or above the ceiling, at the rate asked for, so decode and shrink stay cheap.
 inline bool pickMode(const Mode* modes, size_t count, uint16_t& width, uint16_t& height, uint8_t& fps) {
     uint32_t bestArea = 0;
@@ -103,9 +124,8 @@ inline bool pickMode(const Mode* modes, size_t count, uint16_t& width, uint16_t&
     uint8_t bestFps = 0;
     for (size_t i = 0; i < count; i++) {
         const Mode& m = modes[i];
-        if (m.width < width || m.height < height) continue;   // below the ceiling it would be upscaled
         const uint32_t area = static_cast<uint32_t>(m.width) * m.height;
-        if (bestArea && area > bestArea) continue;            // a bigger picture to decode every frame
+        if (!modeFits(m, width, height, area, bestArea)) continue;
         // The rates accumulate per resolution, not per area: two shapes can share an area.
         if (m.width != bw || m.height != bh) bestFps = 0;
         bestArea = area;

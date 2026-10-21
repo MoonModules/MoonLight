@@ -95,7 +95,7 @@ TEST_CASE("the mode asked for is the smallest that covers the picture") {
     CHECK(fps == 30);   // not the 60 the same resolution also offers
 }
 
-// A grabber offering a small mode saves the decode entirely, so it must be preferred.
+// A grabber offering a small mode saves the decode, so it must be preferred.
 TEST_CASE("a smaller advertised mode is preferred over a larger one") {
     const Mode rows[] = {{640, 480, 60}, {320, 240, 30}};
     uint16_t w = 64, h = 48;
