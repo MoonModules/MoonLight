@@ -30,7 +30,7 @@ public:
     /// The sources `source` picks from, in option order.
     enum Source : uint8_t { kTestPattern, kUsbCapture, kSourceCount };
     /// Where the picture comes from.
-    /// @guide The test pattern is a test card in the layout of Philips' PM5544, drawn at any size. **usb capture** decodes MJPEG from an HDMI grabber, scaled to fit.
+    /// @guide The test pattern is a test card in the layout of Philips' PM5544, drawn at any size. With **usb capture**, MJPEG from an HDMI grabber fills the picture at its set size.
     uint8_t source = kTestPattern;
     /// Frames a second asked of a capture device, which streams the nearest rate it offers.
     uint8_t fps = 30;

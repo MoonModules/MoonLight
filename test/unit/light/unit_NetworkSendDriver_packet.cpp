@@ -398,10 +398,12 @@ struct PaceRig {
 TEST_CASE("NetworkSendDriver: a packet gap spaces a frame's packets, sent from a task") {
     PaceRig r(1000, 3000, 20);   // 3000 bytes: three DDP packets, 3 ms apart
     REQUIRE(r.driver.sendsInTask());
+    const uint32_t sent = mm::platform::micros();
     r.driver.tick();
     const std::vector<uint32_t> at = r.arrivals(3);
     REQUIRE(at.size() == 3);
-    for (size_t i = 1; i < at.size(); i++) CHECK(at[i] - at[i - 1] >= 2000);   // the gap, less scheduling slack
+    // From the tick to the last arrival, a bound a slow poll only pushes later, where two packets read in one late poll arrive together.
+    CHECK(at[2] - sent >= 4000);   // two 3 ms gaps, less scheduling slack
 }
 
 // A gap of 0 keeps the burst from the tick, with no task: the choice for a board that cannot spare one.

@@ -61,11 +61,11 @@ TEST_CASE("PraxisEffect varies color across the grid") {
     layer.tick();
 
     auto* data = layer.buffer().data();
-    // The y·macro·x cross term makes far-apart pixels land on different hues. Compare the origin with the far corner (15,15), where the spatial term is at its largest.
-    uint8_t r0 = data[0], g0 = data[1], b0 = data[2];
-    size_t idx = (15 * 16 + 15) * 3;
-    uint8_t r1 = data[idx], g1 = data[idx + 1], b1 = data[idx + 2];
-    CHECK((r0 != r1 || g0 != g1 || b0 != b1));
+    // Two lights can share a color at a moment, since the mutators follow the clock, so the grid as a whole holds more than one.
+    bool varies = false;
+    for (size_t i = 1; i < 16u * 16u && !varies; i++)
+        varies = data[i * 3] != data[0] || data[i * 3 + 1] != data[1] || data[i * 3 + 2] != data[2];
+    CHECK(varies);
 }
 
 // Hard rule: the effect runs at a degenerate grid without crashing. width/height <= 0 is guarded, and a 1×1 grid exercises the render loop at its smallest.

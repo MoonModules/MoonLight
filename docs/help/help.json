@@ -4021,7 +4021,7 @@
    "controls": {
     "source": {
      "line": "Where the picture comes from.",
-     "more": "The test pattern is a test card in the layout of Philips' PM5544, drawn at any size. **usb capture** decodes MJPEG from an HDMI grabber, scaled to fit."
+     "more": "The test pattern is a test card in the layout of Philips' PM5544, drawn at any size. With **usb capture**, MJPEG from an HDMI grabber fills the picture at its set size."
     },
     "fps": {
      "line": "Frames a second asked of a capture device, which streams the nearest rate it offers."

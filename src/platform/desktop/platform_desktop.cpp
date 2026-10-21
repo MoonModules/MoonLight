@@ -133,7 +133,7 @@
 /// A host has no second card, so a subfolder of the one real root stands in. `sdMounted_` gates it as a missing card would, and format is a wipe-and-recreate.
 
 #include "platform/platform.h"
-#include "platform/usbvideo_frames.h"   // areaAverage: the shrink the device backend also uses
+#include "platform/usbvideo_frames.h"   // areaMean: the shrink the device backend also uses
 #include "core/util/FirmwareImage.h"  // identify/moonBaseRejection: shared image vetting
 #include "core/util/H264Bitstream.h"  // where the encoder's frames begin and end
 
