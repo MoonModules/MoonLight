@@ -28,6 +28,13 @@ One MoonDeck script makes them all: `screenshot_modules.py` learns to step throu
 At 0.5 to 1 MB each that is 25 to 50 MB more, so a smaller format (128 px, 2 s) is part of the decision.
 **Decide first** where they show: a MoonLive scripts page with a card per script grouped by subfolder, or the script picker previewing one before its download.
 
+### Retro looks on a picture: scanlines, chroma bleed, tracking glitches (robwomp, 2026-10-21)
+
+Asked for on Discord by robwomp, who loves the glitchy analog and digital look of the 90s and 00s and has Rockchip boards with HDMI and CSI inputs.
+A captured picture becomes worth watching on lights once it can be degraded on purpose: scanlines, a color channel bleeding sideways, a frame that tears and rolls like a VHS tracking error.
+Each is a modifier on what the Picture effect draws, so it works on any source, a capture, a GIF or a browser tab.
+Ask robwomp which looks matter most before building, and have them tested on robwomp's capture hardware.
+
 ### Effects and Drivers find their source one way, not two (2026-10-08)
 
 Effects finds the top-level Layouts, and Drivers the top-level Effects, by type through `Scheduler::topOfType` when nothing was injected, which is what lets a state document build a tree with no wiring.

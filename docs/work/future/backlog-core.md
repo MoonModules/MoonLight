@@ -258,6 +258,13 @@ identifier gets rewritten by accident.
 
 The "public member has no `///`" rule reads a declaration's shape with a regex and tracks access by counting braces. It missed 25 functions carrying `MM_NONBLOCKING` until the pattern learned that macros follow a parameter list, and its comments list the other shapes it once misread. `check_clang_query.py` and `gen_help.py` already parse every header with libclang, which knows each declaration's access, kind and attached doc comment. Moving the rule onto that parse removes the brace counting, the depth stack and the shape patterns, and it reaches `.cpp` files, which the regex cannot read.
 
+## A capture device on Linux feeds the Picture service (robwomp, 2026-10-21)
+
+The [Streams plan](../present/Plan-20261013%20-%20Streams,%20every%20frame%20from%20outside.md) brings capture to the ESP32: a USB grabber on the P4 ([#151](https://github.com/MoonModules/MoonLight/pull/151), [#152](https://github.com/MoonModules/MoonLight/pull/152)) and a MIPI-CSI camera.
+On the desktop build a capture device is read through Video4Linux (V4L2), which covers USB grabbers and the HDMI and CSI inputs of boards such as Rockchip SBCs.
+It is one more source of the picture family: the platform layer reads frames, and the Picture service takes them as it takes every other source.
+robwomp has such boards and offered to test on Discord.
+
 ## Distribution
 
 ### The arm64 `.deb` is untested on Raspberry Pi OS bookworm (2026-09-13)
@@ -279,6 +286,12 @@ half has been exercised. A wrong alternation fails visibly at `apt install` with
 dependency rather than installing something broken, which is the good failure mode.
 
 **A user with a Pi settles it in one command.** Closing this needs a report, not a code change.
+
+### An example: MoonLight in a pod beside the music server (belrik, 2026-10-21)
+
+belrik runs MoonLight in a Kubernetes pod with PulseAudio, squeezelite and sendspin in containers of their own, playing 96 kHz / 24-bit files through RAOP, each part upgraded on its own.
+That is audio-reactive light fed from a music server, and the reference docs do not yet show how containers share a PulseAudio server.
+An example page under Reference → Examples, built from belrik's manifest, shows it; asked for on Discord.
 
 ### A flashable SD image with MoonLight already on it (robwomp, 2026-09-08)
 

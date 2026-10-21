@@ -365,10 +365,16 @@ class Driver:
         # page then needs is waited for explicitly below.
         self.page.goto(f"http://{host or self.host}/", wait_until="domcontentloaded")
         if cards:
+            # A run opens the app as a first visit. The recorder's profile persists, so what the
+            # last take left in this browser (help turned on, the download question answered, a
+            # selected card) would otherwise start the next one somewhere else.
+            self.page.evaluate("localStorage.clear()")
+            self.page.reload(wait_until="domcontentloaded")
             self.page.wait_for_selector(".card", state="attached", timeout=20000)
-        else:
-            # Another app (the installer): no cards, and its picker populates from an
-            # API call, so the select filling in is the thing to wait on.
+        elif self.page.locator("#rp-release").count():
+            # The installer: no cards, and its picker populates from an API call, so the
+            # select filling in is the thing to wait on. Another app (the docs site) has no
+            # picker and needs only the settle below.
             try:
                 self.page.wait_for_selector("#rp-release option",
                                             state="attached", timeout=15000)
@@ -1026,9 +1032,34 @@ class Driver:
     # than loosening the module actions, so the resilient path stays the default and
     # the raw one is visibly the exception.
 
-    def click(self, selector: str) -> bool:
-        """Click any element, by CSS selector."""
-        return self.tap(self.page.locator(selector))
+    def click(self, selector: str, accept: bool = False) -> bool:
+        """Click any element, by CSS selector. With `accept`, the native `confirm()` the click opens is answered OK, as a person consenting does.
+
+        Armed before the tap, as `new_script` arms its prompt. Every run opens the app as a first visit, so the question is asked, and a click that opens none fails: the clip says it is asked.
+        """
+        if not accept:
+            return self.tap(self.page.locator(selector))
+        answered = {"done": False}
+
+        def handle(dialog):
+            answered["done"] = True
+            dialog.accept()
+
+        self.page.once("dialog", handle)
+        try:
+            if not self.tap(self.page.locator(selector)):
+                return False
+            self.page.wait_for_timeout(800)
+        finally:
+            # DISARM: a handler left armed would answer the next unrelated dialog.
+            if not answered["done"]:
+                try:
+                    self.page.remove_listener("dialog", handle)
+                except Exception:
+                    pass
+        if not answered["done"]:
+            self.failures.append(f"click: no confirm() opened for {selector}")
+        return answered["done"]
 
     def follow_link(self, selector: str, seconds: float = 2.5) -> bool:
         """Point at a link, open where it leads in this page, dwell, then come back.
@@ -1453,7 +1484,7 @@ class Driver:
                                      float(a.get("seconds", 1.8))),
         "choose":         lambda a: (a["module"], a["control"], a["value"]),
         "click_control":  lambda a: (a["module"], a["control"]),
-        "click":          lambda a: (a["selector"],),
+        "click":          lambda a: (a["selector"], bool(a.get("accept", False))),
         "follow_link":    lambda a: (a["selector"], float(a.get("seconds", 2.5))),
         "start_process":  lambda a: (a["command"], a.get("name", "")),
         "wait_process":   lambda a: (a.get("name", ""), float(a.get("timeout", 600.0))),

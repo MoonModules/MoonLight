@@ -7,11 +7,11 @@ The source of the [web installer](https://moonmodules.org/MoonLight/install/). I
 - `devices.js`: the *Your devices* list.
 - `deviceModels.json`: the device catalog below, which MoonDeck reads too.
 
-How it works: [MoonInstaller](../docs/explanation/architecture/mooninstaller.md). Using it: [Install MoonLight](../docs/moonwalk.md#install). Changing it: [Try the web installer locally](../docs/moonwalk.md#preview-installer).
+How it works: [MoonInstaller](https://moonmodules.org/MoonLight/explanation/architecture/mooninstaller.html). Using it: [Install MoonLight](https://moonmodules.org/MoonLight/moonwalk.html#install). Changing it: [Try the web installer locally](https://moonmodules.org/MoonLight/moonwalk.html#preview-installer).
 
 ## The device catalog
 
-One entry per piece of hardware, with the state document that sets it up: the document `PATCH /api/state` takes. Each field's meaning is in [`deviceModels.schema.json`](deviceModels.schema.json), which [`check_devices`](../moondeck/MoonDeck.md#check_devices) validates against. Which defaults an entry may carry is [config provenance](../docs/explanation/architecture/mooninstaller.md#config-provenance-mcu-devicemodel). What a schema cannot say:
+One entry per piece of hardware, with the state document that sets it up: the document `PATCH /api/state` takes. Each field's meaning is in [`deviceModels.schema.json`](deviceModels.schema.json), which [`check_devices`](../moondeck/MoonDeck.md#check_devices) validates against. Which defaults an entry may carry is [config provenance](https://moonmodules.org/MoonLight/explanation/architecture/mooninstaller.html#config-provenance-mcu-devicemodel). What a schema cannot say:
 
 - **It merges.** Applying an entry twice changes nothing. `"$patch": "replace"` makes a container's children the entry's only ones, at that level, and the device keeps the children its code adds, such as `WiFi`.
 - **Drivers go last.** The installer sends one document per container in the entry's order, with `Drivers` last. Starting an output prints on UART0, which a classic board shares with Improv.

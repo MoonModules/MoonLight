@@ -1,0 +1,116 @@
+{
+  "name": "14-help-and-moonwalk",
+  "description": "Help on every card and control, the MoonWalk step a card takes part in, and the test that checks a control.",
+  "speed": 1.7,
+  "voice": "northern",
+  "steps": [
+    {
+      "action": "chapter",
+      "title": "Help and MoonWalk",
+      "description": "What each card does, and the steps around it",
+      "caption": "Help and MoonWalk. What each card does, and the steps around it.",
+      "seconds": 5.2
+    },
+    {
+      "action": "open_card",
+      "module": "Layouts",
+      "caption": "Help is off by default, so the cards stay compact. The i button in the top bar turns it on.",
+      "speech": 6.7
+    },
+    {
+      "action": "click",
+      "selector": "#help-toggle",
+      "accept": true,
+      "caption": "The first time, it asks before downloading: the help comes from the documentation site, not from the device. Once you agree, this browser remembers.",
+      "speech": 10.8
+    },
+    {
+      "action": "wait_for",
+      "selector": "[data-module=\"Grid\"] .card-helpbox",
+      "timeout": 20,
+      "caption": "Every card now says what it is, in one line and a short summary.",
+      "speech": 4.8
+    },
+    {
+      "action": "scroll_to",
+      "selector": "[data-module=\"Grid\"] .control-row[data-key=\"width\"]",
+      "caption": "And every control says what it does, right under it.",
+      "speech": 4.4
+    },
+    {
+      "action": "click",
+      "selector": "[data-module=\"Grid\"] .card-helpbox > summary",
+      "caption": "The arrow opens the rest of a card's help: its guide, and links to its catalog page, its source, its tests, and the MoonWalk steps it takes part in.",
+      "speech": 10.7
+    },
+    {
+      "action": "click",
+      "selector": "[data-module=\"Grid\"] .card-helpbox a[data-walk=\"first-light-show/grid-size\"]",
+      "caption": "Help also links the processes a card takes part in. This one opens MoonWalk at the step that sizes the grid.",
+      "speech": 8.5
+    },
+    {
+      "action": "wait_for",
+      "selector": ".mm-walk-dialog[open]",
+      "text": "Size the Grid",
+      "timeout": 20,
+      "caption": "MoonWalk shows the whole process: its goal, each step, and which steps this device has already done.",
+      "speech": 7.2
+    },
+    {
+      "action": "scroll_to",
+      "selector": ".mm-walk-dialog[open] video",
+      "caption": "Where a step has a clip, it plays right here, beside the step it shows.",
+      "speech": 5.7
+    },
+    {
+      "action": "click",
+      "selector": ".mm-walk-dialog[open] .mm-walk-head button",
+      "caption": "Close it, and you are back where you were.",
+      "speech": 3.2
+    },
+    {
+      "action": "open_card",
+      "module": "Drivers",
+      "caption": "A control's help also names the tests that check it.",
+      "speech": 5.0
+    },
+    {
+      "action": "scroll_to",
+      "selector": "[data-module=\"Drivers\"] .control-row[data-key=\"brightness\"]",
+      "caption": "Here is brightness, on the Drivers card, with the scenarios that set it.",
+      "speech": 5.4
+    },
+    {
+      "action": "follow_link",
+      "selector": "[data-module=\"Drivers\"] .control-row[data-key=\"brightness\"] a[href*=\"tests.html#drivers\"]",
+      "seconds": 5,
+      "caption": "This one opens the test page at the scenario that sets brightness and checks what the lights do. Every behavior has a test like it.",
+      "speech": 9.0
+    },
+    {
+      "action": "click",
+      "selector": "#walk-open",
+      "caption": "The map button opens all of MoonWalk: every process, what this device has done, and what comes next.",
+      "speech": 7.7
+    },
+    {
+      "action": "wait",
+      "seconds": 3,
+      "caption": "Pick any process to see its steps.",
+      "speech": 3.5
+    },
+    {
+      "action": "click",
+      "selector": ".mm-walk-dialog[open] .mm-walk-head button",
+      "caption": "Close the map, and the cards are where you left them.",
+      "speech": 3.6
+    },
+    {
+      "action": "click",
+      "selector": "#help-toggle",
+      "caption": "The same i button turns help off again. Help and MoonWalk: what each card does, how to do things with it, and what proves it works.",
+      "speech": 9.9
+    }
+  ]
+}

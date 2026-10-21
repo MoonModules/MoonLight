@@ -277,6 +277,10 @@ _DOCS_PREFIXED_HREF_RE = re.compile(r'(href|src)="docs/([^"#]+?)(\.md)?(#[^"]*)?
 _OUT_OF_DOCS_HREF_RE = re.compile(
     rf'href="({"|".join(re.escape(p) for p in _OUT_OF_DOCS)})([^"#]*)(#[^"]*)?"')
 
+# README links the website by its address, so a reader on GitHub lands on the site.
+# Embedded in the site, those links become the climb to the site root, so a local preview stays on its own pages.
+_SITE_HREF_RE = re.compile(r'href="https://moonmodules\.org/MoonLight/([^"]*)"')
+
 # The page's first `<h1 ...>text</h1>`, split so the tag and its attributes (the id the
 # table of contents anchors on) survive and only the text is replaced.
 _FIRST_H1_RE = re.compile(r"(<h1[^>]*>)(.*?)(</h1>)", re.S)
@@ -295,6 +299,7 @@ def _rebase_repo_root_doc_links(html, src_uri):
         attr, path, md, anchor = m.group(1), m.group(2), m.group(3), m.group(4) or ""
         return f'{attr}="{root}{path}{".html" if md else ""}{anchor}"'
     html = _DOCS_PREFIXED_HREF_RE.sub(_fix, html)
+    html = _SITE_HREF_RE.sub(lambda m: f'href="{root}{m.group(1) or "index.html"}"', html)
     return _OUT_OF_DOCS_HREF_RE.sub(
         lambda m: f'href="{_BLOB_BASE}/{m.group(1)}{m.group(2)}{m.group(3) or ""}"', html)
 

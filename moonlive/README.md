@@ -3,8 +3,8 @@
 The script library, one file per script, grouped by the module that runs it.
 Name one in a module's `script` control on a running device and it compiles to native code on the next tick.
 
-The language is [MoonLive](../docs/moonmodules/light/moonlive.md).
-Why it compiles rather than interprets is [the engine's design](../docs/explanation/architecture/moonlive.md).
+The language is [MoonLive](https://moonmodules.org/MoonLight/moonmodules/light/moonlive.html).
+Why it compiles rather than interprets is [the engine's design](https://moonmodules.org/MoonLight/explanation/architecture/moonlive.html).
 
 ## What is here
 
@@ -19,11 +19,11 @@ The engine stays role-blind either way, so a class defining several moments is s
 
 | folder | run by | a script writes |
 |---|---|---|
-| `layouts/` | [MoonLive layout](../docs/moonmodules/light/layouts.md#moonlive) | where the lights physically are: `addLight(x, y, z)` |
-| `effects/` | [MoonLive effect](../docs/moonmodules/light/effects.md#moonlive) | a color per light: `setRGB(index, r, g, b)`, or a whole shape with `line(x1, y1, x2, y2, r, g, b)` |
-| `modifiers/` | [MoonLive modifier](../docs/moonmodules/light/modifiers.md#moonlive) | where one light lands: `setXYZ(xPos, yPos, zPos)` |
-| `palettes/` | the `palette` control on [Drivers](../docs/moonmodules/light/supporting.md#drivers) | sixteen palette entries, once per frame |
-| `services/` | [MoonLiveService](../docs/moonmodules/core/services.md#moonliveservice) | hardware reads that drive controls |
+| `layouts/` | [MoonLive layout](https://moonmodules.org/MoonLight/moonmodules/light/layouts.html#moonlive) | where the lights physically are: `addLight(x, y, z)` |
+| `effects/` | [MoonLive effect](https://moonmodules.org/MoonLight/moonmodules/light/effects.html#moonlive) | a color per light: `setRGB(index, r, g, b)`, or a whole shape with `line(x1, y1, x2, y2, r, g, b)` |
+| `modifiers/` | [MoonLive modifier](https://moonmodules.org/MoonLight/moonmodules/light/modifiers.html#moonlive) | where one light lands: `setXYZ(xPos, yPos, zPos)` |
+| `palettes/` | the `palette` control on [Drivers](https://moonmodules.org/MoonLight/moonmodules/light/supporting.html#drivers) | sixteen palette entries, once per frame |
+| `services/` | [MoonLiveService](https://moonmodules.org/MoonLight/moonmodules/core/services.html#moonliveservice) | hardware reads that drive controls |
 
 A folder may hold subfolders that group a collection, such as `effects/particles/` or `effects/hpwit/`. They exist only here: the catalog records each script's subfolder for its download. The device keeps every script in one flat folder, so a name is unique across all of them, and the build refuses a duplicate.
 

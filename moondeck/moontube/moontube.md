@@ -75,14 +75,14 @@ Another MoonLight surface has no module tree, so a run there names elements dire
 | Action | Arguments | The interaction |
 |---|---|---|
 | `goto` | `url` | opens a page |
-| `click` | `selector` | clicks any element |
+| `click` | `selector`, `accept` | clicks any element; `accept` answers the native `confirm()` the click opens with OK, as the help's download question |
 | `type_into` | `selector`, `text`, `delay` | types into any field |
 | `choose_option` | `selector`, `value` | a plain `<select>`, by label (a trailing `*` matches a prefix) |
 | `scroll_to` | `selector` | brings an element into view |
 
 `type` is the TYPE name (`RipplesEffect`), not what the picker displays (`Ripples`). The engine looks the display name up and types that, so a run file survives a display-name change.
 
-A run has to be REPEATABLE, because the same file is a test. So a step says what should be true rather than naming something to remove. `clear_children` on a layer leaves it empty whether it held one effect or none. A `delete_module` naming a specific pre-existing module succeeds once and fails on every run after it.
+A run that turns help on reads the published site's help and MoonWalk, not the tree under test, so it needs the network and checks what the site serves. A run has to be REPEATABLE, because the same file is a test. So a step says what should be true rather than naming something to remove. `clear_children` on a layer leaves it empty whether it held one effect or none. A `delete_module` naming a specific pre-existing module succeeds once and fails on every run after it.
 
 ## REST reads, the UI writes
 
@@ -110,7 +110,7 @@ They were learned by getting them wrong: a two-and-a-half-minute clip that was t
 
 ### Before the camera rolls
 
-- **Boot state.** `mtvideo.py` resets the device before it records: Layouts holds one grid, the Layer runs Pulse, and Drivers holds the two modules boot wires. A clip builds what it needs and leaves it standing, so without this the next take opens on the last one's ending. It lives in the tool, so no clip can forget it and none spends screen time tidying on camera.
+- **Boot state.** `mtvideo.py` resets the device before it records: Layouts holds one grid, the Layer runs Pulse, and Drivers holds the two modules boot wires. The browser opens the app as a first visit, with nothing remembered from the last take. A clip builds what it needs and leaves it standing, so without this the next take opens on the last one's ending. It lives in the tool, so no clip can forget it and none spends screen time tidying on camera.
 - **Setup, not demonstration.** What one clip needs beyond the boot state goes in a `setup` block, applied over REST before recording. A precondition is not a demonstration: the MoonLive clip spent its first three shots typing a grid size into two boxes.
 
 ```json

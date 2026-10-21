@@ -94,7 +94,8 @@ def ui_for(page, host, _browser_available):
             target = run.host or host
         if target != host and not _alive(target, "/"):
             pytest.skip(f"{target} is not answering "
-                        f"(uv run moondeck/run/preview_installer.py)")
+                        f"(the installer: uv run moondeck/run/preview_installer.py; "
+                        f"the docs site: uv run moondeck/docs/build_docs.py --serve)")
         driver = mtrun.Driver(page, target)
         # Cards unless it is another APP: a `requires` run resolves to a real device
         # (target != host) that renders cards like any other, so keying on the address

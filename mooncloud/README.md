@@ -2,7 +2,7 @@
 
 The server behind the MoonCloud card, and the only one MoonLight talks to. **Stats** takes a report and hands back the aggregates; **Talk** is a public message board between devices. One Worker, one database, one deploy. Published here so that "the deployed code is the published code" is checkable rather than taken on trust.
 
-What it stores, and what it deliberately does not, is in [privacy-policy.md](../docs/legal/privacy-policy.md).
+What it stores, and what it deliberately does not, is in [privacy-policy.md](https://moonmodules.org/MoonLight/legal/privacy-policy.html).
 
 | File | |
 |---|---|

@@ -1,0 +1,115 @@
+{
+  "name": "15-the-website",
+  "description": "The documentation site, tab by tab: the home page, getting started, the catalogs generated from the code, MoonWalk, the tests, and the reference and developer pages.",
+  "speed": 1.7,
+  "voice": "cori",
+  "host": "localhost:8422",
+  "steps": [
+    {
+      "action": "chapter",
+      "title": "The website",
+      "description": "Organized by who reads it",
+      "caption": "The website. Organized by who reads it.",
+      "seconds": 4.5
+    },
+    {
+      "action": "goto",
+      "url": "http://localhost:8422/MoonLight/",
+      "caption": "The home page is the project's README, so GitHub and the website say the same thing: every effect as an animated card, and what MoonLight runs on.",
+      "speech": 11.8
+    },
+    {
+      "action": "wait",
+      "seconds": 2,
+      "caption": "The tabs follow the reader: getting started first, then the pages generated from the code, then reference for users and developers for contributors.",
+      "speech": 10.9
+    },
+    {
+      "action": "click",
+      "selector": ".md-tabs__link[href$=\"getting-started.html\"]",
+      "caption": "Getting started explains how MoonLight works for you, one card per idea, each with a picture.",
+      "speech": 7.9
+    },
+    {
+      "action": "scroll_to",
+      "selector": "#three-ways-in",
+      "caption": "Three ways in: flash an ESP32 from your browser, run it on a laptop with no hardware at all, or build it from source.",
+      "speech": 10.1
+    },
+    {
+      "action": "scroll_to",
+      "selector": "#how-we-build-it",
+      "caption": "And for developers: how a change travels from an idea to a release, with every check on the way.",
+      "speech": 7.2
+    },
+    {
+      "action": "click",
+      "selector": ".md-tabs__link[href$=\"light/effects.html\"]",
+      "caption": "The catalogs are generated from the code itself. Every effect is a card that plays its own preview.",
+      "speech": 9.2
+    },
+    {
+      "action": "type_into",
+      "selector": ".mm-deck-search",
+      "text": "fire",
+      "caption": "Search narrows the deck as you type.",
+      "speech": 3.3
+    },
+    {
+      "action": "click",
+      "selector": ".md-tabs__link[href$=\"light/drivers.html\"]",
+      "caption": "Modifiers, layouts and drivers work the same way, and so do the services and the system modules.",
+      "speech": 9.2
+    },
+    {
+      "action": "click",
+      "selector": ".md-tabs__link[href$=\"moonwalk.html\"]",
+      "caption": "MoonWalk puts every process on one map: installing, building a show, contributing. The same map opens on the device.",
+      "speech": 10.3
+    },
+    {
+      "action": "click",
+      "selector": ".md-tabs__link[href$=\"reference/tests.html\"]",
+      "caption": "Tests lists every test and every check by subject, with the counts on every branch.",
+      "speech": 8.0
+    },
+    {
+      "action": "type_into",
+      "selector": ".mm-tests-bar input[type=\"search\"]",
+      "text": "brightness",
+      "caption": "Search finds every test that touches brightness.",
+      "speech": 5.4
+    },
+    {
+      "action": "click",
+      "selector": ".md-tabs__link[href$=\"reference/attributions.html\"]",
+      "caption": "Attributions credits the people and projects MoonLight learned from, each with the modules that use their work.",
+      "speech": 9.0
+    },
+    {
+      "action": "click",
+      "selector": ".md-tabs__link[href$=\"reference/installing-on-linux.html\"]",
+      "caption": "Reference holds what you look up while using it: the hardware, presets, home automation and the REST API.",
+      "speech": 8.7
+    },
+    {
+      "action": "click",
+      "selector": ".md-tabs__link[href$=\"architecture/index.html\"]",
+      "caption": "Developers holds the architecture, the standards, and how the build and the tests work.",
+      "speech": 7.3
+    },
+    {
+      "action": "type_into",
+      "selector": ".md-search__input",
+      "text": "serpentine",
+      "caption": "And search covers the whole site, every page and every card.",
+      "speech": 6.1
+    },
+    {
+      "action": "wait",
+      "seconds": 2,
+      "caption": "MoonLight's website: what it is, how to use it, and how it is built.",
+      "speech": 7.3
+    }
+  ]
+}
