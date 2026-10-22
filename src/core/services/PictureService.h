@@ -48,7 +48,9 @@ public:
     /// Publish the source and the picture's size.
     void defineControls() override {
         static constexpr const char* kSources[] = {"test pattern", "usb capture"};
-        controls_.addSelect("source", source, kSources, kSourceCount);
+        // Only where the transport links, so a board without it shows the one source it has, as the capture's own controls do.
+        controls_.addSelect("source", source, kSources,
+                            static_cast<uint8_t>(platform::hasUsbVideo ? kSourceCount : 1));
         if (platform::hasUsbVideo) {
             controls_.addControl("fps", fps, 1, 120);
             controls_.addControl("noiseFloor", noiseFloor, 0, 64);

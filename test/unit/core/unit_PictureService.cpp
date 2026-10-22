@@ -50,6 +50,15 @@ TEST_CASE("the test pattern publishes the test card") {
     CHECK(is(5, 2, 128, 128, 128));      // a grid square's gray
 }
 
+// The capture needs the transport to link, so a build without it offers the test pattern alone rather than a source that cannot open.
+TEST_CASE("the source list holds only what the build can open") {
+    Picture p(16, 9);
+    uint8_t options = 0;
+    for (uint8_t i = 0; i < p.svc.controls().count(); i++)
+        if (std::strcmp(p.svc.controls()[i].name, "source") == 0) options = p.svc.controls()[i].max;
+    CHECK(options == (mm::platform::hasUsbVideo ? mm::PictureService::kSourceCount : 1));
+}
+
 // A consumer compares generations to skip a picture it already sampled, so a new size is a new generation.
 TEST_CASE("a new picture size publishes a new generation") {
     Picture p(16, 9);
