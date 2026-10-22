@@ -4026,6 +4026,14 @@
     "fps": {
      "line": "Frames a second asked of a capture device, which streams the nearest rate it offers."
     },
+    "noiseFloor": {
+     "line": "Source bytes at or below this read as black.",
+     "more": "A grabber's black is rarely a 0: a dark frame decodes to a 1 or 2, which no screen shows and every LED does. Raise **noiseFloor** to the level its noise reaches."
+    },
+    "staleMs": {
+     "line": "Gap tolerated before the picture is dropped, in milliseconds.",
+     "more": "A source that stops leaves its last picture on the lights, which reads as the room lit from a frozen frame. Past **staleMs** the picture goes, and the lights with it."
+    },
     "width": {
      "line": "The picture's width in pixels, and the most a capture scales its frames to."
     },

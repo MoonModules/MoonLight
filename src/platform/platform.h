@@ -1471,9 +1471,9 @@ bool videoCaptureInit(VideoCaptureHandle& h, uint16_t width, uint16_t height, ui
 /// Wait up to `timeoutMs` for the next frame; true once one is ready to decode.
 bool videoCaptureAwaitFrame(VideoCaptureHandle& h, uint32_t timeoutMs);
 
-/// Decode the frame videoCaptureAwaitFrame announced into `dst`, scaled down to fit `maxWidth` x `maxHeight` x 3 bytes, top row first.
+/// Decode the frame videoCaptureAwaitFrame announced into `dst`, no larger than `maxWidth` x `maxHeight` x 3 bytes, counting a source byte at or below `floor` as black.
 bool videoCaptureDecodeInto(VideoCaptureHandle& h, uint8_t* dst, uint16_t maxWidth, uint16_t maxHeight,
-                            uint16_t& outWidth, uint16_t& outHeight);
+                            uint16_t& outWidth, uint16_t& outHeight, uint8_t floor);
 
 /// Release the device and free its buffers.
 void videoCaptureDeinit(VideoCaptureHandle& h);

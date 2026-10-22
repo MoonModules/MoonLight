@@ -46,6 +46,19 @@ menu "MoonLight"
             MIDI service with no computer. Set by the S3 images with flash to spare
             (n8r8, n16r8); the 4 MB S3-Zero leaves it off.
 
+    config MM_USB_VIDEO
+        bool "USB video capture from a UVC grabber (ESP32-P4 only)"
+        # Constrain the VALUE, not the visibility, for the reason MM_HLS gives above: a `depends on`
+        # hides the symbol, and idf_component.yml gates usb_host_uvc on $CONFIG{MM_USB_VIDEO}, which
+        # the solver cannot read when hidden. hasUsbVideo requires the P4 too, so y elsewhere is inert.
+        default n
+        help
+            Pulls the espressif/usb_host_uvc managed component and compiles the
+            UVC host and the JPEG decode, so an HDMI grabber plugged into the
+            board feeds the Picture service. P4 only: no other chip here has a
+            High-Speed USB host, and at Full Speed MJPEG starves. It owns the USB
+            host library, so never set it with MM_USB_MIDI_HOST in one image.
+
     config MM_AUDIO_CODEC
         bool "Audio codecs in front of a microphone (ES8311, ES7210)"
         default y if IDF_TARGET_ESP32P4 || IDF_TARGET_ESP32S31

@@ -55,6 +55,13 @@ dependencies:
   # microphone behind a codec. Which board has one, and on which pins, is AudioService's runtime
   # configuration from the device model; the Kconfig gate keeps the component out of every image
   # that does not set MM_AUDIO_CODEC. Referenced only from platform_esp32_es8311.cpp.
+  # usb_host_uvc: the UVC (webcam) host a grabber's frames are read through. It declares
+  # espressif/usb as a public dependency, so the host stack comes with it. Gated on MM_USB_VIDEO
+  # rather than on the target, so a P4 image that leaves the capture out carries neither.
+  espressif/usb_host_uvc:
+    version: "^2.5.2"
+    rules:
+      - if: "$CONFIG{MM_USB_VIDEO} == True"
   espressif/esp_codec_dev:
     version: "^1.3.0"
     rules:

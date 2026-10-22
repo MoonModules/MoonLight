@@ -210,8 +210,8 @@ constexpr bool hasUsbMidiHost = true;
 constexpr bool hasUsbMidiHost = false;
 #endif
 
-// The UVC host and the JPEG decoder cost flash, so only the images that set the symbol carry them.
-#if defined(CONFIG_MM_USB_VIDEO)
+// The UVC host and the JPEG decoder cost flash, so only the images that set the symbol carry them. The P4 is named here as well as in the implementation, so the flag cannot promise what links to a stub.
+#if defined(CONFIG_MM_USB_VIDEO) && defined(CONFIG_IDF_TARGET_ESP32P4)
 constexpr bool hasUsbVideo = true;
 #else
 constexpr bool hasUsbVideo = false;

@@ -221,16 +221,18 @@ TEST_CASE("a frame the decoder refuses publishes nothing, and recovery publishes
     p.svc.release();
 }
 
-// The status names the size it publishes and what it lost, so a climbing loss is visible without a log.
-TEST_CASE("the capture status counts the frames that landed and those lost") {
+// The status says whether the capture is live right now, which a total since boot cannot.
+TEST_CASE("the capture status reports a live rate, not a total") {
     Grabber g(320, 240, 30, 5, 5, 5);
     Picture p(64, 48);
     uint32_t was = 0;
     REQUIRE(startCapture(p, was));
     const std::string line = captureStatus(p.svc);
-    CHECK(line.rfind("64 x 48, ", 0) == 0);   // the picture's own size, whatever the grabber streams
-    CHECK(line.find(" frames, 0 lost") != std::string::npos);
-    CHECK(line.find(" 0 frames") == std::string::npos);   // the picture that arrived is counted
+    CHECK(line.rfind("live, 64 x 48 at ", 0) == 0);   // the picture's size, whatever the grabber streams
+    CHECK(line.find(" at ") != std::string::npos);
+    CHECK(line.find("fps") != std::string::npos);
+    CHECK(line.find("skipped") == std::string::npos);   // nothing skipped, so the line says nothing of it
+    CHECK(line.find("frames failing") == std::string::npos);
     CHECK(line.find("one picture") == std::string::npos);
     CHECK(p.svc.severity() == mm::MoonModule::Severity::Status);
     p.svc.release();
@@ -277,5 +279,100 @@ TEST_CASE("switching away from the capture stops its task") {
     CHECK(px[0] == 128);
     CHECK(px[1] == 128);
     CHECK(px[2] == 128);
+    p.svc.release();
+}
+
+// A frame the decoder refuses is a fault and must warn, where a spare frame must not.
+TEST_CASE("a failed frame warns where a spare one does not") {
+    Grabber g(320, 240, 30, 5, 5, 5);
+    Picture p(64, 48);
+    uint32_t was = 0;
+    REQUIRE(startCapture(p, was));
+    REQUIRE(p.svc.severity() == mm::MoonModule::Severity::Status);
+    mm::platform::setTestVideoCaptureDecodeFails(true);
+    // The rate is a per-tick delta, so read it on the tick that sees the failures, not after.
+    bool failing = false;
+    for (int i = 0; i < 200 && !failing; i++) {
+        failing = captureStatus(p.svc).find("frames failing") != std::string::npos;
+        if (!failing) std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+    CHECK(failing);
+    CHECK(p.svc.severity() == mm::MoonModule::Severity::Warning);
+    p.svc.release();
+}
+
+// A source that stops leaves its last picture lighting the room. Past staleMs it goes, generation and all.
+TEST_CASE("a capture that stops sending has its picture dropped") {
+    Grabber g(320, 240, 30, 9, 9, 9);
+    Picture p(64, 48);
+    uint32_t was = 0;
+    REQUIRE(startCapture(p, was));
+    REQUIRE(current().rgb != nullptr);
+    p.svc.staleMs = 100;
+    mm::platform::setTestVideoCaptureDecodeFails(true);   // the grabber goes quiet: the gap opens
+    const uint32_t held = current().generation;
+    bool dropped = false;
+    for (int i = 0; i < 200 && !dropped; i++) {
+        p.svc.tick1s();
+        dropped = current().rgb == nullptr;
+        if (!dropped) std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+    CHECK(dropped);
+    CHECK(current().generation != held);   // or an effect's redraw guard would skip the change
+    p.svc.release();
+}
+
+// The open zeroes the device's counters, so a re-open that kept its baselines would read a rate of four billion.
+TEST_CASE("a re-opened capture reports a plain rate, not an underflowed one") {
+    Grabber g(320, 240, 30, 5, 5, 5);
+    Picture p(64, 48);
+    uint32_t was = 0;
+    REQUIRE(startCapture(p, was));
+    REQUIRE(captureStatus(p.svc).rfind("live, ", 0) == 0);   // a first run, so the baselines are set
+    p.svc.prepare();                                         // the same source again: stop, then open
+    const std::string line = captureStatus(p.svc);
+    CHECK(line.find("4294") == std::string::npos);   // no wrapped delta anywhere on the line
+    CHECK(line.find("frames failing") == std::string::npos);
+    p.svc.release();
+}
+
+// A capture whose frames are landing holds its picture through the stale guard, whatever the board's uptime.
+TEST_CASE("a capture that has just opened keeps its first picture") {
+    Grabber g(320, 240, 30, 9, 9, 9);
+    Picture p(64, 48);
+    uint32_t was = 0;
+    REQUIRE(startCapture(p, was));
+    p.svc.tick1s();   // the stale guard runs here, with staleMs at its default
+    CHECK(current().rgb != nullptr);
+    p.svc.release();
+}
+
+// A gap of one frame is ordinary, since the capture runs at its own rate: it must not strobe.
+TEST_CASE("an ordinary gap between frames keeps the picture") {
+    Grabber g(320, 240, 30, 9, 9, 9);
+    Picture p(64, 48);
+    uint32_t was = 0;
+    REQUIRE(startCapture(p, was));
+    p.svc.staleMs = 2000;   // far longer than the 33 ms the grabber paces at
+    for (int i = 0; i < 20; i++) {
+        p.svc.tick1s();
+        CHECK(current().rgb != nullptr);
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+    p.svc.release();
+}
+
+// A grabber's black is rarely a 0, and a 1 no screen shows is a lit LED. The floor cuts it.
+TEST_CASE("the noise floor cuts a grabber's near-black to black") {
+    Grabber g(320, 240, 30, 2, 2, 2);   // a frame of 2s, which is what a dark source decodes to
+    Picture p(8, 8);
+    uint32_t was = 0;
+    p.svc.noiseFloor = 0;
+    REQUIRE(startCapture(p, was));
+    CHECK(*pixel(current(), 4, 4) == 2);   // off: the byte arrives as sent
+    p.svc.noiseFloor = 4;
+    p.svc.prepare();
+    REQUIRE(publishedPast(current().generation));
+    CHECK(*pixel(current(), 4, 4) == 0);   // at or under the floor: black, so the lights stay off
     p.svc.release();
 }

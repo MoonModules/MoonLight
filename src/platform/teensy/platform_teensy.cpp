@@ -774,7 +774,8 @@ bool usbMidiWrite(const uint8_t (*)[4], size_t) { return false; }
 uint32_t videoCaptureFormatGeneration() MM_NONBLOCKING { return 0; }
 bool videoCaptureInit(VideoCaptureHandle&, uint16_t, uint16_t, uint8_t) { return false; }
 bool videoCaptureAwaitFrame(VideoCaptureHandle&, uint32_t) { return false; }
-bool videoCaptureDecodeInto(VideoCaptureHandle&, uint8_t*, uint16_t, uint16_t, uint16_t&, uint16_t&) { return false; }
+bool videoCaptureDecodeInto(VideoCaptureHandle&, uint8_t*, uint16_t, uint16_t, uint16_t&, uint16_t&,
+                            uint8_t) { return false; }
 void videoCaptureDeinit(VideoCaptureHandle&) {}
 VideoCaptureStats videoCaptureStats() MM_NONBLOCKING { return VideoCaptureStats{}; }
 

@@ -102,6 +102,21 @@ inline uint8_t fpsFrom(uint32_t interval) {
     return interval ? static_cast<uint8_t>((kTicksPerSecond + interval / 2) / interval) : 0;
 }
 
+/// The rates a continuous range is asked for, since such a device names no rate of its own and a picture wants a familiar one.
+constexpr uint8_t kOfferedRates[] = {60, 50, 30, 25, 24, 15, 10, 5};
+
+/// The frame interval, in 100 ns ticks, that asks for `fps`.
+inline uint32_t intervalFor(uint8_t fps) { return fps ? 10000000u / fps : 0; }
+
+/// The rung of a continuous range that holds `fps`, or 0 where the range does not reach it. Rounded away from `min`, so the rate lands at or under the one asked for rather than over it.
+inline uint32_t rungFor(uint8_t fps, uint32_t min, uint32_t max, uint32_t step) {
+    const uint32_t want = intervalFor(fps);
+    if (!want || !min || max < min || want < min || want > max) return 0;
+    if (!step) return want;   // a range with no step reaches every interval in it
+    const uint32_t rung = min + ((want - min + step - 1) / step) * step;
+    return rung <= max ? rung : max;
+}
+
 /// Of two advertised rates, the one to ask for: the fastest at or below `wanted`, else the slowest.
 inline uint8_t betterFps(uint8_t have, uint8_t row, uint8_t wanted) {
     if (!have) return row;
@@ -155,13 +170,12 @@ inline size_t strideFor(uint16_t w, uint16_t h, uint8_t mcuW, uint8_t mcuH, uint
 }
 
 /// Each output pixel the mean of its rectangle, through the shared sampler so one fix reaches both paths.
-inline void areaAverage(const uint8_t* src, size_t stride, uint16_t w, uint16_t h, uint16_t ow,
-                        uint16_t oh, uint8_t* dst) {
-    for (uint16_t y = 0; y < oh; y++) {
-        const Span ry = cellSpan(y, oh, h);
-        for (uint16_t x = 0; x < ow; x++) {
-            const RGB mean = areaMean(src, stride, cellSpan(x, ow, w), ry);
-            uint8_t* out = dst + (static_cast<size_t>(y) * ow + x) * 3;
+inline void areaAverage(const uint8_t* src, size_t stride, uint16_t w, uint16_t h, const Sink& sink) {
+    for (uint16_t y = 0; y < sink.height; y++) {
+        const Span ry = cellSpan(y, sink.height, h);
+        for (uint16_t x = 0; x < sink.width; x++) {
+            const RGB mean = areaMean(src, stride, cellSpan(x, sink.width, w), ry, sink.floor);
+            uint8_t* out = sink.rgb + (static_cast<size_t>(y) * sink.width + x) * 3;
             out[0] = mean.r;
             out[1] = mean.g;
             out[2] = mean.b;

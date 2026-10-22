@@ -34,6 +34,12 @@ public:
     uint8_t source = kTestPattern;
     /// Frames a second asked of a capture device, which streams the nearest rate it offers.
     uint8_t fps = 30;
+    /// Source bytes at or below this read as black.
+    /// @guide A grabber's black is rarely a 0: a dark frame decodes to a 1 or 2, which no screen shows and every LED does. Raise **noiseFloor** to the level its noise reaches.
+    uint8_t noiseFloor = 1;
+    /// Gap tolerated before the picture is dropped, in milliseconds.
+    /// @guide A source that stops leaves its last picture on the lights, which reads as the room lit from a frozen frame. Past **staleMs** the picture goes, and the lights with it.
+    uint16_t staleMs = 2000;
     /// The picture's width in pixels, and the most a capture scales its frames to.
     uint16_t width = 64;
     /// The picture's height in pixels, under the same ceiling as the width.
@@ -43,7 +49,11 @@ public:
     void defineControls() override {
         static constexpr const char* kSources[] = {"test pattern", "usb capture"};
         controls_.addSelect("source", source, kSources, kSourceCount);
-        if (platform::hasUsbVideo) controls_.addControl("fps", fps, 1, 120);
+        if (platform::hasUsbVideo) {
+            controls_.addControl("fps", fps, 1, 120);
+            controls_.addControl("noiseFloor", noiseFloor, 0, 64);
+            controls_.addControl("staleMs", staleMs, 100, 10000);
+        }
         controls_.addControl("width", width, 1, kMaxSide);
         controls_.addControl("height", height, 1, kMaxSide);
     }
@@ -118,18 +128,39 @@ public:
         MoonModule::release();
     }
 
-    /// Name the capture's health once a second: the size it publishes, the frames that landed and those lost.
+    /// Name the capture's health once a second: the size it publishes, the rate it holds and whatever is going wrong.
     void tick1s() MM_NONBLOCKING override {
         if (source != kUsbCapture || !task_.impl) return;
         if (!lock_.tryAcquire()) return;   // the decode task is publishing: the next second reads it
         const unsigned w = frame_.width, h = frame_.height;
         const bool one = !back_;   // the writer swaps back_ under the lock
         lock_.release();
+        dropStalePicture();
         const platform::VideoCaptureStats st = platform::videoCaptureStats();
-        const uint32_t lost = st.dropped + st.failed;
-        mm::formatTo(status_, sizeof(status_), "%u x %u, %u frames, %u lost%s", w, h,
-                     static_cast<unsigned>(st.decoded), static_cast<unsigned>(lost), one ? ", one picture" : "");
-        setStatus(status_, lost || one ? Severity::Warning : Severity::Status);
+        // Per second, not since boot: a running total says nothing about whether the capture is live now.
+        const uint32_t used = st.decoded - lastDecoded_, skipped = st.dropped - lastDropped_;
+        const uint32_t failed = st.failed - lastFailed_;
+        lastDecoded_ = st.decoded;
+        lastDropped_ = st.dropped;
+        lastFailed_ = st.failed;
+        // Only what is happening, and skipped frames are the device offering more than the render takes, so only a refused frame warns.
+        char skipText[24] = {}, tail[56] = {};
+        if (skipped) mm::formatTo(skipText, sizeof(skipText), ", %u skipped", static_cast<unsigned>(skipped));
+        mm::formatTo(tail, sizeof(tail), "%s%s%s", skipText, failed ? ", frames failing" : "",
+                     one ? ", one picture" : "");
+        if (used) mm::formatTo(status_, sizeof(status_), "live, %u x %u at %u fps%s", w, h,
+                               static_cast<unsigned>(used), tail);
+        else mm::formatTo(status_, sizeof(status_), "no frames, %u x %u%s", w, h, tail);
+        setStatus(status_, failed || one || !used ? Severity::Warning : Severity::Status);
+    }
+
+    /// A gap of one frame is normal, since a source runs at its own rate. A long one means it stopped, and holding the picture would light the room from a frozen frame.
+    void dropStalePicture() MM_NONBLOCKING {
+        if (!staleMs || platform::millis() - lastFrameMs_.load(std::memory_order_relaxed) <= staleMs) return;
+        if (!lock_.tryAcquire()) return;   // a writer is publishing, so the next second decides
+        // Under the one hold, since the writer assigns the whole frame. The generation moves too, or an effect's redraw guard skips the change and the lights stay lit.
+        if (frame_.rgb) frame_ = PictureFrame{nullptr, 0, 0, frame_.generation + 1};
+        lock_.release();
     }
 
     /// What a consumer reads with no source: a class constant, since a function-local static needs a guard on first use.
@@ -253,9 +284,12 @@ private:
             return;
         }
         if (back_) clearStatus();   // before the task swaps back_; with one picture, prepareBuffers' warning stays until the first status line
+        // The open zeroes the device's counters, so the baselines go with them, and the frame clock starts now rather than at boot.
+        lastDecoded_ = lastDropped_ = lastFailed_ = 0;
+        lastFrameMs_.store(platform::millis(), std::memory_order_relaxed);
         stop_.store(false, std::memory_order_release);
-        // Core 1, beside the USB host's own tasks, so a decode never lands on the render core.
-        if (!platform::spawnPinnedTask(task_, "mmPicCap", &captureTrampoline, this, 4096, 3, 1)) {
+        // Core 1, so a decode never lands on the render core, at priority 6 above the UVC driver (5) and the pump (4). A decode preempted mid-frame holds the only pending frame, and 60 fps has no room for that.
+        if (!platform::spawnPinnedTask(task_, "mmPicCap", &captureTrampoline, this, 4096, 6, 1)) {
             platform::videoCaptureDeinit(capture_);
             setStatus("no task for the capture", Severity::Error);
             return;
@@ -280,7 +314,11 @@ private:
             if (!platform::videoCaptureAwaitFrame(capture_, kFrameWaitMs)) continue;
             uint16_t w = 0, h = 0;
             uint8_t* px = beginWrite();
-            if (platform::videoCaptureDecodeInto(capture_, px, bufW_, bufH_, w, h)) endWrite(w, h);   // the size the pictures hold, never a control a write changed since
+            // The size the pictures hold, never a control a write changed since.
+            if (platform::videoCaptureDecodeInto(capture_, px, bufW_, bufH_, w, h, noiseFloor)) {
+                lastFrameMs_.store(platform::millis(), std::memory_order_relaxed);
+                endWrite(w, h);
+            }
             else abortWrite();   // a refused frame: the lights keep the one they have rather than a new generation of nothing
         }
     }
@@ -302,7 +340,9 @@ private:
     platform::VideoCaptureHandle capture_;   ///< the open grabber, or an empty handle
     platform::WorkerTask task_;              ///< the decode task, or an empty handle
     std::atomic<bool> stop_{false};          ///< tells the decode task to return
-    char status_[64] = {};                   ///< the capture's status line, rebuilt once a second
+    uint32_t lastDecoded_ = 0, lastDropped_ = 0, lastFailed_ = 0;   ///< the counters a second ago, for the rates
+    std::atomic<uint32_t> lastFrameMs_{0};   ///< when a picture last landed, for the stale drop
+    char status_[96] = {};                   ///< the capture's status line, rebuilt once a second
     ActiveInstance<PictureService> seat_{*this};
 };
 

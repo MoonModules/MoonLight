@@ -84,6 +84,28 @@ TEST_CASE("the rate asked for wins over a faster one the device offers") {
     CHECK(betterFps(60, 90, 30) == 60);   // neither fits, so the slower
 }
 
+// A continuous-range device names no rate, so a rung is computed for each rate a picture asks for.
+TEST_CASE("a continuous range yields the rung for a rate it covers") {
+    const uint32_t fast = intervalFor(60), slow = intervalFor(5);   // 100 ns ticks: a shorter interval is a faster rate
+    CHECK(rungFor(30, fast, slow, 1) == intervalFor(30));
+    CHECK(rungFor(5, fast, slow, 1) == slow);
+    CHECK(rungFor(60, fast, slow, 1) == fast);
+    CHECK(rungFor(90, fast, slow, 1) == 0);     // above the range: the device cannot reach it
+    CHECK(rungFor(1, fast, slow, 1) == 0);      // below it
+    CHECK(rungFor(30, fast, slow, 0) == intervalFor(30));   // no step: every interval in the range
+}
+
+// A step the request falls between must round to the slower rung, since betterFps prefers a rate at or under the one asked for.
+TEST_CASE("a rung lands at or under the rate asked for") {
+    const uint32_t fast = intervalFor(60), slow = intervalFor(10);
+    const uint32_t step = 100000;   // 10 ms rungs, so 30 fps (333333) is between two of them
+    const uint32_t rung = rungFor(30, fast, slow, step);
+    REQUIRE(rung != 0);
+    CHECK((rung - fast) % step == 0);          // on the device's ladder
+    CHECK(rung >= intervalFor(30));            // at or slower than asked
+    CHECK(fpsFrom(rung) <= 30);
+}
+
 // The smallest mode at or above the picture, at the rate asked for: the decode and the shrink both scale with it.
 TEST_CASE("the mode asked for is the smallest that covers the picture") {
     const Mode rows[] = {{1920, 1080, 30}, {1280, 720, 60}, {1280, 720, 30}, {640, 480, 60}, {640, 480, 30}};
@@ -140,7 +162,7 @@ TEST_CASE("a frame of any shape fills the whole picture that was asked for") {
     const uint16_t w = 640, h = 480, ow = 60, oh = 34;
     std::vector<uint8_t> src(static_cast<size_t>(w) * h * 3, 77);
     std::vector<uint8_t> dst(static_cast<size_t>(ow) * oh * 3 + 3, 0xEE);
-    areaAverage(src.data(), static_cast<size_t>(w) * 3, w, h, ow, oh, dst.data());
+    areaAverage(src.data(), static_cast<size_t>(w) * 3, w, h, mm::Sink{dst.data(), ow, oh});
     for (size_t i = 0; i < static_cast<size_t>(ow) * oh * 3; i++) CHECK(dst[i] == 77);
     for (size_t i = static_cast<size_t>(ow) * oh * 3; i < dst.size(); i++) CHECK(dst[i] == 0xEE);
 }
@@ -150,7 +172,7 @@ TEST_CASE("a picture larger than the frame stays inside the source") {
     const uint16_t w = 4, h = 3, ow = 9, oh = 7;
     std::vector<uint8_t> src(static_cast<size_t>(w) * h * 3, 200);
     std::vector<uint8_t> dst(static_cast<size_t>(ow) * oh * 3, 0);
-    areaAverage(src.data(), static_cast<size_t>(w) * 3, w, h, ow, oh, dst.data());
+    areaAverage(src.data(), static_cast<size_t>(w) * 3, w, h, mm::Sink{dst.data(), ow, oh});
     for (uint8_t v : dst) CHECK(v == 200);
     for (uint32_t i = 0; i < ow; i++) {   // no cell may name a column the source does not have
         const mm::Span s = mm::cellSpan(i, ow, w);

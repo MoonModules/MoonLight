@@ -2917,7 +2917,7 @@ bool videoCaptureAwaitFrame(VideoCaptureHandle& h, uint32_t timeoutMs) {
 }
 
 bool videoCaptureDecodeInto(VideoCaptureHandle& h, uint8_t* dst, uint16_t maxWidth, uint16_t maxHeight,
-                            uint16_t& outWidth, uint16_t& outHeight) {
+                            uint16_t& outWidth, uint16_t& outHeight, uint8_t floor) {
     if (!h.impl || !g_grabber.open) return false;
     if (g_grabber.decodeFails) { g_grabber.failed++; return false; }
     if (!maxWidth || !maxHeight) { g_grabber.failed++; return false; }
@@ -2930,7 +2930,8 @@ bool videoCaptureDecodeInto(VideoCaptureHandle& h, uint8_t* dst, uint16_t maxWid
         for (size_t i = 0; i < need; i += 3) std::memcpy(g_grabber.frame.data() + i, rgb, 3);
         std::memcpy(g_grabber.frameRgb, rgb, 3);
     }
-    usbvideo::areaAverage(g_grabber.frame.data(), static_cast<size_t>(w) * 3, w, hh, maxWidth, maxHeight, dst);
+    usbvideo::areaAverage(g_grabber.frame.data(), static_cast<size_t>(w) * 3, w, hh,
+                          Sink{dst, maxWidth, maxHeight, floor});
     outWidth = maxWidth;
     outHeight = maxHeight;
     g_grabber.decoded++;
