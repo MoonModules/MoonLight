@@ -85,6 +85,7 @@ public:
         front_ = a_.data();
         bufW_ = width;
         bufH_ = height;
+        floor_ = noiseFloor;
         back_ = writerTask && secondFits(bytes) && b_.resize(bytes) ? b_.data() : nullptr;
         if (!back_) b_.resize(0);
         if (writerTask && !back_) setStatus("one picture buffer: not enough memory, a capture may skip frames", Severity::Warning);
@@ -316,8 +317,8 @@ private:
             if (!platform::videoCaptureAwaitFrame(capture_, kFrameWaitMs)) continue;
             uint16_t w = 0, h = 0;
             uint8_t* px = beginWrite();
-            // The size the pictures hold, never a control a write changed since.
-            if (platform::videoCaptureDecodeInto(capture_, px, bufW_, bufH_, w, h, noiseFloor)) {
+            // The size and the floor the pictures were prepared with, never a control a write changed since.
+            if (platform::videoCaptureDecodeInto(capture_, px, bufW_, bufH_, w, h, floor_)) {
                 lastFrameMs_.store(platform::millis(), std::memory_order_relaxed);
                 endWrite(w, h);
             }
@@ -338,6 +339,7 @@ private:
     uint8_t* back_ = nullptr;    ///< what a writer fills, or null with one picture
     PictureFrame frame_;         ///< the front picture, as a Reader hands it out
     uint16_t bufW_ = 0, bufH_ = 0;   ///< the size the pictures were allocated at, which a writer fills; the controls may already say otherwise
+    uint8_t floor_ = 0;              ///< the noise floor the decode reads, taken with the size so the task owns both
     TryLock lock_;               ///< held by a reader for its gather, by the writer to swap or to fill the only picture
     platform::VideoCaptureHandle capture_;   ///< the open grabber, or an empty handle
     platform::WorkerTask task_;              ///< the decode task, or an empty handle
