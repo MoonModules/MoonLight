@@ -1462,7 +1462,7 @@ struct VideoCaptureFormat {
     uint8_t  fps = 0;      ///< frames a second offered at that size
 };
 
-/// Bumped whenever that list is rewritten, which is when a device enumerates; 0 until then.
+/// Moves whenever that list is rewritten, a device enumerating or leaving, and never returns to a value it had; 0 while no device is listed.
 uint32_t videoCaptureFormatGeneration() MM_NONBLOCKING;
 
 /// Claim the first grabber and stream MJPEG near this mode; false when none is attached or none fits.
@@ -1477,6 +1477,9 @@ bool videoCaptureDecodeInto(VideoCaptureHandle& h, uint8_t* dst, uint16_t maxWid
 
 /// Release the device and free its buffers.
 void videoCaptureDeinit(VideoCaptureHandle& h);
+
+/// Uninstall what the capture installed to see devices, once no capture is open; the next init installs it again.
+void videoCaptureShutdown();
 
 /// Why frames did not reach the lights, cumulative since the device was opened.
 struct VideoCaptureStats {

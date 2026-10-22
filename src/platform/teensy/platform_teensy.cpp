@@ -777,6 +777,7 @@ bool videoCaptureAwaitFrame(VideoCaptureHandle&, uint32_t) { return false; }
 bool videoCaptureDecodeInto(VideoCaptureHandle&, uint8_t*, uint16_t, uint16_t, uint16_t&, uint16_t&,
                             uint8_t) { return false; }
 void videoCaptureDeinit(VideoCaptureHandle&) {}
+void videoCaptureShutdown() {}
 VideoCaptureStats videoCaptureStats() MM_NONBLOCKING { return VideoCaptureStats{}; }
 
 }  // namespace mm::platform

@@ -157,6 +157,45 @@ inline bool pickMode(const Mode* modes, size_t count, uint16_t& width, uint16_t&
 
 // --- The decoded frame --------------------------------------------------------------------------
 
+/// A JPEG's size and the MCU its luma sampling pads to: 16x16 for 4:2:0, 16x8 for 4:2:2, 8x8 for 4:4:4.
+struct JpegShape {
+    uint16_t width = 0;   ///< pixels across, from the frame header
+    uint16_t height = 0;  ///< pixels down
+    uint8_t mcuW = 8;     ///< the MCU's width
+    uint8_t mcuH = 8;     ///< and its height
+};
+
+/// The shape from one frame header's fields, `s` at its precision byte and `seg` its length; false when too short to hold one component.
+inline bool readFrameHeader(const uint8_t* s, size_t seg, JpegShape& out) {
+    if (seg < 11) return false;   // precision, height, width, count and one component
+    out.height = static_cast<uint16_t>((s[1] << 8) | s[2]);
+    out.width = static_cast<uint16_t>((s[3] << 8) | s[4]);
+    out.mcuW = static_cast<uint8_t>(8 * (s[7] >> 4));     // the first component's horizontal sampling
+    out.mcuH = static_cast<uint8_t>(8 * (s[7] & 0x0F));   // and its vertical
+    return out.width && out.height && out.mcuW && out.mcuH;
+}
+
+/// Whether `d` opens with a JPEG's start-of-image marker.
+inline bool startsImage(const uint8_t* d, size_t len) { return len >= 4 && d[0] == 0xFF && d[1] == 0xD8; }
+/// Whether a marker is a baseline, extended or progressive frame header (SOF0 to SOF2).
+inline bool isFrameHeader(uint8_t marker) { return marker >= 0xC0 && marker <= 0xC2; }
+
+/// The shape from a frame header, walking the segments before it; false for anything that is not a JPEG with one before its scan.
+inline bool jpegShape(const uint8_t* d, size_t len, JpegShape& out) {
+    if (!startsImage(d, len)) return false;
+    size_t i = 2;
+    while (i + 4 <= len) {
+        if (d[i] != 0xFF) return false;
+        const uint8_t marker = d[i + 1];
+        if (marker == 0xFF) { i++; continue; }   // a fill byte before the marker
+        const size_t seg = (static_cast<size_t>(d[i + 2]) << 8) | d[i + 3];   // the segment's length, its own two bytes included
+        if (seg < 2 || i + 2 + seg > len || marker == 0xDA) return false;   // cut short, or the scan began without a frame header
+        if (isFrameHeader(marker)) return readFrameHeader(d + i + 4, seg, out);
+        i += 2 + seg;
+    }
+    return false;
+}
+
 /// `v` rounded up to a multiple of `to`, the MCU boundary a decoder pads a frame's axis to.
 inline uint32_t alignUp(uint32_t v, uint8_t to) { return (v + to - 1u) / to * to; }
 

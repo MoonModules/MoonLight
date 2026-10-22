@@ -65,7 +65,7 @@ public:
     void prepareTree();
 
     /// Ask for a rebuild at the next frame boundary, which is safe from any task.
-    void requestPrepareTree() { prepareRequested_.store(true, std::memory_order_relaxed); }
+    void requestPrepareTree() MM_NONBLOCKING { prepareRequested_.store(true, std::memory_order_relaxed); }
 
 
     /// Average microseconds per tick over the last second, which is the primary performance metric.
@@ -90,7 +90,7 @@ public:
     MoonModule* topOfType(const char* typeName) const;
 
     /// The single live Scheduler, reachable so a factory-created module can drive a control.
-    static Scheduler* instance() { return instance_; }
+    static Scheduler* instance() MM_NONBLOCKING { return instance_; }
     /// A Scheduler that ends without release() still stops being the live one, so instance() never dangles.
     ~Scheduler() { if (instance_ == this) instance_ = nullptr; }
 

@@ -3,6 +3,7 @@
 /// The picture source: the test pattern it publishes, the generation that tells a consumer it changed, and the empty frame when nothing publishes.
 
 #include "doctest.h"
+#include "core/module/Scheduler.h"
 #include "core/services/PictureService.h"
 
 #include <atomic>
@@ -383,5 +384,30 @@ TEST_CASE("the noise floor cuts a grabber's near-black to black") {
     p.svc.prepare();
     REQUIRE(publishedPast(current().generation));
     CHECK(*pixel(current(), 4, 4) == 0);   // at or under the floor: black, so the lights stay off
+    p.svc.release();
+}
+
+// A grabber unplugged mid-stream left the port in recovery, since the stream was never closed, and a replug never enumerated: the device list moving is what closes and re-opens it.
+TEST_CASE("a grabber unplugged and plugged back is opened again") {
+    mm::Scheduler sched;
+    Grabber g(640, 480, 30, 10, 200, 90);
+    Picture p(64, 48);
+    sched.addModule(&p.svc);
+    sched.setup();   // the instance a service asks for a rebuild
+    uint32_t was = 0;
+    REQUIRE(startCapture(p, was));
+
+    mm::platform::setTestVideoCaptureFormats(nullptr, 0);   // unplugged
+    p.svc.tick1s();
+    sched.tick();   // the rebuild it asked for closes the stream
+    REQUIRE(p.svc.status() != nullptr);
+    CHECK(std::string(p.svc.status()) == "no grabber attached");
+
+    const mm::platform::VideoCaptureFormat f{640, 480, 30};
+    mm::platform::setTestVideoCaptureFormats(&f, 1);   // plugged back
+    p.svc.tick1s();
+    was = current().generation;
+    sched.tick();   // and the next one opens it again
+    CHECK(publishedPast(was));
     p.svc.release();
 }

@@ -180,3 +180,40 @@ TEST_CASE("a picture larger than the frame stays inside the source") {
         CHECK(s.lo < s.hi);
     }
 }
+
+namespace {
+// A JPEG's start: SOI, an APP0 segment to walk past, then a baseline frame header for `w` x `h` whose luma samples at `sampling`.
+std::vector<uint8_t> jpegHead(uint16_t w, uint16_t h, uint8_t sampling) {
+    std::vector<uint8_t> d = {0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x06, 'J', 'F', 'I', 'F'};
+    const uint8_t sof[] = {0xFF, 0xC0, 0x00, 0x11, 8, uint8_t(h >> 8), uint8_t(h), uint8_t(w >> 8), uint8_t(w), 3,
+                           1, sampling, 0, 2, 0x11, 1, 3, 0x11, 1};
+    d.insert(d.end(), sof, sof + sizeof sof);
+    return d;
+}
+}  // namespace
+
+// Read from the bitstream, since the decoder's own header call allocates on every frame.
+TEST_CASE("a JPEG's size and MCU come from its frame header") {
+    JpegShape s;
+    std::vector<uint8_t> d = jpegHead(640, 480, 0x21);   // 4:2:2
+    REQUIRE(jpegShape(d.data(), d.size(), s));
+    CHECK(s.width == 640);
+    CHECK(s.height == 480);
+    CHECK(s.mcuW == 16);
+    CHECK(s.mcuH == 8);
+    d = jpegHead(1920, 1080, 0x22);   // 4:2:0
+    REQUIRE(jpegShape(d.data(), d.size(), s));
+    CHECK(s.mcuW == 16);
+    CHECK(s.mcuH == 16);
+}
+
+// A frame cut short or one that is not a JPEG at all is refused rather than read past its end.
+TEST_CASE("a truncated or foreign frame has no JPEG shape") {
+    JpegShape s;
+    std::vector<uint8_t> d = jpegHead(640, 480, 0x21);
+    CHECK_FALSE(jpegShape(d.data(), d.size() - 4, s));   // the frame header cut short
+    const uint8_t png[] = {0x89, 'P', 'N', 'G', 0x0D, 0x0A};
+    CHECK_FALSE(jpegShape(png, sizeof png, s));
+    const uint8_t scanFirst[] = {0xFF, 0xD8, 0xFF, 0xDA, 0x00, 0x02};
+    CHECK_FALSE(jpegShape(scanFirst, sizeof scanFirst, s));
+}

@@ -19,6 +19,7 @@
 
 #include <atomic>
 #include <cstring>
+#include <new>   // std::nothrow: the format list is optional, a failed install says so
 
 namespace mm::platform {
 namespace {
@@ -43,8 +44,6 @@ struct Capture {
     bool saidInfo = false, saidOversize = false, saidDecode = false, saidStride = false, saidShrink = false;
 };
 
-uvc_host_frame_info_t frameList[kMaxFormats];   // file scope: too big for the driver task's stack
-
 /// A seqlock whose generation is odd during a write, so a reader seeing it move across the copy retries.
 struct FormatBank {
     std::atomic<uint16_t> width[kMaxFormats];
@@ -53,31 +52,57 @@ struct FormatBank {
     std::atomic<uint32_t> interval[kMaxFormats];   ///< as published, since `fps` is rounded for the UI
     std::atomic<size_t> count{0};
 };
-FormatBank formatBank;
-std::atomic<uint32_t> formatGen{0};   // 0 = no device seen; odd = a write in progress
+
+/// What the capture keeps while it is installed, about 3 KB: on the heap, so a board that never selects the capture holds none of it.
+struct Bus {
+    uvc_host_frame_info_t frameList[kMaxFormats];   // too big for the driver task's stack
+    FormatBank bank;
+    usbvideo::Mode snapModes[kMaxFormats];   ///< the bank's last snapshot, taken on the render thread only
+    uint32_t snapIntervals[kMaxFormats];
+};
+Bus* bus = nullptr;   // allocated by the install, freed by videoCaptureShutdown
+// Only grows, so a snapshot of one device can never be confirmed by another's; odd while a write is in progress.
+std::atomic<uint32_t> formatGen{0};
 // The device the bank describes, so the open reaches THAT one rather than whichever the driver finds first.
 std::atomic<uint8_t> formatDevAddr{UVC_HOST_ANY_DEV_ADDR};
 constexpr uint8_t kStreamIndex = 0;   // only a device's first streaming function is ever opened
 
 bool hostReady = false;
 bool uvcReady = false;
+std::atomic<bool> pumpRunning{false};   // until the pump has uninstalled the host library
 bool claimed = false;   // one owner at a time, as a device is claimed once
 
 // Counted on the UVC task, read from the render tick: relaxed is enough for a diagnostic.
 std::atomic<uint32_t> statDecoded{0}, statDropped{0}, statFailed{0};
 
-// usb_host_lib_handle_events() is where enumeration and the port state machine run, and it blocks.
+// usb_host_lib_handle_events() is where enumeration and the port state machine run, and it blocks. The UVC driver is the only client, so its uninstall ends the pump, which uninstalls the library, as the MIDI host does.
 void pumpTask(void*) {
-    while (true) {
+    bool noClients = false;
+    for (;;) {
         uint32_t flags = 0;
         usb_host_lib_handle_events(portMAX_DELAY, &flags);
-        if (flags & USB_HOST_LIB_EVENT_FLAGS_NO_CLIENTS) usb_host_device_free_all();
+        if (flags & USB_HOST_LIB_EVENT_FLAGS_NO_CLIENTS) {
+            noClients = true;
+            // Power the port off first: a grabber still on it is enumerated again while the stack is torn down, and the uninstall aborts.
+            usb_host_lib_set_root_port_power(false);
+            if (usb_host_device_free_all() == ESP_OK) break;   // nothing left to free
+        }
+        if ((flags & USB_HOST_LIB_EVENT_FLAGS_ALL_FREE) && noClients) break;
     }
+    if (usb_host_uninstall() != ESP_OK) ESP_LOGE(kTag, "USB host did not uninstall");
+    pumpRunning.store(false, std::memory_order_release);
+    vTaskDelete(nullptr);
 }
 
-// Installed once and never uninstalled: the library is a singleton the whole application shares.
+// Installed while the capture is the source, so the format list fills as a device enumerates and an open fails fast; videoCaptureShutdown removes it.
 bool ensureUsbHost() {
     if (hostReady) return true;
+    if (pumpRunning.load(std::memory_order_acquire)) return false;   // the last shutdown is still tearing down
+    if (!bus) bus = new (std::nothrow) Bus();
+    if (!bus) {
+        ESP_LOGE(kTag, "no memory for the format list");
+        return false;
+    }
     usb_host_config_t hostCfg = {};
     hostCfg.intr_flags = ESP_INTR_FLAG_LOWMED;
     if (usb_host_install(&hostCfg) != ESP_OK) {
@@ -85,7 +110,9 @@ bool ensureUsbHost() {
         return false;
     }
     // Core 1, with the UVC driver and the capture task, so no USB work lands on the render core.
+    pumpRunning.store(true, std::memory_order_release);
     if (xTaskCreatePinnedToCore(pumpTask, "usbpump", 4 * 1024, nullptr, 4, nullptr, 1) != pdPASS) {
+        pumpRunning.store(false, std::memory_order_release);
         ESP_LOGE(kTag, "no USB event task");
         usb_host_uninstall();
         return false;
@@ -117,10 +144,10 @@ void addAdvertised(const uvc_host_frame_info_t& info, uint32_t interval, size_t&
     }
     const uint16_t w = static_cast<uint16_t>(info.h_res), h = static_cast<uint16_t>(info.v_res);
     const uint8_t fps = usbvideo::fpsFrom(interval);
-    formatBank.width[n].store(w, std::memory_order_relaxed);
-    formatBank.height[n].store(h, std::memory_order_relaxed);
-    formatBank.fps[n].store(fps, std::memory_order_relaxed);
-    formatBank.interval[n].store(interval, std::memory_order_relaxed);
+    bus->bank.width[n].store(w, std::memory_order_relaxed);
+    bus->bank.height[n].store(h, std::memory_order_relaxed);
+    bus->bank.fps[n].store(fps, std::memory_order_relaxed);
+    bus->bank.interval[n].store(interval, std::memory_order_relaxed);
     n++;
     ESP_LOGI(kTag, "offers MJPEG %ux%u @ %u fps", w, h, fps);
 }
@@ -137,7 +164,7 @@ void addRange(const uvc_host_frame_info_t& info, size_t& n) {
 size_t publishMjpegRows(size_t count) {
     size_t n = 0;
     for (size_t i = 0; i < count; i++) {
-        const uvc_host_frame_info_t& info = frameList[i];
+        const uvc_host_frame_info_t& info = bus->frameList[i];
         if (info.format != UVC_VS_FORMAT_MJPEG) continue;   // nothing else is decodable here
         if (info.interval_type == 0) {   // a continuous range: the rungs a picture asks for, not only its ends
             addRange(info, n);
@@ -159,10 +186,10 @@ void onDriverEvent(const uvc_host_driver_event_data_t* event, void*) {
     const size_t offered = event->device_connected.frame_info_num;
     if (offered > kMaxFormats) ESP_LOGW(kTag, "device offers %u modes; keeping the first %u",
                                         static_cast<unsigned>(offered), static_cast<unsigned>(kMaxFormats));
-    std::memset(frameList, 0, sizeof frameList);   // a short list must not read the last device's rows
+    std::memset(bus->frameList, 0, sizeof bus->frameList);   // a short list must not read the last device's rows
     size_t count = kMaxFormats;
     if (uvc_host_get_frame_list(devAddr, kStreamIndex,
-                                reinterpret_cast<uvc_host_frame_info_t(*)[]>(frameList), &count) != ESP_OK) {
+                                reinterpret_cast<uvc_host_frame_info_t(*)[]>(bus->frameList), &count) != ESP_OK) {
         ESP_LOGW(kTag, "device connected but its frame list could not be read");
         return;
     }
@@ -171,18 +198,20 @@ void onDriverEvent(const uvc_host_driver_event_data_t* event, void*) {
     formatDevAddr.store(devAddr, std::memory_order_relaxed);
     std::atomic_thread_fence(std::memory_order_release);
     const size_t n = publishMjpegRows(count);
-    formatBank.count.store(n, std::memory_order_relaxed);
+    bus->bank.count.store(n, std::memory_order_relaxed);
     formatGen.fetch_add(1, std::memory_order_release);   // even again: the list is settled
 }
 
-// Every way a stream dies or starves. A paused stream never restarts, so it is named rather than left to read as healthy; an unplug clears the bank so the next open fails fast instead of waiting.
+// Every way a stream dies or starves. A paused stream never restarts, so it is named rather than left to read as healthy; an unplug empties the bank so the next open fails fast instead of waiting.
 void onEvent(const uvc_host_stream_event_data_t* event, void* ctx) {
     switch (event->type) {
         case UVC_HOST_DEVICE_DISCONNECTED:
             ESP_LOGW(kTag, "capture device disconnected");
-            formatGen.store(0, std::memory_order_release);
+            // A rewrite to an empty list: the generation moves, so the Picture service closes the stream and the port recycles for a replug.
+            formatGen.fetch_add(1, std::memory_order_release);
             formatDevAddr.store(UVC_HOST_ANY_DEV_ADDR, std::memory_order_relaxed);
-            formatBank.count.store(0, std::memory_order_relaxed);
+            bus->bank.count.store(0, std::memory_order_relaxed);
+            formatGen.fetch_add(1, std::memory_order_release);
             break;
         case UVC_HOST_TRANSFER_ERROR:
             statFailed.fetch_add(1, std::memory_order_relaxed);
@@ -206,15 +235,6 @@ size_t decodedBytes(uint16_t w, uint16_t h) {
     return static_cast<size_t>(usbvideo::alignUp(w, 16)) * usbvideo::alignUp(h, 16) * 3u;
 }
 
-// The MCU the decoder pads to, which the sampling names: 16x16 for YUV420, 16x8 for 422, 8x8 for 444.
-void mcuFor(jpeg_down_sampling_type_t sampling, uint8_t& mcuW, uint8_t& mcuH) {
-    switch (sampling) {
-        case JPEG_DOWN_SAMPLING_YUV420: mcuW = 16; mcuH = 16; break;
-        case JPEG_DOWN_SAMPLING_YUV422: mcuW = 16; mcuH = 8; break;
-        default:                        mcuW = 8;  mcuH = 8; break;
-    }
-}
-
 // Warn on the FIRST of each kind only: a drop repeats at frame rate, and the counters carry the rate.
 void warnOnce(bool& said, const char* what) {
     if (said) return;
@@ -225,14 +245,14 @@ void warnOnce(bool& said, const char* what) {
 // The decoder takes no scale factor and writes only into its own aligned buffer. So a frame lands there full size, then averages down into the caller's, which is where the fit to its ceiling happens.
 bool decodeAndShrink(Capture& cap, uvc_host_frame_t* frame, const Sink& sink) {
     const size_t len = usbvideo::stripPayloadHeaders(frame->data, frame->data_len);
-    // Dimensions from the bitstream, not from the request: a device may negotiate something else.
-    jpeg_decode_picture_info_t info = {};
-    if (jpeg_decoder_get_info(frame->data, len, &info) != ESP_OK) {
+    // Dimensions from the bitstream, not from the request: a device may negotiate something else. Read here rather than by the decoder's header call, which allocates per frame.
+    usbvideo::JpegShape shape;
+    if (!usbvideo::jpegShape(frame->data, len, shape)) {
         statFailed.fetch_add(1, std::memory_order_relaxed);
         warnOnce(cap.saidInfo, "frame is not readable JPEG (payload stride mis-detected?)");
         return false;
     }
-    const uint16_t w = static_cast<uint16_t>(info.width), h = static_cast<uint16_t>(info.height);
+    const uint16_t w = shape.width, h = shape.height;
     if (decodedBytes(w, h) > cap.rgbCap) {
         statFailed.fetch_add(1, std::memory_order_relaxed);
         warnOnce(cap.saidOversize, "frame exceeds the buffer sized at open");
@@ -255,9 +275,7 @@ bool decodeAndShrink(Capture& cap, uvc_host_frame_t* frame, const Sink& sink) {
         warnOnce(cap.saidDecode, "the decoder refused a bitstream whose header it accepted");
         return false;
     }
-    uint8_t mcuW = 8, mcuH = 8;
-    mcuFor(info.sample_method, mcuW, mcuH);
-    const size_t stride = usbvideo::strideFor(w, h, mcuW, mcuH, outSize);
+    const size_t stride = usbvideo::strideFor(w, h, shape.mcuW, shape.mcuH, outSize);
     if (!stride) {
         statFailed.fetch_add(1, std::memory_order_relaxed);
         warnOnce(cap.saidStride, "the decoder wrote a size its sampling does not explain");
@@ -296,22 +314,21 @@ bool createJpeg(Capture& cap) {
     return false;
 }
 
-// One snapshot of the bank under its seqlock, so a mode is never chosen from a half-rewritten list. Taken on the render thread in init, the only caller, so these buffers need no lock of their own.
-usbvideo::Mode snapModes[kMaxFormats];
-uint32_t snapIntervals[kMaxFormats];
 uint8_t snapDevAddr = UVC_HOST_ANY_DEV_ADDR;   ///< the device the snapshot describes, read under the same hold
 
+// One snapshot of the bank under its seqlock, so a mode is never chosen from a half-rewritten list. Taken on the render thread in init, the only caller, so the snapshot needs no lock of its own.
 size_t snapshotModes() {
     for (int tries = 0; tries < 8; tries++) {
         const uint32_t before = formatGen.load(std::memory_order_acquire);
-        if (before == 0 || (before & 1u)) continue;   // nothing published, or a rewrite in flight
-        size_t n = formatBank.count.load(std::memory_order_relaxed);
+        if (before & 1u) continue;   // a rewrite in flight
+        size_t n = bus->bank.count.load(std::memory_order_relaxed);
+        if (n == 0) return 0;   // no device listed
         if (n > kMaxFormats) n = kMaxFormats;
         for (size_t i = 0; i < n; i++) {
-            snapModes[i].width = formatBank.width[i].load(std::memory_order_relaxed);
-            snapModes[i].height = formatBank.height[i].load(std::memory_order_relaxed);
-            snapModes[i].fps = formatBank.fps[i].load(std::memory_order_relaxed);
-            snapIntervals[i] = formatBank.interval[i].load(std::memory_order_relaxed);
+            bus->snapModes[i].width = bus->bank.width[i].load(std::memory_order_relaxed);
+            bus->snapModes[i].height = bus->bank.height[i].load(std::memory_order_relaxed);
+            bus->snapModes[i].fps = bus->bank.fps[i].load(std::memory_order_relaxed);
+            bus->snapIntervals[i] = bus->bank.interval[i].load(std::memory_order_relaxed);
         }
         snapDevAddr = formatDevAddr.load(std::memory_order_relaxed);
         std::atomic_thread_fence(std::memory_order_acquire);
@@ -323,9 +340,9 @@ size_t snapshotModes() {
 // The snapshot's own interval as the float the driver compares against; 0 asks for the device default.
 float exactFpsFor(size_t modes, uint16_t w, uint16_t h, uint8_t fps) {
     for (size_t i = 0; i < modes; i++)
-        if (snapModes[i].width == w && snapModes[i].height == h && snapModes[i].fps == fps
-            && snapIntervals[i])
-            return 10000000.0f / static_cast<float>(snapIntervals[i]);
+        if (bus->snapModes[i].width == w && bus->snapModes[i].height == h && bus->snapModes[i].fps == fps
+            && bus->snapIntervals[i])
+            return 10000000.0f / static_cast<float>(bus->snapIntervals[i]);
     return 0.0f;
 }
 
@@ -354,7 +371,6 @@ bool openStream(Capture& cap, size_t modes, uint16_t width, uint16_t height, uin
         ESP_LOGW(kTag, "no UVC device offering MJPEG %ux%u", width, height);
         return false;
     }
-    uvc_host_desc_print(cap.stream);   // the format list, for the bench
     return true;
 }
 
@@ -405,7 +421,7 @@ bool videoCaptureInit(VideoCaptureHandle& handle, uint16_t width, uint16_t heigh
     handle.impl = cap;   // every failure below unwinds through videoCaptureDeinit
     resetStats();   // per open, as the seam documents them, so a re-open inherits no losses
     // Nothing advertised covers the picture, so the open would spend its whole timeout on a mode no device offers.
-    if (!usbvideo::pickMode(snapModes, modes, width, height, fps)) {
+    if (!usbvideo::pickMode(bus->snapModes, modes, width, height, fps)) {
         ESP_LOGW(kTag, "no advertised mode covers %ux%u", width, height);
         videoCaptureDeinit(handle);
         return false;
@@ -446,7 +462,10 @@ bool videoCaptureDecodeInto(VideoCaptureHandle& handle, uint8_t* dst, uint16_t m
     return ok;
 }
 
-uint32_t videoCaptureFormatGeneration() MM_NONBLOCKING { return formatGen.load(std::memory_order_acquire); }
+uint32_t videoCaptureFormatGeneration() MM_NONBLOCKING {
+    if (!bus || bus->bank.count.load(std::memory_order_relaxed) == 0) return 0;   // no device listed
+    return formatGen.load(std::memory_order_acquire);
+}
 
 void videoCaptureDeinit(VideoCaptureHandle& handle) {
     auto* cap = static_cast<Capture*>(handle.impl);
@@ -461,6 +480,26 @@ void videoCaptureDeinit(VideoCaptureHandle& handle) {
     delete cap;
     handle.impl = nullptr;
     claimed = false;   // the device is free for the next open
+}
+
+void videoCaptureShutdown() {
+    if (claimed) return;   // a capture is open: its owner deinits first
+    if (uvcReady) {
+        if (uvc_host_uninstall() != ESP_OK) {
+            ESP_LOGW(kTag, "the UVC driver did not uninstall");
+            return;
+        }
+        uvcReady = false;
+    }
+    // The pump sees its only client gone, frees the device and uninstalls the library; a stopped port does that within milliseconds.
+    for (int i = 0; i < 200 && pumpRunning.load(std::memory_order_acquire); i++) vTaskDelay(pdMS_TO_TICKS(5));
+    if (pumpRunning.load(std::memory_order_acquire)) {
+        ESP_LOGW(kTag, "the USB host is still tearing down");
+        return;   // the bank stays until the next shutdown finds the pump gone
+    }
+    hostReady = false;
+    delete bus;
+    bus = nullptr;
 }
 
 VideoCaptureStats videoCaptureStats() MM_NONBLOCKING {
@@ -484,6 +523,7 @@ bool videoCaptureAwaitFrame(VideoCaptureHandle&, uint32_t) { return false; }
 bool videoCaptureDecodeInto(VideoCaptureHandle&, uint8_t*, uint16_t, uint16_t, uint16_t&, uint16_t&,
                             uint8_t) { return false; }
 void videoCaptureDeinit(VideoCaptureHandle&) {}
+void videoCaptureShutdown() {}
 VideoCaptureStats videoCaptureStats() MM_NONBLOCKING { return VideoCaptureStats{}; }
 
 }   // namespace mm::platform

@@ -2874,6 +2874,7 @@ namespace {
 struct TestGrabber {
     std::vector<VideoCaptureFormat> formats;   ///< written by a test while no capture runs
     std::atomic<uint32_t> generation{0};
+    std::atomic<bool> attached{false};
     uint16_t openW = 0, openH = 0;   ///< the mode videoCaptureInit settled on, before the task starts
     uint8_t openFps = 0;             ///< and the rate it delivers at
     std::atomic<uint8_t> r{0}, g{0}, b{0};   ///< what a decode writes into every pixel
@@ -2887,7 +2888,8 @@ struct TestGrabber {
 long apart(long have, long want) { return have > want ? have - want : want - have; }
 }  // namespace
 
-uint32_t videoCaptureFormatGeneration() MM_NONBLOCKING { return g_grabber.generation.load(); }
+// 0 while nothing is attached, as a device reports no list; the counter itself only grows.
+uint32_t videoCaptureFormatGeneration() MM_NONBLOCKING { return g_grabber.attached.load() ? g_grabber.generation.load() : 0; }
 
 bool videoCaptureInit(VideoCaptureHandle& h, uint16_t width, uint16_t height, uint8_t fps) {
     if (g_grabber.formats.empty() || g_grabber.open) return false;   // one owner at a time, as a device is claimed once
@@ -2943,6 +2945,8 @@ void videoCaptureDeinit(VideoCaptureHandle& h) {
     h.impl = nullptr;
 }
 
+void videoCaptureShutdown() {}   // the stand-in installs nothing
+
 VideoCaptureStats videoCaptureStats() MM_NONBLOCKING {
     VideoCaptureStats s;
     s.decoded = g_grabber.decoded.load();
@@ -2952,8 +2956,9 @@ VideoCaptureStats videoCaptureStats() MM_NONBLOCKING {
 
 void setTestVideoCaptureFormats(const VideoCaptureFormat* formats, size_t count) {
     g_grabber.formats.assign(formats, formats + count);
-    g_grabber.generation = count ? g_grabber.generation + 1 : 0;
-    if (!count) g_grabber.open = false;
+    g_grabber.generation++;   // a device enumerating or leaving, as the bus reports it
+    g_grabber.attached = count != 0;
+    if (!count) g_grabber.open = false;   // an unplug ends the stream
 }
 
 void setTestVideoCaptureColor(uint8_t r, uint8_t g, uint8_t b) {

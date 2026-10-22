@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core/module/MoonModule.h"
+#include "core/module/Scheduler.h"   // requestPrepareTree: a grabber arriving or leaving re-opens the capture
 #include "core/util/ActiveInstance.h"   // the one-active-source election
 #include "core/util/color.h"            // RGB
 #include "core/util/format.h"           // formatTo: the status line built off snprintf
@@ -67,6 +68,7 @@ public:
     void prepare() override {
         seat_.claim();
         stopCapture();   // before the pictures move under a decode still writing one
+        if (source != kUsbCapture) platform::videoCaptureShutdown();   // what sees devices goes with the source
         if (!prepareBuffers(kRunsInTask[source])) return;
         if (source == kUsbCapture) { startCapture(); return; }
         drawTestPattern(front_, width, height);   // the frame prepareBuffers published, filled before any reader ticks
@@ -127,13 +129,22 @@ public:
     /// Vacate the seat for any survivor.
     void release() override {
         stopCapture();
+        platform::videoCaptureShutdown();
         seat_.vacate();
         MoonModule::release();
     }
 
     /// Name the capture's health once a second: the size it publishes, the rate it holds and whatever is going wrong.
     void tick1s() MM_NONBLOCKING override {
-        if (source != kUsbCapture || !task_.impl) return;
+        if (source != kUsbCapture) return;
+        // A grabber arriving or leaving rewrites the device list: an unplug closes the stream, which frees the port for a replug, and a replug opens it again.
+        const uint32_t gen = platform::videoCaptureFormatGeneration();
+        if (gen != openedGen_) {
+            openedGen_ = gen;   // asked once; the open the prepare runs records it again
+            if (Scheduler* s = Scheduler::instance()) s->requestPrepareTree();
+            return;
+        }
+        if (!task_.impl) return;
         if (!lock_.tryAcquire()) return;   // the decode task is publishing: the next second reads it
         const unsigned w = frame_.width, h = frame_.height;
         const bool one = !back_;   // the writer swaps back_ under the lock
@@ -281,6 +292,7 @@ private:
 
     /// Open the grabber and decode on a task of its own, so the render loop never waits on the device.
     void startCapture() {
+        openedGen_ = platform::videoCaptureFormatGeneration();   // the device list this open saw, which tick1s watches
         if (!platform::videoCaptureInit(capture_, width, height, fps)) {
             // The format list outlives a failed open, so a device that enumerated but refused is a different fault.
             setStatus(platform::videoCaptureFormatGeneration() ? "the grabber offers no mode that fits" : "no grabber attached", Severity::Warning);
@@ -334,6 +346,7 @@ private:
         return free == 0 || (free > platform::HEAP_RESERVE && free - platform::HEAP_RESERVE >= bytes);
     }
 
+    uint32_t openedGen_ = 0;   ///< the device list the last open saw, so a grabber arriving or leaving re-opens
     ScratchBuffer<uint8_t> a_{*this}, b_{*this};   ///< the pictures, three bytes a pixel; b_ only for a writer task
     uint8_t* front_ = nullptr;   ///< what readers see
     uint8_t* back_ = nullptr;    ///< what a writer fills, or null with one picture
