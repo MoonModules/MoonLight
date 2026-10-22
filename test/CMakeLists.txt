@@ -101,6 +101,7 @@ add_executable(mm_tests
     unit/core/unit_Addressing.cpp
     unit/core/unit_HostResolver.cpp
     unit/core/unit_OscService.cpp
+    unit/core/unit_Scheduler_prepareScope.cpp
     unit/core/unit_Scheduler_unique_names.cpp
     unit/core/unit_MoonStatsModule.cpp
     unit/core/unit_MoonTalkModule.cpp
@@ -232,6 +233,7 @@ add_executable(mm_tests
     unit/light/unit_RandomMapModifier.cpp
     unit/light/unit_RotateModifier.cpp
     unit/light/unit_RegionModifier.cpp
+    unit/light/unit_RegionModifier_prepareScope.cpp
     unit/light/unit_PinwheelModifier.cpp
     unit/light/unit_ParticlesEffect.cpp
     unit/light/unit_PlasmaEffect.cpp
@@ -306,6 +308,8 @@ set_tests_properties(unit_tests PROPERTIES
 # firmware has: src/module_types.cpp carries the reason.
 add_executable(mm_scenarios scenario_runner.cpp ${CMAKE_SOURCE_DIR}/src/module_types.cpp)
 target_link_libraries(mm_scenarios PRIVATE mm_core mm_platform)
+# A write_file step's `from` names a file in the repository, such as a shipped script.
+target_compile_definitions(mm_scenarios PRIVATE MM_REPO_ROOT="${CMAKE_SOURCE_DIR}")
 
 # Kernel micro-bench: ns per call for the power-function kernels, on the host. A report, not a
 # test (no ctest registration): the numbers go into performance.md and gate a kernel swap.

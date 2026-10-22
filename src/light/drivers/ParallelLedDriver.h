@@ -505,11 +505,19 @@ public:
         prefillShiftRows<Slot>(outCh, dst, 0, maxLaneLights_);
     }
 
+    /// The geometry the ring's refill interrupt reads, set with the lane geometry. The methods that compute it reach the peripheral's vtable, which sits in flash, and a flash save switches the cache off under the interrupt.
+    struct HotGeometry {
+        bool shift = false;         ///< the '595 expander is in use
+        uint8_t outPerPin = 1;      ///< strands per data pin
+        uint8_t slotBytes = 1;      ///< bytes per bus slot
+    };
+    HotGeometry hot_;   ///< read by the refill interrupt, written by parseConfig
+
     /// Prefill the shift constants for a row range, `rowCount == 0` meaning to the end; written dst-relative, so a ring slice gets the same constants the whole-frame buffer would.
     template <class Slot>
     void MM_RAMFUNC prefillShiftRows(uint8_t outCh, uint8_t* dst, nrOfLightsType firstRow, nrOfLightsType rowCount) {
         auto* out = reinterpret_cast<Slot*>(dst);
-        const size_t slotsPerRow = static_cast<size_t>(outCh) * 8 * 3 * outputsPerPin();
+        const size_t slotsPerRow = static_cast<size_t>(outCh) * 8 * 3 * hot_.outPerPin;
         const nrOfLightsType lastRow = (rowCount == 0 || firstRow + rowCount > maxLaneLights_)
                                            ? maxLaneLights_
                                            : static_cast<nrOfLightsType>(firstRow + rowCount);
@@ -529,7 +537,7 @@ public:
             if (runEnd <= row) runEnd = lastRow;   // no strand ends ahead in range: one run to lastRow
             const uint32_t rows = static_cast<uint32_t>(runEnd - row);
             // dst-relative: row `firstRow` is at out+0, so offset by (row - firstRow).
-            prefillWs2812ShiftConstants<Slot>(mask, physPins_, latchBit_, outputsPerPin(), outCh, rows,
+            prefillWs2812ShiftConstants<Slot>(mask, physPins_, latchBit_, hot_.outPerPin, outCh, rows,
                                               out + static_cast<size_t>(row - firstRow) * slotsPerRow);
             row = runEnd;
         }
@@ -552,7 +560,7 @@ public:
         uint8_t* const wire = wire_ + static_cast<size_t>(platform::currentCore()) * kMaxStrands * outCh;
         std::memset(wire, 0, static_cast<size_t>(kMaxStrands) * outCh);
         const size_t stride = outCh;
-        const bool shift = pinExpanderMode();
+        const bool shift = hot_.shift;
         // Bench diagnostic: gather-and-mask against transpose-and-emit, via ringDbg's sg/se.
         uint32_t segT0 = platform::cycleCount();
         // 64-bit because the expander drives more strands than the bus is wide.
@@ -571,13 +579,13 @@ public:
             if (shift) {
                 // DATA WORDS ONLY: the pulse-start and tail are frame constants, prefilled once.
                 const uint32_t segT1 = platform::cycleCount();   // the instrument's split: gather above, transpose below
-                encodeWs2812ShiftData<Slot>(wire, mask, physPins_, latchBit_, outputsPerPin(), outCh, out);
+                encodeWs2812ShiftData<Slot>(wire, mask, physPins_, latchBit_, hot_.outPerPin, outCh, out);
                 const uint32_t segT2 = platform::cycleCount();
                 dbgSegGatherCy += segT1 - segT0;   // memset+mask+gather (since segT0 / previous row's end)
                 dbgSegEmitCy   += segT2 - segT1;   // the transpose+emit
                 dbgSegRows     += 1;
                 segT0 = segT2;                     // next row's gather starts here
-                out += static_cast<size_t>(outCh) * 8 * 3 * outputsPerPin();
+                out += static_cast<size_t>(outCh) * 8 * 3 * hot_.outPerPin;
             } else {
                 encodeWs2812ParallelSlots<Slot>(wire, static_cast<Slot>(mask), outCh, out);
                 out += static_cast<size_t>(outCh) * 8 * 3;   // 3 slots × 8 bits × channels, in Slot elements
@@ -589,8 +597,8 @@ public:
 
     /// Write only the frame-closing latch word, which presents the register's final slot.
     void MM_RAMFUNC encodeFrameClose(uint8_t* dst) {
-        if (!pinExpanderMode()) return;
-        if (slotBytes() == 1) encodeWs2812ShiftLatchPad<uint8_t>(latchBit_, reinterpret_cast<uint8_t*>(dst));
+        if (!hot_.shift) return;
+        if (hot_.slotBytes == 1) encodeWs2812ShiftLatchPad<uint8_t>(latchBit_, reinterpret_cast<uint8_t*>(dst));
         else                  encodeWs2812ShiftLatchPad<uint16_t>(latchBit_, reinterpret_cast<uint16_t*>(dst));
     }
 
@@ -1027,6 +1035,7 @@ protected:
             start = static_cast<nrOfLightsType>(start + laneCounts_[i]);
             if (laneCounts_[i] > maxLaneLights_) maxLaneLights_ = laneCounts_[i];
         }
+        hot_ = {pinExpanderMode(), outputsPerPin(), slotBytes()};
         const uint8_t outCh = correction_.outChannels;
         // slotBytes() now reflects the real BUS width: the x8 lands in the slot COUNT instead.
         frameBytes_ = frameBytesFor(maxLaneLights_, outCh, slotBytes(), outputsPerPin());

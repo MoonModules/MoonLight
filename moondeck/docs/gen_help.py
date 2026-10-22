@@ -139,12 +139,24 @@ class ToolchainMissing(Exception):
     """libclang or the LLVM that carries it is not on this host: the help cannot be generated here, which is no fault of the help."""
 
 
+def know_every_cursor_kind(ci):
+    """Register each cursor kind the bindings lack under a placeholder name: the `libclang` wheel's bindings stop at an older list than the library they load, and a kind missing from it, such as a system header's `flag_enum` attribute, raises on `.kind`. No rule here matches a placeholder."""
+    kinds = getattr(ci.CursorKind, "_kinds", None)
+    if kinds is None:   # newer bindings are an Enum that knows its library's kinds
+        return
+    for value in range(1, 1024):
+        if value >= len(kinds) or kinds[value] is None:
+            setattr(ci.CursorKind, f"UNKNOWN_{value}", ci.CursorKind(value))
+            kinds = ci.CursorKind._kinds
+
+
 def load_clang():
     """libclang and the flags that find the standard headers. The library comes from the LLVM `check_clang_query` uses when one is installed, else from the `libclang` wheel; the resource dir comes from that LLVM's clang, as the wheel ships no headers."""
     try:
         import clang.cindex as ci
     except ImportError as e:
         raise ToolchainMissing(f"libclang for Python is not installed: {e}") from e
+    know_every_cursor_kind(ci)
     from check_clang_tidy import _find_tool, _toolchain_args
     anchor = _find_tool("clang-query") or _find_tool("clang")
     if not anchor:

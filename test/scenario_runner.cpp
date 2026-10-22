@@ -24,7 +24,7 @@
 /// ## How a scenario value reaches a control
 ///
 /// A `set_control` step finds the module by id and the control by name, writes the typed value, then mirrors `HttpServerModule::handleSetControl`.
-/// That means calling `onControlChanged()` and, when `affectsPrepare()` returns true, triggering `Scheduler::prepareTree()` so the pipeline reconciles.
+/// That means calling `onControlChanged()` and, when `affectsPrepare()` returns true, rebuilding the scope `prepareScope()` names so the pipeline reconciles.
 /// The bridge runs JsonVal through raw JSON text into `mm::applyControlValue`, so this file hand-rolls none of the per-ControlType dispatch that Control.cpp owns.
 /// A tiny `{"v":VALUE}` wrapper built with JsonSink in heap-grow mode carries it, since writeNumber, writeBool and writeJsonString each produce JSON-correct text per JsonVal type.
 /// Re-serialize-then-parse costs nothing worth counting in test code, at most a hundred set_control ops per scenario.
@@ -167,6 +167,7 @@
 #include <cstring>
 #include <cstdlib>
 #include <fstream>
+#include <iterator>   // istreambuf_iterator: a write_file `from` read whole
 
 static void printModuleMemory(mm::MoonModule* mod, int indent) {
     if (!mod) return;
@@ -378,7 +379,12 @@ static bool applySetControl(mm::Scheduler& scheduler,
         if (c.type == mm::ControlType::Select) target->rebuildControls();
         target->onControlChanged(controlName);
         if (target->affectsPrepare(controlName)) {
-            scheduler.prepareTree();
+            // Now rather than at the next frame, over the scope the module names, as the device rebuilds it.
+            mm::MoonModule* const scope = target->prepareScope() == mm::PrepareScope::Self   ? target
+                                        : target->prepareScope() == mm::PrepareScope::Parent ? target->parent()
+                                                                                             : nullptr;
+            if (scope) scheduler.prepareSubtree(scope);
+            else       scheduler.prepareTree();
         }
         return true;
     }
@@ -759,13 +765,23 @@ static int runScenario(const char* path) {
             result.check(holds, name);
         } else if (std::strcmp(op, "write_file") == 0) {
             // Stage a file the way the UI's editor does, a malformed step being a failed scenario: @xref{why-write-file-exists}.
-            if (!step.has("path") || !step.has("value")) {
-                std::printf("  WRITE %s: missing path/value\n", name);
+            if (!step.has("path") || (!step.has("value") && !step.has("from"))) {
+                std::printf("  WRITE %s: missing path, or value/from\n", name);
                 result.check(false, name);
                 continue;
             }
             const char* filePath = step["path"].c_str();
-            const std::string body = step["value"].str;
+            // `from` names a file of the repository instead, such as a shipped script, so its source keeps one home.
+            std::string body = step.has("value") ? step["value"].str : std::string();
+            if (step.has("from")) {
+                std::ifstream in(std::string(MM_REPO_ROOT) + "/" + step["from"].str, std::ios::binary);
+                if (!in) {
+                    std::printf("  WRITE %s: %s not found in the repository\n", name, step["from"].c_str());
+                    result.check(false, name);
+                    continue;
+                }
+                body.assign(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+            }
             // A FAILED write is a failed scenario rather than a printed note: @xref{why-write-file-exists}.
             const bool wrote = mm::platform::fsWriteAtomic(filePath, body.c_str(), body.size());
             if (wrote) {

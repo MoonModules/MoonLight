@@ -96,6 +96,9 @@ public:
                                   nullptr, 0, 0, platform::millis());
     }
 
+    /// A changed file may be this module's script, which the next prepare then reads again.
+    void onFileChanged(const char* path) override { script_.fileChanged(path); }
+
     /// Free the compiled block and forget it, so re-enabling rebuilds from the file.
     void release() override {
         script_.engine().free();      // release the exec block

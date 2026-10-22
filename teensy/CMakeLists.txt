@@ -63,9 +63,8 @@ add_custom_command(
     DEPENDS ${UI_SOURCES} ${REPO}/src/ui/embed_ui.cmake
     COMMENT "Embedding UI files")
 add_custom_target(ui_embed DEPENDS ${REPO}/src/ui/ui_embedded.h)
-file(GLOB MOONLIVE_SCRIPTS CONFIGURE_DEPENDS
-     ${REPO}/moonlive/effects/*.mle ${REPO}/moonlive/layouts/*.mll ${REPO}/moonlive/modifiers/*.mlm
-     ${REPO}/moonlive/services/*.mls ${REPO}/moonlive/palettes/*.mlp)
+file(GLOB_RECURSE MOONLIVE_SCRIPTS CONFIGURE_DEPENDS
+     ${REPO}/moonlive/*.mle ${REPO}/moonlive/*.mll ${REPO}/moonlive/*.mlm ${REPO}/moonlive/*.mls ${REPO}/moonlive/*.mlp)
 set(MOONLIVE_CATALOG_STAMP ${CMAKE_BINARY_DIR}/moonlive_catalog.stamp)
 add_custom_command(
     OUTPUT ${MOONLIVE_CATALOG_STAMP}

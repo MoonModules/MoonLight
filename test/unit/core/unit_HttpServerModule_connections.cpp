@@ -109,19 +109,19 @@ TEST_CASE("HttpServer: an embedded UI file streams across ticks, arrives whole, 
     const auto bodyStart = reply.find("\r\n\r\n");
     REQUIRE(bodyStart != std::string::npos);
     CHECK(std::strncmp(reply.c_str(), "HTTP/1.1 200", 12) == 0);
-    CHECK(reply.size() - (bodyStart + 4) == file.len);
+    REQUIRE(reply.size() - (bodyStart + 4) == file.len);
     CHECK(std::memcmp(reply.data() + bodyStart + 4, file.data, file.len) == 0);
 
     client.close();
     http.release();
 }
 
-TEST_CASE("HttpServer: a page load opening more connections than there are send slots still gets every file whole") {
+TEST_CASE("HttpServer: a page load past the send slots gets every file whole or a 503, never a write that holds the loop") {
     mm::HttpServerModule http;
     http.port = kTestPort;
     http.setUiPath("/nonexistent-ui");
     http.setup();
-    constexpr int kClients = 10;   // past the eight slots: the rest take the bounded blocking write
+    constexpr int kClients = 18;   // past the sixteen slots
     mm::platform::TcpConnection clients[kClients];
     // Each connects and sends its request at once, as a browser's burst does; a tick between them keeps the listen backlog from filling.
     using CR = mm::platform::TcpConnection::ConnectResult;
@@ -154,12 +154,16 @@ TEST_CASE("HttpServer: a page load opening more connections than there are send 
         }
         if (all) break;
     }
+    int whole = 0;
     for (int k = 0; k < kClients; k++) {
         CAPTURE(k);
         const auto bodyStart = got[k].find("\r\n\r\n");
         REQUIRE(bodyStart != std::string::npos);
+        if (got[k].compare(0, 12, "HTTP/1.1 503") == 0) continue;   // every slot was busy when it asked
         CHECK(got[k].size() - (bodyStart + 4) == file.len);
+        whole++;
     }
+    CHECK(whole >= 16);   // every slot served
     for (auto& c : clients) c.close();
     http.release();
 }

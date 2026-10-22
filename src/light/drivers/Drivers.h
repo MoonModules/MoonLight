@@ -199,17 +199,11 @@ public:
 
     /// A palette script added, removed or restored joins the picker: any path in or above a script folder rescans them.
     void onFileChanged(const char* path) override {
-        if (!touchesFolder(path, moonlive::kScriptDir) && !touchesFolder(path, moonlive::kFactoryScriptDir)) return;
+        if (!moonlive::touchesScripts(path)) return;
+        paletteScriptModule_.fileChanged(path);
         refreshLivePalettes();
         LivePalettes::set(livePtrs_, liveTags_, liveCount_, livePresent_);
         rebuildControls();
-    }
-
-    /// Whether `path` is in `dir`, is `dir`, or holds it.
-    static bool touchesFolder(const char* path, const char* dir) {
-        const size_t p = std::strlen(path), d = std::strlen(dir);
-        if (p >= d) return std::strncmp(path, dir, d) == 0 && (path[d] == '/' || path[d] == 0);
-        return std::strncmp(dir, path, p) == 0 && (dir[p] == '/' || path[p - 1] == '/');
     }
 
     /// The scripted palette names: static, so the one published list outlives any instance, a probe's included.
@@ -555,6 +549,12 @@ public:
         seat_.claim();         // first live Drivers wins (claim-if-empty; one exists in practice)
         outputSeat_.claim();   // and is the light output core reads
         passBufferToDrivers();
+        preparedShape_ = sourceShape();
+    }
+
+    /// Prepare again when a rebuild of one layer changed what this container sized from; a rebuild of the tree already did.
+    void onTreePrepared() override {
+        if (effectivelyEnabled() && sourceShape() != preparedShape_) applyState();
     }
 
     /// Composite the layers into the output buffer, then hand it to the drivers, on the encode core when the render is split.
@@ -583,17 +583,19 @@ public:
         }
     }
 
+    /// Blend one layer into the shared output: the bottom one overwrites, each above per its own mode and opacity, and an invisible one is skipped.
+    void blendLayer(const Layer& L, bool first) {
+        if (!first && !L.contributes()) return;
+        blendMap(L.buffer(), outputBuffer_, L.lut(), L.channelsPerLight(),
+                 first ? BlendOp::Overwrite : L.blendOp(), first ? uint8_t{255} : L.opacity, /*clearFirst=*/first);
+    }
+
     /// Fill the shared output from the layers: blended when several, a wiring-order frame as it is, else the one layer mapped. @xref{the-shared-output-buffer}
     void composite(Layer* srcLayer, EffectBase* wired) MM_NONBLOCKING {
         if (!outputBuffer_.data()) return;   // the drivers read the layer's buffer directly
         if (effects_ && effects_->enabledLayerCount() > 1) {
             // The bottom layer overwrites; each one above blends per its own mode and opacity.
-            effects_->forEachEnabledLayer([&](Layer* L, bool first) {
-                BlendOp op = first ? BlendOp::Overwrite : L->blendOp();
-                uint8_t op_opacity = first ? 255 : L->opacity;
-                blendMap(L->buffer(), outputBuffer_, L->lut(), L->channelsPerLight(),
-                         op, op_opacity, /*clearFirst=*/first);
-            });
+            effects_->forEachEnabledLayer([&](Layer* L, bool first) { blendLayer(*L, first); });
             return;
         }
         if (wired) {
@@ -707,6 +709,30 @@ private:
         if (!encodeTask_.impl) return;
         encodeStop_.store(true, std::memory_order_release);
         platform::stopPinnedTask(encodeTask_);   // signals + wakes + joins (worker exits its loop)
+    }
+
+    /// What prepare() decides the output buffer and the drivers' windows from: the first layer, how many layers composite, and that layer's size and mapping.
+    struct SourceShape {
+        const Layer* out = nullptr;
+        uint8_t layers = 0;
+        bool mapped = false;
+        nrOfLightsType lights = 0;
+        nrOfLightsType count = 0;
+        uint8_t channels = 0;
+        bool operator==(const SourceShape&) const = default;
+    };
+    SourceShape preparedShape_;
+    SourceShape sourceShape() const {
+        SourceShape s;
+        s.out = effects_ ? effects_->firstEnabledLayer() : layer_;
+        s.layers = effects_ ? effects_->enabledLayerCount() : (layer_ ? 1 : 0);
+        if (s.out) {
+            s.mapped = s.out->lut().hasLUT();
+            s.lights = s.out->physicalLightCount();
+            s.count = outputBuffer_.data() ? 0 : s.out->buffer().count();   // the drivers size from it only when they read it directly
+            s.channels = s.out->channelsPerLight();
+        }
+        return s;
     }
 
     void passBufferToDrivers() {

@@ -49,10 +49,14 @@ public:
     void tick() MM_NONBLOCKING override {
         // First, so every layer this frame samples the same entries: Drivers ticks too late for it.
         MoonLivePalette::tickActive(platform::millis());
+        bool bottom = true;
         for (uint8_t i = 0; i < childCount(); i++) {
             MoonModule* c = child(i);
             if (!c || c->role() != ModuleRole::Layer) continue;
             if (c->respectsEnabled() && !c->enabled()) continue;
+            const bool skip = !bottom && !static_cast<Layer*>(c)->contributes();
+            bottom = false;
+            if (skip) continue;   // invisible above the bottom: nothing to render
             uint32_t start = platform::micros();
             c->tick();
             c->addAccumUs(platform::micros() - start);

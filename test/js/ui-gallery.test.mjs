@@ -190,10 +190,10 @@ test("a thumbnail path from the index stays inside the gallery repository", () =
     assert.equal(g.galleryPath(undefined), null);
 });
 
-test("a shipped script's repo path carries its subfolder, and a script the catalog lacks sits at its kind's root", () => {
-    const mlRepoPath = new Function(`${fnSource("mlSubOf")}\nreturn ${fnSource("mlRepoPath")}`)();
-    const cat = { effects: { folder: "effects", names: ["dot.mle", "fire.mle"], sub: ["basics", "hpwit"] } };
-    assert.equal(mlRepoPath(cat, "effects", "fire.mle"), "moonlive/effects/hpwit/fire.mle");
+test("a shipped script's repo path is its catalog folder, and a script the catalog lacks sits at its kind's folder", () => {
+    const mlRepoPath = new Function(`${fnSource("mlFolderOf")}\nreturn ${fnSource("mlRepoPath")}`)();
+    const cat = { effects: { names: ["dot.mle", "fire.mle"], folder: ["effects/basics", "projects/hpwit"] } };
+    assert.equal(mlRepoPath(cat, "effects", "fire.mle"), "moonlive/projects/hpwit/fire.mle");
     assert.equal(mlRepoPath(cat, "effects", "mine.mle"), "moonlive/effects/mine.mle");
     assert.equal(mlRepoPath(null, "effects", "mine.mle"), "moonlive/effects/mine.mle");
 });

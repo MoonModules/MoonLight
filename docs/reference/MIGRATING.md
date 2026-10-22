@@ -100,7 +100,7 @@ Switching a device on and off four times, each within a few seconds, opens its a
 **Action: *nothing*.**
 
 The palette picker lists every factory palette at its place in the catalog, held or not, and your own scripted palettes after them. A saved selection is kept by name.
-A knob or a slot that stepped to a scripted palette by number may land on another one.
+A knob or a slot that stepped to a scripted palette by number may land on another one. `stadbeest-fire` is 65 and `temperature` 64, since the StadBeest palette sits in its project folder.
 One the device does not hold keeps the last palette until the UI downloads it.
 
 ### `stadbeest-legs` is `stadbeest-walk`, `stadbeest-eyes` is `stadbeest-frog-eye`

@@ -8,25 +8,28 @@
 ///
 /// A device carries names only and the UI fetches a script's text on first pick, so flash scales with the script count and the filesystem holds only what is used.
 ///
-/// There is one array per role: a script's role follows from its extension and its folder from its role, so neither is stored per entry. A subfolder is an index into one shared table.
+/// There is one array per role, since a script's role follows from its extension. Its folder under `moonlive/` is an index into one shared table, so a project folder can hold every role.
 #include <cstddef>
 
 namespace mm::moonlive {
 
-/// The subfolders a script may sit in under its role's folder upstream, "" first for the folder itself.
-constexpr const char* kCatalogSubfolders[] = {
-    "",
-    "audio",
-    "basics",
-    "hpwit",
-    "moving-heads",
-    "particles",
-    "shaders",
-    "stadbeest",
-    "waves",
+/// The folders a script sits in under `moonlive/` upstream.
+constexpr const char* kCatalogFolders[] = {
+    "effects/audio",
+    "effects/basics",
+    "effects/moving-heads",
+    "effects/particles",
+    "effects/shaders",
+    "effects/waves",
+    "layouts",
+    "modifiers",
+    "palettes",
+    "projects/hpwit",
+    "projects/stadbeest",
+    "services",
 };
 
-/// Every factory effect by file name, from `moonlive/effects/` upstream.
+/// Every factory effect by file name, from `moonlive/` upstream.
 constexpr const char* kEffectCatalog[] = {
     "glow.mle",
     "pulse.mle",
@@ -39,16 +42,6 @@ constexpr const char* kEffectCatalog[] = {
     "lines.mle",
     "random-pixel.mle",
     "sparkle.mle",
-    "edge-comets.mle",
-    "fire.mle",
-    "mandala.mle",
-    "particle-fountain.mle",
-    "plasma-ring.mle",
-    "plasma-wander.mle",
-    "ripple-rings.mle",
-    "spinning-squares.mle",
-    "twinkle-stars.mle",
-    "voronoi.mle",
     "mh-aim.mle",
     "mh-ambient.mle",
     "mh-sweep.mle",
@@ -65,6 +58,21 @@ constexpr const char* kEffectCatalog[] = {
     "metal.mle",
     "nebula.mle",
     "trails.mle",
+    "aurora.mle",
+    "noise.mle",
+    "octopus.mle",
+    "plasma.mle",
+    "ripples.mle",
+    "edge-comets.mle",
+    "fire.mle",
+    "mandala.mle",
+    "particle-fountain.mle",
+    "plasma-ring.mle",
+    "plasma-wander.mle",
+    "ripple-rings.mle",
+    "spinning-squares.mle",
+    "twinkle-stars.mle",
+    "voronoi.mle",
     "stadbeest-eye-orb.mle",
     "stadbeest-frog-eye.mle",
     "stadbeest-mouth.mle",
@@ -72,11 +80,6 @@ constexpr const char* kEffectCatalog[] = {
     "stadbeest-sauron.mle",
     "stadbeest-thrusters.mle",
     "stadbeest-walk.mle",
-    "aurora.mle",
-    "noise.mle",
-    "octopus.mle",
-    "plasma.mle",
-    "ripples.mle",
 };
 constexpr size_t kEffectCatalogCount = 49;
 /// What each effect above declares about itself, in the same order, 0 meaning it says nothing and the device decides.
@@ -92,16 +95,6 @@ constexpr unsigned char kEffectCatalogDim[] = {
     2,
     1,
     3,
-    2,
-    2,
-    2,
-    2,
-    2,
-    2,
-    2,
-    2,
-    2,
-    2,
     1,
     1,
     1,
@@ -118,14 +111,24 @@ constexpr unsigned char kEffectCatalogDim[] = {
     2,
     3,
     3,
-    2,
-    2,
-    2,
-    2,
-    2,
-    2,
-    2,
     3,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
     2,
     2,
     2,
@@ -138,16 +141,6 @@ constexpr const char* kEffectCatalogTags[] = {
     "💫🎶",
     "💫",
     "💫",
-    "💫",
-    "💫",
-    "💫",
-    "💫",
-    "💫",
-    "💫",
-    "💫✨",
-    "💫",
-    "💫",
-    "💫✨",
     "💫",
     "💫",
     "💫",
@@ -171,35 +164,46 @@ constexpr const char* kEffectCatalogTags[] = {
     "💫🖌️",
     "💫🖌️",
     "💫",
-    "💫🎵🎶",
-    "💫🎵",
-    "💫",
-    "💫🎵🎶",
-    "💫🎵",
-    "💫🎵",
-    "💫",
     "💫",
     "💫🖌️",
     "💫",
     "💫",
+    "💫✨",
+    "💫",
+    "💫",
+    "💫✨",
+    "💫",
+    "💫",
+    "💫",
+    "💫",
+    "💫",
+    "💫",
+    "💫",
+    "💫🎵🎶",
+    "💫🎵",
+    "💫",
+    "💫🎵🎶",
+    "💫🎵",
+    "💫🎵",
 };
-/// Where each effect above sits under `moonlive/effects/`, as an index into kCatalogSubfolders.
-constexpr unsigned char kEffectCatalogSub[] = {
+/// Where each effect above sits under `moonlive/`, as an index into kCatalogFolders.
+constexpr unsigned char kEffectCatalogFolder[] = {
+    0,
+    0,
+    0,
     1,
     1,
     1,
+    1,
+    1,
+    1,
+    1,
+    1,
     2,
     2,
     2,
     2,
     2,
-    2,
-    2,
-    2,
-    3,
-    3,
-    3,
-    3,
     3,
     3,
     3,
@@ -216,28 +220,26 @@ constexpr unsigned char kEffectCatalogSub[] = {
     5,
     5,
     5,
-    5,
-    6,
-    6,
-    6,
-    6,
-    6,
-    7,
-    7,
-    7,
-    7,
-    7,
-    7,
-    7,
-    8,
-    8,
-    8,
-    8,
-    8,
+    9,
+    9,
+    9,
+    9,
+    9,
+    9,
+    9,
+    9,
+    9,
+    9,
+    10,
+    10,
+    10,
+    10,
+    10,
+    10,
+    10,
 };
-constexpr const char* kEffectFolder = "effects";   ///< its directory upstream
 
-/// Every factory layout by file name, from `moonlive/layouts/` upstream.
+/// Every factory layout by file name, from `moonlive/` upstream.
 constexpr const char* kLayoutCatalog[] = {
     "backlight.mll",
     "diagonal.mll",
@@ -280,23 +282,22 @@ constexpr const char* kLayoutCatalogTags[] = {
     "🚥",
     "💫",
 };
-/// Where each layout above sits under `moonlive/layouts/`, as an index into kCatalogSubfolders.
-constexpr unsigned char kLayoutCatalogSub[] = {
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
+/// Where each layout above sits under `moonlive/`, as an index into kCatalogFolders.
+constexpr unsigned char kLayoutCatalogFolder[] = {
+    6,
+    6,
+    6,
+    6,
+    6,
+    6,
+    6,
+    6,
+    6,
+    6,
+    6,
 };
-constexpr const char* kLayoutFolder = "layouts";   ///< its directory upstream
 
-/// Every factory modifier by file name, from `moonlive/modifiers/` upstream.
+/// Every factory modifier by file name, from `moonlive/` upstream.
 constexpr const char* kModifierCatalog[] = {
     "mirror.mlm",
     "shift.mlm",
@@ -315,25 +316,26 @@ constexpr const char* kModifierCatalogTags[] = {
     "💫",
     "💫",
 };
-/// Where each modifier above sits under `moonlive/modifiers/`, as an index into kCatalogSubfolders.
-constexpr unsigned char kModifierCatalogSub[] = {
-    0,
-    0,
-    0,
+/// Where each modifier above sits under `moonlive/`, as an index into kCatalogFolders.
+constexpr unsigned char kModifierCatalogFolder[] = {
+    7,
+    7,
+    7,
 };
-constexpr const char* kModifierFolder = "modifiers";   ///< its directory upstream
 
-/// Every factory service by file name, from `moonlive/services/` upstream.
+/// Every factory service by file name, from `moonlive/` upstream.
 constexpr const char* kServiceCatalog[] = {
+    "hpwit-show.mls",
+    "stadbeest-autopilot.mls",
     "button.mls",
     "chase.mls",
     "power.mls",
-    "stadbeest-autopilot.mls",
     "sweep.mls",
 };
-constexpr size_t kServiceCatalogCount = 5;
+constexpr size_t kServiceCatalogCount = 6;
 /// What each service above declares about itself, in the same order, 0 meaning it says nothing and the device decides.
 constexpr unsigned char kServiceCatalogDim[] = {
+    0,
     0,
     0,
     0,
@@ -347,25 +349,26 @@ constexpr const char* kServiceCatalogTags[] = {
     "",
     "",
     "",
+    "",
 };
-/// Where each service above sits under `moonlive/services/`, as an index into kCatalogSubfolders.
-constexpr unsigned char kServiceCatalogSub[] = {
-    0,
-    0,
-    0,
-    0,
-    0,
+/// Where each service above sits under `moonlive/`, as an index into kCatalogFolders.
+constexpr unsigned char kServiceCatalogFolder[] = {
+    9,
+    10,
+    11,
+    11,
+    11,
+    11,
 };
-constexpr const char* kServiceFolder = "services";   ///< its directory upstream
 
-/// Every factory palette by file name, from `moonlive/palettes/` upstream.
+/// Every factory palette by file name, from `moonlive/` upstream.
 constexpr const char* kPaletteCatalog[] = {
     "beat-flash.mlp",
     "drift.mlp",
     "fire.mlp",
     "spectrum.mlp",
-    "stadbeest-fire.mlp",
     "temperature.mlp",
+    "stadbeest-fire.mlp",
 };
 constexpr size_t kPaletteCatalogCount = 6;
 /// What each palette above declares about itself, in the same order, 0 meaning it says nothing and the device decides.
@@ -383,20 +386,19 @@ constexpr const char* kPaletteCatalogTags[] = {
     "🎨",
     "🎨",
     "🎨🎶",
-    "🎨🎶",
     "🎨",
+    "🎨🎶",
 };
-/// Where each palette above sits under `moonlive/palettes/`, as an index into kCatalogSubfolders.
-constexpr unsigned char kPaletteCatalogSub[] = {
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
+/// Where each palette above sits under `moonlive/`, as an index into kCatalogFolders.
+constexpr unsigned char kPaletteCatalogFolder[] = {
+    8,
+    8,
+    8,
+    8,
+    8,
+    10,
 };
-constexpr const char* kPaletteFolder = "palettes";   ///< its directory upstream
 
-constexpr size_t kCatalogCount = 74;   ///< every factory script, all roles
+constexpr size_t kCatalogCount = 75;   ///< every factory script, all roles
 
 } // namespace mm::moonlive

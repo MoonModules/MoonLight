@@ -38,7 +38,11 @@ public:
 
     /// Re-read the file and recompile when its content hash moved, returning true when a new program was installed, which a modifier turns into a Layer rebuild.
     bool sync(const SysVarTable& sysvars, MoonModule& owner, const BuiltinTable& builtins) {
-        // Cheapest question first, since this runs on every prepare sweep and must not compile.
+        // Read only after an announced change or under another name: a flash read under load costs tens of milliseconds.
+        if (!stale_ && std::strcmp(syncedName_, name_) == 0 && ((engine_.ok() && haveCompiled_) || compileFailed_)) return false;
+        stale_ = false;
+        std::snprintf(syncedName_, sizeof(syncedName_), "%s", name_);
+        // Then the hash, since an unchanged file must not compile.
         uint32_t fileHash = 0;
         const bool readable = scriptFileHash(name_, fileHash);
         if (readable && engine_.ok() && haveCompiled_ && fileHash == compiledHash_) return false;
@@ -110,6 +114,9 @@ public:
     /// The script file this module runs.
     const char* name() const { return name_; }
 
+    /// Mark the script stale when a changed path may hold it, so the next sync() reads it again.
+    void fileChanged(const char* path) { if (moonlive::touchesScripts(path)) stale_ = true; }
+
     /// Point at a different script. The next sync() compiles it.
     void setName(const char* n) {
         if (!n) return;
@@ -133,6 +140,7 @@ public:
 
     /// Forget what is compiled, so the next sync rebuilds for a module coming back from disabled.
     void invalidate() {
+        stale_ = true;
         compiledHash_ = 0;
         haveCompiled_ = false;
         compileFailed_ = false;
@@ -209,6 +217,8 @@ private:
     /// The script file this module runs, empty on a fresh card, which reports "no script" until one is named.
     char     name_[kMaxScriptName + 1] = "";
     uint32_t compiledHash_ = 0;
+    bool     stale_ = true;   ///< the file may have changed since the last read
+    char     syncedName_[kMaxScriptName + 1] = "";   ///< the name the last read was for, since a control write changes `name_` in place
     bool     haveCompiled_ = false;   // 0 is a valid hash, so "is anything compiled" is its own flag
     /// Whether the last compile failed, latched by name and content both so a script fixed in place under the same name is retried.
     bool     compileFailed_ = false;

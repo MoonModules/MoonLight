@@ -1176,6 +1176,25 @@ TEST_CASE("a touched control is not driven on that surface, and resyncs when rel
     d.control->removeSurface(&s);
 }
 
+// A show's service drives slots 50 times a second, and a slot's target counted as configuration, so flash was written about once a second.
+TEST_CASE("a live slot write drives its target without marking either to be saved") {
+    Device d;
+    auto& cs = d.control->controls();
+    for (uint8_t i = 0; i < cs.count(); i++)
+        if (std::strcmp(cs[i].name, "fader2Target") == 0) {
+            std::snprintf(static_cast<char*>(cs[i].ptr), 40, "%s", "Drivers.palette");
+            d.control->onControlChanged("fader2Target");
+        }
+    d.control->clearDirty();
+    d.drivers->clearDirty();
+    REQUIRE(d.scheduler.setControl("Control", "fader2", "{\"value\":9}", /*live=*/true) == mm::Scheduler::SetControlResult::Ok);
+    int32_t palette = -1;
+    REQUIRE(d.scheduler.getControlWide("Drivers", "palette", palette));
+    CHECK(palette == 9);                    // the target moved
+    CHECK_FALSE(d.control->dirty());
+    CHECK_FALSE(d.drivers->dirty());
+}
+
 // The hand is on one desk, so every other surface, such as the OSC link to other devices, keeps following the fader as it moves.
 TEST_CASE("a control touched on one surface still reaches the others as it moves") {
     Device d;

@@ -628,6 +628,7 @@ TEST_CASE("editing a script's text recompiles it, without renaming the file") {
     const std::string edited = mmScriptAs("placeLights",
         "for (int i = 0; i < 7; i = i + 1) { addLight(i, 0, 0); }");
     REQUIRE(mm::platform::fsWriteAtomic(path, edited.c_str(), edited.size()));
+    l.onFileChanged(path);   // the file API announces every save to the tree
 
     l.prepare();
     CHECK(l.lightCount() == 7);
@@ -667,6 +668,7 @@ TEST_CASE("a broken script fixed in place compiles, without being renamed") {
     const std::string fixed = mmScriptAs("placeLights",
         "for (int i = 0; i < 5; i = i + 1) { addLight(i, 0, 0); }");
     REQUIRE(mm::platform::fsWriteAtomic(path, fixed.c_str(), fixed.size()));
+    l.onFileChanged(path);               // the file API announces every save to the tree
 
     CHECK(l.lightCount() == 5);          // the content moved, so the failure latch released
 }

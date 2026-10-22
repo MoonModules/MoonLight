@@ -2,6 +2,14 @@
 
 Forward-looking to-build items for the **core / infrastructure** domain (`src/core/`, `src/platform/`, build, CI, network, persistence, UI). The light-domain counterpart is [backlog-light.md](backlog-light.md); items that genuinely span both are in [backlog-mixed.md](backlog-mixed.md). Index + overview: [README.md](index.md). Completed items are removed.
 
+### The `.deb` ships the systemd unit, raw Ethernet included (2026-10-22, from robwomp on Discord)
+
+The package holds only the binary, so a Pi or NanoPi user writes `/etc/systemd/system/moonlight.service` by hand from MoonWalk's "Run at boot" step. That unit grants no `CAP_NET_RAW`, so the panel card driver's `AF_PACKET` socket fails unless MoonLight runs as root, and the `setcap` alternative is lost whenever apt replaces `/usr/bin/MoonLight`. `CAP_NET_RAW` is all MoonLight needs, since it sets no interface flags. The fix: `package_desktop.py` installs the unit with `AmbientCapabilities=CAP_NET_RAW` and a dedicated `moonlight` user, so installing is `apt install` plus `systemctl enable --now moonlight`. MoonWalk's unit step shrinks to that enable, and the `setcap` step stays for a binary run by hand.
+
+### Downloads off the tick path (2026-10-13)
+
+Every upload moves through the transfer slots; a flash download still writes its whole file on one tick, bounded per chunk by the write deadline. Moving downloads onto the slots too needs a look at how many files the UI reads at once, since two slots answer a third request with 503. Firmware uploads drain whole by design and feed the watchdog.
+
 ### An update's connection that would not open until a reset (2026-10-22, from the internal RAM plan)
 
 On 3.0.0 a board could not open the update's connection (`ESP_ERR_HTTP_CONNECT`) until it was reset, with 80 KB of internal RAM free. TLS has lived in PSRAM since then (`CONFIG_MBEDTLS_EXTERNAL_MEM_ALLOC`), which may be what cured it; it has not recurred. Recorded so a recurrence is recognized: the free internal RAM and largest block at that moment are the first readings to take.

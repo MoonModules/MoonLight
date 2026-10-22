@@ -137,6 +137,24 @@ TEST_CASE("AudioService Local+send: lazy-opens once and reports sending") {
     CHECK_FALSE(a.syncOpenForTest());
 }
 
+// A rebuild anywhere in the tree prepared the audio service too, which closed its socket and reopened its microphone every time.
+TEST_CASE("AudioService keeps its socket through a prepare that changed none of its settings") {
+    FrozenClock clk(1);
+    AudioService a;
+    a.mode = AudioService::kLocalMode;
+    a.send = true;
+    a.syncPort = kTestSyncPort;
+    a.applyState();
+    a.tick();
+    REQUIRE(a.syncOpenForTest());
+    a.applyState();                  // as a tree rebuild for another module does
+    CHECK(a.syncOpenForTest());
+    a.syncPort = static_cast<uint16_t>(kTestSyncPort + 1);
+    a.applyState();                  // a new port rebinds
+    CHECK_FALSE(a.syncOpenForTest());
+    a.release();
+}
+
 TEST_CASE("AudioService Local+send: broadcasts are throttled to ~kSyncSendIntervalMs") {
     FrozenClock clk(1);
     AudioService a;

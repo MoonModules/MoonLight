@@ -6463,15 +6463,14 @@ function mlGroupForExt(ext) {
 }
 
 /// The collection a catalog group files a script under, "" for one at the kind's root or not in the catalog.
-function mlSubOf(g, name) {
-    return (g.sub || [])[(g.names || []).indexOf(name)] || "";
+function mlFolderOf(g, name, group) {
+    return (g.folder || [])[(g.names || []).indexOf(name)] || group;
 }
 
-/// Where a script lives in the repo: in its subfolder when the catalog names one, at the kind's root otherwise. The device keeps every script flat.
+/// Where a script lives in the repo: in the folder the catalog names, at its kind's folder when the catalog lacks it. The device keeps every script flat.
 function mlRepoPath(cat, group, name) {
     const g = (cat && cat[group]) || {};
-    const sub = mlSubOf(g, name);
-    return "moonlive/" + (g.folder || group) + "/" + (sub ? sub + "/" : "") + name;
+    return "moonlive/" + mlFolderOf(g, name, group) + "/" + name;
 }
 
 // Download one factory script and save it to the device.
@@ -6485,7 +6484,7 @@ function mlRepoPath(cat, group, name) {
 // engine that will run it rather than whatever main happens to hold.
 async function mlDownloadScript(name, group) {
     const cat = await mlFetchCatalog();
-    if (!(cat[group] || {}).folder) throw new Error("unknown script kind");
+    if (!cat[group]) throw new Error("unknown script kind");
     const url = "https://raw.githubusercontent.com/MoonModules/MoonLight/"
               + encodeURIComponent(cat.tag) + "/" + mlRepoPath(cat, group, name).split("/").map(encodeURIComponent).join("/");
     const res = await fetch(url);
@@ -8754,11 +8753,11 @@ function buildFilePathControl(row, label, key, moduleName, ctrl) {
             if (g.dim && DIM_EMOJI[g.dim[i]]) marks.push(DIM_EMOJI[g.dim[i]]);
             return marks.length ? marks.join("") + " " : "";
         };
-        // The collection a factory script belongs to upstream, its subfolder, after the name: one library still, with its groups named.
+        // The collection a factory script belongs to upstream, its folder's name, after the name: one library still, with its groups named.
         const from = (n) => {
             const g = cat && cat[group];
-            const sub = g ? mlSubOf(g, n) : "";
-            return sub ? " \u00b7 " + sub : "";
+            const folder = g ? mlFolderOf(g, n, group) : group;
+            return folder !== group ? " \u00b7 " + folder.split("/").pop() : "";
         };
         for (const n of names) {
             const o = document.createElement("option");

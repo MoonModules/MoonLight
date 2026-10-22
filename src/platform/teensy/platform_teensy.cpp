@@ -73,6 +73,8 @@ void free(void* ptr) {
 
 void* allocInternal(size_t bytes) { return alloc(bytes); }   // one RAM, no PSRAM to keep out of
 
+bool ptrIsPsram(const void* /*p*/) { return false; }   // alloc never reaches the optional PSRAM chip
+
 size_t allocatedBytes() { return g_allocatedBytes; }
 size_t allocatedPeak() { return g_allocatedPeak; }
 uint32_t allocatedCount() { return g_allocCount; }

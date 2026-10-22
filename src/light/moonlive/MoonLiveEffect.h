@@ -146,6 +146,9 @@ public:
         moonlive::setDrawCanvas({});
     }
 
+    /// A changed file may be this module's script, which the next prepare then reads again.
+    void onFileChanged(const char* path) override { script_.fileChanged(path); }
+
     /// Drop the compiled program, the trail planes and the particle pool.
     void release() override {
         particles_.release();      // zero the pool BEFORE the base frees its buffers, or it would

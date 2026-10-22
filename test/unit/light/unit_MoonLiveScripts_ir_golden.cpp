@@ -77,20 +77,18 @@ TEST_CASE("every shipped script compiles to the IR it had before the compiler ch
     // MM_PRINT_IR_GOLDEN=1 prints the table instead of checking it, which is how it is captured.
     const bool print = std::getenv("MM_PRINT_IR_GOLDEN") != nullptr;
     int checked = 0;
-    for (const char* sub : {"layouts", "effects", "modifiers", "palettes", "services"}) {
-        const std::filesystem::path dir = scriptRoot() / sub;
-        if (!std::filesystem::exists(dir)) continue;
+    {
         std::map<std::string, std::filesystem::path> files;   // sorted, so the printed table is stable
-        // Keyed by the path under the role's folder, so a script in a subfolder is named with it.
-        for (const auto& e : std::filesystem::recursive_directory_iterator(dir))
-            if (e.is_regular_file() && isScriptExt(e.path().extension().string().c_str())) files[std::filesystem::relative(e.path(), dir).generic_string()] = e.path();
-        for (const auto& [name, path] : files) {
-            const std::string label = std::string(sub) + "/" + name;
+        // Keyed by the path under moonlive/, the role following from the extension, since a project folder mixes roles.
+        for (const auto& e : std::filesystem::recursive_directory_iterator(scriptRoot()))
+            if (e.is_regular_file() && isScriptExt(e.path().extension().string().c_str())) files[std::filesystem::relative(e.path(), scriptRoot()).generic_string()] = e.path();
+        for (const auto& [label, path] : files) {
             const std::string src = readText(path);
-            const bool isService = std::string(sub) == "services";
+            const std::string ext = path.extension().string();
+            const bool isService = ext == kServiceExt;
             const SysVarTable sys = isService ? serviceSysVars()
-                                  : std::string(sub) == "layouts" ? layoutSysVars()
-                                  : std::string(sub) == "modifiers" ? modifierSysVars()
+                                  : ext == kLayoutExt ? layoutSysVars()
+                                  : ext == kModifierExt ? modifierSysVars()
                                   : effectSysVars();
             const BuiltinTable table = isService ? serviceBuiltins() : lightBuiltins();
             static char strings[CompileResult::kStringPool];

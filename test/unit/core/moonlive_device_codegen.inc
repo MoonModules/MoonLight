@@ -320,27 +320,26 @@ TEST_CASE("a returned value reaches the return register on " MM_ISA_NAME) {
 // that would silently stop being the ones under test.
 TEST_CASE("every shipped script compiles for " MM_ISA_NAME) {
     int checked = 0;
-    for (const char* sub : {"layouts", "effects", "modifiers", "drivers"}) {
+    {
         const std::filesystem::path dir =
-            std::filesystem::path(__FILE__).parent_path().parent_path().parent_path().parent_path()
-            / "moonlive" / sub;
-        if (!std::filesystem::exists(dir)) continue;
+            std::filesystem::path(__FILE__).parent_path().parent_path().parent_path().parent_path() / "moonlive";
         for (const auto& entry : std::filesystem::recursive_directory_iterator(dir)) {
             if (!entry.is_regular_file() || !mmIsScript(entry.path())) continue;
+            // The light roles, by extension, wherever they sit: a service or a palette compiles against another table.
+            const std::string ext = entry.path().extension().string();
+            if (ext != mm::moonlive::kEffectExt && ext != mm::moonlive::kLayoutExt && ext != mm::moonlive::kModifierExt) continue;
             std::ifstream f(entry.path());
             std::ostringstream ss;
             ss << f.rdbuf();
             const std::string src = ss.str();
-            // Named per role for readability; all three are the same table. Kept as a per-kind
-            // selection rather than one call so this still reads as "compile it the way its
-            // binding does" if the roles ever diverge again.
-            const std::string kind = sub;
-            const auto& sysvars = kind == "layouts"   ? mm::moonlive::layoutSysVars()
-                                : kind == "modifiers" ? mm::moonlive::modifierSysVars()
-                                                      : mm::moonlive::effectSysVars();
+            // Per role, by extension, so this reads as "compile it the way its binding does" if the
+            // roles' tables ever diverge again; all three are the same table.
+            const auto& sysvars = ext == mm::moonlive::kLayoutExt   ? mm::moonlive::layoutSysVars()
+                                : ext == mm::moonlive::kModifierExt ? mm::moonlive::modifierSysVars()
+                                                                    : mm::moonlive::effectSysVars();
             bool ok = false;
             const size_t n = emitLen(src.c_str(), sysvars, ok);
-            INFO("script: ", kind, "/", entry.path().filename().string(), " on " MM_ISA_NAME);
+            INFO("script: ", entry.path().filename().string(), " on " MM_ISA_NAME);
             CHECK(ok);
             CHECK(n > 0);
             // And it fits its own SIZING ESTIMATE with room to spare. codeCapFor allocates from a

@@ -239,8 +239,8 @@ public:
             return;
         }
         // A per-refill prefill was ~1/3 of the ISR cost, so it runs only when the constants are gone.
-        const bool prefill = owner->pinExpanderMode() && (needsPrefill || !owner->uniformLaneCounts());
-        if (owner->slotBytes() == 1) {
+        const bool prefill = owner->hot_.shift && (needsPrefill || !owner->uniformLaneCounts());
+        if (owner->hot_.slotBytes == 1) {
             if (prefill) owner->prefillShiftRows<uint8_t>(outCh, dst, first, count);
             owner->encodeRows<uint8_t>(outCh, dst, first, count, closeFrame);
         } else {

@@ -104,6 +104,46 @@ TEST_CASE("a scripted service reads a pin and drives the control surface") {
     CHECK(rig.control->switch1 == 0);
 }
 
+// A show's service writes its slots 50 times a second; saving them wrote the configuration to flash about once a second.
+TEST_CASE("a scripted service's writes drive the control surface without marking it to be saved") {
+    Rig rig;
+    writeScript("t_drive.mls",
+                "class Drive {\n"
+                "  void tick20ms() { setControl(\"switch1\", 1); }\n"
+                "}\n");
+    rig.svc->setScript("t_drive.mls");
+    rig.svc->prepare();
+    rig.control->clearDirty();
+    rig.svc->tick20ms();
+    CHECK(rig.control->switch1 == 1);         // the write landed
+    CHECK_FALSE(rig.control->dirty());        // and nothing asks for a save
+}
+
+// Every prepare read the script file to hash it, 30 to 70 ms a read under load on an ESP32-S3; now only an announced change does.
+TEST_CASE("a script file is read again only after a change to it is announced") {
+    Rig rig;
+    auto has = [&](const char* name) {
+        const auto& cs = rig.svc->controls();
+        for (uint8_t i = 0; i < cs.count(); i++) if (std::strcmp(cs[i].name, name) == 0) return true;
+        return false;
+    };
+    writeScript("t_v.mls", "class V {\n  int a = 1;\n  void defineControls() { addControl(\"a\", a, 0, 9); }\n}\n");
+    rig.svc->setScript("t_v.mls");
+    rig.svc->prepare();
+    REQUIRE(has("a"));
+
+    writeScript("t_v.mls", "class V {\n  int b = 1;\n  void defineControls() { addControl(\"b\", b, 0, 9); }\n}\n");
+    rig.svc->prepare();
+    CHECK(has("a"));          // nothing announced the edit, so the compiled program stands
+
+    char path[96];
+    std::snprintf(path, sizeof(path), "%s/t_v.mls", moonlive::kScriptDir);
+    rig.scheduler.notifyFileChanged(path);   // as a save through the file API does
+    rig.svc->prepare();
+    CHECK(has("b"));
+    CHECK_FALSE(has("a"));
+}
+
 TEST_CASE("a scripted service declares its own controls, which a user can set") {
     // `addControl` is what makes a script configurable without editing it: the declared member becomes a real control on the card, bound to the live arena slot the running code reads.
     Rig rig;

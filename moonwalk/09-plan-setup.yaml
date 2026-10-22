@@ -55,6 +55,11 @@ processes:
         when: { run: { command: "git switch -c <branch-name>" } }
         detail: |
           The product owner creates every branch, and whoever initiates a branch submits its pull request. The agent works on the branch it is given and asks when a change does not belong there. The one exception: a small fix, already verified, goes straight to main.
+      - id: session
+        say: Start a fresh agent session for the branch.
+        when: { manual: "A new Claude session, not the one the last branch used." }
+        detail: |
+          The previous topic's context steers the next one, and a long context costs every turn. A large commit is a point to start fresh too: the next commit then begins from the repository rather than from the conversation.
       - id: work
         say: Prove the change on the desktop.
         actor: contributor

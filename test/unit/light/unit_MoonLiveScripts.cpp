@@ -42,12 +42,12 @@ using namespace mm;
 
 namespace {
 
-std::vector<std::filesystem::path> scriptsIn(const char* sub) {
+// Every script under moonlive/, whatever folder holds it: a project folder mixes roles, so the role comes from the extension.
+std::vector<std::filesystem::path> allScripts() {
     std::vector<std::filesystem::path> out;
-    const std::filesystem::path dir = scriptRoot() / sub;
-    if (!std::filesystem::exists(dir)) return out;
-    for (const auto& e : std::filesystem::recursive_directory_iterator(dir))
+    for (const auto& e : std::filesystem::recursive_directory_iterator(scriptRoot()))
         if (e.is_regular_file() && mmIsScript(e.path())) out.push_back(e.path());
+    std::sort(out.begin(), out.end());
     return out;
 }
 
@@ -56,19 +56,20 @@ std::vector<std::filesystem::path> scriptsIn(const char* sub) {
 TEST_CASE("every script in moonlive/ compiles") {
     int checked = 0;
     // services included: it compiles against its own table, which the isService branch below picks.
-    for (const char* sub : {"layouts", "effects", "modifiers", "drivers", "palettes", "services"}) {
-        for (const auto& file : scriptsIn(sub)) {
+    {
+        for (const auto& file : allScripts()) {
             const std::string src = readText(file);
-            const std::string label = std::string(sub) + "/" + file.filename().string();
+            const std::string label = std::filesystem::relative(file, scriptRoot()).generic_string();
+            const std::string ext = file.extension().string();
 
             // Compile it exactly as it ships, against the system variables ITS OWN binding supplies, a layout gets the clock, an effect the grid, a modifier the grid plus a coordinate. Using one shared list here would let a script read a name its module never writes and still pass, which is the silent-zero this per-binding split exists to prevent.
-            const bool isService = std::string(sub) == "services";
+            const bool isService = ext == moonlive::kServiceExt;
             // A palette is a LIGHT-domain script: it fills the active palette, so it gets the light table (where setPalEntry lives) and the effect system variables.
             const moonlive::SysVarTable sys =
-                isService                       ? moonlive::serviceSysVars()  :
-                std::string(sub) == "layouts"   ? moonlive::layoutSysVars()   :
-                std::string(sub) == "modifiers" ? moonlive::modifierSysVars() :
-                                                  moonlive::effectSysVars();
+                isService                     ? moonlive::serviceSysVars()  :
+                ext == moonlive::kLayoutExt   ? moonlive::layoutSysVars()   :
+                ext == moonlive::kModifierExt ? moonlive::modifierSysVars() :
+                                                moonlive::effectSysVars();
             // A SERVICE compiles against its own table: it has gpioRead and setControl and no canvas, so compiling one against the light vocabulary would prove nothing about what the device will actually run, and would accept a script calling setRGB that fails on a real service.
             const moonlive::BuiltinTable builtins =
                 isService ? moonlive::serviceBuiltins() : moonlive::lightBuiltins();
@@ -94,12 +95,11 @@ TEST_CASE("every script in moonlive/ compiles") {
 // The catalog is what a DEVICE knows about: it carries these names and fetches a script's text the first time someone picks it. A script in the repo but not in the catalog is invisible on every device, and nothing else would notice, since the build succeeds and the file is right there.
 TEST_CASE("the shipped catalog names every script in moonlive/") {
     std::vector<std::string> onDisk;
-    for (const char* sub : {"layouts", "effects", "modifiers", "services", "palettes"})
-        for (const auto& f : scriptsIn(sub)) onDisk.push_back(f.filename().string());
+    for (const auto& f : allScripts()) onDisk.push_back(f.filename().string());
     std::sort(onDisk.begin(), onDisk.end());
     REQUIRE(!onDisk.empty());
 
-    // The catalog is one array per role: the folder a script lives in is implied by its role and the role by its extension, so neither is stored per entry.
+    // The catalog is one array per role, the role following from the extension.
     std::vector<std::string> inCatalog;
     for (size_t i = 0; i < moonlive::kEffectCatalogCount; i++)
         inCatalog.push_back(moonlive::kEffectCatalog[i]);
@@ -138,19 +138,19 @@ TEST_CASE("the shipped catalog names every script in moonlive/") {
     }
 }
 
-// The UI fetches a script from its role's folder plus the subfolder the catalog names, so a wrong subfolder index sends every device to a file that is not there.
-TEST_CASE("every catalog entry's subfolder is where its script lives in moonlive/") {
-    const auto at = [](const char* folder, const unsigned char* sub, const char* const* names, size_t count) {
+// The UI fetches a script from the folder the catalog names, so a wrong folder index sends every device to a file that is not there.
+TEST_CASE("every catalog entry's folder is where its script lives in moonlive/") {
+    const auto at = [](const unsigned char* folder, const char* const* names, size_t count) {
         for (size_t i = 0; i < count; i++) {
-            const auto p = scriptRoot() / folder / moonlive::kCatalogSubfolders[sub[i]] / names[i];
+            const auto p = scriptRoot() / moonlive::kCatalogFolders[folder[i]] / names[i];
             CHECK_MESSAGE(std::filesystem::is_regular_file(p), p.string());
         }
     };
-    at(moonlive::kEffectFolder, moonlive::kEffectCatalogSub, moonlive::kEffectCatalog, moonlive::kEffectCatalogCount);
-    at(moonlive::kLayoutFolder, moonlive::kLayoutCatalogSub, moonlive::kLayoutCatalog, moonlive::kLayoutCatalogCount);
-    at(moonlive::kModifierFolder, moonlive::kModifierCatalogSub, moonlive::kModifierCatalog, moonlive::kModifierCatalogCount);
-    at(moonlive::kServiceFolder, moonlive::kServiceCatalogSub, moonlive::kServiceCatalog, moonlive::kServiceCatalogCount);
-    at(moonlive::kPaletteFolder, moonlive::kPaletteCatalogSub, moonlive::kPaletteCatalog, moonlive::kPaletteCatalogCount);
+    at(moonlive::kEffectCatalogFolder, moonlive::kEffectCatalog, moonlive::kEffectCatalogCount);
+    at(moonlive::kLayoutCatalogFolder, moonlive::kLayoutCatalog, moonlive::kLayoutCatalogCount);
+    at(moonlive::kModifierCatalogFolder, moonlive::kModifierCatalog, moonlive::kModifierCatalogCount);
+    at(moonlive::kServiceCatalogFolder, moonlive::kServiceCatalog, moonlive::kServiceCatalogCount);
+    at(moonlive::kPaletteCatalogFolder, moonlive::kPaletteCatalog, moonlive::kPaletteCatalogCount);
 }
 
 // Comments are what makes a script in `moonlive/` readable, so the lexer has to treat a plain `//` line as whitespace, anywhere, including between the statements of a loop body.

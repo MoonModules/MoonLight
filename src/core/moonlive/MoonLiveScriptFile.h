@@ -69,6 +69,18 @@ inline constexpr size_t kMaxScriptName = 40;
 /// FNV-1a over the script text, so a caller detecting a change keeps 4 bytes rather than a copy of the source.
 inline uint32_t scriptHash(const char* s, size_t len) { return fnv1a(s, len); }
 
+/// Whether `path` is in `dir`, is `dir`, or holds it.
+inline bool pathTouchesFolder(const char* path, const char* dir) {
+    const size_t p = std::strlen(path), d = std::strlen(dir);
+    if (p >= d) return std::strncmp(path, dir, d) == 0 && (path[d] == '/' || path[d] == 0);
+    return std::strncmp(dir, path, p) == 0 && (dir[p] == '/' || path[p - 1] == '/');
+}
+
+/// Whether a changed `path` may have changed a script: one in, or above, either script folder.
+inline bool touchesScripts(const char* path) {
+    return path && (pathTouchesFolder(path, kScriptDir) || pathTouchesFolder(path, kFactoryScriptDir));
+}
+
 /// Where `name` lives: the user's copy when there is one, else the factory copy; one resolver, so a fork never compiles from one directory and hashes from the other.
 inline bool resolveScript(const char* name, char* out, size_t outLen) {
     std::snprintf(out, outLen, "%s/%s", kScriptDir, name);

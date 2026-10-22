@@ -66,6 +66,21 @@ public:
 
     /// Ask for a rebuild at the next frame boundary, which is safe from any task.
     void requestPrepareTree() { prepareRequested_.store(true, std::memory_order_relaxed); }
+    /// Ask for one subtree's rebuild at the next frame boundary, safe from any task: a few subtrees per frame, one more widening the request to the tree.
+    void requestPrepare(MoonModule* scope) {
+        if (!scope) { requestPrepareTree(); return; }
+        for (auto& slot : preparePending_) {
+            MoonModule* expected = nullptr;
+            if (slot.compare_exchange_strong(expected, scope, std::memory_order_relaxed) || expected == scope) return;
+        }
+        requestPrepareTree();
+    }
+    /// Rebuild these subtrees now, then let every top module react once, so a reader of what they reshaped re-prepares itself; the whole tree when one has left it.
+    void prepareSubtrees(MoonModule* const* scopes, uint8_t count);
+    /// The same for one subtree.
+    void prepareSubtree(MoonModule* scope) { prepareSubtrees(&scope, 1); }
+    /// Run the rebuild asked for since the last frame: the tree, or the subtrees, at the frame boundary.
+    void preparePending();
 
 
     /// Average microseconds per tick over the last second, which is the primary performance metric.
@@ -105,8 +120,7 @@ public:
     };
 
     /// Set one control by module and control name, applying the whole control-change reaction.
-    SetControlResult setControl(const char* moduleName, const char* controlName,
-                                const char* valueJson);
+    SetControlResult setControl(const char* moduleName, const char* controlName, const char* valueJson, bool live = false);
 
     /// The reaction to a control that changed: visibility rebuilt, the module told, and the tree re-prepared when the control reshapes it.
     void reactToControlChange(MoonModule* target, const char* controlName);
@@ -126,6 +140,10 @@ private:
     uint8_t moduleCount_ = 0;
     /// A rebuild request, atomic because a lost request means a script edit silently never applies.
     std::atomic<bool> prepareRequested_{false};
+    /// Pending subtree rebuilds, null where free: a show moves two or three containers a frame, and one more than fits widens to the tree.
+    std::array<std::atomic<MoonModule*>, 4> preparePending_{};
+    /// A live write is under way, so a write it makes in turn, a slot driving its target, is live too and saves nothing.
+    bool liveWrite_ = false;
     LoadAllFn loadAllHook_ = nullptr;
     NoteDirtyFn noteDirtyHook_ = nullptr;
     uint32_t startTime_ = 0;

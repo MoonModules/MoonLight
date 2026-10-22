@@ -34,6 +34,9 @@ inline const char* roleName(ModuleRole role) {
     }
 }
 
+/// How far a reshaping control change's rebuild reaches: the module itself, the container holding it, or the whole tree.
+enum class PrepareScope : uint8_t { Self, Parent, Tree };
+
 /// The base class for everything in the system, from effects and drivers to system services.
 ///
 /// It is the one deliberate hierarchy, so the UI renders any module with no per-module UI code: @xref{parent-and-child}. The base is the smallest possible, since dozens load at once without PSRAM: @xref{enabled-and-self-reporting}.
@@ -111,6 +114,8 @@ public:
 
     /// Whether this control's change reshapes dimensions, and so triggers the build sweep.
     virtual bool affectsPrepare(const char* /*controlName*/) const { return false; }
+    /// How far that build sweep reaches: the whole tree unless this module knows its change stays closer, a reader of what changed re-preparing itself in onTreePrepared.
+    virtual PrepareScope prepareScope() const { return PrepareScope::Tree; }
 
     /// Declare every control, purely and idempotently, since this is re-run whenever a Select changes.
     virtual void defineControls() { for (uint8_t i = 0; i < childCount_; i++) children_[i]->defineControls(); }

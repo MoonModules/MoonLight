@@ -519,3 +519,10 @@ def test_the_docs_strip_the_same_role_nouns_the_app_does():
     js = (gen_help.ROOT / "src" / "ui" / "help.js").read_text()
     nouns = _re.search(r"const ROLE_NOUNS = \[([^\]]*)\]", js).group(1)
     assert tuple(_re.findall(r'"(\w+)"', nouns)) == gen_help._ROLE_NOUNS
+
+
+def test_a_cursor_kind_newer_than_the_bindings_reads_as_a_placeholder(tmp_path):
+    """The bindings lag the library they load, so a kind they lack, here the `flag_enum` attribute, reads as a placeholder rather than raising mid-walk."""
+    ci, tu = parsed(tmp_path / "Flags.h", "enum __attribute__((flag_enum)) Flags { A = 1, B = 2 };\n")
+    gen_help.know_every_cursor_kind(ci)
+    assert "ENUM_DECL" in [n.kind.name for n in tu.cursor.walk_preorder()]

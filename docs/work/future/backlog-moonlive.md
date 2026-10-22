@@ -531,7 +531,7 @@ Two effects written in one session on real hardware: `stadbeest-walk.mle` (a wal
 
 ### 12. A one-to-one port of hpwit's scripts, for a like-for-like comparison (2026-10-19)
 
-hpwit's compiler (`hpwit/new-parser`, `asmparser2`) runs whole C-like programs. His `multi_effect_controller.sc` (800 lines) and the five `ProceduralEffects` were ported to MoonLive on 2026-10-18 (`moonlive/effects/hpwit/`), but as the same LOOK rather than the same program, so code size and frame time do not compare like for like. A one-to-one port needs the language to accept his programs as written. Each construct was compiled on the desktop on 2026-10-19:
+hpwit's compiler (`hpwit/new-parser`, `asmparser2`) runs whole C-like programs. His `multi_effect_controller.sc` (800 lines) and the five `ProceduralEffects` were ported to MoonLive on 2026-10-18 (`moonlive/projects/hpwit/`), but as the same LOOK rather than the same program, so code size and frame time do not compare like for like. A one-to-one port needs the language to accept his programs as written. Each construct was compiled on the desktop on 2026-10-19:
 
 | his scripts use | MoonLive today | what it takes | work |
 |---|---|---|---|
@@ -548,7 +548,7 @@ hpwit's compiler (`hpwit/new-parser`, `asmparser2`) runs whole C-like programs. 
 
 Work is in days of agent implementation with the product owner's review, for the parser, the IR and all five backends, each with its tests; S is under a day, M one to two, L a week, XL two. In all about five weeks with `float` mapped onto `fixed`, about seven with a real `float`, the structs and the arena being most of it.
 
-Most rows are general language growth the MoonLive scripts want anyway; the `main()` shim and his host bindings exist only for the comparison, and stay behind a compatibility table rather than entering the standard vocabulary. **Decide first** whether the comparison is worth the compatibility layer, or whether comparing on the ported looks, now in `moonlive/effects/hpwit/`, is enough.
+Most rows are general language growth the MoonLive scripts want anyway; the `main()` shim and his host bindings exist only for the comparison, and stay behind a compatibility table rather than entering the standard vocabulary. **Decide first** whether the comparison is worth the compatibility layer, or whether comparing on the ported looks, now in `moonlive/projects/hpwit/`, is enough.
 
 ## How to know a step landed
 

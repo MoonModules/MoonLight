@@ -417,15 +417,14 @@ private:
     /// Close every active slot's stream and socket; release()'s own cleanup, since going out of scope frees neither.
     void releaseTransfers();
 
-    /// An embedded UI file resumes here across ticks: its bytes are already in flash, so a slot is a socket and an offset, with no buffer. A page load fetches several at once, so there are enough slots for a browser's parallel connections. A client on a slow link costs the render loop one non-blocking write per tick.
+    /// An embedded UI file resumes here across ticks: its bytes are already in flash, so a slot is a socket and an offset, with no buffer. A page load fetches several at once, so there is a slot per socket. A client on a slow link costs the render loop one non-blocking write per tick.
     struct EmbeddedSend {
         platform::TcpConnection conn;
         const uint8_t* data = nullptr;     // the next byte to send
         size_t left = 0;
         uint32_t lastActivityMs = 0;       // the same stall guard the transfers use
     };
-    static constexpr int kEmbeddedSendSlots = 8;
-    std::array<EmbeddedSend, kEmbeddedSendSlots> embeddedSends_{};
+    std::array<EmbeddedSend, 16> embeddedSends_{};   // as many as the ESP32's CONFIG_LWIP_MAX_SOCKETS, so a page load never finds them all busy
     /// Send what each slot's socket accepts now; close a slot once its file is out, its peer errs, or it stalls.
     void drainEmbeddedSends();
 

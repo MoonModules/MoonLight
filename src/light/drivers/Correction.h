@@ -2,6 +2,7 @@
 
 #include <cmath>   // powf: the gamma presets, off the per-frame path; the soft start rebakes them each tick for five seconds
 #include "platform/nonblocking.h"   // MM_NONBLOCKING: the brightness table rebakes on the soft start's tick
+#include "platform_config.h"   // MM_RAMFUNC: the ring's refill interrupt corrects every light it encodes
 
 #include <cstdint>
 #include <initializer_list>   // anyPresent: the offsets a fixture may carry
@@ -151,7 +152,7 @@ struct Correction {
 
     /// The transform through a curve table of either width, so the 8-bit and 16-bit outputs share every line. A remap, not a copy: the layer's packed slots become the fixture's own offsets.
     template <typename T>
-    inline void applyThrough(const T* lut, const uint8_t* src, T* out, uint8_t srcChannels) const {
+    inline void MM_RAMFUNC applyThrough(const T* lut, const uint8_t* src, T* out, uint8_t srcChannels) const {
         // A plain strip: the curve on each color and nothing optional, the drivers' commonest light.
         if (plainRgb) {
             if (offRed != kAbsent)   out[offRed] = lut[src[0]];

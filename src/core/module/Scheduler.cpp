@@ -57,10 +57,8 @@ void Scheduler::tick() MM_NONBLOCKING {
     uint32_t now = platform::millis();
     uint32_t tickStart = platform::micros();
 
-    // A requested rebuild runs here at a frame boundary; the analyzer reports prepareTree transitively and that finding stays on purpose, the only signal if the gate is lost.
-    if (prepareRequested_.exchange(false, std::memory_order_relaxed)) {
-        prepareTree();
-    }
+    // A requested rebuild runs here at a frame boundary; the analyzer reports it transitively and that finding stays on purpose, the only signal if the gate is lost.
+    preparePending();
 
     // Disabled modules do not tick, except system modules that override `respectsEnabled()` to return false so users can re-enable others through them.
     auto shouldRun = [](MoonModule* m) {
@@ -126,6 +124,15 @@ uint32_t Scheduler::elapsed() const {
     return platform::millis() - startTime_;
 }
 
+void Scheduler::preparePending() {
+    MoonModule* scopes[std::tuple_size_v<decltype(preparePending_)>];
+    uint8_t scopeCount = 0;
+    for (auto& slot : preparePending_)
+        if (MoonModule* m = slot.exchange(nullptr, std::memory_order_relaxed)) scopes[scopeCount++] = m;
+    if (prepareRequested_.exchange(false, std::memory_order_relaxed)) prepareTree();   // the tree covers every scope
+    else if (scopeCount) prepareSubtrees(scopes, scopeCount);
+}
+
 void Scheduler::prepareTree() {
     // This walk is the one a pending request asked for; a request made during it still stands.
     prepareRequested_.store(false, std::memory_order_relaxed);
@@ -135,6 +142,27 @@ void Scheduler::prepareTree() {
     // Controls a state document named before their script compiled; this prepare compiled it.
     applyDeferredControls(*this);
     // Last, so a module reading across the tree sees every script's controls.
+    for (uint8_t i = 0; i < moduleCount_; i++) modules_[i]->onTreePrepared();
+}
+
+namespace {
+// Whether `m` is `root` or below it, so a pending scope removed since it was requested is never touched.
+bool holds(const MoonModule* root, const MoonModule* m) {
+    if (root == m) return true;
+    for (uint8_t i = 0; i < root->childCount(); i++)
+        if (const MoonModule* c = root->child(i); c && holds(c, m)) return true;
+    return false;
+}
+}  // namespace
+
+void Scheduler::prepareSubtrees(MoonModule* const* scopes, uint8_t count) {
+    for (uint8_t s = 0; s < count; s++) {
+        bool present = false;
+        for (uint8_t i = 0; i < moduleCount_ && !present; i++) present = modules_[i] && holds(modules_[i], scopes[s]);
+        if (!present) { prepareTree(); return; }   // gone since the request: the tree it changed is rebuilt whole
+    }
+    for (uint8_t s = 0; s < count; s++) scopes[s]->applyState();
+    applyDeferredControls(*this);
     for (uint8_t i = 0; i < moduleCount_; i++) modules_[i]->onTreePrepared();
 }
 
@@ -196,15 +224,23 @@ MoonModule* Scheduler::firstByName(const char* name) {
 
 Scheduler::SetControlResult Scheduler::setControl(const char* moduleName,
                                                  const char* controlName,
-                                                 const char* valueJson) {
+                                                 const char* valueJson, bool live) {
     MoonModule* target = firstByName(moduleName);
     if (!target) return SetControlResult::ModuleNotFound;
+    // Restored however this returns, so only the writes this one makes inherit it.
+    struct LiveScope {
+        bool& flag; bool was;
+        LiveScope(bool& f, bool l) : flag(f), was(f) { flag = flag || l; }
+        ~LiveScope() { flag = was; }
+    } liveScope(liveWrite_, live);
 
     // Module-level "enabled" pseudo-control, toggles the flag, then a full rebuild so the disabled subtree stops/starts ticking.
     if (std::strcmp(controlName, "enabled") == 0) {
         target->setEnabled(mm::json::parseBool(valueJson, "value"));
-        target->markDirty();
-        if (noteDirtyHook_) noteDirtyHook_();
+        if (!liveWrite_) {   // a service flipping a look is driving it, as for any other control
+            target->markDirty();
+            if (noteDirtyHook_) noteDirtyHook_();
+        }
         requestPrepareTree();
         // `enabled` rides the FULL state, not the per-leaf patch, so a full resync (the schema-change signal) is what tells the client.
         MoonModule::notifySchemaChanged();
@@ -224,8 +260,8 @@ Scheduler::SetControlResult Scheduler::setControl(const char* moduleName,
             case ApplyResult::ReadOnly:   return SetControlResult::ReadOnly;
         }
         reactToControlChange(target, controlName);
-        // A live control (ControlDescriptor::live) is driven continuously and is not configuration, so it never marks the tree dirty; `c` is the descriptor just applied.
-        if (!c.live) {
+        // A live control (ControlDescriptor::live), or a live write such as a service's, is driven rather than configured, so it never marks the tree dirty; `c` is the descriptor just applied.
+        if (!c.live && !liveWrite_) {
             target->markDirty();
             if (noteDirtyHook_) noteDirtyHook_();
         }
@@ -238,7 +274,12 @@ void Scheduler::reactToControlChange(MoonModule* target, const char* controlName
     // The list rebuilds first, so defineControls() re-evaluates conditional visibility for the new value.
     target->rebuildControls();
     target->onControlChanged(controlName);
-    if (target->affectsPrepare(controlName)) requestPrepareTree();
+    if (!target->affectsPrepare(controlName)) return;
+    switch (target->prepareScope()) {
+        case PrepareScope::Self:   requestPrepare(target); break;
+        case PrepareScope::Parent: requestPrepare(target->parent()); break;   // a top module has none: the tree
+        case PrepareScope::Tree:   requestPrepareTree(); break;
+    }
 }
 
 namespace {

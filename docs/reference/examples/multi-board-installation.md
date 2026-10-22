@@ -34,10 +34,10 @@ This is the case study of one multi-device installation. The steps for your own 
 
 | part | hardware | lights | layout | effect |
 |---|---|---|---|---|
-| legs | LightCrafter 16 (ESP32-S3 N8R8) | 10 SK6812 RGBW strips of 144 | Tubes, `tubeDistance` 7 | [`stadbeest-walk.mle`](https://github.com/MoonModules/MoonLight/blob/main/moonlive/effects/stadbeest/stadbeest-walk.mle), [`stadbeest-orb.mle`](https://github.com/MoonModules/MoonLight/blob/main/moonlive/effects/stadbeest/stadbeest-orb.mle), [`stadbeest-thrusters.mle`](https://github.com/MoonModules/MoonLight/blob/main/moonlive/effects/stadbeest/stadbeest-thrusters.mle) |
-| left eye | ESP32-S3-Zero, 4 MB | a 241-light ring disc | Rings241 | [`stadbeest-frog-eye.mle`](https://github.com/MoonModules/MoonLight/blob/main/moonlive/effects/stadbeest/stadbeest-frog-eye.mle), [`stadbeest-eye-orb.mle`](https://github.com/MoonModules/MoonLight/blob/main/moonlive/effects/stadbeest/stadbeest-eye-orb.mle), [`stadbeest-sauron.mle`](https://github.com/MoonModules/MoonLight/blob/main/moonlive/effects/stadbeest/stadbeest-sauron.mle) |
+| legs | LightCrafter 16 (ESP32-S3 N8R8) | 10 SK6812 RGBW strips of 144 | Tubes, `tubeDistance` 7 | [`stadbeest-walk.mle`](https://github.com/MoonModules/MoonLight/blob/main/moonlive/projects/stadbeest/stadbeest-walk.mle), [`stadbeest-orb.mle`](https://github.com/MoonModules/MoonLight/blob/main/moonlive/projects/stadbeest/stadbeest-orb.mle), [`stadbeest-thrusters.mle`](https://github.com/MoonModules/MoonLight/blob/main/moonlive/projects/stadbeest/stadbeest-thrusters.mle) |
+| left eye | ESP32-S3-Zero, 4 MB | a 241-light ring disc | Rings241 | [`stadbeest-frog-eye.mle`](https://github.com/MoonModules/MoonLight/blob/main/moonlive/projects/stadbeest/stadbeest-frog-eye.mle), [`stadbeest-eye-orb.mle`](https://github.com/MoonModules/MoonLight/blob/main/moonlive/projects/stadbeest/stadbeest-eye-orb.mle), [`stadbeest-sauron.mle`](https://github.com/MoonModules/MoonLight/blob/main/moonlive/projects/stadbeest/stadbeest-sauron.mle) |
 | right eye | ESP32-S3-Zero, 4 MB | a 241-light ring disc | Rings241 | the same three as the left eye |
-| mouth | ESP32-C3 RGBWW PWM bulb | one RGBWW light | Grid 1×1×1 | [`stadbeest-mouth.mle`](https://github.com/MoonModules/MoonLight/blob/main/moonlive/effects/stadbeest/stadbeest-mouth.mle) |
+| mouth | ESP32-C3 RGBWW PWM bulb | one RGBWW light | Grid 1×1×1 | [`stadbeest-mouth.mle`](https://github.com/MoonModules/MoonLight/blob/main/moonlive/projects/stadbeest/stadbeest-mouth.mle) |
 
 The three looks, as each device's preview shows them; the mouth, one light, breathes along with each.
 
@@ -139,7 +139,7 @@ So they look the same way at the same moment, with no message between them.
 **Use them yourself.**
 The six looks and the autopilot are part of MoonLight's [script library](https://github.com/MoonModules/MoonLight/tree/main/moonlive).
 Every device running MoonLight lists them in its script picker and downloads one when it is chosen.
-The full code: [`stadbeest-walk.mle`](https://github.com/MoonModules/MoonLight/blob/main/moonlive/effects/stadbeest/stadbeest-walk.mle), [`stadbeest-orb.mle`](https://github.com/MoonModules/MoonLight/blob/main/moonlive/effects/stadbeest/stadbeest-orb.mle), [`stadbeest-thrusters.mle`](https://github.com/MoonModules/MoonLight/blob/main/moonlive/effects/stadbeest/stadbeest-thrusters.mle), [`stadbeest-frog-eye.mle`](https://github.com/MoonModules/MoonLight/blob/main/moonlive/effects/stadbeest/stadbeest-frog-eye.mle), [`stadbeest-eye-orb.mle`](https://github.com/MoonModules/MoonLight/blob/main/moonlive/effects/stadbeest/stadbeest-eye-orb.mle), [`stadbeest-sauron.mle`](https://github.com/MoonModules/MoonLight/blob/main/moonlive/effects/stadbeest/stadbeest-sauron.mle) and [`stadbeest-autopilot.mls`](https://github.com/MoonModules/MoonLight/blob/main/moonlive/services/stadbeest-autopilot.mls); to write your own, start with [your first script](../../moonwalk.md#first-script).
+The full code: [`stadbeest-walk.mle`](https://github.com/MoonModules/MoonLight/blob/main/moonlive/projects/stadbeest/stadbeest-walk.mle), [`stadbeest-orb.mle`](https://github.com/MoonModules/MoonLight/blob/main/moonlive/projects/stadbeest/stadbeest-orb.mle), [`stadbeest-thrusters.mle`](https://github.com/MoonModules/MoonLight/blob/main/moonlive/projects/stadbeest/stadbeest-thrusters.mle), [`stadbeest-frog-eye.mle`](https://github.com/MoonModules/MoonLight/blob/main/moonlive/projects/stadbeest/stadbeest-frog-eye.mle), [`stadbeest-eye-orb.mle`](https://github.com/MoonModules/MoonLight/blob/main/moonlive/projects/stadbeest/stadbeest-eye-orb.mle), [`stadbeest-sauron.mle`](https://github.com/MoonModules/MoonLight/blob/main/moonlive/projects/stadbeest/stadbeest-sauron.mle) and [`stadbeest-autopilot.mls`](https://github.com/MoonModules/MoonLight/blob/main/moonlive/projects/stadbeest/stadbeest-autopilot.mls); to write your own, start with [your first script](../../moonwalk.md#first-script).
 
 ---
 
@@ -227,13 +227,13 @@ Every device runs the [Audio](../../moonmodules/core/services.md#audio) service 
 
 ## 6. Running unattended
 
-A [MoonLiveService](../../moonmodules/core/services.md#moonliveservice) on the leader runs [`stadbeest-autopilot.mls`](https://github.com/MoonModules/MoonLight/blob/main/moonlive/services/stadbeest-autopilot.mls), which plays the beast through a whole museum night without anyone at the desk.
+A [MoonLiveService](../../moonmodules/core/services.md#moonliveservice) on the leader runs [`stadbeest-autopilot.mls`](https://github.com/MoonModules/MoonLight/blob/main/moonlive/projects/stadbeest/stadbeest-autopilot.mls), which plays the beast through a whole museum night without anyone at the desk.
 
 <img src="../../assets/reference/examples/multi-board/autopilot-card.png" width="300" alt="The autopilot service card: script, run and seconds">
 
 - **Scenes:** every `seconds`, three minutes by default, it picks a new scene.
   A scene moves on to the next look, walking, the orb or the thrusters, by switching `switch3` to `switch5`.
-  It picks a built-in palette, in a third of the thruster scenes [`stadbeest-fire.mlp`](https://github.com/MoonModules/MoonLight/blob/main/moonlive/palettes/stadbeest-fire.mlp), a mood from calm to wild, how much the music counts and `pulse` on or off.
+  It picks a built-in palette, in a third of the thruster scenes [`stadbeest-fire.mlp`](https://github.com/MoonModules/MoonLight/blob/main/moonlive/projects/stadbeest/stadbeest-fire.mlp), a mood from calm to wild, how much the music counts and `pulse` on or off.
   That palette is computed every frame: louder music burns hotter, a beat flares the hot end white, and the flames flicker.
   A palette has the same number on every device, so the eyes and the mouth pick the same one.
 - **Breathing:** within a scene the energy rises and falls once a minute, through `fader2`, the tempo of whatever look runs.

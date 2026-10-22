@@ -81,8 +81,8 @@ extern "C" inline uint32_t mm_service_setControl(const uintptr_t* args, uint32_t
     char valueJson[32];
     std::snprintf(valueJson, sizeof(valueJson), "{\"value\":%d}",
                   static_cast<int>(static_cast<int32_t>(args[1])));
-    // Through the primitive every transport uses, so a script write looks like an OSC message.
-    return sched->setControl("Control", name, valueJson) == Scheduler::SetControlResult::Ok ? 1u : 0u;
+    // Through the primitive every transport uses, so a script write looks like an OSC message; live, since a script drives a value rather than configures it, so nothing is saved.
+    return sched->setControl("Control", name, valueJson, /*live=*/true) == Scheduler::SetControlResult::Ok ? 1u : 0u;
 }
 
 // --- The tables ---------------------------------------------------------------------------------

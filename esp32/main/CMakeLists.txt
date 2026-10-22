@@ -183,8 +183,8 @@ add_custom_target(ui_embed DEPENDS ${UI_DIR}/ui_embedded.h)
 # a script is added or removed, so the catalog cannot go stale against the repo.
 set(MOONLIVE_DIR ${COMPONENT_DIR}/../../moonlive)
 set(MOONLIVE_GEN ${COMPONENT_DIR}/../../src/core/moonlive)
-file(GLOB MOONLIVE_SCRIPTS CONFIGURE_DEPENDS
-     ${MOONLIVE_DIR}/effects/*.mle ${MOONLIVE_DIR}/layouts/*.mll ${MOONLIVE_DIR}/modifiers/*.mlm)
+file(GLOB_RECURSE MOONLIVE_SCRIPTS CONFIGURE_DEPENDS
+     ${MOONLIVE_DIR}/*.mle ${MOONLIVE_DIR}/*.mll ${MOONLIVE_DIR}/*.mlm ${MOONLIVE_DIR}/*.mls ${MOONLIVE_DIR}/*.mlp)
 # See the desktop CMakeLists: the file LIST is a dependency, so a DELETED script regenerates the
 # catalog rather than lingering in it.
 string(REPLACE ";" "\n" MOONLIVE_SCRIPT_LIST "${MOONLIVE_SCRIPTS}")

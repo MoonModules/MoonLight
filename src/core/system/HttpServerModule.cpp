@@ -1188,25 +1188,25 @@ void HttpServerModule::serveFile(platform::TcpConnection& conn, const ui::Embedd
         "\r\n",
         contentType, file.len,
         file.gzipped ? "Content-Encoding: gzip\r\n" : "");
+    EmbeddedSend* slot = nullptr;
+    for (auto& s : embeddedSends_)
+        if (!s.conn.valid()) { slot = &s; break; }
+    // Every slot busy: answered rather than written whole, which would hold the render loop for the transfer.
+    if (!slot) { sendResponse(conn, 503, "application/json", "{\"error\":\"every send slot is busy\"}"); return; }
     if (!conn.write(reinterpret_cast<const uint8_t*>(header), headerLen)) return;
-    for (auto& s : embeddedSends_) {
-        if (s.conn.valid()) continue;
-        s.conn = std::move(conn);
-        s.data = file.data;
-        s.left = file.len;
-        s.lastActivityMs = platform::millis();
-        return;
-    }
-    conn.write(file.data, file.len);   // every slot busy: the bounded blocking write
+    slot->conn = std::move(conn);
+    slot->data = file.data;
+    slot->left = file.len;
+    slot->lastActivityMs = platform::millis();
 }
 
 void HttpServerModule::drainEmbeddedSends() {
     const uint32_t now = platform::millis();
     for (auto& s : embeddedSends_) {
         if (!s.conn.valid()) continue;
-        if (!sendHasHeadroom()) { s.lastActivityMs = now; continue; }   // waiting on our memory is no stall of the peer
+        // A send waiting on our memory counts as stalled too, so one that never gets room is closed and frees its share.
         int n = 1;
-        while (s.left > 0 && n > 0 && sendHasHeadroom()) {
+        while (s.left > 0 && n > 0 && sendHasHeadroom() && platform::millis() - now < kTransferTickBudgetMs) {
             n = s.conn.writeSome(s.data, s.left);
             if (n <= 0) break;
             s.data += n;
@@ -2254,11 +2254,10 @@ void HttpServerModule::serveScriptCatalog(platform::TcpConnection& conn) {
     sink.append(",\"dir\":");
     sink.writeJsonString(moonlive::kFactoryScriptDir);
 
-    // Each name carries `dim` and `tags` from its source, for the picker, and `sub`, the subfolder the UI fetches it from; the device keeps scripts flat.
-    auto emit = [&sink](const char* key, const char* folder,
-                        const char* const* names, const unsigned char* dims,
-                        const char* const* tags, const unsigned char* subs, size_t count) {
-        sink.appendf(",\"%s\":{\"folder\":\"%s\",\"names\":[", key, folder);
+    // Each name carries `dim` and `tags` from its source, for the picker, and `folder`, where under moonlive/ the UI fetches it from; the device keeps scripts flat.
+    auto emit = [&sink](const char* key, const char* const* names, const unsigned char* dims,
+                        const char* const* tags, const unsigned char* folders, size_t count) {
+        sink.appendf(",\"%s\":{\"names\":[", key);
         for (size_t i = 0; i < count; i++) {
             if (i) sink.append(",");
             sink.writeJsonString(names[i]);
@@ -2270,27 +2269,27 @@ void HttpServerModule::serveScriptCatalog(platform::TcpConnection& conn) {
             if (i) sink.append(",");
             sink.writeJsonString(tags[i]);
         }
-        sink.append("],\"sub\":[");
+        sink.append("],\"folder\":[");
         for (size_t i = 0; i < count; i++) {
             if (i) sink.append(",");
-            sink.writeJsonString(moonlive::kCatalogSubfolders[subs[i]]);
+            sink.writeJsonString(moonlive::kCatalogFolders[folders[i]]);
         }
         sink.append("]}");
     };
-    emit("effects", moonlive::kEffectFolder, moonlive::kEffectCatalog,
-         moonlive::kEffectCatalogDim, moonlive::kEffectCatalogTags, moonlive::kEffectCatalogSub,
+    emit("effects", moonlive::kEffectCatalog,
+         moonlive::kEffectCatalogDim, moonlive::kEffectCatalogTags, moonlive::kEffectCatalogFolder,
          moonlive::kEffectCatalogCount);
-    emit("layouts", moonlive::kLayoutFolder, moonlive::kLayoutCatalog,
-         moonlive::kLayoutCatalogDim, moonlive::kLayoutCatalogTags, moonlive::kLayoutCatalogSub,
+    emit("layouts", moonlive::kLayoutCatalog,
+         moonlive::kLayoutCatalogDim, moonlive::kLayoutCatalogTags, moonlive::kLayoutCatalogFolder,
          moonlive::kLayoutCatalogCount);
-    emit("modifiers", moonlive::kModifierFolder, moonlive::kModifierCatalog,
-         moonlive::kModifierCatalogDim, moonlive::kModifierCatalogTags, moonlive::kModifierCatalogSub,
+    emit("modifiers", moonlive::kModifierCatalog,
+         moonlive::kModifierCatalogDim, moonlive::kModifierCatalogTags, moonlive::kModifierCatalogFolder,
          moonlive::kModifierCatalogCount);
-    emit("services", moonlive::kServiceFolder, moonlive::kServiceCatalog,
-         moonlive::kServiceCatalogDim, moonlive::kServiceCatalogTags, moonlive::kServiceCatalogSub,
+    emit("services", moonlive::kServiceCatalog,
+         moonlive::kServiceCatalogDim, moonlive::kServiceCatalogTags, moonlive::kServiceCatalogFolder,
          moonlive::kServiceCatalogCount);
-    emit("palettes", moonlive::kPaletteFolder, moonlive::kPaletteCatalog,
-         moonlive::kPaletteCatalogDim, moonlive::kPaletteCatalogTags, moonlive::kPaletteCatalogSub,
+    emit("palettes", moonlive::kPaletteCatalog,
+         moonlive::kPaletteCatalogDim, moonlive::kPaletteCatalogTags, moonlive::kPaletteCatalogFolder,
          moonlive::kPaletteCatalogCount);
     sink.append("}");
     sink.flush();

@@ -54,6 +54,9 @@ public:
     /// The script file this palette runs.
     const char* scriptName() const { return script_.name(); }
 
+    /// Note a changed file, so the next prepare reads the script again when the path may hold it.
+    void fileChanged(const char* path) { script_.fileChanged(path); }
+
     /// Compile if the named file changed, reporting status and dynamic bytes through `owner`.
     void prepare(MoonModule& owner) {
         script_.sync(moonlive::effectSysVars(), owner, moonlive::lightBuiltins());

@@ -114,7 +114,7 @@ void  writeExec(void* dst, const void* src, size_t len);
 /// Give the scheduler a turn.
 void yield();
 
-/// Which core the caller runs on; a driver seeing core 1 knows the render/encode split is engaged.
+/// Which core the caller runs on, safe in an ISR; a driver seeing core 1 knows the render/encode split is engaged.
 uint8_t currentCore();
 /// Upper bound on cores running driver code at once, sizing per-CPU scratch; single-core targets leave slice 1 unused.
 inline constexpr uint8_t kMaxCores = 2;

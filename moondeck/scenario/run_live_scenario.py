@@ -651,7 +651,7 @@ def _fixture_canvas(fixture: list) -> list:
 def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
                  update_contract: bool = False, update_observed: bool = False,
                  update_reason: str | None = None, named: bool = True,
-                 network: str | None = None, boards: dict | None = None) -> dict:
+                 network: str | None = None, boards: dict | None = None, keep: bool = False) -> dict:
     """Run a scenario against a live device and return results.
 
     Mode handling (see docs/reference/testing.md § Scenario modes):
@@ -903,7 +903,8 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
                 # absent file, so reporting PASSED afterwards is the silent pass this op exists
                 # to prevent: the same rule the desktop runner applies.
                 path_ = step.get("path")
-                body = step.get("value", "")
+                # `from` stages a file of the repository, such as a shipped script, so its source keeps one home.
+                body = (ROOT / step["from"]).read_text(encoding="utf-8") if "from" in step else step.get("value", "")
                 if not path_:
                     print(f"  WRITE {step_name}: missing path")
                     step_result["status"] = "skipped" if step.get("optional") else "error"
@@ -1363,7 +1364,7 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
             # step, and break out of the step loop so end-of-run cleanup
             # (delete created modules) still fires.
             try:
-                metrics = collect_metrics(client, settle_s)
+                metrics = collect_metrics(client, float(step.get("settle", settle_s)))   # a step that needs longer to reach its steady state says so
             except Exception as e:
                 print(f"  FAIL  {step_name}: collect_metrics failed: {e}")
                 step_result["status"] = "error"
@@ -1521,37 +1522,39 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
         if put_back:
             print(f"  restored {put_back} control(s) on {b}")
 
-    # Cleanup: delete modules that were created by this scenario
-    for module_id in reversed(created_modules):
-        try:
-            client.delete(_mod_path(module_id))
-            print(f"  -     {module_id} (cleanup)")
-        except Exception:
-            pass
+    # `--keep` leaves the device as the last step set it, files and all, to watch or deploy what the scenario built.
+    if not keep:
+        # Cleanup: delete modules that were created by this scenario
+        for module_id in reversed(created_modules):
+            try:
+                client.delete(_mod_path(module_id))
+                print(f"  -     {module_id} (cleanup)")
+            except Exception:
+                pass
 
-    # Restore: each container's document as it was, which removes, re-creates and re-types until the tree is the one the run started with.
-    for doc in snapshot_docs:
-        try:
-            client.patch("/api/state", doc)
-        except Exception as e:
-            print(f"  WARN: couldn't restore {next(iter(doc), '?')}: {e}")
-    # And the controls it wrote, after the tree, so a module the restore re-created takes its values.
-    put_back = _restore_controls(client, prior_controls)
-    if put_back:
-        print(f"  restored {put_back} control(s) the scenario had set")
-    # And the files it created that no step removed, after the controls, so nothing still selects a file as it goes.
-    for path_ in created_files:
-        try:
-            client.delete(f"/api/dir?path={urllib.parse.quote(path_)}")
-            print(f"  -     {path_} (cleanup)")
-        except Exception:
-            pass
-    for path_, before in prior_files.items():
-        try:
-            client.post_text(f"/api/file?path={urllib.parse.quote(path_)}", before)
-            print(f"  ~     {path_} (restored)")
-        except Exception as e:
-            print(f"  WARN  restore of {path_} failed: {e}")
+        # Restore: each container's document as it was, which removes, re-creates and re-types until the tree is the one the run started with.
+        for doc in snapshot_docs:
+            try:
+                client.patch("/api/state", doc)
+            except Exception as e:
+                print(f"  WARN: couldn't restore {next(iter(doc), '?')}: {e}")
+        # And the controls it wrote, after the tree, so a module the restore re-created takes its values.
+        put_back = _restore_controls(client, prior_controls)
+        if put_back:
+            print(f"  restored {put_back} control(s) the scenario had set")
+        # And the files it created that no step removed, after the controls, so nothing still selects a file as it goes.
+        for path_ in created_files:
+            try:
+                client.delete(f"/api/dir?path={urllib.parse.quote(path_)}")
+                print(f"  -     {path_} (cleanup)")
+            except Exception:
+                pass
+        for path_, before in prior_files.items():
+            try:
+                client.post_text(f"/api/file?path={urllib.parse.quote(path_)}", before)
+                print(f"  ~     {path_} (restored)")
+            except Exception as e:
+                print(f"  WARN  restore of {path_} failed: {e}")
 
     # Write the scenario JSON back if anything changed:
     #   - observed.<target> was updated by any measure step (every run); OR
@@ -1617,6 +1620,8 @@ def main():
                         help="Registry network (moondeck.json) the host and device share, for a scenario that moves the host's WiFi.")
     parser.add_argument("--board", action="append", default=[], metavar="NAME=HOST",
                         help="Another board a scenario names in `boards`, such as sender=192.168.1.156; repeat for each.")
+    parser.add_argument("--keep", action="store_true",
+                        help="Leave the device as the last step set it, rather than restoring it: to watch or deploy what a scenario built.")
     parser.add_argument("--settle", type=float, default=3.0,
                         help="Settle time in seconds between step and measurement")
     parser.add_argument("--update-observed", action="store_true",
@@ -1690,7 +1695,7 @@ def main():
         result = run_scenario(client, path, args.settle,
                               update_contract=args.update_contract, update_observed=args.update_observed,
                               update_reason=args.reason, named=bool(args.name), network=args.network,
-                              boards=boards)
+                              boards=boards, keep=args.keep)
         all_results[result["name"]] = result
         if not result["passed"]:
             all_passed = False

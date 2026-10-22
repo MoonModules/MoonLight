@@ -454,8 +454,8 @@ TEST_CASE("a brightness change does not rescan the palette scripts; a palette fi
 
     drivers.onFileChanged("/moonlive/mine.mlp");     // what a write through the API announces
     CHECK(paletteOptions(drivers) == before + 1);
-    CHECK(mm::Drivers::touchesFolder("/", "/moonlive"));             // a restore of everything
-    CHECK_FALSE(mm::Drivers::touchesFolder("/moonlivex/a.mlp", "/moonlive"));
+    CHECK(mm::moonlive::pathTouchesFolder("/", "/moonlive"));             // a restore of everything
+    CHECK_FALSE(mm::moonlive::pathTouchesFolder("/moonlivex/a.mlp", "/moonlive"));
     std::filesystem::remove_all(root);
 }
 
