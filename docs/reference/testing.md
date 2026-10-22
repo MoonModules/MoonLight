@@ -336,6 +336,12 @@ The runner compares each measurement to the contract and fails if the device mis
 
 - `tick_us` is a **ceiling**, the device must deliver this tick or faster. Going faster than contract is good news, never a failure.
 - `free_heap` is a **floor**, the device must deliver at least this much free heap. Growing heap is good news.
+- `max_alloc_block`, `free_internal` and `min_stack_free` are **floors** a step opts into, one for each of these:
+    - the largest free block, which an allocator needing one piece depends on;
+    - the internal RAM WiFi, HTTP and the UI need on a board with PSRAM, where `free_heap` counts the PSRAM too;
+    - the headroom of the tightest task stack, which the runner names.
+
+    The first two take the heap tolerance; a stack's headroom is exact. `scenario_RAM_floor` holds them with the UI open in a real browser, through the live runner's `browser` step (`action` open, refresh or close, with a `settle` in seconds).
 - Both are **hand-set promises**, not auto-captured last readings. Renegotiating a contract requires `--update-contract --reason "..."`, see below.
 - `set_by` records when the contract was last (re)negotiated; `reason` records why. Both stamped automatically by `--update-contract`.
 
@@ -425,7 +431,7 @@ Every `scenario_*.json` carries top-level metadata plus a `description` per step
 }
 ```
 
-`name` matches the filename stem exactly; `module` drives the doc grouping and the MoonDeck filter; `also` lists peer modules. `mode` is `construct` or `mutate` (see above). `fixture` is required for `mutate` scenarios that need to run in-process. `reset` (optional but recommended for mutate scenarios) normalizes controls before measurement so contract assertions aren't coupled to run order. `contract[<target>]` carries the per-target performance contract, see § Performance contracts. `observed[<target>]` carries the published summary of the observations per metric (tick_us, free_heap, max_alloc_block), written on request; see § Persistent observations. Per-step `description` is recommended (a missing one falls back to the step's `name`/`op` in the generated view). Optional top-level `"live_only": true` keeps the scenario out of the in-process runner. Optional per-step `"measure": true` triggers a measurement after the step, checked against the step's `contract`.
+`name` matches the filename stem exactly; `module` drives the doc grouping and the MoonDeck filter; `also` lists peer modules. `mode` is `construct` or `mutate` (see above). `fixture` is required for `mutate` scenarios that need to run in-process. `reset` (optional but recommended for mutate scenarios) normalizes controls before measurement so contract assertions aren't coupled to run order. `contract[<target>]` carries the per-target performance contract, see § Performance contracts. `observed[<target>]` carries the published summary of the observations per metric (tick_us, free_heap, max_alloc_block, and on a live device free_internal and min_stack_free), written on request; see § Persistent observations. Per-step `description` is recommended (a missing one falls back to the step's `name`/`op` in the generated view). Optional top-level `"live_only": true` keeps the scenario out of the in-process runner. Optional per-step `"measure": true` triggers a measurement after the step, checked against the step's `contract`.
 
 Unknown JSON keys are ignored by both runners (C++ and Python), so adding a new field is safe.
 

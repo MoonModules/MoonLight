@@ -698,8 +698,8 @@ private:
         if (!renderSplitActive_ || encodeTask_.impl) return;
         encodeStop_.store(false, std::memory_order_release);
         encodeDone_.store(true, std::memory_order_release);
-        // 8 KB: drivers own their DMA buffers, so the task stack stays light.
-        if (!platform::spawnPinnedTask(encodeTask_, "mmEncode", &encodeTrampoline, this, 8192, 5, 1))
+        // 5 KB: drivers own their DMA buffers and a network driver sends from its own task, so the encode loops stay light, measured at 1 to 1.4 KB.
+        if (!platform::spawnPinnedTask(encodeTask_, "mmEncode", &encodeTrampoline, this, 5120, 5, 1))
             renderSplitActive_ = false;   // couldn't create the task → inline path
     }
     /// Stop and join the core-1 task, draining its encode before any buffer it reads is freed.

@@ -8,7 +8,6 @@
 #include "light/drivers/PinList.h"         // parsePinList / assignCounts (shared)
 #include "platform/platform.h"
 
-#include <numeric>  // std::gcd: the snapshot split's cache-line alignment
 
 namespace mm {
 
@@ -38,8 +37,13 @@ namespace mm {
 /// **Loopback:** in shift mode a data GPIO carries the serial stream, so the wire comes from a register output. No continuity check runs, so a mis-wired jumper shows as a bit failure. Intrusive OFF re-allocates the whole ring pool.
 ///
 /// **GPIO-DMA.** A timer ticks every 373 ns and one DMA channel writes the next slot into the GPIO port, widened to 32 bits by the platform. The next frame encodes meanwhile, so `doubleBuffer` has no effect there.
-class ParallelLedDriver : public DriverBase {
+class ParallelLedDriver : public DriverBase, public platform::InternalRamObject {   // the ring's refill interrupt reads it, so internal RAM, unlike other modules
 public:
+    /// Internal RAM, where MoonModule places other modules in PSRAM.
+    using platform::InternalRamObject::operator new;
+    /// Return the allocation above.
+    using platform::InternalRamObject::operator delete;
+
     /// Test-only: borrow a mock backend, dropping any existing one. The caller keeps ownership.
     void setPeripheralForTest(LedPeripheral* p) {
         if (peripheral_ && peripheralOwned_) { peripheral_->busDeinit(); delete peripheral_; }
@@ -99,8 +103,28 @@ public:
     /// Encode the next frame while this one clocks out, where supported.
     /// @guide Leave it on: a tick costs the longer of encode and wire, not their sum, for one extra DMA buffer and 8 to 20 ms of latency. A board without room falls back to one buffer.
     bool doubleBuffer = true;
-    /// Freeze the source each frame for the ring's off-thread refill.
+    // The peripheral's settings live on the driver, which binds them, so switching the peripheral away and back keeps them.
+
+    /// Copy each frame before the ring sends it, so a frame never mixes with the next.
     bool ringSnapshot = true;
+    /// Stream the frame as a ring of small internal buffers, or send it whole from one block.
+    bool useRing = true;
+
+    /// Size the ring by itself and show the numbers it picked in the controls below.
+    bool ringAuto = true;
+
+    /// Lights per DMA buffer: the ring's grain, and the RAM against interrupt-rate lever.
+    uint8_t ringRows = platform::kRingRowsDefault;
+
+    /// How many buffers the DMA circulates, each `ringRows` rows of internal RAM.
+    uint8_t ringBufs = platform::kRingBufsDefault;
+
+    /// Inter-buffer zero-pad in µs, buying refill deadline at a linear frame-time cost.
+    uint8_t ringPadUs = 0;
+
+    /// Shift the '595 at 26.67 MHz, not 20, for short wires; off if a panel scrambles.
+    bool shiftOverclock = false;
+
     /// TX to RX self-test: send a known pattern, bit-verify the capture.
     bool     loopbackTest = false;
     /// TX pin override for the test; unset uses lane 0.
@@ -118,6 +142,37 @@ public:
     bool     pinExpander = false;
     /// The 74HCT595 latch (RCLK) pin, needed with the expander.
     int8_t   latchPin = -1;
+    /// The i80 write strobe (WR): the pixel clock, and the expander's shift clock.
+    int8_t   clockPin = platform::i2sLanes > 0 ? -1 : 10;
+    /// The i80 bus's data/command select, which `LCD-IDF` mandates though WS2812 ignores it.
+    int8_t   dcPin    = platform::i2sLanes > 0 ? 33 : 11;
+
+    /// Bind the ring's settings whatever the peripheral, so a fresh driver reports their defaults and a switch keeps them; shown only where the peripheral streams a ring through the expander.
+    void addRingSettings() {
+        const bool canRing = peripheral_ && peripheral_->supportsRing() && pinExpanderMode();
+        const bool ring = peripheral_ && peripheral_->wantsRing();
+        // The fix for '595 corruption is OFF.
+        controls_.addControl("shiftOverclock", shiftOverclock);
+        controls_.setHidden(controls_.count() - 1, !canRing);
+        controls_.setAdvanced(controls_.count() - 1);   // a '595 clock tuning knob: expert only
+        // This picks the path; ringSnapshot tunes how the ring reads its source. Whole-frame stays as the A/B reference, not a fallback the ring degrades into.
+        controls_.addControl("useRing", useRing);
+        controls_.setHidden(controls_.count() - 1, !canRing);
+        controls_.addControl("ringSnapshot", ringSnapshot);
+        controls_.setHidden(controls_.count() - 1, !ring);
+        controls_.addControl("ringAuto", ringAuto);
+        controls_.setHidden(controls_.count() - 1, !ring);
+        // Dev tuning: ringAuto derives these for the end user, so the manual knobs are expert-only.
+        controls_.addControl("ringRows", ringRows, 1, 64);
+        controls_.setHidden(controls_.count() - 1, !ring);
+        controls_.setAdvanced(controls_.count() - 1);
+        controls_.addControl("ringBufs", ringBufs, platform::kRingBufsMin, platform::kRingBufsMax);   // depth buys jitter absorption, so only the average refill must beat the slice deadline
+        controls_.setHidden(controls_.count() - 1, !ring);
+        controls_.setAdvanced(controls_.count() - 1);
+        controls_.addControl("ringPadUs", ringPadUs, 0, platform::kRingPadMaxUs);
+        controls_.setHidden(controls_.count() - 1, !ring);
+        controls_.setAdvanced(controls_.count() - 1);
+    }
 
     /// Is the shift-register expander engaged, after the peripheral's own capability? Gated here rather than by mutating `pinExpander`, so the saved value survives a round trip.
     bool pinExpanderMode() const { return pinExpander && peripheral_ && peripheral_->supportsPinExpander(); }
@@ -145,7 +200,8 @@ public:
         controls_.setHidden(controls_.count() - 1, !(peripheral_ && peripheral_->supportsPinExpander()));
         controls_.addPin("latchPin", latchPin);
         controls_.setHidden(controls_.count() - 1, !pinExpanderMode());
-        // MoonI80 only, and gated on the expander, so it sits under the switch that governs it.
+        // Under the expander switch that governs them, then the peripheral's ring instrument.
+        addRingSettings();
         if (peripheral_) peripheral_->addRingControls(controls_);
         // A bring-up instrument rather than a casual setting, so the whole cluster is developer-only.
         controls_.addControl("loopbackTest", loopbackTest);
@@ -489,9 +545,10 @@ public:
                                            : static_cast<nrOfLightsType>(firstRow + rowCount);
         // Correction runs HERE, fused into the gather: the snapshot is a raw copy, not pre-corrected.
         const uint8_t* src = encodeSrc_ ? encodeSrc_ : sourceBuffer_->data();
-        const uint8_t srcCh = sourceBuffer_->channelsPerLight();
+        // On the ring the stride comes from the snapshot, not the source Buffer: the refill interrupt reads nothing that lives in PSRAM, where a module's members do.
+        const uint8_t srcCh = encodeSrc_ ? snapCopyCh_ : sourceBuffer_->channelsPerLight();
         auto* out = reinterpret_cast<Slot*>(dst);
-        // This core's own scratch slice: the prime fork-join runs encodeRows on both cores at once.
+        // This core's own scratch slice: the refill interrupt and the prime encode on different cores.
         uint8_t* const wire = wire_ + static_cast<size_t>(platform::currentCore()) * kMaxStrands * outCh;
         std::memset(wire, 0, static_cast<size_t>(kMaxStrands) * outCh);
         const size_t stride = outCh;
@@ -603,8 +660,6 @@ public:
     const uint16_t* laneList() const { return laneList_; }
     /// The live output Correction, which a backend's encode and prefill helpers read through.
     const Correction& correction() const { return correction_; }
-    /// Mutable reference to the ring-snapshot knob, for a backend's addRingControls to bind: addControl binds by reference, so it needs the member's address.
-    bool& ringSnapshotRef() { return ringSnapshot; }
     /// The ring snapshot buffer, null off the ring path; a backend's KPI reads its residency.
     const uint8_t* snapshotBuf() const { return snapshotBuf_; }
     /// The wired source buffer (null before setSourceBuffer): same KPI-residency use as snapshotBuf().
@@ -756,10 +811,21 @@ protected:
         const size_t dma = peripheral_ ? peripheral_->busHeapBytes() : 0;
         return DriverBase::driverHeapBytes() + snapshotCap_ + dma;
     }
-    /// The snapshot copy's source, set before copyRange: the snapshot is serial, only the ring prime still forks to the core-0 helper.
+    /// The snapshot copy's source, set before copyRange.
     const uint8_t* snapCopySrc_ = nullptr;
     uint8_t  snapCopyCh_ = 0;             ///< the snapshot copy's channel stride
     const uint8_t* encodeSrc_ = nullptr;  ///< when non-null, encodeRows reads this (bias-corrected) instead of sourceBuffer_
+
+    /// Why the ring cannot run, else null: its refill would read PSRAM. A flash save on the other core switches that cache off mid-refill, a panic, so the ring refuses instead.
+    const char* ringPsramRefusal() const {
+        if (platform::ptrIsPsram(wire_))
+            return "ring refused: its scratch fell back to PSRAM, which a flash save cuts off mid-refill; free internal RAM";
+        if (ringSnapshot && platform::ptrIsPsram(snapshotBuf_))
+            return "ring refused: its snapshot fell back to PSRAM, which a flash save cuts off mid-refill; free internal RAM";
+        if (!ringSnapshot && sourceBuffer_ && platform::ptrIsPsram(sourceBuffer_->data()))
+            return "ring refused: with ringSnapshot off it reads the frame from PSRAM, which a flash save cuts off mid-refill; turn ringSnapshot on";
+        return nullptr;
+    }
 
     /// Resize the ring snapshot to hold this driver's whole window; grow-only and off the hot path, so the render thread only ever memcpys into it.
     bool ensureSnapshotCap() {
@@ -768,7 +834,7 @@ protected:
         const size_t srcCh = sourceBuffer_->channelsPerLight();
         const size_t bytes = static_cast<size_t>(winLen_) * (srcCh ? srcCh : correction_.outChannels);
         if (bytes == 0 || snapshotCap_ >= bytes) return true;
-        // INTERNAL RAM first: PSRAM latency costs ~10% of a refill, but slow beats dark.
+        // Internal RAM, which the refill interrupt needs; a PSRAM fallback is refused by ringPsramRefusal, which names the cause in the status.
         uint8_t* grown = static_cast<uint8_t*>(platform::allocInternal(bytes));
         if (!grown) grown = static_cast<uint8_t*>(platform::alloc(bytes));
         if (!grown) return false;
@@ -799,7 +865,6 @@ protected:
         // The ISR refill reads a frozen frame while the render loop overwrites the live buffer.
         snapCopySrc_ = sourceBuffer_->data() + static_cast<size_t>(winStart_) * srcCh;
         snapCopyCh_ = static_cast<uint8_t>(srcCh);
-        // SERIAL always: forking the copy saturated core 0 and hung the board. The prime still forks.
         copyRange(0, winLights);
         // Raw source bytes, since correction runs later in encodeRows, uniformly.
         if (patternHoldStrand_ >= 0 && static_cast<uint8_t>(patternHoldStrand_) < laneCount_) {
@@ -821,7 +886,7 @@ protected:
         return true;
     }
 
-    /// Copy lights [lo, hi) of the window into the snapshot: a raw memcpy at srcCh stride. MM_RAMFUNC because both cores run it, which keeps it out of the shared flash cache.
+    /// Copy lights [lo, hi) of the window into the snapshot: a raw memcpy at srcCh stride.
     void MM_RAMFUNC copyRange(nrOfLightsType lo, nrOfLightsType hi) {
         const size_t ch = snapCopyCh_;
         if (hi > lo)
@@ -830,16 +895,6 @@ protected:
     }
 
 
-    /// Split the window near the middle, rounded so the second half starts on a cache line. Each half then owns whole cache lines, so the two cores never share one (false sharing).
-    static nrOfLightsType snapLineAlignedHalf(nrOfLightsType winLights, size_t chStride) {
-        if (chStride == 0) return winLights / 2;
-        // 64 / gcd(64, stride) lights: a plain 64/stride rounds down and misses the line boundary.
-        const auto lightsPerAlign = static_cast<nrOfLightsType>(64 / std::gcd(size_t{64}, chStride));
-        nrOfLightsType half = winLights / 2;
-        half -= half % lightsPerAlign;                                // round DOWN to a line boundary
-        if (half == 0) half = lightsPerAlign;                         // never give the helper nothing
-        return half < winLights ? half : winLights / 2;               // tiny window: plain (unaligned) halve
-    }
     /// Which strand carries the pinned pattern while a loopback runs, -1 for off.
     int16_t patternHoldStrand_ = -1;
     uint8_t kPatternRGB_[3] = {0xA5, 0x00, 0xFF};   ///< the bytes the bit-verify expects
@@ -887,11 +942,11 @@ public:
     /// The bus pin list a backend builds its bus from: data pins, then the latch in shift mode, then every spare lane parked on WR. Public because a backend reaches it through owner_.
     const uint16_t* busPinList() {
         const uint8_t width = busPinCount();
-        const uint16_t clockPin = peripheral_ ? peripheral_->clockPinForBus() : laneList_[0];
+        const uint16_t wr = peripheral_ ? peripheral_->clockPinForBus() : laneList_[0];
         for (uint8_t i = 0; i < width && i < kMaxLanes; i++) {
             if (i < physPins_)                        busPinBuf_[i] = laneList_[i];   // data
             else if (pinExpanderMode() && i == latchBit_)   busPinBuf_[i] = static_cast<uint16_t>(latchPin);
-            else                                      busPinBuf_[i] = clockPin;
+            else                                      busPinBuf_[i] = wr;
         }
         return busPinBuf_;
     }
@@ -1012,6 +1067,13 @@ protected:
             if (!ringSnapshot) freeSnapshot();
             if (peripheral_->busInitRing(rowBytes, static_cast<uint32_t>(maxLaneLights_))
                 && (!ringSnapshot || ensureSnapshotCap())) {
+                if (const char* why = ringPsramRefusal()) {
+                    peripheral_->busDeinit();   // directly: inited_ is false, so deinit would leak the built ring
+                    deinit();
+                    freeSnapshot();
+                    setStatus(why, Severity::Error);
+                    return;
+                }
                 inited_ = true;
                 dmaBuf_ = peripheral_->busBuffer(0);   // ring[0]: a real pointer, the "inited" sentinel
                 for (uint8_t i = 0; i < kMaxLanes; i++) busPins_[i] = laneList_[i];

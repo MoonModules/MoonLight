@@ -23,13 +23,6 @@ namespace mm {
 /// Both silicon paths do whole-frame chained DMA. So the classic I2S path is WiFi-underrun-immune by construction, and needs none of the ISR-refilled ring the lineage requires.
 class I80Peripheral : public LedPeripheral {
 public:
-    // Unset until the user sets them; the S3 N16R8 bench is pins "1,2,4,5,6,7,8,9", rx 12.
-
-    /// The i80 bus's write strobe, the pixel clock the peripheral mandates; in shift mode it is also the '595's shift clock, so it is wired to the expander. See the driver page.
-    int8_t clockPin = platform::i2sLanes > 0 ? -1 : 10;
-    /// The i80 bus's data/command select; unused by WS2812 but mandated by the peripheral.
-    int8_t dcPin    = platform::i2sLanes > 0 ? 33 : 11;
-
     // --- LedPeripheral descriptors ---
 
     /// The number of i80 lanes this chip provides, 0 meaning no i80 bus here; the two backends are mutually exclusive per chip, so the sum picks whichever exists.
@@ -72,13 +65,13 @@ public:
 
     /// The GPIO spare lanes park on, overriding the interface default: the "ghost pin" WR, which is already driven and already wired.
     uint16_t clockPinForBus() const override {
-        return clockPin < 0 ? platform::kBusPinUnset : static_cast<uint16_t>(clockPin);
+        return owner_->clockPin < 0 ? platform::kBusPinUnset : static_cast<uint16_t>(owner_->clockPin);
     }
 
     /// Bind the sacrificial WR (clockPin) and DC pins the i80 peripheral mandates.
     void addBusControls(ControlList& controls) override {
-        controls.addPin("clockPin", clockPin);
-        controls.addPin("dcPin", dcPin);   // never unset: esp_lcd toggles DC in software every transfer, and that aborts on a bare pad
+        controls.addPin("clockPin", owner_->clockPin);
+        controls.addPin("dcPin", owner_->dcPin);   // never unset: esp_lcd toggles DC in software every transfer, and that aborts on a bare pad
     }
     /// Whether changing `name` needs the bus rebuilt: clockPin and dcPin do.
     bool busControlTriggersBuild(const char* name) const override {
@@ -88,29 +81,29 @@ public:
     /// Why the bus pins are fatally wrong, or null when they are usable. It is the error path, not validateBusPins' warnings, as a broken bus is not a warn-and-run.
     const char* validateBusFatal() const override {
         // An unguarded -1 becomes 65535 in busInit's cast and slips IDF's own `>= 0` test.
-        if (platform::i2sLanes == 0 && clockPin < 0)
+        if (platform::i2sLanes == 0 && owner_->clockPin < 0)
             return "clockPin (WR) is unset - the i80 bus needs a write-strobe GPIO on this chip";
-        if (dcPin < 0) return "dcPin (DC) is unset - the i80 bus toggles it every frame, so it needs a real GPIO";
-        if (clockPin >= 0 && clockPin == dcPin)
+        if (owner_->dcPin < 0) return "dcPin (DC) is unset - the i80 bus toggles it every frame, so it needs a real GPIO";
+        if (owner_->clockPin >= 0 && owner_->clockPin == owner_->dcPin)
             return "clockPin (WR) and dcPin (DC) are the same GPIO - they must differ";
         // The lane sweep misses WR and DC, so the pair is refused here, in the platform's words.
-        if (clockPin >= 0) {
-            if (const char* why = platform::gpioRefusal(static_cast<uint8_t>(clockPin))) {
+        if (owner_->clockPin >= 0) {
+            if (const char* why = platform::gpioRefusal(static_cast<uint8_t>(owner_->clockPin))) {
                 std::snprintf(refusal_, sizeof(refusal_), "clockPin (WR) %s - pick another pin", why);
                 return refusal_;
             }
         }
-        if (dcPin >= 0) {
-            if (const char* why = platform::gpioRefusal(static_cast<uint8_t>(dcPin))) {
+        if (owner_->dcPin >= 0) {
+            if (const char* why = platform::gpioRefusal(static_cast<uint8_t>(owner_->dcPin))) {
                 std::snprintf(refusal_, sizeof(refusal_), "dcPin (DC) %s - pick another pin", why);
                 return refusal_;
             }
         }
         // The latch is a BUS LANE and needs its own GPIO: sharing WR latches every shift cycle.
         if (owner_->pinExpanderMode() && owner_->latchPin >= 0) {
-            if (owner_->latchPin == clockPin)
+            if (owner_->latchPin == owner_->clockPin)
                 return "latchPin is on clockPin (WR) - the latch needs its own GPIO";
-            if (owner_->latchPin == dcPin)
+            if (owner_->latchPin == owner_->dcPin)
                 return "latchPin is on dcPin (DC) - the latch needs its own GPIO";
         }
         return nullptr;
@@ -120,9 +113,9 @@ public:
     const char* validateBusPins(const uint16_t* lanes, uint8_t n) const override {
         for (uint8_t i = 0; i < n; i++) {
             // clockPin/dcPin are int8_t (-1 = unset); only a real GPIO can collide.
-            if (clockPin >= 0 && lanes[i] == static_cast<uint16_t>(clockPin))
+            if (owner_->clockPin >= 0 && lanes[i] == static_cast<uint16_t>(owner_->clockPin))
                 return "a LED pin is on clockPin (WR): that lane carries the clock, not pixels";
-            if (dcPin >= 0 && lanes[i] == static_cast<uint16_t>(dcPin))
+            if (owner_->dcPin >= 0 && lanes[i] == static_cast<uint16_t>(owner_->dcPin))
                 return "a LED pin is on dcPin: that lane carries DC, not pixels";
         }
         return nullptr;
@@ -135,7 +128,7 @@ public:
     bool busInit(size_t frameBytes, bool wantSecondBuffer) override {
         return platform::i80Ws2812Init(i80_, owner_->busPinList(), owner_->busPinCount(),
                                        clockPinForBus(),
-                                       dcPin < 0 ? platform::kBusPinUnset : static_cast<uint16_t>(dcPin),
+                                       owner_->dcPin < 0 ? platform::kBusPinUnset : static_cast<uint16_t>(owner_->dcPin),
                                        frameBytes, wantSecondBuffer, owner_->busClockMultiplier());
     }
     /// DMA buffer `i` (0 or 1) the orchestrator encodes into; buffer 1 is null in single-buffer mode, and both are busCapacity bytes.
@@ -156,18 +149,18 @@ public:
                                             size_t dataBytes, uint8_t rowBits) override {
         // Built from the same pin list and pclk, so the test transmits what the render loop does.
         return platform::i80Ws2812Loopback(owner_->busPinList(), owner_->busPinCount(),
-                                           static_cast<uint16_t>(clockPin),
-                                           static_cast<uint16_t>(dcPin),
+                                           static_cast<uint16_t>(owner_->clockPin),
+                                           static_cast<uint16_t>(owner_->dcPin),
                                            static_cast<uint16_t>(owner_->loopbackRxPin),
                                            frame, frameBytes, dataBytes, rowBits,
                                            owner_->busClockMultiplier());
     }
 
     /// Store WR and DC alongside the data pins, so editing either rebuilds the bus.
-    void recordBusPins() override { lastClockPin_ = clockPin; lastDcPin_ = dcPin; }
+    void recordBusPins() override { lastClockPin_ = owner_->clockPin; lastDcPin_ = owner_->dcPin; }
     /// Whether the live bus's WR and DC pins still match the controls, so a rebuild can be skipped.
     bool extraBusPinsCurrent() const override {
-        return lastClockPin_ == clockPin && lastDcPin_ == dcPin;
+        return lastClockPin_ == owner_->clockPin && lastDcPin_ == owner_->dcPin;
     }
 
 private:

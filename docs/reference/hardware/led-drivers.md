@@ -38,6 +38,34 @@ On an S3, P4 or S31 with `i80` or `MoonI80` as the `peripheral`, `pinExpander` o
 
 The expander buys pins, not memory: the register is serial-in, so the DMA frame grows eightfold, about 1.1 KB per light. `i80` holds the whole frame, which past about 96 lights per strand falls to PSRAM too slow for the expander's clock. `MoonI80` streams the frame and drives 128 reliably.
 
+## Sizing the MoonI80 ring
+
+`MoonI80` streams the frame through a ring of small buffers in internal RAM, refilled from an interrupt as the wire drains each one. The refill encodes faster than the wire drains, so the ring only absorbs the moments the interrupt is held off, up to about 1.1 ms. What prevents a lost frame is the ring's lead over the wire in rows, not its number of buffers. On a 3,840-light expander rig, 45 rows ran clean and 40 lost frames.
+
+`ringAuto` cuts the ring into 3-row buffers and takes enough for 54 rows of lead. It stops where free internal RAM would fall under 100 KB, and the status says when that cuts it short. With it off, `ringRows` and `ringBufs` are yours to set, at about 600 bytes a row on an 8-pin expander.
+
+`ringSnapshot` copies each frame into internal RAM before the ring sends it, 3 bytes per RGB light (11.5 KB for 3,840 lights). Off, the ring reads the live frame, and refuses where that frame is in PSRAM. A flash save on the other core switches PSRAM off in the middle of a refill.
+
+`ringDbg` shows the ring's counters once a second. `ab` and `ml` say whether the depth holds.
+
+| Field | Meaning |
+|---|---|
+| `sn`, `lv` | where the snapshot and the live frame live: `I` internal RAM, `P` PSRAM |
+| `sl/bf` | slices per frame, over buffers |
+| `co`, `cr` | refills deferred while the flash cache was off, and their longest run |
+| `ab` | stalls abandoned, each a lost frame: 0 on a healthy ring |
+| `dn`, `ld` | frames done, and the last drain |
+| `lt` | slices refilled after their drain began; the lead prevents it, so it stays 0 even while frames are lost |
+| `tx` | the frame's wire time, in µs |
+| `ipb`, `ci` | DMA items per buffer, and consumed |
+| `tn`, `de` | the chain terminator, and descriptor errors |
+| `enc`, `ea` | the slowest and the average refill, in µs |
+| `sg`, `se` | gather and emit cycles per row |
+| `tw`, `ts`, `tp` | the tick's wait, snapshot and prime, in µs |
+| `gap@` | the longest gap between refills within a frame in µs, and the slice it ended at |
+| `ml` | the fewest slices the refill stayed ahead of the drain |
+| `c` | the core the refill runs on |
+
 ## Testing the wire with the loopback
 
 `loopbackTest` sends a known pattern out of a strand and reads it back through a jumper to `loopbackRxPin`, with its verdict in the status field. A `PASS` means the chip and the peripheral are clean, so flicker that remains is [signal integrity](../troubleshooting.md#stray-pixels-or-wrong-colors-on-lights-that-should-be-off).

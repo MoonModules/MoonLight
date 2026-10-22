@@ -77,6 +77,8 @@ struct Correction {
     uint8_t offPanFine = kAbsent, offTiltFine = kAbsent, offDimmerFine = kAbsent;
     /// Whether any color or dimmer channel is 16-bit, resolved at rebuild so an 8-bit profile pays one predictable branch per light.
     bool hasFine = false;
+    /// Whether the fixture carries red, green and blue alone, resolved at rebuild so a plain strip skips every optional role per light.
+    bool plainRgb = true;
     uint8_t outChannels = 3;        // bytes emitted per light (= channelsPerLight of the wiring)
     WhiteMode whiteMode = WhiteMode::Min;   // how white is synthesized from RGB (white lights only)
 
@@ -135,6 +137,7 @@ struct Correction {
         }
         hasMotion = anyPresent({offPan, offTilt, offZoom, offRotate, offGobo});
         hasFine = anyPresent({offRedFine, offGreenFine, offBlueFine, offWhiteFine, offWarmWhiteFine, offDimmerFine});
+        plainRgb = !hasMotion && !hasFine && offDimmer == kAbsent && !anyPresent({offWhite, offWarmWhite, offYellow, offUV});
         outChannels = nChannels;
         // After the offsets: whether the 16-bit table is filled depends on hasFine.
         rebuildBrightness(brightness);
@@ -149,6 +152,13 @@ struct Correction {
     /// The transform through a curve table of either width, so the 8-bit and 16-bit outputs share every line. A remap, not a copy: the layer's packed slots become the fixture's own offsets.
     template <typename T>
     inline void applyThrough(const T* lut, const uint8_t* src, T* out, uint8_t srcChannels) const {
+        // A plain strip: the curve on each color and nothing optional, the drivers' commonest light.
+        if (plainRgb) {
+            if (offRed != kAbsent)   out[offRed] = lut[src[0]];
+            if (offGreen != kAbsent) out[offGreen] = lut[src[1]];
+            if (offBlue != kAbsent)  out[offBlue] = lut[src[2]];
+            return;
+        }
         constexpr T kFull = static_cast<T>(~T{0});   // 255 or 65535
         // Wide open, and written every frame, so a profile declaring one cannot be silently unlit.
         if (offDimmer != kAbsent) out[offDimmer] = kFull;

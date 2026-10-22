@@ -1,5 +1,5 @@
-# Opt-in FreeRTOS run-time stats — appended only for a --task-cpu-stats profiling build (see
-# build_esp32.py). Enables the per-task CPU% counter TasksModule shows behind MM_TASK_CPU_STATS.
+# Opt-in profiling — appended only for a --task-cpu-stats build (see build_esp32.py). Enables the per-task
+# CPU% counter TasksModule shows behind MM_TASK_CPU_STATS.
 # NOT in the base sdkconfig.defaults because it reads a timer on every context switch (~5% tick,
 # measured). The esp_timer clock source is the cheap default for the run-time counter.
 CONFIG_FREERTOS_GENERATE_RUN_TIME_STATS=y

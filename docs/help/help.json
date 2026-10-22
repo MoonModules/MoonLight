@@ -3702,6 +3702,12 @@
       }
      ]
     },
+    "clockPin": {
+     "line": "The i80 write strobe (WR): the pixel clock, and the expander's shift clock."
+    },
+    "dcPin": {
+     "line": "The i80 bus's data/command select, which `LCD-IDF` mandates though WS2812 ignores it."
+    },
     "pinExpander": {
      "line": "A 74HCT595 per data pin: each pin then drives 8 strands.",
      "more": "It buys pins, not memory: the frame grows eightfold, about 1.1 KB per light, up to 64 strands. `i80` stops at about 96 lights per strand, `MoonI80` drives 128.",
@@ -3714,6 +3720,30 @@
     },
     "latchPin": {
      "line": "The 74HCT595 latch (RCLK) pin, needed with the expander."
+    },
+    "shiftOverclock": {
+     "line": "Shift the '595 at 26.67 MHz, not 20, for short wires; off if a panel scrambles."
+    },
+    "useRing": {
+     "line": "Stream the frame as a ring of small internal buffers, or send it whole from one block."
+    },
+    "ringSnapshot": {
+     "line": "Copy each frame before the ring sends it, so a frame never mixes with the next."
+    },
+    "ringAuto": {
+     "line": "Size the ring by itself and show the numbers it picked in the controls below."
+    },
+    "ringRows": {
+     "line": "Lights per DMA buffer: the ring's grain, and the RAM against interrupt-rate lever."
+    },
+    "ringBufs": {
+     "line": "How many buffers the DMA circulates, each `ringRows` rows of internal RAM."
+    },
+    "ringPadUs": {
+     "line": "Inter-buffer zero-pad in µs, buying refill deadline at a linear frame-time cost."
+    },
+    "ringDbg": {
+     "line": "The ring's live counters, once a second; `ab` counts lost frames, 0 on a healthy ring."
     },
     "loopbackTest": {
      "line": "TX to RX self-test: send a known pattern, bit-verify the capture."

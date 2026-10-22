@@ -15,7 +15,7 @@ processes:
     intro: |
       A topic is one module, effect, driver or capability. The plan is the contract for the branch. A draft may wait in `docs/work/future/` until its topic is picked.
 
-      The plan becomes the pull request description and is deleted in the same pull request, the product owner's call: the code being written is not the plan being realized, since verification, including the judgment steps, is part of it.
+      The pull request description links the plan, and the plan moves to `docs/work/past/plans/` with `(shipped)` in its name in the same pull request, the product owner's call: the code being written is not the plan being realized, since verification, including the judgment steps, is part of it.
     steps:
       - id: pick
         say: Name one module, effect, driver or capability.

@@ -80,7 +80,7 @@ private:
         }
         /// How many tasks the snapshot holds.
         uint8_t listRowCount() const override { return count_; }
-        /// Append one task's summary: its name, state, core, priority and stack.
+        /// Append one task's summary: its name, state, core, priority and stack, then its CPU share where the build measures it.
         void writeListRow(JsonSink& sink, uint8_t row) const override {
             if (row >= count_) { sink.append("{}"); return; }
             const platform::TaskInfo& t = rows_[row];

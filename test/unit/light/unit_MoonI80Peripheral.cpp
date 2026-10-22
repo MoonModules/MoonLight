@@ -7,7 +7,7 @@
 #include "correction_presets.h"
 #include "light/drivers/MoonI80Peripheral.h"
 #include "light/layers/Buffer.h"
-#include "unit/core/conditional_controls.h"  // controlIndex/setControlValue — clockPin now lives on the backend
+#include "unit/core/conditional_controls.h"  // controlIndex/setControlValue: clockPin is set through the control the backend declares
 
 #include <cstring>
 
@@ -62,7 +62,7 @@ TEST_CASE("MoonI80Peripheral direct mode: clockPin is unrouted, so it cannot col
     mm::ParallelLedDriver d;
     mm::Buffer src;
     mm::Correction corr;
-    std::strcpy(d.pins, "1,2,4,5,6,7,8,10");   // pin 10 IS the default clockPin (WR) — fine here
+    std::strcpy(d.pins, "1,2,4,5,6,7,8,10");   // pin 10 IS the default clockPin (WR), fine here
     wire(d, peripheral, src, corr, 8 * 16);
     CHECK(d.severity() != mm::ParallelLedDriver::Severity::Error);
     CHECK(d.laneCount() == 8);   // it drives all eight strands
@@ -83,7 +83,7 @@ TEST_CASE("MoonI80Peripheral shift mode: a data pin on clockPin (WR) is caught")
 
 // The '595 latch rides a DATA lane (the peripheral gives only one clock output, and WR is already the shift clock), so it must not land on WR, the latch would ride the shift clock itself and nothing would ever latch, which looks like a dead strip rather than a config error.
 //
-// clockPin now lives on the MoonI80Peripheral backend (not a MoonI80Peripheral member), so it is read/set through the control API defineDriverControls() binds, the same mechanism the UI and persistence use.
+// clockPin is the driver's wiring, which the backend declares as a control, so it is read and set through the control API defineDriverControls() binds, the same mechanism the UI and persistence use.
 TEST_CASE("MoonI80Peripheral rejects a latchPin on WR") {
     ExpanderMoonI80 peripheral;
     mm::ParallelLedDriver d;
@@ -133,4 +133,31 @@ TEST_CASE("MoonI80Peripheral drives a valid config like its sibling") {
     mm::Correction corr;
     wire(d, peripheral, src, corr, 8 * 32);   // 8 lanes × 32 lights
     CHECK(d.laneCount() == 8);
+}
+
+// ringAuto once took every internal byte above a 64 KB reserve, 28 buffers on shiffy, leaving 66 KB free; the ring needs only its lead over the wire.
+TEST_CASE("MoonI80Peripheral ringAuto takes 3-row buffers for its lead, not the free RAM") {
+    // shiffy: 585 bytes per row, 259 rows per frame.
+    const auto d = mm::MoonI80Peripheral::autoDepth(585, 259, 200 * 1024);
+    CHECK(d.rows == 3);
+    CHECK(d.bufs == 21);   // 54 rows of lead over 3-row buffers, plus the 2 the refill keeps clear and the one it writes
+    CHECK_FALSE(d.shortOfLead);
+}
+
+TEST_CASE("MoonI80Peripheral ringAuto takes fewer rows per buffer when a row nearly fills a node") {
+    const auto d = mm::MoonI80Peripheral::autoDepth(1500, 259, 400 * 1024);   // 2 rows fill a 4 KB node
+    CHECK(d.rows == 2);
+}
+
+TEST_CASE("MoonI80Peripheral ringAuto never takes more than one buffer per slice and a spare") {
+    const auto d = mm::MoonI80Peripheral::autoDepth(585, 20, 200 * 1024);   // a small frame: 7 slices
+    CHECK(d.bufs == 8);
+    CHECK_FALSE(d.shortOfLead);
+}
+
+TEST_CASE("MoonI80Peripheral ringAuto stops at the internal floor and says the lead is short") {
+    const size_t freeInternal = mm::platform::kInternalFreeFloor + 6 * 3 * 585;   // room for 6 buffers above the floor
+    const auto d = mm::MoonI80Peripheral::autoDepth(585, 259, freeInternal);
+    CHECK(d.bufs == 6);
+    CHECK(d.shortOfLead);
 }

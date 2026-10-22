@@ -346,7 +346,19 @@ void* alloc(size_t bytes) {
     return trackedAlloc(bytes);
 }
 
-bool ptrIsPsram(const void* /*p*/) { return false; }   // desktop has no PSRAM
+static std::atomic<const void*> testPsramBegin{nullptr};
+static std::atomic<const void*> testPsramEnd{nullptr};
+void setTestPsramRange(const void* begin, const void* end) {
+    testPsramBegin.store(begin, std::memory_order_relaxed);
+    testPsramEnd.store(end, std::memory_order_relaxed);
+}
+
+bool ptrIsPsram(const void* p) {   // desktop has no PSRAM, unless a test marks a range as such
+    const auto* b = static_cast<const uint8_t*>(testPsramBegin.load(std::memory_order_relaxed));
+    const auto* e = static_cast<const uint8_t*>(testPsramEnd.load(std::memory_order_relaxed));
+    const auto* q = static_cast<const uint8_t*>(p);
+    return b && q && q >= b && q < e;
+}
 
 void* allocInternal(size_t bytes) {
     return trackedAlloc(bytes);   // desktop has one flat RAM: internal == ordinary
@@ -438,8 +450,11 @@ size_t freeHeap() {
     return 0; // Not meaningful on desktop (0 = unlimited)
 }
 
+static std::atomic<size_t> testFreeInternal{0};
+void setTestFreeInternalHeap(size_t bytes) { testFreeInternal.store(bytes, std::memory_order_relaxed); }
+
 size_t freeInternalHeap() {
-    return 0; // Not meaningful on desktop (0 = unlimited)
+    return testFreeInternal.load(std::memory_order_relaxed);   // 0 = not meaningful on desktop (unlimited), unless a test sets it
 }
 
 // Test-only cap on the reported largest free block, so a test can force the paged fallback without a fragmented heap.
@@ -2597,8 +2612,6 @@ bool moonI80Ws2812InitRing(MoonI80Ws2812Handle& /*h*/, const uint16_t* /*dataPin
 }
 bool moonI80Ws2812TransmitRing(MoonI80Ws2812Handle& /*h*/) { return false; }
 void moonI80SetShiftClockDiv(uint8_t /*div*/) {}
-void moonI80Ws2812PrimeRange(MoonI80Ws2812Handle& /*h*/, uint8_t /*bufLo*/, uint8_t /*bufHi*/) {}
-bool moonI80Ws2812ArmRing(MoonI80Ws2812Handle& /*h*/) { return false; }
 bool moonI80Ws2812IsRing(const MoonI80Ws2812Handle& /*h*/) { return false; }
 bool moonI80Ws2812InternalFits(size_t /*bytes*/) { return false; }
 uint8_t* moonI80Ws2812Buffer(const MoonI80Ws2812Handle& h, uint8_t buffer) {

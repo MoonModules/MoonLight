@@ -159,12 +159,18 @@ def load_clang():
     return ci, (["-resource-dir", resource] if resource else []) + _toolchain_args()
 
 
-def _referenced_field(expr):
-    """The member an argument names, through casts and array decay; None for a temporary."""
+def _referenced_field(expr, through_accessor=False):
+    """The member an argument names, through casts and array decay, or with `through_accessor` the one an accessor it calls returns; None for a temporary."""
     for node in expr.walk_preorder():
         ref = node.referenced
         if ref is not None and ref.kind.name in ("FIELD_DECL", "VAR_DECL"):
             return ref
+        if through_accessor and node.kind.name == "CALL_EXPR" and ref is not None and ref.kind.name == "CXX_METHOD":
+            # An accessor such as `char* lastSavedStr() { return lastSaveStr_; }` publishes the member it returns.
+            body = ref.get_definition()
+            ret = next((n for n in body.walk_preorder() if n.kind.name == "RETURN_STMT"), None) if body is not None else None
+            if ret is not None:
+                return _referenced_field(ret, through_accessor)
     return None
 
 
@@ -199,7 +205,7 @@ def control_help(text: str) -> dict:
 
 
 def controls_of(cls) -> dict:
-    """Each control the `defineControls` the class runs publishes, in order, with its comment: the `///` on the member the `add…` call names, else the run above the call or a `///<` behind it; empty when there is neither. A call to one of the class's own methods is followed as the virtual call resolves it, so a base's template method and its helpers count, and a branch on a method returning a literal `true` or `false` follows that value."""
+    """Each control the `defineControls` the class runs publishes, in order, with its comment: the `///` on the member the `add…` call names, else the run above the call or a `///<` behind it, else the member an accessor in the call returns; empty when there is neither. A call to one of the class's own methods is followed as the virtual call resolves it, so a base's template method and its helpers count, and a branch on a method returning a literal `true` or `false` follows that value."""
     controls, entered = {}, set()
 
     def own(node):
@@ -230,14 +236,21 @@ def controls_of(cls) -> dict:
             name = _literal(args[0]) if args and callee.startswith("add") else None
             if name:
                 field = _referenced_field(args[1]) if len(args) > 1 else None
-                controls[name] = (comment_text(field.raw_comment) if field is not None else "") \
-                    or _line_comment(node)
+                # A member the call names says it; else the call's own comment, then the member an accessor returns.
+                named = comment_text(field.raw_comment) if field is not None else ""
+                behind = _referenced_field(args[1], through_accessor=True) if len(args) > 1 and not named else None
+                controls[name] = named or _line_comment(node) or (comment_text(behind.raw_comment) if behind is not None else "")
                 return
             method = own(node)
             if method is not None and method.hash not in entered:
                 entered.add(method.hash)
                 visit(method)
                 return
+            # A strategy handed the control list, such as a driver's peripheral, declares controls the module shows: each override can run, so each one's count.
+            for impl in _overrides_given_controls(node):
+                if impl.hash not in entered:
+                    entered.add(impl.hash)
+                    visit(impl)
         for child in node.get_children():
             visit(child)
 
@@ -245,6 +258,28 @@ def controls_of(cls) -> dict:
     if root is not None:
         visit(root)
     return controls
+
+
+def _overrides_given_controls(call) -> list:
+    """Every definition of the virtual method `call` reaches on another object when it is handed a `ControlList`, one per class in the unit that derives from the method's class: which one runs is decided at run time, so each declares controls the module can show."""
+    ref = call.referenced
+    if ref is None or ref.kind.name != "CXX_METHOD" or not ref.is_virtual_method():
+        return []
+    if not any("ControlList" in a.type.spelling for a in ref.get_arguments()):
+        return []
+    base = ref.semantic_parent
+    unit = call.translation_unit.cursor
+    impls = []
+    for c in unit.walk_preorder():
+        if c.kind.name not in ("CLASS_DECL", "STRUCT_DECL") or not c.is_definition() or c.spelling == base.spelling:
+            continue
+        if not _is_base_or_self(c, base):
+            continue
+        method = _runs(c, ref.spelling)
+        if method is not None and method.semantic_parent is not None and method.semantic_parent.spelling != base.spelling \
+                and all(m.hash != method.hash for m in impls):
+            impls.append(method)
+    return impls
 
 
 def _is_base_or_self(cls, other) -> bool:

@@ -44,7 +44,8 @@ struct SwapMock : mm::LedPeripheral {
     const char* initFailMsg() const override { return "mock init failed"; }
     mm::LedHwBlock hwBlock() const override { return block; }
 
-    void addBusControls(mm::ControlList&) override {}
+    void addBusControls(mm::ControlList& controls) override { controls.addPin("clockPin", owner_->clockPin); }   // as both LCD backends declare it
+    void addRingControls(mm::ControlList& controls) override { controls.addControl("ringBufs", owner_->ringBufs, 2, 64); }   // as LCD-MM declares it
     bool busControlTriggersBuild(const char*) const override { return false; }
     void recordBusPins() override {}
     bool extraBusPinsCurrent() const override { return true; }
@@ -98,6 +99,28 @@ void changePeripheralTo(mm::ParallelLedDriver& d, uint8_t index) {
     d.onControlChanged("peripheral");
 }
 
+// Wire a working driver on pins 1 and 2. A fresh driver seeds the first registered backend, swapA.
+void wireDriver(mm::ParallelLedDriver& d, mm::Buffer& src, mm::Correction& corr) {
+    std::strcpy(d.pins, "1,2");
+    REQUIRE(src.allocate(64, 3) == true);
+    mm::test::rebuildFromPreset(corr, 255, mm::test::PresetOrder::GRB);
+    d.defineControls();
+    d.setSourceBuffer(&src);
+    d.correctionForTest() = corr;
+    d.applyState();
+}
+
+// The `peripheral` Select's index for a backend's label, or -1: the board-filtered option list in registry order, which a test does not hardcode. A Select keeps its options in aux and their count in max.
+int peripheralIndex(mm::ParallelLedDriver& d, const char* label) {
+    const int sel = mm::test::controlIndex(d, "peripheral");
+    if (sel < 0) return -1;
+    const auto& c = d.controls()[static_cast<uint8_t>(sel)];
+    const char* const* opts = reinterpret_cast<const char* const*>(c.aux);
+    for (int k = 0; k < c.max; k++)
+        if (opts[k] && std::strcmp(opts[k], label) == 0) return k;
+    return -1;
+}
+
 } // namespace
 
 TEST_CASE("ParallelLedDriver: a peripheral swap does not double-free or dangle the control list") {
@@ -108,29 +131,13 @@ TEST_CASE("ParallelLedDriver: a peripheral swap does not double-free or dangle t
         mm::ParallelLedDriver d;
         mm::Buffer src;
         mm::Correction corr;
-        // Fresh driver seeds the first registered backend (swapA). Wire a working config.
-        std::strcpy(d.pins, "1,2");
-        REQUIRE(src.allocate(64, 3) == true);
-        mm::test::rebuildFromPreset(corr, 255, mm::test::PresetOrder::GRB);
-        d.defineControls();
-        d.setSourceBuffer(&src);
-        d.correctionForTest() = corr;
-        d.applyState();
+        wireDriver(d, src, corr);
 
         // Exactly ONE backend is live for a driver holding a single peripheral.
         CHECK(SwapMock::live == liveBefore + 1);
 
-        // Resolve labels → board-filtered indices via the driver's own option list (order is registry order, which the test does not hardcode). A Select stores its options in aux and its option COUNT in max (hi = max-1), the shape defineDriverControls uses for the peripheral Select.
-        int aIdx = -1, bIdx = -1;
-        const auto& cs = d.controls();
-        int selIdx = mm::test::controlIndex(d, "peripheral");
-        REQUIRE(selIdx >= 0);
-        const char* const* opts = reinterpret_cast<const char* const*>(cs[static_cast<uint8_t>(selIdx)].aux);
-        const int optCount = cs[static_cast<uint8_t>(selIdx)].max;   // addSelect stores optionCount in max
-        for (int k = 0; k < optCount; k++) {
-            if (opts[k] && std::strcmp(opts[k], "swapA") == 0) aIdx = k;
-            if (opts[k] && std::strcmp(opts[k], "swapB") == 0) bIdx = k;
-        }
+        const int aIdx = peripheralIndex(d, "swapA");
+        const int bIdx = peripheralIndex(d, "swapB");
         REQUIRE(aIdx >= 0);
         REQUIRE(bIdx >= 0);
 
@@ -173,21 +180,8 @@ TEST_CASE("ParallelLedDriver: a live peripheral swap quiesces the render worker 
         mm::ParallelLedDriver d;
         mm::Buffer src;
         mm::Correction corr;
-        std::strcpy(d.pins, "1,2");
-        REQUIRE(src.allocate(64, 3) == true);
-        mm::test::rebuildFromPreset(corr, 255, mm::test::PresetOrder::GRB);
-        d.defineControls();
-        d.setSourceBuffer(&src);
-        d.correctionForTest() = corr;
-        d.applyState();
-
-        const auto& cs = d.controls();
-        int selIdx = mm::test::controlIndex(d, "peripheral");
-        REQUIRE(selIdx >= 0);
-        const char* const* opts = reinterpret_cast<const char* const*>(cs[static_cast<uint8_t>(selIdx)].aux);
-        const int optCount = cs[static_cast<uint8_t>(selIdx)].max;
-        int bIdx = -1;
-        for (int k = 0; k < optCount; k++) if (opts[k] && std::strcmp(opts[k], "swapB") == 0) bIdx = k;
+        wireDriver(d, src, corr);
+        const int bIdx = peripheralIndex(d, "swapB");
         REQUIRE(bIdx >= 0);
 
         // Reset the fire count to ZERO immediately before the swap so the dtor's "had the hook fired?" snapshot reflects ONLY this swap, not an earlier fire from applyState/rebuild. Otherwise any prior fire would make g_hookFiredBeforeLastDtor true even if THIS swap freed A before quiescing.
@@ -201,4 +195,45 @@ TEST_CASE("ParallelLedDriver: a live peripheral swap quiesces the render worker 
     }
 
     mm::MoonModule::setQuiesceRenderHook(nullptr);
+}
+
+// The wiring is the board's and the ring's settings the user's, so both survive the peripheral they are declared through. Each backend once held its own copy at a default, so a switch there and back put WR on a data pin and reset the ring.
+TEST_CASE("ParallelLedDriver: switching the peripheral and back keeps the clockPin and the ring's settings") {
+    RegistryScope registry;
+    mm::ParallelLedDriver d;
+    mm::Buffer src;
+    mm::Correction corr;
+    wireDriver(d, src, corr);
+    const int aIdx = peripheralIndex(d, "swapA");
+    const int bIdx = peripheralIndex(d, "swapB");
+    REQUIRE(aIdx >= 0);
+    REQUIRE(bIdx >= 0);
+    changePeripheralTo(d, static_cast<uint8_t>(aIdx));
+    mm::test::setControlValue<int8_t>(d, "clockPin", 3);
+    mm::test::setControlValue<uint8_t>(d, "ringBufs", 20);
+
+    changePeripheralTo(d, static_cast<uint8_t>(bIdx));
+    changePeripheralTo(d, static_cast<uint8_t>(aIdx));
+
+    const int idx = mm::test::controlIndex(d, "clockPin");
+    REQUIRE(idx >= 0);
+    CHECK(*static_cast<const int8_t*>(d.controls()[static_cast<uint8_t>(idx)].ptr) == 3);
+    CHECK(d.clockPin == 3);
+    const int ring = mm::test::controlIndex(d, "ringBufs");
+    REQUIRE(ring >= 0);
+    CHECK(*static_cast<const uint8_t*>(d.controls()[static_cast<uint8_t>(ring)].ptr) == 20);
+    CHECK(d.ringBufs == 20);
+}
+
+// The reset button's default comes from a fresh driver, which on an S3 starts on LCD-IDF: settings a ring-capable peripheral declared had none there.
+TEST_CASE("ParallelLedDriver: the ring's settings are declared, hidden, without a ring-capable peripheral, so their defaults are known") {
+    RegistryScope registry;
+    mm::ParallelLedDriver d;
+    d.defineControls();
+    for (const char* name : {"shiftOverclock", "useRing", "ringSnapshot", "ringAuto", "ringRows", "ringBufs", "ringPadUs"}) {
+        CAPTURE(name);
+        const int idx = mm::test::controlIndex(d, name);
+        REQUIRE(idx >= 0);
+        CHECK(d.controls()[static_cast<uint8_t>(idx)].hidden);
+    }
 }

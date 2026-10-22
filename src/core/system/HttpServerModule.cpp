@@ -118,6 +118,7 @@ void HttpServerModule::release() {
     for (auto& ws : wsClients_) ws.close();
     for (auto& c : parked_) c.close();
     releaseTransfers();
+    for (auto& s : embeddedSends_) s.conn.close();
     // Every close site notifies the producer (see cancelBufferedSend), else ghost standing requests keep the driver gathering frames for nobody.
     for (int i = 0; i < MAX_PREVIEW_CLIENTS; i++) {
         if (previewClients_[i].valid() && clientSink_) clientSink_->onClientGone(i);
@@ -300,6 +301,7 @@ void HttpServerModule::driveTransfers() {
             if (now - budgetStart >= kTransferTickBudgetMs) break;
         }
     }
+    drainEmbeddedSends();   // an embedded file is a transfer too, its bytes already in flash
 }
 
 void HttpServerModule::tick1s() MM_NONBLOCKING {
@@ -1186,8 +1188,33 @@ void HttpServerModule::serveFile(platform::TcpConnection& conn, const ui::Embedd
         "\r\n",
         contentType, file.len,
         file.gzipped ? "Content-Encoding: gzip\r\n" : "");
-    conn.write(reinterpret_cast<const uint8_t*>(header), headerLen);
-    conn.write(file.data, file.len);
+    if (!conn.write(reinterpret_cast<const uint8_t*>(header), headerLen)) return;
+    for (auto& s : embeddedSends_) {
+        if (s.conn.valid()) continue;
+        s.conn = std::move(conn);
+        s.data = file.data;
+        s.left = file.len;
+        s.lastActivityMs = platform::millis();
+        return;
+    }
+    conn.write(file.data, file.len);   // every slot busy: the bounded blocking write
+}
+
+void HttpServerModule::drainEmbeddedSends() {
+    const uint32_t now = platform::millis();
+    for (auto& s : embeddedSends_) {
+        if (!s.conn.valid()) continue;
+        if (!sendHasHeadroom()) { s.lastActivityMs = now; continue; }   // waiting on our memory is no stall of the peer
+        int n = 1;
+        while (s.left > 0 && n > 0 && sendHasHeadroom()) {
+            n = s.conn.writeSome(s.data, s.left);
+            if (n <= 0) break;
+            s.data += n;
+            s.left -= static_cast<size_t>(n);
+            s.lastActivityMs = now;
+        }
+        if (s.left == 0 || n < 0 || now - s.lastActivityMs > kTransferStallMs) s.conn.close();
+    }
 }
 
 void HttpServerModule::serveState(platform::TcpConnection& conn) {
@@ -2914,6 +2941,8 @@ void HttpServerModule::drainPreviewSend() {
     LockGuard lease{wsLock_};
     if (!lease) return;
     if (!previewSend_.active) return;
+    // Short of internal RAM the frame waits, and the producer drops the frames behind it, as it does for a busy socket.
+    if (!sendHasHeadroom()) return;
     const size_t total = previewSend_.hdrLen + previewSend_.bodyLen;
     const size_t chunk = drainChunkBytes();
     bool anyLiveClient = false;
@@ -3005,7 +3034,7 @@ void HttpServerModule::drainStream(int client, size_t budget) {
     StateStream& s = streams_[client];
     auto& ws = wsClients_[client];
     if (!ws.valid()) { endStream(s); return; }
-    while (budget > 0) {
+    while (budget > 0 && sendHasHeadroom()) {   // short of internal RAM the stream resumes next tick
         if (!s.frame) {
             if (s.last) { endStream(s); return; }
             if (!nextStreamFrame(client)) { refuseFragment(client); return; }

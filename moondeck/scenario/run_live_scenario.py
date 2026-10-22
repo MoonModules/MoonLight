@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+# /// script
+# requires-python = ">=3.11"
+# dependencies = ["playwright"]
+# ///
 """Run scenario tests against a live device via HTTP.
 
 Same JSON format as the in-process runner. Executes steps via REST API
@@ -143,9 +147,62 @@ def collect_metrics(client: Client, settle_s: float = 1.5) -> dict:
     try:
         state = client.get("/api/state")
         metrics["dynamicBytesTotal"] = _sum_dynamic_bytes(state)
+        metrics["minStackFree"], metrics["minStackTask"] = _min_stack_free(state)
     except Exception:
         metrics["dynamicBytesTotal"] = None
     return metrics
+
+
+def _min_stack_free(state: dict):
+    """The task with the least stack headroom on the Tasks card, as (bytes, name), or (None, None) where the card lists none."""
+    least = (None, None)
+    def walk(modules):
+        nonlocal least
+        for m in modules:
+            for c in m.get("controls", []) if m.get("type") == "TasksModule" else []:
+                if c.get("name") != "tasks" or not isinstance(c.get("value"), list):
+                    continue
+                for t in c["value"]:
+                    free = t.get("stack")
+                    if isinstance(free, int) and (least[0] is None or free < least[0]):
+                        least = (free, t.get("name"))
+            walk(m.get("children", []))
+    walk(state.get("modules", []))
+    return least
+
+
+_browser = {}
+
+
+def _browser_page():
+    """The one browser page the run's `browser` steps share, started on first use; Playwright and Chromium are MoonDeck's, installed by install_playwright.py."""
+    if "page" not in _browser:
+        from playwright.sync_api import sync_playwright
+        _browser["pw"] = sync_playwright().start()
+        _browser["browser"] = _browser["pw"].chromium.launch()
+        _browser["page"] = _browser["browser"].new_page()
+    return _browser["page"]
+
+
+def _browser_close():
+    """Close the browser, if a `browser` step opened one; also run at exit, so a failed run leaves no viewer on the device."""
+    if "browser" in _browser:
+        _browser["browser"].close()
+        _browser["pw"].stop()
+    _browser.clear()
+
+
+atexit.register(_browser_close)
+
+
+def _floor_verdict(metric: str, value, floor, tolerance_pct: float):
+    """A contract floor: (passed, line). The device must deliver at least `floor`, less by more than the tolerance failing; a value of None or 0 against a positive floor fails, since the device then reports none."""
+    if not value or value <= 0:
+        return False, f"  FAIL  {metric} {value} (the device reports none) vs contract {floor}"
+    drop_pct = (floor - value) * 100.0 / floor if value < floor else 0
+    if drop_pct > tolerance_pct:
+        return False, f"  FAIL  {metric} {value} dropped {drop_pct:.1f}% below contract {floor}"
+    return True, f"  PASS  {metric} {value} >= contract {floor} (within -{tolerance_pct}% tolerance)"
 
 
 def _control_value(module: dict, name: str):
@@ -1246,6 +1303,21 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
                 if not holds:
                     results["passed"] = False
 
+            elif op == "browser":
+                # A real browser on the device's UI, for what a page load and an open card cost the device: open, refresh, close.
+                action = step.get("action", "open")
+                if action == "close":
+                    _browser_close()
+                else:
+                    page = _browser_page()
+                    if action == "open":
+                        page.goto(client.base + "/", wait_until="domcontentloaded")
+                    else:
+                        page.reload(wait_until="domcontentloaded")
+                    page.wait_for_timeout(int(float(step.get("settle", 5)) * 1000))
+                print(f"  BROWSER {action}")
+                step_result["status"] = "ok"
+
             elif op == "measure":
                 # Pure measurement step (introduced for the build-up scenario shape).
                 # No REST call; the measure block below picks it up via step["measure"]
@@ -1310,8 +1382,8 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
             heap = metrics.get("freeHeap", 0)
             max_block = metrics.get("maxBlock", 0)
             model_bytes = metrics.get("dynamicBytesTotal")
-            print(f"  MEASURE  tick={tick_us}us (FPS={fps})  heap={heap}  "
-                  f"block={max_block}  model={model_bytes}")
+            print(f"  MEASURE  tick={tick_us}us (FPS={fps})  heap={heap}  internal={metrics.get('freeInternal')}  "
+                  f"block={max_block}  stack={metrics.get('minStackFree')} ({metrics.get('minStackTask')})  model={model_bytes}")
 
             # Per-step contract: { "contract": { "<target>": { "tick_us": N,
             #   "free_heap": M, "tick_tolerance_pct": P, "heap_tolerance_pct": Q,
@@ -1353,53 +1425,29 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
                     else:
                         print(f"  PASS  tick {tick_us}us vs contract {exp_tick}us "
                               f"(over by {overshoot:.0f}us within {allowed:.0f}us)")
-                if exp_heap is not None and exp_heap > 0:
-                    # Contract is a *floor*: the device must deliver at least this
-                    # much free heap. More is better; less by more than tolerance is
-                    # a regression. Tolerance applies because of legitimate run-to-
-                    # run drift in lwIP/TCP buffer pools.
-                    drop_pct = (exp_heap - heap) * 100.0 / exp_heap if heap < exp_heap else 0
-                    if drop_pct > heap_tol_pct:
-                        print(f"  FAIL  free_heap {heap} dropped {drop_pct:.1f}% "
-                              f"below contract {exp_heap}")
+                # Floors: the device must deliver at least this much, less by more than the tolerance being a regression.
+                # Free heap and the largest block drift with lwIP's pools, so they carry the heap tolerance; a stack's headroom is exact.
+                # The block floor is what an allocator needing one contiguous chunk depends on, and free internal RAM is what WiFi and HTTP need on a board with PSRAM.
+                floors = (("free_heap", heap, exp_heap, heap_tol_pct),
+                          ("max_alloc_block", max_block, contract_block.get("max_alloc_block"), heap_tol_pct),
+                          ("free_internal", metrics.get("freeInternal"), contract_block.get("free_internal"), heap_tol_pct),
+                          ("min_stack_free", metrics.get("minStackFree"), contract_block.get("min_stack_free"), 0))
+                for metric, value, floor, tol in floors:
+                    if floor is None or floor <= 0:
+                        continue
+                    ok, line = _floor_verdict(metric, value, floor, tol)
+                    print(line + (f" ({metrics.get('minStackTask')})" if metric == "min_stack_free" else ""))
+                    if not ok:
                         results["passed"] = False
-                    else:
-                        print(f"  PASS  free_heap {heap} >= contract {exp_heap} "
-                              f"(within -{heap_tol_pct}% tolerance)")
-                # max_alloc_block contract is also a *floor*: opt-in per scenario.
-                # The LUT/buffer allocators need a single contiguous chunk; on a
-                # fragmented heap the largest block can be much smaller than free
-                # heap, and Layer silently degrades to 1:1 (mirror disappears) when
-                # the LUT won't fit. Scenarios that depend on that allocation
-                # succeeding assert a minimum block here.
-                exp_block = contract_block.get("max_alloc_block")
-                if exp_block is not None and exp_block > 0:
-                    # max_block of 0 always fails when a positive floor is
-                    # asserted: maxBlock is always served by current firmware
-                    # (src/core/system/HttpServerModule.cpp), so 0 means the device
-                    # reports zero contiguous heap: a real failure, not a
-                    # missing field. (Contrast with free_heap on desktop where 0
-                    # is the "unlimited" sentinel: that's a desktop-only
-                    # convention not used by the live runner.)
-                    if max_block <= 0:
-                        print(f"  FAIL  max_alloc_block {max_block} (device reports no "
-                              f"contiguous heap) vs contract {exp_block}")
-                        results["passed"] = False
-                    else:
-                        drop_pct = (exp_block - max_block) * 100.0 / exp_block if max_block < exp_block else 0
-                        if drop_pct > heap_tol_pct:
-                            print(f"  FAIL  max_alloc_block {max_block} dropped {drop_pct:.1f}% "
-                                  f"below contract {exp_block}")
-                            results["passed"] = False
-                        else:
-                            print(f"  PASS  max_alloc_block {max_block} >= contract {exp_block} "
-                                  f"(within -{heap_tol_pct}% tolerance)")
 
             sample = {
                 "tick_us": int(tick_us),
                 "free_heap": int(heap),
                 "max_alloc_block": int(max_block),
             }
+            for metric, key in (("free_internal", "freeInternal"), ("min_stack_free", "minStackFree")):
+                if metrics.get(key) is not None:
+                    sample[metric] = int(metrics[key])
             # The window is this machine's, kept in the local store; the scenario file takes the summary only when asked.
             local = _observed.record(scenario.get("name", scenario_path.stem), step.get("name", "?"), obs_target, sample, _today_iso(), reset_window=update_contract)
             if update_observed or update_contract:
@@ -1442,6 +1490,10 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
                 # path: keep both files in sync if you change one.
                 if "max_alloc_block" in existing:
                     new_block["max_alloc_block"] = int(max_block)
+                # The internal-RAM and stack floors are requirements a person sets, not readings, so a renegotiation keeps them.
+                for k in ("free_internal", "min_stack_free"):
+                    if k in existing:
+                        new_block[k] = existing[k]
                 step.setdefault("contract", {})[obs_target] = new_block
 
         results["steps"].append(step_result)

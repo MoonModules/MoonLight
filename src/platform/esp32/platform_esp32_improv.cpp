@@ -478,8 +478,8 @@ bool improvProvisioningInit(const ImprovDeviceInfo& info,
     g_improv.opOutLen = opOutLen;
     g_improv.opReady = opReady;
 
-    // 6 KB stack: parser is small, scan response uses std::vector + std::string (some short-string-optimized, some heap). Priority 4, below OTA (5), above idle. Single task per device; not pinned to a core.
-    BaseType_t ok = xTaskCreate(&improvTask, "improv", 6144, nullptr, 4, nullptr);
+    // 4 KB stack: the deepest path, a scan answered network by network, measured at 1.5 KB on the classic, the strings and vectors being on the heap. Priority 4, below OTA (5), above idle. Single task per device; not pinned to a core.
+    BaseType_t ok = xTaskCreate(&improvTask, "improv", 4096, nullptr, 4, nullptr);
     if (ok != pdPASS) {
         improvSetStatus("error: task create failed");
         return false;

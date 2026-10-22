@@ -6119,7 +6119,7 @@ function updateStatusBar() {
         }
     }
 
-    // System stats: "uptime · 🧠 NNK · 🧱 NNKB"
+    // System stats: "uptime · 🧠 NNKB · 🧱 NNKB"
     // 🧠 = internal-RAM free (heap progress total−used); 🧱 = largest contiguous
     // internal-RAM block (the maxBlock control, already maxInternalAllocBlock).
     // Both matter: free can be ample while fragmentation leaves no single block
@@ -6141,7 +6141,7 @@ function updateStatusBar() {
         }
         if (heapCtrl && heapCtrl.value !== undefined && heapCtrl.total) {
             const freeKb = Math.round((heapCtrl.total - heapCtrl.value) / 1024);
-            parts.push("🧠 " + freeKb + "K");
+            parts.push("🧠 " + freeKb + "KB");
         }
         // Skip on desktop, where the platform stub reports "0KB" (no real
         // block measurement / unlimited heap): same reason heap free above

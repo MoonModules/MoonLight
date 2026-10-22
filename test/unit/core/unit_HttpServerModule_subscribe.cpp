@@ -289,6 +289,22 @@ TEST_CASE("the full state streams as one fragmented message that reassembles to 
     CHECK(message == whole(sv.http, &expected));
 }
 
+// An open UI over a slow link queued the state stream's segments on a board without PSRAM, taking free internal RAM to 12 KB: below the headroom the stream waits.
+TEST_CASE("the state stream waits while internal RAM is short, then arrives whole") {
+    struct Heap { ~Heap() { mm::platform::setTestFreeInternalHeap(0); } } heap;   // restored however the test ends
+    Served sv;
+    WsClient c{sv.http, {}, {}};
+    REQUIRE(c.open(kTestPort));
+    mm::platform::setTestFreeInternalHeap(mm::HttpServerModule::kSendHeadroom - 1);
+    REQUIRE(c.send("{\"subscribe\":[\"B\"]}"));
+    std::vector<uint8_t> opcodes;
+    CHECK(c.message(opcodes, 100).empty());   // nothing while short
+    mm::platform::setTestFreeInternalHeap(0);
+    const std::string message = c.message(opcodes);
+    const auto expected = subscribed("{\"subscribe\":[\"B\"]}");
+    CHECK(message == whole(sv.http, &expected));
+}
+
 TEST_CASE("a client that subscribes is sent a full state, and the client already there is not") {
     Served sv;
     WsClient first{sv.http, {}, {}}, second{sv.http, {}, {}};

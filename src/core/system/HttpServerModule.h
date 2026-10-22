@@ -406,7 +406,7 @@ private:
     std::array<FileTransfer, kTransferSlots> transfers_{};
     /// A free slot with its buffer, or null once it has answered: 503 when both slots are busy, 507 when the buffer does not fit.
     FileTransfer* claimTransfer(platform::TcpConnection& conn);
-    /// Advance every active slot by one bounded chunk; called once per tick, the drainXxxSend's sibling.
+    /// Advance every active slot by one bounded chunk, then the embedded file sends; called once per tick, the drainXxxSend's sibling.
     void driveTransfers();
     /// One upload slot's bounded chunk: socket to storage, then the stall guard. Returns whether real bytes moved.
     bool driveUpload(FileTransfer& t, uint32_t now);
@@ -416,6 +416,18 @@ private:
     void finishTransfer(FileTransfer& t, bool closeConn);
     /// Close every active slot's stream and socket; release()'s own cleanup, since going out of scope frees neither.
     void releaseTransfers();
+
+    /// An embedded UI file resumes here across ticks: its bytes are already in flash, so a slot is a socket and an offset, with no buffer. A page load fetches several at once, so there are enough slots for a browser's parallel connections. A client on a slow link costs the render loop one non-blocking write per tick.
+    struct EmbeddedSend {
+        platform::TcpConnection conn;
+        const uint8_t* data = nullptr;     // the next byte to send
+        size_t left = 0;
+        uint32_t lastActivityMs = 0;       // the same stall guard the transfers use
+    };
+    static constexpr int kEmbeddedSendSlots = 8;
+    std::array<EmbeddedSend, kEmbeddedSendSlots> embeddedSends_{};
+    /// Send what each slot's socket accepts now; close a slot once its file is out, its peer errs, or it stalls.
+    void drainEmbeddedSends();
 
     ClientMessageSink* clientSink_ = nullptr;   // the producer's inbound-message sink (PreviewDriver) @xref{crossing-the-domain-boundary}
 
@@ -430,6 +442,13 @@ private:
     };
     PreviewSend previewSend_;
 public:
+    /// The internal RAM a send leaves free. On a board without PSRAM every unacknowledged segment is internal RAM, and a page load or a preview over a slow link queued 52 KB of them.
+    static constexpr size_t kSendHeadroom = platform::kInternalFreeFloor / 2;
+    /// Admission control for every send that queues on a socket: true while free internal RAM is above the headroom, or unreported (0).
+    static bool sendHasHeadroom() {
+        const size_t f = platform::freeInternalHeap();
+        return f == 0 || f > kSendHeadroom;
+    }
     /// What one control client views: modules named at any depth by name or type, each bringing its descendants. @xref{state-by-subscription}
     struct Subscription {
         static constexpr uint8_t kMaxModules = 8;   ///< a page names its root and five types it reads beside it

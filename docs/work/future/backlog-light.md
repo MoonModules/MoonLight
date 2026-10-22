@@ -20,6 +20,10 @@ Forward-looking to-build items for the **light domain** (`src/light/`: drivers, 
 
 ## Effects
 
+### The ring's refill jitter (2026-10-22, from the internal RAM plan)
+
+LCD-MM's refill interrupt goes about 1.1 ms without firing almost every second, where it fires every 89 µs at 3-row slices, so `ringAuto` keeps 54 rows of lead (3 × 21 buffers, 37 KB on shiffy) where hpwit's S3 driver runs on 10. Measured with `ringDbg`'s `gap` (within a frame, `@` the slice it ended at), `ml` (the fewest slices of lead) and `c` (the interrupt's core): not the flash cache (`co` stays 0), not the core (registered on core 1 it was the same, and it broke the cache guard, so it stays on core 0), not `mmSnap` (removed), and it ends mid-frame as often as at the idle tail. The next measurement is the gap against the frame's own events, the arm and the snapshot, then other interrupts on core 0. A lead of 10 rows would free most of the ring's internal RAM.
+
 ### A preview GIF for every MoonLive script (2026-10-19)
 
 The 140 compiled effects each show a GIF on their catalog card (`docs/assets/light/effects/<Type>.gif`, 25 MB in all); the 49 MoonLive effect scripts show none.
@@ -896,7 +900,7 @@ The LED-driver increments **shipped**: increment 1 (RMT/WS2812B single-strand on
 
   **Why it waits.** It is fourteen effects' worth of change across audio-reactive and simulation families, each needing its own judgement about whether to clear, fade, or seed differently — not a mechanical sweep. `unit_Effects_gridsweep.cpp` already measures it (`afterFirst`) and asserts only the settled frame, so the number is visible without blocking.
 
-- **A scripted modifier that animates every frame** (2026-10-11): `MoonLiveModifier` compiles a `modifyLive()` entry, so a script moves lights per frame with `t` (scroll, wobble, sweep) as the compiled Rotate does. Geometry only: dimming is a blend mode or an effect's `mulRGB`, per [the layer compositing plan](../present/Plan-20261011%20-%20Layer%20compositing,%20masks%20and%20transitions.md). Built once a script needs it; the cost to measure is one compiled-script call per light per frame, on an S3 at its largest grid.
+- **A scripted modifier that animates every frame** (2026-10-11): `MoonLiveModifier` compiles a `modifyLive()` entry, so a script moves lights per frame with `t` (scroll, wobble, sweep) as the compiled Rotate does. Geometry only: dimming is a blend mode or an effect's `mulRGB`, per [the layer compositing plan](../present/Plan-20261011%20-%20Layer%20compositing%2C%20masks%20and%20transitions%20(partial).md). Built once a script needs it; the cost to measure is one compiled-script call per light per frame, on an S3 at its largest grid.
 - **A scripted modifier needs a way to drop a light** (2026-08-10). A coordinate slot is a byte, so a script that computes past 255 wraps: `shift.mlv` with a large `amount` lands lights back at the left edge instead of walking them off it. The Layer already drops an out-of-bounds position, but a script has no way to SAY out-of-bounds — every value it can write is a valid coordinate. Needs a sentinel the binding recognizes (or a wider coordinate slot), at which point the "walks off the edge" behavior a scroll modifier wants becomes expressible.
 
 - **A scripted layout loses its control values across a reboot** (2026-08-11). Persistence SAVES them correctly (`/.config/Layouts.json` holds `"0.width":64`), but on boot they are loaded into a control set that does not exist yet: a script's controls are created by `defineControls`, which can only publish what the ENGINE declared, and the engine does not compile until `prepare()` — Scheduler phase 4, after the phase-2b re-bind. So the loaded value has nowhere to land and the script's declared default wins; a saved 64×64 grid comes back 16×16. Verified on the P4 bench.

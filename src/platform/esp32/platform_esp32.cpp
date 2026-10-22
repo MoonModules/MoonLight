@@ -171,7 +171,8 @@ void* alloc(size_t bytes) {
 
 void* allocInternal(size_t bytes) {
     // Internal only, no PSRAM fallback here, the caller chose this seam because PSRAM latency breaks it (an ISR-read buffer); a silent PSRAM grant would hand back the exact problem. Caller falls back.
-    return heap_caps_malloc(bytes, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    // Aligned as malloc promises, since InternalRamObject constructs objects here and the heap alone guarantees only a word.
+    return heap_caps_aligned_alloc(alignof(std::max_align_t), bytes, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
 }
 
 bool ptrIsPsram(const void* p) {
