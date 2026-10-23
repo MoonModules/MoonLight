@@ -92,7 +92,8 @@ public:
         if (!back_) b_.resize(0);
         if (writerTask && !back_) setStatus("one picture buffer: not enough memory, a capture may skip frames", Severity::Warning);
         else clearStatus();
-        frame_ = PictureFrame{front_, width, height, frame_.generation + 1};
+        // A writer's picture is whatever it last decoded, so only its own publish lights it: a rebuild here would re-light a frame the drop just put out.
+        frame_ = PictureFrame{writerTask ? nullptr : front_, width, height, frame_.generation + 1};
         return true;
     }
 
@@ -137,6 +138,7 @@ public:
     /// Name the capture's health once a second: the size it publishes, the rate it holds and whatever is going wrong.
     void tick1s() MM_NONBLOCKING override {
         if (source != kUsbCapture) return;
+        dropStalePicture();   // first, so a device that went away puts the lights out on this tick and not the next
         // A grabber arriving or leaving rewrites the device list: an unplug closes the stream, which frees the port for a replug, and a replug opens it again.
         const uint32_t gen = platform::videoCaptureFormatGeneration();
         if (gen != openedGen_) {
@@ -144,12 +146,16 @@ public:
             if (Scheduler* s = Scheduler::instance()) s->requestPrepareTree();
             return;
         }
-        if (!task_.impl) return;
+        if (!task_.impl) {
+            // Nothing to open over while the last teardown unwinds, so the open waits for it rather than failing in a way worth naming.
+            if (platform::videoCaptureSettling())
+                if (Scheduler* s = Scheduler::instance()) s->requestPrepareTree();
+            return;
+        }
         if (!lock_.tryAcquire()) return;   // the decode task is publishing: the next second reads it
-        const unsigned w = frame_.width, h = frame_.height;
         const bool one = !back_;   // the writer swaps back_ under the lock
         lock_.release();
-        dropStalePicture();
+        const unsigned w = bufW_, h = bufH_;   // the size a writer fills, which a dropped picture no longer carries
         const platform::VideoCaptureStats st = platform::videoCaptureStats();
         // Per second, not since boot: a running total says nothing about whether the capture is live now.
         const uint32_t used = st.decoded - lastDecoded_, skipped = st.dropped - lastDropped_;
@@ -293,9 +299,15 @@ private:
     /// Open the grabber and decode on a task of its own, so the render loop never waits on the device.
     void startCapture() {
         openedGen_ = platform::videoCaptureFormatGeneration();   // the device list this open saw, which tick1s watches
+        // A teardown still unwinding is the one failure worth waiting on, since nothing installs over it; tick1s asks again until it has.
+        if (platform::videoCaptureSettling()) {
+            setStatus("looking for a grabber", Severity::Status);
+            return;
+        }
         if (!platform::videoCaptureInit(capture_, width, height, fps)) {
-            // The format list outlives a failed open, so a device that enumerated but refused is a different fault.
-            setStatus(platform::videoCaptureFormatGeneration() ? "the grabber offers no mode that fits" : "no grabber attached", Severity::Warning);
+            // The step the platform stopped at, since a device that enumerated and still refused is a different fault from an empty port.
+            const char* why = platform::videoCaptureFault();
+            setStatus(why ? why : "no grabber attached", Severity::Warning);
             return;
         }
         if (back_) clearStatus();   // before the task swaps back_; with one picture, prepareBuffers' warning stays until the first status line

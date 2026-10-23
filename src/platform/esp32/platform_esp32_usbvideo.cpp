@@ -67,9 +67,18 @@ std::atomic<uint32_t> formatGen{0};
 std::atomic<uint8_t> formatDevAddr{UVC_HOST_ANY_DEV_ADDR};
 constexpr uint8_t kStreamIndex = 0;   // only a device's first streaming function is ever opened
 
+// Which step refused the last open, so the status names the cause rather than guessing at the mode list.
+const char* openFault = nullptr;
+bool fail(const char* why) {
+    openFault = why;
+    return false;
+}
+
 bool hostReady = false;
 bool uvcReady = false;
 std::atomic<bool> pumpRunning{false};   // until the pump has uninstalled the host library
+// Set when a shutdown hands the teardown to the pump, cleared when the pump has finished it. Distinct from pumpRunning, which holds for every working capture.
+std::atomic<bool> tearingDown{false};
 bool claimed = false;   // one owner at a time, as a device is claimed once
 
 // Counted on the UVC task, read from the render tick: relaxed is enough for a diagnostic.
@@ -90,6 +99,7 @@ void pumpTask(void*) {
         if ((flags & USB_HOST_LIB_EVENT_FLAGS_ALL_FREE) && noClients) break;
     }
     if (usb_host_uninstall() != ESP_OK) ESP_LOGE(kTag, "USB host did not uninstall");
+    tearingDown.store(false, std::memory_order_release);   // the next install may proceed
     pumpRunning.store(false, std::memory_order_release);
     vTaskDelete(nullptr);
 }
@@ -97,17 +107,17 @@ void pumpTask(void*) {
 // Installed while the capture is the source, so the format list fills as a device enumerates and an open fails fast; videoCaptureShutdown removes it.
 bool ensureUsbHost() {
     if (hostReady) return true;
-    if (pumpRunning.load(std::memory_order_acquire)) return false;   // the last shutdown is still tearing down
+    if (tearingDown.load(std::memory_order_acquire)) return fail("the USB host is still shutting down");
     if (!bus) bus = new (std::nothrow) Bus();
     if (!bus) {
         ESP_LOGE(kTag, "no memory for the format list");
-        return false;
+        return fail("no memory for the format list");
     }
     usb_host_config_t hostCfg = {};
     hostCfg.intr_flags = ESP_INTR_FLAG_LOWMED;
     if (usb_host_install(&hostCfg) != ESP_OK) {
         ESP_LOGE(kTag, "usb_host_install failed");
-        return false;
+        return fail("the USB host did not install");
     }
     // Core 1, with the UVC driver and the capture task, so no USB work lands on the render core.
     pumpRunning.store(true, std::memory_order_release);
@@ -115,7 +125,7 @@ bool ensureUsbHost() {
         pumpRunning.store(false, std::memory_order_release);
         ESP_LOGE(kTag, "no USB event task");
         usb_host_uninstall();
-        return false;
+        return fail("no task for the USB host");
     }
     hostReady = true;
     return true;
@@ -186,6 +196,7 @@ void onDriverEvent(const uvc_host_driver_event_data_t* event, void*) {
     const size_t offered = event->device_connected.frame_info_num;
     if (offered > kMaxFormats) ESP_LOGW(kTag, "device offers %u modes; keeping the first %u",
                                         static_cast<unsigned>(offered), static_cast<unsigned>(kMaxFormats));
+    if (!bus) return;   // a shutdown freed the bank: this device belongs to the install that follows
     std::memset(bus->frameList, 0, sizeof bus->frameList);   // a short list must not read the last device's rows
     size_t count = kMaxFormats;
     if (uvc_host_get_frame_list(devAddr, kStreamIndex,
@@ -210,7 +221,7 @@ void onEvent(const uvc_host_stream_event_data_t* event, void* ctx) {
             // A rewrite to an empty list: the generation moves, so the Picture service closes the stream and the port recycles for a replug.
             formatGen.fetch_add(1, std::memory_order_release);
             formatDevAddr.store(UVC_HOST_ANY_DEV_ADDR, std::memory_order_relaxed);
-            bus->bank.count.store(0, std::memory_order_relaxed);
+            if (bus) bus->bank.count.store(0, std::memory_order_relaxed);
             formatGen.fetch_add(1, std::memory_order_release);
             break;
         case UVC_HOST_TRANSFER_ERROR:
@@ -299,7 +310,7 @@ bool ensureUvcHost() {
     driverCfg.event_cb = onDriverEvent;   // fills the format bank as soon as a device enumerates
     if (uvc_host_install(&driverCfg) != ESP_OK) {
         ESP_LOGE(kTag, "uvc_host_install failed");
-        return false;
+        return fail("the UVC driver did not install");
     }
     uvcReady = true;
     return true;
@@ -404,19 +415,24 @@ void resetStats() {
 // In this order on purpose: the decode engine and the signal first, then the stream, then its buffer.
 bool bringUp(Capture& cap, size_t modes, uint16_t width, uint16_t height, uint8_t fps) {
     cap.wake = xSemaphoreCreateBinary();
-    return cap.wake && createJpeg(cap) && openStream(cap, modes, width, height, fps) && sizeBuffer(cap)
-           && uvc_host_stream_start(cap.stream) == ESP_OK;
+    if (!cap.wake) return fail("no semaphore for the capture");
+    if (!createJpeg(cap)) return fail("the JPEG decoder did not start");
+    if (!openStream(cap, modes, width, height, fps)) return fail("the device refused the stream");
+    if (!sizeBuffer(cap)) return fail("no memory for the decoded frame");
+    if (uvc_host_stream_start(cap.stream) != ESP_OK) return fail("the stream did not start");
+    return true;
 }
 
 }   // namespace
 
 bool videoCaptureInit(VideoCaptureHandle& handle, uint16_t width, uint16_t height, uint8_t fps) {
     if (handle.impl) return true;
-    if (claimed) return false;   // one owner at a time, as the seam documents
+    openFault = nullptr;   // this open answers for itself
+    if (claimed) return fail("a capture is already open");   // one owner at a time, as the seam documents
     if (!ensureUsbHost() || !ensureUvcHost()) return false;
     // No device has enumerated, so there is nothing to open: failing here keeps a board without a grabber from stalling on the open's timeout.
     const size_t modes = snapshotModes();
-    if (!modes) return false;
+    if (!modes) return fail("no grabber attached");
     auto* cap = new Capture();
     handle.impl = cap;   // every failure below unwinds through videoCaptureDeinit
     resetStats();   // per open, as the seam documents them, so a re-open inherits no losses
@@ -424,7 +440,7 @@ bool videoCaptureInit(VideoCaptureHandle& handle, uint16_t width, uint16_t heigh
     if (!usbvideo::pickMode(bus->snapModes, modes, width, height, fps)) {
         ESP_LOGW(kTag, "no advertised mode covers %ux%u", width, height);
         videoCaptureDeinit(handle);
-        return false;
+        return fail("no advertised mode covers the picture");
     }
     if (bringUp(*cap, modes, width, height, fps)) {
         claimed = true;
@@ -462,6 +478,10 @@ bool videoCaptureDecodeInto(VideoCaptureHandle& handle, uint8_t* dst, uint16_t m
     return ok;
 }
 
+const char* videoCaptureFault() MM_NONBLOCKING { return openFault; }
+
+bool videoCaptureSettling() MM_NONBLOCKING { return tearingDown.load(std::memory_order_acquire); }
+
 uint32_t videoCaptureFormatGeneration() MM_NONBLOCKING {
     if (!bus || bus->bank.count.load(std::memory_order_relaxed) == 0) return 0;   // no device listed
     return formatGen.load(std::memory_order_acquire);
@@ -482,6 +502,7 @@ void videoCaptureDeinit(VideoCaptureHandle& handle) {
     claimed = false;   // the device is free for the next open
 }
 
+// Starts the teardown and returns: the pump runs it to completion, and the next open waits on pumpRunning rather than installing over it. Nothing here blocks, since prepare runs on the render thread.
 void videoCaptureShutdown() {
     if (claimed) return;   // a capture is open: its owner deinits first
     if (uvcReady) {
@@ -491,15 +512,13 @@ void videoCaptureShutdown() {
         }
         uvcReady = false;
     }
-    // The pump sees its only client gone, frees the device and uninstalls the library; a stopped port does that within milliseconds.
-    for (int i = 0; i < 200 && pumpRunning.load(std::memory_order_acquire); i++) vTaskDelay(pdMS_TO_TICKS(5));
-    if (pumpRunning.load(std::memory_order_acquire)) {
-        ESP_LOGW(kTag, "the USB host is still tearing down");
-        return;   // the bank stays until the next shutdown finds the pump gone
-    }
+    // The host goes with the driver, and the pump unwinds the rest: until it has, tearingDown refuses an install over it.
+    if (pumpRunning.load(std::memory_order_acquire)) tearingDown.store(true, std::memory_order_release);
     hostReady = false;
+    // Freed here, with the driver that filled it uninstalled and the render thread the only other reader, so the next install starts from an empty bank.
     delete bus;
     bus = nullptr;
+    formatDevAddr.store(UVC_HOST_ANY_DEV_ADDR, std::memory_order_relaxed);
 }
 
 VideoCaptureStats videoCaptureStats() MM_NONBLOCKING {
@@ -518,6 +537,8 @@ namespace mm::platform {
 
 // An image without the capture reports no device, which the Picture service shows as a status.
 uint32_t videoCaptureFormatGeneration() MM_NONBLOCKING { return 0; }
+const char* videoCaptureFault() MM_NONBLOCKING { return nullptr; }
+bool videoCaptureSettling() MM_NONBLOCKING { return false; }
 bool videoCaptureInit(VideoCaptureHandle&, uint16_t, uint16_t, uint8_t) { return false; }
 bool videoCaptureAwaitFrame(VideoCaptureHandle&, uint32_t) { return false; }
 bool videoCaptureDecodeInto(VideoCaptureHandle&, uint8_t*, uint16_t, uint16_t, uint16_t&, uint16_t&,

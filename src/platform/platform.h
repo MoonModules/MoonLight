@@ -1475,11 +1475,17 @@ bool videoCaptureAwaitFrame(VideoCaptureHandle& h, uint32_t timeoutMs);
 bool videoCaptureDecodeInto(VideoCaptureHandle& h, uint8_t* dst, uint16_t maxWidth, uint16_t maxHeight,
                             uint16_t& outWidth, uint16_t& outHeight, uint8_t floor);
 
+/// Which step the last open failed at, or null where none has failed since; a static string the caller may show.
+const char* videoCaptureFault() MM_NONBLOCKING;
+
 /// Release the device and free its buffers.
 void videoCaptureDeinit(VideoCaptureHandle& h);
 
-/// Uninstall what the capture installed to see devices, once no capture is open; the next init installs it again.
+/// Start uninstalling what the capture installed to see devices, once no capture is open. It returns before the teardown finishes, so an init is refused while videoCaptureSettling() holds.
 void videoCaptureShutdown();
+
+/// Whether a teardown is still unwinding, so an open would be refused rather than failing for a reason worth naming.
+bool videoCaptureSettling() MM_NONBLOCKING;
 
 /// Why frames did not reach the lights, cumulative since the device was opened.
 struct VideoCaptureStats {

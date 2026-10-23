@@ -2883,6 +2883,7 @@ struct TestGrabber {
     std::atomic<uint32_t> decoded{0}, failed{0};
     std::vector<uint8_t> frame;   ///< the synthesized source, rebuilt only when its size or color moves
     uint8_t frameRgb[3] = {};
+    const char* fault = nullptr;   ///< which step refused the last open, or null where none has
 } g_grabber;
 // How far `have` is from `want`, so the nearest advertised mode can be picked without <cstdlib>.
 long apart(long have, long want) { return have > want ? have - want : want - have; }
@@ -2892,7 +2893,10 @@ long apart(long have, long want) { return have > want ? have - want : want - hav
 uint32_t videoCaptureFormatGeneration() MM_NONBLOCKING { return g_grabber.attached.load() ? g_grabber.generation.load() : 0; }
 
 bool videoCaptureInit(VideoCaptureHandle& h, uint16_t width, uint16_t height, uint8_t fps) {
-    if (g_grabber.formats.empty() || g_grabber.open) return false;   // one owner at a time, as a device is claimed once
+    // One owner at a time, as a device is claimed once.
+    if (g_grabber.formats.empty()) { g_grabber.fault = "no grabber attached"; return false; }
+    if (g_grabber.open) { g_grabber.fault = "a capture is already open"; return false; }
+    g_grabber.fault = nullptr;   // this open answers for itself
     // The nearest advertised mode by area then by rate, as a grabber settles a request it cannot meet.
     const VideoCaptureFormat* best = nullptr;
     long bestCost = 0;
@@ -2939,6 +2943,10 @@ bool videoCaptureDecodeInto(VideoCaptureHandle& h, uint8_t* dst, uint16_t maxWid
     g_grabber.decoded++;
     return true;
 }
+
+const char* videoCaptureFault() MM_NONBLOCKING { return g_grabber.fault; }
+
+bool videoCaptureSettling() MM_NONBLOCKING { return false; }   // the stand-in tears down inside the call
 
 void videoCaptureDeinit(VideoCaptureHandle& h) {
     if (h.impl == &g_grabber) g_grabber.open = false;   // only the owning handle closes it
