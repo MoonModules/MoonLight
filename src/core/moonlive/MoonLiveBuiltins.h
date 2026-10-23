@@ -16,7 +16,8 @@
 
 namespace mm::moonlive {
 
-enum class CtrlType : uint8_t { Int, Byte, Bool, Fixed, Str };
+/// A value's type: the numbers, a string literal, and a JSON document the host holds, which a script names by a handle in an int's slot.
+enum class CtrlType : uint8_t { Int, Byte, Bool, Fixed, Str, Json };
 
 /// Bytes one array element occupies, where packing pays: a byte array costs a quarter of an int one, with no PSRAM to absorb it.
 constexpr uint8_t ctrlWidth(CtrlType t) {
@@ -65,6 +66,10 @@ struct Builtin {
     const char*  retStruct = nullptr;
     /// Whether the arguments may be all whole or all fixed, with the result following them, as `min` and `abs` are.
     bool         sameTypeArgs = false;
+    /// Which arguments are JSON documents, a bit per position, where a string literal is parsed into one.
+    uint8_t      jsonArgs = 0;
+    /// Whether the result is a JSON document.
+    bool         jsonReturn = false;
 };
 
 /// Most fields a struct type carries: three for a color or a coordinate, four for a color with white.
@@ -91,6 +96,18 @@ struct StructDef {
                         static_cast<unsigned>((t).registered()));                     \
         }                                                                             \
     } while (0)
+
+/// The entry among the first `count` of `items` named exactly the `len` characters at `name`, or null: the lookup both tables share.
+template <typename T>
+const T* findNamed(const T* items, uint8_t count, const char* name, size_t len) {
+    for (uint8_t i = 0; i < count; i++) {
+        const char* n = items[i].name;
+        size_t j = 0;
+        for (; j < len && n[j]; j++) if (n[j] != name[j]) break;
+        if (j == len && n[j] == 0) return &items[i];
+    }
+    return nullptr;
+}
 
 /// A fixed-capacity table the host fills and the compiler reads, looked up by name.
 struct BuiltinTable {
@@ -143,15 +160,7 @@ struct BuiltinTable {
     /// Every registered name, for the overflow diagnostic. Not used on any hot path.
     uint8_t registered() const { return count; }
     /// The builtin registered under `name`, or null when there is none.
-    const Builtin* find(const char* name, size_t len) const {
-        for (uint8_t i = 0; i < count; i++) {
-            const char* n = items[i].name;
-            size_t j = 0;
-            for (; j < len && n[j]; j++) if (n[j] != name[j]) break;
-            if (j == len && n[j] == 0) return &items[i];
-        }
-        return nullptr;
-    }
+    const Builtin* find(const char* name, size_t len) const { return findNamed(items, count, name, len); }
 };
 
 /// Bytes the script's own members may occupy: the byte budget the arena allocates, where the count is what the record tables hold.
@@ -230,15 +239,7 @@ struct SysVarTable {
         return true;
     }
     /// The system variable registered under `name`, or null when there is none.
-    const SysVar* find(const char* name, size_t len) const {
-        for (uint8_t i = 0; i < count; i++) {
-            const char* n = items[i].name;
-            size_t j = 0;
-            for (; j < len && n[j]; j++) if (n[j] != name[j]) break;
-            if (j == len && n[j] == 0) return &items[i];
-        }
-        return nullptr;
-    }
+    const SysVar* find(const char* name, size_t len) const { return findNamed(items, count, name, len); }
 };
 
 }  // namespace mm::moonlive

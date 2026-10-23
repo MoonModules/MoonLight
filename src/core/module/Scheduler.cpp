@@ -118,6 +118,19 @@ void Scheduler::release() {
     }
     moduleCount_ = 0;
     instance_ = nullptr;
+    // A document never applied goes with the tree it was meant for, and is answered as refused, so whoever queued it stops waiting.
+    for (auto& slot : pendingLive_) {
+        if (!slot.text) continue;
+        const PendingLive entry = slot;
+        slot = {};
+        platform::free(entry.text);
+        if (entry.done) {
+            StateDocumentResult refused;
+            refused.ok = false;
+            refused.error = "the device stopped before applying it";
+            entry.done(entry.tag, refused);
+        }
+    }
 }
 
 uint32_t Scheduler::elapsed() const {
@@ -125,12 +138,35 @@ uint32_t Scheduler::elapsed() const {
 }
 
 void Scheduler::preparePending() {
+    // A live document first, so the rebuild it asks for runs in this same frame.
+    applyPendingLive();
     MoonModule* scopes[std::tuple_size_v<decltype(preparePending_)>];
     uint8_t scopeCount = 0;
     for (auto& slot : preparePending_)
         if (MoonModule* m = slot.exchange(nullptr, std::memory_order_relaxed)) scopes[scopeCount++] = m;
     if (prepareRequested_.exchange(false, std::memory_order_relaxed)) prepareTree();   // the tree covers every scope
     else if (scopeCount) prepareSubtrees(scopes, scopeCount);
+}
+
+bool Scheduler::applyLive(char* text, LiveDone done, uintptr_t tag) {
+    if (!text) return false;
+    for (auto& slot : pendingLive_) {
+        if (slot.text) continue;
+        slot = {text, done, tag};
+        return true;
+    }
+    return false;
+}
+
+void Scheduler::applyPendingLive() {
+    for (auto& slot : pendingLive_) {
+        if (!slot.text) continue;
+        const PendingLive entry = slot;
+        slot = {};   // free before the apply, so a done callback may queue the next one
+        const StateDocumentResult r = applyStateDocument(*this, entry.text, StateSource::Live);
+        platform::free(entry.text);
+        if (entry.done) entry.done(entry.tag, r);
+    }
 }
 
 void Scheduler::prepareTree() {

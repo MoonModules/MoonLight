@@ -121,6 +121,8 @@ CONFIG_SPI_MASTER_ISR_IN_IRAM=n
 # WiFi, lwIP and TLS buffers in PSRAM; both depend on PSRAM in Kconfig, so a board without it drops them.
 CONFIG_SPIRAM_TRY_ALLOCATE_WIFI_LWIP=y
 CONFIG_MBEDTLS_EXTERNAL_MEM_ALLOC=y
+# A chain served through a cross-signed root, as every Google Trust Services site serves GTS Root R4 under GlobalSign, verifies against the bundled root anywhere in the chain rather than only the last issuer.
+CONFIG_MBEDTLS_CERTIFICATE_BUNDLE_CROSS_SIGNED_VERIFY=y
 # No reserve pool: it carves 32 KB from the main internal region, which capped the largest block at 31 KB; the 100 KB free floor is the net instead.
 CONFIG_SPIRAM_MALLOC_RESERVE_INTERNAL=0
 # Every plain malloc asks PSRAM first; what an interrupt reads with the cache off asks for internal RAM by capability (platform::InternalRamObject).

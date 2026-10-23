@@ -56,8 +56,8 @@ struct CompileResult {
     DeclaredControl members[kMaxCtrls];
     /// How many members the class declared.
     uint8_t         memberCount = 0;
-    /// Bytes of string-literal storage the engine holds, interned into a pool it owns because the source buffer is freed after a compile.
-    static constexpr uint16_t kStringPool = 128;
+    /// The most string-literal text one script holds, interned into a pool the engine sizes to the script because the source buffer is freed after a compile.
+    static constexpr uint16_t kMaxStrings = 16384;
     /// How much of the string pool is used, so a binding can report the headroom.
     uint16_t        stringLen = 0;
     /// The class name diagnostics report, so renaming a file does not change what a user is told.
@@ -79,5 +79,8 @@ CompileResult compileSource(const char* source, const BuiltinTable& table,
 
 /// Tokens in `source`, which both right-sized buffers derive from; one function, so a caller cannot measure a script differently from the compiler.
 uint32_t countTokens(const char* source);
+
+/// Bytes the string pool needs for `source`: every literal and its terminator, as the compiler interns them.
+uint32_t countStringBytes(const char* source);
 
 }  // namespace mm::moonlive

@@ -320,6 +320,24 @@ bool HttpServerModule::anyWsClientOnAccessPoint() const MM_NONBLOCKING {
     return false;
 }
 
+// Whether the query holds the parameter `name=value` whole, as a query parameter is read: `xlive=1` and `live=10` are other parameters.
+static bool queryHas(const char* query, const char* name, const char* value) {
+    const size_t n = std::strlen(name), v = std::strlen(value);
+    for (const char* p = query; p && *p;) {
+        const char* end = std::strchr(p, '&');
+        const size_t len = end ? static_cast<size_t>(end - p) : std::strlen(p);
+        if (len == n + 1 + v && std::strncmp(p, name, n) == 0 && p[n] == '=' && std::strncmp(p + n + 1, value, v) == 0) return true;
+        p = end ? end + 1 : nullptr;
+    }
+    return false;
+}
+
+// Whether the request line is `prefix`, the method and the state path, ending there or going on with a query.
+static bool isStatePath(const char* req, const char* prefix) {
+    const size_t n = std::strlen(prefix);
+    return std::strncmp(req, prefix, n) == 0 && (req[n] == ' ' || req[n] == '?');
+}
+
 // A cheap scan of the query for a "/sd" path, which only sizes the Content-Length ceiling; parseFilePath is the real guard, downstream.
 static bool requestNamesSdPath(const char* req) {
     const char* query = std::strchr(req, '?');
@@ -428,9 +446,8 @@ bool HttpServerModule::handleConnection(platform::TcpConnection& conn, int patie
                     std::strncmp(req, "POST /api/firmware/upload", 25) == 0 ||
                     // A MoonBase image (~750 KB) streams too; the trailing space keeps `moonbase-update-url`, a small JSON body read whole, out of the match.
                     std::strncmp(req, "POST /api/firmware/moonbase-update ", 35) == 0 ||
-                    // A state document holding an effects stack outgrows the request buffer; the trailing space keeps a longer path out.
-                    std::strncmp(req, "PATCH /api/state ", 17) == 0 ||
-                    std::strncmp(req, "POST /api/state ", 16) == 0;
+                    // A state document holding an effects stack outgrows the request buffer; the space or query after it keeps a longer path out.
+                    isStatePath(req, "PATCH /api/state") || isStatePath(req, "POST /api/state");
                 if (bodyNeeded > sizeof(buf) - 1) {
                     if (!isStreamingRoute) {
                         sendResponse(conn, 413, "application/json",
@@ -531,7 +548,7 @@ bool HttpServerModule::handleConnection(platform::TcpConnection& conn, int patie
             // POST for a client that cannot send PATCH: the same document, the same engine.
             if (!hasContentLen) { sendResponse(conn, 411, "application/json", "{\"error\":\"length required\"}"); return true; }
             handleApplyState(conn, body, static_cast<size_t>(totalRead) - static_cast<size_t>(body - req),
-                             static_cast<size_t>(contentLen));
+                             static_cast<size_t>(contentLen), queryStart && queryHas(queryStart + 1, "live", "1"));
         } else if (std::strcmp(path, "/api/file") == 0 && body) {
             // File Manager: POST /api/file?path=<rel> streams the body to an atomic write; `body` holds the bytes that came with the headers, and a transfer slot pulls the rest off the socket.
             const size_t initialLen = static_cast<size_t>(totalRead) - static_cast<size_t>(body - req);
@@ -592,7 +609,7 @@ bool HttpServerModule::handleConnection(platform::TcpConnection& conn, int patie
         if (std::strcmp(path, "/api/state") == 0 && body) {
             if (!hasContentLen) { sendResponse(conn, 411, "application/json", "{\"error\":\"length required\"}"); return true; }
             handleApplyState(conn, body, static_cast<size_t>(totalRead) - static_cast<size_t>(body - req),
-                             static_cast<size_t>(contentLen));
+                             static_cast<size_t>(contentLen), queryStart && queryHas(queryStart + 1, "live", "1"));
         } else if (std::strncmp(path, "/api/list/", 10) == 0 && body) {
             handleListPatchRow(conn, path + 10, body);
         } else {
@@ -769,6 +786,11 @@ void HttpServerModule::handleRemoveEntry(platform::TcpConnection& conn, const ch
         sendResponse(conn, 400, "application/json", "{\"error\":\"bad path\"}");
         return;
     }
+    // A path that names nothing is the client's mistake, 404 as REST answers it, where a removal that fails is the device's.
+    if (!platform::fsExists(path)) {
+        sendResponse(conn, 404, "application/json", "{\"error\":\"not found\"}");
+        return;
+    }
     if (FilesystemModule::removeTree(path)) {
         // A removed file is a change to persistent state like a written one: a module derived from it must notice the file is gone.
         applyFileChanged(path);
@@ -925,7 +947,7 @@ static bool pullWholeBody(platform::TcpConnection& conn, const char* initialBody
 }
 
 void HttpServerModule::handleApplyState(platform::TcpConnection& conn, const char* initialBody, size_t initialLen,
-                                        size_t contentLen) {
+                                        size_t contentLen, bool live) {
     if (!scheduler_) { sendResponse(conn, 503, "application/json", "{\"error\":\"not ready\"}"); return; }
     if (contentLen > kStateDocumentMax) { sendResponse(conn, 413, "application/json", "{\"error\":\"document too large\"}"); return; }
     char* doc = static_cast<char*>(platform::alloc(contentLen + 1));
@@ -935,7 +957,8 @@ void HttpServerModule::handleApplyState(platform::TcpConnection& conn, const cha
         sendResponse(conn, 400, "application/json", "{\"error\":\"incomplete request body\"}");
         return;
     }
-    const StateDocumentResult r = applyStateDocument(*scheduler_, doc);
+    // `?live=1` drives rather than configures, as a show building its look on another device does: nothing it changes is marked to save.
+    const StateDocumentResult r = applyStateDocument(*scheduler_, doc, live ? StateSource::Live : StateSource::Request);
     platform::free(doc);
     // A growing sink, since a path of escaped names has no small fixed bound.
     JsonSink sink;
@@ -1010,6 +1033,8 @@ void HttpServerModule::applyFileChanged(const char* path) {
     if (auto* fs = FilesystemModule::instance()) fs->requestConfigApply(path);
     // A user script of a name the firmware also ships is a fork; record its origin here, where every writer passes, so the binding can flag an updated shipped copy.
     moonlive::noteForkedFrom(path);
+    // A script that landed leaves the missing list here, not at a compile that may never come.
+    moonlive::noteScriptLanded(path);
     if (!scheduler_) return;
     scheduler_->notifyFileChanged(path);
     // requestPrepareTree, never prepareTree: the flag is consumed at the frame boundary, so a multi-file upload costs one sweep.

@@ -52,6 +52,7 @@ The answer is `{"ok":true,"changes":N}`, or a 400 naming the first failure and w
 A failure only writing finds, such as a value out of range, leaves what came before it applied.
 A document is at most 32 KB, and a larger one is refused with a 413.
 `POST /api/state` takes the same document, for a client that cannot send `PATCH`.
+`PATCH /api/state?live=1` applies a document that drives rather than configures, as a show building its look on another device does. It is checked and applied the same way, and nothing it changes is marked to save, so a reboot returns the device to its saved state.
 Adding, replacing and removing a module through `/api/modules` applies a one-member document, so the same rules hold on both paths.
 
 `GET /api/modules/<name>/document` reads a module back as a document, its path from the top level around it, and a card's `{ }` button shows the same.

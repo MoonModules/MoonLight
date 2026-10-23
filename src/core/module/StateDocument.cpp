@@ -83,32 +83,6 @@ constexpr const char* kNameRule = "a module name has 1 to 15 characters";
 // Keys a module object reads itself rather than as a control or a child.
 bool reserved(const char* key) { return key[0] == '$' || std::strcmp(key, "type") == 0; }
 
-void writeValue(JsonSink& sink, const JsonDoc& doc, const JsonNode* n);
-
-// An array or an object, its members written in order.
-void writeContainer(JsonSink& sink, const JsonDoc& doc, const JsonNode* n) {
-    const bool isObject = n->type == JsonType::Object;
-    sink.append(isObject ? "{" : "[");
-    for (const JsonNode* c = doc.node(n->firstChild); c; c = doc.node(c->next)) {
-        if (c != doc.node(n->firstChild)) sink.append(",");
-        if (isObject) { sink.writeJsonString(c->key); sink.append(":"); }
-        writeValue(sink, doc, c);
-    }
-    sink.append(isObject ? "}" : "]");
-}
-
-// Write a value node back out as JSON, the form the control write path parses.
-void writeValue(JsonSink& sink, const JsonDoc& doc, const JsonNode* n) {
-    switch (n->type) {
-        case JsonType::Null:   sink.append("null"); break;
-        case JsonType::Bool:   sink.append(n->intValue ? "true" : "false"); break;
-        case JsonType::Int:    sink.appendf("%ld", n->intValue); break;
-        case JsonType::String: sink.writeJsonString(n->str); break;
-        case JsonType::Array:
-        case JsonType::Object: writeContainer(sink, doc, n); break;
-    }
-}
-
 MoonModule* childNamed(MoonModule* parent, const char* name) {
     for (uint8_t i = 0; i < parent->childCount(); i++) {
         MoonModule* c = parent->child(i);
@@ -157,8 +131,10 @@ struct Applier {
         return false;
     }
 
-    bool stored() const { return source != StateSource::Request; }
+    bool stored() const { return source == StateSource::Stored || source == StateSource::Boot; }
     bool boot() const { return source == StateSource::Boot; }
+    // A live document is driven rather than configured, as a service's control write is, so it marks nothing to save.
+    bool live() const { return source == StateSource::Live; }
 
     // A stored file goes on past what this build cannot place: the failure is logged and counted, and the rest still applies.
     bool skip() {
@@ -181,7 +157,7 @@ struct Applier {
     }
 
     void finishStructure(MoonModule* parent) {
-        if (!boot()) parent->markDirty();   // a boot load restores what the file holds, so nothing is left to save
+        if (!boot() && !live()) parent->markDirty();   // a boot load restores what the file holds, so nothing is left to save
         structural = true;
         r.changes++;
     }
@@ -354,7 +330,7 @@ struct Applier {
     // `{"value":...}`, the body the control write path takes; false when it does not fit.
     bool wrapValue(JsonSink& sink, const JsonNode* value) const {
         sink.append("{\"value\":");
-        writeValue(sink, doc, value);
+        json::write(sink, doc, value);
         sink.append("}");
         return !sink.overflowed();
     }
@@ -362,7 +338,7 @@ struct Applier {
     bool setControl(MoonModule* m, const char* key, const JsonNode* value) {
         JsonSink sink;
         if (!wrapValue(sink, value)) return fail("out of memory");
-        const Scheduler::SetControlResult result = s.setControl(m->name(), key, sink.data());
+        const Scheduler::SetControlResult result = s.setControl(m->name(), key, sink.data(), live());
         const bool compiles = m->declaresControlsAtPrepare();
         if (result == Scheduler::SetControlResult::Ok && compiles && m->affectsPrepare(key)) markRebuilt(m);
         // A control a script declares exists only after the rebuild, so it waits for it; on a module the document leaves as it is, an unknown control is a mistake.
@@ -631,13 +607,13 @@ void closePath(JsonSink& sink, uint8_t depth) {
 }
 
 // One prepare and one full resync for the whole document, however much it changed; the scripts compile at that prepare, and the controls they declare are set right after it.
-void settle(Scheduler& scheduler, bool structural, const StateDocumentResult& r) {
+void settle(Scheduler& scheduler, bool structural, const StateDocumentResult& r, bool live) {
     if (structural) {
         scheduler.requestPrepareTree();
         MoonModule::notifySchemaChanged();
     }
     if (r.deferred) scheduler.requestPrepareTree();
-    if (r.changes) scheduler.noteDirty();
+    if (r.changes && !live) scheduler.noteDirty();
 }
 
 }  // namespace
@@ -655,7 +631,7 @@ StateDocumentResult applyStateDocument(Scheduler& scheduler, const char* text, S
     // A failed document leaves nothing waiting for the rebuild: what came before the failure stays applied, but no deferred write lands after it.
     if (!r.ok) dropDeferredSince(deferredBefore, r);
     // At boot the phases after the load set up, build and prepare the whole tree, and the file already holds what was loaded.
-    if (source != StateSource::Boot) settle(scheduler, a.structural, r);
+    if (source != StateSource::Boot) settle(scheduler, a.structural, r, source == StateSource::Live);
     return r;
 }
 
@@ -711,7 +687,7 @@ void writeFlatValues(JsonSink& out, const JsonDoc& doc, const char* prefix) {
         out.append(",");
         out.writeJsonString(rest);
         out.append(":");
-        writeValue(out, doc, n);
+        json::write(out, doc, n);
     }
 }
 

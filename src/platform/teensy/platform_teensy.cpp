@@ -540,7 +540,11 @@ int httpRequest(const char*, const char*, uint16_t, const char*, const char*, ui
     return 0;
 }
 bool httpsAvailable() MM_NONBLOCKING { return false; }
-bool httpsPost(const char*, const char*, uint32_t) { return false; }
+int httpFetch(const char*, const char*, const char*, uint32_t, char* body, size_t bodyLen) {
+    if (body && bodyLen) body[0] = '\0';
+    return 0;
+}
+bool tlsRoom(const char*) { return false; }
 bool hlsSegment(const char*, const uint8_t**, size_t*) { return false; }
 void hlsSegmentRelease() {}
 

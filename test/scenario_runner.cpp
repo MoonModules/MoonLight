@@ -325,6 +325,18 @@ static JsonVal parseJson(const std::string& text) {
     return parser.parse();
 }
 
+// A file a scenario names by `from`: relative, with no `..` component, so a scenario reads only the repository; `a..b.txt` is a name, not a step up.
+static bool insideRepo(const std::string& rel) {
+    if (rel.empty() || rel[0] == '/' || rel[0] == '\\' || rel.find(':') != std::string::npos) return false;
+    for (size_t start = 0; start <= rel.size();) {
+        size_t end = rel.find_first_of("/\\", start);
+        if (end == std::string::npos) end = rel.size();
+        if (end - start == 2 && rel.compare(start, 2, "..") == 0) return false;
+        start = end + 1;
+    }
+    return true;
+}
+
 static std::string readFile(const char* path) {
     std::ifstream f(path);
     if (!f) return {};
@@ -774,6 +786,11 @@ static int runScenario(const char* path) {
             // `from` names a file of the repository instead, such as a shipped script, so its source keeps one home.
             std::string body = step.has("value") ? step["value"].str : std::string();
             if (step.has("from")) {
+                if (!insideRepo(step["from"].str)) {
+                    std::printf("  WRITE %s: %s is not a path inside the repository\n", name, step["from"].c_str());
+                    result.check(false, name);
+                    continue;
+                }
                 std::ifstream in(std::string(MM_REPO_ROOT) + "/" + step["from"].str, std::ios::binary);
                 if (!in) {
                     std::printf("  WRITE %s: %s not found in the repository\n", name, step["from"].c_str());

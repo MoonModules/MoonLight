@@ -221,6 +221,7 @@ function connectWs() {
                     updateValues();
                     walker?.update(state);
                     relayMoonCloudOutbox();
+                    downloadMissingScripts();
                     // A targetFps slider move arrives as a PATCH, and the preview controller aims
                     // at whatever it last heard: without this, the advertised detail/smoothness
                     // chooser only takes effect on the next reconnect.
@@ -235,6 +236,7 @@ function connectWs() {
             state = data;
             if (helpPending) loadHelp();
             relayMoonCloudOutbox();
+            downloadMissingScripts();
             // Defer the DOM rebuild while the user is mid-interaction: rebuilding under an open dropdown makes it unselectable. The state is stored above, so updateValues() still shows fresh values, and renderIfDeferred draws the structure once the edit ends.
             if (userIsEditing()) {
                 structuralRenderPending = true;
@@ -6462,7 +6464,7 @@ function mlGroupForExt(ext) {
          : ext === ".mlp" ? "palettes" : null;
 }
 
-/// The collection a catalog group files a script under, "" for one at the kind's root or not in the catalog.
+/// The folder a catalog group files a script under, such as `effects/basics`, or the group's own folder for a script the catalog does not list.
 function mlFolderOf(g, name, group) {
     return (g.folder || [])[(g.names || []).indexOf(name)] || group;
 }
@@ -6471,6 +6473,28 @@ function mlFolderOf(g, name, group) {
 function mlRepoPath(cat, group, name) {
     const g = (cat && cat[group]) || {};
     return "moonlive/" + mlFolderOf(g, name, group) + "/" + name;
+}
+
+// A module naming a shipped script the device lacks lists it in System's hidden `missing scripts`; the open page downloads each through the picker's own path, and the device compiles it once it lands.
+// A name is tried once a minute at most, so a failing download is not repeated with every state patch, and one that worked has left the list by then.
+let mlMissingBusy = false;
+const mlMissingTried = new Map();   // name -> when its download was last started
+async function downloadMissingScripts() {
+    if (mlMissingBusy) return;
+    // Found by the control's own name, which no other module uses, so the page names no module type.
+    const raw = allModules().flatMap(m => m.controls || []).find(c => c.name === "missing scripts")?.value;
+    if (!raw) return;
+    mlMissingBusy = true;
+    try {
+        for (const name of raw.split("|").filter(Boolean)) {
+            const group = mlGroupForExt(name.slice(name.lastIndexOf(".")));
+            if (!group || Date.now() - (mlMissingTried.get(name) || 0) < 60000) continue;
+            mlMissingTried.set(name, Date.now());
+            await mlDownloadScript(name, group).catch(() => {});
+        }
+    } finally {
+        mlMissingBusy = false;
+    }
 }
 
 // Download one factory script and save it to the device.

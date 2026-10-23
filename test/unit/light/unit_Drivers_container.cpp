@@ -536,3 +536,25 @@ TEST_CASE("the lights rise to their brightness after a device boot, and a host p
     CHECK(dark.effectiveBrightness() == 100);
     layouts.removeChild(&grid);
 }
+
+// Regression: a palette script edited, or downloaded by an open page, stayed on its old program until a control changed.
+TEST_CASE("the running palette script compiles again when its file changes") {
+    mm::platform::fsMkdir(mm::moonlive::kScriptDir);
+    const char* good = "class P {\n  void tick() { setPalEntry(0, 1, 2, 3); }\n}\n";
+    REQUIRE(mm::platform::fsWriteAtomic("/moonlive/unit-live.mlp", good, std::strlen(good)));
+    mm::Drivers drivers;
+    drivers.defineControls();
+    const int i = mm::test::controlIndex(drivers, "paletteScript");
+    REQUIRE(i >= 0);
+    REQUIRE(mm::applyControlValue(drivers.controls()[static_cast<uint8_t>(i)], "{\"value\":\"unit-live.mlp\"}",
+                                  "value", mm::ApplyPolicy::Clamp) == mm::ApplyResult::Ok);
+    drivers.onControlChanged("paletteScript");
+    REQUIRE(drivers.status() != nullptr);
+    CHECK(drivers.status()[0] != 'u');                         // compiled: the status is its size
+    const char* broken = "class P {\n  void tick() { nosuch(); }\n}\n";
+    REQUIRE(mm::platform::fsWriteAtomic("/moonlive/unit-live.mlp", broken, std::strlen(broken)));
+    drivers.onFileChanged("/moonlive/unit-live.mlp");          // what a file write announces
+    REQUIRE(drivers.status() != nullptr);
+    CHECK(std::strstr(drivers.status(), "unknown function") != nullptr);
+    mm::platform::fsRemove("/moonlive/unit-live.mlp");
+}

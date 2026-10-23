@@ -329,12 +329,14 @@ constexpr const char* kServiceCatalog[] = {
     "stadbeest-autopilot.mls",
     "button.mls",
     "chase.mls",
+    "jsondemo.mls",
     "power.mls",
     "sweep.mls",
 };
-constexpr size_t kServiceCatalogCount = 6;
+constexpr size_t kServiceCatalogCount = 7;
 /// What each service above declares about itself, in the same order, 0 meaning it says nothing and the device decides.
 constexpr unsigned char kServiceCatalogDim[] = {
+    0,
     0,
     0,
     0,
@@ -350,11 +352,13 @@ constexpr const char* kServiceCatalogTags[] = {
     "",
     "",
     "",
+    "",
 };
 /// Where each service above sits under `moonlive/`, as an index into kCatalogFolders.
 constexpr unsigned char kServiceCatalogFolder[] = {
     9,
     10,
+    11,
     11,
     11,
     11,
@@ -399,6 +403,6 @@ constexpr unsigned char kPaletteCatalogFolder[] = {
     10,
 };
 
-constexpr size_t kCatalogCount = 75;   ///< every factory script, all roles
+constexpr size_t kCatalogCount = 76;   ///< every factory script, all roles
 
 } // namespace mm::moonlive

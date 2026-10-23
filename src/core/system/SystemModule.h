@@ -2,6 +2,7 @@
 
 #include "core/util/DeviceName.h"   // defaultDeviceName: shared with MoonBase
 #include "core/util/format.h"   // formatTo: nonblocking formatting into a fixed buffer
+#include "core/moonlive/MoonLiveMissing.h"   // the missing scripts an open page downloads
 #include "core/module/MoonModule.h"
 #include "core/module/Scheduler.h"
 #include "core/system/FilesystemModule.h"   // setDeviceModel() arms the debounced save (noteDirty)
@@ -138,6 +139,9 @@ public:
             }
         }
         controls_.addReadOnly("maxBlock", maxBlockStr_, sizeof(maxBlockStr_));
+        /// Shipped scripts a module names and the device lacks; an open page downloads them.
+        controls_.addReadOnly("missing scripts", moonlive::missingScripts(), moonlive::kMissingText);
+        controls_.setHidden(controls_.count() - 1, true);   // the module naming one says so on its own card
 
         // Firmware identity lives on the firmware card, and filesystem usage on the file manager.
         if (chipFlashVal_ > 0) {

@@ -127,6 +127,7 @@
 
 #include <atomic>
 #include <cstdarg>
+#include <cstddef>   // std::max_align_t, the alignment allocInternal asks for
 #include <cstdlib>
 #include <cstdio>
 #include <algorithm>   // std::min

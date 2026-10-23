@@ -125,14 +125,17 @@ inline bool parseBool(const char* json, const char* key) {
 /// The recursion bound for a device task stack, far deeper than anything we emit yet a hard guard against a pathological input.
 inline constexpr int kMaxDepth = 64;
 
+/// Every JSON number is `Int`: whole numbers read as they are, and a decimal reads truncated as a whole and, from its text, exact to 1/65536 as fixed point.
 enum class JsonType : uint8_t { Null, Bool, Int, String, Object, Array };
 
 /// One value in the arena, its children linked by index so every node stays fixed-size with no per-node child array.
 struct JsonNode {
     JsonType type = JsonType::Null;   ///< which kind of value this node holds
+    bool decimal = false;         ///< a number with a fraction or an exponent, whose text is the value
+    uint16_t numLen = 0;          ///< a number's text length at `str`, which a writer repeats exactly
     const char* key = nullptr;    ///< the member name when this node is an object member
-    const char* str = nullptr;    // string value (points into doc buffer) when type == String
-    long intValue = 0;            ///< the numeric value, and a mirror for a boolean
+    const char* str = nullptr;    ///< the string value, or a number's text
+    long intValue = 0;            ///< the numeric value truncated toward zero, and a mirror for a boolean
     int firstChild = -1;          ///< the first child's index, or none
     int next = -1;                ///< the next sibling's index, or none
 };
@@ -146,11 +149,37 @@ struct JsonDoc {
     int       count = 0;         ///< used node slots
     int       root = -1;         ///< the top value's index, or none until a parse succeeds
     bool      outOfMemory = false;   ///< why a parse failed, when it was memory rather than the text
+    char**    owned = nullptr;   ///< text an edit added, a block each, since the parse buffer has no room for it
+    int       ownedCount = 0;    ///< used entries in `owned`
+    int       ownedCap = 0;      ///< allocated entries in `owned`
 
     /// An empty document, owning nothing until a parse fills it.
     JsonDoc() = default;
-    /// Frees both blocks.
-    ~JsonDoc() { std::free(buf); std::free(nodes); }
+    /// Frees every block.
+    ~JsonDoc() { dropOwned(); std::free(static_cast<void*>(owned)); std::free(buf); std::free(nodes); }
+
+    /// Free the text edits added, which a new parse or the destructor ends.
+    void dropOwned() {
+        for (int i = 0; i < ownedCount; i++) std::free(owned[i]);
+        ownedCount = 0;
+    }
+
+    /// A copy of `s` the document keeps until it is freed or parsed again, or null when memory ran out.
+    const char* own(const char* s, size_t len) {
+        if (ownedCount == ownedCap) {
+            const int grown = ownedCap ? ownedCap * 2 : 8;
+            auto* list = static_cast<char**>(std::realloc(static_cast<void*>(owned), static_cast<size_t>(grown) * sizeof(char*)));
+            if (!list) return nullptr;
+            owned = list;
+            ownedCap = grown;
+        }
+        char* copy = static_cast<char*>(std::malloc(len + 1));
+        if (!copy) return nullptr;
+        std::memcpy(copy, s, len);
+        copy[len] = '\0';
+        owned[ownedCount++] = copy;
+        return copy;
+    }
     /// Non-copyable: it owns two heap blocks.
     JsonDoc(const JsonDoc&) = delete;
     JsonDoc& operator=(const JsonDoc&) = delete;
@@ -174,6 +203,9 @@ struct JsonDoc {
     }
 };
 
+/// Read the JSON number at `p` (RFC 8259) in integer arithmetic, a double being emulated in software on the classic ESP32. The end of the number, or null when there is none.
+const char* parseNumber(const char* p, long& whole, int32_t& fixed, bool& decimal);
+
 namespace detail {
 
 /// The cursor over the document's own buffer, which doubles as scratch: un-escaping rewrites string bytes in place.
@@ -196,6 +228,49 @@ struct JsonParser {
         return i;
     }
 
+    /// Four hex digits at the cursor as a number, or -1 with the cursor left where it was.
+    long hex4() {
+        long v = 0;
+        for (int i = 0; i < 4; i++) {
+            const int d = hexDigit(p[i]);
+            if (d < 0) return -1;
+            v = v * 16 + d;
+        }
+        p += 4;
+        return v;
+    }
+
+    /// Write code point `cp` as UTF-8 at `out`, answering the write cursor.
+    static char* encodeUtf8(char* out, long cp) {
+        if (cp < 0x80) { *out++ = static_cast<char>(cp); return out; }
+        if (cp < 0x800) {
+            *out++ = static_cast<char>(0xC0 | (cp >> 6));
+        } else if (cp < 0x10000) {
+            *out++ = static_cast<char>(0xE0 | (cp >> 12));
+            *out++ = static_cast<char>(0x80 | ((cp >> 6) & 0x3F));
+        } else {
+            *out++ = static_cast<char>(0xF0 | (cp >> 18));
+            *out++ = static_cast<char>(0x80 | ((cp >> 12) & 0x3F));
+            *out++ = static_cast<char>(0x80 | ((cp >> 6) & 0x3F));
+        }
+        *out++ = static_cast<char>(0x80 | (cp & 0x3F));
+        return out;
+    }
+
+    /// Decode a `\uXXXX` escape, the cursor past the `u`, as UTF-8 at `out` (RFC 8259), a surrogate pair as one character and a malformed one as '?'. Answers the write cursor, which an escape, longer than its bytes, keeps behind the read cursor.
+    char* decodeUnicode(char* out) {
+        long cp = hex4();
+        const bool high = cp >= 0xD800 && cp <= 0xDBFF;
+        if (high && p[0] == '\\' && p[1] == 'u') {
+            p += 2;
+            const long low = hex4();
+            cp = (low >= 0xDC00 && low <= 0xDFFF) ? 0x10000 + ((cp - 0xD800) << 10) + (low - 0xDC00) : '?';
+        } else if (cp < 0 || (cp >= 0xD800 && cp <= 0xDFFF)) {
+            cp = '?';   // malformed, or half a pair
+        }
+        return encodeUtf8(out, cp);
+    }
+
     /// Un-escape a string literal in place and terminate it, returning its first byte, or nothing when unterminated.
     char* parseStringLiteral() {
         p++;                       // opening quote
@@ -215,8 +290,9 @@ struct JsonParser {
                     case 't':  c = '\t'; break;
                     case 'b':  c = '\b'; break;
                     case 'f':  c = '\f'; break;
+                    case 'u':  out = decodeUnicode(out); continue;
                     case 0:    ok = false; return nullptr;  // trailing backslash, truncated
-                    default:   c = e;    break;             // unknown escape (incl. \u): keep byte
+                    default:   c = e;    break;             // an unknown escape keeps its byte
                 }
             }
             *out++ = c;
@@ -263,25 +339,16 @@ struct JsonParser {
                 return idx;
             }
             default: {
-                // An integer-only model: the sign and digits, then any fractional tail discarded, since we never persist a float.
-                if (*p != '-' && (*p < '0' || *p > '9')) { ok = false; return -1; }
-                char* endp = nullptr;
-                long v = std::strtol(p, &endp, 10);
-                if (endp == p) { ok = false; return -1; }
-                p = endp;
-                // Skipped precisely, so the scan stops at the number's real end rather than swallowing a following token.
-                auto digits = [&] { while (*p >= '0' && *p <= '9') p++; };
-                if (*p == '.') { p++; digits(); }
-                if (*p == 'e' || *p == 'E') {
-                    char* e = p++;
-                    if (*p == '+' || *p == '-') p++;
-                    if (*p >= '0' && *p <= '9') digits();
-                    else p = e;     // bare 'e' with no exponent digits: not part of the number
-                }
                 int idx = alloc();
                 if (idx < 0) return -1;
-                doc.nodes[idx].type = JsonType::Int;
-                doc.nodes[idx].intValue = v;
+                JsonNode& n = doc.nodes[idx];
+                int32_t fixed = 0;   // derived from the text when asked, so every node stays 24 bytes
+                const char* end = parseNumber(p, n.intValue, fixed, n.decimal);
+                if (!end) { ok = false; return -1; }
+                n.type = JsonType::Int;
+                n.str = p;   // the source text, which a writer repeats rather than re-rounding
+                n.numLen = static_cast<uint16_t>(end - p > 0xFFFF ? 0 : end - p);
+                p += end - p;
                 return idx;
             }
         }
@@ -348,6 +415,7 @@ inline bool parse(const char* json, JsonDoc& out) {
     out.count = 0;
     out.root = -1;
     out.outOfMemory = false;
+    out.dropOwned();
     if (!json) return false;
     size_t len = std::strlen(json);
     if (len == 0) return false;
@@ -430,6 +498,39 @@ inline bool readBool(const JsonNode* n, bool fallback = false) {
     if (n->type == JsonType::Bool || n->type == JsonType::Int) return n->intValue != 0;
     return fallback;
 }
+
+/// Read a node as Q16.16 fixed point: a decimal keeps its fraction, a whole number and a bool scale up, and anything else is `fallback`.
+int32_t readFixed(const JsonNode* n, int32_t fallback = 0);
+
+/// Read a node as a number as JavaScript's parseFloat does: a number or a bool as it is, a string by its leading number, since services quote theirs (`"price":"252.11"`). False when there is none.
+bool readNumber(const JsonNode* n, long& whole, int32_t& fixed);
+
+// Addressing and editing by JSON Pointer (RFC 6901), the path JSON Patch speaks: "" is the whole document, "/a/0/b" a member of the first element of "a". A key spells "/" as "~1" and "~" as "~0".
+
+/// The node a JSON Pointer names, or null when the path leaves the document.
+const JsonNode* at(const JsonDoc& doc, const char* pointer);
+
+/// Set the number at `pointer`, creating the member and any object on the way, as `mkdir -p` makes folders. False when the path runs through a non-object or past an array's end.
+bool setInt(JsonDoc& doc, const char* pointer, long value);
+/// The same for a Q16.16 value, which a writer prints with four decimals.
+bool setFixed(JsonDoc& doc, const char* pointer, int32_t value);
+/// The same for a string, which the document copies.
+bool setString(JsonDoc& doc, const char* pointer, const char* value);
+/// Copy the value at `srcPointer` in `src`, a whole object or array included, to `dstPointer` in `dst`; false when the source has no such value.
+bool copyValue(JsonDoc& dst, const char* dstPointer, const JsonDoc& src, const char* srcPointer);
+/// Append text to the string at `pointer`, which becomes a string when it held something else.
+bool appendText(JsonDoc& doc, const char* pointer, const char* text);
+/// Append the value at `srcPointer` as text: a string as it reads, anything else as JSON writes it; false when the source has no such value.
+bool appendValue(JsonDoc& dst, const char* dstPointer, const JsonDoc& src, const char* srcPointer);
+
+}  // namespace mm::json
+
+namespace mm { class JsonSink; }
+
+namespace mm::json {
+
+/// Write a node and everything under it as JSON text, the whole document for its root; a parsed number is repeated as written.
+void write(JsonSink& out, const JsonDoc& doc, const JsonNode* n);
 
 /// Navigate to the array under a key, or nothing when the input names none: @xref{the-shared-document-is-a-function-local-static|why its own function}.
 inline const JsonNode* parseListArray(const char* json, const char* key, JsonDoc*& docOut) {

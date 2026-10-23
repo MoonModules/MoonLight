@@ -253,12 +253,10 @@ public:
             return;
         }
         if (sendReport(MoonStatsEvent::Refresh)) {
-            setOwnStatus(cloudRelays() ? "Handed to this page, which sends it within a second."
-                                       : "Sent. The charts below now describe this device as it is now.",
+            setOwnStatus(lastViaPage() ? "Handed to this page, which sends it within a second." : "Sending...",
                          Severity::Status);
         } else {
-            setOwnStatus("Could not reach the server. Nothing was sent; press send update to try again.",
-                         Severity::Error);
+            setOwnStatus(kNotSent, Severity::Error);
         }
     }
 
@@ -326,13 +324,9 @@ public:
     /// Send the automatic report once every guard below passes.
     void tick1s() MM_NONBLOCKING override {
         MoonModule::tick1s();
-        // A report handed to the page is marked once the outbox empties, and nothing else goes until then.
-        if (relayPending_) {
-            const auto* cloud = static_cast<const MoonCloudModule*>(parent());
-            if (!cloud || !cloud->outboxWaiting()) {
-                markReported();
-                relayPending_ = false;
-            }
+        // A report on its way, to the page or over HTTPS, is settled once it arrived, and nothing else goes until then.
+        if (pending_) {
+            settlePending();
             return;
         }
         if (!reportDue()) return;
@@ -353,6 +347,12 @@ public:
     bool cloudRelays() const {
         const auto* cloud = static_cast<const MoonCloudModule*>(parent());
         return cloud && cloud->relaysThroughBrowser();
+    }
+
+    /// Whether the last report went to the open page rather than out of the board.
+    bool lastViaPage() const {
+        const auto* cloud = static_cast<const MoonCloudModule*>(parent());
+        return cloud && cloud->lastViaPage();
     }
 
     /// Whether we serve our own access point, asked of the platform so no copy goes stale.
@@ -384,19 +384,28 @@ private:
                              static_cast<uint32_t>(platform::freeHeap()),
                              sched->fps());
 
-        // Through the container, which owns the address. Whether it was accepted is reported.
-        bool sent = false;
-        if (auto* cloud = static_cast<MoonCloudModule*>(parent())) {
-            sent = cloud->post("/api/report", body.data());
-        }
-        // Through the page, the report counts once the page has delivered it, so a reboot before then sends it again.
-        if (cloudRelays()) {
-            relayPending_ = sent;
-            return sent;
-        }
-        // The automatic report marks itself either way; a failed press must not.
-        if (kind != MoonStatsEvent::Refresh || sent) markReported();
+        // Through the container, which owns the address; the outcome is settled once it arrived.
+        auto* cloud = static_cast<MoonCloudModule*>(parent());
+        ticket_ = cloud ? cloud->post("/api/report", body.data()) : 0;
+        const bool sent = ticket_ != 0;
+        pending_ = sent;
+        pressed_ = kind == MoonStatsEvent::Refresh;
         return sent;
+    }
+
+    /// What a press that did not reach the server says.
+    static constexpr const char* kNotSent = "Could not reach the server. Nothing was sent; press send update to try again.";
+
+    /// Settle a report once it left. A pressed one counts once it arrived, so a reboot before then sends it again; the automatic one counts either way, so an unreachable server is not asked every second.
+    void settlePending() {
+        auto* cloud = static_cast<MoonCloudModule*>(parent());
+        if (cloud && cloud->waiting(ticket_)) return;
+        pending_ = false;
+        const bool arrived = cloud && cloud->delivered(ticket_);
+        if (arrived || !pressed_) markReported();
+        if (pressed_ && !lastViaPage())
+            setOwnStatus(arrived ? "Sent. The charts below now describe this device as it is now." : kNotSent,
+                         arrived ? Severity::Status : Severity::Error);
     }
 
     /// The verdict this module last set, or null, so the next press retracts exactly this one.
@@ -423,7 +432,9 @@ private:
     /// Whether this install may report.
     /// @guide Nothing is sent and no identifier is computed while it is off.
     bool consent_ = false;
-    bool relayPending_ = false;        ///< a report waits in the container's outbox for the page
+    bool pending_ = false;             ///< a report is on its way, to the page or over HTTPS
+    bool pressed_ = false;             ///< and it was the send update button's
+    uint32_t ticket_ = 0;              ///< the report's ticket, so this module reads its own outcome
     /// The version that last reported.
     /// @guide It differs from the running version exactly when a report is due.
     char reportedVersion_[32] = {};

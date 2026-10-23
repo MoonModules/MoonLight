@@ -3832,6 +3832,9 @@
     "maxBlock": {
      "line": "The largest free internal block, which bounds one allocation."
     },
+    "missing scripts": {
+     "line": "Shipped scripts a module names and the device lacks; an open page downloads them."
+    },
     "flash": {
      "line": "The flash chip size."
     },
@@ -4372,6 +4375,10 @@
     {
      "title": "Writing the script",
      "text": "Everything the script declares appears as a control on the card, and a slider move lands without a recompile. A compile error shows on the status line, and the service does nothing until it is fixed. A script runs on the 50 Hz poll rather than the render tick, so a heavy one costs its own tick."
+    },
+    {
+     "title": "Reading and sending JSON",
+     "text": "A service reads JSON from the internet with `getJson`, and sends its own documents with `pushJson` to this device or `pushJsonTo` to another. A show builds its own look this way, live and never saved. The calls: [the MoonLive language](https://moonmodules.org/MoonLight/moonmodules/light/moonlive.html#json-documents-in-a-service)."
     }
    ],
    "image": "https://moonmodules.org/MoonLight/assets/core/MoonLiveService.png",

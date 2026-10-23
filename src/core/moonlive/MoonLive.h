@@ -181,8 +181,11 @@ public:
     /// The allocated exec-block size, which is the heap held.
     size_t codeCap() const { return codeCap_; }
 
-    /// Every heap byte this engine holds: the exec block plus the control arena, without the inline string pool the module's own sizeof counts.
-    size_t heapBytes() const { return codeCap_ + (ctrlArena_ ? kArenaBytes : 0); }
+    /// Every heap byte this engine holds: the exec block, the control arena and the string pool.
+    size_t heapBytes() const { return codeCap_ + (ctrlArena_ ? kArenaBytes : 0) + stringCap_; }
+
+    /// The control arena's address, which names this engine to a host table holding things on its behalf, as `JsonFetch` holds documents.
+    const void* arena() const { return ctrlArena_; }
 
     /// Write the program's size and the one budget it is closest to exhausting into `out`, shown past half full, one budget since the others follow from code size.
     void describe(char* out, size_t cap) const {
@@ -192,7 +195,6 @@ public:
         struct Budget { const char* name; uint32_t used, max; };
         const Budget budgets[] = {
             {"controls", controlCount_, kMaxCtrls},
-            {"strings",  stringLen_,    CompileResult::kStringPool},
             {"code",     static_cast<uint32_t>(codeLen_), kCodeCap},
             {"entries",  entryCount_,   kMaxEntryPoints},
         };
@@ -276,9 +278,11 @@ private:
     uint8_t* ctrlArena_ = nullptr;   // live control + system-variable bytes (platform::alloc, kArenaBytes, fixed)
     uint8_t  controlCount_ = 0;      // controls the current program declared
     DeclaredControl controls_[kMaxCtrls] = {};   // the declared-control metadata for the binding
-    /// The string pool, copied so the engine outlives the source text it was built from.
-    char strings_[CompileResult::kStringPool] = {};
-    /// How much of the pool the current program uses, for the card's headroom readout.
+    /// The string pool, sized to the program's literals and copied so the engine outlives the source text it was built from; a script with none holds none.
+    char*    strings_ = nullptr;
+    /// Its size.
+    uint16_t stringCap_ = 0;
+    /// How much of the pool the current program uses.
     uint16_t stringLen_ = 0;
 };
 

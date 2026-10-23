@@ -447,3 +447,57 @@ TEST_CASE("replacing a module's children keeps the unlisted ones where they are"
     CHECK(t.children(t.effects) == "A,Wired,B");
     CHECK(t.apply(R"({"Effects":{"$patch":"replace","A":{},"B":{}}})").changes == 0);
 }
+
+TEST_CASE("a live document applies as a request does and marks nothing to save") {
+    Tree t;
+    static int saves = 0;
+    saves = 0;
+    t.s.setNoteDirtyHook([] { saves++; });
+    auto r = mm::applyStateDocument(t.s, R"({"Effects": {"Knob": {"type": "SdKnob", "value": 42}}})", mm::StateSource::Live);
+    REQUIRE(r.ok);
+    CHECK(valueOf(t.find("Knob")) == 42);
+    CHECK(saves == 0);
+    CHECK_FALSE(t.effects->dirty());
+    CHECK_FALSE(t.find("Knob")->dirty());
+    // Checked whole as a request is: a mistake changes nothing.
+    auto bad = mm::applyStateDocument(t.s, R"({"Effects": {"Knob": {"value": 7}, "X": {"type": "Nope"}}})", mm::StateSource::Live);
+    CHECK_FALSE(bad.ok);
+    CHECK(valueOf(t.find("Knob")) == 42);
+}
+
+TEST_CASE("a live document queued from a tick applies at the frame boundary and reports back") {
+    Tree t;
+    static bool reported = false;
+    static uint16_t changes = 0;
+    reported = false;
+    const char* text = R"({"Effects": {"Knob": {"type": "SdKnob", "value": 9}}})";
+    char* copy = static_cast<char*>(mm::platform::alloc(std::strlen(text) + 1));
+    std::strcpy(copy, text);
+    REQUIRE(t.s.applyLive(copy, [](uintptr_t tag, const mm::StateDocumentResult& r) {
+        reported = tag == 7 && r.ok;
+        changes = r.changes;
+    }, 7));
+    CHECK(t.find("Knob") == nullptr);   // nothing until the boundary
+    t.s.preparePending();
+    REQUIRE(t.find("Knob") != nullptr);
+    CHECK(valueOf(t.find("Knob")) == 9);
+    CHECK(reported);
+    CHECK(changes == 2);
+}
+
+TEST_CASE("the live queue refuses a fifth document rather than growing") {
+    Tree t;
+    char* texts[5];
+    for (auto& p : texts) {
+        p = static_cast<char*>(mm::platform::alloc(3));
+        std::strcpy(p, "{}");
+    }
+    for (int i = 0; i < 4; i++) CHECK(t.s.applyLive(texts[i]));
+    CHECK_FALSE(t.s.applyLive(texts[4]));
+    mm::platform::free(texts[4]);   // refused, so still the caller's
+    t.s.preparePending();
+    // Applied, so there is room again.
+    char* again = static_cast<char*>(mm::platform::alloc(3));
+    std::strcpy(again, "{}");
+    CHECK(t.s.applyLive(again));
+}

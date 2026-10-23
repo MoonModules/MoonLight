@@ -1050,7 +1050,9 @@ uv run moondeck/build/build_esp32.py --firmware esp32-16mb
 uv run moondeck/build/build_esp32.py --firmware esp32s3-n16r8
 ```
 
-Auto-detects ESP-IDF installation, sets target if needed, builds, and shows flash/RAM usage summary. Each firmware writes into `build/esp32-<firmware>/`, so switching firmwares (or building several in one session) keeps every variant on disk — no clean rebuild on switch.
+Auto-detects ESP-IDF installation, sets target if needed, builds, and shows flash/RAM usage summary. Each firmware writes into `build/esp32-<firmware>/`, so switching firmwares (or building several in one session) keeps every variant on disk, with no clean rebuild on switch.
+
+An edited `sdkconfig` fragment reaches every build that uses it. IDF seeds `sdkconfig` from the fragments only when the file is absent, so each build dir records a digest of its fragments in `sdkconfig.fragments.sha256`. When they differ, the build deletes that `sdkconfig` and runs `idf.py reconfigure` (`sdkconfig_fragments.py`, shared with the MoonBase build), so only what reads a changed option recompiles. A value set by hand in menuconfig goes with it: the fragments are the config's one source.
 
 The Ethernet PHY type and pin map are runtime config, not baked in: each firmware carries the driver(s) its chip can host (RMII EMAC for classic, W5500 SPI for S3), and `deviceModels.json` supplies the per-board PHY/pins. The `esp32` / `esp32-eth` builds default to the common LAN8720 RMII pins (PHY reset on GPIO 5, MDIO addr 0, clock GPIO 17 — e.g. the [Olimex ESP32-Gateway](https://www.olimex.com/Products/IoT/ESP32/ESP32-GATEWAY/open-source-hardware)); a board with different pins (e.g. WT32-ETH01: reset on GPIO 16) just needs a different `deviceModels.json` entry — no rebuild.
 
@@ -1110,12 +1112,14 @@ The script never touches git, since the commit and the tag stay yours.
 
 ### serve_firmware
 
-Serve a built firmware over HTTP so a board can install it by URL. Long-running.
+Serve a built firmware over HTTP so a board can install it by URL. Long-running: the **Serve for OTA** card on the ESP32 tab serves the selected firmware until Stop.
 
 ```bash
-uv run moondeck/run/serve_firmware.py esp32 --port 8099
-uv run moondeck/run/serve_firmware.py build/moonbase-esp32/MoonLight-moonbase.bin --port 8098
+uv run moondeck/run/serve_firmware.py --firmware esp32 --port 8099
+uv run moondeck/run/serve_firmware.py --firmware build/moonbase-esp32/MoonLight-moonbase.bin --port 8098
 ```
+
+For a device MoonDeck lists, the **OTA** button on its Live row does the same in one click: MoonDeck serves the image itself and hands the device the URL. The card is for a device it does not list, MoonBase's own page, or a board on another network.
 
 Takes a firmware name (resolved to the app image in `build/esp32-<name>/`) or a path to any `.bin`, and
 prints the LAN URL to paste into the Firmware card or MoonBase's own page. The file is re-read per

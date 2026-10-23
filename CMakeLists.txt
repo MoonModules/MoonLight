@@ -131,6 +131,7 @@ find_program(UV_EXECUTABLE NAMES uv REQUIRED
 add_library(mm_core STATIC
     src/core/module/Control.cpp
     src/core/util/JsonUtil.cpp
+    src/core/util/JsonFetch.cpp
     src/core/util/parse.cpp
     src/core/util/ScratchBuffer.cpp
     src/core/system/HttpServerModule.cpp

@@ -31,6 +31,12 @@ For a device still on old firmware (no Backup button yet), the [installer page](
 
 ## Unreleased
 
+### The StadBeest autopilot builds its looks, a layer each
+
+**Action: *nothing*, unless a desk or a preset switched the looks on `switch3` to `switch5`: use `encoder6` to `encoder8`.**
+
+`stadbeest-autopilot.mls` pushes every part its look at start, a layer per look. It crossfades between them through `encoder6` to `encoder8`, which set the three layers' opacity, where `switch3` to `switch5` turned three effects in one layer on and off, and it clears those three switch targets. The eyes and the mouth are reached by name, `MM-eye1.local`, `MM-eye2.local` and `MM-mouth.local`; a part named otherwise is renamed on its System card, or the names are edited in the script. [The StadBeest](examples/multi-board-installation.md#3-one-surface-layout-for-every-device) has the table.
+
 ### LCD-MM's ring is smaller, and refuses PSRAM
 
 **Action: *nothing*, unless `ringSnapshot` was off on a board with PSRAM: turn it on.**

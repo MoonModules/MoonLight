@@ -46,7 +46,7 @@ uint64_t builtinName(HostCallFn fn) {
 uint64_t pointerOffset(const void* p) {
     if (!p) return 0;
     const char* c = static_cast<const char*>(p);
-    if (g_strings && c >= g_strings && c < g_strings + CompileResult::kStringPool) return uint64_t(c - g_strings) + 1;
+    if (g_strings && c >= g_strings && c < g_strings + CompileResult::kMaxStrings) return uint64_t(c - g_strings) + 1;
     return 0xFFFF;
 }
 
@@ -91,7 +91,7 @@ TEST_CASE("every shipped script compiles to the IR it had before the compiler ch
                                   : ext == kModifierExt ? modifierSysVars()
                                   : effectSysVars();
             const BuiltinTable table = isService ? serviceBuiltins() : lightBuiltins();
-            static char strings[CompileResult::kStringPool];
+            static char strings[CompileResult::kMaxStrings];
             g_table = &table;
             g_strings = strings;
             g_hash = 0;

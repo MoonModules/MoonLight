@@ -1436,7 +1436,7 @@ TEST_CASE("a function without a declared return type is refused") {
 TEST_CASE("void, int and string are the return types; a member type is not one") {
     uint8_t out[2048];
     // A string return INTERNS its literal, so this form needs the pool the engine always supplies. Without one the compile fails with "no room for this script's strings", which is the honest answer to a caller that offered nowhere to put it.
-    static char pool[moonlive::CompileResult::kStringPool];
+    static char pool[moonlive::CompileResult::kMaxStrings];
     for (const char* good : {"class T { void tick() { fill(1,2,3); } }",
                              "class T { int dimensions() { return 2; } void tick() { fill(1,2,3); } }",
                              "class T { string tags() { return \"x\"; } void tick() { fill(1,2,3); } }"}) {
@@ -1457,7 +1457,7 @@ TEST_CASE("void, int and string are the return types; a member type is not one")
 // A `return` must match what its function declared. Without this the declaration would be a label rather than a contract: `return "x";` in a void function compiles, and the host that calls it for its effect never looks at the register, so a script silently disagrees with its own signature.
 TEST_CASE("a return must match the type its function declared") {
     uint8_t out[2048];
-    static char pool[moonlive::CompileResult::kStringPool];
+    static char pool[moonlive::CompileResult::kMaxStrings];
     const auto compiles = [&](const char* src) {
         return moonlive::compileSource(src, kTable, kSys, out, sizeof(out), nullptr, nullptr,
                                        pool, sizeof(pool)).ok;

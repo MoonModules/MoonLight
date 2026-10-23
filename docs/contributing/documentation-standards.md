@@ -126,7 +126,7 @@ Every page serves one of four reader needs, and only one. This is [Diátaxis](ht
 
 The test for any page is the cell it sits in. A tutorial that stops to explain, or a reference that starts to teach, is two pages: move the other half to where it belongs.
 
-Two kinds of page sit outside the grid on purpose. **The rules**, [coding-standards.md](coding-standards.md) and this page in `contributing/` and [CLAUDE.md](../../CLAUDE.md) at the repo root, are for contributors and bind every change. `legal/` sits outside it too. **Work not yet in the code** lives under `docs/work/`, and nothing there describes the system as it is. `future` is what does not exist, `present` is being built and moves to `past` at its PR, `past` holds the closed plans, shipped or cancelled.
+Two kinds of page sit outside the grid on purpose. **The rules**, [coding-standards.md](coding-standards.md) and this page in `contributing/` and [CLAUDE.md](../../CLAUDE.md) at the repo root, are for contributors and bind every change. `legal/` sits outside it too. **Work on its way to the code** lives under `docs/work/`, apart from the pages that describe the system. `future` holds what is planned, `present` what is being built, which moves to `past` at its PR, and `past` the closed plans, shipped or cancelled.
 
 Two scales below a page. **A module** has one reference card and one header (see [Module pages](#module-pages)); **a line of code** carries its own reason in a comment (see [Comments](#comments)).
 

@@ -4,7 +4,7 @@ Shipped plans and dated records.
 
 **A shipped plan is a working document, not testimony.** Whatever its PR already carries is duplication and can be trimmed or deleted. What earns keeping is the part no PR and no commit holds: the alternatives considered and rejected, and the reason the chosen shape won.
 
-`plans/` holds every plan that left `present`, each named with its status, `(shipped)`, `(superseded)`, `(cancelled)` or `(attempted, reverted)`. A plan moves here in its own PR ([CLAUDE.md, Branch](../../../CLAUDE.md#main-and-branch)).
+`plans/` holds every plan that left `present`, each named with its status: `(shipped)` once every step is built and verified, the judgment steps included, or `(superseded)`, `(cancelled)` or `(attempted, reverted)`. A plan moves here in the pull request that ships or closes it, the product owner's call ([CLAUDE.md, Branch](../../../CLAUDE.md#main-and-branch)).
 
 The prior-version inventories beside it state what was true at a moment and stay unrewritten. Release notes live on [the GitHub release](https://github.com/MoonModules/MoonLight/releases) itself, which is their one home: a copy here drifts from what shipped, and the links in one pinned to an older tag went stale exactly that way.
 

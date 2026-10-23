@@ -98,6 +98,7 @@ add_executable(MoonLight.elf
     ${REPO}/src/module_types.cpp
     ${REPO}/src/core/module/Control.cpp
     ${REPO}/src/core/util/JsonUtil.cpp
+    ${REPO}/src/core/util/JsonFetch.cpp
     ${REPO}/src/core/util/parse.cpp
     ${REPO}/src/core/util/ScratchBuffer.cpp
     ${REPO}/src/core/system/HttpServerModule.cpp

@@ -377,7 +377,7 @@ TEST_CASE("Xtensa: every shipped script compiles at the device's own code budget
         std::ostringstream ss; ss << f.rdbuf();
         const std::string src = ss.str();
         std::vector<uint8_t> out(mm::moonlive::codeCapFor(mm::moonlive::countTokens(src.c_str())));
-        static char strings[mm::moonlive::CompileResult::kStringPool];
+        static char strings[mm::moonlive::CompileResult::kMaxStrings];
         auto r = mm::moonlive::compileSource(src.c_str(), mm::moonlive::lightBuiltins(),
                                              mm::moonlive::effectSysVars(), out.data(), out.size(),
                                              nullptr, MM_ISA_LOWER, strings, sizeof(strings));

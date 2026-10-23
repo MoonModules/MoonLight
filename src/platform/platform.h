@@ -828,11 +828,24 @@ void moonbaseClearStagedUrl();
 int httpRequest(const char* method, const char* host, uint16_t port, const char* path,
                 const char* reqBody, uint32_t timeoutMs, char* body, size_t bodyLen);
 
-/// One HTTPS POST to a public server, answering the status or 0; `url` is a full URL, so a hostname resolves.
-bool httpsPost(const char* url, const char* body, uint32_t timeoutMs);
+/// One request to a full `http://` or `https://` URL: the method, an optional JSON body, and the answer into `body` when there is room. The HTTP status, or 0 when it failed or did not fit; it blocks, so only a background task calls it.
+int httpFetch(const char* method, const char* url, const char* reqBody, uint32_t timeoutMs,
+              char* body, size_t bodyLen);
 
 /// Whether this build can make an outbound HTTPS request at all.
 bool httpsAvailable() MM_NONBLOCKING;
+
+/// Internal RAM one TLS session holds while it lasts, on a board whose TLS buffers cannot go to PSRAM: two record buffers and the handshake.
+inline constexpr size_t kTlsSessionBytes = 45 * 1024;
+
+/// Whether a request to `url` may start now. HTTPS on a board whose TLS lives in internal RAM waits while that RAM is under the floor plus one session, which would starve WiFi and the web server.
+bool tlsRoom(const char* url);
+
+#ifndef ESP_PLATFORM   // a host-test seam, which no ESP32 code calls
+/// Answer `httpFetch` from a test instead of the network, by the same signature; null restores the network.
+using HttpFetchFn = int (*)(const char* method, const char* url, const char* reqBody, char* body, size_t bodyLen);
+void setTestHttpFetch(HttpFetchFn fn);
+#endif
 
 // Improv provisioning over UART0, sharing the channel with logging, which writes registers directly.
 

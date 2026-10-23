@@ -2,6 +2,7 @@
 
 #include "core/module/MoonModule.h"   // safeMode: no script runs in it
 #include "core/moonlive/MoonLive.h"
+#include "core/moonlive/MoonLiveMissing.h"   // what a compile finds missing
 #include "core/moonlive/script_catalog.h"
 #include "core/util/fnv.h"   // the shipped names, for isFactoryScript below
 #include "platform/platform.h"
@@ -230,7 +231,10 @@ inline bool compileScriptFile(MoonLive& engine, const char* name,
     resolveScript(name, path, sizeof(path));
 
     const int64_t size = platform::fsSize(path);
+    // A shipped script the device lacks is listed for an open page to download, the picker's own path.
+    if (size < 0 && isFactoryScript(name)) { noteScriptMissing(name); err = "script missing: an open page downloads it"; return false; }
     if (size < 0)               { err = "script not found"; return false; }
+    noteScriptPresent(name);
     if (size == 0)              { err = "script is empty";  return false; }
     if (size > kScriptFileMax)  { err = "script too large"; return false; }
 

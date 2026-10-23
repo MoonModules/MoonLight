@@ -7,6 +7,7 @@
 /// This is the test the plan's step 2 asks for: the script does in eight lines what ButtonService does as a module, and proving both drive the same control through the same primitive is what "compiled and scripted are interchangeable" means.
 
 #include "doctest.h"
+#include "moonlive_script_file.h"
 #include "core/services/MoonLiveService.h"
 #include "core/module/Scheduler.h"
 #include "core/module/MoonModule.h"
@@ -29,16 +30,6 @@ struct FakeControl : public MoonModule {
 };
 
 constexpr uint8_t kPin = 4;
-
-/// Write a script into the device's script directory, the same place the UI saves one.
-///
-/// Through the PLATFORM fs, not std::ofstream: the desktop platform roots its filesystem somewhere of its own choosing, so writing to a host-relative "/moonlive" put the file where the loader would never look and every script silently failed to compile.
-void writeScript(const char* name, const char* body) {
-    platform::fsMkdir(moonlive::kScriptDir);
-    char path[96];
-    std::snprintf(path, sizeof(path), "%s/%s", moonlive::kScriptDir, name);
-    REQUIRE(platform::fsWriteAtomic(path, body, std::strlen(body)));
-}
 
 struct Rig {
     Scheduler scheduler;

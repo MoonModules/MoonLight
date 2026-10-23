@@ -153,68 +153,71 @@ public:
 
     /// List every factory palette at its place in the catalog, held or not, then the user's own `.mlp` files, and publish them to the picker. The names live in member arrays, as the seam holds pointers.
     void refreshLivePalettes() {
-        livePalettesScanned_ = true;   // every scan counts, whichever caller ran it
-        liveCount_ = 0;
+        live_.scanned = true;   // every scan counts, whichever caller ran it
+        live_.count = 0;
         // The catalog first, in its own order, so a palette's number is the same on every device of one firmware and a slot or a desk can pick it.
-        for (size_t c = 0; c < moonlive::kPaletteCatalogCount && liveCount_ < LivePalettes::kMax; c++) {
+        for (size_t c = 0; c < moonlive::kPaletteCatalogCount && live_.count < LivePalettes::kMax; c++) {
             char path[96];
-            livePtrs_[liveCount_] = moonlive::kPaletteCatalog[c];
-            liveTags_[liveCount_] = moonlive::kPaletteCatalogTags[c];
-            livePresent_[liveCount_] = moonlive::resolveScript(moonlive::kPaletteCatalog[c], path, sizeof(path));
-            liveCount_++;
+            live_.ptrs[live_.count] = moonlive::kPaletteCatalog[c];
+            live_.tags[live_.count] = moonlive::kPaletteCatalogTags[c];
+            live_.present[live_.count] = moonlive::resolveScript(moonlive::kPaletteCatalog[c], path, sizeof(path));
+            live_.count++;
         }
-        const uint8_t own = liveCount_;
+        const uint8_t own = live_.count;
         // Then the user's own, from BOTH directories, user first, so an edited one appears once.
         const auto scan = [](const char* dir, void* ctx) {
             platform::fsList(dir, [](const char* name, bool isDir, uint32_t, void* c) {
                 auto* self = static_cast<Drivers*>(c);
-                if (isDir || self->liveCount_ >= LivePalettes::kMax) return;
+                if (isDir || self->live_.count >= LivePalettes::kMax) return;
                 const size_t n = std::strlen(name);
                 if (n < 5 || std::strcmp(name + n - 4, moonlive::kPaletteExt) != 0) return;
                 // A catalog palette, or one already listed, is not added twice.
-                for (uint8_t i = 0; i < self->liveCount_; i++)
-                    if (std::strcmp(self->livePtrs_[i], name) == 0) return;
+                for (uint8_t i = 0; i < self->live_.count; i++)
+                    if (std::strcmp(self->live_.ptrs[i], name) == 0) return;
                 // A bounded copy: a name longer than the slot truncates, which a picker wants.
-                char* slot = self->liveNames_[self->liveCount_];
-                const size_t cap = sizeof(self->liveNames_[0]) - 1;
+                char* slot = self->live_.names[self->live_.count];
+                const size_t cap = sizeof(self->live_.names[0]) - 1;
                 const size_t copy = n < cap ? n : cap;
                 std::memcpy(slot, name, copy);
                 slot[copy] = '\0';
-                self->livePtrs_[self->liveCount_] = slot;
-                self->liveTags_[self->liveCount_] = "";   // a script the catalog does not know is the user's own: no chips
-                self->livePresent_[self->liveCount_] = true;
-                self->liveCount_++;
+                self->live_.ptrs[self->live_.count] = slot;
+                self->live_.tags[self->live_.count] = "";   // a script the catalog does not know is the user's own: no chips
+                self->live_.present[self->live_.count] = true;
+                self->live_.count++;
             }, ctx);
         };
         scan(moonlive::kScriptDir, this);
         scan(moonlive::kFactoryScriptDir, this);
         // The user's own alphabetical among themselves, after the catalog.
-        for (uint8_t i = static_cast<uint8_t>(own + 1); i < liveCount_; i++)
-            for (uint8_t j = i; j > own && LivePalettes::cmpName(livePtrs_[j], livePtrs_[j - 1]) < 0; j--) {
-                std::swap(livePtrs_[j], livePtrs_[j - 1]);
-                std::swap(liveTags_[j], liveTags_[j - 1]);
-                std::swap(livePresent_[j], livePresent_[j - 1]);
+        for (uint8_t i = static_cast<uint8_t>(own + 1); i < live_.count; i++)
+            for (uint8_t j = i; j > own && LivePalettes::cmpName(live_.ptrs[j], live_.ptrs[j - 1]) < 0; j--) {
+                std::swap(live_.ptrs[j], live_.ptrs[j - 1]);
+                std::swap(live_.tags[j], live_.tags[j - 1]);
+                std::swap(live_.present[j], live_.present[j - 1]);
             }
     }
 
-    /// A palette script added, removed or restored joins the picker: any path in or above a script folder rescans them.
+    /// A palette script added, removed or restored joins the picker: any path in or above a script folder rescans them. The running one compiles again at once, an edit or a download landing with no control change.
     void onFileChanged(const char* path) override {
         if (!moonlive::touchesScripts(path)) return;
         paletteScriptModule_.fileChanged(path);
+        if (paletteScript_[0]) paletteScriptModule_.prepare(*this);
         refreshLivePalettes();
-        LivePalettes::set(livePtrs_, liveTags_, liveCount_, livePresent_);
+        LivePalettes::set(live_.ptrs, live_.tags, live_.count, live_.present);
         rebuildControls();
     }
 
-    /// The scripted palette names: static, so the one published list outlives any instance, a probe's included.
-    static inline char        liveNames_[LivePalettes::kMax][moonlive::kMaxScriptName + 1] = {};
-    static inline const char* livePtrs_[LivePalettes::kMax] = {};
-    static inline const char* liveTags_[LivePalettes::kMax] = {};
-    static inline bool        livePresent_[LivePalettes::kMax] = {};   ///< whether the device holds the file, which the UI downloads on a pick when it does not
-    /// How many scripted palettes the last scan found.
-    static inline uint8_t     liveCount_ = 0;
-    /// Whether the list was scanned, device-wide as the list is, so a probe reads it rather than rescanning it.
-    static inline bool livePalettesScanned_ = false;
+    /// The device's scripted palettes, as the last scan found them; static storage starts them zeroed.
+    struct LiveScan {
+        char        names[LivePalettes::kMax][moonlive::kMaxScriptName + 1];   ///< the user's own scripts' names, which `ptrs` points at
+        const char* ptrs[LivePalettes::kMax];   ///< each palette's name
+        const char* tags[LivePalettes::kMax];   ///< each palette's catalog chips, empty for the user's own
+        bool        present[LivePalettes::kMax];   ///< whether the device holds the file, which the UI downloads on a pick when it does not
+        uint8_t     count;     ///< how many the scan found
+        bool        scanned;   ///< so a probe reads the list rather than rescanning it
+    };
+    /// Static, so the one published list outlives any instance, a probe's included.
+    static inline LiveScan live_{};
     bool        softStarting_ = false;          ///< the lights are still rising after this boot
     bool        dark_ = false;                  ///< safe mode: every driver sends black, so no LED holds a bright frame
     bool        softStartBegun_ = false;        ///< the first lit frame has started the rise
@@ -270,12 +273,12 @@ public:
         controls_.setAdvanced(controls_.count() - 1);   // wiring an installer sets once
         controls_.addControl("brightness", brightness, 0, 255);
         // ONE picker for both kinds, so a `.mlp` is chosen exactly like a built-in; setup scans the folders and a file change rescans, never a brightness change.
-        if (!livePalettesScanned_) refreshLivePalettes();
+        if (!live_.scanned) refreshLivePalettes();
         // Published here too, so a saved palette name resolves when the file is applied, before setup.
-        LivePalettes::set(livePtrs_, liveTags_, liveCount_, livePresent_);
+        LivePalettes::set(live_.ptrs, live_.tags, live_.count, live_.present);
         // Sized from THIS instance's scan: defineControls also runs before prepare has published.
         controls_.addPalette("palette", palette, mm::paletteOptions,
-                             static_cast<uint8_t>(liveCount_ + mm::palettes::kCount));
+                             static_cast<uint8_t>(live_.count + mm::palettes::kCount));
         controls_.setPersistLabel(controls_.count() - 1);   // saved by name, which survives a script added before it
         // An EDITOR, not a second selector: `palette` owns the choice, so the two cannot disagree.
         controls_.addFilePath("paletteScript", paletteScript_, sizeof(paletteScript_),
@@ -473,7 +476,7 @@ public:
     void setup() override {
         // The filesystem module mounts first, so this scan is the one that sees every script; from here a file change rescans.
         refreshLivePalettes();
-        LivePalettes::set(livePtrs_, liveTags_, liveCount_, livePresent_);
+        LivePalettes::set(live_.ptrs, live_.tags, live_.count, live_.present);
         // The saved choice starts as picking it does, a script palette compiled, since at boot nothing reacts to the value.
         onControlChanged("palette");
         dark_ = MoonModule::safeMode();
@@ -491,11 +494,11 @@ public:
     /// Size the composition buffer, engage or drop the core-1 split, publish the summary.
     void prepare() override {
         // A rescan here picks up a script written since the last one.
-        const uint8_t hadLive = liveCount_;
+        const uint8_t hadLive = live_.count;
         refreshLivePalettes();
-        LivePalettes::set(livePtrs_, liveTags_, liveCount_, livePresent_);
+        LivePalettes::set(live_.ptrs, live_.tags, live_.count, live_.present);
         // A CHANGED count needs the control rebuilt: `palette`'s maximum is baked at define time.
-        if (liveCount_ != hadLive) rebuildControls();
+        if (live_.count != hadLive) rebuildControls();
         // The top-level Effects, found by type when nothing injected a source, so a tree built from a document needs no wiring.
         if (!effects_ && !layer_)
             if (Scheduler* s = Scheduler::instance()) effects_ = static_cast<Effects*>(s->topOfType("Effects"));

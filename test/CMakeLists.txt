@@ -32,6 +32,7 @@ add_executable(mm_tests
     unit/core/unit_ButtonService.cpp
     unit/core/unit_GamepadService.cpp
     unit/core/unit_MoonLiveService.cpp
+    unit/core/unit_MoonLiveService_json.cpp
     unit/core/unit_InfraredService.cpp
     unit/core/unit_TcpConnect.cpp
     unit/core/unit_MqttPacket.cpp
@@ -67,6 +68,8 @@ add_executable(mm_tests
     unit/core/unit_ImprovOpReassembler.cpp
     unit/core/unit_JsonUtil_parse.cpp
     unit/core/unit_JsonUtil_parseint.cpp
+    unit/core/unit_JsonUtil_pointer.cpp
+    unit/core/unit_JsonFetch.cpp
     unit/core/unit_JsonSink_detach.cpp
     unit/core/unit_JsonSink_number.cpp
     unit/core/unit_JsonSink_overflow.cpp
@@ -97,6 +100,7 @@ add_executable(mm_tests
     unit/core/unit_sanitizeHostname.cpp
     unit/core/unit_platform_clock.cpp
     unit/core/unit_platform_worker.cpp
+    unit/core/unit_platform_httpfetch.cpp
     unit/core/unit_HostList.cpp
     unit/core/unit_Addressing.cpp
     unit/core/unit_HostResolver.cpp

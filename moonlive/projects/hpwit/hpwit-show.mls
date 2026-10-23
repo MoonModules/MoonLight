@@ -1,8 +1,9 @@
-// HpwitShow: plays hpwit's effects as a show. Every scene picks a palette and how the layers blend, and shows either the wandering voronoi window or the mandala, by opacity, since a layer at opacity 0 costs nothing; within it the plasma strip slides and breathes, and the effects' own controls drift. It drives the control surface, so each slot's target on the Control card says what it moves.
+// HpwitShow: plays hpwit's effects as a show. It builds its own look at start, six layers and the surface slots that drive them, with one push that is never saved. Every scene picks a palette and how the layers blend, and shows either the wandering voronoi window or the mandala, by opacity, since a layer at opacity 0 costs nothing; within it the plasma strip slides and breathes, and the effects' own controls drift. It drives the control surface, so each slot's target on the Control card says what it moves.
 
 class HpwitShow {
   bool run = true;
   byte seconds = 20;
+  bool built = false;      // the look is pushed once, at start
 
   int scene = -1;          // the scene running, counted from boot
   int sceneAt = -1000000;  // when it started, in ms
@@ -14,7 +15,37 @@ class HpwitShow {
     addControl("seconds", seconds, 5, 120); // how long a scene lasts
   }
 
+  // The six layers, cheapest first, and which slot moves what; the scenes start once it has landed.
+  void build() {
+    pushJson(R"({"Effects": {"$patch": "replace",
+      "Sky": {"type": "Layer", "blendMode": "additive",
+        "Stars": {"type": "MoonLiveEffect", "script": "twinkle-stars.mle"}},
+      "Rings": {"type": "Layer", "blendMode": "additive",
+        "Ripples": {"type": "MoonLiveEffect", "script": "ripple-rings.mle"}},
+      "Plasma": {"type": "Layer", "blendMode": "screen",
+        "PlasmaRegion": {"type": "RegionModifier", "startX": 0, "endX": 35},
+        "Waves": {"type": "MoonLiveEffect", "script": "plasma-ring.mle"}},
+      "Cells": {"type": "Layer", "blendMode": "lighten",
+        "CellsRegion": {"type": "RegionModifier", "startX": 0, "endX": 30, "startY": 0, "endY": 50},
+        "Seeds": {"type": "MoonLiveEffect", "script": "voronoi.mle"}},
+      "Mandala": {"type": "Layer", "blendMode": "lighten", "opacity": 0,
+        "MandalaRegion": {"type": "RegionModifier", "startX": 35, "endX": 65, "startY": 25, "endY": 75},
+        "Petals": {"type": "MoonLiveEffect", "script": "mandala.mle"}},
+      "Fountain": {"type": "Layer", "blendMode": "additive",
+        "Sparks": {"type": "MoonLiveEffect", "script": "particle-fountain.mle"}}},
+     "Control": {"fader2Target": "CellsRegion.startX", "fader3Target": "CellsRegion.endX",
+       "fader4Target": "CellsRegion.startY", "fader5Target": "CellsRegion.endY",
+       "fader6Target": "PlasmaRegion.startX", "fader7Target": "PlasmaRegion.endX", "fader8Target": "Plasma.opacity",
+       "encoder2Target": "Plasma.blendMode", "encoder3Target": "Rings.blendMode", "encoder4Target": "Waves.speed",
+       "encoder5Target": "Ripples.amount", "encoder6Target": "Mandala.opacity", "encoder7Target": "Cells.opacity"}})");
+  }
+
   void tick20ms() {
+    if (!built) {
+      build();
+      built = true;
+      return;
+    }
     if (run == 0) { return; }
     if (t - sceneAt >= seconds * 1000) {
       scene = scene + 1;

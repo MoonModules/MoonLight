@@ -22,7 +22,19 @@ Forward-looking to-build items for the **light domain** (`src/light/`: drivers, 
 
 ### The ring's refill jitter (2026-10-22, from the internal RAM plan)
 
-LCD-MM's refill interrupt fires every 89 µs at 3-row slices, yet almost every second it goes about 1.1 ms without firing, so `ringAuto` keeps 54 rows of lead (3 × 21 buffers, 37 KB on shiffy) where hpwit's S3 driver runs on 10. Measured with `ringDbg`'s `gap` (within a frame, `@` the slice it ended at), `ml` (the fewest slices of lead) and `c` (the interrupt's core): not the flash cache (`co` stays 0), not the core (registered on core 1 it was the same, and it broke the cache guard, so it stays on core 0), not `mmSnap` (removed), and it ends mid-frame as often as at the idle tail. The next measurement is the gap against the frame's own events, the arm and the snapshot, then other interrupts on core 0. A lead of 10 rows would free most of the ring's internal RAM.
+LCD-MM's refill interrupt fires every 89 µs at 3-row slices, yet almost every second it goes about 1.1 ms without firing.
+So `ringAuto` keeps 54 rows of lead (3 × 21 buffers, 37 KB on shiffy), where hpwit's S3 driver runs on 10.
+
+Measured with `ringDbg`'s `gap` (within a frame, `@` the slice it ended at), `ml` (the fewest slices of lead) and `c` (the interrupt's core). The gap ends mid-frame as often as at the idle tail.
+
+Ruled out:
+- the flash cache: `co` stays 0;
+- the core: registered on core 1 it was the same, and it broke the cache guard, so it stays on core 0;
+- `mmSnap`: removed.
+
+Next, the gap measured against the frame's own events, the arm and the snapshot, then against other interrupts on core 0.
+
+A lead of 10 rows would free most of the ring's internal RAM.
 
 ### A preview GIF for every MoonLive script (2026-10-19)
 

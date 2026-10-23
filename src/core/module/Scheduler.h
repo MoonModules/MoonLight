@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core/module/MoonModule.h"
+#include "core/module/StateDocument.h"   // what a live document's apply answers
 
 #include <array>
 #include <atomic>
@@ -79,8 +80,15 @@ public:
     void prepareSubtrees(MoonModule* const* scopes, uint8_t count);
     /// The same for one subtree.
     void prepareSubtree(MoonModule* scope) { prepareSubtrees(&scope, 1); }
-    /// Run the rebuild asked for since the last frame: the tree, or the subtrees, at the frame boundary.
+    /// Run what was asked for since the last frame, at the frame boundary: the live documents, then the rebuild of the tree or the subtrees.
     void preparePending();
+
+    /// What a queued live document's apply reports, with the tag its caller gave.
+    using LiveDone = void (*)(uintptr_t tag, const StateDocumentResult& result);
+    /// Apply a state document as a live source at the next frame boundary, where no module is mid-tick, so a module may ask from its own tick. The queue frees `text`, from platform::alloc; false when full, the text then still the caller's.
+    bool applyLive(char* text, LiveDone done = nullptr, uintptr_t tag = 0);
+    /// Apply the queued live documents, in the order they came.
+    void applyPendingLive();
 
 
     /// Average microseconds per tick over the last second, which is the primary performance metric.
@@ -144,6 +152,9 @@ private:
     std::array<std::atomic<MoonModule*>, 4> preparePending_{};
     /// A live write is under way, so a write it makes in turn, a slot driving its target, is live too and saves nothing.
     bool liveWrite_ = false;
+    /// Live documents waiting for the frame boundary, from the loop's own task only: a show builds a look in one or two.
+    struct PendingLive { char* text = nullptr; LiveDone done = nullptr; uintptr_t tag = 0; };
+    std::array<PendingLive, 4> pendingLive_{};
     LoadAllFn loadAllHook_ = nullptr;
     NoteDirtyFn noteDirtyHook_ = nullptr;
     uint32_t startTime_ = 0;

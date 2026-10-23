@@ -114,6 +114,7 @@
 ///
 #include "module_types.h"
 
+#include "core/util/JsonFetch.h"   // poll(): the JSON worker stops once nothing uses it
 #include "core/module/Scheduler.h"
 #include "core/util/ModuleFactory.h"
 #include "light/layers/Effects.h"
@@ -321,6 +322,8 @@ void mm_main(volatile bool& keepRunning, uint16_t httpPort) {
         uint32_t now = mm::platform::millis();
         if (now - lastLog >= 1000) {
             lastLog = now;
+            // The JSON client stops its worker once nothing uses it, which only the loop can ask safely.
+            mm::JsonFetch::poll();
             // `goto`, not `continue`, because the loop's pacing lives at its TAIL: @xref{why-the-loop-pacing-uses-goto-and-a-sleep}.
             if (scheduler.tickTimeUs() == 0) goto paced; // no measurement yet
 

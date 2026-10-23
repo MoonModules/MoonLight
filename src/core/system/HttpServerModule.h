@@ -417,7 +417,7 @@ private:
     /// Close every active slot's stream and socket; release()'s own cleanup, since going out of scope frees neither.
     void releaseTransfers();
 
-    /// An embedded UI file resumes here across ticks: its bytes are already in flash, so a slot is a socket and an offset, with no buffer. A page load fetches several at once, so there is a slot per socket. A client on a slow link costs the render loop one non-blocking write per tick.
+    /// An embedded UI file resuming across ticks, a slot per socket since a page load fetches several: a socket and an offset into flash, one non-blocking write a tick.
     struct EmbeddedSend {
         platform::TcpConnection conn;
         const uint8_t* data = nullptr;     // the next byte to send
@@ -655,7 +655,8 @@ private:
 
     void handleSetControl(platform::TcpConnection& conn, const char* body);
     /// Apply a state document from the request body, which may outgrow the request buffer: `PATCH /api/state`.
-    void handleApplyState(platform::TcpConnection& conn, const char* initialBody, size_t initialLen, size_t contentLen);
+    void handleApplyState(platform::TcpConnection& conn, const char* initialBody, size_t initialLen, size_t contentLen,
+                          bool live);
 
     /// Delegates to the scheduler's own canonical tree walk, guarding a null scheduler first.
     MoonModule* findModuleByName(const char* name);
