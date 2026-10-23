@@ -64,6 +64,8 @@ struct Rig {
             m->defineControls();
         s.setup();
     }
+    // The encode worker ticks `drv`, which goes before `drivers` does, so the worker stops first.
+    ~Rig() { drivers.release(); }
     void zero() { fxA.prepares = fxB.prepares = drv.prepares = 0; }
 };
 

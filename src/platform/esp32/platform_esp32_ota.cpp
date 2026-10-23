@@ -810,7 +810,13 @@ bool readAnswer(esp_http_client_handle_t client, char* body, size_t bodyLen) {
     return whole;
 }
 
-/// Send the request with its body and read the answer; the status, or 0 when it failed or the answer outgrew the buffer.
+/// Whether the answer read was all of it. A declared length or a chunked body proves it; one the server ends by closing, as MoonLight's own state route answers, is whole once the reads end.
+bool answerComplete(esp_http_client_handle_t client) {
+    const bool framed = esp_http_client_is_chunked_response(client) || esp_http_client_get_content_length(client) >= 0;
+    return !framed || esp_http_client_is_complete_data_received(client);
+}
+
+/// Send the request with its body and read the answer; the status, or 0 when it failed, was cut short or outgrew the buffer.
 int exchange(esp_http_client_handle_t client, const char* reqBody, char* body, size_t bodyLen) {
     const int reqLen = reqBody ? static_cast<int>(std::strlen(reqBody)) : 0;
     if (reqBody) esp_http_client_set_header(client, "Content-Type", "application/json");
@@ -819,7 +825,7 @@ int exchange(esp_http_client_handle_t client, const char* reqBody, char* body, s
     if (reqLen == 0 || esp_http_client_write(client, reqBody, reqLen) == reqLen) {
         esp_http_client_fetch_headers(client);
         status = esp_http_client_get_status_code(client);
-        if (!readAnswer(client, body, bodyLen)) status = 0;
+        if (!readAnswer(client, body, bodyLen) || !answerComplete(client)) status = 0;
     }
     esp_http_client_close(client);
     return status;

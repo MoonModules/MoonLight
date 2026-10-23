@@ -161,7 +161,7 @@ TEST_CASE("text joins onto a string, from the caller or from another document's 
     CHECK(text(show) == R"({"text":"BTC $81201.915 / 9.4true"})");
 }
 
-// The demo edits its bands each time a feed changes: the text and the nodes an edit replaces were kept until the document went, so a device ran out of memory within days.
+// The demo edits its bands whenever a feed changes. Replaced text and nodes were kept until the document went, so a device ran out of memory within days.
 TEST_CASE("an edit repeated forever holds the memory of one, its replaced text and nodes reused") {
     json::JsonDoc feed, show;
     REQUIRE(json::parse(R"({"item":{"title":"news","n":3.25,"tags":["a","b"]}})", feed));
