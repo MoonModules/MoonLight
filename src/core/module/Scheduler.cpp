@@ -140,7 +140,7 @@ uint32_t Scheduler::elapsed() const {
 void Scheduler::preparePending() {
     // A live document first, so the rebuild it asks for runs in this same frame.
     applyPendingLive();
-    MoonModule* scopes[std::tuple_size_v<decltype(preparePending_)>];
+    MoonModule* scopes[kPendingScopes];
     uint8_t scopeCount = 0;
     for (auto& slot : preparePending_)
         if (MoonModule* m = slot.exchange(nullptr, std::memory_order_relaxed)) scopes[scopeCount++] = m;

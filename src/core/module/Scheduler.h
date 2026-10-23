@@ -148,8 +148,10 @@ private:
     uint8_t moduleCount_ = 0;
     /// A rebuild request, atomic because a lost request means a script edit silently never applies.
     std::atomic<bool> prepareRequested_{false};
-    /// Pending subtree rebuilds, null where free: a show moves two or three containers a frame, and one more than fits widens to the tree.
-    std::array<std::atomic<MoonModule*>, 4> preparePending_{};
+    /// How many subtree rebuilds wait at once: a show moves two or three containers a frame, and one more than fits widens to the tree.
+    static constexpr uint8_t kPendingScopes = 4;
+    /// Pending subtree rebuilds, null where free.
+    std::array<std::atomic<MoonModule*>, kPendingScopes> preparePending_{};
     /// A live write is under way, so a write it makes in turn, a slot driving its target, is live too and saves nothing.
     bool liveWrite_ = false;
     /// Live documents waiting for the frame boundary, from the loop's own task only: a show builds a look in one or two.
