@@ -109,6 +109,38 @@ processes:
         when: { call: { operation: setControl, body: '{"module":"MoonLive","control":"hue","value":128}' } }
         detail: |
           They appear on the module once the script compiles. Writing the file again recompiles it on the next frame and keeps each control's live value, so a script is iterated on from an editor without touching the module.
+  - id: live-data
+    title: Show live data from the internet
+    actor: user
+    goal: The weather, a price, a score or a headline from a public service runs on the lights, refreshed on its own.
+    systems: [MoonLive]
+    dependsOn: [first-script]
+    intro: |
+      A [service script](moonmodules/light/moonlive.md#json-documents-in-a-service) reads JSON from the internet and sends the device a document of its own, so it builds the look that shows the data and keeps it current. `jsondemo.mls` does it for four free feeds, a band of scrolling text each.
+    steps:
+      - id: add
+        section: Run the demo
+        say: Add a script service and name jsondemo.mls.
+        when: { add: { module: Services, type: MoonLiveService } }
+        then:
+          - { module: MoonLiveService, exists: true }
+        detail: |
+          Open Services and press + add module. With the page open, a script the device lacks downloads by itself.
+
+          The device needs the internet. A board without PSRAM fetches over HTTPS only while internal RAM holds a TLS session, and waits otherwise.
+      - id: look
+        say: See the bands appear and fill.
+        when: { manual: "Four text layers appear under Effects; each fills once its feed answers." }
+        detail: |
+          The look is pushed live, never saved, so a reboot returns the device to its saved state and the script builds the look again.
+      - id: own
+        section: Make it yours
+        say: Point a copy at the data you want.
+        when: { manual: "Edit the URL and the JSON Pointer, such as /current/temperature_2m." }
+        detail: |
+          Open the URL in a browser to see the document, then name the value by its path. A service that quotes its numbers, such as `"price":"252.11"`, still reads as a number. Read a feed no more often than it changes: a price each minute, the weather each ten.
+    outro: |
+      Every JSON call: [MoonLive](moonmodules/light/moonlive.md#json-documents-in-a-service). A script sends another device its look with `pushJsonTo`, which is how [the StadBeest](reference/examples/multi-board-installation.md) builds its eyes.
   - id: smart-home-hub
     title: Set up a smart-home hub
     actor: user

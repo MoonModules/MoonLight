@@ -1,0 +1,109 @@
+// StadBeestAutopilot: builds the StadBeest and runs it unattended. At start it pushes each part its look, never saved: on the legs, itself, a layer per look (walking, the orb, the thrusters), on each eye the eye's three, and on the mouth its one; it pushes them again every half minute, so a part that boots late or reboots gets its look back. Every few minutes a new scene crossfades to the next look and picks a palette (stadbeest-fire in a third of the thruster scenes), a mood, how much the music counts and whether it flashes on the beat; within a scene the energy breathes once a minute. It moves the control surface, so the legs follow here and the eyes over OSC, each on the look's own controls through automap.
+
+class StadBeestAutopilot {
+  bool run = true;
+  byte seconds = 180;
+
+  int scene = -1;          // the scene running, counted from boot
+  int sceneAt = -1000000;  // when it started, in ms, so a new length moves where it ends rather than restarting the count
+  int look = 0;            // the scene's look: 0 walking, 1 the orb, 2 the thrusters, a layer each
+  int prevLook = 0;        // the look it fades from
+  int fadeAt = -100000;    // when the crossfade started, in ms
+  int mood = 128;          // the scene's energy, 0 calm to 255 wild
+  int palette = 0;         // the scene's palette
+  int pulseOn = 0;         // whether the scene flashes on the beat
+  int hearing = 160;       // how much the music drives legs and eyes this scene
+  int lastGlide = -100000; // when the slots were last written, in ms
+  int nextSlot = 7;        // the slot written next; 7 means all are written
+  int builtAt = -100000;   // when the looks were last pushed, in ms
+
+  void defineControls() {
+    addControl("run", run, 0, 1); // off hands the beast back to people and desks
+    addControl("seconds", seconds, 1, 255); // how long a scene lasts
+  }
+
+  // Each part's look, a layer per look so a crossfade is two opacities, and the encoders 6 to 8 that set them, which the eyes hear over OSC.
+  void build() {
+    pushJson(R"({"Effects": {"$patch": "replace",
+      "WalkLayer": {"type": "Layer", "walk": {"type": "MoonLiveEffect", "script": "stadbeest-walk.mle"}},
+      "OrbLayer": {"type": "Layer", "orb": {"type": "MoonLiveEffect", "script": "stadbeest-orb.mle"}},
+      "ThrustersLayer": {"type": "Layer", "thrusters": {"type": "MoonLiveEffect", "script": "stadbeest-thrusters.mle"}}},
+     "Control": {"switch3Target": "", "switch4Target": "", "switch5Target": "",
+       "encoder6Target": "WalkLayer.opacity", "encoder7Target": "OrbLayer.opacity", "encoder8Target": "ThrustersLayer.opacity"}})");
+    json eye = R"({"Effects": {"$patch": "replace",
+      "FrogLayer": {"type": "Layer", "frog-eye": {"type": "MoonLiveEffect", "script": "stadbeest-frog-eye.mle"}},
+      "EyeOrbLayer": {"type": "Layer", "eye-orb": {"type": "MoonLiveEffect", "script": "stadbeest-eye-orb.mle"}},
+      "SauronLayer": {"type": "Layer", "sauron": {"type": "MoonLiveEffect", "script": "stadbeest-sauron.mle"}}},
+     "Control": {"switch3Target": "", "switch4Target": "", "switch5Target": "",
+       "encoder6Target": "FrogLayer.opacity", "encoder7Target": "EyeOrbLayer.opacity", "encoder8Target": "SauronLayer.opacity"}})";
+    pushJsonTo("MM-eye1.local", eye);
+    pushJsonTo("MM-eye2.local", eye);
+    pushJsonTo("MM-mouth.local", R"({"Effects": {"$patch": "replace",
+      "MouthLayer": {"type": "Layer", "mouth": {"type": "MoonLiveEffect", "script": "stadbeest-mouth.mle"}}}})");
+  }
+
+  // The energy around the scene's mood, breathing once a minute.
+  int energy() {
+    int phase = div(mod(t, 60000) * 1092, 1000);
+    int e = mood + div((sin(phase) - 32768) * 48, 32768);
+    if (e < 0) { e = 0; }
+    if (e > 255) { e = 255; }
+    return e;
+  }
+
+  // A look's opacity now: the new one rising and the old one falling over three seconds, the third one dark.
+  int level(int k) {
+    int p = div((t - fadeAt) * 255, 3000);
+    if (p > 255) { p = 255; }
+    if (k == look) { return p; }
+    if (k == prevLook) { return 255 - p; }
+    return 0;
+  }
+
+  // One slot per call: the three looks' opacities first, then the slots every look shares: the palette, pulse, bpm with the energy, and sensitivity.
+  void write(int k) {
+    if (k == 0) { setControl("encoder6", level(0)); }
+    if (k == 1) { setControl("encoder7", level(1)); }
+    if (k == 2) { setControl("encoder8", level(2)); }
+    if (k == 3) { setControl("encoder1", palette); }
+    if (k == 4) { setControl("switch2", pulseOn); }
+    if (k == 5) { setControl("fader2", 20 + div(energy() * 70, 255)); }
+    if (k == 6) { if (look != 1) { setControl("fader3", hearing); } } // the orb hears no music, and its fader3 is its spin
+  }
+
+  void tick20ms() {
+    // Every half minute, since a look pushed live is gone after its part reboots, and the same document applied again changes nothing.
+    if (t - builtAt >= 30000) {
+      builtAt = t;
+      build();
+    }
+    if (run == 0) { return; }
+    if (t - sceneAt >= seconds * 1000) {
+      scene = scene + 1;
+      sceneAt = t;
+      prevLook = look;
+      look = mod(scene, 3);
+      fadeAt = t;
+      palette = random16(60); // any built-in palette
+      if (look == 2) { if (random16(3) == 0) { palette = 65; } } // a third of the thruster scenes burn in stadbeest-fire, its place in the palette list on every device
+      mood = random16(256);
+      pulseOn = random16(2);
+      hearing = 80 + random16(150);
+      lastGlide = -100000;
+    }
+    // While the looks cross, their three opacities in turn, one a tick, so the eyes follow at 16 steps a second.
+    if (t - fadeAt < 3200) {
+      write(mod(div(t, 20), 3));
+      return;
+    }
+    // Every ten seconds all seven slots, one per tick: the eyes hear them over WiFi multicast, which drops a burst.
+    if (t - lastGlide >= 10000) {
+      lastGlide = t;
+      nextSlot = 0;
+    }
+    if (nextSlot < 7) {
+      write(nextSlot);
+      nextSlot = nextSlot + 1;
+    }
+  }
+}

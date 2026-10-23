@@ -324,7 +324,7 @@ TEST_CASE("the consent explanation is a status that follows the answer") {
 /// So a reboot before any page opens sends it again rather than losing it.
 TEST_CASE("a report handed to the page counts as sent only once the page delivers it") {
     mm::Scheduler scheduler;
-    auto* cloud = new mm::MoonCloudModule(true);   // the relay a board without HTTPS gets
+    auto* cloud = new mm::MoonCloudModule(mm::MoonCloudModule::Route::Page);   // the relay a board without HTTPS gets
     cloud->setName("MoonCloud");
     auto* stats = new mm::MoonStatsModule();
     stats->setName("Stats");
@@ -336,11 +336,11 @@ TEST_CASE("a report handed to the page counts as sent only once the page deliver
     stats->setConsent(true);
     CHECK(stats->reportDue());
     stats->onControlChanged("send update");
-    REQUIRE(cloud->outboxWaiting());
+    REQUIRE(cloud->waiting());
 
     stats->tick1s();               // handed over but not delivered: still due, nothing else queued
     CHECK(stats->reportDue());
-    CHECK(cloud->outboxWaiting());
+    CHECK(cloud->waiting());
 
     // The page delivered it, and wrote the request's id back: the first request this boot is 1.
     for (uint8_t i = 0; i < cloud->controls().count(); i++)
@@ -348,4 +348,46 @@ TEST_CASE("a report handed to the page counts as sent only once the page deliver
     cloud->onControlChanged("outbox sent");
     stats->tick1s();
     CHECK_FALSE(stats->reportDue());
+}
+
+namespace {
+int g_cloudStatus = 200;
+int g_cloudPosts = 0;
+int cloudStandIn(const char* method, const char*, const char*, char*, size_t) {
+    g_cloudPosts += std::strcmp(method, "POST") == 0;
+    return g_cloudStatus;
+}
+}  // namespace
+
+/// Over HTTPS the report goes out on the JSON client's worker, so the loop never waits for a handshake; a press says "Sending..." and then how it went.
+TEST_CASE("a pressed report goes out on the worker and says how it went once answered") {
+    if (!mm::platform::httpsAvailable()) { MESSAGE("no HTTPS client in this build"); return; }
+    mm::platform::setTestHttpFetch(&cloudStandIn);
+    for (const int status : {200, 0}) {
+        g_cloudStatus = status;
+        g_cloudPosts = 0;
+        mm::Scheduler scheduler;
+        auto* cloud = new mm::MoonCloudModule(mm::MoonCloudModule::Route::Direct);
+        cloud->setName("MoonCloud");
+        auto* stats = new mm::MoonStatsModule();
+        stats->setName("Stats");
+        cloud->addChild(stats);
+        scheduler.addModule(cloud);
+        scheduler.setup();
+        stats->setConsent(true);
+        stats->onControlChanged("send update");
+        CHECK(std::string(stats->status()) == "Sending...");
+        REQUIRE(mm::JsonFetch::instance().settle(2000));
+        stats->tick1s();
+        CHECK(g_cloudPosts == 1);
+        if (status == 200) {
+            CHECK(std::string(stats->status()).rfind("Sent.", 0) == 0);
+            CHECK_FALSE(stats->reportDue());
+        } else {
+            CHECK(std::string(stats->status()).rfind("Could not reach the server", 0) == 0);
+            CHECK(stats->reportDue());   // a failed press does not count
+        }
+        scheduler.release();
+    }
+    mm::platform::setTestHttpFetch(nullptr);
 }

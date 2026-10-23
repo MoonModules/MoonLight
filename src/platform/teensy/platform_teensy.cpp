@@ -73,6 +73,8 @@ void free(void* ptr) {
 
 void* allocInternal(size_t bytes) { return alloc(bytes); }   // one RAM, no PSRAM to keep out of
 
+bool ptrIsPsram(const void* /*p*/) { return false; }   // alloc never reaches the optional PSRAM chip
+
 size_t allocatedBytes() { return g_allocatedBytes; }
 size_t allocatedPeak() { return g_allocatedPeak; }
 uint32_t allocatedCount() { return g_allocCount; }
@@ -538,7 +540,11 @@ int httpRequest(const char*, const char*, uint16_t, const char*, const char*, ui
     return 0;
 }
 bool httpsAvailable() MM_NONBLOCKING { return false; }
-bool httpsPost(const char*, const char*, uint32_t) { return false; }
+int httpFetch(const char*, const char*, const char*, uint32_t, char* body, size_t bodyLen) {
+    if (body && bodyLen) body[0] = '\0';
+    return 0;
+}
+bool tlsRoom(const char* url) { return !url || std::strncmp(url, "https://", 8) != 0; }   // only HTTPS waits, and this board has no TLS
 bool hlsSegment(const char*, const uint8_t**, size_t*) { return false; }
 void hlsSegmentRelease() {}
 

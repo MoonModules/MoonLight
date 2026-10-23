@@ -1,0 +1,80 @@
+// HpwitShow: plays hpwit's effects as a show. It builds its own look at start, six layers and the surface slots that drive them, with one push that is never saved. Every scene picks a palette and how the layers blend, and shows either the wandering voronoi window or the mandala, by opacity, since a layer at opacity 0 costs nothing; within it the plasma strip slides and breathes, and the effects' own controls drift. It drives the control surface, so each slot's target on the Control card says what it moves.
+
+class HpwitShow {
+  bool run = true;
+  byte seconds = 20;
+  bool built = false;      // the look is pushed once, at start
+
+  int scene = -1;          // the scene running, counted from boot
+  int sceneAt = -1000000;  // when it started, in ms
+  int plasmaBlend = 3;     // the scene's blend for the plasma strip
+  int ringsBlend = 1;      // and for the rings
+
+  void defineControls() {
+    addControl("run", run, 0, 1); // off leaves the layers where they are
+    addControl("seconds", seconds, 5, 120); // how long a scene lasts
+  }
+
+  // The six layers, cheapest first, and which slot moves what; the scenes start once it has landed.
+  void build() {
+    pushJson(R"({"Effects": {"$patch": "replace",
+      "Sky": {"type": "Layer", "blendMode": "additive",
+        "Stars": {"type": "MoonLiveEffect", "script": "twinkle-stars.mle"}},
+      "Rings": {"type": "Layer", "blendMode": "additive",
+        "Ripples": {"type": "MoonLiveEffect", "script": "ripple-rings.mle"}},
+      "Plasma": {"type": "Layer", "blendMode": "screen",
+        "PlasmaRegion": {"type": "RegionModifier", "startX": 0, "endX": 35},
+        "Waves": {"type": "MoonLiveEffect", "script": "plasma-ring.mle"}},
+      "Cells": {"type": "Layer", "blendMode": "lighten",
+        "CellsRegion": {"type": "RegionModifier", "startX": 0, "endX": 30, "startY": 0, "endY": 50},
+        "Seeds": {"type": "MoonLiveEffect", "script": "voronoi.mle"}},
+      "Mandala": {"type": "Layer", "blendMode": "lighten", "opacity": 0,
+        "MandalaRegion": {"type": "RegionModifier", "startX": 35, "endX": 65, "startY": 25, "endY": 75},
+        "Petals": {"type": "MoonLiveEffect", "script": "mandala.mle"}},
+      "Fountain": {"type": "Layer", "blendMode": "additive",
+        "Sparks": {"type": "MoonLiveEffect", "script": "particle-fountain.mle"}}},
+     "Control": {"fader2Target": "CellsRegion.startX", "fader3Target": "CellsRegion.endX",
+       "fader4Target": "CellsRegion.startY", "fader5Target": "CellsRegion.endY",
+       "fader6Target": "PlasmaRegion.startX", "fader7Target": "PlasmaRegion.endX", "fader8Target": "Plasma.opacity",
+       "encoder2Target": "Plasma.blendMode", "encoder3Target": "Rings.blendMode", "encoder4Target": "Waves.speed",
+       "encoder5Target": "Ripples.amount", "encoder6Target": "Mandala.opacity", "encoder7Target": "Cells.opacity"}})");
+  }
+
+  void tick20ms() {
+    if (!built) {
+      build();
+      built = true;
+      return;
+    }
+    if (run == 0) { return; }
+    if (t - sceneAt >= seconds * 1000) {
+      scene = scene + 1;
+      sceneAt = t;
+      plasmaBlend = 3 + random16(4);   // screen, darken, lighten or difference
+      ringsBlend = 1 + random16(2);    // additive or multiply
+      setControl("encoder1", random16(60));   // a built-in palette
+      setControl("encoder2", plasmaBlend);
+      setControl("encoder3", ringsBlend);
+      // The two expensive effects take turns: voronoi in even scenes, the mandala in odd ones.
+      int voronoiOn = 0;
+      if (mod(scene, 2) == 0) { voronoiOn = 1; }
+      setControl("encoder7", voronoiOn * 255);
+      setControl("encoder6", (1 - voronoiOn) * 255);
+    }
+    // The voronoi window, 30 by 50 percent, wandering on two slow sines.
+    int cx = beatsin(3, t, 70);
+    int cy = beatsin(2, t, 50);
+    setControl("fader2", cx);
+    setControl("fader3", cx + 30);
+    setControl("fader4", cy);
+    setControl("fader5", cy + 50);
+    // The plasma strip, 35 percent wide, sliding the other way and breathing.
+    int px = 65 - beatsin(2, t, 65);
+    setControl("fader6", px);
+    setControl("fader7", px + 35);
+    setControl("fader8", 120 + beatsin(5, t, 135));
+    // The effects' own controls drift with the scene.
+    setControl("encoder4", 20 + beatsin(1, t, 80));   // the plasma's speed
+    setControl("encoder5", 2 + beatsin(4, t, 10));    // how many rings at once
+  }
+}

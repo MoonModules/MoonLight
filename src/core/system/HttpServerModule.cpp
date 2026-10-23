@@ -118,6 +118,7 @@ void HttpServerModule::release() {
     for (auto& ws : wsClients_) ws.close();
     for (auto& c : parked_) c.close();
     releaseTransfers();
+    for (auto& s : embeddedSends_) s.conn.close();
     // Every close site notifies the producer (see cancelBufferedSend), else ghost standing requests keep the driver gathering frames for nobody.
     for (int i = 0; i < MAX_PREVIEW_CLIENTS; i++) {
         if (previewClients_[i].valid() && clientSink_) clientSink_->onClientGone(i);
@@ -300,6 +301,7 @@ void HttpServerModule::driveTransfers() {
             if (now - budgetStart >= kTransferTickBudgetMs) break;
         }
     }
+    drainEmbeddedSends();   // an embedded file is a transfer too, its bytes already in flash
 }
 
 void HttpServerModule::tick1s() MM_NONBLOCKING {
@@ -316,6 +318,24 @@ bool HttpServerModule::anyWsClientOnAccessPoint() const MM_NONBLOCKING {
     for (int i = 0; i < MAX_WS_CLIENTS; i++)
         if (wsOnAccessPoint_[i] && wsClients_[i].valid()) return true;
     return false;
+}
+
+// Whether the query holds the parameter `name=value` whole, as a query parameter is read: `xlive=1` and `live=10` are other parameters.
+static bool queryHas(const char* query, const char* name, const char* value) {
+    const size_t n = std::strlen(name), v = std::strlen(value);
+    for (const char* p = query; p && *p;) {
+        const char* end = std::strchr(p, '&');
+        const size_t len = end ? static_cast<size_t>(end - p) : std::strlen(p);
+        if (len == n + 1 + v && std::strncmp(p, name, n) == 0 && p[n] == '=' && std::strncmp(p + n + 1, value, v) == 0) return true;
+        p = end ? end + 1 : nullptr;
+    }
+    return false;
+}
+
+// Whether the request line is `prefix`, the method and the state path, ending there or going on with a query.
+static bool isStatePath(const char* req, const char* prefix) {
+    const size_t n = std::strlen(prefix);
+    return std::strncmp(req, prefix, n) == 0 && (req[n] == ' ' || req[n] == '?');
 }
 
 // A cheap scan of the query for a "/sd" path, which only sizes the Content-Length ceiling; parseFilePath is the real guard, downstream.
@@ -426,9 +446,8 @@ bool HttpServerModule::handleConnection(platform::TcpConnection& conn, int patie
                     std::strncmp(req, "POST /api/firmware/upload", 25) == 0 ||
                     // A MoonBase image (~750 KB) streams too; the trailing space keeps `moonbase-update-url`, a small JSON body read whole, out of the match.
                     std::strncmp(req, "POST /api/firmware/moonbase-update ", 35) == 0 ||
-                    // A state document holding an effects stack outgrows the request buffer; the trailing space keeps a longer path out.
-                    std::strncmp(req, "PATCH /api/state ", 17) == 0 ||
-                    std::strncmp(req, "POST /api/state ", 16) == 0;
+                    // A state document holding an effects stack outgrows the request buffer; the space or query after it keeps a longer path out.
+                    isStatePath(req, "PATCH /api/state") || isStatePath(req, "POST /api/state");
                 if (bodyNeeded > sizeof(buf) - 1) {
                     if (!isStreamingRoute) {
                         sendResponse(conn, 413, "application/json",
@@ -529,7 +548,7 @@ bool HttpServerModule::handleConnection(platform::TcpConnection& conn, int patie
             // POST for a client that cannot send PATCH: the same document, the same engine.
             if (!hasContentLen) { sendResponse(conn, 411, "application/json", "{\"error\":\"length required\"}"); return true; }
             handleApplyState(conn, body, static_cast<size_t>(totalRead) - static_cast<size_t>(body - req),
-                             static_cast<size_t>(contentLen));
+                             static_cast<size_t>(contentLen), queryStart && queryHas(queryStart + 1, "live", "1"));
         } else if (std::strcmp(path, "/api/file") == 0 && body) {
             // File Manager: POST /api/file?path=<rel> streams the body to an atomic write; `body` holds the bytes that came with the headers, and a transfer slot pulls the rest off the socket.
             const size_t initialLen = static_cast<size_t>(totalRead) - static_cast<size_t>(body - req);
@@ -590,7 +609,7 @@ bool HttpServerModule::handleConnection(platform::TcpConnection& conn, int patie
         if (std::strcmp(path, "/api/state") == 0 && body) {
             if (!hasContentLen) { sendResponse(conn, 411, "application/json", "{\"error\":\"length required\"}"); return true; }
             handleApplyState(conn, body, static_cast<size_t>(totalRead) - static_cast<size_t>(body - req),
-                             static_cast<size_t>(contentLen));
+                             static_cast<size_t>(contentLen), queryStart && queryHas(queryStart + 1, "live", "1"));
         } else if (std::strncmp(path, "/api/list/", 10) == 0 && body) {
             handleListPatchRow(conn, path + 10, body);
         } else {
@@ -767,6 +786,11 @@ void HttpServerModule::handleRemoveEntry(platform::TcpConnection& conn, const ch
         sendResponse(conn, 400, "application/json", "{\"error\":\"bad path\"}");
         return;
     }
+    // A path that names nothing is the client's mistake, 404 as REST answers it, where a removal that fails is the device's.
+    if (!platform::fsExists(path)) {
+        sendResponse(conn, 404, "application/json", "{\"error\":\"not found\"}");
+        return;
+    }
     if (FilesystemModule::removeTree(path)) {
         // A removed file is a change to persistent state like a written one: a module derived from it must notice the file is gone.
         applyFileChanged(path);
@@ -923,7 +947,7 @@ static bool pullWholeBody(platform::TcpConnection& conn, const char* initialBody
 }
 
 void HttpServerModule::handleApplyState(platform::TcpConnection& conn, const char* initialBody, size_t initialLen,
-                                        size_t contentLen) {
+                                        size_t contentLen, bool live) {
     if (!scheduler_) { sendResponse(conn, 503, "application/json", "{\"error\":\"not ready\"}"); return; }
     if (contentLen > kStateDocumentMax) { sendResponse(conn, 413, "application/json", "{\"error\":\"document too large\"}"); return; }
     char* doc = static_cast<char*>(platform::alloc(contentLen + 1));
@@ -933,7 +957,8 @@ void HttpServerModule::handleApplyState(platform::TcpConnection& conn, const cha
         sendResponse(conn, 400, "application/json", "{\"error\":\"incomplete request body\"}");
         return;
     }
-    const StateDocumentResult r = applyStateDocument(*scheduler_, doc);
+    // `?live=1` drives rather than configures, as a show building its look on another device does: nothing it changes is marked to save.
+    const StateDocumentResult r = applyStateDocument(*scheduler_, doc, live ? StateSource::Live : StateSource::Request);
     platform::free(doc);
     // A growing sink, since a path of escaped names has no small fixed bound.
     JsonSink sink;
@@ -1008,6 +1033,8 @@ void HttpServerModule::applyFileChanged(const char* path) {
     if (auto* fs = FilesystemModule::instance()) fs->requestConfigApply(path);
     // A user script of a name the firmware also ships is a fork; record its origin here, where every writer passes, so the binding can flag an updated shipped copy.
     moonlive::noteForkedFrom(path);
+    // A script that landed leaves the missing list here, not at a compile that may never come.
+    moonlive::noteScriptLanded(path);
     if (!scheduler_) return;
     scheduler_->notifyFileChanged(path);
     // requestPrepareTree, never prepareTree: the flag is consumed at the frame boundary, so a multi-file upload costs one sweep.
@@ -1186,8 +1213,33 @@ void HttpServerModule::serveFile(platform::TcpConnection& conn, const ui::Embedd
         "\r\n",
         contentType, file.len,
         file.gzipped ? "Content-Encoding: gzip\r\n" : "");
-    conn.write(reinterpret_cast<const uint8_t*>(header), headerLen);
-    conn.write(file.data, file.len);
+    EmbeddedSend* slot = nullptr;
+    for (auto& s : embeddedSends_)
+        if (!s.conn.valid()) { slot = &s; break; }
+    // Every slot busy: answered rather than written whole, which would hold the render loop for the transfer.
+    if (!slot) { sendResponse(conn, 503, "application/json", "{\"error\":\"every send slot is busy\"}"); return; }
+    if (!conn.write(reinterpret_cast<const uint8_t*>(header), headerLen)) return;
+    slot->conn = std::move(conn);
+    slot->data = file.data;
+    slot->left = file.len;
+    slot->lastActivityMs = platform::millis();
+}
+
+void HttpServerModule::drainEmbeddedSends() {
+    const uint32_t now = platform::millis();
+    for (auto& s : embeddedSends_) {
+        if (!s.conn.valid()) continue;
+        // A send waiting on our memory counts as stalled too, so one that never gets room is closed and frees its share.
+        int n = 1;
+        while (s.left > 0 && n > 0 && sendHasHeadroom() && platform::millis() - now < kTransferTickBudgetMs) {
+            n = s.conn.writeSome(s.data, s.left);
+            if (n <= 0) break;
+            s.data += n;
+            s.left -= static_cast<size_t>(n);
+            s.lastActivityMs = now;
+        }
+        if (s.left == 0 || n < 0 || now - s.lastActivityMs > kTransferStallMs) s.conn.close();
+    }
 }
 
 void HttpServerModule::serveState(platform::TcpConnection& conn) {
@@ -2227,11 +2279,10 @@ void HttpServerModule::serveScriptCatalog(platform::TcpConnection& conn) {
     sink.append(",\"dir\":");
     sink.writeJsonString(moonlive::kFactoryScriptDir);
 
-    // Each name carries `dim` and `tags` from its source, for the picker, and `sub`, the subfolder the UI fetches it from; the device keeps scripts flat.
-    auto emit = [&sink](const char* key, const char* folder,
-                        const char* const* names, const unsigned char* dims,
-                        const char* const* tags, const unsigned char* subs, size_t count) {
-        sink.appendf(",\"%s\":{\"folder\":\"%s\",\"names\":[", key, folder);
+    // Each name carries `dim` and `tags` from its source, for the picker, and `folder`, where under moonlive/ the UI fetches it from; the device keeps scripts flat.
+    auto emit = [&sink](const char* key, const char* const* names, const unsigned char* dims,
+                        const char* const* tags, const unsigned char* folders, size_t count) {
+        sink.appendf(",\"%s\":{\"names\":[", key);
         for (size_t i = 0; i < count; i++) {
             if (i) sink.append(",");
             sink.writeJsonString(names[i]);
@@ -2243,27 +2294,27 @@ void HttpServerModule::serveScriptCatalog(platform::TcpConnection& conn) {
             if (i) sink.append(",");
             sink.writeJsonString(tags[i]);
         }
-        sink.append("],\"sub\":[");
+        sink.append("],\"folder\":[");
         for (size_t i = 0; i < count; i++) {
             if (i) sink.append(",");
-            sink.writeJsonString(moonlive::kCatalogSubfolders[subs[i]]);
+            sink.writeJsonString(moonlive::kCatalogFolders[folders[i]]);
         }
         sink.append("]}");
     };
-    emit("effects", moonlive::kEffectFolder, moonlive::kEffectCatalog,
-         moonlive::kEffectCatalogDim, moonlive::kEffectCatalogTags, moonlive::kEffectCatalogSub,
+    emit("effects", moonlive::kEffectCatalog,
+         moonlive::kEffectCatalogDim, moonlive::kEffectCatalogTags, moonlive::kEffectCatalogFolder,
          moonlive::kEffectCatalogCount);
-    emit("layouts", moonlive::kLayoutFolder, moonlive::kLayoutCatalog,
-         moonlive::kLayoutCatalogDim, moonlive::kLayoutCatalogTags, moonlive::kLayoutCatalogSub,
+    emit("layouts", moonlive::kLayoutCatalog,
+         moonlive::kLayoutCatalogDim, moonlive::kLayoutCatalogTags, moonlive::kLayoutCatalogFolder,
          moonlive::kLayoutCatalogCount);
-    emit("modifiers", moonlive::kModifierFolder, moonlive::kModifierCatalog,
-         moonlive::kModifierCatalogDim, moonlive::kModifierCatalogTags, moonlive::kModifierCatalogSub,
+    emit("modifiers", moonlive::kModifierCatalog,
+         moonlive::kModifierCatalogDim, moonlive::kModifierCatalogTags, moonlive::kModifierCatalogFolder,
          moonlive::kModifierCatalogCount);
-    emit("services", moonlive::kServiceFolder, moonlive::kServiceCatalog,
-         moonlive::kServiceCatalogDim, moonlive::kServiceCatalogTags, moonlive::kServiceCatalogSub,
+    emit("services", moonlive::kServiceCatalog,
+         moonlive::kServiceCatalogDim, moonlive::kServiceCatalogTags, moonlive::kServiceCatalogFolder,
          moonlive::kServiceCatalogCount);
-    emit("palettes", moonlive::kPaletteFolder, moonlive::kPaletteCatalog,
-         moonlive::kPaletteCatalogDim, moonlive::kPaletteCatalogTags, moonlive::kPaletteCatalogSub,
+    emit("palettes", moonlive::kPaletteCatalog,
+         moonlive::kPaletteCatalogDim, moonlive::kPaletteCatalogTags, moonlive::kPaletteCatalogFolder,
          moonlive::kPaletteCatalogCount);
     sink.append("}");
     sink.flush();
@@ -2914,6 +2965,8 @@ void HttpServerModule::drainPreviewSend() {
     LockGuard lease{wsLock_};
     if (!lease) return;
     if (!previewSend_.active) return;
+    // Short of internal RAM the frame waits, and the producer drops the frames behind it, as it does for a busy socket.
+    if (!sendHasHeadroom()) return;
     const size_t total = previewSend_.hdrLen + previewSend_.bodyLen;
     const size_t chunk = drainChunkBytes();
     bool anyLiveClient = false;
@@ -3005,7 +3058,7 @@ void HttpServerModule::drainStream(int client, size_t budget) {
     StateStream& s = streams_[client];
     auto& ws = wsClients_[client];
     if (!ws.valid()) { endStream(s); return; }
-    while (budget > 0) {
+    while (budget > 0 && sendHasHeadroom()) {   // short of internal RAM the stream resumes next tick
         if (!s.frame) {
             if (s.last) { endStream(s); return; }
             if (!nextStreamFrame(client)) { refuseFragment(client); return; }

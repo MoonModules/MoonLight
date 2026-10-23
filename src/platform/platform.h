@@ -3,6 +3,7 @@
 #include <atomic>
 #include <cstdint>
 #include <cstddef>
+#include <new>      // std::nothrow_t, for InternalRamObject's allocation
 #include "platform_config.h"  // hasOta / hasPsram / …: flags this header's contract refers to
 #include "nonblocking.h"      // MM_NONBLOCKING, which every declaration below carries
 
@@ -62,9 +63,13 @@ void setTestNowMs(uint32_t ms);
 
 /// Make the next bind fail, so a test reaches that path; false restores. Hogging the port instead is not portable: Linux permits the overlapping bind under SO_REUSEADDR, and macOS lets a non-root process bind port 80.
 void setTestBindFails(bool fail);
-#ifndef ESP_PLATFORM   // a host-test seam, which no ESP32 code calls
+#ifndef ESP_PLATFORM   // host-test seams, which no ESP32 code calls
 /// Make the next multicast join fail, as on a network without multicast; false restores.
 void setTestJoinFails(bool fail);
+/// Report this much free internal RAM, as a board without PSRAM under load would; 0 restores the desktop's unreported figure.
+void setTestFreeInternalHeap(size_t bytes);
+/// Report addresses in [begin, end) as PSRAM, as a board with PSRAM places a buffer; null restores the desktop's none.
+void setTestPsramRange(const void* begin, const void* end);
 #endif
 
 /// Allocate, preferring PSRAM where the target has it.
@@ -74,6 +79,16 @@ void free(void* ptr);
 
 /// Allocate internal RAM only, for buffers a hot ISR reads per byte; free with `free`: @xref{internal-ram-for-what-an-interrupt-reads}.
 void* allocInternal(size_t bytes);
+
+/// A type a cache-safe interrupt reads inherits this, so `new` places it in internal RAM. PSRAM sits behind the flash cache, which a flash write on the other core can switch off mid-interrupt.
+struct InternalRamObject {
+    /// Internal RAM, or null when there is none to give.
+    static void* operator new(size_t bytes) noexcept { return allocInternal(bytes); }
+    /// The same, for `new (std::nothrow)`.
+    static void* operator new(size_t bytes, const std::nothrow_t&) noexcept { return allocInternal(bytes); }
+    /// Return the allocation above.
+    static void operator delete(void* ptr) noexcept { free(ptr); }
+};
 
 /// Bytes taken on purpose through alloc and allocInternal.
 size_t allocatedBytes();
@@ -99,7 +114,7 @@ void  writeExec(void* dst, const void* src, size_t len);
 /// Give the scheduler a turn.
 void yield();
 
-/// Which core the caller runs on; a driver seeing core 1 knows the render/encode split is engaged.
+/// Which core the caller runs on, safe in an ISR; a driver seeing core 1 knows the render/encode split is engaged.
 uint8_t currentCore();
 /// Upper bound on cores running driver code at once, sizing per-CPU scratch; single-core targets leave slice 1 unused.
 inline constexpr uint8_t kMaxCores = 2;
@@ -218,6 +233,8 @@ size_t totalInternalHeap();
 
 /// Heap to keep free for stack, HTTP, WiFi and overhead; any allocator checks against this before committing.
 constexpr size_t HEAP_RESERVE = 32768;
+/// The internal RAM a board keeps free, which an allocator that takes what is left stops at: WiFi, HTTP and the UI need it.
+constexpr size_t kInternalFreeFloor = 100 * 1024;
 
 /// The device's MAC address.
 void getMacAddress(uint8_t mac[6]);
@@ -811,11 +828,24 @@ void moonbaseClearStagedUrl();
 int httpRequest(const char* method, const char* host, uint16_t port, const char* path,
                 const char* reqBody, uint32_t timeoutMs, char* body, size_t bodyLen);
 
-/// One HTTPS POST to a public server, answering the status or 0; `url` is a full URL, so a hostname resolves.
-bool httpsPost(const char* url, const char* body, uint32_t timeoutMs);
+/// One request to a full `http://` or `https://` URL: the method, an optional JSON body, and the answer into `body` when there is room. The HTTP status, or 0 when it failed or did not fit; it blocks, so only a background task calls it.
+int httpFetch(const char* method, const char* url, const char* reqBody, uint32_t timeoutMs,
+              char* body, size_t bodyLen);
 
 /// Whether this build can make an outbound HTTPS request at all.
 bool httpsAvailable() MM_NONBLOCKING;
+
+/// Internal RAM one TLS session holds while it lasts, on a board whose TLS buffers cannot go to PSRAM: two record buffers and the handshake.
+inline constexpr size_t kTlsSessionBytes = 45 * 1024;
+
+/// Whether a request to `url` may start now. HTTPS on a board whose TLS lives in internal RAM waits while that RAM is under the floor plus one session, which would starve WiFi and the web server.
+bool tlsRoom(const char* url);
+
+#ifndef ESP_PLATFORM   // a host-test seam, which no ESP32 code calls
+/// Answer `httpFetch` from a test instead of the network, by the same signature; null restores the network.
+using HttpFetchFn = int (*)(const char* method, const char* url, const char* reqBody, char* body, size_t bodyLen);
+void setTestHttpFetch(HttpFetchFn fn);
+#endif
 
 // Improv provisioning over UART0, sharing the channel with logging, which writes registers directly.
 
@@ -1126,6 +1156,12 @@ constexpr uint8_t kRingBufsDefault = 16;
 constexpr uint8_t kRingPadMaxUs = 120;
 /// The most bytes one GDMA descriptor node carries.
 constexpr size_t kRingNodeMaxBytes = 4095;
+/// Buffers the refill keeps clear behind the drain, so it never writes one the DMA may still read.
+constexpr uint32_t kRingRefillGap = 2;
+/// The ring's lead over the wire, in rows, that ringAuto sizes to. On a 3,840-light expander rig 40 rows lost frames and 45 ran clean, so 45 plus a fifth.
+constexpr uint32_t kRingLeadRows = 54;
+/// Rows per buffer under ringAuto: finer slices waste less of the lead to the refill's whole-slice steps, and one-row slices interrupt faster than the refill keeps up.
+constexpr uint8_t kRingAutoRows = 3;
 /// The deepest ring pool, which keeps every slice encoded before arming even at 48 by 256.
 constexpr uint8_t kRingBufsMax = 64;
 /// The shallowest ring pool.
@@ -1141,10 +1177,6 @@ bool moonI80Ws2812InitRing(MoonI80Ws2812Handle& h, const uint16_t* dataPins, uin
 bool moonI80Ws2812TransmitRing(MoonI80Ws2812Handle& h);
 /// Set the '595 shift-clock prescale off the 80 MHz bus, taking effect on the next bus build.
 void moonI80SetShiftClockDiv(uint8_t div);
-/// Prime a sub-range of the pool, so two cores can prime disjoint ranges at once.
-void moonI80Ws2812PrimeRange(MoonI80Ws2812Handle& h, uint8_t bufLo, uint8_t bufHi);
-/// Arm the ring once everything is primed.
-bool moonI80Ws2812ArmRing(MoonI80Ws2812Handle& h);
 
 /// Whether this handle came up as a ring, which tells the driver which transmit to call.
 bool moonI80Ws2812IsRing(const MoonI80Ws2812Handle& h);
@@ -1177,7 +1209,10 @@ struct MoonI80RingStats {
     uint32_t descErr = 0;        ///< descriptor errors, where anything above 0 means the chain was corrupted
     uint32_t maxEncodeUs = 0;    ///< worst refill-encode time, the producer's jitter
     uint32_t avgEncodeUs = 0;    ///< average refill-encode time, which decides whether the ring keeps up
-    uint32_t maxIsrGapUs = 0;    ///< worst gap between interrupts, which is the drain deadline
+    uint32_t maxIsrGapUs = 0;    ///< worst gap between interrupts within a frame, which is the drain deadline
+    int32_t  minLead = -1;       ///< fewest slices the refill was ahead of the drain when an interrupt came, -1 before any
+    uint32_t maxGapAtSlice = 0;  ///< the drain position where the worst gap ended, telling a frame-start stall from a random one
+    uint8_t  isrCore = 0;        ///< the core the refill interrupt runs on
     uint32_t late = 0;           ///< slices refilled after their drain began, each one stale on the wire
     uint32_t itemsPerBuf = 0;    ///< descriptor nodes a ring buffer takes, 1 since the clamp
     int32_t  termNodeDiag = -1;  ///< the mount-time terminator node, -1 on a lapping chain
@@ -1185,7 +1220,7 @@ struct MoonI80RingStats {
     uint32_t cacheOffMaxRun = 0; ///< worst run of those, which is how many buffers drained un-refilled
     uint32_t stallAbandons = 0;  ///< frames the wait backstop finalized after the DMA self-terminated
 };
-/// Read the ring's counters.
+/// Read the ring's counters; the worst gap and the fewest lead cover the time since the previous read.
 MoonI80RingStats moonI80Ws2812RingStats(const MoonI80Ws2812Handle& h);
 
 /// Release the bus and its buffers.

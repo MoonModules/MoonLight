@@ -36,6 +36,24 @@ std::string withBody(const char* head, const std::string& body) {
     return std::string(head) + " HTTP/1.1\r\nContent-Length: " + std::to_string(body.size()) + "\r\n\r\n" + body;
 }
 
+/// A scheduler holding one `Rack`, served on the test port.
+struct RackServer {
+    mm::Scheduler s;
+    Rack* rack = new Rack();
+    mm::HttpServerModule http;
+    RackServer() {
+        rack->setName("Rack");
+        s.addModule(rack);
+        http.port = kTestPort;
+        http.setScheduler(&s);
+        http.setup();
+    }
+    ~RackServer() {
+        http.release();
+        s.deleteTree(rack);
+    }
+};
+
 mm::MoonModule* childNamed(mm::MoonModule* parent, const char* name) {
     for (uint8_t i = 0; i < parent->childCount(); i++)
         if (parent->child(i) && std::strcmp(parent->child(i)->name(), name) == 0) return parent->child(i);
@@ -79,14 +97,8 @@ TEST_CASE("a firmware upload without a Content-Length is refused with 411, as ev
 
 // A name past what a module holds is refused on every route that names one, rather than cut short into a name that could match another module.
 TEST_CASE("a module route whose name does not fit is refused with 400 on move, replace, delete and read alike") {
-    mm::Scheduler s;
-    auto* rack = new Rack();
-    rack->setName("Rack");
-    s.addModule(rack);
-    mm::HttpServerModule http;
-    http.port = kTestPort;
-    http.setScheduler(&s);
-    http.setup();
+    RackServer server;
+    mm::HttpServerModule& http = server.http;
     const std::string longName(40, 'x');
     CHECK(request(http, withBody(("POST /api/modules/" + longName + "/move").c_str(), "{\"to\":0}")).rfind("HTTP/1.1 400", 0) == 0);
     CHECK(request(http, withBody(("POST /api/modules/" + longName + "/replace").c_str(), "{\"type\":\"RouteDial\"}")).rfind("HTTP/1.1 400", 0) == 0);
@@ -95,6 +107,24 @@ TEST_CASE("a module route whose name does not fit is refused with 400 on move, r
     CHECK(request(http, "GET /api/modules/" + pastAName + " HTTP/1.1\r\n\r\n").rfind("HTTP/1.1 400", 0) == 0);
     CHECK(request(http, "DELETE /api/modules/" + pastAName + " HTTP/1.1\r\n\r\n").rfind("HTTP/1.1 400", 0) == 0);
     CHECK(request(http, "GET /api/modules/Rack HTTP/1.1\r\n\r\n").rfind("HTTP/1.1 200", 0) == 0);
-    http.release();
-    s.deleteTree(rack);
+}
+
+// `?live=1` applies a document that marks nothing to save; it is read as a whole query parameter, so `xlive=1` and `live=10` are plain requests.
+TEST_CASE("PATCH /api/state?live=1 applies without marking the tree to save, and only that exact parameter does") {
+    static bool registered = false;
+    if (!registered) { mm::ModuleFactory::registerType<Dial>("LiveDial"); registered = true; }
+    RackServer server;
+    mm::HttpServerModule& http = server.http;
+    Rack* rack = server.rack;
+
+    const std::string doc = R"({"Rack":{"A":{"type":"LiveDial"}}})";
+    CHECK(request(http, withBody("PATCH /api/state?live=1", doc)).rfind("HTTP/1.1 200", 0) == 0);
+    CHECK(childNamed(rack, "A") != nullptr);
+    CHECK_FALSE(rack->dirty());
+    for (const char* path : {"PATCH /api/state?xlive=1", "PATCH /api/state?live=10"}) {
+        rack->clearDirty();
+        const std::string another = std::string(R"({"Rack":{"B)") + (path[17] == 'x' ? "x" : "y") + R"(":{"type":"LiveDial"}}})";
+        CHECK(request(http, withBody(path, another)).rfind("HTTP/1.1 200", 0) == 0);
+        CHECK(rack->dirty());   // an ordinary request: saved
+    }
 }

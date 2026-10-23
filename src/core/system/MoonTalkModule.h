@@ -65,10 +65,26 @@ public:
         if (!consent_) return;           // never publish without consent
         if (message_[0] == 0) return;    // nothing typed
 
-        // Only on a successful hand-off, so an unreachable server keeps what somebody typed.
+        // Cleared only once the message arrived, so an unreachable server keeps what somebody typed.
         if (send()) {
+            sending_ = true;
+            setStatus("Sending...");
+        }
+    }
+
+    /// Clear the box once the message arrived, or say it did not.
+    void tick1s() MM_NONBLOCKING override {
+        MoonModule::tick1s();
+        if (!sending_) return;
+        auto* cloud = static_cast<MoonCloudModule*>(parent());
+        if (cloud && cloud->waiting(ticket_)) return;
+        sending_ = false;
+        if (cloud && cloud->delivered(ticket_)) {
             message_[0] = 0;
             markDirty();
+            refreshStatus();
+        } else {
+            setStatus("Could not reach the server. The message is kept; press send to try again.", Severity::Error);
         }
     }
 
@@ -128,7 +144,8 @@ private:
 
         // Through the container, which owns the address.
         auto* cloud = static_cast<MoonCloudModule*>(parent());
-        return cloud && cloud->post("/api/talk", body.data());
+        ticket_ = cloud ? cloud->post("/api/talk", body.data()) : 0;
+        return ticket_ != 0;
     }
 
     /// Whether posting and reading are on.
@@ -139,6 +156,10 @@ private:
     bool shareName_ = false;
     /// What to say; typing changes nothing on its own.
     char message_[281] = {};
+    /// A message is on its way, and the box keeps it until it arrived.
+    bool sending_ = false;
+    /// Its ticket, so this module reads its own outcome rather than a report's.
+    uint32_t ticket_ = 0;
 };
 
 }  // namespace mm

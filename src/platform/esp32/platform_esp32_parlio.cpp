@@ -44,7 +44,6 @@
 
 #include <cstring>
 #include <functional>  // the transmit callback passed to the shared frame loopback
-#include <new>      // placement new (the state is built in heap_caps memory)
 
 namespace mm::platform {
 
@@ -59,7 +58,7 @@ constexpr size_t kMaxBusWidth = 16;   // both peripherals' physical ceiling
 constexpr uint32_t kPclkHz = 2'666'666;
 
 // Two frame buffers for the deferred-wait double buffer, the same shape the sibling backend uses, the second null when its allocation did not fit. Transfers complete in order and the event carries no token, so the same two-slot queue routes each signal to the buffer that finished.
-struct ParlioState {
+struct ParlioState : platform::InternalRamObject {
     parlio_tx_unit_handle_t unit = nullptr;
     SemaphoreHandle_t done[2] = {nullptr, nullptr};
     uint8_t* buf[2] = {nullptr, nullptr};
@@ -90,10 +89,6 @@ bool IRAM_ATTR parlioDoneCb(parlio_tx_unit_handle_t, const parlio_tx_done_event_
     return high == pdTRUE;
 }
 
-// The struct is placement-new'd into heap_caps_aligned_alloc'd memory using alignof(ParlioState), so any alignment it needs is honoured by construction. This pins the assumption that the value is a power of two the allocator accepts, a member needing more would otherwise fail silently.
-static_assert(alignof(ParlioState) <= 16 && (alignof(ParlioState) & (alignof(ParlioState) - 1)) == 0,
-              "ParlioState alignment must be a small power of two for heap_caps_aligned_alloc");
-
 void destroyState(ParlioState* st) {
     if (!st) return;
     if (st->unit) {
@@ -102,20 +97,14 @@ void destroyState(ParlioState* st) {
     }
     for (auto* b : st->buf) if (b) heap_caps_free(b);
     for (auto* s : st->done) if (s) vSemaphoreDelete(s);
-    st->~ParlioState();     // placement-new'd into heap_caps memory, so destroy and free by hand
-    heap_caps_free(st);
+    delete st;
 }
 
 // One TX unit + DMA buffer(s). pclkHz is the WS2812 slot rate (2.67 MHz). `wantSecond` allocates the async double-buffer's second frame buffer (best-effort); false → buffer 0 only.
 ParlioState* createState(const uint16_t* dataPins, uint8_t laneCount,
                          uint32_t pclkHz, size_t bufferBytes, bool wantSecond) {
-    // Internal memory rather than a plain allocation, since the default allocator may hand back external memory while the completion callback runs cache-safe and fires when that is unreachable.
-    // Every field it touches must therefore be internal, and construction is in place because the allocator gives raw memory.
-    // Aligned explicitly: the struct holds wide timestamps while the allocator promises only word alignment, which the assertion below pins.
-    void* mem = heap_caps_aligned_alloc(alignof(ParlioState), sizeof(ParlioState),
-                                        MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
-    if (!mem) return nullptr;
-    auto* st = new (mem) ParlioState();
+    auto* st = new (std::nothrow) ParlioState();
+    if (!st) return nullptr;
 
     parlio_tx_unit_config_t cfg = {};
     cfg.clk_src = PARLIO_CLK_SRC_DEFAULT;     // PLL_F160M → /60 = 2.67 MHz

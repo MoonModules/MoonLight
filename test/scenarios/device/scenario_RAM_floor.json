@@ -1,0 +1,324 @@
+{
+  "name": "scenario_RAM_floor",
+  "module": "SystemModule",
+  "also": [
+    "HttpServerModule",
+    "TasksModule",
+    "BouncingBallsEffect",
+    "Layer"
+  ],
+  "mode": "mutate",
+  "live_only": true,
+  "description": "Internal RAM, the largest free block and the tightest task stack, with the board's own layout and drivers and one fixed effect: idle, with the UI open in a real browser, after a refresh, and after it closes. A board with PSRAM keeps 100 KB of internal RAM free and a 50 KB block through all four, the floor WiFi, HTTP and the UI need; a board without PSRAM is recorded but holds no floor, since its network buffers share the same RAM. Only the effects are replaced, so a board's LED driver, the largest internal RAM user, stays as it runs.",
+  "top": [
+    "Effects"
+  ],
+  "steps": [
+    {
+      "name": "effects-clear",
+      "op": "apply_state",
+      "document": {
+        "Effects": {
+          "$patch": "replace"
+        }
+      }
+    },
+    {
+      "name": "fixed-effect",
+      "description": "BouncingBalls, the effect the internal RAM plan measured every A/B on.",
+      "op": "apply_state",
+      "document": {
+        "Effects": {
+          "Layer": {
+            "type": "Layer",
+            "BouncingBalls": {
+              "type": "BouncingBallsEffect"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "idle",
+      "description": "No browser on the board.",
+      "op": "measure",
+      "contract": {
+        "esp32s3-n16r8": {
+          "free_internal": 102400,
+          "max_alloc_block": 51200,
+          "min_stack_free": 256,
+          "heap_tolerance_pct": 0,
+          "set_by": "2026-10-22",
+          "reason": "the internal RAM plan's floor: 100 KB free and a 50 KB block, and no task within 256 bytes of its stack's end, ESP-IDF's own ipc tasks running at about 500"
+        },
+        "esp32p4rev1-eth": {
+          "free_internal": 102400,
+          "max_alloc_block": 51200,
+          "min_stack_free": 256,
+          "heap_tolerance_pct": 0,
+          "set_by": "2026-10-22",
+          "reason": "the internal RAM plan's floor: 100 KB free and a 50 KB block, and no task within 256 bytes of its stack's end, ESP-IDF's own ipc tasks running at about 500"
+        }
+      },
+      "observed": {
+        "esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 11732,
+            "p95": 12527,
+            "min": 10044,
+            "max": 12527,
+            "n": 3
+          },
+          "free_heap": {
+            "p50": 8298100,
+            "p95": 8299648,
+            "min": 8294016,
+            "max": 8299648,
+            "n": 3
+          },
+          "max_alloc_block": {
+            "p50": 108544,
+            "p95": 108544,
+            "min": 108544,
+            "max": 108544,
+            "n": 3
+          },
+          "last_updated": "2026-10-22"
+        },
+        "esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 2168,
+            "p95": 2168,
+            "min": 2168,
+            "max": 2168,
+            "n": 1
+          },
+          "free_heap": {
+            "p50": 33853787,
+            "p95": 33853787,
+            "min": 33853787,
+            "max": 33853787,
+            "n": 1
+          },
+          "max_alloc_block": {
+            "p50": 192512,
+            "p95": 192512,
+            "min": 192512,
+            "max": 192512,
+            "n": 1
+          },
+          "last_updated": "2026-10-22"
+        }
+      }
+    },
+    {
+      "name": "ui-open",
+      "description": "A browser loads the UI and keeps it open: its files, the state stream and the preview.",
+      "op": "browser",
+      "action": "open",
+      "settle": 8,
+      "measure": true,
+      "contract": {
+        "esp32s3-n16r8": {
+          "free_internal": 102400,
+          "max_alloc_block": 51200,
+          "min_stack_free": 256,
+          "heap_tolerance_pct": 0,
+          "set_by": "2026-10-22",
+          "reason": "the internal RAM plan's floor, with the UI open"
+        },
+        "esp32p4rev1-eth": {
+          "free_internal": 102400,
+          "max_alloc_block": 51200,
+          "min_stack_free": 256,
+          "heap_tolerance_pct": 0,
+          "set_by": "2026-10-22",
+          "reason": "the internal RAM plan's floor, with the UI open"
+        }
+      },
+      "observed": {
+        "esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 11568,
+            "p95": 12460,
+            "min": 11199,
+            "max": 12460,
+            "n": 3
+          },
+          "free_heap": {
+            "p50": 8298480,
+            "p95": 8300344,
+            "min": 8295360,
+            "max": 8300344,
+            "n": 3
+          },
+          "max_alloc_block": {
+            "p50": 108544,
+            "p95": 108544,
+            "min": 108544,
+            "max": 108544,
+            "n": 3
+          },
+          "last_updated": "2026-10-22"
+        },
+        "esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 2077,
+            "p95": 2077,
+            "min": 2077,
+            "max": 2077,
+            "n": 1
+          },
+          "free_heap": {
+            "p50": 33859943,
+            "p95": 33859943,
+            "min": 33859943,
+            "max": 33859943,
+            "n": 1
+          },
+          "max_alloc_block": {
+            "p50": 192512,
+            "p95": 192512,
+            "min": 192512,
+            "max": 192512,
+            "n": 1
+          },
+          "last_updated": "2026-10-22"
+        }
+      }
+    },
+    {
+      "name": "ui-refresh",
+      "description": "The page reloads, so the browser opens its connections again while the old ones close.",
+      "op": "browser",
+      "action": "refresh",
+      "settle": 8,
+      "measure": true,
+      "contract": {
+        "esp32s3-n16r8": {
+          "free_internal": 102400,
+          "max_alloc_block": 51200,
+          "min_stack_free": 256,
+          "heap_tolerance_pct": 0,
+          "set_by": "2026-10-22",
+          "reason": "the internal RAM plan's floor, through a refresh"
+        },
+        "esp32p4rev1-eth": {
+          "free_internal": 102400,
+          "max_alloc_block": 51200,
+          "min_stack_free": 256,
+          "heap_tolerance_pct": 0,
+          "set_by": "2026-10-22",
+          "reason": "the internal RAM plan's floor, through a refresh"
+        }
+      },
+      "observed": {
+        "esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 11507,
+            "p95": 13870,
+            "min": 11297,
+            "max": 13870,
+            "n": 3
+          },
+          "free_heap": {
+            "p50": 8301608,
+            "p95": 8301616,
+            "min": 8300356,
+            "max": 8301616,
+            "n": 3
+          },
+          "max_alloc_block": {
+            "p50": 108544,
+            "p95": 108544,
+            "min": 108544,
+            "max": 108544,
+            "n": 3
+          },
+          "last_updated": "2026-10-22"
+        },
+        "esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 2076,
+            "p95": 2076,
+            "min": 2076,
+            "max": 2076,
+            "n": 1
+          },
+          "free_heap": {
+            "p50": 33859951,
+            "p95": 33859951,
+            "min": 33859951,
+            "max": 33859951,
+            "n": 1
+          },
+          "max_alloc_block": {
+            "p50": 192512,
+            "p95": 192512,
+            "min": 192512,
+            "max": 192512,
+            "n": 1
+          },
+          "last_updated": "2026-10-22"
+        }
+      }
+    },
+    {
+      "name": "ui-closed",
+      "description": "The browser is gone: what a viewer took comes back.",
+      "op": "browser",
+      "action": "close",
+      "measure": true,
+      "observed": {
+        "esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 9530,
+            "p95": 11758,
+            "min": 9475,
+            "max": 11758,
+            "n": 3
+          },
+          "free_heap": {
+            "p50": 8298332,
+            "p95": 8301948,
+            "min": 8297096,
+            "max": 8301948,
+            "n": 3
+          },
+          "max_alloc_block": {
+            "p50": 108544,
+            "p95": 108544,
+            "min": 108544,
+            "max": 108544,
+            "n": 3
+          },
+          "last_updated": "2026-10-22"
+        },
+        "esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 2070,
+            "p95": 2070,
+            "min": 2070,
+            "max": 2070,
+            "n": 1
+          },
+          "free_heap": {
+            "p50": 33860315,
+            "p95": 33860315,
+            "min": 33860315,
+            "max": 33860315,
+            "n": 1
+          },
+          "max_alloc_block": {
+            "p50": 192512,
+            "p95": 192512,
+            "min": 192512,
+            "max": 192512,
+            "n": 1
+          },
+          "last_updated": "2026-10-22"
+        }
+      }
+    }
+  ]
+}

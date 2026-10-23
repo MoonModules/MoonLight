@@ -150,6 +150,9 @@ public:
     /// A task still running would read a destroyed object, so the destructor stops it too.
     ~NetworkSendDriver() override { stopSendTask(); }
 
+    /// How many times the send task was started, so a test can tell a running stream from a restarted one.
+    uint32_t taskStartsForTest() const { return taskStarts_; }
+
     /// Stop the send task and close the socket on release, then chain to the base to clear any status this driver set.
     void release() override {
         stopSendTask();
@@ -166,20 +169,20 @@ public:
 
     /// Open the socket, resolve the destinations and their window slices, and size the buffer; all parsing happens here, so tick is a bare walk of two small arrays.
     void prepare() override {
-        stopSendTask();          // the task reads the destinations and the corrected buffer, both rebuilt below
         socket_.open();          // idempotent: no-op if already open
-        resizeCorrected();
+        resizeCorrected();       // which waits out a running task only when it reallocates
 
         // Published only once EVERYTHING validates: wrong output is worse than none at all.
         Host dest[kMaxDestinations] = {};
         uint8_t n = 0;
         if (mode() == Addressing::Unicast) {
             const char* err = parseHostList(hosts, dest, kMaxDestinations, n);
-            if (err) { nDest_ = 0; setStatus(err, Severity::Error); return; }
+            if (err) { stopSendTask(); nDest_ = 0; setStatus(err, Severity::Error); return; }
             for (uint8_t d = 0; d < n; d++)
                 if (dest[d].isName()) { HostResolver::ensureStarted(); break; }   // here, where allocating is allowed
             if (n == 0) {
                 // A Warning, not an Error: an unset host is unfinished, not faulty.
+                stopSendTask();
                 nDest_ = 0;
                 setStatus("set a host", Severity::Warning);
                 return;
@@ -194,15 +197,26 @@ public:
         nrOfLightsType counts[kMaxDestinations] = {};
         const char* warn = nullptr;
         const char* err = assignCounts(mode() == Addressing::Unicast ? lightsPerHost : "", n, winLen, counts, 0, &warn);
-        if (err) { nDest_ = 0; setStatus(err, Severity::Error); return; }
+        if (err) { stopSendTask(); nDest_ = 0; setStatus(err, Severity::Error); return; }
 
-        // Everything validated: publish as one unit.
+        publishDestinations(dest, counts, n);
+        prepareWarn_ = warn;
+        refreshHosts();
+        if (packetGap > 0) startSendTask();   // a no-op while it runs
+        else stopSendTask();
+    }
+
+    /// Publish validated destinations as one unit. The send task reads them, so it stops only when they differ, and a rebuild elsewhere leaves a running stream alone.
+    void publishDestinations(const Host* dest, const nrOfLightsType* counts, uint8_t n) {
+        // By the text and mode they came from, since the resolver fills in a name's address later.
+        if (n == nDest_ && mode() == preparedMode_ && std::strcmp(hosts, preparedHosts_) == 0
+            && std::memcmp(destCounts_, counts, sizeof(nrOfLightsType) * n) == 0) return;
+        stopSendTask();
         std::memcpy(dest_, dest, sizeof(Host) * n);
         std::memcpy(destCounts_, counts, sizeof(nrOfLightsType) * n);
         nDest_ = n;
-        prepareWarn_ = warn;
-        refreshHosts();
-        if (packetGap > 0) startSendTask();
+        preparedMode_ = mode();
+        std::snprintf(preparedHosts_, sizeof(preparedHosts_), "%s", hosts);
     }
 
     /// Re-size the corrected buffer when the fixture profile changes the output channel count.
@@ -349,6 +363,7 @@ private:
     /// Start the paced send task on core 1, beside the receive task; a board that cannot start it sends from the tick, unpaced.
     void startSendTask() {
         if (sendTask_.impl) return;
+        taskStarts_++;
         sendStop_.store(false, std::memory_order_release);
         frameState_.exchange(kFrameIdle, std::memory_order_acq_rel);
         platform::spawnPinnedTask(sendTask_, "mmSend", &sendTrampoline, this, 4096, 3, 1);
@@ -477,6 +492,9 @@ private:
         corrected_.allocate(n, ch);
         if (wasSending) startSendTask();
     }
+    uint32_t taskStarts_ = 0;   ///< send-task starts, for taskStartsForTest
+    char preparedHosts_[sizeof(hosts)] = {};      ///< the host text the running destinations came from
+    Addressing preparedMode_ = Addressing::Unicast;   ///< and the addressing
 };
 
 } // namespace mm

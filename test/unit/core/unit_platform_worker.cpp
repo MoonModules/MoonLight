@@ -42,7 +42,8 @@ TEST_CASE("worker seam: each notify wakes the task exactly once") {
 
     for (int i = 0; i < 5; i++) {
         mm::platform::notifyTask(c.task);
-        std::this_thread::sleep_for(5ms);   // let the consumer drain this notify
+        // Until the consumer counted this notify: one still pending merges with the next, as FreeRTOS's take-and-clear does, so a fixed sleep fails under load.
+        for (int w = 0; w < 2000 && c.wakes.load() < i + 1; w++) std::this_thread::sleep_for(1ms);
     }
     // Exactly 5 wakes, no lost notify, no double-count.
     CHECK(c.wakes.load() == 5);

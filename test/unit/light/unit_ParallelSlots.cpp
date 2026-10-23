@@ -475,7 +475,7 @@ TEST_CASE("shift encoder: prefill + data-only == the whole-slot encode, byte for
     const uint64_t mask = 0xFFFFu;   // all 16 strands of 2 pins active
 
     // A dense, varied wire pattern per row, a zeroed buffer would hide a bug in either path.
-    uint8_t wire[16 * kCh];
+    uint8_t wire[64 * kCh];   // the encoder reads all 64 strands' bytes, as the driver's scratch holds them
     for (size_t i = 0; i < sizeof(wire); i++) wire[i] = static_cast<uint8_t>(i * 37 + 11);
 
     const size_t slotsPerLight = static_cast<size_t>(kCh) * 8 * 3 * kSh;
@@ -507,7 +507,7 @@ TEST_CASE("shift encoder: prefill + data-only agree on an exhausted strand") {
     const uint8_t latchBit = 4;
     const uint64_t mask = 0x1u;   // ONLY strand 0 of pin 0 — strands 1..7 are exhausted
 
-    uint8_t wire[8 * kCh];
+    uint8_t wire[64 * kCh];   // the encoder reads all 64 strands' bytes, as the driver's scratch holds them
     for (size_t i = 0; i < sizeof(wire); i++) wire[i] = 0xFF;   // every strand's wire is hot...
 
     const size_t slotsPerLight = static_cast<size_t>(kCh) * 8 * 3 * kSh;

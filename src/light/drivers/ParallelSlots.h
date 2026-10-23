@@ -249,54 +249,55 @@ inline void MM_RAMFUNC prefillWs2812ShiftConstants(uint64_t activeMask, uint8_t 
     }
 }
 
-/// The per-light data encode, writing ONLY the data word of each slot; the output is identical to the whole-slot encoder's, provided the prefill ran with the same mask.
+/// The per-light data encode, writing only each slot's data word as the whole-slot encoder would after the same prefill. At most 8 pins, each in the word's low byte.
 template <class Slot>
 inline void MM_RAMFUNC encodeWs2812ShiftData(const uint8_t* wire, uint64_t activeMask, uint8_t physPins,
                                   uint8_t latchBit, uint8_t outPerPin, uint8_t channels, Slot* out) {
-    constexpr uint8_t kLanes = sizeof(Slot) * 8;
-    if (outPerPin == 0 || outPerPin > kPinExpanderOutputs) return;
+    if (outPerPin == 0 || outPerPin > kPinExpanderOutputs || physPins > 8) return;
     const Slot latch = static_cast<Slot>(Slot(1) << latchBit);
     // Words per WS2812 bit: each bit is one 3-word slot per shift cycle.
     const size_t bitStride = static_cast<size_t>(3) * outPerPin;
-    // The mask is split into 32-bit halves once, so every strand test below is one Xtensa shift.
+    // Per shift cycle, the live pins in each byte of a transposed plane: a dead strand idles LOW at two ANDs per plane, not a test per lane.
     const uint32_t maskLo = static_cast<uint32_t>(activeMask);
     const uint32_t maskHi = static_cast<uint32_t>(activeMask >> 32);
+    uint32_t live[kPinExpanderOutputs];
+    for (uint8_t c = 0; c < outPerPin; c++) {
+        const uint8_t pos = static_cast<uint8_t>(outPerPin - 1 - c);
+        uint32_t pins = 0;
+        for (uint8_t p = 0; p < physPins; p++) {
+            const uint8_t v = static_cast<uint8_t>(p * outPerPin + pos);
+            pins |= ((v < 32 ? maskLo >> v : maskHi >> (v - 32)) & 1u) << p;   // 32-bit halves: a 64-bit shift is a library call on Xtensa
+        }
+        live[c] = pins * 0x01010101u;
+    }
+    // Lane p's byte sits p strands' worth of channels further on; lanes past physPins read zeros or a dead strand, which the live mask clears.
+    const size_t laneStep = static_cast<size_t>(outPerPin) * channels;
 
     // The transpose IS the emit: each plane is stored while still in registers, never staged.
     for (uint8_t ch = 0; ch < channels; ch++) {
         Slot* chBase = out + static_cast<size_t>(ch) * 8 * bitStride;
         for (uint8_t c = 0; c < outPerPin; c++) {
-            const uint8_t pos = static_cast<uint8_t>(outPerPin - 1 - c);
-            // Lane p is byte p of the 8x8 matrix, so it packs straight into the SWAR register pair.
-            uint32_t loA = 0, loB = 0, hiA = 0, hiB = 0;
-            for (uint8_t p = 0; p < physPins && p < kLanes; p++) {
-                const uint8_t v = static_cast<uint8_t>(p * outPerPin + pos);
-                // 32-bit half test: see the maskLo/maskHi split above.
-                const uint32_t live = (v < 32) ? (maskLo >> v) : (maskHi >> (v - 32));
-                if (!(live & 1u)) continue;   // exhausted strand: idle LOW
-                const uint32_t b = wire[static_cast<size_t>(v) * channels + ch];
-                if (p < 8) { if (p < 4) loA |= b << (8 * p); else loB |= b << (8 * (p - 4)); }
-                else       { const uint8_t q = static_cast<uint8_t>(p - 8);
-                             if (q < 4) hiA |= b << (8 * q); else hiB |= b << (8 * (q - 4)); }
-            }
+            const uint8_t* lane = wire + static_cast<size_t>(outPerPin - 1 - c) * channels + ch;
+            // Lane p is byte p of the 8x8 matrix, so the eight lanes pack straight into the SWAR register pair.
+            uint32_t loA = lane[0] | (uint32_t(lane[laneStep]) << 8) | (uint32_t(lane[2 * laneStep]) << 16)
+                         | (uint32_t(lane[3 * laneStep]) << 24);
+            uint32_t loB = lane[4 * laneStep] | (uint32_t(lane[5 * laneStep]) << 8)
+                         | (uint32_t(lane[6 * laneStep]) << 16) | (uint32_t(lane[7 * laneStep]) << 24);
             transposeBits8x8Pair(loA, loB);
-            if constexpr (sizeof(Slot) != 1) transposeBits8x8Pair(hiA, hiB);
+            loA &= live[c];
+            loB &= live[c];
 
             const Slot first = (c == 0) ? latch : Slot(0);   // RCLK rides word 0 of each slot
             Slot* dst = chBase + outPerPin + c;              // the DATA word of bit 7's slot, cycle c
-            for (int bit = 7; bit >= 0; bit--) {             // MSB-first per byte, as the wire contract
-                const uint8_t sh = static_cast<uint8_t>(8 * (bit & 3));
-                Slot data;
-                if constexpr (sizeof(Slot) == 1) {
-                    data = static_cast<Slot>(((bit < 4) ? loA : loB) >> sh);
-                } else {
-                    data = static_cast<Slot>((((bit < 4) ? loA : loB) >> sh) & 0xFF)
-                         | static_cast<Slot>(((((bit < 4) ? hiA : hiB) >> sh) & 0xFF) << 8);
-                }
-                // ONLY the data word: the slot's other two are the prefilled constants.
-                *dst = static_cast<Slot>(data | first);
-                dst += bitStride;
-            }
+            // Plane 7 down to 0, MSB first per the wire contract, unrolled so each shift is a constant; only the data word, the other two are prefilled.
+            dst[0]             = static_cast<Slot>(static_cast<Slot>(loB >> 24) | first);
+            dst[bitStride]     = static_cast<Slot>(static_cast<Slot>((loB >> 16) & 0xFF) | first);
+            dst[2 * bitStride] = static_cast<Slot>(static_cast<Slot>((loB >> 8) & 0xFF) | first);
+            dst[3 * bitStride] = static_cast<Slot>(static_cast<Slot>(loB & 0xFF) | first);
+            dst[4 * bitStride] = static_cast<Slot>(static_cast<Slot>(loA >> 24) | first);
+            dst[5 * bitStride] = static_cast<Slot>(static_cast<Slot>((loA >> 16) & 0xFF) | first);
+            dst[6 * bitStride] = static_cast<Slot>(static_cast<Slot>((loA >> 8) & 0xFF) | first);
+            dst[7 * bitStride] = static_cast<Slot>(static_cast<Slot>(loA & 0xFF) | first);
         }
     }
 }

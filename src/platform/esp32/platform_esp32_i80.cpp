@@ -117,7 +117,7 @@ constexpr uint32_t kShiftPclkHz = 26'666'666;   // prescale 3 of 80 MHz -> 300 n
 // The second is null when its allocation did not fit, and each has its own completion signal so a wait targets the right transfer.
 // Both can be in flight at once and the completion event carries no token, but transfers complete in order.
 // So a two-slot queue of started indices routes each signal to the buffer that finished.
-struct I80State {
+struct I80State : platform::InternalRamObject {
     esp_lcd_i80_bus_handle_t bus = nullptr;
     esp_lcd_panel_io_handle_t io = nullptr;
     SemaphoreHandle_t done[2] = {nullptr, nullptr};

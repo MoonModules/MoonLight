@@ -34,10 +34,10 @@ This is the case study of one multi-device installation. The steps for your own 
 
 | part | hardware | lights | layout | effect |
 |---|---|---|---|---|
-| legs | LightCrafter 16 (ESP32-S3 N8R8) | 10 SK6812 RGBW strips of 144 | Tubes, `tubeDistance` 7 | [`stadbeest-walk.mle`](https://github.com/MoonModules/MoonLight/blob/main/moonlive/effects/stadbeest/stadbeest-walk.mle), [`stadbeest-orb.mle`](https://github.com/MoonModules/MoonLight/blob/main/moonlive/effects/stadbeest/stadbeest-orb.mle), [`stadbeest-thrusters.mle`](https://github.com/MoonModules/MoonLight/blob/main/moonlive/effects/stadbeest/stadbeest-thrusters.mle) |
-| left eye | ESP32-S3-Zero, 4 MB | a 241-light ring disc | Rings241 | [`stadbeest-frog-eye.mle`](https://github.com/MoonModules/MoonLight/blob/main/moonlive/effects/stadbeest/stadbeest-frog-eye.mle), [`stadbeest-eye-orb.mle`](https://github.com/MoonModules/MoonLight/blob/main/moonlive/effects/stadbeest/stadbeest-eye-orb.mle), [`stadbeest-sauron.mle`](https://github.com/MoonModules/MoonLight/blob/main/moonlive/effects/stadbeest/stadbeest-sauron.mle) |
+| legs | LightCrafter 16 (ESP32-S3 N8R8) | 10 SK6812 RGBW strips of 144 | Tubes, `tubeDistance` 7 | [`stadbeest-walk.mle`](https://github.com/MoonModules/MoonLight/blob/main/moonlive/projects/stadbeest/stadbeest-walk.mle), [`stadbeest-orb.mle`](https://github.com/MoonModules/MoonLight/blob/main/moonlive/projects/stadbeest/stadbeest-orb.mle), [`stadbeest-thrusters.mle`](https://github.com/MoonModules/MoonLight/blob/main/moonlive/projects/stadbeest/stadbeest-thrusters.mle) |
+| left eye | ESP32-S3-Zero, 4 MB | a 241-light ring disc | Rings241 | [`stadbeest-frog-eye.mle`](https://github.com/MoonModules/MoonLight/blob/main/moonlive/projects/stadbeest/stadbeest-frog-eye.mle), [`stadbeest-eye-orb.mle`](https://github.com/MoonModules/MoonLight/blob/main/moonlive/projects/stadbeest/stadbeest-eye-orb.mle), [`stadbeest-sauron.mle`](https://github.com/MoonModules/MoonLight/blob/main/moonlive/projects/stadbeest/stadbeest-sauron.mle) |
 | right eye | ESP32-S3-Zero, 4 MB | a 241-light ring disc | Rings241 | the same three as the left eye |
-| mouth | ESP32-C3 RGBWW PWM bulb | one RGBWW light | Grid 1×1×1 | [`stadbeest-mouth.mle`](https://github.com/MoonModules/MoonLight/blob/main/moonlive/effects/stadbeest/stadbeest-mouth.mle) |
+| mouth | ESP32-C3 RGBWW PWM bulb | one RGBWW light | Grid 1×1×1 | [`stadbeest-mouth.mle`](https://github.com/MoonModules/MoonLight/blob/main/moonlive/projects/stadbeest/stadbeest-mouth.mle) |
 
 The three looks, as each device's preview shows them; the mouth, one light, breathes along with each.
 
@@ -139,7 +139,7 @@ So they look the same way at the same moment, with no message between them.
 **Use them yourself.**
 The six looks and the autopilot are part of MoonLight's [script library](https://github.com/MoonModules/MoonLight/tree/main/moonlive).
 Every device running MoonLight lists them in its script picker and downloads one when it is chosen.
-The full code: [`stadbeest-walk.mle`](https://github.com/MoonModules/MoonLight/blob/main/moonlive/effects/stadbeest/stadbeest-walk.mle), [`stadbeest-orb.mle`](https://github.com/MoonModules/MoonLight/blob/main/moonlive/effects/stadbeest/stadbeest-orb.mle), [`stadbeest-thrusters.mle`](https://github.com/MoonModules/MoonLight/blob/main/moonlive/effects/stadbeest/stadbeest-thrusters.mle), [`stadbeest-frog-eye.mle`](https://github.com/MoonModules/MoonLight/blob/main/moonlive/effects/stadbeest/stadbeest-frog-eye.mle), [`stadbeest-eye-orb.mle`](https://github.com/MoonModules/MoonLight/blob/main/moonlive/effects/stadbeest/stadbeest-eye-orb.mle), [`stadbeest-sauron.mle`](https://github.com/MoonModules/MoonLight/blob/main/moonlive/effects/stadbeest/stadbeest-sauron.mle) and [`stadbeest-autopilot.mls`](https://github.com/MoonModules/MoonLight/blob/main/moonlive/services/stadbeest-autopilot.mls); to write your own, start with [your first script](../../moonwalk.md#first-script).
+The full code: [`stadbeest-walk.mle`](https://github.com/MoonModules/MoonLight/blob/main/moonlive/projects/stadbeest/stadbeest-walk.mle), [`stadbeest-orb.mle`](https://github.com/MoonModules/MoonLight/blob/main/moonlive/projects/stadbeest/stadbeest-orb.mle), [`stadbeest-thrusters.mle`](https://github.com/MoonModules/MoonLight/blob/main/moonlive/projects/stadbeest/stadbeest-thrusters.mle), [`stadbeest-frog-eye.mle`](https://github.com/MoonModules/MoonLight/blob/main/moonlive/projects/stadbeest/stadbeest-frog-eye.mle), [`stadbeest-eye-orb.mle`](https://github.com/MoonModules/MoonLight/blob/main/moonlive/projects/stadbeest/stadbeest-eye-orb.mle), [`stadbeest-sauron.mle`](https://github.com/MoonModules/MoonLight/blob/main/moonlive/projects/stadbeest/stadbeest-sauron.mle) and [`stadbeest-autopilot.mls`](https://github.com/MoonModules/MoonLight/blob/main/moonlive/projects/stadbeest/stadbeest-autopilot.mls); to write your own, start with [your first script](../../moonwalk.md#first-script).
 
 ---
 
@@ -151,15 +151,12 @@ The first slot of each bank on a [Control](../../moonmodules/core/system.md#cont
 
 Every StadBeest effect that hears music declares `bpm`, `sensitivity` and `pulse` first, so those slots mean the same on the legs and on the eyes in every look.
 The rest are the look's own: on the walk `fader4` is `swing`, on the frog eye it is `pupil`.
-A slot assigned by hand keeps its target, which is how the look switches and the autopilot stay put.
+A slot assigned by hand keeps its target, which is how the look opacities and the autopilot stay put.
 
 | slot | legs | each eye | mouth |
 |---|---|---|---|
 | `switch1` | `Drivers.on` | `Drivers.on` | `Drivers.on` |
 | `switch2` | `pulse` | `pulse` | `pulse` |
-| `switch3` | `walk.enabled` | `frog-eye.enabled` | |
-| `switch4` | `orb.enabled` | `eye-orb.enabled` | |
-| `switch5` | `thrusters.enabled` | `sauron.enabled` | |
 | `switch8` | autopilot `run` | | |
 | `fader1` | `Drivers.brightness` | `Drivers.brightness` | `Drivers.brightness` |
 | `fader2` | `bpm` | `bpm` | `bpm` |
@@ -167,11 +164,14 @@ A slot assigned by hand keeps its target, which is how the look switches and the
 | `fader4` to `fader7` | the look's next numbers | the look's next numbers | `rest` |
 | `fader8` | autopilot `seconds` | | |
 | `encoder1` | `Drivers.palette` | `Drivers.palette` | `Drivers.palette` |
-| `encoder2` and on | the look's choices, such as the orb's `shape` | the same | |
+| `encoder2` to `encoder5` | the look's choices, such as the orb's `shape` | the same | |
+| `encoder6` | `WalkLayer.opacity` | `FrogLayer.opacity` | |
+| `encoder7` | `OrbLayer.opacity` | `EyeOrbLayer.opacity` | |
+| `encoder8` | `ThrustersLayer.opacity` | `SauronLayer.opacity` | |
 
 A slot holds the value of the control it drives, so `fader2` at 33 means `bpm` 33.
-Each look is an effect of its own on every device, named after its script without the `stadbeest-` prefix, and `switch3` to `switch5` turn them on and off through their `enabled`.
-So one switch changes the look on the legs and on both eyes at once, and the desk follows it.
+Each look is a layer of its own on every device, its effect named after its script without the `stadbeest-` prefix. `encoder6` to `encoder8` set the three layers' opacity.
+So one encoder fades a look on the legs and on both eyes at once, and the desk follows it. A layer at opacity 0 costs nothing, so the beast renders two looks only while they cross.
 
 ---
 
@@ -227,13 +227,16 @@ Every device runs the [Audio](../../moonmodules/core/services.md#audio) service 
 
 ## 6. Running unattended
 
-A [MoonLiveService](../../moonmodules/core/services.md#moonliveservice) on the leader runs [`stadbeest-autopilot.mls`](https://github.com/MoonModules/MoonLight/blob/main/moonlive/services/stadbeest-autopilot.mls), which plays the beast through a whole museum night without anyone at the desk.
+A [MoonLiveService](../../moonmodules/core/services.md#moonliveservice) on the leader runs [`stadbeest-autopilot.mls`](https://github.com/MoonModules/MoonLight/blob/main/moonlive/projects/stadbeest/stadbeest-autopilot.mls), which plays the beast through a whole museum night without anyone at the desk.
 
 <img src="../../assets/reference/examples/multi-board/autopilot-card.png" width="300" alt="The autopilot service card: script, run and seconds">
 
+- **Building:** at start it pushes every part its look, a layer per look, with [`pushJson` and `pushJsonTo`](../../moonmodules/light/moonlive.md#json-documents-in-a-service). It reaches the legs, itself, and the eyes and the mouth by name: `MM-eye1.local`, `MM-eye2.local` and `MM-mouth.local`.
+  A push is live and never saved, so it pushes them again every half minute, and a part that boots late or reboots gets its look back. The same document applied again changes nothing.
+  A part whose look names a script it lacks lists it on its System card, and the page open on it downloads it.
 - **Scenes:** every `seconds`, three minutes by default, it picks a new scene.
-  A scene moves on to the next look, walking, the orb or the thrusters, by switching `switch3` to `switch5`.
-  It picks a built-in palette, in a third of the thruster scenes [`stadbeest-fire.mlp`](https://github.com/MoonModules/MoonLight/blob/main/moonlive/palettes/stadbeest-fire.mlp), a mood from calm to wild, how much the music counts and `pulse` on or off.
+  A scene crossfades to the next look, walking, the orb or the thrusters, over three seconds through `encoder6` to `encoder8`.
+  It picks a built-in palette, in a third of the thruster scenes [`stadbeest-fire.mlp`](https://github.com/MoonModules/MoonLight/blob/main/moonlive/projects/stadbeest/stadbeest-fire.mlp), a mood from calm to wild, how much the music counts and `pulse` on or off.
   That palette is computed every frame: louder music burns hotter, a beat flares the hot end white, and the flames flicker.
   A palette has the same number on every device, so the eyes and the mouth pick the same one.
 - **Breathing:** within a scene the energy rises and falls once a minute, through `fader2`, the tempo of whatever look runs.
@@ -266,10 +269,10 @@ The browser is the bridge between desk and device, so the laptop keeps the leade
 |---|---|
 | track faders 1-7 | brightness, then the look's `bpm`, `sensitivity` and its own numbers |
 | track fader 8 | the autopilot's `seconds`, how long a scene lasts |
-| track knobs 1-8 | the palette, then the look's choices and the numbers past the faders |
+| track knobs 1-5 | the palette, then the look's choices and the numbers past the faders |
+| track knobs 6-8 | the looks, faded in and out: walking, the orb, the thrusters |
 | activator 1 | on and off |
 | activator 2 | `pulse`, legs and eyes together |
-| activators 3 to 5 | the look: walking, the orb, the thrusters |
 | activator 8 | the autopilot's `run` |
 | clip pads | the presets, the top-left pad being preset 1; a stored preset glows white and the applied one green |
 

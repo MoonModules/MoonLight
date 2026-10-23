@@ -15,6 +15,7 @@ import sys
 from pathlib import Path
 
 import compute_version   # sibling: the one place a version string is derived
+import sdkconfig_fragments   # sibling: a changed fragment regenerates a build dir's sdkconfig
 from moonbase_images import MOONBASE_BIN, build_migrate, build_moonbase   # sibling: the images that carry MoonBase
 
 ROOT = Path(__file__).resolve().parent.parent.parent
@@ -731,6 +732,12 @@ def stale_feature_cache(build_dir: Path, extra: list[str], chip: str) -> str | N
     return None
 
 
+def fragment_paths(extra: list[str]) -> list[Path]:
+    """The sdkconfig fragments a build passes in SDKCONFIG_DEFAULTS, in their merge order."""
+    frags = next((a.split("=", 1)[1] for a in extra if a.startswith("-DSDKCONFIG_DEFAULTS=")), "")
+    return [ESP32_DIR / name for name in frags.split(";") if name]
+
+
 def build_dir_for(firmware: str) -> Path:
     """Return the per-firmware build directory.
 
@@ -841,12 +848,15 @@ def main():
               f"cache ({stale}); removing it for a clean reconfigure.")
         shutil.rmtree(build_dir)
 
+    # A chip in PREVIEW_TARGETS needs `--preview` on idf.py itself, before the action, or
+    # set-target and reconfigure refuse it.
+    preview = ["--preview"] if chip in PREVIEW_TARGETS else []
+    digest = sdkconfig_fragments.refresh(cmd + preview + b_arg + extra, build_dir,
+                                         fragment_paths(extra), ESP32_DIR, env)
+
     if not build_dir.exists():
         print(f"Setting target to {chip} (firmware: {firmware}, build dir: "
               f"{build_dir.relative_to(ROOT)})...")
-        # A preview chip (esp32s31 today) needs `--preview` on idf.py itself,
-        # before the action, or set-target refuses it.
-        preview = ["--preview"] if chip in PREVIEW_TARGETS else []
         r = subprocess.run(cmd + preview + b_arg + extra + ["set-target", chip],
                            cwd=ESP32_DIR, env=env)
         if r.returncode != 0:
@@ -856,6 +866,7 @@ def main():
     r = subprocess.run(cmd + b_arg + extra + ["build"], cwd=ESP32_DIR, env=env)
     if r.returncode != 0:
         sys.exit(r.returncode)
+    sdkconfig_fragments.record(build_dir, digest)
 
     # Show flash/RAM usage summary
     subprocess.run(cmd + b_arg + ["size"], cwd=ESP32_DIR, env=env)

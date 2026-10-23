@@ -235,6 +235,7 @@
 #include "soc/gpio_sig_map.h"   // SIG_GPIO_OUT_IDX — detaches a matrix route (destroyState)
 #include "esp_rom_sys.h"     // esp_rom_delay_us — the DMA-to-FIFO settle before lcd_ll_start
 #include "esp_timer.h"       // esp_timer_get_time — ISR-safe wire-time stamp
+#include "esp_cpu.h"         // esp_cpu_get_core_id: which core the refill interrupt runs on
 #include "driver/gpio.h"
 #include "soc/io_mux_reg.h"  // PIN_FUNC_GPIO — the IO-MUX function the matrix routes through
 #include "freertos/FreeRTOS.h"
@@ -300,7 +301,7 @@ constexpr uint32_t kWireFreeTimeoutMs = 200;
 // Two buffers for the deferred-wait double buffer, the second null when its allocation did not fit, each with its own completion signal.
 // Transfers complete in start order and the event carries no token, so a two-slot queue of started indices routes each signal to the buffer that finished.
 // There is no transaction queue, so a transmit programs the chain directly and a second one in flight is a caller error, rejected rather than queued.
-struct MoonI80State {
+struct MoonI80State : platform::InternalRamObject {
     lcd_hal_context_t hal = {};
     gdma_channel_handle_t dma = nullptr;
     gdma_link_list_handle_t link = nullptr;
@@ -381,7 +382,10 @@ struct MoonI80State {
     volatile uint32_t dbgEncAvgUs = 0;   // LAST FRAME's average, latched at frame end — the readout target
                                          // (reading sum/count mid-frame races the per-frame reset: the 1 s KPI tick correlates with the frame cycle and kept landing in the freshly-reset window, reading a false 0)
     volatile uint32_t dbgMaxIsrGapUs = 0;
-    volatile int64_t  dbgLastEofUs = 0;
+    volatile int64_t  dbgLastEofUs = 0;     // the previous interrupt within this frame, the arm before the first
+    volatile int32_t  dbgMinLead = INT32_MAX;   // fewest slices the frontier led the drain by at an interrupt
+    volatile uint32_t dbgMaxGapAtSlice = 0;     // the drain position where the worst gap ended: frame start or anywhere
+    volatile uint8_t  dbgIsrCore = 0;           // the core the refill interrupt runs on
     // The scatter meter: slices written after their drain had begun, each stale on the wire. A clean soak reads zero, whether or not the eye catches it.
     volatile uint32_t dbgLate = 0;
 };
@@ -426,9 +430,13 @@ bool IRAM_ATTR moonI80EofCb(gdma_channel_handle_t, gdma_event_data_t*, void* use
         st->dbgCacheOffRun = 0;                          // a live firing ends the streak
         st->dbgEofTotal = st->dbgEofTotal + 1u;         // ISR INSTRUMENTATION (diagnostic)
         const int64_t eofNow = esp_timer_get_time();
+        st->dbgIsrCore = static_cast<uint8_t>(esp_cpu_get_core_id());
         if (st->dbgLastEofUs != 0) {
             const uint32_t gap = static_cast<uint32_t>(eofNow - st->dbgLastEofUs);
-            if (gap > st->dbgMaxIsrGapUs) st->dbgMaxIsrGapUs = gap;
+            if (gap > st->dbgMaxIsrGapUs) {
+                st->dbgMaxIsrGapUs = gap;
+                st->dbgMaxGapAtSlice = static_cast<uint32_t>(((eofNow - st->armUs) * 1000) / (st->sliceNs ? st->sliceNs : 1));
+            }
         }
         st->dbgLastEofUs = eofNow;
 
@@ -439,14 +447,16 @@ bool IRAM_ATTR moonI80EofCb(gdma_channel_handle_t, gdma_event_data_t*, void* use
                 ((eofNow - st->armUs) * 1000) / st->sliceNs);
             st->drainCount = drainPos;      // DIAGNOSTIC (dbgLastDrain mirrors the old counter's slot)
             st->dbgLastDrain = drainPos;
+            // How close the drain came to the frontier: the ring's margin, which a stall eats.
+            const int32_t lead = static_cast<int32_t>(st->lastWrittenSlice) - static_cast<int32_t>(drainPos);
+            if (lead < st->dbgMinLead) st->dbgMinLead = lead;
 
             // Batch refill toward the writable window: a slice's previous occupant is provably drained once the drain position has passed it, and a safety margin sets the edge.
             // Capped per firing to bound the handler's duration, and capped batches still converge since interrupts keep arriving.
             // The pool is the jitter buffer, so only the average encode must beat the deadline.
-            constexpr uint32_t kLead = 2;
             constexpr uint32_t kBatchMax = 4;
             // kTailBufs (file scope): one pure-zero flush slice past the frame-close slice, so a stop firing on the second-to-last EOF (oracle floor at a slice boundary) can only truncate zeros, never the frame-close latch (which streams a whole slice earlier).
-            const uint32_t windowEnd = drainPos + st->ringBufs - kLead;
+            const uint32_t windowEnd = drainPos + st->ringBufs - kRingRefillGap;
             // The frame's last writes are the frame-close slice (index nSlices: zeros + the closing latch word) and kTailBufs pure-zero flush slices. The frontier terminator then RESTS on the final node as the frame's hardware end, the DMA cannot pass a NULL, so nothing past the frame is ever re-read (no lap of zero-fill needed beyond it).
             const uint32_t lastSlice = st->nSlices + kTailBufs;
             for (uint32_t n = 0; n < kBatchMax; n++) {
@@ -480,6 +490,7 @@ bool IRAM_ATTR moonI80EofCb(gdma_channel_handle_t, gdma_event_data_t*, void* use
             // Fires exactly once per frame, the block being gated on the busy flag that the completion clears.
             if (st->lastWrittenSlice >= lastSlice) {
                 st->busy = false;
+                st->dbgLastEofUs = 0;   // the idle time before the next frame is no refill gap
                 // Latch this frame's encode average and reset the window, at frame END, when every refill has landed, so a readout never sees a half-filled (or just-reset) window.
                 st->dbgEncAvgUs = st->dbgEncCount ? st->dbgEncSumUs / st->dbgEncCount : 0;
                 st->dbgEncSumUs = 0;
@@ -847,7 +858,7 @@ void waitWireDrained(MoonI80State* st) {
     if (now < st->lastStopUs) esp_rom_delay_us(static_cast<uint32_t>(st->lastStopUs - now));
 }
 
-// Prime a range of buffers, each independent, so two cores can prime disjoint ranges concurrently. No latch pad, the reset coming from the stop; each caller takes the wire barrier itself, which is idempotent in parallel and keeps the barrier a per-call contract.
+// Prime a range of buffers. No latch pad, the reset coming from the stop; the wire barrier comes first.
 void primeRingRange(MoonI80State* st, uint8_t bufLo, uint8_t bufHi) {
     waitWireDrained(st);
     if (bufHi > st->ringBufs) bufHi = st->ringBufs;
@@ -855,7 +866,7 @@ void primeRingRange(MoonI80State* st, uint8_t bufLo, uint8_t bufHi) {
         fillSlice(st, primed, primed);   // first lap: buffer index IS the slice index
 }
 
-// Arm the primed ring: peripheral setup, the timed WS2812-reset guard, the oracle epoch, gdma_start. Every buffer must be primed (primeRingRange over the whole pool, serial or fork-joined) BEFORE this runs; the caller owns that ordering (the driver's join is the fence).
+// Arm the primed ring: peripheral setup, the timed WS2812-reset guard, the oracle epoch, gdma_start. Every buffer is primed before this runs.
 bool armRingTransfer(MoonI80State* st) {
     lcd_cam_dev_t* dev = st->hal.dev;
     st->drainCount = 0;
@@ -889,6 +900,7 @@ bool armRingTransfer(MoonI80State* st) {
 
     st->txStartUs[0] = esp_timer_get_time();
     st->armUs = st->txStartUs[0];   // the clock oracle's epoch: drain position = (now − armUs) / sliceNs
+    st->dbgLastEofUs = st->armUs;   // the frame's first refill gap is measured from the arm
     if (gdma_start(st->dma, gdma_link_get_head_addr(st->link)) != ESP_OK) {
         st->busy = false;
         return false;
@@ -898,7 +910,7 @@ bool armRingTransfer(MoonI80State* st) {
     return true;
 }
 
-// The serial combo (prime everything, then arm), the single-core path, and what the dual-core driver falls back to when its helper is unavailable.
+// Prime every buffer, then arm.
 bool startRingTransfer(MoonI80State* st) {
     primeRingRange(st, 0, st->ringBufs);
     return armRingTransfer(st);
@@ -955,6 +967,7 @@ bool initRingDma(MoonI80State* st) {
     gdma_tx_event_callbacks_t cbs = {};
     cbs.on_trans_eof = moonI80EofCb;
     cbs.on_descr_err = moonI80DescErrCb;   // B1-DISCRIMINATOR (diagnostic): catch the silent descriptor-fetch halt
+    // The refill interrupt runs on the core that registers it, core 0: on core 1 it faulted when a flash write on core 0 switched the cache off mid-refill.
     return gdma_register_tx_event_callbacks(st->dma, &cbs, st) == ESP_OK;
 }
 
@@ -1182,18 +1195,6 @@ void moonI80SetShiftClockDiv(uint8_t div) {
     g_shiftClockDiv = div;
 }
 
-void moonI80Ws2812PrimeRange(MoonI80Ws2812Handle& h, uint8_t bufLo, uint8_t bufHi) {
-    auto* st = static_cast<MoonI80State*>(h.impl);
-    if (!st || !st->isRing || st->busy) return;   // never prime under a live transfer
-    primeRingRange(st, bufLo, bufHi);
-}
-
-bool moonI80Ws2812ArmRing(MoonI80Ws2812Handle& h) {
-    auto* st = static_cast<MoonI80State*>(h.impl);
-    if (!st || !st->isRing || st->busy) return false;
-    return armRingTransfer(st);
-}
-
 bool moonI80Ws2812TransmitRing(MoonI80Ws2812Handle& h) {
     auto* st = static_cast<MoonI80State*>(h.impl);
     if (!st || !st->isRing) return false;
@@ -1305,6 +1306,12 @@ MoonI80RingStats moonI80Ws2812RingStats(const MoonI80Ws2812Handle& h) {
     s.maxEncodeUs   = st->dbgMaxEncodeUs;
     s.avgEncodeUs   = st->dbgEncAvgUs;
     s.maxIsrGapUs   = st->dbgMaxIsrGapUs;
+    s.minLead       = st->dbgMinLead == INT32_MAX ? -1 : st->dbgMinLead;
+    s.maxGapAtSlice = st->dbgMaxGapAtSlice;
+    s.isrCore       = st->dbgIsrCore;
+    // The gap and the lead are per reading, the window the once-a-second readout makes, so one stall at a rebuild does not hide the steady state.
+    st->dbgMaxIsrGapUs = 0;
+    st->dbgMinLead = INT32_MAX;
     s.itemsPerBuf   = st->itemsPerBuf;
     s.termNodeDiag  = st->termNode;
     s.late          = st->dbgLate;
@@ -1468,8 +1475,6 @@ bool moonI80Ws2812InitRing(MoonI80Ws2812Handle&, const uint16_t*, uint8_t, uint1
 }
 bool moonI80Ws2812TransmitRing(MoonI80Ws2812Handle&) { return false; }
 void moonI80SetShiftClockDiv(uint8_t) {}
-void moonI80Ws2812PrimeRange(MoonI80Ws2812Handle&, uint8_t, uint8_t) {}
-bool moonI80Ws2812ArmRing(MoonI80Ws2812Handle&) { return false; }
 bool moonI80Ws2812IsRing(const MoonI80Ws2812Handle&) { return false; }
 bool moonI80Ws2812InternalFits(size_t) { return false; }
 uint8_t* moonI80Ws2812Buffer(const MoonI80Ws2812Handle&, uint8_t) { return nullptr; }

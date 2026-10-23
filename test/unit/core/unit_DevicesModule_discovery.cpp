@@ -157,6 +157,25 @@ TEST_CASE("DevicesModule: a peer heard only over broadcast proves the network dr
     CHECK(cleared);
 }
 
+// The verdict lives in the status, which is not saved: flipping it once wrote the config file to flash on every flip.
+TEST_CASE("DevicesModule: the multicast verdict changing arms no save, a new device does") {
+    NetworkPath::multicastDropped = false;
+    DevicesModule dev;
+    injectCopy(dev, 62, /*broadcast=*/true);
+    const bool newRowSaves = dev.dirty();
+    dev.clearDirty();
+    for (int i = 0; i < 2; i++) injectCopy(dev, 62, /*broadcast=*/true);   // the third copy proves the drop
+    const bool proven = NetworkPath::multicastDropped;
+    const bool dirtyAfterProof = dev.dirty();
+    injectCopy(dev, 62, /*broadcast=*/false);                              // and a multicast copy clears it
+    const bool dirtyAfterClear = dev.dirty();
+    NetworkPath::multicastDropped = false;
+    CHECK(newRowSaves);
+    CHECK(proven);
+    CHECK_FALSE(dirtyAfterProof);
+    CHECK_FALSE(dirtyAfterClear);
+}
+
 TEST_CASE("DevicesModule: a peer heard both ways, or not at all, proves nothing") {
     NetworkPath::multicastDropped = false;
     DevicesModule other;

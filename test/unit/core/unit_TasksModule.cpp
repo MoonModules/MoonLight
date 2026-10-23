@@ -69,7 +69,7 @@ TEST_CASE("TasksModule: the empty desktop snapshot is safe (no RTOS on host)") {
 }
 
 TEST_CASE("TasksModule: the tasks list renders the injected RTOS tasks with their fields") {
-    // Inject a canned snapshot (desktop test seam) → the `tasks` List serializes those rows with name/state/core/prio/stack, and the CPU% field appears only when it's a real measurement.
+    // Inject a canned snapshot (desktop test seam) → the `tasks` List serializes those rows with name/state/core/prio/stack, and the CPU% and heap fields appear only when they are real measurements.
     const platform::TaskInfo snap[] = {
         {"main",  platform::TaskState::Running, 0, 1, 2340, 479 /* 47.9% */},
         {"IDLE1", platform::TaskState::Ready,   1, 0, 1100, platform::kTaskCpuUnmeasured},
@@ -107,7 +107,7 @@ TEST_CASE("TasksModule: MoonLight tasks sort to the top, system tasks below, alp
     // Input order is scrambled (system, ours, system, ours, ...), exactly the kind of shuffle the RTOS snapshot produces frame to frame.
     const platform::TaskInfo snap[] = {
         {"Tmr Svc", platform::TaskState::Blocked, -1, 1, 900, platform::kTaskCpuUnmeasured},
-        {"mmSnap",  platform::TaskState::Blocked,  1, 5, 700, platform::kTaskCpuUnmeasured},
+        {"mmSend",  platform::TaskState::Blocked,  1, 5, 700, platform::kTaskCpuUnmeasured},
         {"IDLE0",   platform::TaskState::Ready,    0, 0, 500, platform::kTaskCpuUnmeasured},
         {"main",    platform::TaskState::Running,  0, 1, 2340, platform::kTaskCpuUnmeasured},
         {"esp_timer", platform::TaskState::Blocked, -1, 22, 800, platform::kTaskCpuUnmeasured},
@@ -135,10 +135,10 @@ TEST_CASE("TasksModule: MoonLight tasks sort to the top, system tasks below, alp
         return row.substr(p, row.find('"', p) - p);
     };
 
-    // Ours first (main, then mm* alphabetical: mmEncode < mmSnap), then system alphabetical (IDLE0 < Tmr Svc < esp_timer, uppercase sorts before lowercase).
+    // Ours first (main, then mm* alphabetical: mmEncode < mmSend), then system alphabetical (IDLE0 < Tmr Svc < esp_timer, uppercase sorts before lowercase).
     CHECK(rowName(0) == "main");
     CHECK(rowName(1) == "mmEncode");
-    CHECK(rowName(2) == "mmSnap");
+    CHECK(rowName(2) == "mmSend");
     CHECK(rowName(3) == "IDLE0");
     CHECK(rowName(4) == "Tmr Svc");
     CHECK(rowName(5) == "esp_timer");

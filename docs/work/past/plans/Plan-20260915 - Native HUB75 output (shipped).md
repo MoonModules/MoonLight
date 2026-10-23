@@ -4,7 +4,7 @@ Answers [issue #102](https://github.com/MoonModules/MoonLight/issues/102). Phase
 
 ## The gap
 
-MoonLight drives HUB75 panels one way: [PanelCardDriver](../../../src/light/drivers/PanelCardDriver.h) emits ColorLight frames over raw Ethernet to a 5A-75B/E receiving card, which does the HUB75 driving. That path is excellent above roughly 16,384 pixels and it is what the [panel-cards guide](../../reference/hardware/panel-cards.md) documents.
+MoonLight drives HUB75 panels one way: [PanelCardDriver](../../../../src/light/drivers/PanelCardDriver.h) emits ColorLight frames over raw Ethernet to a 5A-75B/E receiving card, which does the HUB75 driving. That path is excellent above roughly 16,384 pixels and it is what the [panel-cards guide](../../../reference/hardware/panel-cards.md) documents.
 
 Below that size it is the wrong shape. The user buys a receiving card, configures it with LEDvision (a Windows tool, not ours), and runs a dedicated Ethernet link, all to light one 64×64 panel that a $10 board could drive from its own pins. WLED does this natively; MoonLight does not. That is the gap, and it is the whole of Phase 1.
 
@@ -18,7 +18,7 @@ frame bytes = (height / 2) × width × bitDepth
 
 Measured against the peripherals MoonLight already has:
 
-Measured from the encoder's own formula (`Hub75Geometry::frameBytes`, pinned by [unit_Hub75Slots.cpp](../../../test/unit/light/unit_Hub75Slots.cpp)), at 1/32 scan:
+Measured from the encoder's own formula (`Hub75Geometry::frameBytes`, pinned by [unit_Hub75Slots.cpp](../../../../test/unit/light/unit_Hub75Slots.cpp)), at 1/32 scan:
 
 | Panels | Geometry | 4-bit | 6-bit | Parlio (65,535 B cap) | LCD_CAM (internal RAM) |
 |---|---|---:|---:|:--|:--:|
@@ -28,9 +28,9 @@ Measured from the encoder's own formula (`Hub75Geometry::frameBytes`, pinned by 
 
 Two bytes a slot, since the bus word is 16 bits. **Four panels miss the Parlio cap even at 4-bit, by one byte**, so four panels are an LCD_CAM job at any depth, and Parlio carries one panel at up to 6-bit. The encoder offers 2 to 6 bits; 8-bit waits on repeating the upper planes (backlog).
 
-**This is the fact the issue does not account for.** #102 proposes the P4-Nano as lead candidate because Espressif's reference uses PARLIO, but [platform_esp32_parlio.cpp:238](../../../src/platform/esp32/platform_esp32_parlio.cpp) records the hardware cap: `kParlioMaxTransferBytes = 0x7FFFF / 8` = 65,535 bytes, width-invariant. PARLIO carries one panel comfortably, reaches its limit at four, and cannot do sixteen at any useful depth.
+**This is the fact the issue does not account for.** #102 proposes the P4-Nano as lead candidate because Espressif's reference uses PARLIO, but [platform_esp32_parlio.cpp:238](../../../../src/platform/esp32/platform_esp32_parlio.cpp) records the hardware cap: `kParlioMaxTransferBytes = 0x7FFFF / 8` = 65,535 bytes, width-invariant. PARLIO carries one panel comfortably, reaches its limit at four, and cannot do sixteen at any useful depth.
 
-The route that scales is the one the [shift-register analysis](../future/shift-register-driver-analysis.md) already established for a structurally identical problem: **i80/LCD_CAM, whose DMA reaches PSRAM**, proven on this exact path to 16,384 lights. `hasLcdCam` is true on S3, P4 and S31.
+The route that scales is the one the [shift-register analysis](../../future/shift-register-driver-analysis.md) already established for a structurally identical problem: **i80/LCD_CAM, whose DMA reaches PSRAM**, proven on this exact path to 16,384 lights. `hasLcdCam` is true on S3, P4 and S31.
 
 ### GPIO requirements
 
@@ -43,21 +43,21 @@ HUB75 is pin-hungry in a way the memory table hides. One port needs:
 | Control | `clk lat oe` | 3 |
 | | **Total** | **12-14** |
 
-Against the per-chip free sets in [gpio-usage.md](../../reference/hardware/gpio-usage.md), which exclude flash/PSRAM, input-only, USB, UART0 and strapping pins:
+Against the per-chip free sets in [gpio-usage.md](../../../reference/hardware/gpio-usage.md), which exclude flash/PSRAM, input-only, USB, UART0 and strapping pins:
 
 | Chip | Usable output GPIOs | 1/16 scan (13 pins) | 1/32 scan (14 pins) |
 |---|---:|:--:|:--:|
 | **ESP32-S3** (N16R8) | 16 | ✅ 3 spare | ✅ 2 spare |
 | **ESP32-P4** (P4-NANO) | 20 | ✅ 7 spare | ✅ 6 spare |
-| **ESP32-S31** | board-specific | take from the [coreboard reference](../../reference/hardware/esp32-s31-coreboard.md) | |
+| **ESP32-S31** | board-specific | take from the [coreboard reference](../../../reference/hardware/esp32-s31-coreboard.md) | |
 | **ESP32 classic** | 13 | ❌ | ❌ |
 
 **This settles the target list, and it removes a chip the issue implies.** The classic ESP32 has 13 usable output GPIOs and would need every one for a 1/16-scan port, leaving nothing for the LED strand, a button or a mic; a 1/32 panel does not fit at all. gpio-usage.md already records the same squeeze for 16-lane i80 ("a 16-lane set must borrow strap pins, and GPIO 12 is the flash-voltage strap: driving it at reset can brick the boot"). So HUB75 is an **S3, P4 and S31 feature**, and the classic is out on pins before memory is even considered.
 
 Two consequences for the plan:
 
-- **The board catalog entries in step 5 are load-bearing, not polish.** An S3 has exactly 3 spare pins at 1/16 scan, so a user picking 13 by hand will land on octal-PSRAM (33-37), USB (19-20), UART0 (43-44) or a strap (0, 3, 45, 46). [PinsModule](../../moonmodules/core/system.md) flags a conflict after the fact; a catalog entry prevents it.
-- **Defaults stay unset.** Even with the pins available, a default would guess the user's wiring. Same rule the LED drivers follow, and the P4's own history is the argument: its first LED-driver default landed on strapping pins ([lessons.md](../past/lessons.md)).
+- **The board catalog entries in step 5 are load-bearing, not polish.** An S3 has exactly 3 spare pins at 1/16 scan, so a user picking 13 by hand will land on octal-PSRAM (33-37), USB (19-20), UART0 (43-44) or a strap (0, 3, 45, 46). [PinsModule](../../../moonmodules/core/system.md) flags a conflict after the fact; a catalog entry prevents it.
+- **Defaults stay unset.** Even with the pins available, a default would guess the user's wiring. Same rule the LED drivers follow, and the P4's own history is the argument: its first LED-driver default landed on strapping pins ([lessons.md](../lessons.md)).
 
 ### Refresh
 
@@ -69,7 +69,7 @@ frame time = (height / 2) x bitDepth x line time
 refresh    = 1 / frame time
 ```
 
-Predicted at a 20 MHz shift clock (the rate the i80 path already runs, per the [shift-register analysis](../future/shift-register-driver-analysis.md)), ignoring latch overhead, so these are ceilings rather than promises:
+Predicted at a 20 MHz shift clock (the rate the i80 path already runs, per the [shift-register analysis](../../future/shift-register-driver-analysis.md)), ignoring latch overhead, so these are ceilings rather than promises:
 
 | Geometry | 4-bit | 6-bit | 8-bit |
 |---|---:|---:|---:|
@@ -85,11 +85,11 @@ Predicted at a 20 MHz shift clock (the rate the i80 path already runs, per the [
 
 ### The driver
 
-`Hub75Driver : DriverBase`, registered in [main.cpp](../../../src/main.cpp) beside the others, gated on `platform::hasLcdCam || platform::parlioLanes` so it is offered only where it can run — the same inert-on-wrong-chip rule [ParlioLedDriver](../../../src/light/drivers/ParlioLedDriver.h) follows. That gate happens to exclude the classic ESP32, which § GPIO requirements shows could not host a port anyway.
+`Hub75Driver : DriverBase`, registered in [main.cpp](../../../../src/main.cpp) beside the others, gated on `platform::hasLcdCam || platform::parlioLanes` so it is offered only where it can run — the same inert-on-wrong-chip rule [ParlioLedDriver](../../../../src/light/drivers/ParlioLedDriver.h) follows. That gate happens to exclude the classic ESP32, which § GPIO requirements shows could not host a port anyway.
 
 It is **not** a `LedPeripheral` backend. That seam is shaped around the parallel WS2812 orchestrator (`supportsPinExpander`, `lanesAvailable`, slot encoding), and HUB75 shares none of it: different wire protocol, different buffer shape, different control set. Reusing it would mean a base class whose every method one subclass ignores, which is the abstraction CLAUDE.md's minimalism rule exists to prevent. What they legitimately share is the **platform DMA seam**, and that is where the sharing belongs.
 
-Controls, all defaulting to unset because a soldered pin must never be guessed ([lessons.md](../past/lessons.md)):
+Controls, all defaulting to unset because a soldered pin must never be guessed ([lessons.md](../lessons.md)):
 
 | Control | Why |
 |---|---|
@@ -101,7 +101,7 @@ Controls, all defaulting to unset because a soldered pin must never be guessed (
 | `sPWM` | The [WLED-MM sPWM commit](https://github.com/MoonModules/WLED-MM/commit/778ae558) case |
 | `peripheral` | Which silicon block drives the panel, where the chip has more than one |
 
-**Geometry is not a driver control.** [PanelLayout](../../../src/light/layouts/PanelLayout.h) and [PanelsLayout](../../../src/light/layouts/PanelsLayout.h) already model a serpentine panel and an M×N tiling of them, with configurable axis order and per-axis direction. A layout emits coordinates and the driver owns pins: that separation is the architecture, and HUB75 must not re-litigate it. The issue asks for "UI features to set panel dimensions and arrangement", and the honest answer is that MoonLight already has them.
+**Geometry is not a driver control.** [PanelLayout](../../../../src/light/layouts/PanelLayout.h) and [PanelsLayout](../../../../src/light/layouts/PanelsLayout.h) already model a serpentine panel and an M×N tiling of them, with configurable axis order and per-axis direction. A layout emits coordinates and the driver owns pins: that separation is the architecture, and HUB75 must not re-litigate it. The issue asks for "UI features to set panel dimensions and arrangement", and the honest answer is that MoonLight already has them.
 
 ### The platform seam
 
@@ -115,7 +115,7 @@ bool     hub75Transmit(Hub75Handle& h, uint8_t buffer);
 void     hub75Deinit(Hub75Handle& h);
 ```
 
-Two backends behind it, and **the user picks which**, through a `peripheral` select exactly like the one [ParallelLedDriver](../../../src/light/drivers/ParallelLedDriver.h) already carries. Each backend self-registers at static init, and `main.cpp` links it only where its SOC macro says the silicon exists, so the dropdown's options are per-chip rather than a fixed list: LCD_CAM on an S3 or S31, LCD_CAM and PARLIO on a P4, nothing on a classic.
+Two backends behind it, and **the user picks which**, through a `peripheral` select exactly like the one [ParallelLedDriver](../../../../src/light/drivers/ParallelLedDriver.h) already carries. Each backend self-registers at static init, and `main.cpp` links it only where its SOC macro says the silicon exists, so the dropdown's options are per-chip rather than a fixed list: LCD_CAM on an S3 or S31, LCD_CAM and PARLIO on a P4, nothing on a classic.
 
 **An earlier draft of this plan had the platform choose, on memory alone. That was wrong, and the reason is contention rather than capacity.** A P4 has both peripherals and only one of each. A user driving WS2812 strips from PARLIO needs HUB75 on LCD_CAM; another user wants the reverse. Both are correct, the difference is what else is plugged into that board, and the platform cannot know it. The sibling claim guard stops two drivers colliding on one block, but it cannot guess which driver should win — that is the user's call, and a select is how the repo already asks it.
 
@@ -127,7 +127,7 @@ A desktop stub returning false from everything keeps `mm_tests` and every non-HU
 
 The one genuinely new piece: rendered RGB → bit-plane-major scan buffer. Per bit plane, per scan row, pack six colour bits per pixel-column into the parallel word alongside the row address and the latch/OE timing.
 
-This is the same class of work as [ParallelSlots.h](../../../src/light/drivers/ParallelSlots.h) (serialise a frame through a parallel bus under a DMA ceiling) and is testable the same way: a host unit test that walks a known pattern through the encoder and asserts the exact bytes, including a walking-one per colour line. The '595 investigation's hardest lesson was that an encoder proven byte-for-byte on the host still left a wall-visible artifact, so the test pins the encoder and hardware verification stays the PO's.
+This is the same class of work as [ParallelSlots.h](../../../../src/light/drivers/ParallelSlots.h) (serialise a frame through a parallel bus under a DMA ceiling) and is testable the same way: a host unit test that walks a known pattern through the encoder and asserts the exact bytes, including a walking-one per colour line. The '595 investigation's hardest lesson was that an encoder proven byte-for-byte on the host still left a wall-visible artifact, so the test pins the encoder and hardware verification stays the PO's.
 
 ## End states considered
 
@@ -146,7 +146,7 @@ This is the same class of work as [ParallelSlots.h](../../../src/light/drivers/P
 3. **`Hub75Driver`.** Controls, pin claims through the existing `PinsModule` registry, status line reporting geometry and achieved refresh, registration in `main.cpp`.
 4. **A backend registry, then the PARLIO backend.** The seam built in step 1 picks its peripheral internally; this turns it into an interface the driver selects, mirroring `LedPeripheral` without reusing it (that one is WS2812-shaped — same pattern, own interface). Then PARLIO behind it, and the `peripheral` select on the card. This REVISES step 1 rather than only adding to it.
 5. **Board catalog entries**: Adafruit S3 Portal, Waveshare RGB Matrix, Lilygo S3, ESP32-S3-16MB-PSRAM. Catalog data in `deviceModels.json`, not driver work, and it is what makes the feature findable.
-6. **Docs**: a how-to beside [panel-cards.md](../../reference/hardware/panel-cards.md), the driver's catalog card, and a line in panel-cards.md saying which of the two paths a given wall wants.
+6. **Docs**: a how-to beside [panel-cards.md](../../../reference/hardware/panel-cards.md), the driver's catalog card, and a line in panel-cards.md saying which of the two paths a given wall wants.
 
 Steps 1-3 are the shippable unit. Steps 4-6 each stand alone.
 
@@ -178,7 +178,7 @@ The PO's MoonHub75 (a LILYGO T7-S3 on the passive adapter) drove a 64×64 1/32-s
 ## Risks
 
 - **Refresh at depth may disappoint on 16 panels.** The encoder cost is linear in bit planes and the scan is serial. **Settled by publishing the prediction, not by measuring first**: § Refresh computes the ceiling per geometry and depth, the driver reports what it actually achieves, and the docs name PanelCard as the path above whatever that turns out to be. A user meets the limit with an explanation rather than a surprise.
-- **The [48×256 white-flash](../future/backlog-light.md) is open on the i80 path.** Six theories ruled out, cause unfound. A HUB75 driver rides the same peripheral, so it may inherit it. **Settled by shipping and watching**: Phase 1 targets 1-4 panels, a size at which the flash has never been seen, so it does not block. If a tester on a large HUB75 wall reports it, that is the seventh theory the backlog entry is missing — the flash following a non-WS2812 encoder through the same peripheral would exonerate the WS2812 slot encoding, which six hardware tests could not do.
+- **The [48×256 white-flash](../../future/backlog-light.md) is open on the i80 path.** Six theories ruled out, cause unfound. A HUB75 driver rides the same peripheral, so it may inherit it. **Settled by shipping and watching**: Phase 1 targets 1-4 panels, a size at which the flash has never been seen, so it does not block. If a tester on a large HUB75 wall reports it, that is the seventh theory the backlog entry is missing — the flash following a non-WS2812 encoder through the same peripheral would exonerate the WS2812 slot encoding, which six hardware tests could not do.
 - **Pin count is the tightest constraint on the classic ESP32 and shapes the target list.** See § GPIO requirements: the classic cannot host a full port without a strap pin, so it is excluded rather than half-supported.
 
 ## What this plan does not do

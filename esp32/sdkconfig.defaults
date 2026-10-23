@@ -116,3 +116,19 @@ CONFIG_PARLIO_OBJ_CACHE_SAFE=y
 
 # The SPI master's interrupt in flash, not IRAM: no SPI user here needs it while the flash cache is off, and IRAM is the classic's scarcest memory.
 CONFIG_SPI_MASTER_ISR_IN_IRAM=n
+
+# Internal RAM is kept for what DMA and the cache-off paths need (Plan Internal RAM on the ESP32).
+# WiFi, lwIP and TLS buffers in PSRAM; both depend on PSRAM in Kconfig, so a board without it drops them.
+CONFIG_SPIRAM_TRY_ALLOCATE_WIFI_LWIP=y
+CONFIG_MBEDTLS_EXTERNAL_MEM_ALLOC=y
+# A chain served through a cross-signed root, as every Google Trust Services site serves GTS Root R4 under GlobalSign, verifies against the bundled root anywhere in the chain rather than only the last issuer.
+CONFIG_MBEDTLS_CERTIFICATE_BUNDLE_CROSS_SIGNED_VERIFY=y
+# No reserve pool: it carves 32 KB from the main internal region, which capped the largest block at 31 KB; the 100 KB free floor is the net instead.
+CONFIG_SPIRAM_MALLOC_RESERVE_INTERNAL=0
+# Every plain malloc asks PSRAM first; what an interrupt reads with the cache off asks for internal RAM by capability (platform::InternalRamObject).
+CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL=0
+# WiFi's hot paths run from flash rather than internal RAM (step 4): about 15 to 20 KB, at some WiFi throughput.
+CONFIG_ESP_WIFI_IRAM_OPT=n
+CONFIG_ESP_WIFI_RX_IRAM_OPT=n
+# WiFi keeps no copy of its config in NVS: the WiFi card hands it the credentials at every join, and the copy cost 4.9 KB of internal RAM.
+CONFIG_ESP_WIFI_NVS_ENABLED=n

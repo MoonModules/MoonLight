@@ -5,8 +5,8 @@
 # ///
 """Generate the test registry: every unit test and scenario by a derived id, sharded by subject.
 
-The registry is the test engine's index (docs/work/present/Plan-20261020 - Test engine.md, its schema is
-tests.schema.json). `index.json` lists the subjects with their counts and `<subject>.json` holds the tests about
+The registry is the test engine's index, its schema tests.schema.json (the plan that designed it, Test engine,
+lives in docs/work while it is open). `index.json` lists the subjects with their counts and `<subject>.json` holds the tests about
 one subject, so a page or a device fetches only what it opens, as MoonWalk fetches a process's text. The docs build
 publishes them; run as a script, it writes only the tests of each process step, for the preview server.
 

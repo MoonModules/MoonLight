@@ -63,6 +63,22 @@ def builtins():
     return sorted(widest.items())
 
 
+def json_builtins():
+    """The JSON builtins, typed: (name, return type, parameter types), from `addJsonBuiltins`.
+
+    Each registration carries which arguments are documents (`jsonArgs`) and which are quoted text (`byStr`), so the C++ signature follows from the table as the compiler's own checks do.
+    """
+    found = []
+    for path in BUILTINS:
+        text = path.read_text(encoding="utf-8")
+        for name, argc, jargs, sargs, jret in re.findall(
+                r'add\("(\w+)",\s*(\d+),\s*&\w+,\s*0x([0-9A-Fa-f]+),\s*0x([0-9A-Fa-f]+),\s*(true|false)', text):
+            j, st = int(jargs, 16), int(sargs, 16)
+            params = ["json" if j >> i & 1 else "string" if st >> i & 1 else "int" for i in range(int(argc))]
+            found.append((name, "json" if jret == "true" else "int", params))
+    return found
+
+
 def structs():
     """Every struct type the tables register: (name, field type, field names), from `addStruct`."""
     found = []
@@ -91,6 +107,8 @@ def prelude() -> str:
         "using byte = uint8_t;",
         "using fixed = int32_t;",
         "using string = const char*;",
+        # A document's handle, which a string literal converts into as the compiler parses one.
+        "struct json { json() = default; json(string) {} };",
     ]
     for v in SYSVARS:
         lines.append(f"inline int {v} = 0;")
@@ -104,6 +122,13 @@ def prelude() -> str:
     # int-only form cannot express a string, and emitting both makes the call ambiguous rather than
     # resolving it.
     byString = {"addControl", "addSelect", "setControl"}
+    typed = json_builtins()
+    assert typed, "no JSON builtins parsed: the addJsonBuiltins shape changed"
+    for name, ret, params in typed:
+        # `json(text)` is the type's own converting constructor in C++, which the struct above declares.
+        if name != "json":
+            lines.append(f"{ret} {name}({', '.join(params)});")
+    byString |= {name for name, _, _ in typed}
     for name, argc in builtins():
         if name in byString:
             continue

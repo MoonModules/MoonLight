@@ -101,13 +101,27 @@ The light domain plugs into the UI at three points. **A fixed top-level tree**: 
 Only abstract what you need:
 
 - **Time**: `millis()`, `micros()`. Monotonic, microsecond resolution. (`esp_timer` / `std::chrono`)
-- **Memory**: `alloc(size)`, `free(ptr)`. Prefers PSRAM on ESP32, falls back to regular heap. `freeHeap()`, `maxAllocBlock()` for diagnostics. (`heap_caps_malloc` / `std::malloc`)
+- **Memory**: `alloc(size)`, `free(ptr)`. Prefers PSRAM on ESP32, falls back to regular heap; `allocInternal(size)` where only internal RAM will do (see [Internal RAM](#internal-ram)). `freeHeap()`, `maxAllocBlock()` for diagnostics. (`heap_caps_malloc` / `std::malloc`)
 - **Executable memory**: `allocExec(size)` / `freeExec(ptr, size)` allocate memory the CPU can *fetch and execute* from, and `writeExec(dst, src, len)` copies emitted machine code into it safely. Used by the MoonLive live-script engine (below) to place the native code it compiles. All the W^X and instruction-cache quirks live behind these three functions. On ESP32 that is IRAM via `MALLOC_CAP_EXEC`, with 32-bit-aligned stores and a cache sync so the core fetches fresh code. On POSIX desktops it is an `mmap` `PROT_EXEC` page, with `MAP_JIT` and a write-protect toggle on macOS-arm64. On Windows it is a `VirtualAlloc` `PAGE_EXECUTE_READWRITE` page plus `FlushInstructionCache`. (`heap_caps_malloc(MALLOC_CAP_EXEC)` / `mmap` / `VirtualAlloc`)
 - **Networking**: `UdpSocket` for ArtNet send. `TcpConnection` / `TcpServer` for HTTP + WebSocket; `TcpConnection::writeSome` is a non-blocking partial write (returns bytes written, 0 = would-block) so a backpressured browser can't stall the render loop. (lwIP sockets / BSD sockets)
 - **Scheduling**: `yield()` (cooperative yield to OS/RTOS), `delayMs(ms)` (blocking sleep, off-path only), `delayUs(us)` (a microsecond busy-wait, only for sub-millisecond hardware timing a driver owns, such as the WS2812 300 µs inter-frame latch in `RmtLedDriver`), and `reboot()`. General pacing uses the non-blocking `millis()` gate instead. (`vTaskDelay` / `esp_rom_delay_us` / `esp_restart` on ESP32; `std::this_thread::sleep_for` / `std::exit` on desktop)
 - **Platform config**: `platform_config.h` per platform: compile-time constants like `hasPsram` and `hasWiFi`. Each platform provides its own version; `types.h` includes it without `#ifdef`. Core code branches on these via `if constexpr` (such as NetworkModule drops its WiFi cascade when `hasWiFi` is false), so the dead branch is removed from the binary with no `#ifdef` outside `src/platform/`.
 
 Abstractions are added when a concrete implementation needs them, not pre-designed.
+
+### Internal RAM
+
+On an ESP32 internal RAM is the scarce memory. WiFi, lwIP, the task stacks and every DMA buffer need it, while a board with PSRAM has megabytes of the other kind. **Whatever can live in PSRAM does.** Internal RAM is kept for what cannot leave it:
+
+- **What a DMA engine reads**, the LED drivers' buffers.
+- **What a cache-safe interrupt reads.** PSRAM sits behind the flash cache, and a flash write on either core switches that cache off, even in the middle of an interrupt on the other core. So the interrupt's data comes from `platform::allocInternal`, and an object it reads inherits `platform::InternalRamObject`, whose `new` places it there. `ParallelLedDriver` and `MoonI80Peripheral` are the examples; the LCD-MM ring refuses to run when what its refill reads fell back to PSRAM, rather than fault at the next save.
+- **The code and stacks of those paths.**
+
+Everything else asks for PSRAM first: a module through `MoonModule`'s `operator new`, a buffer through `platform::alloc`, a plain `malloc` through `CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL=0`. WiFi, lwIP and TLS do so through their options in `esp32/sdkconfig.defaults`, where each option carries its reason.
+
+**The floor.** `platform::kInternalFreeFloor`, 100 KB, is the internal RAM a board with PSRAM keeps free for WiFi, HTTP and the UI. Its largest free block stays at 50 KB, for a TLS handshake or a state send. What would take the rest respects it. LCD-MM's `ringAuto` sizes its ring by the lead the wire needs and stops at the floor. The HTTP server queues a send on a socket only while internal RAM stays above half of it, so a slow client waits rather than draining the board. `scenario_RAM_floor` holds the floor with the UI open on the S3 and the P4.
+
+**A board without PSRAM** runs the same calls, which fall back to internal RAM. Its network buffers then share that RAM, so it holds no floor, and the send back-pressure is what keeps an open UI on a weak link from exhausting it. The measurements are in [performance.md](../../reference/performance.md#internal-ram).
 
 **Platform boundary (hard rule).** All `#ifdef`, `#if defined`, platform-specific `#include`s, and hardware API calls live exclusively in `src/platform/`. Everything outside `src/platform/` compiles on every target without modification. Compile-time platform branching uses `if constexpr` on `platform_config.h` flags, never a preprocessor `#ifdef`. **Domain boundary.** A file in `src/core` includes nothing from `src/light`: core declares an interface, and the light domain implements and registers it.
 

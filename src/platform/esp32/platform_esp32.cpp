@@ -127,6 +127,7 @@
 
 #include <atomic>
 #include <cstdarg>
+#include <cstddef>   // std::max_align_t, the alignment allocInternal asks for
 #include <cstdlib>
 #include <cstdio>
 #include <algorithm>   // std::min
@@ -171,7 +172,8 @@ void* alloc(size_t bytes) {
 
 void* allocInternal(size_t bytes) {
     // Internal only, no PSRAM fallback here, the caller chose this seam because PSRAM latency breaks it (an ISR-read buffer); a silent PSRAM grant would hand back the exact problem. Caller falls back.
-    return heap_caps_malloc(bytes, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    // Aligned as malloc promises, since InternalRamObject constructs objects here and the heap alone guarantees only a word.
+    return heap_caps_aligned_alloc(alignof(std::max_align_t), bytes, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
 }
 
 bool ptrIsPsram(const void* p) {
@@ -335,7 +337,7 @@ const char* chipModel() {
 
 uint32_t IRAM_ATTR cycleCount() { return esp_cpu_get_cycle_count(); }
 
-uint8_t currentCore() { return static_cast<uint8_t>(xPortGetCoreID()); }
+uint8_t IRAM_ATTR currentCore() { return static_cast<uint8_t>(xPortGetCoreID()); }
 
 const char* cpuInfo() {
     // Frequency from the running clock (esp_rom_get_cpu_ticks_per_us == MHz), not the sdkconfig macro, so a config/hardware mismatch shows up. Cores from esp_chip_info, same source chipModel uses.

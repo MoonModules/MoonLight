@@ -454,8 +454,8 @@ TEST_CASE("a brightness change does not rescan the palette scripts; a palette fi
 
     drivers.onFileChanged("/moonlive/mine.mlp");     // what a write through the API announces
     CHECK(paletteOptions(drivers) == before + 1);
-    CHECK(mm::Drivers::touchesFolder("/", "/moonlive"));             // a restore of everything
-    CHECK_FALSE(mm::Drivers::touchesFolder("/moonlivex/a.mlp", "/moonlive"));
+    CHECK(mm::moonlive::pathTouchesFolder("/", "/moonlive"));             // a restore of everything
+    CHECK_FALSE(mm::moonlive::pathTouchesFolder("/moonlivex/a.mlp", "/moonlive"));
     std::filesystem::remove_all(root);
 }
 
@@ -535,4 +535,27 @@ TEST_CASE("the lights rise to their brightness after a device boot, and a host p
     mm::platform::setTestNowMs(mm::platform::kBootStableMs + mm::Drivers::kSoftStartMs / 2);
     CHECK(dark.effectiveBrightness() == 100);
     layouts.removeChild(&grid);
+}
+
+// Regression: a palette script edited, or downloaded by an open page, stayed on its old program until a control changed.
+TEST_CASE("the running palette script compiles again when its file changes") {
+    mm::platform::fsMkdir(mm::moonlive::kScriptDir);
+    const char* good = "class P {\n  void tick() { setPalEntry(0, 1, 2, 3); }\n}\n";
+    REQUIRE(mm::platform::fsWriteAtomic("/moonlive/unit-live.mlp", good, std::strlen(good)));
+    mm::Drivers drivers;
+    drivers.defineControls();
+    const int i = mm::test::controlIndex(drivers, "paletteScript");
+    REQUIRE(i >= 0);
+    REQUIRE(mm::applyControlValue(drivers.controls()[static_cast<uint8_t>(i)], "{\"value\":\"unit-live.mlp\"}",
+                                  "value", mm::ApplyPolicy::Clamp) == mm::ApplyResult::Ok);
+    drivers.onControlChanged("paletteScript");
+    REQUIRE(drivers.status() != nullptr);
+    CHECK(drivers.severity() == mm::MoonModule::Severity::Status);   // compiled: a status, not an error
+    const char* broken = "class P {\n  void tick() { nosuch(); }\n}\n";
+    REQUIRE(mm::platform::fsWriteAtomic("/moonlive/unit-live.mlp", broken, std::strlen(broken)));
+    drivers.onFileChanged("/moonlive/unit-live.mlp");          // what a file write announces
+    REQUIRE(drivers.status() != nullptr);
+    CHECK(std::strstr(drivers.status(), "unknown function") != nullptr);
+    CHECK(drivers.severity() == mm::MoonModule::Severity::Error);
+    mm::platform::fsRemove("/moonlive/unit-live.mlp");
 }

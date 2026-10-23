@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core/util/format.h"   // formatTo: nonblocking formatting into a fixed buffer
+#include "core/util/fnv.h"      // fnv1a: the sync hosts, compared as one number
 #include "core/util/Addressing.h"   // sendAddressed: the multicast rule every sender shares
 #include "core/util/HostList.h"     // the boards a unicast send goes to
 #include "core/util/HostResolver.h" // a named board's address, looked up off the render thread
@@ -267,12 +268,18 @@ public:
     void prepare() override {
         micSeat_.claim();       // the first live instance wins the seat, in any mode
         if (mode == kLocalMode) {
-            reinit();           // only this mode runs a peripheral
+            // Only this mode runs a peripheral, reopened only when a setting it was opened with changed: a rebuild for another module must not cut the audio.
+            if (!inited_ || micConfig() != openedWith_) reinit();
         } else {
             deinit();           // the others free the channel and its pins
             clearStatus();      // a mic diagnosis would otherwise linger in a mode with no mic
         }
-        syncReinit();
+        // The socket likewise, rebound only when what it binds to changed.
+        if (!syncSet_ || syncConfig() != syncedWith_) {
+            syncReinit();
+            syncedWith_ = syncConfig();
+            syncSet_ = true;
+        }
         parseSyncHosts();
     }
     /// One-time wiring only: the acquire and the election live in the build.
@@ -485,6 +492,25 @@ private:
 
     platform::AudioMicHandle mic_;
     bool inited_ = false;
+    /// What the microphone is opened with, so a prepare that changed none of it keeps it open.
+    struct MicConfig {
+        uint8_t device, micMode, sampleRateSel, codec, codecAddr;
+        int8_t sck, ws, sd, mclk;
+        bool operator==(const MicConfig&) const = default;
+    };
+    MicConfig micConfig() const { return {device, micMode, sampleRateSel, codec, codecAddr, sckPin, wsPin, sdPin, mclkPin}; }
+    MicConfig openedWith_{};
+    /// What the sync socket is set up for, so a prepare that changed none of it keeps it bound.
+    struct SyncConfig {
+        uint8_t mode, addressing;
+        bool send;
+        uint16_t port;
+        uint32_t hosts;
+        bool operator==(const SyncConfig&) const = default;
+    };
+    SyncConfig syncConfig() const { return {mode, addressing, send, syncPort, fnv1a(hosts, std::strlen(hosts))}; }
+    SyncConfig syncedWith_{};
+    bool syncSet_ = false;
     uint32_t codecBusGen_ = 0;   ///< the bus generation the codec last attached to, so a moved bus re-attaches it
     size_t filled_ = 0;         // samples accumulated toward the next full block
     DcBlocker dc_;              // ~40 Hz high-pass, continuous across blocks
@@ -535,6 +561,7 @@ private:
     /// (Re)create the I2S channel for the current pins + rate.
     void reinit() {
         codecBusGen_ = platform::i2cBusGeneration();   // every path through here has seen this bus, so tick1s waits for the next change
+        openedWith_ = micConfig();                     // the settings this attempt opens with
         if constexpr (platform::hasAudioCapture) {
             // Desktop:
             deinit();

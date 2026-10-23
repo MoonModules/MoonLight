@@ -555,7 +555,7 @@ TEST_CASE("pinExpander degrades to direct on a peripheral that can't host it, ke
 
 // Regression: the i80 clock/DC defaults were 10/11, free GPIOs on the ESP32-S3 they were chosen on and the FLASH bus (6-11) on a classic ESP32. On an ESP32-PICO-V3-02 (QuinLED Dig-Next-2) every pin list wedged the board the moment it was applied: a TG1WDT_SYS_RESET with both CPUs stuck at the same PC, no panic and no coredump, so nothing named the pin. The defaults are now chosen per chip off the same `i2sLanes > 0` discriminator dmaBudgetBytes() uses, and reinit() refuses any reserved bus pin outright rather than routing I/O onto flash.
 TEST_CASE("the i80 clock and DC defaults never land on a chip's flash pins") {
-    mm::I80Peripheral p;
+    mm::ParallelLedDriver p;   // the wiring is the driver's, whichever peripheral drives it
     // Classic ESP32 reserves 6-11 for flash; every other supported chip has 10/11 free. Whichever build this is, the defaults must sit outside that range on the classic path.
     if constexpr (mm::platform::i2sLanes > 0) {  // compiles out on every desktop build; flash pins are a classic-ESP32 property
         CHECK(p.clockPin != 10);
@@ -603,8 +603,8 @@ TEST_CASE("a full-width bus still refuses a WR or DC pin wired to flash") {
     mm::I80Peripheral peripheral;
     mm::Buffer src;
     mm::Correction corr;
-    peripheral.clockPin = 10;
-    peripheral.dcPin    = 11;                              // DC on the reserved pin
+    d.clockPin = 10;
+    d.dcPin    = 11;                              // DC on the reserved pin
     d.setPeripheralForTest(&peripheral);
     std::strcpy(d.pins, "10,20,21,22,23,24,25,26");        // full 8-wide bus: no spare lane for WR
     d.pinExpander = false;
@@ -621,8 +621,8 @@ TEST_CASE("a full-width bus still refuses a WR or DC pin wired to flash") {
     CHECK(std::strstr(d.status(), "dcPin") != nullptr);
     CHECK(std::strstr(d.status(), "flash") != nullptr);
 
-    peripheral.clockPin = 11;                              // and the same for WR
-    peripheral.dcPin    = 10;
+    d.clockPin = 11;                                       // and the same for WR
+    d.dcPin    = 10;
     d.applyState();
     REQUIRE(d.status() != nullptr);
     CHECK(std::strstr(d.status(), "clockPin") != nullptr);

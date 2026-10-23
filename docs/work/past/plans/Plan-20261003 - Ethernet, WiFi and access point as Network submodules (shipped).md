@@ -150,7 +150,7 @@ Waiting for more devices and a cable:
 
 ## Out of scope at first
 
-The advanced settings users will ask for sooner or later are listed in the backlog's [advanced network settings](../future/backlog-core.md) item: roaming, enterprise WiFi, pinning to one access point, power save, the country code, the access point's address, and IPv6 beyond link-local.
+The advanced settings users will ask for sooner or later are listed in the backlog's [advanced network settings](../../future/backlog-core.md) item: roaming, enterprise WiFi, pinning to one access point, power save, the country code, the access point's address, and IPv6 beyond link-local.
 
 ## Decided
 

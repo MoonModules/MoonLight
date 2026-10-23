@@ -84,7 +84,7 @@ Every activity is a [MoonWalk](docs/moonwalk.md) process, the one home of its st
 
 ### Main and branch
 
-**The product owner creates every branch**, and main stays releasable: [the branch](docs/moonwalk.md#branch). A change goes from [a spec and a plan](docs/moonwalk.md#pick-spec-plan) to a pull request the plan describes. **Deleting the plan is the product owner's call**, because "the code is written" is not "the plan is realized".
+**The product owner creates every branch**, and main stays releasable: [the branch](docs/moonwalk.md#branch). A change goes from [a spec and a plan](docs/moonwalk.md#pick-spec-plan) to a pull request the plan describes. **Moving the plan to `docs/work/past/plans/` is the product owner's call**, because "the code is written" is not "the plan is realized".
 
 **A contributed pull request is one topic, max 400 changed lines and ten files**, tests included, based on main: [Contribute a pull request](docs/moonwalk.md#contribute-pr). The contributor vouches for every line, agent-written or not, answers reviewers in their own words, and says what an agent wrote and what was tested. **A contribution is reviewed and finished as [Review and finish a contribution](docs/moonwalk.md#review-contribution) describes**. The contributor fixes their own code first and the maintainer finishes, case by case. The merge keeps their commits and authorship.
 

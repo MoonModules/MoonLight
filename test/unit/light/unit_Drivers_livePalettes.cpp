@@ -192,10 +192,10 @@ TEST_CASE("a factory palette keeps its number whether the device holds it or not
 }
 
 // The StadBeest autopilot picks its fire palette by number, so a palette added before it in the list must move this test and that script together.
-TEST_CASE("the StadBeest fire palette is number 64, the one its autopilot picks") {
+TEST_CASE("the StadBeest fire palette is number 65, the one its autopilot picks") {
     int index = -1;
     for (size_t c = 0; c < mm::moonlive::kPaletteCatalogCount; c++)
         if (std::strcmp(mm::moonlive::kPaletteCatalog[c], "stadbeest-fire.mlp") == 0) index = static_cast<int>(c);
     REQUIRE(index >= 0);
-    CHECK(mm::palettes::kCount + index == 64);   // moonlive/services/stadbeest-autopilot.mls: palette = 64
+    CHECK(mm::palettes::kCount + index == 65);   // moonlive/projects/stadbeest/stadbeest-autopilot.mls: palette = 65
 }

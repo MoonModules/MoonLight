@@ -73,16 +73,16 @@ public:
     virtual bool busTransmitRing() { return false; }
     /// Is the live bus a streaming ring?
     virtual bool busIsRing() const MM_NONBLOCKING { return false; }
+    /// Can this backend stream a ring, so the driver shows the ring's settings? Default: no.
+    virtual bool supportsRing() const { return false; }
     /// Should reinit build a ring for the current config instead of the whole-frame path?
     virtual bool wantsRing() const { return false; }
     /// The ring's active-mode label for the status line, or nullptr for the whole-frame path.
     virtual const char* busRingMode() const { return nullptr; }
-    /// Append this peripheral's ring controls into the shared list. Default: none.
+    /// Append this peripheral's ring instrument into the shared list; the ring's settings are the driver's. Default: none.
     virtual void addRingControls(ControlList& /*controls*/) {}
     /// Refresh any peripheral-specific read-only KPIs (the ring diagnostic). Default: none.
     virtual void refreshBusKpi() {}
-    /// Is the core-0 fork-join snapshot helper up (dual-core prime)? Default: no helper.
-    virtual bool snapHelperReady() const { return false; }
 
     /// Append this peripheral's own bus-pin controls into the shared list.
     virtual void addBusControls(ControlList& /*controls*/) {}

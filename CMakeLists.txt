@@ -131,6 +131,7 @@ find_program(UV_EXECUTABLE NAMES uv REQUIRED
 add_library(mm_core STATIC
     src/core/module/Control.cpp
     src/core/util/JsonUtil.cpp
+    src/core/util/JsonFetch.cpp
     src/core/util/parse.cpp
     src/core/util/ScratchBuffer.cpp
     src/core/system/HttpServerModule.cpp
@@ -262,12 +263,9 @@ add_custom_target(ui_embed DEPENDS ${CMAKE_SOURCE_DIR}/src/ui/ui_embedded.h)
 # library while the device holds only what someone actually picked. Globbed, so the DEPENDS is the
 # directory contents rather than a file list that would drift; CONFIGURE_DEPENDS re-globs when a
 # script is added or removed.
-file(GLOB MOONLIVE_SCRIPTS CONFIGURE_DEPENDS
-     ${CMAKE_SOURCE_DIR}/moonlive/effects/*.mle
-     ${CMAKE_SOURCE_DIR}/moonlive/layouts/*.mll
-     ${CMAKE_SOURCE_DIR}/moonlive/modifiers/*.mlm
-     ${CMAKE_SOURCE_DIR}/moonlive/services/*.mls
-     ${CMAKE_SOURCE_DIR}/moonlive/palettes/*.mlp)
+file(GLOB_RECURSE MOONLIVE_SCRIPTS CONFIGURE_DEPENDS
+     ${CMAKE_SOURCE_DIR}/moonlive/*.mle ${CMAKE_SOURCE_DIR}/moonlive/*.mll ${CMAKE_SOURCE_DIR}/moonlive/*.mlm
+     ${CMAKE_SOURCE_DIR}/moonlive/*.mls ${CMAKE_SOURCE_DIR}/moonlive/*.mlp)
 # The file LIST itself is a dependency, not just each file's timestamp: DEPENDS notices an edited
 # script but not a DELETED one, so removing a script left it in the catalog and the device went on
 # offering a name that no longer exists upstream. The stamp is written at configure time from the

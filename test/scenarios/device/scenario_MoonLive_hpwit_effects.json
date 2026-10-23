@@ -1,0 +1,392 @@
+{
+  "name": "scenario_MoonLive_hpwit_effects",
+  "module": "MoonLiveEffect",
+  "also": [
+    "Layer",
+    "Effects"
+  ],
+  "mode": "mutate",
+  "live_only": true,
+  "description": "Each of hpwit's MoonLive effects alone in one layer over the board's own layout and drivers: its frame time, free internal RAM and largest block, read against the rig with no effect. Each waits 10 s, past the slower seconds that follow a change. The scripts are staged from the repository and removed afterwards, and only the effects are replaced.",
+  "top": [
+    "Effects"
+  ],
+  "steps": [
+    {
+      "name": "stage-edge-comets",
+      "op": "write_file",
+      "path": "/moonlive/edge-comets.mle",
+      "from": "moonlive/projects/hpwit/edge-comets.mle"
+    },
+    {
+      "name": "stage-fire",
+      "op": "write_file",
+      "path": "/moonlive/fire.mle",
+      "from": "moonlive/projects/hpwit/fire.mle"
+    },
+    {
+      "name": "stage-mandala",
+      "op": "write_file",
+      "path": "/moonlive/mandala.mle",
+      "from": "moonlive/projects/hpwit/mandala.mle"
+    },
+    {
+      "name": "stage-particle-fountain",
+      "op": "write_file",
+      "path": "/moonlive/particle-fountain.mle",
+      "from": "moonlive/projects/hpwit/particle-fountain.mle"
+    },
+    {
+      "name": "stage-plasma-ring",
+      "op": "write_file",
+      "path": "/moonlive/plasma-ring.mle",
+      "from": "moonlive/projects/hpwit/plasma-ring.mle"
+    },
+    {
+      "name": "stage-plasma-wander",
+      "op": "write_file",
+      "path": "/moonlive/plasma-wander.mle",
+      "from": "moonlive/projects/hpwit/plasma-wander.mle"
+    },
+    {
+      "name": "stage-ripple-rings",
+      "op": "write_file",
+      "path": "/moonlive/ripple-rings.mle",
+      "from": "moonlive/projects/hpwit/ripple-rings.mle"
+    },
+    {
+      "name": "stage-spinning-squares",
+      "op": "write_file",
+      "path": "/moonlive/spinning-squares.mle",
+      "from": "moonlive/projects/hpwit/spinning-squares.mle"
+    },
+    {
+      "name": "stage-twinkle-stars",
+      "op": "write_file",
+      "path": "/moonlive/twinkle-stars.mle",
+      "from": "moonlive/projects/hpwit/twinkle-stars.mle"
+    },
+    {
+      "name": "stage-voronoi",
+      "op": "write_file",
+      "path": "/moonlive/voronoi.mle",
+      "from": "moonlive/projects/hpwit/voronoi.mle"
+    },
+    {
+      "name": "effects-clear",
+      "op": "apply_state",
+      "document": {
+        "Effects": {
+          "$patch": "replace"
+        }
+      }
+    },
+    {
+      "name": "no-effect",
+      "description": "The rig with no effect: the baseline each script's cost is read against.",
+      "op": "measure",
+      "measure": true,
+      "settle": 10
+    },
+    {
+      "name": "edge-comets-clear",
+      "op": "apply_state",
+      "document": {
+        "Effects": {
+          "$patch": "replace"
+        }
+      }
+    },
+    {
+      "name": "edge-comets",
+      "description": "`edge-comets.mle` alone in one layer over the whole rig.",
+      "op": "apply_state",
+      "measure": true,
+      "document": {
+        "Effects": {
+          "Layer": {
+            "type": "Layer",
+            "FX": {
+              "type": "MoonLiveEffect",
+              "script": "edge-comets.mle"
+            }
+          }
+        }
+      },
+      "settle": 10,
+      "read": [
+        "FX.tick"
+      ]
+    },
+    {
+      "name": "fire-clear",
+      "op": "apply_state",
+      "document": {
+        "Effects": {
+          "$patch": "replace"
+        }
+      }
+    },
+    {
+      "name": "fire",
+      "description": "`fire.mle` alone in one layer over the whole rig.",
+      "op": "apply_state",
+      "measure": true,
+      "document": {
+        "Effects": {
+          "Layer": {
+            "type": "Layer",
+            "FX": {
+              "type": "MoonLiveEffect",
+              "script": "fire.mle"
+            }
+          }
+        }
+      },
+      "settle": 10,
+      "read": [
+        "FX.tick"
+      ]
+    },
+    {
+      "name": "mandala-clear",
+      "op": "apply_state",
+      "document": {
+        "Effects": {
+          "$patch": "replace"
+        }
+      }
+    },
+    {
+      "name": "mandala",
+      "description": "`mandala.mle` alone in one layer over the whole rig.",
+      "op": "apply_state",
+      "measure": true,
+      "document": {
+        "Effects": {
+          "Layer": {
+            "type": "Layer",
+            "FX": {
+              "type": "MoonLiveEffect",
+              "script": "mandala.mle"
+            }
+          }
+        }
+      },
+      "settle": 10,
+      "read": [
+        "FX.tick"
+      ]
+    },
+    {
+      "name": "particle-fountain-clear",
+      "op": "apply_state",
+      "document": {
+        "Effects": {
+          "$patch": "replace"
+        }
+      }
+    },
+    {
+      "name": "particle-fountain",
+      "description": "`particle-fountain.mle` alone in one layer over the whole rig.",
+      "op": "apply_state",
+      "measure": true,
+      "document": {
+        "Effects": {
+          "Layer": {
+            "type": "Layer",
+            "FX": {
+              "type": "MoonLiveEffect",
+              "script": "particle-fountain.mle"
+            }
+          }
+        }
+      },
+      "settle": 10,
+      "read": [
+        "FX.tick"
+      ]
+    },
+    {
+      "name": "plasma-ring-clear",
+      "op": "apply_state",
+      "document": {
+        "Effects": {
+          "$patch": "replace"
+        }
+      }
+    },
+    {
+      "name": "plasma-ring",
+      "description": "`plasma-ring.mle` alone in one layer over the whole rig.",
+      "op": "apply_state",
+      "measure": true,
+      "document": {
+        "Effects": {
+          "Layer": {
+            "type": "Layer",
+            "FX": {
+              "type": "MoonLiveEffect",
+              "script": "plasma-ring.mle"
+            }
+          }
+        }
+      },
+      "settle": 10,
+      "read": [
+        "FX.tick"
+      ]
+    },
+    {
+      "name": "plasma-wander-clear",
+      "op": "apply_state",
+      "document": {
+        "Effects": {
+          "$patch": "replace"
+        }
+      }
+    },
+    {
+      "name": "plasma-wander",
+      "description": "`plasma-wander.mle` alone in one layer over the whole rig.",
+      "op": "apply_state",
+      "measure": true,
+      "document": {
+        "Effects": {
+          "Layer": {
+            "type": "Layer",
+            "FX": {
+              "type": "MoonLiveEffect",
+              "script": "plasma-wander.mle"
+            }
+          }
+        }
+      },
+      "settle": 10,
+      "read": [
+        "FX.tick"
+      ]
+    },
+    {
+      "name": "ripple-rings-clear",
+      "op": "apply_state",
+      "document": {
+        "Effects": {
+          "$patch": "replace"
+        }
+      }
+    },
+    {
+      "name": "ripple-rings",
+      "description": "`ripple-rings.mle` alone in one layer over the whole rig.",
+      "op": "apply_state",
+      "measure": true,
+      "document": {
+        "Effects": {
+          "Layer": {
+            "type": "Layer",
+            "FX": {
+              "type": "MoonLiveEffect",
+              "script": "ripple-rings.mle"
+            }
+          }
+        }
+      },
+      "settle": 10,
+      "read": [
+        "FX.tick"
+      ]
+    },
+    {
+      "name": "spinning-squares-clear",
+      "op": "apply_state",
+      "document": {
+        "Effects": {
+          "$patch": "replace"
+        }
+      }
+    },
+    {
+      "name": "spinning-squares",
+      "description": "`spinning-squares.mle` alone in one layer over the whole rig.",
+      "op": "apply_state",
+      "measure": true,
+      "document": {
+        "Effects": {
+          "Layer": {
+            "type": "Layer",
+            "FX": {
+              "type": "MoonLiveEffect",
+              "script": "spinning-squares.mle"
+            }
+          }
+        }
+      },
+      "settle": 10,
+      "read": [
+        "FX.tick"
+      ]
+    },
+    {
+      "name": "twinkle-stars-clear",
+      "op": "apply_state",
+      "document": {
+        "Effects": {
+          "$patch": "replace"
+        }
+      }
+    },
+    {
+      "name": "twinkle-stars",
+      "description": "`twinkle-stars.mle` alone in one layer over the whole rig.",
+      "op": "apply_state",
+      "measure": true,
+      "document": {
+        "Effects": {
+          "Layer": {
+            "type": "Layer",
+            "FX": {
+              "type": "MoonLiveEffect",
+              "script": "twinkle-stars.mle"
+            }
+          }
+        }
+      },
+      "settle": 10,
+      "read": [
+        "FX.tick"
+      ]
+    },
+    {
+      "name": "voronoi-clear",
+      "op": "apply_state",
+      "document": {
+        "Effects": {
+          "$patch": "replace"
+        }
+      }
+    },
+    {
+      "name": "voronoi",
+      "description": "`voronoi.mle` alone in one layer over the whole rig.",
+      "op": "apply_state",
+      "measure": true,
+      "document": {
+        "Effects": {
+          "Layer": {
+            "type": "Layer",
+            "FX": {
+              "type": "MoonLiveEffect",
+              "script": "voronoi.mle"
+            }
+          }
+        }
+      },
+      "settle": 10,
+      "read": [
+        "FX.tick"
+      ]
+    }
+  ]
+}

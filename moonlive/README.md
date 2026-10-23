@@ -25,7 +25,7 @@ The engine stays role-blind either way, so a class defining several moments is s
 | `palettes/` | the `palette` control on [Drivers](https://moonmodules.org/MoonLight/moonmodules/light/supporting.html#drivers) | sixteen palette entries, once per frame |
 | `services/` | [MoonLiveService](https://moonmodules.org/MoonLight/moonmodules/core/services.html#moonliveservice) | hardware reads that drive controls |
 
-A folder may hold subfolders that group a collection, such as `effects/particles/` or `effects/hpwit/`. They exist only here: the catalog records each script's subfolder for its download. The device keeps every script in one flat folder, so a name is unique across all of them, and the build refuses a duplicate.
+A folder may hold subfolders that group a collection, such as `effects/particles/`. A project gets its own folder under `projects/`, holding every kind its look needs, such as `projects/stadbeest/` with its effects, its palette and the service that plays them. Folders exist only here: the catalog records each script's folder for its download. The device keeps every script in one flat folder, so a name is unique across all of them, and the build refuses a duplicate.
 
 Each module ships one of these as its default, so the folder doubles as the reference for what a working script looks like.
 

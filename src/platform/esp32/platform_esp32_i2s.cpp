@@ -14,10 +14,10 @@
 /// ## The transform scratch is allocated, not reserved
 ///
 /// As a plain array it was eight kilobytes of internal memory reserved from boot on every board.
-/// That is a few percent of the pool the network stack and every task stack share.
 /// That included the many boards with no microphone fitted, where nothing ever reads it, and a module that is not used should cost nothing.
-/// Now a board without audio pays only for the pointer, and one with audio allocates on its first analyzed frame and keeps it for the process.
-/// So nothing allocates per frame on the audio path.
+/// Now a board without audio pays only for the pointer, and one with audio allocates on its first analyzed frame and frees it with the microphone's channel.
+/// So nothing allocates per frame on the audio path, and a board that stops listening gets the memory back.
+/// The library's twiddle table is initialized at the block size: built in on the ESP32-S3, 4 KB elsewhere, where the library's maximum (4,096) allocated 16 KB.
 ///
 /// ## The gain from the alternate microphone is a conversion, not a boost
 ///
@@ -74,8 +74,8 @@ bool   g_fftReady = false;
 
 bool ensureFftInit() {
     if (g_fftReady) return true;
-    // dsps_fft2r_init_fc32(NULL, …) uses the library's built-in max-size twiddle table, no caller allocation, initialized once for the process.
-    if (dsps_fft2r_init_fc32(nullptr, CONFIG_DSP_MAX_FFT_SIZE) != ESP_OK) {
+    // On the ESP32-S3 the library takes its built-in twiddle table at this block size; elsewhere it allocates a 4 KB one. The microphone's release frees either.
+    if (dsps_fft2r_init_fc32(nullptr, kMaxFftN) != ESP_OK) {
         ESP_LOGE(I2S_TAG, "esp-dsp FFT init failed");
         return false;
     }
@@ -221,6 +221,13 @@ void audioMicDeinit(AudioMicHandle& h) {
     }
     delete st;
     h.impl = nullptr;
+    // The transform serves the microphone alone, so it goes with the channel: @xref{the-transform-scratch-is-allocated-not-reserved|why}.
+    if (g_fftReady) {
+        heap_caps_free(g_fftBuf);
+        g_fftBuf = nullptr;
+        dsps_fft2r_deinit_fc32();
+        g_fftReady = false;
+    }
 }
 
 void audioFft(const float* windowed, size_t n, float* outMag) {

@@ -1,9 +1,16 @@
 // Fire: embers along the bottom row re-lit in bursts, heat rising, spreading and cooling, after hpwit's ProceduralEffects. The lights are the heat field: each frame reads the heat back from the color it drew.
 
 class FireEffect {
+  byte sparks = 4;
+  byte cooling = 130;
   int dimensions() { return 2; }
 
   string tags() { return "💫"; }
+
+  void defineControls() {
+    addControl("sparks", sparks, 1, 12); // bursts of embers re-lit per frame
+    addControl("cooling", cooling, 128, 160); // how fast the heat fades as it rises: higher is shorter flames
+  }
 
   // Heat 0..255 through black, red, yellow and white.
   RGB color(int h) {
@@ -23,7 +30,7 @@ class FireEffect {
   void tick() {
     int base = (height - 1) * width;
     for (int x = 0; x < width; x = x + 1) { setRGB(base + x, color(heat(base + x) * 13 / 16)); }
-    for (int b = 0; b < 4; b = b + 1) {
+    for (int b = 0; b < sparks; b = b + 1) {
       int x0 = random16(width);
       int w = 2 + random16(9);
       for (int k = 0; k < w; k = k + 1) { setRGB(base + mod(x0 + k, width), color(255)); }
@@ -34,7 +41,7 @@ class FireEffect {
       int under = min(y + 2, height - 1) * width;
       for (int x = 0; x < width; x = x + 1) {
         int s = heat(below + mod(x + width - 1, width)) + heat(below + x) + heat(below + mod(x + 1, width)) + heat(under + x);
-        setRGB(y * width + x, color(s * 32 / 130));
+        setRGB(y * width + x, color(s * 32 / cooling));
       }
     }
   }

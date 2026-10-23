@@ -55,7 +55,8 @@ def _lan_ip() -> str:
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("firmware", help="path to the .bin, or a firmware name under build/esp32-<name>/")
+    ap.add_argument("--firmware", required=True,
+                    help="a firmware name, served from build/esp32-<name>/, or the path to any .bin")
     ap.add_argument("--port", type=int, default=8099)
     args = ap.parse_args()
 

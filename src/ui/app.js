@@ -221,6 +221,7 @@ function connectWs() {
                     updateValues();
                     walker?.update(state);
                     relayMoonCloudOutbox();
+                    downloadMissingScripts();
                     // A targetFps slider move arrives as a PATCH, and the preview controller aims
                     // at whatever it last heard: without this, the advertised detail/smoothness
                     // chooser only takes effect on the next reconnect.
@@ -235,6 +236,7 @@ function connectWs() {
             state = data;
             if (helpPending) loadHelp();
             relayMoonCloudOutbox();
+            downloadMissingScripts();
             // Defer the DOM rebuild while the user is mid-interaction: rebuilding under an open dropdown makes it unselectable. The state is stored above, so updateValues() still shows fresh values, and renderIfDeferred draws the structure once the edit ends.
             if (userIsEditing()) {
                 structuralRenderPending = true;
@@ -6119,7 +6121,7 @@ function updateStatusBar() {
         }
     }
 
-    // System stats: "uptime · 🧠 NNK · 🧱 NNKB"
+    // System stats: "uptime · 🧠 NNKB · 🧱 NNKB"
     // 🧠 = internal-RAM free (heap progress total−used); 🧱 = largest contiguous
     // internal-RAM block (the maxBlock control, already maxInternalAllocBlock).
     // Both matter: free can be ample while fragmentation leaves no single block
@@ -6141,7 +6143,7 @@ function updateStatusBar() {
         }
         if (heapCtrl && heapCtrl.value !== undefined && heapCtrl.total) {
             const freeKb = Math.round((heapCtrl.total - heapCtrl.value) / 1024);
-            parts.push("🧠 " + freeKb + "K");
+            parts.push("🧠 " + freeKb + "KB");
         }
         // Skip on desktop, where the platform stub reports "0KB" (no real
         // block measurement / unlimited heap): same reason heap free above
@@ -6462,16 +6464,37 @@ function mlGroupForExt(ext) {
          : ext === ".mlp" ? "palettes" : null;
 }
 
-/// The collection a catalog group files a script under, "" for one at the kind's root or not in the catalog.
-function mlSubOf(g, name) {
-    return (g.sub || [])[(g.names || []).indexOf(name)] || "";
+/// The folder a catalog group files a script under, such as `effects/basics`, or the group's own folder for a script the catalog does not list.
+function mlFolderOf(g, name, group) {
+    return (g.folder || [])[(g.names || []).indexOf(name)] || group;
 }
 
-/// Where a script lives in the repo: in its subfolder when the catalog names one, at the kind's root otherwise. The device keeps every script flat.
+/// Where a script lives in the repo: in the folder the catalog names, at its kind's folder when the catalog lacks it. The device keeps every script flat.
 function mlRepoPath(cat, group, name) {
     const g = (cat && cat[group]) || {};
-    const sub = mlSubOf(g, name);
-    return "moonlive/" + (g.folder || group) + "/" + (sub ? sub + "/" : "") + name;
+    return "moonlive/" + mlFolderOf(g, name, group) + "/" + name;
+}
+
+// A module naming a shipped script the device lacks lists it in System's hidden `missing scripts`; the open page downloads each through the picker's own path, and the device compiles it once it lands.
+// A name is tried once a minute at most, so a failing download is not repeated with every state patch, and one that worked has left the list by then.
+let mlMissingBusy = false;
+const mlMissingTried = new Map();   // name -> when its download was last started
+async function downloadMissingScripts() {
+    if (mlMissingBusy) return;
+    // Found by the control's own name, which no other module uses, so the page names no module type.
+    const raw = allModules().flatMap(m => m.controls || []).find(c => c.name === "missing scripts")?.value;
+    if (!raw) return;
+    mlMissingBusy = true;
+    try {
+        for (const name of raw.split("|").filter(Boolean)) {
+            const group = mlGroupForExt(name.slice(name.lastIndexOf(".")));
+            if (!group || Date.now() - (mlMissingTried.get(name) || 0) < 60000) continue;
+            mlMissingTried.set(name, Date.now());
+            await mlDownloadScript(name, group).catch(() => {});
+        }
+    } finally {
+        mlMissingBusy = false;
+    }
 }
 
 // Download one factory script and save it to the device.
@@ -6485,7 +6508,7 @@ function mlRepoPath(cat, group, name) {
 // engine that will run it rather than whatever main happens to hold.
 async function mlDownloadScript(name, group) {
     const cat = await mlFetchCatalog();
-    if (!(cat[group] || {}).folder) throw new Error("unknown script kind");
+    if (!cat[group]) throw new Error("unknown script kind");
     const url = "https://raw.githubusercontent.com/MoonModules/MoonLight/"
               + encodeURIComponent(cat.tag) + "/" + mlRepoPath(cat, group, name).split("/").map(encodeURIComponent).join("/");
     const res = await fetch(url);
@@ -8754,11 +8777,11 @@ function buildFilePathControl(row, label, key, moduleName, ctrl) {
             if (g.dim && DIM_EMOJI[g.dim[i]]) marks.push(DIM_EMOJI[g.dim[i]]);
             return marks.length ? marks.join("") + " " : "";
         };
-        // The collection a factory script belongs to upstream, its subfolder, after the name: one library still, with its groups named.
+        // The collection a factory script belongs to upstream, its folder's name, after the name: one library still, with its groups named.
         const from = (n) => {
             const g = cat && cat[group];
-            const sub = g ? mlSubOf(g, n) : "";
-            return sub ? " \u00b7 " + sub : "";
+            const folder = g ? mlFolderOf(g, n, group) : group;
+            return folder !== group ? " \u00b7 " + folder.split("/").pop() : "";
         };
         for (const n of names) {
             const o = document.createElement("option");

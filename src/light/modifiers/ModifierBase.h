@@ -33,6 +33,8 @@ public:
 
     /// Whether a control change rebuilds the mapping, which every modifier control does.
     bool affectsPrepare(const char* /*controlName*/) const override { return true; }
+    /// The layer holding it: the mapping it shapes is that layer's alone, and Drivers re-prepares only if the layer's shape changed.
+    PrepareScope prepareScope() const override { return PrepareScope::Parent; }
 
     /// Which axes this modifier can transform, advisory only: unlike an effect's dimensions, the render path never reads it.
     virtual Dim dimensions() const { return Dim::D3; }

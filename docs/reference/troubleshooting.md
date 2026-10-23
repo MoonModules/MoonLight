@@ -44,6 +44,14 @@ Confirm the firmware is innocent before reaching for the soldering iron: [Diagno
 
 How the bench found this is in [lessons.md](../work/past/lessons.md).
 
+## The lights stutter once a second
+
+At **logLevel** `Info` or above, the device writes a status line to its serial console once a second, from the loop that renders the frames. On an ESP32-S3 driving a large setup, that write stalls the loop long enough to see. Set **logLevel** on the System card to `Warn`: the line stops and the stutter with it. The first minute after boot always prints, since the installer reads the device's address from that line.
+
+## Free memory is low with the interface open
+
+The status bar's 🧠 is free internal RAM and 🧱 its largest block, the memory WiFi, the web server and the LED drivers share. A board with PSRAM keeps 100 KB free and a 50 KB block. A classic ESP32 without PSRAM runs with less. An open interface over a weak WiFi link takes more there, since what the board sends waits in that RAM until the browser acknowledges it. Ethernet, a better WiFi link or a closed preview gives it back. Where the RAM goes and what each board holds is in [performance.md](performance.md#internal-ram).
+
 ## Colors are wrong everywhere
 
 Red where you expect green usually means the channel order does not match the strip. Set it on the driver: the [fixture profile](../moonmodules/light/supporting.md#fixtureprofiles) names which channel carries which color.
