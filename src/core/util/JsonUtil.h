@@ -152,6 +152,7 @@ struct JsonDoc {
     char**    owned = nullptr;   ///< text an edit added, a block each, since the parse buffer has no room for it
     int       ownedCount = 0;    ///< used entries in `owned`
     int       ownedCap = 0;      ///< allocated entries in `owned`
+    int       freeNode = -1;     ///< the first node an edit released, chained through `next`, which the next new node reuses
 
     /// An empty document, owning nothing until a parse fills it.
     JsonDoc() = default;
@@ -162,6 +163,18 @@ struct JsonDoc {
     void dropOwned() {
         for (int i = 0; i < ownedCount; i++) std::free(owned[i]);
         ownedCount = 0;
+        freeNode = -1;
+    }
+
+    /// Free the text `s` when an edit added it, so an edit repeated forever holds one copy; text in the parse buffer stays.
+    void disown(const char* s) {
+        if (!s) return;
+        for (int i = 0; i < ownedCount; i++)
+            if (owned[i] == s) {
+                std::free(owned[i]);
+                owned[i] = owned[--ownedCount];
+                return;
+            }
     }
 
     /// A copy of `s` the document keeps until it is freed or parsed again, or null when memory ran out.
@@ -257,14 +270,24 @@ struct JsonParser {
         return out;
     }
 
+    /// The low half of a surrogate pair in the `\uXXXX` escape at the cursor, read past. Otherwise -1, the cursor kept so that escape decodes on its own.
+    long lowHalf() {
+        if (p[0] != '\\' || p[1] != 'u') return -1;
+        char* at = p;
+        p += 2;
+        const long low = hex4();
+        if (low >= 0xDC00 && low <= 0xDFFF) return low;
+        p = at;
+        return -1;
+    }
+
     /// Decode a `\uXXXX` escape, the cursor past the `u`, as UTF-8 at `out` (RFC 8259), a surrogate pair as one character and a malformed one as '?'. Answers the write cursor, which an escape, longer than its bytes, keeps behind the read cursor.
     char* decodeUnicode(char* out) {
         long cp = hex4();
         const bool high = cp >= 0xD800 && cp <= 0xDBFF;
-        if (high && p[0] == '\\' && p[1] == 'u') {
-            p += 2;
-            const long low = hex4();
-            cp = (low >= 0xDC00 && low <= 0xDFFF) ? 0x10000 + ((cp - 0xD800) << 10) + (low - 0xDC00) : '?';
+        if (high) {
+            const long low = lowHalf();
+            cp = low >= 0 ? 0x10000 + ((cp - 0xD800) << 10) + (low - 0xDC00) : '?';
         } else if (cp < 0 || (cp >= 0xD800 && cp <= 0xDFFF)) {
             cp = '?';   // malformed, or half a pair
         }

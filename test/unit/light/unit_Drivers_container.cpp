@@ -550,11 +550,12 @@ TEST_CASE("the running palette script compiles again when its file changes") {
                                   "value", mm::ApplyPolicy::Clamp) == mm::ApplyResult::Ok);
     drivers.onControlChanged("paletteScript");
     REQUIRE(drivers.status() != nullptr);
-    CHECK(drivers.status()[0] != 'u');                         // compiled: the status is its size
+    CHECK(drivers.severity() == mm::MoonModule::Severity::Status);   // compiled: a status, not an error
     const char* broken = "class P {\n  void tick() { nosuch(); }\n}\n";
     REQUIRE(mm::platform::fsWriteAtomic("/moonlive/unit-live.mlp", broken, std::strlen(broken)));
     drivers.onFileChanged("/moonlive/unit-live.mlp");          // what a file write announces
     REQUIRE(drivers.status() != nullptr);
     CHECK(std::strstr(drivers.status(), "unknown function") != nullptr);
+    CHECK(drivers.severity() == mm::MoonModule::Severity::Error);
     mm::platform::fsRemove("/moonlive/unit-live.mlp");
 }

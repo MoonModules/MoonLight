@@ -53,7 +53,7 @@ std::string request(mm::HttpServerModule& http, mm::platform::TcpConnection& cli
 // The status line of one request on a connection of its own.
 std::string statusOf(mm::HttpServerModule& http, const char* req) {
     mm::platform::TcpConnection client;
-    if (!connectAndAccept(http, client, kTestPort)) return {};
+    REQUIRE(connectAndAccept(http, client, kTestPort));
     const std::string reply = request(http, client, req);
     client.close();
     return reply.substr(0, 12);

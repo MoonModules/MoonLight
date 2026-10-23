@@ -7,9 +7,7 @@
 #include <cstdio>
 #include <cstring>
 
-/// Write a script into the device's script directory, the same place the UI saves one.
-///
-/// Through the PLATFORM fs, not std::ofstream: the desktop platform roots its filesystem somewhere of its own choosing, so writing to a host-relative "/moonlive" put the file where the loader would never look and every script silently failed to compile.
+/// Write a script where the UI saves one, through the platform fs: the desktop roots its filesystem where it chooses, so a host path is never where the loader looks.
 inline void writeScript(const char* name, const char* body) {
     mm::platform::fsMkdir(mm::moonlive::kScriptDir);
     char path[96];

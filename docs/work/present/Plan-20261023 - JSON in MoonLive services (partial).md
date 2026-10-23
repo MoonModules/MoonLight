@@ -131,7 +131,7 @@ Steps 1 to 6 are built, desktop-tested and run on shiffy and the Waveshare; the 
 
 What the build changed from the plan:
 - **The rule for a busy target.** A second push to a target with one on its way waits and replaces any that waited before it, so no update is lost; dropping it lost text updates.
-- **Text and numbers from services.** Many services quote their numbers (`"price":"252.11"`), so `jsonInt` and `jsonFixed` read a quoted number, and a script joins text with `jsonAppendText` and `jsonAppend`. `\uXXXX` escapes decode to UTF-8.
+- **Text and numbers from services.** Many services quote their numbers (`"price":"252.11"`), so `jsonInt` and `jsonFixed` read a quoted number, and a script joins text with `jsonAppendText` and `jsonAppend`. `\uXXXX` escapes decode to UTF-8. Every call a script has: [the MoonLive language](../../moonmodules/light/moonlive.md#json-documents-in-a-service).
 - **Certificates.** Every Google Trust Services site (Coinbase, TheSportsDB, Spaceflight News) failed on the ESP32 with "No matching trusted root certificate found": it serves GTS Root R4 cross-signed by GlobalSign. `CONFIG_MBEDTLS_CERTIFICATE_BUNDLE_CROSS_SIGNED_VERIFY` fixes it, for every board.
 - **`.local` names.** `esp_http_client` resolves through DNS alone, so the ESP32's `httpFetch` looks a `.local` host up over mDNS first.
 - **TheSportsDB's test key** is `123`; `3` is retired.

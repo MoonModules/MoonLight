@@ -22,7 +22,7 @@ public:
     /// An engine with nothing compiled, until a compile call fills it.
     MoonLive() = default;
     /// Release the exec block and the control arena.
-    ~MoonLive() { free(); }
+    ~MoonLive();
 
     /// Never copied: each scripted module holds its own engine, which owns a heap-backed exec block that a copy would double-free.
     MoonLive(const MoonLive&) = delete;
@@ -175,6 +175,8 @@ public:
 
     /// Drop the compiled code, keeping the control arena, so a bound control pointer stays valid and keeps the live value the user set.
     void freeCode();
+    /// Retire the string pool, freeing the one retired before it.
+    void retirePool();
 
     /// How many bytes of machine code the current program is, which a script author asks, where `heapBytes` answers what the module takes from the heap.
     size_t codeLen() const { return codeLen_; }
@@ -182,7 +184,7 @@ public:
     size_t codeCap() const { return codeCap_; }
 
     /// Every heap byte this engine holds: the exec block, the control arena and the string pool.
-    size_t heapBytes() const { return codeCap_ + (ctrlArena_ ? kArenaBytes : 0) + stringCap_; }
+    size_t heapBytes() const { return codeCap_ + (ctrlArena_ ? kArenaBytes : 0) + stringCap_ + retiredCap_; }
 
     /// The control arena's address, which names this engine to a host table holding things on its behalf, as `JsonFetch` holds documents.
     const void* arena() const { return ctrlArena_; }
@@ -282,6 +284,10 @@ private:
     char*    strings_ = nullptr;
     /// Its size.
     uint16_t stringCap_ = 0;
+    /// The previous program's pool, kept until the next swap, since a module's control names point into it until it rebuilds them.
+    char*    retired_ = nullptr;
+    /// Its size.
+    uint16_t retiredCap_ = 0;
     /// How much of the pool the current program uses.
     uint16_t stringLen_ = 0;
 };

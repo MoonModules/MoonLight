@@ -457,7 +457,7 @@ TEST_CASE("every script example in the docs compiles") {
 
             INFO("block: ", block);
             moonlive::MoonLive eng;
-            // A block with a service's moment compiles against the service vocabulary, every other against the EFFECT one: the three role tables alias one light vocabulary (pinned by "the three roles are handed the same table").
+            // A block with a service's moment compiles against the service vocabulary, every other against the EFFECT one, which the three role tables alias.
             const bool service = block.find("tick20ms") != std::string::npos;
             CHECK(eng.compile(block.c_str(), service ? moonlive::serviceBuiltins() : moonlive::lightBuiltins(),
                               service ? moonlive::serviceSysVars() : moonlive::effectSysVars()));

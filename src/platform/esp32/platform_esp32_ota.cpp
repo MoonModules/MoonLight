@@ -786,26 +786,28 @@ esp_http_client_method_t methodOf(const char* method) {
     return HTTP_METHOD_GET;
 }
 
-/// Read the answer to its end into `body`, or past it when there is none; false when it outgrows the buffer, which is refused rather than handed back half.
-bool readAnswer(esp_http_client_handle_t client, char* body, size_t bodyLen) {
-    const bool keep = body && bodyLen;
-    size_t len = 0;
+/// Read past the answer, for a caller that keeps none; false when it was cut off.
+bool drainAnswer(esp_http_client_handle_t client) {
     char discard[64];
-    for (;;) {
-        char* into = keep ? body + len : discard;
-        const size_t room = keep ? bodyLen - 1 - len : sizeof(discard);
-        if (room == 0) {
-            char probe;
-            const bool fits = esp_http_client_read(client, &probe, 1) <= 0;
-            body[fits ? len : 0] = '\0';
-            return fits;
-        }
-        const int got = esp_http_client_read(client, into, static_cast<int>(room));
-        if (got <= 0) break;
-        if (keep) len += static_cast<size_t>(got);
+    int got;
+    while ((got = esp_http_client_read(client, discard, sizeof(discard))) > 0) {}
+    return got == 0;
+}
+
+/// Read the answer to its end into `body`. False when it outgrows the buffer or is cut off: refused rather than handed back half.
+bool readAnswer(esp_http_client_handle_t client, char* body, size_t bodyLen) {
+    if (!body || !bodyLen) return drainAnswer(client);
+    size_t len = 0;
+    int got = 1;
+    while (got > 0 && len + 1 < bodyLen) {
+        got = esp_http_client_read(client, body + len, static_cast<int>(bodyLen - 1 - len));
+        if (got > 0) len += static_cast<size_t>(got);
     }
-    if (keep) body[len] = '\0';
-    return true;
+    // The end reached is whole; a full buffer with more behind it outgrew it, and a failed read was cut off.
+    char probe;
+    const bool whole = got == 0 || (got > 0 && esp_http_client_read(client, &probe, 1) == 0);
+    body[whole ? len : 0] = '\0';
+    return whole;
 }
 
 /// Send the request with its body and read the answer; the status, or 0 when it failed or the answer outgrew the buffer.

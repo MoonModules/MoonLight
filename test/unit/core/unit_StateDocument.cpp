@@ -293,6 +293,21 @@ TEST_CASE("a control a script declares waits for the rebuild, and lands after it
     CHECK(static_cast<SdScript*>(t.find("Script"))->late == 42);
 }
 
+// A show pushes a script's controls with the script: replayed after the rebuild as a plain write, they were marked to save.
+TEST_CASE("a script's control a live document sets lands after the rebuild, still unsaved") {
+    Tree t;
+    static int saves = 0;
+    saves = 0;
+    t.s.setNoteDirtyHook([] { saves++; });
+    auto r = mm::applyStateDocument(t.s, R"({"Effects": {"Script": {"type": "SdScript", "source": "a", "late": 42}}})", mm::StateSource::Live);
+    REQUIRE(r.ok);
+    CHECK(r.deferred == 1);
+    t.s.prepareTree();
+    CHECK(static_cast<SdScript*>(t.find("Script"))->late == 42);
+    CHECK_FALSE(t.find("Script")->dirty());
+    CHECK(saves == 0);
+}
+
 TEST_CASE("a mistyped control on a script the document leaves as it is is named at once") {
     Tree t;
     REQUIRE(t.apply(R"({"Effects": {"Script": {"type": "SdScript", "source": "a"}}})").ok);

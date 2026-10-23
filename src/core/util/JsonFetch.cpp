@@ -25,6 +25,15 @@ char* copyText(const char* s) {
 /// Whether a target names this device: nothing at all.
 bool isSelf(const char* target) { return !target || !*target; }
 
+/// Where a push to `target` goes and with which method. A URL is any endpoint, which takes a POST; a bare host is a MoonLight, whose state takes it live as a PATCH. Null for a host too long for `buf`.
+const char* pushUrl(const char* target, char* buf, size_t cap, const char*& method) {
+    const bool url = std::strncmp(target, "http://", 7) == 0 || std::strncmp(target, "https://", 8) == 0;
+    method = url ? "POST" : "PATCH";
+    if (url) return target;
+    const int n = std::snprintf(buf, cap, "http://%s/api/state?live=1", target);
+    return n >= 0 && static_cast<size_t>(n) < cap ? buf : nullptr;
+}
+
 /// Whether two targets are the same, the empty and the null one both being this device.
 bool sameTarget(const char* a, const char* b) {
     if (isSelf(a) || isSelf(b)) return isSelf(a) && isSelf(b);
@@ -47,15 +56,14 @@ void JsonFetch::retireIfUnused() {
     // A feed asks again on its own, so it keeps the worker; a held reply waits for the next push, which starts it again.
     for (const Slot& s : slots_) if (s.kind == Kind::Feed) return;
     // Nothing queued and nothing on its way, so the worker waits and the join is immediate.
-    stop_.store(true, std::memory_order_relaxed);
+    generation_.fetch_add(1, std::memory_order_release);
     platform::stopPinnedTask(task_);
     started_ = false;
-    stop_.store(false, std::memory_order_relaxed);
 }
 
 JsonFetch::~JsonFetch() {
     if (started_) {
-        stop_.store(true, std::memory_order_relaxed);
+        generation_.fetch_add(1, std::memory_order_release);
         platform::stopPinnedTask(task_);
     }
     Job j;
@@ -199,12 +207,10 @@ void JsonFetch::dispatch(int index, char* body) {
         busy_.fetch_add(1, std::memory_order_relaxed);
         return;
     }
-    // A bare host is a MoonLight, whose state takes the document live; a URL is any endpoint, which takes a POST.
-    const char* target = reply.target;
-    const bool url = std::strncmp(target, "http://", 7) == 0 || std::strncmp(target, "https://", 8) == 0;
     char stateUrl[96];
-    if (!url) std::snprintf(stateUrl, sizeof(stateUrl), "http://%s/api/state?live=1", target);
-    if (!send(index, url ? "POST" : "PATCH", url ? target : stateUrl, body)) { platform::free(body); lost(index); }
+    const char* method = nullptr;
+    const char* url = pushUrl(reply.target, stateUrl, sizeof(stateUrl), method);
+    if (!url || !send(index, method, url, body)) { platform::free(body); lost(index); }
 }
 
 bool JsonFetch::send(int index, const char* method, const char* url, char* body) {
@@ -228,7 +234,9 @@ void JsonFetch::refreshIfDue(int index) {
     Slot& s = slots_[index];
     const uint32_t now = platform::millis();
     if (s.inFlight || static_cast<int32_t>(now - s.dueAt) < 0) return;
-    if (send(index, "GET", s.target, nullptr)) s.dueAt = now + s.periodMs;
+    // A request that could not go skips this round, as one that failed does, rather than retrying every tick.
+    send(index, "GET", s.target, nullptr);
+    s.dueAt = now + s.periodMs;
 }
 
 void JsonFetch::takeAnswers() {
@@ -333,12 +341,15 @@ void JsonFetch::worker(void* self) {
     auto& f = *static_cast<JsonFetch*>(self);
     // One answer buffer for the task's life, in PSRAM where there is PSRAM.
     char* answer = static_cast<char*>(platform::alloc(kAnswerCap));
-    while (!f.stop_.load(std::memory_order_relaxed)) {
+    // Started while the loop has a request out, so no stop comes before this read.
+    const uint32_t mine = f.generation_.load(std::memory_order_acquire);
+    auto current = [&f, mine] { return f.generation_.load(std::memory_order_acquire) == mine; };
+    while (current()) {
         Job j;
         if (!f.jobs_.pop(&j, 1)) { platform::waitNotify(f.task_, 1000); continue; }
         const Answer a = serve(j, answer);
         // The ring holds every request the loop can have out, so this only waits while it takes the last ones in.
-        while (f.answers_.push(&a, 1) != 1 && !f.stop_.load(std::memory_order_relaxed)) platform::delayMs(5);
+        while (f.answers_.push(&a, 1) != 1 && current()) platform::delayMs(5);
     }
     platform::free(answer);
 }

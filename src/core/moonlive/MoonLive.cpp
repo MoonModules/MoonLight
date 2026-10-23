@@ -113,7 +113,7 @@ bool MoonLive::compile(const char* source, const BuiltinTable& table, const SysV
     // Publish the control set only once place() succeeds, never for code that is not running.
     void* block = place(staging.p, cr.len);
     if (!block) { platform::free(pool); return false; }            // controlCount_/controls_ unchanged
-    platform::free(strings_);
+    retirePool();
     strings_ = pool;
     stringCap_ = static_cast<uint16_t>(want);
     // Names included, since a result's `name` points into source the caller frees on return.
@@ -195,12 +195,24 @@ bool MoonLive::compileAnimated() {
     return true;
 }
 
+MoonLive::~MoonLive() {
+    free();
+    platform::free(retired_);   // nothing names its text once the engine goes
+}
+
+/// The current pool retires and the one retired before it goes: the module's controls name text in the current one until it rebuilds them.
+void MoonLive::retirePool() {
+    platform::free(retired_);
+    retired_ = strings_;
+    retiredCap_ = stringCap_;
+    strings_ = nullptr;
+    stringCap_ = 0;
+}
+
 /// Release everything: the exec block, the fn pointers and the control arena.
 void MoonLive::free() {
     freeCode();                       // exec block + fn pointers
-    platform::free(strings_);         // the pool goes with the program it belongs to
-    strings_ = nullptr;
-    stringCap_ = 0;
+    retirePool();                     // the pool goes with the program, once the module's controls stop naming it
     if (ctrlArena_) platform::free(ctrlArena_);   // full release also releases the control arena
     ctrlArena_ = nullptr;
     controlCount_ = 0;

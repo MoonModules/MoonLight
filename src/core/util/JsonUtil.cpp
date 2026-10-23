@@ -198,10 +198,15 @@ int indexAt(const JsonDoc& doc, const char* ptr) {
     return cur;
 }
 
-/// A fresh node, or -1 with the document marked out of memory.
+/// A fresh node, a released one first, or -1 with the document marked out of memory.
 int newNode(JsonDoc& doc, JsonType type) {
-    if (!doc.ensureNode()) { doc.outOfMemory = true; return -1; }
-    const int i = doc.count++;
+    int i = doc.freeNode;
+    if (i >= 0) {
+        doc.freeNode = doc.nodes[i].next;
+    } else {
+        if (!doc.ensureNode()) { doc.outOfMemory = true; return -1; }
+        i = doc.count++;
+    }
     doc.nodes[i] = JsonNode{};
     doc.nodes[i].type = type;
     return i;
@@ -259,8 +264,25 @@ int ensureIndex(JsonDoc& doc, const char* ptr) {
     return cur;
 }
 
-/// Give a node a new type, dropping what it held; the children it had stay in the pool until the document goes.
+/// Release the nodes from `first` on, along their sibling chain, with everything under them and the text they own, for new nodes to reuse.
+void releaseNodes(JsonDoc& doc, int first) {
+    while (first >= 0) {
+        JsonNode& n = doc.nodes[first];
+        const int next = n.next;
+        releaseNodes(doc, n.firstChild);   // as deep as the document, which kMaxDepth bounds
+        doc.disown(n.key);
+        doc.disown(n.str);
+        n = JsonNode{};
+        n.next = doc.freeNode;
+        doc.freeNode = first;
+        first = next;
+    }
+}
+
+/// Give a node a new type, releasing what it held, its text and its children.
 JsonNode* resetNode(JsonDoc& doc, int i, JsonType type) {
+    releaseNodes(doc, doc.nodes[i].firstChild);
+    doc.disown(doc.nodes[i].str);
     JsonNode& n = doc.nodes[i];
     n.type = type;
     n.firstChild = -1;

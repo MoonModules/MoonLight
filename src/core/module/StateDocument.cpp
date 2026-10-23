@@ -25,7 +25,7 @@ struct Deferred {
     char module[MoonModule::kNameLen];
     char key[32];
     char* valueJson;   // `{"value":...}`, on the heap
-    bool stored;       // from a stored file, so clamped and not marked dirty: it is what the file already holds
+    StateSource source;   // the document's, so the write replays as the document would have made it
 };
 constexpr uint8_t kMaxDeferred = 64;   // far past a script's controls; more is refused by name rather than dropped
 // On the heap only while something waits, so a device that never defers keeps the 3 KB.
@@ -47,7 +47,7 @@ void dropDeferredSince(uint8_t from, StateDocumentResult& r) {
     releaseDeferredTable();
 }
 
-bool defer(const char* module, const char* key, const char* valueJson, bool stored) {
+bool defer(const char* module, const char* key, const char* valueJson, StateSource source) {
     if (g_deferredCount >= kMaxDeferred) return false;
     if (!g_deferred && !(g_deferred = static_cast<Deferred*>(platform::alloc(sizeof(Deferred) * kMaxDeferred)))) return false;
     const size_t n = std::strlen(valueJson) + 1;
@@ -58,7 +58,7 @@ bool defer(const char* module, const char* key, const char* valueJson, bool stor
     std::snprintf(d.module, sizeof(d.module), "%s", module);
     std::snprintf(d.key, sizeof(d.key), "%s", key);
     d.valueJson = copy;
-    d.stored = stored;
+    d.source = source;
     return true;
 }
 
@@ -342,14 +342,14 @@ struct Applier {
         const bool compiles = m->declaresControlsAtPrepare();
         if (result == Scheduler::SetControlResult::Ok && compiles && m->affectsPrepare(key)) markRebuilt(m);
         // A control a script declares exists only after the rebuild, so it waits for it; on a module the document leaves as it is, an unknown control is a mistake.
-        if (result == Scheduler::SetControlResult::ControlNotFound && compiles && isRebuilt(m)) return deferControl(m, key, sink.data(), false);
+        if (result == Scheduler::SetControlResult::ControlNotFound && compiles && isRebuilt(m)) return deferControl(m, key, sink.data());
         if (const char* why = failureOf(result)) return fail(why);
         r.changes++;
         return true;
     }
 
-    bool deferControl(MoonModule* m, const char* key, const char* valueJson, bool fromFile) {
-        if (!defer(m->name(), key, valueJson, fromFile)) return fail("too many controls wait for the rebuild");
+    bool deferControl(MoonModule* m, const char* key, const char* valueJson) {
+        if (!defer(m->name(), key, valueJson, source)) return fail("too many controls wait for the rebuild");
         r.deferred++;
         return true;
     }
@@ -410,7 +410,7 @@ struct Applier {
     // A script's controls appear when it compiles; any other unknown key is one this build lacks, dropped as the file is rewritten.
     bool storeUnknown(MoonModule* m, const char* key, const char* valueJson, bool final) {
         if (!final || !m->declaresControlsAtPrepare()) return true;
-        return deferControl(m, key, valueJson, true);
+        return deferControl(m, key, valueJson);
     }
 
     void react(MoonModule* m, const char* key, bool live) {
@@ -782,14 +782,15 @@ void applyDeferredControls(Scheduler& scheduler) {
     for (uint8_t i = 0; i < g_deferredCount; i++) {
         Deferred& d = g_deferred[i];
         bool ok = true;
-        if (d.stored) {
+        if (d.source == StateSource::Stored || d.source == StateSource::Boot) {
             // What the file holds, so clamped, reacted to when it changed something, and never marked for a save.
             MoonModule* m = scheduler.firstByName(d.module);
             const ControlDescriptor* c = m ? controlNamed(*m, d.key) : nullptr;
             ok = c != nullptr;
             if (c && storeClamped(*c, d.valueJson)) scheduler.reactToControlChange(m, d.key);
         } else {
-            ok = scheduler.setControl(d.module, d.key, d.valueJson) == Scheduler::SetControlResult::Ok;
+            // A live document's write stays unsaved after the rebuild as it would have before it.
+            ok = scheduler.setControl(d.module, d.key, d.valueJson, d.source == StateSource::Live) == Scheduler::SetControlResult::Ok;
         }
         if (!ok) std::printf("state document: %s.%s did not apply after the rebuild\n", d.module, d.key);
         platform::free(d.valueJson);

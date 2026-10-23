@@ -127,6 +127,10 @@ TEST_CASE("a \\u escape decodes to UTF-8, a surrogate pair to one character") {
     char s[64];
     REQUIRE(json::readString(json::at(doc, "/t"), s, sizeof(s)));
     CHECK(std::string(s) == "it\xE2\x80\x99s \xC3\xA9 \xF0\x9F\x9A\x80 A ?x");
+    // A high half followed by an escape that is not its low half: the half reads '?', and the escape after it still decodes.
+    REQUIRE(json::parse(R"({"t":"\ud83d\u0041\ud83d\ude80"})", doc));
+    REQUIRE(json::readString(json::at(doc, "/t"), s, sizeof(s)));
+    CHECK(std::string(s) == "?A\xF0\x9F\x9A\x80");
 }
 
 TEST_CASE("a quoted number reads as the number it starts with, as services quote theirs") {
@@ -155,4 +159,23 @@ TEST_CASE("text joins onto a string, from the caller or from another document's 
     REQUIRE(json::appendValue(show, "/text", feed, "/ok"));
     CHECK_FALSE(json::appendValue(show, "/text", feed, "/nope"));
     CHECK(text(show) == R"({"text":"BTC $81201.915 / 9.4true"})");
+}
+
+// The demo edits its bands each time a feed changes: the text and the nodes an edit replaces were kept until the document went, so a device ran out of memory within days.
+TEST_CASE("an edit repeated forever holds the memory of one, its replaced text and nodes reused") {
+    json::JsonDoc feed, show;
+    REQUIRE(json::parse(R"({"item":{"title":"news","n":3.25,"tags":["a","b"]}})", feed));
+    REQUIRE(json::parse(R"({"Text":{"text":""}})", show));
+    int owned = 0, nodes = 0;
+    for (int round = 0; round < 1000; round++) {
+        REQUIRE(json::setString(show, "/Text/text", "BTC "));
+        REQUIRE(json::appendValue(show, "/Text/text", feed, "/item/n"));
+        REQUIRE(json::setFixed(show, "/Text/speed", 98304));
+        REQUIRE(json::copyValue(show, "/item", feed, "/item"));
+        if (round == 0) { owned = show.ownedCount; nodes = show.count; continue; }
+        if (show.ownedCount != owned || show.count != nodes) break;   // one report, not a thousand
+    }
+    CHECK(show.ownedCount == owned);   // every key and string the document holds, once
+    CHECK(show.count == nodes);
+    CHECK(text(show) == R"({"Text":{"text":"BTC 3.25","speed":1.5000},"item":{"title":"news","n":3.25,"tags":["a","b"]}})");
 }

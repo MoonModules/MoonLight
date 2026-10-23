@@ -115,7 +115,7 @@ private:
     SpscRing<Answer, 8> answers_;
     platform::WorkerTask task_;
     bool started_ = false;
-    std::atomic<bool> stop_{false};
+    std::atomic<uint32_t> generation_{0};   ///< bumped by each stop, so a worker a timed-out join left running ends rather than serving beside the next
     std::atomic<uint32_t> busy_{0};   ///< requests sent whose answers the loop has still to take in
 };
 
