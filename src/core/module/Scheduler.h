@@ -66,9 +66,9 @@ public:
     void prepareTree();
 
     /// Ask for a rebuild at the next frame boundary, which is safe from any task.
-    void requestPrepareTree() { prepareRequested_.store(true, std::memory_order_relaxed); }
+    void requestPrepareTree() MM_NONBLOCKING { prepareRequested_.store(true, std::memory_order_relaxed); }
     /// Ask for one subtree's rebuild at the next frame boundary, safe from any task: a few subtrees per frame, one more widening the request to the tree.
-    void requestPrepare(MoonModule* scope) {
+    void requestPrepare(MoonModule* scope) MM_NONBLOCKING {
         if (!scope) { requestPrepareTree(); return; }
         for (auto& slot : preparePending_) {
             MoonModule* expected = nullptr;
@@ -113,7 +113,7 @@ public:
     MoonModule* topOfType(const char* typeName) const;
 
     /// The single live Scheduler, reachable so a factory-created module can drive a control.
-    static Scheduler* instance() { return instance_; }
+    static Scheduler* instance() MM_NONBLOCKING { return instance_; }
     /// A Scheduler that ends without release() still stops being the live one, so instance() never dangles.
     ~Scheduler() { if (instance_ == this) instance_ = nullptr; }
 

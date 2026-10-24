@@ -70,6 +70,15 @@ TEST_CASE("a uniform frame averages to itself") {
     for (uint8_t v : dst) CHECK(v == 123);
 }
 
+// The floor's edge: a byte at the floor reads as black, one step above it passes through.
+TEST_CASE("a byte at the noise floor reads as black, one above it passes through") {
+    const uint8_t at[3] = {4, 4, 4}, above[3] = {5, 5, 5};
+    const mm::RGB a = mm::areaMean(at, 3, mm::Span{0, 1}, mm::Span{0, 1}, /*floor=*/4);
+    const mm::RGB b = mm::areaMean(above, 3, mm::Span{0, 1}, mm::Span{0, 1}, /*floor=*/4);
+    CHECK(a.r == 0);
+    CHECK(b.r == 5);
+}
+
 // Averaging in linear light rather than on the bytes, so a shrink does not darken the picture.
 TEST_CASE("a half-black half-white frame averages above the arithmetic mean") {
     const uint16_t w = 2, h = 2;

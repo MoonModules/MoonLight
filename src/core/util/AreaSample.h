@@ -26,8 +26,16 @@ inline Span cellSpan(uint32_t i, uint32_t out, uint32_t src) {
     return Span{static_cast<uint16_t>(lo), static_cast<uint16_t>(hi)};
 }
 
-/// The rectangle's mean in linear light (square, average, root: gamma 2 for the display curve), from at most four reads per axis.
-inline RGB areaMean(const uint8_t* rgb, size_t stride, Span cx, Span ry) {
+/// Where a sampler writes: the buffer, the picture size it fills, and the floor below which a source byte reads as black.
+struct Sink {
+    uint8_t* rgb = nullptr;   ///< the destination, `width` x `height` x 3 bytes, top row first
+    uint16_t width = 0;       ///< the picture's width, which a sampler fills exactly
+    uint16_t height = 0;      ///< the picture's height, likewise
+    uint8_t floor = 0;        ///< source bytes at or below this read as 0; 0 passes every byte through
+};
+
+/// The rectangle's mean in linear light (square, average, root: gamma 2 for the display curve), from at most four reads per axis. A byte at or below `floor` counts as 0, which a noisy source's black needs.
+inline RGB areaMean(const uint8_t* rgb, size_t stride, Span cx, Span ry, uint8_t floor = 0) {
     const uint32_t sx = (cx.hi - cx.lo + kAreaTapsPerAxis - 1u) / kAreaTapsPerAxis;
     const uint32_t sy = (ry.hi - ry.lo + kAreaTapsPerAxis - 1u) / kAreaTapsPerAxis;
     uint32_t sum[3] = {0, 0, 0}, taps = 0;
@@ -35,7 +43,10 @@ inline RGB areaMean(const uint8_t* rgb, size_t stride, Span cx, Span ry) {
         const uint8_t* row = rgb + static_cast<size_t>(y) * stride;
         for (uint32_t x = cx.lo; x < cx.hi; x += sx) {
             const uint8_t* p = row + static_cast<size_t>(x) * 3u;
-            for (int c = 0; c < 3; c++) sum[c] += static_cast<uint32_t>(p[c]) * p[c];
+            for (int c = 0; c < 3; c++) {
+                const uint32_t v = p[c] > floor ? p[c] : 0u;
+                sum[c] += v * v;
+            }
             taps++;
         }
     }

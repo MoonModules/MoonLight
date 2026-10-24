@@ -779,9 +779,13 @@ bool usbMidiWrite(const uint8_t (*)[4], size_t) { return false; }
 // No USB host on this chip, so a capture source finds no device and says so in its status.
 uint32_t videoCaptureFormatGeneration() MM_NONBLOCKING { return 0; }
 bool videoCaptureInit(VideoCaptureHandle&, uint16_t, uint16_t, uint8_t) { return false; }
+const char* videoCaptureFault() MM_NONBLOCKING { return nullptr; }
+bool videoCaptureSettling() MM_NONBLOCKING { return false; }
 bool videoCaptureAwaitFrame(VideoCaptureHandle&, uint32_t) { return false; }
-bool videoCaptureDecodeInto(VideoCaptureHandle&, uint8_t*, uint16_t, uint16_t, uint16_t&, uint16_t&) { return false; }
+bool videoCaptureDecodeInto(VideoCaptureHandle&, uint8_t*, uint16_t, uint16_t, uint16_t&, uint16_t&,
+                            uint8_t) { return false; }
 void videoCaptureDeinit(VideoCaptureHandle&) {}
+void videoCaptureShutdown() {}
 VideoCaptureStats videoCaptureStats() MM_NONBLOCKING { return VideoCaptureStats{}; }
 
 }  // namespace mm::platform

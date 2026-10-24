@@ -102,6 +102,21 @@ inline uint8_t fpsFrom(uint32_t interval) {
     return interval ? static_cast<uint8_t>((kTicksPerSecond + interval / 2) / interval) : 0;
 }
 
+/// The rates a continuous range is asked for, since such a device names no rate of its own and a picture wants a familiar one.
+constexpr uint8_t kOfferedRates[] = {60, 50, 30, 25, 24, 15, 10, 5};
+
+/// The frame interval, in 100 ns ticks, that asks for `fps`.
+inline uint32_t intervalFor(uint8_t fps) { return fps ? 10000000u / fps : 0; }
+
+/// The rung of a continuous range that holds `fps`, or 0 where the range does not reach it. Rounded away from `min`, so the rate lands at or under the one asked for rather than over it.
+inline uint32_t rungFor(uint8_t fps, uint32_t min, uint32_t max, uint32_t step) {
+    const uint32_t want = intervalFor(fps);
+    if (!want || !min || max < min || want < min || want > max) return 0;
+    if (!step) return want;   // a range with no step reaches every interval in it
+    const uint32_t rung = min + ((want - min + step - 1) / step) * step;
+    return rung <= max ? rung : max;
+}
+
 /// Of two advertised rates, the one to ask for: the fastest at or below `wanted`, else the slowest.
 inline uint8_t betterFps(uint8_t have, uint8_t row, uint8_t wanted) {
     if (!have) return row;
@@ -142,6 +157,45 @@ inline bool pickMode(const Mode* modes, size_t count, uint16_t& width, uint16_t&
 
 // --- The decoded frame --------------------------------------------------------------------------
 
+/// A JPEG's size and the MCU its luma sampling pads to: 16x16 for 4:2:0, 16x8 for 4:2:2, 8x8 for 4:4:4.
+struct JpegShape {
+    uint16_t width = 0;   ///< pixels across, from the frame header
+    uint16_t height = 0;  ///< pixels down
+    uint8_t mcuW = 8;     ///< the MCU's width
+    uint8_t mcuH = 8;     ///< and its height
+};
+
+/// The shape from one frame header's fields, `s` at its precision byte and `seg` its length; false when too short to hold one component.
+inline bool readFrameHeader(const uint8_t* s, size_t seg, JpegShape& out) {
+    if (seg < 11) return false;   // precision, height, width, count and one component
+    out.height = static_cast<uint16_t>((s[1] << 8) | s[2]);
+    out.width = static_cast<uint16_t>((s[3] << 8) | s[4]);
+    out.mcuW = static_cast<uint8_t>(8 * (s[7] >> 4));     // the first component's horizontal sampling
+    out.mcuH = static_cast<uint8_t>(8 * (s[7] & 0x0F));   // and its vertical
+    return out.width && out.height && out.mcuW && out.mcuH;
+}
+
+/// Whether `d` opens with a JPEG's start-of-image marker.
+inline bool startsImage(const uint8_t* d, size_t len) { return len >= 4 && d[0] == 0xFF && d[1] == 0xD8; }
+/// Whether a marker is a baseline, extended or progressive frame header (SOF0 to SOF2).
+inline bool isFrameHeader(uint8_t marker) { return marker >= 0xC0 && marker <= 0xC2; }
+
+/// The shape from a frame header, walking the segments before it; false for anything that is not a JPEG with one before its scan.
+inline bool jpegShape(const uint8_t* d, size_t len, JpegShape& out) {
+    if (!startsImage(d, len)) return false;
+    size_t i = 2;
+    while (i + 4 <= len) {
+        if (d[i] != 0xFF) return false;
+        const uint8_t marker = d[i + 1];
+        if (marker == 0xFF) { i++; continue; }   // a fill byte before the marker
+        const size_t seg = (static_cast<size_t>(d[i + 2]) << 8) | d[i + 3];   // the segment's length, its own two bytes included
+        if (seg < 2 || i + 2 + seg > len || marker == 0xDA) return false;   // cut short, or the scan began without a frame header
+        if (isFrameHeader(marker)) return readFrameHeader(d + i + 4, seg, out);
+        i += 2 + seg;
+    }
+    return false;
+}
+
 /// `v` rounded up to a multiple of `to`, the MCU boundary a decoder pads a frame's axis to.
 inline uint32_t alignUp(uint32_t v, uint8_t to) { return (v + to - 1u) / to * to; }
 
@@ -155,13 +209,12 @@ inline size_t strideFor(uint16_t w, uint16_t h, uint8_t mcuW, uint8_t mcuH, uint
 }
 
 /// Each output pixel the mean of its rectangle, through the shared sampler so one fix reaches both paths.
-inline void areaAverage(const uint8_t* src, size_t stride, uint16_t w, uint16_t h, uint16_t ow,
-                        uint16_t oh, uint8_t* dst) {
-    for (uint16_t y = 0; y < oh; y++) {
-        const Span ry = cellSpan(y, oh, h);
-        for (uint16_t x = 0; x < ow; x++) {
-            const RGB mean = areaMean(src, stride, cellSpan(x, ow, w), ry);
-            uint8_t* out = dst + (static_cast<size_t>(y) * ow + x) * 3;
+inline void areaAverage(const uint8_t* src, size_t stride, uint16_t w, uint16_t h, const Sink& sink) {
+    for (uint16_t y = 0; y < sink.height; y++) {
+        const Span ry = cellSpan(y, sink.height, h);
+        for (uint16_t x = 0; x < sink.width; x++) {
+            const RGB mean = areaMean(src, stride, cellSpan(x, sink.width, w), ry, sink.floor);
+            uint8_t* out = sink.rgb + (static_cast<size_t>(y) * sink.width + x) * 3;
             out[0] = mean.r;
             out[1] = mean.g;
             out[2] = mean.b;

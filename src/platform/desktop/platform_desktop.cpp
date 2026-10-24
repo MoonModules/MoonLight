@@ -2939,6 +2939,7 @@ namespace {
 struct TestGrabber {
     std::vector<VideoCaptureFormat> formats;   ///< written by a test while no capture runs
     std::atomic<uint32_t> generation{0};
+    std::atomic<bool> attached{false};
     uint16_t openW = 0, openH = 0;   ///< the mode videoCaptureInit settled on, before the task starts
     uint8_t openFps = 0;             ///< and the rate it delivers at
     std::atomic<uint8_t> r{0}, g{0}, b{0};   ///< what a decode writes into every pixel
@@ -2947,15 +2948,20 @@ struct TestGrabber {
     std::atomic<uint32_t> decoded{0}, failed{0};
     std::vector<uint8_t> frame;   ///< the synthesized source, rebuilt only when its size or color moves
     uint8_t frameRgb[3] = {};
+    const char* fault = nullptr;   ///< which step refused the last open, or null where none has
 } g_grabber;
 // How far `have` is from `want`, so the nearest advertised mode can be picked without <cstdlib>.
 long apart(long have, long want) { return have > want ? have - want : want - have; }
 }  // namespace
 
-uint32_t videoCaptureFormatGeneration() MM_NONBLOCKING { return g_grabber.generation.load(); }
+// 0 while nothing is attached, as a device reports no list; the counter itself only grows.
+uint32_t videoCaptureFormatGeneration() MM_NONBLOCKING { return g_grabber.attached.load() ? g_grabber.generation.load() : 0; }
 
 bool videoCaptureInit(VideoCaptureHandle& h, uint16_t width, uint16_t height, uint8_t fps) {
-    if (g_grabber.formats.empty() || g_grabber.open) return false;   // one owner at a time, as a device is claimed once
+    // One owner at a time, as a device is claimed once.
+    if (g_grabber.formats.empty()) { g_grabber.fault = "no grabber attached"; return false; }
+    if (g_grabber.open) { g_grabber.fault = "a capture is already open"; return false; }
+    g_grabber.fault = nullptr;   // this open answers for itself
     // The nearest advertised mode by area then by rate, as a grabber settles a request it cannot meet.
     const VideoCaptureFormat* best = nullptr;
     long bestCost = 0;
@@ -2982,7 +2988,7 @@ bool videoCaptureAwaitFrame(VideoCaptureHandle& h, uint32_t timeoutMs) {
 }
 
 bool videoCaptureDecodeInto(VideoCaptureHandle& h, uint8_t* dst, uint16_t maxWidth, uint16_t maxHeight,
-                            uint16_t& outWidth, uint16_t& outHeight) {
+                            uint16_t& outWidth, uint16_t& outHeight, uint8_t floor) {
     if (!h.impl || !g_grabber.open) return false;
     if (g_grabber.decodeFails) { g_grabber.failed++; return false; }
     if (!maxWidth || !maxHeight) { g_grabber.failed++; return false; }
@@ -2995,17 +3001,24 @@ bool videoCaptureDecodeInto(VideoCaptureHandle& h, uint8_t* dst, uint16_t maxWid
         for (size_t i = 0; i < need; i += 3) std::memcpy(g_grabber.frame.data() + i, rgb, 3);
         std::memcpy(g_grabber.frameRgb, rgb, 3);
     }
-    usbvideo::areaAverage(g_grabber.frame.data(), static_cast<size_t>(w) * 3, w, hh, maxWidth, maxHeight, dst);
+    usbvideo::areaAverage(g_grabber.frame.data(), static_cast<size_t>(w) * 3, w, hh,
+                          Sink{dst, maxWidth, maxHeight, floor});
     outWidth = maxWidth;
     outHeight = maxHeight;
     g_grabber.decoded++;
     return true;
 }
 
+const char* videoCaptureFault() MM_NONBLOCKING { return g_grabber.fault; }
+
+bool videoCaptureSettling() MM_NONBLOCKING { return false; }   // the stand-in tears down inside the call
+
 void videoCaptureDeinit(VideoCaptureHandle& h) {
     if (h.impl == &g_grabber) g_grabber.open = false;   // only the owning handle closes it
     h.impl = nullptr;
 }
+
+void videoCaptureShutdown() {}   // the stand-in installs nothing
 
 VideoCaptureStats videoCaptureStats() MM_NONBLOCKING {
     VideoCaptureStats s;
@@ -3016,8 +3029,9 @@ VideoCaptureStats videoCaptureStats() MM_NONBLOCKING {
 
 void setTestVideoCaptureFormats(const VideoCaptureFormat* formats, size_t count) {
     g_grabber.formats.assign(formats, formats + count);
-    g_grabber.generation = count ? g_grabber.generation + 1 : 0;
-    if (!count) g_grabber.open = false;
+    g_grabber.generation++;   // a device enumerating or leaving, as the bus reports it
+    g_grabber.attached = count != 0;
+    if (!count) g_grabber.open = false;   // an unplug ends the stream
 }
 
 void setTestVideoCaptureColor(uint8_t r, uint8_t g, uint8_t b) {

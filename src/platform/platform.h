@@ -1497,7 +1497,7 @@ struct VideoCaptureFormat {
     uint8_t  fps = 0;      ///< frames a second offered at that size
 };
 
-/// Bumped whenever that list is rewritten, which is when a device enumerates; 0 until then.
+/// Moves whenever that list is rewritten, a device enumerating or leaving, and never returns to a value it had; 0 while no device is listed.
 uint32_t videoCaptureFormatGeneration() MM_NONBLOCKING;
 
 /// Claim the first grabber and stream MJPEG near this mode; false when none is attached or none fits.
@@ -1506,12 +1506,21 @@ bool videoCaptureInit(VideoCaptureHandle& h, uint16_t width, uint16_t height, ui
 /// Wait up to `timeoutMs` for the next frame; true once one is ready to decode.
 bool videoCaptureAwaitFrame(VideoCaptureHandle& h, uint32_t timeoutMs);
 
-/// Decode the frame videoCaptureAwaitFrame announced into `dst`, scaled down to fit `maxWidth` x `maxHeight` x 3 bytes, top row first.
+/// Decode the frame videoCaptureAwaitFrame announced into `dst`, no larger than `maxWidth` x `maxHeight` x 3 bytes, counting a source byte at or below `floor` as black.
 bool videoCaptureDecodeInto(VideoCaptureHandle& h, uint8_t* dst, uint16_t maxWidth, uint16_t maxHeight,
-                            uint16_t& outWidth, uint16_t& outHeight);
+                            uint16_t& outWidth, uint16_t& outHeight, uint8_t floor);
+
+/// Which step the last open failed at, or null where none has failed since; a static string the caller may show.
+const char* videoCaptureFault() MM_NONBLOCKING;
 
 /// Release the device and free its buffers.
 void videoCaptureDeinit(VideoCaptureHandle& h);
+
+/// Start uninstalling what the capture installed to see devices, once no capture is open. It returns before the teardown finishes, so an init is refused while videoCaptureSettling() holds.
+void videoCaptureShutdown();
+
+/// Whether a teardown is still unwinding, so an open would be refused rather than failing for a reason worth naming.
+bool videoCaptureSettling() MM_NONBLOCKING;
 
 /// Why frames did not reach the lights, cumulative since the device was opened.
 struct VideoCaptureStats {

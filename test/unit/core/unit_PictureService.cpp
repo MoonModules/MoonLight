@@ -3,6 +3,7 @@
 /// The picture source: the test pattern it publishes, the generation that tells a consumer it changed, and the empty frame when nothing publishes.
 
 #include "doctest.h"
+#include "core/module/Scheduler.h"
 #include "core/services/PictureService.h"
 
 #include <atomic>
@@ -48,6 +49,15 @@ TEST_CASE("the test pattern publishes the test card") {
     CHECK(is(117, 89, 255, 255, 255));   // and end white
     CHECK(is(22, 38, 80, 160, 140));     // the left side's tall block, upper half
     CHECK(is(5, 2, 128, 128, 128));      // a grid square's gray
+}
+
+// The capture needs the transport to link, so a build without it offers the test pattern alone rather than a source that cannot open.
+TEST_CASE("the source list holds only what the build can open") {
+    Picture p(16, 9);
+    uint8_t options = 0;
+    for (uint8_t i = 0; i < p.svc.controls().count(); i++)
+        if (std::strcmp(p.svc.controls()[i].name, "source") == 0) options = p.svc.controls()[i].max;
+    CHECK(options == (mm::platform::hasUsbVideo ? mm::PictureService::kSourceCount : 1));
 }
 
 // A consumer compares generations to skip a picture it already sampled, so a new size is a new generation.
@@ -177,6 +187,14 @@ bool startCapture(Picture& p, uint32_t& was) {
     was = current().generation;   // prepareBuffers published the resized picture; a frame comes after it
     return publishedPast(was);
 }
+
+// A capture publishing a picture with a short stale window, which both drop tests open from.
+void openWithShortStale(Picture& p) {
+    uint32_t was = 0;
+    REQUIRE(startCapture(p, was));
+    REQUIRE(current().rgb != nullptr);
+    p.svc.staleMs = 100;
+}
 }  // namespace
 
 // The whole picture, as the test pattern fills it. A 4:3 frame fills a 2:1 picture rather than leaving it short.
@@ -195,6 +213,23 @@ TEST_CASE("the usb capture source publishes the grabber's frames at the size the
     p.svc.release();
 }
 
+// The platform names the step a failed open stopped at, and the status shows it rather than guessing at the mode list.
+TEST_CASE("a failed open reports the step the platform stopped at") {
+    const mm::platform::VideoCaptureFormat f{640, 480, 30};
+    mm::platform::setTestVideoCaptureFormats(&f, 1);
+    mm::platform::VideoCaptureHandle held;
+    REQUIRE(mm::platform::videoCaptureInit(held, 64, 48, 30));   // the one owner, taken before the service asks
+    Picture p(64, 48);
+    p.svc.source = mm::PictureService::kUsbCapture;
+    p.svc.prepare();
+    REQUIRE(p.svc.status() != nullptr);
+    CHECK(std::string(p.svc.status()) == "a capture is already open");
+    CHECK(p.svc.severity() == mm::MoonModule::Severity::Warning);
+    p.svc.release();
+    mm::platform::videoCaptureDeinit(held);
+    mm::platform::setTestVideoCaptureFormats(nullptr, 0);
+}
+
 // A board whose USB port has nothing on it says so, rather than failing or waiting on a device.
 TEST_CASE("the usb capture source without a grabber reports it") {
     mm::platform::setTestVideoCaptureFormats(nullptr, 0);
@@ -203,6 +238,7 @@ TEST_CASE("the usb capture source without a grabber reports it") {
     p.svc.prepare();
     REQUIRE(p.svc.status() != nullptr);
     CHECK(std::string(p.svc.status()) == "no grabber attached");
+    CHECK(p.svc.severity() == mm::MoonModule::Severity::Warning);
     p.svc.release();
 }
 
@@ -221,16 +257,18 @@ TEST_CASE("a frame the decoder refuses publishes nothing, and recovery publishes
     p.svc.release();
 }
 
-// The status names the size it publishes and what it lost, so a climbing loss is visible without a log.
-TEST_CASE("the capture status counts the frames that landed and those lost") {
+// The status says whether the capture is live right now, which a total since boot cannot.
+TEST_CASE("the capture status reports a live rate, not a total") {
     Grabber g(320, 240, 30, 5, 5, 5);
     Picture p(64, 48);
     uint32_t was = 0;
     REQUIRE(startCapture(p, was));
     const std::string line = captureStatus(p.svc);
-    CHECK(line.rfind("64 x 48, ", 0) == 0);   // the picture's own size, whatever the grabber streams
-    CHECK(line.find(" frames, 0 lost") != std::string::npos);
-    CHECK(line.find(" 0 frames") == std::string::npos);   // the picture that arrived is counted
+    CHECK(line.rfind("live, 64 x 48 at ", 0) == 0);   // the picture's size, whatever the grabber streams
+    CHECK(line.find(" at ") != std::string::npos);
+    CHECK(line.find("fps") != std::string::npos);
+    CHECK(line.find("skipped") == std::string::npos);   // nothing skipped, so the line says nothing of it
+    CHECK(line.find("frames failing") == std::string::npos);
     CHECK(line.find("one picture") == std::string::npos);
     CHECK(p.svc.severity() == mm::MoonModule::Severity::Status);
     p.svc.release();
@@ -277,5 +315,145 @@ TEST_CASE("switching away from the capture stops its task") {
     CHECK(px[0] == 128);
     CHECK(px[1] == 128);
     CHECK(px[2] == 128);
+    p.svc.release();
+}
+
+// A frame the decoder refuses is a fault and must warn, where a spare frame must not.
+TEST_CASE("a failed frame warns where a spare one does not") {
+    Grabber g(320, 240, 30, 5, 5, 5);
+    Picture p(64, 48);
+    uint32_t was = 0;
+    REQUIRE(startCapture(p, was));
+    REQUIRE(p.svc.severity() == mm::MoonModule::Severity::Status);
+    mm::platform::setTestVideoCaptureDecodeFails(true);
+    // The rate is a per-tick delta, so read it on the tick that sees the failures, not after.
+    bool failing = false;
+    for (int i = 0; i < 200 && !failing; i++) {
+        failing = captureStatus(p.svc).find("frames failing") != std::string::npos;
+        if (!failing) std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+    CHECK(failing);
+    CHECK(p.svc.severity() == mm::MoonModule::Severity::Warning);
+    p.svc.release();
+}
+
+// A source that stops leaves its last picture lighting the room. Past staleMs it goes, generation and all.
+TEST_CASE("a capture that stops sending has its picture dropped") {
+    Grabber g(320, 240, 30, 9, 9, 9);
+    Picture p(64, 48);
+    openWithShortStale(p);
+    mm::platform::setTestVideoCaptureDecodeFails(true);   // the grabber goes quiet: the gap opens
+    const uint32_t held = current().generation;
+    bool dropped = false;
+    for (int i = 0; i < 200 && !dropped; i++) {
+        p.svc.tick1s();
+        dropped = current().rgb == nullptr;
+        if (!dropped) std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+    CHECK(dropped);
+    CHECK(current().generation != held);   // or an effect's redraw guard would skip the change
+    p.svc.release();
+}
+
+// The open zeroes the device's counters, so a re-open that kept its baselines would read a rate of four billion.
+TEST_CASE("a re-opened capture reports a plain rate, not an underflowed one") {
+    Grabber g(320, 240, 30, 5, 5, 5);
+    Picture p(64, 48);
+    uint32_t was = 0;
+    REQUIRE(startCapture(p, was));
+    REQUIRE(captureStatus(p.svc).rfind("live, ", 0) == 0);   // a first run, so the baselines are set
+    p.svc.prepare();                                         // the same source again: stop, then open
+    const std::string line = captureStatus(p.svc);
+    CHECK(line.find("4294") == std::string::npos);   // no wrapped delta anywhere on the line
+    CHECK(line.find("frames failing") == std::string::npos);
+    p.svc.release();
+}
+
+// A capture whose frames are landing holds its picture through the stale guard, whatever the board's uptime.
+TEST_CASE("a capture that has just opened keeps its first picture") {
+    Grabber g(320, 240, 30, 9, 9, 9);
+    Picture p(64, 48);
+    uint32_t was = 0;
+    REQUIRE(startCapture(p, was));
+    p.svc.tick1s();   // the stale guard runs here, with staleMs at its default
+    CHECK(current().rgb != nullptr);
+    p.svc.release();
+}
+
+// A grabber that leaves takes its task with it, so the drop cannot wait on one: its last picture would stay on the lights.
+TEST_CASE("a capture whose device is unplugged has its picture dropped") {
+    mm::Scheduler sched;
+    Grabber g(320, 240, 30, 9, 9, 9);
+    Picture p(64, 48);
+    sched.addModule(&p.svc);
+    sched.setup();   // the instance the service asks for a rebuild
+    openWithShortStale(p);
+    mm::platform::setTestVideoCaptureFormats(nullptr, 0);   // the grabber is pulled off the bus
+    bool dropped = false;
+    for (int i = 0; i < 200 && !dropped; i++) {
+        p.svc.tick1s();
+        sched.tick();   // the rebuild the tick asked for, run where the Scheduler runs it
+        dropped = current().rgb == nullptr;
+        if (!dropped) std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+    CHECK(dropped);
+    // The rebuild must not light the frame again: a writer's picture is published by its own decode.
+    sched.tick();
+    CHECK(current().rgb == nullptr);
+    p.svc.release();
+}
+
+// A gap of one frame is ordinary, since the capture runs at its own rate: it must not strobe.
+TEST_CASE("an ordinary gap between frames keeps the picture") {
+    Grabber g(320, 240, 30, 9, 9, 9);
+    Picture p(64, 48);
+    uint32_t was = 0;
+    REQUIRE(startCapture(p, was));
+    p.svc.staleMs = 2000;   // far longer than the 33 ms the grabber paces at
+    for (int i = 0; i < 20; i++) {
+        p.svc.tick1s();
+        CHECK(current().rgb != nullptr);
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+    p.svc.release();
+}
+
+// A grabber's black is rarely a 0, and a 1 no screen shows is a lit LED. The floor cuts it.
+TEST_CASE("the noise floor cuts a grabber's near-black to black") {
+    Grabber g(320, 240, 30, 2, 2, 2);   // a frame of 2s, which is what a dark source decodes to
+    Picture p(8, 8);
+    uint32_t was = 0;
+    p.svc.noiseFloor = 0;
+    REQUIRE(startCapture(p, was));
+    CHECK(*pixel(current(), 4, 4) == 2);   // off: the byte arrives as sent
+    p.svc.noiseFloor = 4;
+    p.svc.prepare();
+    REQUIRE(publishedPast(current().generation));
+    CHECK(*pixel(current(), 4, 4) == 0);   // at or under the floor: black, so the lights stay off
+    p.svc.release();
+}
+
+// A grabber unplugged mid-stream left the port in recovery, since the stream was never closed, and a replug never enumerated: the device list moving is what closes and re-opens it.
+TEST_CASE("a grabber unplugged and plugged back is opened again") {
+    mm::Scheduler sched;
+    Grabber g(640, 480, 30, 10, 200, 90);
+    Picture p(64, 48);
+    sched.addModule(&p.svc);
+    sched.setup();   // the instance a service asks for a rebuild
+    uint32_t was = 0;
+    REQUIRE(startCapture(p, was));
+
+    mm::platform::setTestVideoCaptureFormats(nullptr, 0);   // unplugged
+    p.svc.tick1s();
+    sched.tick();   // the rebuild it asked for closes the stream
+    REQUIRE(p.svc.status() != nullptr);
+    CHECK(std::string(p.svc.status()) == "no grabber attached");
+
+    const mm::platform::VideoCaptureFormat f{640, 480, 30};
+    mm::platform::setTestVideoCaptureFormats(&f, 1);   // plugged back
+    p.svc.tick1s();
+    was = current().generation;
+    sched.tick();   // and the next one opens it again
+    CHECK(publishedPast(was));
     p.svc.release();
 }
