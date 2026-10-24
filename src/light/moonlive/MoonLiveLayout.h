@@ -100,6 +100,9 @@ public:
         runScript(&addToSink, &e);
     }
 
+    /// A changed file may be this module's script, which the next prepare then reads again.
+    void onFileChanged(const char* path) override { script_.fileChanged(path); }
+
     /// Drop the compiled program and its memory.
     void release() override {
         script_.engine().free();

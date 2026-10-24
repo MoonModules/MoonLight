@@ -1,0 +1,101 @@
+{
+  "name": "scenario_MoonLive_hpwit_show",
+  "module": "MoonLiveEffect",
+  "also": [
+    "Layer",
+    "RegionModifier",
+    "MoonLiveService",
+    "ControlModule",
+    "Effects"
+  ],
+  "mode": "mutate",
+  "live_only": true,
+  "description": "hpwit's effects as one show, played by the hpwit-show service, which builds its own six layers and the surface slots with one live push: the cheap effects over the whole rig, the per-pixel ones in Region windows the service moves, since a window costs its share of the rig. Effects, Services and Control are restored afterwards, and the scripts staged from the repository are removed.",
+  "top": [
+    "Effects",
+    "Services",
+    "Control"
+  ],
+  "steps": [
+    {
+      "name": "stage-twinkle-stars",
+      "op": "write_file",
+      "path": "/moonlive/twinkle-stars.mle",
+      "from": "moonlive/projects/hpwit/twinkle-stars.mle"
+    },
+    {
+      "name": "stage-ripple-rings",
+      "op": "write_file",
+      "path": "/moonlive/ripple-rings.mle",
+      "from": "moonlive/projects/hpwit/ripple-rings.mle"
+    },
+    {
+      "name": "stage-plasma-ring",
+      "op": "write_file",
+      "path": "/moonlive/plasma-ring.mle",
+      "from": "moonlive/projects/hpwit/plasma-ring.mle"
+    },
+    {
+      "name": "stage-voronoi",
+      "op": "write_file",
+      "path": "/moonlive/voronoi.mle",
+      "from": "moonlive/projects/hpwit/voronoi.mle"
+    },
+    {
+      "name": "stage-particle-fountain",
+      "op": "write_file",
+      "path": "/moonlive/particle-fountain.mle",
+      "from": "moonlive/projects/hpwit/particle-fountain.mle"
+    },
+    {
+      "name": "stage-mandala",
+      "op": "write_file",
+      "path": "/moonlive/mandala.mle",
+      "from": "moonlive/projects/hpwit/mandala.mle"
+    },
+    {
+      "name": "stage-show",
+      "op": "write_file",
+      "path": "/moonlive/hpwit-show.mls",
+      "from": "moonlive/projects/hpwit/hpwit-show.mls"
+    },
+    {
+      "name": "show",
+      "description": "The show service running, its windows moving every 20 ms.",
+      "op": "apply_state",
+      "measure": true,
+      "settle": 10,
+      "read": [
+        "Stars.tick",
+        "Ripples.tick",
+        "Waves.tick",
+        "Seeds.tick",
+        "Petals.tick",
+        "Sparks.tick"
+      ],
+      "document": {
+        "Services": {
+          "Show": {
+            "type": "MoonLiveService",
+            "script": "hpwit-show.mls"
+          }
+        }
+      }
+    },
+    {
+      "name": "show-next-scene",
+      "description": "Past the first scene change, a new palette and blends.",
+      "op": "measure",
+      "measure": true,
+      "settle": 15,
+      "read": [
+        "Stars.tick",
+        "Ripples.tick",
+        "Waves.tick",
+        "Seeds.tick",
+        "Petals.tick",
+        "Sparks.tick"
+      ]
+    }
+  ]
+}

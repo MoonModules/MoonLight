@@ -199,7 +199,7 @@ A modifier is a coordinate transform, applied in one of two ways (the fold contr
 
 The blend+map step walks each layer in turn: reads each logical light, uses that layer's LUT to find the physical position(s), blends the color into the physical output buffer. This is where logical space meets physical space.
 
-Each mapping LUT is a flat, contiguous lookup table allocated outside the hot path. It is built in `Layer::prepare()` and rebuilt whenever a Layout or Modifier control changes (the controls' `affectsPrepare` returns true) or a Modifier/Layout child is added/removed/replaced/moved; both triggers flow through the same core mechanism, see [Event triggering between modules](moonmodule.md#event-triggering-between-modules).
+Each mapping LUT is a flat, contiguous lookup table allocated outside the hot path. It is built in `Layer::prepare()`. A Layout or Modifier control change rebuilds it, a Modifier's reaching its own layer alone, and so does adding, removing, replacing or moving a Modifier or Layout child. Both triggers flow through the same core mechanism: [Event triggering between modules](moonmodule.md#event-triggering-between-modules).
 
 The LUT supports four mapping types:
 

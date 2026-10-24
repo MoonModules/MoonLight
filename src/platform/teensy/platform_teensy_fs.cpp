@@ -155,6 +155,12 @@ bool fsMkdir(const char* apiPath) {
     return fs->exists(path);
 }
 
+bool fsExists(const char* apiPath) {
+    const char* path = nullptr;
+    FS* fs = fsFor(apiPath, path);
+    return fs && fs->exists(path);
+}
+
 bool fsRemove(const char* apiPath) {
     const char* path = nullptr;
     FS* fs = fsFor(apiPath, path);

@@ -24,11 +24,35 @@ For a device still on old firmware (no Backup button yet), the [installer page](
 | *re-set a control* | One value resets to its default; set it again in the UI if you had changed it. |
 | *re-add a module* | The module vanishes from the tree on boot; add it again and re-enter its controls. |
 | *update a file* | An on-device file must be edited or replaced. |
+| *install over USB* | The update cannot come over the air: one install from the installer page with a cable, after which updates over the air work again. |
 | *erase flash* | A full flash erase is required (the heaviest, a full reconfigure follows). |
 
 ---
 
 ## Unreleased
+
+### The StadBeest autopilot builds its looks, a layer each
+
+**Action: *nothing*, unless a desk or a preset switched the looks on `switch3` to `switch5`: use `encoder6` to `encoder8`.**
+
+`stadbeest-autopilot.mls` pushes every part its look at start, a layer per look. It crossfades between them through `encoder6` to `encoder8`, which set the three layers' opacity, where `switch3` to `switch5` turned three effects in one layer on and off, and it clears those three switch targets. The eyes and the mouth are reached by name, `MM-eye1.local`, `MM-eye2.local` and `MM-mouth.local`; a part named otherwise is renamed on its System card, or the names are edited in the script. [The StadBeest](examples/multi-board-installation.md#3-one-surface-layout-for-every-device) has the table.
+
+### LCD-MM's ring is smaller, and refuses PSRAM
+
+**Action: *nothing*, unless `ringSnapshot` was off on a board with PSRAM: turn it on.**
+
+`ringAuto` now sizes the ring by the lead the wire needs, 3-row buffers, where it took every byte of internal RAM above 64 KB. On a 3,840-light S3 that is 21 small buffers instead of 28 large ones, a ring of 37 KB where it took about 112 KB. Turn `ringAuto` off to set `ringRows` and `ringBufs` by hand as before.
+The ring refuses to run when its refill would read PSRAM, since a flash save can cut PSRAM off in the middle of a refill and crash the board. With `ringSnapshot` off it reads the live frame, which a board with PSRAM keeps there, so the card shows `ring refused: … turn ringSnapshot on`.
+
+### ESP32-S3 boards read their flash over four lines
+
+**Action: *install over USB* once, on an `esp32s3-n16r8`, `esp32s3-n8r8` or `esp32s3-zero` device; the others need *nothing*.**
+
+These three firmwares read code from flash over four data lines (QIO) where they used two (DIO), which makes an S3's tick about 16% faster.
+The flash mode is the bootloader's, and an update over the air replaces only the app, so ESP-IDF refuses an app whose mode differs from the running one.
+The Firmware card then reports `ESP_ERR_OTA_SPI_MODE_MISMATCH`.
+Install this release once over USB from the [installer page](https://moonmodules.org/MoonLight/install/), which writes the bootloader too.
+The partition table is unchanged, so with *Erase chip first* left unticked the config stays; take a backup first anyway.
 
 ### Rings 241 places a few lights one unit over
 
@@ -82,7 +106,7 @@ Switching a device on and off four times, each within a few seconds, opens its a
 **Action: *nothing*.**
 
 The palette picker lists every factory palette at its place in the catalog, held or not, and your own scripted palettes after them. A saved selection is kept by name.
-A knob or a slot that stepped to a scripted palette by number may land on another one.
+A knob or a slot that stepped to a scripted palette by number may land on another one. `stadbeest-fire` is 65 and `temperature` 64, since the StadBeest palette sits in its project folder.
 One the device does not hold keeps the last palette until the UI downloads it.
 
 ### `stadbeest-legs` is `stadbeest-walk`, `stadbeest-eyes` is `stadbeest-frog-eye`

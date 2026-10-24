@@ -1,6 +1,6 @@
 # Processes inventory
 
-Step 1 of [Processes, described once](../present/Plan-20261015%20-%20Processes%2C%20described%20once.md), the Extract phase: every process MoonLight has, recorded by its content rather than the format it is stored in, counted on 2026-10-16 by three read-only Researchers. Part 1 is the end user's journey, Part 2 the contributor's, product owner's, agents' and CI's, and Part 3 the executable step lists: the scenarios and the MoonTube clips.
+Step 1 of [Processes, described once](../present/Plan-20261015%20-%20Processes%2C%20described%20once%20(partial).md), the Extract phase: every process MoonLight has, recorded by its content rather than the format it is stored in, counted on 2026-10-16 by three read-only Researchers. Part 1 is the end user's journey, Part 2 the contributor's, product owner's, agents' and CI's, and Part 3 the executable step lists: the scenarios and the MoonTube clips.
 
 ## What it found
 

@@ -4,13 +4,13 @@
 build_esp32.py calls both after the app build for a variant that carries them.
 """
 
-import shutil
 import subprocess
 import sys
 from pathlib import Path
 
 import compute_version   # sibling: the one place a version string is derived
 from generate_build_info import build_id   # sibling: the one place the build id is derived
+import sdkconfig_fragments   # sibling: a changed fragment regenerates a build dir's sdkconfig
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 
@@ -40,15 +40,9 @@ def build_moonbase(cmd: list[str], env: dict, chip: str, version: str = "") -> N
         # The library.json default the app resolves through build_info.h's #ifndef, rather than a git-describe string the app cannot compare against.
         version = compute_version.compute("local", "")
     b_arg.append(f"-DPROJECT_VER={version}+{build_id()}")
-    # Same trap as stale_feature_cache: IDF generates sdkconfig from the defaults only when it is
-    # absent, so an edited moonbase/sdkconfig.defaults silently changes nothing. One defaults file
-    # here, so mtime is a sufficient staleness signal.
-    gen = build_dir / "sdkconfig"
-    defaults = moonbase_dir / "sdkconfig.defaults"
-    if gen.exists() and defaults.stat().st_mtime > gen.stat().st_mtime:
-        print(f"MoonBase build dir {build_dir.name} predates sdkconfig.defaults; "
-              "removing it for a clean reconfigure.")
-        shutil.rmtree(build_dir)
+    # An edited moonbase/sdkconfig.defaults regenerates the sdkconfig, as the app's fragments do.
+    digest = sdkconfig_fragments.refresh(cmd + b_arg, build_dir, [moonbase_dir / "sdkconfig.defaults"],
+                                         moonbase_dir, env)
     if not build_dir.exists():
         print(f"Setting MoonBase target to {chip}...")
         r = subprocess.run(cmd + b_arg + ["set-target", chip], cwd=moonbase_dir, env=env)
@@ -58,6 +52,7 @@ def build_moonbase(cmd: list[str], env: dict, chip: str, version: str = "") -> N
     r = subprocess.run(cmd + b_arg + ["build"], cwd=moonbase_dir, env=env)
     if r.returncode != 0:
         sys.exit(r.returncode)
+    sdkconfig_fragments.record(build_dir, digest)
     binp = build_dir / MOONBASE_BIN
     if binp.exists():
         kb = binp.stat().st_size / 1024

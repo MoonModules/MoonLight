@@ -3,7 +3,6 @@
 #include "light/drivers/ParallelLedDriver.h"   // shared driver body + LedPeripheral
 #include "platform/platform.h"
 
-#include <atomic>   // the parallel-snapshot helper join flags
 
 namespace mm {
 
@@ -26,33 +25,11 @@ namespace mm {
 /// The whole-frame path runs free once armed; the ring carries a deadline. Its refill runs from the end-of-buffer interrupt and must beat the wire at 28.8 µs per light at 20 MHz, which is why `useRing` is a switch.
 ///
 /// @card MoonI80Peripheral.png
-class MoonI80Peripheral : public LedPeripheral {
+class MoonI80Peripheral : public LedPeripheral, public platform::InternalRamObject {   // the refill interrupt reads it, so internal RAM, as ParallelLedDriver
 public:
-    // Pins default to UNSET: they are user-soldered, so a default would be a guess.
-
-    /// WR, the pixel clock, needed only by a 74HCT595 expander and unrouted otherwise.
-    int8_t clockPin = 10;
-
-    /// Stream the frame as a ring of small internal buffers, or send it whole from one block.
-    bool useRing = true;
-
-    /// Derive the ring geometry and write it into the controls, so the user sees real numbers.
-    bool ringAuto = true;
-
-    /// Lights per DMA buffer: the ring's grain, and the RAM against interrupt-rate lever.
-    uint8_t ringRows = platform::kRingRowsDefault;
-
-    /// How many buffers the DMA circulates; more depth costs more internal DMA RAM.
-    uint8_t ringBufs = platform::kRingBufsDefault;
-
-    /// Inter-buffer zero-pad in µs, buying refill deadline at a linear frame-time cost.
-    uint8_t ringPadUs = 0;
-
-    /// Overclock the '595 shift clock from 20 MHz to 26.67 MHz, for short-wired rigs; turn it off if any panel scrambles.
-    bool shiftOverclock = false;
-
-    /// Backing store for the read-only `ringDbg` control, the ring's one-line instrument.
-    char ringDbgStr_[176] = "—";
+    /// The ring's live counters, once a second; `ab` counts lost frames, 0 on a healthy ring.
+    char ringDbgStr_[192] = "—";
+    bool shortOfLead_ = false;   ///< ringAuto stopped at the internal floor before the lead the ring needs
 
     // --- LedPeripheral descriptors ---
 
@@ -73,41 +50,41 @@ public:
     bool supportsDoubleBuffer() const override { return false; }
 
     /// The GPIO the orchestrator pads spare bus lanes with, which only shift mode routes.
-    uint16_t clockPinForBus() const override { return static_cast<uint16_t>(clockPin); }
+    uint16_t clockPinForBus() const override { return static_cast<uint16_t>(owner_->clockPin); }
     /// A spare lane needs no pad: this backend routes only the GPIOs it is handed.
     bool spareLanesNeedPad() const override { return false; }
 
     /// Bind the bus controls; WR is bound always but shown only in expander mode.
     void addBusControls(ControlList& controls) override {
-        controls.addPin("clockPin", clockPin);
+        controls.addPin("clockPin", owner_->clockPin);
         controls.setHidden(controls.count() - 1, !owner_->pinExpanderMode());
     }
 
-    /// Bind the output path, the ring's geometry and its instrument, in a separate hook so clockPin and latchPin stay together as one wiring pair in the UI.
+    /// What ringAuto picks: rows per buffer, buffers, and whether the floor cut the lead short.
+    struct RingDepth { uint8_t rows; uint8_t bufs; bool shortOfLead; };
+    /// The depth the measured lead needs, no more than one buffer per slice, and never past the internal floor WiFi and HTTP need.
+    static RingDepth autoDepth(size_t rowBytes, uint32_t totalRows, size_t freeInternal) {
+        if (rowBytes == 0) rowBytes = 1;   // no row to size by: the depth falls to its limits rather than dividing by zero
+        const uint32_t maxRows = static_cast<uint32_t>(platform::kRingNodeMaxBytes / rowBytes);
+        const uint8_t rows = static_cast<uint8_t>(maxRows < platform::kRingAutoRows ? (maxRows ? maxRows : 1) : platform::kRingAutoRows);
+        const uint32_t slices = (totalRows + rows - 1u) / rows;
+        const size_t bufBytes = static_cast<size_t>(rows) * rowBytes;
+        // The lead counts only past the buffers the refill keeps clear and the slice it is writing.
+        uint32_t bufs = (platform::kRingLeadRows + rows - 1u) / rows + platform::kRingRefillGap + 1u;
+        if (bufs > slices + 1u) bufs = slices + 1u;   // a buffer per slice and one spare: nothing races the wire
+        if (bufs > platform::kRingBufsMax) bufs = platform::kRingBufsMax;
+        const size_t budget = freeInternal > platform::kInternalFreeFloor ? freeInternal - platform::kInternalFreeFloor : 0;
+        const uint32_t byRam = static_cast<uint32_t>(budget / bufBytes);
+        const bool shortOfLead = bufs > byRam;
+        if (shortOfLead) bufs = byRam;
+        return {rows, static_cast<uint8_t>(bufs >= platform::kRingBufsMin ? bufs : platform::kRingBufsMin), shortOfLead};
+    }
+
+    /// This backend streams the ring, so the driver shows the ring's settings.
+    bool supportsRing() const override { return true; }
+
+    /// Bind the ring's instrument below the driver's ring settings.
     void addRingControls(ControlList& controls) override {
-        // Placed below the wiring pair it belongs to; the fix for '595 corruption is OFF.
-        controls.addControl("shiftOverclock", shiftOverclock);
-        controls.setHidden(controls.count() - 1, !owner_->pinExpanderMode());
-        controls.setAdvanced(controls.count() - 1);   // a '595 clock tuning knob: expert only
-        // This picks the PATH; ringSnapshot tunes how the ring reads its source. They compose. Whole-frame stays as the A/B reference, not a fallback the ring degrades into.
-        controls.addControl("useRing", useRing);
-        controls.setHidden(controls.count() - 1, !owner_->pinExpanderMode());
-        // Lives on the orchestrator; the control binds it here through the reference accessor.
-        controls.addControl("ringSnapshot", owner_->ringSnapshotRef());
-        controls.setHidden(controls.count() - 1, !wantsRing());
-        // Gating on wantsRing() is safe: it reads plain members, so it resolves before boot wiring.
-        controls.addControl("ringAuto", ringAuto);
-        controls.setHidden(controls.count() - 1, !wantsRing());
-        // Dev tuning: ringAuto derives these for the end user, so the manual knobs are expert-only.
-        controls.addControl("ringRows", ringRows, 1, 64);
-        controls.setHidden(controls.count() - 1, !wantsRing());
-        controls.setAdvanced(controls.count() - 1);
-        controls.addControl("ringBufs", ringBufs, platform::kRingBufsMin, platform::kRingBufsMax);   // depth buys jitter absorption, so only the average refill must beat the slice deadline
-        controls.setHidden(controls.count() - 1, !wantsRing());
-        controls.setAdvanced(controls.count() - 1);
-        controls.addControl("ringPadUs", ringPadUs, 0, platform::kRingPadMaxUs);
-        controls.setHidden(controls.count() - 1, !wantsRing());
-        controls.setAdvanced(controls.count() - 1);
         // Diagnosable by polling /api/state, which is more reliable than scraping serial.
         controls.addReadOnly("ringDbg", ringDbgStr_, sizeof(ringDbgStr_));
         controls.setHidden(controls.count() - 1, !wantsRing());
@@ -132,7 +109,7 @@ public:
             ? (platform::ptrIsPsram(snap) ? 'P' : 'I') : '-';
         const char liveWhere = (src && src->data())
             ? (platform::ptrIsPsram(src->data()) ? 'P' : 'I') : '-';
-        std::snprintf(ringDbgStr_, sizeof(ringDbgStr_), "sn%c lv%c sl%u/bf%u co%u cr%u ab%u dn%u ld%u lt%u tx%u ipb%u ci%u tn%d de%u enc%u ea%u sg%u se%u tw%u ts%u tp%u gap%u",
+        std::snprintf(ringDbgStr_, sizeof(ringDbgStr_), "sn%c lv%c sl%u/bf%u co%u cr%u ab%u dn%u ld%u lt%u tx%u ipb%u ci%u tn%d de%u enc%u ea%u sg%u se%u tw%u ts%u tp%u gap%u@%u ml%d c%u",
                       snapWhere, liveWhere,
                       static_cast<unsigned>(s.nSlices), static_cast<unsigned>(s.ringBufs),
                       static_cast<unsigned>(s.cacheOffDefers), static_cast<unsigned>(s.cacheOffMaxRun),
@@ -148,8 +125,9 @@ public:
                       static_cast<unsigned>(ParallelLedDriver::dbgTickWaitUs),   // wire-wait µs
                       static_cast<unsigned>(ParallelLedDriver::dbgTickSnapUs),   // snapshot µs
                       static_cast<unsigned>(ParallelLedDriver::dbgTickPrimeUs),  // prime µs
-                      static_cast<unsigned>(s.maxIsrGapUs));
-                      // The field legend is on the drivers page; `lt` is the one to watch.
+                      static_cast<unsigned>(s.maxIsrGapUs), static_cast<unsigned>(s.maxGapAtSlice),
+                      static_cast<int>(s.minLead), static_cast<unsigned>(s.isrCore));
+                      // The field legend is on the LED drivers page.
     }
     /// Which controls need the bus rebuilt rather than re-encoded when they change.
     bool busControlTriggersBuild(const char* name) const override {
@@ -167,8 +145,8 @@ public:
     const char* validateBusFatal() const override {
         if (owner_->pinExpanderMode()) {
             // Unset would route WR to GPIO 65535, so reject it before busInit reaches the pad.
-            if (clockPin < 0) return "the 74HCT595 expander needs a clockPin (its shift clock)";
-            if (owner_->latchPin >= 0 && owner_->latchPin == clockPin)
+            if (owner_->clockPin < 0) return "the 74HCT595 expander needs a clockPin (its shift clock)";
+            if (owner_->latchPin >= 0 && owner_->latchPin == owner_->clockPin)
                 return "latchPin is on clockPin (WR) — the latch needs its own GPIO";
         }
         return nullptr;
@@ -177,20 +155,20 @@ public:
     const char* validateBusPins(const uint16_t* lanes, uint8_t n) const override {
         if (!owner_->pinExpanderMode()) return nullptr;
         for (uint8_t i = 0; i < n; i++)
-            if (lanes[i] == static_cast<uint16_t>(clockPin)) return "a data pin is on clockPin (WR)";
+            if (lanes[i] == static_cast<uint16_t>(owner_->clockPin)) return "a data pin is on clockPin (WR)";
         return nullptr;
     }
 
     /// Create the bus and its DMA buffers, scaling the pixel clock to the slot's shift width.
     bool busInit(size_t frameBytes, bool /*wantSecondBuffer*/) override {
-        platform::moonI80SetShiftClockDiv(shiftOverclock ? 3 : 4);   // ON = 26.67 MHz, OFF = 20 MHz
+        platform::moonI80SetShiftClockDiv(owner_->shiftOverclock ? 3 : 4);   // ON = 26.67 MHz, OFF = 20 MHz
         // Forced single-buffer here too, so a caller that forgets the gate cannot reach the race.
         return platform::moonI80Ws2812Init(bus_, owner_->busPinList(), owner_->busPinCount(),
-                                           static_cast<uint16_t>(clockPin), frameBytes,
+                                           static_cast<uint16_t>(owner_->clockPin), frameBytes,
                                            /*wantSecondBuffer=*/false, owner_->busClockMultiplier());
     }
-    /// Tear the bus down, stopping this backend's own snapshot helper before it goes away.
-    void busDeinit() override { stopSnapHelper(); platform::moonI80Ws2812Deinit(bus_); }
+    /// Tear the bus down.
+    void busDeinit() override { platform::moonI80Ws2812Deinit(bus_); }
     /// The DMA buffer the encoder writes slice `i` into.
     uint8_t* busBuffer(uint8_t i) override { return platform::moonI80Ws2812Buffer(bus_, i); }
     /// How many bytes one DMA buffer holds.
@@ -206,63 +184,42 @@ public:
     platform::RmtLoopbackResult busLoopback(const uint8_t* frame, size_t frameBytes,
                                             size_t dataBytes, uint8_t rowBits) override {
         return platform::moonI80Ws2812Loopback(owner_->busPinList(), owner_->busPinCount(),
-                                               static_cast<uint16_t>(clockPin),
+                                               static_cast<uint16_t>(owner_->clockPin),
                                                static_cast<uint16_t>(owner_->loopbackRxPin),
                                                frame, frameBytes, dataBytes, rowBits,
                                                owner_->busClockMultiplier(),
-                                               ringRows, ringBufs, useRing);
+                                               owner_->ringRows, owner_->ringBufs, owner_->useRing);
     }
 
     /// Whether reinit should build a ring for this config rather than the whole-frame path. A silent fallback would hide the active path, so the switch says what runs.
     bool wantsRing() const override {
         if (!owner_->pinExpanderMode()) return false;   // direct mode never rings (drives PSRAM fine)
-        return useRing;
+        return owner_->useRing;
     }
 
     /// Bring the bus up as a streaming ring, so a frame too big for internal RAM never forms.
     bool busInitRing(size_t rowBytes, uint32_t totalRows) override {
-        // The RAM budget takes free internal MINUS a reserve, since WiFi and HTTP need their share.
-        if (ringAuto && rowBytes > 0) {
-            const uint32_t maxRows = static_cast<uint32_t>(platform::kRingNodeMaxBytes / rowBytes);
-            ringRows = static_cast<uint8_t>(maxRows > 64 ? 64 : (maxRows ? maxRows : 1));
-            const uint32_t slices = (totalRows + ringRows - 1u) / ringRows;
-            const size_t bufBytes = static_cast<size_t>(ringRows) * rowBytes;
-            const size_t freeInt = platform::freeInternalHeap();
-            constexpr size_t kReserve = 64 * 1024;   // leave WiFi/HTTP/stacks their internal share
-            // A deep pool is the whole win: each buffer removes one slice from the ISR's load.
-            const size_t budget = freeInt > kReserve ? (freeInt - kReserve) : 0;
-            const uint32_t byRam = bufBytes ? static_cast<uint32_t>(budget / bufBytes) : 0;
-            uint32_t bufs = slices + 1u;             // prime-only when it fits: the ideal
-            if (bufs > platform::kRingBufsMax) bufs = platform::kRingBufsMax;
-            if (bufs > byRam) bufs = byRam;
-            ringBufs = static_cast<uint8_t>(bufs >= platform::kRingBufsMin ? bufs : platform::kRingBufsMin);
+        shortOfLead_ = false;
+        if (owner_->ringAuto && rowBytes > 0) {
+            const RingDepth d = autoDepth(rowBytes, totalRows, platform::freeInternalHeap());
+            owner_->ringRows = d.rows;
+            owner_->ringBufs = d.bufs;
+            shortOfLead_ = d.shortOfLead;
         }
-        platform::moonI80SetShiftClockDiv(shiftOverclock ? 3 : 4);   // ON = 26.67 MHz, OFF = 20 MHz
+        platform::moonI80SetShiftClockDiv(owner_->shiftOverclock ? 3 : 4);   // ON = 26.67 MHz, OFF = 20 MHz
         const bool ok = platform::moonI80Ws2812InitRing(bus_, owner_->busPinList(), owner_->busPinCount(),
-                                               static_cast<uint16_t>(clockPin), rowBytes, totalRows,
-                                               ringRows, ringBufs, ringPadUs, owner_->busClockMultiplier(),
+                                               static_cast<uint16_t>(owner_->clockPin), rowBytes, totalRows,
+                                               owner_->ringRows, owner_->ringBufs, owner_->ringPadUs, owner_->busClockMultiplier(),
                                                &MoonI80Peripheral::ringEncodeTrampoline, this);
-        // Spawned here on the cold path, so kick and join only ever notify.
-        if (ok) ensureSnapHelper();
         return ok;
     }
-    /// Send one frame: prime the pool, fire the DMA, let the end-of-buffer ISR refill behind it. The ring buffers are independent, so the prime fork-joins across both cores when the split runs.
-    bool busTransmitRing() override {
-        if (snapHelperReady() && ringBufs >= 2) {
-            // Each prime waits out the previous wire end, so neither half repaints a draining buffer.
-            const uint8_t half = static_cast<uint8_t>(ringBufs / 2);
-            primeLo_ = 0; primeHi_ = half;
-            helperKick();                                             // core 0: buffers [0, half)
-            platform::moonI80Ws2812PrimeRange(bus_, half, ringBufs);   // this core: [half, ringBufs)
-            helperJoin();                                              // fence: every buffer primed
-            return platform::moonI80Ws2812ArmRing(bus_);
-        }
-        return platform::moonI80Ws2812TransmitRing(bus_);
-    }
+    /// Send one frame: prime the pool, fire the DMA, let the end-of-buffer ISR refill behind it. The prime runs on this core alone: a helper priming half on core 0 preempted the effects there and cost 12 fps.
+    bool busTransmitRing() override { return platform::moonI80Ws2812TransmitRing(bus_); }
     /// The ring's regime for the status suffix: primed before arming, or lapping behind the DMA.
     const char* busRingMode() const override {
         const platform::MoonI80RingStats s = platform::moonI80Ws2812RingStats(bus_);
         if (!s.isRing) return nullptr;
+        if (shortOfLead_) return "lapping, short of RAM: frames may glitch";
         return s.nSlices <= s.ringBufs ? "primed" : "lapping";
     }
     /// Whether the bus came up as a ring, reporting what the platform built rather than asked.
@@ -282,8 +239,8 @@ public:
             return;
         }
         // A per-refill prefill was ~1/3 of the ISR cost, so it runs only when the constants are gone.
-        const bool prefill = owner->pinExpanderMode() && (needsPrefill || !owner->uniformLaneCounts());
-        if (owner->slotBytes() == 1) {
+        const bool prefill = owner->hot_.shift && (needsPrefill || !owner->uniformLaneCounts());
+        if (owner->hot_.slotBytes == 1) {
             if (prefill) owner->prefillShiftRows<uint8_t>(outCh, dst, first, count);
             owner->encodeRows<uint8_t>(outCh, dst, first, count, closeFrame);
         } else {
@@ -293,99 +250,11 @@ public:
     }
 
     /// WR is part of the bus identity, so a change to it rebuilds the bus: not a data-pin edit.
-    void recordBusPins() override { lastClockPin_ = clockPin; }
+    void recordBusPins() override { lastClockPin_ = owner_->clockPin; }
     /// Whether the extra bus pins still match the live bus, WR being bus identity here.
-    bool extraBusPinsCurrent() const override { return lastClockPin_ == clockPin; }
-
-    // The SNAPSHOT is deliberately NOT forked: doing so saturated core 0 and hung the board.
-
-    /// Whether the fork-join should engage: the helper is up and this caller runs on core 1.
-    bool snapHelperReady() const override {
-        return snapHelper_.impl != nullptr && !snapHelperBroken_ && platform::currentCore() == 1;
-    }
-
-
-    /// Publish this frame's prime job and wake the helper; always paired with `helperJoin`.
-    void helperKick() {
-        if (!snapHelper_.impl) return;
-        // Strict ordering keeps the bounds race-free; this park-wait stops a lost or doubled notify.
-        const uint32_t t0 = platform::millis();
-        while (!snapHelperParked_.load(std::memory_order_acquire)) {
-            if (platform::millis() - t0 > kSnapJoinTimeoutMs) { snapHelperBroken_ = true; runHelperJob(); return; }
-            platform::yield();
-        }
-        snapHelperParked_.store(false, std::memory_order_release);   // consume the park; helper re-sets it
-        snapHelperDone_.store(false, std::memory_order_release);
-        platform::notifyTask(snapHelper_);
-    }
-
-    /// Block until the helper's half is primed; the fence that makes the fork-join safe. A timeout latches the helper broken and runs serially, so a wedged worker degrades.
-    void helperJoin() {
-        if (!snapHelper_.impl) return;
-        // A degraded kick already did the work serially, so there is nothing to wait for.
-        if (snapHelperBroken_) return;
-        // A real-time deadline, not a spin count: yield() may return instantly and burn hot.
-        const uint32_t t0 = platform::millis();
-        while (!snapHelperDone_.load(std::memory_order_acquire)) {
-            if (platform::millis() - t0 > kSnapJoinTimeoutMs) {
-                // Self-heal: the jobs are idempotent, so even a late helper write is identical.
-                runHelperJob();
-                snapHelperBroken_ = true;
-                return;
-            }
-            platform::yield();
-        }
-    }
-
-    /// Prime the buffer range the kick published, on the helper or serially as the fallback.
-    void runHelperJob() { platform::moonI80Ws2812PrimeRange(bus_, primeLo_, primeHi_); }
-
-    /// Bring the helper task up on core 0, the ring's tick having core 1 under the split.
-    void ensureSnapHelper() {
-        if (snapHelper_.impl) return;
-        snapHelperBroken_ = false;   // a rebuild gets a fresh chance
-        snapHelperStop_.store(false, std::memory_order_release);
-        // Seeded true, so the first kick does not wait on a park signal the task has yet to emit.
-        snapHelperParked_.store(true, std::memory_order_release);
-        snapHelperDone_.store(true, std::memory_order_release);
-        platform::spawnPinnedTask(snapHelper_, "mmSnap", &MoonI80Peripheral::snapHelperTramp, this,
-                                  4096, 5, /*core=*/0);
-    }
-    /// Tear the helper down, so the worker cannot outlive the bus it primes into.
-    void stopSnapHelper() {
-        if (!snapHelper_.impl) return;
-        snapHelperStop_.store(true, std::memory_order_release);
-        platform::stopPinnedTask(snapHelper_);
-    }
-
-    /// The worker's entry point: park, run the published job, mark done, repeat until stopped.
-    static void snapHelperTramp(void* user) {
-        auto* self = static_cast<MoonI80Peripheral*>(user);
-        while (!self->snapHelperStop_.load(std::memory_order_acquire)) {
-            // Announced BEFORE blocking, closing the window where done is set but the park is not.
-            self->snapHelperParked_.store(true, std::memory_order_release);
-            if (!platform::waitNotify(self->snapHelper_, 100)) continue;   // re-check stop on timeout
-            if (self->snapHelperStop_.load(std::memory_order_acquire)) break;
-            self->runHelperJob();                                           // this core-0 frame's half
-            self->snapHelperDone_.store(true, std::memory_order_release);
-        }
-    }
+    bool extraBusPinsCurrent() const override { return lastClockPin_ == owner_->clockPin; }
 
 private:
-    /// Join deadline for one prime half; at this point the helper is broken rather than slow.
-    static constexpr uint32_t kSnapJoinTimeoutMs = 100;
-    /// The core-0 worker that primes the bottom half of the ring pool.
-    platform::WorkerTask snapHelper_{};
-    /// Stored by the helper when its job is finished; starts true so the first join returns.
-    std::atomic<bool> snapHelperDone_{true};
-    /// Asks the helper to exit its wait loop; set once by `stopSnapHelper` at teardown.
-    std::atomic<bool> snapHelperStop_{false};
-    /// Whether the helper is parked, which the kick waits for before mutating the bounds.
-    std::atomic<bool> snapHelperParked_{true};
-    /// Self-heal latch: one timed-out join disables the helper and the prime runs serial.
-    bool snapHelperBroken_ = false;
-    /// The buffer range [lo, hi) the helper primes this frame: written only between join and kick.
-    uint8_t primeLo_ = 0, primeHi_ = 0;
 
     /// The platform-side bus handle; opaque here, so no LCD_CAM type escapes the platform layer.
     platform::MoonI80Ws2812Handle bus_;

@@ -21,13 +21,13 @@ elseif(NOT DEFINED PYTHON_CMD)
         "or -DPYTHON_CMD=<interpreter>.")
 endif()
 
-# The repo keeps each role in its own folder, subfolders grouping a collection; the device keeps one flat directory, the role in the extension, so folder and subfolder survive only as part of the fetch URL.
+# The repo groups scripts in folders, a role's own or a project's mixing roles; the device keeps one flat directory, the role in the extension, so a folder survives only as part of the fetch URL.
 file(GLOB_RECURSE SCRIPT_PATHS
-     "${SCRIPT_DIR}/effects/*.mle"
-     "${SCRIPT_DIR}/layouts/*.mll"
-     "${SCRIPT_DIR}/modifiers/*.mlm"
-     "${SCRIPT_DIR}/services/*.mls"
-     "${SCRIPT_DIR}/palettes/*.mlp")
+     "${SCRIPT_DIR}/*.mle"
+     "${SCRIPT_DIR}/*.mll"
+     "${SCRIPT_DIR}/*.mlm"
+     "${SCRIPT_DIR}/*.mls"
+     "${SCRIPT_DIR}/*.mlp")
 list(SORT SCRIPT_PATHS)   # deterministic output: the same input must give a byte-identical header
 
 list(LENGTH SCRIPT_PATHS SCRIPT_COUNT)

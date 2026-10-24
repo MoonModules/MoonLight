@@ -48,6 +48,10 @@ inline constexpr const char* kServicePick[3] = {kScriptDir, kServiceExt, kServic
 ///
 /// Everything the script declares appears as a control on the card, and a slider move lands without a recompile. A compile error shows on the status line, and the service does nothing until it is fixed. A script runs on the 50 Hz poll rather than the render tick, so a heavy one costs its own tick.
 ///
+/// ## Reading and sending JSON
+///
+/// A service reads JSON from the internet with `getJson`, and sends its own documents with `pushJson` to this device or `pushJsonTo` to another. A show builds its own look this way, live and never saved. The calls: [the MoonLive language](https://moonmodules.org/MoonLight/moonmodules/light/moonlive.html#json-documents-in-a-service).
+///
 /// @technical
 ///
 /// **Same as effects.** A compiled effect and a scripted one are interchangeable, and so are the input services. The engine is identical, and the service is added under the container, then pointed at a file.
@@ -57,6 +61,13 @@ inline constexpr const char* kServicePick[3] = {kScriptDir, kServiceExt, kServic
 /// **Reach.** A script reaches the pins for hardware and the control surface for output, as the mapping rows do. It cannot rewrite a driver's pins by naming it.
 class MoonLiveService : public MoonModule {
 public:
+    /// A service whose documents go with each program, so an edited script starts with none.
+    MoonLiveService() {
+        script_.setDefineHook([](void* self, moonlive::DefinePhase phase) {
+            if (phase == moonlive::DefinePhase::Compiling) static_cast<MoonLiveService*>(self)->releaseDocuments();
+        }, this);
+    }
+
     /// A service, so the container accepts it as a child.
     ModuleRole role() const MM_NONBLOCKING override { return ModuleRole::Service; }
 
@@ -96,8 +107,12 @@ public:
                                   nullptr, 0, 0, platform::millis());
     }
 
+    /// A changed file may be this module's script, which the next prepare then reads again.
+    void onFileChanged(const char* path) override { script_.fileChanged(path); }
+
     /// Free the compiled block and forget it, so re-enabling rebuilds from the file.
     void release() override {
+        releaseDocuments();           // before the arena that names them goes
         script_.engine().free();      // release the exec block
         script_.invalidate();         // and forget what was compiled, so re-enabling rebuilds it
         script_.releaseReporting(*this);
@@ -108,6 +123,11 @@ public:
     void setScript(const char* name) { script_.setName(name); }
 
 private:
+    /// Free the JSON documents this script's program holds, named by its arena.
+    void releaseDocuments() {
+        if (const void* owner = script_.engine().arena()) JsonFetch::instance().release(owner);
+    }
+
     moonlive::MoonLiveScript script_;
 };
 

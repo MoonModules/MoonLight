@@ -400,12 +400,10 @@ def set_control(host: str, module: str, control: str, value) -> bool:
 # name a `script` control resolves against.
 SCRIPT_DIR = "/moonlive"
 
-# Where each script extension lives in the repo, imported rather than restated: catalog_scripts.py
-# is the one home for the extension-to-role-to-folder mapping, and a second copy here would drift
-# the moment a role is added.
+# The script extensions, imported rather than restated: catalog_scripts.py is their one home, and a
+# second copy here would drift the moment a role is added.
 sys.path.insert(0, str(ROOT / "src" / "core" / "moonlive"))
-from catalog_scripts import ROLE_BY_EXT, FOLDER_BY_ROLE   # noqa: E402
-SCRIPT_SRC = {ext: FOLDER_BY_ROLE[role] for ext, role in ROLE_BY_EXT.items()}
+from catalog_scripts import ROLE_BY_EXT   # noqa: E402
 
 
 def push_script(host: str, name: str) -> bool:
@@ -417,8 +415,8 @@ def push_script(host: str, name: str) -> bool:
 
     Byte-exact through /api/file, the same request the File Manager's upload makes.
     """
-    # Names are unique across a role's subfolders (the catalog generator enforces it), so the first match is the one.
-    src = next((ROOT / "moonlive" / SCRIPT_SRC.get(Path(name).suffix, "")).rglob(name), None) if Path(name).suffix in SCRIPT_SRC else None
+    # Names are unique across every folder under moonlive/ (the catalog generator enforces it), so the first match is the one.
+    src = next((ROOT / "moonlive").rglob(name), None) if Path(name).suffix in ROLE_BY_EXT else None
     if src is None or not src.is_file():
         return False
     r = _post(f"http://{host}/api/file?path={SCRIPT_DIR}/{name}",

@@ -237,3 +237,29 @@ def test_a_fixture_naming_a_container_the_run_does_not_restore_is_refused():
     with pytest.raises(ValueError, match="System"):
         runner._fixture_canvas([{"op": "apply_state", "document": {"System": {"deviceName": "x"}}}])
 
+
+
+def _tasks_state(*stacks):
+    tasks = [{"name": n, "stack": s} for n, s in stacks]
+    return {"modules": [{"type": "SystemModule", "children": [
+        {"type": "TasksModule", "controls": [{"name": "tasks", "value": tasks}], "children": []}]}]}
+
+
+def test_the_tightest_stack_is_the_task_with_least_headroom_and_names_it():
+    assert runner._min_stack_free(_tasks_state(("main", 6436), ("improv", 2616), ("wifi", 4260))) == (2616, "improv")
+
+
+def test_a_board_without_a_tasks_card_reports_no_stack():
+    assert runner._min_stack_free({"modules": [{"type": "SystemModule", "children": []}]}) == (None, None)
+
+
+def test_a_floor_passes_at_or_above_and_fails_below_by_more_than_its_tolerance():
+    assert runner._floor_verdict("free_internal", 102400, 102400, 0)[0]
+    assert not runner._floor_verdict("free_internal", 102399, 102400, 0)[0]
+    assert runner._floor_verdict("free_heap", 95000, 100000, 10)[0]
+    assert not runner._floor_verdict("free_heap", 89000, 100000, 10)[0]
+
+
+def test_a_floor_against_a_value_the_device_does_not_report_fails():
+    ok, line = runner._floor_verdict("min_stack_free", None, 512, 0)
+    assert not ok and "reports none" in line

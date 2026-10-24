@@ -3,7 +3,7 @@
 Hard-won debugging lessons and gotchas, recorded with the code that proved them. The PR-merge *carry-forward* gate writes new entries here (CLAUDE.md § Lifecycle Events). This is the **lesson** record: a bug, its root cause, and the fix. Two neighbours hold the other genres, and a lesson belongs in whichever fits:
 
 - A durable **rule** that graduated from a lesson lives in [CLAUDE.md](../../../CLAUDE.md) or [coding-standards.md](../../contributing/coding-standards.md), not here.
-- The forward-looking **design intent** of a feature is a [plan](plans/index.md).
+- The forward-looking **design intent** of a feature is a [plan](index.md).
 
 Entries run oldest-first by branch. A lesson fully absorbed into a rule doc or the code is pruned (per *Mandatory subtraction*): the git history is the permanent record, this file is the working narrative on top.
 
@@ -533,3 +533,14 @@ Two tests were written and both passed against the unfixed code before one final
 Three weeks without a Windows run left three build breaks waiting, while CI's `build-windows-x64` job was green on the same commit. They were not one bug: `if (anyKnownChip)` and `if (i2sLanes > 0)` are compile-time constants that **this** MSVC (19.44.35227) reports as C4127 and the toolset `windows-latest` pins does not, and `/WX` turns either into C2220. A non-ASCII literal raised C4566, which is not a toolset question at all but the system code page: MSVC alone assumes it for both the source and execution charset, so `/utf-8` settles it the way GCC and clang already behave. On the Python side the same code page is the default for `read_text`, `write_text`, `open` and `subprocess(text=True)`, and `PYTHONIOENCODING` masks only stdio, so a UTF-8 doc read crashes a script whose output looked fine.
 
 **The rule: a platform in CI is one toolchain on that platform, not the platform.** `windows-latest` is a moving pin, so green there says the code built with that toolset on that runner image, which is a weaker claim than it reads as. `if constexpr` is the textbook answer to C4127 and says what was meant anyway; explicit `encoding="utf-8"` is the answer everywhere Python touches a file. The second half of the lesson is cheaper than the first: the drift is silent and the cost scales with how long the platform goes unexercised, so the fix is to run it, not to reason about it.
+
+## Lessons from the internal RAM plan (2026-10-22)
+
+- **Measure at the low point, not on average.** Free RAM read once a second said 70 KB on a classic board whose page load dropped it to 3.6 KB; a task sampling every tick and recording the heap's block sizes at each new low named the owner (1,536-byte TCP segments) in one run.
+- **A block size is a fingerprint.** 32 KB blocks were ESP-IDF's DMA reserve pool, 1,536 bytes a TCP segment, 1,664 WiFi's receive buffers, 4,096 the ring's DMA nodes; matching sizes to owners attributed most of the heap without a tracer.
+- **The obvious owner can be wrong.** Thirty-two queued packets matched WiFi's transmit queue of 32 exactly, and halving that queue changed nothing: they were TCP's.
+- **A tick figure is wall-clock.** Control read 1.4 ms per tick because a helper task on its core preempted it; its own work was 150 µs. The helper itself, meant to halve the ring's prime, cost 12 fps by preempting the effects.
+- **A guard that holds on one core can fail on the other.** A cache-safe interrupt's cache-off check held on the core doing flash writes; moved to the other core, the cache went off mid-refill and the board panicked. Whatever such an interrupt reads must be internal, whichever core it runs on.
+- **Check the compiler's output before optimizing the algorithm.** Removing branches and a whole wasted transpose gained nothing measurable; the disassembly showed the store loop's variable shifts costing more than the transpose, and unrolling them gained 37%.
+- **A depth that runs clean is the measurement, not free RAM.** `ringAuto` took 28 buffers because RAM allowed it; 21 smaller ones run clean, and the RAM went back to WiFi and the UI.
+- **Two fix attempts, then stop.** The ring's 1.1 ms of jitter survived two; it is in the backlog with its measurements rather than chased further.

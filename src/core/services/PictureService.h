@@ -1,7 +1,7 @@
 #pragma once
 
 #include "core/module/MoonModule.h"
-#include "core/module/Scheduler.h"   // requestPrepareTree: a grabber arriving or leaving re-opens the capture
+#include "core/module/Scheduler.h"   // requestPrepare: a grabber arriving or leaving re-opens the capture
 #include "core/util/ActiveInstance.h"   // the one-active-source election
 #include "core/util/color.h"            // RGB
 #include "core/util/format.h"           // formatTo: the status line built off snprintf
@@ -143,19 +143,19 @@ public:
         const uint32_t gen = platform::videoCaptureFormatGeneration();
         if (gen != openedGen_) {
             openedGen_ = gen;   // asked once; the open the prepare runs records it again
-            if (Scheduler* s = Scheduler::instance()) s->requestPrepareTree();
+            if (Scheduler* s = Scheduler::instance()) s->requestPrepare(this);   // this service alone: the picture keeps its size, so no reader re-prepares
             return;
         }
         if (!task_.impl) {
             // Nothing to open over while the last teardown unwinds, so the open waits for it rather than failing in a way worth naming.
             if (platform::videoCaptureSettling())
-                if (Scheduler* s = Scheduler::instance()) s->requestPrepareTree();
+                if (Scheduler* s = Scheduler::instance()) s->requestPrepare(this);
             return;
         }
         if (!lock_.tryAcquire()) return;   // the decode task is publishing: the next second reads it
         const bool one = !back_;   // the writer swaps back_ under the lock
         lock_.release();
-        const unsigned w = bufW_, h = bufH_;   // the size a writer fills, which a dropped picture no longer carries
+        const unsigned w = bufW_, h = bufH_;   // the size a writer fills, which a dropped picture does not carry
         const platform::VideoCaptureStats st = platform::videoCaptureStats();
         // Per second, not since boot: a running total says nothing about whether the capture is live now.
         const uint32_t used = st.decoded - lastDecoded_, skipped = st.dropped - lastDropped_;

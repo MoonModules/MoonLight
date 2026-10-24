@@ -1,15 +1,20 @@
 // Spinning squares: six gradient squares orbit the center, each spinning on itself, over a dim swirl of twisted squares, after hpwit's ProceduralEffects.
 
 class SpinningSquaresEffect {
-  byte qx[6];
-  byte qy[6];
-  byte qc[6];
-  byte qs[6];
+  byte speed = 40;
+  int acc = 0;     // the phase in 1/1320 steps, carried from frame to frame
+  int lastT = 0;   // when it last advanced, in ms
+  byte qxy[12];    // each square's place, x then 6 on its y, one array since two of six bytes would each start 4-byte aligned
+  byte qcs[12];    // the cosine of its spin, then 6 on its sine
   int qsize[6];
 
   int dimensions() { return 2; }
 
   string tags() { return "💫"; }
+
+  void defineControls() {
+    addControl("speed", speed, 1, 120); // how fast it moves
+  }
 
   int wave(int i) { return sin(i * 256) / 256; }
 
@@ -24,18 +29,22 @@ class SpinningSquaresEffect {
     for (int i = 0; i < 6; i = i + 1) {
       int orbit = mod(f + i * 43, 256);
       int reach = (24 + mod(i, 2) * 16) * width / 128;
-      qx[i] = width / 2 + reach * (wave(orbit + 64) - 128) / 127;
-      qy[i] = height / 2 + reach * (wave(orbit) - 128) / 160;
+      qxy[i] = width / 2 + reach * (wave(orbit + 64) - 128) / 127;
+      qxy[i + 6] = height / 2 + reach * (wave(orbit) - 128) / 160;
       int spin = mod(f * 3 + i * 40, 256);
       if (mod(i, 2) == 1) { spin = 255 - spin; }
-      qc[i] = wave(spin + 64);
-      qs[i] = wave(spin);
+      qcs[i] = wave(spin + 64);
+      qcs[i + 6] = wave(spin);
       qsize[i] = max((9 + wave(f * 2 + i * 60) / 40) * 127 * width / 128, 127);
     }
   }
 
   void tick() {
-    int f = mod(t / 33, 25600);
+    // The phase advances by the time since the last frame at the current speed, so a speed change moves on rather than jumping.
+    if (lastT == 0) { lastT = t; }
+    acc = mod(acc + (t - lastT) * speed, 33792000);   // 25600 phases of 1320
+    lastT = t;
+    int f = acc / 1320;
     moveSquares(f);
     int flow = 256 - mod(f * 2, 256);
     for (int y = 0; y < height; y = y + 1) {
@@ -52,10 +61,10 @@ class SpinningSquaresEffect {
         int hue = m * 3 + f;
         int sat = 255;
         for (int i = 0; i < 6; i = i + 1) {
-          int ex = x - qx[i];
-          int ey = y - qy[i];
-          int across = ex * (qc[i] - 128) + ey * (qs[i] - 128);
-          int inside = max(abs(across), abs(ey * (qc[i] - 128) - ex * (qs[i] - 128)));
+          int ex = x - qxy[i];
+          int ey = y - qxy[i + 6];
+          int across = ex * (qcs[i] - 128) + ey * (qcs[i + 6] - 128);
+          int inside = max(abs(across), abs(ey * (qcs[i] - 128) - ex * (qcs[i + 6] - 128)));
           if (inside < qsize[i]) {
             int g = inside * 255 / qsize[i];
             v = 110 + g * 145 / 255;

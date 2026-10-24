@@ -18,6 +18,7 @@ class Scheduler;
 /// Where a document comes from, which decides how strictly it applies.
 enum class StateSource : uint8_t {
     Request,   ///< a client's document, refused whole on the first problem so nothing changes by half
+    Live,      ///< a request that drives rather than configures, such as a show building its look: checked the same, and nothing it changes is marked to save
     Stored,    ///< a file the device wrote, onto the running tree: what this build cannot place is skipped, values clamp, code-wired children stay
     Boot,      ///< the same file during boot, before any setup: no lifecycle and no reactions, which the boot phases run after it
 };

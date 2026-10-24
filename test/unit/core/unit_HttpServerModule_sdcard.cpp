@@ -50,6 +50,15 @@ std::string request(mm::HttpServerModule& http, mm::platform::TcpConnection& cli
     return reply;
 }
 
+// The status line of one request on a connection of its own.
+std::string statusOf(mm::HttpServerModule& http, const char* req) {
+    mm::platform::TcpConnection client;
+    REQUIRE(connectAndAccept(http, client, kTestPort));
+    const std::string reply = request(http, client, req);
+    client.close();
+    return reply.substr(0, 12);
+}
+
 
 // Ticks with a millisecond between them, since Linux loopback delivers a write at once and macOS a moment later; a tick with nothing new is harmless.
 void tickWhileDelivering(mm::HttpServerModule& http, int ticks = 5) {
@@ -360,24 +369,10 @@ TEST_CASE("DELETE /api/dir removes a file and a non-empty folder on the card, vi
     http.port = kTestPort;
     http.setup();
 
-    {
-        mm::platform::TcpConnection client;
-        REQUIRE(connectAndAccept(http, client, kTestPort));
-        const char* req = "DELETE /api/dir?path=/sd/lone.bin HTTP/1.1\r\n\r\n";
-        const std::string reply = request(http, client, req);
-        CHECK(std::strncmp(reply.c_str(), "HTTP/1.1 200", 12) == 0);
-        client.close();
-    }
+    CHECK(statusOf(http, "DELETE /api/dir?path=/sd/lone.bin HTTP/1.1\r\n\r\n") == "HTTP/1.1 200");
     CHECK(mm::platform::fsSize("/sd/lone.bin") < 0);
 
-    {
-        mm::platform::TcpConnection client;
-        REQUIRE(connectAndAccept(http, client, kTestPort));
-        const char* req = "DELETE /api/dir?path=/sd/tree HTTP/1.1\r\n\r\n";
-        const std::string reply = request(http, client, req);
-        CHECK(std::strncmp(reply.c_str(), "HTTP/1.1 200", 12) == 0);
-        client.close();
-    }
+    CHECK(statusOf(http, "DELETE /api/dir?path=/sd/tree HTTP/1.1\r\n\r\n") == "HTTP/1.1 200");
     CHECK(mm::platform::fsSize("/sd/tree/sub/leaf.txt") < 0);
     CHECK_FALSE(mm::platform::fsExists("/sd/tree"));
 
@@ -393,12 +388,7 @@ TEST_CASE("DELETE /api/dir on /sd itself is refused, leaving the card untouched"
     http.port = kTestPort;
     http.setup();
 
-    mm::platform::TcpConnection client;
-    REQUIRE(connectAndAccept(http, client, kTestPort));
-    const char* req = "DELETE /api/dir?path=/sd HTTP/1.1\r\n\r\n";
-    const std::string reply = request(http, client, req);
-    CHECK(std::strncmp(reply.c_str(), "HTTP/1.1 500", 12) == 0);
-    client.close();
+    CHECK(statusOf(http, "DELETE /api/dir?path=/sd HTTP/1.1\r\n\r\n") == "HTTP/1.1 500");
 
     CHECK(mm::platform::fsSize("/sd/keep.bin") >= 0);   // untouched, not even one level in
     http.release();
@@ -411,13 +401,8 @@ TEST_CASE("DELETE /api/dir on the card root spelled with extra slashes is refuse
     mm::HttpServerModule http;
     http.port = kTestPort;
     http.setup();
-    for (const char* req : {"DELETE /api/dir?path=/sd// HTTP/1.1\r\n\r\n", "DELETE /api/dir?path=//sd HTTP/1.1\r\n\r\n"}) {
-        mm::platform::TcpConnection client;
-        REQUIRE(connectAndAccept(http, client, kTestPort));
-        const std::string reply = request(http, client, req);
-        CHECK(std::strncmp(reply.c_str(), "HTTP/1.1 200", 12) != 0);
-        client.close();
-    }
+    for (const char* req : {"DELETE /api/dir?path=/sd// HTTP/1.1\r\n\r\n", "DELETE /api/dir?path=//sd HTTP/1.1\r\n\r\n"})
+        CHECK(statusOf(http, req) != "HTTP/1.1 200");
     CHECK(mm::platform::fsSize("/sd/keep.bin") >= 0);
     http.release();
 }
@@ -435,5 +420,17 @@ TEST_CASE("an upload to a relative sd/ path gets the card's size limit") {
     const std::string reply = request(http, client, req);
     CHECK(std::strncmp(reply.c_str(), "HTTP/1.1 507", 12) == 0);
     client.close();
+    http.release();
+}
+
+// Deleting what is not there answered 500, the code for the device failing; it is the client's mistake, a 404.
+TEST_CASE("DELETE /api/dir on a path that names nothing answers 404") {
+    SdFixture fix;
+    mm::HttpServerModule http;
+    http.port = kTestPort;
+    http.setup();
+    for (const char* req : {"DELETE /api/dir?path=/sd/nothing.bin HTTP/1.1\r\n\r\n",
+                            "DELETE /api/dir?path=/moonlive/nothing.mle HTTP/1.1\r\n\r\n"})
+        CHECK(statusOf(http, req) == "HTTP/1.1 404");
     http.release();
 }

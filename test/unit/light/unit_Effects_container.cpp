@@ -428,3 +428,37 @@ TEST_CASE("Disabling a parent Layer cascades release to its effects (effectively
     effects.applyState();
     CHECK(fire.dynamicBytes() == 0);
 }
+
+namespace {
+// Counts its renders.
+class CountingRender : public mm::EffectBase {
+public:
+    void tick() MM_NONBLOCKING override { renders++; }
+    int renders = 0;
+};
+}  // namespace
+
+// A show alternates two expensive effects by opacity, so an invisible layer must cost nothing; the bottom layer overwrites and ignores opacity, so it always renders.
+TEST_CASE("a layer at opacity 0 above the bottom is not rendered; the bottom layer always is") {
+    mm::Layouts layouts;
+    mm::GridLayout grid;
+    grid.width = 8; grid.height = 8; grid.depth = 1;
+    layouts.addChild(&grid);
+    mm::Effects effects;
+    mm::Layer bottom, top;
+    CountingRender fxBottom, fxTop;
+    bottom.addChild(&fxBottom);
+    top.addChild(&fxTop);
+    effects.addChild(&bottom);
+    effects.addChild(&top);
+    effects.setLayouts(&layouts);
+    effects.applyState();
+    bottom.opacity = 0;
+    top.opacity = 0;
+    effects.tick();
+    CHECK(fxBottom.renders == 1);
+    CHECK(fxTop.renders == 0);
+    top.opacity = 1;
+    effects.tick();
+    CHECK(fxTop.renders == 1);
+}

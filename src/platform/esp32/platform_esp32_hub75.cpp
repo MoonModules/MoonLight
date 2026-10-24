@@ -97,7 +97,7 @@ const char* g_lastError = nullptr;
 constexpr uint8_t kOeLane = Hub75Layout{}.oe;
 void invertOe(gpio_num_t oe, int signal) { esp_rom_gpio_connect_out_signal(oe, signal, true, false); }
 
-struct Hub75State {
+struct Hub75State : platform::InternalRamObject {
     Hub75Backend backend = Hub75Backend::LcdCam;
 #if MM_HUB75_LCDCAM
     esp_lcd_i80_bus_handle_t bus = nullptr;

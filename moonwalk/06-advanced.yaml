@@ -376,7 +376,7 @@ processes:
         say: Add a script service on the leader.
         when: { add: { module: Services, type: MoonLiveService } }
         detail: |
-          A script service writes the shared slots with `setControl("fader2", value)`, as a person moves a fader, one slot at a time with a pause between writes so no burst reaches the network. Declare a `run` switch in the script with `addControl` and assign it to a slot on the Control card, so off hands the installation back to people and desks.
+          A script service writes the shared slots with `setControl("fader2", value)`, as a person moves a fader, one slot at a time with a pause between writes so no burst reaches the network. Declare a `run` switch in the script with `addControl` and assign it to a slot on the Control card, so off hands the installation back to people and desks. It can also build every part's look with `pushJson` and `pushJsonTo`, pushed again every half minute, so a part that reboots gets it back.
       - id: desk
         say: Plug a desk into the leader.
         when: { open: { module: MidiService } }

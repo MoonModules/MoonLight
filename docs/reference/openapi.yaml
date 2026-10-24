@@ -56,6 +56,12 @@ paths:
       tags: [State]
       operationId: applyState
       summary: Applies a state document as a JSON Merge Patch (RFC 7386); its rules are in Integrating.
+      parameters: &stateParameters
+        - name: live
+          in: query
+          required: false
+          description: 1 applies a document that drives rather than configures, such as a show building its look on another device, checked the same way and marking nothing to save.
+          schema: { type: integer, enum: [0, 1] }
       requestBody: { $ref: "#/components/requestBodies/StateDocument" }
       responses: &stateResponses
         "200": { $ref: "#/components/responses/StateResult" }
@@ -68,6 +74,7 @@ paths:
       tags: [State]
       operationId: applyStatePost
       summary: The same as PATCH, for a client that cannot send PATCH.
+      parameters: *stateParameters
       requestBody: { $ref: "#/components/requestBodies/StateDocument" }
       responses: *stateResponses
 
@@ -359,6 +366,7 @@ paths:
       responses:
         "200": { $ref: "#/components/responses/Ok" }
         "400": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
         "500": { $ref: "#/components/responses/Error" }
 
   /api/file:

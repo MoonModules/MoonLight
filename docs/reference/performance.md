@@ -300,6 +300,35 @@ The exec block is the emitted machine code, so its size varies by ISA. `lines.ml
 
 ---
 
+## Internal RAM
+
+What the ESP32's scarce memory holds and what freed it, measured 2026-10-21 and 2026-10-22 with BouncingBalls held fixed. The rule behind it is in [MoonCore](../explanation/architecture/mooncore.md#internal-ram); `scenario_RAM_floor` measures it on any board.
+
+**The S3** (shiffy, `esp32s3-n16r8`, 3,840 lights through 2 pins and the 74HCT595 expander on LCD-MM), with a browser on the UI:
+
+| | Free internal | Largest block | fps |
+|---|---|---|---|
+| Start, `ringAuto` taking all but 64 KB (28 buffers of 7 rows) | 66 KB | 30 KB | 75 |
+| WiFi, lwIP and TLS buffers in PSRAM, WiFi's code in flash | 110 KB | 31 KB | 72 |
+| ESP-IDF's 32 KB DMA reserve pool off (it capped the block at its own size) | 111 KB | 59 KB | 72 |
+| Every plain `malloc` asking PSRAM first, smaller stacks | 132 KB | 88 KB | 71 |
+| `ringAuto` sizing by lead, 3-row buffers (3 × 21, a 37 KB ring) | 145 KB | 94 KB | 81 |
+| The prime's core-0 helper removed | 150 to 155 KB | 108 KB | 102 to 107 |
+
+**The ring's depth** (`ringAuto` off, 40 s each, frames lost): what counts is the lead over the wire in rows. Before the encode sped up, 7 × 10 and 3 × 24 ran clean and 7 × 8 lost a frame in five. After it, 3 × 18 and 2 × 26 run clean, 3 × 14 loses one every few seconds, and 1-row buffers send nothing.
+
+| Per row of 64 strands | Before | After |
+|---|---|---|
+| Emit (transpose and store) | 5,800 cycles | 3,650 (its eight stores unrolled to constant shifts, and the empty second byte of a 16-bit bus skipped) |
+| Gather (correction per light) | 1,850 cycles | 1,300 (a plain RGB strip skips every optional fixture role) |
+| Refill of a slice, against its wire time | 220 µs vs 207 (7 rows) | 63 µs vs 89 (3 rows) |
+
+**The P4** (64 lights) holds 368 to 373 KB free with a 192 KB block through the same scenario.
+
+**The classic ESP32 without PSRAM** (the Olimex, WiFi, 64 lights) rests at about 70 KB free. A page load over a slow link once took it to 3.6 KB. The RAM went to 34 TCP segments of 1,536 bytes waiting for acknowledgement and 8 of WiFi's receive buffers. With the sends' back-pressure an open UI and preview hold 40 to 55 KB with a 40 KB block, where they held 12 to 23 KB. On the classic, WiFi's code in flash frees only the code-only region (22 to 55 KB, MoonLive's scripts use it), no data RAM.
+
+**Network receive** is unaffected by WiFi's code in flash. In `scenario_NetworkReceive_two_boards`, the P4 sending to the S3, every row matched the run with it in IRAM. That is 38 to 40 frames a second up to 4,096 lights, in Art-Net, E1.31 and DDP.
+
 ## Multi-pin LED driving (all three peripherals, 128×128 grid)
 
 The rows name the `ParallelLedDriver` backends by the class names they were measured under: `MultiPinLedDriver` is the `i80` peripheral, `MoonLedDriver` is `MoonI80`, and `ParlioLedDriver` is `Parlio`. The `peripheral` control selects the backend at one vtable dispatch per frame, so the timings hold.

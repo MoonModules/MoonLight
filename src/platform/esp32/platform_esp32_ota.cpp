@@ -118,6 +118,7 @@
 #include <cstdarg>
 #include <cstdio>
 #include <cstring>
+#include <strings.h>     // strncasecmp: a host name compares without case
 #include <memory>        // unique_ptr — frees the upload buffer on every exit path
 #include <new>           // std::nothrow for the OtaTaskParams alloc below
 
@@ -656,26 +657,26 @@ bool otaHasMoonBase() {
     return moonBasePartition() != nullptr;
 }
 
-// Which recovery image this device carries: @xref{reporting-on-the-recovery-image|why it is read here rather than asked of it}.
-bool otaMoonBaseVersion(char* out, size_t len) {
+// MoonBase's app descriptor into `desc`, with `out` emptied for the caller to fill; false without a buffer, a MoonBase or a descriptor.
+static bool moonBaseDescription(char* out, size_t len, esp_app_desc_t& desc) {
     if (!out || len == 0) return false;
     out[0] = 0;
     const esp_partition_t* part = moonBasePartition();
-    if (!part) return false;
+    return part && esp_ota_get_partition_description(part, &desc) == ESP_OK;
+}
+
+// Which recovery image this device carries: @xref{reporting-on-the-recovery-image|why it is read here rather than asked of it}.
+bool otaMoonBaseVersion(char* out, size_t len) {
     esp_app_desc_t desc = {};
-    if (esp_ota_get_partition_description(part, &desc) != ESP_OK) return false;
+    if (!moonBaseDescription(out, len, desc)) return false;
     std::snprintf(out, len, "%.*s", static_cast<int>(sizeof(desc.version)), desc.version);
     return out[0] != 0;
 }
 
 // When MoonBase was built, from the same descriptor. The UI shows the app's build stamp beside its version, and shows the same pair for MoonBase, so this is the other half of that.
 bool otaMoonBaseBuild(char* out, size_t len) {
-    if (!out || len == 0) return false;
-    out[0] = 0;
-    const esp_partition_t* part = moonBasePartition();
-    if (!part) return false;
     esp_app_desc_t desc = {};
-    if (esp_ota_get_partition_description(part, &desc) != ESP_OK) return false;
+    if (!moonBaseDescription(out, len, desc)) return false;
     std::snprintf(out, len, "%.*s %.*s",
                   static_cast<int>(sizeof(desc.date)), desc.date,
                   static_cast<int>(sizeof(desc.time)), desc.time);
@@ -746,26 +747,114 @@ bool httpsAvailable() MM_NONBLOCKING {
     return true;   // the TLS stack is linked for OTA, so an ESP32 build can always try
 }
 
-bool httpsPost(const char* url, const char* body, uint32_t timeoutMs) {
-    if (!url || !*url) return false;
+bool tlsRoom(const char* url) {
+#ifdef CONFIG_MBEDTLS_EXTERNAL_MEM_ALLOC
+    (void)url;   // TLS buffers sit in PSRAM on this board, so a session takes no internal RAM
+    return true;
+#else
+    if (!url || std::strncmp(url, "https://", 8) != 0) return true;
+    return freeInternalHeap() >= kInternalFreeFloor + kTlsSessionBytes;
+#endif
+}
+
+namespace {
+
+/// `url` with a `.local` host replaced by its mDNS address into `out`, since the client resolves through DNS alone. False when it names none or the lookup failed.
+bool resolveLocal(const char* url, char* out, size_t cap) {
+    const char* host = std::strstr(url, "://");
+    if (!host) return false;
+    host += 3;
+    const char* end = host;
+    while (*end && *end != ':' && *end != '/') end++;
+    const size_t len = static_cast<size_t>(end - host);
+    if (len < 7 || len >= 64 || strncasecmp(end - 6, ".local", 6) != 0) return false;
+    char name[64];
+    std::memcpy(name, host, len);
+    name[len] = '\0';
+    uint8_t ip[4];
+    if (!resolveHost(name, ip)) return false;
+    const int n = std::snprintf(out, cap, "%.*s%u.%u.%u.%u%s", static_cast<int>(host - url), url,
+                                ip[0], ip[1], ip[2], ip[3], end);
+    return n > 0 && static_cast<size_t>(n) < cap;
+}
+
+esp_http_client_method_t methodOf(const char* method) {
+    if (std::strcmp(method, "POST") == 0) return HTTP_METHOD_POST;
+    if (std::strcmp(method, "PATCH") == 0) return HTTP_METHOD_PATCH;
+    if (std::strcmp(method, "PUT") == 0) return HTTP_METHOD_PUT;
+    if (std::strcmp(method, "DELETE") == 0) return HTTP_METHOD_DELETE;
+    return HTTP_METHOD_GET;
+}
+
+/// Read past the answer, for a caller that keeps none; false when it was cut off.
+bool drainAnswer(esp_http_client_handle_t client) {
+    char discard[64];
+    int got;
+    while ((got = esp_http_client_read(client, discard, sizeof(discard))) > 0) {}
+    return got == 0;
+}
+
+/// Read the answer to its end into `body`. False when it outgrows the buffer or is cut off: refused rather than handed back half.
+bool readAnswer(esp_http_client_handle_t client, char* body, size_t bodyLen) {
+    if (!body || !bodyLen) return drainAnswer(client);
+    size_t len = 0;
+    int got = 1;
+    while (got > 0 && len + 1 < bodyLen) {
+        got = esp_http_client_read(client, body + len, static_cast<int>(bodyLen - 1 - len));
+        if (got > 0) len += static_cast<size_t>(got);
+    }
+    // The end reached is whole; a full buffer with more behind it outgrew it, and a failed read was cut off.
+    char probe;
+    const bool whole = got == 0 || (got > 0 && esp_http_client_read(client, &probe, 1) == 0);
+    body[whole ? len : 0] = '\0';
+    return whole;
+}
+
+/// Whether the answer read was all of it. A declared length or a chunked body proves it; one the server ends by closing, as MoonLight's own state route answers, is whole once the reads end.
+bool answerComplete(esp_http_client_handle_t client) {
+    const bool framed = esp_http_client_is_chunked_response(client) || esp_http_client_get_content_length(client) >= 0;
+    return !framed || esp_http_client_is_complete_data_received(client);
+}
+
+/// Send the request with its body and read the answer; the status, or 0 when it failed, was cut short or outgrew the buffer.
+int exchange(esp_http_client_handle_t client, const char* reqBody, char* body, size_t bodyLen) {
+    const int reqLen = reqBody ? static_cast<int>(std::strlen(reqBody)) : 0;
+    if (reqBody) esp_http_client_set_header(client, "Content-Type", "application/json");
+    if (esp_http_client_open(client, reqLen) != ESP_OK) return 0;
+    int status = 0;
+    if (reqLen == 0 || esp_http_client_write(client, reqBody, reqLen) == reqLen) {
+        esp_http_client_fetch_headers(client);
+        status = esp_http_client_get_status_code(client);
+        if (!readAnswer(client, body, bodyLen) || !answerComplete(client)) status = 0;
+    }
+    esp_http_client_close(client);
+    return status;
+}
+
+}  // namespace
+
+int httpFetch(const char* method, const char* url, const char* reqBody, uint32_t timeoutMs,
+              char* body, size_t bodyLen) {
+    if (body && bodyLen) body[0] = '\0';
+    if (!method || !url || !*url) return 0;
+    if (!tlsRoom(url)) return 0;
+    char resolved[192];
+    if (resolveLocal(url, resolved, sizeof(resolved))) url = resolved;
 
     esp_http_client_config_t cfg = {};
     cfg.url = url;
-    cfg.method = HTTP_METHOD_POST;
     cfg.timeout_ms = static_cast<int>(timeoutMs);
     // The SAME trust-anchor bundle the OTA path uses: IDF's built-in root certificates, so this verifies a public server without us shipping or maintaining a CA store.
     cfg.crt_bundle_attach = esp_crt_bundle_attach;
+    cfg.method = methodOf(method);
+    // No redirect following: a server moving the request somewhere the caller never named is refused.
+    cfg.disable_auto_redirect = true;
 
     esp_http_client_handle_t client = esp_http_client_init(&cfg);
-    if (!client) return false;
-
-    esp_http_client_set_header(client, "Content-Type", "application/json");
-    esp_http_client_set_post_field(client, body ? body : "", body ? std::strlen(body) : 0);
-
-    const esp_err_t err = esp_http_client_perform(client);
-    const int status = (err == ESP_OK) ? esp_http_client_get_status_code(client) : 0;
+    if (!client) return 0;
+    const int status = exchange(client, reqBody, body, bodyLen);
     esp_http_client_cleanup(client);
-    return err == ESP_OK && status >= 200 && status < 300;
+    return status;
 }
 
 } // namespace mm::platform

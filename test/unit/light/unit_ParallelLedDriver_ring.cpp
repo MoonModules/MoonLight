@@ -40,7 +40,7 @@ namespace {
 
 using mm::nrOfLightsType;
 
-// The mock's own geometry, deliberately SMALL and independent of the platform's (which is a runtime control now, see MoonI80Peripheral::ringRows/ringBufs). A 4-buffer pool forces buffer REUSE at few slices (a 200-light frame = 13 slices reuses buffers 0..4), which is the path the recycled / short-last-slice tests exist to exercise. 16 rows/buffer keeps a slice MULTI-row on purpose: a 1-row slice cannot express a tiling bug (every buffer would hold exactly one light, so a stride error has nowhere to show).
+// The mock's own geometry, deliberately SMALL and independent of the platform's (a runtime control, see ParallelLedDriver::ringRows/ringBufs). A 4-buffer pool forces buffer REUSE at few slices (a 200-light frame = 13 slices reuses buffers 0..4), which is the path the recycled / short-last-slice tests exist to exercise. 16 rows/buffer keeps a slice MULTI-row on purpose: a 1-row slice cannot express a tiling bug (every buffer would hold exactly one light, so a stride error has nowhere to show).
 constexpr uint8_t kMockRingBufs = 4;
 constexpr uint32_t kMockRingRows = 16;
 
@@ -57,11 +57,8 @@ public:
     mm::LedHwBlock hwBlock() const override { return mm::LedHwBlock::None; }   // mock drives no real block
 
     void addBusControls(mm::ControlList&) override {}
-    // A ring-capable backend adds its ring cluster here (the default addRingControls is a no-op for whole-frame-only backends). Mirror the real driver: the source-snapshot knob under the path, gated on wantsRing(), this mock's controllable wantRing_ drives the visibility the hide test checks.
-    void addRingControls(mm::ControlList& controls) override {
-        controls.addControl("ringSnapshot", owner_->ringSnapshotRef());
-        controls.setHidden(controls.count() - 1, !wantsRing());
-    }
+    // A ring-capable backend, as LCD-MM is: the driver then shows the ring's settings, and this mock's controllable wantRing_ drives the visibility the hide test checks.
+    bool supportsRing() const override { return true; }
     bool busControlTriggersBuild(const char*) const override { return false; }
     void recordBusPins() override {}
     bool extraBusPinsCurrent() const override { return true; }
@@ -323,8 +320,10 @@ public:
     // After this, encodeRows reads the snapshot, so mutating the live source (a resize / repaint on the render thread) can't tear or UAF the in-flight frame.
     // Mirror production's reinit(): size the snapshot OFF the hot path (ensureSnapshotCap) THEN take the per-frame copy (snapshotSourceForRing, memcpy-only). tickRing does exactly this split on device.
     bool snapshotForTest() { this->ensureSnapshotCap(); return this->snapshotSourceForRing(); }
+    // Drop the source, as a refill that must not reach it: the source Buffer lives in a module, in PSRAM.
+    void dropSourceForTest() { this->sourceBuffer_ = nullptr; }
 
-    // Test hooks for the PARALLEL-snapshot split: expose the snapshot buffer + a manual range-copy so a test can prove copyRange(0,N) == copyRange(0,half)+copyRange(half,N) byte-for-byte (the fork-join's correctness oracle, the device runs the two halves on two cores; here one thread runs both ranges, which must land the identical bytes). setSnapCopyForTest mirrors what snapshotSourceForRing sets before splitting (the snapshot is now a raw memcpy at srcCh stride; correction fuses into encodeRows).
+    // Test hooks for the snapshot copy: expose the snapshot buffer and set what snapshotSourceForRing sets before it copies (a raw memcpy at the srcCh stride; correction fuses into encodeRows).
     uint8_t* snapshotBufForTest() { return this->snapshotBuf_; }
     void setSnapCopyForTest() {
         this->snapCopySrc_ = this->sourceBuffer_->data()
@@ -334,9 +333,6 @@ public:
     void copyRangeForTest(mm::nrOfLightsType lo, mm::nrOfLightsType hi) { this->copyRange(lo, hi); }
     mm::nrOfLightsType winLenForTest() const { return this->winLen_; }
     size_t snapshotCapForTest() const { return this->snapshotCap_; }
-    static mm::nrOfLightsType snapHalfForTest(mm::nrOfLightsType n, size_t chStride) {
-        return snapLineAlignedHalf(n, chStride);
-    }
 };
 
 // Out-of-line: needs MockRingDriver's full definition (encodeSliceForTest), so it's defined after the class rather than inline in MockRingPeripheral.
@@ -365,6 +361,20 @@ void wireShift(MockRingDriver& d, MockRingPeripheral& peripheral, mm::Buffer& sr
     d.setSourceBuffer(&src);
     d.correctionForTest() = corr;
     d.applyState();
+}
+
+// Wire 200 lights on pins 1 and 2 with a structured source, then bring the ring up sized to it, 24 bits a channel per row.
+bool wireRing(MockRingDriver& d, MockRingPeripheral& peripheral, mm::Buffer& src, mm::Correction& corr) {
+    wireShift(d, peripheral, src, corr, 200, "1,2");
+    uint8_t* s = src.data();
+    for (nrOfLightsType i = 0; i < src.count(); i++) {
+        s[i * 3 + 0] = static_cast<uint8_t>(i * 5 + 3);
+        s[i * 3 + 1] = static_cast<uint8_t>(i * 11);
+        s[i * 3 + 2] = static_cast<uint8_t>(i * 17 + 7);
+    }
+    peripheral.setWantRing(true);
+    const size_t rowBytes = static_cast<size_t>(corr.outChannels) * 24 * 1 * d.outputsPerPin();
+    return peripheral.busInitRing(rowBytes, static_cast<uint32_t>(d.maxLaneLights()));
 }
 
 } // namespace
@@ -434,18 +444,7 @@ TEST_CASE("MoonI80 ring: a recycled buffer produces the same bytes as a fresh on
     MockRingPeripheral peripheral;
     mm::Buffer src;
     mm::Correction corr;
-    wireShift(d, peripheral, src, corr, 200, "1,2");
-    uint8_t* s = src.data();
-    for (nrOfLightsType i = 0; i < src.count(); i++) {
-        s[i * 3 + 0] = static_cast<uint8_t>(i * 5 + 3);
-        s[i * 3 + 1] = static_cast<uint8_t>(i * 11);
-        s[i * 3 + 2] = static_cast<uint8_t>(i * 17 + 7);
-    }
-    const uint8_t outCh = corr.outChannels;
-
-    peripheral.setWantRing(true);
-    const size_t rowBytes = static_cast<size_t>(outCh) * 24 * 1 * d.outputsPerPin();
-    REQUIRE(peripheral.busInitRing(rowBytes, static_cast<uint32_t>(d.maxLaneLights())));
+    REQUIRE(wireRing(d, peripheral, src, corr));
 
     std::vector<uint8_t> first = peripheral.driveRingFrame();
     std::vector<uint8_t> second = peripheral.driveRingFrame();   // same buffers, recycled — not re-init'd
@@ -488,17 +487,7 @@ TEST_CASE("MoonI80 ring: the encode reads a per-frame snapshot, not the live sou
     MockRingPeripheral peripheral;
     mm::Buffer src;
     mm::Correction corr;
-    wireShift(d, peripheral, src, corr, 200, "1,2");
-    uint8_t* s = src.data();
-    for (nrOfLightsType i = 0; i < src.count(); i++) {
-        s[i * 3 + 0] = static_cast<uint8_t>(i * 5 + 3);
-        s[i * 3 + 1] = static_cast<uint8_t>(i * 11);
-        s[i * 3 + 2] = static_cast<uint8_t>(i * 17 + 7);
-    }
-    const uint8_t outCh = corr.outChannels;
-    peripheral.setWantRing(true);
-    const size_t rowBytes = static_cast<size_t>(outCh) * 24 * 1 * d.outputsPerPin();
-    REQUIRE(peripheral.busInitRing(rowBytes, static_cast<uint32_t>(d.maxLaneLights())));
+    REQUIRE(wireRing(d, peripheral, src, corr));
 
     // Freeze the source, then SCRIBBLE all over the live buffer as the render thread would between kick and wire-completion. The snapshot must shield the encode from it.
     REQUIRE(d.snapshotForTest());
@@ -514,6 +503,39 @@ TEST_CASE("MoonI80 ring: the encode reads a per-frame snapshot, not the live sou
     std::vector<uint8_t> fromMutated = peripheral.driveRingFrame();
     REQUIRE(fromMutated.size() == fromSnapshot.size());
     CHECK(std::memcmp(fromMutated.data(), fromSnapshot.data(), fromMutated.size()) != 0);
+}
+
+// The refill interrupt runs while a flash write on the other core can switch off the cache PSRAM sits behind, so on the snapshot it reads nothing of the source Buffer, a module's member in PSRAM, not even its channel count.
+TEST_CASE("MoonI80 ring: a refill from the snapshot reads nothing of the source buffer") {
+    MockRingDriver d;
+    MockRingPeripheral peripheral;
+    mm::Buffer src;
+    mm::Correction corr;
+    REQUIRE(wireRing(d, peripheral, src, corr));
+    REQUIRE(d.snapshotForTest());
+    const std::vector<uint8_t> withSource = peripheral.driveRingFrame();
+    d.dropSourceForTest();   // a read of the source Buffer now dereferences null
+    const std::vector<uint8_t> withoutSource = peripheral.driveRingFrame();
+    REQUIRE(withSource.size() == withoutSource.size());
+    CHECK(std::memcmp(withSource.data(), withoutSource.data(), withSource.size()) == 0);
+}
+
+// A flash save on the other core cuts PSRAM off mid-refill, so a ring whose refill would read PSRAM refuses to run, says why, and leaves no ring behind.
+TEST_CASE("MoonI80 ring: with the snapshot off and the frame in PSRAM, the ring refuses and leaves no ring behind") {
+    struct Psram { ~Psram() { mm::platform::setTestPsramRange(nullptr, nullptr); } } psram;   // restored however the test ends
+    MockRingDriver d;
+    MockRingPeripheral peripheral;
+    mm::Buffer src;
+    mm::Correction corr;
+    peripheral.setWantRing(true);
+    wireShift(d, peripheral, src, corr, 64, "1,2");
+    REQUIRE(peripheral.busIsRing());
+    mm::platform::setTestPsramRange(src.data(), src.data() + static_cast<size_t>(src.count()) * src.channelsPerLight());
+    d.ringSnapshot = false;
+    d.applyState();
+    CHECK_FALSE(peripheral.busIsRing());
+    REQUIRE(d.status() != nullptr);
+    CHECK(std::strstr(d.status(), "ring refused") != nullptr);
 }
 
 // 6.
@@ -844,54 +866,6 @@ TEST_CASE("MoonI80 ring: a failed ring build tears the bus down (no leaked ring)
     // The fall-through's teardown, as reinit() performs it. It must not be gated on `inited_`, which is false here, exactly as it is in production on this path.
     peripheral.busDeinit();
     CHECK_FALSE(peripheral.busIsRing());   // the ring is gone, not merely unreferenced
-}
-
-TEST_CASE("MoonI80 ring: the PARALLEL snapshot's range-split is byte-identical to the whole-range serial") {
-    // The fork-join correctness oracle.
-    // On device the two [lo,hi) halves run on two cores; the bytes must be identical to one serial pass.
-    // Here one thread runs both ranges, same requirement, since the ranges are disjoint and stateless: copyRange(0,half)+copyRange(half,N) == copyRange(0,N).
-    // The snapshot is now a raw memcpy at SOURCE channel stride (correction fuses into encodeRows downstream).
-    MockRingDriver d;
-    MockRingPeripheral peripheral;
-    mm::Buffer src;
-    mm::Correction corr;
-    wireShift(d, peripheral, src, corr, 200, "1,2");   // 16 strands × 200, a real window
-    // Distinctive per-light source so a mis-split (gap/overlap/wrong stride) can't accidentally match.
-    uint8_t* s = src.data();
-    for (mm::nrOfLightsType i = 0; i < src.count(); i++) {
-        s[i * 3 + 0] = static_cast<uint8_t>(i * 7 + 1);
-        s[i * 3 + 1] = static_cast<uint8_t>(i * 13 + 5);
-        s[i * 3 + 2] = static_cast<uint8_t>(i * 29 + 3);
-    }
-    const uint8_t outCh = corr.outChannels;
-    const uint8_t srcCh = static_cast<uint8_t>(src.channelsPerLight());
-    const size_t rowBytes = static_cast<size_t>(outCh) * 24 * 1 * d.outputsPerPin();
-    peripheral.setWantRing(true);
-    REQUIRE(peripheral.busInitRing(rowBytes, static_cast<uint32_t>(d.maxLaneLights())));
-    // snapshotForTest sizes snapshotBuf_ (ensureSnapshotCap) and runs one full serial snapshot, after it, the snapshot state (snapCopy*) is set and the buffer exists, so the manual re-runs below are safe.
-    REQUIRE(d.snapshotForTest());
-
-    const mm::nrOfLightsType N = d.winLenForTest();
-    REQUIRE(N > 4);
-    const size_t bufBytes = static_cast<size_t>(N) * srcCh;   // snapshot is srcCh-stride now
-
-    // Reference: one whole-range copy over the (now-allocated) snapshot buffer.
-    d.setSnapCopyForTest();
-    std::memset(d.snapshotBufForTest(), 0xEE, bufBytes);
-    d.copyRangeForTest(0, N);
-    std::vector<uint8_t> whole(d.snapshotBufForTest(), d.snapshotBufForTest() + bufBytes);
-
-    // Split at the cache-line-aligned midpoint, exactly as the production path picks it (srcCh stride).
-    const mm::nrOfLightsType half = MockRingDriver::snapHalfForTest(N, srcCh);
-    REQUIRE(half > 0);
-    REQUIRE(half < N);
-    std::memset(d.snapshotBufForTest(), 0xEE, bufBytes);
-    d.copyRangeForTest(0, half);        // "core 0" half
-    d.copyRangeForTest(half, N);        // "core 1" half
-    std::vector<uint8_t> split(d.snapshotBufForTest(), d.snapshotBufForTest() + bufBytes);
-
-    REQUIRE(split.size() == whole.size());
-    CHECK(std::memcmp(split.data(), whole.data(), bufBytes) == 0);
 }
 
 // The snapshot window clamp must key on the SOURCE stride (srcCh), not outCh, the buffer is a raw srcCh-strided memcpy.

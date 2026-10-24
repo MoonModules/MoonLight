@@ -156,8 +156,8 @@ public:
         // A cached row coming back online is a status change even with no field edit.
         const bool wasCached = d->cached;
         d->cached = false;
-        if (persistChanged) sortByName();              // re-sort only on a real persisted change
-        if (persistChanged || wasCached) refreshStatus();
+        if (persistChanged) { sortByName(); listChanged(); }   // re-sort and save only on a real persisted change
+        else if (wasCached) refreshStatus();
     }
 
     /// Report the cached list on boot, which persistence restored before this ran.
@@ -384,7 +384,7 @@ private:
         if (!d->name[0]) { formatDottedQuad(d->name, ip); persistChanged = true; }
         if (persistChanged) {                  // only a saved-field change touches disk + sort
             sortByName();
-            refreshStatus();
+            listChanged();
         }
     }
 
@@ -413,7 +413,7 @@ private:
         }
         if (changed) {                 // only a real self-row change re-sorts + arms persistence
             sortByName();
-            refreshStatus();
+            listChanged();
         }
     }
 
@@ -453,16 +453,20 @@ private:
         }
         if (w == deviceCount_) return;   // nothing dropped: common case, no churn
         deviceCount_ = w;
-        refreshStatus();
+        listChanged();
     }
 
-    /// Report how many devices are listed, and arm the save.
+    /// Report how many devices are listed and whether multicast arrives; the status is not saved, so this arms no save.
     void refreshStatus() {
         mm::formatTo(statusBuf_, sizeof(statusBuf_), "%u device%s%s",
                       deviceCount_, deviceCount_ == 1 ? "" : "s",
                       NetworkPath::multicastDropped ? ", multicast blocked: broadcasting too" : "");
         setStatus(statusBuf_);
-        // Persisted, so the next boot shows the set instantly.
+    }
+
+    /// A saved field changed: report it and arm the save, so the next boot shows the set instantly.
+    void listChanged() {
+        refreshStatus();
         markDirty();
         FilesystemModule::noteDirty();
     }

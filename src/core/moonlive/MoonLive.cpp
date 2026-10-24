@@ -24,7 +24,7 @@ void MoonLive::freeCode() {
     hasErrorPos_ = false;
     // The entry table describes code that is gone, so entry() would hand out a freed address.
     entryCount_ = 0;
-    // The pool is reclaimed when the next compile interns from zero, not cleared mid-compile.
+    // The pool stays until the next compile replaces it, so text a control still names is never freed under it.
     controlCount_ = 0;
     stringLen_ = 0;
 }
@@ -82,11 +82,16 @@ bool MoonLive::compile(uint8_t r, uint8_t g, uint8_t b) {
 bool MoonLive::compile(const char* source, const BuiltinTable& table, const SysVarTable& sysvars) {
     Staging staging(codeCapFor(countTokens(source)));
     if (!staging) { freeCode(); error_ = "no memory to compile"; return false; }
-    // strings_ interns literals into memory outliving the compile, and freeCode owns clearing it.
+    // A pool sized to this script's literals, the new one beside the old until the compile succeeds, so a control name read meanwhile still points at text.
+    const uint32_t want = countStringBytes(source);
+    if (want > CompileResult::kMaxStrings) { freeCode(); error_ = "the script's strings pass 16 KB"; return false; }
+    char* pool = want ? static_cast<char*>(platform::alloc(want)) : nullptr;
+    if (want && !pool) { freeCode(); error_ = "no memory for the script's strings"; return false; }
     CompileResult cr = compileSource(source, table, sysvars, staging.p, staging.n,
-                                     nullptr, nullptr, strings_, CompileResult::kStringPool);
+                                     nullptr, nullptr, pool, static_cast<uint16_t>(want));
     // errorCol is one-based and every consumer counts from zero, so it converts at this boundary.
     if (!cr.ok) {
+        platform::free(pool);
         freeCode();
         // One file-static line, since a per-result buffer dangled and a per-engine one repeats.
         if (cr.error == kSpillRefused) {
@@ -104,10 +109,13 @@ bool MoonLive::compile(const char* source, const BuiltinTable& table, const SysV
         return false;
     }
     // Before publishing, since ensureArena reads the previous count to know which slots are new.
-    if (!ensureArena(cr.members, cr.memberCount)) { freeCode(); error_ = "no control memory"; return false; }
+    if (!ensureArena(cr.members, cr.memberCount)) { platform::free(pool); freeCode(); error_ = "no control memory"; return false; }
     // Publish the control set only once place() succeeds, never for code that is not running.
     void* block = place(staging.p, cr.len);
-    if (!block) return false;                                      // controlCount_/controls_ unchanged
+    if (!block) { platform::free(pool); return false; }            // controlCount_/controls_ unchanged
+    retirePool();
+    strings_ = pool;
+    stringCap_ = static_cast<uint16_t>(want);
     // Names included, since a result's `name` points into source the caller frees on return.
     entryCount_ = cr.entryCount < kMaxEntryPoints ? cr.entryCount : kMaxEntryPoints;
     for (uint8_t i = 0; i < entryCount_; i++) {
@@ -187,9 +195,24 @@ bool MoonLive::compileAnimated() {
     return true;
 }
 
+MoonLive::~MoonLive() {
+    free();
+    platform::free(retired_);   // nothing names its text once the engine goes
+}
+
+/// The current pool retires and the one retired before it goes: the module's controls name text in the current one until it rebuilds them.
+void MoonLive::retirePool() {
+    platform::free(retired_);
+    retired_ = strings_;
+    retiredCap_ = stringCap_;
+    strings_ = nullptr;
+    stringCap_ = 0;
+}
+
 /// Release everything: the exec block, the fn pointers and the control arena.
 void MoonLive::free() {
     freeCode();                       // exec block + fn pointers
+    retirePool();                     // the pool goes with the program, once the module's controls stop naming it
     if (ctrlArena_) platform::free(ctrlArena_);   // full release also releases the control arena
     ctrlArena_ = nullptr;
     controlCount_ = 0;

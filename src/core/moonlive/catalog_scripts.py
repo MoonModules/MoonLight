@@ -19,11 +19,6 @@ from pathlib import Path
 ROLE_BY_EXT = {".mle": "Effect", ".mll": "Layout", ".mlm": "Modifier", ".mls": "Service",
                ".mlp": "Palette"}
 
-# Where each role lives in the repo. The device keeps one flat directory, so this is only ever part
-# of the download URL.
-FOLDER_BY_ROLE = {"Effect": "effects", "Layout": "layouts", "Modifier": "modifiers", "Service": "services",
-                  "Palette": "palettes"}
-
 
 # What a script DECLARES about itself, read from its source. The script is the one home for this
 # (a user-written script never appears in a catalog at all), so what a build extracts here is a
@@ -65,7 +60,7 @@ def main() -> int:
     out = Path(sys.argv[2])
     root = Path(sys.argv[3])
 
-    # A name is unique on the device, whose one flat directory drops the repo's folders, so a duplicate across roles or subfolders fails the build rather than overwriting silently.
+    # A name is unique on the device, whose one flat directory drops the repo's folders, so a duplicate across roles or folders fails the build rather than overwriting silently.
     seen: dict[str, Path] = {}
     for p in paths:
         if p.suffix not in ROLE_BY_EXT:
@@ -79,27 +74,26 @@ def main() -> int:
             return 1
         seen[p.name] = p
 
-    # One array per role rather than one array of {name, folder, role}. The folder is implied by
-    # the role ("effects" holds the effects) and the role by the extension, so storing either per
-    # entry would be the same value repeated once per script. It also makes the picker's job a
-    # range rather than a scan: it wants "every effect", which is now an array, not a filter.
+    # One array per role rather than one array of {name, folder, role}: the role follows from the
+    # extension, so storing it per entry would repeat one value per script. It also makes the
+    # picker's job a range rather than a scan: it wants "every effect", which is an array, not a filter.
     by_role: dict[str, list[str]] = {r: [] for r in ROLE_BY_EXT.values()}
     # What each script says it is, in the same order, so the picker can show a row the way the
     # module picker shows a type: its dimension and its emoji, before the script is downloaded.
     decl_by_role: dict[str, list[tuple[int, str]]] = {r: [] for r in ROLE_BY_EXT.values()}
-    # The subfolder under the role's folder, "" for most, as an index into one table, so a collection costs its name once rather than once per script.
-    subfolders: list[str] = [""]
-    sub_by_role: dict[str, list[int]] = {r: [] for r in ROLE_BY_EXT.values()}
+    # The folder under moonlive/, as an index into one table, so a collection costs its name once rather than once per script; a project folder mixes roles.
+    folders: list[str] = []
+    folder_by_role: dict[str, list[int]] = {r: [] for r in ROLE_BY_EXT.values()}
     for p in paths:
         role = ROLE_BY_EXT[p.suffix]
         by_role[role].append(p.name)
-        sub = "/".join(p.resolve().relative_to(root.resolve()).parts[1:-1])   # between the role's folder and the file
-        if sub not in subfolders:
-            if len(subfolders) == 256:   # an index is an unsigned char
-                print(f"catalog_scripts: {p} opens a 257th subfolder; the catalog indexes at most 256", file=sys.stderr)
+        folder = "/".join(p.resolve().relative_to(root.resolve()).parts[:-1])
+        if folder not in folders:
+            if len(folders) == 256:   # an index is an unsigned char
+                print(f"catalog_scripts: {p} opens a 257th folder; the catalog indexes at most 256", file=sys.stderr)
                 return 1
-            subfolders.append(sub)
-        sub_by_role[role].append(subfolders.index(sub))
+            folders.append(folder)
+        folder_by_role[role].append(folders.index(folder))
         try:
             decl_by_role[role].append(declared(p))
         except ValueError as e:
@@ -116,20 +110,19 @@ def main() -> int:
         "///\n",
         "/// A device carries names only and the UI fetches a script's text on first pick, so flash scales with the script count and the filesystem holds only what is used.\n",
         "///\n",
-        "/// There is one array per role: a script's role follows from its extension and its folder from its role, so neither is stored per entry. A subfolder is an index into one shared table.\n",
+        "/// There is one array per role, since a script's role follows from its extension. Its folder under `moonlive/` is an index into one shared table, so a project folder can hold every role.\n",
         "#include <cstddef>\n\n",
         "namespace mm::moonlive {\n\n",
     ]
 
-    parts.append("/// The subfolders a script may sit in under its role's folder upstream, \"\" first for the folder itself.\n")
-    parts.append("constexpr const char* kCatalogSubfolders[] = {\n")
-    parts.append("".join(f'    "{s}",\n' for s in subfolders))
+    parts.append("/// The folders a script sits in under `moonlive/` upstream.\n")
+    parts.append("constexpr const char* kCatalogFolders[] = {\n")
+    parts.append("".join(f'    "{s}",\n' for s in folders))
     parts.append("};\n\n")
 
     for role, names in by_role.items():
         lower = role.lower()
-        folder = FOLDER_BY_ROLE[role]
-        parts.append(f"/// Every factory {lower} by file name, from `moonlive/{folder}/` upstream.\n")
+        parts.append(f"/// Every factory {lower} by file name, from `moonlive/` upstream.\n")
         parts.append(f"constexpr const char* k{role}Catalog[] = {{\n")
         parts.append("".join(f'    "{n}",\n' for n in names))
         parts.append("};\n")
@@ -145,11 +138,10 @@ def main() -> int:
         parts.append(f"constexpr const char* k{role}CatalogTags[] = {{\n")
         parts.append("".join(f'    "{g}",\n' for _, g in decls))
         parts.append("};\n")
-        parts.append(f"/// Where each {lower} above sits under `moonlive/{folder}/`, as an index into kCatalogSubfolders.\n")
-        parts.append(f"constexpr unsigned char k{role}CatalogSub[] = {{\n")
-        parts.append("".join(f"    {i},\n" for i in sub_by_role[role]))
-        parts.append("};\n")
-        parts.append(f'constexpr const char* k{role}Folder = "{folder}";   ///< its directory upstream\n\n')
+        parts.append(f"/// Where each {lower} above sits under `moonlive/`, as an index into kCatalogFolders.\n")
+        parts.append(f"constexpr unsigned char k{role}CatalogFolder[] = {{\n")
+        parts.append("".join(f"    {i},\n" for i in folder_by_role[role]))
+        parts.append("};\n\n")
 
     total = sum(len(v) for v in by_role.values())
     parts.append(f"constexpr size_t kCatalogCount = {total};   ///< every factory script, all roles\n\n")

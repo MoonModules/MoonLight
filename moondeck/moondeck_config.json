@@ -376,6 +376,17 @@
       "pass_port_device_model": true
     },
     {
+      "id": "serve_firmware",
+      "tab": "esp32",
+      "group": "flash",
+      "label": "Serve for OTA",
+      "help": "serve_firmware",
+      "script": "run/serve_firmware.py",
+      "needs_firmware": true,
+      "long_running": true,
+      "process_name": "serve_firmware.py"
+    },
+    {
       "id": "check_encodings",
       "tab": "esp32",
       "group": "qemu",

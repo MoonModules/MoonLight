@@ -60,6 +60,7 @@ TEST_CASE("every demo draws something on a panel") {
         Panel p;
         p.effect.demo = d;
         p.effect.fade = 255;               // no trail carried between frames: judge one frame alone
+        p.effect.zoom = 0;                 // the camera push-in runs on the process clock, and at its peak a figure leaves this small panel
         for (int i = 0; i < 30; i++) p.layer.tick();
         CAPTURE(std::string(mm::FixedPointEffect::kDemoNames[d]));
         CHECK(p.litCount() > 0);

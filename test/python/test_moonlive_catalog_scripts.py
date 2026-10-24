@@ -108,27 +108,28 @@ def generate(tmp_path, rel_paths: list) -> tuple:
     return code, out.read_text(encoding="utf-8") if out.exists() else ""
 
 
-def test_a_script_in_a_subfolder_is_cataloged_with_it_for_the_download_url(tmp_path):
+def test_a_script_is_cataloged_with_its_folder_for_the_download_url(tmp_path):
     code, header = generate(tmp_path, ["effects/plain.mle", "effects/hpwit/fire.mle"])
     assert code == 0
-    assert 'kCatalogSubfolders[] = {\n    "",\n    "hpwit",\n};' in header
-    assert "kEffectCatalogSub[] = {\n    0,\n    1,\n};" in header   # in the listing's order, which the build sorts
+    assert 'kCatalogFolders[] = {\n    "effects",\n    "effects/hpwit",\n};' in header
+    assert "kEffectCatalogFolder[] = {\n    0,\n    1,\n};" in header   # in the listing's order, which the build sorts
 
 
-def test_a_subfolder_named_like_a_role_folder_is_still_a_subfolder(tmp_path):
-    code, header = generate(tmp_path, ["effects/effects/fire.mle"])
+def test_a_project_folder_holds_scripts_of_every_role(tmp_path):
+    code, header = generate(tmp_path, ["projects/show/glow.mle", "projects/show/play.mls"])
     assert code == 0
-    assert "kEffectCatalogSub[] = {\n    1,\n};" in header
-    assert '"effects",\n};' in header
+    assert 'kCatalogFolders[] = {\n    "projects/show",\n};' in header
+    assert "kEffectCatalogFolder[] = {\n    0,\n};" in header
+    assert "kServiceCatalogFolder[] = {\n    0,\n};" in header
 
 
-def test_two_scripts_of_one_name_in_different_subfolders_fail_the_build(tmp_path, capsys):
+def test_two_scripts_of_one_name_in_different_folders_fail_the_build(tmp_path, capsys):
     code, _ = generate(tmp_path, ["effects/a/fire.mle", "effects/b/fire.mle"])
     assert code == 1
     assert "duplicate script name fire.mle" in capsys.readouterr().err
 
 
-def test_more_subfolders_than_an_index_holds_fail_the_build(tmp_path, capsys):
-    code, _ = generate(tmp_path, [f"effects/c{i}/s{i}.mle" for i in range(256)])
+def test_more_folders_than_an_index_holds_fail_the_build(tmp_path, capsys):
+    code, _ = generate(tmp_path, [f"effects/c{i}/s{i}.mle" for i in range(257)])
     assert code == 1
-    assert "257th subfolder" in capsys.readouterr().err
+    assert "257th folder" in capsys.readouterr().err

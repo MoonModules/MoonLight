@@ -368,9 +368,8 @@ TEST_CASE("Xtensa: a fixed multiply emits mulsh beside mull") {
 // Every SHIPPED script compiles for the classic ESP32 at the buffer the device itself sizes (codeCapFor of its token count), read from moonlive/ on disk so there is one home for each script and a newly added one is under test the moment it exists. This is the contract behind the factory catalog: a user on a Dig-Next-2 or a Dig-Octa picks any of these and gets an effect. It is a COMPILER guardrail: a host has no heap ceiling, so it cannot see the allocation failures that were reported as "codegen failed" on 2026-09-09 (the on-device sweep is the test for those).
 TEST_CASE("Xtensa: every shipped script compiles at the device's own code budget") {
     const std::filesystem::path dir =
-        std::filesystem::path(__FILE__).parent_path().parent_path().parent_path().parent_path()
-        / "moonlive" / "effects";
-    REQUIRE(std::filesystem::exists(dir));
+        std::filesystem::path(__FILE__).parent_path().parent_path().parent_path().parent_path() / "moonlive";
+    REQUIRE(std::filesystem::exists(dir));   // every effect, by extension, wherever its folder
     int checked = 0;
     for (const auto& entry : std::filesystem::recursive_directory_iterator(dir)) {
         if (!entry.is_regular_file() || entry.path().extension() != ".mle") continue;
@@ -378,7 +377,7 @@ TEST_CASE("Xtensa: every shipped script compiles at the device's own code budget
         std::ostringstream ss; ss << f.rdbuf();
         const std::string src = ss.str();
         std::vector<uint8_t> out(mm::moonlive::codeCapFor(mm::moonlive::countTokens(src.c_str())));
-        static char strings[mm::moonlive::CompileResult::kStringPool];
+        static char strings[mm::moonlive::CompileResult::kMaxStrings];
         auto r = mm::moonlive::compileSource(src.c_str(), mm::moonlive::lightBuiltins(),
                                              mm::moonlive::effectSysVars(), out.data(), out.size(),
                                              nullptr, MM_ISA_LOWER, strings, sizeof(strings));

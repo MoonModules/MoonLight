@@ -281,6 +281,56 @@ def test_a_base_classs_template_method_and_its_helpers_publish_the_controls_a_dr
                                                                            "more": "Two drivers can share one buffer."}
 
 
+STRATEGY = """
+struct ControlList { void addControl(const char*, int&) {} };
+struct Driver;
+struct Peripheral {
+    Driver* owner_ = nullptr;
+    virtual void addBusControls(ControlList&) {}
+    virtual int speed() const { return 0; }
+};
+struct Driver {
+    ControlList controls_;
+    Peripheral* peripheral_ = nullptr;
+    /// The data pins.
+    int pins = 0;
+    /// The write strobe, the board's wiring.
+    int clockPin = 10;
+    /// Freeze each frame before it is sent.
+    int snapshot = 1;
+    int& snapshotRef() { return snapshot; }
+    void defineControls() {
+        controls_.addControl("pins", pins);
+        if (peripheral_) peripheral_->addBusControls(controls_);
+        if (peripheral_) peripheral_->speed();
+    }
+};
+struct FastBus : Peripheral {
+    /// Buffers the DMA circulates.
+    int bufs = 12;
+    void addBusControls(ControlList& c) override {
+        c.addControl("clockPin", owner_->clockPin);
+        c.addControl("bufs", bufs);
+        c.addControl("snapshot", owner_->snapshotRef());
+    }
+};
+struct PlainBus : Peripheral {
+    /// The data/command select.
+    int dcPin = 11;
+    void addBusControls(ControlList& c) override { c.addControl("clockPin", owner_->clockPin); c.addControl("dcPin", dcPin); }
+};
+"""
+
+
+def test_a_strategy_handed_the_control_list_publishes_its_controls_with_their_help(tmp_path):
+    """A driver's peripheral declares controls on the driver's card through a virtual call handed the control list; each implementation can run, so each one's controls take the help on their members, an accessor's member included."""
+    ci, tu = parsed(tmp_path / "Strategy.h", STRATEGY)
+    cls = {c.spelling: c for c in tu.cursor.walk_preorder() if c.kind == ci.CursorKind.STRUCT_DECL and c.is_definition()}
+    assert gen_help.controls_of(cls["Driver"]) == {"pins": "The data pins.", "clockPin": "The write strobe, the board's wiring.",
+                                                  "bufs": "Buffers the DMA circulates.", "snapshot": "Freeze each frame before it is sent.",
+                                                  "dcPin": "The data/command select."}
+
+
 def test_controls_defined_in_the_cpp_beside_the_header_and_through_a_local_add_lambda_count(tmp_path):
     """A class that only declares `defineControls` is read from its `.cpp`, and a lambda named `add…` publishes as a method does."""
     header = tmp_path / "Slot.h"
@@ -469,3 +519,10 @@ def test_the_docs_strip_the_same_role_nouns_the_app_does():
     js = (gen_help.ROOT / "src" / "ui" / "help.js").read_text()
     nouns = _re.search(r"const ROLE_NOUNS = \[([^\]]*)\]", js).group(1)
     assert tuple(_re.findall(r'"(\w+)"', nouns)) == gen_help._ROLE_NOUNS
+
+
+def test_a_cursor_kind_newer_than_the_bindings_reads_as_a_placeholder(tmp_path):
+    """The bindings lag the library they load, so a kind they lack, here the `flag_enum` attribute, reads as a placeholder rather than raising mid-walk."""
+    ci, tu = parsed(tmp_path / "Flags.h", "enum __attribute__((flag_enum)) Flags { A = 1, B = 2 };\n")
+    gen_help.know_every_cursor_kind(ci)
+    assert "ENUM_DECL" in [n.kind.name for n in tu.cursor.walk_preorder()]

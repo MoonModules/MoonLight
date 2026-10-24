@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core/module/MoonModule.h"
+#include "core/module/StateDocument.h"   // what a live document's apply answers
 
 #include <array>
 #include <atomic>
@@ -66,6 +67,28 @@ public:
 
     /// Ask for a rebuild at the next frame boundary, which is safe from any task.
     void requestPrepareTree() MM_NONBLOCKING { prepareRequested_.store(true, std::memory_order_relaxed); }
+    /// Ask for one subtree's rebuild at the next frame boundary, safe from any task: a few subtrees per frame, one more widening the request to the tree.
+    void requestPrepare(MoonModule* scope) MM_NONBLOCKING {
+        if (!scope) { requestPrepareTree(); return; }
+        for (auto& slot : preparePending_) {
+            MoonModule* expected = nullptr;
+            if (slot.compare_exchange_strong(expected, scope, std::memory_order_relaxed) || expected == scope) return;
+        }
+        requestPrepareTree();
+    }
+    /// Rebuild these subtrees now, then let every top module react once, so a reader of what they reshaped re-prepares itself; the whole tree when one has left it.
+    void prepareSubtrees(MoonModule* const* scopes, uint8_t count);
+    /// The same for one subtree.
+    void prepareSubtree(MoonModule* scope) { prepareSubtrees(&scope, 1); }
+    /// Run what was asked for since the last frame, at the frame boundary: the live documents, then the rebuild of the tree or the subtrees.
+    void preparePending();
+
+    /// What a queued live document's apply reports, with the tag its caller gave.
+    using LiveDone = void (*)(uintptr_t tag, const StateDocumentResult& result);
+    /// Apply a state document as a live source at the next frame boundary, where no module is mid-tick, so a module may ask from its own tick. The queue frees `text`, from platform::alloc; false when full, the text then still the caller's.
+    bool applyLive(char* text, LiveDone done = nullptr, uintptr_t tag = 0);
+    /// Apply the queued live documents, in the order they came.
+    void applyPendingLive();
 
 
     /// Average microseconds per tick over the last second, which is the primary performance metric.
@@ -105,8 +128,7 @@ public:
     };
 
     /// Set one control by module and control name, applying the whole control-change reaction.
-    SetControlResult setControl(const char* moduleName, const char* controlName,
-                                const char* valueJson);
+    SetControlResult setControl(const char* moduleName, const char* controlName, const char* valueJson, bool live = false);
 
     /// The reaction to a control that changed: visibility rebuilt, the module told, and the tree re-prepared when the control reshapes it.
     void reactToControlChange(MoonModule* target, const char* controlName);
@@ -126,6 +148,15 @@ private:
     uint8_t moduleCount_ = 0;
     /// A rebuild request, atomic because a lost request means a script edit silently never applies.
     std::atomic<bool> prepareRequested_{false};
+    /// How many subtree rebuilds wait at once: a show moves two or three containers a frame, and one more than fits widens to the tree.
+    static constexpr uint8_t kPendingScopes = 4;
+    /// Pending subtree rebuilds, null where free.
+    std::array<std::atomic<MoonModule*>, kPendingScopes> preparePending_{};
+    /// A live write is under way, so a write it makes in turn, a slot driving its target, is live too and saves nothing.
+    bool liveWrite_ = false;
+    /// Live documents waiting for the frame boundary, from the loop's own task only: a show builds a look in one or two.
+    struct PendingLive { char* text = nullptr; LiveDone done = nullptr; uintptr_t tag = 0; };
+    std::array<PendingLive, 4> pendingLive_{};
     LoadAllFn loadAllHook_ = nullptr;
     NoteDirtyFn noteDirtyHook_ = nullptr;
     uint32_t startTime_ = 0;

@@ -55,13 +55,14 @@ void tick() {
 ```
 
 `string` names what comes back rather than introducing a string type: a script returns a literal, and building, joining or comparing text is out of scope.
+Text a script assembles, such as a temperature with its unit, lives in a [JSON document](#json-documents-in-a-service), which the host holds.
 
 ### Members, and which become controls
 
 `byte bpm = 30;` is state the script owns: visible in every function, surviving every tick. Naming it in `defineControls()` with `addControl("bpm", bpm, 1, 240)` also puts it on the UI as a slider, which is the same call a compiled module makes. A member no `addControl` names stays private to the script, which is how a stateful effect holds a value the user should not see.
 
 The default comes from the declaration, the range from the call, and the quoted name is the UI label, free to differ from the member's name.
-`addSelect("shape", shape, "disc|ball|egg")` makes a dropdown instead: `shape` holds 0, 1 or 2, the index of the name picked. The quoted names count against the script's 128 bytes of strings. The engine keeps every dropdown's names together in 96 bytes, each name with one byte for its end, up to 16 names in all.
+`addSelect("shape", shape, "disc|ball|egg")` makes a dropdown instead: `shape` holds 0, 1 or 2, the index of the name picked. The engine keeps every dropdown's names together in 96 bytes, each name with one byte for its end, up to 16 names in all.
 
 ### A member can be written
 
@@ -130,7 +131,7 @@ class RainEffect {
 
 Both reach the picker before a factory script is downloaded, because the build extracts them from the source into the catalog. That copy is for display only: once a script is on the device, the compiled script is what decides.
 
-## The five types
+## The six types
 
 A type says what a value means, and the storage is the compiler's business.
 Every scalar occupies the same 4-byte slot whatever its type, and only arrays pack by element.
@@ -143,9 +144,13 @@ That is where width still earns its keep: a `byte[]` heat map costs a quarter of
 | `bool` | `true` or `false` | a flag |
 | `fixed` | -32,768.0 to 32,767.99998, in steps of 1/65,536 | coordinates and anything fractional |
 | `string` | one of the script's own literals | a name passed to a builtin |
+| `json` | a document the host holds, or none | data a service reads from the internet or sends to a device |
 
 An initializer is range-checked against its type, so `byte n = 300;` is a compile error naming the member rather than a silent 44.
 A `string` array is refused, since there is no runtime string to fill one with.
+
+A script's literals live in a pool sized to them, so a long one costs only the script that holds it, up to 16 KB of text a script.
+`R"( ... )"` is C++'s raw literal: it spans lines and keeps every quote, so a JSON document pastes in as it is, and `R"x( ... )x"` takes a delimiter for text holding `)"`.
 
 ## RGB and Coord3D
 
@@ -279,11 +284,11 @@ The core owns the grammar and a generic call mechanism, and nothing else.
 | `addSelect(name, member, "a\|b\|c")` | surface a byte member as a dropdown of those names, its value the index picked |
 | `gpioRead(pin)`, `gpioWrite(pin, v)` | read and drive a pin, from a service script |
 | `adcRead(pin)`, `adcMv(pin)`, `adcMax()` | an analog reading: raw, in millivolts, and its full scale |
-| `setControl(module, control, v)` | drive another module's control, which is what a service does |
+| `setControl("fader2", v)` | move a slot of the Control surface, which drives whatever the slot targets: what a service does |
 
 Every audio call answers 0 without audio, so a script written for a rig with a microphone still runs on one without.
 A motion call reaches nothing on a light that carries no such channel, so one script serves a moving head and a strip.
-The last four belong to a service script, which runs on the poll rather than the render tick.
+The last three belong to a service script, which runs on the poll rather than the render tick, and so do the JSON calls below.
 
 Each particle call is one pass over the whole pool per frame rather than one per light.
 A 300-spark script therefore costs far less than a shader touching every pixel.
@@ -298,6 +303,53 @@ Its time axis must be monotonic, so feeding it a `beat()` sawtooth reads as a hi
 
 `turn(n)` exists because a full revolution is 65536, one past the largest number a script can write.
 
+## JSON documents in a service
+
+A service script reads JSON from the internet, builds documents of its own, and sends them to this device or another one.
+A `json` value is a handle to a document the host holds, in an int's slot, so text never passes through the script: it moves from document to document, and a number comes out as an `int` or a `fixed`.
+A path into a document is a JSON Pointer ([RFC 6901](https://www.rfc-editor.org/rfc/rfc6901)): `/current/temperature_2m`, `/results/0/title`.
+
+```c
+class Weather {
+  json w;
+  json show;
+
+  void tick20ms() {
+    w = getJson("https://api.open-meteo.com/v1/forecast?latitude=52.37&longitude=4.90&current=temperature_2m", 600);
+    if (jsonChanged(w)) {
+      show = R"({"Effects": {"Layer": {"Text": {"text": ""}}}})";
+      jsonSetText(show, "/Effects/Layer/Text/text", "Amsterdam ");
+      jsonAppend(show, "/Effects/Layer/Text/text", w, "/current/temperature_2m");
+      pushJson(show);
+    }
+  }
+}
+```
+
+| call | does |
+|---|---|
+| `json d = R"({...})";` | a document from the script's own text, parsed once: a string literal where a `json` value belongs is parsed into one |
+| `getJson(url, seconds)` | a document fetched from `url`, fetched again once `seconds` passed and it is read; it answers at once, with the last document that arrived |
+| `jsonChanged(d)` | true when a new document arrived since the script last asked |
+| `jsonStatus(d)` | the HTTP status of the last answer, 0 while none came |
+| `jsonInt(d, "/p")`, `jsonFixed(d, "/p")` | the number at a pointer, a quoted one such as `"252.11"` included, 0 when absent |
+| `jsonSize(d, "/p")` | how many elements or members the array or object at a pointer holds |
+| `jsonSetInt(d, "/p", v)`, `jsonSetFixed(d, "/p", v)`, `jsonSetText(d, "/p", "text")` | write a value, creating the members on the way |
+| `jsonAppendText(d, "/p", "text")`, `jsonAppend(d, "/p", src, "/q")` | join text onto a string: the script's own, or another document's value as it reads |
+| `jsonCopy(d, "/p", src, "/q")` | copy a value from one document to another, a whole object included |
+| `pushJson(d)` | apply a state document to this device, and answer the reply |
+| `pushJsonTo("MM-eye1.local", d)` | send it to another MoonLight, or `POST` it to a URL, and answer the reply |
+
+A fetch runs on a task of its own, so a DNS lookup or a TLS handshake never stalls the poll.
+A refresh that fails keeps the last good document, and an answer past 16 KB, 4 KB on a board without PSRAM, is refused rather than cut.
+On a board without PSRAM an HTTPS request waits while internal RAM cannot hold a TLS session, and `jsonStatus` reads 0 until it went.
+
+A push is live, never saved: it applies the way `PATCH /api/state?live=1` does, at the next frame boundary, so a script building its look pushes it again at start.
+A push to a target with one still on its way waits, replacing any that waited before it, so a script may push whenever something changed.
+A document naming a shipped script the device lacks lists that script on the System card, and an open page downloads it, as the picker does.
+
+`jsondemo.mls` in `moonlive/services` shows four feeds, the weather, a price, a match and a headline, as scrolling text, and builds its own four layers to do it.
+
 ## Debugging: print
 
 `print(v)` writes a value to the serial log and returns it, so it wraps any part of an expression without changing the result.
@@ -308,4 +360,5 @@ tick, so a print costs frame time every frame it survives. Each compile grants a
 
 ## Source
 
-[MoonLive](../../../src/core/moonlive/MoonLive.h) is the engine, [MoonLiveCompiler](../../../src/core/moonlive/MoonLiveCompiler.h) the front-end, and [MoonLiveBuiltins_light](../../../src/light/moonlive/MoonLiveBuiltins_light.h) the table registering every call above. [The lowering](../../../src/core/moonlive/moonlive_lower.h) turns the intermediate form into machine bytes, written once for every backend.
+[MoonLive](../../../src/core/moonlive/MoonLive.h) is the engine, [MoonLiveCompiler](../../../src/core/moonlive/MoonLiveCompiler.h) the front-end, and [MoonLiveBuiltins_light](../../../src/light/moonlive/MoonLiveBuiltins_light.h) the table registering every call above.
+The service and JSON calls are [MoonLiveBuiltins_service](../../../src/core/moonlive/MoonLiveBuiltins_service.h), each a thin wrapper over [JsonFetch](../../../src/core/util/JsonFetch.h) and [JsonUtil](../../../src/core/util/JsonUtil.h), which compiled code calls for the same reach. [The lowering](../../../src/core/moonlive/moonlive_lower.h) turns the intermediate form into machine bytes, written once for every backend.

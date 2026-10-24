@@ -134,3 +134,34 @@ TEST_CASE("the talk consent explanation is a status that follows the answer") {
     talk.setConsentForTest(true);
     CHECK(talk.status() == nullptr);
 }
+
+namespace {
+int g_talkStatus = 200;
+int talkStandIn(const char*, const char*, const char*, char*, size_t) { return g_talkStatus; }
+}  // namespace
+
+/// The box keeps the message until the server took it, so an unreachable server never costs what somebody typed.
+TEST_CASE("a message leaves the box only once it arrived") {
+    if (!mm::platform::httpsAvailable()) { MESSAGE("no HTTPS client in this build"); return; }
+    mm::platform::setTestHttpFetch(&talkStandIn);
+    for (const int status : {0, 200}) {
+        g_talkStatus = status;
+        mm::Scheduler scheduler;
+        auto* cloud = new mm::MoonCloudModule(mm::MoonCloudModule::Route::Direct);
+        cloud->setName("MoonCloud");
+        auto* talk = new mm::MoonTalkModule();
+        talk->setName("Talk");
+        cloud->addChild(talk);
+        scheduler.addModule(cloud);
+        scheduler.setup();
+        talk->setConsentForTest(true);
+        talk->setMessageForTest("hello");
+        talk->onControlChanged("send");
+        CHECK(std::string(talk->message()) == "hello");   // on its way: still in the box
+        REQUIRE(mm::JsonFetch::instance().settle(2000));
+        talk->tick1s();
+        CHECK(std::string(talk->message()) == (status == 200 ? "" : "hello"));
+        scheduler.release();
+    }
+    mm::platform::setTestHttpFetch(nullptr);
+}

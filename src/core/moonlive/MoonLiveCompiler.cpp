@@ -75,6 +75,30 @@ struct Lexer {
         return true;
     }
 
+    /// Whether `q` is the `)delim"` that ends a raw literal.
+    static bool closesRaw(const char* q, const char* delim, size_t dLen) {
+        return *q == ')' && std::strncmp(q + 1, delim, dLen) == 0 && q[1 + dLen] == '"';
+    }
+
+    /// Whether a character may sit in a raw literal's delimiter, as C++ allows: none of a space, a parenthesis, a backslash or a quote.
+    static bool isDelimChar(char c) { return c && c != '(' && c != ')' && c != '\\' && c != '"' && !isSpace(c); }
+
+    /// Read a raw literal at `R"`, its text spanned between the delimiters with nothing decoded.
+    void readRawString() {
+        const char* delim = p + 2;
+        const char* open = delim;
+        while (open - delim < 16 && isDelimChar(*open)) open++;
+        if (*open != '(') { kind = Tok::Error; err = "a raw string opens with R\"( and closes with )\""; return; }
+        const size_t dLen = static_cast<size_t>(open - delim);
+        identBeg = open + 1;
+        const char* q = identBeg;
+        while (*q && !closesRaw(q, delim, dLen)) q++;
+        if (!*q) { kind = Tok::Error; err = "unterminated raw string"; return; }
+        identLen = static_cast<size_t>(q - identBeg);
+        p = q + 2 + dLen;
+        kind = Tok::String;
+    }
+
     /// Lex the next token into this lexer's fields.
     void advance() {
         for (;;) {
@@ -118,6 +142,8 @@ struct Lexer {
         // '/' only reaches here when it is NOT the `//` a comment starts with (handled above).
         if (c == '/') { p++; kind = Tok::Slash;   return; }
         if (c == '%') { p++; kind = Tok::Percent; return; }
+        // A raw literal, C++'s R"delim( ... )delim": it spans lines and keeps every quote, so a JSON document pastes in as it is.
+        if (c == 'R' && p[1] == '"') { readRawString(); return; }
         // A control's UI label, spanned like an identifier since both are source bytes; no escapes.
         if (c == '"') {
             p++;
@@ -151,6 +177,8 @@ struct Lexer {
 constexpr const char* kJoinsConditions = "&&, || and ! join the conditions of an if, not values";
 /// What a whole struct where one value belongs says.
 constexpr const char* kOneFieldAtATime = "a struct is read one field at a time: write name.field";
+/// What a JSON document where a number belongs says.
+constexpr const char* kJsonIsNoNumber = "a json value is a document: read a number with jsonInt";
 /// What a comparison after a negated value says.
 constexpr const char* kNegatesWhatFollows = "! negates what follows it: write !(a < b) to negate a comparison";
 
@@ -204,6 +232,8 @@ struct Parser {
     // No AST, so the type rides alongside the register and every parse function sets it.
     /// Whether the value last parsed is Q16.16 rather than a plain integer.
     bool               exprIsFixed = false;
+    /// Whether the value last parsed is a JSON document's handle, which no arithmetic takes.
+    bool               exprIsJson = false;
     /// Whether a same-type builtin's arguments, last parsed, were fixed, which its result follows.
     bool               argsFixed = false;
     // A literal converts by patching its Const, since its meaning is visible at the call site.
@@ -517,8 +547,10 @@ struct Parser {
             lex.advance();
             const bool lhsFixed = exprIsFixed;
             const int  lhsLit   = exprLitConst;
+            const bool lhsJson  = exprIsJson;
             VReg rhs = parseTerm();
             if (failed) return 0;
+            if (lhsJson || exprIsJson) { fail(kJsonIsNoNumber); return 0; }
             bool outFixed = false;
             if (!meet(lhsFixed, lhsLit, exprIsFixed, exprLitConst, outFixed)) return 0;
             exprIsFixed = outFixed;
@@ -559,6 +591,39 @@ struct Parser {
         return dst;
     }
 
+    // A string literal where a document belongs is parsed into one, as C++ converts through a constructor: the host's `json` builtin, named after the type.
+    /// Parse a JSON document: a string literal, converted, or an expression that is already one.
+    VReg parseJsonValue() {
+        if (lex.kind == Tok::String) return convertLiteral();
+        VReg v = parseExpr();
+        if (!failed && !exprIsJson) fail("this is a json document: a string literal or a json value");
+        return v;
+    }
+
+    /// Parse the string literal at the cursor into a document, through the host's `json` builtin.
+    VReg convertLiteral() {
+        const Builtin* ctor = table.find("json", 4);
+        if (!ctor || !ctor->jsonReturn || ctor->argc != 1 || ctor->kind != BuiltinKind::Call)
+            { fail("only a service script has json documents"); return 0; }
+        const char* interned = internString(lex.identBeg, lex.identLen);
+        if (!interned) { fail("no room for this script's strings"); return 0; }
+        lex.advance();
+        if (slotHighWater >= kMaxLocals) { fail("expression too deeply nested"); return 0; }
+        VReg text = alloc();
+        emit({IrOp::ConstPtr, text, 0,0,0,0, 0, nullptr, interned, {}});
+        const uint8_t argBase = slotHighWater;
+        emit({IrOp::Spill, 0, text, 0,0,0, slotHighWater++, nullptr, {}});
+        if (slotHighWater > slotsUsed) slotsUsed = slotHighWater;
+        freeTemp(text);
+        VReg doc = alloc();
+        emit({IrOp::Call, doc, 0, 1, 0, 0, argBase, ctor->fn, {}});
+        slotHighWater = argBase;
+        exprIsFixed = false;
+        exprIsJson = true;
+        exprLitConst = -1;
+        return doc;
+    }
+
     /// Parse a term: a run of primaries joined by the tighter-binding operators.
     VReg parseTerm() {
         VReg lhs = parsePrimary();
@@ -567,9 +632,11 @@ struct Parser {
             const Tok op = lex.kind;
             const bool lhsFixed = exprIsFixed;
             const int  lhsLit   = exprLitConst;
+            const bool lhsJson  = exprIsJson;
             lex.advance();
             VReg rhs = parsePrimary();
             if (failed) return 0;
+            if (lhsJson || exprIsJson) { fail(kJsonIsNoNumber); return 0; }
             bool bothFixed = false;
             if (!meet(lhsFixed, lhsLit, exprIsFixed, exprLitConst, bothFixed)) return 0;
             exprLitConst = -1;
@@ -617,6 +684,7 @@ struct Parser {
         if (!expect(Tok::LParen, "expected '(' after the conversion")) return 0;
         VReg v = parseExpr();
         if (failed) return 0;
+        if (exprIsJson) { fail(kJsonIsNoNumber); return 0; }
         if (up && exprIsFixed) { fail("this value is already fixed"); return 0; }
         if (!up && !exprIsFixed) { fail("this value is already a whole number"); return 0; }
         // A literal is range-checked here, since `toFixed(40000)` would shift past Q16.16.
@@ -670,6 +738,7 @@ struct Parser {
             VReg v = alloc();
             emit({IrOp::Reload, v, 0,0,0,0, locals[li].slot + f, nullptr, {}});
             exprIsFixed = (locals[li].type == CtrlType::Fixed);
+            exprIsJson = (locals[li].type == CtrlType::Json);
             return v;
         }
         // One lookup answers both, since a control is a member the UI shows.
@@ -680,6 +749,7 @@ struct Parser {
         parseCall(&out);   // otherwise a call used as an expression must return a value
         // The builtin's business: uvX and uvY hand back a fixed coordinate, and min follows its arguments.
         exprIsFixed = called && (called->fixedReturn || (called->sameTypeArgs && argsFixed));
+        exprIsJson = called && called->jsonReturn;
         exprLitConst = -1;
         return out;
     }
@@ -715,6 +785,7 @@ struct Parser {
         if (members[mi].count > 1) { fail("an array needs an index: write name[i]"); return 0; }
         VReg v = alloc();
         exprIsFixed = (members[mi].type == CtrlType::Fixed);
+        exprIsJson = (members[mi].type == CtrlType::Json);
         // One load for every scalar, since a slot already holds what its type promises.
         emit({IrOp::LoadCtrl32, v, 0,0,0,0, members[mi].offset, nullptr, {}});
         return v;
@@ -726,6 +797,7 @@ struct Parser {
         if (failed) return 0;
         // Set here, not per branch, so a new kind of primary cannot forget either question.
         exprIsFixed = false;
+        exprIsJson = false;
         exprLitConst = -1;
         if (lex.kind == Tok::Ident && (atKeyword("toFixed", 7) || atKeyword("toInt", 5))) return parseConversion();
         if (lex.kind == Tok::LParen) {                   // grouping
@@ -750,6 +822,7 @@ struct Parser {
             }
             VReg v = parsePrimary();
             if (failed) return 0;
+            if (exprIsJson) { fail(kJsonIsNoNumber); return 0; }
             VReg m = alloc();
             emit({IrOp::Const, m, 0,0,0,0, -1, nullptr, {}});
             VReg dst = alloc();
@@ -781,6 +854,8 @@ struct Parser {
             return v;
         }
         if (lex.kind == Tok::Ident) return parseNamePrimary();
+        // A token the lexer refused says why itself, which an unterminated raw string most needs.
+        if (lex.kind == Tok::Error) { fail(lex.err); return 0; }
         fail(lex.kind == Tok::Not ? kJoinsConditions : "expected a number, a control name, or a function call");
         return 0;
     }
@@ -893,6 +968,16 @@ struct Parser {
                 }
                 // A string label and a member by name, only where the builtin asks for them.
                 VReg v = 0;
+                if ((fn->jsonArgs >> n) & 1u) {
+                    v = parseJsonValue();
+                    if (failed) return false;
+                    if (slotHighWater >= kMaxLocals) { fail("too many arguments to hold"); return false; }
+                    emit({IrOp::Spill, 0, v, 0,0,0, slotHighWater++, nullptr, {}});
+                    freeTemp(v);
+                    n++;
+                    if (lex.kind == Tok::Comma) { lex.advance(); continue; }
+                    break;
+                }
                 const bool wantStr = (fn->byStr >> n) & 1u;
                 if (wantStr && lex.kind != Tok::String) {
                     fail("this argument must be a name in quotes"); return false;
@@ -913,7 +998,8 @@ struct Parser {
                     const int mi = findMember(lex.identBeg, lex.identLen);
                     if (mi < 0) { fail("no member of that name is declared in this class"); return false; }
                     // The type must have a widget, and drive one value rather than an array.
-                    if (members[mi].type == CtrlType::Fixed || members[mi].type == CtrlType::Str)
+                    if (members[mi].type == CtrlType::Fixed || members[mi].type == CtrlType::Str ||
+                        members[mi].type == CtrlType::Json)
                         { fail("a control binds an int, byte or bool member"); return false; }
                     if (members[mi].count > 1)
                         { fail("a control binds a single member, not an array"); return false; }
@@ -926,6 +1012,7 @@ struct Parser {
                     // One type across the arguments, a literal adopting it, and the result following it.
                     v = parseExpr();
                     if (failed) return false;
+                    if (exprIsJson) { fail(kJsonIsNoNumber); return false; }
                     if (n == 0) {
                         groupFixed = exprIsFixed;
                         groupLit = exprLitConst;
@@ -939,6 +1026,7 @@ struct Parser {
                     const bool wantFixed = ((fn->fixedArgs >> n) & 1u) != 0;
                     v = parseExpr();
                     if (failed) return false;
+                    if (exprIsJson) { fail(kJsonIsNoNumber); return false; }
                     // Against what the builtin declares, since a stray fixed reads 65,536 times off.
                     if (wantFixed != exprIsFixed) {
                         bool adopted = false;
@@ -1005,6 +1093,8 @@ struct Parser {
         if (isReservedWord(name, nameLen)) { fail("member name is a reserved word"); return; }
         if (table.findStruct(name, nameLen)) { fail("that name is a type"); return; }
         lex.advance();
+        // A document is named by a handle the host gives at run time, so a member starts with none.
+        if (type == CtrlType::Json) { parseJsonMember(name, nameLen); return; }
         // The length is a literal, since the arena is sized at compile time.
         uint8_t count = 1;
         if (lex.kind == Tok::LBracket) {
@@ -1078,6 +1168,7 @@ struct Parser {
                                       { fail("a bool member takes true or false"); return; }
                                   break;
             case CtrlType::Str:   fail("a string member cannot be initialized yet"); return;
+            case CtrlType::Json:  return;   // parseJsonMember took it before the '='
             case CtrlType::Int:   rangeErr = "default out of range";
                                   if (lex.numberIsFixed)
                                       { fail("an int member takes a whole number"); return; }
@@ -1113,12 +1204,27 @@ struct Parser {
         memberCount++;
     }
 
+    /// Parse the rest of `json name;`, the name consumed: a slot holding no document until a function gives it one.
+    void parseJsonMember(const char* name, size_t nameLen) {
+        if (lex.kind == Tok::LBracket) { fail("json arrays are not supported"); return; }
+        if (lex.kind == Tok::Assign) { fail("a json member starts empty: give it a document in a function"); return; }
+        if (!expect(Tok::Semicolon, "expected ';' after the member declaration")) return;
+        if (memberCount >= kMaxCtrls) { fail("too many members"); return; }
+        uint16_t at = memberBytes;
+        if ((at % 4) != 0) at = uint16_t(at + (4 - at % 4));
+        if (at + 4 > kCtrlBytes) { fail("the class declares more member data than the arena holds"); return; }
+        members[memberCount] = {name, 0, 0, 0, static_cast<uint8_t>(nameLen), CtrlType::Json,
+                                static_cast<uint8_t>(at), 1};
+        memberBytes = static_cast<uint8_t>(at + 4);
+        memberCount++;
+    }
+
     /// Whether a name is one the expression parser resolves before it looks for a member.
     static bool isReservedWord(const char* n, size_t len) {
         static const struct { const char* w; size_t len; } kWords[] = {
             {"toFixed", 7}, {"toInt", 5}, {"true", 4}, {"false", 5},
             // The type keywords too, since `int int = 5;` parsed and confused the class loop.
-            {"int", 3}, {"byte", 4}, {"bool", 4}, {"fixed", 5}, {"string", 6},
+            {"int", 3}, {"byte", 4}, {"bool", 4}, {"fixed", 5}, {"string", 6}, {"json", 4},
             // And the statement keywords, since `int if = 0;` made every later `if` a reference.
             {"if", 2}, {"else", 4}, {"for", 3}, {"return", 6}, {"class", 5}, {"void", 4}};
         for (const auto& k : kWords)
@@ -1144,10 +1250,10 @@ struct Parser {
         return lex.kind == Tok::Ident && lex.identLen == len && std::strncmp(lex.identBeg, kw, len) == 0;
     }
     // Names an author reaches for rather than storage widths, which are the compiler's business.
-    /// Whether the current token opens a type: int, byte, bool, fixed or string.
+    /// Whether the current token opens a type: int, byte, bool, fixed, string or json.
     bool atTypeKeyword() const {
         return atKeyword("int", 3) || atKeyword("byte", 4) || atKeyword("bool", 4) ||
-               atKeyword("fixed", 5) || atKeyword("string", 6);
+               atKeyword("fixed", 5) || atKeyword("string", 6) || atKeyword("json", 4);
     }
     // Not every member type, since `byte tick()` would suggest a narrowing the engine never does.
     /// Whether the current token opens a return type: void, int or string.
@@ -1166,6 +1272,7 @@ struct Parser {
         if (atKeyword("bool", 4))   return CtrlType::Bool;
         if (atKeyword("fixed", 5))  return CtrlType::Fixed;
         if (atKeyword("string", 6)) return CtrlType::Str;
+        if (atKeyword("json", 4))   return CtrlType::Json;
         return CtrlType::Int;
     }
 
@@ -1368,8 +1475,10 @@ struct Parser {
             }
             return false;
         }
-        VReg v = parseExpr();
+        const bool wantJson = (li >= 0 ? locals[li].type : members[mi].type) == CtrlType::Json;
+        VReg v = wantJson ? parseJsonValue() : parseExpr();
         if (failed) return false;
+        if (!wantJson && exprIsJson) { fail(kJsonIsNoNumber); return false; }
         // The wall holds at the store, since the slot holds raw bits with no scaling of its own.
         if (mi >= 0) {
             const bool wantFixed = (members[mi].type == CtrlType::Fixed);
@@ -1591,9 +1700,11 @@ struct Parser {
         }
         const bool aFixed = exprIsFixed;
         const int  aLit   = exprLitConst;
+        const bool aJson  = exprIsJson;
         lex.advance();
         VReg b = parseExpr();
         if (failed) { freeTemp(a); return false; }
+        if (aJson || exprIsJson) { freeTemp(b); freeTemp(a); fail(kJsonIsNoNumber); return false; }
         // Same wall as the operators, since Q16.16 preserves order but not magnitude.
         bool cmpFixed = false;
         if (!meet(aFixed, aLit, exprIsFixed, exprLitConst, cmpFixed)) { freeTemp(b); freeTemp(a); return false; }
@@ -1693,8 +1804,10 @@ struct Parser {
         }
         lex.advance();
         if (!expect(Tok::Assign, "a local variable is initialized: int x = 0;")) return false;
-        VReg init = parseExpr();
+        const bool wantJson = (declType == CtrlType::Json);
+        VReg init = wantJson ? parseJsonValue() : parseExpr();
         if (failed) return false;
+        if (!wantJson && exprIsJson) { fail(kJsonIsNoNumber); return false; }
         // The initializer sets the promised scaling, and a literal adopts it.
         if (wantFixed != exprIsFixed) {
             bool adopted = false;
@@ -1816,6 +1929,7 @@ struct Parser {
             if (curRet != RetType::Int) { fail("this function returns a string, not a number"); return false; }
             v = parseExpr();
             if (failed) return false;
+            if (exprIsJson) { fail(kJsonIsNoNumber); return false; }
         }
         // imm 1 says this return carries a value, which the spill pass reads.
         emit({IrOp::Ret, 0, v, 0,0,0, 1, nullptr, {}});
@@ -1985,6 +2099,14 @@ uint32_t countTokens(const char* source) {
         if (++tokens > kMaxIrOps) break;   // a runaway source; reserve() rejects past the bound
     }
     return tokens;
+}
+
+uint32_t countStringBytes(const char* source) {
+    if (!source) return 0;
+    uint32_t bytes = 0;
+    for (Lexer scan(source); scan.kind != Tok::End && scan.kind != Tok::Error; scan.advance())
+        if (scan.kind == Tok::String) bytes += static_cast<uint32_t>(scan.identLen) + 1;
+    return bytes;
 }
 
 /// Compile a script to bytes, answering what it declared and where it failed.

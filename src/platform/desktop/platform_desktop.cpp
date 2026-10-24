@@ -346,7 +346,19 @@ void* alloc(size_t bytes) {
     return trackedAlloc(bytes);
 }
 
-bool ptrIsPsram(const void* /*p*/) { return false; }   // desktop has no PSRAM
+static std::atomic<const void*> testPsramBegin{nullptr};
+static std::atomic<const void*> testPsramEnd{nullptr};
+void setTestPsramRange(const void* begin, const void* end) {
+    testPsramBegin.store(begin, std::memory_order_relaxed);
+    testPsramEnd.store(end, std::memory_order_relaxed);
+}
+
+bool ptrIsPsram(const void* p) {   // desktop has no PSRAM, unless a test marks a range as such
+    const auto* b = static_cast<const uint8_t*>(testPsramBegin.load(std::memory_order_relaxed));
+    const auto* e = static_cast<const uint8_t*>(testPsramEnd.load(std::memory_order_relaxed));
+    const auto* q = static_cast<const uint8_t*>(p);
+    return b && q && q >= b && q < e;
+}
 
 void* allocInternal(size_t bytes) {
     return trackedAlloc(bytes);   // desktop has one flat RAM: internal == ordinary
@@ -438,8 +450,11 @@ size_t freeHeap() {
     return 0; // Not meaningful on desktop (0 = unlimited)
 }
 
+static std::atomic<size_t> testFreeInternal{0};
+void setTestFreeInternalHeap(size_t bytes) { testFreeInternal.store(bytes, std::memory_order_relaxed); }
+
 size_t freeInternalHeap() {
-    return 0; // Not meaningful on desktop (0 = unlimited)
+    return testFreeInternal.load(std::memory_order_relaxed);   // 0 = not meaningful on desktop (unlimited), unless a test sets it
 }
 
 // Test-only cap on the reported largest free block, so a test can force the paged fallback without a fragmented heap.
@@ -617,20 +632,52 @@ bool httpsAvailable() MM_NONBLOCKING {
     // Windows needs no libcurl: WinHTTP ships with the OS, so the send path is always compiled in.
     return true;
 #else
-    return false;   // built without libcurl: httpsPost can never succeed
+    return false;   // built without libcurl: httpFetch can never succeed
 #endif
 }
 
-bool httpsPost(const char* url, const char* body, uint32_t timeoutMs) {
-#ifdef _WIN32
-    // The system's own transport here, for the same reason the others use theirs: the certificate store the platform already ships, with nothing vendored and one link entry.
-    if (!url || !*url) return false;
+namespace {
+std::atomic<HttpFetchFn> testHttpFetch{nullptr};
 
-    // This interface takes the pieces of a URL separately, so its own splitter does the work and nothing is parsed by hand.
+/// Where an answer collects as it arrives, refusing what would not fit rather than truncating it.
+struct FetchSink {
+    char*  body;
+    size_t cap;
+    size_t len = 0;
+    bool   tooBig = false;
+    /// Take `n` more bytes, false once they would not fit with the terminator.
+    bool take(const char* data, size_t n) {
+        if (!body || cap == 0) return true;   // a caller that keeps no answer
+        if (len + n + 1 > cap) { tooBig = true; return false; }
+        std::memcpy(body + len, data, n);
+        len += n;
+        body[len] = '\0';
+        return true;
+    }
+};
+}  // namespace
+
+void setTestHttpFetch(HttpFetchFn fn) { testHttpFetch.store(fn, std::memory_order_relaxed); }
+
+bool tlsRoom(const char* url) {
+    if (!url || std::strncmp(url, "https://", 8) != 0) return true;
+    // Zero is the desktop's "not measured", which only a test replaces with a board's figure.
+    const size_t internal = freeInternalHeap();
+    return internal == 0 || internal >= kInternalFreeFloor + kTlsSessionBytes;
+}
+
+namespace {
+
+#ifdef _WIN32
+/// One request over WinHTTP into `sink`; the status, or 0.
+int transportFetch(const char* method, const char* url, const char* reqBody, uint32_t timeoutMs, FetchSink& sink) {
+    // The system's own transport and certificate store, nothing vendored; the URL is split by WinHTTP's own splitter, never by hand.
     const int wideLen = MultiByteToWideChar(CP_UTF8, 0, url, -1, nullptr, 0);
-    if (wideLen <= 0) return false;
+    if (wideLen <= 0) return 0;
     std::wstring wideUrl(static_cast<size_t>(wideLen), L'\0');
     MultiByteToWideChar(CP_UTF8, 0, url, -1, wideUrl.data(), wideLen);
+    wchar_t wideMethod[16] = {};
+    MultiByteToWideChar(CP_UTF8, 0, method, -1, wideMethod, ARRAYSIZE(wideMethod) - 1);
 
     wchar_t host[256] = {};
     wchar_t path[1024] = {};
@@ -639,38 +686,37 @@ bool httpsPost(const char* url, const char* body, uint32_t timeoutMs) {
     parts.dwStructSize      = sizeof(parts);
     parts.lpszHostName      = host;   parts.dwHostNameLength      = ARRAYSIZE(host);
     parts.lpszUrlPath       = path;   parts.dwUrlPathLength       = ARRAYSIZE(path);
-    // The splitter separates the query from the path, so asking for it and re-joining keeps this general: a later caller's query would otherwise be dropped silently.
+    // The splitter separates the query from the path, so asking for it and re-joining keeps this general: a query would otherwise be dropped silently.
     parts.lpszExtraInfo     = query;  parts.dwExtraInfoLength     = ARRAYSIZE(query);
-    if (!WinHttpCrackUrl(wideUrl.c_str(), 0, 0, &parts)) return false;
-    // Anything but https is a caller error rather than something to downgrade into cleartext.
-    if (parts.nScheme != INTERNET_SCHEME_HTTPS) return false;
+    if (!WinHttpCrackUrl(wideUrl.c_str(), 0, 0, &parts)) return 0;
+    const bool secure = parts.nScheme == INTERNET_SCHEME_HTTPS;
     const std::wstring target = std::wstring(path) + query;
 
     HINTERNET session = WinHttpOpen(L"MoonLight", WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY,
                                     WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
-    if (!session) return false;
+    if (!session) return 0;
 
     // The caller's one timeout applied to every phase, since a hung handshake must bound the same way a hung read does.
     const int t = static_cast<int>(timeoutMs);
     WinHttpSetTimeouts(session, t, t, t, t);
 
-    bool ok = false;
+    int result = 0;
     if (HINTERNET connection = WinHttpConnect(session, host, parts.nPort, 0)) {
-        if (HINTERNET request = WinHttpOpenRequest(connection, L"POST", target.c_str(), nullptr,
+        if (HINTERNET request = WinHttpOpenRequest(connection, wideMethod, target.c_str(), nullptr,
                                                    WINHTTP_NO_REFERER,
                                                    WINHTTP_DEFAULT_ACCEPT_TYPES,
-                                                   WINHTTP_FLAG_SECURE)) {
-            // No redirect following: the endpoint is ours and answers directly, and following one would let a server move the body elsewhere.
+                                                   secure ? WINHTTP_FLAG_SECURE : 0)) {
+            // No redirect following: a server moving the request somewhere the caller never named is refused.
             DWORD noRedirects = WINHTTP_DISABLE_REDIRECTS;
             WinHttpSetOption(request, WINHTTP_OPTION_DISABLE_FEATURE,
                              &noRedirects, sizeof(noRedirects));
 
-            const char* payload = body ? body : "";
+            const char* payload = reqBody ? reqBody : "";
             const DWORD payloadLen = static_cast<DWORD>(std::strlen(payload));
-            // The body rides with the request, which is what lets a one-shot post skip a separate write.
+            // The body rides with the request, which is what lets a one-shot request skip a separate write.
             if (WinHttpSendRequest(request,
-                                   L"Content-Type: application/json\r\n",
-                                   static_cast<DWORD>(-1),
+                                   reqBody ? L"Content-Type: application/json\r\n" : WINHTTP_NO_ADDITIONAL_HEADERS,
+                                   reqBody ? static_cast<DWORD>(-1) : 0,
                                    const_cast<char*>(payload), payloadLen, payloadLen, 0)
                 && WinHttpReceiveResponse(request, nullptr)) {
                 DWORD status = 0, statusSize = sizeof(status);
@@ -678,7 +724,11 @@ bool httpsPost(const char* url, const char* body, uint32_t timeoutMs) {
                                         WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER,
                                         WINHTTP_HEADER_NAME_BY_INDEX, &status, &statusSize,
                                         WINHTTP_NO_HEADER_INDEX)) {
-                    ok = status >= 200 && status < 300;
+                    result = static_cast<int>(status);
+                    char chunk[1024];
+                    DWORD got = 0;
+                    while (WinHttpReadData(request, chunk, sizeof(chunk), &got) && got > 0)
+                        if (!sink.take(chunk, got)) break;
                 }
             }
             WinHttpCloseHandle(request);
@@ -686,36 +736,39 @@ bool httpsPost(const char* url, const char* body, uint32_t timeoutMs) {
         WinHttpCloseHandle(connection);
     }
     WinHttpCloseHandle(session);
-    // The response body is never read, matching the contract: the caller has nothing to do with it and the handles close either way.
-    return ok;
+    return sink.tooBig ? 0 : result;
+}
 #elif defined(MM_HAVE_CURL)
-    if (!url || !*url) return false;
-
+/// One request over libcurl into `sink`; the status, or 0.
+int transportFetch(const char* method, const char* url, const char* reqBody, uint32_t timeoutMs, FetchSink& sink) {
     // The library's global init is not thread-safe and must run once, so a function-local static does it: the first call initializes and every later one skips.
     static const bool inited = (curl_global_init(CURL_GLOBAL_DEFAULT) == CURLE_OK);
-    if (!inited) return false;
+    if (!inited) return 0;
 
     CURL* curl = curl_easy_init();
-    if (!curl) return false;
+    if (!curl) return 0;
 
     curl_easy_setopt(curl, CURLOPT_URL, url);
-    curl_easy_setopt(curl, CURLOPT_POST, 1L);
-    curl_easy_setopt(curl, CURLOPT_POSTFIELDS, body ? body : "");
+    curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, method);
+    if (reqBody) curl_easy_setopt(curl, CURLOPT_POSTFIELDS, reqBody);
     curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS, static_cast<long>(timeoutMs));
     curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT_MS, static_cast<long>(timeoutMs));
     // Both verifications are the defaults, set explicitly so a future edit cannot turn them off quietly: without them the transport proves nothing about who answered.
     curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
     curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 2L);
-    // No redirect following: the endpoint is ours, and following one would let a server move the body somewhere the caller never named.
+    // No redirect following: a server moving the request somewhere the caller never named is refused.
     curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 0L);
     curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1L);   // no SIGALRM in a threaded process
 
-    struct curl_slist* headers = curl_slist_append(nullptr, "Content-Type: application/json");
-    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+    struct curl_slist* headers = reqBody ? curl_slist_append(nullptr, "Content-Type: application/json") : nullptr;
+    if (headers) curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
 
-    // Discard the body rather than buffer it, a callback returning the full size being how the library is told the data was consumed.
+    // A short count tells the library to stop, which is how an answer too big for the caller ends the transfer.
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &sink);
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION,
-                     +[](char*, size_t size, size_t nmemb, void*) -> size_t { return size * nmemb; });
+                     +[](char* data, size_t size, size_t nmemb, void* user) -> size_t {
+                         return static_cast<FetchSink*>(user)->take(data, size * nmemb) ? size * nmemb : 0;
+                     });
 
     const CURLcode rc = curl_easy_perform(curl);
     long status = 0;
@@ -723,11 +776,25 @@ bool httpsPost(const char* url, const char* body, uint32_t timeoutMs) {
 
     curl_slist_free_all(headers);
     curl_easy_cleanup(curl);
-    return rc == CURLE_OK && status >= 200 && status < 300;
+    return rc == CURLE_OK && !sink.tooBig ? static_cast<int>(status) : 0;
+}
+#endif
+
+}  // namespace
+
+int httpFetch(const char* method, const char* url, const char* reqBody, uint32_t timeoutMs,
+              char* body, size_t bodyLen) {
+    if (body && bodyLen) body[0] = '\0';
+    if (!method || !url || !*url) return 0;
+    if (!tlsRoom(url)) return 0;
+    if (HttpFetchFn fn = testHttpFetch.load(std::memory_order_relaxed)) return fn(method, url, reqBody, body, bodyLen);
+    FetchSink sink{body, bodyLen};
+#if defined(_WIN32) || defined(MM_HAVE_CURL)
+    return transportFetch(method, url, reqBody, timeoutMs, sink);
 #else
     // Built without libcurl: the caller degrades visibly rather than pretending it sent something.
-    (void)url; (void)body; (void)timeoutMs;
-    return false;
+    (void)reqBody; (void)timeoutMs; (void)sink;
+    return 0;
 #endif
 }
 
@@ -2597,8 +2664,6 @@ bool moonI80Ws2812InitRing(MoonI80Ws2812Handle& /*h*/, const uint16_t* /*dataPin
 }
 bool moonI80Ws2812TransmitRing(MoonI80Ws2812Handle& /*h*/) { return false; }
 void moonI80SetShiftClockDiv(uint8_t /*div*/) {}
-void moonI80Ws2812PrimeRange(MoonI80Ws2812Handle& /*h*/, uint8_t /*bufLo*/, uint8_t /*bufHi*/) {}
-bool moonI80Ws2812ArmRing(MoonI80Ws2812Handle& /*h*/) { return false; }
 bool moonI80Ws2812IsRing(const MoonI80Ws2812Handle& /*h*/) { return false; }
 bool moonI80Ws2812InternalFits(size_t /*bytes*/) { return false; }
 uint8_t* moonI80Ws2812Buffer(const MoonI80Ws2812Handle& h, uint8_t buffer) {

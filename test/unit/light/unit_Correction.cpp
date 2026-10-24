@@ -52,6 +52,23 @@ TEST_CASE("Correction RGB preset: apply is identity at full brightness") {
 }
 
 // GRB preset swaps R and G in the output (G first, then R, then B), for WS2812-like drivers.
+// The fast path runs only for a strip of colors alone: any optional role sends the light through the full transform, which the preset tests below pin.
+TEST_CASE("Correction takes the plain-strip path for RGB orders only") {
+    Correction rgb, grb, rgbw;
+    mm::test::rebuildFromPreset(rgb, 255, mm::test::PresetOrder::RGB);
+    mm::test::rebuildFromPreset(grb, 128, mm::test::PresetOrder::GRB);
+    mm::test::rebuildFromPreset(rgbw, 255, mm::test::PresetOrder::RGBW);
+    CHECK(rgb.plainRgb);
+    CHECK(grb.plainRgb);
+    CHECK_FALSE(rgbw.plainRgb);
+    const uint8_t src[3] = {200, 100, 50};
+    uint8_t out[3] = {};
+    grb.apply(src, out, 3);
+    CHECK(out[0] == grb.briLut[100]);   // green first
+    CHECK(out[1] == grb.briLut[200]);
+    CHECK(out[2] == grb.briLut[50]);
+}
+
 TEST_CASE("Correction GRB preset: channels reordered, 3 output channels") {
     Correction c;
     c.curve = Correction::Curve::Linear;   // these pin roles and white math, not the curve
