@@ -115,6 +115,7 @@ struct Applier {
     uint8_t rebuiltCount = 0;
     char path[64] = {};
     size_t pathLen = 0;
+    const char* failed = "";   // the latest failure, which a skip logs
 
     size_t push(const char* key) {
         const size_t at = pathLen;
@@ -124,8 +125,11 @@ struct Applier {
     }
     void pop(size_t at) { pathLen = at; path[at] = 0; }
 
+    // A stored file that skipped a member already holds that first skip in `error` and `where`, which a later skip leaves as it is.
     bool fail(const char* what) {
         r.ok = false;
+        failed = what;
+        if (r.skipped) return false;
         r.error = what;
         std::snprintf(r.where, sizeof(r.where), "%s", path);
         return false;
@@ -136,12 +140,10 @@ struct Applier {
     // A live document is driven rather than configured, as a service's control write is, so it marks nothing to save.
     bool live() const { return source == StateSource::Live; }
 
-    // A stored file goes on past what this build cannot place: the failure is logged and counted, and the rest still applies.
+    // A stored file goes on past what this build cannot place. The failure is logged and counted, the first stays in `error` and `where` for the user, and the rest applies.
     bool skip() {
-        std::printf("state document: %s at %s, skipped\n", r.error, r.where);
+        std::printf("state document: %s at %s, skipped\n", failed, path);
         r.ok = true;
-        r.error = "";
-        r.where[0] = 0;
         r.skipped++;
         return true;
     }

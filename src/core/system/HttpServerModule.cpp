@@ -6,17 +6,15 @@
 ///
 /// ## Why a drained body needs two timeouts
 ///
-/// A file upload moves through a transfer slot a bounded slice per tick and blocks nothing. A state document and a firmware image drain whole, blocking `tick20ms()` until the body ends or a bound trips.
+/// A file upload and a state document move through a transfer slot a bounded slice per tick and block nothing. A body held back by a delayed ACK or a resend costs no frame. A firmware image drains whole, blocking `tick20ms()` until the body ends or a bound trips.
 ///
-/// `kUploadIdleMs` resets on every read so a steady body never trips it, and `kUploadHardMs` caps the whole request so a slowloris trickle cannot hold the freeze open.
+/// The idle bound resets on every read so a steady body never trips it. It is ten seconds, under the 12 s watchdog, since flash work stalls the reads and the sender's TCP backs off meanwhile. The hard ceiling caps the whole request so a slowloris trickle cannot hold the freeze open.
 ///
-/// The idle bound sits under the 12 s watchdog, and the hard cap far above a legitimate worst case: a 32 KB state document arrives in well under a second.
+/// ## Why the firmware ceiling is three minutes
 ///
-/// ## Why firmware gets a larger ceiling
+/// A firmware image is MB-scale and takes minutes over weak WiFi: three minutes covers 1.5 MB at 10 KB/s with margin.
 ///
-/// A firmware image is MB-scale and takes minutes over weak WiFi, so it carries its own ceiling: three minutes covers 1.5 MB at 10 KB/s with margin.
-///
-/// The ceiling stays small because it also bounds the worst-case render freeze.
+/// The ceiling stays that small because it also bounds the worst-case render freeze.
 ///
 /// ## Why the WLED shim reports a sentinel version
 ///
@@ -120,7 +118,7 @@ void HttpServerModule::release() {
     releaseTransfers();
     for (auto& s : embeddedSends_) s.conn.close();
     // Every close site notifies the producer (see cancelBufferedSend), else ghost standing requests keep the driver gathering frames for nobody.
-    for (int i = 0; i < MAX_PREVIEW_CLIENTS; i++) {
+    for (int i = 0; i < kMaxPreviewClients; i++) {
         if (previewClients_[i].valid() && clientSink_) clientSink_->onClientGone(i);
         previewClients_[i].close();
     }
@@ -189,10 +187,10 @@ void HttpServerModule::serveParked() {
 }
 
 // The buffer lives from claim to finishTransfer, so idle slots cost nothing; internal RAM, since the SD host bounces a PSRAM buffer per sector.
-HttpServerModule::FileTransfer* HttpServerModule::claimTransfer(platform::TcpConnection& conn) {
+HttpServerModule::FileTransfer* HttpServerModule::claimTransfer(platform::TcpConnection& conn, char* buf) {
     for (auto& t : transfers_) {
         if (t.active) continue;
-        t.buf = static_cast<char*>(platform::allocInternal(kTransferBufBytes));
+        t.buf = buf ? buf : static_cast<char*>(platform::allocInternal(kTransferBufBytes));
         if (t.buf) return &t;
         sendResponse(conn, 507, "application/json", "{\"error\":\"out of memory\"}");
         return nullptr;
@@ -214,8 +212,8 @@ void HttpServerModule::finishTransfer(FileTransfer& t, bool closeConn) {
 void HttpServerModule::releaseTransfers() {
     for (auto& t : transfers_) {
         if (!t.active) continue;
-        if (t.isUpload) platform::fsWriteStreamClose(t.wstream, false);
-        else platform::fsReadStreamClose(t.rstream);
+        if (t.kind == FileTransfer::Kind::Upload) platform::fsWriteStreamClose(t.wstream, false);
+        else if (t.kind == FileTransfer::Kind::Download) platform::fsReadStreamClose(t.rstream);
         finishTransfer(t, true);
     }
 }
@@ -288,14 +286,39 @@ bool HttpServerModule::driveDownload(FileTransfer& t, uint32_t now) {
     return false;
 }
 
-// Several bounded chunks per slot per tick, not one, dispatched to the upload or download leg while storage and the peer keep up; mirrors drainPreviewSend/drainStateSend's non-blocking shape.
+// A document slot's bounded chunk: whatever of the body has arrived, then the document applied once whole. A body held back by a delayed ACK or a resend costs the sender time, never a frame.
+bool HttpServerModule::driveDocument(FileTransfer& t, uint32_t now) {
+    if (t.remaining > 0) {
+        const int n = t.conn.read(reinterpret_cast<uint8_t*>(t.buf + t.bufLen), t.remaining);
+        if (n > 0) {
+            t.bufLen += static_cast<size_t>(n);
+            t.remaining -= static_cast<size_t>(n);
+            t.lastActivityMs = now;
+            return true;
+        }
+        if (n == 0) { finishTransfer(t, true); return false; }   // peer closed with body remaining: no one to answer
+        if (now - t.lastActivityMs > kTransferStallMs) {
+            sendResponse(t.conn, 400, "application/json", "{\"error\":\"incomplete request body\"}");
+            finishTransfer(t, true);
+        }
+        return false;
+    }
+    t.buf[t.bufLen] = 0;
+    answerStateDocument(t.conn, t.buf, t.live);
+    finishTransfer(t, true);
+    return false;
+}
+
+// Several bounded chunks per slot per tick, not one, dispatched to the upload, download or document leg while storage and the peer keep up; mirrors drainPreviewSend/drainStateSend's non-blocking shape.
 void HttpServerModule::driveTransfers() {
     const uint32_t budgetStart = platform::millis();
     for (auto& t : transfers_) {
         if (!t.active) continue;
         for (;;) {
             const uint32_t now = platform::millis();
-            const bool progressed = t.isUpload ? driveUpload(t, now) : driveDownload(t, now);
+            const bool progressed = t.kind == FileTransfer::Kind::Upload ? driveUpload(t, now)
+                                  : t.kind == FileTransfer::Kind::Download ? driveDownload(t, now)
+                                  : driveDocument(t, now);
             if (!t.active) break;           // finished or failed this chunk
             if (!progressed) break;         // no data moved: nothing more to do until next tick
             if (now - budgetStart >= kTransferTickBudgetMs) break;
@@ -315,7 +338,7 @@ bool HttpServerModule::onAccessPoint(const platform::TcpConnection& conn) {
 }
 
 bool HttpServerModule::anyWsClientOnAccessPoint() const MM_NONBLOCKING {
-    for (int i = 0; i < MAX_WS_CLIENTS; i++)
+    for (int i = 0; i < kMaxWsClients; i++)
         if (wsOnAccessPoint_[i] && wsClients_[i].valid()) return true;
     return false;
 }
@@ -383,7 +406,7 @@ bool HttpServerModule::handleConnection(platform::TcpConnection& conn, int patie
     uint8_t buf[2048];
     int totalRead = 0;
 
-    // read() is non-blocking, so a just-accepted connection gets a short bounded wait (~5 ms) for its request; an idle connection costs at most that.
+    // read() is non-blocking, so a newly accepted connection gets a short bounded wait for its request: five polls 1 ms apart, a yield each on a 100 Hz FreeRTOS tick. An idle connection costs at most that.
     for (int empties = 0; totalRead < static_cast<int>(sizeof(buf) - 1);) {
         int n = conn.read(buf + totalRead, sizeof(buf) - 1 - totalRead);
         if (n > 0) {
@@ -456,14 +479,15 @@ bool HttpServerModule::handleConnection(platform::TcpConnection& conn, int patie
                     }
                     bodyNeeded = sizeof(buf) - 1;   // streaming: buffer the prefix only
                 }
-                for (int empties = 0; totalRead < static_cast<int>(bodyNeeded);) {
+                // A streaming route takes the rest itself, a state document in a transfer slot and a firmware image under its timeouts. Nagle holds a small body back up to 500 ms (RFC 1122), so a wait here stalls the frame.
+                for (int empties = 0; !isStreamingRoute && totalRead < static_cast<int>(bodyNeeded);) {
                     int n = conn.read(buf + totalRead, sizeof(buf) - 1 - totalRead);
                     if (n > 0) { totalRead += n; empties = 0; }
                     else if (n == 0) break;                    // peer closed
-                    else { if (++empties > 50) break; platform::delayMs(1); }  // ~50 ms for the body
+                    else { if (++empties > 50) break; platform::delayMs(1); }  // 50 polls: 50 ms on the desktop, yields on a 100 Hz FreeRTOS tick
                 }
                 buf[totalRead] = 0;
-                if (totalRead < static_cast<int>(bodyNeeded)) {   // body never fully arrived
+                if (totalRead < static_cast<int>(bodyNeeded) && !isStreamingRoute) {   // body never fully arrived
                     sendResponse(conn, 400, "application/json",
                                  "{\"error\":\"incomplete request body\"}");
                     return true;
@@ -652,17 +676,19 @@ void HttpServerModule::sendPreflightResponse(platform::TcpConnection& conn) {
     conn.write(reinterpret_cast<const uint8_t*>(response), std::strlen(response));
 }
 
+// The reason phrase for each status this server answers (RFC 9110 section 15); a code not listed reads "Error", which a client ignores.
+static const char* reasonPhrase(int status) {
+    static constexpr struct { int code; const char* text; } kReasons[] = {
+        {200, "OK"}, {202, "Accepted"}, {400, "Bad Request"}, {403, "Forbidden"}, {404, "Not Found"},
+        {405, "Method Not Allowed"}, {409, "Conflict"}, {411, "Length Required"}, {413, "Content Too Large"},
+        {500, "Internal Server Error"}, {501, "Not Implemented"}, {503, "Service Unavailable"}, {507, "Insufficient Storage"},
+    };
+    for (const auto& r : kReasons) if (r.code == status) return r.text;
+    return "Error";
+}
+
 void HttpServerModule::sendResponse(platform::TcpConnection& conn, int status, const char* contentType, const char* body) {
-    const char* statusText =
-        status == 200 ? "OK" :
-        status == 202 ? "Accepted" :
-        status == 400 ? "Bad Request" :
-        status == 404 ? "Not Found" :
-        status == 405 ? "Method Not Allowed" :
-        status == 409 ? "Conflict" :
-        status == 500 ? "Internal Server Error" :
-        status == 501 ? "Not Implemented" :
-        "Error";
+    const char* statusText = reasonPhrase(status);
     char header[256];
     int bodyLen = static_cast<int>(std::strlen(body));
     int headerLen = std::snprintf(header, sizeof(header),
@@ -678,7 +704,6 @@ void HttpServerModule::sendResponse(platform::TcpConnection& conn, int status, c
 }
 
 // The /api/file endpoints: a file body is not a control value; parseFilePath vets the `path=<rel>` query (rejects "..", roots at the mount), the one traversal guard every filesystem entry shares.
-static constexpr size_t kUploadMax = 256 * 1024;   // 256 KB: sanity bound on one upload
 
 // Case-insensitive header lookup (MSVC has no strcasestr), matching only at the start of a header line and stopping at the blank line, so lookalikes and body bytes never match.
 const char* HttpServerModule::findHeaderCI(const char* hay, const char* needle) {
@@ -829,7 +854,7 @@ void HttpServerModule::streamFsFile(platform::TcpConnection& conn, const char* p
             finishTransfer(*t, false);
             return;
         }
-        t->isUpload = false;
+        t->kind = FileTransfer::Kind::Download;
         t->remaining = static_cast<size_t>(size);
         t->bufLen = t->bufSent = 0;
         t->lastActivityMs = platform::millis();
@@ -897,9 +922,8 @@ void HttpServerModule::serveHlsFile(platform::TcpConnection& conn, const char* n
 // Source for the streamed upload: the body bytes already in the request buffer, then the rest straight off the socket, so the device never holds the whole upload in RAM.
 namespace {
 // The drain blocks rendering, and the two bounds cap for how long: idle scales with a steady transfer, hard caps the total against a slowloris. @xref{why-a-drained-body-needs-two-timeouts}
-constexpr uint32_t kUploadIdleMs = 5000;    // max gap between successful reads before abort
-constexpr uint32_t kUploadHardMs = 60000;   // absolute whole-request ceiling (anti-slowloris)
-// A firmware push is MB-scale and bounds a SLOW transfer where kUploadIdleMs bounds a stalled one, kept tight because it caps the render freeze. @xref{why-firmware-gets-a-larger-ceiling}
+constexpr uint32_t kFirmwareIdleMs = 10000;       // max gap between reads of a firmware stream
+// A firmware push is MB-scale and bounds a SLOW transfer where the idle bound catches a stalled one, kept tight because it caps the render freeze. @xref{why-the-firmware-ceiling-is-three-minutes}
 constexpr uint32_t kFirmwareUploadHardMs = 180000;  // 3 min absolute ceiling for a firmware push
 struct UploadSource {
     platform::TcpConnection* conn;
@@ -922,7 +946,7 @@ size_t uploadPull(char* out, size_t cap, void* user, bool* abort) {
     }
     // Then the socket, bounded by the idle and hard deadlines; an early close or lapse sets *abort so the temp file is discarded, while 0 is a clean end.
     const size_t want = s->remaining < cap ? s->remaining : cap;
-    const uint32_t deadline = platform::millis() + kUploadIdleMs;
+    const uint32_t deadline = platform::millis() + kFirmwareIdleMs;
     for (;;) {
         const int r = s->conn->read(reinterpret_cast<uint8_t*>(out), want);
         if (r > 0) { s->remaining -= static_cast<size_t>(r); return static_cast<size_t>(r); }
@@ -935,31 +959,35 @@ size_t uploadPull(char* out, size_t cap, void* user, bool* abort) {
 }  // namespace
 
 
-// The whole body into `out` (contentLen + 1 bytes): the buffered prefix, then the socket under the upload limits; false when it stopped short.
-static bool pullWholeBody(platform::TcpConnection& conn, const char* initialBody, size_t initialLen, size_t contentLen, char* out) {
-    const size_t initial = initialLen < contentLen ? initialLen : contentLen;
-    UploadSource src{&conn, initialBody, initial, contentLen, platform::millis() + kUploadHardMs};
-    size_t got = 0;
-    bool abort = false;
-    for (size_t n = 1; got < contentLen && !abort && n > 0; got += n) n = uploadPull(out + got, contentLen - got, &src, &abort);
-    out[got] = 0;
-    return got >= contentLen;
-}
-
+// The body the request brought is copied out, since a pipelined request may follow it. One whose body has not all arrived waits in a transfer slot rather than holding the frame.
 void HttpServerModule::handleApplyState(platform::TcpConnection& conn, const char* initialBody, size_t initialLen,
                                         size_t contentLen, bool live) {
     if (!scheduler_) { sendResponse(conn, 503, "application/json", "{\"error\":\"not ready\"}"); return; }
     if (contentLen > kStateDocumentMax) { sendResponse(conn, 413, "application/json", "{\"error\":\"document too large\"}"); return; }
     char* doc = static_cast<char*>(platform::alloc(contentLen + 1));
     if (!doc) { sendResponse(conn, 507, "application/json", "{\"error\":\"out of memory\"}"); return; }
-    if (!pullWholeBody(conn, initialBody, initialLen, contentLen, doc)) {
+    const size_t initial = initialLen < contentLen ? initialLen : contentLen;
+    std::memcpy(doc, initialBody, initial);
+    if (initial == contentLen) {
+        doc[contentLen] = 0;
+        answerStateDocument(conn, doc, live);
         platform::free(doc);
-        sendResponse(conn, 400, "application/json", "{\"error\":\"incomplete request body\"}");
         return;
     }
+    FileTransfer* t = claimTransfer(conn, doc);
+    if (!t) { platform::free(doc); return; }
+    t->kind = FileTransfer::Kind::Document;
+    t->live = live;
+    t->bufLen = initial;
+    t->remaining = contentLen - initial;
+    t->lastActivityMs = platform::millis();
+    t->active = true;
+    t->conn = std::move(conn);
+}
+
+void HttpServerModule::answerStateDocument(platform::TcpConnection& conn, const char* doc, bool live) {
     // `?live=1` drives rather than configures, as a show building its look on another device does: nothing it changes is marked to save.
     const StateDocumentResult r = applyStateDocument(*scheduler_, doc, live ? StateSource::Live : StateSource::Request);
-    platform::free(doc);
     // A growing sink, since a path of escaped names has no small fixed bound.
     JsonSink sink;
     writeStateResult(sink, r);
@@ -985,12 +1013,14 @@ void HttpServerModule::startUpload(platform::TcpConnection& conn, const char* pa
         return;
     }
     std::snprintf(t->path, sizeof(t->path), "%s", path);
-    t->isUpload = true;
+    t->kind = FileTransfer::Kind::Upload;
     t->remaining = contentLen - initial;
     t->lastActivityMs = platform::millis();
     t->active = true;
     t->conn = std::move(conn);
 }
+
+static constexpr size_t kUploadMax = 256 * 1024;   // 256 KB: sanity bound on one upload to flash
 
 void HttpServerModule::handleWriteFile(platform::TcpConnection& conn, const char* query,
                                        const char* initialBody, size_t initialLen, size_t contentLen) {
@@ -1054,7 +1084,6 @@ void HttpServerModule::handleFirmwareUpload(platform::TcpConnection& conn, const
         return;
     }
     const size_t initial = initialLen < contentLen ? initialLen : contentLen;
-    // Firmware gets the MB-scale ceiling kFirmwareUploadHardMs: a 1.5 MB push over WiFi outruns kUploadHardMs and would abort mid-flash.
     UploadSource src{&conn, initialBody, initial, contentLen,
                      platform::millis() + kFirmwareUploadHardMs};
     g_otaBytesTotal = static_cast<uint32_t>(contentLen);   // the UI's "Y KB" (Content-Length up front)
@@ -1229,17 +1258,27 @@ void HttpServerModule::drainEmbeddedSends() {
     const uint32_t now = platform::millis();
     for (auto& s : embeddedSends_) {
         if (!s.conn.valid()) continue;
-        // A send waiting on our memory counts as stalled too, so one that never gets room is closed and frees its share.
         int n = 1;
-        while (s.left > 0 && n > 0 && sendHasHeadroom() && platform::millis() - now < kTransferTickBudgetMs) {
+        if (s.left > 0 && !maySend(&s)) s.lastActivityMs = now;   // waiting its turn while internal RAM is short, not stalled
+        while (s.left > 0 && n > 0 && maySend(&s) && platform::millis() - now < kTransferTickBudgetMs) {
             n = s.conn.writeSome(s.data, s.left);
             if (n <= 0) break;
             s.data += n;
             s.left -= static_cast<size_t>(n);
             s.lastActivityMs = now;
+            sent(&s, now);
         }
-        if (s.left == 0 || n < 0 || now - s.lastActivityMs > kTransferStallMs) s.conn.close();
+        if (s.left == 0 || n < 0 || now - s.lastActivityMs > kTransferStallMs) { s.conn.close(); endSend(&s); }
     }
+}
+
+// Below the headroom one send goes at a time rather than none. No send waits forever, and the queue stays one socket's buffer, not the 52 KB a page load once built. A holder that moves nothing for kTransferStallMs passes the lease on.
+bool HttpServerModule::maySend(const void* who) {
+    if (sendHasHeadroom()) return true;
+    const uint32_t now = platform::millis();
+    if (lowRamSender_ && lowRamSender_ != who && now - lowRamProgressMs_ <= kTransferStallMs) return false;
+    if (lowRamSender_ != who) { lowRamSender_ = who; lowRamProgressMs_ = now; }
+    return true;
 }
 
 void HttpServerModule::serveState(platform::TcpConnection& conn) {
@@ -1329,44 +1368,40 @@ void HttpServerModule::visitModuleLeaves(MoonModule* mod, Fn&& fn, bool everythi
 template <class Fn>
 void HttpServerModule::visitOwnLeaves(MoonModule* mod, Fn&& fn) {
     char path[80];
-    // Header telemetry the UI shows per card, `@`-prefixed so it cannot collide with a control name; only fields that change per tick (timing, memory) ride the patch.
-    auto leaf = [&](const char* fieldPath, const char* valueJson) {
-        JsonSink vs; vs.append(valueJson);
-        fn(mod, fnv1a(fieldPath, std::strlen(fieldPath)), fnv1a(vs.data(), vs.size()), fieldPath, vs);
+    // The walk runs every second, so a value goes into the module's own small buffer, and only one that outgrows it, a list or a long text, into a heap sink. A heap block per leaf fragments a small heap.
+    auto leaf = [&](auto&& write) {
+        JsonSink vs(leafValue_, sizeof(leafValue_));
+        write(vs);
+        if (!vs.overflowed()) { fn(mod, fnv1a(path, std::strlen(path)), fnv1a(vs.data(), vs.size()), path, vs); return; }
+        JsonSink big;
+        write(big);
+        fn(mod, fnv1a(path, std::strlen(path)), fnv1a(big.data(), big.size()), path, big);
     };
-    char num[24];
+    // Header telemetry the UI shows per card, `@`-prefixed so it cannot collide with a control name; only fields that change per tick (timing, memory) ride the patch.
     std::snprintf(path, sizeof(path), "%s/@tickTimeUs", mod->name());
-    std::snprintf(num, sizeof(num), "%u", static_cast<unsigned>(mod->tickTimeUs())); leaf(path, num);
+    leaf([&](JsonSink& s) { s.appendf("%u", static_cast<unsigned>(mod->tickTimeUs())); });
     std::snprintf(path, sizeof(path), "%s/@dynamicBytes", mod->name());
-    std::snprintf(num, sizeof(num), "%u", static_cast<unsigned>(mod->dynamicBytes())); leaf(path, num);
+    leaf([&](JsonSink& s) { s.appendf("%u", static_cast<unsigned>(mod->dynamicBytes())); });
     // Status and severity ride the patch too, since a driver can fault at any moment and only the diff push runs every second; an unchanged value costs nothing.
-    {
-        JsonSink sv;
-        // writeJsonString already emits the quotes and escapes, so add none: manual quotes make invalid JSON that the browser rejects as a whole patch frame.
-        sv.writeJsonString(mod->status() ? mod->status() : "");
-        std::snprintf(path, sizeof(path), "%s/@status", mod->name());
-        leaf(path, sv.data());
-    }
-    {
-        static const char* sevStr[] = {"status", "warning", "error"};
-        JsonSink sv;
-        sv.appendf("\"%s\"", sevStr[static_cast<int>(mod->severity())]);
-        std::snprintf(path, sizeof(path), "%s/@severity", mod->name());
-        leaf(path, sv.data());
-    }
+    std::snprintf(path, sizeof(path), "%s/@status", mod->name());
+    // writeJsonString already emits the quotes and escapes, so add none: manual quotes make invalid JSON that the browser rejects as a whole patch frame.
+    leaf([&](JsonSink& s) { s.writeJsonString(mod->status() ? mod->status() : ""); });
+    static const char* sevStr[] = {"status", "warning", "error"};
+    std::snprintf(path, sizeof(path), "%s/@severity", mod->name());
+    leaf([&](JsonSink& s) { s.appendf("\"%s\"", sevStr[static_cast<int>(mod->severity())]); });
     // Each control's value.
     auto& ctrls = mod->controls();
     for (uint8_t i = 0; i < ctrls.count(); i++) {
         auto& c = ctrls[i];
         std::snprintf(path, sizeof(path), "%s/%s", mod->name(), c.name);
-        JsonSink vs;
-        if (c.type == ControlType::Password) writeObfuscatedPassword(vs, static_cast<const char*>(c.ptr));   // as the full state shows it
-        else writeControlValue(vs, c);
-        fn(mod, fnv1a(path, std::strlen(path)), fnv1a(vs.data(), vs.size()), path, vs);
+        leaf([&](JsonSink& s) {
+            if (c.type == ControlType::Password) writeObfuscatedPassword(s, static_cast<const char*>(c.ptr));   // as the full state shows it
+            else writeControlValue(s, c);
+        });
     }
 }
 
-// Look up a leaf's cached value-hash by path-hash, or nullptr; a linear scan over the flat cache is a handful of int compares for ~92 leaves.
+// Look up a leaf's cached value-hash by path-hash, or nullptr. The scan is linear over the flat cache, an int compare per entry, a few hundred on a large tree.
 HttpServerModule::LeafHash* HttpServerModule::findLeaf(uint32_t pathHash) {
     for (uint16_t i = 0; i < leafHashCount_; i++)
         if (leafHashes_[i].path == pathHash) return &leafHashes_[i];
@@ -1400,7 +1435,7 @@ void HttpServerModule::buildClientPatchesForTest(JsonSink* outs, int count) {
     JsonSink entries;
     uint16_t slices = 0;
     collectPatch(entries, slices, [&](auto&& fn) { forEachStateLeaf(fn); });
-    for (int i = 0; i < count && i < MAX_WS_CLIENTS; i++) writeClientPatch(outs[i], entries, slices, &subs_[i]);
+    for (int i = 0; i < count && i < kMaxWsClients; i++) writeClientPatch(outs[i], entries, slices, &subs_[i]);
 }
 
 template <class Fn>
@@ -1474,7 +1509,7 @@ void HttpServerModule::sendPatches(Walk&& walk, bool skipResyncing) {
     JsonSink entries;
     uint16_t slices = 0;
     if (collectPatch(entries, slices, walk) == 0) return;
-    for (int i = 0; i < MAX_WS_CLIENTS; i++) {
+    for (int i = 0; i < kMaxWsClients; i++) {
         auto& ws = wsClients_[i];
         if (!ws.valid() || (skipResyncing && resyncClient_[i])) continue;
         JsonSink out;
@@ -1529,6 +1564,7 @@ MoonModule* HttpServerModule::moduleAt(const TreeCursor& c) const {
 
 bool HttpServerModule::writeTreeFragment(JsonSink& sink, TreeCursor& c, size_t target) {
     if (c.done) return true;
+    c.pieces = target != 0;
     if (c.depth == 0) {
         if (!c.single) sink.append("{\"modules\":[");
         c.depth = 1;
@@ -1547,6 +1583,7 @@ bool HttpServerModule::stepPast(JsonSink& sink, TreeCursor& c) {
     const uint8_t level = c.depth - 1;
     if (c.phase != TreeCursor::kHeader) {
         // The module this level was writing went mid-object: close what it opened, as if it ended there, and go on with its next sibling.
+        if (c.ctrlName) closeOpenControl(sink, c);
         sink.append(c.phase == TreeCursor::kControls ? "]}" : "}");
         c.idx[level]++;
         c.phase = TreeCursor::kHeader;
@@ -1582,9 +1619,18 @@ void HttpServerModule::stepInto(JsonSink& sink, TreeCursor& c, MoonModule* mod) 
         c.ctrl = 0;
         c.phase = full ? TreeCursor::kControls : TreeCursor::kChildren;
     } else if (c.phase == TreeCursor::kControls) {
-        if (c.ctrl < mod->controls().count()) {
+        const bool here = c.ctrl < mod->controls().count();
+        if (c.ctrlName && (!here || mod->controls()[c.ctrl].name != c.ctrlName)) {
+            closeOpenControl(sink, c);   // it changed between fragments: ended as it stood, valid JSON
+            return;
+        }
+        if (here) {
+            const ControlDescriptor& d = mod->controls()[c.ctrl];
+            // A fragment-sized document cuts a large list or option set at a row or an option, so no fragment needs a large block.
+            if (c.pieces && writtenInPieces(d)) { writeControlPieceOf(sink, c, d); return; }
             if (c.ctrl > 0) sink.append(",");
-            writeControl(sink, mod->controls()[c.ctrl++]);
+            writeControl(sink, d);
+            c.ctrl++;
             return;
         }
         sink.append("]");
@@ -1622,6 +1668,31 @@ void HttpServerModule::writeControl(JsonSink& sink, const ControlDescriptor& c) 
         writeControlValue(sink, c);
     }
     writeControlMetadata(sink, c);
+    writeControlTail(sink, c);
+}
+
+void HttpServerModule::writeControlPieceOf(JsonSink& sink, TreeCursor& c, const ControlDescriptor& d) {
+    if (!c.ctrlName) {
+        if (c.ctrl > 0) sink.append(",");
+        sink.appendf("{\"name\":\"%s\",\"type\":\"%s\",\"value\":", d.name, controlTypeName(d.type));
+        c.ctrlName = d.name;
+        c.at = {};
+        return;
+    }
+    if (writeControlPiece(sink, d, c.at)) return;
+    writeControlTail(sink, d);
+    c.ctrlName = nullptr;
+    c.ctrl++;
+}
+
+// Before its first piece only the head is out, waiting for a value; after it, one array is open inside the control.
+void HttpServerModule::closeOpenControl(JsonSink& sink, TreeCursor& c) {
+    sink.append(c.at.part == 0 ? "null}" : "]}");
+    c.ctrlName = nullptr;
+    c.ctrl++;
+}
+
+void HttpServerModule::writeControlTail(JsonSink& sink, const ControlDescriptor& c) {
     // Emit optional flags only when set (common case is false; omit to save bytes).
     if (c.readonly) sink.append(",\"readonly\":true");
     if (c.minMode) sink.appendf(",\"minMode\":%u", static_cast<unsigned>(c.minMode));   // the mode the UI needs before it shows this
@@ -1752,9 +1823,8 @@ void HttpServerModule::serveWledInfo(platform::TcpConnection& conn) {
     conn.write(reinterpret_cast<const uint8_t*>(header), std::strlen(header));
 
     // Identity: the deviceName (from SystemModule), the live IP, the MAC.
-    const char* name; uint8_t mac[6]; uint8_t ip[4];
-    resolveWledIdentity(name, mac, ip);
-    (void)ip;  // serveWledInfo doesn't need the IP; keep the call uniform.
+    const char* name; uint8_t mac[6];
+    resolveWledIdentity(name, mac, nullptr);
 
     // The WLED-Android app requires only `name`, `leds{}`, `wifi{}` and a non-empty `mac` (model/wledapi/Info.kt), else it drops the device silently, so these are the smallest shapes.
     JsonSink sink(conn);
@@ -1786,7 +1856,7 @@ void HttpServerModule::serveWledPresets(platform::TcpConnection& conn) {
 }
 
 // The deviceName / IP / MAC lookup the WLED shim needs at four call sites, so a change to how identity is discovered updates one place.
-void HttpServerModule::resolveWledIdentity(const char*& name, uint8_t mac[6], uint8_t ip[4],
+void HttpServerModule::resolveWledIdentity(const char*& name, uint8_t mac[6], uint8_t* ip,
                                            const char* nameFallback) {
     name = nameFallback;
     if (MoonModule* sys = findModuleByName("System")) {
@@ -1795,6 +1865,7 @@ void HttpServerModule::resolveWledIdentity(const char*& name, uint8_t mac[6], ui
     }
     for (int i = 0; i < 6; i++) mac[i] = 0;
     platform::getMacAddress(mac);
+    if (!ip) return;
     for (int i = 0; i < 4; i++) ip[i] = 0;
     platform::localIPv4(ip);
 }
@@ -1936,9 +2007,8 @@ void HttpServerModule::serveWledStateInfo(platform::TcpConnection& conn) {
         "Connection: close\r\nAccess-Control-Allow-Origin: *\r\n\r\n";
     conn.write(reinterpret_cast<const uint8_t*>(header), std::strlen(header));
 
-    const char* name; uint8_t mac[6]; uint8_t ip[4];
-    resolveWledIdentity(name, mac, ip);
-    (void)ip;  // /json/si's info body carries no IP field; keep the call uniform.
+    const char* name; uint8_t mac[6];
+    resolveWledIdentity(name, mac, nullptr);
 
     JsonSink sink(conn);
     sink.appendf("{\"state\":");
@@ -2685,11 +2755,11 @@ void HttpServerModule::handleWebSocketUpgrade(platform::TcpConnection& conn, con
         acceptKey);
     conn.write(reinterpret_cast<const uint8_t*>(response), respLen);
 
-    // A preview client lands in its own smaller array (see MAX_PREVIEW_CLIENTS) and needs none of the control-plane resync bookkeeping, since it receives only the driver's binary frames.
+    // A preview client lands in its own smaller array (see kMaxPreviewClients) and needs none of the control-plane resync bookkeeping, since it receives only the driver's binary frames.
     if (previewChannel) {
         // Busy is the common case (core 1 streams most ticks) and refusing caused reconnect storms, so admit with a SIZE_MAX cursor: the stream starts at the next whole frame.
         LockGuard admitLease{wsLock_};
-        for (int i = 0; i < MAX_PREVIEW_CLIENTS; i++) {
+        for (int i = 0; i < kMaxPreviewClients; i++) {
             if (previewClients_[i].valid()) continue;
             previewClients_[i] = std::move(conn);
             // The slot turns over: the producer drops its predecessor's standing request, and the new client announces its own wishes (pull model).
@@ -2704,7 +2774,7 @@ void HttpServerModule::handleWebSocketUpgrade(platform::TcpConnection& conn, con
     }
 
     // Store connection as WebSocket client.
-    for (int i = 0; i < MAX_WS_CLIENTS; i++) {
+    for (int i = 0; i < kMaxWsClients; i++) {
         if (!wsClients_[i].valid()) {
             wsOnAccessPoint_[i] = onAccessPoint(conn);   // read once: a socket's peer does not change
             wsClients_[i] = std::move(conn);
@@ -2716,7 +2786,7 @@ void HttpServerModule::handleWebSocketUpgrade(platform::TcpConnection& conn, con
             return;
         }
     }
-    // No slot: close. MAX_WS_CLIENTS sits above the realistic count plus a refresh's overlap, since the new socket opens before the old FIN lands; the browser's backoff retries a full moment.
+    // No slot: close. kMaxWsClients sits above the realistic count plus a refresh's overlap, since the new socket opens before the old FIN lands; the browser's backoff retries a full moment.
     conn.close();
 }
 
@@ -2745,7 +2815,7 @@ void HttpServerModule::pushStateToWebSockets() {
 
 // Each client due a document gets a cursor that streams it on tick20ms, a fragment at a time, so no board needs the whole tree in one block.
 void HttpServerModule::startStreams() {
-    for (int i = 0; i < MAX_WS_CLIENTS; i++) {
+    for (int i = 0; i < kMaxWsClients; i++) {
         const bool wanted = fullResyncPending_ || resyncClient_[i];
         resyncClient_[i] = false;
         if (!wanted || !wsClients_[i].valid() || !subs_[i].received) continue;   // the WLED app never subscribes, and reads its own frame
@@ -2764,12 +2834,11 @@ void HttpServerModule::startStreams() {
 void HttpServerModule::pushWledStateToWebSockets() {
     if (anyStreamActive()) return;   // never interleave with a streamed full state
     bool hasClients = false;
-    for (int i = 0; i < MAX_WS_CLIENTS; i++) if (wsClients_[i].valid() && !subs_[i].received) { hasClients = true; break; }
+    for (int i = 0; i < kMaxWsClients; i++) if (wsClients_[i].valid() && !subs_[i].received) { hasClients = true; break; }
     if (!hasClients) return;   // only the web interface is connected: the frame is built for nobody
 
-    const char* name; uint8_t mac[6]; uint8_t ip[4];
-    resolveWledIdentity(name, mac, ip);
-    (void)ip;  // the WS-push info body carries no IP field; keep the call uniform.
+    const char* name; uint8_t mac[6];
+    resolveWledIdentity(name, mac, nullptr);
 
     JsonSink sink;
     sink.appendf("{\"state\":");
@@ -2778,7 +2847,7 @@ void HttpServerModule::pushWledStateToWebSockets() {
     writeWledInfoBody(sink, name, mac);
     sink.appendf("}");
 
-    for (int i = 0; i < MAX_WS_CLIENTS; i++) {
+    for (int i = 0; i < kMaxWsClients; i++) {
         auto& ws = wsClients_[i];
         // A client that subscribed is the web interface, which reads module state rather than this frame.
         if (!ws.valid() || subs_[i].received) continue;
@@ -2788,9 +2857,9 @@ void HttpServerModule::pushWledStateToWebSockets() {
 
 // Read one frame per client and apply a WLED state-set ({on}/{bri}) to Drivers; client frames are masked (RFC 6455 §5.3), so unmask in place and skip non-text frames.
 void HttpServerModule::pollUplinks() {
-    for (int i = 0; i < MAX_PREVIEW_CLIENTS; i++)
+    for (int i = 0; i < kMaxPreviewClients; i++)
         if (previewClients_[i].valid()) pollPreviewClient(i);
-    for (int c = 0; c < MAX_WS_CLIENTS; c++) pollControlClient(c);
+    for (int c = 0; c < kMaxWsClients; c++) pollControlClient(c);
 }
 
 void HttpServerModule::pollPreviewClient(int i) {
@@ -2945,7 +3014,7 @@ bool HttpServerModule::sendBufferedFrame(const uint8_t* header, size_t headerLen
     const size_t totalLen = headerLen + bodyLen;   // WS payload length = app header + body
     // Build the WS binary header into previewSend_.hdr, followed by the app header, so the cursor streams them as one span.
     const size_t wsLen = writeWsFrameHeader(previewSend_.hdr, 0x82, totalLen);
-    // sizeof(hdr)=16 holds the 10-byte WS form plus the preview app headers (≤10 bytes); the guard stops a larger header overrunning.
+    // sizeof(hdr)=24 holds the 10-byte WS form plus the preview app headers; the guard stops a larger header overrunning.
     if (wsLen + headerLen > sizeof(previewSend_.hdr)) return false;
     // memcpy, not a byte loop: the compiler cannot see that wsLen is at most 10 and would warn (-Wstringop-overflow), while memcpy lets it check against the guard above.
     std::memcpy(previewSend_.hdr + wsLen, header, headerLen);
@@ -2953,7 +3022,7 @@ bool HttpServerModule::sendBufferedFrame(const uint8_t* header, size_t headerLen
     previewSend_.hdrLen = wsLen + headerLen;
     previewSend_.body = body;        // borrowed: PreviewDriver keeps the pixel buffer alive
     previewSend_.bodyLen = bodyLen;
-    for (int i = 0; i < MAX_PREVIEW_CLIENTS; i++) previewSend_.sent[i] = 0;
+    for (int i = 0; i < kMaxPreviewClients; i++) previewSend_.sent[i] = 0;
     previewSend_.active = true;
     // Do not drain here on the render thread, where a variable-cost writeSome would hitch the LEDs; drainPreviewSend() pushes bytes on tick20ms.
     return true;
@@ -2965,13 +3034,13 @@ void HttpServerModule::drainPreviewSend() {
     LockGuard lease{wsLock_};
     if (!lease) return;
     if (!previewSend_.active) return;
-    // Short of internal RAM the frame waits, and the producer drops the frames behind it, as it does for a busy socket.
-    if (!sendHasHeadroom()) return;
+    // Short of internal RAM a frame takes its turn with the other sends, holding the lease until it is out. Meanwhile the producer drops the frames behind it, as for a busy socket.
+    if (!maySend(&previewSend_)) return;
     const size_t total = previewSend_.hdrLen + previewSend_.bodyLen;
     const size_t chunk = drainChunkBytes();
     bool anyLiveClient = false;
     bool allDone = true;
-    for (int i = 0; i < MAX_PREVIEW_CLIENTS; i++) {
+    for (int i = 0; i < kMaxPreviewClients; i++) {
         auto& ws = previewClients_[i];
         if (!ws.valid()) continue;
         anyLiveClient = true;
@@ -2993,15 +3062,19 @@ void HttpServerModule::drainPreviewSend() {
             if (n == 0) break;                   // WouldBlock: leave the rest for next tick (no spin)
             cur += static_cast<size_t>(n);
             budget -= static_cast<size_t>(n);
+            sent(&previewSend_, platform::millis());
         }
         if (ws.valid() && cur < total) allDone = false;
     }
     // Done when every live client finished, or no client remains to send to.
-    if (!anyLiveClient || allDone) previewSend_.active = false;
+    if (!anyLiveClient || allDone) {
+        previewSend_.active = false;
+        endSend(&previewSend_);
+    }
 }
 
 void HttpServerModule::applySubscription(int client, const char* body) {
-    if (client < 0 || client >= MAX_WS_CLIENTS) return;
+    if (client < 0 || client >= kMaxWsClients) return;
     Subscription next;
     if (!next.parse(body) || next == subs_[client]) return;
     subs_[client] = next;
@@ -3021,6 +3094,7 @@ bool HttpServerModule::anyStreamActive() const {
 }
 
 void HttpServerModule::endStream(StateStream& s) {
+    endSend(&s);
     if (s.frame) platform::free(s.frame);
     s = StateStream{};
 }
@@ -3050,7 +3124,7 @@ bool HttpServerModule::nextStreamFrame(int client) {
 // Per client, the fragment in flight leaves a chunk at a time and the next is generated after it; core-0 only, so it needs no sender lease.
 void HttpServerModule::drainStateSend() {
     const size_t chunk = drainChunkBytes();
-    for (int i = 0; i < MAX_WS_CLIENTS; i++)
+    for (int i = 0; i < kMaxWsClients; i++)
         if (streams_[i].active) drainStream(i, chunk);
 }
 
@@ -3058,7 +3132,7 @@ void HttpServerModule::drainStream(int client, size_t budget) {
     StateStream& s = streams_[client];
     auto& ws = wsClients_[client];
     if (!ws.valid()) { endStream(s); return; }
-    while (budget > 0 && sendHasHeadroom()) {   // short of internal RAM the stream resumes next tick
+    while (budget > 0 && maySend(&s)) {   // short of internal RAM the stream waits its turn
         if (!s.frame) {
             if (s.last) { endStream(s); return; }
             if (!nextStreamFrame(client)) { refuseFragment(client); return; }
@@ -3073,6 +3147,7 @@ void HttpServerModule::drainStream(int client, size_t budget) {
         if (n == 0) return;                                // WouldBlock, resume next tick
         s.sent += static_cast<size_t>(n);
         budget -= static_cast<size_t>(n);
+        sent(&s, platform::millis());
         if (s.sent == total) { platform::free(s.frame); s.frame = nullptr; }
     }
 }

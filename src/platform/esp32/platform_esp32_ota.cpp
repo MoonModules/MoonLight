@@ -115,6 +115,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
+#include <algorithm>   // std::min: an erase stops at the slot's end
 #include <cstdarg>
 #include <cstdio>
 #include <cstring>
@@ -454,6 +455,15 @@ bool moonBaseImageRejected(const uint8_t* buf, size_t n, char* why, size_t whyLe
     return true;
 }
 
+// Erase the sectors a write up to `end` reaches that are not erased yet, as the app's own install does. The whole slot at once leaves the network unread longer than the sender's TCP waits.
+static esp_err_t eraseAhead(const esp_partition_t* part, uint32_t& erased, uint32_t end) {
+    if (end <= erased) return ESP_OK;
+    const uint32_t to = std::min<uint32_t>(((end + part->erase_size - 1) / part->erase_size) * part->erase_size, part->size);
+    const esp_err_t err = esp_partition_erase_range(part, erased, to - erased);
+    if (err == ESP_OK) erased = to;
+    return err;
+}
+
 bool otaWriteMoonBase(FsWriteSrc src, void* user, size_t contentLen,
                       char* statusBuf, size_t statusBufLen, uint32_t* bytesReadOut) {
     if (!src || !statusBuf || statusBufLen == 0 || !bytesReadOut) return false;
@@ -485,12 +495,10 @@ bool otaWriteMoonBase(FsWriteSrc src, void* user, size_t contentLen,
     if (abort || first == 0) { setStatus("error: no image received"); return false; }
     if (moonBaseImageRejected(buf, first, statusBuf, statusBufLen)) return false;
 
-    // PAST THIS LINE THE DEVICE HAS NO RECOVERY IMAGE until the write completes: @xref{updating-the-recovery-image-itself|why one pass}.
-    setStatus("erasing");
-    esp_err_t err = esp_partition_erase_range(part, 0, part->size);
-    if (err != ESP_OK) { setStatus("error: erase %s", esp_err_to_name(err)); return false; }
-
+    // PAST THE FIRST ERASE THE DEVICE HAS NO RECOVERY IMAGE until the write completes: @xref{updating-the-recovery-image-itself|why one pass}.
     setStatus("writing MoonBase");
+    esp_err_t err = ESP_OK;
+    uint32_t erased  = 0;     // bytes erased so far, a sector at a time ahead of the write
     uint32_t written = 0;     // bytes committed to flash
     size_t   held    = first; // bytes sitting in buf, not yet written
     bool     eof     = false;
@@ -504,6 +512,8 @@ bool otaWriteMoonBase(FsWriteSrc src, void* user, size_t contentLen,
                 setStatus("error: image overruns the slot");
                 return false;
             }
+            err = eraseAhead(part, erased, written + whole);
+            if (err != ESP_OK) { setStatus("error: erase %s", esp_err_to_name(err)); return false; }
             err = esp_partition_write(part, written, buf, whole);
             if (err != ESP_OK) { setStatus("error: write %s", esp_err_to_name(err)); return false; }
             // The IMAGE grew by what it held, never by the padding.

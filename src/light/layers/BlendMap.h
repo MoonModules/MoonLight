@@ -179,7 +179,7 @@ inline void blendMap(const Buffer& src, Buffer& dst, const MappingLUT& lut,
         std::memcpy(dst.data(), src.data(), src.bytes() < dst.bytes() ? src.bytes() : dst.bytes());
         return;
     }
-    if (mapped && clearFirst) dst.clear();   // bottom layer: cells with no source stay black
+    if (clearFirst) dst.clear();   // bottom layer: over black, and cells with no source stay black
     // Overwrite defers to the LUT's own overwrites() flag, so a folding mapping accumulates.
     if (op == BlendOp::Additive || (mapped && op == BlendOp::Overwrite && !lut.overwrites())) {
         detail::blendThrough(src, dst, lut, channelsPerLight, detail::AddMix{opacity});

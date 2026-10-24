@@ -296,7 +296,7 @@ What MoonLight builds first, so that every contribution after it is one source i
 | G5 | **Sender mapping skips the board's mapping** ✅ built | `Layer`, `Drivers` | the existing rule, hottest path when possible, extended to layouts that are not the identity: an identity layout is already one copy at any number of layers, since the drivers do not map; a layer whose only writer is mapped by the sender, with no modifiers and no second layer, is read as it is whatever the layout, so the layout still shapes the preview and the board's own effects; blending or a modifier on such a layout falls back to G1's round trip, with G1 inverting the layout's mapping alone so the modifier transforms the frame; the tests add a rotated and a mirrored layer to the serpentine and 3D cases |
 | G6 | **The channel-data sink** ✅ built | `ChannelDataSink`, from Network Receive | staging, hold-last-frame, `mapped_by` and the placement, the counters and the status path, extracted from Network Receive so a file source is a thin effect on it; Network Receive's tests pass unchanged |
 | G7 | **A contributor page** ✅ built, [the how-to](../../reference/adding-a-stream-source.md) | docs | how to add a channel-data source and how to add a picture source, with the test pattern as the template |
-| G8 | **The browser as a picture source** | `PictureService`, a UI page | a second `source`, `browser`: a page draws a video file, a webcam or a shared screen (`getDisplayMedia`) onto a canvas at the picture's size and sends the RGB frames over the existing WebSocket into the service's pixels, as WLED streams a tab (DedeHai, PR #4997); a `<video>` element first, since it plays every file the browser does, and GIF frame by frame after it through `ImageDecoder`; about 7 KB a frame at 64x36, 200 KB/s at 30 fps; it needs no hardware, so every board tests the picture path with it. Follow-ups: live recording of the drivers' output to FSEQ on SD (the Recording row below), and the browser baking a whole video into FSEQ for this layout ahead of time, so nothing runs in real time and the board plays it standalone; an hour is about 1.3 GB at 64x64 and 30 fps and 5.3 GB at 12,288 lights and 40 fps, so a baked movie travels on the card rather than over WiFi |
+| G8 | **The browser as a picture source** ⏳ | `PictureService`, a UI page | a second `source`, `browser`: a page draws a video file, a webcam or a shared screen (`getDisplayMedia`) onto a canvas at the picture's size and sends the RGB frames over the existing WebSocket into the service's pixels, as WLED streams a tab (DedeHai, PR #4997); a `<video>` element first, since it plays every file the browser does, and GIF frame by frame after it through `ImageDecoder`; about 7 KB a frame at 64x36, 200 KB/s at 30 fps; it needs no hardware, so every board tests the picture path with it. Follow-ups: live recording of the drivers' output to FSEQ on SD (the Recording row below), and the browser baking a whole video into FSEQ for this layout ahead of time, so nothing runs in real time and the board plays it standalone; an hour is about 1.3 GB at 64x64 and 30 fps and 5.3 GB at 12,288 lights and 40 fps, so a baked movie travels on the card rather than over WiFi |
 
 G1 and G2 come first: they add the second convention every mapping sender needs, and wait on no naming. G3 and G4 take #138's core part, credited to Gohnnyman. Before code: the double mapping confirmed on the bench (a serpentine grid fed by xLights, expected to show every other row reversed) and the open questions below decided.
 
@@ -306,14 +306,14 @@ Each later piece is a small pull request, one topic, based on current main, with
 
 | Pull request | Who | On |
 |---|---|---|
-| Backlight wiring, today's #140 resubmitted on main | Gohnnyman | nothing; it can come now |
-| Color trim, split from #139 | Gohnnyman | nothing; a separate idea |
-| FSEQ playback from SD: uncompressed v2, sparse ranges, the frame index from the clock, verified on a 3D layout. It builds on the channel-data sink (G6) that Network Receive and the FSEQ player both use, each a thin effect with its own settings (decided 2026-10-14) | TouchMyLight | G1, G2, G6; G5 sends a player alone on its layer to the output in one copy on any layout, a 3D one included |
-| Border sampling: edge depth, smoothing | Gohnnyman | G4 |
-| GIF decoder, PPM as a test format | open | G3 |
-| USB capture with its MJPEG decoder, P4, with Teensy stubs | Gohnnyman | G3 |
-| Browser pages: converter, baking to FSEQ | open | G1 to G4, G8 |
-| Recording, HDMI out on the ESP32-P4-PC, clock sync | open | FSEQ playback |
+| ✅ Backlight wiring, today's #140 resubmitted on main | Gohnnyman | nothing; it can come now |
+| ⏳ Color trim, split from #139 | Gohnnyman | nothing; a separate idea |
+| ✅ FSEQ playback from SD: uncompressed v2, sparse ranges, the frame index from the clock, verified on a 3D layout. It builds on the channel-data sink (G6) that Network Receive and the FSEQ player both use, each a thin effect with its own settings (decided 2026-10-14) | TouchMyLight | G1, G2, G6; G5 sends a player alone on its layer to the output in one copy on any layout, a 3D one included |
+| ✅ Border sampling: edge depth, smoothing | Gohnnyman | G4 |
+| ⏳ GIF decoder, PPM as a test format | open | G3 |
+| ✅ USB capture with its MJPEG decoder, P4, with Teensy stubs | Gohnnyman | G3 |
+| ⏳ Browser pages: converter, baking to FSEQ | open | G1 to G4, G8 |
+| ⏳ Recording, HDMI out on the ESP32-P4-PC, clock sync | open | FSEQ playback |
 
 Pull requests #138 and #139 close with thanks once G3 and G4 land, their good parts credited in the groundwork; a stacked pull request waits for the one below it, as [CLAUDE.md](../../../CLAUDE.md) says.
 

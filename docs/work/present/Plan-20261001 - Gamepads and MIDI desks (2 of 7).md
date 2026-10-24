@@ -146,45 +146,45 @@ Checked against the tools a lighting or VJ operator already knows. The shape mat
 
 ## Steps
 
-### 1. GamepadService, browser source
+### 1. GamepadService, browser source 🚧 (the `source` select waits for a second source)
 
 - ✅ `GamepadService`: its rows on `InputMapping`, SDL's GameController names as the row vocabulary, learn, a first state taken as the baseline, sticks written only past a deadband.
 - ✅ The default rows point at the surface: the left stick's Y onto fader 1, the right stick's Y onto fader 2, the left stick's X onto fader 3, A onto switch 1. The Control card assigns those to a game.
 - ✅ The UI's browser bridge reads `navigator.getGamepads()` while a tab is open on a secure origin and writes the pad's state into the service's hidden, live `pad` control through the ordinary control write, on change only and at most 30 times a second. No new message type was needed.
 - ✅ Each write runs the rows at once, through the ordinary control write, which keeps the hot path untouched.
 - ✅ A switch driving a button control fires on the press alone.
-- The `source` select arrives with the second source; with the browser as the only one, it would be a select of one.
+- ⏳ The `source` select arrives with the second source; with the browser as the only one, it would be a select of one.
 - ✅ Verified with the product owner's Xbox Series pad over Bluetooth in Safari on the desktop app's page, driving Pong through the surface.
 - ✅ Verified in Chrome on `localhost` too. It feels immediate from pad to lights; a measured input-to-frame time is not worth its code for now.
 
-### 2. MidiService, browser source, with the MCU profile
+### 2. MidiService, browser source, with the MCU profile 🚧 (learn without a profile, the X-Touch verification)
 
 - ✅ Inbound: the MCU profile maps fader pitch bend onto the surface's faders, touch notes onto `setTouched`, relative knob turns onto `applyEncoderDelta`, and SELECT onto the switches.
 - ✅ The browser bridge gains Web MIDI inbound, on a secure origin; each write is decoded as it lands.
 - ✅ Verified with the QCon in Chrome on `localhost`: its faders drive the surface and, through it, Pong's paddles.
 - ✅ Outbound: the service attaches as a `ControlSurface` and keeps the desk's state in the hidden `desk` control, one message per motor, SELECT light and ring; the bridge sends the slots that changed.
 - ✅ The desk's state goes out within 40 ms: a module calls `notifyValuesChanged()` and the server patches that module alone on the next 20 ms tick, at most 25 times a second.
-- 🚧 Outbound: scribble strips over SysEx.
-- 🚧 Learn for a desk without a profile, and the OpenLamp convention as the generic fallback mapping where it fits.
+- ✅ Outbound: scribble strips over SysEx (the Control card's display line, `sendLcd`).
+- ⏳ Learn for a desk without a profile, and the OpenLamp convention as the generic fallback mapping where it fits.
 - ✅ Verified the outbound half with the QCon: the motors follow the surface, a self-playing Pong included, and a touched fader holds only the desk's own motor while OSC boards keep following.
-- 🚧 Verify the outbound half with the X-Touch, and a preset change moving the faders.
+- ⏳ Verify the outbound half with the X-Touch, and a preset change moving the faders.
 
-### 2b. MidiService, the Akai APC40 mkII profile
+### 2b. MidiService, the Akai APC40 mkII profile ✅
 
 The APC40 mkII is on the bench, so the Akai profile the Decided section waited for is next. Every number comes from [the reference](../../reference/hardware/control-surfaces.md#akai-apc40-mkii).
 
-- A `profile` select on `MidiService`: Mackie Control (as now) or Akai APC40 mkII. The browser bridge already passes bytes both ways unchanged, so only the service's decoding and its desk state differ per profile.
-- **Alternate Ableton Live mode**, set by SysEx whenever the desk connects: every press only reports and every light is the host's, so the board owns each value and the desk shows it. The service offers the SysEx in a hidden control the bridge sends on connect; Web MIDI asks the user once for SysEx permission.
-- Inbound:
+- ✅ A `profile` select on `MidiService`: Mackie Control (as now) or Akai APC40 mkII. The browser bridge already passes bytes both ways unchanged, so only the service's decoding and its desk state differ per profile.
+- ✅ **Alternate Ableton Live mode**, set by SysEx whenever the desk connects: every press only reports and every light is the host's, so the board owns each value and the desk shows it. The service offers the SysEx in a hidden control the bridge sends on connect; Web MIDI asks the user once for SysEx permission.
+- ✅ Inbound:
   - track faders 1-8 (CC 7, channels 0-7) onto `fader1`-`fader8`;
   - track knobs 1-8 (CC 48-55, absolute) onto `encoder1`-`encoder8`;
   - activator buttons 1-8 (note 50, channels 0-7) toggle `switch1`-`switch8` on a press;
   - clip pads (notes 0-39, counted from the bottom-left) apply presets 1-40, the rows flipped so the top-left pad is preset 1 as on the Control card.
-- Outbound: each knob's ring shows its encoder (set to the volume style once), each activator lights when its switch is on, and each pad shows its preset slot: off when empty, dim when stored, bright when active.
-- The Control module lets a surface press a preset pad and tells surfaces each pad's state, through the existing `SurfaceControl::Pad`.
-- Tests: decoding each message kind, the desk state per kind, the row flip, the mode SysEx and the pad states.
-- Docs: the MIDI section on the services page and [Connecting a control surface](../../reference/control-surface.md).
-- Verify on the desktop app with the APC40 on the product owner's Mac in Chrome on `localhost`, then on the StadBeest, where the eyes follow over OSC.
+- ✅ Outbound: each knob's ring shows its encoder (set to the volume style once), each activator lights when its switch is on, and each pad shows its preset slot: off when empty, dim when stored, bright when active.
+- ✅ The Control module lets a surface press a preset pad and tells surfaces each pad's state, through the existing `SurfaceControl::Pad`.
+- ✅ Tests: decoding each message kind, the desk state per kind, the row flip, the mode SysEx and the pad states.
+- ✅ Docs: the MIDI section on the services page and [Connecting a control surface](../../reference/control-surface.md).
+- ✅ Verify on the desktop app with the APC40 on the product owner's Mac in Chrome on `localhost`, then on the StadBeest, where the eyes follow over OSC.
 - Left for later: the master fader and crossfader, the device knobs, the scene pads, transport and tap tempo.
 
 ### 3. Surface-only input targets ✅
@@ -192,17 +192,17 @@ The APC40 mkII is on the bench, so the Akai profile the Decided section waited f
 - `ButtonService`, `AnalogService`, `InfraredService`, `GamepadService` and OSC's `/mm/control/<Module>/<control>` path lose their direct `Module.control` targets; every input reaches a control through the surface.
 - A persisted row with a direct target is reported rather than silently dropped, and MIGRATING records the change.
 
-### 4. USB host on S3 and P4 🚧
+### 4. USB host on S3 and P4 🚧 (hub support, HID gamepads, the S31)
 
 - ✅ USB host bring-up in the platform layer, behind a seam: `platform_esp32_usb_midi.cpp`, built into the n8r8 and n16r8 images (`CONFIG_MM_USB_MIDI_HOST`).
 - ✅ USB MIDI first, since it is one class with no per-vendor parsing: `MidiService`'s `usb` setting. Verified with the QCon on the MIDI-OSC bridge board, driving the StadBeest legs over OSC with `follow` on.
-- The APC40 mkII on a board waits for a powered hub: it takes its power from USB, and the dev board's port supplies none. The hub needs `CONFIG_USB_HOST_HUBS_SUPPORTED` in the S3 images.
+- 🚧 The APC40 mkII on a board waits for a powered hub: it takes its power from USB, and the dev board's port supplies none. The hub needs `CONFIG_USB_HOST_HUBS_SUPPORTED` in the S3 images. (No image sets it; unverified: the bench lists an APC40 desk board on an S3.)
 - ✅ **The legs LEDs stopped briefly on each QCon move** under OSC `follow`, about half a second and only when the change came from the bridge. Gone with RTP-MIDI (step 5), verified on the StadBeest on 2026-10-08.
 - ✅ **A QCon fader slid back after release** under OSC `follow`: the bridge kept its own copy of the state, and a value from the legs board arriving after the hold-off moved the motor back. Gone with RTP-MIDI (step 5), where the legs board owns the only copy; verified on the StadBeest on 2026-10-08.
-- HID gamepads next, with controller translations seeded from GameControllerDB. Xbox pads over USB need a GIP driver on top, and only if wanted, since the browser already reaches them over USB or Bluetooth on the computer.
-- The S31 joins if its datasheet confirms a USB host.
+- ⏳ HID gamepads next, with controller translations seeded from GameControllerDB. Xbox pads over USB need a GIP driver on top, and only if wanted, since the browser already reaches them over USB or Bluetooth on the computer.
+- ⏳ The S31 joins if its datasheet confirms a USB host.
 
-### 5. RTP-MIDI: a desk on the network 🚧
+### 5. RTP-MIDI: a desk on the network 🚧 (the X-Touch and a Mac's Audio MIDI Setup unverified)
 
 A desk always attaches to the device it drives, and only the cable changes: browser, the device's own USB port, or the network.
 The network cable is RTP-MIDI (RFC 6295, Apple's Network MIDI), which the X-Touch's Ethernet port speaks, macOS has built in and Windows gets with the free rtpMIDI driver.
@@ -218,11 +218,11 @@ It replaces OSC `follow`: the bridge device turns into a plain MIDI cable with n
 - ✅ **Docs:** the services page (MIDI `network` and `share`, OSC without `follow`), the multi-board guide's bridge and diagram, the control surfaces reference, MIGRATING.
 - ✅ Verified on the StadBeest on 2026-10-08: the QCon on the bridge device, the legs' MIDI service on `network` inviting it, and the fader slide-back and LED stall of step 4 gone.
 - ✅ A refusal says why: the refusing side puts `no desk`, `in use` or `it invites` in its `NO` packet's name field, and the inviter's status shows it.
-- 🚧 Verify the X-Touch over Ethernet, and whether it invites or waits to be invited.
-- 🚧 Verify a Mac's Audio MIDI Setup joining a device's session.
+- ⏳ Verify the X-Touch over Ethernet, and whether it invites or waits to be invited.
+- ⏳ Verify a Mac's Audio MIDI Setup joining a device's session.
 - Left for later: picking the host from a list of announced sessions rather than typing its name; the recovery journal, since a lost fader message is repaired by the next one and a lost button press is pressed again.
 
-### 6. A native Linux source 🚧
+### 6. A native Linux source ⏳
 
 `/dev/input` for gamepads and ALSA for MIDI desks, so a headless Linux box such as a NanoPi is a rig controller with no browser. A desktop with a screen needs no native step, since the browser on `localhost` covers it.
 

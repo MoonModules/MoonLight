@@ -31,11 +31,17 @@ For a device still on old firmware (no Backup button yet), the [installer page](
 
 ## Unreleased
 
+### A module whose type was renamed is dropped at boot, and File Manager says so
+
+**Action: after an update over the air, when File Manager shows `skipped at boot`, take a Backup and Restore it before changing anything under the module named.**
+
+The board migrates nothing, so a module whose type a release renamed, such as `OscModule` becoming `OscService`, is skipped when its config file loads, and File Manager names the first one: `Services.Osc skipped at boot: unknown type`. The same line names a type this firmware does not carry at all, such as an SD card service on a board built without one, which no restore brings back. The file still holds the module until that part of the tree is next saved, so a Backup taken first carries it, and Restore migrates it in the browser.
+
 ### The StadBeest autopilot builds its looks, a layer each
 
 **Action: *nothing*, unless a desk or a preset switched the looks on `switch3` to `switch5`: use `encoder6` to `encoder8`.**
 
-`stadbeest-autopilot.mls` pushes every part its look at start, a layer per look. It crossfades between them through `encoder6` to `encoder8`, which set the three layers' opacity, where `switch3` to `switch5` turned three effects in one layer on and off, and it clears those three switch targets. The eyes and the mouth are reached by name, `MM-eye1.local`, `MM-eye2.local` and `MM-mouth.local`; a part named otherwise is renamed on its System card, or the names are edited in the script. [The StadBeest](examples/multi-board-installation.md#3-one-surface-layout-for-every-device) has the table.
+`stadbeest-autopilot.mls` pushes every part its look at start, a layer per look. It crossfades between them through `encoder6` to `encoder8`, which set the three layers' opacity, where `switch3` to `switch5` turned three effects in one layer on and off, and it clears those three switch targets. The eyes and the mouth are reached by name, `MM-eye1.local`, `MM-eye2.local`, `MM-mouth.local` and `MM-mouth2.local`; a part named otherwise is renamed on its System card, or the names are edited in the script. [The StadBeest](examples/multi-board-installation.md#3-one-surface-layout-for-every-device) has the table.
 
 ### LCD-MM's ring is smaller, and refuses PSRAM
 

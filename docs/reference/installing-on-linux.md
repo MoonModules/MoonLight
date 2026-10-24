@@ -61,6 +61,8 @@ The same program, installed as a container rather than a package: start it as [I
 | **Output** | Art-Net UDP 6454, DDP 4048, E1.31 5568, all outbound |
 | **Capabilities** | none: it binds its port as an ordinary process |
 
+**Audio input comes through PulseAudio.** The image carries libpulse, so audio a PulseAudio server receives from the network, from squeezelite or sendspin for instance, drives the audio-reactive effects. Point the container at the server with `-e PULSE_SERVER=tcp:<host>:4713`, or mount the host's socket with `-v /run/user/1000/pulse/native:/run/pulse/native -e PULSE_SERVER=unix:/run/pulse/native`. Without one it runs as before, without audio input.
+
 **Several instances** run side by side: each container has its own ports and writes its own identity, so they are told apart on the network. CPU is the limit rather than memory, about one core each, since the desktop build renders as fast as it may; cap it with `cpus:` when running a fleet.
 
 ### From a source checkout, with Compose

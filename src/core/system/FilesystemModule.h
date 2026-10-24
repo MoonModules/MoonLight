@@ -63,6 +63,8 @@ public:
 
     /// The live "last saved" buffer, which FileManagerModule binds its own control straight at.
     char* lastSavedStr() { return lastSaveStr_; }
+    /// The first module boot could not place and why, which FileManagerModule shows as its status; null when every file loaded whole.
+    const char* skippedAtBoot() const { return skippedStr_; }
 
     /// The live singleton, or null before the boot wiring registers it.
     static FilesystemModule* instance() { return instance_; }
@@ -108,6 +110,7 @@ private:
     uint32_t firstDirtyMs_ = 0;
     uint32_t lastSaveMs_ = 0;      ///< when the last save landed, which the status string ages from
     char lastSaveStr_[24] = "never";  ///< the status string FileManagerModule reads
+    char* skippedStr_ = nullptr;      ///< what skippedAtBoot() reads, allocated by the first boot load that skips
 
     // The module holds no standing buffer: each operation allocates and frees its own.
 

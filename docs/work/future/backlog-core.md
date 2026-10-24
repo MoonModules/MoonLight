@@ -10,6 +10,18 @@ The package holds only the binary, so a Pi or NanoPi user writes `/etc/systemd/s
 
 Every upload moves through the transfer slots; a flash download still writes its whole file on one tick, bounded per chunk by the write deadline. Moving downloads onto the slots too needs a look at how many files the UI reads at once, since two slots answer a third request with 503. Firmware uploads drain whole by design and feed the watchdog.
 
+### An HTTPS request on a board without PSRAM (2026-10-24, from the JSON plan)
+
+A board without PSRAM never fetches over HTTPS: `tlsRoom` asks for the 100 KB internal floor plus a 45 KB TLS session, and a classic ESP32 has 55 KB free at idle. `CONFIG_MBEDTLS_DYNAMIC_BUFFER` allocates mbedTLS's buffers as a connection needs them rather than the worst case up front, which may fit one request on an idle board. To measure on `MM-Olimex` (.207): the peak a session takes with it, what a smaller floor costs WiFi and the HTTP server, and whether a feed then fetches with lights running. Until then such a board gets its data pushed from one with PSRAM.
+
+### A StadBeest eye reset once by the task watchdog (2026-10-24)
+
+On 2026-10-23 eye2 (`MM-Eye2`, an ESP32-S3-Zero) reset once by the task watchdog, shortly after its OSC service was added, with no USB attached to read the panic. It has not recurred: both eyes ran the crossfading autopilot without a reset afterwards, and on 2026-10-24 they report `POWERON` after the beast was switched on. Recorded so a recurrence is recognized: `bootReason` on the System card is the one reading the network gives, since the board keeps no crash record; the panic itself needs the eye on USB with `monitor_esp32.py`.
+
+### What the WiFi buffer copy costs (2026-10-24)
+
+`CONFIG_LWIP_L2_TO_L3_COPY` copies every received frame so a socket the blocked loop stops draining cannot hold the 32 WiFi receive buffers; without it, every firmware upload stalled at 150 to 860 KB. Its cost is unmeasured: the frame rate on a busy DDP stream with and without it, same scene. If it costs much, firmware uploads move onto the transfer slots so nothing blocks the loop, and the copy goes.
+
 ### An update's connection that would not open until a reset (2026-10-22, from the internal RAM plan)
 
 On 3.0.0 a board could not open the update's connection (`ESP_ERR_HTTP_CONNECT`) until it was reset, with 80 KB of internal RAM free. TLS has lived in PSRAM since then (`CONFIG_MBEDTLS_EXTERNAL_MEM_ALLOC`), which may be what cured it; it has not recurred. Recorded so a recurrence is recognized: the free internal RAM and largest block at that moment are the first readings to take.
@@ -202,7 +214,7 @@ Pinned on the bench: every device answering its `.local` name and listed in the 
 ## A MoonLive control past a limit vanishes without a word (2026-10-08)
 
 **Found** in review: an `addSelect` with a 17th option, or one whose names overflow the 96-character option store, adds no control at all, and nothing tells the script's author why.
-The other limits of `addDeclaredControl` behave the same way: past `kMaxCtrls` controls, a member already bound, or a slot running past the arena.
+The other limits of `addDeclaredControl` behave the same way: past `kMaxCtrls` controls, a member already bound, a slot running past the arena, or names past the engine's 128-character name store (`nameText_`, about sixteen controls of seven characters).
 
 **The fix to build:** each refusal names itself on the effect's status line, as a compile error does, such as `control "shape": more than 16 options`, so the author sees which declaration lost and why.
 Pinned by a test per limit that reads the status.
@@ -276,7 +288,7 @@ The "public member has no `///`" rule reads a declaration's shape with a regex a
 
 ## A capture device on Linux feeds the Picture service (robwomp, 2026-10-21)
 
-The [Streams plan](../present/Plan-20261013%20-%20Streams%2C%20every%20frame%20from%20outside%20(partial).md) brings capture to the ESP32: a USB grabber on the P4 ([#151](https://github.com/MoonModules/MoonLight/pull/151), [#152](https://github.com/MoonModules/MoonLight/pull/152)) and a MIPI-CSI camera.
+The [Streams plan](../present/Plan-20261013%20-%20Streams%2C%20every%20frame%20from%20outside%20(11%20of%2016).md) brings capture to the ESP32: a USB grabber on the P4 ([#151](https://github.com/MoonModules/MoonLight/pull/151), [#152](https://github.com/MoonModules/MoonLight/pull/152)) and a MIPI-CSI camera.
 On the desktop build a capture device is read through Video4Linux (V4L2), which covers USB grabbers and the HDMI and CSI inputs of boards such as Rockchip SBCs.
 It is one more source of the picture family: the platform layer reads frames, and the Picture service takes them as it takes every other source.
 robwomp has such boards and offered to test on Discord.
@@ -2024,7 +2036,7 @@ Lower risk than the RGMII case (six pins rather than twelve, and nothing of ours
 
 ## Input transports: foot pedals, USB game controllers, and MoonLive at the pins (2026-09-01)
 
-`ButtonService` shipped with the [GPIO seam](../present/Plan-20260901%20-%20Input%20mapping%20and%20scripted%20sensors%20(partial).md)
+`ButtonService` shipped with the [GPIO seam](../present/Plan-20260901%20-%20Input%20mapping%20and%20scripted%20sensors%20(4%20of%2012).md)
 (`gpioInputBegin` / `gpioRead` / `gpioWrite`). It names a target as `Module.control` and writes it
 through `Scheduler::setControl`, so a press and an OSC message are indistinguishable downstream.
 Three follow-ups build on that seam rather than beside it.

@@ -586,11 +586,11 @@ public:
         }
     }
 
-    /// Blend one layer into the shared output: the bottom one overwrites, each above per its own mode and opacity, and an invisible one is skipped.
+    /// Blend one layer into the shared output, each per its own mode and opacity, an invisible one above the bottom skipped. The bottom one lies over black: a plain overwrite at full opacity, faded by alpha below it, so any look can be the one faded out.
     void blendLayer(const Layer& L, bool first) {
         if (!first && !L.contributes()) return;
-        blendMap(L.buffer(), outputBuffer_, L.lut(), L.channelsPerLight(),
-                 first ? BlendOp::Overwrite : L.blendOp(), first ? uint8_t{255} : L.opacity, /*clearFirst=*/first);
+        const BlendOp op = !first ? L.blendOp() : L.opacity == 255 ? BlendOp::Overwrite : BlendOp::Alpha;
+        blendMap(L.buffer(), outputBuffer_, L.lut(), L.channelsPerLight(), op, L.opacity, /*clearFirst=*/first);
     }
 
     /// Fill the shared output from the layers: blended when several, a wiring-order frame as it is, else the one layer mapped. @xref{the-shared-output-buffer}

@@ -12,6 +12,7 @@
 #include "http_test_client.h"
 #include "platform/platform.h"
 
+#include <algorithm> // std::max
 #include <cstdio>    // std::snprintf, the wide module's control names
 #include <cstring>
 #include <string>    // std::string: named explicitly, GCC does not pull it in transitively
@@ -103,6 +104,64 @@ TEST_CASE("a full state written in fragments of any size equals the state writte
         CHECK(joined == once);
         if (target < once.size()) CHECK(fragments > 1);
     }
+}
+
+namespace {
+// A select, a palette and a list whose options and rows run to many kilobytes, as Drivers' palette and the fixture profile list do.
+struct Lots : public mm::MoonModule, public mm::ListSource {
+    static constexpr int kOptions = 200;
+    uint8_t listRowCount() const override { return 60; }
+    void writeListRow(mm::JsonSink& sink, uint8_t row) const override { sink.appendf("{\"id\":%u,\"name\":\"profile %02u\"}", row, row); }
+    void writeListRowDetail(mm::JsonSink& sink, uint8_t row) const override {
+        sink.appendf("{\"channels\":\"red green blue white amber uv dimmer strobe pan tilt\",\"row\":%u}", row);
+    }
+    void writeListOptionSets(mm::JsonSink& sink) const override { sink.append("\"kinds\":[\"rgb\",\"rgbw\"]"); }
+    uint8_t pick = 0, palette = 0;
+    static void paletteOptions(mm::JsonSink& sink) {
+        const auto one = [&](int i) { sink.appendf("%s{\"name\":\"palette %03d\",\"colors\":\"ff0000 00ff00 0000ff ffffff\"}", i > 0 ? "," : "", i); };
+        if (sink.optionIndex() >= 0) { if (sink.optionIndex() < kOptions) one(sink.optionIndex()); return; }
+        for (int i = 0; i < kOptions; i++) one(i);
+    }
+    void defineControls() override {
+        static char names[kOptions][40];
+        static const char* options[kOptions];
+        for (int i = 0; i < kOptions; i++) {
+            std::snprintf(names[i], sizeof(names[i]), "an option with a long name, number %03d", i);
+            options[i] = names[i];
+        }
+        controls_.addSelect("pick", pick, options, kOptions);
+        controls_.addPalette("palette", palette, paletteOptions, kOptions);
+        controls_.addList("profiles", *this);
+    }
+};
+}  // namespace
+
+// A classic ESP32's page never got its state: one control of 11 to 17 KB went into a single fragment, which no free block that size could hold.
+TEST_CASE("a control larger than a fragment streams a row or an option at a time, and reassembles to the whole") {
+    mm::Scheduler s;
+    auto* lots = new Lots();
+    lots->setName("Lots");
+    s.addModule(lots);
+    s.setup();
+    mm::HttpServerModule http;
+    http.setScheduler(&s);
+    const std::string once = whole(http, nullptr);
+    REQUIRE(once.size() > 4 * 2048);
+    for (size_t target : {size_t(1), size_t(64), size_t(2048)}) {
+        mm::HttpServerModule::TreeCursor c;
+        std::string joined;
+        size_t largest = 0;
+        bool done = false;
+        for (int fragments = 0; !done && fragments < 100000; fragments++) {
+            mm::JsonSink sink;
+            done = http.writeTreeFragment(sink, c, target);
+            joined.append(sink.data(), sink.size());
+            largest = std::max(largest, sink.size());
+        }
+        CHECK(joined == once);
+        CHECK(largest < target + 200);   // the target and one option past it, never a whole control
+    }
+    mm::Scheduler::deleteTree(lots);
 }
 
 TEST_CASE("one module's JSON is its entry in the full state, children included") {
@@ -289,8 +348,8 @@ TEST_CASE("the full state streams as one fragmented message that reassembles to 
     CHECK(message == whole(sv.http, &expected));
 }
 
-// An open UI over a slow link queued the state stream's segments on a board without PSRAM, taking free internal RAM to 12 KB: below the headroom the stream waits.
-TEST_CASE("the state stream waits while internal RAM is short, then arrives whole") {
+// Below the headroom the stream once waited for room a classic ESP32 never has, so its page got no state. It now takes its turn with the other sends.
+TEST_CASE("the state stream still arrives whole while internal RAM is short") {
     struct Heap { ~Heap() { mm::platform::setTestFreeInternalHeap(0); } } heap;   // restored however the test ends
     Served sv;
     WsClient c{sv.http, {}, {}};
@@ -298,8 +357,6 @@ TEST_CASE("the state stream waits while internal RAM is short, then arrives whol
     mm::platform::setTestFreeInternalHeap(mm::HttpServerModule::kSendHeadroom - 1);
     REQUIRE(c.send("{\"subscribe\":[\"B\"]}"));
     std::vector<uint8_t> opcodes;
-    CHECK(c.message(opcodes, 100).empty());   // nothing while short
-    mm::platform::setTestFreeInternalHeap(0);
     const std::string message = c.message(opcodes);
     const auto expected = subscribed("{\"subscribe\":[\"B\"]}");
     CHECK(message == whole(sv.http, &expected));

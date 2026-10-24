@@ -166,7 +166,7 @@ the value per frame through the published frame**, and **a threshold drives a co
 table**. A sensor that only does one is half-built. The full reasoning is in
 [input-mapping-analysis.md](../future/input-mapping-analysis.md).
 
-## Step 0: the decisions
+## Step 0: the decisions ✅
 
 **Decided (2026-09-01), so step 1 is unblocked:**
 
@@ -202,7 +202,7 @@ table**. A sensor that only does one is half-built. The full reasoning is in
    script drives the surface, the surface drives everything, which is the same two-step model the
    tables use. Unrestricted is simpler and lets a script rewrite a driver's pin list.
 
-## Step 0b: the two open items carried in from the GPIO-seam plan
+## Step 0b: the two open items carried in from the GPIO-seam plan 🚧 (`/mm/pad/N` shipped; the driver/service line is drawn in mooncore.md, the sentence at `DriverBase.h:19` stays unscoped)
 
 That plan had seven steps. Five shipped (the GPIO seam, ButtonService, the Dig-2-Go catalog entry,
 the MoonLive GPIO builtins and MoonLiveService). Two did not, and they are small enough to state
@@ -216,7 +216,7 @@ rather than schedule:
   generic pad-grid list), but OSC has no path for one, so a surface cannot. Decide what a press means
   on an empty slot and whether a nonzero value is press-versus-hold.
 
-## Step 1: rebuild Infrared and Button around a mapping list
+## Step 1: rebuild Infrared and Button around a mapping list ✅
 
 **This is the first work, and it is a rebuild rather than an extension.** Both modules are wrong in
 the same way, and both are new enough on this branch to change without a migration: `ButtonService`
@@ -256,7 +256,7 @@ and a test that the rename left no `IrService` behind. Bench: the Dig-2-Go's GPI
 and the infrared remote on another, both driving `Control.switch1`, so two inputs reaching one target
 is proven rather than assumed.
 
-## Step 1b: an encoder that shows what it selects
+## Step 1b: an encoder that shows what it selects 🚧 (the Open Stage Control session has no strip widget; its label and pad-matrix gaps stay in backlog-core)
 
 Small, and it follows step 1 rather than joining it, so the rebuild is not also carrying a UI change.
 
@@ -303,7 +303,7 @@ NAME appearing in the strip and the lights following. That is the whole two-step
 observation: a remote code reaches the surface, the surface reaches Drivers, and the strip says what
 happened.
 
-## Step 2: MoonLive at the pins
+## Step 2: MoonLive at the pins ✅
 
 The GPIO seam shipped (`gpioInputBegin` / `gpioRead` / `gpioWrite`). This exposes it to scripts and
 adds the host module that makes a scripted service addable.
@@ -407,7 +407,7 @@ Two things this step found, which the text above predates:
   next non-light binding meets it the same way. Worth splitting the guard out of `run()`, or naming
   the two entries for what they are.
 
-## Step 2b: encoders send DELTAS, the way an encoder actually works
+## Step 2b: encoders send DELTAS, the way an encoder actually works 🚧 (superseded by 2c's framing: a delta exists only at `turn()`, the knob and `/mm/encoder/N` stay absolute, a palette clamps rather than wraps)
 
 A rotary encoder has no end stops. It reports MOVEMENT, not position: one detent clockwise is "+1",
 and the device it is plugged into owns the value and decides what +1 means. That is what every
@@ -455,7 +455,7 @@ palette ring wrapping while brightness clamps at the same detent, and the readou
 target rather than the knob. Bench: the Dig-2-Go's encoder1 on the palette, turned a full revolution
 in each direction, with the strip naming each palette as it passes.
 
-## Step 2c: the surface's own bindings become assignable
+## Step 2c: the surface's own bindings become assignable ✅
 
 `fader1` drives `Drivers.brightness`, `switch1` drives `Drivers.on` and `encoder1` drives
 `Drivers.palette`, hardcoded in `ControlModule::surfaceTarget` and its siblings. Everything around
@@ -531,7 +531,7 @@ shows up as a UI knob that can read 106 while its target reads 59. Worth revisit
 lands, because assignable targets need the surface to show what its control drives, which is the
 mirroring step 2b removed.
 
-### Measured: the 1 Hz state push stays, and instant feedback needs a different mechanism
+### Measured: the 1 Hz state push stays, and instant feedback needs a different mechanism ✅
 
 The surface shows a value changed by something else (a script, OSC, another client) up to a second
 late, because the UI learns it from the 1 Hz state patch. The obvious fix is a faster push, and the
@@ -642,7 +642,7 @@ Cost measured before the fix: 14.5us per `setControl` on the P4, 0.29% of a core
 tick unaffected. Small enough that no optimization was called for, which is why the work went into
 the shape rather than the speed.
 
-## Step 3: analog in, and the expression pedal
+## Step 3: analog in, and the expression pedal 🚧 (bench: the ADC reads live on the Dig-2-Go and a script reads volts on four boards; a pot's full travel through `AnalogService` is untested)
 
 An ADC read is the smallest new seam and unlocks a whole input class.
 
@@ -679,7 +679,7 @@ unreachable. It now takes the remaining distance whole once the step rounds to n
 LightCrafter sense pins are the natural rig and are now free (see `backlog-light.md`), but the scale
 factor per board needs the schematic.
 
-## Step 4: I2C sensors
+## Step 4: I2C sensors 🚧 (only the shared bus and its scan, `I2cBusModule`; no register read, sensor module, published frame or `i2cRead` builtin)
 
 The prerequisite is not new work: an unmerged commit (`11f8eb76`, "Add GyroDriver (MPU6050) +
 generic platform I2C layer") already carries the seam, and this branch has only `i2cScan`, which
@@ -714,7 +714,7 @@ frame** through the published frame, and **a threshold row** driving a switch pa
 value published for an effect to pull), which is the proof of the scripted-sensor claim: a user with
 a datasheet and no toolchain gets a working sensor an effect can use.
 
-## Step 4b: the sensor that produces an image
+## Step 4b: the sensor that produces an image ⏳
 
 **Not optional, and not a follow-up.** The VL53L8CX is the only ToF on the bench, so it is both the
 second I2C device (proving the seam generalizes) and the case that proves the seam is not enough.
@@ -758,7 +758,7 @@ A script that lights the column nearest a hand is then a few lines, and the heav
 scriptable as the light ones. The boundary the blob draws is narrower than it first looked: a script
 cannot *be* the driver for such a sensor, but it can *use* one fully.
 
-## Step 5: pulse timing, and what it unlocks
+## Step 5: pulse timing, and what it unlocks ⏳
 
 Two wanted inputs share one missing seam: an ultrasonic sensor's echo *width*, and a rotary
 encoder's quadrature. Both are edge timing, and the textbook ESP32 answer for both is a hardware
@@ -773,7 +773,7 @@ peripheral (PCNT for the encoder, RMT or a timed capture for the echo) rather th
 **Test:** an encoder on the bench driving `Control.encoder1` through the module, and an HC-SR04
 reporting distance through a script.
 
-## Step 6: PIR, and the trigger vocabulary
+## Step 6: PIR, and the trigger vocabulary 🚧 (a `set` row already holds a level, `unit_ButtonService.cpp:122`; no `level` kind, PIR test or multi-click vocabulary)
 
 The cheap finish. A PIR is a digital pin, so it needs no seam at all: it is a `ButtonService` row
 whose event is a *level* rather than a press. MoonLight models it exactly so (`pin_PIR`,

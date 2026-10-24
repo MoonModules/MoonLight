@@ -341,14 +341,43 @@ class Weather {
 | `pushJsonTo("MM-eye1.local", d)` | send it to another MoonLight, or `POST` it to a URL, and answer the reply |
 
 A fetch runs on a task of its own, so a DNS lookup or a TLS handshake never stalls the poll.
-A refresh that fails keeps the last good document, and an answer past 16 KB, 4 KB on a board without PSRAM, is refused rather than cut.
-On a board without PSRAM an HTTPS request waits while internal RAM cannot hold a TLS session, and `jsonStatus` reads 0 until it went.
+A refresh that fails keeps the last good document and is asked again after 5 seconds, then 10, 20 and on up to the feed's own period, so the first fetch after a boot, before WiFi is up, costs seconds rather than a period.
+An answer past 16 KB, 4 KB on a board without PSRAM, is refused rather than cut.
+An HTTPS feed needs PSRAM: a TLS session takes about 45 KB, which a board without PSRAM never has free beside its lights, so there the request waits and `jsonStatus` reads 0.
+A plain `http://` feed needs no session and runs on any board, though few services still answer without TLS.
+
+A board without PSRAM gets an HTTPS feed from one that has PSRAM: a script there fetches it and sends what the board shows with `pushJsonTo`, over plain HTTP on the local network.
+The board itself runs no script for it, only the layer the text lands in:
+
+```c
+class SharePriceRelay {
+  bool built = false;
+  json price;
+  json text;
+
+  void tick20ms() {
+    if (!built) {
+      pushJsonTo("MM-ticker.local", R"({"Effects": {"Asml": {"type": "Layer",
+        "AsmlText": {"type": "TextEffect", "text": "ASML", "scroll": true}}}})");
+      text = R"({"Effects": {"Asml": {"AsmlText": {"text": ""}}}})";
+      built = true;
+    }
+    price = getJson("https://query1.finance.yahoo.com/v8/finance/chart/ASML.AS?interval=1d&range=1d", 300);
+    if (jsonChanged(price)) {
+      jsonSetText(text, "/Effects/Asml/AsmlText/text", "ASML EUR ");
+      jsonAppend(text, "/Effects/Asml/AsmlText/text", price, "/chart/result/0/meta/regularMarketPrice");
+      pushJsonTo("MM-ticker.local", text);
+    }
+  }
+}
+```
 
 A push is live, never saved: it applies the way `PATCH /api/state?live=1` does, at the next frame boundary, so a script building its look pushes it again at start.
 A push to a target with one still on its way waits, replacing any that waited before it, so a script may push whenever something changed.
 A document naming a shipped script the device lacks lists that script on the System card, and an open page downloads it, as the picker does.
 
-`jsondemo.mls` in `moonlive/services` shows four feeds, the weather, a price, a match and a headline, as scrolling text, and builds its own four layers to do it.
+`jsondemo.mls` in `moonlive/services` shows four feeds, the weather, a share price, a match and a headline, as scrolling text, and builds its own four layers to do it; it needs PSRAM for their HTTPS.
+`weather.mls` beside it shows one feed over plain HTTP, the weather, so it runs on any board.
 
 ## Debugging: print
 

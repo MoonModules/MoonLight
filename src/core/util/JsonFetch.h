@@ -74,9 +74,14 @@ private:
         uint32_t seen = 0;             ///< the generation `changed` last answered for
         int status = 0;
         uint16_t epoch = 0;            ///< bumped on release, so a late answer for a freed slot is dropped
+        uint8_t failures = 0;          ///< a feed's failed refreshes in a row, which space the next one
         bool inFlight = false;
         bool keepAnswer = true;        ///< false for a post, whose caller reads the status alone
     };
+    /// The first retry after a failed refresh, doubling with each failure after it up to the feed's own period.
+    static constexpr uint32_t kRetryMs = 5000;
+    /// Space a feed's next refresh after a failure: exponential backoff from kRetryMs, capped at its period.
+    static void backOff(Slot& s, uint32_t now);
     struct Job { uint8_t slot; uint16_t epoch; const char* method; char* url; char* body; bool keep; };
     struct Answer { uint8_t slot; uint16_t epoch; int status; json::JsonDoc* doc; };
 

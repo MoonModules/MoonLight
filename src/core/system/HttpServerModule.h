@@ -41,7 +41,7 @@ namespace ui { struct EmbeddedFile; }   // one served UI file, from the generate
 ///
 /// A binary frame drains in memory-adaptive chunks per client per 20 ms tick. A large frame so crosses several ticks without a loop waiting on a socket, and still arrives as one message.
 ///
-/// One frame is in flight per channel and a new offer meanwhile is dropped. A client is closed on a real error or a FIN, never for being slow.
+/// One frame is in flight per channel and a new offer meanwhile is dropped. A preview or state-stream client is closed on a real error or a FIN, never for being slow. A patch still writes whole, so a client that stopped reading is closed after the write's stall bound.
 ///
 /// ## What a preview client may send back
 ///
@@ -214,7 +214,7 @@ public:
     void cancelBufferedSend() override {
         if (previewSend_.active) {
             const size_t total = previewSend_.hdrLen + previewSend_.bodyLen;
-            for (int i = 0; i < MAX_PREVIEW_CLIENTS; i++)
+            for (int i = 0; i < kMaxPreviewClients; i++)
                 if (previewClients_[i].valid() &&
                     previewSend_.sent[i] > 0 && previewSend_.sent[i] < total) {
                     previewClients_[i].close();
@@ -223,6 +223,7 @@ public:
                 }
         }
         previewSend_.active = false;
+        endSend(&previewSend_);
     }
 
 
@@ -373,28 +374,30 @@ private:
     const char* uiPath_ = "src/ui";
 
     /// Eight: a few viewers plus the overlap while a refresh's old socket is still being reaped. @xref{how-the-two-channel-caps-are-sized}
-    static constexpr int MAX_WS_CLIENTS = 8;
-    platform::TcpConnection wsClients_[MAX_WS_CLIENTS];
-    bool wsOnAccessPoint_[MAX_WS_CLIENTS] = {};   // each client's side, read when it connected
+    static constexpr int kMaxWsClients = 8;
+    platform::TcpConnection wsClients_[kMaxWsClients];
+    bool wsOnAccessPoint_[kMaxWsClients] = {};   // each client's side, read when it connected
 
     /// Four, deliberately fewer: the two arrays share one lwIP socket budget with every other service. @xref{why-the-preview-cap-is-lower}
-    static constexpr int MAX_PREVIEW_CLIENTS = 4;
-    platform::TcpConnection previewClients_[MAX_PREVIEW_CLIENTS];
+    static constexpr int kMaxPreviewClients = 4;
+    platform::TcpConnection previewClients_[kMaxPreviewClients];
     static constexpr int kParkedSlots = 4;          // connections open with no request yet
     static constexpr uint32_t kParkMs = 3000;       // how long one waits for its request before it is closed
     platform::TcpConnection parked_[kParkedSlots];
     uint32_t parkedAt_[kParkedSlots] = {};
 
-    /// Every upload, and every /sd download, resumes here across ticks, a bounded slice at a time, drainPreviewSend's shape: neither a large file nor a slow client holds the render loop.
+    /// Every upload, every /sd download and every state document whose body comes after its headers resumes here across ticks, a bounded slice at a time. Neither a large file nor a slow or lossy client holds the render loop.
     struct FileTransfer {
+        enum class Kind : uint8_t { Download, Upload, Document };
         bool active = false;
-        bool isUpload = false;
+        Kind kind = Kind::Download;
+        bool live = false;                 // document only: applied as a live source
         platform::TcpConnection conn;
-        platform::FsWriteStream wstream;   // valid while isUpload
-        platform::FsReadStream  rstream;   // valid while !isUpload
-        size_t remaining = 0;              // upload: body bytes still expected; download: bytes left to send
-        char* buf = nullptr;               // kTransferBufBytes from the claim to the finish, so an idle server holds none
-        size_t bufLen = 0;                 // download only: the read chunk, drained across ticks by writeSome
+        platform::FsWriteStream wstream;   // valid for an upload
+        platform::FsReadStream  rstream;   // valid for a download
+        size_t remaining = 0;              // upload and document: body bytes still expected; download: bytes left to send
+        char* buf = nullptr;               // from the claim to the finish, so an idle server holds none: kTransferBufBytes, or a document's whole body
+        size_t bufLen = 0;                 // download: the read chunk, drained across ticks by writeSome; document: the body bytes in buf
         size_t bufSent = 0;
         uint32_t lastActivityMs = 0;       // a stall guard, not a size or time cap on the transfer itself
         char path[160] = {};               // upload only: the file applyFileChanged announces once it commits
@@ -404,14 +407,16 @@ private:
     static constexpr uint32_t kTransferStallMs = 10000;   // no progress this long: abort, free the slot
     static constexpr uint32_t kTransferTickBudgetMs = 3;  // several chunks while storage/peer keep up, not one
     std::array<FileTransfer, kTransferSlots> transfers_{};
-    /// A free slot with its buffer, or null once it has answered: 503 when both slots are busy, 507 when the buffer does not fit.
-    FileTransfer* claimTransfer(platform::TcpConnection& conn);
+    /// A free slot with its buffer, `buf` when the caller brings one, or null once it has answered. That answer is 503 when both slots are busy, 507 when the buffer does not fit.
+    FileTransfer* claimTransfer(platform::TcpConnection& conn, char* buf = nullptr);
     /// Advance every active slot by one bounded chunk, then the embedded file sends; called once per tick, the drainXxxSend's sibling.
     void driveTransfers();
     /// One upload slot's bounded chunk: socket to storage, then the stall guard. Returns whether real bytes moved.
     bool driveUpload(FileTransfer& t, uint32_t now);
     /// One download slot's bounded chunk: storage to socket, then the stall guard. Returns whether real bytes moved.
     bool driveDownload(FileTransfer& t, uint32_t now);
+    /// One document slot's bounded chunk: socket to its buffer, applied once whole, then the stall guard. Returns whether real bytes moved.
+    bool driveDocument(FileTransfer& t, uint32_t now);
     /// Close the connection when asked, free the buffer and the slot; the caller closed the stream.
     void finishTransfer(FileTransfer& t, bool closeConn);
     /// Close every active slot's stream and socket; release()'s own cleanup, since going out of scope frees neither.
@@ -436,14 +441,23 @@ private:
         size_t hdrLen = 0;
         const uint8_t* body = nullptr;        // the frame body, borrowed: the producer keeps it alive and cancels before a resize frees it
         size_t bodyLen = 0;
-        size_t sent[MAX_PREVIEW_CLIENTS] = {};  // per-PREVIEW-client cursor over [hdr ++ body]; a slow client lags
+        size_t sent[kMaxPreviewClients] = {};  // per-PREVIEW-client cursor over [hdr ++ body]; a slow client lags
         bool active = false;
     };
     PreviewSend previewSend_;
+    /// Whether `who` may queue now: always above the headroom, and below it the one send holding the lease, so none starves and the queue stays one socket's buffer.
+    bool maySend(const void* who);
+    /// Give the lease up when `who` holds it, as its send ends.
+    void endSend(const void* who) { if (lowRamSender_ == who) lowRamSender_ = nullptr; }
+    /// Record that `who` moved bytes, which keeps a lease it holds.
+    void sent(const void* who, uint32_t now) { if (lowRamSender_ == who) lowRamProgressMs_ = now; }
+    char leafValue_[128] = {};             ///< one value of the once-a-second walk, on the module rather than the stack, whose frame stays under 512 bytes
+    const void* lowRamSender_ = nullptr;   ///< the one send that queues while internal RAM is short
+    uint32_t lowRamProgressMs_ = 0;        ///< when it last moved bytes: one stalled this long passes the lease on
 public:
     /// The internal RAM a send leaves free. On a board without PSRAM every unacknowledged segment is internal RAM, and a page load or a preview over a slow link queued 52 KB of them.
     static constexpr size_t kSendHeadroom = platform::kInternalFreeFloor / 2;
-    /// Admission control for every send that queues on a socket: true while free internal RAM is above the headroom, or unreported (0).
+    /// Whether free internal RAM is above the headroom, or unreported (0). Below it embedded files, state streams and preview frames take turns through `maySend`; patches, REST answers and downloads still queue regardless.
     static bool sendHasHeadroom() {
         const size_t f = platform::freeInternalHeap();
         return f == 0 || f > kSendHeadroom;
@@ -474,6 +488,9 @@ public:
         uint8_t depth = 0;                   ///< levels on the path, 0 before the document begins
         uint8_t phase = 0;                   ///< the deepest module's part in progress: header, controls or children
         uint8_t ctrl = 0;                    ///< the next control, in the controls part
+        ControlCursor at;                    ///< inside a control written a piece at a time
+        const char* ctrlName = nullptr;      ///< that control's name while it is open, so one gone between fragments is closed rather than continued
+        bool pieces = false;                 ///< a fragment-sized document, whose large controls go out a piece at a time
         bool wroteRoot = false;              ///< a root went out, so the next one takes a comma
         bool done = false;                   ///< the document has ended
         static constexpr uint8_t kHeader = 0, kControls = 1, kChildren = 2;   ///< the values of `phase`
@@ -483,13 +500,21 @@ public:
     bool writeTreeFragment(JsonSink& sink, TreeCursor& c, size_t target);
     /// One step where the cursor's path names no module: close what is open and move on, true once the document has ended.
     bool stepPast(JsonSink& sink, TreeCursor& c);
-    /// One step of the module at the cursor: its header, a control, or its children.
+    /// One step of the module at the cursor: its header, a control or a piece of one, or its children.
     void stepInto(JsonSink& sink, TreeCursor& c, MoonModule* mod);
+    /// One piece of a control written a piece at a time: its head, a row or an option, then its tail.
+    static void writeControlPieceOf(JsonSink& sink, TreeCursor& c, const ControlDescriptor& d);
+    /// End the open control as it stands, valid JSON, and move past it.
+    static void closeOpenControl(JsonSink& sink, TreeCursor& c);
 
     /// Set a client slot's subscription, as its `{"subscribe":…}` frame does, for a test.
     void subscribeForTest(int client, const char* body) { applySubscription(client, body); }
     /// Mark a client's stream open without draining it, for a test of what waits while a document is under way.
     void holdStreamForTest(int client) { streams_[client].active = true; }
+    /// Ask for the send lease as a send would, for a test of who may queue while internal RAM is short.
+    bool maySendForTest(const void* who) { return maySend(who); }
+    /// End a send's turn, for the same test.
+    void endSendForTest(const void* who) { endSend(who); }
     /// Collect the next patch once and write each of the first `count` client slots its share, for a test with no socket.
     void buildClientPatchesForTest(JsonSink* outs, int count);
 
@@ -509,10 +534,10 @@ private:
         bool first = true;         // the next frame opens the message
         bool last = false;         // the frame in flight ends it
     };
-    StateStream streams_[MAX_WS_CLIENTS];
-    Subscription subs_[MAX_WS_CLIENTS];
-    bool resyncClient_[MAX_WS_CLIENTS] = {};   // this client alone needs a full state: it subscribed, changed what it views, or asked again
-    uint32_t resyncId_[MAX_WS_CLIENTS] = {};   // the id of the request a client's next document answers
+    StateStream streams_[kMaxWsClients];
+    Subscription subs_[kMaxWsClients];
+    bool resyncClient_[kMaxWsClients] = {};   // this client alone needs a full state: it subscribed, changed what it views, or asked again
+    uint32_t resyncId_[kMaxWsClients] = {};   // the id of the request a client's next document answers
     bool fragmentRefused_ = false;   // a fragment found no memory; logged once per run of refusals
     /// Whether a frame may go to this client now: no fragment of its stream is half written. The uplink is read only then, so a Ping is always answered between frames (RFC 6455 §5.4).
     bool atFrameBoundary(int client) const;
@@ -648,15 +673,19 @@ private:
     /// A module's fields before its controls, which an outline carries alone.
     void writeModuleHeader(JsonSink& sink, MoonModule* mod);
     static void writeControl(JsonSink& sink, const ControlDescriptor& c);
+    /// The flags after a control's value and extras, and its closing brace.
+    static void writeControlTail(JsonSink& sink, const ControlDescriptor& c);
     /// Emit a module's status and severity where set, shared so the two endpoints stay in sync.
     static void writeStatus(JsonSink& sink, MoonModule* mod);
 
     // Control setter
 
     void handleSetControl(platform::TcpConnection& conn, const char* body);
-    /// Apply a state document from the request body, which may outgrow the request buffer: `PATCH /api/state`.
+    /// Apply a state document from the request body, which may outgrow the request buffer: `PATCH /api/state`. A body still on its way finishes in a transfer slot.
     void handleApplyState(platform::TcpConnection& conn, const char* initialBody, size_t initialLen, size_t contentLen,
                           bool live);
+    /// Apply a whole state document and answer what it did.
+    void answerStateDocument(platform::TcpConnection& conn, const char* doc, bool live);
 
     /// Delegates to the scheduler's own canonical tree walk, guarding a null scheduler first.
     MoonModule* findModuleByName(const char* name);
@@ -680,8 +709,8 @@ private:
     void writeWledInfoBody(JsonSink& sink, const char* name, const uint8_t mac[6]);
     void writeWledName(JsonSink& sink, const char* name);   // 💫-prefixed WLED name (HA marker)
     void writeWledStateBody(JsonSink& sink);
-    /// The device's name, MAC and live address, resolved once for every WLED handler to share. @xref{the-wled-compatibility-shim}
-    void resolveWledIdentity(const char*& name, uint8_t mac[6], uint8_t ip[4],
+    /// The device's name, MAC and, when `ip` is given, live address, resolved once for every WLED handler to share. @xref{the-wled-compatibility-shim}
+    void resolveWledIdentity(const char*& name, uint8_t mac[6], uint8_t* ip,
                              const char* nameFallback = "MoonLight");
     void writeModuleMetricsJson(JsonSink& sink, MoonModule* mod, bool& first);
 

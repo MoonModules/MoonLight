@@ -56,7 +56,7 @@ The request's `weather.getValue("/x")` method syntax would need member calls on 
 | Feed | Endpoint (no key unless noted) | Pointer |
 |---|---|---|
 | Weather | Open-Meteo `api.open-meteo.com/v1/forecast?latitude=52.37&longitude=4.90&current=temperature_2m` | `/current/temperature_2m` |
-| Stocks | Alpha Vantage `…/query?function=GLOBAL_QUOTE&symbol=IBM&apikey=demo` (demo key, IBM only); crypto without a key: Coinbase `api.coinbase.com/v2/prices/BTC-USD/spot` | `/Global Quote/05. price`, `/data/amount` |
+| Stocks | Yahoo Finance's chart endpoint, unofficial: `query1.finance.yahoo.com/v8/finance/chart/ASML.AS?interval=1d&range=1d` | `/chart/result/0/meta/regularMarketPrice` |
 | Sports | TheSportsDB test key `3`: `…/api/v1/json/3/eventslast.php?id=133604` | `/results/0/strEvent`, `/results/0/intHomeScore` |
 | News | Spaceflight News `api.spaceflightnewsapi.net/v4/articles/?limit=1` | `/results/0/title` |
 
@@ -105,12 +105,12 @@ Each answer is a few KB or less; a feed that returns hundreds of KB (an ESPN sco
 
 ## Steps
 
-1. Core JSON: pointer get and replace, copy, `fixed` numbers, serialize; unit tests per RFC 6901's own examples.
-2. Platform `httpsGet` beside `httpsPost`, sharing its client setup, which gains the heap check both get; its desktop stand-in; a test against the stand-in, the real one on the bench.
-3. `JsonFetch`: sources, refresh, size cap, push queue; `StateSource::Live` and `?live=1`; tests through the stand-in.
-4. MoonLive: `json` keyword and type checks, raw string literals, the builtins, the per-script string pool; compile tests, IR golden table. A module naming a script the device lacks reports it missing in its state, and the UI downloads it; a UI test with the file absent.
-5. hpwit-show builds its own layers, measured on shiffy and the Waveshare; the StadBeest autopilot builds the legs, eyes and mouth, a layer per look, and crossfades its scenes, measured on the beast (the frame time during a crossfade, when two looks render); `jsondemo.mls` with the four feeds and TextEffect.
-6. Feeds verified, docs, MoonWalk process "Show live data from the internet".
+1. ✅ Core JSON: pointer get and replace, copy, `fixed` numbers, serialize; unit tests per RFC 6901's own examples.
+2. ✅ Platform `httpsGet` beside `httpsPost`, sharing its client setup, which gains the heap check both get; its desktop stand-in; a test against the stand-in, the real one on the bench.
+3. ✅ `JsonFetch`: sources, refresh, size cap, push queue; `StateSource::Live` and `?live=1`; tests through the stand-in.
+4. ✅ MoonLive: `json` keyword and type checks, raw string literals, the builtins, the per-script string pool; compile tests, IR golden table. A module naming a script the device lacks reports it missing in its state, and the UI downloads it; a UI test with the file absent.
+5. ✅ hpwit-show builds its own layers, measured on shiffy and the Waveshare; the StadBeest autopilot builds the legs, eyes and mouth, a layer per look, and crossfades its scenes, measured on the beast (the frame time during a crossfade, when two looks render); `jsondemo.mls` with the four feeds and TextEffect.
+6. ✅ Feeds verified, docs, MoonWalk process "Show live data from the internet".
 
 ## Decisions (recommended)
 
@@ -125,9 +125,20 @@ Each answer is a few KB or less; a feed that returns hundreds of KB (an ESPN sco
 
 Nothing in code: it adds a type, a service, a state source and a platform call. hpwit-show no longer needs its layers set up by a scenario first, so `scenario_MoonLive_hpwit_show`'s layer steps shrink to staging the scripts. The StadBeest page's per-device setup by hand becomes "install the autopilot on the legs".
 
-## Where it stands (2026-10-23)
+## Where it stands (2026-10-24)
 
-Steps 1 to 6 are built, desktop-tested and run on shiffy and the Waveshare; the StadBeest waits for the beast, which was offline.
+Steps 1 to 6 are built, desktop-tested and run on shiffy, the Waveshare and the StadBeest: the autopilot on the legs builds the legs, both eyes and the mouth's two bulbs (`MM-mouth`, `MM-mouth2`), and the eyes and the mouth follow it over OSC.
+
+The StadBeest's frame time, the median of one-second averages over four minutes of 20-second scenes on 2026-10-24:
+
+| Look (legs / eyes) | Legs | Eye1 | Eye2 |
+|---|---|---|---|
+| walk / frog eye | 10.1 ms | 8.6 ms | 8.4 ms |
+| orb / eye orb | 15.4 ms | 10.1 ms | 11.3 ms |
+| thrusters / Sauron | 23.9 ms | 20.6 ms | 20.1 ms |
+| a crossfade, two looks rendering | 30.9 ms | 23.7 ms | 26.1 ms |
+
+A crossfade costs about the heavier look plus the lighter one, and the slowest, thrusters into walk, holds 32 fps on the legs. One second during a crossfade averaged 293 ms on eye1 and 48 ms on eye2, a stall in that second.
 
 What the build changed from the plan:
 - **The rule for a busy target.** A second push to a target with one on its way waits and replaces any that waited before it, so no update is lost; dropping it lost text updates.
@@ -137,5 +148,7 @@ What the build changed from the plan:
 - **TheSportsDB's test key** is `123`; `3` is retired.
 - **The StadBeest's looks** fade through `encoder6` to `encoder8`, since a switch writes true or false and an opacity needs 0 to 255; `switch3` to `switch5` are freed.
 - **`httpsPost`** is gone: MoonCloud posts through `JsonFetch` on the worker, over `httpFetch`, the one client every request shares, so the heap check covers it too.
+- **HTTPS needs PSRAM.** On a classic ESP32 without PSRAM (`MM-Olimex`, 2026-10-24) the request waits for 145 KB of internal RAM, the 100 KB floor plus a 45 KB TLS session, where the board has 55 KB free at idle and 19 KB with `jsondemo.mls`'s four text layers; the bands kept their placeholders. Such a board gets its data pushed from one with PSRAM ([the MoonLive language](../../moonmodules/light/moonlive.md#json-documents-in-a-service)); smaller TLS sessions are in the backlog. A plain-HTTP feed runs there: `weather.mls`, Open-Meteo over `http://`, showed "Amsterdam 12.2 C" on `MM-Olimex` with 60 KB still free. Of the demo's other feeds only Open-Meteo answers without TLS; the rest redirect to HTTPS, which a fetch refuses.
+- **The share price** is ASML's in Amsterdam, from Yahoo Finance's chart endpoint, keyless and unofficial, where the demo first read bitcoin's.
 
-Still to see on hardware: the StadBeest (its parts' names, `MM-eye1.local`, `MM-eye2.local`, `MM-mouth.local`, are a guess for the mouth), a board without PSRAM fetching over HTTPS, and the missing-script download through an open page.
+Seen on hardware (`MM-Olimex`, 2026-10-24): a saved service naming `chase.mls`, which the board lacked, listed it as missing; an open page downloaded it into `/.moonlive`, and after a reboot with no page open the service compiled it from there.
