@@ -30,9 +30,8 @@
 # **Capabilities.** None. It binds 8080 as an ordinary process and needs no added capability.
 #
 # **Audio input through PulseAudio.** The image carries libpulse, so a PulseAudio server takes audio
-# in from the network, squeezelite or sendspin for instance, and MoonLight listens to it. Point it at
-# the server: `-e PULSE_SERVER=tcp:<host>:4713`, or mount the host's socket with
-# `-v /run/user/1000/pulse/native:/run/pulse/native -e PULSE_SERVER=unix:/run/pulse/native`.
+# in from the network, squeezelite or sendspin for instance, and MoonLight listens to it. How to point
+# the container at a server, and how that server lets it in: docs/reference/installing-on-linux.md.
 # Without a server it runs as before, with no audio input.
 #
 # **amd64 and arm64.** The release builds a .deb for each, so `docker build` on an arm64 host
@@ -84,7 +83,12 @@ RUN apt-get update \
  && mkdir -p /deps \
  && pulse=$(find /usr/lib -name libpulse.so.0 | head -1) \
  && test -n "$pulse" \
- && { ldd /rootfs/usr/bin/MoonLight; ldd "$pulse"; echo "libpulse.so.0 => $pulse (0)"; } | awk '/=> \//{print $3}' | sort -u | grep -vE '/(libc|libm|libstdc\+\+|libgcc_s)\.so' | xargs -I{} cp -L {} /deps/
+ # Captured first, so a failing ldd, or one naming a library it cannot find, stops the build here.
+ && ldd /rootfs/usr/bin/MoonLight > /tmp/deps \
+ && ldd "$pulse" >> /tmp/deps \
+ && ! grep -q "not found" /tmp/deps \
+ && echo "libpulse.so.0 => $pulse (0)" >> /tmp/deps \
+ && awk '/=> \//{print $3}' /tmp/deps | sort -u | grep -vE '/(libc|libm|libstdc\+\+|libgcc_s)\.so' | xargs -I{} cp -L {} /deps/
 
 # --- stage 2: the image that ships ------------------------------------------------------------
 # Distroless: the binary plus the shared libraries it resolves, with no shell and no package

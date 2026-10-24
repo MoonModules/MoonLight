@@ -233,6 +233,10 @@ void delayMs(uint32_t ms) {
     vTaskDelay(pdMS_TO_TICKS(ms));
 }
 
+// The interface is the embedded one alone.
+bool uiFolderFile(const char*, char*&, size_t&) { return false; }
+void setUiFolder(const char*) {}
+
 void pauseLoop() {
     // Nothing: yield() here is vTaskDelay(1), which already yields to the idle task for a tick. A further sleep would come straight out of the render budget.
 }
@@ -1961,6 +1965,9 @@ bool UdpSocket::open() {
     // Allow sends to a broadcast address (e.g. 255.255.255.255 for an Art-Net / E1.31 spray to every device on the LAN). Without SO_BROADCAST the stack rejects such a send; it has no effect on unicast/multicast sends.
     const int on = 1;
     setsockopt(fd_, SOL_SOCKET, SO_BROADCAST, &on, sizeof(on));
+    // Non-blocking from the start, so neither a send-only socket nor the render loop's drain ever waits on the stack.
+    const int flags = fcntl(fd_, F_GETFL, 0);
+    fcntl(fd_, F_SETFL, flags | O_NONBLOCK);
     return true;
 }
 
@@ -1973,11 +1980,7 @@ bool UdpSocket::bind(uint16_t port, const uint8_t localIp[4]) {
     addr.sin_port = htons(port);
     if (localIp) std::memcpy(&addr.sin_addr.s_addr, localIp, 4);   // octets are network order
     else addr.sin_addr.s_addr = htonl(INADDR_ANY);
-    if (::bind(fd_, reinterpret_cast<const sockaddr*>(&addr), sizeof(addr)) != 0) return false;
-    // Non-blocking so the render loop's drain never stalls waiting for a packet.
-    int flags = fcntl(fd_, F_GETFL, 0);
-    fcntl(fd_, F_SETFL, flags | O_NONBLOCK);
-    return true;
+    return ::bind(fd_, reinterpret_cast<const sockaddr*>(&addr), sizeof(addr)) == 0;
 }
 
 int UdpSocket::recvFrom(uint8_t* buf, size_t maxLen, uint8_t srcIp[4], uint16_t* srcPort) {

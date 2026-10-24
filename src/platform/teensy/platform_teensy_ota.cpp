@@ -21,7 +21,6 @@
 /// The search reads its prefix from the mark itself, so the prefix occurs once per image, and that reference keeps the linker from collecting the mark.
 
 #include "platform/platform.h"
-#include "core/util/build_info.h"   // MM_FIRMWARE_NAME, the variant an image must match
 
 #include <Arduino.h>
 
@@ -43,7 +42,7 @@ constexpr uint32_t kSectorBytes = 4096;
 constexpr uint32_t kBlockBytes = 65536;   // the erase unit: one block erase costs about what one sector erase does, so 16x fewer of them
 constexpr uint32_t kPageBytes = 256;   // the most one program command writes
 
-// The firmware name an upload must carry: @xref{the-image-mark}.
+// The firmware name an upload must carry, MM_FIRMWARE_NAME from teensy/CMakeLists.txt: @xref{the-image-mark}.
 constexpr char kImageMark[] = "MoonLight image for " MM_FIRMWARE_NAME ";";
 constexpr uint32_t kMarkPrefixLen = sizeof("MoonLight image for ") - 1;
 
@@ -108,61 +107,80 @@ void applyStagedFirmware() {
 }
 
 namespace {
-// One sector of the upload into g_sector, its tail padded with what erased flash reads; false when the client aborted.
-bool readSector(FsWriteSrc src, void* user, uint32_t& fill, bool& eof) {
-    fill = 0;
-    eof = false;
-    while (fill < kSectorBytes) {
-        bool abort = false;
-        const size_t n = src(reinterpret_cast<char*>(g_sector + fill), kSectorBytes - fill, user, &abort);
-        if (abort) return false;
-        if (n == 0) { eof = true; break; }
-        fill += static_cast<uint32_t>(n);
+// The one image under way: where it stages, how much is in, and where its progress is reported.
+struct Image {
+    uint32_t base = 0;
+    uint32_t room = 0;
+    uint32_t written = 0;      // staged bytes
+    uint32_t fill = 0;         // bytes in g_sector, waiting to be staged
+    size_t contentLen = 0;
+    char* status = nullptr;
+    size_t statusLen = 0;
+    uint32_t* bytesOut = nullptr;
+};
+Image g_image;
+
+// Stage what g_sector holds, its tail padded with what erased flash reads; the first sector's header is checked before a byte lands.
+bool stageFill(Image& img) {
+    if (!img.fill) return true;
+    std::memset(g_sector + img.fill, 0xFF, kSectorBytes - img.fill);
+    const char* why = img.written == 0 ? firmware::teensyHeaderProblem(g_sector, kSectorBytes) : nullptr;
+    if (why) { std::snprintf(img.status, img.statusLen, "%s", why); return false; }
+    if (img.written + img.fill > img.room) { std::snprintf(img.status, img.statusLen, "error: image too large for the free flash"); return false; }
+    stageSector(img.base + img.written);
+    img.written += img.fill;
+    *img.bytesOut = img.written;
+    img.fill = 0;
+    return true;
+}
+}  // namespace
+
+// One board, one image: the writer is the static above, so a second begin restarts it.
+bool otaBegin(OtaWrite& w, OtaTarget target, size_t contentLen, char* statusBuf, size_t statusBufLen, uint32_t* bytesOut) {
+    if (!statusBuf || statusBufLen == 0 || !bytesOut) return false;
+    // One image and no recovery image beside it.
+    if (target == OtaTarget::MoonBase) { std::snprintf(statusBuf, statusBufLen, "error: no MoonBase on this board"); return false; }
+    g_stagedBytes = 0;
+    g_image = Image{stagingBase(), programEnd() - stagingBase(), 0, 0, contentLen, statusBuf, statusBufLen, bytesOut};
+    if (contentLen > g_image.room) {
+        std::snprintf(statusBuf, statusBufLen, "error: image too large (%u > %u)", static_cast<unsigned>(contentLen), static_cast<unsigned>(g_image.room));
+        return false;
     }
-    std::memset(g_sector + fill, 0xFF, kSectorBytes - fill);
+    std::snprintf(statusBuf, statusBufLen, "flashing");
+    *bytesOut = 0;
+    w.impl = &g_image;
     return true;
 }
 
-}  // namespace
-
-bool otaWriteStream(FsWriteSrc src, void* user, size_t contentLen,
-                    char* statusBuf, size_t statusBufLen, uint32_t* bytesReadOut) {
-    if (!src || !statusBuf || statusBufLen == 0 || !bytesReadOut) return false;
-    // A macro rather than a lambda, so the format reaches snprintf as a literal and keeps its check.
-    #define setStatus(...) std::snprintf(statusBuf, statusBufLen, __VA_ARGS__)
-    g_stagedBytes = 0;
-    const uint32_t base = stagingBase();
-    const uint32_t room = programEnd() - base;
-    if (contentLen > room) {
-        setStatus("error: image too large (%u > %u)", static_cast<unsigned>(contentLen), static_cast<unsigned>(room));
-        return false;
+bool otaWrite(OtaWrite& w, const uint8_t* data, size_t len) {
+    auto* img = static_cast<Image*>(w.impl);
+    if (!img) return false;
+    while (len) {
+        const size_t n = len < kSectorBytes - img->fill ? len : kSectorBytes - img->fill;
+        std::memcpy(g_sector + img->fill, data, n);
+        img->fill += static_cast<uint32_t>(n);
+        data += n;
+        len -= n;
+        if (img->fill == kSectorBytes && !stageFill(*img)) { w.impl = nullptr; return false; }
     }
-    setStatus("flashing");
-    uint32_t written = 0;
-    for (;;) {
-        uint32_t fill = 0;
-        bool eof = false;
-        if (!readSector(src, user, fill, eof)) { setStatus("error: upload aborted"); return false; }
-        if (fill == 0) break;
-        const char* why = (written == 0) ? firmware::teensyHeaderProblem(g_sector, kSectorBytes) : nullptr;
-        if (why) { setStatus("%s", why); return false; }
-        if (written + fill > room) { setStatus("error: image too large for the free flash"); return false; }
-        stageSector(base + written);
-        written += fill;
-        *bytesReadOut = written;
-        taskWdtReset();   // a megabyte of erases runs on the render loop, which the watchdog guards
-        if (eof) break;
-    }
-    if (contentLen && written < contentLen) {
-        setStatus("error: incomplete upload (%u/%u)", static_cast<unsigned>(written), static_cast<unsigned>(contentLen));
-        return false;
-    }
-    if (firmware::teensyImageRefused(reinterpret_cast<const uint8_t*>(base), written, kImageMark, kMarkPrefixLen,
-                                     MM_FIRMWARE_NAME, statusBuf, statusBufLen)) return false;
-    g_stagedBytes = written;
-    setStatus("rebooting");
     return true;
-    #undef setStatus
+}
+
+bool otaEnd(OtaWrite& w, bool commit) {
+    auto* img = static_cast<Image*>(w.impl);
+    w.impl = nullptr;
+    if (!img) return false;
+    if (!commit) { std::snprintf(img->status, img->statusLen, "error: upload aborted"); return false; }
+    if (!stageFill(*img)) return false;
+    if (img->contentLen && img->written < img->contentLen) {
+        std::snprintf(img->status, img->statusLen, "error: incomplete upload (%u/%u)", static_cast<unsigned>(img->written), static_cast<unsigned>(img->contentLen));
+        return false;
+    }
+    if (firmware::teensyImageRefused(reinterpret_cast<const uint8_t*>(img->base), img->written, kImageMark, kMarkPrefixLen,
+                                     MM_FIRMWARE_NAME, img->status, img->statusLen)) return false;
+    g_stagedBytes = img->written;
+    std::snprintf(img->status, img->statusLen, "rebooting");
+    return true;
 }
 
 // GitHub serves release assets over HTTPS only, which this board cannot speak.
@@ -174,10 +192,6 @@ bool http_fetch_to_ota(const char*, char* statusBuf, size_t statusBufLen, uint32
 }
 
 // One image and no recovery image beside it: the MoonBase questions all answer no.
-bool otaWriteMoonBase(FsWriteSrc, void*, size_t, char* statusBuf, size_t statusBufLen, uint32_t*) {
-    if (statusBuf && statusBufLen) std::snprintf(statusBuf, statusBufLen, "error: no MoonBase on this board");
-    return false;
-}
 bool otaFetchMoonBaseUrl(const char*, char* statusBuf, size_t statusBufLen, uint32_t* bytesReadOut, uint32_t* bytesTotalOut) {
     return http_fetch_to_ota(nullptr, statusBuf, statusBufLen, bytesReadOut, bytesTotalOut, nullptr);
 }

@@ -1,36 +1,6 @@
-/// The request handlers behind HttpServerModule, and the compatibility shims they serve.
+/// The request handlers behind HttpServerModule: connections, routes, the REST answers and every send.
 ///
-/// Public surface and class layout live in HttpServerModule.h, so implementation edits do not cascade-recompile every TU including the header.
-///
-/// @technical
-///
-/// ## Why a drained body needs two timeouts
-///
-/// A file upload and a state document move through a transfer slot a bounded slice per tick and block nothing. A body held back by a delayed ACK or a resend costs no frame. A firmware image drains whole, blocking `tick20ms()` until the body ends or a bound trips.
-///
-/// The idle bound resets on every read so a steady body never trips it. It is ten seconds, under the 12 s watchdog, since flash work stalls the reads and the sender's TCP backs off meanwhile. The hard ceiling caps the whole request so a slowloris trickle cannot hold the freeze open.
-///
-/// ## Why the firmware ceiling is three minutes
-///
-/// A firmware image is MB-scale and takes minutes over weak WiFi: three minutes covers 1.5 MB at 10 KB/s with margin.
-///
-/// The ceiling stays that small because it also bounds the worst-case render freeze.
-///
-/// ## Why the WLED shim reports a sentinel version
-///
-/// The `ver` field is a sentinel, not the MoonLight version.
-///
-/// Home Assistant parses WLED tags as CalVer, so a real `2.1.0-dev` compares lower than `16.0.1` and HA offers an update whose `.bin` would brick the device.
-///
-/// Under CalVer `99.0.0` outranks any WLED tag, so HA's update check stays silent.
-///
-/// The real version belongs on the MQTT update topic, where the question is whether MoonLight shipped a release.
-///
-/// ## Why an Ethernet device sends no wifi object
-///
-/// The `wifi` block feeds HA's diagnostic sensors, and an Ethernet device has no AP, so `info.wifi` (optional in python-wled) is omitted.
-///
-/// Omitting it makes HA create no WiFi sensors, as a real WLED on Ethernet does, instead of greyed-out zero rows.
+/// Public surface and class layout live in HttpServerModule.h, so implementation edits do not cascade-recompile every TU including the header. The state wire lives in HttpServerState.cpp and the WLED shim in HttpServerWled.cpp.
 
 #include "core/system/HttpServerModule.h"
 
@@ -46,14 +16,12 @@
 #include "core/util/fnv.h"               // fnv1a: the diff-on-the-wire cache's digest
 #include "core/system/Sha1.h"
 #include "core/system/Base64.h"
-#include "core/system/ControlModule.h"   // look presets on /presets.json (HA WLED integration)
 #include "core/system/FilesystemModule.h"
 #include "core/system/FirmwareUpdateModule.h"
 #include "core/system/SystemModule.h"      // deviceName() for the WLED /json/info shim
 #include "core/moonlive/MoonLiveScriptFile.h"   // kFactoryScriptDir: where a download lands
 #include "core/moonlive/script_catalog.h"        // generated: which factory scripts exist
 #include "core/util/build_info.h"                      // kVersion: the tag a script is fetched from
-#include "core/util/LightOutput.h"   // the device shape and the palettes as colors, for the WLED shim
 #include "platform/platform.h"
 #include "ui/ui_embedded.h"
 
@@ -66,8 +34,10 @@
 #include <cerrno>    // errno / ERANGE: Content-Length overflow check
 #include <cstring>
 #include <cstdint>
+#include <new>       // placement new: a send's source built in its heap block
 
 namespace mm {
+
 
 // The UI file named `name`, from the table embed_ui.cmake generates, or null.
 static const ui::EmbeddedFile* embeddedFile(const char* name) {
@@ -94,29 +64,16 @@ void HttpServerModule::setup() {
     MoonModule::setValuesChangedHook(&HttpServerModule::onValuesChanged);
 }
 
-// Static sink for the schema-changed hook: routes a module's rebuildControls() to the live instance's resync flag, like FilesystemModule::noteDirty.
-void HttpServerModule::onSchemaChanged() {
-    if (instance_) instance_->requestFullResync();
-}
-
-void HttpServerModule::onValuesChanged(MoonModule* mod) {
-    if (!instance_ || !mod || !mod->name()) return;
-    HttpServerModule& self = *instance_;
-    for (uint8_t i = 0; i < self.soonCount_; i++)
-        if (std::strcmp(self.soon_[i], mod->name()) == 0) return;
-    // A full list leaves the rest to the periodic patch, which carries every change anyway.
-    if (self.soonCount_ >= kSoonModules) return;
-    mm::formatTo(self.soon_[self.soonCount_++], sizeof(self.soon_[0]), "%s", mod->name());
-}
-
 void HttpServerModule::release() {
     // Drop the in-flight sends before the clients go: the preview frame borrows its buffer, a state stream owns its fragment.
     cancelBufferedSend();
-    for (auto& st : streams_) endStream(st);
+    for (auto& cs : controlSends_) endSendSlot(cs);
+    for (int i = 0; i < kMaxWsClients; i++) dropCarry(i);
+    endValueWalk();
     for (auto& ws : wsClients_) ws.close();
     for (auto& c : parked_) c.close();
     releaseTransfers();
-    for (auto& s : embeddedSends_) s.conn.close();
+    for (auto& a : sends_) { endSendSlot(a); a.conn.close(); }
     // Every close site notifies the producer (see cancelBufferedSend), else ghost standing requests keep the driver gathering frames for nobody.
     for (int i = 0; i < kMaxPreviewClients; i++) {
         if (previewClients_[i].valid() && clientSink_) clientSink_->onClientGone(i);
@@ -129,13 +86,12 @@ void HttpServerModule::release() {
         MoonModule::setValuesChangedHook(nullptr);
         instance_ = nullptr;
     }
-    MoonModule::release();   // chain: uniform override-and-chain (no buffers/children today, but the convention holds)
+    MoonModule::release();   // chain: uniform override-and-chain (no buffers or children, but the convention holds)
 }
 
 void HttpServerModule::tick20ms() MM_NONBLOCKING {
-    // Drain the in-flight preview frame on the 20 ms transport cadence, before accept so a connection burst cannot starve it; sockets stay off the render tick (architecture.md § Parallelism).
-    drainPreviewSend();
-    drainStateSend();
+    // Drain every send on the 20 ms transport cadence, before accept so a connection burst cannot starve it; sockets stay off the render tick (architecture.md § Parallelism).
+    drainSends();
     // Inbound WS frames before the push, so the subscription a page sends on open shapes its first document: control writes, subscriptions, and the WLED app's {on,bri}.
     pollUplinks();
     // A pending full resync is served here, not on the 1 s tick, so a connect reaches its first preview within tens of ms; the flag gates the expensive serialize.
@@ -145,6 +101,7 @@ void HttpServerModule::tick20ms() MM_NONBLOCKING {
         // A module that asked goes out now rather than on the next second.
         if (soonCount_) pushSoonPatch();
     }
+    advanceValueWalk();
     serveConnections();
     driveTransfers();
 }
@@ -190,7 +147,7 @@ void HttpServerModule::serveParked() {
 HttpServerModule::FileTransfer* HttpServerModule::claimTransfer(platform::TcpConnection& conn, char* buf) {
     for (auto& t : transfers_) {
         if (t.active) continue;
-        t.buf = buf ? buf : static_cast<char*>(platform::allocInternal(kTransferBufBytes));
+        t.buf = buf ? buf : static_cast<char*>(platform::allocInternal(kTransferBufBytes + kUploadPathBytes));
         if (t.buf) return &t;
         sendResponse(conn, 507, "application/json", "{\"error\":\"out of memory\"}");
         return nullptr;
@@ -204,7 +161,6 @@ void HttpServerModule::finishTransfer(FileTransfer& t, bool closeConn) {
     if (closeConn) t.conn.close();
     t.active = false;
     t.wstream = platform::FsWriteStream{};
-    t.rstream = platform::FsReadStream{};
     if (t.buf) { platform::free(t.buf); t.buf = nullptr; }
 }
 
@@ -212,119 +168,109 @@ void HttpServerModule::finishTransfer(FileTransfer& t, bool closeConn) {
 void HttpServerModule::releaseTransfers() {
     for (auto& t : transfers_) {
         if (!t.active) continue;
-        if (t.kind == FileTransfer::Kind::Upload) platform::fsWriteStreamClose(t.wstream, false);
-        else if (t.kind == FileTransfer::Kind::Download) platform::fsReadStreamClose(t.rstream);
+        if (t.kind != FileTransfer::Kind::Request) abandonUpload(t);
         finishTransfer(t, true);
     }
 }
 
-// An upload slot's bounded chunk, socket to storage then the stall guard; uses t.buf, not a stack-local, since a 4 KB frame here once panicked the board.
+void HttpServerModule::abandonUpload(FileTransfer& t) {
+    if (t.kind == FileTransfer::Kind::Firmware) platform::otaEnd(t.ota, false);
+    else platform::fsWriteStreamClose(t.wstream, false);
+}
+
+// An upload slot's bounded chunk, socket to storage or the firmware writer, then the rate guard. It uses t.buf, not a stack-local: a 4 KB frame here once panicked the board.
 bool HttpServerModule::driveUpload(FileTransfer& t, uint32_t now) {
     if (t.remaining > 0) {
         const size_t want = t.remaining < kTransferBufBytes ? t.remaining : kTransferBufBytes;
         const int n = t.conn.read(reinterpret_cast<uint8_t*>(t.buf), want);
         if (n > 0) {
-            if (!platform::fsWriteStreamWrite(t.wstream, t.buf, static_cast<size_t>(n))) {
+            if (t.kind == FileTransfer::Kind::Firmware) {
+                // A refused image is read to its end and dropped, so the answer reaches a sender still sending rather than a reset.
+                if (!t.refused && !platform::otaWrite(t.ota, reinterpret_cast<const uint8_t*>(t.buf), static_cast<size_t>(n))) t.refused = true;
+            } else if (!platform::fsWriteStreamWrite(t.wstream, t.buf, static_cast<size_t>(n))) {
                 platform::fsWriteStreamClose(t.wstream, false);
                 sendResponse(t.conn, 500, "application/json", "{\"error\":\"write failed\"}");
                 finishTransfer(t, true);
                 return false;
             }
             t.remaining -= static_cast<size_t>(n);
-            t.lastActivityMs = now;
+            moved(t, static_cast<size_t>(n));
             return true;
         }
         if (n == 0) {   // peer closed with body remaining
-            platform::fsWriteStreamClose(t.wstream, false);
+            abandonUpload(t);
             finishTransfer(t, true);   // the peer is already gone: no response to send
             return false;
         }
     }
+    if (t.active && t.remaining == 0 && t.kind == FileTransfer::Kind::Firmware) {
+        const bool ok = !t.refused && platform::otaEnd(t.ota, true);
+        answerFirmware(t.conn, ok, t.target);   // the application's success reboots here
+        finishTransfer(t, true);
+        return false;
+    }
     if (t.active && t.remaining == 0) {
         const bool ok = platform::fsWriteStreamClose(t.wstream, true);
-        if (ok) applyFileChanged(t.path);   // the write succeeded, so what was built from it may be stale
+        if (ok) applyFileChanged(uploadPath(t));   // the write succeeded, so what was built from it may be stale
         sendResponse(t.conn, ok ? 200 : 500, "application/json",
                     ok ? "{\"ok\":true}" : "{\"error\":\"write failed\"}");
         finishTransfer(t, true);
         return false;
     }
-    // A liveness guard, not a size or time cap on the transfer itself: only a stalled peer trips it.
-    if (t.active && now - t.lastActivityMs > kTransferStallMs) {
-        platform::fsWriteStreamClose(t.wstream, false);
+    // A rate guard, not a size or time cap on the transfer itself: only a peer that stalled or trickles trips it.
+    if (t.active && tooSlow(t, now)) {
+        abandonUpload(t);
         finishTransfer(t, true);
     }
     return false;
 }
 
-// A download slot's bounded chunk: storage to socket, resuming where last tick's writeSome left off.
-bool HttpServerModule::driveDownload(FileTransfer& t, uint32_t now) {
-    if (t.bufSent < t.bufLen) {
-        const int n = t.conn.writeSome(reinterpret_cast<const uint8_t*>(t.buf + t.bufSent),
-                                       t.bufLen - t.bufSent);
-        if (n < 0) { platform::fsReadStreamClose(t.rstream); finishTransfer(t, true); return false; }
-        if (n > 0) { t.bufSent += static_cast<size_t>(n); t.lastActivityMs = now; return true; }
-        // n == 0: socket buffer full, nothing sent; falls through to the stall guard below.
-    } else if (t.remaining > 0) {
-        const size_t want = t.remaining < kTransferBufBytes ? t.remaining : kTransferBufBytes;
-        const int got = platform::fsReadStreamRead(t.rstream, t.buf, want);
-        if (got <= 0) { platform::fsReadStreamClose(t.rstream); finishTransfer(t, true); return false; }
-        t.bufLen = static_cast<size_t>(got);
-        t.bufSent = 0;
-        t.remaining -= static_cast<size_t>(got);
-        t.lastActivityMs = now;
-        return true;
-    } else {
-        platform::fsReadStreamClose(t.rstream);
-        finishTransfer(t, true);
-        return false;
-    }
-    // A liveness guard, not a size or time cap on the transfer itself: only a stalled peer trips it.
-    if (t.active && now - t.lastActivityMs > kTransferStallMs) {
-        platform::fsReadStreamClose(t.rstream);
-        finishTransfer(t, true);
-    }
-    return false;
+bool HttpServerModule::tooSlow(FileTransfer& t, uint32_t now) {
+    if (now - t.windowStartMs < kTransferStallMs) return false;
+    // A body with less than the minimum left owes only what it has.
+    const size_t owed = std::min(kMinBodyBytesPerWindow, t.remaining + t.windowBytes);
+    const bool slow = t.windowBytes < owed;
+    t.windowStartMs = now;
+    t.windowBytes = 0;
+    return slow;
 }
 
-// A document slot's bounded chunk: whatever of the body has arrived, then the document applied once whole. A body held back by a delayed ACK or a resend costs the sender time, never a frame.
-bool HttpServerModule::driveDocument(FileTransfer& t, uint32_t now) {
+// A request slot's bounded chunk: whatever of the body has arrived, then the request routed once whole. A body held back by a delayed ACK or a resend costs the sender time, never a frame.
+bool HttpServerModule::driveRequest(FileTransfer& t, uint32_t now) {
     if (t.remaining > 0) {
         const int n = t.conn.read(reinterpret_cast<uint8_t*>(t.buf + t.bufLen), t.remaining);
         if (n > 0) {
             t.bufLen += static_cast<size_t>(n);
             t.remaining -= static_cast<size_t>(n);
-            t.lastActivityMs = now;
+            moved(t, static_cast<size_t>(n));
             return true;
         }
         if (n == 0) { finishTransfer(t, true); return false; }   // peer closed with body remaining: no one to answer
-        if (now - t.lastActivityMs > kTransferStallMs) {
+        if (tooSlow(t, now)) {
             sendResponse(t.conn, 400, "application/json", "{\"error\":\"incomplete request body\"}");
             finishTransfer(t, true);
         }
         return false;
     }
     t.buf[t.bufLen] = 0;
-    answerStateDocument(t.conn, t.buf, t.live);
+    routeRequest(t.conn, t.buf, t.bufLen);
     finishTransfer(t, true);
     return false;
 }
 
-// Several bounded chunks per slot per tick, not one, dispatched to the upload, download or document leg while storage and the peer keep up; mirrors drainPreviewSend/drainStateSend's non-blocking shape.
+// Several bounded chunks per slot per tick, not one, dispatched to the upload or request leg while storage and the peer keep up; drainSends' non-blocking shape, for what comes in.
 void HttpServerModule::driveTransfers() {
     const uint32_t budgetStart = platform::millis();
     for (auto& t : transfers_) {
         if (!t.active) continue;
         for (;;) {
             const uint32_t now = platform::millis();
-            const bool progressed = t.kind == FileTransfer::Kind::Upload ? driveUpload(t, now)
-                                  : t.kind == FileTransfer::Kind::Download ? driveDownload(t, now)
-                                  : driveDocument(t, now);
+            const bool progressed = t.kind == FileTransfer::Kind::Request ? driveRequest(t, now) : driveUpload(t, now);
             if (!t.active) break;           // finished or failed this chunk
             if (!progressed) break;         // no data moved: nothing more to do until next tick
             if (now - budgetStart >= kTransferTickBudgetMs) break;
         }
     }
-    drainEmbeddedSends();   // an embedded file is a transfer too, its bytes already in flash
 }
 
 void HttpServerModule::tick1s() MM_NONBLOCKING {
@@ -398,11 +344,15 @@ static bool routeModuleName(const char* segment, char (&out)[MoonModule::kNameLe
     return true;
 }
 
+// The uploads that stream their body to storage as it comes, never held whole: a file, a firmware image and a MoonBase image.
+static bool isStreamingUpload(const char* req) {
+    return std::strncmp(req, "POST /api/file", 14) == 0 ||
+           std::strncmp(req, "POST /api/firmware/upload", 25) == 0 ||
+           // The trailing space keeps `moonbase-update-url`, a small JSON body read whole, out of the match.
+           std::strncmp(req, "POST /api/firmware/moonbase-update ", 35) == 0;
+}
+
 bool HttpServerModule::handleConnection(platform::TcpConnection& conn, int patienceMs) {
-    // A client on the device's own access point has not shown it knows the network's password, so it sees no stored one.
-    const SecretsHidden hide(onAccessPoint(conn));
-    uint8_t local[4] = {};
-    conn.localIPv4(local);   // the address it reached, which the captive redirect decides by
     uint8_t buf[2048];
     int totalRead = 0;
 
@@ -427,78 +377,92 @@ bool HttpServerModule::handleConnection(platform::TcpConnection& conn, int patie
     buf[totalRead] = 0;
     auto* req = reinterpret_cast<char*>(buf);
 
-    // The body can land a segment after the headers, so retry briefly; one still incomplete gets 400, never a truncated parse into the permissive JSON helpers.
     auto* headerEnd = std::strstr(req, "\r\n\r\n");
-    size_t contentLen = 0;   // declared body length (0 if no Content-Length); used by the streaming route
-    bool hasContentLen = false;   // header PRESENT (an explicit 0 is a legitimate empty write)
-    if (headerEnd) {
-        auto* clh = findHeaderCI(req, "Content-Length:");
-        if (clh) {
-            hasContentLen = true;
-            // An /sd upload rides FAT32's own ceiling, 4 GiB-1 (UINT32_MAX), via strtoull not strtoul: `unsigned long` is only 32-bit on this RV32 target, the same width as that ceiling itself.
-            const bool fileUpload = std::strncmp(req, "POST /api/file", 14) == 0;
-            const bool sdUpload = fileUpload && requestNamesSdPath(req);
-            const unsigned long long kContentLenMax = sdUpload ? 0xFFFFFFFFULL : 8ULL * 1024 * 1024;
-            const char* valStart = clh + 15;
-            while (*valStart == ' ' || *valStart == '\t') valStart++;   // skip OWS after the colon
-            char* valEnd = nullptr;
-            errno = 0;
-            const unsigned long long parsed = std::strtoull(valStart, &valEnd, 10);
-            const bool consumedDigits = valEnd != valStart;
-            const bool endsCleanly = *valEnd == '\r' || *valEnd == '\n' || *valEnd == ' ' ||
-                                     *valEnd == '\t' || *valEnd == '\0';
-            if (!consumedDigits || !endsCleanly || errno == ERANGE) {
-                sendResponse(conn, 400, "application/json",
-                             "{\"error\":\"invalid content-length\"}");
+    const char* clh = headerEnd ? findHeaderCI(req, "Content-Length:") : nullptr;
+    if (clh) {
+        // An /sd upload rides FAT32's own ceiling, 4 GiB-1 (UINT32_MAX), via strtoull not strtoul: `unsigned long` is only 32-bit on this RV32 target, the same width as that ceiling itself.
+        const bool sdUpload = std::strncmp(req, "POST /api/file", 14) == 0 && requestNamesSdPath(req);
+        const unsigned long long kContentLenMax = sdUpload ? 0xFFFFFFFFULL : 8ULL * 1024 * 1024;
+        const char* valStart = clh + 15;
+        while (*valStart == ' ' || *valStart == '\t') valStart++;   // skip OWS after the colon
+        char* valEnd = nullptr;
+        errno = 0;
+        const unsigned long long parsed = std::strtoull(valStart, &valEnd, 10);
+        const bool consumedDigits = valEnd != valStart;
+        const bool endsCleanly = *valEnd == '\r' || *valEnd == '\n' || *valEnd == ' ' ||
+                                 *valEnd == '\t' || *valEnd == '\0';
+        if (!consumedDigits || !endsCleanly || errno == ERANGE) {
+            sendResponse(conn, 400, "application/json",
+                         "{\"error\":\"invalid content-length\"}");
+            return true;
+        }
+        // A well-formed number past the ceiling is too large, not malformed: 413, not 400.
+        if (parsed > kContentLenMax) {
+            sendResponse(conn, 413, "application/json",
+                         "{\"error\":\"request body too large\"}");
+            return true;
+        }
+        if (!isStreamingUpload(req)) {
+            const size_t headerSize = static_cast<size_t>(headerEnd + 4 - req);
+            const size_t whole = headerSize + static_cast<size_t>(parsed);
+            // A state document holds an effects stack and outgrows the request buffer; every other body is read whole within it, so an oversized one is 413, never a truncated parse.
+            const bool state = isStatePath(req, "PATCH /api/state") || isStatePath(req, "POST /api/state");
+            if (whole > (state ? headerSize + kStateDocumentMax : sizeof(buf) - 1)) {
+                sendResponse(conn, 413, "application/json", state ? "{\"error\":\"document too large\"}" : "{\"error\":\"request body too large\"}");
                 return true;
             }
-            // A well-formed number past the ceiling is too large, not malformed: 413, not 400.
-            if (parsed > kContentLenMax) {
-                sendResponse(conn, 413, "application/json",
-                             "{\"error\":\"request body too large\"}");
+            // A body not all in yet, held back by a delayed ACK or a resend, waits in a slot rather than in the frame, and is routed once whole.
+            if (static_cast<size_t>(totalRead) < whole) {
+                deferRequest(conn, req, static_cast<size_t>(totalRead), whole);
                 return true;
             }
-            contentLen = static_cast<size_t>(parsed);
-            if (fileUpload) {
-                // Hand off early: a transfer slot pulls the rest off this same connection, a bounded slice per tick, rather than looping here for the whole body.
-            } else {
-                const size_t headerSize = static_cast<size_t>(headerEnd + 4 - req);
-                size_t bodyNeeded = headerSize + contentLen;
-                // Only streaming routes pull a body larger than buf off the socket; every other route parses it whole, so an oversized body gets 413, never a truncated read.
-                const bool isStreamingRoute =
-                    std::strncmp(req, "POST /api/firmware/upload", 25) == 0 ||
-                    // A MoonBase image (~750 KB) streams too; the trailing space keeps `moonbase-update-url`, a small JSON body read whole, out of the match.
-                    std::strncmp(req, "POST /api/firmware/moonbase-update ", 35) == 0 ||
-                    // A state document holding an effects stack outgrows the request buffer; the space or query after it keeps a longer path out.
-                    isStatePath(req, "PATCH /api/state") || isStatePath(req, "POST /api/state");
-                if (bodyNeeded > sizeof(buf) - 1) {
-                    if (!isStreamingRoute) {
-                        sendResponse(conn, 413, "application/json",
-                                     "{\"error\":\"request body too large\"}");
-                        return true;
-                    }
-                    bodyNeeded = sizeof(buf) - 1;   // streaming: buffer the prefix only
-                }
-                // A streaming route takes the rest itself, a state document in a transfer slot and a firmware image under its timeouts. Nagle holds a small body back up to 500 ms (RFC 1122), so a wait here stalls the frame.
-                for (int empties = 0; !isStreamingRoute && totalRead < static_cast<int>(bodyNeeded);) {
-                    int n = conn.read(buf + totalRead, sizeof(buf) - 1 - totalRead);
-                    if (n > 0) { totalRead += n; empties = 0; }
-                    else if (n == 0) break;                    // peer closed
-                    else { if (++empties > 50) break; platform::delayMs(1); }  // 50 polls: 50 ms on the desktop, yields on a 100 Hz FreeRTOS tick
-                }
-                buf[totalRead] = 0;
-                if (totalRead < static_cast<int>(bodyNeeded) && !isStreamingRoute) {   // body never fully arrived
-                    sendResponse(conn, 400, "application/json",
-                                 "{\"error\":\"incomplete request body\"}");
-                    return true;
-                }
-            }
+            req[whole] = 0;   // the body ends here: this server closes every connection, so nothing pipelined after it is read
+            totalRead = static_cast<int>(whole);
         }
     }
+    routeRequest(conn, req, static_cast<size_t>(totalRead));
+    return true;
+}
 
-    // Parse method and path
-    char method[8] = {};
-    char path[128] = {};
+// A request whose body is still on its way: its text so far is copied into a buffer sized to the whole, which a slot completes.
+void HttpServerModule::deferRequest(platform::TcpConnection& conn, const char* req, size_t got, size_t whole) {
+    char* text = static_cast<char*>(platform::alloc(whole + 1));
+    if (!text) { sendResponse(conn, 507, "application/json", "{\"error\":\"out of memory\"}"); return; }
+    std::memcpy(text, req, got);
+    FileTransfer* t = claimTransfer(conn, text);
+    if (!t) { platform::free(text); return; }
+    t->kind = FileTransfer::Kind::Request;
+    t->bufLen = got;
+    t->remaining = whole - got;
+    t->windowStartMs = platform::millis();
+    t->windowBytes = 0;
+    t->active = true;
+    t->conn = std::move(conn);
+}
+
+// Whether a request names a JavaScript module, the one kind of UI file the embedded bundle folds into app.js.
+static bool isScriptName(const char* path) {
+    const size_t n = std::strlen(path);
+    return n > 3 && std::strcmp(path + n - 3, ".js") == 0;
+}
+
+// One request of `len` bytes, its body whole or, for an upload, its first part: the method and path pick the handler.
+void HttpServerModule::routeRequest(platform::TcpConnection& conn, char* req, size_t len) {
+    // A client on the device's own access point has not shown it knows the network's password, so it sees no stored one.
+    const SecretsHidden hide(onAccessPoint(conn));
+    uint8_t local[4] = {};
+    conn.localIPv4(local);   // the address it reached, which the captive redirect decides by
+    auto* headerEnd = std::strstr(req, "\r\n\r\n");
+    const char* clh = headerEnd ? findHeaderCI(req, "Content-Length:") : nullptr;
+    const bool hasContentLen = clh != nullptr;   // header PRESENT: an explicit 0 is a legitimate empty write
+    const size_t contentLen = clh ? static_cast<size_t>(std::strtoull(clh + 15, nullptr, 10)) : 0;   // validated by handleConnection
+    const int totalRead = static_cast<int>(len);   // a byte count, never strlen: an uploaded image holds zero bytes
+
+    // Parse method and path, into members rather than locals: one request routes at a time, and on the stack they pushed this frame past 512 bytes.
+    char (&method)[8] = routeMethod_;
+    char (&path)[128] = routePath_;
+    std::memset(method, 0, sizeof(method));
+    std::memset(path, 0, sizeof(path));
     std::sscanf(req, "%7s %127s", method, path);
     // Strip the query string (RFC 3986 §3.4) before routing; the web installer's Inject button hands off `/?deviceModel=<name>` (see SystemModule.md).
     char* queryStart = std::strchr(path, '?');
@@ -510,7 +474,7 @@ bool HttpServerModule::handleConnection(platform::TcpConnection& conn, int patie
     if (std::strcmp(method, "GET") == 0 && (isWs || isWsp) &&
         findHeaderCI(req, "Upgrade: websocket")) {
         handleWebSocketUpgrade(conn, req, isWsp);
-        return true; // don't close: connection is now a WebSocket
+        return; // don't close: connection is now a WebSocket
     }
 
     // The body starts after the headers
@@ -522,18 +486,19 @@ bool HttpServerModule::handleConnection(platform::TcpConnection& conn, int patie
         if (host) { host += 5; while (*host == ' ') host++; }
         if (captive::redirects(local, host, path)) {   // `local` was read when the connection came in
             conn.write(reinterpret_cast<const uint8_t*>(captive::kRedirect), std::strlen(captive::kRedirect));
-            return true;
+            return;
         }
     }
 
     // Route
     if (std::strcmp(method, "GET") == 0) {
-        if (std::strcmp(path, "/") == 0) serveFile(conn, *embeddedFile("index.html"));
+        const char* ifNoneMatch = findHeaderCI(req, "If-None-Match:");
+        if (std::strcmp(path, "/") == 0) serveFile(conn, *embeddedFile("index.html"), ifNoneMatch);
         // Every UI file at `/<name>`, from the one list embed_ui.cmake generates.
-        else if (const ui::EmbeddedFile* file = embeddedFile(path + 1)) serveFile(conn, *file);
+        else if (const ui::EmbeddedFile* file = embeddedFile(path + 1)) serveFile(conn, *file, ifNoneMatch);
         else if (std::strcmp(path, "/api/state") == 0) serveState(conn);
         else if (std::strcmp(path, "/api/system") == 0) serveSystem(conn);
-        else if (std::strcmp(path, "/api/types") == 0) serveTypes(conn);
+        else if (std::strcmp(path, "/api/types") == 0) serveTypes(conn, ifNoneMatch);
         // GET /api/scripts → the MoonLive factory catalog (names per role + the tag to fetch from).
         else if (std::strcmp(path, "/api/scripts") == 0) serveScriptCatalog(conn);
         // GET /api/modules/<name> → that module's JSON as /api/state carries it, for issue reports; /document → the module as a state document.
@@ -553,6 +518,8 @@ bool HttpServerModule::handleConnection(platform::TcpConnection& conn, int patie
         else if (std::strcmp(path, "/json") == 0) serveWledDeviceJson(conn);
         // /presets.json: python-wled fetches it after /json and a 404 aborts HA's config flow; the truthy-but-empty `{"0":{}}` yields zero presets where `{}` fails its `not presets` guard.
         else if (std::strcmp(path, "/presets.json") == 0) serveWledPresets(conn);
+        // A desktop running from a checkout serves the UI's own modules, which the embedded bundle holds inside app.js: scripts only, so the folder's other files stay private.
+        else if (isScriptName(path) && serveUiFromDisk(conn, path + 1)) {}
         else sendResponse(conn, 404, "text/plain", "Not found");
     } else if (std::strcmp(method, "POST") == 0) {
         // POST /api/modules/<name>/move with body {"to":N}. Strict-suffix check: path must end with "/move" exactly (rejects "/movex").
@@ -570,16 +537,15 @@ bool HttpServerModule::handleConnection(platform::TcpConnection& conn, int patie
             handleSetControl(conn, body);
         } else if (std::strcmp(path, "/api/state") == 0 && body) {
             // POST for a client that cannot send PATCH: the same document, the same engine.
-            if (!hasContentLen) { sendResponse(conn, 411, "application/json", "{\"error\":\"length required\"}"); return true; }
-            handleApplyState(conn, body, static_cast<size_t>(totalRead) - static_cast<size_t>(body - req),
-                             static_cast<size_t>(contentLen), queryStart && queryHas(queryStart + 1, "live", "1"));
+            if (!hasContentLen) { sendResponse(conn, 411, "application/json", "{\"error\":\"length required\"}"); return; }
+            handleApplyState(conn, body, queryStart && queryHas(queryStart + 1, "live", "1"));
         } else if (std::strcmp(path, "/api/file") == 0 && body) {
             // File Manager: POST /api/file?path=<rel> streams the body to an atomic write; `body` holds the bytes that came with the headers, and a transfer slot pulls the rest off the socket.
             const size_t initialLen = static_cast<size_t>(totalRead) - static_cast<size_t>(body - req);
             // No Content-Length (chunked) is 411, since acting on it would commit an empty file; keyed on header absence, so an explicit `Content-Length: 0` stays a valid empty write.
             if (!hasContentLen) {
                 sendResponse(conn, 411, "application/json", "{\"error\":\"length required\"}");
-                return true;
+                return;
             }
             handleWriteFile(conn, queryStart ? queryStart + 1 : "", body, initialLen,
                             static_cast<size_t>(contentLen));
@@ -617,23 +583,22 @@ bool HttpServerModule::handleConnection(platform::TcpConnection& conn, int patie
             const size_t initialLen = static_cast<size_t>(totalRead) - static_cast<size_t>(body - req);
             if (!hasContentLen) {
                 sendResponse(conn, 411, "application/json", "{\"error\":\"length required\"}");
-                return true;
+                return;
             }
-            handleMoonBaseUpload(conn, body, initialLen, static_cast<size_t>(contentLen));
+            handleFirmwareUpload(conn, platform::OtaTarget::MoonBase, body, initialLen, static_cast<size_t>(contentLen));
         } else if (std::strcmp(path, "/api/firmware/upload") == 0 && body) {
             // OTA from an uploaded .bin body: the browser POSTs the image to the device, which streams it into the OTA partition like /api/file.
             const size_t initialLen = static_cast<size_t>(totalRead) - static_cast<size_t>(body - req);
-            if (!hasContentLen) { sendResponse(conn, 411, "application/json", "{\"error\":\"length required\"}"); return true; }   // as every upload route
-            handleFirmwareUpload(conn, body, initialLen, static_cast<size_t>(contentLen));
+            if (!hasContentLen) { sendResponse(conn, 411, "application/json", "{\"error\":\"length required\"}"); return; }   // as every upload route
+            handleFirmwareUpload(conn, platform::OtaTarget::App, body, initialLen, static_cast<size_t>(contentLen));
         } else {
             sendResponse(conn, 404, "text/plain", "Not found");
         }
     } else if (std::strcmp(method, "PATCH") == 0) {
         // Editable list: PATCH /api/list/<module>/<control>/<id> edits one row: a field ({"field":F,"value":V}) or a reorder ({"to":N}).
         if (std::strcmp(path, "/api/state") == 0 && body) {
-            if (!hasContentLen) { sendResponse(conn, 411, "application/json", "{\"error\":\"length required\"}"); return true; }
-            handleApplyState(conn, body, static_cast<size_t>(totalRead) - static_cast<size_t>(body - req),
-                             static_cast<size_t>(contentLen), queryStart && queryHas(queryStart + 1, "live", "1"));
+            if (!hasContentLen) { sendResponse(conn, 411, "application/json", "{\"error\":\"length required\"}"); return; }
+            handleApplyState(conn, body, queryStart && queryHas(queryStart + 1, "live", "1"));
         } else if (std::strncmp(path, "/api/list/", 10) == 0 && body) {
             handleListPatchRow(conn, path + 10, body);
         } else {
@@ -660,7 +625,6 @@ bool HttpServerModule::handleConnection(platform::TcpConnection& conn, int patie
     }
 
     conn.close();
-    return true;
 }
 
 void HttpServerModule::sendPreflightResponse(platform::TcpConnection& conn) {
@@ -825,7 +789,7 @@ void HttpServerModule::handleRemoveEntry(platform::TcpConnection& conn, const ch
     }
 }
 
-// Stream a file in 1 KB chunks, NUL-safe; an /sd download claims its slot before any response, as an upload already does.
+// A download resumes in a send slot a chunk per tick, NUL-safe. The slot is claimed and the file opened before the header. A busy slot, a missing buffer or a failed open answers 503, 507 or 500, never a 200 with no body.
 void HttpServerModule::streamFsFile(platform::TcpConnection& conn, const char* path,
                                     const char* mime, const char* extraHeaders) {
     // The saved config holds the WiFi passwords in plain text, which a client on the access point does not see.
@@ -840,40 +804,28 @@ void HttpServerModule::streamFsFile(platform::TcpConnection& conn, const char* p
         "HTTP/1.1 200 OK\r\nContent-Type: %s\r\nContent-Length: %lld\r\n%s"
         "Connection: close\r\nAccess-Control-Allow-Origin: *\r\n\r\n", mime, static_cast<long long>(size), extraHeaders);
 
-    // An /sd download hands off to the chunked driver, one bounded slice per tick. Claimed and opened before the header, so a busy slot, a missing buffer or a failed open answers 503/507/500, not a 200 with no body.
-    if (platform::isSdPath(path)) {
-        FileTransfer* t = claimTransfer(conn);
-        if (!t) return;
-        if (!platform::fsReadStreamOpen(t->rstream, path)) {
-            finishTransfer(*t, false);
-            sendResponse(conn, 500, "application/json", "{\"error\":\"read failed\"}");
-            return;
-        }
-        if (!conn.write(reinterpret_cast<const uint8_t*>(header), static_cast<size_t>(hn))) {
-            platform::fsReadStreamClose(t->rstream);
-            finishTransfer(*t, false);
-            return;
-        }
-        t->kind = FileTransfer::Kind::Download;
-        t->remaining = static_cast<size_t>(size);
-        t->bufLen = t->bufSent = 0;
-        t->lastActivityMs = platform::millis();
-        t->active = true;
-        t->conn = std::move(conn);
+    Send* slot = claimSend(conn);
+    if (!slot) return;
+    // Internal RAM, since the SD host bounces a PSRAM buffer per sector.
+    auto* f = static_cast<FileSource*>(platform::allocInternal(sizeof(FileSource)));
+    if (!f) { sendResponse(conn, 507, "application/json", "{\"error\":\"out of memory\"}"); return; }
+    new (f) FileSource;
+    if (!platform::fsReadStreamOpen(f->stream, path)) {
+        platform::free(f);
+        sendResponse(conn, 500, "application/json", "{\"error\":\"read failed\"}");
         return;
     }
-
-    if (!conn.write(reinterpret_cast<const uint8_t*>(header), static_cast<size_t>(hn))) return;
-    platform::FsReadStream rs{};
-    if (!platform::fsReadStreamOpen(rs, path)) return;   // the header already promised a body; best effort stops here
-    char chunk[1024];
-    for (;;) {
-        const int got = platform::fsReadStreamRead(rs, chunk, sizeof(chunk));
-        if (got <= 0) break;   // read error / clean EOF: the client sees a short (truncated) body on error
-        // write() fails on a socket error or its deadline; stop, since retrying every remaining chunk would burn a deadline each on the render thread.
-        if (!conn.write(reinterpret_cast<const uint8_t*>(chunk), static_cast<size_t>(got))) break;
+    if (!conn.write(reinterpret_cast<const uint8_t*>(header), static_cast<size_t>(hn))) {
+        platform::fsReadStreamClose(f->stream);
+        platform::free(f);
+        return;
     }
-    platform::fsReadStreamClose(rs);
+    f->left = static_cast<size_t>(size);
+    slot->block = f;
+    slot->source = Send::Source::File;
+    slot->conn = std::move(conn);
+    slot->busy = true;
+    slot->lastActivityMs = platform::millis();
 }
 
 void HttpServerModule::serveFileContents(platform::TcpConnection& conn, const char* query) {
@@ -903,86 +855,26 @@ void HttpServerModule::serveHlsFile(platform::TcpConnection& conn, const char* n
     const uint8_t* ram = nullptr;
     size_t ramLen = 0;
     if (platform::hlsSegment(name, &ram, &ramLen)) {
+        // Copied out and released at once: the platform holds one segment for one reader, and the playlist lives in a static buffer the next request rewrites.
+        auto* copy = static_cast<char*>(platform::alloc(ramLen ? ramLen : 1));
+        if (copy) std::memcpy(copy, ram, ramLen);
+        platform::hlsSegmentRelease();
+        if (!copy) { sendResponse(conn, 507, "application/json", "{\"error\":\"out of memory\"}"); return; }
         char header[224];
-        const int hn = std::snprintf(header, sizeof(header),
+        std::snprintf(header, sizeof(header),
             "HTTP/1.1 200 OK\r\nContent-Type: %s\r\nContent-Length: %zu\r\n"
             "Cache-Control: no-cache\r\nConnection: close\r\n"
             "Access-Control-Allow-Origin: *\r\n\r\n", mime, ramLen);
-        // One write, not streamFsFile's 1 KB loop, since chunking a resident RAM segment only gives each piece a fresh deadline; release on every exit.
-        if (hn > 0 && hn < static_cast<int>(sizeof(header)) &&
-            conn.write(reinterpret_cast<const uint8_t*>(header), static_cast<size_t>(hn))) {
-            conn.write(ram, ramLen);
-        }
-        platform::hlsSegmentRelease();
+        answerBlock(conn, header, copy, ramLen);
         return;
     }
     streamFsFile(conn, path, mime, "Cache-Control: no-cache\r\n");
 }
 
-// Source for the streamed upload: the body bytes already in the request buffer, then the rest straight off the socket, so the device never holds the whole upload in RAM.
-namespace {
-// The drain blocks rendering, and the two bounds cap for how long: idle scales with a steady transfer, hard caps the total against a slowloris. @xref{why-a-drained-body-needs-two-timeouts}
-constexpr uint32_t kFirmwareIdleMs = 10000;       // max gap between reads of a firmware stream
-// A firmware push is MB-scale and bounds a SLOW transfer where the idle bound catches a stalled one, kept tight because it caps the render freeze. @xref{why-the-firmware-ceiling-is-three-minutes}
-constexpr uint32_t kFirmwareUploadHardMs = 180000;  // 3 min absolute ceiling for a firmware push
-struct UploadSource {
-    platform::TcpConnection* conn;
-    const char* initial;      // body bytes already read into the request buffer
-    size_t initialLeft;       // how many of those remain to hand out
-    size_t remaining;         // total body bytes still to deliver (Content-Length − delivered)
-    uint32_t hardDeadline;    // absolute millis by which the whole body must arrive
-};
-size_t uploadPull(char* out, size_t cap, void* user, bool* abort) {
-    auto* s = static_cast<UploadSource*>(user);
-    if (s->remaining == 0) return 0;   // all body delivered → clean EOF
-    // Whole-request ceiling, checked on every pull: a paced trickler keeping one byte ready would never trip a cap tested only in the wait loop.
-    if (static_cast<int32_t>(platform::millis() - s->hardDeadline) >= 0) { *abort = true; return 0; }
-    // Drain the already-buffered prefix first.
-    if (s->initialLeft) {
-        const size_t n = s->initialLeft < cap ? s->initialLeft : cap;
-        std::memcpy(out, s->initial, n);
-        s->initial += n; s->initialLeft -= n; s->remaining -= n;
-        return n;
-    }
-    // Then the socket, bounded by the idle and hard deadlines; an early close or lapse sets *abort so the temp file is discarded, while 0 is a clean end.
-    const size_t want = s->remaining < cap ? s->remaining : cap;
-    const uint32_t deadline = platform::millis() + kFirmwareIdleMs;
-    for (;;) {
-        const int r = s->conn->read(reinterpret_cast<uint8_t*>(out), want);
-        if (r > 0) { s->remaining -= static_cast<size_t>(r); return static_cast<size_t>(r); }
-        if (r == 0) { *abort = true; return 0; }                 // peer closed with body remaining
-        // Idle timeout; the hard cap is enforced at the top of uploadPull, so it covers the pacing case this wait loop cannot.
-        if (static_cast<int32_t>(platform::millis() - deadline) >= 0) { *abort = true; return 0; }
-        platform::delayMs(1);
-    }
-}
-}  // namespace
-
-
-// The body the request brought is copied out, since a pipelined request may follow it. One whose body has not all arrived waits in a transfer slot rather than holding the frame.
-void HttpServerModule::handleApplyState(platform::TcpConnection& conn, const char* initialBody, size_t initialLen,
-                                        size_t contentLen, bool live) {
+// The body is whole, its request ended at it by handleConnection or completed in a slot.
+void HttpServerModule::handleApplyState(platform::TcpConnection& conn, const char* body, bool live) {
     if (!scheduler_) { sendResponse(conn, 503, "application/json", "{\"error\":\"not ready\"}"); return; }
-    if (contentLen > kStateDocumentMax) { sendResponse(conn, 413, "application/json", "{\"error\":\"document too large\"}"); return; }
-    char* doc = static_cast<char*>(platform::alloc(contentLen + 1));
-    if (!doc) { sendResponse(conn, 507, "application/json", "{\"error\":\"out of memory\"}"); return; }
-    const size_t initial = initialLen < contentLen ? initialLen : contentLen;
-    std::memcpy(doc, initialBody, initial);
-    if (initial == contentLen) {
-        doc[contentLen] = 0;
-        answerStateDocument(conn, doc, live);
-        platform::free(doc);
-        return;
-    }
-    FileTransfer* t = claimTransfer(conn, doc);
-    if (!t) { platform::free(doc); return; }
-    t->kind = FileTransfer::Kind::Document;
-    t->live = live;
-    t->bufLen = initial;
-    t->remaining = contentLen - initial;
-    t->lastActivityMs = platform::millis();
-    t->active = true;
-    t->conn = std::move(conn);
+    answerStateDocument(conn, body, live);
 }
 
 void HttpServerModule::answerStateDocument(platform::TcpConnection& conn, const char* doc, bool live) {
@@ -1012,10 +904,11 @@ void HttpServerModule::startUpload(platform::TcpConnection& conn, const char* pa
         sendResponse(conn, 500, "application/json", "{\"error\":\"write failed\"}");
         return;
     }
-    std::snprintf(t->path, sizeof(t->path), "%s", path);
+    std::snprintf(uploadPath(*t), kUploadPathBytes, "%s", path);
     t->kind = FileTransfer::Kind::Upload;
     t->remaining = contentLen - initial;
-    t->lastActivityMs = platform::millis();
+    t->windowStartMs = platform::millis();
+    t->windowBytes = 0;
     t->active = true;
     t->conn = std::move(conn);
 }
@@ -1071,84 +964,72 @@ void HttpServerModule::applyFileChanged(const char* path) {
     scheduler_->requestPrepareTree();
 }
 
-// OTA from an uploaded .bin body: stream it into the OTA partition (platform::otaWriteStream) with the same uploadPull as file upload; the 200 goes out before the reboot.
-void HttpServerModule::handleFirmwareUpload(platform::TcpConnection& conn, const char* initialBody,
+// A firmware image moves through a transfer slot as a file upload does, its bytes pushed into the platform's writer as they arrive, so no frame waits on the sender.
+void HttpServerModule::handleFirmwareUpload(platform::TcpConnection& conn, platform::OtaTarget target, const char* initialBody,
                                             size_t initialLen, size_t contentLen) {
     if constexpr (!platform::hasOta) {
         sendResponse(conn, 501, "application/json", "{\"error\":\"OTA not supported on this platform\"}");
         return;
     }
-    // Same 409 concurrency guard as handleFirmwareUrl: one OTA at a time (both write g_ota* state).
+    if (target == platform::OtaTarget::MoonBase) {
+        if (!platform::otaHasMoonBase()) {
+            sendResponse(conn, 409, "application/json", "{\"error\":\"no MoonBase on this device\"}");
+            return;
+        }
+        // Running from MoonBase means the factory slot is executing and cannot be written; this answers with the reason, and otaBegin is the real guard.
+        if (platform::otaRunningMoonBase()) {
+            sendResponse(conn, 409, "application/json", "{\"error\":\"running from MoonBase, boot the app first\"}");
+            return;
+        }
+    }
+    // One OTA at a time, as handleFirmwareUrl guards: both write g_ota* state.
     if (otaInFlight()) {
         sendResponse(conn, 409, "application/json", "{\"error\":\"ota already in progress\"}");
         return;
     }
-    const size_t initial = initialLen < contentLen ? initialLen : contentLen;
-    UploadSource src{&conn, initialBody, initial, contentLen,
-                     platform::millis() + kFirmwareUploadHardMs};
-    g_otaBytesTotal = static_cast<uint32_t>(contentLen);   // the UI's "Y KB" (Content-Length up front)
-    g_otaBytesRead = 0;                                    // clear any stale count from a prior OTA
-    // otaWriteStream commits the image and flips the boot pointer without rebooting, so the 200 goes out first and the browser sees a clean "flashed" instead of an aborted socket.
-    const bool ok = platform::otaWriteStream(&uploadPull, &src, contentLen,
-                                             g_otaStatus, sizeof(g_otaStatus), &g_otaBytesRead);
-    if (!ok) {
-        char msg[96];
-        std::snprintf(msg, sizeof(msg), "{\"error\":\"ota failed: %.60s\"}", g_otaStatus);
-        sendResponse(conn, 500, "application/json", msg);
+    FileTransfer* t = claimTransfer(conn);
+    if (!t) return;
+    g_otaBytesTotal = static_cast<uint32_t>(contentLen);   // the UI's "Y KB", Content-Length up front
+    if (!platform::otaBegin(t->ota, target, contentLen, g_otaStatus, sizeof(g_otaStatus), &g_otaBytesRead)) {
+        finishTransfer(*t, false);
+        answerFirmware(conn, false, target);
         return;
     }
-    FilesystemModule::flushPending();
-    sendResponse(conn, 200, "application/json", "{\"ok\":true}");
-    conn.close();
-    platform::delayMs(200);
-    platform::reboot();  // noreturn: boots the flashed image
+    t->kind = FileTransfer::Kind::Firmware;
+    t->target = target;
+    t->refused = false;
+    // The bytes that came with the request go first, at most Content-Length of them.
+    const size_t initial = initialLen < contentLen ? initialLen : contentLen;
+    if (initial && !platform::otaWrite(t->ota, reinterpret_cast<const uint8_t*>(initialBody), initial)) t->refused = true;
+    t->remaining = contentLen - initial;
+    t->windowStartMs = platform::millis();
+    t->windowBytes = 0;
+    t->active = true;
+    t->conn = std::move(conn);
 }
 
-void HttpServerModule::handleMoonBaseUpload(platform::TcpConnection& conn, const char* initialBody,
-                                            size_t initialLen, size_t contentLen) {
-    if constexpr (!platform::hasOta) {
-        sendResponse(conn, 501, "application/json", "{\"error\":\"OTA not supported on this platform\"}");
-        return;
-    }
-    if (!platform::otaHasMoonBase()) {
-        sendResponse(conn, 409, "application/json", "{\"error\":\"no MoonBase on this device\"}");
-        return;
-    }
-    // Running from MoonBase means the factory slot is executing and cannot be written; this check exists for the message, while otaWriteMoonBase is the real guard and stays.
-    if (platform::otaRunningMoonBase()) {
-        sendResponse(conn, 409, "application/json",
-                     "{\"error\":\"running from MoonBase, boot the app first\"}");
-        return;
-    }
-    if (otaInFlight()) {
-        sendResponse(conn, 409, "application/json", "{\"error\":\"ota already in progress\"}");
-        return;
-    }
-    const size_t initial = initialLen < contentLen ? initialLen : contentLen;
-    UploadSource src{&conn, initialBody, initial, contentLen,
-                     platform::millis() + kFirmwareUploadHardMs};
-    g_otaBytesTotal = static_cast<uint32_t>(contentLen);
-    g_otaBytesRead = 0;
-    const bool ok = platform::otaWriteMoonBase(&uploadPull, &src, contentLen,
-                                               g_otaStatus, sizeof(g_otaStatus), &g_otaBytesRead);
+void HttpServerModule::answerFirmware(platform::TcpConnection& conn, bool ok, platform::OtaTarget target) {
     if (!ok) {
-        // Drain before answering: replying while ~750 KB is in flight shows the peer a reset instead of the reason, and uploadPull's deadlines bound the drain.
-        char discard[512];
-        for (bool done = false; !done;) {
-            bool abort = false;
-            if (uploadPull(discard, sizeof(discard), &src, &abort) == 0 || abort) done = true;
-        }
         char msg[128];
         std::snprintf(msg, sizeof(msg), "{\"error\":\"%.90s\"}", g_otaStatus);
         sendResponse(conn, 500, "application/json", msg);
         return;
     }
-    // No reboot: the running app is untouched; re-read then re-bind, since the card's version buffer is filled at setup.
-    if (auto* fw = static_cast<FirmwareUpdateModule*>(findModuleByName("Firmware"))) {
-        fw->readMoonBaseVersion();
-        fw->rebuildControls();
+    if (target == platform::OtaTarget::MoonBase) {
+        // No reboot: the running app is untouched; re-read then re-bind, since the card's version buffer is filled at setup.
+        if (auto* fw = static_cast<FirmwareUpdateModule*>(findModuleByName("Firmware"))) {
+            fw->readMoonBaseVersion();
+            fw->rebuildControls();
+        }
+        sendResponse(conn, 200, "application/json", "{\"ok\":true}");
+        return;
     }
+    // The boot pointer flipped, so the 200 goes out first and the browser sees a clean "flashed" instead of an aborted socket.
+    FilesystemModule::flushPending();
     sendResponse(conn, 200, "application/json", "{\"ok\":true}");
+    conn.close();
+    platform::delayMs(200);
+    platform::reboot();   // noreturn: boots the flashed image
 }
 
 void HttpServerModule::handleMoonBaseUrl(platform::TcpConnection& conn, const char* body) {
@@ -1194,42 +1075,72 @@ void HttpServerModule::handleMoonBaseUrl(platform::TcpConnection& conn, const ch
     sendResponse(conn, 202, "application/json", "{\"ok\":true}");
 }
 
-void HttpServerModule::serveFile(platform::TcpConnection& conn, const ui::EmbeddedFile& file) {
-    const char* contentType = file.contentType;
-    // Try disk first (desktop development: live editing without rebuild)
-    char filepath[256];
-    std::snprintf(filepath, sizeof(filepath), "%s/%s", uiPath_, file.name);
+// The content type a UI file name's extension names, for a file served from disk.
+static const char* uiContentType(const char* name) {
+    const char* ext = std::strrchr(name, '.');
+    if (!ext) return "application/octet-stream";
+    if (std::strcmp(ext, ".html") == 0) return "text/html";
+    if (std::strcmp(ext, ".css") == 0) return "text/css";
+    if (std::strcmp(ext, ".js") == 0) return "application/javascript";
+    if (std::strcmp(ext, ".png") == 0) return "image/png";
+    return "application/octet-stream";
+}
 
-    FILE* f = std::fopen(filepath, "rb");
-    if (f) {
-        std::fseek(f, 0, SEEK_END);
-        long size = std::ftell(f);
-        std::fseek(f, 0, SEEK_SET);
+bool HttpServerModule::serveUiFromDisk(platform::TcpConnection& conn, const char* name) {
+    char* data = nullptr;
+    size_t len = 0;
+    if (!platform::uiFolderFile(name, data, len)) return false;
+    char header[256];
+    std::snprintf(header, sizeof(header),
+        "HTTP/1.1 200 OK\r\n"
+        "Content-Type: %s\r\n"
+        "Content-Length: %zu\r\n"
+        "Connection: close\r\n"
+        "Cache-Control: no-cache\r\n"
+        "\r\n",
+        uiContentType(name), len);
+    answerBlock(conn, header, data, len);
+    return true;
+}
 
-        char header[256];
-        int headerLen = std::snprintf(header, sizeof(header),
-            "HTTP/1.1 200 OK\r\n"
-            "Content-Type: %s\r\n"
-            "Content-Length: %ld\r\n"
-            "Connection: close\r\n"
-            "Cache-Control: no-cache\r\n"
-            "\r\n",
-            contentType, size);
-        if (!conn.write(reinterpret_cast<const uint8_t*>(header), headerLen)) { std::fclose(f); return; }
-
-        uint8_t chunk[1024];
-        while (size > 0) {
-            size_t toRead = size > static_cast<long>(sizeof(chunk)) ? sizeof(chunk) : static_cast<size_t>(size);
-            size_t bytesRead = std::fread(chunk, 1, toRead, f);
-            if (bytesRead == 0) break;
-            // Stop on a write failure (socket error or deadline), else every remaining chunk burns a deadline of render-thread time.
-            if (!conn.write(chunk, bytesRead)) break;
-            size -= static_cast<long>(bytesRead);
-        }
-        std::fclose(f);
+void HttpServerModule::answerBlock(platform::TcpConnection& conn, const char* header, char* data, size_t len) {
+    Send* slot = claimSend(conn);
+    if (!slot || !conn.write(reinterpret_cast<const uint8_t*>(header), std::strlen(header))) {
+        platform::free(data);
         return;
     }
+    // The block leaves as the body and is freed once it is out.
+    slot->owned = data;
+    slot->body = reinterpret_cast<const uint8_t*>(data);
+    slot->bodyLeft = len;
+    slot->conn = std::move(conn);
+    slot->busy = true;
+    slot->lastActivityMs = platform::millis();
+}
 
+// Whether a request's If-None-Match names this file's tag, or `*` (RFC 9110 section 13.1.2).
+static bool etagMatches(const char* ifNoneMatch, const char* etag) {
+    if (!ifNoneMatch) return false;
+    const char* value = ifNoneMatch + std::strlen("If-None-Match:");
+    const char* eol = std::strstr(value, "\r\n");
+    const char* hit = std::strstr(value, etag);
+    if (hit && (!eol || hit < eol)) return true;
+    const char* star = std::strchr(value, '*');
+    return star && (!eol || star < eol);
+}
+
+void HttpServerModule::serveFile(platform::TcpConnection& conn, const ui::EmbeddedFile& file, const char* ifNoneMatch) {
+    // A desktop running from a checkout serves its folder's copy, so an edit shows without a rebuild.
+    if (serveUiFromDisk(conn, file.name)) return;
+    // A browser holding this exact file is told so, and loads it from its cache.
+    if (etagMatches(ifNoneMatch, file.etag)) {
+        char notModified[128];
+        int n = std::snprintf(notModified, sizeof(notModified),
+            "HTTP/1.1 304 Not Modified\r\nETag: %s\r\nCache-Control: no-cache\r\nConnection: close\r\n\r\n", file.etag);
+        conn.write(reinterpret_cast<const uint8_t*>(notModified), static_cast<size_t>(n));
+        return;
+    }
+    const char* contentType = file.contentType;
     // Fall back to the embedded copy (ESP32, or no files on disk).
     char header[256];
     int headerLen = std::snprintf(header, sizeof(header),
@@ -1237,488 +1148,35 @@ void HttpServerModule::serveFile(platform::TcpConnection& conn, const ui::Embedd
         "Content-Type: %s\r\n"
         "Content-Length: %zu\r\n"
         "%s"
+        "ETag: %s\r\n"
         "Connection: close\r\n"
         "Cache-Control: no-cache\r\n"
         "\r\n",
         contentType, file.len,
-        file.gzipped ? "Content-Encoding: gzip\r\n" : "");
-    EmbeddedSend* slot = nullptr;
-    for (auto& s : embeddedSends_)
-        if (!s.conn.valid()) { slot = &s; break; }
-    // Every slot busy: answered rather than written whole, which would hold the render loop for the transfer.
-    if (!slot) { sendResponse(conn, 503, "application/json", "{\"error\":\"every send slot is busy\"}"); return; }
+        file.gzipped ? "Content-Encoding: gzip\r\n" : "", file.etag);
+    Send* slot = claimSend(conn);
+    if (!slot) return;
     if (!conn.write(reinterpret_cast<const uint8_t*>(header), headerLen)) return;
+    slot->body = file.data;
+    slot->bodyLeft = file.len;
     slot->conn = std::move(conn);
-    slot->data = file.data;
-    slot->left = file.len;
+    slot->busy = true;
     slot->lastActivityMs = platform::millis();
-}
-
-void HttpServerModule::drainEmbeddedSends() {
-    const uint32_t now = platform::millis();
-    for (auto& s : embeddedSends_) {
-        if (!s.conn.valid()) continue;
-        int n = 1;
-        if (s.left > 0 && !maySend(&s)) s.lastActivityMs = now;   // waiting its turn while internal RAM is short, not stalled
-        while (s.left > 0 && n > 0 && maySend(&s) && platform::millis() - now < kTransferTickBudgetMs) {
-            n = s.conn.writeSome(s.data, s.left);
-            if (n <= 0) break;
-            s.data += n;
-            s.left -= static_cast<size_t>(n);
-            s.lastActivityMs = now;
-            sent(&s, now);
-        }
-        if (s.left == 0 || n < 0 || now - s.lastActivityMs > kTransferStallMs) { s.conn.close(); endSend(&s); }
-    }
 }
 
 // Below the headroom one send goes at a time rather than none. No send waits forever, and the queue stays one socket's buffer, not the 52 KB a page load once built. A holder that moves nothing for kTransferStallMs passes the lease on.
 bool HttpServerModule::maySend(const void* who) {
     if (sendHasHeadroom()) return true;
     const uint32_t now = platform::millis();
-    if (lowRamSender_ && lowRamSender_ != who && now - lowRamProgressMs_ <= kTransferStallMs) return false;
+    if (lowRamSender_ && lowRamSender_ != who && now - lowRamProgressMs_ <= kTransferStallMs) {
+        if (!lowRamWaiter_ || now - lowRamWaitMs_ > kTransferStallMs) { lowRamWaiter_ = who; lowRamWaitMs_ = now; }
+        return false;
+    }
+    // Turns go in order: a send that asked while another held the lease goes before one asking again, as the preview does with every frame.
+    if (!lowRamSender_ && lowRamWaiter_ && lowRamWaiter_ != who && now - lowRamWaitMs_ <= kTransferStallMs) return false;
+    if (lowRamWaiter_ == who) lowRamWaiter_ = nullptr;
     if (lowRamSender_ != who) { lowRamSender_ = who; lowRamProgressMs_ = now; }
     return true;
-}
-
-void HttpServerModule::serveState(platform::TcpConnection& conn) {
-    const char* header =
-        "HTTP/1.1 200 OK\r\n"
-        "Content-Type: application/json\r\n"
-        "Connection: close\r\n"
-        "Access-Control-Allow-Origin: *\r\n"
-        "\r\n";
-    conn.write(reinterpret_cast<const uint8_t*>(header), std::strlen(header));
-
-    JsonSink sink(conn);
-    buildStateJson(sink);
-    sink.flush();
-}
-
-void HttpServerModule::buildStateJson(JsonSink& sink) {
-    TreeCursor c;
-    writeTreeFragment(sink, c, 0);
-}
-
-// The diff-on-the-wire cache keeps an 8-byte FNV-1a {path,value} hash per leaf, not the value; a collision skips one update at worst.
-
-bool HttpServerModule::Subscription::names_(const char* s) const {
-    if (!s || !s[0]) return false;
-    const uint32_t h = fnv1a(s, std::strlen(s));
-    for (uint8_t i = 0; i < count; i++)
-        if (names[i] == h) return true;
-    return false;
-}
-
-bool HttpServerModule::Subscription::covers(const MoonModule* mod) const {
-    if (all) return true;
-    for (const MoonModule* m = mod; m && count; m = m->parent())
-        if (names_(m->name()) || names_(m->typeName())) return true;
-    return false;
-}
-
-bool HttpServerModule::Subscription::parse(const char* body) {
-    json::JsonDoc* doc = nullptr;
-    const json::JsonNode* arr = json::parseListArray(body, "subscribe", doc);
-    if (!arr) return false;
-    *this = Subscription{};
-    received = true;
-    const int n = json::arraySize(*doc, arr);
-    for (int i = 0; i < n; i++) {
-        const json::JsonNode* el = json::element(*doc, arr, i);
-        if (!el || el->type != json::JsonType::String || !el->str || !el->str[0]) continue;
-        if (std::strcmp(el->str, "*") == 0) all = true;
-        else if (count < kMaxModules) names[count++] = fnv1a(el->str, std::strlen(el->str));
-    }
-    return true;
-}
-
-bool HttpServerModule::Subscription::operator==(const Subscription& o) const {
-    if (received != o.received || all != o.all || count != o.count) return false;
-    for (uint8_t i = 0; i < count; i++)
-        if (names[i] != o.names[i]) return false;
-    return true;
-}
-
-bool HttpServerModule::anyClientCovers(const MoonModule* mod) const {
-    // Every slot's subscription, live or not: the uplink poll clears a slot's subscription once its client is gone.
-    for (const auto& sub : subs_)
-        if (sub.covers(mod)) return true;
-    return false;
-}
-
-// The diff-on-the-wire core: visit every UI leaf a client subscribes to, in buildStateJson order, as fn(module, pathHash, valueHash, path, valueSink); names are unique tree-wide, so "<module>/<name>" is stable.
-template <class Fn>
-void HttpServerModule::forEachStateLeaf(Fn&& fn, bool everything) {
-    if (!scheduler_) return;
-    // `fn`, not std::forward: forwarding inside a loop moves the callable on the first module, leaving later modules a moved-from object.
-    for (uint8_t m = 0; m < scheduler_->moduleCount(); m++)
-        if (auto* mod = scheduler_->module(m))
-            if (mod->appearsInUi()) visitModuleLeaves(mod, fn, everything);
-}
-
-template <class Fn>
-void HttpServerModule::visitModuleLeaves(MoonModule* mod, Fn&& fn, bool everything) {
-    if (everything || anyClientCovers(mod)) visitOwnLeaves(mod, fn);
-    // A module nobody views can still hold one somebody does, the preview inside Drivers.
-    for (uint8_t i = 0; i < mod->childCount(); i++)
-        if (auto* ch = mod->child(i)) visitModuleLeaves(ch, fn, everything);
-}
-
-template <class Fn>
-void HttpServerModule::visitOwnLeaves(MoonModule* mod, Fn&& fn) {
-    char path[80];
-    // The walk runs every second, so a value goes into the module's own small buffer, and only one that outgrows it, a list or a long text, into a heap sink. A heap block per leaf fragments a small heap.
-    auto leaf = [&](auto&& write) {
-        JsonSink vs(leafValue_, sizeof(leafValue_));
-        write(vs);
-        if (!vs.overflowed()) { fn(mod, fnv1a(path, std::strlen(path)), fnv1a(vs.data(), vs.size()), path, vs); return; }
-        JsonSink big;
-        write(big);
-        fn(mod, fnv1a(path, std::strlen(path)), fnv1a(big.data(), big.size()), path, big);
-    };
-    // Header telemetry the UI shows per card, `@`-prefixed so it cannot collide with a control name; only fields that change per tick (timing, memory) ride the patch.
-    std::snprintf(path, sizeof(path), "%s/@tickTimeUs", mod->name());
-    leaf([&](JsonSink& s) { s.appendf("%u", static_cast<unsigned>(mod->tickTimeUs())); });
-    std::snprintf(path, sizeof(path), "%s/@dynamicBytes", mod->name());
-    leaf([&](JsonSink& s) { s.appendf("%u", static_cast<unsigned>(mod->dynamicBytes())); });
-    // Status and severity ride the patch too, since a driver can fault at any moment and only the diff push runs every second; an unchanged value costs nothing.
-    std::snprintf(path, sizeof(path), "%s/@status", mod->name());
-    // writeJsonString already emits the quotes and escapes, so add none: manual quotes make invalid JSON that the browser rejects as a whole patch frame.
-    leaf([&](JsonSink& s) { s.writeJsonString(mod->status() ? mod->status() : ""); });
-    static const char* sevStr[] = {"status", "warning", "error"};
-    std::snprintf(path, sizeof(path), "%s/@severity", mod->name());
-    leaf([&](JsonSink& s) { s.appendf("\"%s\"", sevStr[static_cast<int>(mod->severity())]); });
-    // Each control's value.
-    auto& ctrls = mod->controls();
-    for (uint8_t i = 0; i < ctrls.count(); i++) {
-        auto& c = ctrls[i];
-        std::snprintf(path, sizeof(path), "%s/%s", mod->name(), c.name);
-        leaf([&](JsonSink& s) {
-            if (c.type == ControlType::Password) writeObfuscatedPassword(s, static_cast<const char*>(c.ptr));   // as the full state shows it
-            else writeControlValue(s, c);
-        });
-    }
-}
-
-// Look up a leaf's cached value-hash by path-hash, or nullptr. The scan is linear over the flat cache, an int compare per entry, a few hundred on a large tree.
-HttpServerModule::LeafHash* HttpServerModule::findLeaf(uint32_t pathHash) {
-    for (uint16_t i = 0; i < leafHashCount_; i++)
-        if (leafHashes_[i].path == pathHash) return &leafHashes_[i];
-    return nullptr;
-}
-
-void HttpServerModule::baselineLeafHashes(bool everything) {
-    // Count leaves and modules, size the hashes and patch slices exactly, then fill from scratch, since resize does not preserve; a resync, not each second.
-    uint16_t n = 0, modules = 0;
-    const MoonModule* last = nullptr;
-    forEachStateLeaf([&](const MoonModule* mod, uint32_t, uint32_t, const char*, JsonSink&) {
-        n++;
-        if (mod != last) { modules++; last = mod; }
-    }, everything);
-    leafHashes_.resize(n);
-    leafHashCount_ = 0;
-    forEachStateLeaf([&](const MoonModule*, uint32_t ph, uint32_t vh, const char*, JsonSink&) {
-        if (leafHashCount_ < leafHashes_.count()) leafHashes_[leafHashCount_++] = {ph, vh};
-    }, everything);
-    if (patchSlices_.count() < modules) patchSlices_.resize(modules);
-}
-
-uint16_t HttpServerModule::buildStatePatch(JsonSink& sink) {
-    JsonSink entries;
-    uint16_t slices = 0;
-    collectPatch(entries, slices, [&](auto&& fn) { forEachStateLeaf(fn, true); });
-    return writeClientPatch(sink, entries, slices, nullptr);
-}
-
-void HttpServerModule::buildClientPatchesForTest(JsonSink* outs, int count) {
-    JsonSink entries;
-    uint16_t slices = 0;
-    collectPatch(entries, slices, [&](auto&& fn) { forEachStateLeaf(fn); });
-    for (int i = 0; i < count && i < kMaxWsClients; i++) writeClientPatch(outs[i], entries, slices, &subs_[i]);
-}
-
-template <class Fn>
-void HttpServerModule::forEachSoonLeaf(Fn&& fn, bool everything) {
-    for (uint8_t i = 0; i < soonCount_; i++)
-        // No appearsInUi test: the interface drops a patch for a module it never saw.
-        if (MoonModule* mod = scheduler_ ? scheduler_->firstByName(soon_[i]) : nullptr) visitModuleLeaves(mod, fn, everything);
-    soonCount_ = 0;
-}
-
-uint16_t HttpServerModule::buildSoonPatch(JsonSink& sink) {
-    JsonSink entries;
-    uint16_t slices = 0;
-    collectPatch(entries, slices, [&](auto&& fn) { forEachSoonLeaf(fn, true); });
-    return writeClientPatch(sink, entries, slices, nullptr);
-}
-
-void HttpServerModule::pushSoonPatch() {
-    // A small frame written into a full state mid-stream would land inside that message, so it waits.
-    if (fullResyncPending_ || anyClientResync() || anyStreamActive()) return;
-    const uint32_t now = platform::millis();
-    if (now - soonSentMs_ < kSoonMs) return;
-    soonSentMs_ = now;
-    // The leaves' hashes update as they go, so the second's patch does not send them again.
-    sendPatches([&](auto&& fn) { forEachSoonLeaf(fn); });
-}
-
-template <class Walk>
-uint16_t HttpServerModule::collectPatch(JsonSink& entries, uint16_t& sliceCount, Walk&& walk) {
-    sliceCount = 0;
-    uint16_t changed = 0;
-    walk([&](const MoonModule* mod, uint32_t ph, uint32_t vh, const char* path, JsonSink& vs) {
-        LeafHash* h = findLeaf(ph);
-        if (h && h->value == vh) return;              // unchanged: the common case, emit nothing
-        const bool opens = !sliceCount || patchSlices_[sliceCount - 1].mod != mod;
-        // No room for the module's slice leaves the hash as it was, so the change goes out once there is.
-        if (opens && sliceCount >= patchSlices_.count()) return;
-        if (h) h->value = vh;                          // known leaf, value changed → update cache
-        // A leaf missing from the baseline cannot happen, since every structural mutation re-baselines first; emit it without growing the cache, because ScratchBuffer::resize is non-preserving and would discard every hash.
-        if (opens) patchSlices_[sliceCount++] = {mod, static_cast<uint32_t>(entries.size()), 0, 0};
-        entries.append(",{\"path\":\"");
-        entries.append(path);
-        entries.append("\",\"value\":");
-        entries.append(vs.data(), vs.size());          // the already-serialized value
-        entries.append("}");
-        PatchSlice& s = patchSlices_[sliceCount - 1];
-        s.end = static_cast<uint32_t>(entries.size());
-        s.count++;
-        changed++;
-    });
-    return changed;
-}
-
-uint16_t HttpServerModule::writeClientPatch(JsonSink& out, const JsonSink& entries, uint16_t sliceCount, const Subscription* sub) {
-    out.append("{\"patch\":[");
-    uint16_t n = 0;
-    for (uint16_t i = 0; i < sliceCount; i++) {
-        const PatchSlice& s = patchSlices_[i];
-        if (sub && !sub->covers(s.mod)) continue;
-        // Every entry leads with its comma, which the first one of the frame drops.
-        const size_t skip = n == 0 ? 1 : 0;
-        out.append(entries.data() + s.begin + skip, s.end - s.begin - skip);
-        n += s.count;
-    }
-    out.append("]}");
-    return n;
-}
-
-template <class Walk>
-void HttpServerModule::sendPatches(Walk&& walk, bool skipResyncing) {
-    JsonSink entries;
-    uint16_t slices = 0;
-    if (collectPatch(entries, slices, walk) == 0) return;
-    for (int i = 0; i < kMaxWsClients; i++) {
-        auto& ws = wsClients_[i];
-        if (!ws.valid() || (skipResyncing && resyncClient_[i])) continue;
-        JsonSink out;
-        if (writeClientPatch(out, entries, slices, &subs_[i]) == 0) continue;
-        if (!sendWsTextFrame(ws, out.data(), static_cast<int>(out.size()))) ws.close();
-    }
-}
-
-void HttpServerModule::writeModuleHeader(JsonSink& sink, MoonModule* mod) {
-    // Per-module header: name, role, enabled, tickTimeUs (fps/ms display), classSize (static C++ object bytes) + dynamicBytes (heap)
-    const char* roleStr = roleName(mod->role());
-    const char* type = mod->typeName();
-    if (!type) type = "";
-    // `enabled` is published for every module, and the ones that keep running regardless say so here, so the UI can leave out a switch that would do nothing.
-    sink.appendf(
-        "{\"name\":\"%s\",\"type\":\"%s\",\"role\":\"%s\",\"enabled\":%s,"
-        "\"respectsEnabled\":%s,"
-        "\"tickTimeUs\":%u,\"classSize\":%u,\"dynamicBytes\":%u",
-        mod->name() ? mod->name() : "",
-        type,
-        roleStr,
-        mod->enabledSetting() ? "true" : "false",
-        mod->respectsEnabled() ? "true" : "false",
-        static_cast<unsigned>(mod->tickTimeUs()),
-        static_cast<unsigned>(mod->classSize()),
-        static_cast<unsigned>(mod->dynamicBytes()));
-    // The flag as set, and whether safe mode holds the module anyway, so the UI shows why its switch does nothing.
-    if (mod->held()) sink.append(",\"held\":true");
-    // The instance's own tags (a scripted module's come from its script), since /api/types answers per type; emitted only when non-empty.
-    if (const char* tg = mod->tags(); tg && tg[0]) {
-        sink.append(",\"tags\":");
-        sink.writeJsonString(tg);
-    }
-    writeStatus(sink, mod);
-    // userEditable is omitted when true (the UI treats absent as editable); modules that opt out, like PreviewDriver, hide their delete/replace affordance.
-    if (!mod->userEditable()) sink.append(",\"userEditable\":false");
-}
-
-void HttpServerModule::writeModuleJson(JsonSink& sink, MoonModule* mod) {
-    TreeCursor c;
-    c.single = mod;
-    writeTreeFragment(sink, c, 0);
-}
-
-MoonModule* HttpServerModule::moduleAt(const TreeCursor& c) const {
-    MoonModule* mod = c.single ? (c.idx[0] == 0 ? c.single : nullptr)
-                               : (scheduler_ ? scheduler_->module(c.idx[0]) : nullptr);
-    for (uint8_t l = 1; mod && l < c.depth; l++)
-        mod = c.idx[l] < mod->childCount() ? mod->child(c.idx[l]) : nullptr;
-    return mod;
-}
-
-bool HttpServerModule::writeTreeFragment(JsonSink& sink, TreeCursor& c, size_t target) {
-    if (c.done) return true;
-    c.pieces = target != 0;
-    if (c.depth == 0) {
-        if (!c.single) sink.append("{\"modules\":[");
-        c.depth = 1;
-        c.idx[0] = 0;
-        c.phase = TreeCursor::kHeader;
-    }
-    // The path is resolved again at every step rather than held as pointers, so a tree changed between fragments still ends in valid JSON.
-    while (target == 0 || sink.size() < target) {
-        if (MoonModule* mod = moduleAt(c)) stepInto(sink, c, mod);
-        else if (stepPast(sink, c)) return true;
-    }
-    return false;
-}
-
-bool HttpServerModule::stepPast(JsonSink& sink, TreeCursor& c) {
-    const uint8_t level = c.depth - 1;
-    if (c.phase != TreeCursor::kHeader) {
-        // The module this level was writing went mid-object: close what it opened, as if it ended there, and go on with its next sibling.
-        if (c.ctrlName) closeOpenControl(sink, c);
-        sink.append(c.phase == TreeCursor::kControls ? "]}" : "}");
-        c.idx[level]++;
-        c.phase = TreeCursor::kHeader;
-        return false;
-    }
-    if (level > 0) {
-        sink.append("]}");   // the parent's children and the parent itself
-        c.depth--;
-        c.idx[c.depth - 1]++;
-        return false;
-    }
-    if (!c.single) {
-        sink.append("]");
-        // The id of the request the streamed state answers, so the page knows its view arrived rather than an earlier one.
-        if (c.answers) sink.appendf(",\"resync\":%lu", static_cast<unsigned long>(c.answers));
-        sink.append("}");
-    }
-    c.done = true;
-    return true;
-}
-
-void HttpServerModule::stepInto(JsonSink& sink, TreeCursor& c, MoonModule* mod) {
-    const uint8_t level = c.depth - 1;
-    if (c.phase == TreeCursor::kHeader) {
-        // HttpServerModule and FilesystemModule are no cards: appearsInUi is the one mechanism for that.
-        if (level == 0 && !c.single && !mod->appearsInUi()) { c.idx[0]++; return; }
-        if (level == 0 ? c.wroteRoot : c.idx[level] > 0) sink.append(",");
-        if (level == 0) c.wroteRoot = true;
-        writeModuleHeader(sink, mod);
-        // An outline leaves the controls out: the module's name and shape are what a client viewing elsewhere reads.
-        const bool full = !c.sub || c.sub->covers(mod);
-        if (full) sink.append(",\"controls\":[");
-        c.ctrl = 0;
-        c.phase = full ? TreeCursor::kControls : TreeCursor::kChildren;
-    } else if (c.phase == TreeCursor::kControls) {
-        const bool here = c.ctrl < mod->controls().count();
-        if (c.ctrlName && (!here || mod->controls()[c.ctrl].name != c.ctrlName)) {
-            closeOpenControl(sink, c);   // it changed between fragments: ended as it stood, valid JSON
-            return;
-        }
-        if (here) {
-            const ControlDescriptor& d = mod->controls()[c.ctrl];
-            // A fragment-sized document cuts a large list or option set at a row or an option, so no fragment needs a large block.
-            if (c.pieces && writtenInPieces(d)) { writeControlPieceOf(sink, c, d); return; }
-            if (c.ctrl > 0) sink.append(",");
-            writeControl(sink, d);
-            c.ctrl++;
-            return;
-        }
-        sink.append("]");
-        c.phase = TreeCursor::kChildren;
-    } else if (mod->childCount() > 0 && c.depth < TreeCursor::kMaxDepth) {
-        sink.append(",\"children\":[");
-        c.idx[c.depth++] = 0;
-        c.phase = TreeCursor::kHeader;
-    } else {
-        sink.append("}");
-        c.idx[level]++;
-        c.phase = TreeCursor::kHeader;
-    }
-}
-
-void HttpServerModule::writeStatus(JsonSink& sink, MoonModule* mod) {
-    // Only emit when the module has a status; severity strings are stable wire format ("status", "warning", "error"), documented in HttpServerModule.md.
-    const char* s = mod->status();
-    if (!s) return;
-    static const char* sevStr[] = {"status", "warning", "error"};
-    // writeJsonString emits its own quotes and escapes a `"` or `\` that a raw %s would turn into invalid JSON; severity is a fixed vocabulary and stays a plain %s.
-    sink.append(",\"status\":");
-    sink.writeJsonString(s);
-    sink.appendf(",\"severity\":\"%s\"", sevStr[static_cast<int>(mod->severity())]);
-}
-
-void HttpServerModule::writeControl(JsonSink& sink, const ControlDescriptor& c) {
-    // Common wrapper for every control; per-type VALUE + EXTRAS live in Control.cpp, but Password is handled here since its API form is XOR-obfuscated + base64 and writeControlValue stays sink-neutral.
-    sink.appendf("{\"name\":\"%s\",\"type\":\"%s\",\"value\":",
-                 c.name, controlTypeName(c.type));
-    if (c.type == ControlType::Password) {
-        // Not readable at a glance in `curl /api/state`, and the UI's hold-to-peek reverses it.
-        writeObfuscatedPassword(sink, static_cast<char*>(c.ptr));
-    } else {
-        writeControlValue(sink, c);
-    }
-    writeControlMetadata(sink, c);
-    writeControlTail(sink, c);
-}
-
-void HttpServerModule::writeControlPieceOf(JsonSink& sink, TreeCursor& c, const ControlDescriptor& d) {
-    if (!c.ctrlName) {
-        if (c.ctrl > 0) sink.append(",");
-        sink.appendf("{\"name\":\"%s\",\"type\":\"%s\",\"value\":", d.name, controlTypeName(d.type));
-        c.ctrlName = d.name;
-        c.at = {};
-        return;
-    }
-    if (writeControlPiece(sink, d, c.at)) return;
-    writeControlTail(sink, d);
-    c.ctrlName = nullptr;
-    c.ctrl++;
-}
-
-// Before its first piece only the head is out, waiting for a value; after it, one array is open inside the control.
-void HttpServerModule::closeOpenControl(JsonSink& sink, TreeCursor& c) {
-    sink.append(c.at.part == 0 ? "null}" : "]}");
-    c.ctrlName = nullptr;
-    c.ctrl++;
-}
-
-void HttpServerModule::writeControlTail(JsonSink& sink, const ControlDescriptor& c) {
-    // Emit optional flags only when set (common case is false; omit to save bytes).
-    if (c.readonly) sink.append(",\"readonly\":true");
-    if (c.minMode) sink.appendf(",\"minMode\":%u", static_cast<unsigned>(c.minMode));   // the mode the UI needs before it shows this
-    if (c.numberField) sink.append(",\"numberField\":true");   // render a plain number input, not a slider
-    if (c.hex) sink.append(",\"hex\":true");   // that number input reads and writes hexadecimal
-    if (c.switchRow) sink.append(",\"switchRow\":true");
-    if (c.displayStrip) sink.append(",\"displayStrip\":true");
-    // The target rides with all three surface kinds, since a switch drives something too (switch1 is the global on/off) and its popup should say so.
-    if (c.fader || c.encoder || c.switchRow) {
-        if (c.fader)        sink.append(",\"fader\":true");
-        else if (c.encoder) sink.append(",\"encoder\":true");
-        if (c.surfaceTarget) { sink.append(",\"target\":"); sink.writeJsonString(c.surfaceTarget); }
-    }
-    // An editable List shows add/delete/reorder and inline row editors; its rows carry a stable id and field descriptors.
-    if (c.type == ControlType::List) {
-        const auto* ls = static_cast<const ListSource*>(c.ptr);
-        if (ls && ls->isEditableList()) sink.append(",\"editable\":true");
-        if (ls && ls->listRowsFixed()) sink.append(",\"fixedRows\":true");
-        if (ls && ls->listAsPads()) {
-            sink.append(",\"pads\":true");
-            const uint8_t gc = ls->listGridCols(), gr = ls->listGridRows();
-            if (gc && gr) sink.appendf(",\"gridCols\":%u,\"gridRows\":%u",
-                                       static_cast<unsigned>(gc), static_cast<unsigned>(gr));
-        }
-    }
-    sink.append(c.hidden ? ",\"hidden\":true}" : "}");
 }
 
 // Apply-core: set one control's value from the same `{"value":8}` body the HTTP handler gets; transport-free, returning an OpResult the caller maps to its own reporting.
@@ -1810,271 +1268,6 @@ void HttpServerModule::serveSystem(platform::TcpConnection& conn) {
 
     sink.append("]}");
     sink.flush();
-}
-
-// WLED-compatibility `/json/info`: the field set the WLED apps and HA validate after `_wled._tcp` discovery, with `brand:"WLED"` to interoperate and `product:"MoonModules"` to say what this is.
-void HttpServerModule::serveWledInfo(platform::TcpConnection& conn) {
-    const char* header =
-        "HTTP/1.1 200 OK\r\n"
-        "Content-Type: application/json\r\n"
-        "Connection: close\r\n"
-        "Access-Control-Allow-Origin: *\r\n"
-        "\r\n";
-    conn.write(reinterpret_cast<const uint8_t*>(header), std::strlen(header));
-
-    // Identity: the deviceName (from SystemModule), the live IP, the MAC.
-    const char* name; uint8_t mac[6];
-    resolveWledIdentity(name, mac, nullptr);
-
-    // The WLED-Android app requires only `name`, `leds{}`, `wifi{}` and a non-empty `mac` (model/wledapi/Info.kt), else it drops the device silently, so these are the smallest shapes.
-    JsonSink sink(conn);
-    writeWledInfoBody(sink, name, mac);
-    sink.flush();
-}
-
-// /presets.json: look presets in WLED's format, keyed by 1-based slot (python-wled discards 0) with a `{"0":{}}` floor; Drivers and Layouts presets stay out since they rewire pins or geometry.
-void HttpServerModule::serveWledPresets(platform::TcpConnection& conn) {
-    auto* control = static_cast<ControlModule*>(findModuleByName("Control"));
-    if (!control) { sendResponse(conn, 200, "application/json", "{\"0\":{}}"); return; }
-
-    JsonSink sink;
-    sink.append("{");
-    bool any = false;
-    for (uint8_t i = 0; i < control->presetCount(); i++) {
-        if (!control->isLookOnly(i)) continue;
-        const char* name = control->presetName(i);
-        if (!name || !name[0]) continue;
-        // Slot+1: WLED slot 0 is reserved, and python-wled drops it.
-        sink.appendf("%s\"%u\":{\"n\":", any ? "," : "", static_cast<unsigned>(i + 1));
-        sink.writeJsonString(name);
-        sink.append("}");
-        any = true;
-    }
-    if (!any) sink.append("\"0\":{}");   // non-empty, or python-wled reads it as no response at all
-    sink.append("}");
-    sendResponse(conn, 200, "application/json", sink.data());
-}
-
-// The deviceName / IP / MAC lookup the WLED shim needs at four call sites, so a change to how identity is discovered updates one place.
-void HttpServerModule::resolveWledIdentity(const char*& name, uint8_t mac[6], uint8_t* ip,
-                                           const char* nameFallback) {
-    name = nameFallback;
-    if (MoonModule* sys = findModuleByName("System")) {
-        const char* dn = static_cast<SystemModule*>(sys)->deviceName();
-        if (dn && dn[0]) name = dn;
-    }
-    for (int i = 0; i < 6; i++) mac[i] = 0;
-    platform::getMacAddress(mac);
-    if (!ip) return;
-    for (int i = 0; i < 4; i++) ip[i] = 0;
-    platform::localIPv4(ip);
-}
-
-// The WLED info object (no HTTP header), shared by /json/info and /json/si; the 💫 marker prefixes only the WLED-compat name HA reads, never the real deviceName.
-void HttpServerModule::writeWledName(JsonSink& sink, const char* name) {
-    char prefixed[80];
-    std::snprintf(prefixed, sizeof(prefixed), "\xF0\x9F\x92\xAB %s", name ? name : "");
-    sink.writeJsonString(prefixed);
-}
-
-void HttpServerModule::writeWledInfoBody(JsonSink& sink, const char* name, const uint8_t mac[6]) {
-    sink.appendf("{\"name\":");
-    writeWledName(sink, name);
-    // The real light count and the wifi signal, so the WLED app card shows the true device shape; signal maps rssi to 0-100 as WLED does.
-    const unsigned ledCount = lightSummary().lightCount;
-    const int rssi = platform::wifiStaRssi();
-    int signal = (rssi == 0) ? 0 : (2 * (rssi + 100));
-    if (signal < 0) signal = 0; else if (signal > 100) signal = 100;
-    sink.appendf(",\"mac\":\"%02x%02x%02x%02x%02x%02x\","
-                 "\"leds\":{\"count\":%u},\"wifi\":{\"rssi\":%d,\"signal\":%d},"
-                 "\"brand\":\"WLED\",\"product\":\"MoonModules\"}",
-                 mac[0], mac[1], mac[2], mac[3], mac[4], mac[5],
-                 ledCount, rssi, signal);
-}
-
-// The WLED state object: `on`+`bri` mirror Drivers, and `seg[0].col[0]` is the active palette's full-value color, stable across consumers and never double-dimmed with HA's `state.bri × seg.bri`.
-void HttpServerModule::writeWledStateBody(JsonSink& sink) {
-    const uint8_t bri = driversBrightness(scheduler_);
-    const LightOutput* out = LightOutput::active();
-    const RGB pc = out ? out->paletteRgb(driversPalette(scheduler_)) : RGB{0, 0, 0};
-    // python-wled parses this response through State.from_dict, so nl/udpn/lor/transition/ps/pl/mainseg are required, and seg[0].on must be present since HA reads segment .on, not top-level state.on.
-    const char* onStr = driversOn(scheduler_) ? "true" : "false";
-    // seg[0].pal is the active palette index, sharing the Drivers `palette` control with col[0], so HA's palette dropdown and color picker are two views of one value.
-    const uint8_t pal = driversPalette(scheduler_);
-    // The applied look as a WLED preset slot (1-based, as /presets.json), or -1; without it HA's preset dropdown reads unknown even while a preset is active.
-    int currentPs = -1;
-    if (auto* control = static_cast<ControlModule*>(findModuleByName("Control"))) {
-        const char* look = control->currentLook();
-        if (look && look[0]) {
-            for (uint8_t i = 0; i < control->presetCount(); i++) {
-                if (!control->isLookOnly(i)) continue;
-                const char* n = control->presetName(i);
-                if (n && std::strcmp(n, look) == 0) { currentPs = i + 1; break; }
-            }
-        }
-    }
-    sink.appendf("{\"on\":%s,\"bri\":%u,\"transition\":7,\"ps\":%d,\"pl\":-1,"
-                 "\"nl\":{},\"udpn\":{},\"lor\":0,\"mainseg\":0,"
-                 // seg[0].bri = 255 so HA's segment.bri × state.bri / 255 shows the master value; fx=0 ("Solid") pairs with pal as python-wled expects, else the light entity stays unavailable.
-                 "\"seg\":[{\"id\":0,\"on\":%s,\"bri\":255,\"fx\":0,\"pal\":%u,\"col\":[[%u,%u,%u]]}]}",
-                 onStr, bri, currentPs, onStr, pal, pc.r, pc.g, pc.b);
-}
-
-void HttpServerModule::serveWledState(platform::TcpConnection& conn) {
-    const char* header =
-        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n"
-        "Connection: close\r\nAccess-Control-Allow-Origin: *\r\n\r\n";
-    conn.write(reinterpret_cast<const uint8_t*>(header), std::strlen(header));
-    JsonSink sink(conn);
-    writeWledStateBody(sink);
-    sink.flush();
-}
-
-// /json: the full blob HA's python-wled fetches, requiring `info.fs`, `state.nl`, `state.udpn`, `state.lor` and `ver` >= 0.14.0; separate from /json/info and /json/state, which stay the Android-validated minimum.
-void HttpServerModule::serveWledDeviceJson(platform::TcpConnection& conn) {
-    const char* header =
-        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n"
-        "Connection: close\r\nAccess-Control-Allow-Origin: *\r\n\r\n";
-    conn.write(reinterpret_cast<const uint8_t*>(header), std::strlen(header));
-
-    const char* name; uint8_t mac[6]; uint8_t ip[4];
-    resolveWledIdentity(name, mac, ip);
-
-    JsonSink sink(conn);
-    // state: reuse writeWledStateBody under "state" so one writer decides which seg[0] fields HA reads.
-    sink.appendf("{\"state\":");
-    writeWledStateBody(sink);
-    // `ver` is a sentinel and an Ethernet device omits `wifi` entirely. @xref{why-the-wled-shim-reports-a-sentinel-version} @xref{why-an-ethernet-device-sends-no-wifi-object}
-    const bool onEth = platform::ethConnected();
-    const int rssi = platform::wifiStaRssi();
-    uint8_t bssid[6] = {};
-    platform::wifiStaBssid(bssid);
-    const int channel = platform::wifiStaChannel();
-    int signal = (rssi == 0) ? 0 : (2 * (rssi + 100));
-    if (signal < 0) signal = 0; else if (signal > 100) signal = 100;
-    // The real pipeline shape and render rate.
-    const LightSummary& ls = lightSummary();
-    const LightOutput* out = LightOutput::active();
-    const unsigned ledCount = ls.lightCount;
-    const unsigned renderFps = scheduler_ ? scheduler_->fps() : 0;
-    const char* rgbw = (ls.channelsPerLight >= 4) ? "true" : "false";
-    sink.appendf(",\"info\":{\"ver\":\"99.0.0\",\"vid\":2410150,\"name\":");
-    writeWledName(sink, name);
-    sink.appendf(",\"mac\":\"%02x%02x%02x%02x%02x%02x\","
-                 "\"ip\":\"%u.%u.%u.%u\",\"arch\":\"esp32\","
-                 "\"brand\":\"WLED\",\"product\":\"MoonModules\",\"release\":\"MoonModules\","
-                 // lc and seglc are capability codes, not counts: 1 (RGB_COLOR) gives HA a brightness slider and color picker, and a LED count would leave the light entity without color modes.
-                 "\"leds\":{\"count\":%u,\"fps\":%u,\"rgbw\":%s,\"wv\":false,\"cct\":false,"
-                 "\"maxpwr\":0,\"maxseg\":1,\"pwr\":0,\"lc\":1,\"seglc\":[1]},",
-                 mac[0], mac[1], mac[2], mac[3], mac[4], mac[5],
-                 ip[0], ip[1], ip[2], ip[3],
-                 ledCount, renderFps, rgbw);
-    // wifi: only for a Wi-Fi device (omitted on Ethernet; see the comment above the getters).
-    if (!onEth) {
-        sink.appendf("\"wifi\":{\"bssid\":\"%02x:%02x:%02x:%02x:%02x:%02x\","
-                     "\"rssi\":%d,\"channel\":%d,\"signal\":%d},",
-                     bssid[0], bssid[1], bssid[2], bssid[3], bssid[4], bssid[5],
-                     rssi, channel, signal);
-    }
-    // pmt is the presets-modified time HA uses to re-fetch /presets.json, stamped by ControlModule on every preset change, with 1 as the no-ControlModule fallback.
-    unsigned pmt = 1;
-    if (auto* control = static_cast<ControlModule*>(findModuleByName("Control")))
-        pmt = static_cast<unsigned>(control->presetsRevision());   // >= 1 once setup's rescan ran
-    if (pmt == 0) pmt = 1;   // python-wled treats 0 as "no presets support"
-    sink.appendf("\"fs\":{\"t\":256,\"u\":32,\"pmt\":%u},"
-                 // uptime + pmt drive python-wled's presets change-detect: both non-zero and stable stop HA refetching /presets.json on every state update.
-                 "\"freeheap\":%u,\"uptime\":%u,\"udpport\":21324,\"live\":false,"
-                 // ws=-1 tells python-wled WebSocket updates are unsupported, so HA polls over HTTP instead of opening /ws, whose MoonLight-native frames flood its log with `MissingField: filesystem`.
-                 "\"lm\":\"\",\"lip\":\"\",\"ws\":-1,"
-                 // palcount is the real count, built-ins plus the scripted tail, matching palettes[] below; fxcount stays 1 and cpal/umpal are 0.
-                 "\"fxcount\":1,\"palcount\":%u,\"cpalcount\":0,\"umpalcount\":0,\"str\":false}",
-                 // Non-zero or HA rejects the device: the desktop's freeHeap() reports 0, so a nominal figure stands in.
-                 pmt,
-                 static_cast<unsigned>(platform::freeHeap() ? platform::freeHeap() : 32768u),
-                 static_cast<unsigned>(platform::millis() / 1000u),
-                 static_cast<unsigned>(out ? out->paletteCount() : 0));
-    // effects stays one real entry ("Solid") since this shim drives a single Layer; palettes is the real list, indexed to match seg[0].pal and the Drivers `palette` control.
-    sink.appendf(",\"effects\":[\"Solid\"],\"palettes\":[");
-    if (out) out->writePaletteNames(sink);
-    sink.appendf("]}");
-    sink.flush();
-}
-
-// /json/si: the combined {state, info} the WLED app reads in one call for its card.
-void HttpServerModule::serveWledStateInfo(platform::TcpConnection& conn) {
-    const char* header =
-        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n"
-        "Connection: close\r\nAccess-Control-Allow-Origin: *\r\n\r\n";
-    conn.write(reinterpret_cast<const uint8_t*>(header), std::strlen(header));
-
-    const char* name; uint8_t mac[6];
-    resolveWledIdentity(name, mac, nullptr);
-
-    JsonSink sink(conn);
-    sink.appendf("{\"state\":");
-    writeWledStateBody(sink);
-    sink.appendf(",\"info\":");
-    writeWledInfoBody(sink, name, mac);
-    sink.appendf("}");
-    sink.flush();
-}
-
-// Apply a WLED state-set body ({on?, bri?}) to Drivers through the apply-core, from POST /json/state and the inbound WebSocket; `on` is master power, so toggling off keeps the brightness level.
-void HttpServerModule::applyWledState(const char* body) {
-    // ps is a preset slot from HA's dropdown (1-based, as /presets.json); applyLookByName re-checks look-only, so a crafted request naming a Drivers or Layouts preset is refused here, not hidden.
-    if (mm::json::hasKey(body, "ps")) {
-        const int slot = mm::json::parseInt(body, "ps");
-        auto* control = static_cast<ControlModule*>(findModuleByName("Control"));
-        if (control && slot > 0 && slot <= control->presetCount()) {
-            const char* name = control->presetName(static_cast<uint8_t>(slot - 1));
-            if (name) control->applyLookByName(name);
-        }
-    }
-    if (mm::json::hasKey(body, "on")) {
-        applySetControl("Drivers", "on",
-                        mm::json::parseBool(body, "on") ? "{\"value\":true}" : "{\"value\":false}");
-    }
-    if (mm::json::hasKey(body, "bri")) {
-        int bri = mm::json::parseInt(body, "bri");
-        if (bri < 0) bri = 0;
-        if (bri > 255) bri = 255;
-        char valueJson[32];
-        std::snprintf(valueJson, sizeof(valueJson), "{\"value\":%d}", bri);
-        applySetControl("Drivers", "brightness", valueJson);
-    }
-    // seg[0].pal is the palette index HA writes from its dropdown, mapped to the Drivers `palette` control and parsed from the segment object so a top-level "pal" cannot hijack it.
-    const LightOutput* out = LightOutput::active();
-    const char* segStart = std::strstr(body, "\"seg\":");
-    const char* palStart = segStart ? std::strstr(segStart, "\"pal\":") : nullptr;
-    if (palStart && out) {
-        int pal = mm::parseIntStr(palStart + 6);
-        if (pal < 0) pal = 0;
-        // Clamp to the full count, built-ins plus the scripted tail, the list served as `palettes[]`, so a scripted index the device offered is not snapped back.
-        if (pal >= out->paletteCount()) pal = out->paletteCount() - 1;
-        char valueJson[24];
-        std::snprintf(valueJson, sizeof(valueJson), "{\"value\":%d}", pal);
-        applySetControl("Drivers", "palette", valueJson);
-    }
-    // seg[0].col[0] is [r,g,b] from HA's color picker, mapped to the nearest palette; the value channel is ignored since HA's brightness slider sends `bri`.
-    const char* colStart = std::strstr(body, "\"col\":[[");
-    if (colStart && out) {
-        int r = 0, g = 0, b = 0;
-        if (std::sscanf(colStart + 8, "%d,%d,%d", &r, &g, &b) == 3) {
-            const uint8_t rc = static_cast<uint8_t>(r < 0 ? 0 : (r > 255 ? 255 : r));
-            const uint8_t gc = static_cast<uint8_t>(g < 0 ? 0 : (g > 255 ? 255 : g));
-            const uint8_t bc = static_cast<uint8_t>(b < 0 ? 0 : (b > 255 ? 255 : b));
-            const uint8_t idx = out->nearestPalette(RGB{rc, gc, bc});
-            char valueJson[24];
-            std::snprintf(valueJson, sizeof(valueJson), "{\"value\":%u}", static_cast<unsigned>(idx));
-            applySetControl("Drivers", "palette", valueJson);
-        }
-    }
-}
-
-// POST /json/state: the WLED app's HTTP control channel; apply, then echo the resulting state, which the app expects.
-void HttpServerModule::handleWledState(platform::TcpConnection& conn, const char* body) {
-    applyWledState(body);
-    serveWledState(conn);
 }
 
 void HttpServerModule::writeModuleMetricsJson(JsonSink& sink, MoonModule* mod, bool& first) {
@@ -2279,7 +1472,6 @@ void HttpServerModule::handleReplaceModule(platform::TcpConnection& conn, const 
     }
 }
 
-
 void HttpServerModule::serveModule(platform::TcpConnection& conn, const char* name) {
     char decoded[MoonModule::kNameLen] = {};
     if (!routeModuleName(name, decoded)) {
@@ -2390,44 +1582,59 @@ void HttpServerModule::serveScriptCatalog(platform::TcpConnection& conn) {
     sink.flush();
 }
 
-void HttpServerModule::serveTypes(platform::TcpConnection& conn) {
-    const char* header =
-        "HTTP/1.1 200 OK\r\n"
-        "Content-Type: application/json\r\n"
-        "Connection: close\r\n"
-        "Access-Control-Allow-Origin: *\r\n"
-        "\r\n";
-    conn.write(reinterpret_cast<const uint8_t*>(header), std::strlen(header));
+void HttpServerModule::typesEtag(char (&out)[16]) {
+    Fnv1a f;
+    for (const char* part : {kVersion, kBuildId, kBuildDate, kFirmwareName}) f.add(part, std::strlen(part));
+    for (uint8_t i = 0; i < ModuleFactory::typeCount(); i++)
+        if (const char* name = ModuleFactory::typeName(i)) f.add(name, std::strlen(name) + 1);   // the terminator keeps "ab","c" from reading as "a","bc"
+    std::snprintf(out, sizeof(out), "\"%08x\"", static_cast<unsigned>(f.h));
+}
 
-    JsonSink sink(conn);
-    sink.append("{\"types\":[");
-    bool first = true;
-    for (uint8_t i = 0; i < ModuleFactory::typeCount(); i++) {
-        const char* name = ModuleFactory::typeName(i);
-        if (!name) continue;
-        ModuleRole role = ModuleFactory::typeRole(i);
-        const char* roleStr = roleName(role);
-        const char* docPath = ModuleFactory::typeDocPath(i);
-        const char* tags = ModuleFactory::typeTags(i);
-        uint8_t dim = ModuleFactory::typeDim(i);
-        const char* childRoles = ModuleFactory::typeAcceptsChildRoles(i);
-        // displayNameFor returns a pointer into a shared static buffer, so copy it before another factory call overwrites it.
-        char displayName[16];
-        std::strncpy(displayName, ModuleFactory::displayNameFor(name, role), sizeof(displayName) - 1);
-        displayName[sizeof(displayName) - 1] = 0;
-        sink.appendf("%s{\"name\":\"%s\",\"displayName\":\"%s\",\"role\":\"%s\","
-                     "\"docPath\":\"%s\",\"tags\":\"%s\",\"dim\":%u,"
-                     "\"acceptsChildRoles\":\"%s\",\"defaults\":{",
-                     first ? "" : ",", name, displayName, roleStr,
-                     docPath ? docPath : "", tags ? tags : "",
-                     static_cast<unsigned>(dim),
-                     childRoles ? childRoles : "");
-        writeTypeDefaults(sink, name);
-        sink.append("}}");
-        first = false;
+void HttpServerModule::serveTypes(platform::TcpConnection& conn, const char* ifNoneMatch) {
+    char tag[16];
+    typesEtag(tag);
+    if (etagMatches(ifNoneMatch, tag)) {
+        char notModified[128];
+        const int n = std::snprintf(notModified, sizeof(notModified),
+            "HTTP/1.1 304 Not Modified\r\nETag: %s\r\nCache-Control: no-cache\r\nConnection: close\r\n\r\n", tag);
+        conn.write(reinterpret_cast<const uint8_t*>(notModified), static_cast<size_t>(n));
+        return;
     }
-    sink.append("]}");
-    sink.flush();
+    Send* slot = claimSend(conn);
+    if (!slot) return;
+    auto* t = static_cast<TypesSource*>(platform::alloc(sizeof(TypesSource)));
+    if (!t) { sendResponse(conn, 507, "application/json", "{\"error\":\"out of memory\"}"); return; }
+    new (t) TypesSource;
+    char header[192];
+    const int hn = std::snprintf(header, sizeof(header),
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nETag: %s\r\nCache-Control: no-cache\r\n"
+        "Connection: close\r\nAccess-Control-Allow-Origin: *\r\n\r\n", tag);
+    if (!conn.write(reinterpret_cast<const uint8_t*>(header), static_cast<size_t>(hn))) { platform::free(t); return; }
+    slot->block = t;
+    slot->source = Send::Source::Types;
+    slot->conn = std::move(conn);
+    slot->busy = true;
+    slot->lastActivityMs = platform::millis();
+}
+
+void HttpServerModule::writeTypeJson(JsonSink& sink, uint8_t i, bool first) {
+    const char* name = ModuleFactory::typeName(i);
+    const ModuleRole role = ModuleFactory::typeRole(i);
+    const char* docPath = ModuleFactory::typeDocPath(i);
+    const char* tags = ModuleFactory::typeTags(i);
+    const char* childRoles = ModuleFactory::typeAcceptsChildRoles(i);
+    // displayNameFor returns a pointer into a shared static buffer, so copy it before another factory call overwrites it.
+    char displayName[16];
+    mm::formatTo(displayName, sizeof(displayName), "%s", ModuleFactory::displayNameFor(name, role));
+    sink.appendf("%s{\"name\":\"%s\",\"displayName\":\"%s\",\"role\":\"%s\","
+                 "\"docPath\":\"%s\",\"tags\":\"%s\",\"dim\":%u,"
+                 "\"acceptsChildRoles\":\"%s\",\"defaults\":{",
+                 first ? "" : ",", name, displayName, roleName(role),
+                 docPath ? docPath : "", tags ? tags : "",
+                 static_cast<unsigned>(ModuleFactory::typeDim(i)),
+                 childRoles ? childRoles : "");
+    writeTypeDefaults(sink, name);
+    sink.append("}}");
 }
 
 void HttpServerModule::writeTypeDefaults(JsonSink& sink, const char* typeName) {
@@ -2764,9 +1971,9 @@ void HttpServerModule::handleWebSocketUpgrade(platform::TcpConnection& conn, con
             previewClients_[i] = std::move(conn);
             // The slot turns over: the producer drops its predecessor's standing request, and the new client announces its own wishes (pull model).
             if (clientSink_) clientSink_->onClientGone(i);
-            // A frame mid-drain to other clients keeps draining; this slot marks itself done so the newcomer is never spliced into a half-sent message.
-            previewSend_.sent[i] = !admitLease ? SIZE_MAX
-                                 : (previewSend_.active ? previewSend_.hdrLen + previewSend_.bodyLen : 0);
+            // A frame mid-drain to other clients keeps draining; this slot's send stays idle, so the newcomer starts at the next whole frame and is never spliced into a half-sent message.
+            previewSends_[i].busy = false;
+            previewSends_[i].headLeft = previewSends_[i].bodyLeft = 0;
             return;
         }
         conn.close();   // preview cap reached: the client keeps /ws and simply shows no preview
@@ -2778,8 +1985,9 @@ void HttpServerModule::handleWebSocketUpgrade(platform::TcpConnection& conn, con
         if (!wsClients_[i].valid()) {
             wsOnAccessPoint_[i] = onAccessPoint(conn);   // read once: a socket's peer does not change
             wsClients_[i] = std::move(conn);
-            // A fresh slot: no stream, and no state until the client subscribes, which requests the resync its first document answers.
-            endStream(streams_[i]);
+            // A fresh slot: no stream, no frame its last client left half read, and no state until the client subscribes, which requests the resync its first document answers.
+            endSendSlot(controlSends_[i]);
+            dropCarry(i);
             subs_[i] = Subscription{};
             resyncClient_[i] = false;
             resyncId_[i] = 0;
@@ -2788,71 +1996,6 @@ void HttpServerModule::handleWebSocketUpgrade(platform::TcpConnection& conn, con
     }
     // No slot: close. kMaxWsClients sits above the realistic count plus a refresh's overlap, since the new socket opens before the old FIN lands; the browser's backoff retries a full moment.
     conn.close();
-}
-
-void HttpServerModule::pushStateToWebSockets() {
-    bool hasClients = false;
-    for (auto& ws : wsClients_) {
-        if (ws.valid()) { hasClients = true; break; }
-    }
-    if (!hasClients) return;
-
-    // Nothing may land inside a streamed document, so every push waits while one is open; a resync requested meanwhile starts once they end.
-    if (anyStreamActive()) return;
-    if (fullResyncPending_ || anyClientResync()) {
-        // A resync of some clients first patches the rest up to now, since the baseline taken next forgets what they have not been sent.
-        if (!fullResyncPending_) sendPatches([&](auto&& fn) { forEachStateLeaf(fn); }, /*skipResyncing=*/true);
-        baselineLeafHashes();       // the full state IS the new baseline: next tick patches from here
-        startStreams();
-        return;   // the WLED frame waits for the streams too
-    }
-    // PATCH, the steady state: only changed leaves go out inline, each client its share; an idle device sends nothing.
-    sendPatches([&](auto&& fn) { forEachStateLeaf(fn); });
-
-    // Push a WLED-shaped {state, info} frame for the WLED app on this /ws; each consumer ignores the other's frame (the UI keys on `modules`, the app on `state`/`info`).
-    pushWledStateToWebSockets();
-}
-
-// Each client due a document gets a cursor that streams it on tick20ms, a fragment at a time, so no board needs the whole tree in one block.
-void HttpServerModule::startStreams() {
-    for (int i = 0; i < kMaxWsClients; i++) {
-        const bool wanted = fullResyncPending_ || resyncClient_[i];
-        resyncClient_[i] = false;
-        if (!wanted || !wsClients_[i].valid() || !subs_[i].received) continue;   // the WLED app never subscribes, and reads its own frame
-        StateStream& s = streams_[i];
-        endStream(s);
-        s.sub = subs_[i];
-        s.cursor.sub = &s.sub;
-        s.cursor.answers = resyncId_[i];
-        resyncId_[i] = 0;
-        s.active = true;
-    }
-    fullResyncPending_ = false;
-}
-
-// Build and push the WLED {state, info} object to every WS client. Shares the same body writers as /json/si.
-void HttpServerModule::pushWledStateToWebSockets() {
-    if (anyStreamActive()) return;   // never interleave with a streamed full state
-    bool hasClients = false;
-    for (int i = 0; i < kMaxWsClients; i++) if (wsClients_[i].valid() && !subs_[i].received) { hasClients = true; break; }
-    if (!hasClients) return;   // only the web interface is connected: the frame is built for nobody
-
-    const char* name; uint8_t mac[6];
-    resolveWledIdentity(name, mac, nullptr);
-
-    JsonSink sink;
-    sink.appendf("{\"state\":");
-    writeWledStateBody(sink);
-    sink.appendf(",\"info\":");
-    writeWledInfoBody(sink, name, mac);
-    sink.appendf("}");
-
-    for (int i = 0; i < kMaxWsClients; i++) {
-        auto& ws = wsClients_[i];
-        // A client that subscribed is the web interface, which reads module state rather than this frame.
-        if (!ws.valid() || subs_[i].received) continue;
-        if (!sendWsTextFrame(ws, sink.data(), static_cast<int>(sink.size()))) ws.close();
-    }
 }
 
 // Read one frame per client and apply a WLED state-set ({on}/{bri}) to Drivers; client frames are masked (RFC 6455 §5.3), so unmask in place and skip non-text frames.
@@ -2887,27 +2030,42 @@ void HttpServerModule::pollPreviewClient(int i) {
 void HttpServerModule::pollControlClient(int c) {
     auto& ws = wsClients_[c];
     if (!ws.valid()) {
-        if (carryClient_ == c) carryLen_ = 0;
+        dropCarry(c);
         if (subs_[c].received) subs_[c] = Subscription{};   // a gone client stops widening what the patch walks
         return;
     }
-    // Mid-fragment the client's frames wait in the socket, so whatever they answer, a Pong or a Close, goes out between frames.
-    if (!atFrameBoundary(c)) return;
     uint8_t f[768];
     size_t have = 0;
     // A frame the last read cut in half starts this one, so the stream never loses its framing.
-    if (carryClient_ == c && carryLen_) { std::memcpy(f, carry_, carryLen_); have = carryLen_; carryLen_ = 0; }
+    if (carry_[c]) {
+        std::memcpy(f, carry_[c], carryLen_[c]);
+        have = carryLen_[c];
+        dropCarry(c);
+    }
     const int n = ws.read(f + have, sizeof(f) - have);   // non-blocking: -1 when nothing is pending
     if (n == 0) { ws.close(); return; }                   // a clean close frees the slot for a reconnect burst
     const size_t total = have + static_cast<size_t>(n > 0 ? n : 0);
     if (total == 0) return;
     const size_t used = walkWsFrames(f, total, [&](const char* body) { onTextFrame(c, body); },
         [&](uint8_t opcode, const uint8_t* payload, size_t len) { onControlFrame(c, opcode, payload, len); });
-    if (used < total && total - used <= sizeof(carry_)) {
-        std::memcpy(carry_, f + used, total - used);
-        carryLen_ = total - used;
-        carryClient_ = c;
+    if (used == total) return;
+    const size_t rest = total - used;
+    // Past the longest frame a client writes, or with no memory to hold it, the stream cannot resume. It fails with 1002 (RFC 6455 section 7.4.1) and the client reconnects clean.
+    auto* keep = rest <= kCarryMax ? static_cast<uint8_t*>(platform::alloc(rest)) : nullptr;
+    if (!keep) {
+        queueFrame(c, 0x88, "\x03\xea", 2);
+        controlSends_[c].closing = true;
+        return;
     }
+    std::memcpy(keep, f + used, rest);
+    carry_[c] = keep;
+    carryLen_[c] = static_cast<uint16_t>(rest);
+}
+
+void HttpServerModule::dropCarry(int client) {
+    if (carry_[client]) platform::free(carry_[client]);
+    carry_[client] = nullptr;
+    carryLen_[client] = 0;
 }
 
 void HttpServerModule::onTextFrame(int c, const char* body) {
@@ -2930,51 +2088,15 @@ void HttpServerModule::onTextFrame(int c, const char* body) {
     }
 }
 
-bool HttpServerModule::atFrameBoundary(int client) const {
-    const StateStream& s = streams_[client];
-    return !s.frame || s.sent == 0;
-}
-
 void HttpServerModule::onControlFrame(int client, uint8_t opcode, const uint8_t* payload, size_t len) {
-    // Read only at a frame boundary, so the answer goes out between frames, where a control frame may.
-    auto& ws = wsClients_[client];
+    // Queued behind the frame leaving, so the answer goes out between frames, where a control frame may.
     if (opcode == 0x9) {
-        if (!sendWsControlFrame(ws, 0xA, payload, len)) ws.close();
+        queueFrame(client, 0x8A, reinterpret_cast<const char*>(payload), len);
         return;
     }
-    // A Close is echoed with its status code and the connection ends; a one-byte body carries no code (§5.5.1), so it is answered empty.
-    sendWsControlFrame(ws, 0x8, payload, len >= 2 ? 2 : 0);
-    ws.close();
-    endStream(streams_[client]);
-}
-
-bool HttpServerModule::sendWsControlFrame(platform::TcpConnection& conn, uint8_t opcode, const uint8_t* payload, size_t len) {
-    uint8_t frame[2 + kWsControlMax];
-    frame[0] = static_cast<uint8_t>(0x80 | opcode);
-    frame[1] = static_cast<uint8_t>(len);
-    if (len) std::memcpy(frame + 2, payload, len);
-    return conn.write(frame, 2 + len);
-}
-
-bool HttpServerModule::sendWsTextFrame(platform::TcpConnection& conn, const char* data, int len) {
-    uint8_t header[10];
-    int headerLen = 0;
-
-    header[0] = 0x81; // FIN + text opcode
-    if (len < 126) {
-        header[1] = static_cast<uint8_t>(len);
-        headerLen = 2;
-    } else if (len < 65536) {
-        header[1] = 126;
-        header[2] = static_cast<uint8_t>((len >> 8) & 0xFF);
-        header[3] = static_cast<uint8_t>(len & 0xFF);
-        headerLen = 4;
-    } else {
-        return false; // too large
-    }
-
-    if (!conn.write(header, headerLen)) return false;
-    return conn.write(reinterpret_cast<const uint8_t*>(data), len);
+    // A Close is echoed with its status code and the connection ends once it is out; a one-byte body carries no code (§5.5.1), so it is answered empty.
+    queueFrame(client, 0x88, reinterpret_cast<const char*>(payload), len >= 2 ? 2 : 0);
+    controlSends_[client].closing = true;
 }
 
 int HttpServerModule::parsePreviewUplink(const uint8_t* buf, int n, uint8_t out[8], int* consumed) {
@@ -3009,155 +2131,282 @@ static size_t writeWsFrameHeader(uint8_t* h, uint8_t opcode, size_t payloadLen) 
 bool HttpServerModule::sendBufferedFrame(const uint8_t* header, size_t headerLen,
                                          const uint8_t* body, size_t bodyLen) {
     // Drop-new backpressure: one frame in flight, and a caller asking during a send is told busy, which the producer reads as the link being behind and sheds frame rate.
-    if (previewSend_.active) return false;
+    if (previewFrame_.active) return false;
 
     const size_t totalLen = headerLen + bodyLen;   // WS payload length = app header + body
-    // Build the WS binary header into previewSend_.hdr, followed by the app header, so the cursor streams them as one span.
-    const size_t wsLen = writeWsFrameHeader(previewSend_.hdr, 0x82, totalLen);
+    // Build the WS binary header into previewFrame_.hdr, followed by the app header, so each send streams them as one head.
+    const size_t wsLen = writeWsFrameHeader(previewFrame_.hdr, 0x82, totalLen);
     // sizeof(hdr)=24 holds the 10-byte WS form plus the preview app headers; the guard stops a larger header overrunning.
-    if (wsLen + headerLen > sizeof(previewSend_.hdr)) return false;
+    if (wsLen + headerLen > sizeof(previewFrame_.hdr)) return false;
     // memcpy, not a byte loop: the compiler cannot see that wsLen is at most 10 and would warn (-Wstringop-overflow), while memcpy lets it check against the guard above.
-    std::memcpy(previewSend_.hdr + wsLen, header, headerLen);
+    std::memcpy(previewFrame_.hdr + wsLen, header, headerLen);
 
-    previewSend_.hdrLen = wsLen + headerLen;
-    previewSend_.body = body;        // borrowed: PreviewDriver keeps the pixel buffer alive
-    previewSend_.bodyLen = bodyLen;
-    for (int i = 0; i < kMaxPreviewClients; i++) previewSend_.sent[i] = 0;
-    previewSend_.active = true;
-    // Do not drain here on the render thread, where a variable-cost writeSome would hitch the LEDs; drainPreviewSend() pushes bytes on tick20ms.
-    return true;
-}
-
-// Per-client cursor over [hdr ++ body]: write what the socket takes (one chunk), advance, resume next tick; an error closes that client, the send ends when every client is done.
-void HttpServerModule::drainPreviewSend() {
-    // Core-0 side of the sender lease core 1 holds while arming a frame; try_lock, not a wait, since tick20ms must not block, so we drain next tick.
-    LockGuard lease{wsLock_};
-    if (!lease) return;
-    if (!previewSend_.active) return;
-    // Short of internal RAM a frame takes its turn with the other sends, holding the lease until it is out. Meanwhile the producer drops the frames behind it, as for a busy socket.
-    if (!maySend(&previewSend_)) return;
-    const size_t total = previewSend_.hdrLen + previewSend_.bodyLen;
-    const size_t chunk = drainChunkBytes();
-    bool anyLiveClient = false;
-    bool allDone = true;
+    previewFrame_.hdrLen = wsLen + headerLen;
+    previewFrame_.body = body;        // borrowed: PreviewDriver keeps the pixel buffer alive
+    previewFrame_.bodyLen = bodyLen;
+    const uint32_t now = platform::millis();
     for (int i = 0; i < kMaxPreviewClients; i++) {
-        auto& ws = previewClients_[i];
-        if (!ws.valid()) continue;
-        anyLiveClient = true;
-        size_t& cur = previewSend_.sent[i];
-        size_t budget = chunk;   // bound bytes pushed to THIS client this tick → bounded tick cost
-        while (cur < total && budget > 0) {
-            // Source the next byte run from hdr (cursor < hdrLen) or body (cursor >= hdrLen).
-            const uint8_t* src;
-            size_t span;
-            if (cur < previewSend_.hdrLen) { src = previewSend_.hdr + cur; span = previewSend_.hdrLen - cur; }
-            else { src = previewSend_.body + (cur - previewSend_.hdrLen); span = total - cur; }
-            if (span > budget) span = budget;
-            int n = ws.writeSome(src, span);
-            if (n < 0) {                         // real error: drop this client and its requests
-                ws.close();
-                if (clientSink_) clientSink_->onClientGone(i);
-                break;
-            }
-            if (n == 0) break;                   // WouldBlock: leave the rest for next tick (no spin)
-            cur += static_cast<size_t>(n);
-            budget -= static_cast<size_t>(n);
-            sent(&previewSend_, platform::millis());
-        }
-        if (ws.valid() && cur < total) allDone = false;
+        if (!previewClients_[i].valid()) continue;
+        Send& s = previewSends_[i];
+        s.head = previewFrame_.hdr;
+        s.headLeft = previewFrame_.hdrLen;
+        s.body = body;
+        s.bodyLeft = bodyLen;
+        s.busy = true;
+        s.lastActivityMs = now;
     }
-    // Done when every live client finished, or no client remains to send to.
-    if (!anyLiveClient || allDone) {
-        previewSend_.active = false;
-        endSend(&previewSend_);
-    }
-}
-
-void HttpServerModule::applySubscription(int client, const char* body) {
-    if (client < 0 || client >= kMaxWsClients) return;
-    Subscription next;
-    if (!next.parse(body) || next == subs_[client]) return;
-    subs_[client] = next;
-    resyncClient_[client] = true;   // this client alone: the push brings the others up to date before it re-baselines
-}
-
-bool HttpServerModule::anyClientResync() const {
-    for (bool r : resyncClient_)
-        if (r) return true;
-    return false;
-}
-
-bool HttpServerModule::anyStreamActive() const {
-    for (const auto& st : streams_)
-        if (st.active) return true;
-    return false;
-}
-
-void HttpServerModule::endStream(StateStream& s) {
-    endSend(&s);
-    if (s.frame) platform::free(s.frame);
-    s = StateStream{};
-}
-
-bool HttpServerModule::nextStreamFrame(int client) {
-    StateStream& s = streams_[client];
-    JsonSink sink;
-    bool done;
-    {
-        // Per client: one on the device's own access point gets its passwords empty, the others as stored.
-        const SecretsHidden hide(wsOnAccessPoint_[client]);
-        done = writeTreeFragment(sink, s.cursor, kStreamFragmentBytes);
-    }
-    if (sink.overflowed()) return false;   // a truncated fragment would end the message in invalid JSON
-    s.frameLen = sink.size();
-    s.frame = sink.detach();
-    if (!s.frame) return false;
-    // RFC 6455 §5.4: the first frame carries the text opcode, the rest continue it, and the last one sets FIN.
-    const uint8_t opcode = static_cast<uint8_t>((s.first ? 0x01 : 0x00) | (done ? 0x80 : 0x00));
-    s.hdrLen = writeWsFrameHeader(s.hdr, opcode, s.frameLen);
-    s.sent = 0;
-    s.first = false;
-    s.last = done;
+    previewFrame_.active = true;
+    // Do not drain here on the render thread, where a variable-cost writeSome would hitch the LEDs; drainSends() pushes bytes on tick20ms.
     return true;
 }
 
-// Per client, the fragment in flight leaves a chunk at a time and the next is generated after it; core-0 only, so it needs no sender lease.
-void HttpServerModule::drainStateSend() {
-    const size_t chunk = drainChunkBytes();
-    for (int i = 0; i < kMaxWsClients; i++)
-        if (streams_[i].active) drainStream(i, chunk);
+void HttpServerModule::cancelBufferedSend() {
+    const size_t whole = previewFrame_.hdrLen + previewFrame_.bodyLen;
+    for (int i = 0; i < kMaxPreviewClients; i++) {
+        Send& s = previewSends_[i];
+        // A client left mid-message would read the next frame as the rest of this one.
+        if (s.busy && s.headLeft + s.bodyLeft < whole && previewClients_[i].valid()) {
+            previewClients_[i].close();
+            // Every close notifies the producer, or the dead slot's standing request steers on.
+            if (clientSink_) clientSink_->onClientGone(i);
+        }
+        endSendSlot(s);
+    }
+    previewFrame_.active = false;
+    endSend(&previewFrame_);
 }
 
-void HttpServerModule::drainStream(int client, size_t budget) {
-    StateStream& s = streams_[client];
+void HttpServerModule::finishPreviewFrame() {
+    if (!previewFrame_.active) return;
+    for (const auto& s : previewSends_)
+        if (s.busy) return;
+    previewFrame_.active = false;
+    endSend(&previewFrame_);
+}
+
+HttpServerModule::Send* HttpServerModule::claimSend(platform::TcpConnection& conn) {
+    for (auto& a : sends_)
+        if (!a.busy) return &a;
+    // Every slot busy: answered rather than written whole, which would hold the render loop for the transfer.
+    sendResponse(conn, 503, "application/json", "{\"error\":\"every send slot is busy\"}");
+    return nullptr;
+}
+
+bool HttpServerModule::startTree(Send& s, const Subscription* sub, bool ws, bool hide, uint32_t answers) {
+    auto* t = static_cast<TreeSource*>(platform::alloc(sizeof(TreeSource)));
+    if (!t) return false;
+    new (t) TreeSource;
+    if (sub) {
+        t->sub = *sub;
+        t->cursor.sub = &t->sub;
+    }
+    t->cursor.answers = answers;
+    t->ws = ws;
+    t->hide = hide;
+    s.block = t;
+    s.source = Send::Source::Tree;
+    s.busy = true;
+    s.lastActivityMs = platform::millis();
+    return true;
+}
+
+void HttpServerModule::queueFrame(int client, uint8_t opcode, const char* payload, size_t len) {
+    Send& s = controlSends_[client];
     auto& ws = wsClients_[client];
-    if (!ws.valid()) { endStream(s); return; }
-    while (budget > 0 && maySend(&s)) {   // short of internal RAM the stream waits its turn
-        if (!s.frame) {
-            if (s.last) { endStream(s); return; }
-            if (!nextStreamFrame(client)) { refuseFragment(client); return; }
-            fragmentRefused_ = false;
-        }
-        const size_t total = s.hdrLen + s.frameLen;
-        const bool inHeader = s.sent < s.hdrLen;
-        const uint8_t* src = inHeader ? s.hdr + s.sent : reinterpret_cast<const uint8_t*>(s.frame) + (s.sent - s.hdrLen);
-        const size_t span = std::min(budget, (inHeader ? s.hdrLen : total) - s.sent);
-        const int n = ws.writeSome(src, span);
-        if (n < 0) { ws.close(); endStream(s); return; }   // real error, drop this client
-        if (n == 0) return;                                // WouldBlock, resume next tick
-        s.sent += static_cast<size_t>(n);
-        budget -= static_cast<size_t>(n);
-        sent(&s, platform::millis());
-        if (s.sent == total) { platform::free(s.frame); s.frame = nullptr; }
+    if (!ws.valid()) return;
+    uint8_t hdr[10];
+    const size_t hl = writeWsFrameHeader(hdr, opcode, len);
+    // One frame always queues; more behind it only within the backlog, past which the client has stopped reading and is closed, to reconnect to a fresh document.
+    const bool over = s.queuedLen && s.queuedLen + hl + len > kFrameBacklogMax;
+    char* grown = over ? nullptr : static_cast<char*>(platform::alloc(s.queuedLen + hl + len));
+    if (!grown) {
+        endSendSlot(s);
+        ws.close();
+        return;
+    }
+    if (s.queued) {
+        std::memcpy(grown, s.queued, s.queuedLen);
+        platform::free(s.queued);
+    }
+    std::memcpy(grown + s.queuedLen, hdr, hl);
+    if (len) std::memcpy(grown + s.queuedLen + hl, payload, len);
+    s.queued = grown;
+    s.queuedLen += hl + len;
+    if (!s.busy) {
+        s.busy = true;
+        s.lastActivityMs = platform::millis();
     }
 }
 
-void HttpServerModule::refuseFragment(int client) {
-    // Out of memory for one fragment: the client reconnects and is sent its document again, and the serial log says why, once per run of refusals.
-    if (!fragmentRefused_) std::printf("state stream: no memory for a %u-byte fragment (largest block %u), client closed\n", static_cast<unsigned>(kStreamFragmentBytes), static_cast<unsigned>(platform::maxAllocBlock()));
+void HttpServerModule::endSendSlot(Send& s) {
+    if (s.owned) platform::free(s.owned);
+    if (s.queued) platform::free(s.queued);
+    if (s.block) {
+        if (s.source == Send::Source::File) platform::fsReadStreamClose(static_cast<FileSource*>(s.block)->stream);
+        platform::free(s.block);
+    }
+    endSend(&s);
+    s.source = Send::Source::None;
+    s.busy = s.closing = false;
+    s.head = s.body = nullptr;
+    s.headLeft = s.bodyLeft = 0;
+    s.owned = s.queued = nullptr;
+    s.block = nullptr;
+    s.queuedLen = 0;
+}
+
+HttpServerModule::Refill HttpServerModule::refill(Send& s) {
+    if (s.owned) { platform::free(s.owned); s.owned = nullptr; }
+    // Queued frames go at a frame boundary, which this is: a Pong may sit between a document's fragments (RFC 6455 section 5.4), and no data frame queues while one streams.
+    if (s.queued) {
+        s.owned = s.queued;
+        s.body = reinterpret_cast<const uint8_t*>(s.queued);
+        s.bodyLeft = s.queuedLen;
+        s.queued = nullptr;
+        s.queuedLen = 0;
+        return Refill::More;
+    }
+    if (s.closing) return Refill::End;
+    if (s.source == Send::Source::File) {
+        auto* f = static_cast<FileSource*>(s.block);
+        if (f->left == 0) return Refill::End;
+        const size_t want = f->left < sizeof(f->buf) ? f->left : sizeof(f->buf);
+        const int got = platform::fsReadStreamRead(f->stream, f->buf, want);
+        if (got <= 0) return Refill::Failed;   // the header promised more: the close tells the reader its body is short
+        f->left -= static_cast<size_t>(got);
+        s.body = reinterpret_cast<const uint8_t*>(f->buf);
+        s.bodyLeft = static_cast<size_t>(got);
+        return Refill::More;
+    }
+    if (s.source == Send::Source::Types) {
+        auto* t = static_cast<TypesSource*>(s.block);
+        if (t->last) return Refill::End;
+        JsonSink sink;
+        if (t->next == 0) sink.append("{\"types\":[");
+        // One type a refill: building it to read its defaults is the costly part.
+        const uint8_t count = ModuleFactory::typeCount();
+        while (t->next < count && !ModuleFactory::typeName(t->next)) t->next++;
+        if (t->next < count) {
+            writeTypeJson(sink, t->next, !t->wrote);
+            t->wrote = true;
+            t->next++;
+        }
+        if (t->next >= count) {
+            sink.append("]}");
+            t->last = true;
+        }
+        if (sink.overflowed()) return Refill::Failed;
+        s.bodyLeft = sink.size();
+        s.owned = sink.detach();
+        s.body = reinterpret_cast<const uint8_t*>(s.owned);
+        return Refill::More;
+    }
+    if (s.source == Send::Source::Tree) {
+        auto* t = static_cast<TreeSource*>(s.block);
+        if (t->last) return Refill::End;
+        JsonSink sink;
+        bool done;
+        {
+            // Per reader: one on the device's own access point gets its passwords empty, the others as stored.
+            const SecretsHidden hide(t->hide);
+            done = writeTreeFragment(sink, t->cursor, fragmentBytes());
+        }
+        // A truncated fragment would end the document in invalid JSON.
+        if (sink.overflowed()) { refuseFragment(); return Refill::Failed; }
+        s.bodyLeft = sink.size();
+        s.owned = sink.detach();
+        s.body = reinterpret_cast<const uint8_t*>(s.owned);
+        if (t->ws) {
+            // RFC 6455 section 5.4: the first frame carries the text opcode, the rest continue it, and the last one sets FIN.
+            const uint8_t opcode = static_cast<uint8_t>((t->first ? 0x01 : 0x00) | (done ? 0x80 : 0x00));
+            s.head = t->hdr;
+            s.headLeft = writeWsFrameHeader(t->hdr, opcode, s.bodyLeft);
+            t->first = false;
+        }
+        t->last = done;
+        fragmentRefused_ = false;
+        return Refill::More;
+    }
+    return Refill::End;
+}
+
+void HttpServerModule::drainSend(Send& s, platform::TcpConnection& conn, const void* who, size_t budget, uint32_t tickStart) {
+    if (!s.busy) return;
+    if (!conn.valid()) { endSendSlot(s); return; }
+    const uint32_t now = platform::millis();
+    // Short of internal RAM a send waits its turn, which is not a stall.
+    if (!maySend(who)) { s.lastActivityMs = now; return; }
+    // An answer's own connection closes once the answer is out; a WebSocket client's stays open for the next.
+    const bool answer = &conn == &s.conn;
+    while (budget > 0) {
+        if (!s.headLeft && !s.bodyLeft) {
+            // A refill writes a fragment or reads a chunk, the costly part, so it waits for the next tick once this one's time is spent.
+            if (platform::millis() - tickStart >= kTransferTickBudgetMs) { s.lastActivityMs = now; return; }
+            const Refill r = refill(s);
+            if (r == Refill::More) continue;
+            const bool close = answer || s.closing || r == Refill::Failed;
+            endSendSlot(s);
+            if (close) conn.close();
+            return;
+        }
+        // A write queues its bytes in internal RAM until they are acknowledged, so it takes only what lies above the floor WiFi needs to keep receiving. Below it the send waits, which is not a stall.
+        const size_t room = sendRoom();
+        if (room == 0) { s.lastActivityMs = now; break; }
+        const bool inHead = s.headLeft > 0;
+        const size_t span = std::min({budget, room, inHead ? s.headLeft : s.bodyLeft});
+        const int n = conn.writeSome(inHead ? s.head : s.body, span);
+        if (n < 0) { endSendSlot(s); conn.close(); return; }   // a real error: drop this client
+        if (n == 0) break;                                      // the socket is full: the rest goes next tick
+        if (inHead) { s.head += n; s.headLeft -= static_cast<size_t>(n); }
+        else { s.body += n; s.bodyLeft -= static_cast<size_t>(n); }
+        budget -= static_cast<size_t>(n);
+        s.lastActivityMs = now;
+        sent(who, now);
+    }
+    // A liveness guard, not a size or time cap on the answer: only a peer that stopped reading trips it.
+    if (now - s.lastActivityMs > kTransferStallMs) { endSendSlot(s); conn.close(); }
+}
+
+void HttpServerModule::drainSends() {
+    const uint32_t start = platform::millis();
+    const size_t chunk = drainChunkBytes();
+    {
+        // Core 1 arms preview frames under this lease; try_lock, not a wait, since tick20ms must not block, so the preview drains next tick.
+        LockGuard lease{wsLock_};
+        if (lease) {
+            for (int i = 0; i < kMaxPreviewClients; i++) {
+                const bool was = previewClients_[i].valid();
+                // The frame is one send to the lease, shared by every preview client.
+                drainSend(previewSends_[i], previewClients_[i], &previewFrame_, chunk, start);
+                // Every close notifies the producer, or the dead slot's standing request steers on.
+                if (was && !previewClients_[i].valid() && clientSink_) clientSink_->onClientGone(i);
+            }
+            finishPreviewFrame();
+        }
+    }
+    // Control clients and answers take turns from a rotating start, so the tick's time budget favors no slot.
+    constexpr int kTurns = kMaxWsClients + kSendSlots;
+    for (int k = 0; k < kTurns; k++) {
+        const int i = (sendTurn_ + k) % kTurns;
+        if (i < kMaxWsClients) {
+            drainSend(controlSends_[i], wsClients_[i], &controlSends_[i], chunk, start);
+        } else {
+            Send& a = sends_[i - kMaxWsClients];
+            drainSend(a, a.conn, &a, chunk, start);
+        }
+    }
+    sendTurn_ = (sendTurn_ + 1) % kTurns;
+}
+
+void HttpServerModule::refuseFragment() {
+    // Out of memory for one fragment: the reader is closed, a page reconnects and is sent its document again, and the serial log says why, once per run of refusals.
+    if (!fragmentRefused_) std::printf("state stream: no memory for a %u-byte fragment (largest block %u), client closed\n", static_cast<unsigned>(fragmentBytes()), static_cast<unsigned>(platform::maxAllocBlock()));
     fragmentRefused_ = true;
-    wsClients_[client].close();
-    endStream(streams_[client]);
+}
+
+size_t HttpServerModule::fragmentBytes() const {
+    const size_t chunk = drainChunkBytes();
+    return chunk < kFragmentCeilBytes ? chunk : kFragmentCeilBytes;
 }
 
 // Per-client chunk cap per tick from free contiguous memory, between a floor (progress) and a ceiling (tick occupancy), so a tight board takes small bites.

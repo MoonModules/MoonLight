@@ -262,6 +262,16 @@ TEST_CASE("a script's tags outlive the release of its engine") {
     CHECK(std::strcmp(rig.effect.tags(), "🔥🎵") == 0);
 }
 
+// The buffer held 24 bytes, one short of the six four-byte emoji the declaration promises, so the sixth was cut.
+TEST_CASE("a script keeps six emoji tags whole, and leaves out a seventh") {
+    HeadRig rig(/*withMotion=*/false);
+    rig.run("class S {"
+            "  string tags() { return \"🔥🎵🗼🎶🎯💡🌈\"; }"
+            "  void tick() { fill(1, 2, 3); }"
+            "}");
+    CHECK(std::strcmp(rig.effect.tags(), "🔥🎵🗼🎶🎯💡") == 0);
+}
+
 // A script that says nothing keeps the defaults, so every script written before scripts could declare anything behaves exactly as it did. D2, and the notepad that marks it as scripted.
 TEST_CASE("a script that declares neither keeps the scripted defaults") {
     HeadRig rig(/*withMotion=*/false);

@@ -3,6 +3,7 @@
 /// The module routes read a name the way the client encodes it, and every upload route asks for its length, driven over loopback.
 
 #include "doctest.h"
+#include "core/util/JsonUtil.h"   // the type list parses as one document
 #include "core/module/Scheduler.h"
 #include "core/util/ModuleFactory.h"
 #include "core/system/HttpServerModule.h"
@@ -53,6 +54,34 @@ struct RackServer {
         http.release();
         s.deleteTree(rack);
     }
+};
+
+/// What a request whose body comes after its headers met: the slowest tick while the body was held back, and the reply once it came.
+struct LateBody { uint32_t slowestTickMs = 0; std::string reply; };
+
+/// Send `method path` with its headers alone, tick while the body is held back, then send `body` and read the reply.
+LateBody sendBodyLate(mm::HttpServerModule& http, const std::string& request, const std::string& body) {
+    LateBody out;
+    const std::string head = request + " HTTP/1.1\r\nContent-Length: " + std::to_string(body.size()) + "\r\n\r\n";
+    mm::platform::TcpConnection client;
+    if (!connectAndAccept(http, client, kTestPort)) return out;
+    if (!client.write(reinterpret_cast<const uint8_t*>(head.data()), head.size())) return out;
+    for (int i = 0; i < 20; i++) {   // the headers are read, and the body has not come
+        const uint32_t start = mm::platform::millis();
+        http.tick20ms();
+        out.slowestTickMs = std::max(out.slowestTickMs, mm::platform::millis() - start);
+        mm::platform::delayMs(1);
+    }
+    if (!client.write(reinterpret_cast<const uint8_t*>(body.data()), body.size())) return out;
+    out.reply = pumpUntil(http, client, 12);
+    client.close();
+    return out;
+}
+
+/// A module with one control a route can set.
+struct Level : public mm::MoonModule {
+    uint8_t level = 0;
+    void defineControls() override { controls_.addControl("level", level, 0, 255); }
 };
 
 mm::MoonModule* childNamed(mm::MoonModule* parent, const char* name) {
@@ -135,23 +164,78 @@ TEST_CASE("a state document whose body comes after its headers applies, and the 
     static bool registered = false;
     if (!registered) { mm::ModuleFactory::registerType<Dial>("WaitDial"); registered = true; }
     RackServer server;
-    const std::string doc = R"({"Rack":{"Waited":{"type":"WaitDial"}}})";
-    const std::string head = "PATCH /api/state?live=1 HTTP/1.1\r\nContent-Length: " + std::to_string(doc.size()) + "\r\n\r\n";
+    const LateBody late = sendBodyLate(server.http, "PATCH /api/state?live=1", R"({"Rack":{"Waited":{"type":"WaitDial"}}})");
+    CHECK(late.slowestTickMs < 20);
+    CHECK(late.reply.rfind("HTTP/1.1 200", 0) == 0);
+    CHECK(childNamed(server.rack, "Waited") != nullptr);
+}
+
+// The late-body race was fixed for state documents first, while every other route with a body still answered 400 on hardware: one rule now holds for each.
+TEST_CASE("any request whose body comes after its headers is answered whole, and the frame keeps running meanwhile") {
+    RackServer server;
+    auto* knob = new Level();
+    knob->setName("Knob");
+    server.rack->addChild(knob);
+    knob->rebuildControls();
+    const LateBody late = sendBodyLate(server.http, "POST /api/control", R"({"module":"Knob","control":"level","value":7})");
+    CHECK(late.slowestTickMs < 20);
+    CHECK(late.reply.rfind("HTTP/1.1 200", 0) == 0);
+    CHECK(knob->level == 7);
+}
+
+// A byte every few seconds once kept a slot forever, the stall guard seeing progress each time: a body now owes a minimum in every window.
+TEST_CASE("a body that trickles a byte a second is answered 400 once its window ends, its slot free again") {
+    struct Clock { ~Clock() { mm::platform::setTestNowMs(0); } } clock;
+    mm::platform::setTestNowMs(1000);
+    RackServer server;
+    const std::string body(100, ' ');
+    const std::string head = "POST /api/control HTTP/1.1\r\nContent-Length: 100\r\n\r\n";
     mm::platform::TcpConnection client;
     REQUIRE(connectAndAccept(server.http, client, kTestPort));
     REQUIRE(client.write(reinterpret_cast<const uint8_t*>(head.data()), head.size()));
-    uint32_t slowest = 0;
-    for (int i = 0; i < 20; i++) {   // the headers are read, and the body has not come
-        const uint32_t start = mm::platform::millis();
-        server.http.tick20ms();
-        slowest = std::max(slowest, mm::platform::millis() - start);
-        mm::platform::delayMs(1);
+    std::string reply;
+    for (int second = 1; second <= 12 && reply.empty(); second++) {
+        REQUIRE(client.write(reinterpret_cast<const uint8_t*>(body.data()), 1));
+        mm::platform::setTestNowMs(1000 + second * 1000);
+        for (int i = 0; i < 3; i++) { mm::platform::delayMs(1); server.http.tick20ms(); }
+        char buf[256];
+        const int n = client.read(reinterpret_cast<uint8_t*>(buf), sizeof(buf));
+        if (n > 0) reply.assign(buf, static_cast<size_t>(n));
     }
-    CHECK(slowest < 20);
-    CHECK(childNamed(server.rack, "Waited") == nullptr);
-    REQUIRE(client.write(reinterpret_cast<const uint8_t*>(doc.data()), doc.size()));
-    const std::string reply = pumpUntil(server.http, client, 12);
+    CHECK(reply.rfind("HTTP/1.1 400", 0) == 0);
     client.close();
-    CHECK(reply.rfind("HTTP/1.1 200", 0) == 0);
-    CHECK(childNamed(server.rack, "Waited") != nullptr);
+}
+
+namespace {
+// Sends one raw request and reads until the server closes, the whole answer.
+std::string requestWhole(mm::HttpServerModule& http, const std::string& req) {
+    mm::platform::TcpConnection client;
+    if (!connectAndAccept(http, client, kTestPort)) return {};
+    if (!client.write(reinterpret_cast<const uint8_t*>(req.data()), req.size())) return {};
+    std::string out = readUntilClosed(http, client);
+    client.close();
+    return out;
+}
+}  // namespace
+
+// Every page load built every registered module to read its defaults, 0.6 s and a burst of allocations on a classic ESP32, which once ran it out of memory.
+TEST_CASE("the type list arrives whole with its tag, and a browser holding that tag is answered 304 with no body") {
+    if (mm::ModuleFactory::typeCount() == 0) mm::ModuleFactory::registerType<Dial>("RouteDial");
+    RackServer server;
+    const std::string full = requestWhole(server.http, "GET /api/types HTTP/1.1\r\n\r\n");
+    REQUIRE(full.rfind("HTTP/1.1 200", 0) == 0);
+    const size_t at = full.find("\r\n\r\n");
+    REQUIRE(at != std::string::npos);
+    mm::json::JsonDoc doc;
+    CHECK(mm::json::parse(full.c_str() + at + 4, doc));
+    for (uint8_t i = 0; i < mm::ModuleFactory::typeCount(); i++)
+        if (const char* name = mm::ModuleFactory::typeName(i))
+            CHECK(full.find(std::string("\"name\":\"") + name + "\"") != std::string::npos);
+    const size_t tagAt = full.find("ETag: ");
+    REQUIRE(tagAt != std::string::npos);
+    const std::string tag = full.substr(tagAt + 6, full.find("\r\n", tagAt) - tagAt - 6);
+
+    const std::string again = requestWhole(server.http, "GET /api/types HTTP/1.1\r\nIf-None-Match: " + tag + "\r\n\r\n");
+    CHECK(again.rfind("HTTP/1.1 304", 0) == 0);
+    CHECK(again.find("\r\n\r\n") + 4 == again.size());   // headers only
 }

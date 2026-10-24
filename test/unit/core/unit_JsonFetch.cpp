@@ -119,6 +119,28 @@ TEST_CASE("a feed refreshes once its period ran out, and a failed refresh keeps 
     CHECK_FALSE(fx.f.changed(&fx.owner, h));
 }
 
+// A feed whose server answered an error in JSON took the error as its new document and stopped retrying.
+TEST_CASE("a feed answered with an error status keeps its last document and retries soon") {
+    Fixture fx;
+    const int h = fx.f.fetch(&fx.owner, "https://api.example/news", 60000);
+    REQUIRE(fx.f.settle(2000));
+    REQUIRE(fx.f.changed(&fx.owner, h));
+    net.status = 503;
+    net.answer = R"({"error":"busy"})";
+    platform::setTestNowMs(100000 + 60000);
+    fx.f.doc(&fx.owner, h);
+    REQUIRE(fx.f.settle(2000));
+    CHECK(fx.f.status(&fx.owner, h) == 503);
+    const json::JsonDoc* doc = fx.f.doc(&fx.owner, h);
+    REQUIRE(doc != nullptr);
+    CHECK_FALSE(fx.f.changed(&fx.owner, h));   // still the good document
+    net.status = 200;
+    platform::setTestNowMs(100000 + 60000 + 5000);
+    fx.f.doc(&fx.owner, h);
+    fx.f.settle(2000);
+    CHECK(net.calls == 3);   // asked again 5 s later, not a period later
+}
+
 // A classic ESP32 showed its weather placeholder for ten minutes after a reboot: the first fetch went before WiFi was up, and a failure waited out the whole period.
 TEST_CASE("a failed fetch is asked again within seconds, backing off, and a success returns to the period") {
     Fixture fx;

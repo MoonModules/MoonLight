@@ -545,6 +545,9 @@ int httpFetch(const char*, const char*, const char*, uint32_t, char* body, size_
     return 0;
 }
 bool tlsRoom(const char* url) { return !url || std::strncmp(url, "https://", 8) != 0; }   // only HTTPS waits, and this board has no TLS
+// The interface is the embedded one alone.
+bool uiFolderFile(const char*, char*&, size_t&) { return false; }
+void setUiFolder(const char*) {}
 bool hlsSegment(const char*, const uint8_t**, size_t*) { return false; }
 void hlsSegmentRelease() {}
 

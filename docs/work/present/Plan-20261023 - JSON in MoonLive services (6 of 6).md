@@ -55,7 +55,7 @@ The request's `weather.getValue("/x")` method syntax would need member calls on 
 
 | Feed | Endpoint (no key unless noted) | Pointer |
 |---|---|---|
-| Weather | Open-Meteo `api.open-meteo.com/v1/forecast?latitude=52.37&longitude=4.90&current=temperature_2m` | `/current/temperature_2m` |
+| Weather | Open-Meteo `api.open-meteo.com/v1/forecast?latitude=40.79&longitude=-119.21&current=temperature_2m` | `/current/temperature_2m` |
 | Stocks | Yahoo Finance's chart endpoint, unofficial: `query1.finance.yahoo.com/v8/finance/chart/ASML.AS?interval=1d&range=1d` | `/chart/result/0/meta/regularMarketPrice` |
 | Sports | TheSportsDB test key `3`: `…/api/v1/json/3/eventslast.php?id=133604` | `/results/0/strEvent`, `/results/0/intHomeScore` |
 | News | Spaceflight News `api.spaceflightnewsapi.net/v4/articles/?limit=1` | `/results/0/title` |

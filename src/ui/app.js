@@ -3,13 +3,13 @@
 // component used by both the device UI (here, OTA flash) and the GitHub Pages
 // installer (first flash via Web Serial). Module loading is deferred by
 // default; entry-point is the WS init at the bottom: no ordering surprises.
-import { installPicker } from "/install-picker.js";
-import { preview } from "/preview3d.js";
-import { encodeGif } from "/gif.js";
-import { isNewer, parse } from "/semver.js";
-import { applyMigrations, collectFiles, restoreDirs, diffRestore } from "/migrate.js";
+import { installPicker } from "./install-picker.js";
+import { preview } from "./preview3d.js";
+import { encodeGif } from "./gif.js";
+import { isNewer, parse } from "./semver.js";
+import { applyMigrations, collectFiles, restoreDirs, diffRestore } from "./migrate.js";
 import { moduleHelp, controlHelp, walkLinks, ROLE_EMOJI, DIM_EMOJI, SCRIPTED_EMOJI, COMPILED_EMOJI, EMOJI_LABEL,
-         emojiTagsFor, emojiChipRow, chipsMatch } from "/help.js";
+         emojiTagsFor, emojiChipRow, chipsMatch } from "./help.js";
 
 // Sections (top to bottom):
 //   1. State + storage
@@ -6121,7 +6121,7 @@ function updateStatusBar() {
         }
     }
 
-    // System stats: "uptime · 🧠 NNKB · 🧱 NNKB"
+    // System stats: the uptime, then from expert mode up "🕒 fps · 🧠 NNKB · 🧱 NNKB"
     // 🧠 = internal-RAM free (heap progress total−used); 🧱 = largest contiguous
     // internal-RAM block (the maxBlock control, already maxInternalAllocBlock).
     // Both matter: free can be ample while fragmentation leaves no single block
@@ -6134,21 +6134,23 @@ function updateStatusBar() {
     if (statsEl) {
         const parts = [];
         if (uptimeCtrl) parts.push(uptimeCtrl.value);
+        // The rate and the memory are for someone tuning the device, so they show from expert mode up.
+        const tuning = uiMode() >= 1;
         // The WHOLE pipeline's rate, which is the one place fps is the honest unit: the device
         // really does complete this many frames a second, where a per-module fps is one part's
         // cost inverted. Before the memory badges because it is the number that moves.
-        if (fpsCtrl && fpsCtrl.value) {
+        if (tuning && fpsCtrl && fpsCtrl.value) {
             const f = Number(fpsCtrl.value);
             parts.push("🕒 " + (f >= 1000 ? Math.round(f / 1000) + "K fps" : f + " fps"));
         }
-        if (heapCtrl && heapCtrl.value !== undefined && heapCtrl.total) {
+        if (tuning && heapCtrl && heapCtrl.value !== undefined && heapCtrl.total) {
             const freeKb = Math.round((heapCtrl.total - heapCtrl.value) / 1024);
             parts.push("🧠 " + freeKb + "KB");
         }
         // Skip on desktop, where the platform stub reports "0KB" (no real
         // block measurement / unlimited heap): same reason heap free above
         // only shows when the heap progress control is present.
-        if (blockCtrl && blockCtrl.value && blockCtrl.value !== "0KB") {
+        if (tuning && blockCtrl && blockCtrl.value && blockCtrl.value !== "0KB") {
             parts.push("🧱 " + blockCtrl.value);
         }
         setText(statsEl, parts.join(" · "));
@@ -6306,15 +6308,17 @@ function releaseTagOf(version) {
 // Light the badge for an available update. `tag` is the release the picker should pre-select
 // (a vX.Y.Z stable tag, or "latest"); `label` is what the badge shows.
 function showUpdateBadge(badge, tag, label, isDesktop) {
-    // setText, not a raw write: this runs on every state patch, and rewriting identical text
-    // still destroys a selection inside the element.
-    setText(badge, `⬆ ${label}`);
+    // The arrow alone, so the header fits a phone; what the update is reads in the tooltip and on
+    // the Firmware card the badge opens. setText, not a raw write: this runs on every state patch,
+    // and rewriting identical text still destroys a selection inside the element.
+    setText(badge, "⬆");
     // A desktop cannot install from the Firmware card: it has no OTA, and updating means
     // downloading an archive and replacing the binary. So the badge sends it to the release page
     // instead of a card that would offer it nothing.
     badge.title = isDesktop
         ? `Update available: ${label}. Open the release page to download`
         : `Firmware update available: ${label}. Open Firmware to install`;
+    badge.setAttribute("aria-label", badge.title);
     badge.dataset.tag = tag;
     badge.dataset.desktop = isDesktop ? "1" : "";
     badge.dataset.moonbase = "";
@@ -6323,8 +6327,9 @@ function showUpdateBadge(badge, tag, label, isDesktop) {
 
 // Light the badge for a MoonBase that does not match the app, which an app update leaves behind on either channel: the matching one ships in the app's own release.
 function showMoonBaseBadge(badge, dev) {
-    setText(badge, "⬆ MoonBase");
+    setText(badge, "⬆");
     badge.title = `MoonBase ${dev.moonbase} does not match the app ${dev.version}. Open Firmware to install the matching one`;
+    badge.setAttribute("aria-label", badge.title);
     badge.dataset.tag = releaseTagOf(dev.version);
     badge.dataset.desktop = "";
     badge.dataset.moonbase = "1";

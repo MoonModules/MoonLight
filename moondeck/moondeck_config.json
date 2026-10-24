@@ -365,6 +365,15 @@
       "needs_firmware": true
     },
     {
+      "id": "size_symbols",
+      "tab": "esp32",
+      "group": "build",
+      "label": "Size by Symbol",
+      "help": "size_symbols",
+      "script": "report/size_symbols.py",
+      "needs_firmware": true
+    },
+    {
       "id": "flash_esp32",
       "tab": "esp32",
       "group": "flash",
@@ -486,6 +495,18 @@
       "label": "Build",
       "help": "build_teensy",
       "script": "build/build_teensy.py"
+    },
+    {
+      "id": "size_symbols_teensy",
+      "tab": "teensy",
+      "group": "build",
+      "label": "Size by Symbol",
+      "help": "size_symbols",
+      "script": "report/size_symbols.py",
+      "args": [
+        "--firmware",
+        "teensy41"
+      ]
     },
     {
       "id": "flash_teensy",

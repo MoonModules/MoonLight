@@ -9,9 +9,11 @@ sys.path.insert(0, str(ROOT / "moondeck" / "check"))
 import check_esp32_built as check  # noqa: E402
 
 
-def test_the_ui_inputs_are_the_files_the_header_is_generated_from():
+def test_the_ui_inputs_are_the_files_the_header_is_bundled_from():
     inputs = check.ui_inputs()
-    assert {"src/ui/app.js", "src/ui/help.js", "src/ui/index.html", "src/ui/style.css"} <= inputs
+    # A module only the bundle reads, the vendored script and the bundler itself count as much as the page.
+    assert {"src/ui/app.js", "src/ui/preview3d.js", "src/ui/index.html", "src/ui/style.css",
+            "src/ui/vendor/prism.js", "moondeck/build/bundle_ui.py"} <= inputs
     assert all((ROOT / f).exists() for f in inputs)
 
 
@@ -33,13 +35,3 @@ def test_the_sources_a_firmware_reads_include_the_ui_files_its_header_embeds(tmp
 
 def test_a_build_without_the_ui_header_gains_nothing():
     assert check.with_ui({"src/main.cpp"}) == {"src/main.cpp"}
-
-
-def test_a_recipe_without_the_ui_list_stops_the_check(tmp_path, monkeypatch):
-    recipe = tmp_path / "embed_ui.cmake"
-    recipe.write_text("# no list here\n", encoding="utf-8")
-    monkeypatch.setattr(check, "UI_RECIPE", recipe)
-    monkeypatch.setattr(check, "ROOT", tmp_path)
-    import pytest
-    with pytest.raises(SystemExit, match="no set\\(UI_FILES"):
-        check.ui_inputs()

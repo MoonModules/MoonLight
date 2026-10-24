@@ -168,6 +168,23 @@ inline void blendSeparable(BlendOp op, const Buffer& src, Buffer& dst, const Map
     }
 }
 
+/// Copy each light's bytes from channel `from` on as they are, through the LUT when there is one: a motion byte is a position, which no opacity fades.
+inline void copyChannelsFrom(const Buffer& src, Buffer& dst, const MappingLUT& lut, uint8_t channelsPerLight, uint8_t from) {
+    if (from >= channelsPerLight) return;
+    const size_t srcLights = src.bytes() / channelsPerLight;
+    const size_t dstLights = dst.bytes() / channelsPerLight;
+    const size_t n = channelsPerLight - from;
+    auto copy = [&](size_t s, size_t d) {
+        std::memcpy(dst.data() + d * channelsPerLight + from, src.data() + s * channelsPerLight + from, n);
+    };
+    if (!lut.hasLUT()) {
+        for (size_t i = 0; i < srcLights && i < dstLights; i++) copy(i, i);
+        return;
+    }
+    for (nrOfLightsType li = 0; li < lut.logicalCount() && li < srcLights; li++)
+        lut.forEachDestination(li, [&](nrOfLightsType phys) { if (phys < dstLights) copy(li, phys); });
+}
+
 /// Blend one layer's `src` into `dst` through its LUT, once per frame.
 inline void blendMap(const Buffer& src, Buffer& dst, const MappingLUT& lut,
                      uint8_t channelsPerLight,

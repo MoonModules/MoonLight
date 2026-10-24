@@ -39,6 +39,7 @@ add_executable(mm_tests
     unit/core/unit_MqttModule.cpp
     unit/core/unit_FileManagerModule.cpp
     unit/core/unit_Control_apply_absent_key.cpp
+    unit/core/unit_Control_capacity.cpp
     unit/core/unit_Control_int32.cpp
     unit/core/unit_Control_filepath.cpp
     unit/core/unit_Control_list.cpp
@@ -265,7 +266,7 @@ add_executable(mm_tests
 # The grid-size sweep drives every effect, including ones added after this file was
 # written, so its effect list is DERIVED from src/light/effects/ rather than typed here
 # (a hand-kept list would silently miss the next effect: the exact gap the sweep closes).
-# Always out-of-date on purpose, same rule as build_info.h: adding an effect file must
+# Always out-of-date on purpose, same rule as build_id.h: adding an effect file must
 # regenerate. The generator rewrites only on change, so an unchanged effect set is a no-op.
 add_custom_target(effect_sweep_gen ALL
     COMMAND ${UV_EXECUTABLE} run python ${CMAKE_SOURCE_DIR}/moondeck/build/generate_effect_sweep.py ${CMAKE_CURRENT_BINARY_DIR}/generated/effect_sweep.h

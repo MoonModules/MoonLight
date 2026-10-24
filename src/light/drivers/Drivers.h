@@ -591,6 +591,9 @@ public:
         if (!first && !L.contributes()) return;
         const BlendOp op = !first ? L.blendOp() : L.opacity == 255 ? BlendOp::Overwrite : BlendOp::Alpha;
         blendMap(L.buffer(), outputBuffer_, L.lut(), L.channelsPerLight(), op, L.opacity, /*clearFirst=*/first);
+        // Opacity fades color; the bottom layer's moving heads keep their aim however far it is faded.
+        if (first && op != BlendOp::Overwrite)
+            copyChannelsFrom(L.buffer(), outputBuffer_, L.lut(), L.channelsPerLight(), FixtureChannels::kMotionBase);
     }
 
     /// Fill the shared output from the layers: blended when several, a wiring-order frame as it is, else the one layer mapped. @xref{the-shared-output-buffer}

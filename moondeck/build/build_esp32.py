@@ -539,7 +539,7 @@ def firmware_cmake_args(firmware: str, release: str = "", version: str = "",
 
     `version` overrides MM_VERSION with the pipeline-computed semver
     (compute_version.py): the core for a stable tag, `<next>-dev.<N>` for a
-    moving `latest` build. Empty for local builds; build_info.h's #ifndef
+    moving `latest` build. Empty for local builds; build_info.cpp's #ifndef
     default (library.json) applies.
     """
     spec = FIRMWARES[firmware]
@@ -556,15 +556,15 @@ def firmware_cmake_args(firmware: str, release: str = "", version: str = "",
     # Burn the firmware key into the binary so SystemModule can report it and
     # the OTA path can pick the matching release asset (every release ships
     # one .bin per firmware key; see release.yml).
-    args.append(f'-DMM_FIRMWARE_NAME="{firmware}"')
+    args.append(f"-DMM_FIRMWARE_NAME={firmware}")   # bare: CMake adds the quotes, so idf.py's cache comparison matches
     # Burn the release-channel tag too, when the build pipeline supplies one.
-    # Same -D mechanism; empty default left to build_info.h's #ifndef so a
+    # Same -D mechanism; empty default left to build_info.cpp's #ifndef so a
     # local build needs no flag.
     if release:
-        args.append(f'-DMM_RELEASE="{release}"')
-    # Same for the computed version; empty leaves build_info.h's library.json default.
+        args.append(f"-DMM_RELEASE={release}")
+    # Same for the computed version; empty leaves build_info.cpp's library.json default.
     if version:
-        args.append(f'-DMM_VERSION="{version}"')
+        args.append(f"-DMM_VERSION={version}")
     # And into the IMAGE's app descriptor, the struct IDF puts in every binary. Without it the
     # descriptor keeps IDF's `git describe` fallback, which drifts from what the device reports:
     # describe names the nearest tag, so a one-off tag left in the repo kept surfacing in built
@@ -868,8 +868,8 @@ def main():
         sys.exit(r.returncode)
     sdkconfig_fragments.record(build_dir, digest)
 
-    # Show flash/RAM usage summary
-    subprocess.run(cmd + b_arg + ["size"], cwd=ESP32_DIR, env=env)
+    # The flash/RAM summary, read from the linker map: `idf.py size` builds again first, and the build stamp would relink the image a second time.
+    subprocess.run([cmd[0], "-m", "esp_idf_size", str(build_dir / "MoonLight.map")], cwd=ESP32_DIR, env=env)
 
     if FIRMWARES[firmware].get("moonbase"):
         build_moonbase(cmd, env, chip, args.version)

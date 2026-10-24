@@ -36,6 +36,10 @@ A firmware key that changes its feature set would otherwise keep its old `MM_NO_
 
 On Windows the default generator is Visual Studio multi-config, so `MoonLight.exe` lands at `build/windows/Release/MoonLight.exe` and `mm_scenarios.exe` under `build/windows/test/Release/`. `build_desktop.py` and `run_scenario.py` look in both the `Release/` folder and the build root, so Ninja works as well.
 
+## The compiler cache
+
+Every build uses [ccache](https://ccache.dev) when it is installed, and builds as before when it is not. A compile whose source, headers and flags match an earlier one is read back from the cache. That covers a rebuild after a clean, the same file in another ESP32 firmware, and a branch switched back to. ESP-IDF turns on its own ccache switch from `esp32/CMakeLists.txt`, and the desktop and Teensy builds set it as the compiler launcher. ESP-IDF's installer brings ccache on Windows; the Windows desktop build, on the Visual Studio generator, runs without it. `ccache -s` shows how often it hits. CI keeps one cache per build job through `.github/actions/ccache`. The version, git hash and date change with every commit, so `build_info.cpp` alone holds them, and a new commit recompiles only what it changed.
+
 ## Where the desktop keeps its settings
 
 A source checkout writes to `build/fs/`, its config under `build/fs/.config/`, recognized by `CMakeLists.txt` and `moondeck/` both being in the working directory. A development tree stays self-contained and ignored by git, and the File Manager shows what a board shows rather than build output. An installed or unzipped binary writes to the per-user data folder its OS provides, listed under [Install MoonLight](../moonwalk.md#install). `MM_DATA_DIR` overrides both, which is how the tests keep their files inside the build tree.
@@ -48,8 +52,8 @@ CMake runs these when their sources change; the generated files are ignored by g
 
 | Step | Source | Generated |
 |---|---|---|
-| `build_info_gen` | `library.json` | `src/core/util/build_info.h` |
-| `ui_embed` | every file in `embed_ui.cmake`'s `UI_FILES` | `src/ui/ui_embedded.h` |
+| `build_info_gen` | `library.json` and the git hash | `src/core/util/build_id.h` |
+| `ui_embed` | every file in `src/ui`, bundled and minified by `moondeck/build/bundle_ui.py` with a pinned esbuild it fetches into `build/tools` | `src/ui/ui_embedded.h` |
 
 ## Firmware variants
 

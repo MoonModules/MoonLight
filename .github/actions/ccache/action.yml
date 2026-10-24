@@ -1,0 +1,33 @@
+name: ccache
+description: The compiler cache for one job, restored from that job's newest run and saved after this one.
+# The key rotates per commit and restores from the newest matching prefix, the standard shape for a
+# compiler cache. The directory lives in the workspace (gitignored, so the build id stays clean),
+# where a build container mounting the workspace reaches it too. The builds pick ccache up
+# themselves once it is installed: build-system.md, The compiler cache.
+inputs:
+  key:
+    description: The job's cache name, one per configuration, since one configuration's objects never hit another's.
+    required: true
+  install:
+    description: Install ccache on the runner; 'false' when the build runs in a container that ships it.
+    default: 'true'
+runs:
+  using: composite
+  steps:
+    - if: inputs.install == 'true' && runner.os == 'Linux'
+      shell: bash
+      run: sudo apt-get update -qq && sudo apt-get install -y -qq ccache
+    - if: inputs.install == 'true' && runner.os == 'macOS'
+      shell: bash
+      run: brew install ccache
+    - uses: actions/cache@v4
+      with:
+        path: .ccache
+        key: ccache-${{ inputs.key }}-${{ github.sha }}
+        restore-keys: ccache-${{ inputs.key }}-
+    # 500 MB a job keeps every job's cache inside the repository's 10 GB together.
+    - shell: bash
+      run: |
+        mkdir -p .ccache
+        echo "max_size = 500M" > .ccache/ccache.conf
+        echo "CCACHE_DIR=$GITHUB_WORKSPACE/.ccache" >> "$GITHUB_ENV"

@@ -20,13 +20,13 @@ Exit codes: 0 fresh · 1 missing or stale (the message says which, and what to r
 """
 
 import argparse
-import re
 import subprocess
 import sys
 import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent.parent
+REPO = ROOT   # this repository, which a test that moves ROOT keeps for the UI globs
 
 sys.path.insert(0, str(ROOT / "moondeck" / "build"))
 from build_esp32 import APP_BIN, FIRMWARES, MOONBASE_BIN  # noqa: E402
@@ -66,7 +66,7 @@ SKIP_PARTS = {"build", "managed_components", "__pycache__", ".git"}
 # A desktop build regenerates them after an ESP32 build, so treating them as inputs makes
 # the firmware look stale forever, one minute after it was built. What actually feeds them
 # — src/ui/*.js, library.json, the git hash — is already covered by the scan.
-SKIP_FILES = {"src/ui/ui_embedded.h", "src/core/util/build_info.h"}
+SKIP_FILES = {"src/ui/ui_embedded.h", "src/core/util/build_id.h"}
 
 # The desktop-only platform never compiles into an ESP32 image, so an edit there cannot
 # stale the firmware. Kept in step with this check's trigger in CLAUDE.md § Commit,
@@ -108,18 +108,14 @@ def newest_source(only=None):
     return newest_path, newest_mtime
 
 
-# The UI reaches the firmware as one generated header, whose inputs no compiler reads, so ninja never lists them: the header's own recipe names them, the one home of that list.
+# The UI reaches the firmware as one generated header, whose inputs no compiler reads, so ninja never lists them. They are every file the builds glob as its dependencies, bundled by embed_ui.cmake.
 UI_HEADER = "src/ui/ui_embedded.h"
-UI_RECIPE = ROOT / "src" / "ui" / "embed_ui.cmake"
+UI_GLOBS = ("src/ui/*.js", "src/ui/*.html", "src/ui/*.css", "src/ui/*.png", "src/ui/vendor/*.js", "src/ui/embed_ui.cmake", "moondeck/build/bundle_ui.py")
 
 
 def ui_inputs() -> set:
-    """The UI files the embedded header is generated from, as embed_ui.cmake's UI_FILES lists them."""
-    m = re.search(r"set\(UI_FILES ([^)]*)\)", UI_RECIPE.read_text(encoding="utf-8"))
-    # A recipe this check cannot read would leave the UI unwatched again, so it stops rather than passing.
-    if not m:
-        raise SystemExit(f"{UI_RECIPE.relative_to(ROOT)}: no set(UI_FILES ...) to read the UI's files from")
-    return {f"src/ui/{name}" for name in m.group(1).split()}
+    """The files the embedded header is generated from, the same globs the three builds depend on, read in this repository."""
+    return {str(p.relative_to(REPO)) for g in UI_GLOBS for p in REPO.glob(g)}
 
 
 def with_ui(deps: set) -> set:

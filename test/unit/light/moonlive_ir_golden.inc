@@ -71,7 +71,7 @@
     {"projects/stadbeest/stadbeest-walk.mle", 0x07253f910ca2b12aull},
     {"services/button.mls", 0x377a24ae1d49b9d1ull},
     {"services/chase.mls", 0x91984b68b9521c79ull},
-    {"services/jsondemo.mls", 0xa0ee5ff445062864ull},
+    {"services/jsondemo.mls", 0xe6f44fec9d3bf3b2ull},
     {"services/power.mls", 0x0656e0565392a427ull},
     {"services/sweep.mls", 0xf22d60f9fdbec0ecull},
     {"services/weather.mls", 0xd29c20c5e3c8cb3full},

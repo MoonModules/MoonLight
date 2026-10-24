@@ -212,9 +212,9 @@ rather than schedule:
   somewhere", the output-only wording the analysis above set out to correct. The correction is two
   edits and no code: scope that line to a LIGHT driver, and name the general sense plus its two
   families in `architecture.md`. It is cheap, and every other document defers to it.
-- **`/mm/pad/N` in `OscModule`.** Every input can fire a pad now (the pad target resolves through the
-  generic pad-grid list), but OSC has no path for one, so a surface cannot. Decide what a press means
-  on an empty slot and whether a nonzero value is press-versus-hold.
+- ✅ **`/mm/pad/N` in `OscService`.** A truthy value on `/mm/pad/N` presses pad N, which applies the
+  preset on that cell; the release a button sends after it does nothing, and N outside the grid is
+  ignored.
 
 ## Step 1: rebuild Infrared and Button around a mapping list ✅
 

@@ -113,7 +113,7 @@ a { color: var(--accent); }
     color: var(--accent);
     font-size: 12px;
     line-height: 1;
-    padding: 4px 8px;
+    padding: 4px 6px;
     border-radius: 12px;
     cursor: pointer;
     white-space: nowrap;

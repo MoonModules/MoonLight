@@ -785,6 +785,17 @@ Scenarios are JSON files in `test/scenarios/`. Use the dropdown to run a single 
 
 For a full description of each scenario, see the [test page](https://moonmodules.org/MoonLight/reference/tests.html), auto-generated from the JSON files.
 
+### size_symbols
+
+What a firmware image spends its bytes on, per symbol: the bytes per kind (code, constants, data, zero-initialized) and the largest symbols. From the second run on, it also lists every symbol that grew, shrank, appeared or went since that firmware's last run. A commit's KPI line says the image grew; this says by which functions and tables.
+
+```bash
+uv run moondeck/report/size_symbols.py --firmware esp32          # build/esp32-esp32/MoonLight.elf
+uv run moondeck/report/size_symbols.py --firmware teensy41 --top 50
+```
+
+It reads the linked `MoonLight.elf` with the `nm` beside the compiler that built it, as the build directory's CMake cache names it. Its table stays beside the image as `size-symbols.json`, for the next comparison. Firmware only: a macOS binary stores no symbol sizes.
+
 ### history_report
 
 Generate a human-readable history report from `git log` + `gh release list`. Writes a single markdown file at `build/history.md` (gitignored — the report is an artifact, not source; storing it in the repo would duplicate what git already carries).

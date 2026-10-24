@@ -444,3 +444,20 @@ TEST_CASE("exclusion stays in range and within one step of its formula for every
         }
     CHECK(worst <= 1);
 }
+
+// The bottom layer of a composite fades over black, and its moving heads turned toward pan 0 with it: a motion byte is a position, not a brightness.
+TEST_CASE("a bottom layer faded over black keeps its motion bytes, its color halved") {
+    mm::Buffer src, dst;
+    src.allocate(2, 6);   // RGBW, then pan and tilt
+    dst.allocate(2, 6);
+    for (size_t i = 0; i < src.bytes(); i++) src.data()[i] = 200;
+    mm::MappingLUT lut;
+    lut.setIdentity(2);
+    mm::blendMap(src, dst, lut, 6, mm::BlendOp::Alpha, 128, /*clearFirst=*/true);
+    mm::copyChannelsFrom(src, dst, lut, 6, mm::FixtureChannels::kMotionBase);
+    for (size_t light = 0; light < 2; light++) {
+        CHECK(dst.data()[light * 6 + 0] == 100);   // color, faded by half
+        CHECK(dst.data()[light * 6 + 4] == 200);   // pan, as the layer aimed it
+        CHECK(dst.data()[light * 6 + 5] == 200);   // tilt
+    }
+}

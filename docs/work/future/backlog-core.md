@@ -286,13 +286,6 @@ identifier gets rewritten by accident.
 
 The "public member has no `///`" rule reads a declaration's shape with a regex and tracks access by counting braces. It missed 25 functions carrying `MM_NONBLOCKING` until the pattern learned that macros follow a parameter list, and its comments list the other shapes it once misread. `check_clang_query.py` and `gen_help.py` already parse every header with libclang, which knows each declaration's access, kind and attached doc comment. Moving the rule onto that parse removes the brace counting, the depth stack and the shape patterns, and it reaches `.cpp` files, which the regex cannot read.
 
-## A capture device on Linux feeds the Picture service (robwomp, 2026-10-21)
-
-The [Streams plan](../present/Plan-20261013%20-%20Streams%2C%20every%20frame%20from%20outside%20(11%20of%2016).md) brings capture to the ESP32: a USB grabber on the P4 ([#151](https://github.com/MoonModules/MoonLight/pull/151), [#152](https://github.com/MoonModules/MoonLight/pull/152)) and a MIPI-CSI camera.
-On the desktop build a capture device is read through Video4Linux (V4L2), which covers USB grabbers and the HDMI and CSI inputs of boards such as Rockchip SBCs.
-It is one more source of the picture family: the platform layer reads frames, and the Picture service takes them as it takes every other source.
-robwomp has such boards and offered to test on Discord.
-
 ## Distribution
 
 ### The arm64 `.deb` is untested on Raspberry Pi OS bookworm (2026-09-13)
@@ -1250,9 +1243,13 @@ the sixth silent-zero this tooling has produced, and each looked like a clean tr
 
 `HueDriver::ensureNameBuffers()` / `freeNameBuffers()` is the alloc-in-build / free-in-release / null-guard bundle that `ScratchBuffer` absorbs — and it does **no** `dynamicBytes` accounting, so the module's memory readout under-reports its Hue-light name buffers. It was skipped in the ScratchBuffer migration (its buffers are `char[]` name tables, not the grid-sized state the sweep targeted). Now that `DriverBase::release()` chains to `MoonModule::release()` (fixed on PR #43), a `ScratchBuffer` member here would free correctly on disable and self-report its bytes. Mechanical, one-file, behaviour-preserving. Flagged by the 👾 Reviewer on PR #43.
 
-### Socket-pair fixture for HttpServerModule WS-send tests (test infra)
+### Link-time optimisation on the ESP32 builds (measure)
 
-`HttpServerModule`'s resumable preview send (`sendBufferedFrame` / `drainPreviewSend` / `cancelBufferedSend`, the newest-wins drop, the per-client cursor over `[hdr ++ body]`, the memory-adaptive chunk) has no direct unit test because driving it needs real `TcpConnection` clients whose `writeSome` returns partial / WouldBlock under control — and there's no socket-pair test fixture today. The send *contract* is covered indirectly: `unit_PreviewDriver` drives a `CaptureBroadcaster` mock for route-to-buffered / gate-on-idle / cancel-on-rebuild, and the live device sweep exercises the real drain across ticks. A loopback `socketpair()` fixture on the desktop platform (a `TcpConnection` pair where the test reads the bytes the server pushed, and can simulate a stalled receiver by not draining) would let the drain/drop/cancel/over-push paths be pinned host-side. Build it when the next core transport change lands (it'd also serve future WS tests).
+Splitting `HttpServerModule` into three files cost 7,360 bytes on the classic ESP32 (2,129,216 to 2,136,576), the compiler no longer inlining across the files. Link-time optimisation (`-flto`) optimises the whole program at the link and wins that back, and likely more across the firmware. ESP-IDF's current docs offer it as `CONFIG_COMPILER_LTO_LINKTIME`; v6.1, which MoonLight builds with, has no such option. Try it once the ESP-IDF release MoonLight moves to offers it, per board: the image size, the IRAM placement in the map file (an interrupt handler must not inline code from flash), a run on the RMT and parallel drivers, and the build time, which LTO makes two to three times longer.
+
+### Pin the preview cancel over loopback (test)
+
+`cancelBufferedSend` closes a preview client left mid-message, so the next frame is never read as the rest of this one, and nothing pins it. The loopback `WsClient` in `unit_HttpServerModule_subscribe.cpp` already drives `/wsp` and reads a frame whole; a client that stops reading mid-frame, then a cancel, then a check that its socket closed while a client that read the whole frame stays open, covers it.
 
 ### Adopting the v6.x ecosystem changes (plan)
 
@@ -1426,16 +1423,9 @@ Compile-time answer already ships: `--firmware esp32-eth` excludes the WiFi stac
 
 Forward-looking companion to the shipped UI spec, [moonmodules/core/ui.md](../../moonmodules/core/ui.md). The live spec describes the UI as shipped; this file holds what is **not** in it yet: deferred items, open design questions for 1.0, and the gap analysis against MoonLight v1.
 
-### Serving the UI: ETags, one minified bundle, then a split app.js (2026-10-15)
+### Split app.js by feature (2026-10-15)
 
-Every embedded UI file is served with `Cache-Control: no-cache` and no ETag, so each page load downloads the whole UI again, about 280 KB gzipped, written inline on the render thread: frames stall while a page loads. Three steps, in this order, each standing on its own:
-
-1. **ETags.** `embed_ui.cmake` hashes each file at build time and writes the tag into `ui::kFiles`; the server answers a matching `If-None-Match` with `304 Not Modified` and no body (RFC 9110). A reload then costs a few hundred bytes, and a firmware update changes the tags, so the browser fetches the new UI by itself. `no-cache` stays: it already means "ask before using the cache".
-2. **Bundle and minify at build time, WLED's shape.** WLED's `tools/cdata.js` inlines its CSS and JavaScript into one HTML, minifies and gzips it, and serves one file. Our UI is ES modules, so joining them is a bundler's job: esbuild bundles and minifies in one pass. One request, one compression dictionary and no import chain on load. Measured on 2026-10-15 with esbuild 0.24: the 8 JavaScript files gzip to 217 KB today, to 96 KB bundled (the comments go) and to 67 KB minified, and `style.css` to 9 KB from 28.5 KB minified. That is about 170 KB of flash, the embedded UI going from 254 KB to 84 KB; joining files alone saves only 3 KB, so the gain is the comments. It loads faster too: a first load sends a third of the bytes through the render thread over WiFi, so the page appears sooner and the lights stall a third as long, while the UI runs at the same speed once loaded. The step to take when the firmware nears its partition. The desktop keeps serving the separate files from disk for live editing. To decide first: esbuild as a build dependency of the ESP32 and desktop builds, which need only Python today (PyPI, npm or a standalone binary).
-3. **Split `app.js` by feature, not by module.** Almost every card comes from the one generic renderer, so the candidates are the features with their own UI: the control surface and pads, the File Manager, the gallery, the MoonLive editor, the preview, the status bar. Six to ten files, the shape `preview3d.js`, `help.js`, `migrate.js` and `gif.js` already have. With step 2 a split costs nothing at runtime; without it, each file costs a connection on load (a browser opens up to 6, beside the two WebSockets), a short RAM peak of lwIP buffers, a little render-thread time per request, and about 3 KB of flash for an eight-way split, measured as the gap between the files gzipped apart and joined.
-4. **One home for the file list.** The build files glob `src/ui` for their dependencies while `embed_ui.cmake` keeps `UI_FILES` by hand, so a file can rebuild the firmware yet never be served. `embed_ui.cmake` globbing the directory itself makes the set one list; the first step of the bundle above replaces both.
-
-Measure a first load and a reload on an ESP32 before and after each step, so the numbers decide rather than the reasoning.
+The UI ships as one minified bundle with ETags, so splitting `app.js` costs nothing at runtime. Almost every card comes from the one generic renderer, so the candidates are the features with their own UI: the control surface and pads, the File Manager, the gallery, the MoonLive editor, the preview, the status bar. Six to ten files, the shape `preview3d.js`, `help.js`, `migrate.js` and `gif.js` already have. Worth it once a feature is hard to find in the 500 KB source.
 
 ### Deferred to 1.x
 

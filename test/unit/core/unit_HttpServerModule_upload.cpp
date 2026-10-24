@@ -1,13 +1,14 @@
 /// @module HttpServerModule
 /// @also FileManagerModule
 ///
-/// An upload to flash moves through the card's transfer slots, a bounded slice per tick, so a slow client never holds the render loop; driven over loopback.
+/// An upload to flash and a download from it move a bounded slice per tick, so a slow client never holds the render loop; driven over loopback.
 
 #include "doctest.h"
 #include "core/system/HttpServerModule.h"
 #include "platform/platform.h"
 #include "http_loopback.h"
 
+#include <algorithm>
 #include <chrono>
 #include <cstdio>
 #include <cstring>
@@ -103,6 +104,47 @@ TEST_CASE("a flash upload whose client stalls never holds a tick, and once the s
     CHECK(postSmall(http, client2, kTestPort, "/ok.bin", "hi").rfind("HTTP/1.1 200", 0) == 0);   // the slot is free again
 
     client2.close();
+    http.release();
+}
+
+// A flash download once wrote its whole file in one call, so a client that stopped reading held the render loop until the write gave up.
+TEST_CASE("a flash download whose client stops reading never holds a tick, and the stall guard closes it") {
+    FlashFixture fix;
+    const std::string big = pattern(16u << 20);   // more than the loopback socket buffers hold
+    REQUIRE(mm::platform::fsWriteAtomic("/big.bin", big.data(), big.size()));
+    mm::HttpServerModule http;
+    http.port = kTestPort;
+    http.setup();
+    mm::platform::TcpConnection client;
+    REQUIRE(connectAndAccept(http, client, kTestPort));
+    const char* req = "GET /api/file?path=/big.bin HTTP/1.1\r\n\r\n";
+    REQUIRE(client.write(reinterpret_cast<const uint8_t*>(req), std::strlen(req)));
+
+    long long slowestMs = 0;
+    for (int i = 0; i < 20; i++) {
+        const auto t0 = std::chrono::steady_clock::now();
+        http.tick20ms();
+        slowestMs = std::max<long long>(slowestMs, std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - t0).count());
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    CHECK(slowestMs < 50);   // the reader takes nothing: each tick writes what the socket holds and moves on
+
+    struct Clock { ~Clock() { mm::platform::setTestNowMs(0); } } clock;
+    mm::platform::setTestNowMs(mm::platform::millis() + 60000);   // well past the stall guard
+    for (int i = 0; i < 5; i++) http.tick20ms();
+    // The client finds what the socket held, then the close: never the whole file.
+    size_t got = 0;
+    int n = -1;
+    static char buf[65536];
+    for (int ms = 0; ms < 5000 && n != 0; ) {
+        n = client.read(reinterpret_cast<uint8_t*>(buf), sizeof(buf));
+        if (n > 0) got += static_cast<size_t>(n);
+        else if (n < 0) { std::this_thread::sleep_for(std::chrono::milliseconds(1)); ms++; }
+    }
+    CHECK(n == 0);
+    CHECK(got < big.size());
+
+    client.close();
     http.release();
 }
 

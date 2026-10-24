@@ -221,7 +221,7 @@ private:
     /// What the compiled script declared, cached so no call lands on the tick path.
     Dim         dim_  = Dim::D2;
     /// The tags the script declared: six emoji at most, the longest shipped script using three.
-    char        tags_[24] = {};
+    char        tags_[25] = {};   // six four-byte emoji and the terminator
     /// Which shadow note the status should carry, or null when this is the only copy, asked once per status line so the success and failure branches agree.
     const char* shadowMark() const {
         if (!moonlive::scriptShadowsFactory(name_)) return nullptr;

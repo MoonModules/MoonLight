@@ -139,7 +139,7 @@ On `/dev/cu.usbmodem202134311`, after a repower (it was wedged on the last probe
 
 ### 5. The bulb ✅, Glow ✅
 
-**Done** on 2026-10-08: WLED took the image, MoonBase came up on the WiFi in 6 seconds, MoonLight installed and runs the bulb's catalog entry. **In progress:** Glow, iterated on the bulb to follow the bass, waits for your verdict before it moves into `moonlive/effects/`.
+**Done** on 2026-10-08: WLED took the image, MoonBase came up on the WiFi in 6 seconds, MoonLight installed and runs the bulb's catalog entry. Glow, iterated on the bulb to follow the bass, lives in `moonlive/effects/audio/glow.mle`.
 
 - Before anything is written: every file WLED's `/edit?list=/` lists, downloaded for reference into the appendix below. WLED hides `wsec.json` from the listing and from HTTP, so only the migration image reads it.
 - With step 4 green and your go-ahead: the same `/update` on 192.168.1.230.

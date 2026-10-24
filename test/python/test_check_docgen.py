@@ -456,11 +456,11 @@ def test_the_headers_are_actually_scanned():
 
 
 def test_a_header_a_build_generates_is_not_counted():
-    """build_info.h is written by every build and never committed, so counting it moved the
+    """build_id.h is written by every build and never committed, so counting it moved the
     ratchet with whatever was built last."""
     import check_docgen
     scanned = {p.as_posix() for p in check_docgen._headers()}
-    assert "src/core/util/build_info.h" not in scanned
+    assert "src/core/util/build_id.h" not in scanned
     assert "src/core/system/HttpServerModule.h" in scanned
 
 

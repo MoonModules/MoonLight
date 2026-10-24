@@ -3133,7 +3133,7 @@
      "line": "The first light of the shared buffer this driver reads."
     },
     "count": {
-     "line": "How many lights it reads from `start`; blank reads them all.",
+     "line": "How many lights it reads from `start`; 0 reads them all.",
      "more": "So drivers share one buffer: a status LED takes `start 0, count 1` and the strip `start 1`."
     }
    },
@@ -3208,7 +3208,7 @@
      "line": "The first light of the shared buffer this driver reads."
     },
     "count": {
-     "line": "How many lights it reads from `start`; blank reads them all.",
+     "line": "How many lights it reads from `start`; 0 reads them all.",
      "more": "So drivers share one buffer: a status LED takes `start 0, count 1` and the strip `start 1`."
     },
     "fps": {
@@ -3460,7 +3460,7 @@
      "line": "The first light of the shared buffer this driver reads."
     },
     "count": {
-     "line": "How many lights it reads from `start`; blank reads them all.",
+     "line": "How many lights it reads from `start`; 0 reads them all.",
      "more": "So drivers share one buffer: a status LED takes `start 0, count 1` and the strip `start 1`."
     },
     "fps": {
@@ -3555,7 +3555,7 @@
      "line": "The first light of the shared buffer this driver reads."
     },
     "count": {
-     "line": "How many lights it reads from `start`; blank reads them all.",
+     "line": "How many lights it reads from `start`; 0 reads them all.",
      "more": "So drivers share one buffer: a status LED takes `start 0, count 1` and the strip `start 1`."
     },
     "pins": {
@@ -3619,7 +3619,7 @@
      "line": "The first light of the shared buffer this driver reads."
     },
     "count": {
-     "line": "How many lights it reads from `start`; blank reads them all.",
+     "line": "How many lights it reads from `start`; 0 reads them all.",
      "more": "So drivers share one buffer: a status LED takes `start 0, count 1` and the strip `start 1`."
     },
     "pins": {
@@ -3671,7 +3671,7 @@
      "line": "The first light of the shared buffer this driver reads."
     },
     "count": {
-     "line": "How many lights it reads from `start`; blank reads them all.",
+     "line": "How many lights it reads from `start`; 0 reads them all.",
      "more": "So drivers share one buffer: a status LED takes `start 0, count 1` and the strip `start 1`."
     },
     "pins": {

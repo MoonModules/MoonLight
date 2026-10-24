@@ -294,7 +294,7 @@ def _headers():
                 rel = p.relative_to(ROOT)
                 if rel.as_posix().startswith(HEADER_EXEMPT) or rel in seen:
                     continue
-                # Tracked files only, as repo_health measures: a header a build generates (build_info.h, ui_embedded.h) moved the counts with whatever was built last.
+                # Tracked files only, as repo_health measures: a header a build generates (build_id.h, ui_embedded.h) moved the counts with whatever was built last.
                 if tracked is not None and rel.as_posix() not in tracked:
                     continue
                 seen.add(rel)

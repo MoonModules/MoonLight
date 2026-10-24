@@ -61,7 +61,12 @@ The same program, installed as a container rather than a package: start it as [I
 | **Output** | Art-Net UDP 6454, DDP 4048, E1.31 5568, all outbound |
 | **Capabilities** | none: it binds its port as an ordinary process |
 
-**Audio input comes through PulseAudio.** The image carries libpulse, so audio a PulseAudio server receives from the network, from squeezelite or sendspin for instance, drives the audio-reactive effects. Point the container at the server with `-e PULSE_SERVER=tcp:<host>:4713`, or mount the host's socket with `-v /run/user/1000/pulse/native:/run/pulse/native -e PULSE_SERVER=unix:/run/pulse/native`. Without one it runs as before, without audio input.
+**Audio input comes through PulseAudio.** The image carries libpulse, so audio a PulseAudio server receives from the network, from squeezelite or sendspin for instance, drives the audio-reactive effects. The server has to let the container in, in one of two ways:
+
+- **Over TCP:** `-e PULSE_SERVER=tcp:<host>:4713`, where the server's `module-native-protocol-tcp` admits the container by address (`auth-ip-acl=`) or admits anyone (`auth-anonymous=1`).
+- **Through the host's socket:** mount it together with the cookie the server checks: `-v /run/user/$(id -u)/pulse/native:/run/pulse/native -v ~/.config/pulse/cookie:/run/pulse/cookie:ro -e PULSE_SERVER=unix:/run/pulse/native -e PULSE_COOKIE=/run/pulse/cookie`.
+
+Without a server it runs as before, without audio input.
 
 **Several instances** run side by side: each container has its own ports and writes its own identity, so they are told apart on the network. CPU is the limit rather than memory, about one core each, since the desktop build renders as fast as it may; cap it with `cpus:` when running a fleet.
 

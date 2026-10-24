@@ -69,7 +69,7 @@ processes:
   - id: build-setup
     title: Set up a computer to build MoonLight
     actor: contributor
-    goal: uv, CMake 3.20 or newer and a C++20 compiler on the machine, once.
+    goal: uv, CMake 3.20 or newer, a C++20 compiler and ccache on the machine, once.
     systems: [MoonDeck]
     inputs:
       type: object
@@ -77,13 +77,13 @@ processes:
         platform: { type: string, enum: [macOS, Linux, Windows], description: "Which computer?" }
     steps:
       - id: mac
-        say: Install the command line tools, CMake and uv.
+        say: Install Xcode's command line tools, CMake, uv, ccache.
         given: [{ input: platform, equals: macOS }]
-        when: { run: { command: "xcode-select --install; brew install cmake uv" } }
+        when: { run: { command: "xcode-select --install; brew install cmake uv ccache" } }
       - id: linux
-        say: Install CMake, a compiler and uv.
+        say: Install CMake, a compiler, ccache and uv.
         given: [{ input: platform, equals: Linux }]
-        when: { run: { command: "sudo apt install cmake g++ && curl -LsSf https://astral.sh/uv/install.sh | sh" } }
+        when: { run: { command: "sudo apt install cmake g++ ccache && curl -LsSf https://astral.sh/uv/install.sh | sh" } }
         detail: |
           GCC 12 or Clang 15 from your distribution, and uv from astral's installer.
       - id: windows

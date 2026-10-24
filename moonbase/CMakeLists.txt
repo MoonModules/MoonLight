@@ -14,4 +14,9 @@
 # The project name is load-bearing: the app's image is matched by BASENAME in release.yml and through `APP_BIN` in build_esp32.py, and unknown basenames are skipped with only a warning, so MoonBase must answer to a name of its own.
 cmake_minimum_required(VERSION 3.16)
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
+# A compiler cache where one is installed, as the application's build does.
+find_program(MM_CCACHE ccache)
+if(MM_CCACHE)
+    set(CCACHE_ENABLE 1)
+endif()
 project(MoonLight-moonbase)

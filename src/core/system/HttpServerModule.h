@@ -4,6 +4,7 @@
 #include "core/util/TryLock.h"   // the cross-thread sender latch (wsLock_)
 #include "core/util/ScratchBuffer.h"   // leafHashes_: the growable diff-on-the-wire value-hash cache
 #include "core/util/BinaryBroadcaster.h"
+#include "core/util/JsonSink.h"   // walkPatch_ holds the second's gathered patch between ticks
 #include "platform/platform.h"
 
 #include <array>
@@ -13,7 +14,6 @@ namespace mm {
 
 struct StateDocumentResult;
 
-class JsonSink;   // forward declared: the bodies in the .cpp include the real headers
 class Scheduler;
 
 namespace ui { struct EmbeddedFile; }   // one served UI file, from the generated ui_embedded.h
@@ -41,7 +41,7 @@ namespace ui { struct EmbeddedFile; }   // one served UI file, from the generate
 ///
 /// A binary frame drains in memory-adaptive chunks per client per 20 ms tick. A large frame so crosses several ticks without a loop waiting on a socket, and still arrives as one message.
 ///
-/// One frame is in flight per channel and a new offer meanwhile is dropped. A preview or state-stream client is closed on a real error or a FIN, never for being slow. A patch still writes whole, so a client that stopped reading is closed after the write's stall bound.
+/// One preview frame is in flight and a new offer meanwhile is dropped. On `/ws` a client's frames queue behind the one leaving, up to 8 KB, past which the client is closed and reconnects to a fresh document. A client is closed on a real error, a FIN or the stall guard, never for being slow.
 ///
 /// ## What a preview client may send back
 ///
@@ -54,6 +54,8 @@ namespace ui { struct EmbeddedFile; }   // one served UI file, from the generate
 /// Snapshot then patch, the shape Redux and Firestore sync use and RFC 6902 formalises. Re-serializing the mostly static tree every second on the render thread stuttered the LEDs at 1 Hz.
 ///
 /// A client gets a full state when it subscribes, then each second a patch of the values that changed. Each leaf's serialized value is hashed with FNV-1a and compared with the cached hash.
+///
+/// The second's walk moves about 1 ms per 20 ms tick and sends its patch when it ends, so no frame pays for every value. It visits the leaves in the baseline's order, so the cached hash it compares with is the entry after the last match, found without a search.
 ///
 /// Value-compare rather than a dirty flag, so a value the device changes itself, telemetry, a status or a driver, is caught like a `setControl` write with no per-write bookkeeping.
 ///
@@ -73,7 +75,7 @@ namespace ui { struct EmbeddedFile; }   // one served UI file, from the generate
 ///
 /// A Ping gets a Pong with its payload, and a Close a Close with its status code before the connection ends (RFC 6455 §5.5). A browser sends neither; a client library pings to keep alive.
 ///
-/// The uplink is read only between frames, so the answer can never land inside a fragment, where RFC 6455 §5.4 forbids it.
+/// The answer queues behind the frame leaving, so it goes out between frames and never inside a fragment, where RFC 6455 §5.4 forbids it.
 ///
 /// ## The full state streams
 ///
@@ -85,13 +87,13 @@ namespace ui { struct EmbeddedFile; }   // one served UI file, from the generate
 ///
 /// The cursor resolves its path again at every step, so a tree changed between fragments still ends in valid JSON, and the schema change queues the resync that follows.
 ///
-/// Run to completion, the same cursor writes `/api/state` and one module's JSON. Patches and the WLED frame wait while any document streams.
+/// The same cursor answers `/api/state` a fragment at a time, and writes one module's JSON at once. Patches and the WLED frame wait while any document streams.
 ///
 /// ## A value someone watches move
 ///
-/// A module whose values move in front of someone, a desk's motorized faders, calls `notifyValuesChanged()`. Its changes go out on the next 20 ms tick, at most every 40 ms.
+/// A module whose values move in front of someone, a desk's motorized faders, calls `notifyValuesChanged()`. Its changes go out on the next 20 ms tick, at most every 40 ms. A configured control write marks its module the same way, so every other page shows it on the next tick; a driven one rides the second's walk.
 ///
-/// Only that module is walked and its hashes update as it goes, so the second's patch does not send the values again.
+/// Only that module is walked and its hashes update as it goes, so the second's patch does not send the values again. What the second's walk has gathered goes out first, so an older value it holds never lands after the newer one.
 ///
 /// ## How a leaf is named
 ///
@@ -107,9 +109,21 @@ namespace ui { struct EmbeddedFile; }   // one served UI file, from the generate
 ///
 /// A pending resync runs on the 20 ms tick and preempts an in-flight preview frame, so a new client gets its state, and its preview, within tens of milliseconds.
 ///
-/// ## Why the drain runs on the transport tick
+/// ## The type list is fixed per binary
 ///
-/// The drain runs on the 20 ms transport poll, not the per-render `tick`, so a socket write is never charged to the LEDs. The preview's rate is bounded by that cadence: it is a view, the LEDs are not.
+/// Every type registers at boot, so `/api/types` answers the same for the life of a binary. Its ETag comes from the build's identity and the type names. A browser holding the list is answered 304 and builds no module (RFC 9110 section 13.1.2).
+///
+/// A full answer builds each type once to read its defaults, one type per refill of a send slot, so no frame pays for them all.
+///
+/// ## One resumable send
+///
+/// Every answer leaves through one kind of slot: a connection, a head and a body, and a source that refills the body once it is out. The source is a span in flash, a preview frame, a file or the state a chunk at a time, or the frames queued for a control client.
+///
+/// One loop drains them all on the 20 ms transport poll, never on the render tick, so a socket write is never charged to the LEDs. The preview's rate is bounded by that cadence: it is a view, the LEDs are not.
+///
+/// Each slot moves as much as its socket takes now. A refill, the costly part, waits for the next tick once the tick's 3 ms are spent, and the turn rotates so no slot is favored.
+///
+/// Below the internal-RAM headroom one send queues at a time through the lease, and a send that moves nothing for 10 s is closed. No client, however slow, holds the render loop.
 ///
 /// ## The WLED-compatibility shim
 ///
@@ -177,7 +191,7 @@ namespace ui { struct EmbeddedFile; }   // one served UI file, from the generate
 ///
 /// The control channel takes eight clients: a few viewers plus a refresh's overlap. The new socket opens before the old one's FIN arrives, and holds a slot until the old one is reaped.
 ///
-/// At four, quick refreshes fill every slot with dead connections and the new upgrade is refused. A slot is only a descriptor and a stream cursor.
+/// At four, quick refreshes fill every slot with dead connections and the new upgrade is refused. A slot is only a descriptor and an idle send.
 ///
 /// ## Why the preview cap is lower
 ///
@@ -187,7 +201,7 @@ namespace ui { struct EmbeddedFile; }   // one served UI file, from the generate
 ///
 /// ## Why the preview has its own connections
 ///
-/// Separate TCP connections keep a 10 KB preview frame from delaying a state push, the standard remedy for head-of-line blocking. The state push has its own streams for the same reason.
+/// Separate TCP connections keep a 10 KB preview frame from delaying a state push, the standard remedy for head-of-line blocking. The state push has its own sends for the same reason.
 ///
 /// ## Why the sink helpers are members
 ///
@@ -202,29 +216,14 @@ public:
 
     /// The scheduler every control write is applied through.
     void setScheduler(Scheduler* s) { scheduler_ = s; }
-    /// Where the UI assets are served from.
-    void setUiPath(const char* path) { uiPath_ = path; }
 
     /// Stream one binary frame to every client, the producer pushing payload bytes and this prepending the header. @xref{the-two-websocket-channels}
     bool sendBufferedFrame(const uint8_t* header, size_t headerLen,
                            const uint8_t* body, size_t bodyLen) override;
     /// True when no preview frame is draining.
-    bool bufferedSendIdle() const override { return !previewSend_.active; }
+    bool bufferedSendIdle() const override { return !previewFrame_.active; }
     /// Drop the in-flight frame, closing any client left mid-message, whose stream would desync.
-    void cancelBufferedSend() override {
-        if (previewSend_.active) {
-            const size_t total = previewSend_.hdrLen + previewSend_.bodyLen;
-            for (int i = 0; i < kMaxPreviewClients; i++)
-                if (previewClients_[i].valid() &&
-                    previewSend_.sent[i] > 0 && previewSend_.sent[i] < total) {
-                    previewClients_[i].close();
-                    // Every close notifies the producer, or the dead slot's standing request steers on.
-                    if (clientSink_) clientSink_->onClientGone(i);
-                }
-        }
-        previewSend_.active = false;
-        endSend(&previewSend_);
-    }
+    void cancelBufferedSend() override;
 
 
     /// How many preview clients are connected.
@@ -355,11 +354,17 @@ public:
     void clearFullResyncForTest() { fullResyncPending_ = false; }
     /// Whether one client alone waits for a full state, for a test.
     bool clientResyncPendingForTest(int client) const { return resyncClient_[client]; }
-    /// The port the live server is actually bound to, or 0 when none is up.
+    /// The port the live server is bound to, or 0 when none is up.
     static uint16_t servedPort() { return instance_ ? instance_->boundPort_ : 0; }
 
     /// Build the early patch of the modules that asked for one, for a test.
     uint16_t buildSoonPatchForTest(JsonSink& sink) { return buildSoonPatch(sink); }
+    /// Start the second's walk, for a test.
+    void startValueWalkForTest() { startValueWalk(); }
+    /// Move the second's walk on by `leaves` leaves, returning whether it has visited every viewed value, for a test.
+    bool stepValueWalkForTest(int leaves);
+    /// What the second's walk has gathered so far, for a test.
+    uint16_t walkPatchForTest(JsonSink& sink) { return writeClientPatch(sink, walkPatch_, nullptr); }
 
     /// Install the schema-changed and values-changed hooks without opening the listener, which a unit test needs.
     void installHooksForTest() {
@@ -368,10 +373,12 @@ public:
         MoonModule::setValuesChangedHook(&HttpServerModule::onValuesChanged);
     }
 
+    /// Two browsers loading a page at once, six connections each, the most a browser opens to one host.
+    static constexpr int kSendSlots = 12;
+
 private:
     platform::TcpServer server_;
     Scheduler* scheduler_ = nullptr;
-    const char* uiPath_ = "src/ui";
 
     /// Eight: a few viewers plus the overlap while a refresh's old socket is still being reaped. @xref{how-the-two-channel-caps-are-sized}
     static constexpr int kMaxWsClients = 8;
@@ -381,83 +388,147 @@ private:
     /// Four, deliberately fewer: the two arrays share one lwIP socket budget with every other service. @xref{why-the-preview-cap-is-lower}
     static constexpr int kMaxPreviewClients = 4;
     platform::TcpConnection previewClients_[kMaxPreviewClients];
-    static constexpr int kParkedSlots = 4;          // connections open with no request yet
+    /// Connections open with no request yet, as many as answers, since a page load's connections can all arrive before their requests.
+    static constexpr int kParkedSlots = kSendSlots;
     static constexpr uint32_t kParkMs = 3000;       // how long one waits for its request before it is closed
     platform::TcpConnection parked_[kParkedSlots];
     uint32_t parkedAt_[kParkedSlots] = {};
 
-    /// Every upload, every /sd download and every state document whose body comes after its headers resumes here across ticks, a bounded slice at a time. Neither a large file nor a slow or lossy client holds the render loop.
+    /// Every upload, a firmware image among them, and every request whose body comes after its headers is read here across ticks, a bounded slice at a time. Neither a large file nor a slow or lossy client holds the render loop.
     struct FileTransfer {
-        enum class Kind : uint8_t { Download, Upload, Document };
+        enum class Kind : uint8_t { Upload, Firmware, Request };
         bool active = false;
-        Kind kind = Kind::Download;
-        bool live = false;                 // document only: applied as a live source
+        Kind kind = Kind::Upload;
+        bool refused = false;              // firmware: the writer refused the image, so the rest of the body is read and dropped before the answer
+        platform::OtaTarget target = platform::OtaTarget::App;
         platform::TcpConnection conn;
         platform::FsWriteStream wstream;   // valid for an upload
-        platform::FsReadStream  rstream;   // valid for a download
-        size_t remaining = 0;              // upload and document: body bytes still expected; download: bytes left to send
-        char* buf = nullptr;               // from the claim to the finish, so an idle server holds none: kTransferBufBytes, or a document's whole body
-        size_t bufLen = 0;                 // download: the read chunk, drained across ticks by writeSome; document: the body bytes in buf
-        size_t bufSent = 0;
-        uint32_t lastActivityMs = 0;       // a stall guard, not a size or time cap on the transfer itself
-        char path[160] = {};               // upload only: the file applyFileChanged announces once it commits
+        platform::OtaWrite ota;            // valid for a firmware image
+        size_t remaining = 0;              // body bytes still expected
+        char* buf = nullptr;               // from the claim to the finish, so an idle server holds none: kTransferBufBytes, or a request's whole text
+        size_t bufLen = 0;                 // request: the bytes of it in buf
+        uint32_t windowStartMs = 0;        // the stall window under way: a rate guard, not a size or time cap on the transfer itself
+        size_t windowBytes = 0;            // body bytes moved in it
     };
     static constexpr int kTransferSlots = 2;
     static constexpr size_t kTransferBufBytes = 4096;
-    static constexpr uint32_t kTransferStallMs = 10000;   // no progress this long: abort, free the slot
+    /// An upload's path, kept after its chunk in the slot's own buffer.
+    static constexpr size_t kUploadPathBytes = 160;
+    /// What a body must move in every stall window. A client on a weak link moves this in ten seconds, and one trickling a byte every few seconds holds its slot as briefly as one that stopped.
+    static constexpr size_t kMinBodyBytesPerWindow = 1024;
+    /// Count `n` body bytes into the slot's window.
+    static void moved(FileTransfer& t, size_t n) { t.windowBytes += n; }
+    /// Whether the window that ended moved less than kMinBodyBytesPerWindow, or less than the body had left; starts the next one.
+    static bool tooSlow(FileTransfer& t, uint32_t now);
+    /// Where an upload's path lives, after its chunk.
+    static char* uploadPath(FileTransfer& t) { return t.buf + kTransferBufBytes; }
+    static constexpr uint32_t kTransferStallMs = 10000;   // the window a send's progress and a body's rate are judged over
     static constexpr uint32_t kTransferTickBudgetMs = 3;  // several chunks while storage/peer keep up, not one
     std::array<FileTransfer, kTransferSlots> transfers_{};
-    /// A free slot with its buffer, `buf` when the caller brings one, or null once it has answered. That answer is 503 when both slots are busy, 507 when the buffer does not fit.
+    /// A free slot with its buffer, `buf` when the caller brings one or a chunk with room for an upload's path, or null once it has answered. That answer is 503 when both slots are busy, 507 when the buffer does not fit.
     FileTransfer* claimTransfer(platform::TcpConnection& conn, char* buf = nullptr);
-    /// Advance every active slot by one bounded chunk, then the embedded file sends; called once per tick, the drainXxxSend's sibling.
+    /// Advance every active slot by one bounded chunk; called once per tick, drainSends' sibling for what comes in.
     void driveTransfers();
-    /// One upload slot's bounded chunk: socket to storage, then the stall guard. Returns whether real bytes moved.
+    /// One upload slot's bounded chunk: socket to storage or to the firmware writer, then the rate guard. Returns whether real bytes moved.
     bool driveUpload(FileTransfer& t, uint32_t now);
-    /// One download slot's bounded chunk: storage to socket, then the stall guard. Returns whether real bytes moved.
-    bool driveDownload(FileTransfer& t, uint32_t now);
-    /// One document slot's bounded chunk: socket to its buffer, applied once whole, then the stall guard. Returns whether real bytes moved.
-    bool driveDocument(FileTransfer& t, uint32_t now);
+    /// One request slot's bounded chunk: socket to its buffer, routed once whole, then the rate guard. Returns whether real bytes moved.
+    bool driveRequest(FileTransfer& t, uint32_t now);
+    /// Hand a request whose body is still on its way to a slot, with the `got` bytes of its `whole` that arrived.
+    void deferRequest(platform::TcpConnection& conn, const char* req, size_t got, size_t whole);
+    /// Route one request of `len` bytes, its body whole or, for an upload, its first part.
+    void routeRequest(platform::TcpConnection& conn, char* req, size_t len);
+    /// The routed request's method and path, members since one request routes at a time.
+    char routeMethod_[8] = {};
+    char routePath_[128] = {};
     /// Close the connection when asked, free the buffer and the slot; the caller closed the stream.
     void finishTransfer(FileTransfer& t, bool closeConn);
+    /// Abandon an upload's file or firmware image, its sender gone or too slow.
+    void abandonUpload(FileTransfer& t);
     /// Close every active slot's stream and socket; release()'s own cleanup, since going out of scope frees neither.
     void releaseTransfers();
 
-    /// An embedded UI file resuming across ticks, a slot per socket since a page load fetches several: a socket and an offset into flash, one non-blocking write a tick.
-    struct EmbeddedSend {
-        platform::TcpConnection conn;
-        const uint8_t* data = nullptr;     // the next byte to send
-        size_t left = 0;
-        uint32_t lastActivityMs = 0;       // the same stall guard the transfers use
+    /// One answer leaving one connection, resumed a chunk per tick: a head, then a body, refilled from its source until the source runs out. @xref{one-resumable-send}
+    struct Send {
+        /// What refills the body once it is out.
+        enum class Source : uint8_t {
+            None,   ///< nothing more: a span in flash or a preview frame, or the queued frames alone
+            File,   ///< the next chunk of a file, read into the block
+            Tree,   ///< the next fragment of the state, from the cursor in the block
+            Types,  ///< the next registered type with its defaults, which builds that one type to read them
+        };
+        Source source = Source::None;
+        bool busy = false;                 ///< bytes are due, so the slot is taken
+        bool closing = false;              ///< a Close is queued: the connection ends once it is out
+        platform::TcpConnection conn;      ///< an answer's own connection, closed once it is out; a WebSocket client's stays in its array
+        const uint8_t* head = nullptr;     ///< a frame header ahead of the body, not owned
+        size_t headLeft = 0;
+        const uint8_t* body = nullptr;     ///< the bytes leaving now
+        size_t bodyLeft = 0;
+        char* owned = nullptr;             ///< the heap block the body lies in, a fragment or queued frames, freed once it is out
+        void* block = nullptr;             ///< the source's own heap block: a file's stream and chunk, or a tree's cursor and fragment header
+        char* queued = nullptr;            ///< whole frames due once the body is out, a control client's only
+        size_t queuedLen = 0;
+        uint32_t lastActivityMs = 0;       ///< a stall guard, not a size or time cap on the answer itself
     };
-    std::array<EmbeddedSend, 16> embeddedSends_{};   // as many as the ESP32's CONFIG_LWIP_MAX_SOCKETS, so a page load never finds them all busy
-    /// Send what each slot's socket accepts now; close a slot once its file is out, its peer errs, or it stalls.
-    void drainEmbeddedSends();
+    std::array<Send, kSendSlots> sends_{};
+    int sendTurn_ = 0;   ///< where the next tick's drain starts
+    /// The frames waiting behind one in flight that a control client may hold. Past it the client is closed and reconnects to a fresh document, since a client this far behind has stopped reading.
+    static constexpr size_t kFrameBacklogMax = 8192;
+    /// Answer with `header`, then `data`, a heap block of `len` bytes the send frees once it is out; freed here when no slot takes it.
+    void answerBlock(platform::TcpConnection& conn, const char* header, char* data, size_t len);
+    /// A free answer slot holding `conn`, or null once a 503 has said every slot is busy.
+    Send* claimSend(platform::TcpConnection& conn);
+    /// Every send in flight, one loop: what each socket takes now within one time budget, the lease below the headroom, and the stall guard.
+    void drainSends();
+    /// One send as far as `budget` bytes, the socket and the tick's time allow; `who` is the send as the lease knows it.
+    void drainSend(Send& s, platform::TcpConnection& conn, const void* who, size_t budget, uint32_t tickStart);
+    /// What a refill found: more bytes, the source's end, or a failure that ends the connection.
+    enum class Refill : uint8_t { More, End, Failed };
+    /// Free what went out and load the next bytes: queued frames first, at a frame boundary, then the source's next piece.
+    Refill refill(Send& s);
+    /// End a send: free its blocks and give up its lease turn, leaving its connection to the caller.
+    void endSendSlot(Send& s);
+    /// Queue one whole frame for control client `client`, closing it when its backlog would pass kFrameBacklogMax.
+    void queueFrame(int client, uint8_t opcode, const char* payload, size_t len);
 
     ClientMessageSink* clientSink_ = nullptr;   // the producer's inbound-message sink (PreviewDriver) @xref{crossing-the-domain-boundary}
 
-    /// One resumable frame: a copied header plus a pointer into the caller's stable body buffer. @xref{why-the-preview-has-its-own-connections}
-    struct PreviewSend {
+    /// The preview frame in flight: a copied header and the caller's stable body, each preview client's send a span over both. @xref{why-the-preview-has-its-own-connections}
+    struct PreviewFrame {
         uint8_t hdr[24] = {};                 // WS + app header, copied (caller's may be a stack local); 24 not 16, as a payload over 64 KB needs the ten-byte length form
         size_t hdrLen = 0;
         const uint8_t* body = nullptr;        // the frame body, borrowed: the producer keeps it alive and cancels before a resize frees it
         size_t bodyLen = 0;
-        size_t sent[kMaxPreviewClients] = {};  // per-PREVIEW-client cursor over [hdr ++ body]; a slow client lags
         bool active = false;
     };
-    PreviewSend previewSend_;
+    PreviewFrame previewFrame_;
+    Send previewSends_[kMaxPreviewClients];   ///< each preview client's share of the frame; a slow client lags
     /// Whether `who` may queue now: always above the headroom, and below it the one send holding the lease, so none starves and the queue stays one socket's buffer.
     bool maySend(const void* who);
     /// Give the lease up when `who` holds it, as its send ends.
-    void endSend(const void* who) { if (lowRamSender_ == who) lowRamSender_ = nullptr; }
+    void endSend(const void* who) {
+        if (lowRamSender_ == who) lowRamSender_ = nullptr;
+        if (lowRamWaiter_ == who) lowRamWaiter_ = nullptr;
+    }
     /// Record that `who` moved bytes, which keeps a lease it holds.
     void sent(const void* who, uint32_t now) { if (lowRamSender_ == who) lowRamProgressMs_ = now; }
     char leafValue_[128] = {};             ///< one value of the once-a-second walk, on the module rather than the stack, whose frame stays under 512 bytes
     const void* lowRamSender_ = nullptr;   ///< the one send that queues while internal RAM is short
     uint32_t lowRamProgressMs_ = 0;        ///< when it last moved bytes: one stalled this long passes the lease on
+    const void* lowRamWaiter_ = nullptr;   ///< the first send refused while the lease was held, which takes it next
+    uint32_t lowRamWaitMs_ = 0;            ///< when it asked: one that stops asking this long loses its place
 public:
     /// The internal RAM a send leaves free. On a board without PSRAM every unacknowledged segment is internal RAM, and a page load or a preview over a slow link queued 52 KB of them.
     static constexpr size_t kSendHeadroom = platform::kInternalFreeFloor / 2;
-    /// Whether free internal RAM is above the headroom, or unreported (0). Below it embedded files, state streams and preview frames take turns through `maySend`; patches, REST answers and downloads still queue regardless.
+    /// The internal RAM no send may queue into: what WiFi needs to keep receiving acknowledgements and requests. A classic ESP32 under a page load and a preview fell to 2.6 KB free and dropped off the network.
+    static constexpr size_t kSendFloor = 40 * 1024;
+    /// How many bytes a write may queue now: free internal RAM above kSendFloor, unlimited where it is unreported (0).
+    static size_t sendRoom() {
+        const size_t f = platform::freeInternalHeap();
+        if (f == 0) return SIZE_MAX;
+        return f > kSendFloor ? f - kSendFloor : 0;
+    }
+    /// Whether free internal RAM is above the headroom, or unreported (0). Below it every send takes its turn through `maySend`.
     static bool sendHasHeadroom() {
         const size_t f = platform::freeInternalHeap();
         return f == 0 || f > kSendHeadroom;
@@ -510,7 +581,7 @@ public:
     /// Set a client slot's subscription, as its `{"subscribe":…}` frame does, for a test.
     void subscribeForTest(int client, const char* body) { applySubscription(client, body); }
     /// Mark a client's stream open without draining it, for a test of what waits while a document is under way.
-    void holdStreamForTest(int client) { streams_[client].active = true; }
+    void holdStreamForTest(int client) { startTree(controlSends_[client], &subs_[client], true, false, 0); }
     /// Ask for the send lease as a send would, for a test of who may queue while internal RAM is short.
     bool maySendForTest(const void* who) { return maySend(who); }
     /// End a send's turn, for the same test.
@@ -519,52 +590,54 @@ public:
     void buildClientPatchesForTest(JsonSink* outs, int count);
 
 private:
-    /// The resumable fragment a stream sends at a time: small enough for a fragmented heap, large enough that frame headers stay noise.
-    static constexpr size_t kStreamFragmentBytes = 2048;
-    /// One client's full state in flight: the cursor, and the fragment leaving as one WebSocket frame. @xref{the-full-state-streams}
-    struct StateStream {
-        bool active = false;
+    /// The largest fragment a stream writes at a time, which keeps one fragment's writing short on the render task.
+    static constexpr size_t kFragmentCeilBytes = 8192;
+    /// A fragment as large as the drain chunk, so a roomy board sends few frames and a tight one small blocks, up to kFragmentCeilBytes.
+    size_t fragmentBytes() const;
+    /// A state answer's source: the cursor, and the header of the fragment in flight. @xref{the-full-state-streams}
+    struct TreeSource {
         Subscription sub;          // copied at the start, so a subscribe arriving mid-document cannot switch the view halfway
         TreeCursor cursor;
-        char* frame = nullptr;     // the fragment in flight, owned
-        size_t frameLen = 0;
         uint8_t hdr[10] = {};
-        size_t hdrLen = 0;
-        size_t sent = 0;           // over hdr ++ frame
+        bool ws = false;           // each fragment a WebSocket frame, rather than the body of an HTTP answer
+        bool hide = false;         // passwords hidden, the reader being on the device's own access point
         bool first = true;         // the next frame opens the message
-        bool last = false;         // the frame in flight ends it
+        bool last = false;         // the fragment in flight ends it
     };
-    StateStream streams_[kMaxWsClients];
+    /// The type list's source: the next type to write.
+    struct TypesSource {
+        uint8_t next = 0;
+        bool wrote = false;        // a type went out, so the next one takes a comma
+        bool last = false;         // the closing bracket went out
+    };
+    /// A download's source: the open file and the chunk leaving now.
+    struct FileSource {
+        platform::FsReadStream stream;
+        size_t left = 0;           // bytes of the file still to read
+        char buf[kTransferBufBytes];
+    };
+    /// Start the state as `s`'s source, `ws` framing each fragment as a WebSocket frame and `hide` hiding passwords as it is written; false when its block does not fit.
+    bool startTree(Send& s, const Subscription* sub, bool ws, bool hide, uint32_t answers);
+    /// Each control client's send: its document, then the frames queued for it.
+    Send controlSends_[kMaxWsClients];
     Subscription subs_[kMaxWsClients];
     bool resyncClient_[kMaxWsClients] = {};   // this client alone needs a full state: it subscribed, changed what it views, or asked again
     uint32_t resyncId_[kMaxWsClients] = {};   // the id of the request a client's next document answers
     bool fragmentRefused_ = false;   // a fragment found no memory; logged once per run of refusals
-    /// Whether a frame may go to this client now: no fragment of its stream is half written. The uplink is read only then, so a Ping is always answered between frames (RFC 6455 §5.4).
-    bool atFrameBoundary(int client) const;
     /// Answer a Ping with a Pong, or a Close with a Close and the end of the connection. @xref{ping-and-close}
     void onControlFrame(int client, uint8_t opcode, const uint8_t* payload, size_t len);
-    /// Write one unfragmented control frame, `opcode` with FIN, carrying `payload`.
-    static bool sendWsControlFrame(platform::TcpConnection& conn, uint8_t opcode, const uint8_t* payload, size_t len);
     /// Guards the preview channel alone, whose producers sit on two cores under the split.
     mutable TryLock wsLock_;
-    /// Drain one chunk per client, finishing when every live client holds the whole frame. @xref{why-the-drain-runs-on-the-transport-tick}
-    void drainPreviewSend();
-    /// Advance every open stream by one bounded chunk, generating each fragment as the previous one leaves. Called from tick20ms.
-    void drainStateSend();
-    /// One client's stream, as far as `budget` bytes and the socket allow.
-    void drainStream(int client, size_t budget);
-    /// A fragment found no memory: close the client, which reconnects and is sent its document again.
-    void refuseFragment(int client);
+    /// The preview frame is out once no client's send holds any of it.
+    void finishPreviewFrame();
+    /// A fragment found no memory: logged once per run of refusals, and the reader closed, which reconnects and is sent its document again.
+    void refuseFragment();
     /// Give each client due a document its stream, from the baseline taken this pass.
     void startStreams();
-    /// Generate a stream's next fragment and its frame header, false when even one fragment does not fit in memory.
-    bool nextStreamFrame(int client);
-    /// Free a stream's fragment and close it.
-    void endStream(StateStream& s);
     /// Whether any client is mid-document, which holds every other frame on the control channel.
     bool anyStreamActive() const;
     /// Whether some client alone waits for a full state.
-    bool anyClientResync() const;
+    bool anyClientResync() const MM_NONBLOCKING;
     /// Store a client's subscription, resyncing when it changed.
     void applySubscription(int client, const char* body);
     /// The module at a cursor's path, or null when the deepest index has run past its siblings.
@@ -584,12 +657,35 @@ private:
     struct PatchSlice { const MoonModule* mod; uint32_t begin; uint32_t end; uint16_t count; };
     /// Sized at each baseline to the modules it covers, one slice each.
     ScratchBuffer<PatchSlice> patchSlices_{*this};
-    /// The changed leaves over what `walk` visits, as comma-led entries in one slice per module, returning how many there were.
-    template <class Walk> uint16_t collectPatch(JsonSink& entries, uint16_t& sliceCount, Walk&& walk);
+    /// The changed leaves a walk gathers, in one call or, for the second's walk, over several ticks.
+    struct PatchBuild {
+        JsonSink entries;       ///< comma-led entries, one slice per module in patchSlices_
+        uint16_t slices = 0;
+        uint16_t changed = 0;
+        uint16_t next = 0;      ///< the cache entry the next leaf is expected at, the one after the last match
+    };
+    /// Add the changed leaves over what `walk` visits to `b`.
+    template <class Walk> void collectPatch(PatchBuild& b, Walk&& walk);
     /// Wrap the slices `sub` covers as one patch frame, null covering all, returning how many entries it holds.
-    uint16_t writeClientPatch(JsonSink& out, const JsonSink& entries, uint16_t sliceCount, const Subscription* sub);
-    /// Collect over `walk`, then send each control client the share its subscription covers; a client about to get a full state is skipped when `skipResyncing`.
+    uint16_t writeClientPatch(JsonSink& out, const PatchBuild& b, const Subscription* sub);
+    /// Send each control client the share of `b` its subscription covers, then empty it; a client about to get a full state is skipped when `skipResyncing`.
+    void sendPatch(PatchBuild& b, bool skipResyncing = false);
+    /// Collect over `walk` and send it at once.
     template <class Walk> void sendPatches(Walk&& walk, bool skipResyncing = false);
+
+    /// The second's walk over every viewed value, a slice per transport tick so no frame pays for all of them. The place is an index path: the module's position in the state's order and the leaf within it. It is resolved again each tick as the state stream's is, so a tree changed meanwhile never leaves a dangling pointer.
+    struct ValueWalk { bool active = false; uint16_t module = 0; uint16_t leaf = 0; };
+    ValueWalk walk_;
+    PatchBuild walkPatch_;
+    /// A slice's share of the render task: a classic ESP32's 2.6 ms frame grows by at most this, where the whole walk in one frame took 16 to 45 ms.
+    static constexpr uint32_t kWalkSliceUs = 1000;
+    /// Move the second's walk on by one slice, sending its patch once it has visited every value.
+    void advanceValueWalk();
+    void startValueWalk();
+    /// Drop the walk and what it gathered.
+    void endValueWalk();
+    /// Walk on until `stop()` says so, at least one leaf, returning whether every viewed value has been visited.
+    template <class Stop> bool stepValueWalk(Stop&& stop);
     /// Whether some client's subscription covers `mod`, so its leaves are worth hashing.
     bool anyClientCovers(const MoonModule* mod) const;
 
@@ -612,22 +708,30 @@ private:
     void baselineLeafHashes(bool everything = false);
     /// Visit every UI leaf some client subscribes to, in the state's own order, templated so the lambda inlines; `everything` visits the whole tree, for a test.
     template <class Fn> void forEachStateLeaf(Fn&& fn, bool everything = false);
-    /// One module's own leaves, `fn` taking the module first so the patch knows whose slice each belongs to.
-    template <class Fn> void visitOwnLeaves(MoonModule* mod, Fn&& fn);
-    /// A subtree's leaves, skipping a module no client covers unless `everything`.
-    template <class Fn> void visitModuleLeaves(MoonModule* mod, Fn&& fn, bool everything = false);
-    LeafHash* findLeaf(uint32_t pathHash);
+    /// Visit the modules the state shows in its own order, as fn(module, position), until `fn` returns false.
+    template <class Fn> void forEachStateModule(Fn&& fn);
+    /// A subtree in pre-order, numbering each module from `k`, returning false once `fn` does.
+    template <class Fn> bool visitTree(MoonModule* mod, uint16_t& k, Fn& fn);
+    /// The four header leaves every module carries ahead of its controls.
+    static constexpr uint16_t kHeaderLeaves = 4;
+    /// One module's own leaves from leaf `next` on, `fn` taking the module first so the patch knows whose slice each belongs to. Returns false when `stop()` ends it early, with `next` naming the leaf to resume at.
+    template <class Fn, class Stop> bool visitOwnLeaves(MoonModule* mod, Fn&& fn, uint16_t& next, Stop&& stop);
+    /// A leaf's cached hashes, tried at `next` first and searched only when the tree moved since the baseline; `next` moves past the match.
+    LeafHash* findLeaf(uint32_t pathHash, uint16_t& next);
     /// The next push must be a full state and a fresh baseline. @xref{when-a-patch-cannot-describe-the-change}
     void requestFullResync() { fullResyncPending_ = true; }
 
     /// Routes any module's schema change to the live instance's resync request.
     static void onSchemaChanged();
     static inline HttpServerModule* instance_ = nullptr;
-    /// One frame cut in half by a read waits here for the rest, for one client at a time: the bridges' writes are small.
-    uint8_t  carry_[kWsTextMax + 16] = {};
-    size_t   carryLen_ = 0;
-    int      carryClient_ = -1;
-    uint16_t boundPort_ = 0;   // the port open() actually bound; 0 when no server is live
+    /// A frame cut in half by a read waits for its rest, each client's on its own. It sits on the heap only while it waits, so two clients cut in the same tick each keep theirs.
+    uint8_t* carry_[kMaxWsClients] = {};
+    uint16_t carryLen_[kMaxWsClients] = {};
+    /// The longest rest a client may leave: one frame of the longest text a client writes, with its header and mask key.
+    static constexpr size_t kCarryMax = kWsTextMax + 16;
+    /// Free what a client's cut frame left.
+    void dropCarry(int client);
+    uint16_t boundPort_ = 0;   // the port open() bound; 0 when no server is live
 
     // HTTP handling
 
@@ -645,7 +749,10 @@ private:
     /// The child module a delete or replace may act on: found, not top-level, and one the user can remove.
     OpResult editableChild(const char* moduleName, MoonModule*& mod);
     void sendPreflightResponse(platform::TcpConnection& conn);
-    void serveFile(platform::TcpConnection& conn, const ui::EmbeddedFile& file);
+    /// Serve one UI file: from disk on a desktop checkout, else its embedded copy with its tag, or a 304 when the request already holds it.
+    void serveFile(platform::TcpConnection& conn, const ui::EmbeddedFile& file, const char* ifNoneMatch = nullptr);
+    /// Serve `name` from the platform's UI folder, a desktop running from a checkout; false when there is no such file, always on a device.
+    bool serveUiFromDisk(platform::TcpConnection& conn, const char* name);
 
     /// A file body is not a control value, so the File Manager has its own vetted endpoints, `/api/file` and `/api/dir`. @xref{the-rest-api}
     void serveFileContents(platform::TcpConnection& conn, const char* query);
@@ -681,9 +788,8 @@ private:
     // Control setter
 
     void handleSetControl(platform::TcpConnection& conn, const char* body);
-    /// Apply a state document from the request body, which may outgrow the request buffer: `PATCH /api/state`. A body still on its way finishes in a transfer slot.
-    void handleApplyState(platform::TcpConnection& conn, const char* initialBody, size_t initialLen, size_t contentLen,
-                          bool live);
+    /// Apply the state document a request carries whole: `PATCH /api/state`.
+    void handleApplyState(platform::TcpConnection& conn, const char* body, bool live);
     /// Apply a whole state document and answer what it did.
     void answerStateDocument(platform::TcpConnection& conn, const char* doc, bool live);
 
@@ -719,7 +825,12 @@ private:
     void handleAddModule(platform::TcpConnection& conn, const char* body);
     void handleDeleteModule(platform::TcpConnection& conn, const char* path);
     void handleReplaceModule(platform::TcpConnection& conn, const char* moduleName, const char* body);
-    void serveTypes(platform::TcpConnection& conn);
+    /// Every registered type with its defaults, a type at a time from a send slot; a browser holding this binary's list is answered 304 and nothing is built. @xref{the-type-list-is-fixed-per-binary}
+    void serveTypes(platform::TcpConnection& conn, const char* ifNoneMatch);
+    /// One registered type's entry, led by a comma unless it is the first.
+    void writeTypeJson(JsonSink& sink, uint8_t i, bool first);
+    /// The type list's tag: this binary's identity and every type's name, so it changes exactly when the list can, and reading it builds nothing.
+    static void typesEtag(char (&out)[16]);
     /// The compiled-in script catalog, so the UI can offer a script the device does not hold yet.
     void serveScriptCatalog(platform::TcpConnection& conn);
 
@@ -740,11 +851,11 @@ private:
     void handleBootMoonBase(platform::TcpConnection& conn);
     /// Take a firmware URL and answer at once, the install running on its own task. @xref{two-firmware-install-paths}
     void handleFirmwareUrl(platform::TcpConnection& conn, const char* body);
-    void handleFirmwareUpload(platform::TcpConnection& conn, const char* initialBody,
-                              size_t initialLen, size_t contentLen);   // POST /api/firmware/upload
-    /// Install a MoonBase image into the factory slot, vetting it before erasing anything.
-    void handleMoonBaseUpload(platform::TcpConnection& conn, const char* initialBody,
-                              size_t initialLen, size_t contentLen);   // POST /api/firmware/moonbase-update
+    /// Install an uploaded image, the application's (`POST /api/firmware/upload`) or MoonBase's (`POST /api/firmware/moonbase-update`), through a transfer slot.
+    void handleFirmwareUpload(platform::TcpConnection& conn, platform::OtaTarget target, const char* initialBody,
+                              size_t initialLen, size_t contentLen);
+    /// The answer once the image is in: the reason on a failure, a 200 then the reboot for the application, a 200 and the card's new version for MoonBase.
+    void answerFirmware(platform::TcpConnection& conn, bool ok, platform::OtaTarget target);
     /// The same install, fetched by the device itself from a URL.
     void handleMoonBaseUrl(platform::TcpConnection& conn, const char* body);   // POST /api/firmware/moonbase-update-url
 
@@ -755,7 +866,6 @@ private:
                                 bool previewChannel = false);
     void pushStateToWebSockets();
     void pushWledStateToWebSockets();   // WLED-app {state,info} frame on /ws (see impl)
-    static bool sendWsTextFrame(platform::TcpConnection& conn, const char* data, int len);
 };
 
 } // namespace mm

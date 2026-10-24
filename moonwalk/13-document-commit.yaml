@@ -127,7 +127,7 @@ processes:
         given: [{ changed: [src/**, "!src/platform/desktop/**"] }]
         when: { run: { script: moondeck/check/check_esp32_built.py, args: "--firmware esp32s3-n16r8" } }
         detail: |
-          It compares the binary against every source in a tenth of a second, and catches the edit that was never compiled. One firmware is the gate, the S3, since it compiles the most of the light domain (the panel cards and the LCD drivers the classic leaves out) and the release builds every shipped variant; a change to a per-variant sdkconfig fragment, the executable-memory path or host-ISA code needs every shipped variant built, since the release is otherwise the first to build the rest. A stale one is rebuilt on the product owner's go, [one at a time](moonwalk.md#esp32-build-flash).
+          It compares the binary against every source in a tenth of a second, and catches the edit that was never compiled. One firmware is the gate, the S3, since it compiles the most of the light domain (the panel cards and the LCD drivers the classic leaves out) and the release builds every shipped variant; a change to a per-variant sdkconfig fragment, the executable-memory path or host-ISA code needs every shipped variant built, since the release is otherwise the first to build the rest. A stale one is rebuilt without asking, [one at a time](moonwalk.md#esp32-build-flash).
       - id: esp32-fresh-moonbase
         say: Check the classic firmware and MoonBase are current.
         given: [{ changed: [moonbase/**] }]

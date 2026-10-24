@@ -2,6 +2,12 @@
 # Configured by moondeck/build/build_teensy.py with -DCMAKE_TOOLCHAIN_FILE=teensy/teensy41.cmake.
 
 cmake_minimum_required(VERSION 3.20)
+# A compiler cache where one is installed, as the desktop build does.
+find_program(CCACHE_PROGRAM ccache)
+if(CCACHE_PROGRAM)
+    set(CMAKE_C_COMPILER_LAUNCHER ${CCACHE_PROGRAM})
+    set(CMAKE_CXX_COMPILER_LAUNCHER ${CCACHE_PROGRAM})
+endif()
 project(MoonLightTeensy C CXX ASM)
 
 set(REPO "${CMAKE_CURRENT_SOURCE_DIR}/..")
@@ -50,9 +56,9 @@ target_compile_options(qnethernet PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-std=gnu++17
 # Generated headers, the same steps the desktop and ESP32 builds run.
 add_custom_target(build_info_gen ALL
     COMMAND ${UV_EXECUTABLE} run python ${REPO}/moondeck/build/generate_build_info.py
-    BYPRODUCTS ${REPO}/src/core/util/build_info.h
+    BYPRODUCTS ${REPO}/src/core/util/build_id.h ${REPO}/src/core/util/build_date.stamp
     WORKING_DIRECTORY ${REPO}
-    COMMENT "Generating build_info.h (git build id)"
+    COMMENT "Generating build_id.h (git build id)"
     VERBATIM)
 # Every UI file, by glob, so a file added to src/ui re-embeds without a second edit here: the hand-kept list named only three of them.
 file(GLOB UI_SOURCES CONFIGURE_DEPENDS ${REPO}/src/ui/*.js ${REPO}/src/ui/*.html ${REPO}/src/ui/*.css
@@ -60,7 +66,7 @@ file(GLOB UI_SOURCES CONFIGURE_DEPENDS ${REPO}/src/ui/*.js ${REPO}/src/ui/*.html
 add_custom_command(
     OUTPUT ${REPO}/src/ui/ui_embedded.h
     COMMAND ${CMAKE_COMMAND} -DUI_DIR=${REPO}/src/ui -DOUT=${REPO}/src/ui/ui_embedded.h -DUV_EXECUTABLE=${UV_EXECUTABLE} -P ${REPO}/src/ui/embed_ui.cmake
-    DEPENDS ${UI_SOURCES} ${REPO}/src/ui/embed_ui.cmake
+    DEPENDS ${UI_SOURCES} ${REPO}/src/ui/embed_ui.cmake ${REPO}/moondeck/build/bundle_ui.py
     COMMENT "Embedding UI files")
 add_custom_target(ui_embed DEPENDS ${REPO}/src/ui/ui_embedded.h)
 file(GLOB_RECURSE MOONLIVE_SCRIPTS CONFIGURE_DEPENDS
@@ -98,10 +104,13 @@ add_executable(MoonLight.elf
     ${REPO}/src/module_types.cpp
     ${REPO}/src/core/module/Control.cpp
     ${REPO}/src/core/util/JsonUtil.cpp
+    ${REPO}/src/core/util/build_info.cpp
     ${REPO}/src/core/util/JsonFetch.cpp
     ${REPO}/src/core/util/parse.cpp
     ${REPO}/src/core/util/ScratchBuffer.cpp
     ${REPO}/src/core/system/HttpServerModule.cpp
+    ${REPO}/src/core/system/HttpServerState.cpp
+    ${REPO}/src/core/system/HttpServerWled.cpp
     ${REPO}/src/core/system/FilesystemModule.cpp
     ${REPO}/src/core/system/FileManagerModule.cpp
     ${REPO}/src/core/services/SdCardService.cpp
@@ -121,15 +130,18 @@ add_executable(MoonLight.elf
     ${REPO}/src/platform/teensy/platform_teensy_improv.cpp
 )
 add_dependencies(MoonLight.elf build_info_gen ui_embed moonlive_catalog)
+# The one unit holding the clock recompiles on every build, the generator touching its stamp.
+set_source_files_properties(${REPO}/src/core/util/build_info.cpp PROPERTIES OBJECT_DEPENDS ${REPO}/src/core/util/build_date.stamp)
 target_include_directories(MoonLight.elf PRIVATE ${REPO}/src ${REPO}/src/platform/teensy)
 target_compile_options(MoonLight.elf PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-std=gnu++20> -Wall -Wextra -Werror)
+# The firmware name on every unit: the update writer's image mark is built from it at compile time, and it is fixed per build directory.
 target_compile_definitions(MoonLight.elf PRIVATE MM_FIRMWARE_NAME="${MM_FIRMWARE}")
-# A release passes its channel and version; empty leaves build_info.h's defaults, as on the ESP32.
+# A release passes its channel and version, on build_info.cpp alone as on the ESP32; empty leaves its defaults.
 if(MM_RELEASE)
-    target_compile_definitions(MoonLight.elf PRIVATE MM_RELEASE="${MM_RELEASE}")
+    set_property(SOURCE ${REPO}/src/core/util/build_info.cpp APPEND PROPERTY COMPILE_DEFINITIONS MM_RELEASE="${MM_RELEASE}")
 endif()
 if(MM_VERSION)
-    target_compile_definitions(MoonLight.elf PRIVATE MM_VERSION="${MM_VERSION}")
+    set_property(SOURCE ${REPO}/src/core/util/build_info.cpp APPEND PROPERTY COMPILE_DEFINITIONS MM_VERSION="${MM_VERSION}")
 endif()
 target_link_libraries(MoonLight.elf PRIVATE qnethernet teensy_sd teensy_libs teensy_core m stdc++)
 target_link_options(MoonLight.elf PRIVATE "-T${CMAKE_BINARY_DIR}/imxrt1062_t41.ld")

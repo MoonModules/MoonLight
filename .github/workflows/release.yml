@@ -173,6 +173,11 @@ jobs:
           V=$(uv run python moondeck/build/compute_version.py --tag "$TAG")
           echo "version=$V" >> "$GITHUB_OUTPUT"
 
+      # The espressif/idf image ships ccache and turns it on; the workspace mount carries the cache in and out.
+      - uses: ./.github/actions/ccache
+        with:
+          key: esp32-${{ matrix.firmware }}
+          install: 'false'
       - name: Build firmware
         uses: espressif/esp-idf-ci-action@v1
         with:
@@ -184,7 +189,8 @@ jobs:
           # We run our own builder (not the action's default `idf.py build`)
           # so the sdkconfig fragments and EXCLUDE_COMPONENTS go through the
           # same code path as local builds. --release burns the channel tag in.
-          command: python ../moondeck/build/build_esp32.py --firmware ${{ matrix.firmware }} --release "${{ steps.tag.outputs.tag }}" --version "${{ steps.ver.outputs.version }}"
+          command: python ../moondeck/build/build_esp32.py --firmware ${{ matrix.firmware }} --release "${{ steps.tag.outputs.tag }}" --version "${{ steps.ver.outputs.version }}" && ccache --show-stats
+          extra_docker_args: -e CCACHE_DIR=/app/${{ github.repository }}/.ccache
 
       - name: Stage release artifacts
         run: |
@@ -277,28 +283,11 @@ jobs:
           set -euo pipefail
           V=$(uv run python moondeck/build/compute_version.py --tag "$TAG")
           echo "version=$V" >> "$GITHUB_OUTPUT"
-      # ccache: the macOS runner compiles the whole desktop tree from cold every run (the ESP32
-      # jobs get a prebuilt IDF container; this one gets nothing), which is why it was the slowest
-      # job in the workflow at ~10 min. CMake picks the launcher up from the environment, so the
-      # build script stays unchanged. The key rotates per run and restores from the newest
-      # matching prefix, the standard save-always cache shape for a compiler cache.
-      - name: Install ccache
-        run: brew install ccache
-      - name: Restore ccache
-        uses: actions/cache@v4
+      - uses: ./.github/actions/ccache
         with:
-          path: ~/Library/Caches/ccache
-          key: ccache-macos-14-${{ github.sha }}
-          restore-keys: |
-            ccache-macos-14-
+          key: macos-arm64
       - name: Build + package macOS arm64
-        env:
-          CMAKE_CXX_COMPILER_LAUNCHER: ccache
-          CMAKE_C_COMPILER_LAUNCHER: ccache
-        run: uv run moondeck/ci/package_desktop.py --version "${{ steps.ver.outputs.version }}"
-      - name: ccache stats
-        if: always()
-        run: ccache --show-stats
+        run: uv run moondeck/ci/package_desktop.py --version "${{ steps.ver.outputs.version }}" && ccache --show-stats
       - uses: actions/upload-artifact@v4
         with:
           name: desktop-macos
@@ -433,8 +422,11 @@ jobs:
           set -euo pipefail
           V=$(uv run python moondeck/build/compute_version.py --tag "$TAG")
           echo "version=$V" >> "$GITHUB_OUTPUT"
+      - uses: ./.github/actions/ccache
+        with:
+          key: linux-x64
       - name: Build + package Linux x64
-        run: uv run moondeck/ci/package_desktop.py --version "${{ steps.ver.outputs.version }}"
+        run: uv run moondeck/ci/package_desktop.py --version "${{ steps.ver.outputs.version }}" && ccache --show-stats
       - name: Check the glibc floor
         run: uv run moondeck/ci/check_glibc_floor.py dist/moonlight_*_amd64.deb
       - uses: actions/upload-artifact@v4
@@ -495,8 +487,11 @@ jobs:
           set -euo pipefail
           V=$(uv run python moondeck/build/compute_version.py --tag "$TAG")
           echo "version=$V" >> "$GITHUB_OUTPUT"
+      - uses: ./.github/actions/ccache
+        with:
+          key: linux-arm64
       - name: Build + package Linux arm64
-        run: uv run moondeck/ci/package_desktop.py --version "${{ steps.ver.outputs.version }}"
+        run: uv run moondeck/ci/package_desktop.py --version "${{ steps.ver.outputs.version }}" && ccache --show-stats
       - name: Check the glibc floor
         run: uv run moondeck/ci/check_glibc_floor.py dist/moonlight_*_arm64.deb
       - uses: actions/upload-artifact@v4
@@ -521,6 +516,9 @@ jobs:
         with:
           path: ~/teensy/arm-gnu-toolchain-*
           key: teensy-gcc-${{ runner.os }}-${{ steps.gcc.outputs.version }}
+      - uses: ./.github/actions/ccache
+        with:
+          key: teensy
       # Same tag and version resolution as build-esp32, so the HEX reports the version and channel its asset name carries.
       - name: Resolve release tag
         id: tag

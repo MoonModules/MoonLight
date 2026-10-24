@@ -49,6 +49,7 @@ The 5-second soft start after boot raises the global brightness that the correct
 
 - Which modes beyond the built six earn their flash, measured per mode on a classic ESP32.
 - How the UI offers a transition: a duration and a style on the Effects container, or per layer.
+- How motion bytes combine across layers. Opacity and blend modes are colour operations, and a pan or tilt byte is a position. In a dissolve, do the heads crossfade their aim, or does the top layer take it outright? Today an upper layer's motion bytes blend like colour; the bottom layer's pass through unfaded.
 - Whether the additive mode takes the specification name *plus*, now that the list follows the specification.
 
 ## Inspiration

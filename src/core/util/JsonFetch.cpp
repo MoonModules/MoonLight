@@ -259,8 +259,9 @@ void JsonFetch::deliver(uint8_t index, uint16_t epoch, int status, json::JsonDoc
     if (s.kind == Kind::Free || s.epoch != epoch) { delete d; return; }   // released while on its way
     s.inFlight = false;
     s.status = status;
-    // A failed refresh keeps the last good document, as a cache serves stale while it revalidates, and is retried sooner than the period.
+    // A failed refresh keeps the last good document, as a cache serves stale while it revalidates, and is retried sooner than the period. An error page that parses as JSON failed too (RFC 9110 section 15.3: only 2xx succeeds).
     if (s.kind == Kind::Feed) {
+        if (d && (status < 200 || status >= 300)) { delete d; d = nullptr; }
         if (d) s.failures = 0;
         else backOff(s, platform::millis());
     }

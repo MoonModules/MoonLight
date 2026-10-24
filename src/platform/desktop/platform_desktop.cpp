@@ -342,7 +342,12 @@ void* trackedAlloc(size_t bytes) {
 }
 }  // namespace
 
+static std::atomic<size_t> testAllocRefusedFrom{0};
+void setTestAllocRefusedFrom(size_t bytes) { testAllocRefusedFrom.store(bytes, std::memory_order_relaxed); }
+
 void* alloc(size_t bytes) {
+    const size_t refused = testAllocRefusedFrom.load(std::memory_order_relaxed);
+    if (refused && bytes >= refused) return nullptr;
     return trackedAlloc(bytes);
 }
 
@@ -1996,13 +2001,14 @@ bool http_fetch_to_ota(const char* /*url*/,
     return false;
 }
 
-bool otaWriteStream(FsWriteSrc /*src*/, void* /*user*/, size_t /*contentLen*/,
-                    char* statusBuf, size_t statusBufLen, uint32_t* bytesReadOut) {
-    // No OTA partition on desktop, call sites guard with `if constexpr (mm::platform::hasOta)`.
+// No OTA partition on desktop, call sites guard with `if constexpr (mm::platform::hasOta)`.
+bool otaBegin(OtaWrite&, OtaTarget, size_t, char* statusBuf, size_t statusBufLen, uint32_t* bytesOut) {
     if (statusBuf && statusBufLen > 0) std::snprintf(statusBuf, statusBufLen, "unsupported on desktop");
-    if (bytesReadOut) *bytesReadOut = 0;
+    if (bytesOut) *bytesOut = 0;
     return false;
 }
+bool otaWrite(OtaWrite&, const uint8_t*, size_t) { return false; }
+bool otaEnd(OtaWrite&, bool) { return false; }
 
 // No partitions on desktop: there is no recovery image and nothing to boot into, unless a host test gives it one to read.
 static const char* testMoonBaseVersion_ = nullptr;
@@ -2032,13 +2038,6 @@ bool otaFetchMoonBaseUrl(const char*, char* statusBuf, size_t statusBufLen,
 }
 
 // No recovery partition here, so this installs nothing and consumes nothing, and refuses without touching the source.
-bool otaWriteMoonBase(FsWriteSrc, void*, size_t, char* statusBuf, size_t statusBufLen,
-                      uint32_t* bytesReadOut) {
-    if (statusBuf && statusBufLen > 0) std::snprintf(statusBuf, statusBufLen, "unsupported on desktop");
-    if (bytesReadOut) *bytesReadOut = 0;
-    return false;
-}
-
 bool moonbaseStageInstallUrl(const char*) { return false; }
 void moonbaseClearStagedUrl() {}
 
@@ -2182,6 +2181,8 @@ bool UdpSocket::open() {
     const int on = 1;
     ::setsockopt(sock(fd_), SOL_SOCKET, SO_BROADCAST,
                  reinterpret_cast<const char*>(&on), sizeof(on));
+    // Non-blocking from the start, so neither a send-only socket nor the render loop's drain ever waits on the stack.
+    if (make_nonblocking(fd_) != 0) { close(); return false; }
     return true;
 }
 
@@ -2203,9 +2204,7 @@ bool UdpSocket::bind(uint16_t port, const uint8_t localIp[4]) {
     addr.sin_port = htons(port);
     if (localIp) std::memcpy(&addr.sin_addr.s_addr, localIp, 4);   // octets are network order
     else addr.sin_addr.s_addr = htonl(INADDR_ANY);
-    if (::bind(sock(fd_), reinterpret_cast<const sockaddr*>(&addr), sizeof(addr)) != 0) return false;
-    // Non-blocking so the render loop's drain never stalls waiting for a packet.
-    return make_nonblocking(fd_) == 0;
+    return ::bind(sock(fd_), reinterpret_cast<const sockaddr*>(&addr), sizeof(addr)) == 0;
 }
 
 int UdpSocket::recvFrom(uint8_t* buf, size_t maxLen, uint8_t srcIp[4], uint16_t* srcPort) {
@@ -3586,6 +3585,37 @@ bool encoderStart(const EncoderConfig& cfg) {
     }
     argv[i] = nullptr;
     return spawnEncoderProcess(argv, elementary);
+}
+
+namespace {
+const char* g_uiFolder = "src/ui";
+}
+
+void setUiFolder(const char* path) { g_uiFolder = path; }
+
+// A plain name in the folder only: no subfolder, no way out of it.
+static bool plainFileName(const char* name) {
+    return name[0] && !std::strchr(name, '/') && !std::strchr(name, '\\') && !std::strstr(name, "..");
+}
+
+// Read on every request, so an edit shows on the next reload without a rebuild.
+bool uiFolderFile(const char* name, char*& data, size_t& len) {
+    if (!g_uiFolder || !plainFileName(name)) return false;
+    const std::filesystem::path path = std::filesystem::path(g_uiFolder) / name;
+    std::error_code ec;
+    if (!std::filesystem::is_regular_file(path, ec)) return false;
+    const auto size = std::filesystem::file_size(path, ec);
+    if (ec) return false;
+    // A FILE rather than an ifstream, whose 500-byte object would sit on the caller's frame.
+    FILE* f = std::fopen(path.string().c_str(), "rb");
+    if (!f) return false;
+    char* buf = static_cast<char*>(alloc(size ? size : 1));
+    const bool read = buf && std::fread(buf, 1, size, f) == size;
+    std::fclose(f);
+    if (!read) { free(buf); return false; }
+    data = buf;
+    len = size;
+    return true;
 }
 
 // ffmpeg writes the playlist and segments to disk itself, so there is nothing in RAM to serve and the HTTP server uses its normal file path.

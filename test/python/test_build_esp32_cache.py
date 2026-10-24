@@ -25,7 +25,7 @@ def test_a_value_changed_inside_a_fragment_regenerates_the_sdkconfig(tmp_path, m
     monkeypatch.setattr(build_esp32, "ESP32_DIR", tmp_path)
     (tmp_path / "sdkconfig.defaults").write_text("CONFIG_A=y\n")
     (tmp_path / "sdkconfig.defaults.board").write_text("CONFIG_B=y\n")
-    paths = fragment_paths(["-DSDKCONFIG_DEFAULTS=sdkconfig.defaults;sdkconfig.defaults.board", "-DMM_FIRMWARE_NAME=\"x\""])
+    paths = fragment_paths(["-DSDKCONFIG_DEFAULTS=sdkconfig.defaults;sdkconfig.defaults.board", "-DMM_FIRMWARE_NAME=x"])
     assert paths == [tmp_path / "sdkconfig.defaults", tmp_path / "sdkconfig.defaults.board"]
     build = tmp_path / "build"
     build.mkdir()

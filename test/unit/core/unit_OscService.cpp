@@ -85,7 +85,15 @@ TEST_CASE("OSC feedback asks for every surface value again every 30 seconds, and
     scheduler.release();
 }
 
-// On the StadBeest the eyes never followed the legs: the leader had feedback on and listen off, and opened no socket to send it from.
+// On the StadBeest the eyes never followed the legs: the leader's feedback socket is opened and never bound, and the non-blocking switch lived in bind alone.
+TEST_CASE("a socket opened only to send never waits on the stack") {
+    mm::platform::UdpSocket s;
+    REQUIRE(s.open());
+    uint8_t buf[16];
+    uint8_t src[4] = {};
+    CHECK(s.recvFrom(buf, sizeof(buf), src) <= 0);   // answers at once: nothing pending
+}
+
 TEST_CASE("a leader sends feedback without listening, and a live encoder write reaches its follower") {
     Scheduler scheduler;
     auto* control = new ControlModule();

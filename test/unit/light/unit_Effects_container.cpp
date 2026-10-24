@@ -13,6 +13,7 @@
 #include "platform/platform.h"
 
 #include <cstring>
+#include <vector>
 
 // RAII guard that restores the platform test clock on scope exit even if a REQUIRE/CHECK throws, without this, a mid-test failure would leave the global setTestNowMs override in place and pollute later test cases.
 struct ClockGuard {
@@ -494,4 +495,32 @@ TEST_CASE("the bottom layer of a composite fades by its own opacity, over black"
     rig.bottom.opacity = 128;
     rig.frame();
     for (size_t i = 0; i < full.size(); i++) CHECK(rig.cap.src_->data()[i] <= full[i] / 2 + 1);   // about half, never more
+}
+
+// A faded bottom layer keeps its moving heads' aim, while a faded layer above it blends its aim into theirs by its mode: opacity fades a position only where something lies under it.
+TEST_CASE("a faded bottom layer keeps its motion bytes, and a faded top layer blends its own into them") {
+    mm::RainbowEffect base;
+    mm::SpiralEffect over;
+    TwoLayers rig(base, over);
+    rig.bottom.setChannelsPerLight(6);   // RGBW, then pan and tilt
+    rig.top.setChannelsPerLight(6);
+    rig.prepare();
+    // The pan byte of every light, each layer aiming its own way, as the composite sees it.
+    const auto panAfter = [&](uint8_t bottomOpacity, uint8_t topOpacity) {
+        rig.bottom.opacity = bottomOpacity;
+        rig.top.opacity = topOpacity;
+        rig.effects.tick();
+        for (size_t light = 0; light < 4; light++) {
+            rig.bottom.buffer().data()[light * 6 + mm::FixtureChannels::kMotionBase] = 200;
+            rig.top.buffer().data()[light * 6 + mm::FixtureChannels::kMotionBase] = 100;
+        }
+        rig.drivers.tick();
+        REQUIRE(rig.cap.src_ != nullptr);
+        return rig.cap.src_->data()[mm::FixtureChannels::kMotionBase];
+    };
+    CHECK(panAfter(128, 0) == 200);   // the bottom alone, faded: its aim, not half of it
+    CHECK(panAfter(255, 0) == 200);   // at full opacity it overwrites, aim included
+    const uint8_t mixed = panAfter(128, 128);
+    CHECK(mixed > 200);                // the top, half faded, adds half its aim, additive being its default mode
+    CHECK(mixed < 255);
 }

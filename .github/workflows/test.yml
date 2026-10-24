@@ -41,6 +41,7 @@ on:
       # The Teensy job below builds the firmware from these.
       - 'teensy/**'
       - '.github/workflows/test.yml'
+      - '.github/actions/**'
   push:
     branches:
       - main
@@ -117,6 +118,9 @@ jobs:
           key: teensy-gcc-${{ runner.os }}-${{ steps.gcc.outputs.version }}
       - name: install the Teensy SDK
         run: uv run moondeck/build/setup_teensy.py --no-loader
+      - uses: ./.github/actions/ccache
+        with:
+          key: teensy
       - name: build the Teensy 4.1 firmwares
         run: |
           set -euo pipefail
@@ -169,6 +173,9 @@ jobs:
           wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/llvm.asc
           sudo add-apt-repository -y "deb http://apt.llvm.org/$(lsb_release -cs)/ llvm-toolchain-$(lsb_release -cs)-20 main"
           sudo apt-get install -y clang-20
+      - uses: ./.github/actions/ccache
+        with:
+          key: sanitizer-${{ matrix.kind }}
       - name: build + run unit tests under ${{ matrix.kind }}sanitizer
         run: |
           # RTSan is clang-only — GCC rejects `-fsanitize=realtime` outright — and the attribute

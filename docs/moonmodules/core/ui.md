@@ -215,4 +215,4 @@ The rest, reorder, control values and the like, lives on the device.
 
 ## Source
 
-Hand-maintained files: [index.html](../../../../src/ui/index.html) · [app.js](../../../../src/ui/app.js) · [style.css](../../../../src/ui/style.css) · [preview3d.js](../../../../src/ui/preview3d.js) · [install-picker.js](../../../../src/ui/install-picker.js). Embedded into firmware at build time via [embed_ui.cmake](../../../../src/ui/embed_ui.cmake).
+Hand-maintained files: [index.html](../../../../src/ui/index.html) · [app.js](../../../../src/ui/app.js) · [style.css](../../../../src/ui/style.css) · [preview3d.js](../../../../src/ui/preview3d.js) · [install-picker.js](../../../../src/ui/install-picker.js). Embedded into firmware at build time via [embed_ui.cmake](../../../../src/ui/embed_ui.cmake): `app.js` and every module it imports become one minified `app.js`, `style.css` is minified, and each file carries an ETag, so a reload of an unchanged file is a `304`. A desktop running from a checkout serves the files in `src/ui` as they are, for live editing.

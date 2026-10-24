@@ -300,6 +300,8 @@ Scheduler::SetControlResult Scheduler::setControl(const char* moduleName,
         if (!c.live && !liveWrite_) {
             target->markDirty();
             if (noteDirtyHook_) noteDirtyHook_();
+            // Every other page shows a configured write on the next transport tick rather than the next second; a driven one rides the second's walk.
+            target->notifyValuesChanged();
         }
         return SetControlResult::Ok;
     }

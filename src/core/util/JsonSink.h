@@ -183,6 +183,16 @@ public:
         return out;
     }
 
+    /// Empty a buffer-mode sink and give its block back, so a sink kept between uses holds no memory while empty.
+    void clear() {
+        if (conn_ || fixed_) return;
+        if (heap_) platform::free(heap_);
+        heap_ = nullptr;
+        heapCap_ = heapLen_ = 0;
+        written_ = 0;
+        overflowed_ = false;
+    }
+
     /// Bytes appended so far in any mode, a socket's included, which `size()` cannot tell: whether a writer wrote anything.
     size_t written() const { return written_; }
 
