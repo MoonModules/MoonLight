@@ -92,7 +92,7 @@ public:
         if (!back_) b_.resize(0);
         if (writerTask && !back_) setStatus("one picture buffer: not enough memory, a capture may skip frames", Severity::Warning);
         else clearStatus();
-        // A writer's picture is whatever it last decoded, so only its own publish lights it: a rebuild here would re-light a frame the drop just put out.
+        // A writer's picture is whatever it last decoded, so only its own publish lights it: a rebuild here would re-light the frame the drop has put out.
         frame_ = PictureFrame{writerTask ? nullptr : front_, width, height, frame_.generation + 1};
         return true;
     }
