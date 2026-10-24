@@ -9,6 +9,7 @@
 #include "platform/platform.h"
 #include "http_loopback.h"
 
+#include <algorithm>
 #include <cstring>
 #include <string>
 
@@ -127,4 +128,30 @@ TEST_CASE("PATCH /api/state?live=1 applies without marking the tree to save, and
         CHECK(request(http, withBody(path, another)).rfind("HTTP/1.1 200", 0) == 0);
         CHECK(rack->dirty());   // an ordinary request: saved
     }
+}
+
+// An ESP32 pushing a look sends its headers, then holds the small body back for the delayed ACK, and a lost segment comes a resend later. Every push once answered 400, then the eye froze waiting on the render loop.
+TEST_CASE("a state document whose body comes after its headers applies, and the frame keeps running meanwhile") {
+    static bool registered = false;
+    if (!registered) { mm::ModuleFactory::registerType<Dial>("WaitDial"); registered = true; }
+    RackServer server;
+    const std::string doc = R"({"Rack":{"Waited":{"type":"WaitDial"}}})";
+    const std::string head = "PATCH /api/state?live=1 HTTP/1.1\r\nContent-Length: " + std::to_string(doc.size()) + "\r\n\r\n";
+    mm::platform::TcpConnection client;
+    REQUIRE(connectAndAccept(server.http, client, kTestPort));
+    REQUIRE(client.write(reinterpret_cast<const uint8_t*>(head.data()), head.size()));
+    uint32_t slowest = 0;
+    for (int i = 0; i < 20; i++) {   // the headers are read, and the body has not come
+        const uint32_t start = mm::platform::millis();
+        server.http.tick20ms();
+        slowest = std::max(slowest, mm::platform::millis() - start);
+        mm::platform::delayMs(1);
+    }
+    CHECK(slowest < 20);
+    CHECK(childNamed(server.rack, "Waited") == nullptr);
+    REQUIRE(client.write(reinterpret_cast<const uint8_t*>(doc.data()), doc.size()));
+    const std::string reply = pumpUntil(server.http, client, 12);
+    client.close();
+    CHECK(reply.rfind("HTTP/1.1 200", 0) == 0);
+    CHECK(childNamed(server.rack, "Waited") != nullptr);
 }

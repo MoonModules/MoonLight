@@ -15,35 +15,35 @@ This plan resolves a board's name from MoonLight's own discovery and shows names
 
 ## Steps
 
-### 1. One lookup, in core
+### 1. One lookup, in core ⏳
 
 The Devices module answers the name for an address and the address for a name, from the list it already keeps.
 It is the one home of that mapping; nothing else resolves names.
 
 About 40 lines and two tests: an hour.
 
-### 2. A peer is shown by name
+### 2. A peer is shown by name ⏳
 
 A status that names a peer uses the lookup: "receiving from MM-S31 (192.168.1.125)".
 A peer the list does not know, a desk or a computer, keeps its address alone.
 
 About 20 lines across the cards that name a peer (Audio, Network Receive, MIDI), plus a test: an hour.
 
-### 3. An address setting shows the name
+### 3. An address setting shows the name ⏳
 
 A text control that holds an address or a list of addresses says so when it is declared, so the UI knows without guessing from the value.
 The UI then shows the known name next to each address, the same way on every card.
 
 A control flag carried in the module's JSON, the Devices list reaching the UI, and one rendering rule in `app.js` with its JS test: about 100 lines, half a day.
 
-### 4. A board's name resolves through discovery
+### 4. A board's name resolves through discovery ⏳
 
 `HostResolver` asks the lookup first and falls back to mDNS and DNS, so a MoonLight board's name resolves from the Devices list, which broadcast keeps current even on a router that drops multicast.
 Every host setting gets it at once, since they all resolve through `HostResolver`.
 
 About 30 lines and a test: two hours.
 
-### 5. Tests and docs
+### 5. Tests and docs 🚧 (the how-to names address reservations; the names option and the tests wait for steps 1 to 4)
 
 - Unit tests: the lookup both ways, a status naming a known and an unknown peer, a board name resolving through the Devices list before mDNS.
 - The multi-board how-to gets an addressing section: reservations on the installation's own router, or names in the host settings.

@@ -482,6 +482,16 @@ private:
 /// Append the per-type extras that ride beside the value, such as bounds or options.
 void writeControlMetadata(JsonSink& sink, const ControlDescriptor& c);
 
+/// Where a control written a piece at a time stands: the part, and the row or option within it.
+struct ControlCursor {
+    uint8_t part = 0;    ///< the part being written: the head, then the rows or options, then a list's detail
+    uint16_t item = 0;   ///< the next row or option in that part
+};
+/// Whether a control's value and extras can go out a piece at a time: a list's rows and detail rows, an option list's options.
+bool writtenInPieces(const ControlDescriptor& c);
+/// Append the next piece of what writeControlValue then writeControlMetadata write whole, false once the last is out. One piece is a row or an option, so no piece needs a large buffer.
+bool writeControlPiece(JsonSink& sink, const ControlDescriptor& c, ControlCursor& at);
+
 /// What an apply did, which each caller maps onto its own reporting.
 enum class ApplyResult : uint8_t {
     Ok,            ///< value parsed and applied.

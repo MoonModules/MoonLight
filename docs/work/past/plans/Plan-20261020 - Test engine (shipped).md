@@ -2,7 +2,7 @@
 
 Plan, for the product owner's approval (2026-10-20). Automated tests are one of MoonLight's core strengths, and they run as several separate machines: C++ unit tests, scenarios on the desktop and on a live device, JS and Python tests, and the Python checks (docgen, prose, code, specs). Each has its own runner, its own output and its own report. This plan finds one model above them, so that what exists, what ran and what it found are described once and read by everyone it concerns: the help, MoonWalk, MoonDeck, the docs and CI.
 
-It starts from [Processes, described once](../../present/Plan-20261015%20-%20Processes%2C%20described%20once%20(partial).md), step 17: the map should show which tests cover a step, and the help which tests cover a module and a control. That needs a machine-readable index of the tests, which does not exist. The index is this plan's first result, and the rest follows from it.
+It starts from [Processes, described once](../../present/Plan-20261015%20-%20Processes%2C%20described%20once%20(16%20of%2023).md), step 17: the map should show which tests cover a step, and the help which tests cover a module and a control. That needs a machine-readable index of the tests, which does not exist. The index is this plan's first result, and the rest follows from it.
 
 ## Why
 

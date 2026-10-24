@@ -250,6 +250,18 @@ TEST_CASE("a script declares its dimensions and its tags") {
     CHECK(std::strncmp(rig.effect.tags(), "AB", 2) == 0);
 }
 
+// A disabled effect on the StadBeest showed garbage tags: released twice, its engine freed the pool its tags pointed into.
+TEST_CASE("a script's tags outlive the release of its engine") {
+    HeadRig rig(/*withMotion=*/false);
+    rig.run("class S {"
+            "  string tags() { return \"🔥🎵\"; }"
+            "  void tick() { fill(1, 2, 3); }"
+            "}");
+    rig.effect.release();
+    rig.effect.release();
+    CHECK(std::strcmp(rig.effect.tags(), "🔥🎵") == 0);
+}
+
 // A script that says nothing keeps the defaults, so every script written before scripts could declare anything behaves exactly as it did. D2, and the notepad that marks it as scripted.
 TEST_CASE("a script that declares neither keeps the scripted defaults") {
     HeadRig rig(/*withMotion=*/false);

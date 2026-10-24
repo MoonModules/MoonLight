@@ -1,7 +1,7 @@
 // The migration engine and its data: THE authoritative log of every machine-mappable schema
 // break, applied in the BROWSER to a config backup before upload, the device never executes
-// migration logic (ADR-0013: its loader ignores unknown keys, defaults absent ones, clamps
-// stale values). MIGRATING.md keeps only the breaks no map can express (erase-flash moves,
+// migration logic (its loader ignores unknown keys, defaults absent ones, clamps stale values,
+// and names on File Manager a module it drops). MIGRATING.md keeps only the breaks no map can express (erase-flash moves,
 // behavior changes) and points here for the rest.
 //
 // Rules of this file:

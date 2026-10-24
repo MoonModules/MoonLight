@@ -131,7 +131,7 @@ public:
         ctrlArena_[offset + 3] = uint8_t((u >> 24) & 0xff);
     }
 
-    /// Append a control the running `defineControls()` declared; with `options`, "a|b|c", it is a dropdown of those names, and `name` must outlive the engine.
+    /// Append a control the running `defineControls()` declared; with `options`, "a|b|c", it is a dropdown of those names. Both are copied, since the string pool they come from moves with each compile.
     void addDeclaredControl(const char* name, uint8_t offset, int32_t lo, int32_t hi,
                             CtrlType type = CtrlType::Int, const char* options = nullptr) {
         if (controlCount_ >= kMaxCtrls || !name || offset >= kArenaBytes) return;
@@ -156,16 +156,21 @@ public:
         if (def < lo) def = lo;
         else if (def > hi) def = hi;
         if (ctrlArena_) writeSlot(offset, def);
-        controls_[controlCount_] = {name, lo, hi, def, 0, type, offset, 1, optionList};
         // Measured here rather than passed, and the bound is tested before the byte is read.
         uint8_t n = 0;
         while (n < kMaxControlName - 1 && name[n]) n++;
+        if (nameLen_ + n + 1 > kNameText) return;   // no room for its name: no control rather than a nameless one
+        char* kept = nameText_ + nameLen_;
+        std::memcpy(kept, name, n);
+        kept[n] = '\0';
+        nameLen_ = static_cast<uint8_t>(nameLen_ + n + 1);
+        controls_[controlCount_] = {kept, lo, hi, def, 0, type, offset, 1, optionList};
         controls_[controlCount_].nameLen = n;
         controlCount_++;
     }
 
     /// Forget the controls a previous `defineControls()` declared, so re-running it rebuilds.
-    void clearDeclaredControls() { controlCount_ = 0; selectLen_ = 0; selectCount_ = 0; }
+    void clearDeclaredControls() { controlCount_ = 0; nameLen_ = 0; selectLen_ = 0; selectCount_ = 0; }
 
     /// Does the script define this entry point? A binding asks before reporting "no tick() to run".
     bool hasEntry(const char* name) const { return entry(name) != nullptr; }
@@ -237,6 +242,10 @@ private:
             p = end + 1;
         }
     }
+    /// The declared controls' names, the engine's own for its life, so a card never names text a recompile freed: room for sixteen of seven characters.
+    static constexpr uint8_t kNameText = 128;
+    char    nameText_[kNameText] = {};
+    uint8_t nameLen_ = 0;
     /// Room for every dropdown one script declares: the names, and a pointer to each.
     static constexpr uint8_t kSelectText = 96, kSelectOptions = 16;
     char        selectText_[kSelectText] = {};

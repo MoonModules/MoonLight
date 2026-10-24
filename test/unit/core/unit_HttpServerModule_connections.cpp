@@ -168,8 +168,26 @@ TEST_CASE("HttpServer: a page load past the send slots gets every file whole or 
     http.release();
 }
 
-// A page load over a slow link queued 52 KB of unacknowledged segments on a board without PSRAM, taking it to 3.6 KB free: below the headroom the file waits rather than queues more.
-TEST_CASE("HttpServer: an embedded file waits while internal RAM is short, then arrives whole") {
+// Below the headroom files, state streams and preview frames take turns: one holds the lease until it ends, and one stalled past the stall guard hands it on. The queue stays one socket's buffer, and none waits forever.
+TEST_CASE("HttpServer: below the headroom one send queues at a time, and a stalled one hands its turn on") {
+    struct Restore { ~Restore() { mm::platform::setTestFreeInternalHeap(0); mm::platform::setTestNowMs(0); } } restore;
+    mm::HttpServerModule http;
+    int fileSend = 0, previewSend = 0;
+    mm::platform::setTestNowMs(1000);
+    CHECK(http.maySendForTest(&fileSend));     // room enough: every send goes
+    CHECK(http.maySendForTest(&previewSend));
+    mm::platform::setTestFreeInternalHeap(mm::HttpServerModule::kSendHeadroom - 1);
+    CHECK(http.maySendForTest(&fileSend));     // short of room: the first to ask holds the turn
+    CHECK_FALSE(http.maySendForTest(&previewSend));
+    http.endSendForTest(&fileSend);
+    CHECK(http.maySendForTest(&previewSend));  // its send ended: the next one goes
+    CHECK_FALSE(http.maySendForTest(&fileSend));
+    mm::platform::setTestNowMs(1000 + 11000);  // the holder moved nothing past the stall guard
+    CHECK(http.maySendForTest(&fileSend));
+}
+
+// A classic ESP32 keeps 40 to 55 KB free, below the headroom, and no page file went out at all: below it files go one at a time, never none.
+TEST_CASE("HttpServer: an embedded file still arrives whole while internal RAM is short") {
     struct Heap { ~Heap() { mm::platform::setTestFreeInternalHeap(0); } } heap;   // restored however the test ends
     mm::HttpServerModule http;
     http.port = kTestPort;
@@ -179,30 +197,10 @@ TEST_CASE("HttpServer: an embedded file waits while internal RAM is short, then 
     REQUIRE(connectAndAccept(http, client, kTestPort));
 
     mm::platform::setTestFreeInternalHeap(mm::HttpServerModule::kSendHeadroom - 1);
-    const char* req = "GET /app.js HTTP/1.1\r\nHost: test\r\n\r\n";
-    REQUIRE(client.write(reinterpret_cast<const uint8_t*>(req), std::strlen(req)));
-    std::string held;
-    char buf[4096];
-    for (int i = 0; i < 50; i++) {
-        http.tick20ms();
-        const int n = client.read(reinterpret_cast<uint8_t*>(buf), sizeof(buf));
-        if (n > 0) held.append(buf, static_cast<size_t>(n));
-        else mm::platform::delayMs(1);
-    }
-    const auto headerEnd = held.find("\r\n\r\n");
+    const std::string got = getUntilClosed(http, client, "/app.js");
+    const auto headerEnd = got.find("\r\n\r\n");
     REQUIRE(headerEnd != std::string::npos);
-    CHECK(held.size() == headerEnd + 4);   // the header went out, no body while short
-
-    mm::platform::setTestFreeInternalHeap(0);
-    std::string rest = held;
-    for (int i = 0; i < 3000; i++) {
-        http.tick20ms();
-        const int n = client.read(reinterpret_cast<uint8_t*>(buf), sizeof(buf));
-        if (n > 0) rest.append(buf, static_cast<size_t>(n));
-        else if (n == 0) break;
-        else mm::platform::delayMs(1);
-    }
-    CHECK(rest.size() - (headerEnd + 4) == embeddedAppJs().len);
+    CHECK(got.size() - (headerEnd + 4) == embeddedAppJs().len);
 
     client.close();
     http.release();

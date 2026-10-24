@@ -119,6 +119,31 @@ TEST_CASE("a feed refreshes once its period ran out, and a failed refresh keeps 
     CHECK_FALSE(fx.f.changed(&fx.owner, h));
 }
 
+// A classic ESP32 showed its weather placeholder for ten minutes after a reboot: the first fetch went before WiFi was up, and a failure waited out the whole period.
+TEST_CASE("a failed fetch is asked again within seconds, backing off, and a success returns to the period") {
+    Fixture fx;
+    net.status = 0;   // no network yet
+    const int h = fx.f.fetch(&fx.owner, "https://api.example/weather", 600000);
+    REQUIRE(fx.f.settle(2000));
+    CHECK(net.calls == 1);
+    CHECK(fx.f.doc(&fx.owner, h) == nullptr);
+    const auto at = [&](uint32_t ms) { platform::setTestNowMs(100000 + ms); fx.f.doc(&fx.owner, h); fx.f.settle(2000); };
+    at(5000);
+    CHECK(net.calls == 2);   // 5 s after the first failure
+    at(10000);
+    CHECK(net.calls == 2);   // the second failure waits 10 s
+    at(15000);
+    CHECK(net.calls == 3);
+    net.status = 200;        // the network is up
+    at(35000);
+    CHECK(net.calls == 4);   // 20 s after the third failure
+    REQUIRE(fx.f.doc(&fx.owner, h) != nullptr);
+    at(35000 + 300000);
+    CHECK(net.calls == 4);   // back to the period after a success
+    at(35000 + 600000);
+    CHECK(net.calls == 5);
+}
+
 TEST_CASE("an answer too big for the device is refused, not cut") {
     Fixture fx;
     net.answer = "[" + std::string(JsonFetch::kAnswerCap, '1') + "]";

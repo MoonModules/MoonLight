@@ -1,0 +1,24 @@
+// Weather: the temperature in Amsterdam as scrolling text, fetched from Open-Meteo over plain HTTP, which needs no TLS session, so it runs on a board without PSRAM, a classic ESP32 included. It builds its own look, one text layer, with one push at start, and writes the text again whenever a new reading arrives, every ten minutes.
+
+class Weather {
+  bool built = false;
+  json weather;
+  json text;
+
+  void tick20ms() {
+    if (!built) {
+      pushJson(R"({"Effects": {"$patch": "replace",
+        "Temperature": {"type": "Layer",
+          "TemperatureText": {"type": "TextEffect", "text": "temperature", "scroll": true, "speed": 20, "hue": 30}}}})");
+      text = R"({"Effects": {"Temperature": {"TemperatureText": {}}}})";
+      built = true;
+    }
+    weather = getJson("http://api.open-meteo.com/v1/forecast?latitude=52.37&longitude=4.90&current=temperature_2m", 600);
+    if (jsonChanged(weather)) {
+      jsonSetText(text, "/Effects/Temperature/TemperatureText/text", "Amsterdam ");
+      jsonAppend(text, "/Effects/Temperature/TemperatureText/text", weather, "/current/temperature_2m");
+      jsonAppendText(text, "/Effects/Temperature/TemperatureText/text", " C");
+      pushJson(text);
+    }
+  }
+}

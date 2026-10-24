@@ -492,6 +492,30 @@ TEST_CASE("a control is declared by calling addControl, and a plain member is no
     CHECK(buf[1] == 7);                               // `hidden`, read by tick, never on the UI
 }
 
+// On a board, a card named its controls with freed text after a recompile moved the string pool: the names are the engine's own.
+TEST_CASE("a declared control's name outlives the string pool it was written in") {
+    moonlive::MoonLive eng;
+    const char* src = "class T {\n"
+                      "  byte bpm = 60;\n"
+                      "  void defineControls() { addControl(\"bpm\", bpm, 1, 255); }\n"
+                      "  void tick() { setRGB(0, bpm, 0, 0); }\n"
+                      "}\n";
+    REQUIRE(eng.compile(src, kTable, kSys));
+    moonlive::runDefineControls(eng);
+    uint8_t n = 0;
+    const char* name = eng.declaredControls(n)[0].name;
+    REQUIRE(n == 1);
+    // Two more compiles, each with a pool of its own, and the first one freed, with no defineControls between them.
+    const char* other = "class U {\n"
+                        "  byte speedy = 1;\n"
+                        "  void defineControls() { addControl(\"speedy\", speedy, 0, 9); }\n"
+                        "  void tick() { setRGB(0, speedy, 0, 0); }\n"
+                        "}\n";
+    REQUIRE(eng.compile(other, kTable, kSys));
+    REQUIRE(eng.compile(other, kTable, kSys));
+    CHECK(std::strcmp(name, "bpm") == 0);
+}
+
 // A control's range is an ORDINARY EXPRESSION, like every other argument in the language. Making addControl the one call whose arguments must be literals would be a special case wearing a disguise, so this pins that it is not one.
 TEST_CASE("a control's range can be computed, not just written as a literal") {
     moonlive::MoonLive eng;

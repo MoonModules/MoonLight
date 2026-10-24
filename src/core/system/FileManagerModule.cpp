@@ -40,6 +40,9 @@ void FileManagerModule::setup() {
     MoonModule::setup();
     // `show hidden` is a view preference, off on every boot whatever was saved: setup() runs after persistence overlays it.
     showHidden_ = false;
+    // Setup runs after boot's load, so what it dropped is known: this panel is where a backup is taken.
+    if (FilesystemModule* fs = FilesystemModule::instance(); fs && fs->skippedAtBoot())
+        setStatus(fs->skippedAtBoot(), Severity::Warning);
 }
 
 // Creating and deleting are HttpServerModule's /api/dir routes, which carry the path in the request, so this module holds no op state; parseFilePath is the one path guard.
