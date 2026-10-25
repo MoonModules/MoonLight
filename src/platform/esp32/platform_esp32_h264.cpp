@@ -16,7 +16,7 @@
 ///
 /// Stopping a worker detaches one that overruns its join deadline rather than freeing it, so an orphan can still be parked when the next start runs. A running flag cannot gate that, since the new start sets it true again.
 ///
-/// The orphan would resume as a second producer on the one encoder handle and scratch buffer, so each worker captures the generation it was spawned for and exits once it is no longer current.
+/// The orphan would resume as a second producer on the one encoder handle and scratch buffer, so each worker captures the generation it was spawned for and exits once a newer one is current.
 ///
 /// Buffers are freed only once the worker has returned: a detached one is mid-encode holding raw pointers to them, so freeing is a use-after-free plus a call into a deleted session, and leaking a few megabytes until the next start is the better trade.
 ///

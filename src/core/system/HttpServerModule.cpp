@@ -1019,17 +1019,13 @@ void HttpServerModule::handleFirmwareUpload(platform::TcpConnection& conn, platf
     FileTransfer* t = claimTransfer(conn);
     if (!t) return;
     g_otaBytesTotal = static_cast<uint32_t>(contentLen);   // the UI's "Y KB", Content-Length up front
-    if (!platform::otaBegin(t->ota, target, contentLen, g_otaStatus, sizeof(g_otaStatus), &g_otaBytesRead)) {
-        finishTransfer(*t, false);
-        answerFirmware(conn, false, target);
-        return;
-    }
+    // An image refused at the start is drained like one refused mid-write, so the answer reaches a sender still sending rather than a reset.
+    t->refused = !platform::otaBegin(t->ota, target, contentLen, g_otaStatus, sizeof(g_otaStatus), &g_otaBytesRead);
     t->kind = FileTransfer::Kind::Firmware;
     t->target = target;
-    t->refused = false;
     // The bytes that came with the request go first, at most Content-Length of them.
     const size_t initial = initialLen < contentLen ? initialLen : contentLen;
-    if (initial && !platform::otaWrite(t->ota, reinterpret_cast<const uint8_t*>(initialBody), initial)) t->refused = true;
+    if (initial && !t->refused && !platform::otaWrite(t->ota, reinterpret_cast<const uint8_t*>(initialBody), initial)) t->refused = true;
     t->remaining = contentLen - initial;
     t->windowStartMs = platform::millis();
     t->windowBytes = 0;
@@ -2388,9 +2384,9 @@ void HttpServerModule::drainSend(Send& s, platform::TcpConnection& conn, const v
             if (close) conn.close();
             return;
         }
-        // A write queues its bytes in internal RAM until they are acknowledged, so it takes only what lies above the floor WiFi needs to keep receiving. Below it the send waits, which is not a stall.
+        // A write queues its bytes in internal RAM until acknowledged, so it takes only what lies above the floor WiFi needs to receive; below it the send waits, within the stall window.
         const size_t room = sendRoom();
-        if (room == 0) { s.lastActivityMs = now; break; }
+        if (room == 0) break;
         const bool inHead = s.headLeft > 0;
         const size_t span = std::min({budget, room, inHead ? s.headLeft : s.bodyLeft});
         const int n = conn.writeSome(inHead ? s.head : s.body, span);

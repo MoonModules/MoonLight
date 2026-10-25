@@ -600,7 +600,7 @@ public:
     void composite(Layer* srcLayer, EffectBase* wired) MM_NONBLOCKING {
         if (!outputBuffer_.data()) return;   // the drivers read the layer's buffer directly
         if (effects_ && effects_->enabledLayerCount() > 1) {
-            // The bottom layer overwrites; each one above blends per its own mode and opacity.
+            // The bottom layer lies over black, faded by its opacity; each one above blends per its own mode and opacity.
             effects_->forEachEnabledLayer([&](Layer* L, bool first) { blendLayer(*L, first); });
             return;
         }

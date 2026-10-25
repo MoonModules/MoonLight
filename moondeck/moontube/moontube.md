@@ -75,6 +75,7 @@ Another MoonLight surface has no module tree, so a run there names elements dire
 | Action | Arguments | The interaction |
 |---|---|---|
 | `goto` | `url` | opens a page |
+| `upload_file` | `selector`, `file` | clicks an element that opens the browser's file chooser and picks `file`, from the repository root |
 | `click` | `selector`, `accept` | clicks any element; `accept` answers the native `confirm()` the click opens with OK, as the help's download question |
 | `type_into` | `selector`, `text`, `delay` | types into any field |
 | `choose_option` | `selector`, `value` | a plain `<select>`, by label (a trailing `*` matches a prefix) |

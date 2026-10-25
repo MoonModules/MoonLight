@@ -399,7 +399,7 @@ processes:
       properties:
         source:
           type: string
-          enum: [A microphone on a board, The computer's audio on macOS, The computer's audio on Windows, The computer's audio on Linux]
+          enum: [A microphone on a board, The computer's audio on macOS, The computer's audio on Windows, The computer's audio on Linux, A PulseAudio server into the container]
           description: What should the effects hear?
     intro: |
       Audio-reactive effects read the [Audio](moonmodules/core/services.md#audio) service. Wire a microphone or capture what the machine plays, then set the levels.
@@ -448,9 +448,19 @@ processes:
         say: Find the Monitor of your output.
         given: [{ input: source, equals: The computer's audio on Linux }]
         when: { manual: "PulseAudio and PipeWire list a Monitor of the output as a source." }
+      - id: pulse
+        section: Pick the source
+        say: Let the container reach the PulseAudio server.
+        given: [{ input: source, equals: A PulseAudio server into the container }]
+        when: { manual: "Over TCP or through the host's socket, each with the server's cookie." }
+        detail: |
+          The image carries libpulse, so audio the server receives from the network, from squeezelite or sendspin for instance, drives the effects. Without a server the container runs without audio input.
+
+          - **Over TCP:** `-e PULSE_SERVER=tcp:<host>:4713`, where the server's `module-native-protocol-tcp` admits the container by its cookie, mounted as below, or by address (`auth-ip-acl=`). `auth-anonymous=1` lets anyone who reaches the port play and record, so it belongs only on a listener bound to a trusted interface (`listen=`).
+          - **Through the host's socket:** `-v /run/user/$(id -u)/pulse/native:/run/pulse/native -v ~/.config/pulse/cookie:/run/pulse/cookie:ro -e PULSE_SERVER=unix:/run/pulse/native -e PULSE_COOKIE=/run/pulse/cookie`.
       - id: device
         say: Pick the loopback in device.
-        given: [{ input: source, in: [The computer's audio on macOS, The computer's audio on Windows, The computer's audio on Linux] }]
+        given: [{ input: source, in: [The computer's audio on macOS, The computer's audio on Windows, The computer's audio on Linux, A PulseAudio server into the container] }]
         when: { manual: "Pick the loopback source in device." }
         detail: |
           On the desktop it captures the picked device right away.

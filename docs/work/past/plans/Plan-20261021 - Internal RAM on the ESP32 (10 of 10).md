@@ -8,14 +8,14 @@ Plan of 2026-10-21, every step done 2026-10-22. An ESP32-S3 driving 3,840 lights
 
 | What | Home |
 |---|---|
-| The rule: what must be internal and why, the floor, the sends' back-pressure, a board without PSRAM | [MoonCore, Internal RAM](../../explanation/architecture/mooncore.md#internal-ram) |
-| How deep the LCD-MM ring is, and its live counters | [LED drivers, Sizing the MoonI80 ring](../../reference/hardware/led-drivers.md#sizing-the-mooni80-ring) |
+| The rule: what must be internal and why, the floor, the sends' back-pressure, a board without PSRAM | [MoonCore, Internal RAM](../../../explanation/architecture/mooncore.md#internal-ram) |
+| How deep the LCD-MM ring is, and its live counters | [LED drivers, Sizing the MoonI80 ring](../../../reference/hardware/led-drivers.md#sizing-the-mooni80-ring) |
 | Each build option and its reason | `esp32/sdkconfig.defaults` |
-| The measurements: the S3 step by step, the ring's depth and encode cost, the P4, the classic, network receive | [performance.md, Internal RAM](../../reference/performance.md#internal-ram) |
-| The floor as a test, and the `browser` step | `scenario_RAM_floor`, [testing.md, Performance contracts](../../reference/testing.md#performance-contracts-contracttarget) |
-| What a user notices | [MIGRATING](../../reference/MIGRATING.md#lcd-mms-ring-is-smaller-and-refuses-psram), [troubleshooting](../../reference/troubleshooting.md#free-memory-is-low-with-the-interface-open) |
-| What it taught | [lessons](../past/lessons.md#lessons-from-the-internal-ram-plan-2026-10-22) |
-| Left open | the ring's refill jitter ([backlog-light](../future/backlog-light.md#the-rings-refill-jitter-2026-10-22-from-the-internal-ram-plan)), the 3.0.0 update-connection symptom ([backlog-core](../future/backlog-core.md#an-updates-connection-that-would-not-open-until-a-reset-2026-10-22-from-the-internal-ram-plan)) |
+| The measurements: the S3 step by step, the ring's depth and encode cost, the P4, the classic, network receive | [performance.md, Internal RAM](../../../reference/performance.md#internal-ram) |
+| The floor as a test, and the `browser` step | `scenario_RAM_floor`, [testing.md, Performance contracts](../../../reference/testing.md#performance-contracts-contracttarget) |
+| What a user notices | [MIGRATING](../../../reference/MIGRATING.md#lcd-mms-ring-is-smaller-and-refuses-psram), [troubleshooting](../../../reference/troubleshooting.md#free-memory-is-low-with-the-interface-open) |
+| What it taught | [lessons](../../past/lessons.md#lessons-from-the-internal-ram-plan-2026-10-22) |
+| Left open | the ring's refill jitter ([backlog-light](../../future/backlog-light.md#the-rings-refill-jitter-2026-10-22-from-the-internal-ram-plan)), the 3.0.0 update-connection symptom ([backlog-core](../../future/backlog-core.md#an-updates-connection-that-would-not-open-until-a-reset-2026-10-22-from-the-internal-ram-plan)) |
 
 ## What was done
 

@@ -61,7 +61,7 @@ public:
     uint8_t blendMode = kBlendAdditive;
     /// How strongly this layer shows, from invisible to full.
     uint8_t opacity = 255;
-    /// Whether this layer shows above the bottom one: at opacity 0 it neither renders nor blends, so a show switches looks by opacity at no cost. The bottom layer overwrites and ignores opacity.
+    /// Whether this layer shows in a composite: at opacity 0 it neither renders nor blends, so a show switches looks by opacity at no cost. The bottom layer lies over black, so it fades out like any other.
     bool contributes() const MM_NONBLOCKING { return opacity > 0; }
 
     /// Publish the two composition controls the `Drivers` container reads.

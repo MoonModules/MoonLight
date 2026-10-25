@@ -48,7 +48,8 @@ and cannot drift between two tools that half-agree:
 | Rule | Enforced by |
 |---|---|
 | No allocation/blocking in the render path | `[[clang::nonblocking]]` + RTSan, counted by `check_code.py` |
-| No platform code outside `src/platform/`, no light include in core | `check_code.py` |
+| No platform code outside `src/platform/` | `check_code.py` |
+| No light include in core | the build: `mm_core`'s include root and header check (`CMakeLists.txt`) |
 | Specs match the code | `check_specs.py` |
 | Catalog matches the modules | `check_devices.py` |
 | Untrusted input is memory-safe | CodeQL |

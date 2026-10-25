@@ -40,8 +40,14 @@ processes:
     intro: |
       The product owner initiates every event and every gate list. On "run pre-commit", run each check the change triggers, once. Report one line each, PASS, FAIL or SKIP with the reason, and stop. An applicable check skipped carries a one-line reason in the commit or pull request. A failure is reported, not fixed and rerun: a second run needs the words again.
 
-      The scope freezes at the words: a request made during a run goes to the next commit. The product owner can bring one in, such as an edit to a file already in the diff that triggers no new check. After a run, a change re-checks only itself on the product owner's go, a cosmetic one rides along, and "restart" reruns everything. On about ten files across areas, or on request, the Reviewer reads the staged diff first, so checks run once. `test_host --ui` is never a gate.
+      The scope freezes at the words: a request made during a run goes to the next commit. The product owner can bring one in, such as an edit to a file already in the diff that triggers no new check. After a run, a change re-checks only itself on the product owner's go, a cosmetic one rides along, and "restart" reruns everything. `test_host --ui` is never a gate.
     steps:
+      - id: reviewer
+        say: Have the Reviewer read the staged diff.
+        actor: agent
+        when: { manual: "First, on about ten files across areas or on request: every check waits until its findings are processed." }
+        detail: |
+          A review finding changes the diff, and a check run before it would have to run again: the Reviewer first is what lets every check run once. Its findings are processed as [Process a review finding](moonwalk.md#review-finding) says.
       - id: specs
         section: Every change
         say: Check the specs.

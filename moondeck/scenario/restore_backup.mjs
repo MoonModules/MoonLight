@@ -31,6 +31,7 @@ const flat = (o, p = "", out = {}) => {
 
 const bundle = JSON.parse(readFileSync(bundlePath, "utf8"));
 const before = await system();
+const startedMs = Date.now();
 
 // Other clients reading the device for the whole restore, as a second browser or a script does.
 let reading = readers > 0, reads = 0, cut = 0;
@@ -49,7 +50,9 @@ await new Promise(r => setTimeout(r, 1500));   // a written config file applies 
 
 let failures = 0;
 const after = await system().catch(() => null);
-if (!after || after.uptime < before.uptime) {
+// Uptime runs with the wall clock unless the device restarted, whose new uptime then falls short of it, however long it was up before.
+const elapsed = (Date.now() - startedMs) / 1000;
+if (!after || after.uptime + 2 < before.uptime + elapsed) {
     failures++;
     console.log(`FAIL the device restarted during the restore (bootReason ${await bootReason().catch(() => "unknown")})`);
 }

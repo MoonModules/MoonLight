@@ -154,8 +154,8 @@ target_link_libraries(mm_core PUBLIC mm_platform)
 # the sources above include only part of it. mm_tests depends on the check, so a test build fails on a crossing.
 if(NOT WIN32 AND CMAKE_VERSION VERSION_GREATER_EQUAL 3.24)
     # Named through the root, since a header set's base directory joins the include path, and src/ there would show light again.
-    file(GLOB_RECURSE MM_CORE_HEADERS CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/src/core/*.h)
-    list(TRANSFORM MM_CORE_HEADERS REPLACE "^${CMAKE_SOURCE_DIR}/src/" "${MM_CORE_ROOT}/")
+    file(GLOB_RECURSE MM_CORE_HEADERS CONFIGURE_DEPENDS RELATIVE ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/src/core/*.h)
+    list(TRANSFORM MM_CORE_HEADERS PREPEND "${MM_CORE_ROOT}/")
     target_sources(mm_core PUBLIC FILE_SET HEADERS BASE_DIRS ${MM_CORE_ROOT} FILES ${MM_CORE_HEADERS})
     set_target_properties(mm_core PROPERTIES VERIFY_INTERFACE_HEADER_SETS ON)
     set(MM_CORE_HEADER_CHECK ON)   # the check's target exists only at generate time, so test/ reads this

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "core/util/format.h"   // formatTo: nonblocking formatting into a fixed buffer
-#include "core/system/DevicesModule.h"   // formatPeer: the sender by its board's name
+#include "core/util/HostResolver.h"   // formatPeer: the sender by its board's name
 #include "light/effects/ChannelDataSink.h"   // staging, the held frame and its placement
 #include "light/effects/EffectBase.h"
 
@@ -262,8 +262,8 @@ private:
         lastProto_ = proto;
         lastPath_ = path;
         std::memcpy(lastIp_, ip, 4);
-        char peer[48];
-        DevicesModule::formatPeer(peer, sizeof(peer), ip);
+        char peer[HostResolver::kPeerChars];
+        HostResolver::formatPeer(peer, sizeof(peer), ip);
         mm::formatTo(recvStatus_, sizeof(recvStatus_), "receiving %s from %s%s", proto, peer, kPathNotes[path]);
         setStatus(recvStatus_, Severity::Status);
     }

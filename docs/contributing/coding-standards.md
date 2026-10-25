@@ -20,6 +20,7 @@ Decided once, not re-derived per file.
 - **Namespace `mm`** for everything in the project. Platform code lives in `mm::platform`. Tests live in `mm` (no `mm::test`, keeps the same names visible to test code as to library code).
 - **No `using namespace` in headers.** In a `.cpp`, `using namespace mm;` is allowed at file scope. In a header it pollutes every translation unit that includes it. Checked by `check_code`, rule `using namespace in a header`.
 - **Include what you use, and compare C strings with `strcmp`.** A file includes every header it names, and a `const char*` compares by content with `strcmp`, while a `std::string` or `std::string_view` compares with `==`. Clang resolves standard headers transitively and merges identical literals, and macOS's libc++ includes `<cstdint>` for you; GCC in CI and Linux's libstdc++ show both faults.
+- **An include path never steps through `.` or `..`** (Google C++ Style Guide, Names and Order of Includes). A header is named from `src/`, as `core/…` or `light/…`, or by its name alone beside its includer. A target's include root is then what it can reach, which is how core stays without light. Checked by `check_code`, rule `relative include path`.
 
 ### Naming
 
@@ -186,6 +187,7 @@ Diagnostics as you type come from clangd, using the same `.clang-tidy` CI runs; 
 
 - **Hot path check** (`moondeck/check/check_nonblocking.py`): the tick methods carry `MM_NONBLOCKING`, and Clang verifies transitively that nothing they reach allocates or blocks. Each site is a `blocking call on the render path` finding of the code check below, so the count may only fall. Each finding stays a judgment: fix it, annotate the callee, or accept it with a scoped reason. An audit must sweep every syscall the path can reach, not the loudest one: a socket timeout is not a fix, it is the size of the freeze. The rule itself: [the architecture](../explanation/architecture/moonmodule.md#hot-path-discipline).
 - **The code check** (`moondeck/check/check_code.py`): its rules, the limit of each, how a finding is solved and what it last found are on [the test page](../reference/tests.md#check_code), generated from the check itself.
+- **No formatter.** A formatter run over the tree rewrites every diff and blame line at once, the opposite of step by step. The compiler's view is held by warnings-as-errors and the reader's by docgen's comment-shape rules.
 
 ### From a finding to a fix
 

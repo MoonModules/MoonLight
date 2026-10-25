@@ -534,8 +534,14 @@ void HttpServerModule::writeControlPieceOf(JsonSink& sink, TreeCursor& c, const 
     c.ctrl++;
 }
 
-// Each address the device list knows with its board's name, and each board's name with its address, read as the service reads its list; nothing for a list it refuses.
+// Each address the device list knows with its board's name, and each board's name with its address, read as the service reads its list; empty for a list it refuses, so the interface still knows the field names hosts.
 void HttpServerModule::writeKnownHosts(JsonSink& sink, const char* text) {
+    sink.append(",\"known\":{");
+    writeKnownHostEntries(sink, text);
+    sink.append("}");
+}
+
+void HttpServerModule::writeKnownHostEntries(JsonSink& sink, const char* text) {
     const DevicesModule* devices = DevicesModule::active();
     if (!devices || !text) return;
     Host hosts[32];
@@ -558,13 +564,12 @@ void HttpServerModule::writeKnownHosts(JsonSink& sink, const char* text) {
             if (!counterpart) continue;
             formatDottedQuad(dotted, hosts[i].ip);
         }
-        sink.append(any ? "," : ",\"known\":{");
+        if (any) sink.append(",");
         sink.writeJsonString(entry);
         sink.append(":");
         sink.writeJsonString(counterpart);
         any = true;
     }
-    if (any) sink.append("}");
 }
 
 // Before its first piece only the head is out, waiting for a value; after it, one array is open inside the control.

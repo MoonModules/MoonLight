@@ -3361,9 +3361,12 @@ function createControl(moduleName, moduleType, ctrl, writeTo = (name, value) => 
                 input.addEventListener("input", () => { dragTs[key] = Date.now(); pendingSends[key] = () => write(ctrl.name, input.value); });
                 input.addEventListener("change", () => flushPendingSends(key));
             } else {
+                // A hosts text carries `known`, the boards it names: the note goes while the text changes, and the view that follows the write brings it back.
+                const hosts = ctrl.known !== undefined;
                 input.addEventListener("input", () => {
                     dragTs[key] = Date.now();
-                    debounceSend(key, 500, () => write(ctrl.name, input.value));
+                    if (hosts) row.querySelector(".control-known")?.remove();
+                    debounceSend(key, 500, () => hosts ? write(ctrl.name, input.value).then(() => refetchState()) : write(ctrl.name, input.value));
                 });
                 // Enter presses the card's `send` button, where the module has one. Generic rather
                 // than a MoonTalk rule: any module pairing a text field with a send button gets it,
@@ -3428,9 +3431,12 @@ function createControl(moduleName, moduleType, ctrl, writeTo = (name, value) => 
             if (ctrl.readonly) {
                 input.readOnly = true;
             } else {
+                // A hosts text carries `known`, the boards it names: the note goes while the text changes, and the view that follows the write brings it back.
+                const hosts = ctrl.known !== undefined;
                 input.addEventListener("input", () => {
                     dragTs[key] = Date.now();
-                    debounceSend(key, 500, () => write(ctrl.name, input.value));
+                    if (hosts) row.querySelector(".control-known")?.remove();
+                    debounceSend(key, 500, () => hosts ? write(ctrl.name, input.value).then(() => refetchState()) : write(ctrl.name, input.value));
                 });
             }
             row.appendChild(input);

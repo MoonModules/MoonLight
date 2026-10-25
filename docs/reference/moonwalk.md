@@ -32,8 +32,10 @@ The same map opens in four places; this part covers three, and MoonDeck's is in 
 | Host | Opens from | Starts as | What the lists show |
 |--|--|--|--|
 | The website | [moonwalk.html](../moonwalk.md), or a **MoonWalk** button on a page | every actor, the whole journey | **Next** only. An address `moonwalk.html#<process>` opens that process, and `?focus=<page>` the processes of a page |
-| A device | the 🗺️ button in the app's header | the user | **Here**: the processes that touch the cards in view. **Next** after it |
+| A device | the 🗺️ button in the app's header | the user, with the choices preset to where it runs | **Here**: the processes that touch the cards in view. **Next** after it |
 | The installer | the **MoonWalk** link beside "Not sure which way to install?" | the user | **Here**: the install process, with the platform choice on ESP32 |
+
+MoonBase, the recovery image, links its **?** to the website's map at the firmware update rather than hosting the map, since a board in recovery often runs offline.
 
 ![MoonWalk opened on a device, its parts numbered](../assets/reference/moonwalk/opened-on-a-device-numbered.png)
 
@@ -105,7 +107,7 @@ flowchart LR
     os -- no --> first["the first option"]
 ```
 
-A choice, such as the platform, takes the reader's own pick first, then the host's preset, then the reader's operating system, then the first option. The pick is kept per choice name, in the browser's storage for that host's address, so the website and a device each keep their own.
+A choice, such as the platform, takes the reader's own pick first, then the host's preset, then the reader's operating system, then the first option. A device presets what follows from where it runs, read from its System card: the platform (ESP32, Teensy, or the desktop build's macOS, Linux, Windows or Docker), the target (Board or Desktop) and the audio source. The pick is kept per choice name, in the browser's storage for that host's address, so the website and a device each keep their own.
 
 ### 3. Opening a process
 
@@ -297,7 +299,7 @@ An example, from `first-light-show`, shortened:
 | `actor` | who does this step, when it is not the process's actor |
 | `given` | when the step applies. A list of conditions, below |
 | `when` | what the step does. Exactly one verb, below |
-| `then` | what the device shows once the step holds, as in section 2. Left out, the generator derives it for `add` and `set`, whose result is their action |
+| `then` | what the device shows once the step holds, as in section 2. Left out, the generator derives it for `add` and `set`, whose result is their action. A `call` that changes the device carries one by hand, so every process that changes the device marks itself done |
 | `detail` | markdown that explains the step, at most 120 words |
 
 #### What `when` can be

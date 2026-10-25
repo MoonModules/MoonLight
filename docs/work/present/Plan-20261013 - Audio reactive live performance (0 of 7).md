@@ -21,7 +21,7 @@ An **Akai MPK261**: 61 semi-weighted keys, 16 RGB-backlit pads, 8 knobs, 8 fader
 - **`AudioService`** publishing an `AudioFrame` per block: level, sixteen bands, the dominant frequency, spectral flux and `onset`, the block a hit was detected, which effects read through `latestFrame()` and MoonLive scripts through builtins. `BeatRipplesEffect` already splashes on `onset`.
 - **Layers, layouts and modifiers,** which already give each musician a place: one layer per band member, placed on its own part of the rig.
 - **The MovingHead effect and fixture profiles,** which already aim heads: pan and tilt per fixture, in formations, from the profiles' Pan and Tilt roles.
-- **The input-mapping plan's sensors** ([input mapping and scripted sensors](Plan-20260901%20-%20Input%20mapping%20and%20scripted%20sensors%20(4%20of%2012).md)): a PIR, a VL53L0X distance sensor, a VL53L8CX zone grid and an MPU6050, on the I2C seam that plan builds.
+- **The input-mapping plan's sensors** ([input mapping and scripted sensors](Plan-20260901%20-%20Input%20mapping%20and%20scripted%20sensors%20(7%20of%2012).md)): a PIR, a VL53L0X distance sensor, a VL53L8CX zone grid and an MPU6050, on the I2C seam that plan builds.
 
 ## The shape
 
@@ -108,7 +108,7 @@ The sensors, from what is listed to what a stage needs:
 | <img src="../../assets/hardware/sensors/hlk-ld2450.webp" width="80" alt="HLK-LD2450"> | [mmWave radar, HLK-LD2450](https://www.tinytronics.nl/en/sensors/motion/hi-link-hlk-ld2450-24ghz-radar-sensor-module-with-bluetooth) | up to 3 targets with x and y, about 6 m, UART | the cheapest real tracker, working in darkness and haze | Tinytronics €7.00 |
 | <img src="../../assets/hardware/sensors/dw3000.webp" width="80" alt="DWM3000EVB"> | [UWB, Qorvo DWM3000EVB](https://www.digikey.nl/nl/products/detail/qorvo/DWM3000EVB/24367408) | about 10 cm, with anchors and a tag per performer | how professional radio trackers work | DigiKey €31.34 per node |
 | | [PosiStageNet in](https://posistage.net/) | positions from a professional system | MoonLight joining a rig that already tracks | free, open protocol, MIT-licensed SDK |
-| <img src="../../assets/hardware/sensors/p4-csi-camera.webp" width="80" alt="OV5647 camera"> | [A camera on the P4](https://www.tinytronics.nl/en/raspberry-pi/raspberry-pi-compatible-camera-5mp-v1.3) (OV5647, MIPI-CSI) | person detection | later, with the [streams](Plan-20261013%20-%20Streams%2C%20every%20frame%20from%20outside%20(11%20of%2016).md) work | Tinytronics €8.00 |
+| <img src="../../assets/hardware/sensors/p4-csi-camera.webp" width="80" alt="OV5647 camera"> | [A camera on the P4](https://www.tinytronics.nl/en/raspberry-pi/raspberry-pi-compatible-camera-5mp-v1.3) (OV5647, MIPI-CSI) | person detection | later, with the [streams](Plan-20261013%20-%20Streams%2C%20every%20frame%20from%20outside%20(11%20of%2013).md) work | Tinytronics €8.00 |
 
 **On the bench (2026-10-19): two HLK-LD2450 kit B** from Hi-Link's own store, each with a USB-to-serial adapter, a Bluetooth antenna and a cable. The adapter lets the radar be tried on a computer with Hi-Link's tool before the UART seam exists: targets, range and zone exclusion on day one. Two units answer the stage questions: whether two 24 GHz radars side by side interfere, and how their targets merge where their views overlap.
 
@@ -118,10 +118,10 @@ The order: the radar first, which needs a UART seam the platform does not have y
 
 ## Open questions
 
-- **Does a note decay in the frame or in the effect?** The proposal: the frame carries held notes and edges only, and each effect owns its own decay, since a splash and a held key want different curves.
-- **One board for the band, or a board per musician?** RTP-MIDI makes both possible; the first gig decides.
+- **Does a note decay in the frame or in the effect?** The proposal: the frame carries held notes and edges only, and each effect owns its own decay, since a splash and a held key want different curves. **Recommended (2026-10-25):** the proposal: the effect owns the decay.
+- **One board for the band, or a board per musician?** RTP-MIDI makes both possible; the first gig decides. **Recommended (2026-10-25):** one board for the band first, one RTP-MIDI session; a board per musician once the cable runs ask for it.
 - **How far on-device analysis goes** before the musicians' own converters are the better answer, measured per instrument in step 6.
-- **Which tracker for the first stage:** the mmWave radar covers a small stage for the price of a sensor; UWB is the accurate route and the larger build.
+- **Which tracker for the first stage:** the mmWave radar covers a small stage for the price of a sensor; UWB is the accurate route and the larger build. **Recommended (2026-10-25):** the mmWave radar first, cheap and enough for a small stage; UWB when a larger stage needs the accuracy.
 
 ## What it removes
 

@@ -13,7 +13,7 @@ Start from the symptom. Each entry says what to check first and where the detail
 | Another machine cannot reach it | Use the `HTTP server ->` address from the log, not `localhost`. Windows Firewall prompts on first run; allow it on your private network. |
 | Settings do not survive a restart | The log says `cannot use ... persistence disabled` and names the directory it tried. |
 | The installer fails saying a file is in use | A copy of MoonLight is running that it could not stop. Close its console window and run the setup again. |
-| The container exits at once | [When the container exits at once](installing-on-linux.md#when-the-container-exits-at-once): usually an overlay root filesystem. |
+| The container exits at once | Usually an overlay root filesystem: [Start the container on an overlay root](../moonwalk.md#container-overlay-root). |
 
 ## Windows flags the download
 

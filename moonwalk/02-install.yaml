@@ -204,7 +204,7 @@ processes:
         detail: |
           It runs with host networking and a volume for its settings.
 
-          One image carries amd64 and arm64, so a board and a server pull the same tag. Host networking is what lets mDNS and Art-Net broadcast reach your fixtures, and `--restart unless-stopped` brings it back after every reboot. Why each flag, and what to do when the container exits at once: [Docker](reference/installing-on-linux.md#docker). From a source checkout, `docker compose up -d` builds the image and serves it on port 8081: [From a source checkout, with Compose](reference/installing-on-linux.md#from-a-source-checkout-with-compose).
+          One image carries amd64 and arm64, so a board and a server pull the same tag. Host networking is what lets mDNS and Art-Net broadcast reach your fixtures, and `--restart unless-stopped` brings it back after every reboot. Why each flag: [Docker](reference/installing-on-linux.md#docker). When the container exits at once: [Start the container on an overlay root](moonwalk.md#container-overlay-root). From a source checkout, `docker compose up -d` builds the image from the repository's `docker-compose.yml` and serves it on port 8081, so it never meets a native install on 8080.
       - id: open-device
         section: That is it
         say: Click the device's link in the installer.
@@ -442,7 +442,37 @@ processes:
         say: Check the service runs.
         when: { run: { command: "systemctl status moonlight" } }
         detail: |
-          To stop the board cleanly later: `sudo shutdown now`. The service comes back at the next boot.
+          To stop the board cleanly later: `sudo shutdown now`, since an SD card cut off mid-write can corrupt the filesystem. The service comes back at the next boot.
+  - id: container-overlay-root
+    title: Start the container on an overlay root
+    actor: user
+    goal: "A container that exits at once with `failed to mount ... fstype: overlay ... invalid argument` runs."
+    systems: [MoonCore]
+    page: reference/installing-on-linux.md
+    intro: |
+      The machine's root filesystem is itself an overlay, which several board and NAS systems use, and Docker's default `overlay2` driver cannot stack one on another.
+    steps:
+      - id: check
+        say: Check the root filesystem's type.
+        when: { run: { command: "findmnt -no FSTYPE /" } }
+        detail: |
+          `overlay` is this case; anything else is another cause.
+      - id: driver
+        say: Set Docker's storage driver to vfs.
+        when: { manual: "Add the key to /etc/docker/daemon.json, keeping what is there." }
+        detail: |
+          A plain `tee` would discard existing settings, and a NAS or a board image often ships some:
+
+          ```sh
+          sudo mkdir -p /etc/docker
+          sudo sh -c 'f=/etc/docker/daemon.json; [ -s "$f" ] || echo "{}" > "$f"; \
+            tmp=$(mktemp); python3 -c "import json,sys;d=json.load(open(sys.argv[1]));d[\"storage-driver\"]=\"vfs\";json.dump(d,open(sys.argv[2],\"w\"),indent=2)" "$f" "$tmp" && mv "$tmp" "$f"'
+          ```
+
+          `vfs` copies layers instead of sharing them, so it uses more disk and pulls are slower. `fuse-overlayfs` is the faster alternative where the package exists.
+      - id: restart
+        say: Restart Docker, then run the container again.
+        when: { run: { command: "sudo systemctl restart docker" } }
   - id: join-access-point
     title: Join your WiFi through the device's own network
     actor: user

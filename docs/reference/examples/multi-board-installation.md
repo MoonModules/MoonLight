@@ -333,7 +333,9 @@ Two router settings keep it steady:
   The audio then stopped every 20 seconds, and an eye missed the leader's palette changes.
   With a few small streams on a dedicated network, sending multicast to every device costs nothing worth saving.
 - **An address reservation per device** (Network, LAN), so the addresses above stay the same.
-  The leader's MIDI `host` is the bridge's address, and a host setting also takes a name, but a name resolves by mDNS, which is multicast again.
+  Or a board's name in the host settings, such as the leader's MIDI `host` as `MM-MIDI-rtp`.
+  A MoonLight board's name resolves from the Devices list, which the boards' broadcast keeps current where a router drops mDNS's multicast.
+  A host setting shows the name of each board it knows beside its address.
 
 A device that stops hearing a group joins it again after 3 seconds of silence, so a network that drops multicast now and then recovers on its own.
 

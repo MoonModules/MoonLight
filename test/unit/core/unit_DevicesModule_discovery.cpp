@@ -269,12 +269,15 @@ TEST_CASE("DevicesModule: a status names a known peer by its board and an unknow
     dev.setup();
     dev.applyState();   // claims the seat a status reads through
     inject(dev, "MM-S31", /*mm=*/true, 192, 168, 1, 125);
-    char peer[48];
-    const uint8_t known[4] = {192, 168, 1, 125}, unknown[4] = {192, 168, 1, 9};
-    DevicesModule::formatPeer(peer, sizeof(peer), known);
+    inject(dev, "MM-a-name-of-23-letters", /*mm=*/true, 255, 255, 255, 254);
+    char peer[HostResolver::kPeerChars];
+    const uint8_t known[4] = {192, 168, 1, 125}, unknown[4] = {192, 168, 1, 9}, longest[4] = {255, 255, 255, 254};
+    HostResolver::formatPeer(peer, sizeof(peer), known);
     CHECK(std::string(peer) == "MM-S31 (192.168.1.125)");
-    DevicesModule::formatPeer(peer, sizeof(peer), unknown);
+    HostResolver::formatPeer(peer, sizeof(peer), unknown);
     CHECK(std::string(peer) == "192.168.1.9");
+    HostResolver::formatPeer(peer, sizeof(peer), longest);
+    CHECK(std::string(peer) == "MM-a-name-of-23-letters (255.255.255.254)");   // the longest name a board holds fits whole
     dev.release();
 }
 

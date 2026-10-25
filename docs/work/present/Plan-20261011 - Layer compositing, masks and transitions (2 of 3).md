@@ -48,9 +48,9 @@ The 5-second soft start after boot raises the global brightness that the correct
 ## Open questions
 
 - Which modes beyond the built six earn their flash, measured per mode on a classic ESP32.
-- How the UI offers a transition: a duration and a style on the Effects container, or per layer.
-- How motion bytes combine across layers. Opacity and blend modes are colour operations, and a pan or tilt byte is a position. In a dissolve, do the heads crossfade their aim, or does the top layer take it outright? Today an upper layer's motion bytes blend like colour; the bottom layer's pass through unfaded.
-- Whether the additive mode takes the specification name *plus*, now that the list follows the specification.
+- How the UI offers a transition: a duration and a style on the Effects container, or per layer. **Recommended (2026-10-25):** on the Effects container, one duration and one style, as a lighting console has one fade time per playback; per layer only once someone asks for it.
+- How motion bytes combine across layers. Opacity and blend modes are color operations, and a pan or tilt byte is a position. In a dissolve, do the heads crossfade their aim, or does the top layer take it outright? Today an upper layer's motion bytes blend like color; the bottom layer's pass through unfaded. **Recommended (2026-10-25):** latest takes precedence (LTP), the console rule for position channels: the top layer's aim wins, and in a dissolve the heads move from the old aim to the new over the fade, as a cue fade moves them. A position is not a color, so it is not blended like one.
+- Whether the additive mode takes the specification name *plus*, now that the list follows the specification. **Recommended (2026-10-25):** yes, `plus`, the specification's own operator.
 
 ## Inspiration
 

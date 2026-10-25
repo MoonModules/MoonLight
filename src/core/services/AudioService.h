@@ -5,7 +5,7 @@
 #include "core/util/Addressing.h"   // sendAddressed: the multicast rule every sender shares
 #include "core/util/HostList.h"     // the boards a unicast send goes to
 #include "core/util/HostResolver.h" // a named board's address, looked up off the render thread
-#include "core/system/DevicesModule.h" // formatPeer: the sender by its board's name
+#include "core/util/HostResolver.h"   // formatPeer: the sender by its board's name
 #include "core/module/MoonModule.h"
 #include "core/util/ActiveInstance.h"   // the one-active-mic election (the seat + its RAII vacate)
 #include "core/util/AudioFrame.h"
@@ -477,8 +477,8 @@ public:
                 else if (lastSyncRecv_ != 0
                          && platform::millis() - lastSyncRecv_ < kSyncFallbackMs) {
                     // Named, because "receiving" alone cannot tell a rig taking the right source from one locked.
-                    char peer[48];
-                    DevicesModule::formatPeer(peer, sizeof(peer), syncPeer_);
+                    char peer[HostResolver::kPeerChars];
+                    HostResolver::formatPeer(peer, sizeof(peer), syncPeer_);
                     mm::formatTo(syncStr_, sizeof(syncStr_), "receiving from %s", peer);
                     setStatus(syncStr_);
                 } else {

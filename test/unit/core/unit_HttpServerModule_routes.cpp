@@ -260,8 +260,10 @@ TEST_CASE("the type list arrives whole with its tag, and a browser holding that 
     CHECK(again.find("\r\n\r\n") + 4 == again.size());   // headers only
 }
 
-// An address says nothing about which board it is: the state names each board the device list knows, and leaves a desk or a computer alone.
-TEST_CASE("a hosts text carries the boards the device list knows among its entries, each address with its name and each name with its address") {
+namespace {
+
+// The full state with a Sender whose hosts text is `hosts`, as the device list hears MM-S31 at .125 and MM-Eye at .30.
+std::string stateWithHosts(const char* hosts) {
     RackServer server;
     mm::DevicesModule devices;
     devices.setup();
@@ -270,6 +272,7 @@ TEST_CASE("a hosts text carries the boards the device list knows among its entri
     announce(devices, "MM-Eye", 30);
     auto* sender = new Sender();
     sender->setName("Sender");
+    std::strcpy(sender->hosts, hosts);
     server.rack->addChild(sender);
     sender->rebuildControls();
     mm::platform::TcpConnection client;
@@ -277,7 +280,20 @@ TEST_CASE("a hosts text carries the boards the device list knows among its entri
     const char* req = "GET /api/state HTTP/1.1\r\nHost: test\r\n\r\n";
     REQUIRE(client.write(reinterpret_cast<const uint8_t*>(req), std::strlen(req)));
     const std::string reply = readUntilClosed(server.http, client);
-    CHECK(reply.find(R"("known":{"192.168.1.125":"MM-S31","MM-Eye":"192.168.1.30"})") != std::string::npos);   // 10.0.0.9 is no board heard
     client.close();
     devices.release();
+    return reply;
+}
+
+}  // namespace
+
+// An address says nothing about which board it is: the state names each board the device list knows, and leaves a desk or a computer alone.
+TEST_CASE("a hosts text carries the boards the device list knows among its entries, each address with its name and each name with its address") {
+    const std::string reply = stateWithHosts("192.168.1.125, MM-Eye, 10.0.0.9");
+    CHECK(reply.find(R"("known":{"192.168.1.125":"MM-S31","MM-Eye":"192.168.1.30"})") != std::string::npos);   // 10.0.0.9 is no board heard
+}
+
+// The interface tells a hosts text by its `known`, so a text naming no board still carries it, empty, and the note can follow an edit.
+TEST_CASE("a hosts text naming no board the device list knows carries an empty known") {
+    CHECK(stateWithHosts("10.0.0.9").find(R"("known":{})") != std::string::npos);
 }

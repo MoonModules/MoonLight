@@ -94,7 +94,7 @@ Multiple layouts can live in one Layouts container. Each layout describes one li
 
 **Effects** (a MoonModule) is the top-level container for one or more layers. Each layer renders independently into its own buffer; the Drivers container composes those buffers downstream.
 
-**Multi-layer composition.** The container composes more than one Layer's buffer into the shared output. Each enabled Layer renders into its own buffer, and the Drivers container's blend and map step composites them bottom to top in container order into the physical buffer. That is why it is a *blend* buffer in [Memory strategy](#memory-strategy). Each Layer carries a `blendMode` (alpha-over or additive) and an `opacity`, inert parameters the Layer never acts on; Drivers reads them and the container child order, and blends bottom→top. The bottom layer clears + overwrites the output; each layer above blends onto the accumulated frame per its mode and opacity. With a single enabled Layer this is the degenerate case: a thin pass-through that hands the driver the Layer's buffer directly (no composite), byte-for-byte the single-layer pipeline. The blend math is integer-only per the hot-path rule (8-bit alpha-over `(src·α + dst·(255−α))/255`, additive sum-with-clamp); cost scales with the enabled-layer count.
+**Multi-layer composition.** The container composes more than one Layer's buffer into the shared output. Each enabled Layer renders into its own buffer, and the Drivers container's blend and map step composites them bottom to top in container order into the physical buffer. That is why it is a *blend* buffer in [Memory strategy](#memory-strategy). Each Layer carries a `blendMode` (alpha-over or additive) and an `opacity`, inert parameters the Layer never acts on; Drivers reads them and the container child order, and blends bottom→top. The bottom layer lies over black: a plain overwrite at full opacity, faded below it, and skipped at opacity 0 like any other. Each layer above blends onto the accumulated frame per its mode and opacity. With a single enabled Layer this is the degenerate case: a thin pass-through that hands the driver the Layer's buffer directly (no composite), byte-for-byte the single-layer pipeline. The blend math is integer-only per the hot-path rule (8-bit alpha-over `(src·α + dst·(255−α))/255`, additive sum-with-clamp); cost scales with the enabled-layer count.
 
 A **Layer** (a MoonModule, child of Effects) owns:
 
@@ -209,6 +209,29 @@ The LUT supports four mapping types:
 - **1:N multimap**: logical maps to multiple physical positions. Table needed (CSR format). Mirror / clone modifier.
 
 Because mapping and blending happen in a single pass over each layer, there is no intermediate "mapped but unblended" buffer. The physical buffer is the only output-side allocation.
+
+## Frames from outside
+
+A stream of frames from outside the device ends as an effect in a layer, so it composes with effects, blend modes and modifiers. Streams come in two families, as TouchDesigner separates channel operators from texture operators and GStreamer types each output. Every source is a MoonModule, and each family has one place where its frames land.
+
+| | Channel data | Pictures |
+|---|---|---|
+| A frame is | one value per light, in the order the sender chose | width × height pixels, RGB, top row first |
+| Sources | [Network Receive](../../moonmodules/light/effects.md#networkreceive) (Art-Net, E1.31, DDP), the [FSEQ player](../../moonmodules/light/effects.md#fseqplayer) | the [Picture service](../../moonmodules/core/services.md#picture): a test pattern, USB capture |
+| Lands in | `ChannelDataSink`, a member of each source effect | the [Picture effect](../../moonmodules/light/effects.md#picture), sampling per light |
+
+**Channel data is a protocol family, not a decoder.** Universes, discovery, sync and priorities ride with it, and an FSEQ file is a recording of exactly that data, which is why Falcon Player plays FSEQ and sends sACN. So the FSEQ player is a sibling of Network Receive on one sink, rather than a decoder in a generic stream source.
+
+**A sender maps its frame one of two ways.** Mapped by the receiver, it arrives row by row and the layer's mapping applies this board's wiring. Mapped by the sender, it arrives in wiring order, as xLights, FSEQ files, Falcon Player and [Network Send](../../moonmodules/light/drivers.md#networksend) send it. Copied into the layer by index, such a frame is mapped twice. Network Receive's `mapped_by` names which; an FSEQ frame is always mapped by the sender. On a plain grid without modifiers the two coincide. A sender-mapped frame takes the cheapest path its layer allows:
+
+- **Alone on its layer**, one effect and no modifier: the drivers take the frame as it is, one copy on any layout (`Layer::wiringSource`).
+- **Beside another effect or under a modifier**: a table built at prepare (`Layer::placeByLayout`) gives each logical cell the light the layout places at its position. The frame then blends, and a modifier transforms it. The placement reads the layout's positions because inverting the layer's mapping would cancel its static modifiers.
+
+**A stream's consumer is an effect, not a modifier.** The textbook name is inverse mapping: compose every transform into one coordinate function and sample the source once per output pixel, as a GPU fragment shader or OpenCV's `remap` does. Each family builds a small table at prepare and does one gather per new frame into the layer buffer, and the layer's mapping does the rest. So no stage holds a frame of its own, and a stream effect carries no rotate, mirror or scroll: modifiers stay the one home for geometry. The decoded picture is the one full frame, an input the sampler reads.
+
+**The picture side stays small enough for a microcontroller.** A decoder always delivers RGB888, so nothing negotiates formats, and the frame a source publishes (`PictureFrame`) is the pixels, the size and a generation. Area sampling averages in linear light, so a light shows the mean of the light in its rectangle rather than the mean of the bytes.
+
+How to add a source of either family: [Adding a picture or channel-data source](../../reference/adding-a-stream-source.md).
 
 ## Drivers
 

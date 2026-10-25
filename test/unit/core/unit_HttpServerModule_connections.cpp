@@ -292,24 +292,36 @@ TEST_CASE("HttpServer: a desktop serves a UI module from its folder, and no path
     std::filesystem::remove_all(dir);
 }
 
+namespace {
+
+// A GET of the embedded app.js answered while internal RAM sits at the floor, so its header goes and its body waits.
+struct FloorGet {
+    struct Heap { ~Heap() { mm::platform::setTestFreeInternalHeap(0); } } heap;   // restored however the test ends
+    const UiFolder embeddedOnly{nullptr};
+    mm::HttpServerModule http;
+    mm::platform::TcpConnection client;
+    char buf[4096];
+    FloorGet() {
+        http.port = kTestPort;
+        http.setup();
+        REQUIRE(connectAndAccept(http, client, kTestPort));
+        mm::platform::setTestFreeInternalHeap(mm::HttpServerModule::kSendFloor);
+        const char* req = "GET /app.js HTTP/1.1\r\nHost: test\r\n\r\n";
+        REQUIRE(client.write(reinterpret_cast<const uint8_t*>(req), std::strlen(req)));
+    }
+    ~FloorGet() { http.release(); }
+};
+
+}  // namespace
+
 // A classic ESP32 under a page load and a preview queued sends until 2.6 KB of internal RAM was left, and WiFi, with no room to receive, dropped the board off the network.
 TEST_CASE("HttpServer: a send queues nothing while internal RAM is at the floor, and finishes once room returns") {
-    struct Heap { ~Heap() { mm::platform::setTestFreeInternalHeap(0); } } heap;   // restored however the test ends
-    const UiFolder embeddedOnly(nullptr);
-    mm::HttpServerModule http;
-    http.port = kTestPort;
-    http.setup();
-    mm::platform::TcpConnection client;
-    REQUIRE(connectAndAccept(http, client, kTestPort));
-    mm::platform::setTestFreeInternalHeap(mm::HttpServerModule::kSendFloor);
-    const char* req = "GET /app.js HTTP/1.1\r\nHost: test\r\n\r\n";
-    REQUIRE(client.write(reinterpret_cast<const uint8_t*>(req), std::strlen(req)));
+    FloorGet f;
     std::string got;
-    char buf[4096];
     for (int i = 0; i < 50; i++) {
-        http.tick20ms();
-        const int n = client.read(reinterpret_cast<uint8_t*>(buf), sizeof(buf));
-        if (n > 0) got.append(buf, static_cast<size_t>(n));
+        f.http.tick20ms();
+        const int n = f.client.read(reinterpret_cast<uint8_t*>(f.buf), sizeof(f.buf));
+        if (n > 0) got.append(f.buf, static_cast<size_t>(n));
         mm::platform::delayMs(1);
     }
     const size_t headerEnd = got.find("\r\n\r\n");
@@ -317,14 +329,28 @@ TEST_CASE("HttpServer: a send queues nothing while internal RAM is at the floor,
     CHECK(got.size() == headerEnd + 4);   // the header went, no byte of the body
     mm::platform::setTestFreeInternalHeap(0);
     for (int i = 0; i < 3000; i++) {
-        http.tick20ms();
-        const int n = client.read(reinterpret_cast<uint8_t*>(buf), sizeof(buf));
-        if (n > 0) got.append(buf, static_cast<size_t>(n));
+        f.http.tick20ms();
+        const int n = f.client.read(reinterpret_cast<uint8_t*>(f.buf), sizeof(f.buf));
+        if (n > 0) got.append(f.buf, static_cast<size_t>(n));
         else if (n == 0) break;
         else mm::platform::delayMs(1);
     }
     CHECK(got.size() - (headerEnd + 4) == embeddedAppJs().len);
-    http.release();
+}
+
+// A board held at the floor kept every waiting send, so its slots filled and every later request answered 503 until RAM freed.
+TEST_CASE("HttpServer: a send held at the internal-RAM floor a whole stall window closes, so its client retries") {
+    mm::platform::setTestNowMs(1000);
+    FloorGet f;
+    for (int i = 0; i < 20; i++) { f.http.tick20ms(); f.client.read(reinterpret_cast<uint8_t*>(f.buf), sizeof(f.buf)); mm::platform::delayMs(1); }
+    mm::platform::setTestNowMs(61000);   // well past the stall window
+    int n = -1;
+    for (int i = 0; i < 200 && n != 0; i++) {
+        f.http.tick20ms();
+        n = f.client.read(reinterpret_cast<uint8_t*>(f.buf), sizeof(f.buf));
+        if (n < 0) mm::platform::delayMs(1);
+    }
+    CHECK(n == 0);   // closed: the slot is free again
 }
 
 // A classic ESP32 keeps 40 to 55 KB free, below the headroom, and no page file went out at all: below it files go one at a time, never none.

@@ -31,11 +31,11 @@ For a device still on old firmware (no Backup button yet), the [installer page](
 
 ## Unreleased
 
-### A driver's `count` of 0 reads all lights, and the window counts past 65535
+### A driver's `count` of 0 reads to the last light, and the window counts past 65535
 
-**Action: *re-set a control* on a display of more than 65535 lights: set each driver's `count` from 65535 to 0.**
+**Action: *re-set a control* on a display of more than 65535 lights. Where a driver's `count` is 65535, the old default reading to the last light, set it to 0. A 65535 set as a window's length stays.**
 
-A driver's `start` and `count` are 32-bit, so a window starts or ends past light 65535, which two panel cards splitting a large wall need. A count of 0 reads all lights, and 0 is the default; 65535 was the default and meant all lights too. A saved 65535 is now a plain count, which on a display of more than 65535 lights leaves the rest dark until `count` is set to 0.
+A driver's `start` and `count` are 32-bit, so a window starts or ends past light 65535, which two panel cards splitting a large wall need. A count of 0 reads every light from `start` to the last, and 0 is the default; 65535 was the default and meant the same. A saved 65535 is now a plain count, which on a display of more than 65535 lights leaves the rest dark until `count` is set to 0.
 
 ### A module whose type was renamed is dropped at boot, and File Manager says so
 

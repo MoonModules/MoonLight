@@ -102,9 +102,10 @@ def section_findings(text: str) -> list:
 def section_rows() -> list:
     """Every section finding over the Markdown pages the section rules read, as (file, rule, message, line)."""
     rows = []
-    files = subprocess.run(["git", "ls-files", "*.md"], capture_output=True, text=True, cwd=ROOT).stdout.split()
+    # NUL-separated, since a plan's name holds spaces; a tracked page deleted in the working tree has no sections to count.
+    files = subprocess.run(["git", "ls-files", "-z", "*.md"], capture_output=True, text=True, cwd=ROOT).stdout.split("\0")
     for rel in files:
-        if not rel.startswith(REPORT_ROOTS) or rel.startswith(SECTION_EXEMPT):
+        if not rel.startswith(REPORT_ROOTS) or rel.startswith(SECTION_EXEMPT) or not (ROOT / rel).is_file():
             continue
         text = (ROOT / rel).read_text(encoding="utf-8", errors="replace")
         rows += [(rel, rule, msg, n) for rule, msg, n in section_findings(text)]

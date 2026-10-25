@@ -271,7 +271,7 @@ def test_a_code_comment_run_past_one_line_is_flagged():
 
 def test_a_long_code_comment_line_is_flagged():
     """A `//` line carries a character cap: without it the line-count cap is satisfied by one
-    very long line, which is a paragraph that happens to lack line breaks."""
+    line of any length, a paragraph that happens to lack line breaks."""
     long = "// " + " ".join(["word"] * 60)
     issues = _hdr("class Foo {\npublic:\n" + long + "\n/// does a thing\nvoid doThing();\n};")
     assert any(why.startswith("comment line") and "chars >" in why for _, why in issues)

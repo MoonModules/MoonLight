@@ -6,10 +6,6 @@ Forward-looking to-build items for the **core / infrastructure** domain (`src/co
 
 The package holds only the binary, so a Pi or NanoPi user writes `/etc/systemd/system/moonlight.service` by hand from MoonWalk's "Run at boot" step. That unit grants no `CAP_NET_RAW`, so the panel card driver's `AF_PACKET` socket fails unless MoonLight runs as root, and the `setcap` alternative is lost whenever apt replaces `/usr/bin/MoonLight`. `CAP_NET_RAW` is all MoonLight needs, since it sets no interface flags. The fix: `package_desktop.py` installs the unit with `AmbientCapabilities=CAP_NET_RAW` and a dedicated `moonlight` user, so installing is `apt install` plus `systemctl enable --now moonlight`. MoonWalk's unit step shrinks to that enable, and the `setcap` step stays for a binary run by hand.
 
-### Downloads off the tick path (2026-10-13)
-
-Every upload moves through the transfer slots; a flash download still writes its whole file on one tick, bounded per chunk by the write deadline. Moving downloads onto the slots too needs a look at how many files the UI reads at once, since two slots answer a third request with 503. Firmware uploads drain whole by design and feed the watchdog.
-
 ### An HTTPS request on a board without PSRAM (2026-10-24, from the JSON plan)
 
 A board without PSRAM never fetches over HTTPS: `tlsRoom` asks for the 100 KB internal floor plus a 45 KB TLS session, and a classic ESP32 has 55 KB free at idle. `CONFIG_MBEDTLS_DYNAMIC_BUFFER` allocates mbedTLS's buffers as a connection needs them rather than the worst case up front, which may fit one request on an idle board. To measure on `MM-Olimex` (.207): the peak a session takes with it, what a smaller floor costs WiFi and the HTTP server, and whether a feed then fetches with lights running. Until then such a board gets its data pushed from one with PSRAM.
@@ -165,6 +161,20 @@ The fix is the deterministic UDP seam plus `platform::setTestNowMs`, the same pa
 timing test here uses: feed the packet, advance the clock explicitly, assert. Raised by CodeRabbit
 on PR #96 and deliberately not taken in that pass: it is pre-existing rather than part of that
 diff, and swapping a test's transport is a change that wants its own verification.
+
+## A request body shares the two upload slots (2026-10-25, from the pre-merge review)
+
+A request whose body trails its headers waits in a `FileTransfer` slot (`deferRequest`), of which there are two. With two uploads in flight, a `POST /api/control` whose body comes in a second segment answers 503 "every send slot is busy", and a slow-bodied control write holds an upload slot for the 10 s stall window. A slot of its own for `Kind::Request`, or a count kept apart, separates them; it waits for a user who meets it, since two uploads at once is rare.
+
+## The tests' own clock resets, now the listener's job (2026-10-25)
+
+A doctest listener beside the test main in `test/unit/test_main.cpp` puts the test clock back on the real one before every test case and subcase rerun, so the 88 resets of 49 files (`setTestNowMs(0)` in a guard struct or at a test's end) do the same job twice. Remove them: a guard struct and its uses go, a guard that also restores the heap, the WiFi scan, the palette or the boot record keeps that half, and a bare reset in the middle of a test stays wherever the rest of that test reads the real clock. About 150 lines, proven by the full suite.
+
+## Three decisions left open by the code ratchets (2026-10-25, from the Code ratchets plan)
+
+- **Name spread's limit**, 10 files beyond a type's own (`MAX_SPREAD` in `check_code.py`), which no tool defaults: confirm or move. Recommended: confirm, since the count only ratchets down.
+- **A gate runner for agentless development**: the gate lists are run by an agent today, and a local-model or agentless workflow wants one runnable command per event. `precommit.py` went on 2026-10-01; whether one returns, and in what shape.
+- **Undocumented public declarations**: a generated page shows an empty entry for each, which argues for a docgen rule, while cut-first argues against comments for their own sake. The middle way counts only public declarations in headers that generate a page.
 
 ## What disable means: release the memory, or keep the module hot (2026-10-20)
 
@@ -2026,7 +2036,7 @@ Lower risk than the RGMII case (six pins rather than twelve, and nothing of ours
 
 ## Input transports: foot pedals, USB game controllers, and MoonLive at the pins (2026-09-01)
 
-`ButtonService` shipped with the [GPIO seam](../present/Plan-20260901%20-%20Input%20mapping%20and%20scripted%20sensors%20(4%20of%2012).md)
+`ButtonService` shipped with the [GPIO seam](../present/Plan-20260901%20-%20Input%20mapping%20and%20scripted%20sensors%20(7%20of%2012).md)
 (`gpioInputBegin` / `gpioRead` / `gpioWrite`). It names a target as `Module.control` and writes it
 through `Scheduler::setControl`, so a press and an OSC message are indistinguishable downstream.
 Three follow-ups build on that seam rather than beside it.
@@ -2068,6 +2078,10 @@ gains driver scripts whose hello-world is "read from GPIO, write to GPIO", which
 
 `ButtonService` is then the precompiled sibling of a script anyone could write, exactly the
 relationship `ballpit.mle` has with `BallpitEffect`.
+
+**Double-click and multi-click** (2026-10-25), from ESPHome's trigger vocabulary: the same debounce
+timers with more states, so one button does several things. Built when a panel needs more actions
+than it has buttons.
 
 ## Relay-gated boards, and what a driver is (2026-09-01)
 

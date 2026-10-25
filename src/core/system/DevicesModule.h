@@ -13,7 +13,7 @@
 #include "core/system/FilesystemModule.h" // FilesystemModule::noteDirty: persist on list change
 #include "core/system/WledPacket.h"       // the presence packet and which copy it is
 #include "core/util/Addressing.h"         // sendAddressed, and the network's multicast evidence
-#include "core/util/HostResolver.h"       // setNameSource: a host setting naming a board resolves from this list
+#include "core/util/HostResolver.h"       // setNameSource: a host setting naming a board resolves from this list, and a status names it
 #include "platform/platform.h"
 
 #include <cstdint>
@@ -164,16 +164,6 @@ public:
         return false;
     }
 
-    /// `ip` as a status names a peer: `MM-S31 (192.168.1.125)` for a board heard this session, the address alone for anything else.
-    static void formatPeer(char* out, size_t n, const uint8_t ip[4]) MM_NONBLOCKING {
-        char dotted[16];
-        formatDottedQuad(dotted, ip);
-        const DevicesModule* devices = active();
-        const char* name = devices ? devices->nameOf(ip) : nullptr;
-        if (name) mm::formatTo(out, n, "%s (%s)", name, dotted);
-        else mm::formatTo(out, n, "%s", dotted);
-    }
-
     /// Register a bridge a driver found out of band, updating its row or inserting one.
     void upsertHueBridge(const uint8_t ip[4], const char* name, uint8_t color) {
         Device* d = findByIp(ip);
@@ -202,7 +192,7 @@ public:
     /// Report the cached list on boot, which persistence restored before this ran.
     void setup() override {
         MoonModule::setup();
-        HostResolver::setNameSource(&resolveBoard);
+        HostResolver::setNameSource(&resolveBoard, &boardNameAt);
         if (deviceCount_) {
             std::snprintf(statusBuf_, sizeof(statusBuf_), "%u device%s (cached)",
                           deviceCount_, deviceCount_ == 1 ? "" : "s");
@@ -477,6 +467,11 @@ private:
     }
 
     /// A host setting's name as the board announcing it, through whichever instance is active.
+    static const char* boardNameAt(const uint8_t ip[4]) MM_NONBLOCKING {
+        const DevicesModule* devices = active();
+        return devices ? devices->nameOf(ip) : nullptr;
+    }
+
     static bool resolveBoard(const char* name, uint8_t ip[4]) {
         const DevicesModule* devices = active();
         return devices && devices->addressOf(name, ip);

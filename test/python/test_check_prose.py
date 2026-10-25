@@ -53,3 +53,18 @@ def test_a_section_past_its_word_cap_is_a_finding_and_its_tables_and_code_are_no
     found = c.section_findings(page)
     assert [(rule, n) for rule, _, n in found] == [(c.SECTION_RULE, 5)]   # only the prose section, at its heading; a short one is no finding
     assert c.section_findings("# T\n\n## A\n\n" + " ".join(["w"] * c.MAX_SECTION_WORDS) + "\n") == []   # at the cap is within it
+
+
+def test_the_section_count_reads_a_page_whose_name_holds_spaces_and_skips_one_deleted_but_tracked(tmp_path, monkeypatch):
+    import sys
+    sys.path.insert(0, str(ROOT / "moondeck" / "check"))
+    import check_prose as c
+    run = lambda *a: subprocess.run(["git", *a], cwd=tmp_path, check=True, capture_output=True)
+    run("init", "-q")
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "docs" / "a page.md").write_text("# T\n\n## Long\n\n" + " ".join(["w"] * (c.MAX_SECTION_WORDS + 1)) + "\n")
+    (tmp_path / "docs" / "gone.md").write_text("# Gone\n")
+    run("add", ".")
+    (tmp_path / "docs" / "gone.md").unlink()   # deleted in the working tree, still in the index
+    monkeypatch.setattr(c, "ROOT", tmp_path)
+    assert [(f, rule) for f, rule, _, _ in c.section_rows()] == [("docs/a page.md", c.SECTION_RULE)]

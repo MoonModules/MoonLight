@@ -140,6 +140,10 @@ public:
         // Two controls on one member would write the same byte from two cards; refused before a dropdown's names take pool space.
         for (uint8_t i = 0; i < controlCount_; i++)
             if (controls_[i].offset == offset) return;
+        // Measured here rather than passed, the bound tested before the byte is read; a name with no room refuses the control before its options or default touch anything.
+        uint8_t n = 0;
+        while (n < kMaxControlName - 1 && name[n]) n++;
+        if (nameLen_ + n + 1 > kNameText) return;   // no control rather than a nameless one
         const char* const* optionList = nullptr;
         if (options) {
             const uint8_t first = selectCount_;
@@ -156,10 +160,6 @@ public:
         if (def < lo) def = lo;
         else if (def > hi) def = hi;
         if (ctrlArena_) writeSlot(offset, def);
-        // Measured here rather than passed, and the bound is tested before the byte is read.
-        uint8_t n = 0;
-        while (n < kMaxControlName - 1 && name[n]) n++;
-        if (nameLen_ + n + 1 > kNameText) return;   // no room for its name: no control rather than a nameless one
         char* kept = nameText_ + nameLen_;
         std::memcpy(kept, name, n);
         kept[n] = '\0';

@@ -8,6 +8,16 @@
 #include "platform/platform.h"
 #include "http_loopback.h"
 
+// RealtimeSanitizer prints a report for every unsafe call inside a tick, which inflates a tick's wall time; a timing bound means nothing under it.
+#if defined(__has_feature)
+#if __has_feature(realtime_sanitizer)
+#define MM_UNDER_REALTIME_SANITIZER 1
+#endif
+#endif
+#ifndef MM_UNDER_REALTIME_SANITIZER
+#define MM_UNDER_REALTIME_SANITIZER 0
+#endif
+
 #include <algorithm>
 #include <chrono>
 #include <cstdio>
@@ -127,11 +137,16 @@ TEST_CASE("a flash download whose client stops reading never holds a tick, and t
         slowestMs = std::max<long long>(slowestMs, std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - t0).count());
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
+#if !MM_UNDER_REALTIME_SANITIZER
     CHECK(slowestMs < 50);   // the reader takes nothing: each tick writes what the socket holds and moves on
+#endif
 
-    struct Clock { ~Clock() { mm::platform::setTestNowMs(0); } } clock;
-    mm::platform::setTestNowMs(mm::platform::millis() + 60000);   // well past the stall guard
-    for (int i = 0; i < 5; i++) http.tick20ms();
+    // A second a tick, so the socket fills however slowly the build writes, and the guard closes once a whole window moves nothing.
+    const uint32_t start = mm::platform::millis();   // on from the real clock the first ticks ran on, never back
+    for (uint32_t t = start + 1000; t < start + 300000; t += 1000) {
+        mm::platform::setTestNowMs(t);
+        http.tick20ms();
+    }
     // The client finds what the socket held, then the close: never the whole file.
     size_t got = 0;
     int n = -1;
@@ -218,9 +233,13 @@ TEST_CASE("an upload waiting a whole stall window for a slow reader answers 503 
     mm::platform::setTestNowMs(1000);
     HeldDownload held;
     std::string reply;
-    static char buf[4096];
+    static char buf[128 * 1024];
     for (int second = 1; second <= 12 && reply.empty(); second++) {
-        held.reader.read(reinterpret_cast<uint8_t*>(buf), sizeof(buf));   // a little each second: the download progresses, so its own stall guard stays quiet
+        for (size_t got = 0; got < sizeof(buf);) {   // more than one loopback segment each second, so the window reopens and the download's own stall guard stays quiet
+            const int n = held.reader.read(reinterpret_cast<uint8_t*>(buf) + got, sizeof(buf) - got);
+            if (n <= 0) break;
+            got += static_cast<size_t>(n);
+        }
         mm::platform::setTestNowMs(1000 + second * 1000);
         for (int i = 0; i < 3; i++) { mm::platform::delayMs(1); held.http.tick20ms(); }
         reply = pumpUntil(held.http, held.writer, 12, 3);

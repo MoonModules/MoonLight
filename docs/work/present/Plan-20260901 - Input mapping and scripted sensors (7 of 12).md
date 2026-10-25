@@ -202,13 +202,13 @@ table**. A sensor that only does one is half-built. The full reasoning is in
    script drives the surface, the surface drives everything, which is the same two-step model the
    tables use. Unrestricted is simpler and lets a script rewrite a driver's pin list.
 
-## Step 0b: the two open items carried in from the GPIO-seam plan 🚧 (`/mm/pad/N` shipped; the driver/service line is drawn in mooncore.md, the sentence at `DriverBase.h:19` stays unscoped)
+## Step 0b: the two open items carried in from the GPIO-seam plan ✅ (`/mm/pad/N` shipped; the driver/service line is drawn in mooncore.md, and `DriverBase.h` says a driver consumes the light output)
 
 That plan had seven steps. Five shipped (the GPIO seam, ButtonService, the Dig-2-Go catalog entry,
 the MoonLive GPIO builtins and MoonLiveService). Two did not, and they are small enough to state
 rather than schedule:
 
-- **The driver definition in the docs.** `drivers.md:3` still reads "A driver sends lights
+- ✅ **The driver definition in the docs.** `drivers.md:3` read "A driver sends lights
   somewhere", the output-only wording the analysis above set out to correct. The correction is two
   edits and no code: scope that line to a LIGHT driver, and name the general sense plus its two
   families in `architecture.md`. It is cheap, and every other document defers to it.
@@ -407,7 +407,7 @@ Two things this step found, which the text above predates:
   next non-light binding meets it the same way. Worth splitting the guard out of `run()`, or naming
   the two entries for what they are.
 
-## Step 2b: encoders send DELTAS, the way an encoder actually works 🚧 (superseded by 2c's framing: a delta exists only at `turn()`, the knob and `/mm/encoder/N` stay absolute, a palette clamps rather than wraps)
+## Step 2b: encoders send DELTAS, the way an encoder actually works ✅ (superseded by 2c's framing: a delta exists only at `turn()`, the knob and `/mm/encoder/N` stay absolute, a palette clamps rather than wraps; nothing left to build)
 
 A rotary encoder has no end stops. It reports MOVEMENT, not position: one detent clockwise is "+1",
 and the device it is plugged into owns the value and decides what +1 means. That is what every
@@ -773,7 +773,7 @@ peripheral (PCNT for the encoder, RMT or a timed capture for the echo) rather th
 **Test:** an encoder on the bench driving `Control.encoder1` through the module, and an HC-SR04
 reporting distance through a script.
 
-## Step 6: PIR, and the trigger vocabulary 🚧 (a `set` row already holds a level, `unit_ButtonService.cpp:122`; no `level` kind, PIR test or multi-click vocabulary)
+## Step 6: PIR, and the trigger vocabulary ✅ (a PIR is a `set` row, which already holds a level, so no `level` kind: two kinds would do one job; the help and the momentary-row test name it. Multi-click waits for a panel that needs it, in backlog-core)
 
 The cheap finish. A PIR is a digital pin, so it needs no seam at all: it is a `ButtonService` row
 whose event is a *level* rather than a press. MoonLight models it exactly so (`pin_PIR`,

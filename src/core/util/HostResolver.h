@@ -2,6 +2,7 @@
 
 #include "core/util/HostList.h"   // kMaxHostName
 #include "core/util/TryLock.h"    // the cache is shared between the asking thread and the lookup task
+#include "core/util/format.h"     // formatTo: a peer named into a fixed buffer
 #include "platform/platform.h"    // resolveHost, millis, yield, and the worker task seam
 
 #include <atomic>
@@ -29,8 +30,19 @@ public:
 
     /// Where a board's announced name resolves first, on the asking side: false when it knows no board by that name.
     using NameSource = bool (*)(const char* name, uint8_t ip[4]);
-    /// Set by the module that hears the boards announce themselves, so a board's name holds where mDNS's multicast is dropped.
-    static void setNameSource(NameSource source) { self().nameSource = source; }
+    /// The name of the board heard at an address, or null; read from a status on the render path, so it may not block.
+    using BoardName = const char* (*)(const uint8_t ip[4]) MM_NONBLOCKING;
+    /// Set by the module that hears the boards announce themselves, so a board's name holds where mDNS's multicast is dropped, both ways.
+    static void setNameSource(NameSource source, BoardName names) { self().nameSource = source; boardName_ = names; }
+
+    /// What a peer text holds: a board's name of 23 characters, " (255.255.255.255)" and the terminator.
+    static constexpr size_t kPeerChars = 48;
+    /// `ip` as a status names a peer: `MM-S31 (192.168.1.125)` for a board heard this session, the address alone for anything else.
+    static void formatPeer(char* out, size_t n, const uint8_t ip[4]) MM_NONBLOCKING {
+        const char* name = boardName_ ? boardName_(ip) : nullptr;
+        if (name) mm::formatTo(out, n, "%s (%u.%u.%u.%u)", name, ip[0], ip[1], ip[2], ip[3]);
+        else mm::formatTo(out, n, "%u.%u.%u.%u", ip[0], ip[1], ip[2], ip[3]);
+    }
 
     /// Allocate the cache and start the lookup task, once, from a path that may allocate: a prepare or a control edit.
     static void ensureStarted() {
@@ -120,6 +132,8 @@ private:
     };
 
     static Self& self() { static Self s; return s; }
+    /// Beside the cache rather than in it, since a status reads it on the render path, where a function-local static's guard may block.
+    static inline BoardName boardName_ = nullptr;
 
     /// The task: a pass whenever a name is added, and every few seconds for the refreshes.
     static void run(void* user) {
