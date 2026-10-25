@@ -771,6 +771,10 @@ int wifiTxPower();
 
 /// Cap the WiFi transmit power in quarter-dBm units, 8 to 84; 0 keeps the stack default.
 bool wifiSetTxPower(int8_t quarterDbm);
+#ifndef ESP_PLATFORM   // a host-test seam, which no ESP32 code calls
+/// The last cap a test radio took, in quarter dBm, 0 while none was pushed.
+int8_t testLastTxPower();
+#endif
 
 /// Advertise this device over mDNS as `_http._tcp` and `_wled._tcp`, which is how the WLED app and Home Assistant find it.
 bool mdnsInit(const char* deviceName);

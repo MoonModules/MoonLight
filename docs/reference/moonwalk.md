@@ -254,7 +254,7 @@ The installer's link to a new device carries `?walked=install`, which the device
 
 A process is an entry in a stage file, `moonwalk/NN-<stage>.yaml`. The first line of each file, `# yaml-language-server: $schema=moonwalk.schema.json`, makes an editor check it as you type, and the generator checks it again (section 9). Save the file and reload: the preview server on 8421 and the docs server rebuild the map on every request. The steps are a process too: [Change or add a MoonWalk process](../moonwalk.md#change-moonwalk).
 
-The format follows [Arazzo](https://spec.openapis.org/arazzo/latest.html), the OpenAPI Initiative's workflow standard: a process is a workflow, with `dependsOn` and `inputs` as Arazzo has them. A step is shaped as Given, When, Then, as in Gherkin. Arazzo has no UI, shell or manual steps, which is why a step's `when` has its own verbs.
+The format follows [Arazzo](https://spec.openapis.org/arazzo/latest.html), the OpenAPI Initiative's workflow standard: a process is a workflow, with `dependsOn` and `inputs` as Arazzo has them. A step is shaped as Given, When, Then, as in Gherkin. Arazzo has no UI, shell or manual steps, which is why a step's `when` has its own verbs. A step has no loop, as Gherkin has none: work that repeats over every board or measures a spread, such as `run_network_live.py` and `run_network_roundtrip.py`, stays a script a `run` step names.
 
 An example, from `first-light-show`, shortened:
 
@@ -301,6 +301,7 @@ An example, from `first-light-show`, shortened:
 | `when` | what the step does. Exactly one verb, below |
 | `then` | what the device shows once the step holds, as in section 2. Left out, the generator derives it for `add` and `set`, whose result is their action. A `call` that changes the device carries one by hand, so every process that changes the device marks itself done |
 | `detail` | markdown that explains the step, at most 120 words |
+| `asks` | what the person answers at the step in their own words, one question each, listed under the step. `contribute-pr`'s become the headings of the pull request template, which `gen_moonwalk.py --pr-template` writes to `.github/pull_request_template.md` |
 
 #### What `when` can be
 

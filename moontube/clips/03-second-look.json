@@ -97,7 +97,7 @@
     {
       "action": "delete_module",
       "module": "Layer",
-      "caption": "× deletes a module. These two appear only where a module is yours to change.",
+      "caption": "🗑 deletes a module. These two appear only where a module is yours to change.",
       "speech": 8.6
     },
     {

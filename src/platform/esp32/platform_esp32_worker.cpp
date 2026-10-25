@@ -38,6 +38,11 @@
 #include "esp_task_wdt.h"   // the render loop and the encode worker each subscribe themselves so a wedge self-heals (reboot) not hangs
 #include "esp_log.h"         // sleepUs says once when it falls back to a scheduler tick
 #include "esp_timer.h"       // sleepUs: a one-shot timer wakes the task, finer than the scheduler tick
+#include "esp_attr.h"        // IRAM_ATTR: sleepUs' wake runs in the timer interrupt
+
+#if !CONFIG_ESP_TIMER_SUPPORTS_ISR_DISPATCH_METHOD
+#error "sleepUs wakes its task from the timer interrupt: set CONFIG_ESP_TIMER_SUPPORTS_ISR_DISPATCH_METHOD=y (esp32/sdkconfig.defaults)"
+#endif
 
 #include <atomic>
 #include <new>
@@ -114,14 +119,21 @@ static void sleepTick(EspWorker* w) {
     vTaskDelay(1);
 }
 
+// The wake runs in the timer's interrupt, since the esp_timer task shares a core and a priority with a busy render loop and waited for its time slice: a 165 µs gap took 7 ms. In IRAM, the interrupt firing while a flash write has the cache off.
+static void IRAM_ATTR sleepWake(void* arg) {
+    BaseType_t woken = pdFALSE;
+    vTaskNotifyGiveFromISR(static_cast<EspWorker*>(arg)->handle, &woken);
+    portYIELD_FROM_ISR(woken);
+}
+
 // A one-shot esp_timer notifies the task, so a gap below the 10 ms scheduler tick costs no busy-wait; a stop's notification ends it early, as it should.
 void sleepUs(WorkerTask& t, uint32_t us) {
     auto* w = static_cast<EspWorker*>(t.impl);
     if (!w || w->stop.load(std::memory_order_acquire)) return;
     if (!w->sleepTimer) {
         const esp_timer_create_args_t args = {
-            .callback = [](void* arg) { xTaskNotifyGive(static_cast<EspWorker*>(arg)->handle); },
-            .arg = w, .dispatch_method = ESP_TIMER_TASK, .name = "sleepUs", .skip_unhandled_events = true};
+            .callback = &sleepWake,
+            .arg = w, .dispatch_method = ESP_TIMER_ISR, .name = "sleepUs", .skip_unhandled_events = true};
         if (esp_timer_create(&args, &w->sleepTimer) != ESP_OK) { w->sleepTimer = nullptr; sleepTick(w); return; }
     }
     if (esp_timer_start_once(w->sleepTimer, us) != ESP_OK) { sleepTick(w); return; }

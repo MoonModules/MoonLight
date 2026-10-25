@@ -9,6 +9,7 @@
 #include <cstring>
 #include <string>
 
+// @step smart-home/hue-driver
 TEST_CASE("HueDriver: a colored pixel becomes an on/bri/hue/sat state body") {
     mm::HueDriver hue;
     char body[80] = {};

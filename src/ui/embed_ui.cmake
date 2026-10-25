@@ -74,7 +74,7 @@ function(hex_to_c_array HEX_STR VAR_NAME OUT_VAR)
 endfunction()
 
 # Every file the firmware serves, from the stage: `app.js` holds every module it imports. Text is gzipped; the PNG is already compressed and stays raw.
-set(UI_FILES index.html app.js style.css prism.js moonmodules-logo.png)
+set(UI_FILES index.html app.js style.css prism.js momo.png)
 
 set(arrays "")
 set(entries "")

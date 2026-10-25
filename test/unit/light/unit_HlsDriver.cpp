@@ -116,6 +116,7 @@ TEST_CASE("HlsDriver encodes at the layout's size, not a control's") {
 }
 
 // One frame piped per tick within the rate: the grid's pixels, tight RGB, corrected: what the wall shows is what the stream shows, pixel for pixel.
+// @step watch-output/add-hls
 TEST_CASE("HlsDriver pipes the grid pixel-exact") {
     EncSeamGuard seam{mm::platform::EncoderTestMode::Record};
     mm::Buffer source;

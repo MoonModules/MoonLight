@@ -19,12 +19,11 @@ What remains is the browser-side rendering behavior.
 │  Status bar: ☰ · logo · brand · device name · sys stats     │
 │              · WS dot · reboot · theme toggle               │
 ├──────────────┬──────────────────────────────────────────────┤
-│  Side nav    │  Sticky preview canvas (shrinks on scroll)   │
-│  (root list) ├──────────────────────────────────────────────┤
-│              │  Cards for the selected root module          │
-│              │    ↳ child cards inline                      │
-│  ─────────   │      ↳ grandchild cards inline               │
-│  footer:     │                                              │
+│  Side nav    │  Preview          ┃  Cards for the selected  │
+│  (root list) │  (beside, under   ┃  root module             │
+│              │   or floating)    ┃    ↳ child cards inline  │
+│  ─────────   │                   ┃      ↳ grandchild cards  │
+│  footer:     │             split handle ┛                   │
 │  social ©    │                                              │
 └──────────────┴──────────────────────────────────────────────┘
 ```
@@ -32,10 +31,11 @@ What remains is the browser-side rendering behavior.
 - Fixed status bar at top (44 px), hamburger, MoonLight logo, then the rest.
 - Side nav: a left column listing root modules; the selected root's card subtree fills the main area
   (one root visible at a time).
-- Module-card column max-width 500 px, centered (single-column, easier to read on phones). The preview
-  canvas is **not** capped, it spans the full content width.
-- Preview canvas is sticky just below the status bar and shrinks 0 % → 50 % as the user scrolls
-  0 → 300 px.
+- The preview has three layouts, one canvas restyled in place by `preview3d.js::setupLayout`:
+  - **Beside** the cards on a screen 960 px wide or more. The split handle between them sets the card column's width; dragged so wide the preview drops under 240 px, the preview moves to the small layout, and back while the same drag returns.
+  - **Under** the cards, in a band whose height the split handle sets, which suits a phone.
+  - **Floating**, dragged by its bar and staying where it is dropped, kept as fractions of the screen so it holds its place through a rotation.
+- A screen under 960 px uses the small layout, under or floating, which the preview bar's ⬓ / ⧉ switches. ⤢ takes a wide screen's preview out of the side and ⤡ puts it back. All of it is kept per browser.
 - The preview bar's ⏺ records three seconds of the canvas as a GIF the browser saves, encoded by `gif.js` (GIF89a with a median-cut palette), for a preset's gallery preview.
 
 ## Status bar
@@ -43,7 +43,7 @@ What remains is the browser-side rendering behavior.
 Fixed top, 44 px, left-to-right:
 
 1. **Hamburger (☰)**, toggles the side nav (`body.nav-open`). See [§ Side navigation](#side-navigation).
-2. **MoonLight logo**, 28 px PNG from `/moonmodules-logo.png`; the same image is the page favicon.
+2. **Momo**, the MoonModules mascot, 28 px PNG from `/momo.png`; the same image is the page favicon.
 3. **Brand wordmark**, "MoonLight".
 4. **Device name**, from the `System.deviceName` control.
 5. **System stats**, `uptime · NN K free` (uptime `Xd Yh Zm Ws`, free heap KB), read from the SystemModule controls in the WS state push; no separate polling endpoint.
@@ -75,18 +75,18 @@ Each MoonModule renders as a card, with **child cards nested inside their parent
 
 ```text
 ┌─ card ──────────────────────────────────┐
-│ [name] [emoji]  [timing · 🧠 mem]  [enabled toggle]  [✎ × ☰]  [{ } api] │
+│ [name] [emoji]  [timing · 🧠 mem]  [enabled toggle]  [✎ 🗑 ☰]  [{ } api] │
 │ [control rows, one per control]        │
 │ ┌─ child card ────────────────────────┐ │
 │ │ …                                   │ │
 │ └─────────────────────────────────────┘ │
-│ [+ add child]                           │
+│ [+] [🗑]                                │
 └─────────────────────────────────────────┘
 ```
 
-- The parent's own controls render **above** its children; `+ add child` renders **below** them.
+- The parent's own controls render **above** its children; `+` and `🗑` render **below** them.
   Child cards live in a `.card-children` wrapper appended into the parent card's DOM node (not flat siblings); `renderModuleTree` recurses into the parent card, not into `main`.
-- **`{ }`** opens a popup holding the card as a state document, with **copy**, **save as preset** where a preset module exists, and **diagnostics**, which opens `GET /api/modules/{name}` in a new tab, that module's live JSON for issue reports (see [Log an issue](../../reference/logging-an-issue.md)). On EVERY card, unlike `✎`/`×` (user-editable children only).
+- **`{ }`** opens a popup holding the card as a state document, with **copy**, **save as preset** where a preset module exists, and **diagnostics**, which opens `GET /api/modules/{name}` in a new tab, that module's live JSON for issue reports (see [Log an issue](../../reference/logging-an-issue.md)). On EVERY card, unlike `✎`/`🗑` (user-editable children only).
 - **Enabled toggle** in the right-hand action cluster mirrors `MoonModule::enabled()`, a styled
   `<button>` (transparent + muted border, 26×26); state shown by the glyph alone (accent **✓** on, muted **○** off; `data-checked` + `aria-pressed`). Toggling fires `onEnabled()`; the Scheduler skips disabled modules whose `respectsEnabled()` returns true (default).
 - **Emoji tags** next to the name show the same set the type picker uses: role + dimensional (both
@@ -96,11 +96,12 @@ Each MoonModule renders as a card, with **child cards nested inside their parent
   (µs under 1 ms, ms above), omitted when the module has no measured loop time. Memory is the C++ object size (`classSize`); the `+ <dynamic>` part (`dynamicBytes`, heap) shows only when the module allocated heap. The line shows from expert mode up, and holding it peeks at the rate on every card, the password field's gesture: a tick time inverts to a figure that reads as a frame rate and is not one, so the rate is a press away rather than a mode the cards sit in.
 - **Reorder is drag-and-drop** (HTML5 DnD) on the whole card, desktop and mobile. A drag starting on
   an interactive control is canceled in `dragstart` so the control's own gesture wins; a drag is accepted only when source and target share the same `.card-children` container (true siblings).
-- **Replace (✎) / Delete (×) / drag-reorder** apply to *user-managed children*, a module whose role a
+- **Replace (✎) / Delete (🗑) / drag-reorder** apply to *user-managed children*, a module whose role a
   container accepts (`acceptsChildRoles`) and that hasn't opted out via `userEditable: false`. Replace swaps for another type at the same position (picker filtered to the module's role; replacement starts at its own defaults). Delete is press-twice confirm. A `userEditable: false` child (e.g.
   PreviewDriver) shows none of these, it's fixed-shape like a code-wired child.
-- **`+ add child`** renders in a parent's footer when its type declares a non-empty
-  `acceptsChildRoles`; it opens the [type picker](#type-picker) filtered to those roles.
+- **`+`** renders in a parent's footer when its type declares a non-empty
+  `acceptsChildRoles`, titled with those roles ("add effect / modifier"); it opens the [type picker](#type-picker) filtered to those roles.
+- **🗑 beside `+`** deletes every user-managed child of that parent, press-twice confirm like a card's own 🗑. It sends `{"<parent>": {"$patch": "replace"}}` through `PATCH /api/state`, nested under the parent's ancestors, so code-wired children and the parent's own settings stay. It shows only while the parent holds something to delete.
 
 ## Control types
 
@@ -136,7 +137,7 @@ Auto-rendered by `controls[].type`, adding a MoonModule with these types needs n
 
 ## Type picker
 
-One picker serves **add** (`+ add child`) and **replace** (the ✎ button), rendered inline in the card (not a modal).
+One picker serves **add** (`+`) and **replace** (the ✎ button), a modal anchored to the button that opened it.
 
 - **Role filter.** Add mode filters to the parent's `acceptsChildRoles` (declared per-type in
   `/api/types`, the UI hardcodes no container→role map); replace mode filters to the target's own role.

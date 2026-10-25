@@ -227,7 +227,9 @@ void FilesystemModule::loadSubtree(Scheduler& s, MoonModule* m) {
     if (!r.ok) std::printf("FilesystemModule: %s not loaded: %s\n", path, r.error);
     // The board migrates nothing, so the first module it drops is named until the next boot. Only a backup taken before the next save still holds it, since that save rewrites the file without it. Allocated only then, since nearly every boot drops nothing.
     constexpr size_t kSkippedLen = 192;   // the 64-byte path, the reason and the hint
-    if (r.skipped && !skippedStr_) {
+    // The first skip is the one named, so a message that found no memory leaves the warning out rather than naming a later module.
+    if (r.skipped && !skipSeen_) {
+        skipSeen_ = true;
         skippedStr_ = static_cast<char*>(platform::alloc(kSkippedLen));
         if (skippedStr_) std::snprintf(skippedStr_, kSkippedLen, "%s skipped at boot: %s; back up before anything is saved, then restore to migrate it", r.where, r.error);
     }

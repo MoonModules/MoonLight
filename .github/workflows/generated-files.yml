@@ -17,12 +17,8 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - uses: astral-sh/setup-uv@v3
       - name: Name each generated file the pull request changes
         env:
           BASE: ${{ github.event.pull_request.base.sha }}
-        run: |
-          # Metrics are generated whole; a scenario only when it already existed, since a new one is written by hand.
-          { git diff --name-only "$BASE"...HEAD -- docs/reference/metrics
-            git diff --name-only --diff-filter=M "$BASE"...HEAD -- test/scenarios; } | while read -r f; do
-            echo "::warning file=$f::Generated on your machine: the merge regenerates it on ours, so leave it out of the pull request unless you mean to change it."
-          done
+        run: uv run moondeck/ci/github_annotations.py --generated --base "$BASE"

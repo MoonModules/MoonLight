@@ -32,6 +32,7 @@ Build the desktop firmware binary using CMake.
 
 ```bash
 uv run moondeck/build/build_desktop.py
+uv run moondeck/build/build_desktop.py --configure   # configure and generate build_id.h only, what check_code and check_docgen read
 ```
 
 Runs `cmake -B build/<host> -DCMAKE_BUILD_TYPE=Release` then `cmake --build build/<host> --target MoonLight`, where `<host>` is `macos`, `linux`, or `windows` depending on the OS this script runs on. It builds ONLY the firmware binary — not the ~130-file test suite — so the "just give me the binary to run" path stays fast; compile the tests separately (see `compile_tests`). The per-host directory keeps an experimental Linux build from clobbering a macOS one on the same machine, and mirrors the ESP32 side's `build/esp32-<board>/` shape.
@@ -106,6 +107,7 @@ uv run moondeck/test/test_host.py --python   # just Python
 uv run moondeck/test/test_host.py --js       # just JS
 uv run moondeck/test/test_host.py --ui       # only the UI runs (needs a running device)
 uv run moondeck/test/test_host.py --ui --clip 16-restore-a-backup   # one run file
+uv run moondeck/test/test_host.py --python --junit-dir results      # as CI runs it: the results where its annotations read them
 ```
 
 The tests the C++ binary cannot reach: the cross-language contracts (the Improv frame's wire format,
@@ -957,9 +959,10 @@ Restore a backup onto a running device the way the File Manager's Restore does, 
 ```bash
 uv run moondeck/scenario/run_restore_live.py --bundle test/fixtures/backup-flat-2026-09-30.json                    # the desktop app
 uv run moondeck/scenario/run_restore_live.py --bundle <backup.json> --host 192.168.1.139 --readers 4              # a board, read meanwhile
+uv run moondeck/scenario/run_restore_live.py --launch --bundle test/fixtures/backup-flat-2026-09-30.json --readers 2   # as CI runs it
 ```
 
-It runs the UI's own `restoreBundle` (`src/ui/migrate.js`) in Node, then reads each config file back and compares it with the migrated bundle value by value, leaving out what MIGRATING renames on the device and what a device reports rather than stores. It fails on a report entry other than a rename, a value not back, or a device restart, naming the boot reason. `--readers N` keeps other clients reading the device throughout, the case that found a config write refused while its file was being read. CI runs it against the desktop app with the flat fixture on every pull request.
+It runs the UI's own `restoreBundle` (`src/ui/migrate.js`) in Node, then reads each config file back and compares it with the migrated bundle value by value, leaving out what MIGRATING renames on the device and what a device reports rather than stores. It fails on a report entry other than a rename, a value not back, or a device restart, naming the boot reason. `--readers N` keeps other clients reading the device throughout, the case that found a config write refused while its file was being read. CI runs it with `--launch` on every pull request: the script starts this host's desktop build on an empty data folder and its own port, so it runs beside an app already on 8080, and prints the app's log when the restore fails.
 
 ### run_network_live
 
@@ -1387,6 +1390,7 @@ Build a Teensy 4.1 firmware.
 
 ```bash
 uv run moondeck/build/build_teensy.py
+uv run moondeck/build/build_teensy.py --all --dist dist   # every shipping Teensy firmware, its images collected, as CI builds them
 ```
 
 `teensy41` carries both Ethernet drivers, the board's own PHY and a W5500 module for the 4.1-NE, and uses the one the board has.

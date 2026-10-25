@@ -2,6 +2,9 @@
   "name": "scenario_perf_full",
   "module": "Layer",
   "mode": "mutate",
+  "steps_proved": [
+    "driver-setup/add"
+  ],
   "instances": {
     "Audio": "AudioService"
   },

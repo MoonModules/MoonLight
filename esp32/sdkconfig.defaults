@@ -135,3 +135,5 @@ CONFIG_ESP_WIFI_IRAM_OPT=n
 CONFIG_ESP_WIFI_RX_IRAM_OPT=n
 # WiFi keeps no copy of its config in NVS: the WiFi card hands it the credentials at every join, and the copy cost 4.9 KB of internal RAM.
 CONFIG_ESP_WIFI_NVS_ENABLED=n
+# A paced send's gap ends in the timer interrupt (platform::sleepUs); why, measured: sleepWake in src/platform/esp32/platform_esp32_worker.cpp.
+CONFIG_ESP_TIMER_SUPPORTS_ISR_DISPATCH_METHOD=y

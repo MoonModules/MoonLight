@@ -1,0 +1,53 @@
+{
+  "name": "scenario_Services_a_script_service_runs_the_script_it_names",
+  "module": "MoonLiveService",
+  "mode": "mutate",
+  "steps_proved": [
+    "live-data/add"
+  ],
+  "instances": {
+    "Control": "ControlModule"
+  },
+  "also": [
+    "Services",
+    "ControlModule"
+  ],
+  "description": "A script service added by name runs that script: a service whose script writes a surface slot, and the slot holding what it wrote. The live-data process names jsondemo.mls, which needs the internet; a script of the scenario's own proves the same path offline.",
+  "top": [
+    "Services",
+    "ControlModule"
+  ],
+  "steps": [
+    {
+      "name": "stage-the-script",
+      "description": "A service that writes fader7 every 20 ms, so the slot shows it ran.",
+      "op": "write_file",
+      "path": "/moonlive/scenario-slot.mls",
+      "value": "class ScenarioSlot {\n  void tick20ms() { setControl(\"fader7\", 77); }\n}\n"
+    },
+    {
+      "name": "add-the-service",
+      "description": "Added under Services and named by its script, as the live-data process does.",
+      "op": "apply_state",
+      "settle": 1,
+      "document": {"Services": {"ScenarioSlot": {"type": "MoonLiveService", "script": "scenario-slot.mls"}}}
+    },
+    {
+      "name": "running",
+      "description": "Frames pass, the script compiles and its tick writes the slot.",
+      "op": "measure"
+    },
+    {
+      "name": "the-script-ran",
+      "op": "expect_control",
+      "id": "Control",
+      "key": "fader7",
+      "equals": 77
+    },
+    {
+      "name": "remove-the-script",
+      "op": "delete_file",
+      "path": "/moonlive/scenario-slot.mls"
+    }
+  ]
+}

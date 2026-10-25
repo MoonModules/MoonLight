@@ -33,3 +33,22 @@ def test_a_checks_errors_are_annotated_only_in_the_files_a_pull_request_changes(
     assert out.getvalue().splitlines() == ["::error file=src/a.h,line=3,title=check_x::bad"]
     assert rows == [("check_x", {"errors": 2, "warnings": 1})]
     assert "| check_x | 2 | 1 |" in ga.summary("Findings", rows)
+
+
+def test_a_forks_generated_files_are_warned_about_not_failed(monkeypatch):
+    """The metrics whole and an edited scenario each get a warning, since the merge regenerates them; a new scenario is written by hand."""
+    import io
+    def changed(base, *filters):
+        return ["docs/reference/metrics/code.json"] if "docs/reference/metrics" in filters else ["test/scenarios/core/old.json"]
+    monkeypatch.setattr(ga, "changed_files", changed)
+    out = io.StringIO()
+    assert ga.generated("main", out) == ["docs/reference/metrics/code.json", "test/scenarios/core/old.json"]
+    assert out.getvalue().count("::warning file=") == 2
+
+
+def test_a_base_git_does_not_know_stops_with_one_line_not_a_traceback():
+    """A clone without the remote a step names, such as `upstream`, is told which ref to pass."""
+    import pytest
+    with pytest.raises(SystemExit) as stop:
+        ga.changed_files("no-such-remote/main")
+    assert "--base" in str(stop.value)

@@ -14,7 +14,7 @@ A symptom rather than a question belongs in [Troubleshooting](troubleshooting.md
 ## First light
 
 - **Where do I set the number of lights?** On a Layout, not on the driver. See [Layouts](../moonmodules/light/layouts.md).
-- **Where do I add an effect?** Expand a Layer under Effects, then **add module**: a layer is what composites effects and holds the blend mode. See [Build your first light show](../moonwalk.md#first-light-show).
+- **Where do I add an effect?** Expand a Layer under Effects, then **+**: a layer is what composites effects and holds the blend mode. See [Build your first light show](../moonwalk.md#first-light-show).
 - **Nothing lights up.** See [Troubleshooting](troubleshooting.md#the-lights-are-dark).
 
 ## The interface

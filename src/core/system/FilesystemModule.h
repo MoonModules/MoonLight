@@ -111,6 +111,7 @@ private:
     uint32_t lastSaveMs_ = 0;      ///< when the last save landed, which the status string ages from
     char lastSaveStr_[24] = "never";  ///< the status string FileManagerModule reads
     char* skippedStr_ = nullptr;      ///< what skippedAtBoot() reads, allocated by the first boot load that skips
+    bool skipSeen_ = false;           ///< a boot load skipped something, whether or not its message found memory
 
     // The module holds no standing buffer: each operation allocates and frees its own.
 

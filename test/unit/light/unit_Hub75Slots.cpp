@@ -76,6 +76,7 @@ TEST_CASE("HUB75 encode: the address on a data word is the row in the LATCH, one
     for (uint16_t x = 0; x < latch; x++) CHECK((slot(out2, row1 + x) & (1u << low.a)) == 0);
 }
 
+// @step driver-setup/add-hub75
 TEST_CASE("HUB75 encode: a color bit lands on its own line, for both half-panels") {
     // A walking-one per color line: the test that catches a swapped pair (red where green should be) and an upper/lower mix-up. A panel shows both as "wrong colors", which is the least diagnostic symptom there is.
     mm::Hub75Geometry geo;

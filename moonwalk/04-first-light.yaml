@@ -105,9 +105,43 @@ processes:
     outro: |
       ## Where to go next
 
-      - **Stack effects, blend layers and reshape with a modifier**: [How MoonLight works](explanation/how-moonlight-works.md#3-the-light-pipeline) explains each, and its clips show them.
+      - **[Stack and blend layers](moonwalk.md#stack-layers)** puts a second effect over the first. [How MoonLight works](explanation/how-moonlight-works.md#3-the-light-pipeline) explains layers and modifiers, and its clips show them.
       - **[Making beautiful effects](explanation/generative-effects.md)** is about the effects themselves: why noise looks organic and how a field turns into something worth watching.
       - **[Build your own MoonModules](tutorials/build-your-own-moonmodules.md)** is about writing one in C++ when the catalog does not have what you want.
+  - id: stack-layers
+    title: Stack and blend layers
+    actor: user
+    goal: Two effects show at once, one blended over the other.
+    systems: [MoonLight]
+    dependsOn: [first-light-show]
+    intro: |
+      Each layer renders its own effects into a buffer of its own, and Drivers composites the layers into one frame, in their order on the Effects card, the first at the bottom. How a layer combines with the ones below it is its `blendMode` and `opacity`, both live.
+    steps:
+      - id: add-layer
+        section: A second picture
+        say: Add a second layer to Effects.
+        when: { add: { module: Effects, type: Layer } }
+        detail: |
+          Press + on the Effects card. The new layer comes last, so it renders on top.
+      - id: add-effect
+        say: Add an effect that leaves lights dark.
+        when: { add: { module: Layer, type: MetaballsEffect } }
+        detail: |
+          Metaballs lights only where its blobs are, so the layer below shows through everywhere else. An effect that fills every light covers the one below completely in `alpha`.
+      - id: blend
+        section: Mix them
+        say: Pick how it blends.
+        when: { set: { module: Layer, control: blendMode, value: "additive" } }
+        detail: |
+          `additive` adds its light to what is below, so colors brighten where both shine; `alpha` covers what is below; `multiply` and `darken` keep only what both share; `screen` and `lighten` keep the brighter. The preview shows each at once.
+      - id: opacity
+        say: Set its opacity a little over half.
+        when: { set: { module: Layer, control: opacity, value: 160 } }
+        detail: |
+          At 255 the layer counts in full; lower, the picture below shows through. A fader or a button row on the Control card can drive it, which is how [Play an effect while a button is held](moonwalk.md#hold-to-play) does it.
+      - id: order
+        say: Drag a layer's tab to change the order.
+        when: { manual: "The last tab on the Effects card is on top; drag one before another to put it below." }
   - id: turn-help-on
     title: Turn help on in the app
     actor: user

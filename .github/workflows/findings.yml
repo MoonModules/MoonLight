@@ -31,9 +31,7 @@ jobs:
           echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
       # check_code reads a configured tree; check_docgen parses the sources, and build_info.cpp includes the build_id.h the build generates.
       - name: configure the desktop build, and generate build_id.h
-        run: |
-          cmake -S . -B build/linux
-          uv run python moondeck/build/generate_build_info.py
+        run: uv run moondeck/build/build_desktop.py --configure
       - name: check_code
         if: always()
         run: uv run moondeck/check/check_code.py
@@ -46,19 +44,23 @@ jobs:
         env:
           BASE: ${{ github.event.pull_request.base.sha }}
         run: uv run moondeck/check/check_prose.py ${BASE:+"$BASE...HEAD"}
-      - name: check_specs, check_taglines, check_devices, check_firmwares
+      - name: check_specs
         if: always()
-        run: |
-          rc=0
-          for c in specs taglines devices firmwares; do uv run "moondeck/check/check_$c.py" || rc=1; done
-          exit $rc
+        run: uv run moondeck/check/check_specs.py
+      - name: check_taglines
+        if: always()
+        run: uv run moondeck/check/check_taglines.py
+      - name: check_devices
+        if: always()
+        run: uv run moondeck/check/check_devices.py
+      - name: check_firmwares
+        if: always()
+        run: uv run moondeck/check/check_firmwares.py
       - name: the findings in the files the pull request changes
         if: always()
         env:
           BASE: ${{ github.event.pull_request.base.sha }}
-        run: |
-          if [ -n "$BASE" ]; then git diff --name-only "$BASE"...HEAD > "$RUNNER_TEMP/changed.txt"; fi
-          uv run moondeck/ci/github_annotations.py --findings --changed "$RUNNER_TEMP/changed.txt"
+        run: uv run moondeck/ci/github_annotations.py --findings ${BASE:+--base "$BASE"}
       - name: the findings as SARIF
         if: always()
         run: uv run moondeck/ci/findings_sarif.py --out build/sarif

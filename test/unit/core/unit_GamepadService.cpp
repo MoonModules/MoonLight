@@ -61,6 +61,7 @@ TEST_CASE("GamepadService takes a first state's sticks as rest and its buttons a
 }
 
 // The default rows: A onto switch 1 as a held press, the left stick's Y onto fader 1 with up as more, its X onto fader 3.
+// @step control-surface/add-gamepad
 TEST_CASE("GamepadService drives the surface through its default rows") {
     Rig rig;
     rig.write("0,128,128,128,128");

@@ -88,6 +88,7 @@ struct Rig {
 
 }  // namespace
 
+// @step hold-to-play/add-button
 TEST_CASE("a press toggles the control its row targets, once per press") {
     Rig rig;
     rig.addRow("Control.switch1", "toggle");

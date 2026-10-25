@@ -2417,7 +2417,7 @@
   },
   "SpriteFountainEffect": {
    "line": "A fountain that throws the project's whole sprite cast, launched from the floor on a sweeping nozzle and falling back under gravity.",
-   "summary": "The cast is fish, Pacman and his ghosts, toasters and toast, and the three invaders.\n\nColors come from the active palette, one per sprite, held for its whole flight.",
+   "summary": "The cast is fish, Pacman and his ghosts, toasters and toast, the three invaders, and Luna and Momo.\n\nColors come from the active palette, one per sprite, held for its whole flight. Pacman, the toasters, Luna and Momo keep their own.",
    "image": "https://moonmodules.org/MoonLight/assets/light/effects/SpriteFountainEffect.gif",
    "controls": {
     "lift": {

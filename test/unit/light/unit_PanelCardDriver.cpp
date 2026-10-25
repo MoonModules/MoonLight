@@ -83,6 +83,36 @@ TEST_CASE("PanelCardDriver sends one frame per row then one sync") {
     CHECK(frameType(7) == mm::COLORLIGHT_TYPE_SYNC);
 }
 
+// The format a user picks by name is the one on the wire: the select offers ColorLight 5A-75, and chosen, every frame carries that card's types.
+// @step panel-cards/format
+TEST_CASE("PanelCardDriver's format ColorLight 5A-75 puts ColorLight frames on the wire") {
+    mm::Buffer source;
+    mm::PanelCardDriver driver;
+    Wall wall(64, 4);
+    driver.defineControls();
+    auto& cs = driver.controls();
+    bool offered = false;
+    for (uint8_t i = 0; i < cs.count(); i++) {
+        if (std::strcmp(cs[i].name, "format") != 0) continue;
+        char buf[512];
+        mm::JsonSink sink(buf, sizeof(buf));
+        mm::writeControlMetadata(sink, cs[i]);
+        offered = std::string(buf).find("\"ColorLight 5A-75\"") != std::string::npos;
+    }
+    REQUIRE(offered);
+    driver.format = mm::PanelCardDriver::kFormatColorLight5A75;
+    setUp(driver, source, wall, 256);
+
+    mm::platform::setTestNowMs(1000);
+    driver.tick();
+
+    REQUIRE(mm::platform::ethTestFrameCount() > 0);
+    for (size_t i = 0; i < mm::platform::ethTestFrameCount(); i++) {
+        const uint8_t t = frameType(i);
+        CHECK((t == mm::COLORLIGHT_TYPE_BRIGHTNESS || t == mm::COLORLIGHT_TYPE_ROW || t == mm::COLORLIGHT_TYPE_SYNC));
+    }
+}
+
 // A card on v12-or-older firmware acts on the FIRST copy and reads a second sync as another latch, aborting the refresh already running: the wall then updates once every few seconds. That generation gets exactly one brightness and one sync, which is also what FPP sends such a card.
 TEST_CASE("PanelCardDriver sends a pre-v13 card one brightness and one sync") {
     mm::Buffer source;
@@ -136,6 +166,7 @@ TEST_CASE("PanelCardDriver splits a row wider than one packet") {
 }
 
 // Pixel bytes reach the wire unchanged, so what an effect rendered is what the panel receives.
+// @step panel-cards/driver
 TEST_CASE("PanelCardDriver puts rendered pixels on the wire") {
     mm::Buffer source;
     mm::PanelCardDriver driver;

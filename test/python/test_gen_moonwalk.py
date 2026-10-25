@@ -488,3 +488,19 @@ def test_a_read_step_naming_a_section_the_page_lacks_is_refused(tmp_path):
         gen_moonwalk.build(stage(tmp_path, "stage: T\nprocesses:\n  - id: a\n    title: A\n    actor: user\n    goal: G\n    steps:\n"
                                            "      - {id: s, say: Read it., when: {read: {page: reference/moonwalk.md, section: No such section}}}\n"))
 
+
+
+def test_the_pull_request_template_is_the_contribute_pr_process():
+    """The description GitHub pre-fills is generated from the process, so an edit to either alone fails here rather than drifting."""
+    model = gen_moonwalk.build()
+    assert gen_moonwalk.PR_TEMPLATE.read_text(encoding="utf-8") == gen_moonwalk.pr_template(model["processes"]), \
+        "stale: uv run moondeck/docs/gen_moonwalk.py --pr-template"
+
+
+def test_the_pull_request_template_asks_each_question_as_a_heading():
+    """Each question a step asks becomes a heading the contributor writes under."""
+    processes = {"contribute-pr": {"title": "Contribute", "goal": "One topic.",
+                                   "steps": [{"id": "open", "asks": ["What it changes.", "What you tested."]}, {"id": "ci"}]}}
+    text = gen_moonwalk.pr_template(processes)
+    assert "## What it changes\n" in text and "## What you tested\n" in text
+    assert "One topic. [Contribute](" in text

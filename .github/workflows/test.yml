@@ -59,25 +59,9 @@ jobs:
         with:
           persist-credentials: false
       - uses: astral-sh/setup-uv@v3
-      # pytest + pyserial come from the test file's inline PEP-723 block; passing
-      # them via --with is the explicit, discovery-friendly form (a bare `pytest
-      # <dir>` doesn't honour a test file's own inline deps). `markdown` (a MkDocs
-      # dep, not in the base env) is needed by test_mkdocs_slug.py, which pins _slug()
-      # against Python-Markdown's real toc slugify. `wled` is the frenck/python-wled
-      # library HA's WLED integration uses; test_wled_json_shape.py parses the
-      # device /json vector through its Device.from_dict to pin the wire contract.
-      # The MoonLive scripts compile as C++ FIRST, and by name: it is the one suite whose subject is
-      # the shipped content rather than the tooling, so "all 34 scripts are valid C++" should be
-      # readable in the log instead of folded into a single count. Named here rather than split into
-      # its own step so the compiler still runs exactly once.
-      - name: every MoonLive script is valid C++
-        run: uv run --with pytest pytest test/python/test_scripts_are_cpp.py -v --junitxml=results/junit-scripts.xml
-      # The rest, quietly. This directory is excluded because the step above already ran it: a bare
-      # `pytest test/python` here would compile all 34 scripts a second time.
-      - name: pytest
-        run: >
-          uv run --with pytest --with pyserial --with markdown --with wled --with pyyaml --with jsonschema
-          pytest test/python -q --ignore=test/python/test_scripts_are_cpp.py --junitxml=results/junit-python.xml
+      # The command the commit gate runs, its test dependencies named once in test_host.py.
+      - name: the Python host tests
+        run: uv run moondeck/test/test_host.py --python --junit-dir results
       # Each failing test annotated where it fails, and the counts in the job summary, through workflow commands: no token, so a fork's pull request gets them too.
       - if: always()
         run: uv run moondeck/ci/github_annotations.py --junit results/*.xml
@@ -88,14 +72,10 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      # Node's built-in test runner — no npm install, no package.json. The glob
-      # form is required: a bare directory arg is treated as a module to execute.
-      - name: node --test
-        run: |
-          mkdir -p results
-          node --test --test-reporter=spec --test-reporter-destination=stdout \
-            --test-reporter=junit --test-reporter-destination=results/junit-js.xml "test/js/**/*.test.mjs"
       - uses: astral-sh/setup-uv@v3
+      # Node's built-in test runner, no npm install, through the command the commit gate runs.
+      - name: the JavaScript host tests
+        run: uv run moondeck/test/test_host.py --js --junit-dir results
       # Each failing test annotated where it fails, and the counts in the job summary, through workflow commands: no token, so a fork's pull request gets them too.
       - if: always()
         run: uv run moondeck/ci/github_annotations.py --junit results/*.xml
@@ -114,13 +94,9 @@ jobs:
           key: restore
       - name: build the desktop app
         run: uv run moondeck/build/build_desktop.py
+      # The script starts the app on an empty data folder, restores, stops it, and prints the app's log on a failure.
       - name: restore a flat backup onto it
-        run: |
-          MM_DATA_DIR="$RUNNER_TEMP/fs" ./build/linux/MoonLight --no-browser > "$RUNNER_TEMP/app.log" 2>&1 &
-          curl -s -o /dev/null --retry 30 --retry-delay 1 --retry-connrefused http://localhost:8080/api/system
-          uv run moondeck/scenario/run_restore_live.py --bundle test/fixtures/backup-flat-2026-09-30.json --readers 2
-      - if: failure()
-        run: tail -50 "$RUNNER_TEMP/app.log"
+        run: uv run moondeck/scenario/run_restore_live.py --launch --bundle test/fixtures/backup-flat-2026-09-30.json --readers 2
 
   # The Teensy 4.1 firmwares, built on every PR: a change to a platform seam the Teensy must implement fails here, not on the bench.
   # The HEX images are kept as an artifact, so a PR's build can be flashed and tried before it merges.
@@ -144,16 +120,9 @@ jobs:
       - uses: ./.github/actions/ccache
         with:
           key: teensy
+      # Every shipping Teensy firmware builds and is collected, so a second one reaches the artifact too.
       - name: build the Teensy 4.1 firmwares
-        run: |
-          set -euo pipefail
-          mkdir -p dist
-          # Every shipping Teensy firmware builds and is collected, so a second one reaches the artifact too.
-          for fw in $(jq -r '.firmwares[] | select(.ships and .platform == "teensy") | .name' mooninstaller/firmwares.json); do
-            uv run moondeck/build/build_teensy.py --firmware "$fw"
-            cp "build/$fw/MoonLight.hex" "dist/$fw.hex"
-            cp "build/$fw/MoonLight.bin" "dist/$fw.bin"
-          done
+        run: uv run moondeck/build/build_teensy.py --all --dist dist
       - uses: actions/upload-artifact@v4
         with:
           name: firmware-teensy
@@ -169,7 +138,7 @@ jobs:
   # Linux-only, and that is not laziness: on macOS/arm64 Apple's ASan runtime HANGS at startup and
   # TSan SEGFAULTS on a hello-world (both reproduced with minimal programs — toolchain bugs, not our
   # code). Linux is the only place TSan runs at all, which makes this job the sole race gate.
-  # Locally: `uv run moondeck/check/check_sanitizers.py` (uses Homebrew LLVM, ASan only on macOS).
+  # Locally: `uv run moondeck/check/check_sanitizers.py` (Homebrew LLVM on macOS, where TSan's runtime is broken).
   sanitizers:
     runs-on: ubuntu-latest
     strategy:
@@ -195,34 +164,12 @@ jobs:
       - uses: ./.github/actions/ccache
         with:
           key: sanitizer-${{ matrix.kind }}
+      # The whole suite under one sanitizer, as check_sanitizers.py runs it locally. RTSan is clang-only, so that lane names clang-20;
+      # the others take the runner's default compiler. The address lane writes the unit results as JUnit for the annotations: one lane is enough.
       - name: build + run unit tests under ${{ matrix.kind }}sanitizer
-        run: |
-          # RTSan is clang-only — GCC rejects `-fsanitize=realtime` outright — and the attribute
-          # it keys off is [[clang::nonblocking]], which GCC ignores anyway. Passed as a CMake
-          # variable on this lane only, rather than exporting CXX: an empty CXX="" on the other
-          # lanes is not the same as unset, and some probes read it as a broken compiler path.
-          compiler=""
-          if [ "${{ matrix.kind }}" = "realtime" ]; then
-            compiler="-DCMAKE_CXX_COMPILER=clang++-20"
-          fi
-          cmake -S . -B build/san -DCMAKE_BUILD_TYPE=Debug $compiler \
-            -DCMAKE_CXX_FLAGS="-fsanitize=${{ matrix.kind }} -fno-omit-frame-pointer -g" \
-            -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=${{ matrix.kind }}"
-          cmake --build build/san --target mm_tests -j"$(nproc)"
-          # Leak detection is a different concern from the races/UAF this gate hunts, and it fires on
-          # third-party static init; keep the signal on what we're actually looking for.
-          #
-          # RTSan does NOT halt: the render path's known blocking calls are counted in
-          # check_code (docs/reference/metrics/code.json) and backlogged as architecture work, so halting would
-          # fail this lane on every run. It reports; the log is the signal.
-          # The address lane writes the unit results as JUnit for the annotations: one lane is enough.
-          results=""
-          if [ "${{ matrix.kind }}" = "address" ]; then
-            mkdir -p results
-            results="--reporters=junit --out=results/junit-unit.xml"
-          fi
-          # TSan reports every race of the run and still fails it (exit code 66): halting at the first hid the next one behind each fix.
-          ASAN_OPTIONS=detect_leaks=0 TSAN_OPTIONS=halt_on_error=0 \
-            RTSAN_OPTIONS=halt_on_error=0 ./build/san/test/mm_tests $results
+        env:
+          CC: ${{ matrix.kind == 'realtime' && 'clang-20' || '' }}
+          CXX: ${{ matrix.kind == 'realtime' && 'clang++-20' || '' }}
+        run: uv run moondeck/check/check_sanitizers.py --kind ${{ matrix.kind }} --filter '' ${{ matrix.kind == 'address' && '--junit results/junit-unit.xml' || '' }}
       - if: always() && matrix.kind == 'address'
         run: uv run moondeck/ci/github_annotations.py --junit results/*.xml

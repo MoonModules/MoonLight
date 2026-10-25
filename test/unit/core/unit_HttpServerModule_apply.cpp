@@ -247,6 +247,7 @@ TEST_CASE("apply-core: a replace swaps the type in the same place, named by the 
 }
 
 // applyAddModule reports the created module's FINAL name (post-disambiguation) via outName, so the HTTP handler can return it and the UI can select + focus the new module (the "+" focus fix).
+// @step http-api/add
 TEST_CASE("apply-core: applyAddModule reports the created name, disambiguated") {
     registerTestTypes();
     mm::Scheduler s;

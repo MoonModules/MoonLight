@@ -79,6 +79,7 @@ TEST_CASE("NdiDriver reports a missing NDI runtime instead of failing") {
 }
 
 // The frame a receiver gets is the grid: one pixel per light, at the layer's physical size.
+// @step watch-output/add-ndi
 TEST_CASE("NdiDriver sends one pixel per light at the layer's size") {
     NdiSeamGuard seam{mm::platform::NdiTestMode::ForceAvailable};
     mm::Buffer source;

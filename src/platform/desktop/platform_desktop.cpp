@@ -1974,8 +1974,13 @@ uint32_t wifiApClientCount() { return testApUp_ ? testApClients_ : 0; }
 // Host sockets work whatever the link predicates above say, and there is no initialization race, so this is always safe.
 bool networkReady() { return true; }
 int wifiTxPower() { return 0; }
-// Zero is a successful no-op and anything else fails, there being no radio. The module passes its no-override sentinel through here to lift a prior cap, which is trivially true with no radio.
-bool wifiSetTxPower(int8_t quarterDbm) { return quarterDbm == 0; }
+static int8_t testTxPower_ = 0;   // the last cap a test radio took, in quarter dBm
+int8_t testLastTxPower() { return testTxPower_; }
+// A test access point takes the cap, so a host test sees what reaches the radio. With no radio, zero is a successful no-op, as lifting a cap is, and anything else fails.
+bool wifiSetTxPower(int8_t quarterDbm) {
+    if (testApUp_) { testTxPower_ = quarterDbm; return true; }
+    return quarterDbm == 0;
+}
 
 static bool testMdns_ = false;      // the host has no mDNS responder of ours, so a test opts in
 static uint32_t testMdnsInits_ = 0;

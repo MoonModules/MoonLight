@@ -6,6 +6,7 @@ Configures CMake on first use with the SDK setup_teensy.py installed, at the ver
 """
 
 import argparse
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -51,26 +52,40 @@ def hex_image_bytes(path: Path) -> int:
     return total
 
 
+def build(firmware: str, release: str, version: str) -> int:
+    """Configure and build one firmware into its build directory; the build's exit code."""
+    build_dir = hex_path(firmware).parent
+    r = subprocess.run(["cmake", "-S", str(ROOT / "teensy"), "-B", str(build_dir), "-G", "Ninja",
+                        f"-DCMAKE_TOOLCHAIN_FILE={ROOT / 'teensy' / 'teensy41.cmake'}",
+                        f"-DTEENSY_SDK={sdk_root()}", f"-DTEENSY_GCC_BIN={gcc_bin()}",
+                        f"-DTEENSYDUINO={teensyduino_define()}",
+                        f"-DMM_FIRMWARE={firmware}",
+                        f"-DMM_RELEASE={release}", f"-DMM_VERSION={version}"], cwd=ROOT)
+    if r.returncode != 0:
+        return r.returncode
+    return subprocess.run(["cmake", "--build", str(build_dir)], cwd=ROOT).returncode
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     # A release burns its channel and computed version in, as build_esp32.py does; a local build leaves both empty.
     parser.add_argument("--release", default="", help="the release channel tag, e.g. latest or v1.0.0")
     parser.add_argument("--version", default="", help="the computed semver (compute_version.py)")
     add_firmware_arg(parser)
+    parser.add_argument("--all", action="store_true", help="every shipping Teensy firmware, in place of --firmware")
+    parser.add_argument("--dist", type=Path, help="copy each image here as <firmware>.hex and <firmware>.bin")
     args = parser.parse_args()
-    build_dir = hex_path(args.firmware).parent
     left = missing(loader=False)   # building needs no loader
     if left:
         sys.exit(f"Teensy SDK incomplete ({', '.join(left)}): run uv run moondeck/build/setup_teensy.py")
-    r = subprocess.run(["cmake", "-S", str(ROOT / "teensy"), "-B", str(build_dir), "-G", "Ninja",
-                        f"-DCMAKE_TOOLCHAIN_FILE={ROOT / 'teensy' / 'teensy41.cmake'}",
-                        f"-DTEENSY_SDK={sdk_root()}", f"-DTEENSY_GCC_BIN={gcc_bin()}",
-                        f"-DTEENSYDUINO={teensyduino_define()}",
-                        f"-DMM_FIRMWARE={args.firmware}",
-                        f"-DMM_RELEASE={args.release}", f"-DMM_VERSION={args.version}"], cwd=ROOT)
-    if r.returncode != 0:
-        sys.exit(r.returncode)
-    sys.exit(subprocess.run(["cmake", "--build", str(build_dir)], cwd=ROOT).returncode)
+    for fw in [f for f, row in FIRMWARES.items() if row["ships"]] if args.all else [args.firmware]:
+        rc = build(fw, args.release, args.version)
+        if rc != 0:
+            sys.exit(rc)
+        if args.dist:
+            args.dist.mkdir(parents=True, exist_ok=True)
+            for ext in ("hex", "bin"):
+                shutil.copy(hex_path(fw).with_suffix(f".{ext}"), args.dist / f"{fw}.{ext}")
 
 
 if __name__ == "__main__":

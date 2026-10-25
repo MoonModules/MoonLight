@@ -234,17 +234,6 @@ a { color: var(--accent); }
 }
 .nav-social a:hover { color: var(--accent); }
 
-.nav-diag-link {
-    color: var(--fg-muted);
-    font-size: 11px;
-    text-decoration: none;
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    padding: 4px 10px;
-    cursor: pointer;
-}
-.nav-diag-link:hover { color: var(--accent); border-color: var(--accent); }
-
 .nav-copyright {
     color: var(--fg-muted);
     font-size: 11px;
@@ -259,12 +248,14 @@ a { color: var(--accent); }
 
 /* ============================================================
    Workspace: preview pane + module cards
-   Two modes (class on .workspace, toggled by preview3d.js::setupLayout):
-   - .mode-docked  (wide ≥960px): a row — preview pane (flex) beside a fixed-width
-     card column that scrolls on its own. The preview is stable, no scroll-shrink.
-   - .mode-pip     (narrow, or popped out): cards full-width; the preview detaches
-     into a fixed, draggable picture-in-picture (the same one canvas, restyled in
-     place — never duplicated, so the single WebGL context survives the switch).
+   Three modes (class on .workspace, toggled by preview3d.js::setupLayout):
+   - .mode-docked  (wide ≥960px): a row, the preview pane (flex) beside a card column
+     that scrolls on its own and is as wide as the split handle sets it.
+   - .mode-under   (small, or chosen): a column, the cards above and the preview below
+     in a band whose height the split handle sets.
+   - .mode-pip     (small, or chosen): cards full-width; the preview floats where it is
+     dragged. The same one canvas, restyled in place and never duplicated, so the
+     single WebGL context survives every switch.
    ============================================================ */
 
 .workspace.mode-docked {
@@ -282,18 +273,19 @@ a { color: var(--accent); }
     min-width: 0;
 }
 .mode-docked #main {
-    /* Width is driven by --cards-width (default 480px), set by the drag handle and
-       restored from localStorage; clamped so it can't crowd out the preview or vanish. */
-    flex: 0 0 clamp(280px, var(--cards-width, 480px), 900px);
-    max-width: clamp(280px, var(--cards-width, 480px), 900px);
+    /* Width is driven by --cards-width (default 480px), set by the split handle; clamped so the
+       preview keeps 256px: the 240px below which preview3d.js moves it to the small layout
+       (MIN_PREVIEW_W), plus the 16px gap beside the handle. */
+    flex: 0 0 clamp(280px, var(--cards-width, 480px), calc(100% - 256px));
+    max-width: clamp(280px, var(--cards-width, 480px), calc(100% - 256px));
     /* Cards own their scroll — the page itself doesn't scroll in docked mode, so
        the preview beside them stays fixed. 44px status bar + 12px padding above. */
     max-height: calc(100vh - 56px);
     overflow-y: auto;
 }
 
-/* Card-column resize handle: a thin vertical grab bar between the preview and the cards.
-   Only meaningful in docked mode (side-by-side); hidden otherwise. */
+/* The split handle: a thin vertical grab bar between the preview and the cards, a horizontal
+   one in .mode-under (below); hidden while the preview floats. */
 .cards-resize {
     display: none;
 }
@@ -331,6 +323,7 @@ body.cards-resizing {
     cursor: col-resize;
     user-select: none;
 }
+body.cards-resizing.rows { cursor: row-resize; }
 
 #preview {
     display: block;
@@ -420,7 +413,7 @@ body.cards-resizing {
     position: fixed;
     z-index: 70;
     width: 200px;
-    /* JS sets left/top from the snapped corner; these are the fallback (bottom-right). */
+    /* JS sets left/top from where it was dropped; these are the fallback (bottom-right). */
     right: 12px;
     bottom: 12px;
     background: var(--bg-1);
@@ -435,7 +428,41 @@ body.cards-resizing {
 .mode-pip #preview { max-height: none; }
 .mode-pip #preview-reset { top: 28px; width: 22px; height: 22px; font-size: 13px; }
 
-/* When the PiP is dismissed, hide the pane and show the re-show pill. */
+/* ---- Under mode: the cards above, the preview in a band below, a divider between ---- */
+.workspace.mode-under {
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - 56px);   /* the screen below the status bar, shared by cards and preview */
+    height: calc(100dvh - 56px);  /* a phone's visible height, without the browser bar it hides */
+}
+.mode-under #main { order: 1; flex: 1 1 0; min-height: 0; overflow-y: auto; }
+.mode-under .cards-resize {
+    display: block;
+    order: 2;
+    flex: 0 0 14px;               /* a finger-sized hit area */
+    cursor: row-resize;
+    position: relative;
+    touch-action: none;
+}
+/* A grip drawn always, since a touchscreen has no hover to reveal it. */
+.mode-under .cards-resize::before {
+    top: 50%; bottom: auto;
+    left: 50%;
+    width: 40px; height: 4px;
+    transform: translate(-50%, -50%);
+    background: var(--border);
+}
+.mode-under .preview-pane {
+    order: 3;
+    position: relative;           /* the labels overlay's positioned ancestor */
+    flex: 0 0 calc((100% - 14px) * var(--under-share, 0.4));
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+}
+.mode-under #preview { flex: 1 1 0; min-height: 0; height: auto; aspect-ratio: auto; max-height: none; }
+
+/* When the preview is dismissed, hide the pane and show the re-show pill. */
 .workspace.preview-hidden .preview-pane { display: none; }
 .preview-show {
     position: fixed;

@@ -3,12 +3,13 @@
 ///
 /// @technical
 ///
-/// Four effects own their art, each a plain header of pixels. The fountain throws a random species and Pong can use one as its ball, so that shared choice lives here while the pixels stay with the effect that introduced them.
+/// Four effects own their art, each a plain header of pixels, and the mascots have a header of their own. The fountain throws a random species and Pong can use one as its ball, so that shared choice lives here while the pixels stay with the effect that introduced them.
 
 #include "core/util/math16.h"
 #include "light/powerfunctions/draw.h"
 #include "light/effects/FishTankEffect.h"        // fishart:: the reef fish, slim fish, tiny fish
 #include "light/effects/FlyingToastersEffect.h"  // toasterart:: the toaster and its toast
+#include "light/effects/MascotArt.h"             // mascotart:: Luna and Momo
 #include "light/effects/PacmanEffect.h"          // pacart:: Pacman and the ghosts
 #include "light/effects/SpaceInvadersEffect.h"   // invart:: the squid, crab and octopus
 
@@ -17,7 +18,7 @@ namespace spritecast {
 
 /// The cast, in the order a kind byte selects, the three fish leading since they read best.
 enum : uint8_t { kFish = 0, kSlim, kTiny, kPac, kGhost, kToaster, kToast,
-                 kSquid, kCrab, kOcto, kKindCount };
+                 kSquid, kCrab, kOcto, kLuna, kMomo, kKindCount };
 
 /// A fish's palette, built from the active one so a borrowed sprite recolors with the show.
 inline void fishPalette(RGB (&pal)[fishart::kPaletteCount], uint8_t entry) {
@@ -67,9 +68,24 @@ inline void blit(const draw::Canvas& cv, const draw::sprites::Sprite& s, uint8_t
     draw::sprite(cv, s, frame, ox, oy, sc, flip);
 }
 
+/// The members that carry their own colors, ready-made sprites the palette never touches; null for one it colors.
+inline const draw::sprites::Sprite* ownColors(uint8_t kind) {
+    switch (kind) {
+        case kToaster: return &toasterart::kToasterSprite;
+        case kToast:   return &toasterart::kToastSprite;
+        case kLuna:    return &mascotart::kLunaSprite;
+        case kMomo:    return &mascotart::kMomoSprite;
+        default:       return nullptr;
+    }
+}
+
 /// Draw one cast member centered, colored by `entry`, animated by `beat` and faced by `flip`.
 inline void draw(const draw::Canvas& cv, uint8_t kind, uint8_t entry,
                  lengthType px, lengthType py, uint8_t sc, bool flip, uint8_t beat) {
+    if (const draw::sprites::Sprite* s = ownColors(kind)) {
+        blit(cv, *s, beat % s->frames, px, py, sc, flip);
+        return;
+    }
     switch (kind) {
         case kFish: {
             RGB pal[fishart::kPaletteCount];
@@ -106,13 +122,6 @@ inline void draw(const draw::Canvas& cv, uint8_t kind, uint8_t entry,
                       pacart::kPaletteCount}, beat % pacart::GF, px, py, sc, flip);
             break;
         }
-        case kToaster:
-            // The toaster art exports a ready-made Sprite, so this is a straight reuse.
-            blit(cv, toasterart::kToasterSprite, beat % toasterart::F, px, py, sc, flip);
-            break;
-        case kToast:
-            blit(cv, toasterart::kToastSprite, 0, px, py, sc, flip);
-            break;
         case kSquid: {
             RGB pal[invart::kPaletteCount];
             invaderPalette(pal, entry);
@@ -136,11 +145,6 @@ inline void draw(const draw::Canvas& cv, uint8_t kind, uint8_t entry,
         }
     }
 }
-
-/// The widest the cast gets in art pixels, which a caller leaves room for.
-inline constexpr uint8_t kMaxW = 16;
-/// And the tallest.
-inline constexpr uint8_t kMaxH = 11;
 
 }  // namespace spritecast
 }  // namespace mm
