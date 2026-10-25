@@ -26,6 +26,13 @@ def test_each_symbol_is_read_with_its_kind_and_size():
     assert s["mm::ui::file1"]["kind"] == "const"
 
 
+def test_small_data_counts_as_data_and_bss_and_a_weak_object_apart():
+    s = size.parse_nm("3fc90000 00000008 G gSmall\n3fc90010 00000004 g sLocal\n"
+                      "3fc90020 0000000c S zSmall\n3fc90030 00000002 s zLocal\n3fc90040 00000010 V weakObj\n")
+    assert [s[n]["kind"] for n in ("gSmall", "sLocal", "zSmall", "zLocal", "weakObj")] == ["data", "data", "bss", "bss", "weak"]
+    assert size.totals(s) == {"data": 12, "bss": 14, "weak": 16}
+
+
 def test_a_name_defined_in_two_files_counts_both_copies():
     assert size.parse_nm(NM)["helper()"]["size"] == 0x10 + 0x18
 

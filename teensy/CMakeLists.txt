@@ -97,30 +97,13 @@ endif()
 string(REPLACE "\t.text.itcm : {" "\t/DISCARD/ : {\n\t\t*(.ARM.exidx* .ARM.extab* .gnu.linkonce.armexidx.*)\n\t}\n\n\t.text.itcm : {" LINKER_SCRIPT "${LINKER_SCRIPT}")
 file(WRITE "${CMAKE_BINARY_DIR}/imxrt1062_t41.ld" "${LINKER_SCRIPT}")
 
-# The application: the same sources the ESP32 build lists, on the Teensy platform layer.
+# The application: core's list every build reads, and the light domain the ESP32 build lists, on the Teensy platform layer.
+include(${REPO}/src/core/sources.cmake)
 add_executable(MoonLight.elf
     main.cpp
     ${REPO}/src/main.cpp
     ${REPO}/src/module_types.cpp
-    ${REPO}/src/core/module/Control.cpp
-    ${REPO}/src/core/util/JsonUtil.cpp
-    ${REPO}/src/core/util/build_info.cpp
-    ${REPO}/src/core/util/JsonFetch.cpp
-    ${REPO}/src/core/util/parse.cpp
-    ${REPO}/src/core/util/ScratchBuffer.cpp
-    ${REPO}/src/core/system/HttpServerModule.cpp
-    ${REPO}/src/core/system/HttpServerState.cpp
-    ${REPO}/src/core/system/HttpServerWled.cpp
-    ${REPO}/src/core/system/FilesystemModule.cpp
-    ${REPO}/src/core/system/FileManagerModule.cpp
-    ${REPO}/src/core/services/SdCardService.cpp
-    ${REPO}/src/core/system/MqttModule.cpp
-    ${REPO}/src/core/module/Scheduler.cpp
-    ${REPO}/src/core/module/StateDocument.cpp
-    ${REPO}/src/core/util/sha256.cpp
-    ${REPO}/src/core/moonlive/MoonLive.cpp
-    ${REPO}/src/core/moonlive/MoonLiveCompiler.cpp
-    ${REPO}/src/core/moonlive/MoonLiveSpill.cpp
+    ${MM_CORE_SOURCES}
     ${REPO}/src/platform/desktop/moonlive_emit_noarch.cpp
     ${REPO}/src/platform/teensy/moonlive_asm_thumb2.cpp
     ${REPO}/src/platform/teensy/platform_teensy.cpp

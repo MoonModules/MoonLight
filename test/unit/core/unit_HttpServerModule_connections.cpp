@@ -1,8 +1,8 @@
 /// @module HttpServerModule
 ///
 /// A connection whose request arrives late, as one whose first packet was lost and resent does, is parked and served rather than closed with no reply.
-/// An embedded UI file streams across ticks from a send slot, so a slow client never holds the render loop for the whole file.
-/// Driven over loopback against the real server on a test port, since a running desktop app holds 8080.
+///
+/// An embedded UI file streams across ticks from a send slot, so a slow client never holds the render loop for the whole file. Driven over loopback against the real server on a test port, since a running desktop app holds 8080.
 
 #include "doctest.h"
 #include "core/system/HttpServerModule.h"
@@ -135,6 +135,11 @@ TEST_CASE("HttpServer: a checkout's UI folder serves its script modules and noth
     };
     CHECK(statusOf("/panel.js") == "HTTP/1.1 200");
     CHECK(statusOf("/ui_embedded.h") == "HTTP/1.1 404");
+#ifndef _WIN32
+    // On Windows a colon names a drive or a data stream, a way out of the folder, so a name holding one is refused. A file here can carry one, which shows the refusal.
+    std::ofstream(dir / "c:panel.js") << "export const y = 2;";
+    CHECK(statusOf("/c:panel.js") == "HTTP/1.1 404");
+#endif
     http.release();
     std::filesystem::remove_all(dir);
 }

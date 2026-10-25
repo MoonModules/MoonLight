@@ -1,9 +1,13 @@
 #pragma once
 
+#include "platform/nonblocking.h"   // MM_NONBLOCKING
+
+#include <cstddef>
+
 /// @module parse
 /// @also JsonUtil, MqttModule, HueDriver
 
-/// The inverse of format.h: the integer a string starts with, from a JSON value, an MQTT payload or a query parameter alike.
+/// The inverse of format.h: the integer a string starts with, from a JSON value, an MQTT payload or a query parameter alike, and text compared without case.
 ///
 /// @technical
 ///
@@ -26,5 +30,15 @@ namespace mm {
 
 /// The integer a string starts with, decimal or 0x-prefixed hex, or the fallback: @xref{overflow-needs-both-checks|both range checks} and @xref{the-conversion-is-out-of-line|why not inline}.
 int parseIntStr(const char* s, int fallback = 0);
+
+/// Whether the first `n` bytes of two strings match, ASCII letter case aside, as RFC 2326 reads a header name and DNS a host name.
+inline bool asciiCaseEqual(const char* a, const char* b, size_t n) MM_NONBLOCKING {
+    for (size_t i = 0; i < n; i++) {
+        const char x = (a[i] >= 'A' && a[i] <= 'Z') ? static_cast<char>(a[i] + 32) : a[i];
+        const char y = (b[i] >= 'A' && b[i] <= 'Z') ? static_cast<char>(b[i] + 32) : b[i];
+        if (x != y) return false;
+    }
+    return true;
+}
 
 }  // namespace mm

@@ -127,6 +127,58 @@
       "eth_only": true,
       "ships": true,
       "description": "Teensy 4.1: its own Ethernet PHY, or on the 4.1-NE a W5500 module on its SPI port, found at boot."
+    },
+    {
+      "name": "desktop-macos-arm64",
+      "platform": "desktop",
+      "chip": "macos-arm64",
+      "eth_only": false,
+      "ships": true,
+      "description": "MoonLight for macOS arm64, downloaded and run on the computer.",
+      "label": "macOS arm64",
+      "assets": [
+        "^MoonLight-macos-arm64-v.+\\.dmg$",
+        "^MoonLight-macos-arm64-v.+\\.tar\\.gz$"
+      ]
+    },
+    {
+      "name": "desktop-windows-x64",
+      "platform": "desktop",
+      "chip": "windows-x64",
+      "eth_only": false,
+      "ships": true,
+      "description": "MoonLight for Windows x64, downloaded and run on the computer.",
+      "label": "Windows x64",
+      "assets": [
+        "^MoonLight-windows-x64-v.+-setup\\.exe$",
+        "^MoonLight-windows-x64-v.+\\.zip$"
+      ]
+    },
+    {
+      "name": "desktop-linux-x64",
+      "platform": "desktop",
+      "chip": "linux-x64",
+      "eth_only": false,
+      "ships": true,
+      "description": "MoonLight for Linux x64, downloaded and run on the computer.",
+      "label": "Linux x64",
+      "assets": [
+        "^moonlight_.+_amd64\\.deb$",
+        "^MoonLight-linux-x64-v.+\\.tar\\.gz$"
+      ]
+    },
+    {
+      "name": "desktop-linux-arm64",
+      "platform": "desktop",
+      "chip": "linux-arm64",
+      "eth_only": false,
+      "ships": true,
+      "description": "MoonLight for Linux arm64, downloaded and run on the computer.",
+      "label": "Linux arm64",
+      "assets": [
+        "^moonlight_.+_arm64\\.deb$",
+        "^MoonLight-linux-arm64-v.+\\.tar\\.gz$"
+      ]
     }
   ]
 }

@@ -665,7 +665,7 @@ jobs:
           BASE="https://github.com/${REPO}/releases/download/$TAG"
           # The shipping firmware list — the same mooninstaller/firmwares.json the
           # build matrix reads, so manifests and builds can't drift.
-          for F in $(jq -r '.firmwares[] | select(.ships) | .name' mooninstaller/firmwares.json); do
+          for F in $(jq -r '.firmwares[] | select(.ships and .platform != "desktop") | .name' mooninstaller/firmwares.json); do
             # An ESP32 manifest takes its offsets from IDF's flasher args; a Teensy one is the flat image at 0.
             ARGS=()
             [ -f "dist/flasher-$F.json" ] && ARGS=(--flasher-args "dist/flasher-$F.json")

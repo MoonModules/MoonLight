@@ -7,7 +7,7 @@ import { installPicker } from "./install-picker.js";
 import { preview } from "./preview3d.js";
 import { encodeGif } from "./gif.js";
 import { isNewer, parse } from "./semver.js";
-import { applyMigrations, collectFiles, restoreDirs, diffRestore } from "./migrate.js";
+import { collectFiles, restoreBundle } from "./migrate.js";
 import { moduleHelp, controlHelp, walkLinks, ROLE_EMOJI, DIM_EMOJI, SCRIPTED_EMOJI, COMPILED_EMOJI, EMOJI_LABEL,
          emojiTagsFor, emojiChipRow, chipsMatch } from "./help.js";
 
@@ -2962,11 +2962,28 @@ async function openWalk(at) {
     let walk;
     try { walk = await import(lsRead(LS_HELP_SOURCE, "") === "local" ? WALK_URL_LOCAL : WALK_URL); }
     catch (e) { alert(`MoonWalk could not load: ${e.message}`); return; }   // offline, as on the device's own access point
-    const stop = await walk.openMap(async (host, close) => walk.drawMap(host, {
-        state: await fetch("/api/state").then(r => r.json()), model: walkIndex, modules: types, open: at, done: walkedIds(), actor: "user", newTab: true,
-        show: showTarget, reopen: openWalk, onFollow: (w) => { walker = w; close(); w.update(state); } }), { closeClass: "fm-tool" });
+    const stop = await walk.openMap(async (host, close) => {
+        const whole = await fetch("/api/state").then(r => r.json());
+        return walk.drawMap(host, {
+        state: whole, model: walkIndex, modules: types, open: at, done: walkedIds(), actor: "user", newTab: true,
+        choices: walkChoices((whole.modules || []).find(m => (m.controls || []).some(c => c.name === "deviceModel"))?.controls),
+        show: showTarget, reopen: openWalk, onFollow: (w) => { walker = w; close(); w.update(state); } });
+    }, { closeClass: "fm-tool" });
     // The map recorded the installer's vouch once it drew; a map that could not load leaves it for the next open.
     if (typeof stop === "function") try { localStorage.removeItem(LS_WALKED); } catch { /* recorded twice next time, which is harmless */ }
+}
+
+// MoonWalk's choices on this device, so a process opens on the steps for where it runs: the platform from the System card, and the
+// choices that follow from it. The reader's own pick still wins, and an option a process does not list leaves its choice alone.
+function walkChoices(controls) {
+    const value = (name) => String((controls || []).find(c => c.name === name)?.value ?? "");
+    const model = value("deviceModel"), chip = value("chip");
+    const os = { macos: "macOS", linux: "Linux", windows: "Windows" }[model.split("-")[0]];
+    const platform = model === "docker" ? "Docker" : os || (chip.startsWith("ESP32") ? "ESP32" : chip.startsWith("i.MX") ? "Teensy" : "");
+    if (!platform) return {};
+    const board = platform === "ESP32" || platform === "Teensy";
+    return { platform, target: board ? "Board" : "Desktop",
+             source: board ? "A microphone on a board" : platform === "Docker" ? "A PulseAudio server into the container" : `The computer's audio on ${platform}` };
 }
 
 function helpFor(moduleType) {
@@ -3370,6 +3387,14 @@ function createControl(moduleName, moduleType, ctrl, writeTo = (name, value) => 
                 });
             }
             row.appendChild(input);
+            // A hosts text names the boards the device list knows among its entries, so an address says which board it is.
+            const known = knownHostsText(ctrl.known);
+            if (known) {
+                const note = document.createElement("span");
+                note.className = "control-known";
+                note.textContent = known;
+                row.appendChild(note);
+            }
             if (!ctrl.readonly) resetButton(() => { input.value = def; });
             break;
         }
@@ -6104,6 +6129,44 @@ function applyTheme(t) {
     if (btn) btn.textContent = (t === "dark") ? "☀" : "🌙";
 }
 
+// The boards a hosts text names, as the server matched them: "192.168.1.125 is MM-S31 · MM-Eye is 192.168.1.30".
+function knownHostsText(known) {
+    if (!known || typeof known !== "object") return "";
+    return Object.entries(known).map(([entry, other]) => `${entry} is ${other}`).join(" · ");
+}
+
+// The header's stats line: the uptime, then for someone tuning the device "🕒 fps · 🧠 NNKB · 🧱 NNKB".
+// 🧠 = internal-RAM free (heap progress total−used); 🧱 = largest contiguous
+// internal-RAM block (the maxBlock control, already maxInternalAllocBlock).
+// Both matter: free can be ample while fragmentation leaves no single block
+// big enough for the next allocation.
+function headerStats(ctrls, tuning) {
+    const uptimeCtrl = ctrls.find(c => c.name === "uptime");
+    const heapCtrl = ctrls.find(c => c.name === "heap");
+    const blockCtrl = ctrls.find(c => c.name === "maxBlock");
+    const fpsCtrl = ctrls.find(c => c.name === "fps");
+    const parts = [];
+    if (uptimeCtrl) parts.push(uptimeCtrl.value);
+    // The WHOLE pipeline's rate, which is the one place fps is the honest unit: the device
+    // completes this many frames a second, where a per-module fps is one part's
+    // cost inverted. Before the memory badges because it is the number that moves.
+    if (tuning && fpsCtrl && fpsCtrl.value) {
+        const f = Number(fpsCtrl.value);
+        parts.push("🕒 " + (f >= 1000 ? Math.round(f / 1000) + "K fps" : f + " fps"));
+    }
+    if (tuning && heapCtrl && heapCtrl.value !== undefined && heapCtrl.total) {
+        const freeKb = Math.round((heapCtrl.total - heapCtrl.value) / 1024);
+        parts.push("🧠 " + freeKb + "KB");
+    }
+    // Skip on desktop, where the platform stub reports "0KB" (no real
+    // block measurement / unlimited heap): same reason heap free above
+    // only shows when the heap progress control is present.
+    if (tuning && blockCtrl && blockCtrl.value && blockCtrl.value !== "0KB") {
+        parts.push("🧱 " + blockCtrl.value);
+    }
+    return parts.join(" · ");
+}
+
 function updateStatusBar() {
     if (!state || !state.modules) return;
     const sys = state.modules.find(m => m.type === "SystemModule")
@@ -6121,40 +6184,8 @@ function updateStatusBar() {
         }
     }
 
-    // System stats: the uptime, then from expert mode up "🕒 fps · 🧠 NNKB · 🧱 NNKB"
-    // 🧠 = internal-RAM free (heap progress total−used); 🧱 = largest contiguous
-    // internal-RAM block (the maxBlock control, already maxInternalAllocBlock).
-    // Both matter: free can be ample while fragmentation leaves no single block
-    // big enough for the next allocation.
-    const uptimeCtrl = ctrls.find(c => c.name === "uptime");
-    const heapCtrl = ctrls.find(c => c.name === "heap");
-    const blockCtrl = ctrls.find(c => c.name === "maxBlock");
-    const fpsCtrl = ctrls.find(c => c.name === "fps");
     const statsEl = document.getElementById("sys-stats");
-    if (statsEl) {
-        const parts = [];
-        if (uptimeCtrl) parts.push(uptimeCtrl.value);
-        // The rate and the memory are for someone tuning the device, so they show from expert mode up.
-        const tuning = uiMode() >= 1;
-        // The WHOLE pipeline's rate, which is the one place fps is the honest unit: the device
-        // really does complete this many frames a second, where a per-module fps is one part's
-        // cost inverted. Before the memory badges because it is the number that moves.
-        if (tuning && fpsCtrl && fpsCtrl.value) {
-            const f = Number(fpsCtrl.value);
-            parts.push("🕒 " + (f >= 1000 ? Math.round(f / 1000) + "K fps" : f + " fps"));
-        }
-        if (tuning && heapCtrl && heapCtrl.value !== undefined && heapCtrl.total) {
-            const freeKb = Math.round((heapCtrl.total - heapCtrl.value) / 1024);
-            parts.push("🧠 " + freeKb + "KB");
-        }
-        // Skip on desktop, where the platform stub reports "0KB" (no real
-        // block measurement / unlimited heap): same reason heap free above
-        // only shows when the heap progress control is present.
-        if (tuning && blockCtrl && blockCtrl.value && blockCtrl.value !== "0KB") {
-            parts.push("🧱 " + blockCtrl.value);
-        }
-        setText(statsEl, parts.join(" · "));
-    }
+    if (statsEl) setText(statsEl, headerStats(ctrls, uiMode() >= 1));
 
     // Hide reboot button on desktop builds: platform::reboot() just exits the process,
     // which is not useful from the UI and can be mistaken for a crash.
@@ -7856,52 +7887,7 @@ async function fmBackupConfig() {
 }
 
 async function fmRestoreConfig(file, refresh) {
-    const bundle = JSON.parse(await file.text());
-    // Restore is the one supported upgrade path, so it reads the format the previous name wrote as well as its own.
-    const kBackupFormats = ["MoonLight-config-backup", "projectMM-config-backup"];   // a bundle already saved carries the name it was saved under
-    if (!kBackupFormats.includes(bundle.format) || !bundle.files) {
-        throw new Error("not a config backup");
-    }
-    if (bundle.version !== 1) {
-        throw new Error(`backup version ${bundle.version} is newer than this firmware understands`);
-    }
-    // The live tree names what an older flat config file becomes as a document.
-    let live = [];
-    try { live = (await (await fetch("/api/state")).json()).modules || []; } catch (_) {}
-    // The rename map first: MIGRATING.md's schema breaks, applied client-side and reported.
-    const { files, report } = applyMigrations(bundle.files, live);
-    // Directories before files (mkdir is non-recursive); existing dirs answer 500, harmless.
-    for (const dir of restoreDirs(files)) {
-        await fetch("/api/dir?path=" + encodeURIComponent(dir), { method: "POST", body: "" }).catch(() => {});
-    }
-    const failed = [];
-    // Network config last: it applies LIVE, and joining another network mid-restore would cut
-    // off the writes still to come (the AP flow's whole point).
-    const ordered = Object.entries(files).sort(
-        ([a], [b]) => (a.endsWith("/NetworkModule.json") ? 1 : 0) - (b.endsWith("/NetworkModule.json") ? 1 : 0));
-    for (const [path, content] of ordered) {
-        let res = null;
-        // One retry: the device serves a single connection at a time, so a busy moment
-        // drops a socket transiently (seen on the bench); only a retried failure is real.
-        for (let attempt = 0; attempt < 2 && (!res || !res.ok); attempt++) {
-            if (attempt) await new Promise(r => setTimeout(r, 300));
-            res = await fetch("/api/file?path=" + encodeURIComponent(path), {
-                method: "POST", headers: { "Content-Type": "application/octet-stream" },
-                body: new Blob([content]),
-            }).catch(() => null);
-        }
-        if (!res || !res.ok) {
-            failed.push({ kind: "control", where: path, detail: "write failed (" + (res ? res.status : "network") + ")" });
-        }
-    }
-    // The report: what this firmware no longer understands, plus everything the rename map did.
-    let typeNames = [];
-    try { live = (await (await fetch("/api/state")).json()).modules || []; } catch (_) {}
-    try { typeNames = ((await (await fetch("/api/types")).json()).types || []).map(t => t.name); } catch (_) {}
-    const entries = [...report, ...failed, ...diffRestore(files, live, typeNames)];
-    // Network bring-up is not live-re-appliable (it opts out device-side); its restored file
-    // waits for the next boot, so the dialog offers the restart exactly when that matters.
-    const hasNetwork = Object.keys(files).some(p => p.endsWith("/NetworkModule.json"));
+    const { entries, hasNetwork } = await restoreBundle(JSON.parse(await file.text()), fetch);
     fmShowRestoreReport(entries, refresh, hasNetwork);
 }
 

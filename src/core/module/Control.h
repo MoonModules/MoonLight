@@ -15,7 +15,7 @@
 namespace mm {
 
 /// Format four octets as "A.B.C.D", which sixteen bytes always fits.
-inline void formatDottedQuad(char out[16], const uint8_t ip[4]) {
+inline void formatDottedQuad(char out[16], const uint8_t ip[4]) MM_NONBLOCKING {
     mm::formatTo(out, 16, "%u.%u.%u.%u", ip[0], ip[1], ip[2], ip[3]);
 }
 
@@ -181,6 +181,8 @@ struct ControlDescriptor {
     bool live = false;
     /// Whether a number field reads and writes hexadecimal, for a value its datasheet gives in hex, such as an I2C address.
     bool hex = false;
+    /// Whether a text holds an address or a list of hosts, so the UI names the boards it knows among them.
+    bool hosts = false;
     /// What this surface control drives, one field because each kind drives exactly one thing.
     const char* surfaceTarget = nullptr;
     /// An optional check applied before every write, so the rule lives with the control.
@@ -387,6 +389,11 @@ public:
     /// Render a numeric as a number input, for an integer that is an identity not a magnitude.
     void setNumberField(uint8_t i, bool numberField = true) {
         if (i < count_) controls_[i].numberField = numberField;
+    }
+
+    /// Mark a text as holding hosts, an address or a list of addresses and names, so the UI shows each known board's name beside its address.
+    void setHostsField(uint8_t i) {
+        if (i < count_) controls_[i].hosts = true;
     }
 
     /// Render a numeric as a hexadecimal number input, as `0x18`.

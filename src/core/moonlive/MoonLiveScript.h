@@ -8,9 +8,9 @@
 
 namespace mm::moonlive {
 
-/// One scripted module's script: the file it names, the compiled program, and the content hash.
+/// One scripted module's script: the file it names, the compiled program, and the content hash, @xref{held-by-value|held by value}.
 ///
-/// The rule it exists to state once: if the file changed, recompile. That is all `sync()` is.
+/// The rule it exists to state once: if the file changed, recompile. That is all `sync()` is: @xref{one-answer-to-one-question|one answer to one question}.
 ///
 /// @technical
 ///
@@ -127,7 +127,7 @@ public:
     /// The dimensionality the script declared, or D2 when it declared none.
     Dim dimensions() const { return dim_; }
 
-    /// The emoji the script declared, or null when it declared none, valid until the next compile replaces the engine's string pool.
+    /// The emoji the script declared, or null when it declared none: a copy this script holds, which outlives the engine's string pool and changes at the next compile.
     const char* tags() const { return tags_[0] ? tags_ : nullptr; }
 
     /// Hand back what this script reported, called after the engine is freed.
@@ -206,15 +206,18 @@ private:
     /// Copy the tags the script returned, whole characters only, since the string pool they live in moves with each compile and goes with a release.
     void keepTags(const char* s) {
         size_t n = 0;
-        for (size_t i = 0; s[i];) {
-            const unsigned char lead = static_cast<unsigned char>(s[i]);
-            const size_t len = lead < 0x80 ? 1 : lead < 0xE0 ? 2 : lead < 0xF0 ? 3 : 4;
-            if (i + len >= sizeof(tags_) || std::memchr(s + i, '\0', len)) break;   // past the room, or a character cut short
-            i += len;
-            n = i;
-        }
+        for (size_t len; s[n] && (len = utf8Length(s + n)) && n + len < sizeof(tags_);) n += len;
         std::memcpy(tags_, s, n);
         tags_[n] = '\0';
+    }
+
+    /// The length of the whole UTF-8 character at s, 0 for a stray continuation byte or one cut short; each continuation byte is read only once the one before it was no terminator, so the read stays inside the string.
+    static size_t utf8Length(const char* s) {
+        const unsigned char lead = static_cast<unsigned char>(*s);
+        const size_t len = lead < 0x80 ? 1 : lead < 0xC0 ? 0 : lead < 0xE0 ? 2 : lead < 0xF0 ? 3 : lead < 0xF8 ? 4 : 0;
+        for (size_t k = 1; k < len; k++)
+            if ((static_cast<unsigned char>(s[k]) & 0xC0) != 0x80) return 0;
+        return len;
     }
 
     MoonLive engine_;

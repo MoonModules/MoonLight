@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core/util/format.h"   // formatTo: nonblocking formatting into a fixed buffer
+#include "core/system/DevicesModule.h"   // formatPeer: the sender by its board's name
 #include "light/effects/ChannelDataSink.h"   // staging, the held frame and its placement
 #include "light/effects/EffectBase.h"
 
@@ -71,6 +72,7 @@ public:
             packetsPerS = saturate16(static_cast<uint32_t>(uint64_t{packets} * 1000 / span));
             framesPerS = saturate16(static_cast<uint32_t>(uint64_t{frames} * 1000 / span));
         }
+        lastProto_ = nullptr;   // the status is built again on the next packet, so a board heard since shows by name
         EffectBase::tick1s();
     }
 
@@ -152,7 +154,7 @@ private:
     static constexpr int kMaxPacketsPerDrain = 128;   ///< packets one drain takes per socket, so a flood cannot hold the caller
     static constexpr uint32_t kWaitMs = 20;   ///< how long the task waits for a packet before it checks for a stop
     static constexpr const char* kBindFailMsg = "UDP bind failed, port in use?";
-    char recvStatus_[56] = "";          ///< "receiving <protocol> from <ip>, <path>", a member since setStatus holds the pointer
+    char recvStatus_[96] = "";          ///< "receiving <protocol> from <board> (<ip>), <path>", a member since setStatus holds the pointer
     const char* lastProto_ = nullptr;   ///< the last protocol literal the status was built from
     uint8_t lastPath_ = 0;              ///< the last path the status was built from
     /// The status note for each of the sink's paths: none for receiver mapping, which maps once as every layer does.
@@ -260,9 +262,9 @@ private:
         lastProto_ = proto;
         lastPath_ = path;
         std::memcpy(lastIp_, ip, 4);
-        mm::formatTo(recvStatus_, sizeof(recvStatus_), "receiving %s from %u.%u.%u.%u%s", proto,
-                      static_cast<unsigned>(ip[0]), static_cast<unsigned>(ip[1]),
-                      static_cast<unsigned>(ip[2]), static_cast<unsigned>(ip[3]), kPathNotes[path]);
+        char peer[48];
+        DevicesModule::formatPeer(peer, sizeof(peer), ip);
+        mm::formatTo(recvStatus_, sizeof(recvStatus_), "receiving %s from %s%s", proto, peer, kPathNotes[path]);
         setStatus(recvStatus_, Severity::Status);
     }
 

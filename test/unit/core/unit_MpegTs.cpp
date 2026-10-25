@@ -4,7 +4,7 @@
 /// The MPEG-TS packaging the ESP32-P4 does for itself, where desktop hands the whole job to ffmpeg. These tests are why the muxer is pure logic in a header: the packet structure a player has to accept is pinned here, on the host, rather than only by watching a TV.
 
 #include "doctest.h"
-#include "light/util/MpegTs.h"
+#include "core/util/MpegTs.h"
 
 #include <cstring>   // std::memcmp: declared here, not borrowed from MpegTs.h
 #include <vector>
@@ -55,7 +55,7 @@ TEST_CASE("A segment opens with the program tables, then video") {
     CHECK(pidOf(&out[2 * mm::ts::kPacketSize]) == mm::ts::kPidVideo);
 }
 
-// A player finds the video by following the PAT to the PMT and the PMT to the elementary stream. Testing only that those packets EXIST is not enough: the PAT once pointed at PID 0 instead of the PMT, so a player that trusts it (VLC) saw no video track at all, while ffmpeg still played the file because it probes for streams regardless. This walks the chain the way a player does.
+// A player follows the PAT to the PMT to the elementary stream, so the packets merely existing is not enough: a PAT at PID 0 instead of the PMT left VLC with no video track while ffmpeg, which probes regardless, still played. This walks the chain.
 TEST_CASE("The PAT points at the PMT, and the PMT at the video stream") {
     std::vector<uint8_t> out(64 * 1024);
     mm::ts::Continuity wcc;
@@ -158,7 +158,7 @@ TEST_CASE("A keyframe carries the clock reference, a delta frame does not") {
     CHECK_FALSE(hasPcr(delta, dw.size()));
 }
 
-// Muxing a long run of frames must not disturb anything around it. The muxer assembles each PES header in a fixed local buffer, and it once overran that buffer by a byte -- invisible in the output, caught only by a sanitizer. This drives the same path with a guard around the output so the CI sanitizer build has a case that would fail loudly.
+// Muxing many frames must not disturb its surroundings: the muxer builds each PES header in a fixed local buffer and once overran it by a byte, invisible in the output. A guard around the output gives the sanitizer build a case that fails loudly.
 TEST_CASE("Muxing many frames stays inside its buffers") {
     const uint8_t guard = 0x5A;
     std::vector<uint8_t> arena(512 * 1024, guard);
@@ -220,7 +220,7 @@ TEST_CASE("The frame's bytes survive the split across packets") {
     CHECK(found);
 }
 
-// A Writer is constructed per FRAME in production, so the continuity counters cannot live inside it: MPEG-TS requires one unbroken sequence per PID across every frame and every segment. When they did live in the Writer, each frame restarted at zero and ffmpeg reported "Packet corrupt" on every one, which players show as a stream that stalls and re-buffers.
+// A Writer is built per FRAME, so the continuity counters cannot live inside it: MPEG-TS requires one unbroken sequence per PID across all frames and segments; inside the Writer each frame restarted at zero and ffmpeg reported "Packet corrupt".
 TEST_CASE("Continuity survives across the separate writers a stream is muxed with") {
     std::vector<uint8_t> out(256 * 1024);
     mm::ts::Continuity cc;
@@ -247,7 +247,7 @@ TEST_CASE("Continuity survives across the separate writers a stream is muxed wit
     CHECK(checked > 40);   // enough packets that a per-writer reset could not hide
 }
 
-// A frame the segment cannot hold is DISCARDED, and the counters must be discarded with it: the writer advances them per packet as it emits, so keeping the advance for packets that were never sent leaves a gap a player reads as lost packets. The caller restores them; this pins that the counters are a plain value the caller can snapshot for exactly that purpose.
+// A frame the segment cannot hold is DISCARDED with its counters: the writer advances them per packet, so keeping the advance for unsent packets leaves a gap a player reads as lost packets. This pins that a caller can snapshot and restore them.
 TEST_CASE("Discarding an overflowed frame can restore the continuity counters") {
     std::vector<uint8_t> out(64 * 1024);
     mm::ts::Continuity cc;

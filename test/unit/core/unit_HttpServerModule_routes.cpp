@@ -7,6 +7,8 @@
 #include "core/module/Scheduler.h"
 #include "core/util/ModuleFactory.h"
 #include "core/system/HttpServerModule.h"
+#include "core/system/DevicesModule.h"   // the boards a hosts text names
+#include "core/system/WledPacket.h"      // a board announcing itself
 #include "platform/platform.h"
 #include "http_loopback.h"
 
@@ -83,6 +85,24 @@ struct Level : public mm::MoonModule {
     uint8_t level = 0;
     void defineControls() override { controls_.addControl("level", level, 0, 255); }
 };
+
+// A module with a hosts text, declared as a service declares one.
+struct Sender : public mm::MoonModule {
+    char hosts[64] = "192.168.1.125, MM-Eye, 10.0.0.9";
+    void defineControls() override {
+        controls_.addText("hosts", hosts, sizeof(hosts));
+        controls_.setHostsField(controls_.count() - 1);
+    }
+};
+
+// A board announcing itself under `name` from 192.168.1.`last`.
+void announce(mm::DevicesModule& devices, const char* name, uint8_t last) {
+    const uint8_t ip[4] = {192, 168, 1, last};
+    uint8_t pkt[mm::WledPacket::kSize];
+    mm::WledPacket::build(pkt, ip, name, /*boardType=*/34, /*lightsOn=*/true);
+    mm::WledPacket::stampMmMarker(pkt);
+    devices.injectPacketForTest(pkt, sizeof(pkt), ip);
+}
 
 mm::MoonModule* childNamed(mm::MoonModule* parent, const char* name) {
     for (uint8_t i = 0; i < parent->childCount(); i++)
@@ -238,4 +258,26 @@ TEST_CASE("the type list arrives whole with its tag, and a browser holding that 
     const std::string again = requestWhole(server.http, "GET /api/types HTTP/1.1\r\nIf-None-Match: " + tag + "\r\n\r\n");
     CHECK(again.rfind("HTTP/1.1 304", 0) == 0);
     CHECK(again.find("\r\n\r\n") + 4 == again.size());   // headers only
+}
+
+// An address says nothing about which board it is: the state names each board the device list knows, and leaves a desk or a computer alone.
+TEST_CASE("a hosts text carries the boards the device list knows among its entries, each address with its name and each name with its address") {
+    RackServer server;
+    mm::DevicesModule devices;
+    devices.setup();
+    devices.applyState();
+    announce(devices, "MM-S31", 125);
+    announce(devices, "MM-Eye", 30);
+    auto* sender = new Sender();
+    sender->setName("Sender");
+    server.rack->addChild(sender);
+    sender->rebuildControls();
+    mm::platform::TcpConnection client;
+    REQUIRE(connectAndAccept(server.http, client, kTestPort));
+    const char* req = "GET /api/state HTTP/1.1\r\nHost: test\r\n\r\n";
+    REQUIRE(client.write(reinterpret_cast<const uint8_t*>(req), std::strlen(req)));
+    const std::string reply = readUntilClosed(server.http, client);
+    CHECK(reply.find(R"("known":{"192.168.1.125":"MM-S31","MM-Eye":"192.168.1.30"})") != std::string::npos);   // 10.0.0.9 is no board heard
+    client.close();
+    devices.release();
 }

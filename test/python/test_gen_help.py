@@ -88,10 +88,16 @@ def test_an_attribution_names_catalog_entries_and_keeps_an_unlisted_name_as_writ
     page = tmp_path / "attributions.md"
     page.write_text("| Name | Known for |\n|---|---|\n| [Brandon502 / WildCats08](https://github.com/Brandon502) | Rotate |\n| Sören | The installer. |\n")
     catalog = gen_help.attribution_catalog(page)
-    assert catalog == {"brandon502": "https://github.com/Brandon502", "wildcats08": "https://github.com/Brandon502", "sören": None}
+    assert catalog == {"brandon502": "brandon502", "wildcats08": "brandon502", "sören": "soren"}   # every name of an entry to its card
     text, unlisted = gen_help.resolve_attribution("WildCats08, Sören, @Troy", catalog)
-    assert text == "[WildCats08](https://github.com/Brandon502), Sören, @Troy"   # an entry with no page is listed, and shows as written
+    cards = gen_help.ATTRIBUTIONS_PAGE
+    assert text == f"[WildCats08]({cards}#brandon502), [Sören]({cards}#soren), @Troy"   # our card, where the entry's own link waits, even for an entry with no page
     assert unlisted == ["@Troy"]
+
+
+def test_every_attribution_catalog_entry_has_a_card_anchor_of_its_own():
+    anchors = [gen_help.attribution_anchor(names) for _, names, _, _ in gen_help.catalog_rows(gen_help.ATTRIBUTIONS.read_text())]
+    assert all(anchors) and len(set(anchors)) == len(anchors)   # a shared anchor sends a module's attribution to another entry's card
 
 
 def test_every_attribution_catalog_row_is_read():
@@ -395,8 +401,9 @@ HELP = {"line": "A picture on the layer.",
 
 def test_the_attribution_catalog_shows_avatars_and_the_modules_that_name_each_entry(monkeypatch):
     import mkdocs_hooks
-    modules = {"RotateModifier": {"doc": "light/modifiers.md#rotate", "attribution": "[Brandon502](https://github.com/Brandon502), [Rotation matrix](https://en.wikipedia.org/wiki/Rotation_matrix)"},
-               "CheckerboardModifier": {"doc": "light/modifiers.md#checkerboard", "attribution": "[WildCats08](https://github.com/Brandon502)"},
+    cards = "https://moonmodules.org/MoonLight/reference/attributions.html"
+    modules = {"RotateModifier": {"doc": "light/modifiers.md#rotate", "attribution": f"[Brandon502]({cards}#brandon502), [Rotation matrix]({cards}#rotation-matrix)"},
+               "CheckerboardModifier": {"doc": "light/modifiers.md#checkerboard", "attribution": f"[WildCats08]({cards}#brandon502)"},
                "InstallerModule": {"doc": "core/system.md#installer", "attribution": "Sören"}}
     monkeypatch.setitem(mkdocs_hooks._help_cache, "file", {"modules": modules})
     monkeypatch.setattr(mkdocs_hooks, "_source_attributions", lambda modules: [("[draw.h](https://x/draw.h)", "NDI")])
@@ -404,9 +411,9 @@ def test_the_attribution_catalog_shows_avatars_and_the_modules_that_name_each_en
     assert mkdocs_hooks.attributed_by(page).split("\n") == [
         "| Name | Known for | Attributed by |",
         "|------|-----------|---|",
-        '| [Brandon502 / WildCats08](https://github.com/Brandon502)<br><img src="https://github.com/Brandon502.png?size=96" width="48" height="48" alt="" loading="lazy" style="width: 48px; height: 48px; object-fit: cover"> | Modifiers. | [Checkerboard](../moonmodules/light/modifiers.md#checkerboard), [Rotate](../moonmodules/light/modifiers.md#rotate) |',
-        "| Sören | The installer. | [Installer](../moonmodules/core/system.md#installer) |",
-        "| [NDI](https://en.wikipedia.org/wiki/NDI) | Video. | [draw.h](https://x/draw.h) |"]   # code that is no module credits by its own `@attribution`
+        '| [Brandon502 / WildCats08](https://github.com/Brandon502)<span id="brandon502" data-anchor></span><br><img src="https://github.com/Brandon502.png?size=96" width="48" height="48" alt="" loading="lazy" style="width: 48px; height: 48px; object-fit: cover"> | Modifiers. | [Checkerboard](../moonmodules/light/modifiers.md#checkerboard), [Rotate](../moonmodules/light/modifiers.md#rotate) |',
+        '| Sören<span id="soren" data-anchor></span> | The installer. | [Installer](../moonmodules/core/system.md#installer) |',
+        '| [NDI](https://en.wikipedia.org/wiki/NDI)<span id="ndi" data-anchor></span> | Video. | [draw.h](https://x/draw.h) |']   # code that is no module credits by its own `@attribution`
 
 
 def test_a_catalog_row_naming_a_commons_file_shows_it_linked_to_its_file_page(monkeypatch):
@@ -415,7 +422,7 @@ def test_a_catalog_row_naming_a_commons_file_shows_it_linked_to_its_file_page(mo
     monkeypatch.setattr(mkdocs_hooks, "_source_attributions", lambda modules: [])
     page = "| Name | Known for |\n|---|---|\n| [Bresenham](https://en.wikipedia.org/wiki/Bresenham) File:Bresenham.svg | Lines. |"
     assert mkdocs_hooks.attributed_by(page).split("\n")[2] == (
-        '| [Bresenham](https://en.wikipedia.org/wiki/Bresenham)<br><a href="https://commons.wikimedia.org/wiki/File:Bresenham.svg">'
+        '| [Bresenham](https://en.wikipedia.org/wiki/Bresenham)<span id="bresenham" data-anchor></span><br><a href="https://commons.wikimedia.org/wiki/File:Bresenham.svg">'
         '<img src="https://commons.wikimedia.org/wiki/Special:FilePath/Bresenham.svg?width=96" width="48" height="48" alt="" loading="lazy" style="width: 48px; height: 48px; object-fit: cover"></a> | Lines. |  |')
     assert list(gen_help.catalog_rows(page))[0][1:] == (["Bresenham"], "https://en.wikipedia.org/wiki/Bresenham", "Bresenham.svg")
 

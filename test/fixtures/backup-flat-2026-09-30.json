@@ -1,0 +1,15 @@
+{
+ "format": "MoonLight-config-backup",
+ "version": 1,
+ "capturedAt": "2026-09-30T07:21:27.014Z",
+ "origin": "http://192.168.1.248",
+ "device": "MM-testbench-P4",
+ "firmware": "esp32p4rev1-eth-wifi",
+ "build": "08bfe766+ \u00b7 Sep 29 2026 23:04:32",
+ "files": {
+  "/.config/Drivers.json": "{\"on\":true,\"relayPins\":\"\",\"brightness\":46,\"palette\":0,\"paletteScript\":\"\",\"motionHold\":30,\"multicore\":true,\"enabled\":true,\"0.type\":\"LightPresetsModule\",\"0.presets\":[{\"id\":1,\"name\":\"RGB\",\"channels\":3,\"roles\":[1,2,3],\"locked\":true},{\"id\":2,\"name\":\"GRB\",\"channels\":3,\"roles\":[2,1,3],\"locked\":true},{\"id\":3,\"name\":\"BGR\",\"channels\":3,\"roles\":[3,2,1],\"locked\":true},{\"id\":4,\"name\":\"RGBW\",\"channels\":4,\"roles\":[1,2,3,4],\"locked\":true},{\"id\":5,\"name\":\"GRBW\",\"channels\":4,\"roles\":[2,1,3,4],\"locked\":true},{\"id\":6,\"name\":\"WRGB\",\"channels\":4,\"roles\":[4,1,2,3],\"locked\":true},{\"id\":7,\"name\":\"Curtain GRB6\",\"channels\":6,\"roles\":[2,1,3,0,0,0],\"locked\":true},{\"id\":8,\"name\":\"Lightbar RGBWYP\",\"channels\":6,\"roles\":[1,2,3,4,6,7],\"locked\":true},{\"id\":9,\"name\":\"RGBCCT\",\"channels\":5,\"roles\":[1,2,3,4,5],\"locked\":true},{\"id\":10,\"name\":\"IRGB\",\"channels\":4,\"roles\":[13,1,2,3],\"locked\":true},{\"id\":11,\"name\":\"MH BeeEyes 15\",\"channels\":15,\"roles\":[8,9,0,13,0,12,0,10,13,0,1,2,3,0,0],\"locked\":true},{\"id\":12,\"name\":\"MH BeTopper 32\",\"channels\":32,\"roles\":[8,0,9,0,0,10,13,0,0,1,2,3,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],\"locked\":true},{\"id\":13,\"name\":\"MH 19x15W-24\",\"channels\":24,\"roles\":[8,9,0,13,1,2,3,4,0,0,0,0,0,0,0,0,0,10,0,0,0,0,0,0],\"locked\":true},{\"id\":14,\"name\":\"MH Mini 10W 11\",\"channels\":11,\"roles\":[8,0,9,0,0,13,0,1,2,3,4],\"locked\":true}],\"0.enabled\":true,\"1.type\":\"PreviewDriver\",\"1.targetFps\":24,\"1.enabled\":true,\"2.type\":\"ParallelLedDriver\",\"2.localBrightness\":255,\"2.curve\":0,\"2.lightPreset\":1,\"2.whiteMode\":1,\"2.presetRef\":\"GRB\",\"2.start\":0,\"2.count\":65535,\"2.pins\":\"21\",\"2.ledsPerPin\":\"\",\"2.peripheral\":0,\"2.doubleBuffer\":true,\"2.clockPin\":10,\"2.dcPin\":11,\"2.pinExpander\":false,\"2.latchPin\":-1,\"2.loopbackTest\":false,\"2.loopbackTxPin\":-1,\"2.loopbackRxPin\":-1,\"2.loopbackStrand\":0,\"2.loopbackIntrusive\":false,\"2.enabled\":true}",
+  "/.config/Effects.json": "{\"enabled\":true,\"0.type\":\"Layer\",\"0.blendMode\":1,\"0.opacity\":255,\"0.enabled\":true,\"0.0.type\":\"LinesEffect\",\"0.0.mode\":0,\"0.0.speed\":30,\"0.0.axis\":0,\"0.0.panelW\":16,\"0.0.panelH\":16,\"0.0.enabled\":true}",
+  "/.config/Layouts.json": "{\"enabled\":true,\"0.type\":\"GridLayout\",\"0.width\":16,\"0.height\":16,\"0.depth\":1,\"0.serpentine\":false,\"0.enabled\":true}",
+  "/.config/Services.json": "{\"enabled\":true,\"0.type\":\"AudioService\",\"0.mode\":2,\"0.sampleRate\":2,\"0.levels\":1,\"0.floor\":100,\"0.gain\":100,\"0.send audio\":false,\"0.simulate\":0,\"0.syncPort\":11988,\"0.enabled\":false}"
+ }
+}

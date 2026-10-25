@@ -6,51 +6,47 @@
 ///
 /// ## Writing the wrong image is the unrecoverable direction
 ///
-/// The two images sit side by side on the releases page and are one paste apart.
-/// Writing the recovery image into the application slot leaves both partitions holding it, and every route out then resolves to the partition being run from.
-/// The device answers and serves a page and cannot be recovered without a cable, which was found on the bench by installing exactly that.
+/// The two images sit side by side on the releases page, one paste apart. Writing the recovery image into the application slot leaves both partitions holding it, and every route out resolves to the partition being run from.
 ///
-/// So the check reads from the incoming image before a byte is committed, and a wrong file costs nothing.
-/// It decides on ENOUGH bytes rather than on the first chunk: a producer may deliver fewer than the descriptor needs.
-/// And identifying a short prefix reports no description for an image that has one, so the guard would pass and the wrong image would land.
+/// The device answers and serves a page and cannot be recovered without a cable, as found on the bench by installing exactly that.
+///
+/// The check reads from the incoming image before a byte is committed, so a wrong file costs nothing. It decides on ENOUGH bytes, not the first chunk, since a producer may deliver fewer than the descriptor needs.
+///
+/// Identifying a short prefix reports no description for an image that has one, so the guard would pass and the wrong image would land.
 ///
 /// ## Updating the recovery image itself
 ///
-/// The application installs it, the mirror of it installing the application, and nothing else can.
-/// A board cannot rewrite the partition it is executing from, so each slot is writable only while the other is running.
-/// Without this path a device whose recovery image is broken needs a cable, which is the one failure that image exists to prevent, and a bench board hit exactly that.
+/// The application installs it, the mirror of it installing the application, and nothing else can: a board cannot rewrite the partition it is executing from, so each slot is writable only while the other is running.
 ///
-/// The update interface cannot serve it, targeting only its own partition subtypes, so this writes raw flash and loses the validation that interface performs.
-/// The checks below replace it and their ORDER is the safety property: everything that can reject an image runs from the first chunk, before a single byte is erased.
+/// Without this path a device whose recovery image is broken needs a cable, the one failure that image exists to prevent, and a bench board hit exactly that.
+///
+/// The update interface targets only its own partition subtypes, so this writes raw flash and loses its validation; the checks below replace it, and their ORDER is the safety property: all rejection runs from the first chunk, before a byte is erased.
 ///
 /// ## Short chunks are kept, not padded
 ///
-/// The raw write needs a word-aligned length, which the update interface used to absorb.
-/// So bytes collect until a whole chunk, a whole number of words, is buffered, however short each push is.
-/// Padding a short push looks right and is not: a push arrives short whenever the network has less to give, which is most reads.
-/// The padding then reaches flash, the offset advances by the unpadded count, and the next write lands back over it, corrupting the image at every short read.
+/// The raw write needs a word-aligned length, so bytes collect until a whole chunk, a whole number of words, is buffered, however short each push is.
+///
+/// Padding a short push is wrong: pushes arrive short whenever the network has less to give, most reads. The padding reaches flash, the offset advances by the unpadded count, and the next write lands over it, corrupting the image at every short read.
+///
 /// At the end the remainder is the image's last bytes, so it is padded to a word with what erased flash reads as; only there is padding correct.
 ///
 /// ## The redirect response needs a bigger header buffer
 ///
-/// The default is far too small for the host's redirect, whose policy header overflows it and fails the update before the download starts.
-/// Raising both directions covers the longest headers with room to spare, at a few kilobytes of heap freed when the task exits.
+/// The default header buffer is far too small for the host's redirect, whose policy header overflows it and fails the update before the download starts. Raising both directions covers the longest headers, for a few kilobytes freed when the task exits.
 ///
 /// ## Progress rides the status string
 ///
-/// Both writers report the counts in the same shape, so the interface reads progress identically whichever image is installed.
-/// They used to reach a control that no longer exists, which showed an indeterminate sweep that never resolved on a device working perfectly.
+/// Both writers report the counts in the same shape, so the interface reads progress identically whichever image is installed. A separate control showed an indeterminate sweep that never resolved on a device working perfectly.
+///
 /// The padded tail is excluded: it is flash the image does not occupy, and counting it would report more written than was sent.
 ///
 /// ## Why the install runs on its own task
 ///
-/// The HTTP request answers 202 at once, exactly as the application's URL install does.
-/// While a request is open the browser cannot poll for progress, so a synchronous install would leave it blind for the whole write.
+/// The HTTP request answers 202 at once, as the application's URL install does: while a request is open the browser cannot poll for progress, so a synchronous install would leave it blind for the whole write.
 ///
 /// ## The application answers before it reboots
 ///
-/// The image is committed and the boot pointer flipped, so the caller returns and sends its HTTP 200 BEFORE the restart, the same sequence /api/reboot follows.
-/// That is what lets a browser see a clean result rather than a dropped socket.
+/// The image is committed and the boot pointer flipped, so the caller returns and sends its HTTP 200 BEFORE the restart, as /api/reboot does, which lets a browser see a clean result rather than a dropped socket.
 ///
 /// ## Reading a header straight out of a partition
 ///
@@ -59,40 +55,36 @@
 /// ## Reporting on the recovery image
 ///
 /// Which recovery image a device carries is read from its descriptor at a fixed offset, costing one flash read and no reboot.
-/// The recovery image answers the same question about itself elsewhere, which is a different question rather than a second copy.
-/// That reports what it is executing, and this reports an image it is not.
-/// Both carry the same version string, which is what lets a caller compare them by equality.
-/// Its SIZE comes from the slot rather than the image.
-/// The metadata call reads through a mapping arranged for the running partition, and errored for this one, leaving the row absent.
-/// What a user wants from the row is whether the slot has room, and reading the descriptor already proves an image is there.
-/// The figure counts the segments only, so trailing padding, checksum and hash are excluded and it reads a few dozen bytes under the file on disk.
+///
+/// The recovery image answers the same question about itself elsewhere: that reports what it is executing, this reports an image it is not, a different question rather than a second copy. Both carry the same version string, so callers compare by equality.
+///
+/// Its SIZE comes from the slot rather than the image: the metadata call reads through a mapping arranged for the running partition and errors for this one, leaving the row absent.
+///
+/// A user wants to know whether the slot has room, and reading the descriptor already proves an image is there. The figure counts the segments only, excluding trailing padding, checksum and hash, so it reads a few dozen bytes under the file.
+///
 /// That is deliberate: the figure answers how full the slot is, and reproducing the bootloader's padding rules would be a second copy to keep in step for no gain.
 ///
 /// ## Pointing the bootloader at the recovery image
 ///
-/// Setting the boot partition to it erases the selection data rather than writing a sequence number.
-/// Which is what makes a power cut land back in recovery rather than in a half-written application.
+/// Setting the boot partition to it erases the selection data rather than writing a sequence number, which makes a power cut land back in recovery rather than in a half-written application.
 ///
 /// ## A URL pull reuses the upload writer
 ///
-/// The update interface cannot serve a recovery image from a URL, targeting only its own subtypes and picking the partition itself.
-/// So the download is read by hand and pushed into the writer the upload uses: one writer, one set of checks, two sources.
+/// The update interface cannot serve a recovery image from a URL, targeting only its own subtypes and picking the partition itself, so the download is read by hand and pushed into the upload's writer: one writer, one set of checks, two sources.
 ///
 /// ## The single-slot guard
 ///
-/// The next-partition call falls back to the first slot it finds, so on a one-slot table it hands back the partition being executed, and erasing that bricks the device mid-write.
-/// The interface refuses it too, but failing early says why and names the fix.
+/// The next-partition call falls back to the first slot it finds, so on a one-slot table it hands back the partition being executed, and erasing that bricks the device mid-write. The interface refuses too, but failing early says why and names the fix.
 ///
 /// ## The update buffer is heap and owned
 ///
-/// Heap rather than static or stack: too large for a task frame, and a static one held internal memory from boot for nothing.
-/// An update is the one moment when spare memory is least scarce, so allocating here gives it back to the network stack for the rest of uptime.
+/// Heap rather than static or stack: too large for a task frame, and a static one holds internal memory from boot for nothing. An update is when spare memory is least scarce, so allocating here returns it to the network stack for the rest of uptime.
+///
 /// Owned by the image under way, which frees it on every way out.
 ///
 /// ## One bounded status writer
 ///
-/// Three identical local copies each put the format behind a template, which defeats the compiler's format check.
-/// A plain variadic function takes the format attribute instead, so a non-literal format is a build error rather than a scanner note.
+/// Three identical local copies each put the format behind a template, which defeats the compiler's format check. A plain variadic function takes the format attribute instead, so a non-literal format is a build error rather than a scanner note.
 
 #include "platform/platform.h"
 
@@ -497,7 +489,7 @@ bool otaEnd(OtaWrite& w, bool commit) {
         // Committed and flipped: @xref{the-application-answers-before-it-reboots|why the caller returns first}.
         else imageStatus(img, "rebooting");
     } else {
-        // What esp_ota_end does on the app path: checksum the image actually on flash, and say plainly when the recovery image no longer works.
+        // What esp_ota_end does on the app path: checksum the image on flash, and say plainly when the recovery image does not work.
         esp_partition_pos_t pos = { .offset = img->part->address, .size = img->part->size };
         esp_image_metadata_t meta = {};
         if (esp_image_verify(ESP_IMAGE_VERIFY, &pos, &meta) != ESP_OK) { imageStatus(img, "error: MoonBase did not verify, retry before rebooting"); ok = false; }
@@ -562,10 +554,9 @@ bool moonBaseFetchUrlSync(const char* url, char* statusBuf, size_t statusBufLen,
         if (n == 0) break;   // a clean end of body
         ok = otaWrite(w, reinterpret_cast<const uint8_t*>(chunk), static_cast<size_t>(n));
     }
-    if (ok) ok = otaEnd(w, !interrupted);
+    if (ok) ok = otaEnd(w, !interrupted);   // an interrupted download ends as an aborted transfer, its status naming an incomplete MoonBase
     esp_http_client_close(client);
     esp_http_client_cleanup(client);
-    if (interrupted) setStatus("error: the download was interrupted");
     return ok;
     #undef setStatus
 }

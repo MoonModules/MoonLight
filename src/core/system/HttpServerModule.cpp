@@ -160,6 +160,7 @@ HttpServerModule::FileTransfer* HttpServerModule::claimTransfer(platform::TcpCon
 void HttpServerModule::finishTransfer(FileTransfer& t, bool closeConn) {
     if (closeConn) t.conn.close();
     t.active = false;
+    t.waiting = false;
     t.wstream = platform::FsWriteStream{};
     if (t.buf) { platform::free(t.buf); t.buf = nullptr; }
 }
@@ -210,6 +211,15 @@ bool HttpServerModule::driveUpload(FileTransfer& t, uint32_t now) {
         return false;
     }
     if (t.active && t.remaining == 0) {
+        if (sendingFile(uploadPath(t))) {   // committed once its readers are done, retried every tick
+            if (!t.waiting) { t.waiting = true; t.waitSinceMs = now; }
+            if (now - t.waitSinceMs < kTransferStallMs) return false;
+            // A reader that holds the file a whole stall window: the upload gives up, so its client retries rather than waits on it.
+            abandonUpload(t);
+            sendResponse(t.conn, 503, "application/json", "{\"error\":\"the file is being read, retry\"}");
+            finishTransfer(t, true);
+            return false;
+        }
         const bool ok = platform::fsWriteStreamClose(t.wstream, true);
         if (ok) applyFileChanged(uploadPath(t));   // the write succeeded, so what was built from it may be stale
         sendResponse(t.conn, ok ? 200 : 500, "application/json",
@@ -222,6 +232,18 @@ bool HttpServerModule::driveUpload(FileTransfer& t, uint32_t now) {
         abandonUpload(t);
         finishTransfer(t, true);
     }
+    return false;
+}
+
+bool HttpServerModule::sendingFile(const char* path) const {
+    for (const auto& s : sends_)
+        if (s.busy && s.source == Send::Source::File && s.block && std::strcmp(static_cast<const FileSource*>(s.block)->path, path) == 0) return true;
+    return false;
+}
+
+bool HttpServerModule::uploadWaiting(const char* path) {
+    for (auto& t : transfers_)
+        if (t.active && t.kind == FileTransfer::Kind::Upload && t.remaining == 0 && std::strcmp(uploadPath(t), path) == 0) return true;
     return false;
 }
 
@@ -707,6 +729,11 @@ bool HttpServerModule::parseFilePath(const char* query, char* out, size_t cap) {
     if (*p && *p != '&') return false;
     out[i] = 0;
     if (i == 0 || std::strstr(out, "..")) return false;   // empty or traversal → reject
+    // One spelling per file: the filesystems read "//a" as "/a", so a repeated slash collapses and two spellings never pass as two files.
+    size_t w = 0;
+    for (size_t r = 0; out[r]; r++)
+        if (out[r] != '/' || w == 0 || out[w - 1] != '/') out[w++] = out[r];
+    out[w] = 0;
     if (out[0] != '/') {                                  // relative → root at the mount
         char rooted[160];
         const int n = std::snprintf(rooted, sizeof(rooted), "/%s", out);
@@ -799,6 +826,7 @@ void HttpServerModule::streamFsFile(platform::TcpConnection& conn, const char* p
     }
     const int64_t size = platform::fsSize(path);
     if (size < 0) { sendResponse(conn, 404, "application/json", "{\"error\":\"not found\"}"); return; }
+    if (uploadWaiting(path)) { sendResponse(conn, 503, "application/json", "{\"error\":\"the file is being replaced, retry\"}"); return; }
     char header[224];
     const int hn = std::snprintf(header, sizeof(header),
         "HTTP/1.1 200 OK\r\nContent-Type: %s\r\nContent-Length: %lld\r\n%s"
@@ -810,6 +838,7 @@ void HttpServerModule::streamFsFile(platform::TcpConnection& conn, const char* p
     auto* f = static_cast<FileSource*>(platform::allocInternal(sizeof(FileSource)));
     if (!f) { sendResponse(conn, 507, "application/json", "{\"error\":\"out of memory\"}"); return; }
     new (f) FileSource;
+    std::snprintf(f->path, sizeof(f->path), "%s", path);
     if (!platform::fsReadStreamOpen(f->stream, path)) {
         platform::free(f);
         sendResponse(conn, 500, "application/json", "{\"error\":\"read failed\"}");
@@ -1116,6 +1145,16 @@ void HttpServerModule::answerBlock(platform::TcpConnection& conn, const char* he
     slot->conn = std::move(conn);
     slot->busy = true;
     slot->lastActivityMs = platform::millis();
+}
+
+void HttpServerModule::answerJson(platform::TcpConnection& conn, JsonSink& sink) {
+    if (sink.overflowed()) { sendResponse(conn, 500, "application/json", "{\"error\":\"out of memory\"}"); return; }
+    const size_t len = sink.size();
+    char header[192];
+    std::snprintf(header, sizeof(header),
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: %zu\r\n"
+        "Connection: close\r\nAccess-Control-Allow-Origin: *\r\n\r\n", len);
+    answerBlock(conn, header, sink.detach(), len);
 }
 
 // Whether a request's If-None-Match names this file's tag, or `*` (RFC 9110 section 13.1.2).

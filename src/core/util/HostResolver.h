@@ -27,6 +27,11 @@ public:
         Full,       ///< every slot holds a name asked for recently
     };
 
+    /// Where a board's announced name resolves first, on the asking side: false when it knows no board by that name.
+    using NameSource = bool (*)(const char* name, uint8_t ip[4]);
+    /// Set by the module that hears the boards announce themselves, so a board's name holds where mDNS's multicast is dropped.
+    static void setNameSource(NameSource source) { self().nameSource = source; }
+
     /// Allocate the cache and start the lookup task, once, from a path that may allocate: a prepare or a control edit.
     static void ensureStarted() {
         Self& s = self();
@@ -38,6 +43,7 @@ public:
     /// The name's address into `ip` when it is Resolved or Stale; the first ask queues a lookup, and nothing here allocates.
     static State lookup(const char* name, uint8_t ip[4]) {
         Self& s = self();
+        if (s.nameSource && s.nameSource(name, ip)) return State::Resolved;   // a board heard announcing itself, before mDNS and DNS
         if (!s.slots) return State::Waiting;   // not started: the owner's prepare starts it
         LockGuard guard(s.lock);
         if (!guard) return State::Busy;
@@ -110,6 +116,7 @@ private:
         bool inlineSteps = false;   ///< no worker task: lookup() drives the lookups
         int8_t inFlight = -1;       ///< the slot the inline lookup in flight belongs to
         bool testMode = false;
+        NameSource nameSource = nullptr;
     };
 
     static Self& self() { static Self s; return s; }

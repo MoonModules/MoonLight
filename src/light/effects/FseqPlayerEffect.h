@@ -30,6 +30,10 @@ namespace mm {
 /// Zstd-compressed files do not play on any target yet.
 ///
 /// Export a track uncompressed if it needs to play everywhere.
+///
+/// ## The layout numbers its lights as the xLights model does
+///
+/// A frame holds one value per light in the order xLights numbers the model, which is the order the outputs drive them. Give the layout the same order, on a strip, a panel or a cube, and each light shows what the show sent it.
 class FseqPlayerEffect : public EffectBase, public ListSource {
 public:
     /// The transport's three states.

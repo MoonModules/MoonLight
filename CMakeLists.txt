@@ -131,33 +131,35 @@ endif()
 find_program(UV_EXECUTABLE NAMES uv REQUIRED
              HINTS "$ENV{USERPROFILE}/.local/bin" "$ENV{HOME}/.local/bin")
 
-# Core library. Most modules ship header-only (single .h file with implementation
-# inline). Core service modules that bridge to the platform (HTTP server,
-# filesystem, network, …) ship as .h + .cpp per CLAUDE.md — list those .cpps
-# here so both the application and the test binary link them.
+# Core library. Most modules ship header-only; the ones that bridge to the platform (HTTP server,
+# filesystem, …) ship as .h + .cpp, listed once in src/core/sources.cmake for every build.
+include(src/core/sources.cmake)
 add_library(mm_core STATIC
-    src/core/module/Control.cpp
-    src/core/util/JsonUtil.cpp
-    src/core/util/build_info.cpp
-    src/core/util/JsonFetch.cpp
-    src/core/util/parse.cpp
-    src/core/util/ScratchBuffer.cpp
-    src/core/system/HttpServerModule.cpp
-    src/core/system/HttpServerState.cpp
-    src/core/system/HttpServerWled.cpp
-    src/core/system/FilesystemModule.cpp
-    src/core/system/FileManagerModule.cpp
-    src/core/services/SdCardService.cpp
-    src/core/system/MqttModule.cpp
-    src/core/util/sha256.cpp
-    src/core/module/Scheduler.cpp
-    src/core/module/StateDocument.cpp
-    src/core/moonlive/MoonLive.cpp
-    src/core/moonlive/MoonLiveCompiler.cpp
-    src/core/moonlive/MoonLiveSpill.cpp
+    ${MM_CORE_SOURCES}
 )
-target_include_directories(mm_core PUBLIC src/)
+# Core sees only core, the platform and the UI: its include root links those three folders of src/ and not light/, so a core file including
+# light fails to compile (architecture: core without light). The links are symbolic, which Windows grants only in Developer Mode, so Windows
+# keeps src/ as the root and the other desktops and CI hold the boundary. A target that also builds light adds src/ itself.
+set(MM_CORE_ROOT ${CMAKE_SOURCE_DIR}/src)
+if(NOT WIN32)
+    set(MM_CORE_ROOT ${CMAKE_BINARY_DIR}/mm_core_root)
+    file(MAKE_DIRECTORY ${MM_CORE_ROOT})
+    foreach(dir core platform ui)
+        file(CREATE_LINK ${CMAKE_SOURCE_DIR}/src/${dir} ${MM_CORE_ROOT}/${dir} SYMBOLIC)
+    endforeach()
+endif()
+target_include_directories(mm_core PUBLIC ${MM_CORE_ROOT})
 target_link_libraries(mm_core PUBLIC mm_platform)
+# Every core header compiles on its own through that root (CMake's header set verification), since most of core is header-only and
+# the sources above include only part of it. mm_tests depends on the check, so a test build fails on a crossing.
+if(NOT WIN32 AND CMAKE_VERSION VERSION_GREATER_EQUAL 3.24)
+    # Named through the root, since a header set's base directory joins the include path, and src/ there would show light again.
+    file(GLOB_RECURSE MM_CORE_HEADERS CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/src/core/*.h)
+    list(TRANSFORM MM_CORE_HEADERS REPLACE "^${CMAKE_SOURCE_DIR}/src/" "${MM_CORE_ROOT}/")
+    target_sources(mm_core PUBLIC FILE_SET HEADERS BASE_DIRS ${MM_CORE_ROOT} FILES ${MM_CORE_HEADERS})
+    set_target_properties(mm_core PROPERTIES VERIFY_INTERFACE_HEADER_SETS ON)
+    set(MM_CORE_HEADER_CHECK ON)   # the check's target exists only at generate time, so test/ reads this
+endif()
 # `add_dependencies(mm_core ui_embed)` is below, after the ui_embed target is defined.
 
 # The computed semver (compute_version.py): the core for a stable tag, <core>-dev.<N> for a
@@ -183,7 +185,7 @@ add_library(mm_platform
     src/platform/desktop/moonlive_asm_arm64.cpp
     src/platform/desktop/moonlive_asm_x86_64.cpp
 )
-target_include_directories(mm_platform PUBLIC src/ src/platform/desktop/)
+target_include_directories(mm_platform PUBLIC ${MM_CORE_ROOT} src/platform/desktop/)
 # Winsock for the desktop socket surface; IPHLPAPI for real Ethernet link state and negotiated
 # speed (PanelCardDriver warns below gigabit, and a ColorLight card tears rather than erroring).
 # Npcap is deliberately NOT linked: platform_desktop.cpp resolves wpcap.dll at run time so the
@@ -341,6 +343,7 @@ endif()
 # module_types.cpp is the shared type registry, compiled into the app and the scenario runner
 # alike so one list serves both: src/module_types.cpp carries the reason.
 add_executable(MoonLight src/main.cpp src/module_types.cpp src/platform/desktop/main_desktop.cpp ${MM_WIN_RESOURCES})
+target_include_directories(MoonLight PRIVATE src/)
 target_link_libraries(MoonLight PRIVATE mm_core mm_platform)
 add_dependencies(MoonLight ui_embed build_info_gen moonlive_catalog)
 

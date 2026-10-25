@@ -3,6 +3,8 @@
 #include "core/system/HttpServerModule.h"
 
 #include "core/module/Scheduler.h"
+#include "core/system/DevicesModule.h"   // nameOf, addressOf: the boards a hosts text names
+#include "core/util/HostList.h"         // parseHostList: a hosts text read as its service reads it
 #include "core/util/JsonSink.h"
 #include "core/util/JsonUtil.h"           // a subscribe message parsed
 #include "core/util/fnv.h"               // fnv1a: the diff-on-the-wire cache's digest
@@ -532,6 +534,39 @@ void HttpServerModule::writeControlPieceOf(JsonSink& sink, TreeCursor& c, const 
     c.ctrl++;
 }
 
+// Each address the device list knows with its board's name, and each board's name with its address, read as the service reads its list; nothing for a list it refuses.
+void HttpServerModule::writeKnownHosts(JsonSink& sink, const char* text) {
+    const DevicesModule* devices = DevicesModule::active();
+    if (!devices || !text) return;
+    Host hosts[32];
+    uint8_t n = 0;
+    if (parseHostList(text, hosts, 32, n)) return;
+    bool any = false;
+    for (uint8_t i = 0; i < n; i++) {
+        char name[kMaxHostName + 1], dotted[16];
+        const char* entry = dotted;
+        const char* counterpart = name;
+        if (hosts[i].isName()) {
+            hostName(text, hosts[i], name);
+            uint8_t ip[4];
+            if (!devices->addressOf(name, ip)) continue;
+            formatDottedQuad(dotted, ip);
+            entry = name;
+            counterpart = dotted;
+        } else {
+            counterpart = devices->nameOf(hosts[i].ip);
+            if (!counterpart) continue;
+            formatDottedQuad(dotted, hosts[i].ip);
+        }
+        sink.append(any ? "," : ",\"known\":{");
+        sink.writeJsonString(entry);
+        sink.append(":");
+        sink.writeJsonString(counterpart);
+        any = true;
+    }
+    if (any) sink.append("}");
+}
+
 // Before its first piece only the head is out, waiting for a value; after it, one array is open inside the control.
 void HttpServerModule::closeOpenControl(JsonSink& sink, TreeCursor& c) {
     sink.append(c.at.part == 0 ? "null}" : "]}");
@@ -545,6 +580,7 @@ void HttpServerModule::writeControlTail(JsonSink& sink, const ControlDescriptor&
     if (c.minMode) sink.appendf(",\"minMode\":%u", static_cast<unsigned>(c.minMode));   // the mode the UI needs before it shows this
     if (c.numberField) sink.append(",\"numberField\":true");   // render a plain number input, not a slider
     if (c.hex) sink.append(",\"hex\":true");   // that number input reads and writes hexadecimal
+    if (c.hosts) writeKnownHosts(sink, static_cast<const char*>(c.ptr));
     if (c.switchRow) sink.append(",\"switchRow\":true");
     if (c.displayStrip) sink.append(",\"displayStrip\":true");
     // The target rides with all three surface kinds, since a switch drives something too (switch1 is the global on/off) and its popup should say so.

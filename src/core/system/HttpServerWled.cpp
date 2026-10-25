@@ -39,22 +39,14 @@ namespace mm {
 
 // WLED-compatibility `/json/info`: the field set the WLED apps and HA validate after `_wled._tcp` discovery, with `brand:"WLED"` to interoperate and `product:"MoonModules"` to say what this is.
 void HttpServerModule::serveWledInfo(platform::TcpConnection& conn) {
-    const char* header =
-        "HTTP/1.1 200 OK\r\n"
-        "Content-Type: application/json\r\n"
-        "Connection: close\r\n"
-        "Access-Control-Allow-Origin: *\r\n"
-        "\r\n";
-    conn.write(reinterpret_cast<const uint8_t*>(header), std::strlen(header));
-
     // Identity: the deviceName (from SystemModule), the live IP, the MAC.
     const char* name; uint8_t mac[6];
     resolveWledIdentity(name, mac, nullptr);
 
     // The WLED-Android app requires only `name`, `leds{}`, `wifi{}` and a non-empty `mac` (model/wledapi/Info.kt), else it drops the device silently, so these are the smallest shapes.
-    JsonSink sink(conn);
+    JsonSink sink;
     writeWledInfoBody(sink, name, mac);
-    sink.flush();
+    answerJson(conn, sink);
 }
 
 // /presets.json: look presets in WLED's format, keyed by 1-based slot (python-wled discards 0) with a `{"0":{}}` floor; Drivers and Layouts presets stay out since they rewire pins or geometry.
@@ -77,7 +69,7 @@ void HttpServerModule::serveWledPresets(platform::TcpConnection& conn) {
     }
     if (!any) sink.append("\"0\":{}");   // non-empty, or python-wled reads it as no response at all
     sink.append("}");
-    sendResponse(conn, 200, "application/json", sink.data());
+    answerJson(conn, sink);
 }
 
 // The deviceName / IP / MAC lookup the WLED shim needs at four call sites, so a change to how identity is discovered updates one place.
@@ -146,26 +138,17 @@ void HttpServerModule::writeWledStateBody(JsonSink& sink) {
 }
 
 void HttpServerModule::serveWledState(platform::TcpConnection& conn) {
-    const char* header =
-        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n"
-        "Connection: close\r\nAccess-Control-Allow-Origin: *\r\n\r\n";
-    conn.write(reinterpret_cast<const uint8_t*>(header), std::strlen(header));
-    JsonSink sink(conn);
+    JsonSink sink;
     writeWledStateBody(sink);
-    sink.flush();
+    answerJson(conn, sink);
 }
 
 // /json: the full blob HA's python-wled fetches, requiring `info.fs`, `state.nl`, `state.udpn`, `state.lor` and `ver` >= 0.14.0; separate from /json/info and /json/state, which stay the Android-validated minimum.
 void HttpServerModule::serveWledDeviceJson(platform::TcpConnection& conn) {
-    const char* header =
-        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n"
-        "Connection: close\r\nAccess-Control-Allow-Origin: *\r\n\r\n";
-    conn.write(reinterpret_cast<const uint8_t*>(header), std::strlen(header));
-
     const char* name; uint8_t mac[6]; uint8_t ip[4];
     resolveWledIdentity(name, mac, ip);
 
-    JsonSink sink(conn);
+    JsonSink sink;
     // state: reuse writeWledStateBody under "state" so one writer decides which seg[0] fields HA reads.
     sink.appendf("{\"state\":");
     writeWledStateBody(sink);
@@ -222,26 +205,25 @@ void HttpServerModule::serveWledDeviceJson(platform::TcpConnection& conn) {
     sink.appendf(",\"effects\":[\"Solid\"],\"palettes\":[");
     if (out) out->writePaletteNames(sink);
     sink.appendf("]}");
-    sink.flush();
+    answerJson(conn, sink);
 }
 
-// /json/si: the combined {state, info} the WLED app reads in one call for its card.
-void HttpServerModule::serveWledStateInfo(platform::TcpConnection& conn) {
-    const char* header =
-        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n"
-        "Connection: close\r\nAccess-Control-Allow-Origin: *\r\n\r\n";
-    conn.write(reinterpret_cast<const uint8_t*>(header), std::strlen(header));
-
+// The combined {state, info} object, which /json/si answers and the WebSocket pushes.
+void HttpServerModule::writeWledStateInfo(JsonSink& sink) {
     const char* name; uint8_t mac[6];
     resolveWledIdentity(name, mac, nullptr);
-
-    JsonSink sink(conn);
     sink.appendf("{\"state\":");
     writeWledStateBody(sink);
     sink.appendf(",\"info\":");
     writeWledInfoBody(sink, name, mac);
     sink.appendf("}");
-    sink.flush();
+}
+
+// /json/si: the combined {state, info} the WLED app reads in one call for its card.
+void HttpServerModule::serveWledStateInfo(platform::TcpConnection& conn) {
+    JsonSink sink;
+    writeWledStateInfo(sink);
+    answerJson(conn, sink);
 }
 
 // Apply a WLED state-set body ({on?, bri?}) to Drivers through the apply-core, from POST /json/state and the inbound WebSocket; `on` is master power, so toggling off keeps the brightness level.
@@ -302,22 +284,15 @@ void HttpServerModule::handleWledState(platform::TcpConnection& conn, const char
     serveWledState(conn);
 }
 
-// Build and push the WLED {state, info} object to every WS client. Shares the same body writers as /json/si.
+// Build and push the WLED {state, info} object to every WS client, the same object /json/si answers.
 void HttpServerModule::pushWledStateToWebSockets() {
     if (anyStreamActive()) return;   // never interleave with a streamed full state
     bool hasClients = false;
     for (int i = 0; i < kMaxWsClients; i++) if (wsClients_[i].valid() && !subs_[i].received) { hasClients = true; break; }
     if (!hasClients) return;   // only the web interface is connected: the frame is built for nobody
 
-    const char* name; uint8_t mac[6];
-    resolveWledIdentity(name, mac, nullptr);
-
     JsonSink sink;
-    sink.appendf("{\"state\":");
-    writeWledStateBody(sink);
-    sink.appendf(",\"info\":");
-    writeWledInfoBody(sink, name, mac);
-    sink.appendf("}");
+    writeWledStateInfo(sink);
 
     for (int i = 0; i < kMaxWsClients; i++) {
         auto& ws = wsClients_[i];

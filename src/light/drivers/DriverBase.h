@@ -16,7 +16,7 @@
 
 namespace mm {
 
-/// A driver sends the lights out: to LEDs on a wire, a HUB75 panel, the network, a smart-light bridge or the web UI.
+/// A driver consumes the light output and sends it on: to LEDs on a wire, a HUB75 panel, the network, a smart-light bridge or the web UI.
 /// @video 07-drivers-desktop.webm Drivers on a desktop: preview, NDI, RTSP, HLS, network send and Hue.
 /// @video 07-drivers-esp32.webm Drivers on a device: RMT and parallel LED pins, HUB75, panel cards, and the network senders.
 ///

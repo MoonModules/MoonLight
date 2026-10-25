@@ -37,6 +37,7 @@ add_executable(mm_tests
     unit/core/unit_TcpConnect.cpp
     unit/core/unit_MqttPacket.cpp
     unit/core/unit_MqttModule.cpp
+    unit/core/unit_MpegTs.cpp
     unit/core/unit_FileManagerModule.cpp
     unit/core/unit_Control_apply_absent_key.cpp
     unit/core/unit_Control_capacity.cpp
@@ -126,7 +127,6 @@ add_executable(mm_tests
     unit/light/unit_NetworkSendDriver_packet.cpp
     unit/light/unit_NdiDriver.cpp
     unit/light/unit_HlsDriver.cpp
-    unit/light/unit_MpegTs.cpp
     unit/light/unit_RtpH264.cpp
     unit/light/unit_RtspSession.cpp
     unit/light/unit_PanelCardDriver.cpp
@@ -275,7 +275,7 @@ add_custom_target(effect_sweep_gen ALL
     VERBATIM
 )
 
-target_include_directories(mm_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR}/generated)
+target_include_directories(mm_tests PRIVATE ${CMAKE_SOURCE_DIR}/src ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR}/generated)
 target_link_libraries(mm_tests PRIVATE mm_core mm_platform)
 
 # doctest::Approx takes a double, so every CHECK against a float literal promotes: inside
@@ -299,6 +299,10 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     target_compile_options(mm_tests PRIVATE "-Wno-error=#warnings")   # quoted: a bare # starts a CMake comment
 endif()
 add_dependencies(mm_tests effect_sweep_gen)
+# Every core header compiled on its own, without light (CMakeLists.txt, mm_core): a test build fails on a crossing.
+if(MM_CORE_HEADER_CHECK)
+    add_dependencies(mm_tests mm_core_verify_interface_header_sets)
+endif()
 
 add_test(NAME unit_tests COMMAND mm_tests)
 
@@ -312,6 +316,7 @@ set_tests_properties(unit_tests PROPERTIES
 # The same shared type registry the app compiles, so a scenario can name any module the
 # firmware has: src/module_types.cpp carries the reason.
 add_executable(mm_scenarios scenario_runner.cpp ${CMAKE_SOURCE_DIR}/src/module_types.cpp)
+target_include_directories(mm_scenarios PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(mm_scenarios PRIVATE mm_core mm_platform)
 # A write_file step's `from` names a file in the repository, such as a shipped script.
 target_compile_definitions(mm_scenarios PRIVATE MM_REPO_ROOT="${CMAKE_SOURCE_DIR}")
@@ -319,4 +324,5 @@ target_compile_definitions(mm_scenarios PRIVATE MM_REPO_ROOT="${CMAKE_SOURCE_DIR
 # Kernel micro-bench: ns per call for the power-function kernels, on the host. A report, not a
 # test (no ctest registration): the numbers go into performance.md and gate a kernel swap.
 add_executable(mm_bench bench/bench_kernels.cpp)
+target_include_directories(mm_bench PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(mm_bench PRIVATE mm_core mm_platform)

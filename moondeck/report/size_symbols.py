@@ -28,8 +28,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent.parent
 SNAPSHOT = "size-symbols.json"
 
-# nm's type letter, lower case for a local symbol: what the bytes are.
-KINDS = {"t": "code", "w": "code", "r": "const", "d": "data", "b": "bss", "v": "data"}
+# nm's type letter, lower case for a local symbol: what the bytes are. g and s are the small-data
+# sections (.sdata, .sbss) a RISC-V build uses; v is a weak object, whose letter names no section.
+KINDS = {"t": "code", "w": "code", "r": "const", "d": "data", "g": "data", "b": "bss", "s": "bss", "v": "weak"}
 
 
 def build_dir(firmware: str) -> Path:
@@ -132,7 +133,10 @@ def main() -> int:
     before = json.loads(snapshot.read_text()) if snapshot.exists() else None
     print(f"{image.relative_to(ROOT)}\n")
     print(report(symbols, args.top, before))
-    snapshot.write_text(json.dumps(symbols))
+    # Replaced whole, so an interrupted write leaves the last snapshot rather than half a file.
+    tmp = snapshot.with_name(SNAPSHOT + ".tmp")
+    tmp.write_text(json.dumps(symbols))
+    tmp.replace(snapshot)
     return 0
 
 

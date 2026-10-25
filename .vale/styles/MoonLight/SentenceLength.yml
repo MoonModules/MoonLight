@@ -1,9 +1,0 @@
-# documentation-standards.md: "a sentence is one thought; past twenty words it is usually two."
-# That is the writing advice. This fires at 30, where a sentence is a real ramble rather than a
-# normal one, and check_docgen's MAX_DOC_WORDS carries the same number as a gate.
-extends: occurrence
-message: "Sentence runs past 30 words; it is probably two thoughts joined by a comma."
-level: suggestion
-scope: sentence
-max: 30
-token: '\b\w+\b'

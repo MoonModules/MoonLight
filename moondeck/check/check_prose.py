@@ -73,6 +73,44 @@ import _findings  # noqa: E402
 REPORT_ROOTS = ("src/", "moondeck/", "mooninstaller/", "test/", "docs/", "moonwalk/", "CLAUDE.md", "README.md")
 
 
+# A section's length in words of prose, which only cutting shortens: a sentence cap rewarded splitting one thought in two. A split
+# section adds a heading a reader can navigate, and whether two adjacent headings carry one topic is the Reviewer's judgment, since
+# a floor on short sections flagged sections that are short because they are done. A table or a code block is scanned, not read.
+SECTION_RULE = "MoonLight.SectionLength"
+MAX_SECTION_WORDS = 500
+SECTION_EXEMPT = ("docs/work/", "docs/friend-repos/", "docs/reference/metrics/", "docs/reference/tests/", "docs/moonmodules/")
+_HEADING_RE = re.compile(r"^(#{1,6})\s+(.+?)\s*#*\s*$")
+
+
+def section_findings(text: str) -> list:
+    """(rule, message, line) for each leaf section of one page, the text from a heading to the next, past MAX_SECTION_WORDS."""
+    sections, fence, current = [], False, None   # each: [level, title, line, words]
+    for n, line in enumerate(text.split("\n"), 1):
+        if line.lstrip().startswith(("```", "~~~")):
+            fence = not fence
+            continue
+        m = None if fence else _HEADING_RE.match(line)
+        if m:
+            current = [len(m.group(1)), m.group(2), n, 0]
+            sections.append(current)
+        elif current and not fence and not line.lstrip().startswith(("|", "<", "![", ">")):
+            current[3] += len(re.findall(r"[A-Za-z0-9][\w'\u2019-]*", line))
+    return [(SECTION_RULE, f"Section '{title}' runs {words} words, past {MAX_SECTION_WORDS}: cut it, since a split adds a heading and leaves the words.", n)
+            for _, title, n, words in sections if words > MAX_SECTION_WORDS]
+
+
+def section_rows() -> list:
+    """Every section finding over the Markdown pages the section rules read, as (file, rule, message, line)."""
+    rows = []
+    files = subprocess.run(["git", "ls-files", "*.md"], capture_output=True, text=True, cwd=ROOT).stdout.split()
+    for rel in files:
+        if not rel.startswith(REPORT_ROOTS) or rel.startswith(SECTION_EXEMPT):
+            continue
+        text = (ROOT / rel).read_text(encoding="utf-8", errors="replace")
+        rows += [(rel, rule, msg, n) for rule, msg, n in section_findings(text)]
+    return rows
+
+
 def ratchet(by_rule: dict, total: int) -> list:
     """Rules whose count ROSE against the committed counts, worst first.
 
@@ -117,8 +155,13 @@ def count_tree():
             # A warning whatever Vale's level: the tree's debt fails nothing, only an error on an added line does, so `error` keeps the one meaning "fails the check".
             found.append({"rule": a.get("Check", "?"), "message": a.get("Message", ""), "file": rel, "line": a.get("Line")})
 
+    for rel, rule, msg, n in section_rows():
+        by_rule[rule] = by_rule.get(rule, 0) + 1
+        total += 1
+        found.append({"rule": rule, "message": msg, "file": rel, "line": n})
+
     _ratchet.record(COUNTS, dict(by_rule, **{"(total)": total}))
-    rules = {}
+    rules = {SECTION_RULE: {"reason": f"A section past {MAX_SECTION_WORDS} words of prose: cut it, since a split adds a heading and leaves the words", "standard": "docs/contributing/documentation-standards.md"}}
     for style in sorted((ROOT / ".vale" / "styles" / "MoonLight").glob("*.yml")):
         said = re.search(r"(?m)^message:\s*['\"]?(.+?)['\"]?\s*$", style.read_text(encoding="utf-8"))
         rules[f"MoonLight.{style.stem}"] = {"reason": said.group(1).replace("%s", "\u2026") if said else style.stem, "standard": "docs/contributing/documentation-standards.md"}
@@ -169,6 +212,12 @@ def main():
                     errors += 1
                 findings.append(f"{path}: {sev} {a.get('Check')}: {a.get('Message')}  "
                                 f"[{a.get('Match', '')[:40]}]")
+
+    # A section is measured whole on every page the change touches, since its length is the section's and not one line's.
+    for path in sorted(by_path):
+        if path.endswith(".md") and not path.startswith(SECTION_EXEMPT) and os.path.exists(path):
+            for rule, msg, n in section_findings(open(path, encoding="utf-8").read()):
+                findings.append(f"{path}: warning {rule}: {msg}  [line {n}]")
 
     # Pages the sweep has finished are checked WHOLE, not by diff: .vale.ini lists them with every
     # rule promoted to error, so any regression on such a page fails here before it reaches a PR.

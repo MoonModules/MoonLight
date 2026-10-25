@@ -1,3 +1,6 @@
+# Core's sources, the list every build reads.
+include(${CMAKE_CURRENT_LIST_DIR}/../../src/core/sources.cmake)
+
 idf_component_register(
     SRCS
         "main.cpp"
@@ -5,25 +8,7 @@ idf_component_register(
         # The shared type registry, compiled beside main.cpp here and beside the scenario runner on
         # desktop, so one list serves both: src/module_types.cpp carries the reason.
         "../../src/module_types.cpp"
-        "../../src/core/module/Control.cpp"
-        "../../src/core/util/JsonUtil.cpp"
-        "../../src/core/util/build_info.cpp"
-        "../../src/core/util/JsonFetch.cpp"
-        "../../src/core/util/parse.cpp"
-        "../../src/core/util/ScratchBuffer.cpp"
-        "../../src/core/system/HttpServerModule.cpp"
-        "../../src/core/system/HttpServerState.cpp"
-        "../../src/core/system/HttpServerWled.cpp"
-        "../../src/core/system/FilesystemModule.cpp"
-        "../../src/core/system/FileManagerModule.cpp"
-        "../../src/core/services/SdCardService.cpp"
-        "../../src/core/system/MqttModule.cpp"
-        "../../src/core/module/Scheduler.cpp"
-        "../../src/core/module/StateDocument.cpp"
-        "../../src/core/util/sha256.cpp"
-        "../../src/core/moonlive/MoonLive.cpp"
-        "../../src/core/moonlive/MoonLiveCompiler.cpp"
-        "../../src/core/moonlive/MoonLiveSpill.cpp"
+        ${MM_CORE_SOURCES}
         "../../src/platform/esp32/platform_esp32.cpp"
         "../../src/platform/esp32/moonlive_emit_xtensa.cpp"
         "../../src/platform/esp32/moonlive_emit_riscv.cpp"

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core/util/format.h"   // formatTo: nonblocking formatting into a fixed buffer
+#include "core/util/parse.h"    // asciiCaseEqual: a host name compares without case
 #include "core/module/MoonModule.h"
 #include "core/util/ActiveInstance.h"   // the boot-registry seat election (the seat + its RAII vacate)
 #include "core/module/Control.h"
@@ -12,6 +13,7 @@
 #include "core/system/FilesystemModule.h" // FilesystemModule::noteDirty: persist on list change
 #include "core/system/WledPacket.h"       // the presence packet and which copy it is
 #include "core/util/Addressing.h"         // sendAddressed, and the network's multicast evidence
+#include "core/util/HostResolver.h"       // setNameSource: a host setting naming a board resolves from this list
 #include "platform/platform.h"
 
 #include <cstdint>
@@ -32,6 +34,10 @@ namespace mm {
 /// WLED lists a device only from the broadcast copy, and the copy costs the rest of the LAN next to nothing.
 ///
 /// A network that drops multicast is detected, and the status says so ([IGMP snooping](https://moonmodules.org/MoonLight/explanation/architecture/moonlight.html#multicast-and-igmp-snooping)).
+///
+/// ## Boards by name
+///
+/// A host setting naming a board, such as `MM-S31`, resolves from this list before mDNS, so the name holds where a router drops multicast. A card naming a peer, and a host setting, show a board heard this session by its name beside its address. A host setting shows them as of the page's last load.
 ///
 /// @technical
 ///
@@ -133,7 +139,40 @@ public:
     }
 
     /// The one live instance, through which a light-domain driver registers what it found.
-    static DevicesModule* active() { return ActiveInstance<DevicesModule>::active(); }
+    static DevicesModule* active() MM_NONBLOCKING { return ActiveInstance<DevicesModule>::active(); }
+
+    /// The name of the board heard at `ip` this session, or null when none was or it gave none. A row restored from the last boot is left out, its address possibly an older network's.
+    const char* nameOf(const uint8_t ip[4]) const MM_NONBLOCKING {
+        for (uint8_t i = 0; i < deviceCount_; i++) {
+            const Device& d = devices_[i];
+            if (!d.cached && ipEq(d.ip, ip) && d.name[0] && !isIpPlaceholder(d.name, ip)) return d.name;
+        }
+        return nullptr;
+    }
+
+    /// The address of the board named `name` and heard this session, letter case and a trailing `.local` aside, as mDNS compares them; false when none was.
+    bool addressOf(const char* name, uint8_t ip[4]) const MM_NONBLOCKING {
+        if (!name || !name[0]) return false;
+        size_t len = std::strlen(name);
+        if (len > 6 && asciiCaseEqual(name + len - 6, ".local", 6)) len -= 6;
+        for (uint8_t i = 0; i < deviceCount_; i++) {
+            const Device& d = devices_[i];
+            if (d.cached || std::strlen(d.name) != len || !asciiCaseEqual(d.name, name, len) || isIpPlaceholder(d.name, d.ip)) continue;
+            std::memcpy(ip, d.ip, 4);
+            return true;
+        }
+        return false;
+    }
+
+    /// `ip` as a status names a peer: `MM-S31 (192.168.1.125)` for a board heard this session, the address alone for anything else.
+    static void formatPeer(char* out, size_t n, const uint8_t ip[4]) MM_NONBLOCKING {
+        char dotted[16];
+        formatDottedQuad(dotted, ip);
+        const DevicesModule* devices = active();
+        const char* name = devices ? devices->nameOf(ip) : nullptr;
+        if (name) mm::formatTo(out, n, "%s (%s)", name, dotted);
+        else mm::formatTo(out, n, "%s", dotted);
+    }
 
     /// Register a bridge a driver found out of band, updating its row or inserting one.
     void upsertHueBridge(const uint8_t ip[4], const char* name, uint8_t color) {
@@ -163,6 +202,7 @@ public:
     /// Report the cached list on boot, which persistence restored before this ran.
     void setup() override {
         MoonModule::setup();
+        HostResolver::setNameSource(&resolveBoard);
         if (deviceCount_) {
             std::snprintf(statusBuf_, sizeof(statusBuf_), "%u device%s (cached)",
                           deviceCount_, deviceCount_ == 1 ? "" : "s");
@@ -418,7 +458,7 @@ private:
     }
 
     /// Whether this name is only the address, a placeholder a real name overwrites.
-    static bool isIpPlaceholder(const char* name, const uint8_t ip[4]) {
+    static bool isIpPlaceholder(const char* name, const uint8_t ip[4]) MM_NONBLOCKING {
         char ipStr[16];
         formatDottedQuad(ipStr, ip);
         return std::strcmp(name, ipStr) == 0;
@@ -432,8 +472,14 @@ private:
     }
 
     /// Whether two addresses match.
-    static bool ipEq(const uint8_t a[4], const uint8_t b[4]) {
+    static bool ipEq(const uint8_t a[4], const uint8_t b[4]) MM_NONBLOCKING {
         return std::memcmp(a, b, 4) == 0;
+    }
+
+    /// A host setting's name as the board announcing it, through whichever instance is active.
+    static bool resolveBoard(const char* name, uint8_t ip[4]) {
+        const DevicesModule* devices = active();
+        return devices && devices->addressOf(name, ip);
     }
 
     /// Drop whatever has gone unheard past its window, compacting in place.

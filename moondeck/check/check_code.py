@@ -56,7 +56,6 @@ FILE_EXCLUDE = ("src/platform/desktop/vendor/", "src/ui/vendor/", "test/doctest.
 
 HOT_PATH = "blocking call on the render path"
 PLATFORM = "platform code outside src/platform"
-CORE_LIGHT = "light include in core"
 UI_TYPE = "module type in the UI"
 SPREAD = "name spread"
 STACK = "large stack frame"
@@ -67,6 +66,7 @@ HEADER_USING = "using namespace in a header"
 FIRMWARE_DOUBLE = "double in firmware code"
 DEFINE_CONSTANT = "#define used as a constant"
 RTTI = "dynamic_cast or typeid in firmware"
+RELATIVE_INCLUDE = "relative include path"
 RULES = {"complex function": f"cyclomatic complexity > {MAX_CCN}",
          "long function": f"> {MAX_NLOC} lines of code",
          "deeply nested": f"control flow nested deeper than {MAX_NESTING}",
@@ -75,7 +75,6 @@ RULES = {"complex function": f"cyclomatic complexity > {MAX_CCN}",
          "large file": f"> {MAX_FILE_LINES} lines",
          HOT_PATH: "a call from tick, tick20ms or tick1s that can block or allocate",
          PLATFORM: "a vendor header or a platform #ifdef outside src/platform",
-         CORE_LIGHT: "a src/core file including a light/ header",
          UI_TYPE: "a registered type's name as a string literal in src/ui",
          SPREAD: f"a type named in more than {MAX_SPREAD} files beyond its own",
          STACK: f"a function whose stack frame is over {MAX_FRAME} bytes",
@@ -85,15 +84,17 @@ RULES = {"complex function": f"cyclomatic complexity > {MAX_CCN}",
          HEADER_USING: "a using namespace directive in a header under src/",
          FIRMWARE_DOUBLE: "the type double in a firmware file, where only float is native",
          DEFINE_CONSTANT: "a #define of a number or a string that no #if tests, outside src/platform: a constant, not a build flag",
-         RTTI: "dynamic_cast or typeid in firmware, which builds with -fno-rtti"}
+         RTTI: "dynamic_cast or typeid in firmware, which builds with -fno-rtti",
+         RELATIVE_INCLUDE: "an #include under src/ whose path holds . or .., where a path from src/ is the rule"}
 LIMITS = {"complex function": MAX_CCN, "long function": MAX_NLOC, "deeply nested": MAX_NESTING,
           "long parameter list": MAX_PARAMS, "duplicated block": MIN_CLONE_LINES, "large file": MAX_FILE_LINES, HOT_PATH: 1,
-          PLATFORM: 1, CORE_LIGHT: 1, UI_TYPE: 1, SPREAD: MAX_SPREAD, STACK: MAX_FRAME, RAW_ALLOC: 1, MUTABLE_STATIC: 1,
-          NO_PRAGMA: 1, HEADER_USING: 1, FIRMWARE_DOUBLE: 1, DEFINE_CONSTANT: 1, RTTI: 1}
+          PLATFORM: 1, UI_TYPE: 1, SPREAD: MAX_SPREAD, STACK: MAX_FRAME, RAW_ALLOC: 1, MUTABLE_STATIC: 1,
+          NO_PRAGMA: 1, HEADER_USING: 1, FIRMWARE_DOUBLE: 1, DEFINE_CONSTANT: 1, RTTI: 1, RELATIVE_INCLUDE: 1}
 
 # Where each rule lives in the coding standards, for a rule whose home is not the static checks' own section.
 STANDARDS = "docs/contributing/coding-standards.md"
 STANDARD = {NO_PRAGMA: STANDARDS + "#language-mechanics", HEADER_USING: STANDARDS + "#language-mechanics", DEFINE_CONSTANT: STANDARDS + "#language-mechanics",
+            RELATIVE_INCLUDE: STANDARDS + "#language-mechanics",
             RTTI: STANDARDS + "#casts", FIRMWARE_DOUBLE: STANDARDS + "#values-and-types"}
 
 # The catalog move for each smell (Fowler, Refactoring), so a finding says how it is solved; the test page shows it beside the rule.
@@ -105,7 +106,6 @@ FIXES = {"complex function": "a chain on one value becomes a table; a switch on 
          "large file": "Extract Class, Move Function: a module per concern",
          HOT_PATH: "Move the work off the render thread (a worker, a cached value, a deferred apply), or annotate a callee that cannot block",
          PLATFORM: "Move it behind a function in src/platform, and branch on platform_config.h with if constexpr",
-         CORE_LIGHT: "Dependency Inversion: core declares the interface, and the light domain implements and registers it",
          UI_TYPE: "Replace Conditional with Polymorphism: the module declares what the UI needs (a control, a role, a flag) and the UI reads it",
          SPREAD: "Move Function, self-registration: a concept in one place, which callers reach through its role or an interface",
          STACK: "Move the large local into a member or a ScratchBuffer, sized once, so no task's stack pays for it",
@@ -115,7 +115,8 @@ FIXES = {"complex function": "a chain on one value becomes a table; a switch on 
          HEADER_USING: "name what is used, or put the using in the .cpp, where it pollutes no other translation unit",
          FIRMWARE_DOUBLE: "use float, or an integer type for a count or a percentage; Xtensa runs a double in software, about 30 times slower",
          DEFINE_CONSTANT: "constexpr: it has a type and a scope, and the preprocessor keeps #define for the flags it tests",
-         RTTI: "a virtual method or a role check answers a base-to-derived question; the build has no runtime type information"}
+         RTTI: "a virtual method or a role check answers a base-to-derived question; the build has no runtime type information",
+         RELATIVE_INCLUDE: "name the header from src/, as core/... or light/..., so each target's include root holds the boundaries"}
 
 
 def measure(extra=None):
@@ -222,11 +223,10 @@ def large_files() -> list:
 # A vendor SDK header, or a preprocessor branch on the target, which only src/platform may hold.
 _PLATFORM_RE = re.compile(r'#include\s*[<"](?:esp_|freertos/|driver/|hal/|soc/|SDL|wiringPi|pigpio|Arduino\.h|QNEthernet|LittleFS|SdFat|SD\.h|DMAChannel|CrashReport|imxrt)'
                           r'|#(?:if|elif)(?:n?def\s+|\s+defined\s*\(\s*)(?:ESP_PLATFORM|CONFIG_IDF|__APPLE__|__linux__|_WIN32|__IMXRT1062__|TEENSYDUINO|ARDUINO_TEENSY41)')
-_LIGHT_INCLUDE_RE = re.compile(r'#include\s*[<"]light/')
 
 
 def boundary_findings(rel: str, lines) -> list:
-    """The architecture's two boundaries in one firmware file: platform code stays in src/platform, and core includes nothing of the light domain."""
+    """The platform boundary in one firmware file: platform code stays in src/platform. The domain boundary, core without light, is the build's (CMakeLists.txt, mm_core)."""
     if not rel.startswith("src/") or rel.startswith(("src/platform/", "src/ui/")) or not rel.endswith((".h", ".cpp")):
         return []
     rows = []
@@ -234,13 +234,11 @@ def boundary_findings(rel: str, lines) -> list:
         code = line.split("//")[0].strip()
         if _PLATFORM_RE.search(code):
             rows.append((rel, PLATFORM, f"line {n}: {code}", 1))
-        if rel.startswith("src/core/") and _LIGHT_INCLUDE_RE.search(line):
-            rows.append((rel, CORE_LIGHT, f"line {n}: {code}", 1))
     return rows
 
 
 def boundary_rows() -> list:
-    """Every boundary crossing among the files we own."""
+    """Every platform boundary crossing among the files we own."""
     rows = []
     for rel in owned_files():
         with open(ROOT / rel, encoding="utf-8", errors="replace") as f:
@@ -427,6 +425,7 @@ def double_findings(rel: str, lines) -> list:
 _DEFINE_LITERAL_RE = re.compile(r'^\s*#\s*define\s+(\w+)\s+\(?-?(?:0x[0-9a-fA-F]+|\d[\d.]*[uUlLfF]*|"[^"]*")\)?\s*(?://.*)?$')
 _FLAG_TEST_RE = re.compile(r"^\s*#\s*(?:if|ifdef|ifndef|elif)\b(.*)$")
 _RTTI_RE = re.compile(r"\b(?:dynamic_cast|typeid)\b")
+_RELATIVE_INCLUDE_RE = re.compile(r'^\s*#\s*include\s*[<"](?:[^">]*/)?\.\.?/')
 
 
 def tested_names(texts) -> set:
@@ -457,14 +456,22 @@ def rtti_findings(rel: str, lines) -> list:
     return [(rel, RTTI, f"line {n}: {line.strip()[:60]}", 1) for n, line in enumerate(lines, 1) if _RTTI_RE.search(_code(line))]
 
 
+def relative_include_findings(rel: str, lines) -> list:
+    """Every `#include` in one firmware file whose path steps through `.` or `..`, which would reach past core's include root (CMakeLists.txt, mm_core)."""
+    if not _firmware(rel):
+        return []
+    return [(rel, RELATIVE_INCLUDE, f"line {n}: {line.strip()[:60]}", 1) for n, line in enumerate(lines, 1) if _RELATIVE_INCLUDE_RE.match(line)]
+
+
 def style_rows() -> list:
-    """The header, `double`, constant-macro and RTTI rules over every firmware file we own."""
+    """The header, `double`, constant-macro, RTTI and include-path rules over every firmware file we own."""
     texts = {rel: (ROOT / rel).read_text(encoding="utf-8", errors="replace") for rel in owned_files() if _firmware(rel)}
     tested = tested_names(texts.values())
     rows = []
     for rel, text in texts.items():
         lines = text.splitlines()
-        rows += header_findings(rel, text) + double_findings(rel, lines) + define_findings(rel, lines, tested) + rtti_findings(rel, lines)
+        rows += (header_findings(rel, text) + double_findings(rel, lines) + define_findings(rel, lines, tested) + rtti_findings(rel, lines)
+                 + relative_include_findings(rel, lines))
     return rows
 
 

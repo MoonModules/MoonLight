@@ -29,7 +29,7 @@ import gen_tests  # noqa: E402
 import test_runs  # noqa: E402
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "check"))
 import _findings  # noqa: E402
-from gen_help import ATTRIBUTIONS, catalog_rows, display_name  # noqa: E402
+from gen_help import ATTRIBUTIONS, attribution_anchor, catalog_rows, display_name  # noqa: E402
 from gen_moonwalk import build as build_moonwalk, absolute_links, dumps as moonwalk_json, render_text as moonwalk_text, split_text as split_moonwalk  # noqa: E402
 
 
@@ -59,7 +59,7 @@ def _repo_url(path: str) -> str:
     return f"{base}/{path}"
 
 # Repo top-level dirs/files a doc may link into but the site doesn't host.
-_OUT_OF_DOCS = ("src/", "moondeck/", "test/", "esp32/", "mooninstaller/", "moonwalk/",
+_OUT_OF_DOCS = ("src/", "moondeck/", "test/", "esp32/", "mooninstaller/", "moonwalk/", "moonlive/",
                 ".github/", "CLAUDE.md", "README.md", "LICENSE", "library.json", "CMakeLists.txt",
                 ".clang-tidy", ".clangd")
 
@@ -403,7 +403,8 @@ def attributed_by(markdown: str) -> str:
         if i in rows:
             _, url, picture = rows[i]
             cell = ln.split("|")[1]
-            name = cell.partition(" File:")[0].strip()
+            # The card's anchor, which a module's attribution links to.
+            name = cell.partition(" File:")[0].strip() + f'<span id="{attribution_anchor(rows[i][0])}" data-anchor></span>'
             owner = _GITHUB_OWNER_RE.match(url or "")
             img = '<img src="{}" width="48" height="48" alt="" loading="lazy" style="width: 48px; height: 48px; object-fit: cover">'
             if picture:

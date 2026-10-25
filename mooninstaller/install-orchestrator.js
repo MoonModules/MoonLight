@@ -484,9 +484,8 @@ async function releaseDetected() {
 ///
 /// esptool-js reports per FILE: `written`/`total` restart at zero for each image, and an install
 /// writes several (bootloader, partition table, ota data, app, and MoonBase where the layout has
-/// one). Plotting that raw ran the bar 0-100% once per image, so a user watched it reach 100% and
-/// start again (bench 2026-09-08, a Shelly on the public installer). Weighting each file by its
-/// size against the whole write makes the bar cross the modal exactly once.
+/// one). Plotted raw, the bar runs 0-100% once per image. Weighting each file by its size against
+/// the whole write makes the bar cross the modal exactly once.
 ///
 /// `sizes` is the byte length of each image, in the order esptool-js writes them.
 export function flashPercent(sizes, idx, written, total) {
@@ -956,7 +955,7 @@ export const installer = {
             // requestPort() needs a USER GESTURE, and by this point there is none: the
             // flash took tens of seconds, so the click that opened the modal is long
             // expired and Chrome refuses with "Must be handling a user gesture to show a
-            // permission request" (bench 2026-09-08, a Shelly on the public installer).
+            // permission request".
             // The browser's earlier permission grant does not help: it covers ACCESS to
             // the port, not the right to show the picker. So ask the user to click first,
             // exactly as the wrong-port path above does, and call requestPort() inside

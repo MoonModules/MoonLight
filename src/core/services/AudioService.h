@@ -5,6 +5,7 @@
 #include "core/util/Addressing.h"   // sendAddressed: the multicast rule every sender shares
 #include "core/util/HostList.h"     // the boards a unicast send goes to
 #include "core/util/HostResolver.h" // a named board's address, looked up off the render thread
+#include "core/system/DevicesModule.h" // formatPeer: the sender by its board's name
 #include "core/module/MoonModule.h"
 #include "core/util/ActiveInstance.h"   // the one-active-mic election (the seat + its RAII vacate)
 #include "core/util/AudioFrame.h"
@@ -227,6 +228,7 @@ public:
             controls_.addSelect("addressing", addressing, kSyncModeNames, kAddressCount);
             controls_.setHidden(controls_.count() - 1, !localMode || !send);
             controls_.addText("hosts", hosts, sizeof(hosts));
+            controls_.setHostsField(controls_.count() - 1);
             controls_.setHidden(controls_.count() - 1, !localMode || !send || addressing != kAddressUnicast);
         }
         // The pattern picker, shown only in the synthesized mode.
@@ -475,8 +477,9 @@ public:
                 else if (lastSyncRecv_ != 0
                          && platform::millis() - lastSyncRecv_ < kSyncFallbackMs) {
                     // Named, because "receiving" alone cannot tell a rig taking the right source from one locked.
-                    mm::formatTo(syncStr_, sizeof(syncStr_), "receiving from %u.%u.%u.%u",
-                                  syncPeer_[0], syncPeer_[1], syncPeer_[2], syncPeer_[3]);
+                    char peer[48];
+                    DevicesModule::formatPeer(peer, sizeof(peer), syncPeer_);
+                    mm::formatTo(syncStr_, sizeof(syncStr_), "receiving from %s", peer);
                     setStatus(syncStr_);
                 } else {
                     reportListening();
@@ -550,7 +553,7 @@ private:
         else setStatus("listening, unicast only: multicast unavailable", Severity::Warning);
     }
     uint32_t lastSyncOpenFailMs_ = 0;  // millis of the last failed open (0 = none); bring-up backoff
-    char     syncStr_[40] = {};      // scratch for the "receiving from <ip>" status line
+    char     syncStr_[64] = {};      // scratch for the "receiving from <board> (<ip>)" status line
     static constexpr uint32_t kSyncSendIntervalMs = 25;   // ~40/s, WLED-friendly, well under a flood
     static constexpr uint32_t kSyncFallbackMs = 1000;     // no packet this long → resume local mic
     static constexpr uint32_t kSyncOpenRetryMs = 1000;    // pause between socket bring-up retries after a failure

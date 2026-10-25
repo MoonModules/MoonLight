@@ -6,21 +6,27 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { fnSource } from "./app-source.mjs";
 
-const src = readFileSync(new URL("../../src/ui/app.js", import.meta.url), "utf8");
+const headerStats = new Function(`return ${fnSource("headerStats")}`)();
 
-// The header line's build: from the stats element to the text it sets.
-const start = src.indexOf('getElementById("sys-stats")');
-const block = src.slice(start, src.indexOf("setText(statsEl", start));
+// A System card's controls as a device reports them.
+const ctrls = [
+    { name: "uptime", value: "3h 12m" },
+    { name: "fps", value: 120 },
+    { name: "heap", value: 100 * 1024, total: 300 * 1024 },
+    { name: "maxBlock", value: "96KB" },
+];
 
-test("the header's rate and memory show from expert mode up, the uptime always", () => {
-    assert.match(block, /const tuning = uiMode\(\) >= 1;/);
-    for (const badge of ["🕒", "🧠", "🧱"]) {
-        const at = block.indexOf(`"${badge} "`);
-        assert.notEqual(at, -1, `${badge} not found in the header line`);
-        const guard = block.lastIndexOf("if (", at);
-        assert.match(block.slice(guard, at), /^if \(tuning &&/, `${badge} shows outside expert mode`);
-    }
-    assert.match(block, /if \(uptimeCtrl\) parts\.push/);
+test("in basic mode the header shows the uptime alone", () => {
+    assert.equal(headerStats(ctrls, false), "3h 12m");
+});
+
+test("from expert mode up the header adds the rate and the memory after the uptime", () => {
+    assert.equal(headerStats(ctrls, true), "3h 12m · 🕒 120 fps · 🧠 200KB · 🧱 96KB");
+});
+
+test("a desktop's zero block size and a missing control leave their badge out", () => {
+    const desktop = [{ name: "uptime", value: "5m" }, { name: "maxBlock", value: "0KB" }];
+    assert.equal(headerStats(desktop, true), "5m");
 });

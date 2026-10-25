@@ -31,7 +31,7 @@
 #
 # **Audio input through PulseAudio.** The image carries libpulse, so a PulseAudio server takes audio
 # in from the network, squeezelite or sendspin for instance, and MoonLight listens to it. How to point
-# the container at a server, and how that server lets it in: docs/reference/installing-on-linux.md.
+# the container at a server, and how that server lets it in: the Set up audio input process (moonwalk/06-advanced.yaml).
 # Without a server it runs as before, with no audio input.
 #
 # **amd64 and arm64.** The release builds a .deb for each, so `docker build` on an arm64 host

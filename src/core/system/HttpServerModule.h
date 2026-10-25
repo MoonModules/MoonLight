@@ -117,7 +117,7 @@ namespace ui { struct EmbeddedFile; }   // one served UI file, from the generate
 ///
 /// ## One resumable send
 ///
-/// Every answer leaves through one kind of slot: a connection, a head and a body, and a source that refills the body once it is out. The source is a span in flash, a preview frame, a file or the state a chunk at a time, or the frames queued for a control client.
+/// Every answer but a short reply (`sendResponse`) leaves through one kind of slot: a connection, a head and a body, and a source that refills the body once it is out. The source is a span in flash, a heap block, a preview frame, a file or the state a chunk at a time, or the frames queued for a control client.
 ///
 /// One loop drains them all on the 20 ms transport poll, never on the render tick, so a socket write is never charged to the LEDs. The preview's rate is bounded by that cadence: it is a view, the LEDs are not.
 ///
@@ -409,6 +409,8 @@ private:
         size_t bufLen = 0;                 // request: the bytes of it in buf
         uint32_t windowStartMs = 0;        // the stall window under way: a rate guard, not a size or time cap on the transfer itself
         size_t windowBytes = 0;            // body bytes moved in it
+        bool waiting = false;              // an upload's whole body is in and waits for a reader of its file
+        uint32_t waitSinceMs = 0;          // since then
     };
     static constexpr int kTransferSlots = 2;
     static constexpr size_t kTransferBufBytes = 4096;
@@ -431,6 +433,10 @@ private:
     void driveTransfers();
     /// One upload slot's bounded chunk: socket to storage or to the firmware writer, then the rate guard. Returns whether real bytes moved.
     bool driveUpload(FileTransfer& t, uint32_t now);
+    /// Whether a send holds `path` open: LittleFS refuses to replace an open file, so an upload of it commits once this is false.
+    bool sendingFile(const char* path) const;
+    /// Whether an upload of `path` waits to commit, during which a new read of it answers 503 so readers cannot starve the write.
+    bool uploadWaiting(const char* path);
     /// One request slot's bounded chunk: socket to its buffer, routed once whole, then the rate guard. Returns whether real bytes moved.
     bool driveRequest(FileTransfer& t, uint32_t now);
     /// Hand a request whose body is still on its way to a slot, with the `got` bytes of its `whole` that arrived.
@@ -476,6 +482,8 @@ private:
     static constexpr size_t kFrameBacklogMax = 8192;
     /// Answer with `header`, then `data`, a heap block of `len` bytes the send frees once it is out; freed here when no slot takes it.
     void answerBlock(platform::TcpConnection& conn, const char* header, char* data, size_t len);
+    /// Answer 200 with the JSON a buffer-mode sink built, through a send slot; 500 when it overflowed.
+    void answerJson(platform::TcpConnection& conn, JsonSink& sink);
     /// A free answer slot holding `conn`, or null once a 503 has said every slot is busy.
     Send* claimSend(platform::TcpConnection& conn);
     /// Every send in flight, one loop: what each socket takes now within one time budget, the lease below the headroom, and the stall guard.
@@ -614,6 +622,7 @@ private:
     struct FileSource {
         platform::FsReadStream stream;
         size_t left = 0;           // bytes of the file still to read
+        char path[kUploadPathBytes] = {};   // the file, which an upload of the same path waits for
         char buf[kTransferBufBytes];
     };
     /// Start the state as `s`'s source, `ws` framing each fragment as a WebSocket frame and `hide` hiding passwords as it is written; false when its block does not fit.
@@ -743,6 +752,7 @@ private:
     /// Whether `conn`'s client is on the device's own access point, which hides stored secrets from it.
     static bool onAccessPoint(const platform::TcpConnection& conn);
     bool anyWsClientOnAccessPoint() const MM_NONBLOCKING;
+    /// Answer a short reply, under 4 KB, written whole: it fits a fresh connection's empty send buffer, and a reboot route needs it out before the restart. A longer one goes through answerJson or answerBlock.
     void sendResponse(platform::TcpConnection& conn, int status, const char* contentType, const char* body);
     /// Answer a refused document as `PATCH /api/state` does: the engine's error and where it is, with status 400.
     void sendRefusal(platform::TcpConnection& conn, const StateDocumentResult& r);
@@ -782,6 +792,8 @@ private:
     static void writeControl(JsonSink& sink, const ControlDescriptor& c);
     /// The flags after a control's value and extras, and its closing brace.
     static void writeControlTail(JsonSink& sink, const ControlDescriptor& c);
+    /// For a hosts text, the boards the device list knows among its entries, as `"known":{entry: counterpart}`.
+    static void writeKnownHosts(JsonSink& sink, const char* text);
     /// Emit a module's status and severity where set, shared so the two endpoints stay in sync.
     static void writeStatus(JsonSink& sink, MoonModule* mod);
 
@@ -815,6 +827,8 @@ private:
     void writeWledInfoBody(JsonSink& sink, const char* name, const uint8_t mac[6]);
     void writeWledName(JsonSink& sink, const char* name);   // 💫-prefixed WLED name (HA marker)
     void writeWledStateBody(JsonSink& sink);
+    /// The combined {state, info} object /json/si answers and the WebSocket pushes.
+    void writeWledStateInfo(JsonSink& sink);
     /// The device's name, MAC and, when `ip` is given, live address, resolved once for every WLED handler to share. @xref{the-wled-compatibility-shim}
     void resolveWledIdentity(const char*& name, uint8_t mac[6], uint8_t* ip,
                              const char* nameFallback = "MoonLight");

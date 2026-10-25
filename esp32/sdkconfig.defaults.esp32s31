@@ -74,3 +74,8 @@ CONFIG_ETH_TRANSMIT_MUTEX=y
 CONFIG_ESP_SYSTEM_MEMPROT_FEATURE=n
 CONFIG_HEAP_HAS_EXEC_HEAP=y
 
+
+# FreeRTOS in IRAM: ESP-IDF 6.1 leaves pxPortGetCoprocArea, pxPortUpdateCoprocOwner and vPortTaskPinToCore in flash, which an interrupt calls
+# to save a task's FPU registers, so one landing during a flash write panicked with a Cache error (bench P4, 2026-10-25). It costs 14 KB of DIRAM
+# on the P4 (138.7 to 153.0 of 572 KB). The line goes once ESP-IDF places them.
+CONFIG_FREERTOS_IN_IRAM=y

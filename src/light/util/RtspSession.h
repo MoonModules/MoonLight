@@ -9,6 +9,7 @@
 /// Usable means RTP/AVP, not the interleaved TCP profile, explicitly unicast, and carrying a port.
 
 #include "core/util/format.h"   // formatTo: nonblocking formatting into a fixed buffer
+#include "core/util/parse.h"    // asciiCaseEqual: RFC 2326 reads a header name without case
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
@@ -35,16 +36,6 @@ struct Request {
     bool     unicastUdp = false; ///< true where SETUP asked for RTP/AVP/UDP unicast
 };
 
-/// Compare `n` bytes without regard to case, which is how RFC 2326 reads a header name.
-inline bool ieq(const char* a, const char* b, size_t n) {
-    for (size_t i = 0; i < n; i++) {
-        const char x = (a[i] >= 'A' && a[i] <= 'Z') ? static_cast<char>(a[i] + 32) : a[i];
-        const char y = (b[i] >= 'A' && b[i] <= 'Z') ? static_cast<char>(b[i] + 32) : b[i];
-        if (x != y) return false;
-    }
-    return true;
-}
-
 /// Compare `n` bytes at `at` against a literal, false where the buffer holds fewer.
 inline bool matchAt(const char* buf, size_t len, size_t at, const char* lit, size_t n) {
     return at + n <= len && std::memcmp(buf + at, lit, n) == 0;
@@ -68,7 +59,7 @@ inline void parseTransport(const char* buf, size_t len, Request* out) {
     // The header's own span, since these tokens are common enough to appear elsewhere in a request.
     size_t at = len, end = len;
     for (size_t i = 0; i + 10 <= len; i++) {
-        if (ieq(buf + i, "Transport:", 10)) { at = i + 10; break; }
+        if (asciiCaseEqual(buf + i, "Transport:", 10)) { at = i + 10; break; }
     }
     if (at >= len) return;
     for (size_t i = at; i + 1 < len; i++) {
@@ -126,7 +117,7 @@ inline bool parseRequest(const char* buf, size_t len, Request* out) {
 
     // CSeq, matched a letter at a time and bounded by `len`: RFC 2326 headers are case-insensitive, and these bytes arrive with no terminator to stop a scan.
     for (size_t i = 0; i + 5 <= len; i++) {
-        if (ieq(buf + i, "CSeq:", 5)) {
+        if (asciiCaseEqual(buf + i, "CSeq:", 5)) {
             size_t at = i + 5;
             while (at < len && (buf[at] == ' ' || buf[at] == '\t')) at++;
             const uint32_t v = boundedDecimal(buf, len, at, 0xFFFFFFFEu);

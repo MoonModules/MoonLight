@@ -42,3 +42,14 @@ def test_the_whole_tree_count_ratchets_per_rule_and_in_total_against_the_committ
     assert check_prose.ratchet({"MoonLight.EmDash": 1, "MoonLight.Weasel": 3}, 4) == [("MoonLight.Weasel", 2, 3)], "one rule paying for another is caught"
     monkeypatch.setattr(_ratchet, "committed_counts", lambda report: None)
     assert check_prose.ratchet({"MoonLight.EmDash": 9}, 9) == [], "no baseline yet: the first run records it"
+
+
+def test_a_section_past_its_word_cap_is_a_finding_and_its_tables_and_code_are_not_counted():
+    import sys
+    sys.path.insert(0, str(ROOT / "moondeck" / "check"))
+    import check_prose as c
+    words = " ".join(["word"] * (c.MAX_SECTION_WORDS + 1))
+    page = f"# Page\n\nIntro.\n\n## Long\n\n{words}\n\n## Short\n\nDone.\n\n## Data\n\n| a | b |\n|---|---|\n" + "| x y z | w |\n" * 400 + "```\n" + "code " * 900 + "\n```\n"
+    found = c.section_findings(page)
+    assert [(rule, n) for rule, _, n in found] == [(c.SECTION_RULE, 5)]   # only the prose section, at its heading; a short one is no finding
+    assert c.section_findings("# T\n\n## A\n\n" + " ".join(["w"] * c.MAX_SECTION_WORDS) + "\n") == []   # at the cap is within it

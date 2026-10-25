@@ -1,7 +1,6 @@
 /// The platform half of the encoder seam.
 ///
-/// Where a desktop hands the whole job to an external encoder, this chip does all three parts itself.
-/// The hardware encoder, our own muxer, and a segment ring served straight out of memory.
+/// Where a desktop hands the whole job to an external encoder, this chip does all three parts itself: the hardware encoder, our own muxer, and a segment ring served straight out of memory.
 ///
 /// @technical
 ///
@@ -11,39 +10,33 @@
 ///
 /// ## Why a worker task
 ///
-/// The write is called from the render tick and must never block on an encode.
-/// It copies the frame into a slot ring and returns, and the worker does the conversion, the encode and the muxing.
-/// A full ring drops the newest frame, exactly as the desktop path does when its encoder falls behind.
+/// The write is called from the render tick and must never block on an encode: it copies the frame into a slot ring and returns, and the worker converts, encodes and muxes. A full ring drops the newest frame, as the desktop path does.
 ///
 /// ## An orphaned worker must not become a second producer
 ///
-/// Stopping a worker detaches one that overruns its join deadline rather than freeing it, so an orphan can still be parked when the next start runs.
-/// A running flag alone cannot gate that, since the new start sets it true again.
-/// The orphan would then resume as a second producer on the one encoder handle and scratch buffer.
-/// So each worker captures the generation it was spawned for and exits as soon as it is no longer current.
+/// Stopping a worker detaches one that overruns its join deadline rather than freeing it, so an orphan can still be parked when the next start runs. A running flag cannot gate that, since the new start sets it true again.
 ///
-/// For the same reason the buffers are freed only once the worker has returned: a detached one is mid-encode holding raw pointers to them and to the encoder handle.
-/// Freeing there would be a use-after-free plus a call into a deleted session, so leaking a few megabytes until the next start is the better trade.
+/// The orphan would resume as a second producer on the one encoder handle and scratch buffer, so each worker captures the generation it was spawned for and exits once it is no longer current.
+///
+/// Buffers are freed only once the worker has returned: a detached one is mid-encode holding raw pointers to them, so freeing is a use-after-free plus a call into a deleted session, and leaking a few megabytes until the next start is the better trade.
 ///
 /// ## The playlist advertises from the oldest plus a margin
 ///
 /// Never the oldest itself, since that slot is the next one rotation overwrites and a player fetching it races the encoder and gets nothing.
-/// The margin is what a player has left to fetch what it was promised, and the rest of the ring is its buffering budget.
-/// On the bench, listing the true oldest failed immediately and listing only the newest few failed within about five seconds, and both spin forever.
+///
+/// The margin is what a player has left to fetch what it was promised; the rest is its buffering budget. On the bench the true oldest failed immediately and only the newest few failed within five seconds, both spinning forever.
 ///
 /// ## The encoder task's core and stack
 ///
 /// The second core, since the first runs the network stack and starving it stalls the server that serves these segments.
-/// The stack is twice what this started with, the encoder call chain plus our muxer having overflowed the smaller one.
-/// It jumped into the maths library with a corrupted pointer and panicked in a loop.
-/// The vendor's own example runs its encode from a comparable stack, and the muxer's frame loop sits on top of that.
-/// The generation flag is cleared before the task starts rather than inside it.
-/// A worker's first instruction runs only once the scheduler reaches it, so a stop landing in that window would free buffers it is about to encode from.
+///
+/// The stack is twice what this started with: the encoder call chain plus our muxer overflowed the smaller one, jumped into the math library with a corrupted pointer and panicked in a loop. The vendor's own example encodes from a comparable stack.
+///
+/// The generation flag is cleared before the task starts rather than inside it: a worker's first instruction runs only once the scheduler reaches it, so a stop landing in that window would free buffers it is about to encode from.
 ///
 /// ## The QP window lets the bitrate govern
 ///
-/// A near-fixed window pins quality, so the encoder spends whatever that costs and ignores the configured bitrate entirely.
-/// Opening the window lets the bitrate govern what a frame may cost.
+/// A near-fixed window pins quality, so the encoder spends whatever that costs and ignores the configured bitrate entirely. Opening the window lets the bitrate govern what a frame may cost.
 ///
 /// ## A segment claims the duration it holds
 ///
@@ -51,20 +44,15 @@
 ///
 /// ## The target check lives here, not in Kconfig
 ///
-/// `depends on IDF_TARGET_ESP32P4` would hide MM_HLS from the component solver.
-/// The solver reads that symbol to gate the esp_h264 dependency, so every non-P4 build then fails at cmake.
-/// Catching it in the source instead names the cause, where the Kconfig route surfaces as a link error against a missing hardware encoder.
+/// `depends on IDF_TARGET_ESP32P4` would hide MM_HLS from the component solver, which reads that symbol to gate the esp_h264 dependency, so every non-P4 build fails at cmake. The source check names the cause; Kconfig surfaces a link error.
 ///
 /// ## The ring's depth is a lifetime, not a cache
 ///
-/// A segment survives its kept-seconds after it closes.
-/// That is the whole budget a player has to parse the playlist, fetch, and buffer before what it asked for is recycled.
-/// Browsers want several seconds of that.
+/// A segment survives its kept-seconds after it closes: the whole budget a player has to parse the playlist, fetch, and buffer before what it asked for is recycled. Browsers want several seconds of that.
 ///
 /// ## A served segment is reserved
 ///
-/// `hlsSegment` hands out a pointer the caller reads AFTER the lock drops, so the encoder must not recycle that slot underneath it.
-/// Serving is far shorter than the time the ring takes to lap, but "usually in time" is not a lifetime guarantee.
+/// `hlsSegment` hands out a pointer the caller reads AFTER the lock drops, so the encoder must not recycle that slot underneath it. Serving is far shorter than the ring's lap, but "usually in time" is not a lifetime guarantee.
 
 #include "platform/platform.h"
 #include "sdkconfig.h"
@@ -77,7 +65,7 @@
 #error "CONFIG_MM_HLS is set on a chip with no hardware H.264 encoder (P4 only)."
 #endif
 
-#include "light/util/MpegTs.h"
+#include "core/util/MpegTs.h"
 
 #include "esp_h264_enc_single_hw.h"
 #include "esp_heap_caps.h"

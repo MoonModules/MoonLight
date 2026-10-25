@@ -531,3 +531,52 @@ export function diffRestore(files, stateModules, typeNames = []) {
     }
     return report;
 }
+
+/// Restore a backup bundle onto a device through `fetchFn`, the browser's fetch or a test's against a host: migrate, write, report.
+/// Returns {entries, hasNetwork}: the report's entries, and whether a network file waits for the next boot.
+export async function restoreBundle(bundle, fetchFn) {
+    // Restore is the one supported upgrade path, so it reads the format the previous name wrote as well as its own.
+    const kBackupFormats = ["MoonLight-config-backup", "projectMM-config-backup"];   // a bundle already saved carries the name it was saved under
+    if (!kBackupFormats.includes(bundle.format) || !bundle.files) {
+        throw new Error("not a config backup");
+    }
+    if (bundle.version !== 1) {
+        throw new Error(`backup version ${bundle.version} is newer than this firmware understands`);
+    }
+    // The live tree names what an older flat config file becomes as a document.
+    let live = [];
+    try { live = (await (await fetchFn("/api/state")).json()).modules || []; } catch (_) {}
+    // The rename map first: MIGRATING.md's schema breaks, applied client-side and reported.
+    const { files, report } = applyMigrations(bundle.files, live);
+    // Directories before files (mkdir is non-recursive); existing dirs answer 500, harmless.
+    for (const dir of restoreDirs(files)) {
+        await fetchFn("/api/dir?path=" + encodeURIComponent(dir), { method: "POST", body: "" }).catch(() => {});
+    }
+    const failed = [];
+    // Network config last: it applies LIVE, and joining another network mid-restore would cut
+    // off the writes still to come (the AP flow's whole point).
+    const ordered = Object.entries(files).sort(
+        ([a], [b]) => (a.endsWith("/NetworkModule.json") ? 1 : 0) - (b.endsWith("/NetworkModule.json") ? 1 : 0));
+    for (const [path, content] of ordered) {
+        let res = null;
+        // One retry: the device serves a single connection at a time, so a busy moment
+        // drops a socket transiently (seen on the bench); only a retried failure is real.
+        for (let attempt = 0; attempt < 2 && (!res || !res.ok); attempt++) {
+            if (attempt) await new Promise(r => setTimeout(r, 300));
+            res = await fetchFn("/api/file?path=" + encodeURIComponent(path), {
+                method: "POST", headers: { "Content-Type": "application/octet-stream" }, body: content,
+            }).catch(() => null);
+        }
+        if (!res || !res.ok) {
+            failed.push({ kind: "control", where: path, detail: "write failed (" + (res ? res.status : "network") + ")" });
+        }
+    }
+    // The report: what this firmware does not understand, plus everything the rename map did.
+    let typeNames = [];
+    try { live = (await (await fetchFn("/api/state")).json()).modules || []; } catch (_) {}
+    try { typeNames = ((await (await fetchFn("/api/types")).json()).types || []).map(t => t.name); } catch (_) {}
+    // Network bring-up is not live-re-appliable (it opts out device-side); its restored file
+    // waits for the next boot, so the dialog offers the restart exactly when that matters.
+    return { entries: [...report, ...failed, ...diffRestore(files, live, typeNames)],
+             hasNetwork: Object.keys(files).some(p => p.endsWith("/NetworkModule.json")) };
+}

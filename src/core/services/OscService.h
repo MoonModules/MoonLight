@@ -76,6 +76,7 @@ public:
         controls_.addControl("feedback", feedback);
         controls_.addSelect("addressing", addressing, kAddressingNames, kModeCount);
         controls_.addText("hosts", hosts_, sizeof(hosts_));
+        controls_.setHostsField(controls_.count() - 1);
         controls_.setHidden(controls_.count() - 1, addressing != static_cast<uint8_t>(Addressing::Unicast));
         controls_.addText("group", group_, sizeof(group_));
         controls_.addControl("feedbackPort", feedbackPort, 1, 65535);

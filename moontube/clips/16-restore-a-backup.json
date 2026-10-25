@@ -1,0 +1,46 @@
+{
+  "name": "Restore a backup",
+  "description": "A backup from before config files were state documents, restored through the File Manager's Restore",
+  "speed": 1.7,
+  "voice": "prudence",
+  "steps": [
+    {
+      "action": "open_card",
+      "module": "File Manager",
+      "caption": "A backup carries every setting, and Restore puts them back, on this device or another."
+    },
+    {
+      "action": "click",
+      "selector": "button[title^='Restore config']",
+      "caption": "Restore asks twice before it overwrites anything."
+    },
+    {
+      "action": "upload_file",
+      "selector": "button[title^='Restore config']",
+      "file": "test/fixtures/backup-flat-2026-09-30.json",
+      "caption": "This backup was made in September, before the config files changed shape."
+    },
+    {
+      "action": "wait_for",
+      "selector": ".fw-overlay-box h2",
+      "text": "Restore complete",
+      "caption": "The report lists what was renamed on the way, and anything that did not carry over."
+    },
+    {
+      "action": "click",
+      "selector": ".fw-overlay-box button:has-text('close')"
+    },
+    {
+      "action": "open_card",
+      "module": "Effects",
+      "caption": "Every setting is back: the Lines effect the backup holds, at its speed.",
+      "expect": {"module": "Lines", "control": "speed", "value": 30}
+    },
+    {
+      "action": "open_card",
+      "module": "Drivers",
+      "caption": "And the brightness it was saved at.",
+      "expect": {"module": "Drivers", "control": "brightness", "value": 46}
+    }
+  ]
+}

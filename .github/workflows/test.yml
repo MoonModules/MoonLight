@@ -23,6 +23,7 @@ on:
       - 'src/platform/esp32/platform_esp32_improv.cpp'
       - 'test/python/**'
       - 'test/js/**'
+      - 'test/fixtures/**'
       # A MoonLive script IS the subject of test_scripts_are_cpp.py: editing one is exactly when
       # the "this is a subset of C++" claim needs re-checking.
       - 'moonlive/**'
@@ -99,6 +100,28 @@ jobs:
       - if: always()
         run: uv run moondeck/ci/github_annotations.py --junit results/*.xml
 
+  # A backup from before config files were state documents, restored onto the desktop app the way the File Manager's Restore does, with
+  # two other clients reading it meanwhile: every value back and the report clean, or the job fails.
+  restore:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v3
+      - uses: ./.github/actions/ccache
+        with:
+          key: restore
+      - name: build the desktop app
+        run: uv run moondeck/build/build_desktop.py
+      - name: restore a flat backup onto it
+        run: |
+          MM_DATA_DIR="$RUNNER_TEMP/fs" ./build/linux/MoonLight --no-browser > "$RUNNER_TEMP/app.log" 2>&1 &
+          curl -s -o /dev/null --retry 30 --retry-delay 1 --retry-connrefused http://localhost:8080/api/system
+          uv run moondeck/scenario/run_restore_live.py --bundle test/fixtures/backup-flat-2026-09-30.json --readers 2
+      - if: failure()
+        run: tail -50 "$RUNNER_TEMP/app.log"
+
   # The Teensy 4.1 firmwares, built on every PR: a change to a platform seam the Teensy must implement fails here, not on the bench.
   # The HEX images are kept as an artifact, so a PR's build can be flashed and tried before it merges.
   teensy:
@@ -164,15 +187,11 @@ jobs:
       # The CMake configure needs uv on PATH — it resolves UV_EXECUTABLE for the UI-embed step
       # (CLAUDE.md § Use uv for every Python invocation), so a build without it fails at configure.
       - uses: astral-sh/setup-uv@v3
-      # RTSan needs Clang 20+; ubuntu-latest ships Clang 18, which rejects
-      # `-fsanitize=realtime` at the compiler-probe stage. Install a new enough one for that
-      # lane only — ASan/TSan run on the runner's default compiler.
+      # RTSan needs Clang 20+, which Ubuntu 26.04's own archive carries as clang-20. That lane
+      # alone uses it; ASan and TSan run on the runner's default compiler.
       - name: install clang for RealtimeSanitizer
         if: matrix.kind == 'realtime'
-        run: |
-          wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/llvm.asc
-          sudo add-apt-repository -y "deb http://apt.llvm.org/$(lsb_release -cs)/ llvm-toolchain-$(lsb_release -cs)-20 main"
-          sudo apt-get install -y clang-20
+        run: sudo apt-get install -y clang-20
       - uses: ./.github/actions/ccache
         with:
           key: sanitizer-${{ matrix.kind }}

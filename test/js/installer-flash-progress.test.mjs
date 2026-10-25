@@ -2,9 +2,8 @@
 //
 // esptool-js reports progress per FILE: `written`/`total` restart at zero for every image, and an
 // install writes several (bootloader, partition table, ota data, app, plus MoonBase where the
-// layout has one). The installer plotted that raw, so the bar ran 0-100% once per image and a user
-// watched it fill, reset, and fill again (bench 2026-09-08, a Shelly on the public installer:
-// 5 images, so five sweeps). flashPercent weights each file by its size against the whole write.
+// layout has one). Plotted raw, the bar fills and resets once per image, five sweeps for five
+// images. flashPercent weights each file by its size against the whole write.
 //
 // Run: `node --test test/js`.
 
@@ -25,9 +24,9 @@ if (start < 0) throw new Error("flashPercent not found in install-orchestrator.j
 const end = src.indexOf("\n}", start) + 2;
 const flashPercent = new Function(`${src.slice(start, end).replace("export function", "return function")}`)();
 
-// A classic-ESP32 MoonBase install, the case that surfaced this: the app dwarfs the rest, so a
-// per-file bar spends four quick sweeps on small images and one long one on the app.
-const SHELLY = [23168, 3072, 8192, 2059664, 794672];
+// A classic-ESP32 install with MoonBase: the app dwarfs the rest, so a per-file bar spends four
+// quick sweeps on small images and one long one on the app.
+const CLASSIC_ESP32 = [23168, 3072, 8192, 2059664, 794672];
 
 /// Replay a whole flash the way esptool-js drives it: every file from 0 to its own total.
 function sweep(sizes, steps = 8) {
@@ -39,7 +38,7 @@ function sweep(sizes, steps = 8) {
 }
 
 test("progress never goes backwards across a multi-image flash", () => {
-    const pcts = sweep(SHELLY);
+    const pcts = sweep(CLASSIC_ESP32);
     for (let i = 1; i < pcts.length; i++) {
         assert.ok(pcts[i] >= pcts[i - 1],
             `progress went backwards at tick ${i}: ${pcts[i - 1]} then ${pcts[i]}`);
@@ -47,7 +46,7 @@ test("progress never goes backwards across a multi-image flash", () => {
 });
 
 test("progress reaches 100 exactly once, at the end of the last image", () => {
-    const pcts = sweep(SHELLY);
+    const pcts = sweep(CLASSIC_ESP32);
     assert.equal(pcts[pcts.length - 1], 100);
     // The old bug: 100 appeared once per file. One hit, on the final tick, is the contract.
     assert.equal(pcts.filter(p => p === 100).length, 1);
@@ -55,10 +54,10 @@ test("progress reaches 100 exactly once, at the end of the last image", () => {
 
 test("a file's completion lands at its share of the total, not at 100", () => {
     // Finishing the bootloader (23168 of 2888768 bytes) is under 1%, not a full bar.
-    const afterFirst = flashPercent(SHELLY, 0, SHELLY[0], SHELLY[0]);
+    const afterFirst = flashPercent(CLASSIC_ESP32, 0, CLASSIC_ESP32[0], CLASSIC_ESP32[0]);
     assert.ok(afterFirst < 2, `first image ended the bar at ${afterFirst}%`);
     // Finishing the app (the fourth image) is most of the way, but not done: MoonBase follows.
-    const afterApp = flashPercent(SHELLY, 3, SHELLY[3], SHELLY[3]);
+    const afterApp = flashPercent(CLASSIC_ESP32, 3, CLASSIC_ESP32[3], CLASSIC_ESP32[3]);
     assert.ok(afterApp > 60 && afterApp < 100, `app ended the bar at ${afterApp}%`);
 });
 
