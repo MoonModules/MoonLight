@@ -3838,3 +3838,5 @@ const char* rawInterfaceName(size_t i) {
 }
 
 } // namespace mm::platform
+
+#include "platform/ble_control_stub.inc"

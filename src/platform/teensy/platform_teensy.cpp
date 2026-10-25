@@ -792,3 +792,5 @@ void videoCaptureShutdown() {}
 VideoCaptureStats videoCaptureStats() MM_NONBLOCKING { return VideoCaptureStats{}; }
 
 }  // namespace mm::platform
+
+#include "platform/ble_control_stub.inc"
