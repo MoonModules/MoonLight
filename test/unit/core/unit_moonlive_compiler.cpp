@@ -527,9 +527,28 @@ TEST_CASE("a control refused for its name's room leaves the option names and its
     REQUIRE(n == 6);                                  // five named controls and `b`; the sixth refused
     CHECK(std::strcmp(c[5].name, "b") == 0);
     CHECK(c[5].max == 8);                             // all nine options: the refused one took none of the pool
+    REQUIRE(c[5].options != nullptr);
+    const char* const want[] = {"optionAAA", "optionBBB", "optionCCC", "optionDDD", "optionEEE", "optionFFF", "optionGGG", "optionHHH", "optionIII"};
+    for (int i = 0; i < 9; i++) CHECK(std::strcmp(c[5].options[i], want[i]) == 0);   // its own labels, whole
     uint8_t buf[3] = {};
     eng.run(buf, 1, 3, 0, "tick");
     CHECK(buf[0] == 200);                             // the refused control's member keeps its initializer, unclamped
+}
+
+// A control's label is refused past the 23 characters a control name holds rather than cut, so two long labels never end up sharing one name.
+TEST_CASE("a control label longer than a control name holds is refused, one that fits is kept") {
+    moonlive::MoonLive eng;
+    REQUIRE(eng.compile("class T {\n"
+                        "  byte a = 1;\n"
+                        "  byte b = 1;\n"
+                        "  void defineControls() { addControl(\"a-label-of-24-letters-xx\", a, 0, 9); addControl(\"a-label-of-23-letters-x\", b, 0, 9); }\n"
+                        "  void tick() { setRGB(0, a, b, 0); }\n"
+                        "}\n", kTable, kSys));
+    moonlive::runDefineControls(eng);
+    uint8_t n = 0;
+    const auto* c = eng.declaredControls(n);
+    REQUIRE(n == 1);
+    CHECK(std::strcmp(c[0].name, "a-label-of-23-letters-x") == 0);
 }
 
 // A control's range is an ORDINARY EXPRESSION, like every other argument in the language. Making addControl the one call whose arguments must be literals would be a special case wearing a disguise, so this pins that it is not one.
@@ -868,7 +887,7 @@ TEST_CASE("a nonzero seed selects the Julia set rather than the Mandelbrot set")
     CHECK(render(mmScript("setRGB(0, escape(0.0, 0.0, -0.4, 0.6, 40), 7, 0);"), 1)[0] > 0);
 }
 
-// ASSIGNED in tick(), not just seeded by the initializer: store and load are different ops, and the bug pinned here wrote only part of the member, so the load read a stale byte and every coordinate collapsed to 0..255. The 4-byte slot ends it.
+// ASSIGNED in tick() as well as seeded by the initializer: store and load are different ops, and the bug pinned here wrote only part of the member, so the load read a stale byte and every coordinate collapsed to 0..255. The 4-byte slot ends it.
 TEST_CASE("an int member assigned a negative in tick reads back negative") {
     CHECK(render(mmScript("int v = 0; "
                           "v = 100 - 11000; "
@@ -879,7 +898,7 @@ TEST_CASE("an int member assigned a negative in tick reads back negative") {
                           "if (v / 2 < 0 - 5000) { setRGB(0, 7, 0, 0); } else { setRGB(0, 3, 0, 0); }"), 1)[0] == 7);
 }
 
-// 65436 is simply a positive number to an int. It USED to be the bit pattern a uint16_t member held for -100, so the two were indistinguishable in storage; with a 4-byte signed slot they are different values and the comparison says so.
+// 65436 is a positive number to an int and the bit pattern a 16-bit member holds for -100; in a 4-byte signed slot the two are different values, and the comparison says so.
 TEST_CASE("an int member holds a large positive") {
     CHECK(render(mmScript("int pos = 65436; "
                           "if (pos < 0) { setRGB(0, 7, 0, 0); } else { setRGB(0, 3, 0, 0); }"), 1)[0] == 3);

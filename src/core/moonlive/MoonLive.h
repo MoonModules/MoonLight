@@ -143,6 +143,7 @@ public:
         // Measured here rather than passed, the bound tested before the byte is read; a name with no room refuses the control before its options or default touch anything.
         uint8_t n = 0;
         while (n < kMaxControlName - 1 && name[n]) n++;
+        if (name[n]) return;                         // longer than a control name holds: refused, never cut, so two never share one
         if (nameLen_ + n + 1 > kNameText) return;   // no control rather than a nameless one
         const char* const* optionList = nullptr;
         if (options) {

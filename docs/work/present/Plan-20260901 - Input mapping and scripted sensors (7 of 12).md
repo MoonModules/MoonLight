@@ -776,8 +776,8 @@ reporting distance through a script.
 ## Step 6: PIR, and the trigger vocabulary ✅ (a PIR is a `set` row, which already holds a level, so no `level` kind: two kinds would do one job; the help and the momentary-row test name it. Multi-click waits for a panel that needs it, in backlog-core)
 
 The cheap finish. A PIR is a digital pin, so it needs no seam at all: it is a `ButtonService` row
-whose event is a *level* rather than a press. MoonLight models it exactly so (`pin_PIR`,
-"HIGH = lights on"). Add `level` to the event set, and PIR is done.
+with the `set` event, which holds the pin's level rather than reacting to a press. MoonLight
+models it exactly so (`pin_PIR`, "HIGH = lights on").
 
 If the trigger vocabulary is going further (double-click, multi-click, from ESPHome's set), this is
 where it lands: the same timers, more states, and it multiplies what a three-button panel can do.

@@ -72,6 +72,8 @@ const LS_CARDS_W   = "mm_cardsWidth";     // px: dragged width of the docked car
 // The open tab per container, persisted so a reload doesn't dump you back on the first child.
 let selectedTabs = {};
 try { selectedTabs = JSON.parse(lsRead(LS_TABS, "{}")) || {}; } catch { selectedTabs = {}; }
+// How far each container's tab strip is scrolled, so a redraw after a tab click keeps the open tab in view.
+const tabScroll = {};
 
 // Which modules have their "controls" disclosure open: VIEW-ONLY state the backend knows nothing about, so
 // it lives here (like selectedTabs), NOT in the module state. Persisting it means a full-state rebuild (or a
@@ -1420,7 +1422,7 @@ function renderChildTabs(mod, childrenEl, depth) {
         });
         strip.appendChild(addTab);
     }
-    childrenEl.appendChild(strip);
+    childrenEl.appendChild(scrollableStrip(strip, mod.name));
 
     const panel = document.createElement("div");
     panel.className = "tab-panel";
@@ -1428,6 +1430,31 @@ function renderChildTabs(mod, childrenEl, depth) {
     childrenEl.appendChild(panel);
     const child = mod.children.find(c => c.name === active);
     if (child) renderModuleTree(child, panel, depth + 1);
+}
+
+// A strip wider than its card scrolls sideways, which a mouse wheel cannot do: an arrow over each end that has tabs beyond it.
+function scrollableStrip(strip, key) {
+    const box = document.createElement("div");
+    box.className = "tab-scroll";
+    const arrow = (dir, label) => {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "tab-arrow tab-arrow--" + (dir < 0 ? "left" : "right");
+        b.textContent = label;
+        b.setAttribute("aria-label", dir < 0 ? "earlier tabs" : "later tabs");
+        b.addEventListener("click", () => strip.scrollBy({ left: dir * strip.clientWidth * 0.8, behavior: "smooth" }));
+        return b;
+    };
+    const left = arrow(-1, "‹"), right = arrow(1, "›");
+    box.append(left, strip, right);
+    const update = () => {
+        left.hidden = strip.scrollLeft <= 1;
+        right.hidden = strip.scrollLeft + strip.clientWidth >= strip.scrollWidth - 1;
+    };
+    strip.addEventListener("scroll", () => { tabScroll[key] = strip.scrollLeft; update(); }, { passive: true });
+    // Once laid out: the scroll the strip had before the redraw, and the arrows its width calls for.
+    new ResizeObserver(() => { if (tabScroll[key]) strip.scrollLeft = tabScroll[key]; update(); }).observe(strip);
+    return box;
 }
 
 // ---- MoonBase update flow ----

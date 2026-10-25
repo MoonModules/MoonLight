@@ -263,6 +263,18 @@ TEST_CASE("DevicesModule: a board restored from the last boot is not looked up u
     CHECK(dev.addressOf("MM-Eye", ip));
 }
 
+// A board that changed its address leaves its old row listed until it ages out, so a host setting naming it must reach where it is now.
+TEST_CASE("DevicesModule: a board heard at a new address is looked up there, not at the address it left") {
+    DevicesModule dev;
+    mm::platform::setTestNowMs(1000);
+    inject(dev, "MM-Eye", /*mm=*/true, 192, 168, 1, 31);   // where it was
+    mm::platform::setTestNowMs(5000);
+    inject(dev, "MM-Eye", /*mm=*/true, 192, 168, 1, 30);   // where it is now, listed after the old row
+    uint8_t ip[4] = {};
+    REQUIRE(dev.addressOf("MM-Eye", ip));
+    CHECK(ip[3] == 30);
+}
+
 // A card names its peer the same way everywhere: the board and its address, or the address alone for a desk or a computer.
 TEST_CASE("DevicesModule: a status names a known peer by its board and an unknown one by its address") {
     DevicesModule dev;

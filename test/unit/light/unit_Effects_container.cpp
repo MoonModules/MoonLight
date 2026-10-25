@@ -475,6 +475,7 @@ TEST_CASE("a composite's layer at opacity 0 is not rendered, the bottom one incl
 
 // On the StadBeest the walk look, the bottom of three layers, stayed lit at opacity 0 while the autopilot faded the others in and out.
 TEST_CASE("the bottom layer of a composite fades by its own opacity, over black") {
+    mm::platform::setTestNowMs(5000);   // frozen, so every frame draws the same rainbow and each compares with the first
     mm::RainbowEffect base;
     mm::SpiralEffect over;
     TwoLayers rig(base, over);

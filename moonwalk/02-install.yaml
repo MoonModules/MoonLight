@@ -239,7 +239,7 @@ processes:
         given: [{ input: platform, equals: Docker }]
         when: { manual: "Use http://<machine>:8080, or localhost:8080 on the same machine." }
         detail: |
-          The machine's address is the one you reach it at over SSH or from your router.
+          The machine's address is the one you reach it at over SSH or from your router. A container started with `docker compose up -d` from a checkout answers on port 8081 instead.
       - id: settings
         section: Where your settings live
         say: Find where your settings live.

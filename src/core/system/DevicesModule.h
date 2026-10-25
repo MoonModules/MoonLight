@@ -150,18 +150,20 @@ public:
         return nullptr;
     }
 
-    /// The address of the board named `name` and heard this session, letter case and a trailing `.local` aside, as mDNS compares them; false when none was.
+    /// The address of the board named `name` and heard this session, letter case and a trailing `.local` aside, as mDNS compares them; false when none was. A board that moved leaves its old row until it ages out, so the one heard last wins.
     bool addressOf(const char* name, uint8_t ip[4]) const MM_NONBLOCKING {
         if (!name || !name[0]) return false;
         size_t len = std::strlen(name);
         if (len > 6 && asciiCaseEqual(name + len - 6, ".local", 6)) len -= 6;
+        const Device* best = nullptr;
         for (uint8_t i = 0; i < deviceCount_; i++) {
             const Device& d = devices_[i];
-            if (d.cached || std::strlen(d.name) != len || !asciiCaseEqual(d.name, name, len) || isIpPlaceholder(d.name, d.ip)) continue;
-            std::memcpy(ip, d.ip, 4);
-            return true;
+            // Heard later, wrap-safe: the difference of two stamps, read signed.
+            if (heardAs(d, name, len) && (!best || static_cast<int32_t>(d.lastSeenMs - best->lastSeenMs) > 0)) best = &d;
         }
-        return false;
+        if (!best) return false;
+        std::memcpy(ip, best->ip, 4);
+        return true;
     }
 
     /// Register a bridge a driver found out of band, updating its row or inserting one.
@@ -445,6 +447,11 @@ private:
             sortByName();
             listChanged();
         }
+    }
+
+    /// Whether a row is a board heard this session under the first `len` characters of `name`.
+    static bool heardAs(const Device& d, const char* name, size_t len) MM_NONBLOCKING {
+        return !d.cached && std::strlen(d.name) == len && asciiCaseEqual(d.name, name, len) && !isIpPlaceholder(d.name, d.ip);
     }
 
     /// Whether this name is only the address, a placeholder a real name overwrites.
