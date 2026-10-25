@@ -113,7 +113,7 @@ a { color: var(--accent); }
     color: var(--accent);
     font-size: 12px;
     line-height: 1;
-    padding: 4px 8px;
+    padding: 4px 6px;
     border-radius: 12px;
     cursor: pointer;
     white-space: nowrap;
@@ -367,6 +367,8 @@ body.cards-resizing {
     padding: 2px 4px;
     min-width: 0;
 }
+/* The boards a hosts text names, on a line of their own under the field. */
+.control-known { color: var(--fg-muted); font-size: 11px; flex-basis: 100%; }
 .preview-grip { display: none; color: var(--fg-muted); cursor: grab; user-select: none; font-size: 14px; flex-shrink: 0; }
 .preview-status {
     color: var(--fg-muted); font-size: 11px; opacity: 0.8; white-space: nowrap;
@@ -457,7 +459,8 @@ body.cards-resizing {
    ============================================================ */
 
 .card {
-    background: var(--card-bg-0);
+    --card-bg: var(--card-bg-0);        /* what lies under a card's contents, which an overlay inside it paints with */
+    background: var(--card-bg);
     border: 1px solid var(--border);
     border-radius: 6px;
     margin-bottom: 10px;
@@ -471,10 +474,10 @@ body.cards-resizing {
 /* Depth only sets the background here — the indent lives on .card-children,
    which physically encloses the child cards. */
 .card[data-depth="1"] {
-    background: var(--card-bg-1);
+    --card-bg: var(--card-bg-1);
 }
 .card[data-depth="2"] {
-    background: var(--card-bg-2);
+    --card-bg: var(--card-bg-2);
 }
 
 /* Wrapper for a parent card's child cards. Sits inside the parent's padding so
@@ -502,6 +505,25 @@ body.cards-resizing {
     margin-bottom: 8px;
 }
 .tab-strip::-webkit-scrollbar { display: none; }
+/* An arrow lies over each end of a strip with tabs beyond it, for a mouse with no sideways scroll. */
+.tab-scroll { position: relative; margin-bottom: 8px; }
+.tab-scroll > .tab-strip { margin-bottom: 0; }
+.tab-arrow {
+    position: absolute;
+    top: 0;
+    bottom: 1px;                        /* above the strip's bottom border */
+    z-index: 1;
+    padding: 0 6px;
+    border: none;
+    background: var(--card-bg);
+    color: var(--fg);
+    font-size: 16px;
+    cursor: pointer;
+}
+.tab-arrow[hidden] { display: none; }
+.tab-arrow--left  { left: 0;  box-shadow: 6px 0 6px -4px var(--card-bg); }
+.tab-arrow--right { right: 0; box-shadow: -6px 0 6px -4px var(--card-bg); }
+.tab-arrow:hover { color: var(--accent); }
 
 .tab {
     display: flex;

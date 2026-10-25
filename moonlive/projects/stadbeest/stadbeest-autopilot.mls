@@ -1,4 +1,4 @@
-// StadBeestAutopilot: builds the StadBeest and runs it unattended. At start it pushes each part its look, never saved: on the legs, itself, a layer per look (walking, the orb, the thrusters), on each eye the eye's three, and on the mouth its one; it pushes them again every half minute, so a part that boots late or reboots gets its look back. Every few minutes a new scene crossfades to the next look and picks a palette (stadbeest-fire in a third of the thruster scenes), a mood, how much the music counts and whether it flashes on the beat; within a scene the energy breathes once a minute. It moves the control surface, so the legs follow here and the eyes over OSC, each on the look's own controls through automap.
+// StadBeestAutopilot: builds the StadBeest and runs it unattended. At start it pushes each part its look, never saved: on the legs, itself, a layer per look (walking, the orb, the thrusters), on each eye the eye's three, and on each of the mouth's two bulbs its one; it pushes them again every half minute, so a part that boots late or reboots gets its look back. Every few minutes a new scene crossfades to the next look and picks a palette (stadbeest-fire in a third of the thruster scenes), a mood, how much the music counts and whether it flashes on the beat; within a scene the energy breathes once a minute. It moves the control surface, so the legs follow here and the eyes over OSC, each on the look's own controls through automap.
 
 class StadBeestAutopilot {
   bool run = true;
@@ -38,8 +38,10 @@ class StadBeestAutopilot {
        "encoder6Target": "FrogLayer.opacity", "encoder7Target": "EyeOrbLayer.opacity", "encoder8Target": "SauronLayer.opacity"}})";
     pushJsonTo("MM-eye1.local", eye);
     pushJsonTo("MM-eye2.local", eye);
-    pushJsonTo("MM-mouth.local", R"({"Effects": {"$patch": "replace",
-      "MouthLayer": {"type": "Layer", "mouth": {"type": "MoonLiveEffect", "script": "stadbeest-mouth.mle"}}}})");
+    json mouth = R"({"Effects": {"$patch": "replace",
+      "MouthLayer": {"type": "Layer", "mouth": {"type": "MoonLiveEffect", "script": "stadbeest-mouth.mle"}}}})";
+    pushJsonTo("MM-mouth.local", mouth);
+    pushJsonTo("MM-mouth2.local", mouth);
   }
 
   // The energy around the scene's mood, breathing once a minute.

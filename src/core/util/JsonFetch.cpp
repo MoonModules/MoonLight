@@ -234,9 +234,16 @@ void JsonFetch::refreshIfDue(int index) {
     Slot& s = slots_[index];
     const uint32_t now = platform::millis();
     if (s.inFlight || static_cast<int32_t>(now - s.dueAt) < 0) return;
-    // A request that could not go skips this round, as one that failed does, rather than retrying every tick.
-    send(index, "GET", s.target, nullptr);
+    // A request that could not go is spaced as a failed one is, rather than retried every tick.
+    if (!send(index, "GET", s.target, nullptr)) { backOff(s, now); return; }
     s.dueAt = now + s.periodMs;
+}
+
+// A feed that missed once, such as the first fetch after a boot before WiFi is up, is back within seconds. One that keeps failing is asked no more often than its period.
+void JsonFetch::backOff(Slot& s, uint32_t now) {
+    const uint32_t delay = s.failures < 16 ? kRetryMs << s.failures : s.periodMs;
+    s.dueAt = now + (delay < s.periodMs ? delay : s.periodMs);
+    if (s.failures < 16) s.failures++;
 }
 
 void JsonFetch::takeAnswers() {
@@ -252,7 +259,12 @@ void JsonFetch::deliver(uint8_t index, uint16_t epoch, int status, json::JsonDoc
     if (s.kind == Kind::Free || s.epoch != epoch) { delete d; return; }   // released while on its way
     s.inFlight = false;
     s.status = status;
-    // A failed refresh keeps the last good document, as a cache serves stale while it revalidates.
+    // A failed refresh keeps the last good document, as a cache serves stale while it revalidates, and is retried sooner than the period. An error page that parses as JSON failed too (RFC 9110 section 15.3: only 2xx succeeds).
+    if (s.kind == Kind::Feed) {
+        if (d && (status < 200 || status >= 300)) { delete d; d = nullptr; }
+        if (d) s.failures = 0;
+        else backOff(s, platform::millis());
+    }
     if (d) {
         delete s.doc;
         s.doc = d;

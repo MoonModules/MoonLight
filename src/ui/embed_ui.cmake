@@ -1,4 +1,4 @@
-# Generate C header with embedded UI files as byte arrays
+# Generate C header with the embedded UI files as byte arrays, bundled and minified first
 # Usage: cmake -P embed_ui.cmake -DUI_DIR=src/ui -DOUT=src/ui/ui_embedded.h
 #
 # Text assets are gzipped at build time and served with Content-Encoding: gzip
@@ -31,14 +31,24 @@ elseif(NOT DEFINED PYTHON_CMD)
         "fires on a standalone `cmake -P embed_ui.cmake` with neither set.)")
 endif()
 
-# Gzip ${UI_DIR}/<name> to ${OUT_DIR}/<name>.gz and HEX-read it into OUT_VAR.
+# The served files, bundled and minified from ${UI_DIR} by moondeck/build/bundle_ui.py into a stage under build/.
+get_filename_component(REPO_DIR "${UI_DIR}/../.." ABSOLUTE)
+set(STAGE_DIR "${REPO_DIR}/build/ui-bundle")
+execute_process(
+    COMMAND ${PYTHON_CMD} "${REPO_DIR}/moondeck/build/bundle_ui.py" "${UI_DIR}" "${STAGE_DIR}"
+    RESULT_VARIABLE rc)
+if(NOT rc EQUAL 0)
+    message(FATAL_ERROR "bundling the UI failed (PYTHON_CMD=${PYTHON_CMD} rc=${rc})")
+endif()
+
+# Gzip ${STAGE_DIR}/<name> to ${OUT_DIR}/<name>.gz and HEX-read it into OUT_VAR.
 function(gzip_file_hex NAME OUT_VAR)
-    set(src "${UI_DIR}/${NAME}")
+    set(src "${STAGE_DIR}/${NAME}")
     # Write the temp .gz next to the generated header (a writable build dir).
     get_filename_component(out_dir "${OUT}" DIRECTORY)
     set(gz "${out_dir}/${NAME}.gz")
     execute_process(
-        COMMAND ${PYTHON_CMD} -c "import sys,gzip; open(sys.argv[2],'wb').write(gzip.compress(open(sys.argv[1],'rb').read(),9))" "${src}" "${gz}"
+        COMMAND ${PYTHON_CMD} -c "import sys,gzip; open(sys.argv[2],'wb').write(gzip.compress(open(sys.argv[1],'rb').read(),9,mtime=0))" "${src}" "${gz}"
         RESULT_VARIABLE rc)
     if(NOT rc EQUAL 0)
         message(FATAL_ERROR "gzip of ${src} failed (PYTHON_CMD=${PYTHON_CMD} rc=${rc})")
@@ -63,8 +73,8 @@ function(hex_to_c_array HEX_STR VAR_NAME OUT_VAR)
     set(${OUT_VAR} "${result}" PARENT_SCOPE)
 endfunction()
 
-# Every file the web UI serves, the one list: a file added to the UI is a word here. Text is gzipped; the PNG is already compressed and stays raw. A file is served at `/<its name>`, so `vendor/prism.js` answers `/prism.js`.
-set(UI_FILES index.html app.js style.css install-picker.js semver.js vendor/prism.js preview3d.js preview-adapt.js gif.js migrate.js help.js moonmodules-logo.png)
+# Every file the firmware serves, from the stage: `app.js` holds every module it imports. Text is gzipped; the PNG is already compressed and stays raw.
+set(UI_FILES index.html app.js style.css prism.js moonmodules-logo.png)
 
 set(arrays "")
 set(entries "")
@@ -73,7 +83,7 @@ foreach(f ${UI_FILES})
     get_filename_component(name "${f}" NAME)
     get_filename_component(ext "${f}" LAST_EXT)
     if(ext STREQUAL ".png")
-        file(READ "${UI_DIR}/${f}" hex HEX)
+        file(READ "${STAGE_DIR}/${f}" hex HEX)
         set(gzipped false)
         set(type "image/png")
     else()
@@ -87,11 +97,14 @@ foreach(f ${UI_FILES})
             set(type "application/javascript")
         endif()
     endif()
+    # A validator for conditional requests (RFC 9110 section 8.8.3): the served bytes' hash, so a reload of an unchanged file costs a 304. The gzip carries no timestamp (mtime=0), so the same source gives the same bytes and tag in every build.
+    string(SHA1 sha "${hex}")
+    string(SUBSTRING "${sha}" 0 16 etag)
     hex_to_c_array("${hex}" "file${i}" array)
     string(LENGTH "${hex}" hex_len)
     math(EXPR len "${hex_len} / 2")
     string(APPEND arrays "constexpr uint8_t file${i}[] = {${array}};\n")
-    string(APPEND entries "    {\"${name}\", \"${type}\", file${i}, ${len}, ${gzipped}},\n")
+    string(APPEND entries "    {\"${name}\", \"${type}\", file${i}, ${len}, ${gzipped}, \"\\\"${etag}\\\"\"},\n")
     math(EXPR i "${i} + 1")
 endforeach()
 
@@ -105,8 +118,8 @@ file(APPEND "${OUT}" "///\n")
 file(APPEND "${OUT}" "/// The HTTP server answers from flash with no filesystem involved, so a device serves its UI before any filesystem is mounted, and a file cannot go missing.\n")
 file(APPEND "${OUT}" "#include <cstdint>\n#include <cstddef>\nnamespace mm::ui {\n")
 file(APPEND "${OUT}" "${arrays}")
-file(APPEND "${OUT}" "/// One served file: its name under `/`, its content type, its bytes and whether they are gzipped.\n")
-file(APPEND "${OUT}" "struct EmbeddedFile { const char* name; const char* contentType; const uint8_t* data; size_t len; bool gzipped; };\n")
+file(APPEND "${OUT}" "/// One served file: its name under `/`, its content type, its bytes, whether they are gzipped, and its quoted entity tag.\n")
+file(APPEND "${OUT}" "struct EmbeddedFile { const char* name; const char* contentType; const uint8_t* data; size_t len; bool gzipped; const char* etag; };\n")
 file(APPEND "${OUT}" "/// Every file the UI serves, in the order embed_ui.cmake lists them.\n")
 file(APPEND "${OUT}" "constexpr EmbeddedFile kFiles[] = {\n${entries}};\n")
 file(APPEND "${OUT}" "} // namespace mm::ui\n")

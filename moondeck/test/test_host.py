@@ -49,7 +49,10 @@ def main() -> int:
     only.add_argument("--python", action="store_true", help="run only the Python suite")
     only.add_argument("--js", action="store_true", help="run only the JS suite")
     only.add_argument("--ui", action="store_true", help="run only the UI suite (needs a device)")
+    ap.add_argument("--clip", help="with --ui, perform only the run files whose name holds this, such as 16-restore-a-backup")
     args = ap.parse_args()
+    if args.clip and not args.ui:
+        ap.error("--clip narrows the UI suite: pass --ui with it")
     # The UI lane is OPT-IN: it needs a MoonLight listening, so a bare run stays the
     # pure suites that work on any machine. It skips rather than fails when asked for
     # without a device, which is what the tests themselves decide.
@@ -97,7 +100,7 @@ def main() -> int:
         cmd = ["uv", "run"]
         for d in UI_DEPS:
             cmd += ["--with", d]
-        cmd += ["pytest", "moontube", "-q"]
+        cmd += ["pytest", "moontube", "-q"] + (["-k", args.clip] if args.clip else [])
         rc |= run(cmd, "UI (moontube)")
 
     print("\nDONE" if rc == 0 else "\nFAILED", flush=True)

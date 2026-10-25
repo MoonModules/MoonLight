@@ -13,6 +13,7 @@
 #include "platform/platform.h"
 
 #include <cstring>
+#include <vector>
 
 // RAII guard that restores the platform test clock on scope exit even if a REQUIRE/CHECK throws, without this, a mid-test failure would leave the global setTestNowMs override in place and pollute later test cases.
 struct ClockGuard {
@@ -121,6 +122,31 @@ public:
     mm::Buffer* src_ = nullptr;
 };
 
+// Two 3-channel layers over a 4×1 grid, blended by Drivers into a capturing driver. Drivers is the last member, so it destructs first and stops the core-1 encode worker before the capture goes, the order TSan needs.
+struct TwoLayers {
+    mm::Layouts layouts;
+    mm::GridLayout grid;
+    mm::Effects effects;
+    mm::Layer bottom, top;
+    CaptureDriver cap;
+    mm::Drivers drivers;
+    TwoLayers(mm::MoonModule& under, mm::MoonModule& over) {
+        grid.width = 4; grid.height = 1; grid.depth = 1;
+        layouts.addChild(&grid);
+        bottom.setChannelsPerLight(3);
+        bottom.addChild(&under);
+        top.setChannelsPerLight(3);
+        top.addChild(&over);
+        effects.addChild(&bottom);
+        effects.addChild(&top);
+        effects.setLayouts(&layouts);
+        drivers.addChild(&cap);
+        drivers.setEffects(&effects);
+    }
+    void prepare() { effects.applyState(); drivers.applyState(); }
+    void frame() { effects.tick(); drivers.tick(); }
+};
+
 // Multi-layer composition: Drivers blends ≥2 enabled Layers into its own output buffer and hands THAT to drivers (not a single Layer's buffer). Bottom layer overwrites; top layer blends per its blendMode/opacity. This is the end-to-end pin for the composite loop in Drivers::tick.
 TEST_CASE("Drivers composites two enabled Layers into one output buffer") {
     mm::Layouts layouts;
@@ -176,35 +202,16 @@ TEST_CASE("Drivers composites two enabled Layers into one output buffer") {
 
 // Disabling the top layer drops cleanly to the single (bottom) layer, no crash, the driver now sees the bottom layer's content. Pins the robustness path.
 TEST_CASE("Drivers composition drops to single layer when one is disabled") {
-    mm::Layouts layouts;
-    mm::GridLayout grid;
-    grid.width = 4; grid.height = 1; grid.depth = 1;
-    layouts.addChild(&grid);
+    mm::SpiralEffect base;
+    mm::RainbowEffect over;
+    TwoLayers rig(base, over);
+    rig.top.setEnabled(false);         // only the bottom layer remains
+    rig.prepare();
+    rig.frame();
 
-    mm::Effects effectsContainer;
-    mm::Layer bottom; bottom.setChannelsPerLight(3);
-    mm::SpiralEffect base; bottom.addChild(&base);
-    mm::Layer top; top.setChannelsPerLight(3);
-    mm::RainbowEffect over; top.addChild(&over);
-    effectsContainer.addChild(&bottom);
-    effectsContainer.addChild(&top);
-    effectsContainer.setLayouts(&layouts);
-
-    // The driver is declared BEFORE its container ON PURPOSE: stack objects destruct in reverse declaration order, so this puts ~Drivers() (which stops the core-1 encode worker) ahead of ~CaptureDriver(). The other way round, the worker can still be inside the driver's tick() when its vtable is torn down, a vptr race TSan flags. Production is safe by a different route (release()/removeChild() quiesce before any delete); a stack test has only declaration order.
-    CaptureDriver cap;
-    mm::Drivers drivers;
-    drivers.addChild(&cap);
-    drivers.setEffects(&effectsContainer);
-
-    top.setEnabled(false);             // only the bottom layer remains
-    effectsContainer.applyState();
-    drivers.applyState();
-    effectsContainer.tick();
-    drivers.tick();
-
-    CHECK(effectsContainer.enabledLayerCount() == 1);
-    REQUIRE(cap.src_ != nullptr);      // driver still has a valid buffer, no crash
-    REQUIRE(cap.src_->bytes() == static_cast<size_t>(4 * 3));
+    CHECK(rig.effects.enabledLayerCount() == 1);
+    REQUIRE(rig.cap.src_ != nullptr);  // driver still has a valid buffer, no crash
+    REQUIRE(rig.cap.src_->bytes() == static_cast<size_t>(4 * 3));
 }
 
 // Drivers' composition/output-buffer allocation contract (architecture.md § Adaptive allocation). The driver output buffer exists ONLY when the pipeline must blend into physical space; otherwise the lone layer's buffer is handed to drivers directly (zero-copy). dynamicBytes() reflects outputBuffer_.bytes(), so it's 0 ⇔ no buffer. Pins all three cases in one place: 1. one identity (no-LUT) layer  → NO output buffer (zero-copy), WITH multicore off 2. two enabled Layers           → output buffer (must composite) 3. one layer WITH a LUT         → output buffer (must map logical→physical) The multicore render↔encode split adds a fourth reason to own a buffer: it is the frame core 1 reads while core 0 renders the next one, so with the split ON the identity case DOES allocate one (case 1b). That is the documented cost of multicore; turning it off (or failing to allocate) restores the zero-copy profile exactly.
@@ -438,8 +445,8 @@ public:
 };
 }  // namespace
 
-// A show alternates two expensive effects by opacity, so an invisible layer must cost nothing; the bottom layer overwrites and ignores opacity, so it always renders.
-TEST_CASE("a layer at opacity 0 above the bottom is not rendered; the bottom layer always is") {
+// A show alternates expensive effects by opacity, so an invisible layer of a composite costs nothing, the bottom one too. A lone layer is read as it is, so it always renders.
+TEST_CASE("a composite's layer at opacity 0 is not rendered, the bottom one included; a lone layer always is") {
     mm::Layouts layouts;
     mm::GridLayout grid;
     grid.width = 8; grid.height = 8; grid.depth = 1;
@@ -456,9 +463,65 @@ TEST_CASE("a layer at opacity 0 above the bottom is not rendered; the bottom lay
     bottom.opacity = 0;
     top.opacity = 0;
     effects.tick();
-    CHECK(fxBottom.renders == 1);
+    CHECK(fxBottom.renders == 0);
     CHECK(fxTop.renders == 0);
     top.opacity = 1;
     effects.tick();
     CHECK(fxTop.renders == 1);
+    top.setEnabled(false);   // the bottom alone: no composite, so it renders whatever its opacity
+    effects.tick();
+    CHECK(fxBottom.renders == 1);
+}
+
+// On the StadBeest the walk look, the bottom of three layers, stayed lit at opacity 0 while the autopilot faded the others in and out.
+TEST_CASE("the bottom layer of a composite fades by its own opacity, over black") {
+    mm::platform::setTestNowMs(5000);   // frozen, so every frame draws the same rainbow and each compares with the first
+    mm::RainbowEffect base;
+    mm::SpiralEffect over;
+    TwoLayers rig(base, over);
+    rig.top.opacity = 0;   // only the bottom shows, so the output is the bottom scaled by its opacity
+    rig.prepare();
+    rig.frame();
+    REQUIRE(rig.cap.src_ != nullptr);
+    const mm::Buffer& bottom = rig.bottom.buffer();
+    const std::vector<uint8_t> full(bottom.data(), bottom.data() + bottom.bytes());
+    bool lit = false;
+    for (size_t i = 0; i < full.size(); i++) { CHECK(rig.cap.src_->data()[i] == full[i]); lit = lit || full[i]; }
+    REQUIRE(lit);   // the rainbow lights something, so a fade is visible
+
+    rig.bottom.opacity = 0;
+    rig.frame();
+    for (size_t i = 0; i < full.size(); i++) CHECK(rig.cap.src_->data()[i] == 0);   // faded out entirely
+
+    rig.bottom.opacity = 128;
+    rig.frame();
+    for (size_t i = 0; i < full.size(); i++) CHECK(rig.cap.src_->data()[i] <= full[i] / 2 + 1);   // about half, never more
+}
+
+// A faded bottom layer keeps its moving heads' aim, while a faded layer above it blends its aim into theirs by its mode: opacity fades a position only where something lies under it.
+TEST_CASE("a faded bottom layer keeps its motion bytes, and a faded top layer blends its own into them") {
+    mm::RainbowEffect base;
+    mm::SpiralEffect over;
+    TwoLayers rig(base, over);
+    rig.bottom.setChannelsPerLight(6);   // RGBW, then pan and tilt
+    rig.top.setChannelsPerLight(6);
+    rig.prepare();
+    // The pan byte of every light, each layer aiming its own way, as the composite sees it.
+    const auto panAfter = [&](uint8_t bottomOpacity, uint8_t topOpacity) {
+        rig.bottom.opacity = bottomOpacity;
+        rig.top.opacity = topOpacity;
+        rig.effects.tick();
+        for (size_t light = 0; light < 4; light++) {
+            rig.bottom.buffer().data()[light * 6 + mm::FixtureChannels::kMotionBase] = 200;
+            rig.top.buffer().data()[light * 6 + mm::FixtureChannels::kMotionBase] = 100;
+        }
+        rig.drivers.tick();
+        REQUIRE(rig.cap.src_ != nullptr);
+        return rig.cap.src_->data()[mm::FixtureChannels::kMotionBase];
+    };
+    CHECK(panAfter(128, 0) == 200);   // the bottom alone, faded: its aim, not half of it
+    CHECK(panAfter(255, 0) == 200);   // at full opacity it overwrites, aim included
+    const uint8_t mixed = panAfter(128, 128);
+    CHECK(mixed > 200);                // the top, half faded, adds half its aim, additive being its default mode
+    CHECK(mixed < 255);
 }

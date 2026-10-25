@@ -151,14 +151,14 @@ TEST_CASE("a quoted number reads as the number it starts with, as services quote
 
 TEST_CASE("text joins onto a string, from the caller or from another document's value") {
     json::JsonDoc feed, show;
-    REQUIRE(json::parse(R"({"data":{"amount":"81201.915"},"t":9.4,"ok":true})", feed));
-    REQUIRE(json::appendText(show, "/text", "BTC $"));
+    REQUIRE(json::parse(R"({"data":{"amount":"1407.215"},"t":9.4,"ok":true})", feed));
+    REQUIRE(json::appendText(show, "/text", "ASML EUR "));
     REQUIRE(json::appendValue(show, "/text", feed, "/data/amount"));
     REQUIRE(json::appendText(show, "/text", " / "));
     REQUIRE(json::appendValue(show, "/text", feed, "/t"));
     REQUIRE(json::appendValue(show, "/text", feed, "/ok"));
     CHECK_FALSE(json::appendValue(show, "/text", feed, "/nope"));
-    CHECK(text(show) == R"({"text":"BTC $81201.915 / 9.4true"})");
+    CHECK(text(show) == R"({"text":"ASML EUR 1407.215 / 9.4true"})");
 }
 
 // The demo edits its bands whenever a feed changes. Replaced text and nodes were kept until the document went, so a device ran out of memory within days.
@@ -168,7 +168,7 @@ TEST_CASE("an edit repeated forever holds the memory of one, its replaced text a
     REQUIRE(json::parse(R"({"Text":{"text":""}})", show));
     int owned = 0, nodes = 0;
     for (int round = 0; round < 1000; round++) {
-        REQUIRE(json::setString(show, "/Text/text", "BTC "));
+        REQUIRE(json::setString(show, "/Text/text", "ASML "));
         REQUIRE(json::appendValue(show, "/Text/text", feed, "/item/n"));
         REQUIRE(json::setFixed(show, "/Text/speed", 98304));
         REQUIRE(json::copyValue(show, "/item", feed, "/item"));
@@ -177,5 +177,5 @@ TEST_CASE("an edit repeated forever holds the memory of one, its replaced text a
     }
     CHECK(show.ownedCount == owned);   // every key and string the document holds, once
     CHECK(show.count == nodes);
-    CHECK(text(show) == R"({"Text":{"text":"BTC 3.25","speed":1.5000},"item":{"title":"news","n":3.25,"tags":["a","b"]}})");
+    CHECK(text(show) == R"({"Text":{"text":"ASML 3.25","speed":1.5000},"item":{"title":"news","n":3.25,"tags":["a","b"]}})");
 }

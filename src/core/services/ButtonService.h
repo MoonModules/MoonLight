@@ -13,7 +13,7 @@ namespace mm {
 /// A list of push buttons, each on its own GPIO, each driving a control.
 /// @card ButtonService.png
 ///
-/// A press and a UI click are the same thing to whatever they drive. A foot pedal needs no module of its own, being electrically a momentary switch.
+/// A press and a UI click are the same thing to whatever they drive. A foot pedal needs no module of its own, being electrically a momentary switch. Neither does a PIR motion sensor: a set row holds the lights on while it sees motion, and off once still.
 ///
 /// @guide
 ///

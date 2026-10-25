@@ -76,6 +76,7 @@ public:
         controls_.addControl("feedback", feedback);
         controls_.addSelect("addressing", addressing, kAddressingNames, kModeCount);
         controls_.addText("hosts", hosts_, sizeof(hosts_));
+        controls_.setHostsField(controls_.count() - 1);
         controls_.setHidden(controls_.count() - 1, addressing != static_cast<uint8_t>(Addressing::Unicast));
         controls_.addText("group", group_, sizeof(group_));
         controls_.addControl("feedbackPort", feedbackPort, 1, 65535);
@@ -84,7 +85,8 @@ public:
     /// Reopen the socket on a receive change, and re-seed the client on a feedback change.
     void onControlChanged(const char* name) override {
         // The setting applies live: the socket reopens, joining a new group, rather than waiting for a reboot.
-        if (std::strcmp(name, "port") == 0 || std::strcmp(name, "listen") == 0 || std::strcmp(name, "group") == 0)
+        if (std::strcmp(name, "port") == 0 || std::strcmp(name, "listen") == 0 || std::strcmp(name, "group") == 0
+            || std::strcmp(name, "feedback") == 0)
             closeSocket();
         if (std::strcmp(name, "hosts") == 0) parseHosts(/*mayStart=*/true);
         if (std::strcmp(name, "group") == 0) parseGroup();
@@ -125,7 +127,7 @@ public:
     void tick1s() MM_NONBLOCKING override {
         MoonModule::tick1s();
         // Only when the answer changes, since the string is identical in between.
-        if (!enabledOsc) return;
+        if (!needsSocket()) return;
         if (feedback && ++secondsSinceRefresh_ >= kRefreshSeconds) {
             secondsSinceRefresh_ = 0;
             if (auto* c = ControlModule::active()) c->resendPaced(this);
@@ -138,12 +140,12 @@ public:
     /// Drain whatever arrived, learning where to answer, then re-seed a new client once.
     void tick() MM_NONBLOCKING override {
         if constexpr (!platform::hasNetwork) return;
-        if (!enabledOsc) { if (open_) closeSocket(); return; }
+        if (!needsSocket()) { if (open_) closeSocket(); return; }
         if (!ensureSocket()) return;
 
         // Bounded: a desk moves a handful of controls per frame, so a cap keeps a flood out.
         uint8_t pkt[kMaxPacket];
-        for (int i = 0; i < kMaxPerTick; i++) {
+        for (int i = 0; enabledOsc && i < kMaxPerTick; i++) {
             uint8_t src[4] = {};
             const int n = sock_.recvFrom(pkt, sizeof(pkt), src);
             if (n <= 0) break;                       // -1 = nothing pending
@@ -264,16 +266,20 @@ private:
         if (osc::isTruthy(m)) c->pressPad(static_cast<uint8_t>(idx - 1));
     }
 
-    /// Open and bind, deferred to the tick and throttled, so a busy port costs one socket.
+    /// Whether a socket is needed: to listen, or to send feedback, which a leader does without listening.
+    bool needsSocket() const { return enabledOsc || feedback; }
+
+    /// Open the socket, bound to the port only while listening, deferred to the tick and throttled, so a busy port costs one socket.
     bool ensureSocket() {
         if (open_) return true;
         if (!platform::networkReady()) return false;
         const uint32_t now = platform::millis();
         if (lastFailMs_ != 0 && now - lastFailMs_ < kOpenRetryMs) return false;
-        if (sock_.open() && sock_.bind(port)) {
+        // Feedback alone sends from any port, and an unbound socket queues nothing it would then leave undrained.
+        if (sock_.open() && (!enabledOsc || sock_.bind(port))) {
             open_ = true;
             // Join the group a sender multicasts feedback to; a failed join leaves unicast working.
-            if (groupValid_) sock_.joinMulticast(group_);
+            if (enabledOsc && groupValid_) sock_.joinMulticast(group_);
             if (!attached_) {
                 if (auto* c = ControlModule::active()) {
                     c->addSurface(this, ControlModule::Seed::Paced);
@@ -296,7 +302,7 @@ private:
         if (open_) sock_.close();
         open_ = false;
         lastFailMs_ = 0;
-        setStatus(enabledOsc ? "opening" : "off");
+        setStatus(needsSocket() ? "opening" : "off");
     }
 
     /// The modes OSC offers, the first three of Addressing.
@@ -350,6 +356,8 @@ private:
             setStatusf(Severity::Error, "hosts: %s", hostsError_);
         else if (feedback && addressing != static_cast<uint8_t>(Addressing::Unicast) && !groupValid_)
             setStatusf(Severity::Warning, "multicast needs a group address");
+        else if (!enabledOsc)
+            setStatus(feedback ? "sending feedback, not listening" : "off");
         else if (peerFresh())
             setStatusf(Severity::Status, "%u from %u.%u.%u.%u", static_cast<unsigned>(port),
                        peer_[0], peer_[1], peer_[2], peer_[3]);

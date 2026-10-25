@@ -70,6 +70,7 @@ public:
         controls_.addSelect("profile", profile, kProfiles, kProfileCount);
         controls_.setHidden(controls_.count() - 1, sharing());   // the host the desk is shared with decodes it
         controls_.addText("host", host_, sizeof(host_));
+        controls_.setHostsField(controls_.count() - 1);
         controls_.setHidden(controls_.count() - 1, !onNetwork());
         controls_.addControl("port", port, 1, 65535);
         controls_.setHidden(controls_.count() - 1, !onNetwork() && !sharing());

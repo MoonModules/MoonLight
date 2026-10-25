@@ -270,11 +270,11 @@ def test_a_code_comment_run_past_one_line_is_flagged():
 
 
 def test_a_long_code_comment_line_is_flagged():
-    """A `//` line carries the same word budget as a `///` one: without it the line cap is
-    satisfied by one very long line, which is a paragraph that happens to lack line breaks."""
-    long = "// " + " ".join(["word"] * 35)
+    """A `//` line carries a character cap: without it the line-count cap is satisfied by one
+    line of any length, a paragraph that happens to lack line breaks."""
+    long = "// " + " ".join(["word"] * 60)
     issues = _hdr("class Foo {\npublic:\n" + long + "\n/// does a thing\nvoid doThing();\n};")
-    assert any("comment line 35 words" in why for _, why in issues)
+    assert any(why.startswith("comment line") and "chars >" in why for _, why in issues)
 
 
 def test_a_one_line_code_comment_is_accepted():
@@ -291,18 +291,12 @@ def test_a_file_level_code_comment_is_exempt():
     assert not [i for i in issues if "code comment" in i[1]]
 
 
-def test_a_long_doc_sentence_is_flagged():
-    long = "/// " + " ".join(["word"] * 35)
-    issues = _hdr(long + "\nvoid doThing();")
-    assert any("doc sentence 35 words" in why for _, why in issues)
-
-
-def test_several_short_sentences_on_one_line_are_not_flagged():
-    # The no-wrap rule makes a line a paragraph, so the cap counts SENTENCES. Counting the
-    # line would fail correct prose and pass nothing the standards ask for.
-    line = "/// " + " ".join("A short thought here." for _ in range(4))
+def test_a_long_sentence_is_no_finding_since_only_cutting_shortens_a_paragraph():
+    # Counting words per sentence rewarded splitting one thought into two, and squeezing its grammar: the
+    # paragraph stayed as long. The character caps on a line, a lead and a paragraph are what splitting cannot meet.
+    line = "/// " + " ".join(["word"] * 35) + "."
     issues = _hdr(line + "\nvoid doThing();")
-    assert not [i for i in issues if "doc sentence" in i[1]]
+    assert not [i for i in issues if "words >" in i[1]]
 
 
 def test_an_undivided_technical_appendix_is_flagged():
@@ -456,11 +450,11 @@ def test_the_headers_are_actually_scanned():
 
 
 def test_a_header_a_build_generates_is_not_counted():
-    """build_info.h is written by every build and never committed, so counting it moved the
+    """build_id.h is written by every build and never committed, so counting it moved the
     ratchet with whatever was built last."""
     import check_docgen
     scanned = {p.as_posix() for p in check_docgen._headers()}
-    assert "src/core/util/build_info.h" not in scanned
+    assert "src/core/util/build_id.h" not in scanned
     assert "src/core/system/HttpServerModule.h" in scanned
 
 

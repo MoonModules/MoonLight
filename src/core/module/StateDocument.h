@@ -26,8 +26,8 @@ enum class StateSource : uint8_t {
 /// What applying a document did: the first failure and where it happened, or how much it changed.
 struct StateDocumentResult {
     bool ok = true;            ///< false at the first failure, which stops the walk
-    const char* error = "";    ///< what failed, a constant
-    char where[64] = {};       ///< the dotted path of the failing key, such as `Effects.Layer.Noise.speed`
+    const char* error = "";    ///< what failed, a constant; for a stored file that applied, why the first skipped member could not be placed
+    char where[64] = {};       ///< the dotted path of the failing key, such as `Effects.Layer.Noise.speed`, or of that first skipped member
     uint16_t changes = 0;      ///< controls set and modules created, replaced or removed
     uint16_t deferred = 0;     ///< controls a script declares, set once the next prepare has compiled it
     uint16_t skipped = 0;      ///< members a stored file names that this build cannot place, each logged

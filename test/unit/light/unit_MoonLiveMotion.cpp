@@ -3,9 +3,9 @@
 
 /// A script aims moving heads: setPan and setTilt.
 ///
-/// Motion is not a color byte at a fixed offset.
-/// WHERE pan lives inside a light's bytes comes from the layer's fixture channel map, so these builtins are host calls routed through the binding rather than the inline stores setRGB compiles to.
-/// That routing is what these pin: a script must reach the same channels a compiled effect writes, and must do nothing at all on a light that has no motion channels, which is what lets one script run on a moving head and on a plain strip.
+/// Motion is not a color byte at a fixed offset: WHERE pan lives inside a light's bytes comes from the layer's fixture channel map, so these builtins are host calls routed through the binding rather than the inline stores setRGB compiles to.
+///
+/// That routing is what these pin: a script reaches the same channels a compiled effect writes, and does nothing on a light with no motion channels, so one script runs on a moving head and on a plain strip.
 
 #include "doctest.h"
 #include <cstring>
@@ -26,10 +26,7 @@ using namespace mm;
 #if MM_MOONLIVE_HAS_HOST_JIT
 
 namespace {
-/// Put a SHIPPED script on the test filesystem under its own name, and return that name.
-///
-/// The point of the two cases at the bottom of this file is the file in `moonlive/`, so it is read from there rather than pasted here.
-/// A pasted copy stops being the thing that ships the first time someone edits the real one.
+/// Put a SHIPPED script on the test filesystem under its own name and return that name, read from `moonlive/` rather than pasted, since a pasted copy stops being what ships once the real one is edited.
 const char* shipScript(const char* name) {
     // Found by name in any subfolder, since a script's name is unique and its folder only groups it.
     const std::filesystem::path effects =
@@ -50,8 +47,7 @@ const char* shipScript(const char* name) {
     return name;
 }
 
-/// A rig of moving heads: a 1xN chain with pan and tilt channels, the shape a real head chain has.
-/// A 1D layout is width 1 by height N, because extrude duplicates the x=0 column.
+/// A rig of moving heads: a 1xN chain with pan and tilt channels, the shape a real head chain has. A 1D layout is width 1 by height N, because extrude duplicates the x=0 column.
 struct HeadRig {
     Layouts layouts;
     GridLayout grid;
@@ -143,9 +139,7 @@ TEST_CASE("setPan past the last light is ignored") {
     CHECK(rig.channel(0, rig.fc.pan) == 42);   // the in-range write still happened
 }
 
-// The two SHIPPED motion scripts, run on a real head rig.
-// They are the reference a user reads to learn setPan/setTilt, so "it compiles" is not enough.
-// Mh-aim.mle must put every head where its sliders say, and mh-sweep.mle must actually move them and differ between formations.
+// The two SHIPPED motion scripts, run on a real head rig: the reference a user reads to learn setPan/setTilt, so "it compiles" is not enough. Mh-aim.mle puts every head where its sliders say; mh-sweep.mle moves them and differs between formations.
 TEST_CASE("mh-aim.mle points every head where its sliders say") {
     HeadRig rig;
     rig.effect.setScript(shipScript("mh-aim.mle"));
@@ -195,9 +189,7 @@ TEST_CASE("mh-sweep.mle moves the rig and its formations differ") {
     CHECK(cross != chase);
 }
 
-// The audio vocabulary.
-// Its most important property is what happens with NO audio: a script written for a rig with a microphone must still run on one without, rendering nothing rather than failing.
-// That falls out of AudioService::latestFrame returning a silent frame rather than null, and this pins it, because the alternative (a crash or a compile error on an audio-less device) would only ever be found on someone's hardware.
+// The audio vocabulary: a script written for a rig with a microphone runs on one without, rendering nothing rather than failing. AudioService::latestFrame returns a silent frame, not null, and this pins it, as a crash would only show on hardware.
 TEST_CASE("an audio script runs on a device with no audio, and paints nothing") {
     HeadRig rig(/*withMotion=*/false);
     rig.run("class A {"
@@ -234,10 +226,7 @@ TEST_CASE("a script may still declare a member called level") {
 }
 
 
-// A script says WHAT IT IS, and the module answers with it.
-// The two questions a compiled module answers with `Dim dimensions()` and `const char* tags()`, asked of a script the same way: by running the function the script wrote.
-//
-// This is what makes a scripted effect indistinguishable from a compiled one in the picker, and it is load-time only: both are read once per compile, never per frame.
+// A script says WHAT IT IS and the module answers with it, by running `Dim dimensions()` and `const char* tags()`: a scripted effect is indistinguishable from a compiled one in the picker, read once per compile, never per frame.
 TEST_CASE("a script declares its dimensions and its tags") {
     HeadRig rig(/*withMotion=*/false);
     rig.run("class S {"
@@ -248,6 +237,38 @@ TEST_CASE("a script declares its dimensions and its tags") {
     CHECK(rig.effect.dimensions() == Dim::D1);
     REQUIRE(rig.effect.tags() != nullptr);
     CHECK(std::strncmp(rig.effect.tags(), "AB", 2) == 0);
+}
+
+// A disabled effect on the StadBeest showed garbage tags: released twice, its engine freed the pool its tags pointed into.
+TEST_CASE("a script's tags outlive the release of its engine") {
+    HeadRig rig(/*withMotion=*/false);
+    rig.run("class S {"
+            "  string tags() { return \"🔥🎵\"; }"
+            "  void tick() { fill(1, 2, 3); }"
+            "}");
+    rig.effect.release();
+    rig.effect.release();
+    CHECK(std::strcmp(rig.effect.tags(), "🔥🎵") == 0);
+}
+
+// The buffer held 24 bytes, one short of the six four-byte emoji the declaration promises, so the sixth was cut.
+TEST_CASE("a script keeps six emoji tags whole, and leaves out a seventh") {
+    HeadRig rig(/*withMotion=*/false);
+    rig.run("class S {"
+            "  string tags() { return \"🔥🎵🗼🎶🎯💡🌈\"; }"
+            "  void tick() { fill(1, 2, 3); }"
+            "}");
+    CHECK(std::strcmp(rig.effect.tags(), "🔥🎵🗼🎶🎯💡") == 0);
+}
+
+// A lead byte promising four bytes and followed by plain ASCII was copied whole as one character, and a lead at the string's end read past its terminator.
+TEST_CASE("a tag cut short or malformed ends the tags before it") {
+    HeadRig rig(/*withMotion=*/false);
+    rig.run("class S {"
+            "  string tags() { return \"🔥\xF0" "ABC\"; }"
+            "  void tick() { fill(1, 2, 3); }"
+            "}");
+    CHECK(std::strcmp(rig.effect.tags(), "🔥") == 0);
 }
 
 // A script that says nothing keeps the defaults, so every script written before scripts could declare anything behaves exactly as it did. D2, and the notepad that marks it as scripted.
@@ -278,11 +299,7 @@ TEST_CASE("a dimensions() outside 1..3 falls back") {
     CHECK(rig.effect.dimensions() == Dim::D2);
 }
 
-// The point of a script declaring D1: the LAYER extrudes it.
-// A D1 script paints the x=0 column down y and the framework fans it across the width, so one script fills a wall it never indexed.
-//
-// This is the behavior the declaration buys, and it is what makes `int dimensions()` more than a picker label.
-// Get it wrong and a script paints one column of a panel and leaves the rest dark.
+// A script declaring D1 is extruded by the LAYER: it paints the x=0 column down y and the framework fans it across the width, so one script fills a wall it never indexed; without that it paints one column and leaves the rest dark.
 TEST_CASE("a script that declares D1 is extruded across the width") {
     Layouts layouts;
     GridLayout grid;
@@ -319,12 +336,7 @@ TEST_CASE("a script that declares D1 is extruded across the width") {
         }
 }
 
-// The type REGISTRY stores the pointer tags() returns, once, from a probe instance (ModuleFactory registerType).
-// A scripted tags() points into the engine's string pool, which is freed on the next compile.
-// If that pointer ever reached the registry it would dangle for the life of the device.
-//
-// It cannot, because the probe has no script loaded and so answers with the static "📝".
-// This pins that, because the failure it prevents is a use-after-free in a static table read on every UI refresh, and the thing keeping it safe is easy to break by giving MoonLiveEffect a default script.
+// The type REGISTRY stores the pointer tags() returns, once, from a probe instance with no script loaded, so it answers with the static "📝"; a scripted tags() points into the string pool freed on the next compile and would dangle for the device's life.
 TEST_CASE("a freshly constructed MoonLive effect reports static tags") {
     MoonLiveEffect probe;
     REQUIRE(probe.tags() != nullptr);

@@ -64,7 +64,8 @@ def _shipping_firmwares():
     # in one of the comment fields) and Windows Python 3.14 defaults read_text
     # to cp1252, which fails with UnicodeDecodeError. Same class of Windows-
     # only encoding bug as verify_version's stdout crash.
-    return [f["name"] for f in _rows() if f.get("ships")]
+    # A desktop row is a download, not a flashable image, so it has no manifest.
+    return [f["name"] for f in _rows() if f.get("ships") and f["platform"] != "desktop"]
 
 
 def _platform(firmware):

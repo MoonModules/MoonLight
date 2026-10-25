@@ -1,6 +1,7 @@
 /// @module FixedPointEffect
 
 #include "doctest.h"
+#include "platform/platform.h"   // setTestNowMs
 #include "light/effects/FixedPointEffect.h"
 #include "light/layouts/GridLayout.h"
 #include "light/layouts/Layouts.h"
@@ -87,14 +88,19 @@ TEST_CASE("the all setting reaches every demo, and only the demos") {
 
 TEST_CASE("a demo switch does not join the old figure to the new one") {
     // The curve demos share one point buffer. Carried across a switch, the first segment drawn joins a spirograph point to a lissajous point, which is a bright line straight across the panel: visible, wrong, and gone the moment the trail is cleared on the change.
+    mm::platform::setTestNowMs(5000);   // frozen, so both panels draw the figure at the same moment
     Panel p;
     p.effect.demo = mm::FixedPointEffect::kSpirograph;
     p.effect.fade = 255;
     for (int i = 0; i < 40; i++) p.layer.tick();
-    const int spiro = p.litCount();
 
     p.effect.demo = mm::FixedPointEffect::kLissajous;
     p.layer.tick();                        // the FIRST frame after the switch is the risky one
-    // One frame of a fresh trail lights very little; a carried-over trail would light roughly what the full spirograph did, plus the bogus joining segment.
-    CHECK(p.litCount() < spiro);
+
+    Panel fresh;
+    fresh.effect.demo = mm::FixedPointEffect::kLissajous;
+    fresh.effect.fade = 255;
+    fresh.layer.tick();
+    // A carried-over point adds the joining segment; a cleared trail draws exactly what a panel that never showed the spirograph draws.
+    CHECK(p.litCount() == fresh.litCount());
 }

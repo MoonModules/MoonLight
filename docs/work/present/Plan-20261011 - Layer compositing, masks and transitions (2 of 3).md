@@ -18,7 +18,7 @@ Alpha is already `lerp(backdrop, source, opacity)`, the specification's normal m
 
 1. ✅ **Blend modes.** Built: multiply, screen, darken, lighten, difference and exclusion, appended to `blendMode` so saved indices keep their meaning; overlay, hard-light and soft-light wait for their measured cost. Extend `BlendOp` with the separable set, multiply first, then screen, darken, lighten, difference and exclusion, and overlay, hard-light and soft-light if their cost holds. Each mode is one per-channel function with one specialized loop, chosen once per layer as today, integer math only. Opacity applies to every mode through the lerp. A multiply layer above any effect is then a mask over everything below it, soft-edged when the mask effect draws a soft edge. Tests pin each mode's formula at its corner values (0, 128, 255) and at partial opacity.
 2. ✅ **Color reads for effect scripts.** Built: `getRGB` (the light's color as an `RGB`, as `paletteRGB` answers a palette color), and `mulRGB`, `addRGB` and `blendRGB`. MoonLive effects can write a light but not read one. `getRGB`, plus `addRGB` (a saturating add), `mulRGB` (scale each channel by 0 to 255) and `blendRGB` (mix toward a color by an amount), let a script read what is already in the buffer. A mask effect placed after the main effect in the same layer then masks that layer only, since effects in a layer draw in order on one buffer; trails, glow and blur scripts gain the same reads. The names follow the existing `setRGB`.
-3. **Transitions.**
+3. ⏳ **Transitions.**
    - A per-layer opacity ramp: a target and a duration, applied live, interpolated per frame. A layer fading in or out is the ramp on its opacity.
    - A dissolve between effects: on an effect change, the old effect keeps running in a temporary layer under the new one while the new layer's opacity ramps up; the temporary layer goes when the ramp ends.
    - A wipe: the same, with a mask layer whose edge moves instead of a uniform opacity, so every wipe is soft-edged for free.
@@ -48,8 +48,9 @@ The 5-second soft start after boot raises the global brightness that the correct
 ## Open questions
 
 - Which modes beyond the built six earn their flash, measured per mode on a classic ESP32.
-- How the UI offers a transition: a duration and a style on the Effects container, or per layer.
-- Whether the additive mode takes the specification name *plus*, now that the list follows the specification.
+- How the UI offers a transition: a duration and a style on the Effects container, or per layer. **Recommended (2026-10-25):** on the Effects container, one duration and one style, as a lighting console has one fade time per playback; per layer only once someone asks for it.
+- How motion bytes combine across layers. Opacity and blend modes are color operations, and a pan or tilt byte is a position. In a dissolve, do the heads crossfade their aim, or does the top layer take it outright? Today an upper layer's motion bytes blend like color; the bottom layer's pass through unfaded. **Recommended (2026-10-25):** latest takes precedence (LTP), the console rule for position channels: the top layer's aim wins, and in a dissolve the heads move from the old aim to the new over the fade, as a cue fade moves them. A position is not a color, so it is not blended like one.
+- Whether the additive mode takes the specification name *plus*, now that the list follows the specification. **Recommended (2026-10-25):** yes, `plus`, the specification's own operator.
 
 ## Inspiration
 

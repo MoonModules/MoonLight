@@ -10,9 +10,13 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { parseFirmwaresFromAssets, isCompatible } from "../../src/ui/install-picker.js";
 
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const asset = (name) => ({ name, browser_download_url: `https://gh/${name}` });
 
 // A release as the workflow actually publishes it: ESP32 firmware plus one archive per
@@ -26,6 +30,8 @@ const RELEASE = [
     asset("MoonLight-windows-x64-v3.0.0-setup.exe"),
     asset("MoonLight-linux-x64-v3.0.0.tar.gz"),
     asset("moonlight_3.0.0_amd64.deb"),
+    asset("MoonLight-linux-arm64-v3.0.0.tar.gz"),
+    asset("moonlight_3.0.0_arm64.deb"),
 ];
 
 test("a desktop archive is offered for download even though it has no manifest", () => {
@@ -41,7 +47,7 @@ test("a desktop archive is offered for download even though it has no manifest",
 test("each desktop platform is offered once, however many archives it ships", () => {
     const got = parseFirmwaresFromAssets(RELEASE, "v3.0.0").filter(f => f.isDesktop);
     assert.deepEqual(got.map(f => f.firmware).sort(),
-        ["desktop-linux-x64", "desktop-macos-arm64", "desktop-windows-x64"]);
+        ["desktop-linux-arm64", "desktop-linux-x64", "desktop-macos-arm64", "desktop-windows-x64"]);
 });
 
 test("a platform shipping both an installer and a tarball offers the installer", () => {
@@ -54,6 +60,37 @@ test("a platform shipping both an installer and a tarball offers the installer",
     assert.match(got.find(f => f.firmware === "desktop-macos-arm64").binaryUrl, /\.dmg$/);
     assert.match(got.find(f => f.firmware === "desktop-windows-x64").binaryUrl, /-setup\.exe$/);
     assert.match(got.find(f => f.firmware === "desktop-linux-x64").binaryUrl, /\.deb$/);
+    assert.match(got.find(f => f.firmware === "desktop-linux-arm64").binaryUrl, /_arm64\.deb$/);
+});
+
+test("every shipped desktop asset is recognized under its own platform, and an unrelated asset is not", () => {
+    // The names package_desktop.py writes, one per file the release carries.
+    const SHIPPED = {
+        "desktop-macos-arm64": ["MoonLight-macos-arm64-v3.0.0.dmg", "MoonLight-macos-arm64-v3.0.0.tar.gz"],
+        "desktop-windows-x64": ["MoonLight-windows-x64-v3.0.0-setup.exe", "MoonLight-windows-x64-v3.0.0.zip"],
+        "desktop-linux-x64": ["moonlight_3.0.0_amd64.deb", "MoonLight-linux-x64-v3.0.0.tar.gz"],
+        "desktop-linux-arm64": ["moonlight_3.0.0_arm64.deb", "MoonLight-linux-arm64-v3.0.0.tar.gz"],
+    };
+    for (const [key, names] of Object.entries(SHIPPED)) {
+        const got = parseFirmwaresFromAssets(names.map(asset), "v3.0.0");
+        assert.deepEqual(got.map(f => f.firmware), [key]);
+        assert.deepEqual(got[0].assets.map(a => a.name).sort(), [...names].sort());
+    }
+    const none = parseFirmwaresFromAssets(
+        [asset("MoonLight-freebsd-x64-v3.0.0.tar.gz"), asset("moonlight_3.0.0_armhf.deb"), asset("notes.txt")], "v3.0.0");
+    assert.deepEqual(none, []);
+});
+
+test("the picker's desktop list is the registry's desktop rows", () => {
+    // DESKTOP_BUILDS is generated from firmwares.py; each registry row must match an asset of its own.
+    const rows = JSON.parse(readFileSync(join(ROOT, "mooninstaller", "firmwares.json"), "utf8"))
+        .firmwares.filter(f => f.platform === "desktop");
+    assert.ok(rows.length >= 4);
+    for (const row of rows) {
+        const name = row.assets[0].replace(/^\^/, "").replace(/\$$/, "").replace(/\\\./g, ".").replace(".+", "3.0.0").replace(/-v3\.0\.0-setup/, "-v3.0.0-setup");
+        const got = parseFirmwaresFromAssets([asset(name)], "v3.0.0");
+        assert.deepEqual(got.map(f => f.firmware), [row.name], `${row.name}: ${name}`);
+    }
 });
 
 test("a windows installer whose name carries a suffix after the version is still matched", () => {

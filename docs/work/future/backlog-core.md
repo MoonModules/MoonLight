@@ -6,9 +6,17 @@ Forward-looking to-build items for the **core / infrastructure** domain (`src/co
 
 The package holds only the binary, so a Pi or NanoPi user writes `/etc/systemd/system/moonlight.service` by hand from MoonWalk's "Run at boot" step. That unit grants no `CAP_NET_RAW`, so the panel card driver's `AF_PACKET` socket fails unless MoonLight runs as root, and the `setcap` alternative is lost whenever apt replaces `/usr/bin/MoonLight`. `CAP_NET_RAW` is all MoonLight needs, since it sets no interface flags. The fix: `package_desktop.py` installs the unit with `AmbientCapabilities=CAP_NET_RAW` and a dedicated `moonlight` user, so installing is `apt install` plus `systemctl enable --now moonlight`. MoonWalk's unit step shrinks to that enable, and the `setcap` step stays for a binary run by hand.
 
-### Downloads off the tick path (2026-10-13)
+### An HTTPS request on a board without PSRAM (2026-10-24, from the JSON plan)
 
-Every upload moves through the transfer slots; a flash download still writes its whole file on one tick, bounded per chunk by the write deadline. Moving downloads onto the slots too needs a look at how many files the UI reads at once, since two slots answer a third request with 503. Firmware uploads drain whole by design and feed the watchdog.
+A board without PSRAM never fetches over HTTPS: `tlsRoom` asks for the 100 KB internal floor plus a 45 KB TLS session, and a classic ESP32 has 55 KB free at idle. `CONFIG_MBEDTLS_DYNAMIC_BUFFER` allocates mbedTLS's buffers as a connection needs them rather than the worst case up front, which may fit one request on an idle board. To measure on `MM-Olimex` (.207): the peak a session takes with it, what a smaller floor costs WiFi and the HTTP server, and whether a feed then fetches with lights running. Until then such a board gets its data pushed from one with PSRAM.
+
+### A StadBeest eye reset once by the task watchdog (2026-10-24)
+
+On 2026-10-23 eye2 (`MM-Eye2`, an ESP32-S3-Zero) reset once by the task watchdog, shortly after its OSC service was added, with no USB attached to read the panic. It has not recurred: both eyes ran the crossfading autopilot without a reset afterwards, and on 2026-10-24 they report `POWERON` after the beast was switched on. Recorded so a recurrence is recognized: `bootReason` on the System card is the one reading the network gives, since the board keeps no crash record; the panic itself needs the eye on USB with `monitor_esp32.py`.
+
+### What the WiFi buffer copy costs (2026-10-24)
+
+`CONFIG_LWIP_L2_TO_L3_COPY` copies every received frame so a socket the blocked loop stops draining cannot hold the 32 WiFi receive buffers; without it, every firmware upload stalled at 150 to 860 KB. Its cost is unmeasured: the frame rate on a busy DDP stream with and without it, same scene. If it costs much, firmware uploads move onto the transfer slots so nothing blocks the loop, and the copy goes.
 
 ### An update's connection that would not open until a reset (2026-10-22, from the internal RAM plan)
 
@@ -154,6 +162,20 @@ timing test here uses: feed the packet, advance the clock explicitly, assert. Ra
 on PR #96 and deliberately not taken in that pass: it is pre-existing rather than part of that
 diff, and swapping a test's transport is a change that wants its own verification.
 
+## A request body shares the two upload slots (2026-10-25, from the pre-merge review)
+
+A request whose body trails its headers waits in a `FileTransfer` slot (`deferRequest`), of which there are two. With two uploads in flight, a `POST /api/control` whose body comes in a second segment answers 503 "every send slot is busy", and a slow-bodied control write holds an upload slot for the 10 s stall window. A slot of its own for `Kind::Request`, or a count kept apart, separates them; it waits for a user who meets it, since two uploads at once is rare.
+
+## The tests' own clock resets, now the listener's job (2026-10-25)
+
+A doctest listener beside the test main in `test/unit/test_main.cpp` puts the test clock back on the real one before every test case and subcase rerun, so the 88 resets of 49 files (`setTestNowMs(0)` in a guard struct or at a test's end) do the same job twice. Remove them: a guard struct and its uses go, a guard that also restores the heap, the WiFi scan, the palette or the boot record keeps that half, and a bare reset in the middle of a test stays wherever the rest of that test reads the real clock. About 150 lines, proven by the full suite.
+
+## Three decisions left open by the code ratchets (2026-10-25, from the Code ratchets plan)
+
+- **Name spread's limit**, 10 files beyond a type's own (`MAX_SPREAD` in `check_code.py`), which no tool defaults: confirm or move. Recommended: confirm, since the count only ratchets down.
+- **A gate runner for agentless development**: the gate lists are run by an agent today, and a local-model or agentless workflow wants one runnable command per event. `precommit.py` went on 2026-10-01; whether one returns, and in what shape.
+- **Undocumented public declarations**: a generated page shows an empty entry for each, which argues for a docgen rule, while cut-first argues against comments for their own sake. The middle way counts only public declarations in headers that generate a page.
+
 ## What disable means: release the memory, or keep the module hot (2026-10-20)
 
 The rule says a disabled module keeps its settings only, and deleting a module already releases everything, so the question is whether disable should release too or keep the module hot for an instant resume. The contract test (`unit_ModuleContract.cpp`) lists the modules that keep runtime memory while disabled, Layer and Drivers with their pixel buffers the largest, and fixing them would settle the answer, so they wait for it. The analysis weighs: presets and DemoReel switching many modules, where kept memory grows with what is added rather than what runs; a quick toggle, where hot means an instant resume; the measured re-enable cost of every module, its `prepare()` time, gathered with the contract test's placement; three shapes, release on disable, keep everything hot until delete, or keep the settings and what is slow to rebuild while releasing the large buffers; and how comparable systems treat a disabled or paused element. The product owner decides, and the rule in coding-standards, the contract's lists and the Layer and Drivers fix follow.
@@ -202,7 +224,7 @@ Pinned on the bench: every device answering its `.local` name and listed in the 
 ## A MoonLive control past a limit vanishes without a word (2026-10-08)
 
 **Found** in review: an `addSelect` with a 17th option, or one whose names overflow the 96-character option store, adds no control at all, and nothing tells the script's author why.
-The other limits of `addDeclaredControl` behave the same way: past `kMaxCtrls` controls, a member already bound, or a slot running past the arena.
+The other limits of `addDeclaredControl` behave the same way: past `kMaxCtrls` controls, a member already bound, a slot running past the arena, or names past the engine's 128-character name store (`nameText_`, about sixteen controls of seven characters).
 
 **The fix to build:** each refusal names itself on the effect's status line, as a compile error does, such as `control "shape": more than 16 options`, so the author sees which declaration lost and why.
 Pinned by a test per limit that reads the status.
@@ -273,13 +295,6 @@ identifier gets rewritten by accident.
 ## `check_docgen` reads declarations from the clang AST (2026-10-15)
 
 The "public member has no `///`" rule reads a declaration's shape with a regex and tracks access by counting braces. It missed 25 functions carrying `MM_NONBLOCKING` until the pattern learned that macros follow a parameter list, and its comments list the other shapes it once misread. `check_clang_query.py` and `gen_help.py` already parse every header with libclang, which knows each declaration's access, kind and attached doc comment. Moving the rule onto that parse removes the brace counting, the depth stack and the shape patterns, and it reaches `.cpp` files, which the regex cannot read.
-
-## A capture device on Linux feeds the Picture service (robwomp, 2026-10-21)
-
-The [Streams plan](../present/Plan-20261013%20-%20Streams%2C%20every%20frame%20from%20outside%20(partial).md) brings capture to the ESP32: a USB grabber on the P4 ([#151](https://github.com/MoonModules/MoonLight/pull/151), [#152](https://github.com/MoonModules/MoonLight/pull/152)) and a MIPI-CSI camera.
-On the desktop build a capture device is read through Video4Linux (V4L2), which covers USB grabbers and the HDMI and CSI inputs of boards such as Rockchip SBCs.
-It is one more source of the picture family: the platform layer reads frames, and the Picture service takes them as it takes every other source.
-robwomp has such boards and offered to test on Discord.
 
 ## Distribution
 
@@ -1238,9 +1253,13 @@ the sixth silent-zero this tooling has produced, and each looked like a clean tr
 
 `HueDriver::ensureNameBuffers()` / `freeNameBuffers()` is the alloc-in-build / free-in-release / null-guard bundle that `ScratchBuffer` absorbs — and it does **no** `dynamicBytes` accounting, so the module's memory readout under-reports its Hue-light name buffers. It was skipped in the ScratchBuffer migration (its buffers are `char[]` name tables, not the grid-sized state the sweep targeted). Now that `DriverBase::release()` chains to `MoonModule::release()` (fixed on PR #43), a `ScratchBuffer` member here would free correctly on disable and self-report its bytes. Mechanical, one-file, behaviour-preserving. Flagged by the 👾 Reviewer on PR #43.
 
-### Socket-pair fixture for HttpServerModule WS-send tests (test infra)
+### Link-time optimisation on the ESP32 builds (measure)
 
-`HttpServerModule`'s resumable preview send (`sendBufferedFrame` / `drainPreviewSend` / `cancelBufferedSend`, the newest-wins drop, the per-client cursor over `[hdr ++ body]`, the memory-adaptive chunk) has no direct unit test because driving it needs real `TcpConnection` clients whose `writeSome` returns partial / WouldBlock under control — and there's no socket-pair test fixture today. The send *contract* is covered indirectly: `unit_PreviewDriver` drives a `CaptureBroadcaster` mock for route-to-buffered / gate-on-idle / cancel-on-rebuild, and the live device sweep exercises the real drain across ticks. A loopback `socketpair()` fixture on the desktop platform (a `TcpConnection` pair where the test reads the bytes the server pushed, and can simulate a stalled receiver by not draining) would let the drain/drop/cancel/over-push paths be pinned host-side. Build it when the next core transport change lands (it'd also serve future WS tests).
+Splitting `HttpServerModule` into three files cost 7,360 bytes on the classic ESP32 (2,129,216 to 2,136,576), the compiler no longer inlining across the files. Link-time optimisation (`-flto`) optimises the whole program at the link and wins that back, and likely more across the firmware. ESP-IDF's current docs offer it as `CONFIG_COMPILER_LTO_LINKTIME`; v6.1, which MoonLight builds with, has no such option. Try it once the ESP-IDF release MoonLight moves to offers it, per board: the image size, the IRAM placement in the map file (an interrupt handler must not inline code from flash), a run on the RMT and parallel drivers, and the build time, which LTO makes two to three times longer.
+
+### Pin the preview cancel over loopback (test)
+
+`cancelBufferedSend` closes a preview client left mid-message, so the next frame is never read as the rest of this one, and nothing pins it. The loopback `WsClient` in `unit_HttpServerModule_subscribe.cpp` already drives `/wsp` and reads a frame whole; a client that stops reading mid-frame, then a cancel, then a check that its socket closed while a client that read the whole frame stays open, covers it.
 
 ### Adopting the v6.x ecosystem changes (plan)
 
@@ -1414,16 +1433,9 @@ Compile-time answer already ships: `--firmware esp32-eth` excludes the WiFi stac
 
 Forward-looking companion to the shipped UI spec, [moonmodules/core/ui.md](../../moonmodules/core/ui.md). The live spec describes the UI as shipped; this file holds what is **not** in it yet: deferred items, open design questions for 1.0, and the gap analysis against MoonLight v1.
 
-### Serving the UI: ETags, one minified bundle, then a split app.js (2026-10-15)
+### Split app.js by feature (2026-10-15)
 
-Every embedded UI file is served with `Cache-Control: no-cache` and no ETag, so each page load downloads the whole UI again, about 280 KB gzipped, written inline on the render thread: frames stall while a page loads. Three steps, in this order, each standing on its own:
-
-1. **ETags.** `embed_ui.cmake` hashes each file at build time and writes the tag into `ui::kFiles`; the server answers a matching `If-None-Match` with `304 Not Modified` and no body (RFC 9110). A reload then costs a few hundred bytes, and a firmware update changes the tags, so the browser fetches the new UI by itself. `no-cache` stays: it already means "ask before using the cache".
-2. **Bundle and minify at build time, WLED's shape.** WLED's `tools/cdata.js` inlines its CSS and JavaScript into one HTML, minifies and gzips it, and serves one file. Our UI is ES modules, so joining them is a bundler's job: esbuild bundles and minifies in one pass. One request, one compression dictionary and no import chain on load. Measured on 2026-10-15 with esbuild 0.24: the 8 JavaScript files gzip to 217 KB today, to 96 KB bundled (the comments go) and to 67 KB minified, and `style.css` to 9 KB from 28.5 KB minified. That is about 170 KB of flash, the embedded UI going from 254 KB to 84 KB; joining files alone saves only 3 KB, so the gain is the comments. It loads faster too: a first load sends a third of the bytes through the render thread over WiFi, so the page appears sooner and the lights stall a third as long, while the UI runs at the same speed once loaded. The step to take when the firmware nears its partition. The desktop keeps serving the separate files from disk for live editing. To decide first: esbuild as a build dependency of the ESP32 and desktop builds, which need only Python today (PyPI, npm or a standalone binary).
-3. **Split `app.js` by feature, not by module.** Almost every card comes from the one generic renderer, so the candidates are the features with their own UI: the control surface and pads, the File Manager, the gallery, the MoonLive editor, the preview, the status bar. Six to ten files, the shape `preview3d.js`, `help.js`, `migrate.js` and `gif.js` already have. With step 2 a split costs nothing at runtime; without it, each file costs a connection on load (a browser opens up to 6, beside the two WebSockets), a short RAM peak of lwIP buffers, a little render-thread time per request, and about 3 KB of flash for an eight-way split, measured as the gap between the files gzipped apart and joined.
-4. **One home for the file list.** The build files glob `src/ui` for their dependencies while `embed_ui.cmake` keeps `UI_FILES` by hand, so a file can rebuild the firmware yet never be served. `embed_ui.cmake` globbing the directory itself makes the set one list; the first step of the bundle above replaces both.
-
-Measure a first load and a reload on an ESP32 before and after each step, so the numbers decide rather than the reasoning.
+The UI ships as one minified bundle with ETags, so splitting `app.js` costs nothing at runtime. Almost every card comes from the one generic renderer, so the candidates are the features with their own UI: the control surface and pads, the File Manager, the gallery, the MoonLive editor, the preview, the status bar. Six to ten files, the shape `preview3d.js`, `help.js`, `migrate.js` and `gif.js` already have. Worth it once a feature is hard to find in the 500 KB source.
 
 ### Deferred to 1.x
 
@@ -2024,7 +2036,7 @@ Lower risk than the RGMII case (six pins rather than twelve, and nothing of ours
 
 ## Input transports: foot pedals, USB game controllers, and MoonLive at the pins (2026-09-01)
 
-`ButtonService` shipped with the [GPIO seam](../present/Plan-20260901%20-%20Input%20mapping%20and%20scripted%20sensors%20(partial).md)
+`ButtonService` shipped with the [GPIO seam](../present/Plan-20260901%20-%20Input%20mapping%20and%20scripted%20sensors%20(7%20of%2012).md)
 (`gpioInputBegin` / `gpioRead` / `gpioWrite`). It names a target as `Module.control` and writes it
 through `Scheduler::setControl`, so a press and an OSC message are indistinguishable downstream.
 Three follow-ups build on that seam rather than beside it.
@@ -2066,6 +2078,10 @@ gains driver scripts whose hello-world is "read from GPIO, write to GPIO", which
 
 `ButtonService` is then the precompiled sibling of a script anyone could write, exactly the
 relationship `ballpit.mle` has with `BallpitEffect`.
+
+**Double-click and multi-click** (2026-10-25), from ESPHome's trigger vocabulary: the same debounce
+timers with more states, so one button does several things. Built when a panel needs more actions
+than it has buttons.
 
 ## Relay-gated boards, and what a driver is (2026-09-01)
 

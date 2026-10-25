@@ -86,6 +86,7 @@ bool FilesystemModule::removeTree(const char* path, uint8_t depth) {
 
 FilesystemModule::~FilesystemModule() {
     if (instance_ == this) instance_ = nullptr;
+    platform::free(skippedStr_);
 }
 
 void FilesystemModule::setScheduler(Scheduler* s) {
@@ -224,6 +225,12 @@ void FilesystemModule::loadSubtree(Scheduler& s, MoonModule* m) {
     const bool flat = flatToStateDocument(buf, *m, converted);
     const StateDocumentResult r = applyStateDocument(s, flat ? converted.data() : buf, StateSource::Boot);
     if (!r.ok) std::printf("FilesystemModule: %s not loaded: %s\n", path, r.error);
+    // The board migrates nothing, so the first module it drops is named until the next boot. Only a backup taken before the next save still holds it, since that save rewrites the file without it. Allocated only then, since nearly every boot drops nothing.
+    constexpr size_t kSkippedLen = 192;   // the 64-byte path, the reason and the hint
+    if (r.skipped && !skippedStr_) {
+        skippedStr_ = static_cast<char*>(platform::alloc(kSkippedLen));
+        if (skippedStr_) std::snprintf(skippedStr_, kSkippedLen, "%s skipped at boot: %s; back up before anything is saved, then restore to migrate it", r.where, r.error);
+    }
     if (flat && r.ok) {
         std::printf("FilesystemModule: %s converted to a state document\n", path);
         m->markDirty();

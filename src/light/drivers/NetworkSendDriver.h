@@ -110,6 +110,7 @@ public:
         controls_.setHidden(controls_.count() - 1, kModeCount[p] < 2);
         const bool unicast = mode() == Addressing::Unicast;
         controls_.addText("hosts", hosts, sizeof(hosts));
+        controls_.setHostsField(controls_.count() - 1);
         controls_.setHidden(controls_.count() - 1, !unicast);
         controls_.addText("lightsPerHost", lightsPerHost, sizeof(lightsPerHost));
         controls_.setHidden(controls_.count() - 1, !unicast);

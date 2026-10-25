@@ -354,17 +354,31 @@ TEST_CASE("RmtLedDriver window: count 0 means the rest of the buffer from start"
     CHECK(d.pinLightCount(0) == 64);          // 65 - 1 = 64
 }
 
-// The DEFAULT window (count_ = kWindowAll = 65535) must mean "all lights", even on a buffer LARGER than 65535. nrOfLightsType is uint32 on a PSRAM board (the desktop test target), so a big grid can exceed 65535, treating the default as a literal 65535 count would silently cap output there. Tested on the window slice directly (a driver's per-pin WS2812 cap would otherwise mask it).
-TEST_CASE("window: default kWindowAll resolves to ALL lights on a >65535 buffer") {
-    mm::RmtLedDriver d;   // any concrete DriverBase — the window math lives on the base
-    // Fresh driver: start_ = 0, count_ = kWindowAll (no setWindow). A 70000-light buffer exceeds 65535.
-    CHECK(d.resolveWindowLenForTest(70000) == 70000);   // ALL of it, not capped at 65535
-    // An explicit real count still clamps to the buffer, unchanged.
-    d.setWindow(/*start=*/0, /*count=*/1000);
-    CHECK(d.resolveWindowLenForTest(70000) == 1000);
-    // Explicit 0 still means "to the end" (the belt-and-braces sentinel), even past 65535.
-    d.setWindow(/*start=*/0, /*count=*/0);
-    CHECK(d.resolveWindowLenForTest(70000) == 70000);
+// A wall with PSRAM holds more than 65535 lights (nrOfLightsType is 32 bits there, and on the desktop test target), so the window counts past it: tested on the slice directly, since a driver's per-pin WS2812 cap would mask it.
+TEST_CASE("window: the default reads all of a buffer past 65535 lights, and a window starts and counts past it") {
+    mm::RmtLedDriver d;   // any concrete DriverBase: the window math lives on the base
+    CHECK(d.windowCount() == 0);                         // the default is 0, all lights
+    CHECK(d.resolveWindowLenForTest(294912) == 294912);   // a 768x384 wall, whole
+    // Two panel cards splitting that wall: the second half starts at light 147456.
+    d.setWindow(/*start=*/147456, /*count=*/0);
+    CHECK(d.resolveWindowLenForTest(294912) == 147456);
+    d.setWindow(/*start=*/0, /*count=*/100000);
+    CHECK(d.resolveWindowLenForTest(294912) == 100000);   // a count past 65535 is a count, not "all"
+}
+
+TEST_CASE("window: start and count are typed numbers, never a slider over two billion lights") {
+    mm::RmtLedDriver d;
+    d.defineControls();
+    int found = 0;
+    for (uint8_t i = 0; i < d.controls().count(); i++) {
+        const auto& c = d.controls()[i];
+        if (std::strcmp(c.name, "start") != 0 && std::strcmp(c.name, "count") != 0) continue;
+        CAPTURE(c.name);
+        CHECK(c.min == 0);
+        CHECK(c.numberField);
+        found++;
+    }
+    CHECK(found == 2);
 }
 
 TEST_CASE("RmtLedDriver window: a size-1 window at 0 is the onboard-LED case") {

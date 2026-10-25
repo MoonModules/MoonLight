@@ -119,10 +119,9 @@ def test_a_blocking_call_on_the_render_path_is_a_row_per_site(monkeypatch):
     assert check_code.build_warnings() is None
 
 
-def test_the_two_boundaries_are_counted_where_the_architecture_draws_them():
-    """Platform code belongs in src/platform and core includes nothing of the light domain; a comment or another folder crosses nothing."""
+def test_the_platform_boundary_is_counted_where_the_architecture_draws_it():
+    """Platform code belongs in src/platform; a comment or another folder crosses nothing."""
     find = lambda rel, text: [(r[1], r[2]) for r in check_code.boundary_findings(rel, text.splitlines())]
-    assert find("src/core/a.h", '#include "light/drivers/Drivers.h"  // the light count') == [(check_code.CORE_LIGHT, 'line 1: #include "light/drivers/Drivers.h"')]
     assert find("src/light/a.h", '#include "light/drivers/Drivers.h"') == []
     assert find("src/light/a.h", "#include <esp_timer.h>\n#ifdef ESP_PLATFORM\nif constexpr (platform::hasWiFi) {}") == \
         [(check_code.PLATFORM, "line 1: #include <esp_timer.h>"), (check_code.PLATFORM, "line 2: #ifdef ESP_PLATFORM")]
@@ -290,6 +289,16 @@ def test_a_header_must_guard_with_pragma_once_and_never_say_using_namespace():
     assert [r[1] for r in c.header_findings("src/core/A.h", "#ifndef A_H\n#define A_H\n#endif\n")] == [c.NO_PRAGMA]
     assert [r[1] for r in c.header_findings("src/core/A.h", "#pragma once\nusing namespace mm;\n")] == [c.HEADER_USING]
     assert c.header_findings("src/core/A.cpp", "using namespace mm;\n") == []   # a .cpp may, at file scope
+
+
+def test_an_include_path_through_dot_or_dot_dot_is_a_finding_so_the_include_root_holds_the_boundaries():
+    import check_code as c
+    assert [r[1] for r in c.relative_include_findings("src/core/A.h", ['#include "../../light/drivers/Drivers.h"'])] == [c.RELATIVE_INCLUDE]
+    assert [r[1] for r in c.relative_include_findings("src/core/A.h", ['#include "core/../light/x.h"', '#include "./B.h"'])] == [c.RELATIVE_INCLUDE] * 2
+    assert c.relative_include_findings("src/core/A.h", ['#include "core/util/B.h"', '#include "B.h"', '#include <cstdint>', '// #include "../x.h"']) == []
+    assert c.relative_include_findings("test/unit/light/a.cpp", ['#include "../core/x.h"']) == []   # tests are outside src/
+    # The real tree: every firmware include is named from src/ or beside its includer.
+    assert not [r for r in c.style_rows() if r[1] == c.RELATIVE_INCLUDE]
 
 
 def test_the_type_double_is_a_finding_in_firmware_and_a_word_in_a_string_or_a_comment_is_not():

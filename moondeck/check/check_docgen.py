@@ -43,10 +43,7 @@ PREVIEWLESS_PAGES = _hooks.PREVIEWLESS_PAGES
 # A card is read across a row; a member comment is read beside the thing it describes,
 # and the generated page shows its first sentence as the summary. So the budget is one
 # line: cut first, and only a fact neither the code nor the spec says goes after `@technical`.
-# The word cap is 30: a sentence is one thought and past twenty it is
-# usually two, but that is writing advice, and a gate stops a commit only on a real
-# ramble. Measured over the tree, 20 fired on the median sentence and 30 leaves the
-# outliers alone. Vale's SentenceLength carries the same 30 as a suggestion.
+# No cap counts words per sentence: splitting a sentence meets one and leaves the paragraph as long.
 # EVERY C++ source in the repository, not a list of directories inside one of them. A list is a
 # tolerance wearing different clothes: each directory it omits is silently exempt, and nobody
 # notices a new one appearing. `src` is the bulk; the rest are the entry points, the ISA generator
@@ -66,7 +63,6 @@ HEADER_EXEMPT = ("src/platform/desktop/vendor/", "src/ui/vendor/", "test/doctest
 MAX_CLASS_DOC = 10      # lines of `///` directly above `class X`
 MAX_TECHNICAL_SECTION = 10  # lines of ONE `## ` section inside the `@technical` appendix
 MAX_MEMBER_DOC = 1      # lines of a `///` run that is NOT a class comment
-MAX_DOC_WORDS = 30      # words in one sentence of a comment, `///` or `//`
 # Characters of one `//` line, whatever it holds. The word budget governs a sentence and the
 # no-wrap rule keeps a sentence whole, so neither bounds a line carrying several of them: without
 # this a comment stays legal while running off the side of the screen. Related sentences share a
@@ -223,7 +219,7 @@ _RULE_NAMES = (
     "code comment", "comment line", "doc line", "lead",
     "unreferenced appendix section", "appendix section",
     "class comment", "member comment", "no image", "image is", "one control",
-    "doc sentence", "hard wrap", "split paragraph", _STALE_HELP_RULE,
+    "hard wrap", "split paragraph", _STALE_HELP_RULE,
     _RESTATES_RULE, _GUIDE_REPEATS_RULE, _HELP_SIZE_RULE, _GUIDE_NAMES_CONTROL_RULE, _HELP_LINE_RULE,
     _TAG_GROUP_RULE, _NOTE_ON_DECL_RULE, _PROCESS_SIZE_RULE, _PROCESS_REPEAT_RULE,
 )
@@ -242,7 +238,6 @@ _RULE_LABELS = {
     "file opens with //": "files opening with //",
     "file lead missing": "missing file leads",
     "class comment": "over-long class comments",
-    "doc sentence": "over-long sentences",
     "comment line": "over-wide comment lines",
     "doc line": "over-wide doc lines",
     "lead": "over-long leads",
@@ -294,7 +289,7 @@ def _headers():
                 rel = p.relative_to(ROOT)
                 if rel.as_posix().startswith(HEADER_EXEMPT) or rel in seen:
                     continue
-                # Tracked files only, as repo_health measures: a header a build generates (build_info.h, ui_embedded.h) moved the counts with whatever was built last.
+                # Tracked files only, as repo_health measures: a header a build generates (build_id.h, ui_embedded.h) moved the counts with whatever was built last.
                 if tracked is not None and rel.as_posix() not in tracked:
                     continue
                 seen.add(rel)
@@ -342,19 +337,6 @@ def _appendix_growth() -> list:
         if now > was:
             out.append((rel, was, now))
     return out
-
-
-def _sentences(text: str):
-    """The sentences in one comment line, for the word cap.
-
-    A full stop, question mark or exclamation followed by a space ends one. An abbreviation
-    ("e.g.", "i.e.") and a decimal ("0.1 bpp") carry a full stop that ends nothing, so a split
-    there would report two short sentences where there is one long one, which is the opposite
-    of what the cap is for. Both are rare in a comment and neither can lengthen a sentence,
-    so the split is deliberately simple: it can merge, never wrongly divide.
-    """
-    parts = re.split(r"(?<=[.!?])\s+(?=[A-Z`\"'(\[])", text)
-    return [p for p in (x.strip() for x in parts) if p]
 
 
 def _prose_pair(lines: list, k: int, end: int, start: int):
@@ -695,12 +677,7 @@ def _header_rules(rel: str, text: str):
             if chars > MAX_RUN_CHARS:
                 out.append((f"{rel}::line {start + 1}",
                             f"lead {chars} chars > {MAX_RUN_CHARS}"))
-            # The word cap applies here too: the file lead is prose a reader sees.
             for k in range(start, end):
-                for sentence in _sentences(re.sub(r"^\s*///\s*", "", lines[k]).strip()):
-                    if len(sentence.split()) > MAX_DOC_WORDS:
-                        out.append((f"{rel}::line {k + 1}",
-                                    f"doc sentence {len(sentence.split())} words > {MAX_DOC_WORDS}"))
                 width = len(re.sub(r"^\s*///\s?", "", lines[k]))
                 if width > MAX_LEAD_LINE_CHARS:
                     out.append((f"{rel}::line {k + 1}",
@@ -739,17 +716,6 @@ def _header_rules(rel: str, text: str):
                             f"member comment {prose} lines > {MAX_MEMBER_DOC}: "
                             f"cut it to one line"))
         for k in range(start, end):
-            # PER SENTENCE, not per line. The no-wrap rule makes a line a paragraph, so a line
-            # holding three short sentences is correct and a single rambling one is not: counting
-            # the line would fail the first and pass nothing the standards care about. The rule
-            # reads "a sentence is one thought; past twenty words it is usually two", which is a
-            # statement about sentences.
-            text_ = re.sub(r"^\s*///\s*", "", lines[k]).strip()
-            for sentence in _sentences(text_):
-                words = len(sentence.split())
-                if words > MAX_DOC_WORDS:
-                    out.append((f"{rel}::line {k + 1}",
-                                f"doc sentence {words} words > {MAX_DOC_WORDS}"))
             # A LEAD's line is wider than a member's: it carries what the whole type is for,
             # and held to the member cap the driver headers each lost about a third of that.
             cap = MAX_LEAD_LINE_CHARS if _CLASS_RE.match(nxt) else MAX_COMMENT_LINE_CHARS
@@ -844,18 +810,7 @@ def _header_rules(rel: str, text: str):
                 nxt = next((lines[k].strip() for k in range(j, len(lines)) if lines[k].strip()), "")
                 out.append((f"{rel}::{_declared_key(nxt, i) if nxt else f'line {i + 1}'}",
                             f"code comment {j - i - structural} lines > {cap}"))
-            # The same word budget as a `///` line, and measured the same way: PER SENTENCE.
-            # Counting the whole line instead made this rule fight the no-wrap rule above, which
-            # asks for one sentence per line: a dense three-sentence comment then had to fan out
-            # over three lines to pass, which is longer to read rather than shorter. A line
-            # carrying several short sentences is good writing, and one rambling sentence is not.
             for k in range(i, j):
-                text_ = re.sub(r"^\s*//+\s*", "", lines[k]).strip()
-                for sentence in _sentences(text_):
-                    words = len(sentence.split())
-                    if words > MAX_DOC_WORDS:
-                        out.append((f"{rel}::line {k + 1}",
-                                    f"comment line {words} words > {MAX_DOC_WORDS}"))
                 width = len(re.sub(r"^\s*//+\s?", "", lines[k]))
                 if width > MAX_COMMENT_LINE_CHARS:
                     out.append((f"{rel}::line {k + 1}",
@@ -1373,8 +1328,7 @@ def main() -> int:
         print()
     if not found and not risen:
         print(f"Docgen check: clean. Limits: one control {MAX_CONTROL} "
-              f"({MAX_CONTROL_VISUAL} visual), one comment line, "
-              f"{MAX_DOC_WORDS} words.")
+              f"({MAX_CONTROL_VISUAL} visual), one comment line.")
         return 0
 
     print(f"Docgen check: {len(errors)} error(s), {len(warnings)} warning(s).\n")

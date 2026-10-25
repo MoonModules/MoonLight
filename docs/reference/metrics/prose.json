@@ -1,13 +1,13 @@
 {
- "(total)": 2327,
- "MoonLight.EmDash": 1114,
+ "(total)": 2017,
+ "MoonLight.EmDash": 1111,
  "MoonLight.LinkText": 7,
  "MoonLight.NegatedHeading": 6,
+ "MoonLight.SectionLength": 32,
  "MoonLight.SelfReference": 17,
- "MoonLight.SentenceLength": 316,
  "MoonLight.Spelling": 39,
- "MoonLight.Temporal": 183,
+ "MoonLight.Temporal": 174,
  "MoonLight.TonePadding": 1,
  "MoonLight.VagueClose": 28,
- "MoonLight.Weasel": 616
+ "MoonLight.Weasel": 602
 }

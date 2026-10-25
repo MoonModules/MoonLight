@@ -18,6 +18,8 @@ CONFIG_HEAP_HAS_EXEC_HEAP=y
 
 # A MIDI desk on the board's own USB port: the MIDI service's USB source.
 CONFIG_MM_USB_MIDI_HOST=y
+# Through a powered hub, since a desk such as the APC40 takes its power from USB and the board's port supplies none.
+CONFIG_USB_HOST_HUBS_SUPPORTED=y
 
 # The Waveshare ESP32-S3-RGB-Matrix's microphones sit behind an ES7210.
 CONFIG_MM_AUDIO_CODEC=y

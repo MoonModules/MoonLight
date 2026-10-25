@@ -1,13 +1,24 @@
 /// @module HttpServerModule
 /// @also FileManagerModule
 ///
-/// An upload to flash moves through the card's transfer slots, a bounded slice per tick, so a slow client never holds the render loop; driven over loopback.
+/// An upload to flash and a download from it move a bounded slice per tick, so a slow client never holds the render loop; driven over loopback.
 
 #include "doctest.h"
 #include "core/system/HttpServerModule.h"
 #include "platform/platform.h"
 #include "http_loopback.h"
 
+// RealtimeSanitizer prints a report for every unsafe call inside a tick, which inflates a tick's wall time; a timing bound means nothing under it.
+#if defined(__has_feature)
+#if __has_feature(realtime_sanitizer)
+#define MM_UNDER_REALTIME_SANITIZER 1
+#endif
+#endif
+#ifndef MM_UNDER_REALTIME_SANITIZER
+#define MM_UNDER_REALTIME_SANITIZER 0
+#endif
+
+#include <algorithm>
 #include <chrono>
 #include <cstdio>
 #include <cstring>
@@ -106,6 +117,52 @@ TEST_CASE("a flash upload whose client stalls never holds a tick, and once the s
     http.release();
 }
 
+// A flash download once wrote its whole file in one call, so a client that stopped reading held the render loop until the write gave up.
+TEST_CASE("a flash download whose client stops reading never holds a tick, and the stall guard closes it") {
+    FlashFixture fix;
+    const std::string big = pattern(16u << 20);   // more than the loopback socket buffers hold
+    REQUIRE(mm::platform::fsWriteAtomic("/big.bin", big.data(), big.size()));
+    mm::HttpServerModule http;
+    http.port = kTestPort;
+    http.setup();
+    mm::platform::TcpConnection client;
+    REQUIRE(connectAndAccept(http, client, kTestPort));
+    const char* req = "GET /api/file?path=/big.bin HTTP/1.1\r\n\r\n";
+    REQUIRE(client.write(reinterpret_cast<const uint8_t*>(req), std::strlen(req)));
+
+    long long slowestMs = 0;
+    for (int i = 0; i < 20; i++) {
+        const auto t0 = std::chrono::steady_clock::now();
+        http.tick20ms();
+        slowestMs = std::max<long long>(slowestMs, std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - t0).count());
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+#if !MM_UNDER_REALTIME_SANITIZER
+    CHECK(slowestMs < 50);   // the reader takes nothing: each tick writes what the socket holds and moves on
+#endif
+
+    // A second a tick, so the socket fills however slowly the build writes, and the guard closes once a whole window moves nothing.
+    const uint32_t start = mm::platform::millis();   // on from the real clock the first ticks ran on, never back
+    for (uint32_t t = start + 1000; t < start + 300000; t += 1000) {
+        mm::platform::setTestNowMs(t);
+        http.tick20ms();
+    }
+    // The client finds what the socket held, then the close: never the whole file.
+    size_t got = 0;
+    int n = -1;
+    static char buf[65536];
+    for (int ms = 0; ms < 5000 && n != 0; ) {
+        n = client.read(reinterpret_cast<uint8_t*>(buf), sizeof(buf));
+        if (n > 0) got += static_cast<size_t>(n);
+        else if (n < 0) { std::this_thread::sleep_for(std::chrono::milliseconds(1)); ms++; }
+    }
+    CHECK(n == 0);
+    CHECK(got < big.size());
+
+    client.close();
+    http.release();
+}
+
 TEST_CASE("a flash upload over the flash size bound is refused with 413 before any byte lands") {
     FlashFixture fix;
     mm::HttpServerModule http;
@@ -121,4 +178,74 @@ TEST_CASE("a flash upload over the flash size bound is refused with 413 before a
 
     client.close();
     http.release();
+}
+
+// A 16 MB /cfg.json, more than the loopback socket buffers hold, downloaded by a reader that reads nothing, so the download stays open, and an upload of "new" over it.
+struct HeldDownload {
+    const std::string old = pattern(16u << 20);
+    const char* get = "GET /api/file?path=/cfg.json HTTP/1.1\r\n\r\n";
+    mm::HttpServerModule http;
+    mm::platform::TcpConnection reader, writer;
+    HeldDownload() {
+        REQUIRE(mm::platform::fsWriteAtomic("/cfg.json", old.data(), old.size()));
+        http.port = kTestPort;
+        http.setup();
+        REQUIRE(connectAndAccept(http, reader, kTestPort));
+        REQUIRE(reader.write(reinterpret_cast<const uint8_t*>(get), std::strlen(get)));
+        for (int i = 0; i < 5; i++) http.tick20ms();   // the download starts and stalls
+        REQUIRE(connectAndAccept(http, writer, kTestPort));
+        postStart(writer, "/cfg.json", 3, "new");
+    }
+    // NOLINTNEXTLINE(bugprone-exception-escape)
+    ~HeldDownload() noexcept {
+        reader.close();
+        writer.close();
+        http.release();
+    }
+};
+
+// The bug this pins: LittleFS cannot replace an open file, so a Restore writing a config file another client was downloading failed with 500 and lost its settings.
+TEST_CASE("a file being downloaded is replaced once its reader is done, and a new read meanwhile answers 503") {
+    FlashFixture fix;
+    struct Clock { ~Clock() { mm::platform::setTestNowMs(0); } } clock;
+    mm::platform::setTestNowMs(1000);   // frozen at an even millisecond, where a wait start of `now | 1` lay ahead of now and gave up at once
+    HeldDownload held;
+    const std::string early = pumpUntil(held.http, held.writer, 12, 20);
+    CHECK_MESSAGE(early.empty(), early);   // no answer while the file is open, where it answered 500
+
+    mm::platform::TcpConnection late;
+    REQUIRE(connectAndAccept(held.http, late, kTestPort));
+    REQUIRE(late.write(reinterpret_cast<const uint8_t*>(held.get), std::strlen(held.get)));
+    CHECK(pumpUntil(held.http, late, 12).rfind("HTTP/1.1 503", 0) == 0);   // a new read waits for the write, so readers cannot starve it
+
+    held.reader.close();   // the download ends, and the write commits
+    CHECK(pumpUntil(held.http, held.writer, 12).rfind("HTTP/1.1 200", 0) == 0);
+    char back[8] = {};
+    CHECK(mm::platform::fsRead("/cfg.json", back, sizeof(back)) == 3);
+    CHECK(std::strcmp(back, "new") == 0);
+    late.close();
+}
+
+// A reader still reading after a whole stall window does not hold an upload forever: the upload answers 503, its client retries, and the file stays as it was.
+TEST_CASE("an upload waiting a whole stall window for a slow reader answers 503 and leaves the file as it was") {
+    FlashFixture fix;
+    struct Clock { ~Clock() { mm::platform::setTestNowMs(0); } } clock;
+    mm::platform::setTestNowMs(1000);
+    HeldDownload held;
+    std::string reply;
+    static char buf[128 * 1024];
+    for (int second = 1; second <= 12 && reply.empty(); second++) {
+        for (size_t got = 0; got < sizeof(buf);) {   // more than one loopback segment each second, so the window reopens and the download's own stall guard stays quiet
+            const int n = held.reader.read(reinterpret_cast<uint8_t*>(buf) + got, sizeof(buf) - got);
+            if (n <= 0) break;
+            got += static_cast<size_t>(n);
+        }
+        mm::platform::setTestNowMs(1000 + second * 1000);
+        for (int i = 0; i < 3; i++) { mm::platform::delayMs(1); held.http.tick20ms(); }
+        reply = pumpUntil(held.http, held.writer, 12, 3);
+    }
+    CHECK(reply.rfind("HTTP/1.1 503", 0) == 0);
+    char head[4] = {};
+    CHECK(mm::platform::fsRead("/cfg.json", head, sizeof(head)) > 0);
+    CHECK(std::memcmp(head, held.old.data(), 3) == 0);   // the old file, whole: nothing half-committed
 }

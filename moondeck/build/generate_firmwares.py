@@ -16,12 +16,15 @@ check_firmwares.py guards the committed file against drift from FIRMWARES.
 "Firmware" here is the compiled binary variant, separate from "board" (the
 physical hardware). See docs/explanation/architecture/index.md § Firmware vs board.
 
+The desktop rows also land in src/ui/install-picker.js, between its `generated:desktop-builds` markers: the picker is embedded in the firmware, where no firmwares.json can be fetched.
+
 Inputs:
   --out <path>   firmwares.json destination (mooninstaller/firmwares.json).
 """
 
 import argparse
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -51,6 +54,8 @@ def build_doc() -> dict:
                 "eth_only": spec["eth_only"],
                 "ships": spec["ships"],
                 "description": spec["description"],
+                # A desktop row also names its download: the label the installer shows and the asset patterns, preferred form first.
+                **{k: spec[k] for k in ("label", "assets") if k in spec},
             }
             # FLASHABLE variants only. This file feeds the WEB INSTALLER, the list of things a
             # user puts on a board, so a variant that is not silicon has no place in it. The QEMU
@@ -60,6 +65,22 @@ def build_doc() -> dict:
             for name, spec in FIRMWARES.items() if spec.get("installable", True)
         ]
     }
+
+
+PICKER = Path(__file__).resolve().parent.parent.parent / "src" / "ui" / "install-picker.js"
+_BLOCK = re.compile(r"(// <generated:desktop-builds>.*?\n)(.*?)(// </generated:desktop-builds>)", re.S)
+
+
+def picker_block(doc: dict) -> str:
+    """The `DESKTOP_BUILDS` constant for install-picker.js, one line per desktop row."""
+    rows = [f"    {json.dumps({'key': f['name'], 'label': f['label'], 'assets': f['assets']}, ensure_ascii=False)},\n"
+            for f in doc["firmwares"] if f["platform"] == "desktop"]
+    return "const DESKTOP_BUILDS = [\n" + "".join(rows) + "];\n"
+
+
+def picker_source(text: str, doc: dict) -> str:
+    """install-picker.js with its generated block replaced by the registry's desktop rows."""
+    return _BLOCK.sub(lambda m: m.group(1) + picker_block(doc) + m.group(3), text, count=1)
 
 
 def main() -> int:
@@ -76,6 +97,7 @@ def main() -> int:
     # an unnamed encoding falls back to the platform default, which on Windows is cp1252 and
     # raises UnicodeEncodeError. The MoonLive catalog generator failed this way in CI.
     args.out.write_text(json.dumps(doc, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    PICKER.write_text(picker_source(PICKER.read_text(encoding="utf-8"), doc), encoding="utf-8")
     # Count what was WRITTEN, not len(FIRMWARES): build_doc drops non-installable
     # variants, so the raw dict size contradicts check_firmwares.py's count.
     print(f"generate_firmwares: wrote {args.out} ({len(doc['firmwares'])} variants)")

@@ -119,7 +119,7 @@ TEST_CASE("a bounce shorter than the debounce window is not a press") {
     CHECK(rig.surface->switch1 == false);
 }
 
-TEST_CASE("a momentary row writes while held and clears on release, which is what a pedal needs") {
+TEST_CASE("a momentary row writes while held and clears on release, which is what a pedal and a PIR motion sensor need") {
     Rig rig;
     rig.addRow("Control.switch1", "set", 1);
     rig.hold(false, 100);

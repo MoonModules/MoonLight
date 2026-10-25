@@ -46,7 +46,7 @@ Zephyr fundamentals check out: **C++20 is a supported standard** (`CONFIG_STD_CP
 | WiFi (`wifiSta*`, `wifiAp*`) | Only via the **nRF7002 companion IC** (QSPI/SPI-attached, Zephyr WiFi mgmt API) | **With effort + extra chip** — the same shape as the P4's `hasWifiCoprocessor` C6 story, so the seam precedent exists |
 | Ethernet (`ethInit` etc.) | Zephyr ships a **W5500 SPI MAC driver** | **With effort** — mirrors the S3's `hasEthW5500` path exactly |
 | mDNS, hostname, `httpRequest` | Zephyr mDNS responder, sockets | With effort / easy respectively, given IP |
-| OTA (`http_fetch_to_ota`, `otaWriteStream`) | MCUboot + mcumgr/SMP (BLE or serial DFU), or hand-rolled HTTP-to-slot given IP | **With effort** — a different but standard mechanism; the seam's status-buffer contract is implementable |
+| OTA (`http_fetch_to_ota`, `otaBegin`, `otaWrite`, `otaEnd`) | MCUboot + mcumgr/SMP (BLE or serial DFU), or hand-rolled HTTP-to-slot given IP | **With effort** — a different but standard mechanism; the seam's status-buffer contract is implementable |
 | Improv provisioning (UART) | USB CDC-ACM on 52840; **Improv-BLE** is the natural transport on this family | **With effort** — note Improv's BLE variant fits nRF better than the serial one, but that's a new transport in our Improv module, not just a platform stub |
 | Audio in (`audioMicInit`), FFT | nRF **PDM** peripheral (built for MEMS mics) or I2S RX; CMSIS-DSP `arm_rfft` | **Easy-to-moderate** — arguably nicer than ESP32 (PDM is purpose-built); `audioFft` maps to the textbook CMSIS kernel |
 | `i2cScan`, filesystem (`fs*`) | Zephyr `i2c`, **LittleFS** | **Easy** — LittleFS is the same fs ESP32 uses |

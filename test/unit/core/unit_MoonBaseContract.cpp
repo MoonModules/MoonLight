@@ -209,9 +209,9 @@ TEST_CASE("the two boot images serve the OTA routes under the same names") {
                   "MoonBase cannot install itself: it runs from the partition it would erase");
 
     // An image streams only on the allowlist, else it is refused as too large before its handler runs; checked by name, since a reformat moves the length.
-    const size_t allow = app.find("isStreamingRoute");
+    const size_t allow = app.find("static bool isStreamingUpload");
     REQUIRE(allow != std::string::npos);
-    const bool onAllowlist = app.find("moonbase-update", allow) < app.find("bodyNeeded >", allow);
+    const bool onAllowlist = app.find("moonbase-update", allow) < app.find("\n}\n", allow);
     CHECK_MESSAGE(onAllowlist,
                   "the MoonBase update route must be on the streaming allowlist");
 

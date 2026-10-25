@@ -7,14 +7,14 @@
 ///
 /// ## The seat is claimed only while enabled
 ///
-/// applyState() calls prepare(), which claims the seat, only when the module is effectively enabled, and release() otherwise.
-/// A disabled DevicesModule claiming it would point the presence pipeline and Hue-bridge routing at a module the user turned off.
+/// applyState() calls prepare(), which claims the seat, only when the module is effectively enabled, and release() otherwise: a disabled DevicesModule claiming it would point presence and Hue-bridge routing at a module the user turned off.
+///
 /// active_ is a process-wide static, so each case brackets applyState() and release() to leave it clean, the discipline the AudioService cases use.
 ///
 /// ## What it asserts
 ///
-/// Classification, MoonLight against WLED typing, and that one device's packet never contaminates another's name or type.
-/// Live rename too, since a device that changes its name mid-session must not appear twice.
+/// Classification, MoonLight against WLED typing, and that one device's packet never contaminates another's name or type. Live rename too, since a device that changes its name mid-session must not appear twice.
+///
 /// Packets go in through injectPacketForTest(), the same entry the live recvFrom loop uses, so the private upsert path is reachable with no network.
 
 #include "doctest.h"
@@ -234,4 +234,74 @@ TEST_CASE("WledPacket: either copy of a MoonLight packet carries the marker") {
     WledPacket::stampVia(pkt, false);
     CHECK(WledPacket::hasMmMarker(pkt, sizeof(pkt)));
     CHECK_FALSE(WledPacket::viaBroadcast(pkt));
+}
+
+// A board is known by the name it announces, in both directions, and only from what was heard this session.
+TEST_CASE("DevicesModule: a board heard announcing itself answers its name for its address, and its address for its name") {
+    DevicesModule dev;
+    inject(dev, "MM-S31", /*mm=*/true, 192, 168, 1, 125);
+    const uint8_t at[4] = {192, 168, 1, 125}, elsewhere[4] = {192, 168, 1, 126};
+    REQUIRE(dev.nameOf(at) != nullptr);
+    CHECK(std::strcmp(dev.nameOf(at), "MM-S31") == 0);
+    CHECK(dev.nameOf(elsewhere) == nullptr);
+    uint8_t ip[4] = {};
+    CHECK(dev.addressOf("mm-s31.local", ip));   // as mDNS names it: letter case and .local aside
+    CHECK(std::memcmp(ip, at, 4) == 0);
+    CHECK_FALSE(dev.addressOf("MM-S3", ip));     // a prefix is another name
+    CHECK_FALSE(dev.addressOf("desk.local", ip));
+}
+
+// A restored row carries the address of the network it was saved on, which a new router may have handed to another board.
+TEST_CASE("DevicesModule: a board restored from the last boot is not looked up until it is heard again") {
+    DevicesModule dev;
+    REQUIRE(dev.restoreList("{\"devices\":[{\"name\":\"MM-Eye\",\"ip\":\"192.168.1.30\",\"type\":\"MoonLight\"}]}", "devices"));
+    uint8_t ip[4] = {};
+    const uint8_t at[4] = {192, 168, 1, 30};
+    CHECK_FALSE(dev.addressOf("MM-Eye", ip));
+    CHECK(dev.nameOf(at) == nullptr);
+    inject(dev, "MM-Eye", /*mm=*/true, 192, 168, 1, 30);
+    CHECK(dev.addressOf("MM-Eye", ip));
+}
+
+// A board that changed its address leaves its old row listed until it ages out, so a host setting naming it must reach where it is now.
+TEST_CASE("DevicesModule: a board heard at a new address is looked up there, not at the address it left") {
+    DevicesModule dev;
+    mm::platform::setTestNowMs(1000);
+    inject(dev, "MM-Eye", /*mm=*/true, 192, 168, 1, 31);   // where it was
+    mm::platform::setTestNowMs(5000);
+    inject(dev, "MM-Eye", /*mm=*/true, 192, 168, 1, 30);   // where it is now, listed after the old row
+    uint8_t ip[4] = {};
+    REQUIRE(dev.addressOf("MM-Eye", ip));
+    CHECK(ip[3] == 30);
+}
+
+// A card names its peer the same way everywhere: the board and its address, or the address alone for a desk or a computer.
+TEST_CASE("DevicesModule: a status names a known peer by its board and an unknown one by its address") {
+    DevicesModule dev;
+    dev.setup();
+    dev.applyState();   // claims the seat a status reads through
+    inject(dev, "MM-S31", /*mm=*/true, 192, 168, 1, 125);
+    inject(dev, "MM-a-name-of-23-letters", /*mm=*/true, 255, 255, 255, 254);
+    char peer[HostResolver::kPeerChars];
+    const uint8_t known[4] = {192, 168, 1, 125}, unknown[4] = {192, 168, 1, 9}, longest[4] = {255, 255, 255, 254};
+    HostResolver::formatPeer(peer, sizeof(peer), known);
+    CHECK(std::string(peer) == "MM-S31 (192.168.1.125)");
+    HostResolver::formatPeer(peer, sizeof(peer), unknown);
+    CHECK(std::string(peer) == "192.168.1.9");
+    HostResolver::formatPeer(peer, sizeof(peer), longest);
+    CHECK(std::string(peer) == "MM-a-name-of-23-letters (255.255.255.254)");   // the longest name a board holds fits whole
+    dev.release();
+}
+
+// A host setting naming a board resolves from the boards' own announcements, before mDNS, whose multicast a router may drop.
+TEST_CASE("DevicesModule: a host setting naming a board resolves from the device list at once, with no lookup") {
+    DevicesModule dev;
+    dev.setup();
+    dev.applyState();
+    inject(dev, "MM-Bridge", /*mm=*/true, 192, 168, 1, 101);
+    uint8_t ip[4] = {};
+    CHECK(HostResolver::lookup("MM-Bridge.local", ip) == HostResolver::State::Resolved);   // no pass of the lookup task ran
+    CHECK(ip[3] == 101);
+    dev.release();
+    CHECK(HostResolver::lookup("MM-Bridge.local", ip) != HostResolver::State::Resolved);   // gone with the module
 }

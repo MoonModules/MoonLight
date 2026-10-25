@@ -16,7 +16,7 @@
 
 namespace mm {
 
-/// A driver sends the lights out: to LEDs on a wire, a HUB75 panel, the network, a smart-light bridge or the web UI.
+/// A driver consumes the light output and sends it on: to LEDs on a wire, a HUB75 panel, the network, a smart-light bridge or the web UI.
 /// @video 07-drivers-desktop.webm Drivers on a desktop: preview, NDI, RTSP, HLS, network send and Hue.
 /// @video 07-drivers-esp32.webm Drivers on a device: RMT and parallel LED pins, HUB75, panel cards, and the network senders.
 ///
@@ -50,11 +50,11 @@ public:
     void setLayer(Layer* layer) { layer_ = layer; }
 
     /// The first light of the configured window.
-    uint16_t windowStart() const { return start_; }
+    int32_t windowStart() const { return start_; }
     /// Number of lights in the configured window (0 = to end of buffer).
-    uint16_t windowCount() const { return count_; }
+    int32_t windowCount() const { return count_; }
     /// Set the window directly, which takes effect on the next parse as a control edit does.
-    void setWindow(uint16_t start, uint16_t count) { start_ = start; count_ = count; }
+    void setWindow(int32_t start, int32_t count) { start_ = start; count_ = count; }
     /// Test-only: resolve the window against a buffer of `bufN` lights into its length.
     nrOfLightsType resolveWindowLenForTest(nrOfLightsType bufN) const {
         nrOfLightsType outStart = 0, outLen = 0;
@@ -274,17 +274,18 @@ private:
 
 protected:
 
-    static constexpr uint16_t kWindowAll = 65535;  ///< count default: clamped to buffer length = all lights
     /// The first light of the shared buffer this driver reads.
-    uint16_t start_ = 0;
-    /// How many lights it reads from `start`; blank reads them all.
+    int32_t start_ = 0;   // 32 bits, as is count: a wall with PSRAM holds more than 65535 lights
+    /// How many lights it reads from `start`; 0 reads them all.
     /// @guide So drivers share one buffer: a status LED takes `start 0, count 1` and the strip `start 1`.
-    uint16_t count_ = kWindowAll;
+    int32_t count_ = 0;
 
     /// Add the two window controls, which a driver calls where its own controls go.
     void addWindowControls() {
-        controls_.addControl("start", start_);
-        controls_.addControl("count", count_);
+        controls_.addControl("start", start_, 0);
+        controls_.setNumberField(controls_.count() - 1);   // typed: a light index is a number to read, not a position on a 2-billion slider
+        controls_.addControl("count", count_, 0);
+        controls_.setNumberField(controls_.count() - 1);
     }
 
     /// Whether `name` is one of the window controls, for a driver's own prepare test.
@@ -295,12 +296,11 @@ protected:
     /// Resolve the window against a buffer, writing the clamped first light and the length.
     void windowSlice(nrOfLightsType bufN, nrOfLightsType& outStart,
                      nrOfLightsType& outLen) const {
-        outStart = start_ < bufN ? start_ : bufN;
+        // The controls' lower bound keeps both at 0 or above, so they compare as unsigned.
+        const uint32_t start = static_cast<uint32_t>(start_), count = static_cast<uint32_t>(count_);
+        outStart = start < bufN ? static_cast<nrOfLightsType>(start) : bufN;
         const nrOfLightsType avail = static_cast<nrOfLightsType>(bufN - outStart);
-        // Matched EXPLICITLY: a buffer can exceed 65535 lights, which a literal count would cap.
-        outLen = (count_ == 0 || count_ == kWindowAll || count_ > avail)
-                     ? avail
-                     : static_cast<nrOfLightsType>(count_);
+        outLen = (count == 0 || count > avail) ? avail : static_cast<nrOfLightsType>(count);
     }
 
     /// The status verdicts this driver set; each is cleared only when the status still shows the one this driver set.

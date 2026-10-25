@@ -37,7 +37,7 @@ def build_moonbase(cmd: list[str], env: dict, chip: str, version: str = "") -> N
     build_dir = ROOT / "build" / f"moonbase-{chip}"
     b_arg = ["-B", str(build_dir), f"-DSDKCONFIG={build_dir}/sdkconfig"]
     if not version:
-        # The library.json default the app resolves through build_info.h's #ifndef, rather than a git-describe string the app cannot compare against.
+        # The library.json default the app resolves through build_info.cpp's #ifndef, rather than a git-describe string the app cannot compare against.
         version = compute_version.compute("local", "")
     b_arg.append(f"-DPROJECT_VER={version}+{build_id()}")
     # An edited moonbase/sdkconfig.defaults regenerates the sdkconfig, as the app's fragments do.

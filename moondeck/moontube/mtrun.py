@@ -1032,6 +1032,14 @@ class Driver:
     # than loosening the module actions, so the resilient path stays the default and
     # the raw one is visibly the exception.
 
+    def upload_file(self, selector: str, path: str) -> bool:
+        """Click an element that opens the browser's file chooser, and hand it `path`, from the repository root, as a person picking that file does."""
+        with self.page.expect_file_chooser(timeout=5000) as chooser:
+            if not self.tap(self.page.locator(selector)):
+                return False
+        chooser.value.set_files(str(ROOT / path))
+        return True
+
     def click(self, selector: str, accept: bool = False) -> bool:
         """Click any element, by CSS selector. With `accept`, the native `confirm()` the click opens is answered OK, as a person consenting does.
 
@@ -1495,6 +1503,7 @@ class Driver:
         "scroll_to":      lambda a: (a["selector"],),
         "hero":           lambda a: (float(a.get("seconds", 6.0)),),
         "pick_file":      lambda a: (a["module"], a["control"], a["value"]),
+        "upload_file":    lambda a: (a["selector"], a["file"]),
         "new_script":     lambda a: (a["module"], a["control"], a["value"]),
         "type_script":    lambda a: (a["text"], int(a.get("delay", 45))),
     }
@@ -1712,6 +1721,7 @@ ACTIONS: dict[str, str] = {
     "click_control":  "click_control",
     # Selector actions: another MoonLight surface, with no module contract of its own.
     "click":          "click",
+    "upload_file":    "upload_file",
     "follow_link":    "follow_link",
     "start_process":  "start_process",
     "wait_process":   "wait_process",

@@ -226,6 +226,8 @@ void clearTestGpioLiveState();
 
 /// Cap what maxAllocBlock reports, 0 being no cap, so a test reaches the paged-destinations fallback without a fragmented heap.
 void setTestMaxAllocBlock(size_t bytes);
+/// Refuse every allocation of at least `bytes`, 0 being none refused, so a test meets out-of-memory on a growing buffer. Desktop only.
+void setTestAllocRefusedFrom(size_t bytes);
 /// Total heap capacity, internal plus PSRAM.
 size_t totalHeap();
 /// Total internal heap capacity.
@@ -571,6 +573,11 @@ inline void encoderRelease(const void* owner) {
     encoderStop();
 }
 
+/// A UI file from the folder a desktop serves its interface from, read whole into a block the caller gives back with `free`. False on a device, whose interface is the embedded one alone, and for a name that is not a plain file in that folder.
+bool uiFolderFile(const char* name, char*& data, size_t& len);
+/// The folder a desktop serves its interface from, `src/ui` of the checkout it runs in; null serves the embedded interface alone.
+void setUiFolder(const char* path);
+
 /// Serve an HLS file the platform holds in RAM; false where this platform writes segments to disk.
 bool hlsSegment(const char* name, const uint8_t** data, size_t* len);
 /// Release what hlsSegment handed out, required after every call that answered true.
@@ -793,9 +800,16 @@ bool http_fetch_to_ota(const char* url,
                        uint32_t* bytesReadOut, uint32_t* bytesTotalOut,
                        const char* fallbackUrl = nullptr);
 
-/// Flash a firmware image streamed from `src`, on fsWriteStream's producer shape; true once the boot pointer flipped.
-bool otaWriteStream(FsWriteSrc src, void* user, size_t contentLen,
-                    char* statusBuf, size_t statusBufLen, uint32_t* bytesReadOut);
+/// An image written as its bytes arrive, which whoever receives it pushes a chunk at a time.
+struct OtaWrite { void* impl = nullptr; };
+/// Which slot an image goes to: the application's, or MoonBase's, which only the running application can write.
+enum class OtaTarget : uint8_t { App, MoonBase };
+/// Start an image of `contentLen` bytes (0 when unknown) for `target`, its progress in `statusBuf` and `bytesOut`; false with the reason there.
+bool otaBegin(OtaWrite& w, OtaTarget target, size_t contentLen, char* statusBuf, size_t statusBufLen, uint32_t* bytesOut);
+/// Hand the image its next bytes; false once it is refused or the flash fails, the reason in its status and the image abandoned.
+bool otaWrite(OtaWrite& w, const uint8_t* data, size_t len);
+/// Finish the image: with `commit` check it whole and, for the application, point the boot at it; without, abandon it. True once committed.
+bool otaEnd(OtaWrite& w, bool commit);
 
 /// Does this partition table carry MoonBase, the second boot image (a board cannot rewrite the partition it executes from)?
 bool otaHasMoonBase();
@@ -813,9 +827,6 @@ bool otaMoonBaseSize(uint32_t* used, uint32_t* total);
 /// Give a desktop a MoonBase with this descriptor version and build time, for a host test; null removes it.
 void setTestMoonBase(const char* version, const char* built);
 #endif
-/// Install a new MoonBase, which only the running app can do; false on desktop.
-bool otaWriteMoonBase(FsWriteSrc src, void* user, size_t contentLen,
-                      char* statusBuf, size_t statusBufLen, uint32_t* bytesReadOut);
 /// The same install from a URL, which the device fetches itself; runs on its own task and returns at once.
 bool otaFetchMoonBaseUrl(const char* url, char* statusBuf, size_t statusBufLen,
                          uint32_t* bytesReadOut, uint32_t* bytesTotalOut);

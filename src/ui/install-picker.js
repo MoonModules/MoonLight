@@ -212,35 +212,19 @@ function parseFirmwaresFromAssets(assets, tag, moonbaseOnly = false) {
             firmwares.set(firmware, entry);
         }
     }
-    // A DESKTOP build ships an archive, not a .bin: MoonLight-<os>-<arch>-v<ver>.{dmg,tar.gz,zip,deb}.
-    // The device cannot flash itself over the air, so these are offered as a DOWNLOAD instead, and
-    // the caller decides what that means. Keyed by the platform so the picker can show "macOS
-    // arm64" rather than a filename.
-    // The version carries dots, so the platform group has to be anchored on the -v rather than on
-    // "everything up to a dot". A .deb names its arch, not the platform, so it maps to linux-x64.
-    //
-    // The Windows INSTALLER carries a suffix AFTER the version (MoonLight-windows-x64-v1.2.3
-    // -setup.exe), so the extension alternation alone could not match it and the installer never
-    // reached the dropdown: a Windows user was offered the bare .zip while setup.exe sat in the
-    // release. `.+` before the extension covers both shapes.
-    const desktopRe = /^MoonLight-(macos-arm64|windows-x64|linux-x64)-v.+\.(dmg|tar\.gz|zip|exe)$/;
-    const debRe = /^moonlight_.+_amd64\.deb$/;
-    for (const a of assets) {
-        const d = desktopRe.exec(a.name);
-        const plat = d ? d[1] : (debRe.test(a.name) ? "linux-x64" : null);
-        if (!plat) continue;
-        const key = `desktop-${plat}`;
-        const entry = firmwares.get(key) || { firmware: key, manifestUrl: null, binaryUrl: null,
-                                              isDesktop: true, assets: [] };
-        entry.isDesktop = true;
-        (entry.assets = entry.assets || []).push({ name: a.name, url: a.browser_download_url });
-        // Prefer the friendliest form when a platform ships more than one: a .dmg to drag, a
-        // setup.exe that installs, or a .deb apt can install, over the archive that is there for
-        // scripting. An installer is what a person double-clicks, which is the whole point of
-        // offering a download rather than a flash.
-        const friendly = /(\.dmg|\.deb|-setup\.exe)$/.test(a.name);
-        if (!entry.binaryUrl || friendly) entry.binaryUrl = a.browser_download_url;
-        firmwares.set(key, entry);
+    // A DESKTOP build ships an archive, not a .bin. The device cannot flash itself over the air, so
+    // these are offered as a DOWNLOAD instead, and the caller decides what that means. Each platform
+    // lists its asset patterns in the firmware registry (DESKTOP_BUILDS), the friendliest form first:
+    // a .dmg to drag, a setup.exe that installs, a .deb apt installs, over the archive that is there
+    // for scripting. Download takes the first pattern the release has an asset for.
+    for (const b of DESKTOP_BUILDS) {
+        const found = [];
+        for (const re of b.assets) {
+            const rx = new RegExp(re);
+            for (const a of assets) if (rx.test(a.name)) found.push({ name: a.name, url: a.browser_download_url });
+        }
+        if (!found.length) continue;
+        firmwares.set(b.key, { firmware: b.key, manifestUrl: null, binaryUrl: found[0].url, isDesktop: true, assets: found });
     }
 
     for (const a of assets) {
@@ -314,13 +298,18 @@ function isCompatible(ownFirmwareKey, candidateFirmwareKey) {
     return strip(ownFirmwareKey) === strip(candidateFirmwareKey);
 }
 
-// One name per desktop archive, used by both the Device row and the Firmware option so the two
-// cannot drift apart.
-const DESKTOP_LABEL = {
-    "desktop-macos-arm64": "macOS arm64",
-    "desktop-windows-x64": "Windows x64",
-    "desktop-linux-x64":   "Linux x64",
-};
+// The desktop builds of the firmware registry (moondeck/build/firmwares.py), written here by
+// generate_firmwares.py because the picker is embedded in the firmware, where no firmwares.json
+// can be fetched. `label` names a build in the Device row and the Firmware option.
+// <generated:desktop-builds>
+const DESKTOP_BUILDS = [
+    {"key": "desktop-macos-arm64", "label": "macOS arm64", "assets": ["^MoonLight-macos-arm64-v.+\\.dmg$", "^MoonLight-macos-arm64-v.+\\.tar\\.gz$"]},
+    {"key": "desktop-windows-x64", "label": "Windows x64", "assets": ["^MoonLight-windows-x64-v.+-setup\\.exe$", "^MoonLight-windows-x64-v.+\\.zip$"]},
+    {"key": "desktop-linux-x64", "label": "Linux x64", "assets": ["^moonlight_.+_amd64\\.deb$", "^MoonLight-linux-x64-v.+\\.tar\\.gz$"]},
+    {"key": "desktop-linux-arm64", "label": "Linux arm64", "assets": ["^moonlight_.+_arm64\\.deb$", "^MoonLight-linux-arm64-v.+\\.tar\\.gz$"]},
+];
+// </generated:desktop-builds>
+const DESKTOP_LABEL = Object.fromEntries(DESKTOP_BUILDS.map(b => [b.key, b.label]));
 
 // Which desktop archive belongs to the machine viewing this page. Null on an OS we do not package,
 // which leaves the list empty rather than offering a download that will not run.
@@ -328,7 +317,7 @@ function desktopKeyForThisHost() {
     const p = (navigator.platform || "") + " " + (navigator.userAgent || "");
     if (/Win/i.test(p)) return "desktop-windows-x64";
     if (/Mac/i.test(p)) return "desktop-macos-arm64";
-    if (/Linux|X11/i.test(p)) return "desktop-linux-x64";
+    if (/Linux|X11/i.test(p)) return /aarch64|arm64/i.test(p) ? "desktop-linux-arm64" : "desktop-linux-x64";
     return null;
 }
 

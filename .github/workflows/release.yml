@@ -173,6 +173,11 @@ jobs:
           V=$(uv run python moondeck/build/compute_version.py --tag "$TAG")
           echo "version=$V" >> "$GITHUB_OUTPUT"
 
+      # The espressif/idf image ships ccache and turns it on; the workspace mount carries the cache in and out.
+      - uses: ./.github/actions/ccache
+        with:
+          key: esp32-${{ matrix.firmware }}
+          install: 'false'
       - name: Build firmware
         uses: espressif/esp-idf-ci-action@v1
         with:
@@ -184,7 +189,8 @@ jobs:
           # We run our own builder (not the action's default `idf.py build`)
           # so the sdkconfig fragments and EXCLUDE_COMPONENTS go through the
           # same code path as local builds. --release burns the channel tag in.
-          command: python ../moondeck/build/build_esp32.py --firmware ${{ matrix.firmware }} --release "${{ steps.tag.outputs.tag }}" --version "${{ steps.ver.outputs.version }}"
+          command: python ../moondeck/build/build_esp32.py --firmware ${{ matrix.firmware }} --release "${{ steps.tag.outputs.tag }}" --version "${{ steps.ver.outputs.version }}" && ccache --show-stats
+          extra_docker_args: -e CCACHE_DIR=/app/${{ github.repository }}/.ccache
 
       - name: Stage release artifacts
         run: |
@@ -277,28 +283,11 @@ jobs:
           set -euo pipefail
           V=$(uv run python moondeck/build/compute_version.py --tag "$TAG")
           echo "version=$V" >> "$GITHUB_OUTPUT"
-      # ccache: the macOS runner compiles the whole desktop tree from cold every run (the ESP32
-      # jobs get a prebuilt IDF container; this one gets nothing), which is why it was the slowest
-      # job in the workflow at ~10 min. CMake picks the launcher up from the environment, so the
-      # build script stays unchanged. The key rotates per run and restores from the newest
-      # matching prefix, the standard save-always cache shape for a compiler cache.
-      - name: Install ccache
-        run: brew install ccache
-      - name: Restore ccache
-        uses: actions/cache@v4
+      - uses: ./.github/actions/ccache
         with:
-          path: ~/Library/Caches/ccache
-          key: ccache-macos-14-${{ github.sha }}
-          restore-keys: |
-            ccache-macos-14-
+          key: macos-arm64
       - name: Build + package macOS arm64
-        env:
-          CMAKE_CXX_COMPILER_LAUNCHER: ccache
-          CMAKE_C_COMPILER_LAUNCHER: ccache
-        run: uv run moondeck/ci/package_desktop.py --version "${{ steps.ver.outputs.version }}"
-      - name: ccache stats
-        if: always()
-        run: ccache --show-stats
+        run: uv run moondeck/ci/package_desktop.py --version "${{ steps.ver.outputs.version }}" && ccache --show-stats
       - uses: actions/upload-artifact@v4
         with:
           name: desktop-macos
@@ -378,9 +367,17 @@ jobs:
           name: desktop-windows
           path: dist/
 
+  # **ubuntu-22.04, pinned like build-linux-arm64, and this is load-bearing.** A binary carries the
+  # glibc floor of the machine that built it, and `ubuntu-latest` moves: when it moved on, the amd64
+  # package came to need glibc 2.43 and died at startup on Debian 13, Ubuntu 24.04 and in our own
+  # container, while the arm64 one still needed 2.35. Both build on 22.04 now, with the same GCC 12,
+  # and check-glibc-floor below fails the release if either needs more.
   build-linux-x64:
     needs: verify-version
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
+    env:
+      CC: gcc-12      # 22.04's default is GCC 11; 12 is what build-linux-arm64 builds with
+      CXX: g++-12
     steps:
       - uses: actions/checkout@v4
         with:
@@ -395,11 +392,10 @@ jobs:
       # should not abort a release on its own; CMake's own check is what decides, and it fails the
       # build loudly when the library really is absent.
       - name: Install libcurl (MoonCloud, only used once consent is given in the app)
-        run: sudo apt-get update && sudo apt-get install -y libcurl4-openssl-dev || true
-      # Builds with the runner's default GCC (13 on ubuntu-24.04). Its four false-positive
-      # warnings are handled in CMakeLists.txt, which demotes them to non-fatal on GCC below
-      # 16 rather than pinning a compiler here: a from-source build on Debian or Raspberry Pi
-      # OS meets the same GCC and deserves the same fix.
+        run: sudo apt-get update && sudo apt-get install -y libcurl4-openssl-dev g++-12 || true
+      # GCC 12's four false-positive warnings are handled in CMakeLists.txt, which demotes them to
+      # non-fatal on GCC below 16: a from-source build on Debian or Raspberry Pi OS meets the same
+      # GCC and deserves the same fix.
       # Same tag + version resolution as build-esp32 (see the comments there): the computed
       # semver must reach the DESKTOP binary too, or a desktop build reports library.json's bare
       # core and the update badge can never see a `latest` (-dev.N) build as newer. shell: bash
@@ -426,8 +422,13 @@ jobs:
           set -euo pipefail
           V=$(uv run python moondeck/build/compute_version.py --tag "$TAG")
           echo "version=$V" >> "$GITHUB_OUTPUT"
+      - uses: ./.github/actions/ccache
+        with:
+          key: linux-x64
       - name: Build + package Linux x64
-        run: uv run moondeck/ci/package_desktop.py --version "${{ steps.ver.outputs.version }}"
+        run: uv run moondeck/ci/package_desktop.py --version "${{ steps.ver.outputs.version }}" && ccache --show-stats
+      - name: Check the glibc floor
+        run: uv run moondeck/ci/check_glibc_floor.py dist/moonlight_*_amd64.deb
       - uses: actions/upload-artifact@v4
         with:
           name: desktop-linux
@@ -442,11 +443,14 @@ jobs:
   # cleanly and then dies at startup with "GLIBC_2.38 not found", the same failure the Dockerfile
   # records hitting on debian12. Building against the lower floor covers Bookworm (2.36), Debian 13
   # trixie (2.41) and Ubuntu 24.04 (2.39) alike, because glibc symbol versioning is backward
-  # compatible. Its GCC is 12.3 rather than 13, which CMakeLists already covers: it demotes the four
-  # false-positive warnings for every GCC below 16.
+  # compatible. Its GCC is 12, which CMakeLists already covers: it demotes the four false-positive
+  # warnings for every GCC below 16.
   build-linux-arm64:
     needs: verify-version
     runs-on: ubuntu-22.04-arm
+    env:
+      CC: gcc-12      # named, as in build-linux-x64, so both architectures build with one compiler
+      CXX: g++-12
     steps:
       - uses: actions/checkout@v4
         with:
@@ -460,7 +464,7 @@ jobs:
       # should not abort a release on its own; CMake's own check is what decides, and it fails the
       # build loudly when the library really is absent.
       - name: Install libcurl (MoonCloud, only used once consent is given in the app)
-        run: sudo apt-get update && sudo apt-get install -y libcurl4-openssl-dev || true
+        run: sudo apt-get update && sudo apt-get install -y libcurl4-openssl-dev g++-12 || true
       # Same tag + version resolution as every other build job; see build-linux-x64 for why.
       - name: Resolve release tag
         id: tag
@@ -483,8 +487,13 @@ jobs:
           set -euo pipefail
           V=$(uv run python moondeck/build/compute_version.py --tag "$TAG")
           echo "version=$V" >> "$GITHUB_OUTPUT"
+      - uses: ./.github/actions/ccache
+        with:
+          key: linux-arm64
       - name: Build + package Linux arm64
-        run: uv run moondeck/ci/package_desktop.py --version "${{ steps.ver.outputs.version }}"
+        run: uv run moondeck/ci/package_desktop.py --version "${{ steps.ver.outputs.version }}" && ccache --show-stats
+      - name: Check the glibc floor
+        run: uv run moondeck/ci/check_glibc_floor.py dist/moonlight_*_arm64.deb
       - uses: actions/upload-artifact@v4
         with:
           name: desktop-linux-arm64
@@ -507,6 +516,9 @@ jobs:
         with:
           path: ~/teensy/arm-gnu-toolchain-*
           key: teensy-gcc-${{ runner.os }}-${{ steps.gcc.outputs.version }}
+      - uses: ./.github/actions/ccache
+        with:
+          key: teensy
       # Same tag and version resolution as build-esp32, so the HEX reports the version and channel its asset name carries.
       - name: Resolve release tag
         id: tag
@@ -653,7 +665,7 @@ jobs:
           BASE="https://github.com/${REPO}/releases/download/$TAG"
           # The shipping firmware list — the same mooninstaller/firmwares.json the
           # build matrix reads, so manifests and builds can't drift.
-          for F in $(jq -r '.firmwares[] | select(.ships) | .name' mooninstaller/firmwares.json); do
+          for F in $(jq -r '.firmwares[] | select(.ships and .platform != "desktop") | .name' mooninstaller/firmwares.json); do
             # An ESP32 manifest takes its offsets from IDF's flasher args; a Teensy one is the flat image at 0.
             ARGS=()
             [ -f "dist/flasher-$F.json" ] && ARGS=(--flasher-args "dist/flasher-$F.json")
@@ -819,18 +831,18 @@ jobs:
           ARG TARGETARCH
           COPY moonlight_$TARGETARCH.deb /tmp/moonlight.deb
           # libcurl4t64 is installed because the binary LINKS it (the one outbound HTTPS call), and
-          # the ldd sweep then collects it plus everything it needs. Naming the libraries by hand
-          # would be wrong the first time that chain moved.
+          # libpulse0 because its audio input LOADS it at runtime, which ldd cannot see; the sweep
+          # then collects both plus everything they need. See ../../Dockerfile.
           RUN apt-get update \
-           && apt-get install -y --no-install-recommends libcurl4t64 \
+           && apt-get install -y --no-install-recommends libcurl4t64 libpulse0 \
            && rm -rf /var/lib/apt/lists/* \
            && dpkg-deb -x /tmp/moonlight.deb /rootfs \
            && mkdir -p /deps \
-           && ldd /rootfs/usr/bin/MoonLight | awk '/=> \//{print $3}' | sort -u | grep -vE '/(libc|libm|libstdc\+\+|libgcc_s)\.so' | xargs -I{} cp -L {} /deps/
-          # debian13, NOT debian12: the amd64 binary is built on ubuntu-24.04 (glibc 2.39) and
-          # needs glibc >= 2.38, where bookworm ships 2.36 and it dies at startup. The arm64 binary
-          # is built on ubuntu-22.04-arm and floors at 2.35, so it would also run on a bookworm
-          # base; one base for both keeps the two images the same runtime. See ../../Dockerfile.
+           && pulse=$(find /usr/lib -name libpulse.so.0 | head -1) \
+           && test -n "$pulse" \
+           && { ldd /rootfs/usr/bin/MoonLight; ldd "$pulse"; echo "libpulse.so.0 => $pulse (0)"; } | awk '/=> \//{print $3}' | sort -u | grep -vE '/(libc|libm|libstdc\+\+|libgcc_s)\.so' | xargs -I{} cp -L {} /deps/
+          # Both binaries are built on Ubuntu 22.04 and need glibc 2.35 at most, which
+          # check_glibc_floor.py enforces, so debian13 (2.41) runs them. See ../../Dockerfile.
           # Pinned by digest, not by tag: `cc-debian13` is mutable, so an unpinned base means two
           # builds of the same commit can ship different runtimes. Re-pin deliberately when picking
           # up base updates (docker buildx imagetools inspect gcr.io/distroless/cc-debian13:latest).
@@ -839,14 +851,55 @@ jobs:
           FROM gcr.io/distroless/cc-debian13@sha256:9b615fff20e1a4fad29c2b30562580b212c7dd5e2225236735cca0070ed11c78
           COPY --from=fetch /rootfs/usr/bin/MoonLight /usr/bin/MoonLight
           # The libraries the loader resolved, collected in the fetch stage. Without them the
-          # container dies at startup on "libcurl.so.4: cannot open shared object file": this job
-          # builds the image but never runs it, so that failure passed CI and reached a user.
+          # container dies at startup on "libcurl.so.4: cannot open shared object file", which the
+          # run before publishing now catches.
           COPY --from=fetch /deps/ /usr/lib/
           ENV XDG_DATA_HOME=/data
           VOLUME /data
           EXPOSE 8080
           ENTRYPOINT ["/usr/bin/MoonLight"]
           DOCKERFILE
+
+      # Each architecture's image runs before any is published, since an image whose binary dies at
+      # startup (a missing library, a glibc its base lacks) installs cleanly and fails on a user's board.
+      # One load per platform, since a multi-platform build cannot load; the push below reuses the cache.
+      - uses: docker/build-push-action@v6
+        with:
+          context: ctx
+          platforms: linux/amd64
+          load: true
+          tags: moonlight-smoke:amd64
+      - uses: docker/build-push-action@v6
+        with:
+          context: ctx
+          platforms: linux/arm64
+          load: true
+          tags: moonlight-smoke:arm64
+      # amd64 runs natively and must answer its API. arm64 runs under QEMU, where an emulated render
+      # loop makes a response time a matter of the runner, so it must survive its start: the loader
+      # resolves every library and glibc symbol in the first second or the process dies.
+      - name: Run each image
+        run: |
+          set -euo pipefail
+          docker run -d --name smoke-amd64 --platform linux/amd64 -p 18080:8080 moonlight-smoke:amd64
+          ok=0
+          for i in $(seq 1 60); do
+            if curl -fs http://localhost:18080/api/system > /dev/null; then ok=1; break; fi
+            sleep 1
+          done
+          docker logs smoke-amd64 | tail -20
+          docker rm -f smoke-amd64
+          test "$ok" = 1 || { echo "the amd64 image did not answer within 60 s" >&2; exit 1; }
+          echo "the amd64 image answers"
+          docker run -d --name smoke-arm64 --platform linux/arm64 moonlight-smoke:arm64
+          sleep 15
+          running=$(docker inspect -f '{{.State.Running}}' smoke-arm64)
+          docker logs smoke-arm64 2>&1 | tail -20 | tee arm64.log
+          docker rm -f smoke-arm64
+          if [ "$running" != true ] || grep -qE "GLIBC_|cannot open shared object" arm64.log; then
+            echo "the arm64 image did not survive its start" >&2; exit 1
+          fi
+          echo "the arm64 image runs"
 
       # Two tags: the exact version, which never moves, and `latest`, which follows this workflow's
       # own notion of latest (the rolling prerelease from main, or a tagged release). A user pins

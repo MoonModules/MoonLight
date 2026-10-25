@@ -177,11 +177,14 @@ void writeControlValue(JsonSink& sink, const ControlDescriptor& c, bool saving) 
     }
 }
 
+// A declared default, emitted only when one was set, so the wire format and every module relying on the type-level defaults in /api/types stay as they are.
+static void writeDefault(JsonSink& sink, const ControlDescriptor& c) {
+    if (c.def != ControlDescriptor::kNoDefault) sink.appendf(",\"default\":%d", static_cast<int>(c.def));
+}
+
 void writeControlMetadata(JsonSink& sink, const ControlDescriptor& c) {
-    // Before the switch: every branch below returns, and a declared default belongs to the control whatever its type is. Emitted only when one was set, so the wire format and every module that relies on the type-level defaults in /api/types are untouched.
-    if (c.def != ControlDescriptor::kNoDefault) {
-        sink.appendf(",\"default\":%d", static_cast<int>(c.def));
-    }
+    // Before the switch: every branch below returns, and a declared default belongs to the control whatever its type is.
+    writeDefault(sink, c);
     switch (c.type) {
         case ControlType::Uint8:
         case ControlType::Uint16:
@@ -266,6 +269,79 @@ void writeControlMetadata(JsonSink& sink, const ControlDescriptor& c) {
             return;
         }
     }
+}
+
+bool writtenInPieces(const ControlDescriptor& c) {
+    return (c.type == ControlType::List && c.ptr) || c.type == ControlType::Select ||
+           (c.type == ControlType::Palette && c.aux);
+}
+
+namespace {
+
+// One row of a list's value or its detail, its comma before it past the first; false past the last row.
+bool writeRow(JsonSink& sink, const ListSource& src, ControlCursor& at, bool detail) {
+    if (at.item >= src.listRowCount()) return false;
+    if (at.item > 0) sink.append(",");
+    const uint8_t row = static_cast<uint8_t>(at.item++);
+    if (detail) src.writeListRowDetail(sink, row);
+    else src.writeListRow(sink, row);
+    return true;
+}
+
+// One option of a select or a palette, its comma before it past the first; false past the last option.
+bool writeOption(JsonSink& sink, const ControlDescriptor& c, ControlCursor& at) {
+    if (c.type == ControlType::Select) {
+        if (static_cast<int32_t>(at.item) >= c.max) return false;
+        if (at.item > 0) sink.append(",");
+        auto* options = reinterpret_cast<const char* const*>(c.aux);
+        sink.writeJsonString(options[at.item] ? options[at.item] : "");
+    } else {
+        // The light domain writes the option it is asked for, its comma included, and nothing past the last.
+        const size_t before = sink.written();
+        sink.requestOption(at.item);
+        reinterpret_cast<PaletteOptionsFn>(c.aux)(sink);
+        sink.requestOption(-1);
+        if (sink.written() == before) return false;
+    }
+    at.item++;
+    return true;
+}
+
+// A list: `[` its rows `]`, its option sets and `"detail":[` its detail rows `]`.
+bool writeListPiece(JsonSink& sink, const ControlDescriptor& c, ControlCursor& at) {
+    const auto& src = *static_cast<const ListSource*>(c.ptr);
+    if (at.part == 0) { sink.append("["); at = {1, 0}; return true; }
+    const bool detail = at.part == 2;
+    if (writeRow(sink, src, at, detail)) return true;
+    sink.append("]");
+    if (detail) return false;
+    writeDefault(sink, c);
+    sink.append(",\"optionSets\":{");
+    src.writeListOptionSets(sink);
+    sink.append("},\"detail\":[");
+    at = {2, 0};
+    return true;
+}
+
+// A select or a palette: its value and `"options":[` its options `]`.
+bool writeOptionsPiece(JsonSink& sink, const ControlDescriptor& c, ControlCursor& at) {
+    if (at.part == 0) {
+        writeControlValue(sink, c);
+        writeDefault(sink, c);
+        sink.append(",\"options\":[");
+        at = {1, 0};
+        return true;
+    }
+    if (writeOption(sink, c, at)) return true;
+    sink.append("]");
+    return false;
+}
+
+}  // namespace
+
+// The same bytes as writeControlValue then writeControlMetadata, cut where a row or an option ends.
+bool writeControlPiece(JsonSink& sink, const ControlDescriptor& c, ControlCursor& at) {
+    return c.type == ControlType::List ? writeListPiece(sink, c, at) : writeOptionsPiece(sink, c, at);
 }
 
 ApplyResult applyControlValue(const ControlDescriptor& c,

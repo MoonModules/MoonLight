@@ -51,10 +51,10 @@ def run(cmd: list[str]) -> None:
 
 def version_args(version: str) -> list[str]:
     """The -DMM_VERSION override, or nothing: the exact contract build_esp32.py has. Empty means
-    a local/dev build and build_info.h's library.json default; the release pipeline passes the
+    a local/dev build and build_info.cpp's library.json default; the release pipeline passes the
     computed semver so the binary, the asset names and the update badge all carry one version.
     The inner quotes make the macro a string literal, same as the ESP32 build."""
-    return [f'-DMM_VERSION="{version}"'] if version else []
+    return [f"-DMM_VERSION={version}"] if version else []   # bare: CMakeLists.txt adds the quotes
 
 
 def configure_and_build_macos(version: str = "") -> Path:

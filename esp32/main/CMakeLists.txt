@@ -1,3 +1,6 @@
+# Core's sources, the list every build reads.
+include(${CMAKE_CURRENT_LIST_DIR}/../../src/core/sources.cmake)
+
 idf_component_register(
     SRCS
         "main.cpp"
@@ -5,22 +8,7 @@ idf_component_register(
         # The shared type registry, compiled beside main.cpp here and beside the scenario runner on
         # desktop, so one list serves both: src/module_types.cpp carries the reason.
         "../../src/module_types.cpp"
-        "../../src/core/module/Control.cpp"
-        "../../src/core/util/JsonUtil.cpp"
-        "../../src/core/util/JsonFetch.cpp"
-        "../../src/core/util/parse.cpp"
-        "../../src/core/util/ScratchBuffer.cpp"
-        "../../src/core/system/HttpServerModule.cpp"
-        "../../src/core/system/FilesystemModule.cpp"
-        "../../src/core/system/FileManagerModule.cpp"
-        "../../src/core/services/SdCardService.cpp"
-        "../../src/core/system/MqttModule.cpp"
-        "../../src/core/module/Scheduler.cpp"
-        "../../src/core/module/StateDocument.cpp"
-        "../../src/core/util/sha256.cpp"
-        "../../src/core/moonlive/MoonLive.cpp"
-        "../../src/core/moonlive/MoonLiveCompiler.cpp"
-        "../../src/core/moonlive/MoonLiveSpill.cpp"
+        ${MM_CORE_SOURCES}
         "../../src/platform/esp32/platform_esp32.cpp"
         "../../src/platform/esp32/moonlive_emit_xtensa.cpp"
         "../../src/platform/esp32/moonlive_emit_riscv.cpp"
@@ -78,6 +66,9 @@ if(CONFIG_IDF_TARGET_ESP32)
     target_link_libraries(${COMPONENT_LIB} INTERFACE "-u ld_include_rmt_hi_vector")
 endif()
 
+# Where build_info.cpp and its generated build_id.h live: the build identity's one unit.
+set(BUILD_INFO_DIR ${COMPONENT_DIR}/../../src/core/util)
+
 # Firmware-variant defines, set by moondeck/build/build_esp32.py via firmware_cmake_args().
 # See docs/explanation/architecture/mooninstaller.md § Firmware vs board — "firmware" is the compiled
 # binary variant; the physical "board" is a separate concept the device
@@ -90,7 +81,7 @@ endif()
 #                 OTA-compatible binaries. Cache variables in ESP-IDF reach
 #                 this CMakeLists but not the component compile line by
 #                 default, so we forward it explicitly. Without this,
-#                 build_info.h's `#ifndef` fallback kicks in and the device
+#                 build_info.cpp's `#ifndef` fallback kicks in and the device
 #                 reports "firmware: unknown".
 #
 # MM_ETH_ONLY  — set on `--firmware esp32-eth` (no WiFi compiled in).
@@ -105,27 +96,23 @@ endif()
 #                eth* platform functions to return false/empty, mirroring
 #                the desktop platform layer.
 if(MM_FIRMWARE_NAME)
-    # build_esp32.py passes -DMM_FIRMWARE_NAME="<key>" where the outer quotes
-    # become part of the CMake variable value (verified via CMakeCache.txt).
-    # So ${MM_FIRMWARE_NAME} already expands to "esp32-eth" *with* the quotes —
-    # don't re-add them here, or the preprocessor sees MM_FIRMWARE_NAME=""esp32""
-    # and fails as if "esp32" were an identifier.
-    target_compile_definitions(${COMPONENT_LIB} PRIVATE MM_FIRMWARE_NAME=${MM_FIRMWARE_NAME})
+    # build_esp32.py passes the bare key and the quotes go on here, as the Teensy build does: idf.py
+    # strips quotes from a -D value before comparing it with the cache, so a quoted value never
+    # matched and re-ran CMake on every build.
+    set_property(SOURCE ${BUILD_INFO_DIR}/build_info.cpp APPEND PROPERTY COMPILE_DEFINITIONS MM_FIRMWARE_NAME="${MM_FIRMWARE_NAME}")
 endif()
 if(MM_RELEASE)
-    # Same quoting note as MM_FIRMWARE_NAME above — the value arrives with its
-    # quotes already baked in. Release-channel tag (latest / vX.Y.Z); only the
-    # release workflow sets it, so local builds fall through to build_info.h's
-    # #ifndef "" default.
-    target_compile_definitions(${COMPONENT_LIB} PRIVATE MM_RELEASE=${MM_RELEASE})
+    # Quoted here, as MM_FIRMWARE_NAME above. Release-channel tag (latest / vX.Y.Z); only the
+    # release workflow sets it, so local builds fall through to build_info.cpp's #ifndef "" default.
+    set_property(SOURCE ${BUILD_INFO_DIR}/build_info.cpp APPEND PROPERTY COMPILE_DEFINITIONS MM_RELEASE="${MM_RELEASE}")
 endif()
 if(MM_VERSION)
-    # Same quoting note again. The computed semver (compute_version.py): the core
+    # Quoted here too. The computed semver (compute_version.py): the core
     # for a stable tag, <core>-dev.<N> for a moving latest build. Only the release
-    # pipeline sets it; a local build falls through to build_info.h's #ifndef
+    # pipeline sets it; a local build falls through to build_info.cpp's #ifndef
     # default (library.json). Overrides the header's #ifndef so the binary, the
     # release asset names, and the manifest all carry the same version.
-    target_compile_definitions(${COMPONENT_LIB} PRIVATE MM_VERSION=${MM_VERSION})
+    set_property(SOURCE ${BUILD_INFO_DIR}/build_info.cpp APPEND PROPERTY COMPILE_DEFINITIONS MM_VERSION="${MM_VERSION}")
 endif()
 if(MM_ETH_ONLY)
     target_compile_definitions(${COMPONENT_LIB} PRIVATE MM_NO_WIFI)
@@ -174,7 +161,7 @@ file(GLOB UI_SOURCES CONFIGURE_DEPENDS ${UI_DIR}/*.js ${UI_DIR}/*.html ${UI_DIR}
 add_custom_command(
     OUTPUT ${UI_DIR}/ui_embedded.h
     COMMAND ${CMAKE_COMMAND} -DUI_DIR=${UI_DIR} -DOUT=${UI_DIR}/ui_embedded.h -DPYTHON_CMD=${Python3_EXECUTABLE} -P ${UI_DIR}/embed_ui.cmake
-    DEPENDS ${UI_SOURCES} ${UI_DIR}/embed_ui.cmake
+    DEPENDS ${UI_SOURCES} ${UI_DIR}/embed_ui.cmake ${UI_DIR}/../../moondeck/build/bundle_ui.py
     COMMENT "Embedding UI files"
 )
 add_custom_target(ui_embed DEPENDS ${UI_DIR}/ui_embedded.h)
@@ -202,22 +189,21 @@ add_custom_command(
 )
 add_custom_target(moonlive_catalog DEPENDS ${MOONLIVE_CATALOG_STAMP})
 
-# Generate build_info.h from library.json + git (carries version, build id, build date, board name).
+# Generate build_id.h from library.json + git: the build id and the default version, for build_info.cpp alone.
 #
 # **Deliberately ALWAYS out-of-date** — the target runs the generator on every build, not just when
 # library.json changes. MM_BUILD_ID is the git hash the binary is built from, and it is the only
-# trustworthy answer to "which code is on this board?": MM_BUILD_DATE cannot be, because __DATE__
-# expands when the *including* TU compiles, so editing a driver .cpp leaves the date frozen and a
-# freshly flashed board reports the OLD one, which reads as "the flash didn't take" and sends debugging
-# at the wrong binary. Pinning the rule to library.json's mtime has the same failure. The generator is a
-# sub-second script and rewrites the header only when its content changes, so an unchanged tree still
-# costs nothing downstream.
-set(BUILD_INFO_DIR ${COMPONENT_DIR}/../../src/core)
+# trustworthy answer to "which code is on this board?": a stale one reads as "the flash didn't take"
+# and sends debugging at the wrong binary, which pinning the rule to library.json's mtime caused. The generator is a
+# sub-second script and rewrites the header only when its content changes, so an unchanged tree recompiles
+# build_info.cpp alone, the one unit holding the clock, and relinks.
 add_custom_target(build_info_gen ALL
     COMMAND ${Python3_EXECUTABLE} ${COMPONENT_DIR}/../../moondeck/build/generate_build_info.py
-    BYPRODUCTS ${BUILD_INFO_DIR}/build_info.h
-    COMMENT "Generating build_info.h (git build id)"
+    BYPRODUCTS ${BUILD_INFO_DIR}/build_id.h ${BUILD_INFO_DIR}/build_date.stamp
+    COMMENT "Generating build_id.h (git build id)"
     VERBATIM
 )
+# The one unit holding the clock recompiles on every build, the generator touching its stamp.
+set_source_files_properties(${BUILD_INFO_DIR}/build_info.cpp PROPERTIES OBJECT_DEPENDS ${BUILD_INFO_DIR}/build_date.stamp)
 
 add_dependencies(${COMPONENT_LIB} ui_embed build_info_gen moonlive_catalog)

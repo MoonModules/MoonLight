@@ -43,6 +43,20 @@ inline std::string pumpUntil(mm::HttpServerModule& http, mm::platform::TcpConnec
     return out;
 }
 
+/// Tick the server and read `client` until the server closes it: the whole answer.
+inline std::string readUntilClosed(mm::HttpServerModule& http, mm::platform::TcpConnection& client) {
+    std::string out;
+    char buf[4096];
+    for (int i = 0; i < 3000; i++) {
+        http.tick20ms();
+        const int n = client.read(reinterpret_cast<uint8_t*>(buf), sizeof(buf));
+        if (n > 0) out.append(buf, static_cast<size_t>(n));
+        else if (n == 0) break;   // the server closed: the answer is complete
+        else mm::platform::delayMs(1);
+    }
+    return out;
+}
+
 /// What a read answers after the server closes the socket: -1 while the close is in flight, then 0.
 inline int readAfterClose(mm::platform::TcpConnection& client) {
     char buf[32];

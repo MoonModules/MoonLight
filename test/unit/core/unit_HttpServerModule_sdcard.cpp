@@ -257,26 +257,33 @@ TEST_CASE("an SD download larger than one tick's chunk streams across several ti
     http.release();
 }
 
-// Point 8 of the review: streamFsFile sent the 200 header before claiming a slot, so a busy slot answered with a body a dead connection never delivered.
-TEST_CASE("an SD download with no free transfer slot answers 503, not a broken 200") {
+// streamFsFile once sent the 200 header before claiming a slot, so a busy slot answered with a body a dead connection never delivered.
+TEST_CASE("an SD download with no free send slot answers 503, not a broken 200") {
+    struct Heap { ~Heap() { mm::platform::setTestFreeInternalHeap(0); } } heap;   // restored however the test ends
     SdFixture fix;
     REQUIRE(mm::platform::fsWriteAtomic("/sd/noslot.bin", "x", 1));
     mm::HttpServerModule http;
     http.port = kTestPort;
     http.setup();
 
-    // Both slots held by stuck uploads: none free for the download below.
-    mm::platform::TcpConnection busy1, busy2;
-    claimStuckUpload(http, busy1, "/sd/busy1.bin");
-    claimStuckUpload(http, busy2, "/sd/busy2.bin");
+    // Short of internal RAM, with the turn held elsewhere, every download waits in its slot.
+    mm::platform::setTestFreeInternalHeap(mm::HttpServerModule::kSendHeadroom - 1);
+    int elsewhere = 0;
+    REQUIRE(http.maySendForTest(&elsewhere));
+    std::vector<mm::platform::TcpConnection> held(mm::HttpServerModule::kSendSlots);
+    for (auto& c : held) {
+        REQUIRE(connectAndAccept(http, c, kTestPort));
+        const char* req = "GET /api/file?path=/sd/noslot.bin HTTP/1.1\r\n\r\n";
+        REQUIRE(c.write(reinterpret_cast<const uint8_t*>(req), std::strlen(req)));
+        tickWhileDelivering(http);
+    }
 
     mm::platform::TcpConnection client;
     const std::string reply = getAndWait(http, client, "/sd/noslot.bin");
     CHECK(std::strncmp(reply.c_str(), "HTTP/1.1 503", 12) == 0);
 
     client.close();
-    busy1.close();
-    busy2.close();
+    for (auto& c : held) c.close();
     http.release();
 }
 

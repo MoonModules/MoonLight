@@ -1,4 +1,10 @@
 cmake_minimum_required(VERSION 3.20)
+# A compiler cache where one is installed: a rebuild after a clean, or of a configuration built before, reuses every identical compile (build-system.md, The compiler cache).
+find_program(CCACHE_PROGRAM ccache)
+if(CCACHE_PROGRAM)
+    set(CMAKE_C_COMPILER_LAUNCHER ${CCACHE_PROGRAM})
+    set(CMAKE_CXX_COMPILER_LAUNCHER ${CCACHE_PROGRAM})
+endif()
 project(MoonLight LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -99,8 +105,9 @@ else()
         add_compile_options(-Wframe-larger-than=512 -Wno-error=frame-larger-than)
         # Each file's findings are kept beside its object, so the code check reads the whole tree after an incremental build instead of a clean one.
         find_package(Python3 COMPONENTS Interpreter QUIET)
-        if(Python3_Interpreter_FOUND AND NOT CMAKE_CXX_COMPILER_LAUNCHER)
-            set(CMAKE_CXX_COMPILER_LAUNCHER "${Python3_EXECUTABLE};${CMAKE_SOURCE_DIR}/moondeck/build/diag_launcher.py")
+        # Chained in front of ccache when it is there: a cached compile replays the compiler's output, so its findings are kept too.
+        if(Python3_Interpreter_FOUND)
+            list(PREPEND CMAKE_CXX_COMPILER_LAUNCHER "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/moondeck/build/diag_launcher.py")
         endif()
     endif()
 endif()
@@ -117,47 +124,53 @@ if(MM_MOONLIVE_NO_HOST_JIT)
 endif()
 
 # `uv` is the project's Python launcher (see CLAUDE.md / moondeck/MoonDeck.md).
-# The build invokes Python helpers for build_info.h generation and UI embedding;
+# The build invokes Python helpers for build_id.h generation and UI embedding;
 # resolving them through `uv run python …` keeps Windows (where `python3` isn't
 # on PATH) on the same path as macOS / Linux without a `find_package(Python3)`
 # detour and without per-host scaffolding.
 find_program(UV_EXECUTABLE NAMES uv REQUIRED
              HINTS "$ENV{USERPROFILE}/.local/bin" "$ENV{HOME}/.local/bin")
 
-# Core library. Most modules ship header-only (single .h file with implementation
-# inline). Core service modules that bridge to the platform (HTTP server,
-# filesystem, network, …) ship as .h + .cpp per CLAUDE.md — list those .cpps
-# here so both the application and the test binary link them.
+# Core library. Most modules ship header-only; the ones that bridge to the platform (HTTP server,
+# filesystem, …) ship as .h + .cpp, listed once in src/core/sources.cmake for every build.
+include(src/core/sources.cmake)
 add_library(mm_core STATIC
-    src/core/module/Control.cpp
-    src/core/util/JsonUtil.cpp
-    src/core/util/JsonFetch.cpp
-    src/core/util/parse.cpp
-    src/core/util/ScratchBuffer.cpp
-    src/core/system/HttpServerModule.cpp
-    src/core/system/FilesystemModule.cpp
-    src/core/system/FileManagerModule.cpp
-    src/core/services/SdCardService.cpp
-    src/core/system/MqttModule.cpp
-    src/core/util/sha256.cpp
-    src/core/module/Scheduler.cpp
-    src/core/module/StateDocument.cpp
-    src/core/moonlive/MoonLive.cpp
-    src/core/moonlive/MoonLiveCompiler.cpp
-    src/core/moonlive/MoonLiveSpill.cpp
+    ${MM_CORE_SOURCES}
 )
-target_include_directories(mm_core PUBLIC src/)
+# Core sees only core, the platform and the UI: its include root links those three folders of src/ and not light/, so a core file including
+# light fails to compile (architecture: core without light). The links are symbolic, which Windows grants only in Developer Mode, so Windows
+# keeps src/ as the root and the other desktops and CI hold the boundary. A target that also builds light adds src/ itself.
+set(MM_CORE_ROOT ${CMAKE_SOURCE_DIR}/src)
+if(NOT WIN32)
+    set(MM_CORE_ROOT ${CMAKE_BINARY_DIR}/mm_core_root)
+    file(MAKE_DIRECTORY ${MM_CORE_ROOT})
+    foreach(dir core platform ui)
+        file(CREATE_LINK ${CMAKE_SOURCE_DIR}/src/${dir} ${MM_CORE_ROOT}/${dir} SYMBOLIC)
+    endforeach()
+endif()
+target_include_directories(mm_core PUBLIC ${MM_CORE_ROOT})
 target_link_libraries(mm_core PUBLIC mm_platform)
+# Every core header compiles on its own through that root (CMake's header set verification), since most of core is header-only and
+# the sources above include only part of it. mm_tests depends on the check, so a test build fails on a crossing.
+if(NOT WIN32 AND CMAKE_VERSION VERSION_GREATER_EQUAL 3.24)
+    # Named through the root, since a header set's base directory joins the include path, and src/ there would show light again.
+    file(GLOB_RECURSE MM_CORE_HEADERS CONFIGURE_DEPENDS RELATIVE ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/src/core/*.h)
+    list(TRANSFORM MM_CORE_HEADERS PREPEND "${MM_CORE_ROOT}/")
+    target_sources(mm_core PUBLIC FILE_SET HEADERS BASE_DIRS ${MM_CORE_ROOT} FILES ${MM_CORE_HEADERS})
+    set_target_properties(mm_core PROPERTIES VERIFY_INTERFACE_HEADER_SETS ON)
+    set(MM_CORE_HEADER_CHECK ON)   # the check's target exists only at generate time, so test/ reads this
+endif()
 # `add_dependencies(mm_core ui_embed)` is below, after the ui_embed target is defined.
 
 # The computed semver (compute_version.py): the core for a stable tag, <core>-dev.<N> for a
 # moving latest build. Only the release pipeline sets it (package_desktop.py --version); a local
-# build falls through to build_info.h's #ifndef default (library.json). The same override the
+# build falls through to build_info.cpp's #ifndef default (library.json). The same override the
 # ESP32 build has (esp32/main/CMakeLists.txt), so a desktop binary reports the same precise
 # version its release assets are named with, which is what lets the UI's update badge compare
-# a running desktop against the `latest` channel at all.
+# a running desktop against the `latest` channel at all. On build_info.cpp alone, so a new
+# version leaves every other unit a compiler-cache hit (build_info.h).
 if(MM_VERSION)
-    add_compile_definitions(MM_VERSION=${MM_VERSION})
+    set_property(SOURCE src/core/util/build_info.cpp APPEND PROPERTY COMPILE_DEFINITIONS MM_VERSION="${MM_VERSION}")
 endif()
 
 # Platform library (desktop). moonlive_emit.cpp is the desktop MoonLive backend (host-ISA
@@ -172,7 +185,7 @@ add_library(mm_platform
     src/platform/desktop/moonlive_asm_arm64.cpp
     src/platform/desktop/moonlive_asm_x86_64.cpp
 )
-target_include_directories(mm_platform PUBLIC src/ src/platform/desktop/)
+target_include_directories(mm_platform PUBLIC ${MM_CORE_ROOT} src/platform/desktop/)
 # Winsock for the desktop socket surface; IPHLPAPI for real Ethernet link state and negotiated
 # speed (PanelCardDriver warns below gigabit, and a ColorLight card tears rather than erroring).
 # Npcap is deliberately NOT linked: platform_desktop.cpp resolves wpcap.dll at run time so the
@@ -232,17 +245,21 @@ target_link_libraries(mm_platform PUBLIC mm_core)
 set_target_properties(mm_core     PROPERTIES LINK_INTERFACE_MULTIPLICITY 3)
 set_target_properties(mm_platform PROPERTIES LINK_INTERFACE_MULTIPLICITY 3)
 
-# Generate build_info.h from library.json + git (carries version, build id, build date, board name).
+# Generate build_id.h from library.json + git: the build id and the default version, for build_info.cpp alone.
 # ALWAYS out-of-date on purpose — see the same rule in esp32/main/CMakeLists.txt for why: MM_BUILD_ID
 # must track the git hash on every build, and pinning this to library.json's mtime is what made the
 # reported build stamp go stale, which reads as a failed flash and sends debugging at the wrong binary. The generator
-# rewrites the header only when its content changes, so an unchanged tree triggers no rebuild.
+# rewrites the header only when its content changes, so an unchanged tree recompiles build_info.cpp alone, the one unit
+# holding the clock, and relinks.
 add_custom_target(build_info_gen ALL
     COMMAND ${UV_EXECUTABLE} run python ${CMAKE_SOURCE_DIR}/moondeck/build/generate_build_info.py
-    BYPRODUCTS ${CMAKE_SOURCE_DIR}/src/core/util/build_info.h
-    COMMENT "Generating build_info.h (git build id)"
+    BYPRODUCTS ${CMAKE_SOURCE_DIR}/src/core/util/build_id.h ${CMAKE_SOURCE_DIR}/src/core/util/build_date.stamp
+    COMMENT "Generating build_id.h (git build id)"
     VERBATIM
 )
+# The one unit holding the clock recompiles on every build, the generator touching its stamp.
+set_source_files_properties(${CMAKE_SOURCE_DIR}/src/core/util/build_info.cpp PROPERTIES
+    OBJECT_DEPENDS ${CMAKE_SOURCE_DIR}/src/core/util/build_date.stamp)
 
 # Embed UI files as C arrays. Pass UV_EXECUTABLE through as a single value
 # (no semicolons on the command line — those would either get split by `make`
@@ -254,7 +271,7 @@ file(GLOB UI_SOURCES CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/src/ui/*.js ${CMAKE_S
 add_custom_command(
     OUTPUT ${CMAKE_SOURCE_DIR}/src/ui/ui_embedded.h
     COMMAND ${CMAKE_COMMAND} -DUI_DIR=${CMAKE_SOURCE_DIR}/src/ui -DOUT=${CMAKE_SOURCE_DIR}/src/ui/ui_embedded.h -DUV_EXECUTABLE=${UV_EXECUTABLE} -P ${CMAKE_SOURCE_DIR}/src/ui/embed_ui.cmake
-    DEPENDS ${UI_SOURCES} ${CMAKE_SOURCE_DIR}/src/ui/embed_ui.cmake
+    DEPENDS ${UI_SOURCES} ${CMAKE_SOURCE_DIR}/src/ui/embed_ui.cmake ${CMAKE_SOURCE_DIR}/moondeck/build/bundle_ui.py
     COMMENT "Embedding UI files"
 )
 add_custom_target(ui_embed DEPENDS ${CMAKE_SOURCE_DIR}/src/ui/ui_embedded.h)
@@ -286,10 +303,9 @@ add_custom_command(
 )
 add_custom_target(moonlive_catalog DEPENDS ${MOONLIVE_CATALOG_STAMP})
 
-# mm_core's HttpServerModule.cpp consumes ui_embedded.h and SystemModule.h
-# (a mm_core public header) consumes build_info.h. Anything that links mm_core
-# transitively includes those headers, so both generated files must exist
-# before any mm_core compile unit starts. CI's parallel clean build exposes
+# mm_core's HttpServerModule.cpp consumes ui_embedded.h and build_info.cpp
+# consumes build_id.h, so both generated files must exist before any mm_core
+# compile unit starts. CI's parallel clean build exposes
 # the race (test/ compiles SystemModule.h while build_info_gen is still
 # running); wiring the dep here makes the ordering explicit on every consumer.
 add_dependencies(mm_core ui_embed build_info_gen moonlive_catalog)
@@ -327,6 +343,7 @@ endif()
 # module_types.cpp is the shared type registry, compiled into the app and the scenario runner
 # alike so one list serves both: src/module_types.cpp carries the reason.
 add_executable(MoonLight src/main.cpp src/module_types.cpp src/platform/desktop/main_desktop.cpp ${MM_WIN_RESOURCES})
+target_include_directories(MoonLight PRIVATE src/)
 target_link_libraries(MoonLight PRIVATE mm_core mm_platform)
 add_dependencies(MoonLight ui_embed build_info_gen moonlive_catalog)
 

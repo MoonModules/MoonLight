@@ -68,11 +68,11 @@ The product owner is the critical success factor. They review every line before 
 
 **Desktop first, always.** Anything the desktop can prove (UI, logic, tests) is proven there rather than through a multi-minute compile and a 60-second flash. A device build comes after the desktop is clean, and only for what the desktop cannot show: the platform layer, timing, memory, real hardware.
 
-**ESP32 build and flash: only when the product owner approves.** Not to confirm something compiles, not at the end of a phase, not for an interesting measurement. Ask, then wait, every time.
+**ESP32 build: when the work needs it. Flash: only when the product owner approves.** A build runs without asking when a gate finds the firmware stale or a platform change needs compiling for a board, never for an interesting measurement. Writing a board waits for the product owner's go, every time.
 
 **Desktop build and test: only as a prerequisite to continue.** A build earns its place when the next step cannot happen without it. Not after every edit.
 
-**Ask before running anything slow**: ESP32 builds, full scenario sweeps, gate lists, repo-wide sweeps, `collect_kpi`. Run the cheapest thing that answers the question, and say what the expensive one is and why before asking for it.
+**Ask before running anything slow**: full scenario sweeps, gate lists, repo-wide sweeps, `collect_kpi`. Run the cheapest thing that answers the question, and say what the expensive one is and why before asking for it.
 
 **Bench boards are free in risk, costly in time.** Nothing on them is precious, so verifying needs no ceremony, but the product owner still says when a board is written to. Re-probe ports first, since they drift between sessions. A change that could brick, boot-loop or wipe a board gets a one-sentence heads-up on top of the go-ahead.
 

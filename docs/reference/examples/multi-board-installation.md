@@ -231,7 +231,7 @@ A [MoonLiveService](../../moonmodules/core/services.md#moonliveservice) on the l
 
 <img src="../../assets/reference/examples/multi-board/autopilot-card.png" width="300" alt="The autopilot service card: script, run and seconds">
 
-- **Building:** at start it pushes every part its look, a layer per look, with [`pushJson` and `pushJsonTo`](../../moonmodules/light/moonlive.md#json-documents-in-a-service). It reaches the legs, itself, and the eyes and the mouth by name: `MM-eye1.local`, `MM-eye2.local` and `MM-mouth.local`.
+- **Building:** at start it pushes every part its look, a layer per look, with [`pushJson` and `pushJsonTo`](../../moonmodules/light/moonlive.md#json-documents-in-a-service). It reaches the legs, itself, and the eyes and the mouth by name: `MM-eye1.local`, `MM-eye2.local`, `MM-mouth.local` and `MM-mouth2.local`.
   A push is live and never saved, so it pushes them again every half minute, and a part that boots late or reboots gets its look back. The same document applied again changes nothing.
   A part whose look names a script it lacks lists it on its System card, and the page open on it downloads it.
 - **Scenes:** every `seconds`, three minutes by default, it picks a new scene.
@@ -312,10 +312,10 @@ Every device joins its WiFi, and the audio source is wired to it by Ethernet, so
 | Device | Board | Address | Connection | Role |
 |---|---|---|---|---|
 | MM-StadBeest | LightCrafter 16 (ESP32-S3) | 192.168.1.103 | WiFi | the legs, the leader |
-| MM-eye1 | ESP32-S3-Zero | 192.168.1.149 | WiFi | an eye |
+| MM-eye1 | ESP32-S3-Zero | 192.168.1.150 | WiFi | an eye |
 | MM-Eye2 | ESP32-S3-Zero | 192.168.1.216 | WiFi | an eye |
-| MM-bulb1 | ESP32-C3 RGBWW PWM bulb | 192.168.1.230 | WiFi | the mouth |
-| MM-bulb2 | ESP32-C3 RGBWW PWM bulb | 192.168.1.215 | WiFi | the backup mouth, set up as MM-bulb1 |
+| MM-mouth | ESP32-C3 RGBWW PWM bulb | 192.168.1.215 | WiFi | the mouth, one of two bulbs |
+| MM-mouth2 | ESP32-C3 RGBWW PWM bulb | 192.168.1.230 | WiFi | the mouth, one of two bulbs |
 | MM-S31 | ESP32-S31 CoreBoard | 192.168.1.125 | Ethernet, 1 Gbit | the audio source |
 | MM-MIDI-rtp | ESP32-S3 (N16R8) | 192.168.1.101 | WiFi | the MIDI bridge |
 
@@ -333,7 +333,9 @@ Two router settings keep it steady:
   The audio then stopped every 20 seconds, and an eye missed the leader's palette changes.
   With a few small streams on a dedicated network, sending multicast to every device costs nothing worth saving.
 - **An address reservation per device** (Network, LAN), so the addresses above stay the same.
-  The leader's MIDI `host` is the bridge's address, and a host setting also takes a name, but a name resolves by mDNS, which is multicast again.
+  Or a board's name in the host settings, such as the leader's MIDI `host` as `MM-MIDI-rtp`.
+  A MoonLight board's name resolves from the Devices list, which the boards' broadcast keeps current where a router drops mDNS's multicast.
+  A host setting shows the name of each board it knows beside its address.
 
 A device that stops hearing a group joins it again after 3 seconds of silence, so a network that drops multicast now and then recovers on its own.
 

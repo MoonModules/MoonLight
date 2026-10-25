@@ -18,7 +18,7 @@ The control surface these integrations drive is documented once: the MQTT contro
 
 ## Prerequisites
 
-- A MoonLight device on your WiFi/Ethernet. The MQTT paths (HA MQTT discovery, Homebridge) need the [MQTT module](../moonmodules/core/system.md#mqtt), which ships on boards whose catalog entry includes it, the Shelly model among them. The WLED-only HA path needs none: HA reaches the device over its always-present `/json` endpoint.
+- A MoonLight device on your WiFi/Ethernet. The MQTT paths (HA MQTT discovery, Homebridge) need the [MQTT module](../moonmodules/core/system.md#mqtt), which ships on boards whose catalog entry includes it. The WLED-only HA path needs none: HA reaches the device over its always-present `/json` endpoint.
 - The device's **MAC suffix**: the last 6 hex digits of its MAC, its stable MQTT topic id (`MoonLight/<suffix>`), which also identifies it to HA on the WLED path. Read it from the MQTT module's `mqtt_status`, or once the device is talking to the broker, `mosquitto_sub -t 'MoonLight/#'`. The examples below use `563cfe`; substitute yours.
 - A running hub, with what each path needs:
   - **HA + Mosquitto broker add-on**: for MQTT auto-discovery (richer state + HomeKit Bridge). [Set up HA + Mosquitto](../moonwalk.md#smart-home-hub).

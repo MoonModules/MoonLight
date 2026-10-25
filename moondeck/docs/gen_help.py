@@ -18,6 +18,7 @@ import os
 import re
 import subprocess
 import sys
+import unicodedata
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent.parent
@@ -56,6 +57,7 @@ _SENTENCE_RE = re.compile(r"(?<=[.!?])\s+(?=[A-Z`*\[])")
 _REF_RE = re.compile(r'@ref\s+(\w+)(?:\s+"([^"]+)")?')
 # The attribution catalog: a table whose rows name an entry, linked to its person, project or page when it has one, which a module's `@attribution` refers to by any of its names.
 ATTRIBUTIONS = ROOT / "docs" / "reference" / "attributions.md"
+ATTRIBUTIONS_PAGE = SITE + "reference/attributions.html"   # where each entry is a card, at its anchor
 _LINKED_RE = re.compile(r"^\[([^\]]+)\]\((https?://[^)\s]+)\)$")
 # The role nouns a type name ends in, which its display name drops.
 _ROLE_NOUNS = ("Effect", "Modifier", "Layout", "Driver", "Module", "Service")
@@ -433,16 +435,22 @@ def catalog_rows(text: str):
             yield i, [n.strip() for n in names.split(" / ")], url, picture.strip() or None
 
 
+def attribution_anchor(names: list[str]) -> str:
+    """An entry's card anchor on the attributions page: its first name in ASCII, lowercase, each run of other characters a hyphen, so `Jos Stam` is `#jos-stam`."""
+    plain = "".join(c for c in unicodedata.normalize("NFD", names[0]) if not unicodedata.combining(c))
+    return re.sub(r"[^a-z0-9]+", "-", plain.lower()).strip("-")
+
+
 def attribution_catalog(path: Path = ATTRIBUTIONS) -> dict:
-    """The catalog's names, each lowercased to its entry's link, None for an entry with no page."""
+    """The catalog's names, each lowercased to its entry's card anchor."""
     text = path.read_text(encoding="utf-8") if path.exists() else ""
-    return {n.lower(): url for _, names, url, _ in catalog_rows(text) for n in names}
+    return {n.lower(): attribution_anchor(names) for _, names, _, _ in catalog_rows(text) for n in names}
 
 
 def resolve_attribution(text: str, catalog: dict) -> tuple[str, list[str]]:
-    """An attribution's comma-separated names, each in the catalog linked to its entry and any other kept as written, and the ones the catalog does not list yet."""
+    """An attribution's comma-separated names, each in the catalog linked to its card, where its own link waits, and any other kept as written, with the ones the catalog does not list yet."""
     items = [s.strip() for s in text.split(",")]
-    return (", ".join(f"[{s}]({catalog[s.lower()]})" if catalog.get(s.lower()) else s for s in items),
+    return (", ".join(f"[{s}]({ATTRIBUTIONS_PAGE}#{catalog[s.lower()]})" if s.lower() in catalog else s for s in items),
             [s for s in items if s.lower() not in catalog])
 
 

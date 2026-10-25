@@ -6,126 +6,118 @@
 ///
 /// ## A host bus is real memory, not a refusal
 ///
-/// The parallel output seams used to return failure, so a driver body of some 2500 lines never executed off device. It was not runnable, not testable, and invisible to every syntax-tree check.
-/// So a bus is implemented against a heap buffer: init allocates, buffer hands back writable memory, transmit records the byte count, wait returns at once.
-/// Everything above the seam is then the same code that runs on hardware, and only the hand-off is absent.
+/// A seam that returned failure would leave a driver body of some 2500 lines unrunnable, untestable and invisible to every syntax-tree check.
 ///
-/// Deliberately not modelled: timing, wire protocol, pin state and loopback capture. Those need silicon, and faking them would make a driver's self-test lie about hardware it never touched.
-/// HUB75 is the exception that stays inert, having no host analogue worth faking, and its encoder is already tested on plain buffers.
+/// So a bus is a heap buffer: init allocates, buffer hands back writable memory, transmit records the byte count, wait returns at once. Everything above the seam is the code that runs on hardware; only the hand-off is absent.
+///
+/// Deliberately not modelled: timing, wire protocol, pin state and loopback capture, which need silicon and would make a driver's self-test lie. HUB75 stays inert, having no host analogue worth faking; its encoder is tested on plain buffers.
 ///
 /// ## The identity is stored, not read from a NIC
 ///
-/// The address is generated once and kept beside the config, which is the pattern systemd uses for its machine identity.
-/// It matters because the address is an identity rather than a diagnostic: the device name, the MQTT topic prefix and the Home Assistant identifier all derive from it.
-/// A hardcoded value made every desktop instance the same one, so two desktops or a handful of containers were indistinguishable and fought over one entity.
-/// Home Assistant requires that such an identifier survive container recreation, which storing it achieves and reading a host interface does not.
-/// This Mac lists an internal management interface before its real one, and containers sharing a bridge can present related addresses.
+/// The address is generated once and kept beside the config, the pattern systemd uses for its machine identity. It is an identity, not a diagnostic: the device name, the MQTT topic prefix and the Home Assistant identifier all derive from it.
 ///
-/// The address is locally administered and unicast, the range set aside for addresses that are not vendor-assigned, so it cannot collide with real hardware.
-/// Existing installs keep their identity: a tree with no identity file but with config is seeded with the historic value, so an upgrade never renames a device.
+/// A hardcoded value would make every desktop instance the same one, so two desktops or a handful of containers fight over one entity. Home Assistant requires such an identifier to survive container recreation, which storing achieves.
+///
+/// Reading a host interface does not: this Mac lists an internal management interface before its real one, and containers sharing a bridge can present related addresses.
+///
+/// The address is locally administered and unicast, the range for addresses that are not vendor-assigned, so it cannot collide with real hardware. Config without an identity file seeds the historic value, so an upgrade never renames a device.
+///
 /// The write is atomic like every other config write, since a torn line would be rejected on the next start and the device would silently take a different identity.
 ///
 /// ## The data root is per-user, not relative
 ///
-/// A shipped binary is launched from a download folder, a menu shortcut or an installer's directory. A relative root fails both ways.
-/// It lands somewhere unwritable, so every save fails, or it makes the settings belong to that folder rather than to the user, so moving the executable loses them.
-/// Both were seen on a Windows bench. Three sources are tried in order: an explicit override, a repo checkout, then the operating system's per-user application data.
+/// A shipped binary is launched from a download folder, a menu shortcut or an installer's directory. A relative root lands somewhere unwritable so every save fails, or ties the settings to the folder so a move loses them: both seen on a Windows bench.
 ///
-/// A checkout is recognized by two markers together, because one of them is true in the root of every CMake project there is.
-/// A developer whose shell sits in an unrelated one would otherwise get this project's settings written into that project's build directory.
+/// Three sources are tried in order: an explicit override, a repo checkout, then the operating system's per-user application data.
+///
+/// A checkout is recognized by two markers together, because one of them is true in the root of every CMake project: a developer whose shell sits in an unrelated one would otherwise get settings written into that project's build directory.
+///
 /// It keys on the working directory rather than the executable's location, since that is the development loop this preserves and an installed copy is never launched that way.
 ///
 /// ## The raw-frame driver is loaded, not linked
 ///
-/// Windows has no kernel path for sending a raw layer-two frame: it takes a third-party driver, which ColorLight's own software also uses.
-/// The library is resolved at run time rather than linked, and that is deliberate. This layer is a public dependency of the core, the application and both test binaries.
-/// Linking it would make that vendor's kit a build requirement for continuous integration and for every contributor, to compile a path most of them never run.
-/// Loading on demand means the binary builds and runs identically without it, and reports that raw send is unavailable instead of failing to link.
+/// Windows sends a raw layer-two frame only through a third-party driver, which ColorLight's own software also uses. It is resolved at run time, not linked, because this layer is a public dependency of the core, the application and both test binaries.
+///
+/// Linking would make that vendor's kit a build requirement for CI and every contributor, to compile a path most never run. Loading on demand builds and runs identically without it and reports raw send unavailable instead of failing to link.
+///
 /// The whole surface is five functions, declared with the library's own signatures rather than by including its header, which would reintroduce the dependency this avoids.
 ///
 /// ## Interface labels carry the negotiated speed
 ///
-/// The lookup is necessarily per-operating-system, three interfaces in three units, which is what this layer is for. The rendering is not, so it lives here once.
-/// The label shape is a contract that the apply path and the driver's remap both parse, to recover the adapter's stable identity. Two copies would be two chances to drift out of that agreement.
-/// A speed of zero means the system would not state one, for a virtual adapter or a link that is down, and that appends nothing rather than a fabricated figure.
-/// It appends only if the whole suffix fits, since a truncated speed reads worse than none and the label is what the selection persists by.
+/// The lookup is per-operating-system, three interfaces in three units, which is what this layer is for; the rendering is not, so it lives here once. Two copies of the label shape, which the apply path and the driver's remap both parse, would drift.
+///
+/// A speed of zero means the system would not state one (a virtual adapter, a link that is down) and appends nothing, never a fabricated figure. The suffix appends only whole: a truncated speed reads worse than none, the selection persists by label.
 ///
 /// ## Config files are written owner-only
 ///
-/// The standard open creates a file the process umask widens, so on a typical one it lands world-readable. These are the config files, which hold network keys and broker passwords, and a desktop runs on a real machine with real other users.
-/// A device is unaffected: its filesystem has no modes at all.
+/// The standard open creates a file the umask widens, so it lands world-readable, and config files hold network keys and broker passwords on a machine with other users. A device is unaffected: its filesystem has no modes.
 ///
-/// One platform gets an exclusive create with an explicit mode. Exclusive, because a pre-existing file at one of these paths is either a crashed run's leftover or somebody else's, and inheriting its mode would defeat the point.
-/// The other has no mode concept and its files inherit the directory's access list, which is that platform's own answer to the same question, so it keeps the plain open.
+/// One platform gets an exclusive create with an explicit mode, since a pre-existing file is a crashed run's leftover or somebody else's. The other has no modes and inherits the directory's access list, its own answer, so it keeps the plain open.
 ///
 /// ## Address reuse means opposite things
 ///
-/// On one platform the option lets a fresh socket claim a port left waiting from a closed connection, and never allows two live binds to overlap.
-/// On the other its meaning is reversed: two live sockets can hold the same port, so a second bind succeeds where the retry logic expects a refusal.
-/// That platform's default already matches the first one's behavior, so the option is simply not set there.
+/// On one platform the option lets a fresh socket claim a port left waiting from a closed connection, and never lets two live binds overlap.
 ///
-/// The outcome still is not uniform: on one system the option on a datagram socket bound to every address permits an overlapping bind, so a second one succeeds.
-/// A test that needs a bind to fail must use the test override rather than holding the port.
+/// On the other it is reversed: two live sockets can hold one port, so a second bind succeeds where retry logic expects a refusal. That platform's default already matches the first, so the option is not set there.
+///
+/// The outcome is still not uniform: on one system the option on a datagram socket bound to every address permits an overlapping bind. A test that needs a bind to fail uses the test override rather than holding the port.
 ///
 /// ## What the allocation counter is for
 ///
-/// Not a heap figure: a desktop has as much memory as it wants. And the free-heap report stays at nothing because three call sites read that as unlimited and switch off gates that only mean something on a device.
-/// What it is good for is the DELTA. Every buffer the system takes on purpose comes through these entry points. So adding or removing a module moves the number by exactly what that module costs, on a laptop, in a second, with no board attached.
-/// The process's own resident size cannot answer that, since the allocator, the compiler and the network buffers move it too, and a small layer would be lost in the noise.
-/// The REQUESTED size is recorded rather than the allocator's rounded one, so a reported delta is the number the caller asked for.
+/// Not a heap figure: a desktop has as much memory as it wants, and the free-heap report stays at nothing because three call sites read that as unlimited and switch off gates that only mean something on a device.
+///
+/// Its use is the DELTA. Every buffer the system takes on purpose comes through these entry points, so adding or removing a module moves the number by exactly what it costs, on a laptop, in a second, with no board attached.
+///
+/// The process's resident size cannot answer that, since the allocator, compiler and network buffers move it too. The REQUESTED size is recorded, not the allocator's rounded one, so a delta is the number the caller asked for.
 ///
 /// ## The render sleeps to a frame budget
 ///
-/// Yielding alone only offers the processor to another runnable thread. So on an otherwise idle machine it returns at once and the caller spins a core flat out, reported from a bench as the process slowly eating more cycles.
-/// Nothing consumes a desktop render faster than a display or a driver's own rate limit. So a loop free-running at thousands of frames is spending a core to compute frames nobody reads.
-/// The budget is far above any output rate we drive while leaving the processor idle in between. And a tick that legitimately runs longer simply gets no sleep, so a heavy grid still runs as fast as it can.
+/// Yielding only offers the processor to another runnable thread, so on an idle machine it returns at once and the caller spins a core flat out, seen on a bench as the process slowly eating cycles.
+///
+/// Nothing consumes a desktop render faster than a display or a driver's rate limit, so free-running thousands of frames spends a core on frames nobody reads. The budget is far above any rate we drive while leaving the processor idle between.
+///
+/// A tick that runs longer gets no sleep, so a heavy grid still runs as fast as it can.
 ///
 /// ## The video runtime's structures are transcribed, not included
 ///
-/// The runtime is resolved on demand and never linked, bundled, or its headers included, the same arrangement as the raw-frame driver and for the same licensing reason.
-/// The user installs it; a machine without it builds and runs identically and reports the feature unavailable.
+/// The runtime is resolved on demand and never linked, bundled or included, as with the raw-frame driver and for the same licensing reason: the user installs it, and a machine without it builds, runs and reports the feature unavailable.
 ///
-/// So the declarations are transcribed from the vendor's own public headers. Getting a field's type or ORDER wrong is a silent crash or a skewed image rather than a compile error.
-/// These are passed by pointer into a binary built against the real definitions. They are quoted verbatim in the plan with their source, and must not be tidied.
+/// The declarations are transcribed from the vendor's public headers and passed by pointer into a binary built against the real ones, so a wrong field type or ORDER is a silent crash, not a compile error. They are quoted verbatim in the plan, untidied.
 ///
 /// ## Naming an adapter when the capture library cannot
 ///
-/// That library's own description is sometimes absent, and then the adapter is unnameable: the only text left to match is a 49-character device path.
-/// So the system's own description is found through the interface table, keyed on the identifier the device path already carries. The negotiated speed rides in the label too, because the name alone does not say what a picker needs to know.
-/// A wall wants the gigabit adapter, and a list of plausible names hides which entries are a dongle, a radio or a virtual switch. An adapter whose speed the system will not state gets no suffix rather than a fabricated one.
+/// The capture library's own description is sometimes absent, leaving only a 49-character device path to match, so the system's description is found through the interface table, keyed on the identifier the device path carries.
+///
+/// The negotiated speed rides in the label too: a wall wants the gigabit adapter, and plausible names hide which entries are a dongle, a radio or a virtual switch. A speed the system will not state gets no suffix.
 ///
 /// ## The interface table, not the address list
 ///
-/// An adapter bound to a virtual switch does not appear in the address list at all: the system reports the virtual one and hides the physical one the switch owns.
-/// Measured here, where the capture library opens a device whose identifier is in no address-list row.
-/// The interface table lists the physical one and carries the same identifier, so one exact key covers both a virtualized adapter and one described as nothing at all.
-/// The description cannot do that, being absent on some and filter-suffixed on others.
+/// An adapter bound to a virtual switch is missing from the address list: the system reports the virtual one and hides the physical one the switch owns, measured where the capture library opens a device whose identifier is in no address-list row.
+///
+/// The interface table lists the physical one with the same identifier, so one exact key covers a virtualized adapter and one described as nothing; the description cannot, being absent on some and filter-suffixed on others.
 ///
 /// ## Which adapters can carry panel frames
 ///
-/// The interface type alone is not the test: measured on a bench, the virtual switch ports, every wide-area miniport, the bridge and the personal-area network all report the same type.
-/// Whether it is a hardware interface is what separates them from an adapter with a socket on it. A radio fails the type test instead, which is the right answer for a card that needs a wire.
+/// The type alone is not the test: virtual switch ports, wide-area miniports, the bridge and the personal-area network report the same type, so being a hardware interface separates them. A radio fails the type test, right for a card that needs a wire.
 ///
 /// ## The effect-warning guard
 ///
-/// The clock read allocates nothing and takes no lock, but the library does not say so, so the effect warning assumes the worst.
-/// The guard asks the compiler whether it HAS the warning, since one vendor's compiler reports a high major version while predating it.
+/// The clock read allocates nothing and takes no lock, but the library does not say so and the effect warning assumes the worst. The guard asks the compiler whether it HAS the warning, since one vendor reports a high major version while predating it.
 ///
 /// ## The raw-frame capture ring
 ///
-/// Sending a real frame needs privileges no test should ask for, so the host records what the driver emitted, up to a fixed cap past which frames are counted.
-/// It is allocated on first capture, since a static array costs a fifth of a megabyte. It is never freed, which keeps allocation off the per-frame path.
+/// A real send needs privileges no test should ask for, so the host records what the driver emitted up to a fixed cap, then counts. The ring allocates on first capture (a static array costs a fifth of a megabyte) and is never freed, off the frame path.
 ///
 /// ## Raw send and the link query
 ///
-/// A bound adapter sends for real, batched, since one call per packet measured a fivefold spread the panels show as stutter. Unbound, as in every test, it captures.
-/// The link query reports the bound adapter's real speed, because the slow-link warning is what explains a torn panel, and a hardcoded rate would silence it.
+/// A bound adapter sends for real, batched (one call per packet measured a fivefold spread the panels show as stutter); unbound, as in every test, it captures. The link query reports the real speed, so the slow-link warning stays honest.
 ///
 /// ## The stream encoder
 ///
-/// A writer thread does the blocking writes while callers only enqueue whole frames, so a stalled encoder costs dropped frames, never a stalled tick.
-/// Stop TERMs the child BEFORE joining, since a writer blocked in write() unblocks reliably only when the read side dies (EPIPE).
-/// The child comes from posix_spawn, since fork in a threaded process can deadlock on the allocator lock. Every fd but stdin is closed, or a leaked HTTP socket outlives a restart.
+/// A writer thread does the blocking writes while callers enqueue whole frames, so a stalled encoder costs dropped frames, never a stalled tick. Stop TERMs the child BEFORE joining: a blocked write() unblocks reliably only on EPIPE.
+///
+/// posix_spawn starts the child, since fork in a threaded process can deadlock on the allocator lock, and every fd but stdin closes or a leaked HTTP socket outlives a restart.
+///
 /// A restart stops the old writer BEFORE resizing, because the writer reads a slot's data pointer without encMutex_.
 ///
 /// ## Why SD is a subfolder, not a second root
@@ -219,6 +211,11 @@ void appendLinkSpeed(char* out, size_t cap, unsigned mbps) {
 
 
 // Small shims mapping two socket interfaces onto one surface, so each call site reads as plain code.
+#ifdef MSG_NOSIGNAL
+constexpr int kSendFlags = MSG_NOSIGNAL;   // Linux: no SIGPIPE from a send to a closed peer, see no_sigpipe
+#else
+constexpr int kSendFlags = 0;
+#endif
 #ifdef _WIN32
 // Cast to the unsigned handle type at the boundary, so the warning level does not fire at every call site.
 inline SOCKET sock(int fd) { return static_cast<SOCKET>(fd); }
@@ -244,8 +241,19 @@ inline int make_blocking(int fd) {
 inline int sock(int fd) { return fd; }
 inline int close_sock(int fd) { return ::close(fd); }
 inline bool sockWouldBlock() { return errno == EAGAIN || errno == EWOULDBLOCK; }
+// A write to a closed peer answers EPIPE rather than raising SIGPIPE, which kills a host process that does not ignore it: macOS sets it per socket, Linux per send (kSendFlags).
+inline void no_sigpipe(int fd) {
+#ifdef SO_NOSIGPIPE
+    int on = 1;
+    ::setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &on, sizeof(on));
+#else
+    (void)fd;
+#endif
+}
 inline int open_sock(int domain, int type, int protocol) {
-    return ::socket(domain, type, protocol);
+    const int fd = ::socket(domain, type, protocol);
+    if (fd >= 0) no_sigpipe(fd);
+    return fd;
 }
 inline int make_nonblocking(int fd) {
     int flags = ::fcntl(fd, F_GETFL, 0);
@@ -342,7 +350,12 @@ void* trackedAlloc(size_t bytes) {
 }
 }  // namespace
 
+static std::atomic<size_t> testAllocRefusedFrom{0};
+void setTestAllocRefusedFrom(size_t bytes) { testAllocRefusedFrom.store(bytes, std::memory_order_relaxed); }
+
 void* alloc(size_t bytes) {
+    const size_t refused = testAllocRefusedFrom.load(std::memory_order_relaxed);
+    if (refused && bytes >= refused) return nullptr;
     return trackedAlloc(bytes);
 }
 
@@ -1043,6 +1056,12 @@ int fsRead(const char* path, char* buf, size_t maxLen) {
 }
 
 
+namespace {
+// The files a read stream holds open. LittleFS, the device's filesystem, refuses to replace an open file, and a desktop that allowed it hid that.
+std::vector<std::filesystem::path> openReads_;
+bool openForRead(const std::filesystem::path& p) { return std::find(openReads_.begin(), openReads_.end(), p) != openReads_.end(); }
+}
+
 // The folder a write lands in, made first, as the write's contract promises.
 static void makeParent(const std::filesystem::path& target) {
     std::error_code ec;
@@ -1075,7 +1094,8 @@ bool fsWriteAtomic(const char* path, const char* data, size_t len) {
     std::fclose(f);
 
     std::error_code ec;
-    std::filesystem::rename(tmp, target, ec);
+    if (openForRead(target)) ec = std::make_error_code(std::errc::device_or_resource_busy);   // as LittleFS refuses it
+    else std::filesystem::rename(tmp, target, ec);
     if (ec) {
         std::filesystem::remove(tmp, ec);
         return false;
@@ -1092,8 +1112,8 @@ int64_t fsSize(const char* path) {
 }
 
 namespace {
-// Tags whether this handle counts toward sdStreamsOpen_, so close() decrements exactly what open() counted.
-struct DesktopReadHandle { FILE* f = nullptr; bool isSd = false; };
+// Tags whether this handle counts toward sdStreamsOpen_, so close() decrements exactly what open() counted, and the file it holds open.
+struct DesktopReadHandle { FILE* f = nullptr; bool isSd = false; std::filesystem::path path; };
 }
 
 bool fsReadStreamOpen(FsReadStream& h, const char* path) {
@@ -1102,6 +1122,8 @@ bool fsReadStreamOpen(FsReadStream& h, const char* path) {
     auto* rh = new DesktopReadHandle();
     rh->f = f;
     rh->isSd = isSdPath(path);
+    rh->path = toFsPath(path);
+    openReads_.push_back(rh->path);
     if (rh->isSd) ++sdStreamsOpen_;
     h.impl = rh;
     return true;
@@ -1120,6 +1142,7 @@ void fsReadStreamClose(FsReadStream& h) {
     if (rh) {
         std::fclose(rh->f);
         if (rh->isSd) --sdStreamsOpen_;
+        if (auto it = std::find(openReads_.begin(), openReads_.end(), rh->path); it != openReads_.end()) openReads_.erase(it);
         delete rh;
     }
     h.impl = nullptr;
@@ -1166,7 +1189,10 @@ bool fsWriteStreamClose(FsWriteStream& h, bool commit) {
     std::fclose(wh->f);
     std::error_code ec;
     bool ok = true;
-    if (commit) { std::filesystem::rename(wh->tmp, wh->target, ec); ok = !ec; }
+    if (commit) {
+        if (openForRead(wh->target)) ok = false;   // as LittleFS refuses it
+        else { std::filesystem::rename(wh->tmp, wh->target, ec); ok = !ec; }
+    }
     if (!commit || !ok) std::filesystem::remove(wh->tmp, ec);
     if (wh->isSd) --sdStreamsOpen_;
     delete wh;
@@ -1996,13 +2022,14 @@ bool http_fetch_to_ota(const char* /*url*/,
     return false;
 }
 
-bool otaWriteStream(FsWriteSrc /*src*/, void* /*user*/, size_t /*contentLen*/,
-                    char* statusBuf, size_t statusBufLen, uint32_t* bytesReadOut) {
-    // No OTA partition on desktop, call sites guard with `if constexpr (mm::platform::hasOta)`.
+// No OTA partition on desktop, call sites guard with `if constexpr (mm::platform::hasOta)`.
+bool otaBegin(OtaWrite&, OtaTarget, size_t, char* statusBuf, size_t statusBufLen, uint32_t* bytesOut) {
     if (statusBuf && statusBufLen > 0) std::snprintf(statusBuf, statusBufLen, "unsupported on desktop");
-    if (bytesReadOut) *bytesReadOut = 0;
+    if (bytesOut) *bytesOut = 0;
     return false;
 }
+bool otaWrite(OtaWrite&, const uint8_t*, size_t) { return false; }
+bool otaEnd(OtaWrite&, bool) { return false; }
 
 // No partitions on desktop: there is no recovery image and nothing to boot into, unless a host test gives it one to read.
 static const char* testMoonBaseVersion_ = nullptr;
@@ -2032,13 +2059,6 @@ bool otaFetchMoonBaseUrl(const char*, char* statusBuf, size_t statusBufLen,
 }
 
 // No recovery partition here, so this installs nothing and consumes nothing, and refuses without touching the source.
-bool otaWriteMoonBase(FsWriteSrc, void*, size_t, char* statusBuf, size_t statusBufLen,
-                      uint32_t* bytesReadOut) {
-    if (statusBuf && statusBufLen > 0) std::snprintf(statusBuf, statusBufLen, "unsupported on desktop");
-    if (bytesReadOut) *bytesReadOut = 0;
-    return false;
-}
-
 bool moonbaseStageInstallUrl(const char*) { return false; }
 void moonbaseClearStagedUrl() {}
 
@@ -2115,7 +2135,7 @@ int httpRequest(const char* method, const char* host, uint16_t port, const char*
     if (n <= 0 || n >= static_cast<int>(sizeof(req))) return 0;
     // Send the whole request, looping because a blocking send can return short under backpressure.
     for (int off = 0; off < n;) {
-        auto w = ::send(sock(fd), req + off, n - off, 0);
+        auto w = ::send(sock(fd), req + off, n - off, kSendFlags);
         if (w > 0) off += static_cast<int>(w);
         else return 0;
     }
@@ -2182,6 +2202,8 @@ bool UdpSocket::open() {
     const int on = 1;
     ::setsockopt(sock(fd_), SOL_SOCKET, SO_BROADCAST,
                  reinterpret_cast<const char*>(&on), sizeof(on));
+    // Non-blocking from the start, so neither a send-only socket nor the render loop's drain ever waits on the stack.
+    if (make_nonblocking(fd_) != 0) { close(); return false; }
     return true;
 }
 
@@ -2203,9 +2225,7 @@ bool UdpSocket::bind(uint16_t port, const uint8_t localIp[4]) {
     addr.sin_port = htons(port);
     if (localIp) std::memcpy(&addr.sin_addr.s_addr, localIp, 4);   // octets are network order
     else addr.sin_addr.s_addr = htonl(INADDR_ANY);
-    if (::bind(sock(fd_), reinterpret_cast<const sockaddr*>(&addr), sizeof(addr)) != 0) return false;
-    // Non-blocking so the render loop's drain never stalls waiting for a packet.
-    return make_nonblocking(fd_) == 0;
+    return ::bind(sock(fd_), reinterpret_cast<const sockaddr*>(&addr), sizeof(addr)) == 0;
 }
 
 int UdpSocket::recvFrom(uint8_t* buf, size_t maxLen, uint8_t srcIp[4], uint16_t* srcPort) {
@@ -2332,7 +2352,7 @@ bool TcpConnection::write(const uint8_t* data, size_t len) {
     size_t sent = 0;
     while (sent < len) {
         auto n = ::send(sock(fd_), reinterpret_cast<const char*>(data + sent),
-                        static_cast<int>(len - sent), 0);
+                        static_cast<int>(len - sent), kSendFlags);
         if (n > 0) {
             sent += static_cast<size_t>(n);
             lastProgress = millis();
@@ -2356,7 +2376,7 @@ int TcpConnection::writeSome(const uint8_t* data, size_t len) {
     if (fd_ < 0) return -1;
     if (len == 0) return 0;
     // The accepted socket is permanently non-blocking, so a full send buffer surfaces as would-block and is reported as nothing sent; the caller advances its own offset.
-    auto n = ::send(sock(fd_), reinterpret_cast<const char*>(data), static_cast<int>(len), 0);
+    auto n = ::send(sock(fd_), reinterpret_cast<const char*>(data), static_cast<int>(len), kSendFlags);
     if (n > 0) return static_cast<int>(n);
     if (n == 0) return 0;
     if (sockWouldBlock()) return 0;         // buffer full, try later
@@ -2466,6 +2486,7 @@ TcpConnection TcpServer::accept() {
 #else
     int clientFd = ::accept(fd_, nullptr, nullptr);
     if (clientFd < 0) return TcpConnection();
+    no_sigpipe(clientFd);
     // A non-blocking client socket, since a blocking read's timeout froze the loop when the bytes had not landed on accept. The request is read across a few rapid retries.
     make_nonblocking(clientFd);
 #endif
@@ -3586,6 +3607,38 @@ bool encoderStart(const EncoderConfig& cfg) {
     }
     argv[i] = nullptr;
     return spawnEncoderProcess(argv, elementary);
+}
+
+namespace {
+const char* g_uiFolder = "src/ui";
+}
+
+void setUiFolder(const char* path) { g_uiFolder = path; }
+
+// A plain name in the folder only: no subfolder, no way out of it.
+static bool plainFileName(const char* name) {
+    // On Windows a colon names a drive, which leaves the folder, or a file's alternate data stream.
+    return name[0] && !std::strchr(name, '/') && !std::strchr(name, '\\') && !std::strchr(name, ':') && !std::strstr(name, "..");
+}
+
+// Read on every request, so an edit shows on the next reload without a rebuild.
+bool uiFolderFile(const char* name, char*& data, size_t& len) {
+    if (!g_uiFolder || !plainFileName(name)) return false;
+    const std::filesystem::path path = std::filesystem::path(g_uiFolder) / name;
+    std::error_code ec;
+    if (!std::filesystem::is_regular_file(path, ec)) return false;
+    const auto size = std::filesystem::file_size(path, ec);
+    if (ec) return false;
+    // A FILE rather than an ifstream, whose 500-byte object would sit on the caller's frame.
+    FILE* f = std::fopen(path.string().c_str(), "rb");
+    if (!f) return false;
+    char* buf = static_cast<char*>(alloc(size ? size : 1));
+    const bool read = buf && std::fread(buf, 1, size, f) == size;
+    std::fclose(f);
+    if (!read) { free(buf); return false; }
+    data = buf;
+    len = size;
+    return true;
 }
 
 // ffmpeg writes the playlist and segments to disk itself, so there is nothing in RAM to serve and the HTTP server uses its normal file path.

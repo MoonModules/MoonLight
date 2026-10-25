@@ -3,13 +3,13 @@
 // component used by both the device UI (here, OTA flash) and the GitHub Pages
 // installer (first flash via Web Serial). Module loading is deferred by
 // default; entry-point is the WS init at the bottom: no ordering surprises.
-import { installPicker } from "/install-picker.js";
-import { preview } from "/preview3d.js";
-import { encodeGif } from "/gif.js";
-import { isNewer, parse } from "/semver.js";
-import { applyMigrations, collectFiles, restoreDirs, diffRestore } from "/migrate.js";
+import { installPicker } from "./install-picker.js";
+import { preview } from "./preview3d.js";
+import { encodeGif } from "./gif.js";
+import { isNewer, parse } from "./semver.js";
+import { collectFiles, restoreBundle } from "./migrate.js";
 import { moduleHelp, controlHelp, walkLinks, ROLE_EMOJI, DIM_EMOJI, SCRIPTED_EMOJI, COMPILED_EMOJI, EMOJI_LABEL,
-         emojiTagsFor, emojiChipRow, chipsMatch } from "/help.js";
+         emojiTagsFor, emojiChipRow, chipsMatch } from "./help.js";
 
 // Sections (top to bottom):
 //   1. State + storage
@@ -72,6 +72,8 @@ const LS_CARDS_W   = "mm_cardsWidth";     // px: dragged width of the docked car
 // The open tab per container, persisted so a reload doesn't dump you back on the first child.
 let selectedTabs = {};
 try { selectedTabs = JSON.parse(lsRead(LS_TABS, "{}")) || {}; } catch { selectedTabs = {}; }
+// How far each container's tab strip is scrolled, so a redraw after a tab click keeps the open tab in view.
+const tabScroll = {};
 
 // Which modules have their "controls" disclosure open: VIEW-ONLY state the backend knows nothing about, so
 // it lives here (like selectedTabs), NOT in the module state. Persisting it means a full-state rebuild (or a
@@ -1420,7 +1422,7 @@ function renderChildTabs(mod, childrenEl, depth) {
         });
         strip.appendChild(addTab);
     }
-    childrenEl.appendChild(strip);
+    childrenEl.appendChild(scrollableStrip(strip, mod.name));
 
     const panel = document.createElement("div");
     panel.className = "tab-panel";
@@ -1428,6 +1430,31 @@ function renderChildTabs(mod, childrenEl, depth) {
     childrenEl.appendChild(panel);
     const child = mod.children.find(c => c.name === active);
     if (child) renderModuleTree(child, panel, depth + 1);
+}
+
+// A strip wider than its card scrolls sideways, which a mouse wheel cannot do: an arrow over each end that has tabs beyond it.
+function scrollableStrip(strip, key) {
+    const box = document.createElement("div");
+    box.className = "tab-scroll";
+    const arrow = (dir, label) => {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "tab-arrow tab-arrow--" + (dir < 0 ? "left" : "right");
+        b.textContent = label;
+        b.setAttribute("aria-label", dir < 0 ? "earlier tabs" : "later tabs");
+        b.addEventListener("click", () => strip.scrollBy({ left: dir * strip.clientWidth * 0.8, behavior: "smooth" }));
+        return b;
+    };
+    const left = arrow(-1, "‹"), right = arrow(1, "›");
+    box.append(left, strip, right);
+    const update = () => {
+        left.hidden = strip.scrollLeft <= 1;
+        right.hidden = strip.scrollLeft + strip.clientWidth >= strip.scrollWidth - 1;
+    };
+    strip.addEventListener("scroll", () => { tabScroll[key] = strip.scrollLeft; update(); }, { passive: true });
+    // Once laid out: the scroll the strip had before the redraw, and the arrows its width calls for.
+    new ResizeObserver(() => { if (tabScroll[key]) strip.scrollLeft = tabScroll[key]; update(); }).observe(strip);
+    return box;
 }
 
 // ---- MoonBase update flow ----
@@ -2962,11 +2989,28 @@ async function openWalk(at) {
     let walk;
     try { walk = await import(lsRead(LS_HELP_SOURCE, "") === "local" ? WALK_URL_LOCAL : WALK_URL); }
     catch (e) { alert(`MoonWalk could not load: ${e.message}`); return; }   // offline, as on the device's own access point
-    const stop = await walk.openMap(async (host, close) => walk.drawMap(host, {
-        state: await fetch("/api/state").then(r => r.json()), model: walkIndex, modules: types, open: at, done: walkedIds(), actor: "user", newTab: true,
-        show: showTarget, reopen: openWalk, onFollow: (w) => { walker = w; close(); w.update(state); } }), { closeClass: "fm-tool" });
+    const stop = await walk.openMap(async (host, close) => {
+        const whole = await fetch("/api/state").then(r => r.json());
+        return walk.drawMap(host, {
+        state: whole, model: walkIndex, modules: types, open: at, done: walkedIds(), actor: "user", newTab: true,
+        choices: walkChoices((whole.modules || []).find(m => (m.controls || []).some(c => c.name === "deviceModel"))?.controls),
+        show: showTarget, reopen: openWalk, onFollow: (w) => { walker = w; close(); w.update(state); } });
+    }, { closeClass: "fm-tool" });
     // The map recorded the installer's vouch once it drew; a map that could not load leaves it for the next open.
     if (typeof stop === "function") try { localStorage.removeItem(LS_WALKED); } catch { /* recorded twice next time, which is harmless */ }
+}
+
+// MoonWalk's choices on this device, so a process opens on the steps for where it runs: the platform from the System card, and the
+// choices that follow from it. The reader's own pick still wins, and an option a process does not list leaves its choice alone.
+function walkChoices(controls) {
+    const value = (name) => String((controls || []).find(c => c.name === name)?.value ?? "");
+    const model = value("deviceModel"), chip = value("chip");
+    const os = { macos: "macOS", linux: "Linux", windows: "Windows" }[model.split("-")[0]];
+    const platform = model === "docker" ? "Docker" : os || (chip.startsWith("ESP32") ? "ESP32" : chip.startsWith("i.MX") ? "Teensy" : "");
+    if (!platform) return {};
+    const board = platform === "ESP32" || platform === "Teensy";
+    return { platform, target: board ? "Board" : "Desktop",
+             source: board ? "A microphone on a board" : platform === "Docker" ? "A PulseAudio server into the container" : `The computer's audio on ${platform}` };
 }
 
 function helpFor(moduleType) {
@@ -3344,9 +3388,12 @@ function createControl(moduleName, moduleType, ctrl, writeTo = (name, value) => 
                 input.addEventListener("input", () => { dragTs[key] = Date.now(); pendingSends[key] = () => write(ctrl.name, input.value); });
                 input.addEventListener("change", () => flushPendingSends(key));
             } else {
+                // A hosts text carries `known`, the boards it names: the note goes while the text changes, and the view that follows the write brings it back.
+                const hosts = ctrl.known !== undefined;
                 input.addEventListener("input", () => {
                     dragTs[key] = Date.now();
-                    debounceSend(key, 500, () => write(ctrl.name, input.value));
+                    if (hosts) row.querySelector(".control-known")?.remove();
+                    debounceSend(key, 500, () => hosts ? write(ctrl.name, input.value).then(() => refetchState()) : write(ctrl.name, input.value));
                 });
                 // Enter presses the card's `send` button, where the module has one. Generic rather
                 // than a MoonTalk rule: any module pairing a text field with a send button gets it,
@@ -3370,6 +3417,14 @@ function createControl(moduleName, moduleType, ctrl, writeTo = (name, value) => 
                 });
             }
             row.appendChild(input);
+            // A hosts text names the boards the device list knows among its entries, so an address says which board it is.
+            const known = knownHostsText(ctrl.known);
+            if (known) {
+                const note = document.createElement("span");
+                note.className = "control-known";
+                note.textContent = known;
+                row.appendChild(note);
+            }
             if (!ctrl.readonly) resetButton(() => { input.value = def; });
             break;
         }
@@ -3403,9 +3458,12 @@ function createControl(moduleName, moduleType, ctrl, writeTo = (name, value) => 
             if (ctrl.readonly) {
                 input.readOnly = true;
             } else {
+                // A hosts text carries `known`, the boards it names: the note goes while the text changes, and the view that follows the write brings it back.
+                const hosts = ctrl.known !== undefined;
                 input.addEventListener("input", () => {
                     dragTs[key] = Date.now();
-                    debounceSend(key, 500, () => write(ctrl.name, input.value));
+                    if (hosts) row.querySelector(".control-known")?.remove();
+                    debounceSend(key, 500, () => hosts ? write(ctrl.name, input.value).then(() => refetchState()) : write(ctrl.name, input.value));
                 });
             }
             row.appendChild(input);
@@ -6104,6 +6162,44 @@ function applyTheme(t) {
     if (btn) btn.textContent = (t === "dark") ? "☀" : "🌙";
 }
 
+// The boards a hosts text names, as the server matched them: "192.168.1.125 is MM-S31 · MM-Eye is 192.168.1.30".
+function knownHostsText(known) {
+    if (!known || typeof known !== "object") return "";
+    return Object.entries(known).map(([entry, other]) => `${entry} is ${other}`).join(" · ");
+}
+
+// The header's stats line: the uptime, then for someone tuning the device "🕒 fps · 🧠 NNKB · 🧱 NNKB".
+// 🧠 = internal-RAM free (heap progress total−used); 🧱 = largest contiguous
+// internal-RAM block (the maxBlock control, already maxInternalAllocBlock).
+// Both matter: free can be ample while fragmentation leaves no single block
+// big enough for the next allocation.
+function headerStats(ctrls, tuning) {
+    const uptimeCtrl = ctrls.find(c => c.name === "uptime");
+    const heapCtrl = ctrls.find(c => c.name === "heap");
+    const blockCtrl = ctrls.find(c => c.name === "maxBlock");
+    const fpsCtrl = ctrls.find(c => c.name === "fps");
+    const parts = [];
+    if (uptimeCtrl) parts.push(uptimeCtrl.value);
+    // The WHOLE pipeline's rate, which is the one place fps is the honest unit: the device
+    // completes this many frames a second, where a per-module fps is one part's
+    // cost inverted. Before the memory badges because it is the number that moves.
+    if (tuning && fpsCtrl && fpsCtrl.value) {
+        const f = Number(fpsCtrl.value);
+        parts.push("🕒 " + (f >= 1000 ? Math.round(f / 1000) + "K fps" : f + " fps"));
+    }
+    if (tuning && heapCtrl && heapCtrl.value !== undefined && heapCtrl.total) {
+        const freeKb = Math.round((heapCtrl.total - heapCtrl.value) / 1024);
+        parts.push("🧠 " + freeKb + "KB");
+    }
+    // Skip on desktop, where the platform stub reports "0KB" (no real
+    // block measurement / unlimited heap): same reason heap free above
+    // only shows when the heap progress control is present.
+    if (tuning && blockCtrl && blockCtrl.value && blockCtrl.value !== "0KB") {
+        parts.push("🧱 " + blockCtrl.value);
+    }
+    return parts.join(" · ");
+}
+
 function updateStatusBar() {
     if (!state || !state.modules) return;
     const sys = state.modules.find(m => m.type === "SystemModule")
@@ -6121,38 +6217,8 @@ function updateStatusBar() {
         }
     }
 
-    // System stats: "uptime · 🧠 NNKB · 🧱 NNKB"
-    // 🧠 = internal-RAM free (heap progress total−used); 🧱 = largest contiguous
-    // internal-RAM block (the maxBlock control, already maxInternalAllocBlock).
-    // Both matter: free can be ample while fragmentation leaves no single block
-    // big enough for the next allocation.
-    const uptimeCtrl = ctrls.find(c => c.name === "uptime");
-    const heapCtrl = ctrls.find(c => c.name === "heap");
-    const blockCtrl = ctrls.find(c => c.name === "maxBlock");
-    const fpsCtrl = ctrls.find(c => c.name === "fps");
     const statsEl = document.getElementById("sys-stats");
-    if (statsEl) {
-        const parts = [];
-        if (uptimeCtrl) parts.push(uptimeCtrl.value);
-        // The WHOLE pipeline's rate, which is the one place fps is the honest unit: the device
-        // really does complete this many frames a second, where a per-module fps is one part's
-        // cost inverted. Before the memory badges because it is the number that moves.
-        if (fpsCtrl && fpsCtrl.value) {
-            const f = Number(fpsCtrl.value);
-            parts.push("🕒 " + (f >= 1000 ? Math.round(f / 1000) + "K fps" : f + " fps"));
-        }
-        if (heapCtrl && heapCtrl.value !== undefined && heapCtrl.total) {
-            const freeKb = Math.round((heapCtrl.total - heapCtrl.value) / 1024);
-            parts.push("🧠 " + freeKb + "KB");
-        }
-        // Skip on desktop, where the platform stub reports "0KB" (no real
-        // block measurement / unlimited heap): same reason heap free above
-        // only shows when the heap progress control is present.
-        if (blockCtrl && blockCtrl.value && blockCtrl.value !== "0KB") {
-            parts.push("🧱 " + blockCtrl.value);
-        }
-        setText(statsEl, parts.join(" · "));
-    }
+    if (statsEl) setText(statsEl, headerStats(ctrls, uiMode() >= 1));
 
     // Hide reboot button on desktop builds: platform::reboot() just exits the process,
     // which is not useful from the UI and can be mistaken for a crash.
@@ -6306,15 +6372,17 @@ function releaseTagOf(version) {
 // Light the badge for an available update. `tag` is the release the picker should pre-select
 // (a vX.Y.Z stable tag, or "latest"); `label` is what the badge shows.
 function showUpdateBadge(badge, tag, label, isDesktop) {
-    // setText, not a raw write: this runs on every state patch, and rewriting identical text
-    // still destroys a selection inside the element.
-    setText(badge, `⬆ ${label}`);
+    // The arrow alone, so the header fits a phone; what the update is reads in the tooltip and on
+    // the Firmware card the badge opens. setText, not a raw write: this runs on every state patch,
+    // and rewriting identical text still destroys a selection inside the element.
+    setText(badge, "⬆");
     // A desktop cannot install from the Firmware card: it has no OTA, and updating means
     // downloading an archive and replacing the binary. So the badge sends it to the release page
     // instead of a card that would offer it nothing.
     badge.title = isDesktop
         ? `Update available: ${label}. Open the release page to download`
         : `Firmware update available: ${label}. Open Firmware to install`;
+    badge.setAttribute("aria-label", badge.title);
     badge.dataset.tag = tag;
     badge.dataset.desktop = isDesktop ? "1" : "";
     badge.dataset.moonbase = "";
@@ -6323,8 +6391,9 @@ function showUpdateBadge(badge, tag, label, isDesktop) {
 
 // Light the badge for a MoonBase that does not match the app, which an app update leaves behind on either channel: the matching one ships in the app's own release.
 function showMoonBaseBadge(badge, dev) {
-    setText(badge, "⬆ MoonBase");
+    setText(badge, "⬆");
     badge.title = `MoonBase ${dev.moonbase} does not match the app ${dev.version}. Open Firmware to install the matching one`;
+    badge.setAttribute("aria-label", badge.title);
     badge.dataset.tag = releaseTagOf(dev.version);
     badge.dataset.desktop = "";
     badge.dataset.moonbase = "1";
@@ -7851,52 +7920,7 @@ async function fmBackupConfig() {
 }
 
 async function fmRestoreConfig(file, refresh) {
-    const bundle = JSON.parse(await file.text());
-    // Restore is the one supported upgrade path, so it reads the format the previous name wrote as well as its own.
-    const kBackupFormats = ["MoonLight-config-backup", "projectMM-config-backup"];   // a bundle already saved carries the name it was saved under
-    if (!kBackupFormats.includes(bundle.format) || !bundle.files) {
-        throw new Error("not a config backup");
-    }
-    if (bundle.version !== 1) {
-        throw new Error(`backup version ${bundle.version} is newer than this firmware understands`);
-    }
-    // The live tree names what an older flat config file becomes as a document.
-    let live = [];
-    try { live = (await (await fetch("/api/state")).json()).modules || []; } catch (_) {}
-    // The rename map first: MIGRATING.md's schema breaks, applied client-side and reported.
-    const { files, report } = applyMigrations(bundle.files, live);
-    // Directories before files (mkdir is non-recursive); existing dirs answer 500, harmless.
-    for (const dir of restoreDirs(files)) {
-        await fetch("/api/dir?path=" + encodeURIComponent(dir), { method: "POST", body: "" }).catch(() => {});
-    }
-    const failed = [];
-    // Network config last: it applies LIVE, and joining another network mid-restore would cut
-    // off the writes still to come (the AP flow's whole point).
-    const ordered = Object.entries(files).sort(
-        ([a], [b]) => (a.endsWith("/NetworkModule.json") ? 1 : 0) - (b.endsWith("/NetworkModule.json") ? 1 : 0));
-    for (const [path, content] of ordered) {
-        let res = null;
-        // One retry: the device serves a single connection at a time, so a busy moment
-        // drops a socket transiently (seen on the bench); only a retried failure is real.
-        for (let attempt = 0; attempt < 2 && (!res || !res.ok); attempt++) {
-            if (attempt) await new Promise(r => setTimeout(r, 300));
-            res = await fetch("/api/file?path=" + encodeURIComponent(path), {
-                method: "POST", headers: { "Content-Type": "application/octet-stream" },
-                body: new Blob([content]),
-            }).catch(() => null);
-        }
-        if (!res || !res.ok) {
-            failed.push({ kind: "control", where: path, detail: "write failed (" + (res ? res.status : "network") + ")" });
-        }
-    }
-    // The report: what this firmware no longer understands, plus everything the rename map did.
-    let typeNames = [];
-    try { live = (await (await fetch("/api/state")).json()).modules || []; } catch (_) {}
-    try { typeNames = ((await (await fetch("/api/types")).json()).types || []).map(t => t.name); } catch (_) {}
-    const entries = [...report, ...failed, ...diffRestore(files, live, typeNames)];
-    // Network bring-up is not live-re-appliable (it opts out device-side); its restored file
-    // waits for the next boot, so the dialog offers the restart exactly when that matters.
-    const hasNetwork = Object.keys(files).some(p => p.endsWith("/NetworkModule.json"));
+    const { entries, hasNetwork } = await restoreBundle(JSON.parse(await file.text()), fetch);
     fmShowRestoreReport(entries, refresh, hasNetwork);
 }
 

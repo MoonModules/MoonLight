@@ -329,6 +329,42 @@ What the ESP32's scarce memory holds and what freed it, measured 2026-10-21 and 
 
 **Network receive** is unaffected by WiFi's code in flash. In `scenario_NetworkReceive_two_boards`, the P4 sending to the S3, every row matched the run with it in IRAM. That is 38 to 40 frames a second up to 4,096 lights, in Art-Net, E1.31 and DDP.
 
+## Network Receive
+
+What a received frame costs and how much of it arrives, measured 2026-10-14 with `scenario_NetworkReceive_two_boards` and `moondeck/run/fseq_play.py`. Which path a frame takes is in [MoonLight, frames from outside](../explanation/architecture/moonlight.md#frames-from-outside).
+
+**The receiver's cost on the S3**, per frame:
+
+| | Receiver mapping | Sender mapping |
+|---|---|---|
+| 12,288 lights, an identity layout | 1.1 ms | 1.1 ms, one copy |
+| 12,288 lights, a serpentine layout placed on the grid (mapped twice) | 1.1 ms | 4.5 ms |
+| 64×64 serpentine sweep alone on its layer, the whole tick | | 2.96 ms in one copy, 5.83 ms mapped twice |
+
+**What arrives** at 12,288 lights, 40 frames a second sent as 1,040 DDP packets, mapped by the receiver:
+
+| Sender to receiver | Packets/s | Frames/s | Receiver tick |
+|---|---|---|---|
+| S3 WiFi to S3 WiFi | 600 to 980 | 20 to 23 | 6.8 to 8.2 ms |
+| P4 Ethernet to S3 WiFi | 616 | 23 | 5.8 ms |
+| S3 WiFi to P4 Ethernet | 984 | 32 | 0.3 ms |
+| P4 Ethernet to P4 Ethernet | 790 to 846 | 8 to 19 | 0.8 ms |
+
+The loss is the sender's burst: the access point drops it on WiFi, and on Ethernet the push packet at its end is the one most often lost. A [Network Send](../moonmodules/light/drivers.md#networksend) `packet_gap` of 0.5 ms recovered 96% of the packets on WiFi, and took P4 to P4 to 26 to 36 frames a second.
+
+## Prepare only what a change reshapes
+
+A control that reshapes prepares its scope rather than the tree ([MoonModule, the three tiers](../explanation/architecture/moonmodule.md#event-triggering-between-modules)). Measured 2026-10-22 with `scenario_MoonLive_hpwit_show`, whose service moves two Region windows every 20 ms. shiffy is an ESP32-S3 driving 3,840 lights on LCD-MM:
+
+| | Before | After |
+|---|---|---|
+| shiffy, the show with its service | 1,300 to 1,700 ms a frame | 44 ms, 22 fps, as with the layers standing still |
+| Waveshare 64×64 HUB75, the same | 273 ms | 43 ms, 23 fps |
+| The desktop, 128×128 Art-Net to an FPP | Art-Net frozen, the sender restarted on every prepare | about 1,100 fps, the sender undisturbed |
+| Flash saves while the show runs | about one a second | none |
+
+Before the script re-read, each layer's rebuild on shiffy took 37 to 78 ms, almost all of it reading the script file to hash it. That read took 30 ms for 714 bytes and 70 ms for 1,924 under load.
+
 ## Multi-pin LED driving (all three peripherals, 128×128 grid)
 
 The rows name the `ParallelLedDriver` backends by the class names they were measured under: `MultiPinLedDriver` is the `i80` peripheral, `MoonLedDriver` is `MoonI80`, and `ParlioLedDriver` is `Parlio`. The `peripheral` control selects the backend at one vtable dispatch per frame, so the timings hold.

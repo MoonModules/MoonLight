@@ -57,7 +57,7 @@ The engine is a **domain-neutral core** with one narrow seam, structured as thre
 
 ## A script reaches the device like any other control change
 
-A recompile is the normal cold-path rebuild. Editing the `script` control routes through the same `prepare()` sweep every control change uses, so a new script swaps in live with no reboot. A parse error surfaces in the module status while the layer renders dark, which is the robustness rule applied to text a user typed. The module contract is the [scripted effect card](../../moonmodules/light/effects.md#moonlive).
+A recompile is the normal cold-path rebuild. Editing the `script` control routes through the same `prepare()` sweep every control change uses, so a new script swaps in live with no reboot. A rebuild reads the script's file again only after the file API announces a change in or above its folders, or under a new name. A read under load costs tens of milliseconds on a board. A parse error surfaces in the module status while the layer renders dark, which is the robustness rule applied to text a user typed. The module contract is the [scripted effect card](../../moonmodules/light/effects.md#moonlive).
 
 ## The executable-memory seam
 

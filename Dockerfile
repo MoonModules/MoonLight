@@ -29,6 +29,11 @@
 #
 # **Capabilities.** None. It binds 8080 as an ordinary process and needs no added capability.
 #
+# **Audio input through PulseAudio.** The image carries libpulse, so a PulseAudio server takes audio
+# in from the network, squeezelite or sendspin for instance, and MoonLight listens to it. How to point
+# the container at a server, and how that server lets it in: the Set up audio input process (moonwalk/06-advanced.yaml).
+# Without a server it runs as before, with no audio input.
+#
 # **amd64 and arm64.** The release builds a .deb for each, so `docker build` on an arm64 host
 # (a Pi, a NanoPi, an Apple-silicon Mac running Docker Desktop) fetches the arm64 package by
 # itself: the stage below resolves the asset from the architecture it is building for.
@@ -56,9 +61,11 @@ ARG REPO=MoonModules/MoonLight
 # libcurl4t64 is installed, not merely downloaded: the release binary links it (the one outbound
 # HTTPS call), so the image must carry it AND everything it in turn needs. Letting apt resolve that
 # is the point: the chain runs deep (TLS, Kerberos, LDAP, SASL, libssh2, compression), and a
-# hand-written COPY list would be wrong the first time any of them changed.
+# hand-written COPY list would be wrong the first time any of them changed. libpulse0 likewise:
+# the audio input loads it at runtime rather than linking it, so ldd on the binary cannot see it
+# and the sweep below asks for it by name.
 RUN apt-get update \
- && apt-get install -y --no-install-recommends ca-certificates curl libcurl4t64 \
+ && apt-get install -y --no-install-recommends ca-certificates curl libcurl4t64 libpulse0 \
  && if [ "$RELEASE" = "stable" ]; then \
         api="https://api.github.com/repos/${REPO}/releases/latest"; \
     else \
@@ -74,7 +81,14 @@ RUN apt-get update \
  # rather than copied over: the base and this trixie stage are pinned independently, so shipping
  # both would put two glibc builds in one image and let the loader pick by path order.
  && mkdir -p /deps \
- && ldd /rootfs/usr/bin/MoonLight | awk '/=> \//{print $3}' | sort -u | grep -vE '/(libc|libm|libstdc\+\+|libgcc_s)\.so' | xargs -I{} cp -L {} /deps/
+ && pulse=$(find /usr/lib -name libpulse.so.0 | head -1) \
+ && test -n "$pulse" \
+ # Captured first, so a failing ldd, or one naming a library it cannot find, stops the build here.
+ && ldd /rootfs/usr/bin/MoonLight > /tmp/deps \
+ && ldd "$pulse" >> /tmp/deps \
+ && ! grep -q "not found" /tmp/deps \
+ && echo "libpulse.so.0 => $pulse (0)" >> /tmp/deps \
+ && awk '/=> \//{print $3}' /tmp/deps | sort -u | grep -vE '/(libc|libm|libstdc\+\+|libgcc_s)\.so' | xargs -I{} cp -L {} /deps/
 
 # --- stage 2: the image that ships ------------------------------------------------------------
 # Distroless: the binary plus the shared libraries it resolves, with no shell and no package
@@ -85,10 +99,10 @@ RUN apt-get update \
 # which is why the fetch stage now collects what the loader actually resolves instead of the image
 # relying on the base to happen to carry it.
 #
-# **debian13, NOT debian12**, and this is load-bearing. The release is built on ubuntu-24.04
-# (glibc 2.39), so the binary requires glibc >= 2.38. The debian12/bookworm images ship 2.36, where
-# it installs cleanly and then dies at startup with "GLIBC_2.38 not found" from libc and libm.
-# Verified both ways on the bench. If the release ever moves to an older builder, this can too.
+# **debian13.** The release builds both architectures on Ubuntu 22.04, so each binary needs glibc
+# 2.35 at most, which the release checks (moondeck/ci/check_glibc_floor.py) before it publishes;
+# debian13 carries 2.41. A binary built on a newer system dies at startup with "GLIBC_2.xx not
+# found" from libc and libm, as an amd64 package built on `ubuntu-latest` once did here.
 # Pinned by digest, not by tag: `cc-debian13` is mutable, so an unpinned base means two
 # builds of the same commit can ship different runtimes. Re-pin deliberately when picking
 # up base updates (docker buildx imagetools inspect gcr.io/distroless/cc-debian13:latest).
@@ -97,8 +111,7 @@ FROM gcr.io/distroless/cc-debian13@sha256:9b615fff20e1a4fad29c2b30562580b212c7dd
 COPY --from=fetch /rootfs/usr/bin/MoonLight /usr/bin/MoonLight
 # The libraries the loader resolved in the fetch stage, collected there rather than named here.
 # Without this the container starts and dies immediately on "libcurl.so.4: cannot open shared
-# object file", which is what shipped between dev.126 and this fix: the publish job builds the
-# image but never runs it, so a missing library passes CI and fails on a user's board.
+# object file"; the release runs each image before it publishes one.
 COPY --from=fetch /deps/ /usr/lib/
 
 # WHERE THE CONFIG LIVES, and why this line is required rather than a convenience. The desktop

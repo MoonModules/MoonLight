@@ -55,4 +55,4 @@ A flat parser returns zero for a missing key, which is indistinguishable from a 
 | [`LightOutput`](../../../src/core/util/LightOutput.h) | The light pipeline as core reads it: the device's shape and its palettes as colors. The light domain implements it, so the network shims and MoonStats include nothing from the light domain. |
 | [`AudioFrame`](../../../src/core/util/AudioFrame.h) | One snapshot of analyzed audio, produced once per render tick and consumed by audio-reactive effects. |
 | [`BinaryBroadcaster`](../../../src/core/util/BinaryBroadcaster.h) | The sink a producer holds instead of the concrete server, so a driver sends to every client without depending on the web server. |
-| `build_info.h` | The version and build identity, generated from the project manifest rather than edited by hand. |
+| `build_info.h` | The version and build identity, defined in `build_info.cpp` from the project manifest, the git hash and the release flags. |

@@ -139,7 +139,7 @@ Two scales below a page. **A module** has one reference card and one header (see
 - **A page is read start to finish by one reader**, a **user** or a **developer**. A user brings no coding and no hardware knowledge beyond plugging in a board; a developer brings C++, embedded and this codebase's shape. Where a page serves both, lead with the user and put the depth lower down.
 - **The headings are the page's table of contents, and they read top to bottom.** A few lines say what the page is and one paragraph says how it is laid out. The sections then follow in the order a reader needs them. A title that makes sense only after reading the body is the order being wrong.
 - **One tone of voice, everywhere: factual, no nonsense.** State what is true and what to do, addressing the reader as "you". Leave out enthusiasm, apology, and how we felt building it. Only the assumed knowledge changes between pages, never the voice.
-- **No sentence whose job is tone.** Every sentence carries a fact the reader needs. Three shapes to cut: a second person used for effect rather than instruction, a flourish before any information arrives, and a rhetorical question the page then answers. Vale checks spelling, sentence length and weasel words, so this one is the writer's judgement and the reviewer's check.
+- **No sentence whose job is tone.** Every sentence carries a fact the reader needs. Three shapes to cut: a second person used for effect rather than instruction, a flourish before any information arrives, and a rhetorical question the page then answers. Vale checks spelling and weasel words, so this one is the writer's judgment and the reviewer's check.
 - **Follow the [principles](../CLAUDE.md#principles).** Three bear on documentation directly:
     - **Minimalism**: every fact has one home; history lives in git.
         - **Present tense only.** "No X anymore" narrates a removal, which is history. Describe the path that exists. Vale flags the words that date a sentence ("today", "currently", "no longer", "not yet").
@@ -152,7 +152,8 @@ Two scales below a page. **A module** has one reference card and one header (see
 - **Say it, then stop: about 30 words.** One or two sentences a reader can act on, and a reason only when the point is surprising or has been got wrong before. Past that a reader skims, and a skimmed statement is not followed.
 - **Write for the reader who will follow it**, not the one arguing with it. A trap that only bites whoever maintains the tooling belongs in the tooling.
 - **Ask, do not argue.** A request states what you want and why, then stops. Quoting the other side's code back to them and pre-empting every objection is pressure, and earns a reply shorter than the message. Ask the one question that decides the rest.
-- **A sentence is one thought.** Past thirty words it is two, joined by a comma or a colon that a full stop should have been. Instructions in particular: one step, one sentence, and the reader's eyes never lose the line.
+- **A sentence is one thought.** A long one is cut, not split: two sentences where one thought was add a full stop, not clarity. Instructions in particular: one step, one sentence, and the reader's eyes never lose the line.
+- **A section stays within 500 words of prose**, the text from one heading to the next, tables and code aside. Past that it is cut: a split adds a heading and keeps the words, so the Reviewer asks whether two adjacent sections carry one topic. `check_prose`, rule `MoonLight.SectionLength`, counts and ratchets it.
 - **The text never refers to itself.** "This page", "this recipe", "as described above", "in the following section": each one is the author stepping in front of the content. Say the thing; the reader knows where they are.
 - **A diagram beats the paragraph that describes it.** Draw a structure, a flow or a hierarchy as a [Mermaid](https://mermaid.js.org/) diagram: it renders on the site and on GitHub, and it diffs as text. A screenshot does the same where the point is what a reader sees. Both follow the example rule: they replace prose rather than decorate it.
 - **One example, only where the prose alone would be misread.** A code block earns its place by preventing a wrong reading; a second example is the author enjoying the subject.
@@ -236,7 +237,6 @@ A card is read across a row; a member comment is read beside the thing it descri
 | Class `///` | 10 lines |
 | An `@technical` `##` section | 10 lines, and the appendix only on a file or class lead |
 | Any other `///` run | 1 line |
-| One sentence in a comment | 30 words |
 | A `//` run beside code | 1 line |
 | One comment line | 250 characters, on the way down |
 | One line of a file or class lead | 400 characters |
@@ -251,7 +251,7 @@ A card is read across a row; a member comment is read beside the thing it descri
 
 **One rule set, both kinds of file.** An implementation file follows exactly the limits above. What differs is that its findings are warnings where a header's are errors, because a header's comments are the published page. Three of these were once scoped to headers alone, and each reason turned out to be false. A `.cpp` carries a file lead with its own `@technical` appendix, just as a header does. A `.cpp` declares classes, 238 of them here. And a header is read as source far more often than as a rendered page, so its line width reaches a reader exactly as an implementation file's does. Two columns of limits drift apart, and the deduction is what keeps them honest.
 
-The first five cut and the last adds, deliberately: the result is a short line on everything rather than an essay on a few things. The word limit counts a SENTENCE rather than a line, because the no-wrap rule makes a line a paragraph. Three short sentences on one line are correct, and one rambling sentence is not. Thirty rather than twenty because, measured over the tree, a cap of 20 fired on the median sentence. Vale carries the same 30 as a suggestion, so one number means one thing in both tools.
+The first five cut and the last adds, deliberately: the result is a short line on everything rather than an essay on a few things. The limits count characters per line, lead and paragraph, never words per sentence: splitting a sentence or squeezing its grammar meets a sentence cap and leaves the paragraph as long, while only cutting meets a character cap.
 
 **The appendix budget counts a SECTION, not the whole appendix.** A single total punishes a file for having several distinct topics. The cheapest way to satisfy one is to delete a section rather than tighten the prose. Ten lines per `##` section asks each one to be disciplined and lets a file carry as many as it genuinely has. That is what an implementation file needs: the platform backends each hold a handful of separately diagnosed findings, and one shared budget could only force them out of the tree. A fenced block does not count, the same exemption the no-wrap rule makes. A protocol listing is as long as the thing it describes, and counting its lines would ask an author to delete wire format to fit a prose budget.
 

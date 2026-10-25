@@ -1,6 +1,6 @@
 # MoonWalk
 
-Step 2 of [Processes, described once](../present/Plan-20261015%20-%20Processes%2C%20described%20once%20(partial).md): MoonWalk, the model every process is written in and the map that shows them, chosen against [the inventory](processes-inventory.md) and approved on 2026-10-16. The schema is [moonwalk/moonwalk.schema.json](../../../moonwalk/moonwalk.schema.json).
+Step 2 of [Processes, described once](../present/Plan-20261015%20-%20Processes%2C%20described%20once%20(16%20of%2023).md): MoonWalk, the model every process is written in and the map that shows them, chosen against [the inventory](processes-inventory.md) and approved on 2026-10-16. The schema is [moonwalk/moonwalk.schema.json](../../../moonwalk/moonwalk.schema.json).
 
 ## What it must do
 
@@ -129,7 +129,6 @@ Step 6 put the map in the installer and MoonDeck, each a host passing `drawMap` 
 
 1. **The installer vouches for what a device cannot tell.** After an install it marks "Install MoonLight" done in its own origin, which the docs site's map shares on Pages, and hands the fact to the device's map through `?walked=install` on the device link. The running device then offers the next process rather than the install.
 2. **A run proves a step only while it is fresh.** MoonDeck marks a process done when every script its steps run last passed, and on the bench those passes were ten days old. The textbook answer is the one `check_esp32_built` already gives a firmware: a run counts only when it is newer than the sources it covers.
-3. **MoonBase's link waits for its target.** Its help points at the getting-started section on MoonBase, which becomes a process when that page migrates; the link moves then, with the next MoonBase build.
 
 ## Systems
 

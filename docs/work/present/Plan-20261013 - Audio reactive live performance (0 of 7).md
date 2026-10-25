@@ -21,7 +21,7 @@ An **Akai MPK261**: 61 semi-weighted keys, 16 RGB-backlit pads, 8 knobs, 8 fader
 - **`AudioService`** publishing an `AudioFrame` per block: level, sixteen bands, the dominant frequency, spectral flux and `onset`, the block a hit was detected, which effects read through `latestFrame()` and MoonLive scripts through builtins. `BeatRipplesEffect` already splashes on `onset`.
 - **Layers, layouts and modifiers,** which already give each musician a place: one layer per band member, placed on its own part of the rig.
 - **The MovingHead effect and fixture profiles,** which already aim heads: pan and tilt per fixture, in formations, from the profiles' Pan and Tilt roles.
-- **The input-mapping plan's sensors** ([input mapping and scripted sensors](Plan-20260901%20-%20Input%20mapping%20and%20scripted%20sensors%20(partial).md)): a PIR, a VL53L0X distance sensor, a VL53L8CX zone grid and an MPU6050, on the I2C seam that plan builds.
+- **The input-mapping plan's sensors** ([input mapping and scripted sensors](Plan-20260901%20-%20Input%20mapping%20and%20scripted%20sensors%20(7%20of%2012).md)): a PIR, a VL53L0X distance sensor, a VL53L8CX zone grid and an MPU6050, on the I2C seam that plan builds.
 
 ## The shape
 
@@ -44,30 +44,30 @@ An effect opts in, as audio effects do, and on a board with no MIDI it sees an e
 
 Each step ends in something verified on the bench.
 
-### 1. Notes reach effects
+### 1. Notes reach effects ⏳
 
 - `MidiService` publishes the `MidiFrame` from every transport, alongside its desk profiles, which stay as they are.
 - MoonLive gains builtins for it (a note's velocity, whether it is held, whether it started this frame), so a script reacts to notes the way it reacts to `level` and `bands`.
 - Unit tests pin the frame: notes started and ended between two frames, two note-on and note-off cycles of one pitch between frames read as four events in order, a note shorter than a frame, running status, a note-on with velocity 0 read as a note-off.
 - Verify with the PO's Akai MPK261 over the board's USB port and over the browser.
 
-### 2. A keyboard lights per key
+### 2. A keyboard lights per key ⏳
 
 - **`KeysEffect`:** each held note lights its own position along the layer, velocity sets the brightness, and a released note decays over a `release` time; sustain holds it. The note range follows a `low` and `high` setting, so a 25-key controller and an 88-key piano both span the layer.
 - Verify on the MPK261's 61 keys: chords, fast runs, the sustain pedal, and the latency from key to light, measured with slow-motion video.
 
-### 3. Drums splash
+### 3. Drums splash ⏳
 
 - **`DrumsEffect`:** each General MIDI drum fires its own shape: the kick a pulse from the floor, the snare a burst, the hi-hat a sparkle, a crash a wash over the layer. Velocity sets the size and brightness; a hit's shape is a splash with a decay, not a held light.
 - Verify on the MPK261's 16 pads, which send notes like a drum kit, then on an electronic kit. The pads are RGB-lit, so the way back can light each pad with its splash's color, as the APC40 profile already lights its pads.
 
-### 4. A band on the rig
+### 4. A band on the rig ⏳
 
 - A demo preset: a keys layer and a drums layer side by side on one installation, each listening to its own channel.
 - Several boards on one stage take the same notes through `share` and RTP-MIDI, so every board sees every musician.
 - Verify with two instruments playing at once.
 
-### 5. Acoustic drums
+### 5. Acoustic drums ⏳
 
 Two routes, the first needing no code:
 
@@ -75,7 +75,7 @@ Two routes, the first needing no code:
 - **Per-band onsets** in `AudioService`: the single `onset` fires on any hit, so a kick and a snare look alike. An onset per band group (low for the kick, mid and high for the snare and cymbals) separates them from the bands already computed. Best with a direct out or an aux send from the mixer giving the kit alone.
 - Verify with a kit, or a recorded kit track, through one microphone or line input.
 
-### 6. Analog instruments, an investigation
+### 6. Analog instruments, an investigation ⏳
 
 Decided per instrument, cheapest first:
 
@@ -88,7 +88,7 @@ Decided per instrument, cheapest first:
 
 The on-device column needs a second audio channel: the multi-channel front-ends the [audio roadmap](../future/audio-dsp-roadmap.md) anticipates, such as a 4-channel TDM codec (the ES7210 on the Waveshare RGB-Matrix board) or line inputs from the mixer. The budget allows one or two analyzed channels per board.
 
-### 7. Follow the musicians
+### 7. Follow the musicians ⏳
 
 Automated follow spots split the job in two, by the book: **tracking** delivers each performer's position in stage coordinates, and **aiming** turns a position into pan and tilt per fixture, from the fixture's position and its mounting, which is the inverse kinematics behind every console's XYZ focus. Between them sits an open standard for live position data, **PosiStageNet (PSN)**, a UDP multicast protocol that professional trackers and media servers speak.
 
@@ -108,7 +108,7 @@ The sensors, from what is listed to what a stage needs:
 | <img src="../../assets/hardware/sensors/hlk-ld2450.webp" width="80" alt="HLK-LD2450"> | [mmWave radar, HLK-LD2450](https://www.tinytronics.nl/en/sensors/motion/hi-link-hlk-ld2450-24ghz-radar-sensor-module-with-bluetooth) | up to 3 targets with x and y, about 6 m, UART | the cheapest real tracker, working in darkness and haze | Tinytronics €7.00 |
 | <img src="../../assets/hardware/sensors/dw3000.webp" width="80" alt="DWM3000EVB"> | [UWB, Qorvo DWM3000EVB](https://www.digikey.nl/nl/products/detail/qorvo/DWM3000EVB/24367408) | about 10 cm, with anchors and a tag per performer | how professional radio trackers work | DigiKey €31.34 per node |
 | | [PosiStageNet in](https://posistage.net/) | positions from a professional system | MoonLight joining a rig that already tracks | free, open protocol, MIT-licensed SDK |
-| <img src="../../assets/hardware/sensors/p4-csi-camera.webp" width="80" alt="OV5647 camera"> | [A camera on the P4](https://www.tinytronics.nl/en/raspberry-pi/raspberry-pi-compatible-camera-5mp-v1.3) (OV5647, MIPI-CSI) | person detection | later, with the [streams](Plan-20261013%20-%20Streams%2C%20every%20frame%20from%20outside%20(partial).md) work | Tinytronics €8.00 |
+| <img src="../../assets/hardware/sensors/p4-csi-camera.webp" width="80" alt="OV5647 camera"> | [A camera on the P4](https://www.tinytronics.nl/en/raspberry-pi/raspberry-pi-compatible-camera-5mp-v1.3) (OV5647, MIPI-CSI) | person detection | later, with the [streams](Plan-20261013%20-%20Streams%2C%20every%20frame%20from%20outside%20(11%20of%2013).md) work | Tinytronics €8.00 |
 
 **On the bench (2026-10-19): two HLK-LD2450 kit B** from Hi-Link's own store, each with a USB-to-serial adapter, a Bluetooth antenna and a cable. The adapter lets the radar be tried on a computer with Hi-Link's tool before the UART seam exists: targets, range and zone exclusion on day one. Two units answer the stage questions: whether two 24 GHz radars side by side interfere, and how their targets merge where their views overlap.
 
@@ -118,10 +118,10 @@ The order: the radar first, which needs a UART seam the platform does not have y
 
 ## Open questions
 
-- **Does a note decay in the frame or in the effect?** The proposal: the frame carries held notes and edges only, and each effect owns its own decay, since a splash and a held key want different curves.
-- **One board for the band, or a board per musician?** RTP-MIDI makes both possible; the first gig decides.
+- **Does a note decay in the frame or in the effect?** The proposal: the frame carries held notes and edges only, and each effect owns its own decay, since a splash and a held key want different curves. **Recommended (2026-10-25):** the proposal: the effect owns the decay.
+- **One board for the band, or a board per musician?** RTP-MIDI makes both possible; the first gig decides. **Recommended (2026-10-25):** one board for the band first, one RTP-MIDI session; a board per musician once the cable runs ask for it.
 - **How far on-device analysis goes** before the musicians' own converters are the better answer, measured per instrument in step 6.
-- **Which tracker for the first stage:** the mmWave radar covers a small stage for the price of a sensor; UWB is the accurate route and the larger build.
+- **Which tracker for the first stage:** the mmWave radar covers a small stage for the price of a sensor; UWB is the accurate route and the larger build. **Recommended (2026-10-25):** the mmWave radar first, cheap and enough for a small stage; UWB when a larger stage needs the accuracy.
 
 ## What it removes
 

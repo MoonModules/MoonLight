@@ -150,9 +150,12 @@ function entryCard(cell) {
         visit.append(nameLink.cloneNode(true));
         back.push(visit);
     }
+    // The anchor the build wrote (attribution_anchor), which a module's attribution in the help links to, moved from the row to its card.
+    const mark = cell.name.querySelector("[data-anchor]");
+    const id = mark?.id;
+    mark?.removeAttribute("id");
     return playingCard({
-        // The entry's first name as an anchor, so a hand-typed `#jos-stam` brings that card forward.
-        id: name.split(" / ")[0].normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""),
+        id,
         name, emoji: graphemes(cell.kind.textContent.trim()), labels: KIND_LABEL,
         image, alt: "", line: cell.known.innerHTML, back,
         text: `${name} ${cell.known.textContent} ${cell.by?.textContent || ""}`,

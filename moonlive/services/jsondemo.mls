@@ -1,13 +1,12 @@
-// JsonDemo: four live feeds as scrolling text, a band each: the weather in Amsterdam, the bitcoin price, Arsenal's last match and the newest spaceflight headline. It builds its own look, four text layers, with one push at start, and writes the bands again whenever a feed brings something new. The feeds are free and need no key, and each is read again on its own period.
+// JsonDemo: four live feeds as scrolling text, a band each: the temperature in Black Rock City, ASML's share price in Amsterdam, Arsenal's last match and the newest spaceflight headline. It builds its own look, four text layers, with one push at start, and writes the bands again whenever a feed brings something new. The feeds are free and need no key, and each is read again on its own period.
 
 class JsonDemo {
   bool built = false;
   json weather;
-  json bitcoin;
+  json asml;
   json match;
   json news;
   json bands;    // the four texts, pushed as one document
-  json number;   // a whole number on its way into a text
 
   void tick20ms() {
     if (!built) {
@@ -16,39 +15,36 @@ class JsonDemo {
         "Weather": {"type": "Layer",
           "WeatherBand": {"type": "RegionModifier", "startY": 0, "endY": 25},
           "WeatherText": {"type": "TextEffect", "text": "weather", "scroll": true, "speed": 20, "hue": 30}},
-        "Bitcoin": {"type": "Layer",
-          "BitcoinBand": {"type": "RegionModifier", "startY": 25, "endY": 50},
-          "BitcoinText": {"type": "TextEffect", "text": "bitcoin", "scroll": true, "speed": 25, "hue": 90}},
+        "Asml": {"type": "Layer",
+          "AsmlBand": {"type": "RegionModifier", "startY": 25, "endY": 50},
+          "AsmlText": {"type": "TextEffect", "text": "ASML", "scroll": true, "speed": 25, "hue": 90}},
         "Match": {"type": "Layer",
           "MatchBand": {"type": "RegionModifier", "startY": 50, "endY": 75},
           "MatchText": {"type": "TextEffect", "text": "football", "scroll": true, "speed": 30, "hue": 150}},
         "News": {"type": "Layer",
           "NewsBand": {"type": "RegionModifier", "startY": 75, "endY": 100},
           "NewsText": {"type": "TextEffect", "text": "news", "scroll": true, "speed": 35, "hue": 210}}}})");
-      bands = R"({"Effects": {"Weather": {"WeatherText": {}}, "Bitcoin": {"BitcoinText": {}},
+      bands = R"({"Effects": {"Weather": {"WeatherText": {}}, "Asml": {"AsmlText": {}},
                               "Match": {"MatchText": {}}, "News": {"NewsText": {}}}})";
-      number = R"({"n": 0})";
       built = true;
     }
 
     // Asked every tick, each answered from what arrived last and fetched again once its period ran out.
-    weather = getJson("https://api.open-meteo.com/v1/forecast?latitude=52.37&longitude=4.90&current=temperature_2m", 600);
-    bitcoin = getJson("https://api.coinbase.com/v2/prices/BTC-USD/spot", 60);
+    weather = getJson("https://api.open-meteo.com/v1/forecast?latitude=40.79&longitude=-119.21&current=temperature_2m", 600);
+    asml = getJson("https://query1.finance.yahoo.com/v8/finance/chart/ASML.AS?interval=1d&range=1d", 300);
     match = getJson("https://www.thesportsdb.com/api/v1/json/123/eventslast.php?id=133604", 3600);
     news = getJson("https://api.spaceflightnewsapi.net/v4/articles/?limit=1", 900);
 
     bool fresh = false;
     if (jsonChanged(weather)) {
-      jsonSetText(bands, "/Effects/Weather/WeatherText/text", "Amsterdam ");
+      jsonSetText(bands, "/Effects/Weather/WeatherText/text", "Black Rock City ");
       jsonAppend(bands, "/Effects/Weather/WeatherText/text", weather, "/current/temperature_2m");
       jsonAppendText(bands, "/Effects/Weather/WeatherText/text", " C");
       fresh = true;
     }
-    if (jsonChanged(bitcoin)) {
-      // The price comes quoted with three decimals, so it goes through a whole number first.
-      jsonSetInt(number, "/n", jsonInt(bitcoin, "/data/amount"));
-      jsonSetText(bands, "/Effects/Bitcoin/BitcoinText/text", "BTC $");
-      jsonAppend(bands, "/Effects/Bitcoin/BitcoinText/text", number, "/n");
+    if (jsonChanged(asml)) {
+      jsonSetText(bands, "/Effects/Asml/AsmlText/text", "ASML EUR ");
+      jsonAppend(bands, "/Effects/Asml/AsmlText/text", asml, "/chart/result/0/meta/regularMarketPrice");
       fresh = true;
     }
     if (jsonChanged(match)) {

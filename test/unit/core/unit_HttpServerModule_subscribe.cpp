@@ -9,15 +9,18 @@
 #include "core/module/MoonModule.h"
 #include "core/util/JsonSink.h"
 #include "core/util/JsonUtil.h"
-#include "http_test_client.h"
+#include "http_loopback.h"
 #include "platform/platform.h"
 
+#include <algorithm> // std::max
 #include <cstdio>    // std::snprintf, the wide module's control names
 #include <cstring>
 #include <string>    // std::string: named explicitly, GCC does not pull it in transitively
 #include <vector>
 
 namespace {
+
+using namespace http_loopback;
 
 struct Knob : public mm::MoonModule {
     uint8_t value = 10;
@@ -103,6 +106,64 @@ TEST_CASE("a full state written in fragments of any size equals the state writte
         CHECK(joined == once);
         if (target < once.size()) CHECK(fragments > 1);
     }
+}
+
+namespace {
+// A select, a palette and a list whose options and rows run to many kilobytes, as Drivers' palette and the fixture profile list do.
+struct Lots : public mm::MoonModule, public mm::ListSource {
+    static constexpr int kOptions = 200;
+    uint8_t listRowCount() const override { return 60; }
+    void writeListRow(mm::JsonSink& sink, uint8_t row) const override { sink.appendf("{\"id\":%u,\"name\":\"profile %02u\"}", row, row); }
+    void writeListRowDetail(mm::JsonSink& sink, uint8_t row) const override {
+        sink.appendf("{\"channels\":\"red green blue white amber uv dimmer strobe pan tilt\",\"row\":%u}", row);
+    }
+    void writeListOptionSets(mm::JsonSink& sink) const override { sink.append("\"kinds\":[\"rgb\",\"rgbw\"]"); }
+    uint8_t pick = 0, palette = 0;
+    static void paletteOptions(mm::JsonSink& sink) {
+        const auto one = [&](int i) { sink.appendf("%s{\"name\":\"palette %03d\",\"colors\":\"ff0000 00ff00 0000ff ffffff\"}", i > 0 ? "," : "", i); };
+        if (sink.optionIndex() >= 0) { if (sink.optionIndex() < kOptions) one(sink.optionIndex()); return; }
+        for (int i = 0; i < kOptions; i++) one(i);
+    }
+    void defineControls() override {
+        static char names[kOptions][40];
+        static const char* options[kOptions];
+        for (int i = 0; i < kOptions; i++) {
+            std::snprintf(names[i], sizeof(names[i]), "an option with a long name, number %03d", i);
+            options[i] = names[i];
+        }
+        controls_.addSelect("pick", pick, options, kOptions);
+        controls_.addPalette("palette", palette, paletteOptions, kOptions);
+        controls_.addList("profiles", *this);
+    }
+};
+}  // namespace
+
+// A classic ESP32's page never got its state: one control of 11 to 17 KB went into a single fragment, which no free block that size could hold.
+TEST_CASE("a control larger than a fragment streams a row or an option at a time, and reassembles to the whole") {
+    mm::Scheduler s;
+    auto* lots = new Lots();
+    lots->setName("Lots");
+    s.addModule(lots);
+    s.setup();
+    mm::HttpServerModule http;
+    http.setScheduler(&s);
+    const std::string once = whole(http, nullptr);
+    REQUIRE(once.size() > 4 * 2048);
+    for (size_t target : {size_t(1), size_t(64), size_t(2048)}) {
+        mm::HttpServerModule::TreeCursor c;
+        std::string joined;
+        size_t largest = 0;
+        bool done = false;
+        for (int fragments = 0; !done && fragments < 100000; fragments++) {
+            mm::JsonSink sink;
+            done = http.writeTreeFragment(sink, c, target);
+            joined.append(sink.data(), sink.size());
+            largest = std::max(largest, sink.size());
+        }
+        CHECK(joined == once);
+        CHECK(largest < target + 200);   // the target and one option past it, never a whole control
+    }
+    mm::Scheduler::deleteTree(lots);
 }
 
 TEST_CASE("one module's JSON is its entry in the full state, children included") {
@@ -219,11 +280,11 @@ struct WsClient {
     mm::platform::TcpConnection conn;
     std::vector<uint8_t> in;
 
-    bool open(uint16_t port) {
+    bool open(uint16_t port, const char* path = "/ws") {
         if (!connectAndAccept(http, conn, port)) return false;
-        const char* upgrade = "GET /ws HTTP/1.1\r\nHost: test\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"
-                              "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\n\r\n";
-        if (!conn.write(reinterpret_cast<const uint8_t*>(upgrade), std::strlen(upgrade))) return false;
+        const std::string upgrade = std::string("GET ") + path + " HTTP/1.1\r\nHost: test\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"
+                                    "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\n\r\n";
+        if (!conn.write(reinterpret_cast<const uint8_t*>(upgrade.data()), upgrade.size())) return false;
         std::string handshake;
         for (int i = 0; i < 300 && handshake.find("\r\n\r\n") == std::string::npos; i++) {
             http.tick20ms();
@@ -238,6 +299,12 @@ struct WsClient {
     bool send(const char* text, uint8_t opcode = 0x1) {
         const auto f = clientFrame(text, opcode);
         return conn.write(f.data(), f.size());
+    }
+
+    // Subscribe and take the whole first document until its stream ends: a client waiting for patches.
+    bool settleOn(const char* subscribe) {
+        std::vector<uint8_t> opcodes;
+        return send(subscribe) && message(opcodes).rfind("{\"modules\":[", 0) == 0 && message(opcodes, 20).empty();
     }
 
     // The next whole message and the opcode of each of its frames, empty when none arrives within `ticks`.
@@ -276,6 +343,8 @@ struct Served {
 }  // namespace
 
 TEST_CASE("the full state streams as one fragmented message that reassembles to the subscribed document") {
+    // A board whose largest block is 16 KB takes 2 KB fragments; a desktop's would hold this tree in one.
+    struct Block { Block() { mm::platform::setTestMaxAllocBlock(16384); } ~Block() { mm::platform::setTestMaxAllocBlock(0); } } block;
     Served sv;
     WsClient c{sv.http, {}, {}};
     REQUIRE(c.open(kTestPort));
@@ -289,8 +358,8 @@ TEST_CASE("the full state streams as one fragmented message that reassembles to 
     CHECK(message == whole(sv.http, &expected));
 }
 
-// An open UI over a slow link queued the state stream's segments on a board without PSRAM, taking free internal RAM to 12 KB: below the headroom the stream waits.
-TEST_CASE("the state stream waits while internal RAM is short, then arrives whole") {
+// Below the headroom the stream once waited for room a classic ESP32 never has, so its page got no state. It now takes its turn with the other sends.
+TEST_CASE("the state stream still arrives whole while internal RAM is short") {
     struct Heap { ~Heap() { mm::platform::setTestFreeInternalHeap(0); } } heap;   // restored however the test ends
     Served sv;
     WsClient c{sv.http, {}, {}};
@@ -298,8 +367,6 @@ TEST_CASE("the state stream waits while internal RAM is short, then arrives whol
     mm::platform::setTestFreeInternalHeap(mm::HttpServerModule::kSendHeadroom - 1);
     REQUIRE(c.send("{\"subscribe\":[\"B\"]}"));
     std::vector<uint8_t> opcodes;
-    CHECK(c.message(opcodes, 100).empty());   // nothing while short
-    mm::platform::setTestFreeInternalHeap(0);
     const std::string message = c.message(opcodes);
     const auto expected = subscribed("{\"subscribe\":[\"B\"]}");
     CHECK(message == whole(sv.http, &expected));
@@ -442,3 +509,103 @@ TEST_CASE("a client that never subscribes is sent the WLED frame and no module s
     CHECK(first.find("\"patch\"") == std::string::npos);
 }
 
+// Under memory pressure a patch was sent as far as its buffer got: invalid JSON the page rejected, the change lost until the value moved again.
+TEST_CASE("a patch memory cuts short is never sent, and the client takes its whole state again") {
+    struct Refuse { ~Refuse() { mm::platform::setTestAllocRefusedFrom(0); } } refuse;   // restored however the test ends
+    Served sv;
+    WsClient c{sv.http, {}, {}};
+    REQUIRE(c.open(kTestPort));
+    REQUIRE(c.settleOn("{\"subscribe\":[\"B\"]}"));
+    std::vector<uint8_t> opcodes;
+
+    sv.t.l->value = 3;
+    sv.t.l->notifyValuesChanged();
+    mm::platform::delayMs(50);                   // past the early patch's pacing
+    mm::platform::setTestAllocRefusedFrom(2048);   // the patch's first 2 KB block is refused
+    sv.http.tick20ms();
+    mm::platform::setTestAllocRefusedFrom(0);
+    const std::string next = c.message(opcodes);
+    CHECK(next.rfind("{\"modules\":[", 0) == 0);   // the whole state again, not a cut patch
+    CHECK(objectOf(next, "L").find("\"value\":3") != std::string::npos);
+}
+
+// The second's walk holds what it gathered until it ends, so a value that goes out early meanwhile would be overtaken by the older one the walk took.
+TEST_CASE("a value sent early while the second's walk is under way is the last one the client sees") {
+    Served sv;
+    WsClient c{sv.http, {}, {}};
+    REQUIRE(c.open(kTestPort));
+    REQUIRE(c.settleOn("{\"subscribe\":[\"B\"]}"));
+    std::vector<uint8_t> opcodes;
+
+    sv.t.l->value = 1;
+    sv.http.tick1s();                      // the walk starts
+    REQUIRE(!sv.http.stepValueWalkForTest(9));   // past B's four leaves and L's five: the walk holds L at 1
+    sv.t.l->value = 2;
+    sv.t.l->notifyValuesChanged();         // and 2 goes out on the next tick
+
+    std::string last;
+    const std::string key = "\"path\":\"L/value\",\"value\":";
+    for (std::string m = c.message(opcodes, 200); !m.empty(); m = c.message(opcodes, 200))
+        for (size_t at = m.find(key); at != std::string::npos; at = m.find(key, at + 1))
+            last = m.substr(at + key.size(), 1);
+    CHECK(last == "2");
+}
+
+TEST_CASE("a preview frame arrives whole as one binary message, and an offer while it leaves is refused") {
+    Served sv;
+    WsClient c{sv.http, {}, {}};
+    REQUIRE(c.open(kTestPort, "/wsp"));
+    const uint8_t head[3] = {1, 2, 3};
+    const std::string body(20000, 'p');   // more than one tick's chunk on a small board
+    REQUIRE(sv.http.sendBufferedFrame(head, sizeof(head), reinterpret_cast<const uint8_t*>(body.data()), body.size()));
+    CHECK_FALSE(sv.http.sendBufferedFrame(head, sizeof(head), reinterpret_cast<const uint8_t*>(body.data()), body.size()));
+    std::vector<uint8_t> opcodes;
+    const std::string message = c.message(opcodes);
+    REQUIRE(opcodes.size() == 1);
+    CHECK(opcodes[0] == 0x2);
+    CHECK(message == std::string("\x01\x02\x03", 3) + body);
+    CHECK(sv.http.bufferedSendIdle());
+}
+
+TEST_CASE("GET /api/state answers the whole state, written a fragment at a time") {
+    Served sv;
+    mm::platform::TcpConnection client;
+    REQUIRE(connectAndAccept(sv.http, client, kTestPort));
+    const char* req = "GET /api/state HTTP/1.1\r\nHost: test\r\n\r\n";
+    REQUIRE(client.write(reinterpret_cast<const uint8_t*>(req), std::strlen(req)));
+    std::string reply;
+    char buf[4096];
+    for (int i = 0; i < 3000; i++) {
+        sv.http.tick20ms();
+        const int n = client.read(reinterpret_cast<uint8_t*>(buf), sizeof(buf));
+        if (n > 0) reply.append(buf, static_cast<size_t>(n));
+        else if (n == 0) break;   // the server closed: the answer is complete
+        else mm::platform::delayMs(1);
+    }
+    const size_t at = reply.find("\r\n\r\n");
+    REQUIRE(at != std::string::npos);
+    CHECK(reply.rfind("HTTP/1.1 200", 0) == 0);
+    CHECK(reply.substr(at + 4) == whole(sv.http, nullptr));   // W's forty controls take more than one fragment
+}
+
+// One buffer once held the cut frame of one client at a time, so a second client cut in the same tick lost the first one's frame.
+TEST_CASE("two clients whose frames are cut in the same tick each have their frame applied") {
+    Served sv;
+    WsClient a{sv.http, {}, {}}, b{sv.http, {}, {}};
+    REQUIRE(a.open(kTestPort));
+    REQUIRE(b.open(kTestPort));
+    const auto fa = clientFrame("{\"module\":\"K\",\"control\":\"value\",\"value\":42}");
+    const auto fb = clientFrame("{\"module\":\"L\",\"control\":\"value\",\"value\":43}");
+    REQUIRE(a.conn.write(fa.data(), 10));
+    REQUIRE(b.conn.write(fb.data(), 10));
+    mm::platform::delayMs(5);
+    sv.http.tick20ms();   // both halves read: each client keeps its own
+    REQUIRE(a.conn.write(fa.data() + 10, fa.size() - 10));
+    REQUIRE(b.conn.write(fb.data() + 10, fb.size() - 10));
+    for (int i = 0; i < 50 && (sv.t.k->value != 42 || sv.t.l->value != 43); i++) {
+        mm::platform::delayMs(1);
+        sv.http.tick20ms();
+    }
+    CHECK(sv.t.k->value == 42);
+    CHECK(sv.t.l->value == 43);
+}

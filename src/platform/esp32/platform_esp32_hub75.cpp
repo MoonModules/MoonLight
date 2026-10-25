@@ -6,52 +6,45 @@
 ///
 /// ## The output is continuous, not one-shot
 ///
-/// That is the design difference from every other output seam in this tree.
-/// A strand latches a frame and holds it, while a panel holds nothing: it displays only while it is being clocked.
-/// So the controller re-scans the same buffer forever and the driver writes the next frame into it between scans.
-/// There is no per-frame transmit call at all; the start arms the loop once and from then on the panel is lit by the transfer engine.
+/// A strand latches and holds a frame; a panel lights only while clocked, unlike every other output seam. So the start arms one endless scan of the buffer, the driver writes each frame into it between scans, and no call transmits per frame.
 ///
 /// ## Keeping a discrete-frame interface scanning
 ///
-/// The SDK's transaction model is built for discrete frames, so the scan is kept continuous the producer and consumer way.
-/// A refill task queues the same buffer again the moment the previous scan completes, and the peripheral's own interrupt starts it.
-/// Nothing re-arms from interrupt context, because the transmit call blocks once the transaction pool is exhausted, and the completion callback runs before the finished slot is recycled.
-/// Called from there it always blocks, and a blocking queue wait in an interrupt is a watchdog panic, verified on the bench on every board preset.
+/// The SDK's transactions are discrete frames, so a refill task queues the same buffer again as each scan completes, and the peripheral's own interrupt starts it, the producer and consumer way.
+///
+/// Nothing re-arms from the interrupt: the completion callback runs before its slot is recycled, so a transmit there blocks on the empty pool, and a blocking wait in an interrupt is a watchdog panic, verified on every board preset.
 ///
 /// ## Why the narrow capability guard
 ///
-/// A panel port needs fourteen pins on one bus, which rules the classic chip out.
-/// So there is no backend to write for it, and the broad macro would only compile dead code onto it.
+/// A panel port needs fourteen pins on one bus, which rules the classic chip out, so there is no backend for it and the broad macro would only compile dead code onto it.
 ///
 /// ## One scan in flight, which is not a choice
 ///
-/// Each transmit call blocks in task context until its scan finishes and recycles its slot, then queues the same buffer again.
-/// And the interrupt starts it at once because the completion is still pending.
-/// The gap is one task wake, microseconds against a scan of a millisecond or more, and it is uniform: a fraction of a percent of brightness rather than a flicker.
+/// Each transmit blocks in task context until its scan finishes, then queues the buffer again, and the interrupt starts it at once since the completion is still pending.
 ///
-/// A depth of two is not available: the bus owns ONE descriptor list, and queueing a second scan mounts it while the first still owns the descriptors, which fails outright.
-/// The same failure can appear once or twice right after start while the engine hands the first scan's descriptors back, after which the interrupt restarts the list as it stands.
-/// Which already holds this frame, so the panel loses nothing.
+/// The gap is one task wake, microseconds against a scan of a millisecond or more, and uniform: a fraction of a percent of brightness, not a flicker.
 ///
-/// The refill task's priority sits above the encode task, since a refill that lost the processor for a whole scan would leave the panel dark for that long.
-/// It never deletes itself, so teardown can always delete it by handle without racing a self-delete.
+/// A depth of two does not exist: the bus owns one descriptor list, and a second queued scan mounts it while the first still owns it, which fails outright.
+///
+/// Right after start that failure can appear once or twice while the engine hands the descriptors back; the interrupt then restarts the list, which already holds this frame, so the panel loses nothing.
+///
+/// The refill task outranks the encode task, since a refill that lost the processor for a scan leaves the panel dark that long; it never deletes itself, so teardown deletes it by handle without racing.
 ///
 /// ## Both control lines must be real pins
 ///
-/// A panel has no command phase, so the data-command line signals nothing, but the layer validates it before configuring anything and rejects the whole bus otherwise.
-/// Leaving it unset failed every board preset identically with a message that reads like a pin conflict and is not one.
-/// So it points at the write strobe, which costs no extra pin since the command phase is never asserted.
-/// The layer likewise rejects an unconnected data pin, so the lanes the layout does not use park on the strobe, where it toggles harmlessly with no panel line attached.
+/// A panel has no command phase, yet the layer validates the data-command line first and rejects the whole bus without it, with a message that reads like a pin conflict and is not one.
+///
+/// So it points at the write strobe, free since the command phase never asserts; the unused data lanes, which the layer also rejects unconnected, park on the strobe too, toggling with no panel line attached.
 ///
 /// ## The frame must be internal memory
 ///
-/// The peripheral keeps clocking while the transfer engine falls behind on external reads, signals completion with descriptors it still owns, and every following mount then fails.
-/// One chip forecloses it anyway, its external region carrying no transfer capability at all.
-/// So a frame that does not fit is refused with the depth to lower, which is a panel that says why rather than one that scans torn.
+/// The peripheral keeps clocking while the transfer engine lags on external reads, signals completion with descriptors it still owns, and every later mount fails; one chip's external region cannot transfer at all.
+///
+/// So a frame that does not fit internal memory is refused with the depth to lower: a panel that says why rather than one that scans torn.
 
 #include "platform/platform.h"
 // The wire format, for the frame size: one home for it, shared with the driver that encodes.
-#include "light/drivers/Hub75Slots.h"
+#include "platform/Hub75Bus.h"
 
 #include "sdkconfig.h"
 #include "soc/soc_caps.h"
@@ -93,7 +86,7 @@ constexpr size_t kParlioMaxTransferBytes = 0x7FFFF / 8;
 
 const char* g_lastError = nullptr;
 
-// The OE bit means lit and the panel's OE is active low, so the pin is re-routed inverted and an idle bus is dark (Hub75Slots.h, "The OE bit means lit").
+// The OE bit means lit and the panel's OE is active low, so the pin is re-routed inverted and an idle bus is dark (Hub75Bus.h, "The bus word").
 constexpr uint8_t kOeLane = Hub75Layout{}.oe;
 void invertOe(gpio_num_t oe, int signal) { esp_rom_gpio_connect_out_signal(oe, signal, true, false); }
 

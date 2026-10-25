@@ -328,10 +328,35 @@ private:
     static inline uint8_t count_ = 0;
 };
 
-/// Emit a palette control's options, or one option's name when the sink asks for it.
+/// One option object of the picker, its comma before it past the first; nothing past the last. The BUILT-INS come first, keeping the indices every saved selection and the WLED API depend on, then the scripted tail.
+inline void paletteOption(JsonSink& sink, int i) {
+    if (i < 0) return;
+    if (i < palettes::kCount) {
+        const Palette p = Palettes::fromBuiltin(static_cast<uint8_t>(i));
+        sink.appendf("%s{\"name\":\"%s\",\"tags\":\"%s\",\"colors\":\"", i > 0 ? "," : "",
+                     palettes::kBuiltins[i].name, palettes::kBuiltins[i].tags);
+        for (uint8_t e = 0; e < Palette::kEntries; e++)
+            sink.appendf("%s%02x%02x%02x", e > 0 ? " " : "", p.entry[e].r, p.entry[e].g, p.entry[e].b);
+        sink.append("\"}");
+        return;
+    }
+    const int s = i - palettes::kCount;
+    if (s >= LivePalettes::count()) return;
+    const Palette& p = *Palettes::active();
+    // The escaping writer for the NAME: a script names its palette, and a quote in that name would end the string early and cost the UI the whole control frame.
+    sink.append(",{\"name\":");
+    sink.writeJsonString(LivePalettes::nameAt(static_cast<uint8_t>(s)));
+    sink.appendf(",\"live\":true,\"tags\":\"%s\",\"colors\":\"", LivePalettes::tagsAt(static_cast<uint8_t>(s)));
+    // One the device does not hold has no colors yet, and the UI downloads it when it is picked.
+    if (!LivePalettes::presentAt(static_cast<uint8_t>(s))) { sink.append("\",\"absent\":true}"); return; }
+    for (uint8_t e = 0; e < Palette::kEntries; e++)
+        sink.appendf("%s%02x%02x%02x", e > 0 ? " " : "", p.entry[e].r, p.entry[e].g, p.entry[e].b);
+    sink.append("\"}");
+}
+
+/// Emit a palette control's options, the one option or the one name the sink asks for.
 inline void paletteOptions(JsonSink& sink) {
     /// A NAME REQUEST rather than an options dump.
-    const uint8_t live = LivePalettes::count();
     if (sink.nameIndex() >= 0) {
         const uint8_t i = static_cast<uint8_t>(sink.nameIndex());
         const uint8_t src = LivePalettes::sourceIndex(i);
@@ -340,28 +365,8 @@ inline void paletteOptions(JsonSink& sink) {
         if (src < palettes::kCount) sink.append(palettes::kBuiltins[src].name);
         return;
     }
-    // The BUILT-INS first, keeping the indices every saved selection and the WLED API depend on.
-    for (uint8_t i = 0; i < palettes::kCount; i++) {
-        const Palette p = Palettes::fromBuiltin(i);
-        sink.appendf("%s{\"name\":\"%s\",\"tags\":\"%s\",\"colors\":\"", i > 0 ? "," : "",
-                     palettes::kBuiltins[i].name, palettes::kBuiltins[i].tags);
-        for (uint8_t e = 0; e < Palette::kEntries; e++)
-            sink.appendf("%s%02x%02x%02x", e > 0 ? " " : "", p.entry[e].r, p.entry[e].g, p.entry[e].b);
-        sink.append("\"}");
-    }
-    // Then the scripted tail, each marked with 🎨 so the list says at a glance which entries are code rather than a fixed gradient.
-    for (uint8_t i = 0; i < live; i++) {
-        const Palette& p = *Palettes::active();
-        // The escaping writer for the NAME: a script names its palette, and a quote in that name would end the string early and cost the UI the whole control frame.
-        sink.append(",{\"name\":");
-        sink.writeJsonString(LivePalettes::nameAt(i));
-        sink.appendf(",\"live\":true,\"tags\":\"%s\",\"colors\":\"", LivePalettes::tagsAt(i));
-        // One the device does not hold has no colors yet, and the UI downloads it when it is picked.
-        if (!LivePalettes::presentAt(i)) { sink.append("\",\"absent\":true}"); continue; }
-        for (uint8_t e = 0; e < Palette::kEntries; e++)
-            sink.appendf("%s%02x%02x%02x", e > 0 ? " " : "", p.entry[e].r, p.entry[e].g, p.entry[e].b);
-        sink.append("\"}");
-    }
+    if (sink.optionIndex() >= 0) { paletteOption(sink, sink.optionIndex()); return; }
+    for (int i = 0; i < palettes::kCount + LivePalettes::count(); i++) paletteOption(sink, i);
 }
 
 /// Emit the built-in palette names as a bare JSON string array, the element list WLED's /json

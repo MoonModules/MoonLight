@@ -1009,7 +1009,8 @@
     "name": "MM testbench P4",
     "chip": "ESP32-P4",
     "firmwares": [
-      "esp32p4rev1-eth"
+      "esp32p4rev1-eth",
+      "esp32p4rev1-eth-wifi"
     ],
     "image": "assets/deviceModels/esp32-p4-testbench.jpg",
     "supported": [

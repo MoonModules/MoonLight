@@ -26,6 +26,8 @@ CONFIG_HEAP_HAS_EXEC_HEAP=y
 
 # A MIDI desk on the board's own USB port: the MIDI service's USB source.
 CONFIG_MM_USB_MIDI_HOST=y
+# Through a powered hub, since a desk such as the APC40 takes its power from USB and the board's port supplies none.
+CONFIG_USB_HOST_HUBS_SUPPORTED=y
 
 # Quad I/O flash reads: the module's flash takes four data lines, and code fetched from flash over two (DIO, the IDF default) cost the S3 16% of its tick, measured on the testbench S3 (2026-10-13).
 CONFIG_ESPTOOLPY_FLASHMODE_QIO=y

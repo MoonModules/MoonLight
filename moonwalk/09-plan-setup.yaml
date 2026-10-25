@@ -15,7 +15,9 @@ processes:
     intro: |
       A topic is one module, effect, driver or capability. The plan is the contract for the branch. A draft may wait in `docs/work/future/` until its topic is picked.
 
-      The pull request description links the plan, and the plan moves to `docs/work/past/plans/` in that same pull request, the product owner's call, with its status in its name: `(shipped)` once every step is built and verified, the judgment steps included, since the code being written is not the plan being realized; otherwise `(cancelled)`, `(superseded)` or `(attempted, reverted)`.
+      The pull request description links the plan, and the plan moves to `docs/work/past/plans/` in that same pull request, the product owner's call, once every step is built and verified, the judgment steps included, since the code being written is not the plan being realized. It keeps its count, `(7 of 7)`, which with the folder says it shipped; a plan that did not ship is named `(cancelled)`, `(superseded)` or `(attempted, reverted)`.
+
+      A finished step's knowledge moves to the docs, in the plan or once it leaves, and the step stays listed: shortened to one line of what it built, with a link to where its knowledge landed. Only the detail goes, so the plan still says what was done.
     steps:
       - id: pick
         say: Name one module, effect, driver or capability.
@@ -69,7 +71,7 @@ processes:
   - id: build-setup
     title: Set up a computer to build MoonLight
     actor: contributor
-    goal: uv, CMake 3.20 or newer and a C++20 compiler on the machine, once.
+    goal: uv, CMake 3.20 or newer, a C++20 compiler and ccache on the machine, once.
     systems: [MoonDeck]
     inputs:
       type: object
@@ -77,13 +79,13 @@ processes:
         platform: { type: string, enum: [macOS, Linux, Windows], description: "Which computer?" }
     steps:
       - id: mac
-        say: Install the command line tools, CMake and uv.
+        say: Install Xcode's command line tools, CMake, uv, ccache.
         given: [{ input: platform, equals: macOS }]
-        when: { run: { command: "xcode-select --install; brew install cmake uv" } }
+        when: { run: { command: "xcode-select --install; brew install cmake uv ccache" } }
       - id: linux
-        say: Install CMake, a compiler and uv.
+        say: Install CMake, a compiler, ccache and uv.
         given: [{ input: platform, equals: Linux }]
-        when: { run: { command: "sudo apt install cmake g++ && curl -LsSf https://astral.sh/uv/install.sh | sh" } }
+        when: { run: { command: "sudo apt install cmake g++ ccache && curl -LsSf https://astral.sh/uv/install.sh | sh" } }
         detail: |
           GCC 12 or Clang 15 from your distribution, and uv from astral's installer.
       - id: windows

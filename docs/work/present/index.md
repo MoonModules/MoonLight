@@ -6,4 +6,6 @@ A plan is written in plan mode, approved before work starts, and edited as reali
 
 A file here that no longer has work behind it is either finished, and belongs in past, or abandoned, and moves there as `(cancelled)`.
 
-A file name carries its status as the [past plans](../past/index.md) do: `(not started)` before the first step, `(partial)` while some are built, and `(shipped)` once every step is built and verified, the judgment steps included.
+Inside a plan each step carries its status: ✅ built and verified, 🚧 partly built, with what is missing named beside it, ⏳ not started.
+
+A file name counts them, `(3 of 7)` for three steps ✅ out of seven, when the product owner asks for the count, since a renamed file is a new file to git; `(7 of 7)` is a plan whose every step is built and verified, the judgment steps included, ready for the product owner to move to [past](../past/index.md), where it keeps that name.

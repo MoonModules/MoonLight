@@ -6,6 +6,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <new>       // std::nothrow: a control list that cannot grow leaves a control out
 
 #ifndef MM_MAX_GPIO   // the highest valid GPIO, overridden per chip; the fallback is the widest
 #define MM_MAX_GPIO 63
@@ -14,7 +15,7 @@
 namespace mm {
 
 /// Format four octets as "A.B.C.D", which sixteen bytes always fits.
-inline void formatDottedQuad(char out[16], const uint8_t ip[4]) {
+inline void formatDottedQuad(char out[16], const uint8_t ip[4]) MM_NONBLOCKING {
     mm::formatTo(out, 16, "%u.%u.%u.%u", ip[0], ip[1], ip[2], ip[3]);
 }
 
@@ -180,6 +181,8 @@ struct ControlDescriptor {
     bool live = false;
     /// Whether a number field reads and writes hexadecimal, for a value its datasheet gives in hex, such as an I2C address.
     bool hex = false;
+    /// Whether a text holds an address or a list of hosts, so the UI names the boards it knows among them.
+    bool hosts = false;
     /// What this surface control drives, one field because each kind drives exactly one thing.
     const char* surfaceTarget = nullptr;
     /// An optional check applied before every write, so the rule lives with the control.
@@ -217,28 +220,28 @@ public:
 
     /// Bind a byte as a slider, the preferred default, whose bounds also clamp writes.
     void addControl(const char* name, uint8_t& var, uint8_t min = 0, uint8_t max = 255) {
-        grow();
+        if (!grow(name)) return;
         controls_[count_++] = {&var, name, 0, ControlType::Uint8, min, max};
     }
 
     /// Bind a wide unsigned value, whose bounds default to its own full range.
     void addControl(const char* name, uint16_t& var,
                     uint16_t min = 0, uint16_t max = UINT16_MAX) {
-        grow();
+        if (!grow(name)) return;
         controls_[count_++] = {&var, name, 0, ControlType::Uint16, min, max};
     }
 
     /// Bind a signed value, for a coordinate where negatives are legal.
     void addControl(const char* name, int16_t& var,
                     int16_t min = INT16_MIN, int16_t max = INT16_MAX) {
-        grow();
+        if (!grow(name)) return;
         controls_[count_++] = {&var, name, 0, ControlType::Int16, min, max};
     }
 
     /// Bind a wide signed value, where sixteen bits would wrap.
     void addControl(const char* name, int32_t& var,
                     int32_t min = INT32_MIN, int32_t max = INT32_MAX) {
-        grow();
+        if (!grow(name)) return;
         controls_[count_++] = {&var, name, 0, ControlType::Int32, min, max};
     }
 
@@ -247,20 +250,20 @@ public:
 
     /// Bind a GPIO number, which renders as a number since a pin is an identity not a magnitude.
     void addPin(const char* name, int8_t& var, int16_t min = -1, int16_t max = MM_MAX_GPIO) {
-        grow();
+        if (!grow(name)) return;
         controls_[count_++] = {&var, name, 0, ControlType::Pin, min, max};
     }
 
     /// Bind a boolean as a toggle, whose range is itself.
     void addControl(const char* name, bool& var) {
-        grow();
+        if (!grow(name)) return;
         controls_[count_++] = {&var, name, 0, ControlType::Bool, 0, 1};
     }
 
     /// Bind a character buffer as a text input, with an optional check on every write.
     void addText(const char* name, char* var, uint16_t bufSize = 16,
                  bool (*validate)(const char*) = nullptr) {
-        grow();
+        if (!grow(name)) return;
         controls_[count_++] = {.ptr = var, .name = name, .type = ControlType::Text,
                                .max = bufSize, .validate = validate};
     }
@@ -268,7 +271,7 @@ public:
     /// Bind a buffer the UI renders as a resizable multi-line box, such as a script's source.
     void addTextArea(const char* name, char* var, uint16_t bufSize = 16,
                      bool (*validate)(const char*) = nullptr) {
-        grow();
+        if (!grow(name)) return;
         controls_[count_++] = {.ptr = var, .name = name, .type = ControlType::TextArea,
                                .max = bufSize, .validate = validate};
     }
@@ -277,7 +280,7 @@ public:
     void addFilePath(const char* name, char* var, uint16_t bufSize,
                      const FilePathPick& pick,
                      bool (*validate)(const char*) = nullptr) {
-        grow();
+        if (!grow(name)) return;
         controls_[count_++] = {.ptr = var, .name = name,
                                .aux = reinterpret_cast<uintptr_t>(&pick[0]),
                                .type = ControlType::FilePath,
@@ -287,7 +290,7 @@ public:
     /// Bind a file-path control with no picker, which is an editor over one fixed path.
     void addFilePath(const char* name, char* var, uint16_t bufSize,
                      bool (*validate)(const char*) = nullptr) {
-        grow();
+        if (!grow(name)) return;
         controls_[count_++] = {.ptr = var, .name = name, .aux = 0,
                                .type = ControlType::FilePath,
                                .max = bufSize, .validate = validate};
@@ -296,58 +299,58 @@ public:
     /// Bind a buffer holding a secret, which the API obfuscates rather than sending in clear, with an optional check on every write.
     void addPassword(const char* name, char* var, uint8_t bufSize = 32,
                      bool (*validate)(const char*) = nullptr) {
-        grow();
+        if (!grow(name)) return;
         controls_[count_++] = {.ptr = var, .name = name, .type = ControlType::Password,
                                .max = bufSize, .validate = validate};
     }
 
     /// Bind a buffer the UI shows but never edits.
     void addReadOnly(const char* name, char* var, uint8_t bufSize = 32) {
-        grow();
+        if (!grow(name)) return;
         controls_[count_++] = {var, name, 0, ControlType::ReadOnly, 0, bufSize};
     }
 
     /// Bind a small signed telemetry value, shown with the unit suffix the caller owns.
     void addReadOnlyInt(const char* name, int8_t& var, const char* unit) {
-        grow();
+        if (!grow(name)) return;
         controls_[count_++] = {&var, name, reinterpret_cast<uintptr_t>(unit),
                                ControlType::ReadOnlyInt, 0, 0};
     }
 
     /// Bind an index as a palette dropdown, whose options carry their own swatch colors.
     void addPalette(const char* name, uint8_t& var, PaletteOptionsFn optionsFn, uint8_t optionCount) {
-        grow();
+        if (!grow(name)) return;
         controls_[count_++] = {&var, name, reinterpret_cast<uintptr_t>(optionsFn), ControlType::Palette, 0, optionCount};
     }
 
     /// Bind an index as a dropdown over the options array the caller owns.
     void addSelect(const char* name, uint8_t& var, const char* const* options, uint8_t optionCount) {
-        grow();
+        if (!grow(name)) return;
         controls_[count_++] = {&var, name, reinterpret_cast<uintptr_t>(options), ControlType::Select, 0, optionCount};
     }
 
     /// Bind a value as a progress bar against a total, both counted in `unit`.
     void addProgress(const char* name, uint32_t& var, uint32_t total, ProgressUnit unit = ProgressUnit::Bytes) {
-        grow();
+        if (!grow(name)) return;
         controls_[count_++] = {&var, name, total, ControlType::Progress, static_cast<int32_t>(unit), 0};
     }
 
     /// Bind four octets as an address, which serializes as its dotted-quad string.
     void addIPv4(const char* name, uint8_t* var) {
-        grow();
+        if (!grow(name)) return;
         controls_[count_++] = {var, name, 0, ControlType::IPv4, 0, 0};
     }
 
     /// Bind a source as a list of rows, which it produces on demand from its own data.
     void addList(const char* name, ListSource& source) {
-        grow();
+        if (!grow(name)) return;
         // A non-const reference, since restoring a list repopulates the source's rows.
         controls_[count_++] = {&source, name, 0, ControlType::List, 0, 0};
     }
 
     /// Add a momentary button, whose click reaches the module's changed hook rather than storage. `confirm` asks the UI for a second press, while the API, a desk or MQTT acts on one write.
     void addButton(const char* name, bool confirm = false) {
-        grow();
+        if (!grow(name)) return;
         controls_[count_++] = {nullptr, name, confirm ? 1u : 0u, ControlType::Button, 0, 0};
     }
 
@@ -386,6 +389,11 @@ public:
     /// Render a numeric as a number input, for an integer that is an identity not a magnitude.
     void setNumberField(uint8_t i, bool numberField = true) {
         if (i < count_) controls_[i].numberField = numberField;
+    }
+
+    /// Mark a text as holding hosts, an address or a list of addresses and names, so the UI shows each known board's name beside its address.
+    void setHostsField(uint8_t i) {
+        if (i < count_) controls_[i].hosts = true;
     }
 
     /// Render a numeric as a hexadecimal number input, as `0x18`.
@@ -428,15 +436,20 @@ private:
     uint8_t count_ = 0;
     uint8_t capacity_ = 0;
 
-    /// Double the descriptor array when the next control would not fit.
-    void grow() {
-        if (count_ < capacity_) return;
-        uint8_t newCap = capacity_ == 0 ? 4 : capacity_ * 2;
-        auto* newArr = new ControlDescriptor[newCap];
+    /// Double the descriptor array when the next control would not fit, false when it cannot. The control `name` is then left out and the log says so, rather than a board out of memory aborting.
+    bool grow(const char* name) {
+        if (count_ < capacity_) return true;
+        const uint8_t newCap = capacity_ == 0 ? 4 : capacity_ >= 128 ? 255 : static_cast<uint8_t>(capacity_ * 2);
+        auto* newArr = count_ < 255 ? new (std::nothrow) ControlDescriptor[newCap] : nullptr;
+        if (!newArr) {
+            std::printf("controls: no room for %s\n", name ? name : "");
+            return false;
+        }
         for (uint8_t i = 0; i < count_; i++) newArr[i] = controls_[i];
         delete[] controls_;
         controls_ = newArr;
         capacity_ = newCap;
+        return true;
     }
 };
 
@@ -481,6 +494,16 @@ private:
 
 /// Append the per-type extras that ride beside the value, such as bounds or options.
 void writeControlMetadata(JsonSink& sink, const ControlDescriptor& c);
+
+/// Where a control written a piece at a time stands: the part, and the row or option within it.
+struct ControlCursor {
+    uint8_t part = 0;    ///< the part being written: the head, then the rows or options, then a list's detail
+    uint16_t item = 0;   ///< the next row or option in that part
+};
+/// Whether a control's value and extras can go out a piece at a time: a list's rows and detail rows, an option list's options.
+bool writtenInPieces(const ControlDescriptor& c);
+/// Append the next piece of what writeControlValue then writeControlMetadata write whole, false once the last is out. One piece is a row or an option, so no piece needs a large buffer.
+bool writeControlPiece(JsonSink& sink, const ControlDescriptor& c, ControlCursor& at);
 
 /// What an apply did, which each caller maps onto its own reporting.
 enum class ApplyResult : uint8_t {

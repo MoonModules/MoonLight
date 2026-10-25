@@ -84,3 +84,52 @@ TEST_CASE("OSC feedback asks for every surface value again every 30 seconds, and
     control->removeSurface(osc);
     scheduler.release();
 }
+
+// On the StadBeest the eyes never followed the legs: the leader's feedback socket is opened and never bound, and the non-blocking switch lived in bind alone.
+TEST_CASE("a socket opened only to send never waits on the stack") {
+    mm::platform::UdpSocket s;
+    REQUIRE(s.open());
+    uint8_t buf[16];
+    uint8_t src[4] = {};
+    CHECK(s.recvFrom(buf, sizeof(buf), src) <= 0);   // answers at once: nothing pending
+}
+
+TEST_CASE("a leader sends feedback without listening, and a live encoder write reaches its follower") {
+    Scheduler scheduler;
+    auto* control = new ControlModule();
+    control->setName("Control");
+    auto* osc = new OscService();
+    osc->setName("Osc");
+    scheduler.addModule(control);
+    scheduler.addModule(osc);
+    scheduler.setup();
+    REQUIRE(scheduler.setControl("Osc", "port", "{\"value\":19100}") == Scheduler::SetControlResult::Ok);
+    REQUIRE(scheduler.setControl("Osc", "feedbackPort", "{\"value\":19101}") == Scheduler::SetControlResult::Ok);
+    REQUIRE(scheduler.setControl("Osc", "hosts", "{\"value\":\"127.0.0.1\"}") == Scheduler::SetControlResult::Ok);
+    REQUIRE(scheduler.setControl("Osc", "listen", "{\"value\":false}") == Scheduler::SetControlResult::Ok);
+    REQUIRE(scheduler.setControl("Osc", "feedback", "{\"value\":true}") == Scheduler::SetControlResult::Ok);
+
+    platform::UdpSocket follower;
+    REQUIRE(follower.open());
+    REQUIRE(follower.bind(19101));
+    uint8_t pkt[256];
+    // The service opens its socket and attaches to the surface on its tick, then the surface seeds every value.
+    for (int i = 0; i < ControlModule::kSurfaceValues + 4; i++) { osc->tick(); control->tick20ms(); platform::delayMs(1); }
+    while (follower.recvFrom(pkt, sizeof(pkt)) > 0) {}
+
+    // What a script's setControl does: a live write on the surface.
+    REQUIRE(scheduler.setControl("Control", "encoder6", "{\"value\":128}", /*live=*/true) == Scheduler::SetControlResult::Ok);
+    bool heard = false;
+    for (int i = 0; i < 20 && !heard; i++) {
+        control->tick20ms();
+        platform::delayMs(2);
+        int n;
+        while ((n = follower.recvFrom(pkt, sizeof(pkt))) > 0)
+            if (std::strncmp(reinterpret_cast<const char*>(pkt), "/mm/encoder/6", 13) == 0) heard = true;
+    }
+    CHECK(heard);
+    REQUIRE(osc->status() != nullptr);
+    CHECK(std::strstr(osc->status(), "not listening") != nullptr);   // says what it does, not "listening"
+    follower.close();
+    scheduler.release();
+}

@@ -114,6 +114,8 @@ processes:
       - id: report
         say: Report each finding as fixed or skipped.
         when: { manual: "One line per finding: flagged, then done or skipped, plus why. The commit message carries them under Reviews." }
+        detail: |
+          The line goes into the draft commit message, `build/commit-message.md`, the moment the finding is processed, and the commit reads it (`git commit -F`). A conversation's summary and a new session both lose what was only said.
   - id: pre-merge
     title: Run pre-merge, then merge
     actor: product-owner
@@ -132,7 +134,7 @@ processes:
         detail: |
           The Reviewer reads before the checks run.
 
-          Its scope: boundaries, bespoke conventions, unnecessary abstractions, duplication, the hot path, spec conformance and bloat. It also asks whether every setting names the user who needs it, and whether a change touching many areas signals coupling.
+          Its scope: boundaries, bespoke conventions, unnecessary abstractions, duplication, the hot path, spec conformance and bloat. It also asks whether every setting names the user who needs it, whether a change touching many areas signals coupling, and whether two adjacent sections of a page carry one topic.
       - id: feedback
         say: Address every review finding.
         when: { process: review-finding }
@@ -162,6 +164,8 @@ processes:
         when: { run: { command: "git log main..HEAD" } }
         detail: |
           Judged against every commit rather than the first, since a pull request opened early keeps a title that then misdescribes every later commit.
+
+          The agent updates the product owner's own pull request's title and description directly, keeping CodeRabbit's generated summary: they restate commits the product owner already read. A comment, a review reply or an issue still waits for their go.
       - id: perf
         say: Take a performance snapshot.
         when: { manual: "Take it when the tick path changed. Compare the tick matrix with main's." }
@@ -213,7 +217,7 @@ processes:
         say: Take over the easy fixes when it helps.
         when: { manual: "On the second round, when the contributor goes quiet, or sooner when the case calls for it." }
         detail: |
-          Forks allow maintainer edits, so a fix lands as your commit on their branch, after theirs. Commit only once it is tested: the desktop tests always, and an ESP32 build and the bench when the change reaches the platform layer or hardware. With maintainer edits allowed, `gh pr checkout` sets the branch to push to the fork while it tracks origin. An editor's sync that ignores the push setting pushes to origin and creates a stray branch here, so after a push compare `gh pr view <n> --json headRefOid` with `HEAD`.
+          Forks allow maintainer edits, so a fix lands as your commit on their branch, after theirs. One maintainer commit per round: run every check CI runs before it, so no follow-up commit is needed. Commit only once it is tested: the desktop tests always, and an ESP32 build and the bench when the change reaches the platform layer or hardware. With maintainer edits allowed, `gh pr checkout` sets the branch to push to the fork while it tracks origin. An editor's sync that ignores the push setting pushes to origin and creates a stray branch here, so after a push compare `gh pr view <n> --json headRefOid` with `HEAD`.
       - id: conventions
         say: Apply the project's conventions yourself.
         when: { manual: "The local gates' findings, comment and prose style, generated files, where a doc belongs, a compiler flag scoped too wide: on their branch, or as a follow-up commit after the merge." }

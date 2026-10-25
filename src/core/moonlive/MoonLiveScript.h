@@ -8,9 +8,9 @@
 
 namespace mm::moonlive {
 
-/// One scripted module's script: the file it names, the compiled program, and the content hash.
+/// One scripted module's script: the file it names, the compiled program, and the content hash, @xref{held-by-value|held by value}.
 ///
-/// The rule it exists to state once: if the file changed, recompile. That is all `sync()` is.
+/// The rule it exists to state once: if the file changed, recompile. That is all `sync()` is: @xref{one-answer-to-one-question|one answer to one question}.
 ///
 /// @technical
 ///
@@ -91,7 +91,7 @@ public:
             owner.setStatus(statusBuf_, MoonModule::Severity::Error);
             // Forget what the last script said: its strings are already overwritten in the pool.
             dim_ = Dim::D2;
-            tags_ = nullptr;
+            tags_[0] = '\0';
             compileFailed_ = true;
             failedHash_ = fileHash;
             failedReadable_ = readable;   // distinguishes "this text is broken" from "no file"
@@ -127,8 +127,8 @@ public:
     /// The dimensionality the script declared, or D2 when it declared none.
     Dim dimensions() const { return dim_; }
 
-    /// The emoji the script declared, or null when it declared none, valid until the next compile replaces the engine's string pool.
-    const char* tags() const { return tags_; }
+    /// The emoji the script declared, or null when it declared none: a copy this script holds, which outlives the engine's string pool and changes at the next compile.
+    const char* tags() const { return tags_[0] ? tags_ : nullptr; }
 
     /// Hand back what this script reported, called after the engine is freed.
     void releaseReporting(MoonModule& owner) {
@@ -195,18 +195,36 @@ private:
     /// Read what the script says it is, by running the function it wrote; a script declaring neither keeps the binding's defaults.
     void readIdentity() {
         dim_ = Dim::D2;
-        tags_ = nullptr;
+        tags_[0] = '\0';
         // runValue answers only for a matching declared type, so a void one gets the fallback.
         const uintptr_t d = engine_.runValue("dimensions", moonlive::RetType::Int, 2);
         if (d >= 1 && d <= 3) dim_ = static_cast<Dim>(d);
         const uintptr_t s = engine_.runValue("tags", moonlive::RetType::Str, 0);
-        if (s) tags_ = reinterpret_cast<const char*>(s);
+        if (s) keepTags(reinterpret_cast<const char*>(s));
+    }
+
+    /// Copy the tags the script returned, whole characters only, since the string pool they live in moves with each compile and goes with a release.
+    void keepTags(const char* s) {
+        size_t n = 0;
+        for (size_t len; s[n] && (len = utf8Length(s + n)) && n + len < sizeof(tags_);) n += len;
+        std::memcpy(tags_, s, n);
+        tags_[n] = '\0';
+    }
+
+    /// The length of the whole UTF-8 character at s, 0 for a stray continuation byte or one cut short; each continuation byte is read only once the one before it was no terminator, so the read stays inside the string.
+    static size_t utf8Length(const char* s) {
+        const unsigned char lead = static_cast<unsigned char>(*s);
+        const size_t len = lead < 0x80 ? 1 : lead < 0xC0 ? 0 : lead < 0xE0 ? 2 : lead < 0xF0 ? 3 : lead < 0xF8 ? 4 : 0;
+        for (size_t k = 1; k < len; k++)
+            if ((static_cast<unsigned char>(s[k]) & 0xC0) != 0x80) return 0;
+        return len;
     }
 
     MoonLive engine_;
     /// What the compiled script declared, cached so no call lands on the tick path.
     Dim         dim_  = Dim::D2;
-    const char* tags_ = nullptr;
+    /// The tags the script declared: six emoji at most, the longest shipped script using three.
+    char        tags_[25] = {};   // six four-byte emoji and the terminator
     /// Which shadow note the status should carry, or null when this is the only copy, asked once per status line so the success and failure branches agree.
     const char* shadowMark() const {
         if (!moonlive::scriptShadowsFactory(name_)) return nullptr;

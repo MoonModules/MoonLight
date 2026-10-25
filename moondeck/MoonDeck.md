@@ -105,6 +105,7 @@ uv run moondeck/test/test_host.py            # Python and JS
 uv run moondeck/test/test_host.py --python   # just Python
 uv run moondeck/test/test_host.py --js       # just JS
 uv run moondeck/test/test_host.py --ui       # only the UI runs (needs a running device)
+uv run moondeck/test/test_host.py --ui --clip 16-restore-a-backup   # one run file
 ```
 
 The tests the C++ binary cannot reach: the cross-language contracts (the Improv frame's wire format,
@@ -160,7 +161,7 @@ The front pages are `README.md` and `CLAUDE.md`, listed in the script; the site'
 
 ### check_prose
 
-Verify that prose a change ADDS follows the coding standards: no em-dashes, US spelling.
+Verify that prose a change ADDS follows the coding standards: no em-dashes, US spelling, and no section past 500 words of prose.
 
 ```bash
 uv run moondeck/check/check_prose.py
@@ -172,7 +173,7 @@ Reads the added lines of the branch diff and the working tree, so pre-existing p
 
 Report every break of the shape the standards define, and refuse a new one, in help.json and in the headers' `///` comments.
 
-It also regenerates `docs/help/help.json` to prove the committed one is fresh, which needs LLVM, the one [gen_help](#gen_help) uses. Without it the report still runs and names the freshness as unchecked, which fails the gate.
+It also regenerates `docs/help/help.json` to prove the committed one is fresh, which needs LLVM, the one [gen_help](#gen_help) uses. Without it the freshness prints as skipped and every other rule still runs, while `docgen.json` keeps its counts: a run that measured fewer rules records no number to beat.
 
 ```bash
 uv run moondeck/check/check_docgen.py
@@ -188,7 +189,6 @@ And per file, over every `.h` and `.cpp` under `src/`, `test/`, `esp32/main`, `m
 
 - a class comment past 10 lines, or any `## ` section of its `@technical` appendix past 10
 - a member comment past one line
-- one sentence in a comment past 30 words
 - a public function or variable with no `///` at all
 - a `//` note on a declaration, which belongs in its `///` or inside a body
 
@@ -762,7 +762,7 @@ The [test page](../docs/reference/tests.md#check_code) shows each rule with its 
 
 `repo_health` and `collect_kpi` count the function rules through the same two functions this script uses. The clones and the file sizes are this check's alone, a pass too slow for every KPI run. clang-tidy's `readability-function-*` checks stay off: one rule, one owner.
 
-**Platform code outside src/platform** and **light include in core** are the architecture's two boundaries, counted per line. The first is a vendor header or a platform `#ifdef` outside `src/platform/`, the second a `src/core` file including a `light/` header.
+**Platform code outside src/platform** is the architecture's platform boundary, counted per line: a vendor header or a platform `#ifdef` outside `src/platform/`. The domain boundary, core without light, is the build's: `mm_core` compiles through an include root without `light/`, and every core header on its own, so a crossing fails the test build. **Relative include path** closes the one route past that root: an `#include` under `src/` stepping through `.` or `..`.
 
 **Module type in the UI** is a registered type's name as a string literal in `src/ui`, one row per literal. The type list is read from `module_types.cpp` as `check_devices` reads it. The four containers `main.cpp` pins as the tree's roots (`Layouts`, `Effects`, `Drivers`, `Services`) are the UI's contract and not findings. **Name spread** is a type named in more than 10 files beyond its own: its header, its implementation and its tests. It is one row on the header that defines it, and it counts change amplification, since a rename of that type edits that many files.
 
@@ -784,6 +784,17 @@ uv run moondeck/scenario/run_scenario.py --name scenario_Effects_pipeline_builds
 Scenarios are JSON files in `test/scenarios/`. Use the dropdown to run a single scenario or leave it on **all** to run the full suite.
 
 For a full description of each scenario, see the [test page](https://moonmodules.org/MoonLight/reference/tests.html), auto-generated from the JSON files.
+
+### size_symbols
+
+What a firmware image spends its bytes on, per symbol: the bytes per kind (code, constants, data, zero-initialized) and the largest symbols. From the second run on, it also lists the symbols that grew, shrank, appeared or went since that firmware's last run. The largest changes come first, up to `--top` (30 by default). A commit's KPI line says the image grew; this says by which functions and tables.
+
+```bash
+uv run moondeck/report/size_symbols.py --firmware esp32          # build/esp32-esp32/MoonLight.elf
+uv run moondeck/report/size_symbols.py --firmware teensy41 --top 50
+```
+
+It reads the linked `MoonLight.elf` with the `nm` beside the compiler that built it, as the build directory's CMake cache names it. Its table stays beside the image as `size-symbols.json`, for the next comparison. Firmware only: a macOS binary stores no symbol sizes.
 
 ### history_report
 
@@ -938,6 +949,17 @@ uv run moondeck/moontube/mtcompose.py --project moontube/projects/getting-starte
 ```
 
 The dropdown lists every project under `moontube/projects/`. A project is the edit: which clips, in what order, how many BARS each gets, and the audio underneath. Bars rather than seconds, because a cut lands on the music or it does not, and changing the track re-times the whole edit from one number. The finished cut lands in `media/video/<project>.mp4`; the per-segment intermediates are deleted once it exists, and kept only when a cut fails.
+
+### run_restore_live
+
+Restore a backup onto a running device the way the File Manager's Restore does, and prove every value came back.
+
+```bash
+uv run moondeck/scenario/run_restore_live.py --bundle test/fixtures/backup-flat-2026-09-30.json                    # the desktop app
+uv run moondeck/scenario/run_restore_live.py --bundle <backup.json> --host 192.168.1.139 --readers 4              # a board, read meanwhile
+```
+
+It runs the UI's own `restoreBundle` (`src/ui/migrate.js`) in Node, then reads each config file back and compares it with the migrated bundle value by value, leaving out what MIGRATING renames on the device and what a device reports rather than stores. It fails on a report entry other than a rename, a value not back, or a device restart, naming the boot reason. `--readers N` keeps other clients reading the device throughout, the case that found a config write refused while its file was being read. CI runs it against the desktop app with the flat fixture on every pull request.
 
 ### run_network_live
 

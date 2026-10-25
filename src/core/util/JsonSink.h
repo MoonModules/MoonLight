@@ -70,6 +70,7 @@ public:
     /// Append `len` bytes, a slice of a larger document that carries no terminator of its own.
     void append(const char* s, size_t len) {
         if (!s) return;
+        written_ += len;
         if (conn_ && !stage_) { conn_->write(reinterpret_cast<const uint8_t*>(s), len); return; }
         for (const char* end = s + len; s < end; ) {
             if (conn_) {
@@ -170,7 +171,7 @@ public:
         if (fixed_) return fixed_;
         return heap_ ? heap_ : "";
     }
-    /// How many bytes have been written.
+    /// How many bytes the buffer or slice holds; a socket sink holds none, and `written()` counts what went out.
     size_t size() const { return fixed_ ? fixedLen_ : heapLen_; }
 
     /// Hand the block to the caller and give up ownership, so a large built document is not copied out; nothing in the other modes.
@@ -182,6 +183,19 @@ public:
         return out;
     }
 
+    /// Empty a buffer-mode sink and give its block back, so a sink kept between uses holds no memory while empty.
+    void clear() {
+        if (conn_ || fixed_) return;
+        if (heap_) platform::free(heap_);
+        heap_ = nullptr;
+        heapCap_ = heapLen_ = 0;
+        written_ = 0;
+        overflowed_ = false;
+    }
+
+    /// Bytes appended so far in any mode, a socket's included, which `size()` cannot tell: whether a writer wrote anything.
+    size_t written() const { return written_; }
+
     /// Whether a write was refused for want of capacity, which makes the document incomplete.
     bool overflowed() const { return overflowed_; }
 
@@ -189,6 +203,10 @@ public:
     int nameIndex() const { return nameIndex_; }
     /// Ask a palette callback for one option's name rather than the whole set.
     void requestName(uint8_t index) { nameIndex_ = static_cast<int>(index); }
+    /// Which single option object a palette call writes, its comma before it past the first, or -1 for the whole set.
+    int optionIndex() const { return optionIndex_; }
+    /// Ask a palette callback for one option object, so a large set goes out a piece at a time; -1 asks for the whole set again.
+    void requestOption(int index) { optionIndex_ = index; }
 
 private:
     static constexpr size_t STAGE_SIZE = 1024;
@@ -236,6 +254,8 @@ private:
     size_t fixedCap_ = 0;
     bool overflowed_ = false;
     int  nameIndex_ = -1;   // >= 0: this sink is asking for that option's name (see requestName)
+    int  optionIndex_ = -1; // >= 0: this sink is asking for that option object (see requestOption)
+    size_t written_ = 0;    // every byte appended, whatever the mode
 };
 
 /// Escape a string for embedding in a literal, without the surrounding quotes, truncating rather than overflowing its output.

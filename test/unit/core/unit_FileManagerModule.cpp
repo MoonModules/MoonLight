@@ -4,6 +4,9 @@
 
 #include "doctest.h"
 #include "core/system/FileManagerModule.h"
+#include "core/system/FilesystemModule.h"   // boot's load, which reports what it dropped
+#include "core/module/Scheduler.h"
+#include "core/util/ModuleFactory.h"     // a type that exists, in the wrong place
 #include "core/system/HttpServerModule.h"   // parseFilePath — the shared filesystem-path guard
 #include "core/system/SystemModule.h"       // factoryReset: the folder it deletes
 #include "platform/platform.h"
@@ -91,6 +94,43 @@ TEST_CASE("fsSize reports a file past 2 GiB correctly, not as negative") {
     std::filesystem::resize_file(path, static_cast<std::uintmax_t>(kPast2GiB), ec);   // sparse: instant, no real write
     REQUIRE_FALSE(ec);
     CHECK(platform::fsSize("/big.bin") == kPast2GiB);
+}
+
+namespace {
+// A box that takes effects only, so a plain module that exists is refused in it for its role.
+struct DropBox : public MoonModule {
+    const char* acceptsChildRoles() const override { return "effect"; }
+};
+// A plain module, registered so the document can name a type that exists, in the wrong place.
+struct DropPlain : public MoonModule {};
+}  // namespace
+
+// The board migrates nothing, so a module whose type a release renamed is dropped at boot. File Manager, where a backup is taken, names it while the file still holds it.
+TEST_CASE("FileManager: a module dropped at boot shows on its card, path and reason") {
+    static bool registered = false;
+    if (!registered) { ModuleFactory::registerType<DropPlain>("DropPlain"); registered = true; }
+    Rig rig;
+    // Two members fail, for two reasons: the card names the first, which a later one never overwrites.
+    writeFile(std::string(rig.root) + "/.config/DropBox.json", R"({"DropBox":{"Gone":{"type":"GoneThing"},"Misplaced":{"type":"DropPlain"}}})");
+    Scheduler scheduler;
+    auto* files = new FilesystemModule();
+    files->setTypeName("FilesystemModule");
+    files->setScheduler(&scheduler);
+    auto* box = new DropBox();
+    box->setTypeName("DropBox");
+    box->setName("DropBox");
+    auto* manager = new FileManagerModule();
+    manager->setName("File Manager");
+    scheduler.addModule(files);
+    scheduler.addModule(box);
+    scheduler.addModule(manager);
+    scheduler.setup();
+    REQUIRE(manager->status() != nullptr);
+    CHECK(std::strstr(manager->status(), "DropBox.Gone") != nullptr);
+    CHECK(std::strstr(manager->status(), "unknown type") != nullptr);
+    CHECK(manager->severity() == MoonModule::Severity::Warning);
+    CHECK(std::strstr(manager->status(), "Misplaced") == nullptr);   // the later skip, logged but not shown
+    scheduler.release();
 }
 
 TEST_CASE("FileManager: mkdir creates a dir at the target path; delete removes it") {

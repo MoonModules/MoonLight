@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check that mooninstaller/firmwares.json is in sync with the FIRMWARES dict.
+"""Check that mooninstaller/firmwares.json and install-picker.js's DESKTOP_BUILDS are in sync with the FIRMWARES dict.
 
 firmwares.json is a generated projection of build_esp32.py's FIRMWARES (the single
 source of truth), read by the CI release matrix, the ESP Web Tools manifest loops,
@@ -19,7 +19,7 @@ COMMITTED = ROOT / "mooninstaller" / "firmwares.json"
 
 # Reuse the generator's projection so the checker and generator can't disagree.
 sys.path.insert(0, str(ROOT / "moondeck" / "build"))
-from generate_firmwares import build_doc  # noqa: E402
+from generate_firmwares import PICKER, build_doc, picker_source  # noqa: E402
 sys.path.insert(0, str(ROOT / "moondeck" / "check"))
 import _findings  # noqa: E402
 
@@ -48,6 +48,13 @@ def main():
         print(f"Firmware check: {n} variants, DRIFT")
         print("  mooninstaller/firmwares.json is stale — regenerate with:")
         print("  uv run moondeck/build/generate_firmwares.py --out mooninstaller/firmwares.json")
+        sys.exit(1)
+
+    picker = PICKER.read_text(encoding="utf-8")
+    if picker != picker_source(picker, expected):
+        _findings.write("check_firmwares", RULES, [{"rule": "firmware list drift", "message": "install-picker.js DESKTOP_BUILDS differs from the desktop rows of FIRMWARES", "file": PICKER.relative_to(ROOT).as_posix(), "level": "error"}])
+        print(f"Firmware check: {n} variants, DRIFT in install-picker.js")
+        print("  regenerate with: uv run moondeck/build/generate_firmwares.py --out mooninstaller/firmwares.json")
         sys.exit(1)
 
     _findings.write("check_firmwares", RULES, [])
