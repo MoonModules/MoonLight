@@ -3182,8 +3182,20 @@
      "line": "The fixture profile applied per light, for channel order and white.",
      "more": "A reorder or a reboot keeps it. After renaming the profile, re-pick it: the next reboot falls back to the default."
     },
+    "balanceRed": {
+     "line": "One die pulled down to meet the others, which corrects a strip's color cast."
+    },
+    "balanceGreen": {
+     "line": "One die pulled down to meet the others, which corrects a strip's color cast."
+    },
+    "balanceBlue": {
+     "line": "One die pulled down to meet the others, which corrects a strip's color cast."
+    },
     "whiteMode": {
      "line": "How the white channel is derived, shown when the profile carries one."
+    },
+    "whiteLevel": {
+     "line": "The white die's own trim, which the three above cannot reach."
     },
     "fixtureRef": {
      "line": "The profile name an older config saved, read once and then emptied."
@@ -3317,8 +3329,20 @@
      "line": "The fixture profile applied per light, for channel order and white.",
      "more": "A reorder or a reboot keeps it. After renaming the profile, re-pick it: the next reboot falls back to the default."
     },
+    "balanceRed": {
+     "line": "One die pulled down to meet the others, which corrects a strip's color cast."
+    },
+    "balanceGreen": {
+     "line": "One die pulled down to meet the others, which corrects a strip's color cast."
+    },
+    "balanceBlue": {
+     "line": "One die pulled down to meet the others, which corrects a strip's color cast."
+    },
     "whiteMode": {
      "line": "How the white channel is derived, shown when the profile carries one."
+    },
+    "whiteLevel": {
+     "line": "The white die's own trim, which the three above cannot reach."
     },
     "fixtureRef": {
      "line": "The profile name an older config saved, read once and then emptied."
@@ -3363,8 +3387,20 @@
      "line": "The fixture profile applied per light, for channel order and white.",
      "more": "A reorder or a reboot keeps it. After renaming the profile, re-pick it: the next reboot falls back to the default."
     },
+    "balanceRed": {
+     "line": "One die pulled down to meet the others, which corrects a strip's color cast."
+    },
+    "balanceGreen": {
+     "line": "One die pulled down to meet the others, which corrects a strip's color cast."
+    },
+    "balanceBlue": {
+     "line": "One die pulled down to meet the others, which corrects a strip's color cast."
+    },
     "whiteMode": {
      "line": "How the white channel is derived, shown when the profile carries one."
+    },
+    "whiteLevel": {
+     "line": "The white die's own trim, which the three above cannot reach."
     },
     "fixtureRef": {
      "line": "The profile name an older config saved, read once and then emptied."
@@ -3422,8 +3458,20 @@
      "line": "The fixture profile applied per light, for channel order and white.",
      "more": "A reorder or a reboot keeps it. After renaming the profile, re-pick it: the next reboot falls back to the default."
     },
+    "balanceRed": {
+     "line": "One die pulled down to meet the others, which corrects a strip's color cast."
+    },
+    "balanceGreen": {
+     "line": "One die pulled down to meet the others, which corrects a strip's color cast."
+    },
+    "balanceBlue": {
+     "line": "One die pulled down to meet the others, which corrects a strip's color cast."
+    },
     "whiteMode": {
      "line": "How the white channel is derived, shown when the profile carries one."
+    },
+    "whiteLevel": {
+     "line": "The white die's own trim, which the three above cannot reach."
     },
     "fixtureRef": {
      "line": "The profile name an older config saved, read once and then emptied."
@@ -3467,8 +3515,20 @@
      "line": "The fixture profile applied per light, for channel order and white.",
      "more": "A reorder or a reboot keeps it. After renaming the profile, re-pick it: the next reboot falls back to the default."
     },
+    "balanceRed": {
+     "line": "One die pulled down to meet the others, which corrects a strip's color cast."
+    },
+    "balanceGreen": {
+     "line": "One die pulled down to meet the others, which corrects a strip's color cast."
+    },
+    "balanceBlue": {
+     "line": "One die pulled down to meet the others, which corrects a strip's color cast."
+    },
     "whiteMode": {
      "line": "How the white channel is derived, shown when the profile carries one."
+    },
+    "whiteLevel": {
+     "line": "The white die's own trim, which the three above cannot reach."
     },
     "fixtureRef": {
      "line": "The profile name an older config saved, read once and then emptied."
@@ -3523,8 +3583,20 @@
      "line": "The fixture profile applied per light, for channel order and white.",
      "more": "A reorder or a reboot keeps it. After renaming the profile, re-pick it: the next reboot falls back to the default."
     },
+    "balanceRed": {
+     "line": "One die pulled down to meet the others, which corrects a strip's color cast."
+    },
+    "balanceGreen": {
+     "line": "One die pulled down to meet the others, which corrects a strip's color cast."
+    },
+    "balanceBlue": {
+     "line": "One die pulled down to meet the others, which corrects a strip's color cast."
+    },
     "whiteMode": {
      "line": "How the white channel is derived, shown when the profile carries one."
+    },
+    "whiteLevel": {
+     "line": "The white die's own trim, which the three above cannot reach."
     },
     "fixtureRef": {
      "line": "The profile name an older config saved, read once and then emptied."
@@ -3573,8 +3645,20 @@
      "line": "The fixture profile applied per light, for channel order and white.",
      "more": "A reorder or a reboot keeps it. After renaming the profile, re-pick it: the next reboot falls back to the default."
     },
+    "balanceRed": {
+     "line": "One die pulled down to meet the others, which corrects a strip's color cast."
+    },
+    "balanceGreen": {
+     "line": "One die pulled down to meet the others, which corrects a strip's color cast."
+    },
+    "balanceBlue": {
+     "line": "One die pulled down to meet the others, which corrects a strip's color cast."
+    },
     "whiteMode": {
      "line": "How the white channel is derived, shown when the profile carries one."
+    },
+    "whiteLevel": {
+     "line": "The white die's own trim, which the three above cannot reach."
     },
     "fixtureRef": {
      "line": "The profile name an older config saved, read once and then emptied."
@@ -3637,8 +3721,20 @@
      "line": "The fixture profile applied per light, for channel order and white.",
      "more": "A reorder or a reboot keeps it. After renaming the profile, re-pick it: the next reboot falls back to the default."
     },
+    "balanceRed": {
+     "line": "One die pulled down to meet the others, which corrects a strip's color cast."
+    },
+    "balanceGreen": {
+     "line": "One die pulled down to meet the others, which corrects a strip's color cast."
+    },
+    "balanceBlue": {
+     "line": "One die pulled down to meet the others, which corrects a strip's color cast."
+    },
     "whiteMode": {
      "line": "How the white channel is derived, shown when the profile carries one."
+    },
+    "whiteLevel": {
+     "line": "The white die's own trim, which the three above cannot reach."
     },
     "fixtureRef": {
      "line": "The profile name an older config saved, read once and then emptied."
@@ -3689,8 +3785,20 @@
      "line": "The fixture profile applied per light, for channel order and white.",
      "more": "A reorder or a reboot keeps it. After renaming the profile, re-pick it: the next reboot falls back to the default."
     },
+    "balanceRed": {
+     "line": "One die pulled down to meet the others, which corrects a strip's color cast."
+    },
+    "balanceGreen": {
+     "line": "One die pulled down to meet the others, which corrects a strip's color cast."
+    },
+    "balanceBlue": {
+     "line": "One die pulled down to meet the others, which corrects a strip's color cast."
+    },
     "whiteMode": {
      "line": "How the white channel is derived, shown when the profile carries one."
+    },
+    "whiteLevel": {
+     "line": "The white die's own trim, which the three above cannot reach."
     },
     "fixtureRef": {
      "line": "The profile name an older config saved, read once and then emptied."

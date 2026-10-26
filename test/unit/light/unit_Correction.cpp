@@ -642,3 +642,76 @@ TEST_CASE("Dimmer fine is driven wide open with its coarse byte") {
     c.apply(src, out, 3);
     CHECK((out[0] == 255 && out[1] == 255));
 }
+
+// An LED's three emitters are not equally efficient, so a neutral triple can render with a cast. The trim pulls one die down to meet the others, at the output rather than in every effect.
+TEST_CASE("Correction balance: trimming one channel leaves the others untouched") {
+    Correction c;
+    c.balGreen = 128;
+    mm::test::rebuildFromPreset(c, 255, mm::test::PresetOrder::RGB);
+    const uint8_t src[3] = {200, 200, 200};   // the triple a green-cast strip renders wrong
+    uint8_t out[3] = {};
+    c.apply(src, out, 3);
+    CHECK(out[0] == 200);
+    CHECK(out[1] == 100);   // pulled down to match the weaker channels
+    CHECK(out[2] == 200);
+}
+
+// A white phosphor is separate hardware, so an RGB trim must say nothing about it.
+TEST_CASE("Correction balance: an RGB trim does not reach the white die") {
+    Correction c;
+    c.balBlue = 128;
+    mm::test::rebuildFromPreset(c, 255, mm::test::PresetOrder::RGBW);
+    const uint8_t src[3] = {200, 200, 200};
+    uint8_t out[4] = {};
+    c.apply(src, out, 3);
+    CHECK(out[0] == 200);
+    CHECK(out[1] == 200);
+    CHECK(out[2] == 100);   // blue trimmed
+    CHECK(out[3] == 200);   // the white component, from the untrimmed minimum
+}
+
+// The trim pre-scales the index the curve is read at, so the curve still lands last.
+TEST_CASE("Correction balance: the curve and the trim compose") {
+    Correction c;
+    c.balBlue = 128;
+    mm::test::rebuildFromPreset(c, 255, mm::test::PresetOrder::RGB);
+    c.curve = Correction::Curve::Gamma22;
+    c.rebuildBrightness(255);   // the same offsets, the table refilled through the curve
+    const uint8_t src[3] = {200, 200, 200};
+    uint8_t out[3] = {};
+    c.apply(src, out, 3);
+    CHECK(out[0] == 149);         // red: the curve alone, (200/255)^2.2 * 255
+    CHECK(out[2] < out[0]);       // blue: trimmed first, so it reads the curve lower down
+    CHECK(out[2] > 0);
+}
+
+// The white die carries its own trim, since it is often brighter than the trio beside it.
+TEST_CASE("Correction whiteLevel: trims the white die without touching RGB") {
+    const uint8_t src[3] = {200, 160, 120};   // the white component is the minimum, 120
+
+    Correction full;
+    mm::test::rebuildFromPreset(full, 255, mm::test::PresetOrder::RGBW);
+    uint8_t a[4] = {};
+    full.apply(src, a, 3);
+
+    Correction half;
+    half.whiteLevel = 128;
+    mm::test::rebuildFromPreset(half, 255, mm::test::PresetOrder::RGBW);
+    uint8_t b[4] = {};
+    half.apply(src, b, 3);
+
+    CHECK(b[3] < a[3]);                                  // the white die alone moves
+    CHECK((b[0] == a[0] && b[1] == a[1] && b[2] == a[2]));
+}
+
+// A die asked for nothing goes out, rather than resting on the floor that keeps a fade from snapping off.
+TEST_CASE("Correction whiteLevel: zero puts the white die out") {
+    Correction c;
+    c.whiteLevel = 0;
+    mm::test::rebuildFromPreset(c, 255, mm::test::PresetOrder::RGBW);
+    const uint8_t src[3] = {200, 160, 120};
+    uint8_t out[4] = {};
+    c.apply(src, out, 3);
+    CHECK(out[3] == 0);
+    CHECK(out[0] == 200);   // and the trio is untouched
+}

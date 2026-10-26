@@ -74,23 +74,30 @@ public:
         return 0;   // a dangling id renders at the first profile; rebuildCorrection falls back to it too
     }
 
+    /// Whether the profile carries a white die, cold or warm, at either precision; narrower than profileHasSynthChannel, since a profile with amber but no white has nothing the white trim reaches.
+    bool profileHasWhiteDie(uint32_t id) const {
+        return profileHasRole(id, [](ChannelRole r) {
+            return r == ChannelRole::White || r == ChannelRole::WarmWhite
+                || r == ChannelRole::WhiteFine || r == ChannelRole::WarmWhiteFine;
+        });
+    }
+
     /// Whether the profile carries a channel the white mode would synthesize; any channel apply() synthesizes from RGB counts, since one control governs them all.
     bool profileHasSynthChannel(uint32_t id) const {
+        return profileHasRole(id, [](ChannelRole r) {
+            return r == ChannelRole::White || r == ChannelRole::WarmWhite
+                || r == ChannelRole::WhiteFine || r == ChannelRole::WarmWhiteFine
+                || r == ChannelRole::Yellow || r == ChannelRole::UV;
+        });
+    }
+
+    /// Whether any of the profile's channels carries a role `wanted` accepts, the walk both role questions share.
+    bool profileHasRole(uint32_t id, bool (*wanted)(ChannelRole)) const {
         const Profile* p = find(id);
         if (!p) return false;
         const uint8_t* r = roleAt(*p);
-        for (uint8_t c = 0; c < p->channelCount; c++) {
-            switch (static_cast<ChannelRole>(r[c])) {
-                case ChannelRole::White:
-                case ChannelRole::WarmWhite:
-                case ChannelRole::WhiteFine:
-                case ChannelRole::WarmWhiteFine:
-                case ChannelRole::Yellow:
-                case ChannelRole::UV:
-                    return true;
-                default: break;
-            }
-        }
+        for (uint8_t c = 0; c < p->channelCount; c++)
+            if (wanted(static_cast<ChannelRole>(r[c]))) return true;
         return false;
     }
 

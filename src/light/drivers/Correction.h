@@ -47,6 +47,10 @@ struct Correction {
     uint16_t* lut16 = nullptr;
     /// Set by a driver whose output resolves more than a byte, so the 16-bit table is filled whatever the profile.
     bool wide = false;
+    /// Per-channel white balance, 255 = untouched; trimmed down only, since there is no headroom above 255 and raising clips instead.
+    uint8_t balRed = 255, balGreen = 255, balBlue = 255;
+    /// The white die's trim, 255 = untouched; a separate emitter, often brighter than the RGB trio, that the three trims above cannot reach.
+    uint8_t whiteLevel = 255;
     /// Which curve the brightness rebuild fills through; a driver's setting, not a global one.
     Curve curve = Curve::Cie;
     /// Output byte position of the red role; each color role's position is recomputed from the role array.
@@ -107,6 +111,11 @@ struct Correction {
         return linear;
     }
 
+    /// One channel trimmed down by `bal`, where 255 leaves the byte alone. A pre-scale on the index, not a table per trim, which would cost every driver a kilobyte of its inline budget.
+    static uint8_t trim(uint8_t v, uint8_t bal) MM_NONBLOCKING {
+        return bal == 255 ? v : static_cast<uint8_t>((static_cast<uint16_t>(v) * bal + 127) / 255);
+    }
+
     /// Round a curved value to an integer of at most `top`, keeping a lit input above zero so a fade-out does not snap off partway down.
     static int quantize(float out, int top, bool lit) MM_NONBLOCKING {
         int q = static_cast<int>(out + 0.5f);
@@ -155,9 +164,9 @@ struct Correction {
     inline void MM_RAMFUNC applyThrough(const T* lut, const uint8_t* src, T* out, uint8_t srcChannels) const {
         // A plain strip: the curve on each color and nothing optional, the drivers' commonest light.
         if (plainRgb) {
-            if (offRed != kAbsent)   out[offRed] = lut[src[0]];
-            if (offGreen != kAbsent) out[offGreen] = lut[src[1]];
-            if (offBlue != kAbsent)  out[offBlue] = lut[src[2]];
+            if (offRed != kAbsent)   out[offRed] = lut[trim(src[0], balRed)];
+            if (offGreen != kAbsent) out[offGreen] = lut[trim(src[1], balGreen)];
+            if (offBlue != kAbsent)  out[offBlue] = lut[trim(src[2], balBlue)];
             return;
         }
         constexpr T kFull = static_cast<T>(~T{0});   // 255 or 65535
@@ -190,7 +199,7 @@ struct Correction {
         } else {
             w = r < g ? (r < b ? r : b) : (g < b ? g : b);  // min(r,g,b): the white component
             // Computed off the PRE-subtraction values, which only rebalance the RGB emitters.
-            if (offWarmWhite != kAbsent) out[offWarmWhite] = lut[w];
+            if (offWarmWhite != kAbsent) out[offWarmWhite] = lut[trim(w, whiteLevel)];
             // yellow ≈ min(R,G) (the shared red+green component).
             if (offYellow != kAbsent)    out[offYellow] = lut[r < g ? r : g];
             // Driven from the blue with no red or green to pair with, so it stays dark on warm colors.
@@ -201,20 +210,22 @@ struct Correction {
             // White last: it is the only emitter that rebalances RGB.
             if (offWhite != kAbsent) {
                 if (whiteMode == WhiteMode::Accurate) { r -= w; g -= w; b -= w; }  // pull white out of RGB
-                out[offWhite] = lut[w];
+                out[offWhite] = lut[trim(w, whiteLevel)];
             }
         }
         // The curve, applied ONCE: everything above this line is linear light.
-        if (offRed != kAbsent)   out[offRed] = lut[r];
-        if (offGreen != kAbsent) out[offGreen] = lut[g];
-        if (offBlue != kAbsent)  out[offBlue] = lut[b];
+        if (offRed != kAbsent)   out[offRed] = lut[trim(r, balRed)];
+        if (offGreen != kAbsent) out[offGreen] = lut[trim(g, balGreen)];
+        if (offBlue != kAbsent)  out[offBlue] = lut[trim(b, balBlue)];
         if constexpr (sizeof(T) == 1) { if (hasFine) applyFine(r, g, b, w, out); }
     }
 
     /// Hot path, 16-bit profiles only: each color channel with a fine role as its high and low byte from the same table, and a fine dimmer wide open.
     void applyFine(uint8_t r, uint8_t g, uint8_t b, uint8_t w, uint8_t* out) const {
         if (offDimmerFine != kAbsent) out[offDimmerFine] = 255;   // wide open is 65535, not 65280
-        const uint8_t value[5] = {r, g, b, w, w};   // both whites carry the white component, 0 when none is synthesized
+        // Trimmed here as the coarse bytes are, so a fine channel is balanced exactly as an 8-bit one.
+        const uint8_t value[5] = {trim(r, balRed), trim(g, balGreen), trim(b, balBlue),
+                                  trim(w, whiteLevel), trim(w, whiteLevel)};
         const uint8_t coarse[5] = {offRed, offGreen, offBlue, offWhite, offWarmWhite};
         const uint8_t fine[5] = {offRedFine, offGreenFine, offBlueFine, offWhiteFine, offWarmWhiteFine};
         for (uint8_t k = 0; k < 5; k++) {
