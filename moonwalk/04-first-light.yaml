@@ -127,7 +127,7 @@ processes:
         say: Add an effect that leaves lights dark.
         when: { add: { module: Layer, type: MetaballsEffect } }
         detail: |
-          Metaballs lights only where its blobs are, so the layer below shows through everywhere else. An effect that fills every light covers the one below completely in `alpha`.
+          In the default `additive`, Metaballs adds light only where its blobs are, so the layer below shows through everywhere else. In `alpha` at full opacity even its dark lights cover the layer below.
       - id: blend
         section: Mix them
         say: Pick how it blends.

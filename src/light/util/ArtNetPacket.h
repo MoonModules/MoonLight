@@ -60,9 +60,9 @@ inline size_t buildArtDmxPacket(uint8_t* outBuf, uint16_t universe, uint8_t sequ
     return ARTNET_HEADER_SIZE + dataLen;
 }
 
-/// Parse and validate a data packet, zero-copy; the version and sequence are deliberately not checked.
+/// Parse and validate a data packet, zero-copy, reporting its sequence when asked (0 is a sender without one); the version is deliberately not checked.
 inline bool parseArtDmxPacket(const uint8_t* pkt, size_t len, uint16_t& universeOut,
-                              const uint8_t*& dataOut, uint16_t& dataLenOut) {
+                              const uint8_t*& dataOut, uint16_t& dataLenOut, uint8_t* sequenceOut = nullptr) {
     if (!pkt || len < ARTNET_HEADER_SIZE) return false;
     if (std::memcmp(pkt, "Art-Net", 8) != 0) return false;
     if (pkt[8] != 0x00 || pkt[9] != 0x50) return false;   // OpDmx only
@@ -71,6 +71,7 @@ inline bool parseArtDmxPacket(const uint8_t* pkt, size_t len, uint16_t& universe
     universeOut = static_cast<uint16_t>(pkt[14] | (pkt[15] << 8));
     dataOut = pkt + ARTNET_HEADER_SIZE;
     dataLenOut = dataLen;
+    if (sequenceOut) *sequenceOut = pkt[12];
     return true;
 }
 

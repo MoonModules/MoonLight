@@ -244,9 +244,11 @@ struct DriverBase {
     int start = 0;
     void defineControls() {
         if (hasCorrectionControls()) defineCorrectionControls();
+        if (hasWindowControls()) addWindowControls();
         defineDriverControls();
     }
     virtual bool hasCorrectionControls() const { return true; }
+    virtual bool hasWindowControls() const { return false; }
     void defineCorrectionControls() { controls_.addControl("localBrightness", localBrightness); }
     void addWindowControls() { controls_.addControl("start", start); }
     virtual void defineDriverControls() {}
@@ -254,7 +256,8 @@ struct DriverBase {
 struct WireDriver : DriverBase {
     /// The data pins.
     int pins = 0;
-    void defineDriverControls() override { controls_.addControl("pins", pins); addWindowControls(); }
+    bool hasWindowControls() const override { return true; }
+    void defineDriverControls() override { controls_.addControl("pins", pins); }
 };
 struct BridgeDriver : DriverBase {
     /// The bridge's address.
@@ -276,6 +279,7 @@ def test_a_base_classs_template_method_and_its_helpers_publish_the_controls_a_dr
     """A driver adds its own controls in the hook its base's `defineControls` calls, between the base's own blocks, and a block the driver opts out of is not its control."""
     ci, tu = parsed(tmp_path / "Drivers.h", DRIVERS)
     cls = {c.spelling: c for c in tu.cursor.walk_preorder() if c.kind == ci.CursorKind.STRUCT_DECL and c.is_definition()}
+    assert list(gen_help.controls_of(cls["WireDriver"])) == ["localBrightness", "start", "pins"]
     assert gen_help.controls_of(cls["WireDriver"]) == {"localBrightness": "This driver's dim.", "pins": "The data pins.",
                                                       "start": "The first light it reads.\n@guide Two drivers can share one buffer."}
     # A negated branch on a literal `false` runs, and a run of `///` above an `add…` line is that control's comment.

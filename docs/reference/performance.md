@@ -341,16 +341,28 @@ What a received frame costs and how much of it arrives, measured 2026-10-14 with
 | 12,288 lights, a serpentine layout placed on the grid (mapped twice) | 1.1 ms | 4.5 ms |
 | 64×64 serpentine sweep alone on its layer, the whole tick | | 2.96 ms in one copy, 5.83 ms mapped twice |
 
-**What arrives** at 12,288 lights, 40 frames a second sent as 1,040 DDP packets, mapped by the receiver:
+**What arrives, P4 Ethernet to P4 Ethernet**, measured 2026-10-26: the receiver running only Network Receive, the median of seven one-second readings of both cards' status.
 
-| Sender to receiver | Packets/s | Frames/s | Receiver tick |
-|---|---|---|---|
-| S3 WiFi to S3 WiFi | 600 to 980 | 20 to 23 | 6.8 to 8.2 ms |
-| P4 Ethernet to S3 WiFi | 616 | 23 | 5.8 ms |
-| S3 WiFi to P4 Ethernet | 984 | 32 | 0.3 ms |
-| P4 Ethernet to P4 Ethernet | 790 to 846 | 8 to 19 | 0.8 ms |
+| Grid | Protocol | Send cap | Sent fps, packets/s | Received fps, packets/s | Lost/s |
+|---|---|---|---|---|---|
+| 64×64 | DDP | 120 | 115, 1,035 | 115, 1,035 | 0 |
+| 64×64 | Art-Net | 120 | 115, 2,875 | 115, 2,882 | 0 |
+| 128×96 | DDP | 120 | 79, 2,054 | 76, 2,004 | 0 |
+| 128×96 | Art-Net | 60 | 54, 3,942 | 51, 3,289 | 482 |
+| 128×96 | E1.31 | 60 | 54, 3,942 | 51, 3,366 | 667 |
+| 128×96 | Art-Net | 120 | 86, 6,278 | 36, 1,329 | 4,791 |
+| 128×128 | DDP | 40 | 35, 1,225 | 34, 1,213 | 0 |
+| 128×128 | DDP | 120 | 70, 2,450 | 29, 2,249 | 129 |
+| 128×128 | Art-Net | 30 | 27, 2,619 | 27, 2,601 | 71 |
+| 192×192 | DDP | 30 | 21, 1,617 | 20, 1,615 | 25 |
+| 192×192 | DDP | 120 | 33, 2,541 | 5, 1,424 | 1,062 |
+| 256×256 | DDP | 20 | 13, 1,781 | 13, 1,504 | 291 |
 
-The loss is the sender's burst: the access point drops it on WiFi, and on Ethernet the push packet at its end is the one most often lost. A [Network Send](../moonmodules/light/drivers.md#networksend) `packet_gap` of 0.5 ms recovered 96% of the packets on WiFi, and took P4 to P4 to 26 to 36 frames a second.
+**An ESP32-S3 over WiFi**, the 64×64 HUB75 board, receiving from a P4 the same day: 124 of 125 frames a second in DDP with none lost, and 123 of 124 in Art-Net, 3,073 of 3,100 packets.
+
+**The receiver takes about 3,000 packets a second whole**, in any protocol: 64×64 at 120 frames a second, 128×96 DDP at 90, 128×128 DDP at 36. A sender's `fps` keeps a stream below it. Art-Net and E1.31 carry a third of DDP's lights a packet, so they reach it at a third of the grid. Past it frames break up, as a lost packet takes its frame's push or a universe with it. Mapped by the sender changes nothing here, since it saves the render's copy on core 0 and the limit is core 1.
+
+**Where a packet's time goes.** Ethernet's receive task and lwIP's take about 160 µs of core 1 per packet, and Network Receive's task more on top, most of it in lwIP's socket calls. Far past the ceiling those two network tasks fill core 1 and the receive task gets none, which is receive livelock: 128×96 Art-Net at 7,300 packets a second arrives as 200. A millisecond's wait after each drain, so one wake drains several packets, took Network Receive's task from 56% to 36% of core 1 at 3,000 packets a second. Ranking the Ethernet task below the receive task ends the livelock, but loses packets below the ceiling instead, so it keeps its default 15. lwIP's code in IRAM and its buffers in internal RAM changed little. The task table of a `--task-cpu-stats` build shows each task's share.
 
 ## Prepare only what a change reshapes
 

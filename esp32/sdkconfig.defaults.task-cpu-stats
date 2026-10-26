@@ -4,3 +4,5 @@
 # measured). The esp_timer clock source is the cheap default for the run-time counter.
 CONFIG_FREERTOS_GENERATE_RUN_TIME_STATS=y
 CONFIG_FREERTOS_RUN_TIME_STATS_USING_ESP_TIMER=y
+# Each task's core in the task table, so a row shows where it ran.
+CONFIG_FREERTOS_VTASKLIST_INCLUDE_COREID=y

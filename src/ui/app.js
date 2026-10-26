@@ -3055,10 +3055,7 @@ function createControl(moduleName, moduleType, ctrl, writeTo = (name, value) => 
         });
         row.appendChild(input);
         resetButton(() => { input.value = numberFieldText(input, def); });
-        return row;
-    }
-
-    switch (ctrl.type) {
+    } else switch (ctrl.type) {
         case "uint8": {
             const input = document.createElement("input");
             input.type = "range";

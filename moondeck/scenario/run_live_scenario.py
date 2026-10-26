@@ -16,6 +16,7 @@ import signal
 import json
 import os
 import re
+import statistics
 import subprocess
 import sys
 import time
@@ -208,10 +209,10 @@ def _floor_verdict(metric: str, value, floor, tolerance_pct: float):
 def _control_value(module: dict, name: str):
     """Return the value of a named control on a module, or None.
 
-    `enabled` is a field of the module itself rather than one of its controls, so it is read from there.
+    `enabled` and `status` are fields of the module itself rather than controls, so they are read from there.
     """
-    if name == "enabled":
-        return module.get("enabled")
+    if name in ("enabled", "status"):
+        return module.get(name)
     for ctrl in module.get("controls", []):
         if ctrl.get("name") == name:
             return ctrl.get("value")
@@ -537,7 +538,7 @@ def _reboot_and_wait(client, target: str, timeout_s: float = 60.0) -> str:
 
 
 def _read_values(client, metrics: dict, names: list, boards: dict) -> dict:
-    """The values a measure step names: "fps" and "Module.tick" from /api/system, "Module.control" from /api/state; "board:" in front reads another board."""
+    """The values a measure step names: "fps" and "Module.tick" from /api/system, "Module.control" from /api/state, "Module.status[unit]" for the number before that unit in its status; "board:" in front reads another board."""
     ticks = {m.get("name"): m.get("us") for m in metrics.get("modules", []) or []}
     out = {}
     state = None
@@ -557,16 +558,36 @@ def _read_values(client, metrics: dict, names: list, boards: dict) -> dict:
             out[name] = ticks.get(mod, "-")
             continue
         if state is None:
-            state = client.get("/api/state")
-        out[name] = "-"
+            try:
+                state = client.get("/api/state")
+            except Exception as e:   # a device too busy to answer whole reads as unknown, and the run goes on to its restore
+                state = {"error": f"? ({type(e).__name__})"}
+        out[name] = state.get("error", "-")
         stack = list(state.get("modules", []))
         while stack:
             m = stack.pop()
             if m.get("name") == mod:
-                out[name] = _control_value(m, key)
+                unit = re.fullmatch(r"status\[(.+)\]", key)
+                out[name] = status_number(m.get("status"), unit.group(1)) if unit else _control_value(m, key)
                 break
             stack.extend(m.get("children", []) or [])
     return out
+
+
+def median_reads(reads: list) -> dict:
+    """Each value's median over several reads, where every read of it is a number; else its last read."""
+    out = {}
+    for key in reads[-1]:
+        values = [r.get(key) for r in reads]
+        numbers = [v for v in values if isinstance(v, (int, float)) and not isinstance(v, bool)]
+        out[key] = statistics.median(numbers) if len(numbers) == len(values) else values[-1]
+    return out
+
+
+def status_number(status, unit: str):
+    """The number in front of `unit` in a status line, such as 41 from "41 fps, 2197 packets/s", or "-" when it has none."""
+    found = re.search(rf"(\d+) {re.escape(unit)}(?!\w)", status or "")
+    return int(found.group(1)) if found else "-"
 
 
 def _sum_dynamic_bytes(state: dict) -> int:
@@ -1374,9 +1395,18 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
                 results["steps"].append(step_result)
                 break  # stop step loop; cleanup runs below
             step_result["metrics"] = metrics
-            # `read` names extra values to report: "Module.control" from the state, or "Module.tick" for a module's tick time.
+            # `read` names extra values to report: "Module.control" from the state, or "Module.tick" for a module's tick time; `samples` reads them that many seconds and keeps each one's median.
             if step.get("read"):
-                step_result["read"] = _read_values(client, metrics, step["read"], {b: s[0] for b, s in board_state.items()})
+                boards_now = {b: s[0] for b, s in board_state.items()}
+                reads = [_read_values(client, metrics, step["read"], boards_now)]
+                for _ in range(int(step.get("samples", 1)) - 1):
+                    time.sleep(1.0)
+                    try:
+                        system = client.get("/api/system")
+                    except Exception:
+                        system = {}
+                    reads.append(_read_values(client, system, step["read"], boards_now))
+                step_result["read"] = median_reads(reads)
                 print("  READ     " + "  ".join(f"{k}={v}" for k, v in step_result["read"].items()))
             tick_us = metrics.get("tickTimeUs", 0)
             fps = 1000000 // tick_us if tick_us > 0 else metrics.get("fps", 0)

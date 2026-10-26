@@ -1308,12 +1308,6 @@
        "url": "https://moonmodules.org/MoonLight/reference/tests.html#networkreceiveeffect:live:scenario_NetworkReceive_two_boards"
       }
      ]
-    },
-    "packets_per_s": {
-     "line": "Packets received in the last second, read-only."
-    },
-    "frames_per_s": {
-     "line": "Frames received in the last second, read-only."
     }
    },
    "role": "effect",
@@ -3118,6 +3112,13 @@
    "attribution": "[Philips Hue](https://moonmodules.org/MoonLight/reference/attributions.html#philips-hue)",
    "image": "https://moonmodules.org/MoonLight/assets/light/drivers/HueDriver.png",
    "controls": {
+    "start": {
+     "line": "The first light of the shared buffer this driver reads."
+    },
+    "count": {
+     "line": "How many lights it reads from `start`; 0 reads them all.",
+     "more": "So drivers share one buffer: a status LED takes `start 0, count 1` and the strip `start 1`."
+    },
     "bridgeIp": {
      "line": "The bridge's LAN IP, entered in the UI (4 octets)."
     },
@@ -3132,13 +3133,6 @@
     },
     "light": {
      "line": "Narrows the driven lights to one light of that room; 0 is All."
-    },
-    "start": {
-     "line": "The first light of the shared buffer this driver reads."
-    },
-    "count": {
-     "line": "How many lights it reads from `start`; 0 reads them all.",
-     "more": "So drivers share one buffer: a status LED takes `start 0, count 1` and the strip `start 1`."
     }
    },
    "role": "driver",
@@ -3149,12 +3143,12 @@
   },
   "NetworkSendDriver": {
    "line": "Streams the buffer over UDP as Art-Net, E1.31 or DDP, its packets paced so receivers keep up, to Falcon and Advatek controllers, xLights and LedFx.",
-   "summary": "One driver feeds many receivers, each taking a contiguous run of the window under its own address. A wall of tubes is one driver, the twin of one LED driver fanning out to several lanes.",
+   "summary": "One driver feeds many receivers, each a run of the window at its own address, as an LED driver fans out over pins.",
    "attribution": "[Art-Net](https://moonmodules.org/MoonLight/reference/attributions.html#art-net), [E1.31](https://moonmodules.org/MoonLight/reference/attributions.html#e1-31), [DDP](https://moonmodules.org/MoonLight/reference/attributions.html#ddp), [troyhacks](https://moonmodules.org/MoonLight/reference/attributions.html#troyhacks)",
    "guide": [
     {
      "title": "Mixed fixtures",
-     "text": "A chain of mixed fixtures needs one driver per fixture type, each with its own `start`, `count` and `fixture`, the richest motion fixture first.\n\n| driver | window | fixtures |\n|---|---|---|\n| A | `start 0`, `count 2` | the two big pan/tilt/zoom heads |\n| B | `start 2`, `count 4` | four smaller pan/tilt heads |\n| C | `start 6`, `count 10` | ten RGBW pars |"
+     "text": "Mixed fixtures take a driver per fixture type, each with its own `start`, `count` and `fixture`, the richest motion fixture first.\n\n| driver | window | fixtures |\n|---|---|---|\n| A | `start 0`, `count 2` | the two big pan/tilt/zoom heads |\n| B | `start 2`, `count 4` | four smaller pan/tilt heads |\n| C | `start 6`, `count 10` | ten RGBW pars |"
     }
    ],
    "image": "https://moonmodules.org/MoonLight/assets/light/drivers/NetworkSendDriver.png",
@@ -3175,6 +3169,13 @@
     "fixtureRef": {
      "line": "The profile name an older config saved, read once and then emptied."
     },
+    "start": {
+     "line": "The first light of the shared buffer this driver reads."
+    },
+    "count": {
+     "line": "How many lights it reads from `start`; 0 reads them all.",
+     "more": "So drivers share one buffer: a status LED takes `start 0, count 1` and the strip `start 1`."
+    },
     "protocol": {
      "line": "The wire protocol: Art-Net, E1.31 or DDP; the port follows.",
      "tests": [
@@ -3190,7 +3191,7 @@
     },
     "addressing": {
      "line": "How packets travel: unicast, Art-Net broadcast or E1.31 multicast.",
-     "more": "Art-Net 4 requires unicast; broadcast loads every host. E1.31 `multicast` needs [IGMP snooping](https://moonmodules.org/MoonLight/explanation/architecture/moonlight.html#multicast-and-igmp-snooping), and the status says when it is dropped.",
+     "more": "Art-Net 4 requires unicast; broadcast loads every host. E1.31 `multicast` needs [IGMP snooping](https://moonmodules.org/MoonLight/explanation/architecture/moonlight.html#multicast-and-igmp-snooping).",
      "tests": [
       {
        "title": "NetworkSend one sender many receivers",
@@ -3200,27 +3201,31 @@
     },
     "hosts": {
      "line": "Receiver addresses or names, in fan-out order; blank idles.",
-     "more": "A name resolves in the background, `.local` by mDNS and anything else by DNS. It sends nothing until it first resolves, keeps its last address while it stops answering, and the status names the ones still waiting."
+     "more": "A name resolves by mDNS for `.local`, else by DNS; it sends once resolved, keeps its last address while silent, and the status names the ones waiting."
     },
     "lightsPerHost": {
      "line": "Lights per receiver; blank splits evenly, one number to all, a list each."
     },
     "universe_start": {
-     "line": "The first universe, emitted verbatim with no one-based adjust; DDP ignores it."
+     "line": "The first universe, sent as is; DDP ignores it."
     },
-    "start": {
-     "line": "The first light of the shared buffer this driver reads."
-    },
-    "count": {
-     "line": "How many lights it reads from `start`; 0 reads them all.",
-     "more": "So drivers share one buffer: a status LED takes `start 0, count 1` and the strip `start 1`."
+    "channels_per_universe": {
+     "line": "Channels each Art-Net or E1.31 universe carries, exactly; DDP ignores it.",
+     "more": "A light stays in one universe when its channels divide this: **510** does for RGB, RGBWW and 6 channels, **512** fills every universe. RGBW takes 508, a 13-channel head 507."
     },
     "fps": {
-     "line": "Frame-rate limit, so a fast render tick does not flood the LAN."
+     "line": "Frame-rate limit, so a fast render tick does not flood the LAN.",
+     "more": "It sets the load, fps times a frame's packets a second: lowering it eases a receiver.",
+     "tests": [
+      {
+       "title": "NetworkReceive two boards",
+       "url": "https://moonmodules.org/MoonLight/reference/tests.html#networkreceiveeffect:live:scenario_NetworkReceive_two_boards"
+      }
+     ]
     },
     "packet_gap": {
-     "line": "Microseconds between a frame's packets; 0 sends a burst.",
-     "more": "The pause lets a receiver keep up, sent from a task so the render loop never waits."
+     "line": "Microseconds from the start of one packet to the next; 0 sends a burst.",
+     "more": "The pause lets a receiver keep up, sent from a task. A frame fills at most 80% of its period, so a high fps or a large grid shrinks the gap."
     }
    },
    "role": "driver",
@@ -3449,6 +3454,13 @@
     "fixtureRef": {
      "line": "The profile name an older config saved, read once and then emptied."
     },
+    "start": {
+     "line": "The first light of the shared buffer this driver reads."
+    },
+    "count": {
+     "line": "How many lights it reads from `start`; 0 reads them all.",
+     "more": "So drivers share one buffer: a status LED takes `start 0, count 1` and the strip `start 1`."
+    },
     "format": {
      "line": "The card's wire format."
     },
@@ -3459,13 +3471,6 @@
     "interface": {
      "line": "The network adapter the frames go out on.",
      "more": "`none (capture only)` records frames without sending. Sending needs root or `CAP_NET_RAW` on Linux, BPF on macOS, Npcap on Windows ([steps](https://moonmodules.org/MoonLight/reference/hardware/panel-cards.html#6-from-a-desktop))."
-    },
-    "start": {
-     "line": "The first light of the shared buffer this driver reads."
-    },
-    "count": {
-     "line": "How many lights it reads from `start`; 0 reads them all.",
-     "more": "So drivers share one buffer: a status LED takes `start 0, count 1` and the strip `start 1`."
     },
     "fps": {
      "line": "Frame-rate limit, so a fast render tick does not saturate the link."

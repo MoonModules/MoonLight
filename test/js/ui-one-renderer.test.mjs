@@ -21,6 +21,13 @@ test("every field createControl draws carries the key a list rebuild restores it
     assert.ok(fnSource("updateModuleControls").includes('querySelectorAll("[data-dragkey]")'));
 });
 
+// A number field once returned before the shared tail, so start, count and every other number field showed no help.
+test("every control createControl draws, a number field too, ends in the one tail that adds its help", () => {
+    const body = fnSource("createControl");
+    assert.equal(body.split("return row;").length - 1, 1);
+    assert.ok(/controlHelp\(row,[^\n]*\n\s*return row;/.test(body));
+});
+
 test("the card's save-as-preset name is the surface's own name control", () => {
     const popup = fnSource("openDocumentPopup");
     assert.ok(popup.includes('presetNameControl("preset name")'));

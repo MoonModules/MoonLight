@@ -31,6 +31,12 @@ For a device still on old firmware (no Backup button yet), the [installer page](
 
 ## Unreleased
 
+### Network Send fills each universe with `channels_per_universe` channels exactly
+
+**Action: on a Network Send driving fixtures whose channels do not divide 510 over Art-Net or E1.31, such as RGBW strips (4) or a 13-channel moving head, set `channels_per_universe` to a multiple of the fixture's channels, 508 or 507, where the receiver needs each fixture inside one universe. RGB, RGBWW and 6-channel fixtures need nothing.**
+
+A universe carries exactly `channels_per_universe` channels, 510 by default, as Network Receive and xLights read them, so a fixture can straddle two universes. It was cut down to whole fixtures, 508 channels for RGBW, which a receiver reading 510 placed one channel off from the second universe on. RGB at 510 is unchanged.
+
 ### A driver's `count` of 0 reads to the last light, and the window counts past 65535
 
 **Action: *re-set a control* on a display of more than 65535 lights. Where a driver's `count` is 65535, the old default reading to the last light, set it to 0. A 65535 set as a window's length stays.**

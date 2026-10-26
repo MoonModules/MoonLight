@@ -252,6 +252,7 @@ nav:
           - LED drivers: reference/hardware/led-drivers.md
           - HUB75 panels: reference/hardware/hub75-panels.md
           - Receiving cards for LED panels: reference/hardware/panel-cards.md
+          - TV backlight: reference/hardware/tv-backlight.md
   # Contributors: how it is built, the rules, and the references a change needs.
   - Developers:
       - Architecture:
@@ -270,6 +271,8 @@ nav:
           - MoonDeck: explanation/architecture/moondeck.md
           - Web UI: moonmodules/core/ui.md
       - Why we write our own code: explanation/why-we-write-our-own.md
+      # The bugs and fixes MoonLight waits on in the projects it builds on, each with its workaround and when it goes.
+      - Issues in other projects: reference/issues-in-other-projects.md
       - Power functions: moonmodules/light/power-functions.md
       - Picture and channel-data sources: reference/adding-a-stream-source.md
       - Testing strategy: reference/testing.md

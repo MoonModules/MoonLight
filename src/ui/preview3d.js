@@ -583,6 +583,7 @@ function setupLayout() {
     };
     const stopSplit = () => {
         if (!splitFrom) return;
+        if (raf) { cancelAnimationFrame(raf); raf = 0; if (pending) pending(); }   // a release before the next frame keeps the last move
         splitFrom = null;
         split.classList.remove("dragging");
         document.body.classList.remove("cards-resizing", "rows");

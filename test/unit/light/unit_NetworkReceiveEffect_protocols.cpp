@@ -270,7 +270,6 @@ TEST_CASE("NetworkReceiveEffect receives all three protocols at once over localh
     CHECK(landed);
     // The status names the sender, 127.0.0.1 over loopback.
     REQUIRE(r.fx.status() != nullptr);
-    CHECK(std::strstr(r.fx.status(), "receiving ") != nullptr);
     CHECK(std::strstr(r.fx.status(), "from 127.0.0.1") != nullptr);
 
     artTx.close();

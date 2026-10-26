@@ -93,12 +93,12 @@ def findings(changed: set, out=sys.stdout, directory: Path | None = None) -> lis
     return rows
 
 
-def changed_files(base: str, *filters: str) -> list:
-    """The paths the branch changes since it left `base`, as the pull request shows them; `filters` narrow it as git diff's own arguments do."""
-    r = subprocess.run(["git", "diff", "--name-only", *filters, f"{base}...HEAD"], cwd=ROOT, capture_output=True, text=True, check=False)
+def changed_files(base: str, *filters: str, root: Path = ROOT) -> list:
+    """The paths the branch changes since it left `base`, as the pull request shows them; `filters` narrow it as git diff's own arguments do, a `--` and paths last."""
+    r = subprocess.run(["git", "diff", "--name-only", "-z", f"{base}...HEAD", *filters], cwd=root, capture_output=True, text=True, check=False)
     if r.returncode != 0:
         sys.exit(f"github_annotations: git does not know {base} ({r.stderr.strip()}); pass the ref the branch left with --base")
-    return r.stdout.split()
+    return [p for p in r.stdout.split("\0") if p]
 
 
 def generated(base: str, out=sys.stdout) -> list:

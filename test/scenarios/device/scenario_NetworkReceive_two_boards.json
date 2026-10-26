@@ -4,14 +4,18 @@
   "also": [
     "NetworkSendDriver",
     "Layer",
-    "GridLayout"
+    "GridLayout",
+    "PreviewDriver"
   ],
+  "instances": {
+    "Preview": "PreviewDriver"
+  },
   "mode": "mutate",
   "live_only": true,
   "boards": [
     "sender"
   ],
-  "description": "Two boards: the sender board sends with Network Send, this device receives with Network Receive. Sweeps grid size, identity against serpentine layout, mapped by the receiver against the sender, one layer against two, and the three protocols, reading Network Receive's tick and its packets and frames per second against what the sender sent.",
+  "description": "Two boards: the sender board sends with Network Send, this device receives with Network Receive, each running only what the scenario builds. It sweeps grid size, identity against serpentine layout, mapped by the receiver against the sender, and one layer against two at 40 frames a second; then, with the sender uncapped, the grid from 64x64 to 256x256 in DDP, Art-Net and E1.31; then the preview off, unwatched and watched. Each step reads both cards' status: frames, packets and lost packets a second, sent against received.",
   "top": [
     "Layouts",
     "Effects"
@@ -34,6 +38,26 @@
       "op": "apply_state",
       "document": {
         "Effects": {
+          "$patch": "replace"
+        }
+      }
+    },
+    {
+      "name": "sender-clear-drivers",
+      "device": "sender",
+      "op": "apply_state",
+      "document": {
+        "Drivers": {
+          "$patch": "replace"
+        }
+      }
+    },
+    {
+      "name": "sender-clear-services",
+      "device": "sender",
+      "op": "apply_state",
+      "document": {
+        "Services": {
           "$patch": "replace"
         }
       }
@@ -97,6 +121,24 @@
       "op": "apply_state",
       "document": {
         "Effects": {
+          "$patch": "replace"
+        }
+      }
+    },
+    {
+      "name": "receiver-clear-drivers",
+      "op": "apply_state",
+      "document": {
+        "Drivers": {
+          "$patch": "replace"
+        }
+      }
+    },
+    {
+      "name": "receiver-clear-services",
+      "op": "apply_state",
+      "document": {
+        "Services": {
           "$patch": "replace"
         }
       }
@@ -174,13 +216,15 @@
     },
     {
       "name": "16x16-identity-receiver",
-      "description": "256 lights, identity layout, mapped by the receiver, DDP at 40 fps.",
       "op": "measure",
       "read": [
         "sender:fps",
+        "sender:Send.status[fps]",
+        "sender:Send.status[packets/s]",
+        "NetworkReceive.status[fps]",
+        "NetworkReceive.status[packets/s]",
+        "NetworkReceive.status[lost/s]",
         "NetworkReceive.tick",
-        "NetworkReceive.packets_per_s",
-        "NetworkReceive.frames_per_s",
         "Drivers.tick"
       ],
       "observed": {
@@ -258,27 +302,27 @@
         },
         "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
           "tick_us": {
-            "p50": 70,
-            "p95": 83,
-            "min": 64,
-            "max": 83,
-            "n": 6
+            "p50": 116,
+            "p95": 1327,
+            "min": 56,
+            "max": 1327,
+            "n": 5
           },
           "free_heap": {
-            "p50": 33857083,
-            "p95": 33917559,
-            "min": 33828655,
-            "max": 33917559,
-            "n": 6
+            "p50": 33857176,
+            "p95": 33884240,
+            "min": 30857324,
+            "max": 33884240,
+            "n": 5
           },
           "max_alloc_block": {
-            "p50": 192512,
-            "p95": 249856,
-            "min": 159744,
-            "max": 249856,
-            "n": 6
+            "p50": 184320,
+            "p95": 303104,
+            "min": 172032,
+            "max": 303104,
+            "n": 5
           },
-          "last_updated": "2026-10-14"
+          "last_updated": "2026-10-26"
         },
         "host=teensy41 sender=esp32p4rev1-eth": {
           "tick_us": {
@@ -328,7 +372,9 @@
           },
           "last_updated": "2026-10-14"
         }
-      }
+      },
+      "description": "256 lights, identity layout, mapped by the receiver, DDP at 40 fps.",
+      "samples": 5
     },
     {
       "name": "16x16-identity-mapped-by-sender-set",
@@ -339,13 +385,15 @@
     },
     {
       "name": "16x16-identity-sender",
-      "description": "256 lights, identity layout, mapped by the sender, DDP at 40 fps.",
       "op": "measure",
       "read": [
         "sender:fps",
+        "sender:Send.status[fps]",
+        "sender:Send.status[packets/s]",
+        "NetworkReceive.status[fps]",
+        "NetworkReceive.status[packets/s]",
+        "NetworkReceive.status[lost/s]",
         "NetworkReceive.tick",
-        "NetworkReceive.packets_per_s",
-        "NetworkReceive.frames_per_s",
         "Drivers.tick"
       ],
       "observed": {
@@ -423,27 +471,27 @@
         },
         "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
           "tick_us": {
-            "p50": 64,
-            "p95": 76,
-            "min": 64,
-            "max": 76,
-            "n": 6
+            "p50": 72,
+            "p95": 1209,
+            "min": 56,
+            "max": 1209,
+            "n": 5
           },
           "free_heap": {
-            "p50": 33856435,
-            "p95": 33917575,
-            "min": 33829071,
-            "max": 33917575,
-            "n": 6
+            "p50": 33858236,
+            "p95": 33884252,
+            "min": 30856992,
+            "max": 33884252,
+            "n": 5
           },
           "max_alloc_block": {
-            "p50": 192512,
-            "p95": 249856,
-            "min": 163840,
-            "max": 249856,
-            "n": 6
+            "p50": 184320,
+            "p95": 303104,
+            "min": 172032,
+            "max": 303104,
+            "n": 5
           },
-          "last_updated": "2026-10-14"
+          "last_updated": "2026-10-26"
         },
         "host=teensy41 sender=esp32p4rev1-eth": {
           "tick_us": {
@@ -493,7 +541,9 @@
           },
           "last_updated": "2026-10-14"
         }
-      }
+      },
+      "description": "256 lights, identity layout, mapped by the sender, DDP at 40 fps.",
+      "samples": 5
     },
     {
       "name": "16x16-serpentine",
@@ -511,13 +561,15 @@
     },
     {
       "name": "16x16-serpentine-receiver",
-      "description": "256 lights, serpentine layout, mapped by the receiver, DDP at 40 fps.",
       "op": "measure",
       "read": [
         "sender:fps",
+        "sender:Send.status[fps]",
+        "sender:Send.status[packets/s]",
+        "NetworkReceive.status[fps]",
+        "NetworkReceive.status[packets/s]",
+        "NetworkReceive.status[lost/s]",
         "NetworkReceive.tick",
-        "NetworkReceive.packets_per_s",
-        "NetworkReceive.frames_per_s",
         "Drivers.tick"
       ],
       "observed": {
@@ -595,27 +647,27 @@
         },
         "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
           "tick_us": {
-            "p50": 110,
-            "p95": 125,
-            "min": 101,
-            "max": 125,
-            "n": 6
+            "p50": 148,
+            "p95": 2503,
+            "min": 93,
+            "max": 2503,
+            "n": 5
           },
           "free_heap": {
-            "p50": 33853799,
-            "p95": 33914951,
-            "min": 33821775,
-            "max": 33914951,
-            "n": 6
+            "p50": 33853292,
+            "p95": 33879908,
+            "min": 30851496,
+            "max": 33879908,
+            "n": 5
           },
           "max_alloc_block": {
-            "p50": 192512,
-            "p95": 249856,
-            "min": 159744,
-            "max": 249856,
-            "n": 6
+            "p50": 184320,
+            "p95": 303104,
+            "min": 172032,
+            "max": 303104,
+            "n": 5
           },
-          "last_updated": "2026-10-14"
+          "last_updated": "2026-10-26"
         },
         "host=teensy41 sender=esp32p4rev1-eth": {
           "tick_us": {
@@ -665,7 +717,9 @@
           },
           "last_updated": "2026-10-14"
         }
-      }
+      },
+      "description": "256 lights, serpentine layout, mapped by the receiver, DDP at 40 fps.",
+      "samples": 5
     },
     {
       "name": "16x16-serpentine-mapped-by-sender-set",
@@ -676,13 +730,15 @@
     },
     {
       "name": "16x16-serpentine-sender",
-      "description": "256 lights, serpentine layout, mapped by the sender, DDP at 40 fps.",
       "op": "measure",
       "read": [
         "sender:fps",
+        "sender:Send.status[fps]",
+        "sender:Send.status[packets/s]",
+        "NetworkReceive.status[fps]",
+        "NetworkReceive.status[packets/s]",
+        "NetworkReceive.status[lost/s]",
         "NetworkReceive.tick",
-        "NetworkReceive.packets_per_s",
-        "NetworkReceive.frames_per_s",
         "Drivers.tick"
       ],
       "observed": {
@@ -760,27 +816,27 @@
         },
         "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
           "tick_us": {
-            "p50": 114,
-            "p95": 116,
-            "min": 111,
-            "max": 116,
-            "n": 6
+            "p50": 87,
+            "p95": 1060,
+            "min": 59,
+            "max": 1060,
+            "n": 5
           },
           "free_heap": {
-            "p50": 33854163,
-            "p95": 33914623,
-            "min": 33817971,
-            "max": 33914623,
-            "n": 6
+            "p50": 33852960,
+            "p95": 33879860,
+            "min": 30853428,
+            "max": 33879860,
+            "n": 5
           },
           "max_alloc_block": {
-            "p50": 188416,
-            "p95": 249856,
-            "min": 155648,
-            "max": 249856,
-            "n": 6
+            "p50": 184320,
+            "p95": 303104,
+            "min": 172032,
+            "max": 303104,
+            "n": 5
           },
-          "last_updated": "2026-10-14"
+          "last_updated": "2026-10-26"
         },
         "host=teensy41 sender=esp32p4rev1-eth": {
           "tick_us": {
@@ -830,7 +886,9 @@
           },
           "last_updated": "2026-10-14"
         }
-      }
+      },
+      "description": "256 lights, serpentine layout, mapped by the sender, DDP at 40 fps.",
+      "samples": 5
     },
     {
       "name": "sender-64x64-width",
@@ -878,13 +936,15 @@
     },
     {
       "name": "64x64-identity-receiver",
-      "description": "4096 lights, identity layout, mapped by the receiver, DDP at 40 fps.",
       "op": "measure",
       "read": [
         "sender:fps",
+        "sender:Send.status[fps]",
+        "sender:Send.status[packets/s]",
+        "NetworkReceive.status[fps]",
+        "NetworkReceive.status[packets/s]",
+        "NetworkReceive.status[lost/s]",
         "NetworkReceive.tick",
-        "NetworkReceive.packets_per_s",
-        "NetworkReceive.frames_per_s",
         "Drivers.tick"
       ],
       "observed": {
@@ -962,27 +1022,27 @@
         },
         "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
           "tick_us": {
-            "p50": 115,
-            "p95": 146,
-            "min": 105,
-            "max": 146,
-            "n": 6
+            "p50": 177,
+            "p95": 2793,
+            "min": 121,
+            "max": 2793,
+            "n": 5
           },
           "free_heap": {
-            "p50": 33811007,
-            "p95": 33872331,
-            "min": 33775623,
-            "max": 33872331,
-            "n": 6
+            "p50": 33799896,
+            "p95": 33833612,
+            "min": 30802584,
+            "max": 33833612,
+            "n": 5
           },
           "max_alloc_block": {
-            "p50": 188416,
-            "p95": 249856,
-            "min": 155648,
-            "max": 249856,
-            "n": 6
+            "p50": 184320,
+            "p95": 303104,
+            "min": 172032,
+            "max": 303104,
+            "n": 5
           },
-          "last_updated": "2026-10-14"
+          "last_updated": "2026-10-26"
         },
         "host=teensy41 sender=esp32p4rev1-eth": {
           "tick_us": {
@@ -1032,7 +1092,9 @@
           },
           "last_updated": "2026-10-14"
         }
-      }
+      },
+      "description": "4096 lights, identity layout, mapped by the receiver, DDP at 40 fps.",
+      "samples": 5
     },
     {
       "name": "64x64-identity-mapped-by-sender-set",
@@ -1043,13 +1105,15 @@
     },
     {
       "name": "64x64-identity-sender",
-      "description": "4096 lights, identity layout, mapped by the sender, DDP at 40 fps.",
       "op": "measure",
       "read": [
         "sender:fps",
+        "sender:Send.status[fps]",
+        "sender:Send.status[packets/s]",
+        "NetworkReceive.status[fps]",
+        "NetworkReceive.status[packets/s]",
+        "NetworkReceive.status[lost/s]",
         "NetworkReceive.tick",
-        "NetworkReceive.packets_per_s",
-        "NetworkReceive.frames_per_s",
         "Drivers.tick"
       ],
       "observed": {
@@ -1127,27 +1191,27 @@
         },
         "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
           "tick_us": {
-            "p50": 109,
-            "p95": 119,
-            "min": 106,
-            "max": 119,
-            "n": 6
+            "p50": 137,
+            "p95": 4492,
+            "min": 87,
+            "max": 4492,
+            "n": 5
           },
           "free_heap": {
-            "p50": 33808863,
-            "p95": 33869527,
-            "min": 33768571,
-            "max": 33869527,
-            "n": 6
+            "p50": 33807788,
+            "p95": 33838344,
+            "min": 30797700,
+            "max": 33838344,
+            "n": 5
           },
           "max_alloc_block": {
-            "p50": 188416,
-            "p95": 249856,
-            "min": 147456,
-            "max": 249856,
-            "n": 6
+            "p50": 184320,
+            "p95": 303104,
+            "min": 172032,
+            "max": 303104,
+            "n": 5
           },
-          "last_updated": "2026-10-14"
+          "last_updated": "2026-10-26"
         },
         "host=teensy41 sender=esp32p4rev1-eth": {
           "tick_us": {
@@ -1197,7 +1261,9 @@
           },
           "last_updated": "2026-10-14"
         }
-      }
+      },
+      "description": "4096 lights, identity layout, mapped by the sender, DDP at 40 fps.",
+      "samples": 5
     },
     {
       "name": "64x64-serpentine",
@@ -1215,13 +1281,15 @@
     },
     {
       "name": "64x64-serpentine-receiver",
-      "description": "4096 lights, serpentine layout, mapped by the receiver, DDP at 40 fps.",
       "op": "measure",
       "read": [
         "sender:fps",
+        "sender:Send.status[fps]",
+        "sender:Send.status[packets/s]",
+        "NetworkReceive.status[fps]",
+        "NetworkReceive.status[packets/s]",
+        "NetworkReceive.status[lost/s]",
         "NetworkReceive.tick",
-        "NetworkReceive.packets_per_s",
-        "NetworkReceive.frames_per_s",
         "Drivers.tick"
       ],
       "observed": {
@@ -1299,27 +1367,27 @@
         },
         "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
           "tick_us": {
-            "p50": 930,
-            "p95": 1034,
-            "min": 821,
-            "max": 1034,
-            "n": 6
+            "p50": 1485,
+            "p95": 14334,
+            "min": 712,
+            "max": 14334,
+            "n": 5
           },
           "free_heap": {
-            "p50": 33750315,
-            "p95": 33810479,
-            "min": 33708383,
-            "max": 33810479,
-            "n": 6
+            "p50": 33739588,
+            "p95": 33776036,
+            "min": 30741112,
+            "max": 33776036,
+            "n": 5
           },
           "max_alloc_block": {
-            "p50": 188416,
-            "p95": 249856,
-            "min": 151552,
-            "max": 249856,
-            "n": 6
+            "p50": 184320,
+            "p95": 303104,
+            "min": 172032,
+            "max": 303104,
+            "n": 5
           },
-          "last_updated": "2026-10-14"
+          "last_updated": "2026-10-26"
         },
         "host=teensy41 sender=esp32p4rev1-eth": {
           "tick_us": {
@@ -1369,7 +1437,9 @@
           },
           "last_updated": "2026-10-14"
         }
-      }
+      },
+      "description": "4096 lights, serpentine layout, mapped by the receiver, DDP at 40 fps.",
+      "samples": 5
     },
     {
       "name": "64x64-serpentine-mapped-by-sender-set",
@@ -1380,13 +1450,15 @@
     },
     {
       "name": "64x64-serpentine-sender",
-      "description": "4096 lights, serpentine layout, mapped by the sender, DDP at 40 fps.",
       "op": "measure",
       "read": [
         "sender:fps",
+        "sender:Send.status[fps]",
+        "sender:Send.status[packets/s]",
+        "NetworkReceive.status[fps]",
+        "NetworkReceive.status[packets/s]",
+        "NetworkReceive.status[lost/s]",
         "NetworkReceive.tick",
-        "NetworkReceive.packets_per_s",
-        "NetworkReceive.frames_per_s",
         "Drivers.tick"
       ],
       "observed": {
@@ -1464,27 +1536,27 @@
         },
         "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
           "tick_us": {
-            "p50": 1057,
-            "p95": 1276,
-            "min": 799,
-            "max": 1276,
-            "n": 6
+            "p50": 100,
+            "p95": 1936,
+            "min": 74,
+            "max": 1936,
+            "n": 5
           },
           "free_heap": {
-            "p50": 33750327,
-            "p95": 33810803,
-            "min": 33718011,
-            "max": 33810803,
-            "n": 6
+            "p50": 33748460,
+            "p95": 33770364,
+            "min": 30738108,
+            "max": 33770364,
+            "n": 5
           },
           "max_alloc_block": {
-            "p50": 188416,
-            "p95": 253952,
-            "min": 159744,
-            "max": 253952,
-            "n": 6
+            "p50": 184320,
+            "p95": 303104,
+            "min": 172032,
+            "max": 303104,
+            "n": 5
           },
-          "last_updated": "2026-10-14"
+          "last_updated": "2026-10-26"
         },
         "host=teensy41 sender=esp32p4rev1-eth": {
           "tick_us": {
@@ -1534,7 +1606,9 @@
           },
           "last_updated": "2026-10-14"
         }
-      }
+      },
+      "description": "4096 lights, serpentine layout, mapped by the sender, DDP at 40 fps.",
+      "samples": 5
     },
     {
       "name": "sender-128x96-width",
@@ -1582,13 +1656,15 @@
     },
     {
       "name": "128x96-identity-receiver",
-      "description": "12288 lights, identity layout, mapped by the receiver, DDP at 40 fps.",
       "op": "measure",
       "read": [
         "sender:fps",
+        "sender:Send.status[fps]",
+        "sender:Send.status[packets/s]",
+        "NetworkReceive.status[fps]",
+        "NetworkReceive.status[packets/s]",
+        "NetworkReceive.status[lost/s]",
         "NetworkReceive.tick",
-        "NetworkReceive.packets_per_s",
-        "NetworkReceive.frames_per_s",
         "Drivers.tick"
       ],
       "observed": {
@@ -1666,27 +1742,27 @@
         },
         "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
           "tick_us": {
-            "p50": 642,
-            "p95": 1803,
-            "min": 441,
-            "max": 1803,
-            "n": 6
+            "p50": 4234,
+            "p95": 21412,
+            "min": 333,
+            "max": 21412,
+            "n": 5
           },
           "free_heap": {
-            "p50": 33712011,
-            "p95": 33773723,
-            "min": 33678311,
-            "max": 33773723,
-            "n": 6
+            "p50": 33703032,
+            "p95": 33739936,
+            "min": 30703012,
+            "max": 33739936,
+            "n": 5
           },
           "max_alloc_block": {
-            "p50": 188416,
-            "p95": 249856,
-            "min": 151552,
-            "max": 249856,
-            "n": 6
+            "p50": 184320,
+            "p95": 303104,
+            "min": 172032,
+            "max": 303104,
+            "n": 5
           },
-          "last_updated": "2026-10-14"
+          "last_updated": "2026-10-26"
         },
         "host=teensy41 sender=esp32p4rev1-eth": {
           "tick_us": {
@@ -1736,7 +1812,9 @@
           },
           "last_updated": "2026-10-14"
         }
-      }
+      },
+      "description": "12288 lights, identity layout, mapped by the receiver, DDP at 40 fps.",
+      "samples": 5
     },
     {
       "name": "128x96-identity-mapped-by-sender-set",
@@ -1747,13 +1825,15 @@
     },
     {
       "name": "128x96-identity-sender",
-      "description": "12288 lights, identity layout, mapped by the sender, DDP at 40 fps.",
       "op": "measure",
       "read": [
         "sender:fps",
+        "sender:Send.status[fps]",
+        "sender:Send.status[packets/s]",
+        "NetworkReceive.status[fps]",
+        "NetworkReceive.status[packets/s]",
+        "NetworkReceive.status[lost/s]",
         "NetworkReceive.tick",
-        "NetworkReceive.packets_per_s",
-        "NetworkReceive.frames_per_s",
         "Drivers.tick"
       ],
       "observed": {
@@ -1831,27 +1911,27 @@
         },
         "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
           "tick_us": {
-            "p50": 692,
-            "p95": 1855,
-            "min": 573,
-            "max": 1855,
-            "n": 6
+            "p50": 2676,
+            "p95": 18402,
+            "min": 425,
+            "max": 18402,
+            "n": 5
           },
           "free_heap": {
-            "p50": 33699547,
-            "p95": 33775951,
-            "min": 33673223,
-            "max": 33775951,
-            "n": 6
+            "p50": 33713408,
+            "p95": 33734348,
+            "min": 30714596,
+            "max": 33734348,
+            "n": 5
           },
           "max_alloc_block": {
-            "p50": 159744,
-            "p95": 253952,
-            "min": 151552,
-            "max": 253952,
-            "n": 6
+            "p50": 184320,
+            "p95": 303104,
+            "min": 172032,
+            "max": 303104,
+            "n": 5
           },
-          "last_updated": "2026-10-14"
+          "last_updated": "2026-10-26"
         },
         "host=teensy41 sender=esp32p4rev1-eth": {
           "tick_us": {
@@ -1901,7 +1981,9 @@
           },
           "last_updated": "2026-10-14"
         }
-      }
+      },
+      "description": "12288 lights, identity layout, mapped by the sender, DDP at 40 fps.",
+      "samples": 5
     },
     {
       "name": "128x96-serpentine",
@@ -1919,13 +2001,15 @@
     },
     {
       "name": "128x96-serpentine-receiver",
-      "description": "12288 lights, serpentine layout, mapped by the receiver, DDP at 40 fps.",
       "op": "measure",
       "read": [
         "sender:fps",
+        "sender:Send.status[fps]",
+        "sender:Send.status[packets/s]",
+        "NetworkReceive.status[fps]",
+        "NetworkReceive.status[packets/s]",
+        "NetworkReceive.status[lost/s]",
         "NetworkReceive.tick",
-        "NetworkReceive.packets_per_s",
-        "NetworkReceive.frames_per_s",
         "Drivers.tick"
       ],
       "observed": {
@@ -2003,27 +2087,27 @@
         },
         "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
           "tick_us": {
-            "p50": 7118,
-            "p95": 9483,
-            "min": 6352,
-            "max": 9483,
-            "n": 6
+            "p50": 8982,
+            "p95": 31505,
+            "min": 5818,
+            "max": 31505,
+            "n": 5
           },
           "free_heap": {
-            "p50": 33525467,
-            "p95": 33589531,
-            "min": 33481595,
-            "max": 33589531,
-            "n": 6
+            "p50": 33512728,
+            "p95": 33553916,
+            "min": 30528064,
+            "max": 33553916,
+            "n": 5
           },
           "max_alloc_block": {
-            "p50": 188416,
-            "p95": 249856,
-            "min": 147456,
-            "max": 249856,
-            "n": 6
+            "p50": 184320,
+            "p95": 294912,
+            "min": 172032,
+            "max": 294912,
+            "n": 5
           },
-          "last_updated": "2026-10-14"
+          "last_updated": "2026-10-26"
         },
         "host=teensy41 sender=esp32p4rev1-eth": {
           "tick_us": {
@@ -2073,7 +2157,9 @@
           },
           "last_updated": "2026-10-14"
         }
-      }
+      },
+      "description": "12288 lights, serpentine layout, mapped by the receiver, DDP at 40 fps.",
+      "samples": 5
     },
     {
       "name": "128x96-serpentine-mapped-by-sender-set",
@@ -2084,13 +2170,15 @@
     },
     {
       "name": "128x96-serpentine-sender",
-      "description": "12288 lights, serpentine layout, mapped by the sender, DDP at 40 fps.",
       "op": "measure",
       "read": [
         "sender:fps",
+        "sender:Send.status[fps]",
+        "sender:Send.status[packets/s]",
+        "NetworkReceive.status[fps]",
+        "NetworkReceive.status[packets/s]",
+        "NetworkReceive.status[lost/s]",
         "NetworkReceive.tick",
-        "NetworkReceive.packets_per_s",
-        "NetworkReceive.frames_per_s",
         "Drivers.tick"
       ],
       "observed": {
@@ -2168,27 +2256,27 @@
         },
         "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
           "tick_us": {
-            "p50": 9044,
-            "p95": 13022,
-            "min": 8119,
-            "max": 13022,
-            "n": 6
+            "p50": 350,
+            "p95": 7290,
+            "min": 79,
+            "max": 7290,
+            "n": 5
           },
           "free_heap": {
-            "p50": 33516363,
-            "p95": 33588763,
-            "min": 33493455,
-            "max": 33588763,
-            "n": 6
+            "p50": 33529948,
+            "p95": 33554352,
+            "min": 30507480,
+            "max": 33554352,
+            "n": 5
           },
           "max_alloc_block": {
-            "p50": 180224,
-            "p95": 249856,
-            "min": 159744,
-            "max": 249856,
-            "n": 6
+            "p50": 184320,
+            "p95": 303104,
+            "min": 172032,
+            "max": 303104,
+            "n": 5
           },
-          "last_updated": "2026-10-14"
+          "last_updated": "2026-10-26"
         },
         "host=teensy41 sender=esp32p4rev1-eth": {
           "tick_us": {
@@ -2238,7 +2326,9 @@
           },
           "last_updated": "2026-10-14"
         }
-      }
+      },
+      "description": "12288 lights, serpentine layout, mapped by the sender, DDP at 40 fps.",
+      "samples": 5
     },
     {
       "name": "second-layer",
@@ -2271,13 +2361,15 @@
     },
     {
       "name": "two-layers-identity-receiver",
-      "description": "12288 lights on two layers, identity layout, mapped by the receiver.",
       "op": "measure",
       "read": [
         "sender:fps",
+        "sender:Send.status[fps]",
+        "sender:Send.status[packets/s]",
+        "NetworkReceive.status[fps]",
+        "NetworkReceive.status[packets/s]",
+        "NetworkReceive.status[lost/s]",
         "NetworkReceive.tick",
-        "NetworkReceive.packets_per_s",
-        "NetworkReceive.frames_per_s",
         "Drivers.tick"
       ],
       "observed": {
@@ -2355,27 +2447,27 @@
         },
         "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
           "tick_us": {
-            "p50": 5880,
-            "p95": 8906,
-            "min": 5506,
-            "max": 8906,
-            "n": 6
+            "p50": 9711,
+            "p95": 32675,
+            "min": 6210,
+            "max": 32675,
+            "n": 5
           },
           "free_heap": {
-            "p50": 33672403,
-            "p95": 33734995,
-            "min": 33629295,
-            "max": 33734995,
-            "n": 6
+            "p50": 33669556,
+            "p95": 33701068,
+            "min": 30659092,
+            "max": 33701068,
+            "n": 5
           },
           "max_alloc_block": {
-            "p50": 188416,
-            "p95": 249856,
-            "min": 147456,
-            "max": 249856,
-            "n": 6
+            "p50": 184320,
+            "p95": 294912,
+            "min": 172032,
+            "max": 294912,
+            "n": 5
           },
-          "last_updated": "2026-10-14"
+          "last_updated": "2026-10-26"
         },
         "host=teensy41 sender=esp32p4rev1-eth": {
           "tick_us": {
@@ -2425,7 +2517,9 @@
           },
           "last_updated": "2026-10-14"
         }
-      }
+      },
+      "description": "12288 lights on two layers, identity layout, mapped by the receiver.",
+      "samples": 5
     },
     {
       "name": "two-layers-identity-mapped-by-sender-set",
@@ -2436,13 +2530,15 @@
     },
     {
       "name": "two-layers-identity-sender",
-      "description": "12288 lights on two layers, identity layout, mapped by the sender.",
       "op": "measure",
       "read": [
         "sender:fps",
+        "sender:Send.status[fps]",
+        "sender:Send.status[packets/s]",
+        "NetworkReceive.status[fps]",
+        "NetworkReceive.status[packets/s]",
+        "NetworkReceive.status[lost/s]",
         "NetworkReceive.tick",
-        "NetworkReceive.packets_per_s",
-        "NetworkReceive.frames_per_s",
         "Drivers.tick"
       ],
       "observed": {
@@ -2520,27 +2616,27 @@
         },
         "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
           "tick_us": {
-            "p50": 5908,
-            "p95": 11332,
-            "min": 5431,
-            "max": 11332,
-            "n": 6
+            "p50": 8588,
+            "p95": 28646,
+            "min": 4725,
+            "max": 28646,
+            "n": 5
           },
           "free_heap": {
-            "p50": 33673615,
-            "p95": 33735275,
-            "min": 33643619,
-            "max": 33735275,
-            "n": 6
+            "p50": 33659276,
+            "p95": 33701820,
+            "min": 30651316,
+            "max": 33701820,
+            "n": 5
           },
           "max_alloc_block": {
-            "p50": 163840,
-            "p95": 249856,
-            "min": 151552,
-            "max": 249856,
-            "n": 6
+            "p50": 184320,
+            "p95": 294912,
+            "min": 172032,
+            "max": 294912,
+            "n": 5
           },
-          "last_updated": "2026-10-14"
+          "last_updated": "2026-10-26"
         },
         "host=teensy41 sender=esp32p4rev1-eth": {
           "tick_us": {
@@ -2590,7 +2686,9 @@
           },
           "last_updated": "2026-10-14"
         }
-      }
+      },
+      "description": "12288 lights on two layers, identity layout, mapped by the sender.",
+      "samples": 5
     },
     {
       "name": "two-layers-serpentine",
@@ -2608,13 +2706,15 @@
     },
     {
       "name": "two-layers-serpentine-receiver",
-      "description": "12288 lights on two layers, serpentine layout, mapped by the receiver.",
       "op": "measure",
       "read": [
         "sender:fps",
+        "sender:Send.status[fps]",
+        "sender:Send.status[packets/s]",
+        "NetworkReceive.status[fps]",
+        "NetworkReceive.status[packets/s]",
+        "NetworkReceive.status[lost/s]",
         "NetworkReceive.tick",
-        "NetworkReceive.packets_per_s",
-        "NetworkReceive.frames_per_s",
         "Drivers.tick"
       ],
       "observed": {
@@ -2692,27 +2792,27 @@
         },
         "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
           "tick_us": {
-            "p50": 13954,
-            "p95": 18171,
-            "min": 13117,
-            "max": 18171,
-            "n": 6
+            "p50": 17205,
+            "p95": 48065,
+            "min": 13801,
+            "max": 48065,
+            "n": 5
           },
           "free_heap": {
-            "p50": 33378951,
-            "p95": 33451463,
-            "min": 33354651,
-            "max": 33451463,
-            "n": 6
+            "p50": 33381376,
+            "p95": 33416912,
+            "min": 30381984,
+            "max": 33416912,
+            "n": 5
           },
           "max_alloc_block": {
-            "p50": 155648,
-            "p95": 249856,
-            "min": 151552,
-            "max": 249856,
-            "n": 6
+            "p50": 184320,
+            "p95": 294912,
+            "min": 172032,
+            "max": 294912,
+            "n": 5
           },
-          "last_updated": "2026-10-14"
+          "last_updated": "2026-10-26"
         },
         "host=teensy41 sender=esp32p4rev1-eth": {
           "tick_us": {
@@ -2762,7 +2862,9 @@
           },
           "last_updated": "2026-10-14"
         }
-      }
+      },
+      "description": "12288 lights on two layers, serpentine layout, mapped by the receiver.",
+      "samples": 5
     },
     {
       "name": "two-layers-serpentine-mapped-by-sender-set",
@@ -2773,13 +2875,15 @@
     },
     {
       "name": "two-layers-serpentine-sender",
-      "description": "12288 lights on two layers, serpentine layout, mapped by the sender.",
       "op": "measure",
       "read": [
         "sender:fps",
+        "sender:Send.status[fps]",
+        "sender:Send.status[packets/s]",
+        "NetworkReceive.status[fps]",
+        "NetworkReceive.status[packets/s]",
+        "NetworkReceive.status[lost/s]",
         "NetworkReceive.tick",
-        "NetworkReceive.packets_per_s",
-        "NetworkReceive.frames_per_s",
         "Drivers.tick"
       ],
       "observed": {
@@ -2857,27 +2961,27 @@
         },
         "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
           "tick_us": {
-            "p50": 15741,
-            "p95": 22861,
-            "min": 15496,
-            "max": 22861,
-            "n": 6
+            "p50": 20520,
+            "p95": 59786,
+            "min": 14173,
+            "max": 59786,
+            "n": 5
           },
           "free_heap": {
-            "p50": 33383299,
-            "p95": 33451479,
-            "min": 33360551,
-            "max": 33451479,
-            "n": 6
+            "p50": 33342964,
+            "p95": 33350084,
+            "min": 30339504,
+            "max": 33350084,
+            "n": 5
           },
           "max_alloc_block": {
             "p50": 184320,
-            "p95": 249856,
-            "min": 151552,
-            "max": 249856,
-            "n": 6
+            "p95": 294912,
+            "min": 172032,
+            "max": 294912,
+            "n": 5
           },
-          "last_updated": "2026-10-14"
+          "last_updated": "2026-10-26"
         },
         "host=teensy41 sender=esp32p4rev1-eth": {
           "tick_us": {
@@ -2927,7 +3031,9 @@
           },
           "last_updated": "2026-10-14"
         }
-      }
+      },
+      "description": "12288 lights on two layers, serpentine layout, mapped by the sender.",
+      "samples": 5
     },
     {
       "name": "one-layer-again",
@@ -2937,6 +3043,28 @@
           "Layer2": null
         }
       }
+    },
+    {
+      "name": "throughput-identity",
+      "op": "set_control",
+      "id": "Grid",
+      "key": "serpentine",
+      "value": false
+    },
+    {
+      "name": "throughput-mapped-by-receiver",
+      "op": "set_control",
+      "id": "NetworkReceive",
+      "key": "mapped_by",
+      "value": 0
+    },
+    {
+      "name": "throughput-fps-120",
+      "device": "sender",
+      "op": "set_control",
+      "id": "Send",
+      "key": "fps",
+      "value": 120
     },
     {
       "name": "sender-64x64-width",
@@ -2969,353 +3097,7 @@
       "value": 64
     },
     {
-      "name": "protocols-identity",
-      "op": "set_control",
-      "id": "Grid",
-      "key": "serpentine",
-      "value": false
-    },
-    {
-      "name": "protocols-mapped-by-receiver",
-      "op": "set_control",
-      "id": "NetworkReceive",
-      "key": "mapped_by",
-      "value": 0
-    },
-    {
-      "name": "protocol-artnet-set",
-      "device": "sender",
-      "op": "set_control",
-      "id": "Send",
-      "key": "protocol",
-      "value": 0
-    },
-    {
-      "name": "64x64-artnet",
-      "description": "4096 lights over artnet, identity layout, mapped by the receiver.",
-      "op": "measure",
-      "read": [
-        "sender:fps",
-        "NetworkReceive.tick",
-        "NetworkReceive.packets_per_s",
-        "NetworkReceive.frames_per_s",
-        "Drivers.tick"
-      ],
-      "observed": {
-        "host=esp32s3-n16r8 sender=esp32s3-n16r8": {
-          "tick_us": {
-            "p50": 3426,
-            "p95": 3692,
-            "min": 3426,
-            "max": 3692,
-            "n": 2
-          },
-          "free_heap": {
-            "p50": 8397855,
-            "p95": 8411803,
-            "min": 8397855,
-            "max": 8411803,
-            "n": 2
-          },
-          "max_alloc_block": {
-            "p50": 31744,
-            "p95": 45056,
-            "min": 31744,
-            "max": 45056,
-            "n": 2
-          },
-          "last_updated": "2026-10-14"
-        },
-        "host=esp32p4rev1-eth sender=esp32s3-n16r8": {
-          "tick_us": {
-            "p50": 109,
-            "p95": 116,
-            "min": 109,
-            "max": 116,
-            "n": 2
-          },
-          "free_heap": {
-            "p50": 33811879,
-            "p95": 33872987,
-            "min": 33811879,
-            "max": 33872987,
-            "n": 2
-          },
-          "max_alloc_block": {
-            "p50": 188416,
-            "p95": 245760,
-            "min": 188416,
-            "max": 245760,
-            "n": 2
-          },
-          "last_updated": "2026-10-14"
-        },
-        "host=esp32s3-n16r8 sender=esp32p4rev1-eth": {
-          "tick_us": {
-            "p50": 3350,
-            "p95": 3472,
-            "min": 3256,
-            "max": 3472,
-            "n": 3
-          },
-          "free_heap": {
-            "p50": 8419087,
-            "p95": 8419459,
-            "min": 8412399,
-            "max": 8419459,
-            "n": 3
-          },
-          "max_alloc_block": {
-            "p50": 36864,
-            "p95": 45056,
-            "min": 34816,
-            "max": 45056,
-            "n": 3
-          },
-          "last_updated": "2026-10-14"
-        },
-        "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
-          "tick_us": {
-            "p50": 113,
-            "p95": 831,
-            "min": 104,
-            "max": 831,
-            "n": 6
-          },
-          "free_heap": {
-            "p50": 33812175,
-            "p95": 33858791,
-            "min": 33783283,
-            "max": 33858791,
-            "n": 6
-          },
-          "max_alloc_block": {
-            "p50": 188416,
-            "p95": 253952,
-            "min": 159744,
-            "max": 253952,
-            "n": 6
-          },
-          "last_updated": "2026-10-14"
-        },
-        "host=teensy41 sender=esp32p4rev1-eth": {
-          "tick_us": {
-            "p50": 2139,
-            "p95": 2139,
-            "min": 2139,
-            "max": 2139,
-            "n": 1
-          },
-          "free_heap": {
-            "p50": 270784,
-            "p95": 270784,
-            "min": 270784,
-            "max": 270784,
-            "n": 1
-          },
-          "max_alloc_block": {
-            "p50": 167488,
-            "p95": 167488,
-            "min": 167488,
-            "max": 167488,
-            "n": 1
-          },
-          "last_updated": "2026-10-14"
-        },
-        "host=teensy41 sender=esp32s3-n16r8": {
-          "tick_us": {
-            "p50": 2417,
-            "p95": 2440,
-            "min": 2417,
-            "max": 2440,
-            "n": 2
-          },
-          "free_heap": {
-            "p50": 263680,
-            "p95": 264320,
-            "min": 263680,
-            "max": 264320,
-            "n": 2
-          },
-          "max_alloc_block": {
-            "p50": 149640,
-            "p95": 210536,
-            "min": 149640,
-            "max": 210536,
-            "n": 2
-          },
-          "last_updated": "2026-10-14"
-        }
-      }
-    },
-    {
-      "name": "protocol-e131-set",
-      "device": "sender",
-      "op": "set_control",
-      "id": "Send",
-      "key": "protocol",
-      "value": 1
-    },
-    {
-      "name": "64x64-e131",
-      "description": "4096 lights over e131, identity layout, mapped by the receiver.",
-      "op": "measure",
-      "read": [
-        "sender:fps",
-        "NetworkReceive.tick",
-        "NetworkReceive.packets_per_s",
-        "NetworkReceive.frames_per_s",
-        "Drivers.tick"
-      ],
-      "observed": {
-        "host=esp32s3-n16r8 sender=esp32s3-n16r8": {
-          "tick_us": {
-            "p50": 3357,
-            "p95": 3490,
-            "min": 3357,
-            "max": 3490,
-            "n": 2
-          },
-          "free_heap": {
-            "p50": 8414015,
-            "p95": 8417851,
-            "min": 8414015,
-            "max": 8417851,
-            "n": 2
-          },
-          "max_alloc_block": {
-            "p50": 38912,
-            "p95": 47104,
-            "min": 38912,
-            "max": 47104,
-            "n": 2
-          },
-          "last_updated": "2026-10-14"
-        },
-        "host=esp32p4rev1-eth sender=esp32s3-n16r8": {
-          "tick_us": {
-            "p50": 109,
-            "p95": 110,
-            "min": 109,
-            "max": 110,
-            "n": 2
-          },
-          "free_heap": {
-            "p50": 33812367,
-            "p95": 33872439,
-            "min": 33812367,
-            "max": 33872439,
-            "n": 2
-          },
-          "max_alloc_block": {
-            "p50": 188416,
-            "p95": 245760,
-            "min": 188416,
-            "max": 245760,
-            "n": 2
-          },
-          "last_updated": "2026-10-14"
-        },
-        "host=esp32s3-n16r8 sender=esp32p4rev1-eth": {
-          "tick_us": {
-            "p50": 3461,
-            "p95": 3495,
-            "min": 3334,
-            "max": 3495,
-            "n": 3
-          },
-          "free_heap": {
-            "p50": 8419667,
-            "p95": 8419679,
-            "min": 8405079,
-            "max": 8419679,
-            "n": 3
-          },
-          "max_alloc_block": {
-            "p50": 36864,
-            "p95": 40960,
-            "min": 34816,
-            "max": 40960,
-            "n": 3
-          },
-          "last_updated": "2026-10-14"
-        },
-        "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
-          "tick_us": {
-            "p50": 116,
-            "p95": 819,
-            "min": 108,
-            "max": 819,
-            "n": 6
-          },
-          "free_heap": {
-            "p50": 33812079,
-            "p95": 33860755,
-            "min": 33781963,
-            "max": 33860755,
-            "n": 6
-          },
-          "max_alloc_block": {
-            "p50": 188416,
-            "p95": 253952,
-            "min": 159744,
-            "max": 253952,
-            "n": 6
-          },
-          "last_updated": "2026-10-14"
-        },
-        "host=teensy41 sender=esp32p4rev1-eth": {
-          "tick_us": {
-            "p50": 2490,
-            "p95": 2490,
-            "min": 2490,
-            "max": 2490,
-            "n": 1
-          },
-          "free_heap": {
-            "p50": 263976,
-            "p95": 263976,
-            "min": 263976,
-            "max": 263976,
-            "n": 1
-          },
-          "max_alloc_block": {
-            "p50": 167488,
-            "p95": 167488,
-            "min": 167488,
-            "max": 167488,
-            "n": 1
-          },
-          "last_updated": "2026-10-14"
-        },
-        "host=teensy41 sender=esp32s3-n16r8": {
-          "tick_us": {
-            "p50": 2440,
-            "p95": 2450,
-            "min": 2440,
-            "max": 2450,
-            "n": 2
-          },
-          "free_heap": {
-            "p50": 253320,
-            "p95": 263552,
-            "min": 253320,
-            "max": 263552,
-            "n": 2
-          },
-          "max_alloc_block": {
-            "p50": 149640,
-            "p95": 210536,
-            "min": 149640,
-            "max": 210536,
-            "n": 2
-          },
-          "last_updated": "2026-10-14"
-        }
-      }
-    },
-    {
-      "name": "protocol-ddp-set",
+      "name": "64x64-ddp-set",
       "device": "sender",
       "op": "set_control",
       "id": "Send",
@@ -3324,13 +3106,15 @@
     },
     {
       "name": "64x64-ddp",
-      "description": "4096 lights over ddp, identity layout, mapped by the receiver.",
       "op": "measure",
       "read": [
         "sender:fps",
+        "sender:Send.status[fps]",
+        "sender:Send.status[packets/s]",
+        "NetworkReceive.status[fps]",
+        "NetworkReceive.status[packets/s]",
+        "NetworkReceive.status[lost/s]",
         "NetworkReceive.tick",
-        "NetworkReceive.packets_per_s",
-        "NetworkReceive.frames_per_s",
         "Drivers.tick"
       ],
       "observed": {
@@ -3408,27 +3192,27 @@
         },
         "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
           "tick_us": {
-            "p50": 112,
-            "p95": 819,
-            "min": 103,
-            "max": 819,
-            "n": 6
+            "p50": 351,
+            "p95": 3872,
+            "min": 107,
+            "max": 3872,
+            "n": 5
           },
           "free_heap": {
-            "p50": 33812611,
-            "p95": 33870303,
-            "min": 33783927,
-            "max": 33870303,
-            "n": 6
+            "p50": 33798536,
+            "p95": 33833656,
+            "min": 30806044,
+            "max": 33833656,
+            "n": 5
           },
           "max_alloc_block": {
-            "p50": 188416,
-            "p95": 253952,
-            "min": 159744,
-            "max": 253952,
-            "n": 6
+            "p50": 184320,
+            "p95": 303104,
+            "min": 172032,
+            "max": 303104,
+            "n": 5
           },
-          "last_updated": "2026-10-14"
+          "last_updated": "2026-10-26"
         },
         "host=teensy41 sender=esp32p4rev1-eth": {
           "tick_us": {
@@ -3478,7 +3262,1421 @@
           },
           "last_updated": "2026-10-14"
         }
-      }
+      },
+      "description": "4096 lights over ddp, identity layout, mapped by the receiver.",
+      "samples": 5
+    },
+    {
+      "name": "64x64-artnet-set",
+      "device": "sender",
+      "op": "set_control",
+      "id": "Send",
+      "key": "protocol",
+      "value": 0
+    },
+    {
+      "name": "64x64-artnet",
+      "op": "measure",
+      "read": [
+        "sender:fps",
+        "sender:Send.status[fps]",
+        "sender:Send.status[packets/s]",
+        "NetworkReceive.status[fps]",
+        "NetworkReceive.status[packets/s]",
+        "NetworkReceive.status[lost/s]",
+        "NetworkReceive.tick",
+        "Drivers.tick"
+      ],
+      "observed": {
+        "host=esp32s3-n16r8 sender=esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 3426,
+            "p95": 3692,
+            "min": 3426,
+            "max": 3692,
+            "n": 2
+          },
+          "free_heap": {
+            "p50": 8397855,
+            "p95": 8411803,
+            "min": 8397855,
+            "max": 8411803,
+            "n": 2
+          },
+          "max_alloc_block": {
+            "p50": 31744,
+            "p95": 45056,
+            "min": 31744,
+            "max": 45056,
+            "n": 2
+          },
+          "last_updated": "2026-10-14"
+        },
+        "host=esp32p4rev1-eth sender=esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 109,
+            "p95": 116,
+            "min": 109,
+            "max": 116,
+            "n": 2
+          },
+          "free_heap": {
+            "p50": 33811879,
+            "p95": 33872987,
+            "min": 33811879,
+            "max": 33872987,
+            "n": 2
+          },
+          "max_alloc_block": {
+            "p50": 188416,
+            "p95": 245760,
+            "min": 188416,
+            "max": 245760,
+            "n": 2
+          },
+          "last_updated": "2026-10-14"
+        },
+        "host=esp32s3-n16r8 sender=esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 3350,
+            "p95": 3472,
+            "min": 3256,
+            "max": 3472,
+            "n": 3
+          },
+          "free_heap": {
+            "p50": 8419087,
+            "p95": 8419459,
+            "min": 8412399,
+            "max": 8419459,
+            "n": 3
+          },
+          "max_alloc_block": {
+            "p50": 36864,
+            "p95": 45056,
+            "min": 34816,
+            "max": 45056,
+            "n": 3
+          },
+          "last_updated": "2026-10-14"
+        },
+        "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 434,
+            "p95": 15212,
+            "min": 117,
+            "max": 15212,
+            "n": 5
+          },
+          "free_heap": {
+            "p50": 33796688,
+            "p95": 33832548,
+            "min": 30803948,
+            "max": 33832548,
+            "n": 5
+          },
+          "max_alloc_block": {
+            "p50": 184320,
+            "p95": 303104,
+            "min": 172032,
+            "max": 303104,
+            "n": 5
+          },
+          "last_updated": "2026-10-26"
+        },
+        "host=teensy41 sender=esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 2139,
+            "p95": 2139,
+            "min": 2139,
+            "max": 2139,
+            "n": 1
+          },
+          "free_heap": {
+            "p50": 270784,
+            "p95": 270784,
+            "min": 270784,
+            "max": 270784,
+            "n": 1
+          },
+          "max_alloc_block": {
+            "p50": 167488,
+            "p95": 167488,
+            "min": 167488,
+            "max": 167488,
+            "n": 1
+          },
+          "last_updated": "2026-10-14"
+        },
+        "host=teensy41 sender=esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 2417,
+            "p95": 2440,
+            "min": 2417,
+            "max": 2440,
+            "n": 2
+          },
+          "free_heap": {
+            "p50": 263680,
+            "p95": 264320,
+            "min": 263680,
+            "max": 264320,
+            "n": 2
+          },
+          "max_alloc_block": {
+            "p50": 149640,
+            "p95": 210536,
+            "min": 149640,
+            "max": 210536,
+            "n": 2
+          },
+          "last_updated": "2026-10-14"
+        }
+      },
+      "description": "4096 lights over artnet, identity layout, mapped by the receiver.",
+      "samples": 5
+    },
+    {
+      "name": "64x64-e131-set",
+      "device": "sender",
+      "op": "set_control",
+      "id": "Send",
+      "key": "protocol",
+      "value": 1
+    },
+    {
+      "name": "64x64-e131",
+      "op": "measure",
+      "read": [
+        "sender:fps",
+        "sender:Send.status[fps]",
+        "sender:Send.status[packets/s]",
+        "NetworkReceive.status[fps]",
+        "NetworkReceive.status[packets/s]",
+        "NetworkReceive.status[lost/s]",
+        "NetworkReceive.tick",
+        "Drivers.tick"
+      ],
+      "observed": {
+        "host=esp32s3-n16r8 sender=esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 3357,
+            "p95": 3490,
+            "min": 3357,
+            "max": 3490,
+            "n": 2
+          },
+          "free_heap": {
+            "p50": 8414015,
+            "p95": 8417851,
+            "min": 8414015,
+            "max": 8417851,
+            "n": 2
+          },
+          "max_alloc_block": {
+            "p50": 38912,
+            "p95": 47104,
+            "min": 38912,
+            "max": 47104,
+            "n": 2
+          },
+          "last_updated": "2026-10-14"
+        },
+        "host=esp32p4rev1-eth sender=esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 109,
+            "p95": 110,
+            "min": 109,
+            "max": 110,
+            "n": 2
+          },
+          "free_heap": {
+            "p50": 33812367,
+            "p95": 33872439,
+            "min": 33812367,
+            "max": 33872439,
+            "n": 2
+          },
+          "max_alloc_block": {
+            "p50": 188416,
+            "p95": 245760,
+            "min": 188416,
+            "max": 245760,
+            "n": 2
+          },
+          "last_updated": "2026-10-14"
+        },
+        "host=esp32s3-n16r8 sender=esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 3461,
+            "p95": 3495,
+            "min": 3334,
+            "max": 3495,
+            "n": 3
+          },
+          "free_heap": {
+            "p50": 8419667,
+            "p95": 8419679,
+            "min": 8405079,
+            "max": 8419679,
+            "n": 3
+          },
+          "max_alloc_block": {
+            "p50": 36864,
+            "p95": 40960,
+            "min": 34816,
+            "max": 40960,
+            "n": 3
+          },
+          "last_updated": "2026-10-14"
+        },
+        "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 850,
+            "p95": 7244,
+            "min": 157,
+            "max": 7244,
+            "n": 5
+          },
+          "free_heap": {
+            "p50": 33795376,
+            "p95": 33832188,
+            "min": 30797872,
+            "max": 33832188,
+            "n": 5
+          },
+          "max_alloc_block": {
+            "p50": 184320,
+            "p95": 303104,
+            "min": 172032,
+            "max": 303104,
+            "n": 5
+          },
+          "last_updated": "2026-10-26"
+        },
+        "host=teensy41 sender=esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 2490,
+            "p95": 2490,
+            "min": 2490,
+            "max": 2490,
+            "n": 1
+          },
+          "free_heap": {
+            "p50": 263976,
+            "p95": 263976,
+            "min": 263976,
+            "max": 263976,
+            "n": 1
+          },
+          "max_alloc_block": {
+            "p50": 167488,
+            "p95": 167488,
+            "min": 167488,
+            "max": 167488,
+            "n": 1
+          },
+          "last_updated": "2026-10-14"
+        },
+        "host=teensy41 sender=esp32s3-n16r8": {
+          "tick_us": {
+            "p50": 2440,
+            "p95": 2450,
+            "min": 2440,
+            "max": 2450,
+            "n": 2
+          },
+          "free_heap": {
+            "p50": 253320,
+            "p95": 263552,
+            "min": 253320,
+            "max": 263552,
+            "n": 2
+          },
+          "max_alloc_block": {
+            "p50": 149640,
+            "p95": 210536,
+            "min": 149640,
+            "max": 210536,
+            "n": 2
+          },
+          "last_updated": "2026-10-14"
+        }
+      },
+      "description": "4096 lights over e131, identity layout, mapped by the receiver.",
+      "samples": 5
+    },
+    {
+      "name": "sender-128x96-width",
+      "device": "sender",
+      "op": "set_control",
+      "id": "Grid",
+      "key": "width",
+      "value": 128
+    },
+    {
+      "name": "sender-128x96-height",
+      "device": "sender",
+      "op": "set_control",
+      "id": "Grid",
+      "key": "height",
+      "value": 96
+    },
+    {
+      "name": "receiver-128x96-width",
+      "op": "set_control",
+      "id": "Grid",
+      "key": "width",
+      "value": 128
+    },
+    {
+      "name": "receiver-128x96-height",
+      "op": "set_control",
+      "id": "Grid",
+      "key": "height",
+      "value": 96
+    },
+    {
+      "name": "128x96-ddp-set",
+      "device": "sender",
+      "op": "set_control",
+      "id": "Send",
+      "key": "protocol",
+      "value": 2
+    },
+    {
+      "name": "128x96-ddp",
+      "op": "measure",
+      "read": [
+        "sender:fps",
+        "sender:Send.status[fps]",
+        "sender:Send.status[packets/s]",
+        "NetworkReceive.status[fps]",
+        "NetworkReceive.status[packets/s]",
+        "NetworkReceive.status[lost/s]",
+        "NetworkReceive.tick",
+        "Drivers.tick"
+      ],
+      "observed": {
+        "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 2572,
+            "p95": 3966,
+            "min": 1748,
+            "max": 3966,
+            "n": 3
+          },
+          "free_heap": {
+            "p50": 33708280,
+            "p95": 33724596,
+            "min": 33706636,
+            "max": 33724596,
+            "n": 3
+          },
+          "max_alloc_block": {
+            "p50": 278528,
+            "p95": 294912,
+            "min": 184320,
+            "max": 294912,
+            "n": 3
+          },
+          "last_updated": "2026-10-26"
+        }
+      },
+      "samples": 5
+    },
+    {
+      "name": "128x96-artnet-set",
+      "device": "sender",
+      "op": "set_control",
+      "id": "Send",
+      "key": "protocol",
+      "value": 0
+    },
+    {
+      "name": "128x96-artnet",
+      "op": "measure",
+      "read": [
+        "sender:fps",
+        "sender:Send.status[fps]",
+        "sender:Send.status[packets/s]",
+        "NetworkReceive.status[fps]",
+        "NetworkReceive.status[packets/s]",
+        "NetworkReceive.status[lost/s]",
+        "NetworkReceive.tick",
+        "Drivers.tick"
+      ],
+      "observed": {
+        "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 175,
+            "p95": 1733,
+            "min": 148,
+            "max": 1733,
+            "n": 3
+          },
+          "free_heap": {
+            "p50": 33701008,
+            "p95": 33735676,
+            "min": 33683056,
+            "max": 33735676,
+            "n": 3
+          },
+          "max_alloc_block": {
+            "p50": 278528,
+            "p95": 294912,
+            "min": 184320,
+            "max": 294912,
+            "n": 3
+          },
+          "last_updated": "2026-10-26"
+        }
+      },
+      "samples": 5
+    },
+    {
+      "name": "128x96-e131-set",
+      "device": "sender",
+      "op": "set_control",
+      "id": "Send",
+      "key": "protocol",
+      "value": 1
+    },
+    {
+      "name": "128x96-e131",
+      "op": "measure",
+      "read": [
+        "sender:fps",
+        "sender:Send.status[fps]",
+        "sender:Send.status[packets/s]",
+        "NetworkReceive.status[fps]",
+        "NetworkReceive.status[packets/s]",
+        "NetworkReceive.status[lost/s]",
+        "NetworkReceive.tick",
+        "Drivers.tick"
+      ],
+      "observed": {
+        "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 173,
+            "p95": 1348,
+            "min": 164,
+            "max": 1348,
+            "n": 3
+          },
+          "free_heap": {
+            "p50": 33698192,
+            "p95": 33735776,
+            "min": 33683064,
+            "max": 33735776,
+            "n": 3
+          },
+          "max_alloc_block": {
+            "p50": 278528,
+            "p95": 294912,
+            "min": 184320,
+            "max": 294912,
+            "n": 3
+          },
+          "last_updated": "2026-10-26"
+        }
+      },
+      "samples": 5
+    },
+    {
+      "name": "sender-128x128-width",
+      "device": "sender",
+      "op": "set_control",
+      "id": "Grid",
+      "key": "width",
+      "value": 128
+    },
+    {
+      "name": "sender-128x128-height",
+      "device": "sender",
+      "op": "set_control",
+      "id": "Grid",
+      "key": "height",
+      "value": 128
+    },
+    {
+      "name": "receiver-128x128-width",
+      "op": "set_control",
+      "id": "Grid",
+      "key": "width",
+      "value": 128
+    },
+    {
+      "name": "receiver-128x128-height",
+      "op": "set_control",
+      "id": "Grid",
+      "key": "height",
+      "value": 128
+    },
+    {
+      "name": "128x128-ddp-set",
+      "device": "sender",
+      "op": "set_control",
+      "id": "Send",
+      "key": "protocol",
+      "value": 2
+    },
+    {
+      "name": "128x128-ddp",
+      "op": "measure",
+      "read": [
+        "sender:fps",
+        "sender:Send.status[fps]",
+        "sender:Send.status[packets/s]",
+        "NetworkReceive.status[fps]",
+        "NetworkReceive.status[packets/s]",
+        "NetworkReceive.status[lost/s]",
+        "NetworkReceive.tick",
+        "Drivers.tick"
+      ],
+      "observed": {
+        "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 2605,
+            "p95": 8909,
+            "min": 402,
+            "max": 8909,
+            "n": 3
+          },
+          "free_heap": {
+            "p50": 33651336,
+            "p95": 33680536,
+            "min": 33633216,
+            "max": 33680536,
+            "n": 3
+          },
+          "max_alloc_block": {
+            "p50": 278528,
+            "p95": 294912,
+            "min": 184320,
+            "max": 294912,
+            "n": 3
+          },
+          "last_updated": "2026-10-26"
+        }
+      },
+      "samples": 5
+    },
+    {
+      "name": "128x128-artnet-set",
+      "device": "sender",
+      "op": "set_control",
+      "id": "Send",
+      "key": "protocol",
+      "value": 0
+    },
+    {
+      "name": "128x128-artnet",
+      "op": "measure",
+      "read": [
+        "sender:fps",
+        "sender:Send.status[fps]",
+        "sender:Send.status[packets/s]",
+        "NetworkReceive.status[fps]",
+        "NetworkReceive.status[packets/s]",
+        "NetworkReceive.status[lost/s]",
+        "NetworkReceive.tick",
+        "Drivers.tick"
+      ],
+      "observed": {
+        "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 92530,
+            "p95": 118426,
+            "min": 92530,
+            "max": 118426,
+            "n": 2
+          },
+          "free_heap": {
+            "p50": 33648708,
+            "p95": 33667104,
+            "min": 33648708,
+            "max": 33667104,
+            "n": 2
+          },
+          "max_alloc_block": {
+            "p50": 184320,
+            "p95": 294912,
+            "min": 184320,
+            "max": 294912,
+            "n": 2
+          },
+          "last_updated": "2026-10-26"
+        }
+      },
+      "samples": 5
+    },
+    {
+      "name": "128x128-e131-set",
+      "device": "sender",
+      "op": "set_control",
+      "id": "Send",
+      "key": "protocol",
+      "value": 1
+    },
+    {
+      "name": "128x128-e131",
+      "op": "measure",
+      "read": [
+        "sender:fps",
+        "sender:Send.status[fps]",
+        "sender:Send.status[packets/s]",
+        "NetworkReceive.status[fps]",
+        "NetworkReceive.status[packets/s]",
+        "NetworkReceive.status[lost/s]",
+        "NetworkReceive.tick",
+        "Drivers.tick"
+      ],
+      "observed": {
+        "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 429,
+            "p95": 2052,
+            "min": 429,
+            "max": 2052,
+            "n": 2
+          },
+          "free_heap": {
+            "p50": 33640116,
+            "p95": 33668640,
+            "min": 33640116,
+            "max": 33668640,
+            "n": 2
+          },
+          "max_alloc_block": {
+            "p50": 184320,
+            "p95": 294912,
+            "min": 184320,
+            "max": 294912,
+            "n": 2
+          },
+          "last_updated": "2026-10-26"
+        }
+      },
+      "samples": 5
+    },
+    {
+      "name": "sender-160x160-width",
+      "device": "sender",
+      "op": "set_control",
+      "id": "Grid",
+      "key": "width",
+      "value": 160
+    },
+    {
+      "name": "sender-160x160-height",
+      "device": "sender",
+      "op": "set_control",
+      "id": "Grid",
+      "key": "height",
+      "value": 160
+    },
+    {
+      "name": "receiver-160x160-width",
+      "op": "set_control",
+      "id": "Grid",
+      "key": "width",
+      "value": 160
+    },
+    {
+      "name": "receiver-160x160-height",
+      "op": "set_control",
+      "id": "Grid",
+      "key": "height",
+      "value": 160
+    },
+    {
+      "name": "160x160-ddp-set",
+      "device": "sender",
+      "op": "set_control",
+      "id": "Send",
+      "key": "protocol",
+      "value": 2
+    },
+    {
+      "name": "160x160-ddp",
+      "op": "measure",
+      "read": [
+        "sender:fps",
+        "sender:Send.status[fps]",
+        "sender:Send.status[packets/s]",
+        "NetworkReceive.status[fps]",
+        "NetworkReceive.status[packets/s]",
+        "NetworkReceive.status[lost/s]",
+        "NetworkReceive.tick",
+        "Drivers.tick"
+      ],
+      "observed": {
+        "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 2672,
+            "p95": 14855,
+            "min": 2672,
+            "max": 14855,
+            "n": 2
+          },
+          "free_heap": {
+            "p50": 33506740,
+            "p95": 33549824,
+            "min": 33506740,
+            "max": 33549824,
+            "n": 2
+          },
+          "max_alloc_block": {
+            "p50": 184320,
+            "p95": 294912,
+            "min": 184320,
+            "max": 294912,
+            "n": 2
+          },
+          "last_updated": "2026-10-26"
+        }
+      },
+      "samples": 5
+    },
+    {
+      "name": "160x160-artnet-set",
+      "device": "sender",
+      "op": "set_control",
+      "id": "Send",
+      "key": "protocol",
+      "value": 0
+    },
+    {
+      "name": "160x160-artnet",
+      "op": "measure",
+      "read": [
+        "sender:fps",
+        "sender:Send.status[fps]",
+        "sender:Send.status[packets/s]",
+        "NetworkReceive.status[fps]",
+        "NetworkReceive.status[packets/s]",
+        "NetworkReceive.status[lost/s]",
+        "NetworkReceive.tick",
+        "Drivers.tick"
+      ],
+      "observed": {
+        "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 17434,
+            "p95": 35856,
+            "min": 17434,
+            "max": 35856,
+            "n": 2
+          },
+          "free_heap": {
+            "p50": 33533816,
+            "p95": 33566264,
+            "min": 33533816,
+            "max": 33566264,
+            "n": 2
+          },
+          "max_alloc_block": {
+            "p50": 184320,
+            "p95": 294912,
+            "min": 184320,
+            "max": 294912,
+            "n": 2
+          },
+          "last_updated": "2026-10-26"
+        }
+      },
+      "samples": 5
+    },
+    {
+      "name": "160x160-e131-set",
+      "device": "sender",
+      "op": "set_control",
+      "id": "Send",
+      "key": "protocol",
+      "value": 1
+    },
+    {
+      "name": "160x160-e131",
+      "op": "measure",
+      "read": [
+        "sender:fps",
+        "sender:Send.status[fps]",
+        "sender:Send.status[packets/s]",
+        "NetworkReceive.status[fps]",
+        "NetworkReceive.status[packets/s]",
+        "NetworkReceive.status[lost/s]",
+        "NetworkReceive.tick",
+        "Drivers.tick"
+      ],
+      "observed": {
+        "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 13734,
+            "p95": 19203,
+            "min": 13734,
+            "max": 19203,
+            "n": 2
+          },
+          "free_heap": {
+            "p50": 33537548,
+            "p95": 33561220,
+            "min": 33537548,
+            "max": 33561220,
+            "n": 2
+          },
+          "max_alloc_block": {
+            "p50": 184320,
+            "p95": 294912,
+            "min": 184320,
+            "max": 294912,
+            "n": 2
+          },
+          "last_updated": "2026-10-26"
+        }
+      },
+      "samples": 5
+    },
+    {
+      "name": "sender-192x192-width",
+      "device": "sender",
+      "op": "set_control",
+      "id": "Grid",
+      "key": "width",
+      "value": 192
+    },
+    {
+      "name": "sender-192x192-height",
+      "device": "sender",
+      "op": "set_control",
+      "id": "Grid",
+      "key": "height",
+      "value": 192
+    },
+    {
+      "name": "receiver-192x192-width",
+      "op": "set_control",
+      "id": "Grid",
+      "key": "width",
+      "value": 192
+    },
+    {
+      "name": "receiver-192x192-height",
+      "op": "set_control",
+      "id": "Grid",
+      "key": "height",
+      "value": 192
+    },
+    {
+      "name": "192x192-ddp-set",
+      "device": "sender",
+      "op": "set_control",
+      "id": "Send",
+      "key": "protocol",
+      "value": 2
+    },
+    {
+      "name": "192x192-ddp",
+      "op": "measure",
+      "read": [
+        "sender:fps",
+        "sender:Send.status[fps]",
+        "sender:Send.status[packets/s]",
+        "NetworkReceive.status[fps]",
+        "NetworkReceive.status[packets/s]",
+        "NetworkReceive.status[lost/s]",
+        "NetworkReceive.tick",
+        "Drivers.tick"
+      ],
+      "observed": {
+        "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 6777,
+            "p95": 14100,
+            "min": 6777,
+            "max": 14100,
+            "n": 2
+          },
+          "free_heap": {
+            "p50": 33390708,
+            "p95": 33437908,
+            "min": 33390708,
+            "max": 33437908,
+            "n": 2
+          },
+          "max_alloc_block": {
+            "p50": 184320,
+            "p95": 294912,
+            "min": 184320,
+            "max": 294912,
+            "n": 2
+          },
+          "last_updated": "2026-10-26"
+        }
+      },
+      "samples": 5
+    },
+    {
+      "name": "192x192-artnet-set",
+      "device": "sender",
+      "op": "set_control",
+      "id": "Send",
+      "key": "protocol",
+      "value": 0
+    },
+    {
+      "name": "192x192-artnet",
+      "op": "measure",
+      "read": [
+        "sender:fps",
+        "sender:Send.status[fps]",
+        "sender:Send.status[packets/s]",
+        "NetworkReceive.status[fps]",
+        "NetworkReceive.status[packets/s]",
+        "NetworkReceive.status[lost/s]",
+        "NetworkReceive.tick",
+        "Drivers.tick"
+      ],
+      "observed": {
+        "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 8939,
+            "p95": 13374,
+            "min": 8939,
+            "max": 13374,
+            "n": 2
+          },
+          "free_heap": {
+            "p50": 33398292,
+            "p95": 33437868,
+            "min": 33398292,
+            "max": 33437868,
+            "n": 2
+          },
+          "max_alloc_block": {
+            "p50": 184320,
+            "p95": 294912,
+            "min": 184320,
+            "max": 294912,
+            "n": 2
+          },
+          "last_updated": "2026-10-26"
+        }
+      },
+      "samples": 5
+    },
+    {
+      "name": "192x192-e131-set",
+      "device": "sender",
+      "op": "set_control",
+      "id": "Send",
+      "key": "protocol",
+      "value": 1
+    },
+    {
+      "name": "192x192-e131",
+      "op": "measure",
+      "read": [
+        "sender:fps",
+        "sender:Send.status[fps]",
+        "sender:Send.status[packets/s]",
+        "NetworkReceive.status[fps]",
+        "NetworkReceive.status[packets/s]",
+        "NetworkReceive.status[lost/s]",
+        "NetworkReceive.tick",
+        "Drivers.tick"
+      ],
+      "observed": {
+        "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 12391,
+            "p95": 17221,
+            "min": 12391,
+            "max": 17221,
+            "n": 2
+          },
+          "free_heap": {
+            "p50": 33386564,
+            "p95": 33431712,
+            "min": 33386564,
+            "max": 33431712,
+            "n": 2
+          },
+          "max_alloc_block": {
+            "p50": 184320,
+            "p95": 294912,
+            "min": 184320,
+            "max": 294912,
+            "n": 2
+          },
+          "last_updated": "2026-10-26"
+        }
+      },
+      "samples": 5
+    },
+    {
+      "name": "sender-256x256-width",
+      "device": "sender",
+      "op": "set_control",
+      "id": "Grid",
+      "key": "width",
+      "value": 256
+    },
+    {
+      "name": "sender-256x256-height",
+      "device": "sender",
+      "op": "set_control",
+      "id": "Grid",
+      "key": "height",
+      "value": 256
+    },
+    {
+      "name": "receiver-256x256-width",
+      "op": "set_control",
+      "id": "Grid",
+      "key": "width",
+      "value": 256
+    },
+    {
+      "name": "receiver-256x256-height",
+      "op": "set_control",
+      "id": "Grid",
+      "key": "height",
+      "value": 256
+    },
+    {
+      "name": "256x256-ddp-set",
+      "device": "sender",
+      "op": "set_control",
+      "id": "Send",
+      "key": "protocol",
+      "value": 2
+    },
+    {
+      "name": "256x256-ddp",
+      "op": "measure",
+      "read": [
+        "sender:fps",
+        "sender:Send.status[fps]",
+        "sender:Send.status[packets/s]",
+        "NetworkReceive.status[fps]",
+        "NetworkReceive.status[packets/s]",
+        "NetworkReceive.status[lost/s]",
+        "NetworkReceive.tick",
+        "Drivers.tick"
+      ],
+      "observed": {
+        "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 8335,
+            "p95": 15524,
+            "min": 8335,
+            "max": 15524,
+            "n": 2
+          },
+          "free_heap": {
+            "p50": 33065740,
+            "p95": 33101620,
+            "min": 33065740,
+            "max": 33101620,
+            "n": 2
+          },
+          "max_alloc_block": {
+            "p50": 184320,
+            "p95": 294912,
+            "min": 184320,
+            "max": 294912,
+            "n": 2
+          },
+          "last_updated": "2026-10-26"
+        }
+      },
+      "samples": 5
+    },
+    {
+      "name": "256x256-artnet-set",
+      "device": "sender",
+      "op": "set_control",
+      "id": "Send",
+      "key": "protocol",
+      "value": 0
+    },
+    {
+      "name": "256x256-artnet",
+      "op": "measure",
+      "read": [
+        "sender:fps",
+        "sender:Send.status[fps]",
+        "sender:Send.status[packets/s]",
+        "NetworkReceive.status[fps]",
+        "NetworkReceive.status[packets/s]",
+        "NetworkReceive.status[lost/s]",
+        "NetworkReceive.tick",
+        "Drivers.tick"
+      ],
+      "observed": {
+        "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 21542,
+            "p95": 22676,
+            "min": 21542,
+            "max": 22676,
+            "n": 2
+          },
+          "free_heap": {
+            "p50": 33051312,
+            "p95": 33093936,
+            "min": 33051312,
+            "max": 33093936,
+            "n": 2
+          },
+          "max_alloc_block": {
+            "p50": 184320,
+            "p95": 294912,
+            "min": 184320,
+            "max": 294912,
+            "n": 2
+          },
+          "last_updated": "2026-10-26"
+        }
+      },
+      "samples": 5
+    },
+    {
+      "name": "256x256-e131-set",
+      "device": "sender",
+      "op": "set_control",
+      "id": "Send",
+      "key": "protocol",
+      "value": 1
+    },
+    {
+      "name": "256x256-e131",
+      "op": "measure",
+      "read": [
+        "sender:fps",
+        "sender:Send.status[fps]",
+        "sender:Send.status[packets/s]",
+        "NetworkReceive.status[fps]",
+        "NetworkReceive.status[packets/s]",
+        "NetworkReceive.status[lost/s]",
+        "NetworkReceive.tick",
+        "Drivers.tick"
+      ],
+      "observed": {
+        "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 9954,
+            "p95": 21096,
+            "min": 9954,
+            "max": 21096,
+            "n": 2
+          },
+          "free_heap": {
+            "p50": 33040828,
+            "p95": 33091636,
+            "min": 33040828,
+            "max": 33091636,
+            "n": 2
+          },
+          "max_alloc_block": {
+            "p50": 184320,
+            "p95": 294912,
+            "min": 184320,
+            "max": 294912,
+            "n": 2
+          },
+          "last_updated": "2026-10-26"
+        }
+      },
+      "samples": 5
+    },
+    {
+      "name": "sender-128x128-width",
+      "device": "sender",
+      "op": "set_control",
+      "id": "Grid",
+      "key": "width",
+      "value": 128
+    },
+    {
+      "name": "sender-128x128-height",
+      "device": "sender",
+      "op": "set_control",
+      "id": "Grid",
+      "key": "height",
+      "value": 128
+    },
+    {
+      "name": "receiver-128x128-width",
+      "op": "set_control",
+      "id": "Grid",
+      "key": "width",
+      "value": 128
+    },
+    {
+      "name": "receiver-128x128-height",
+      "op": "set_control",
+      "id": "Grid",
+      "key": "height",
+      "value": 128
+    },
+    {
+      "name": "preview-ddp-set",
+      "device": "sender",
+      "op": "set_control",
+      "id": "Send",
+      "key": "protocol",
+      "value": 2
+    },
+    {
+      "name": "128x128-preview-unwatched",
+      "op": "measure",
+      "read": [
+        "sender:fps",
+        "sender:Send.status[fps]",
+        "sender:Send.status[packets/s]",
+        "NetworkReceive.status[fps]",
+        "NetworkReceive.status[packets/s]",
+        "NetworkReceive.status[lost/s]",
+        "NetworkReceive.tick",
+        "Drivers.tick"
+      ],
+      "observed": {
+        "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 4767,
+            "p95": 7748,
+            "min": 4767,
+            "max": 7748,
+            "n": 2
+          },
+          "free_heap": {
+            "p50": 33626504,
+            "p95": 33690204,
+            "min": 33626504,
+            "max": 33690204,
+            "n": 2
+          },
+          "max_alloc_block": {
+            "p50": 184320,
+            "p95": 294912,
+            "min": 184320,
+            "max": 294912,
+            "n": 2
+          },
+          "last_updated": "2026-10-26"
+        }
+      },
+      "samples": 5
+    },
+    {
+      "name": "preview-watch",
+      "op": "browser",
+      "action": "open",
+      "settle": 5
+    },
+    {
+      "name": "128x128-preview-watched",
+      "op": "measure",
+      "read": [
+        "sender:fps",
+        "sender:Send.status[fps]",
+        "sender:Send.status[packets/s]",
+        "NetworkReceive.status[fps]",
+        "NetworkReceive.status[packets/s]",
+        "NetworkReceive.status[lost/s]",
+        "NetworkReceive.tick",
+        "Drivers.tick",
+        "Preview.status"
+      ],
+      "observed": {
+        "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 8878,
+            "p95": 12361,
+            "min": 8878,
+            "max": 12361,
+            "n": 2
+          },
+          "free_heap": {
+            "p50": 33647680,
+            "p95": 33685244,
+            "min": 33647680,
+            "max": 33685244,
+            "n": 2
+          },
+          "max_alloc_block": {
+            "p50": 208896,
+            "p95": 294912,
+            "min": 208896,
+            "max": 294912,
+            "n": 2
+          },
+          "last_updated": "2026-10-26"
+        }
+      },
+      "samples": 5
+    },
+    {
+      "name": "preview-unwatch",
+      "op": "browser",
+      "action": "close"
+    },
+    {
+      "name": "preview-off",
+      "op": "set_control",
+      "id": "Preview",
+      "key": "enabled",
+      "value": false
+    },
+    {
+      "name": "128x128-preview-off",
+      "op": "measure",
+      "read": [
+        "sender:fps",
+        "sender:Send.status[fps]",
+        "sender:Send.status[packets/s]",
+        "NetworkReceive.status[fps]",
+        "NetworkReceive.status[packets/s]",
+        "NetworkReceive.status[lost/s]",
+        "NetworkReceive.tick",
+        "Drivers.tick"
+      ],
+      "observed": {
+        "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
+          "tick_us": {
+            "p50": 65,
+            "p95": 454,
+            "min": 65,
+            "max": 454,
+            "n": 2
+          },
+          "free_heap": {
+            "p50": 33723196,
+            "p95": 33799096,
+            "min": 33723196,
+            "max": 33799096,
+            "n": 2
+          },
+          "max_alloc_block": {
+            "p50": 270336,
+            "p95": 303104,
+            "min": 270336,
+            "max": 303104,
+            "n": 2
+          },
+          "last_updated": "2026-10-26"
+        }
+      },
+      "samples": 5
+    },
+    {
+      "name": "preview-on",
+      "op": "set_control",
+      "id": "Preview",
+      "key": "enabled",
+      "value": true
     }
   ]
 }

@@ -38,7 +38,10 @@ public:
     /// Hue converts to HSV, RGB-fixed, so there is no correction UI to show.
     bool hasCorrectionControls() const override { return false; }
 
-    /// Bind the bridge address, the pairing button, the room and light filters, and the window.
+    /// It drives a slice of the shared buffer.
+    bool hasWindowControls() const override { return true; }
+
+    /// Bind the bridge address, the pairing button, and the room and light filters.
     void defineDriverControls() override {
         controls_.addIPv4("bridgeIp", bridgeIp);
         controls_.addPassword("appKey", appKey, sizeof(appKey));
@@ -49,7 +52,6 @@ public:
         buildLightOptions();
         controls_.addSelect("room", room_, roomOptions_, roomOptionCount_);
         controls_.addSelect("light", light_, lightOptions_, lightOptionCount_);
-        addWindowControls();                                    // start / count: its slice of the buffer
         // One status line carries the pairing state and the driven-of-total light count.
         refreshStatus();
     }

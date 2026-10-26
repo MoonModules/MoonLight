@@ -263,3 +263,27 @@ def test_a_floor_passes_at_or_above_and_fails_below_by_more_than_its_tolerance()
 def test_a_floor_against_a_value_the_device_does_not_report_fails():
     ok, line = runner._floor_verdict("min_stack_free", None, 512, 0)
     assert not ok and "reports none" in line
+
+
+def test_a_status_number_is_read_by_the_unit_after_it():
+    status = "41 fps, 2197 packets/s, 3 lost/s, DDP from MM-P4 (192.168.1.139), one copy"
+    assert runner.status_number(status, "fps") == 41
+    assert runner.status_number(status, "packets/s") == 2197
+    assert runner.status_number(status, "lost/s") == 3
+    assert runner.status_number(status, "each") == "-"
+    assert runner.status_number(None, "fps") == "-"
+
+
+def test_several_reads_keep_each_numbers_median_and_a_texts_last():
+    reads = [{"fps": 40, "status": "a"}, {"fps": 10, "status": "b"}, {"fps": 38, "status": "c"}]
+    assert runner.median_reads(reads) == {"fps": 38, "status": "c"}
+    assert runner.median_reads([{"fps": 3}, {"fps": "-"}]) == {"fps": "-"}
+
+
+def test_a_device_too_busy_to_answer_reads_as_unknown_rather_than_stopping_the_run():
+    class Busy:
+        def get(self, path):
+            raise ValueError("truncated JSON")
+    out = runner._read_values(Busy(), {"fps": 7}, ["fps", "NetworkReceive.status[fps]"], {})
+    assert out["fps"] == 7
+    assert out["NetworkReceive.status[fps]"].startswith("?")

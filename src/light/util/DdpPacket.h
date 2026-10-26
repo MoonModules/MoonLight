@@ -30,11 +30,14 @@ constexpr size_t DDP_MAX_PAYLOAD = 1440;  // 480 RGB / 360 RGBW lights; divisibl
 /// The flags bit marking a frame's last packet.
 constexpr uint8_t DDP_FLAG_PUSH = 0x01;
 
-/// Build a data packet; `push` marks a frame's last packet, which a double-buffering receiver shows on.
+/// The sequence counts 1 to 15 and wraps; 0 is a sender without one.
+constexpr uint8_t DDP_SEQUENCE_MAX = 15;
+
+/// Build a data packet; `push` marks a frame's last packet, which a double-buffering receiver shows on, and `sequence` lets a receiver tell order.
 inline size_t buildDdpPacket(uint8_t* outBuf, uint32_t offset, bool push,
-                             const uint8_t* data, uint16_t dataLen) {
+                             const uint8_t* data, uint16_t dataLen, uint8_t sequence = 0) {
     outBuf[0] = static_cast<uint8_t>(0x40 | (push ? DDP_FLAG_PUSH : 0x00));
-    outBuf[1] = 0;                       // sequence unused
+    outBuf[1] = sequence & 0x0F;
     outBuf[2] = 0x01;                    // RGB
     outBuf[3] = 0x01;                    // default display
     outBuf[4] = static_cast<uint8_t>(offset >> 24);

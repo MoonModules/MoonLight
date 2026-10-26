@@ -16,6 +16,7 @@
 #include "core/moonlive/moonlive_emit.h"
 #include "core/moonlive/MoonLiveCompiler.h"
 #include "light/layers/Layer.h"
+#include "light/layouts/GridLayout.h"
 #include "light/layouts/Layouts.h"
 
 #include <cstring>
@@ -449,6 +450,40 @@ TEST_CASE("a layout that changes size mid-build cannot overrun the mapping") {
         REQUIRE(layer.buffer().data() != nullptr);
         CHECK(layer.buffer().count() >= w);
     }
+}
+
+
+// A panel and a backlight strand around it, from one picture: the Grid's lights go to the panel and the strand's to its own driver, each by its window, and an edge cell lights both.
+TEST_CASE("a Grid and the Backlight layout of the same wall share its edge cells, the Grid's lights first") {
+    const std::string src = readText(scriptRoot() / "layouts" / "backlight.mll");
+    REQUIRE_FALSE(src.empty());
+    Layouts layouts;
+    GridLayout grid;
+    grid.width = 6;
+    grid.height = 4;
+    grid.depth = 1;
+    MoonLiveLayout strand;
+    strand.defineControls();
+    strand.setScript(mmWriteScript(src.c_str()));
+    strand.prepare();
+    const char* wiring = R"({"wallCols":6,"wallRows":4,"top":6,"right":4,"bottom":6,"left":4})";
+    for (uint8_t i = 0; i < strand.controls().count(); i++)
+        if (strand.controls()[i].name) applyControlValue(strand.controls()[i], wiring, strand.controls()[i].name, ApplyPolicy::Clamp);
+    layouts.addChild(&grid);
+    layouts.addChild(&strand);
+    Layer layer;
+    layer.setLayouts(&layouts);
+    layer.setChannelsPerLight(3);
+    layer.applyState();
+
+    CHECK(layer.width() == 6);
+    CHECK(layer.height() == 4);
+    CHECK(layer.physicalLightCount() == 24 + 16);   // the panel's 24, then the strand's 16 around them
+    std::vector<nrOfLightsType> topLeft, middle;
+    layer.lut().forEachDestination(0, [&](nrOfLightsType d) { topLeft.push_back(d); });            // cell (0,0)
+    layer.lut().forEachDestination(1 * 6 + 2, [&](nrOfLightsType d) { middle.push_back(d); });   // cell (2,1), inside
+    CHECK(topLeft == std::vector<nrOfLightsType>{0, 24});   // the panel's first light and the strand's first
+    CHECK(middle == std::vector<nrOfLightsType>{1 * 6 + 2});  // only the panel
 }
 
 #endif  // MM_MOONLIVE_HAS_HOST_JIT

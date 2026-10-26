@@ -37,15 +37,15 @@ Two alternatives were rejected:
 
 ### The desk becomes HA entities
 
-MqttModule announces one entity per desk slot. All of them carry the same `device` block, so HA shows a single device with the light, the update and the desk together. A slot's entity uses `MoonLight/<mac>/<slot>/set` and `/get`, for example `switch2/set`, routed onto the slot through the control path. A slot publishes on change, using the same follow pass the OSC and MIDI surfaces use. The name HA shows is the slot's target ("Woonkamer licht" once a label exists, `switch2` until then).
+MqttModule announces one entity per desk slot. All of them carry the same `device` block, so HA shows a single device with the light, the update and the desk together. A slot's entity uses `MoonLight/<mac>/<slot>/set` and `/get`, for example `switch2/set`, routed onto the slot through the control path. A slot publishes on change, using the same follow pass the OSC and MIDI surfaces use. The name HA shows is the slot's target ("Woonkamer licht" once a label exists, `switch2` until then). Each entity's `unique_id` is the device's MAC suffix and the slot, such as `563cfe_switch2`, so renaming a target or the device keeps its entity and the automations on it. A fader or encoder is a `number` with the slot's byte range: min 0, max 255, step 1.
 
 ### A text bank on the desk
 
-ControlModule gains text slots, assigned like the others to a `Module.control` of text type, such as `RoomText.text`. A text slot holds no buffer: it reads and writes the control it targets. HA sets it through a `text` entity, whose maximum is the target's size. One slot per TextEffect means a look can color each room differently.
+ControlModule gains text slots, assigned like the others to a `Module.control` of text type, such as `RoomText.text`. A text slot holds no buffer: it reads and writes the control it targets. `ControlModule::setValue` carries a byte, so text has a path of its own: a text slot kind and a write that takes the payload as UTF-8, refuses a target that is not a text control, and holds to the target's length without splitting a character. HA sets it through a `text` entity, whose maximum is the target's size. One slot per TextEffect means a look can color each room differently.
 
 ### Touch is an input service
 
-`TouchService` is a core Service. It reads a GT911 on the board's I2C bus and claims its address through `i2cDevices()`. Its rows are a rectangle in percent of the panel, the same 0 to 100 as RegionModifier, plus an `InputAction`, so a touch zone is a virtual button. A finger down is a press and a lift is the release, which lets set-while-held work. Because the rectangle is in percent, a touch zone and the layer band under it match on any resolution. On the desktop, a click on the web Preview feeds the same rows, so the whole touch path is tested without a board.
+`TouchService` is a core Service. It reads a GT911 on the board's I2C bus and claims its address through `i2cDevices()`. Its rows are a rectangle in percent of the panel, the same 0 to 100 as RegionModifier, plus an `InputAction`, so a touch zone is a virtual button. A finger down is a press and a lift is the release, which lets set-while-held work. Because the rectangle is in percent, a touch zone and the layer band under it match on any resolution. The GT911 reports in the panel's native axes, portrait on the Tab5, so TouchService turns a touch through the same rotation the display driver applies, an axis swap and an inversion, before it tests the rectangles. On the desktop, a click on the web Preview feeds the same rows, so the whole touch path is tested without a board.
 
 ### The Tab5 screen is a driver
 
@@ -54,10 +54,10 @@ A MIPI-DSI driver in `Drivers` sends the rendered grid to the panel through a `p
 ## Steps
 
 1. ⏳ **The desk as HA entities.** Table-driven discovery in MqttModule for the light, the update and every switch, fader and encoder slot, one topic per entity; the slot `set` and `get` topics; tests through `feedForTest` and the send capture, asserting each config and each routed command.
-2. ⏳ **Text slots.** A text bank in ControlModule, assigned and followed like the other banks; its HA `text` entity; tests for assigning a slot, writing through it, reading it back, and refusing a target that is not text or is too long.
+2. ⏳ **Text slots.** A text bank in ControlModule, assigned and followed like the other banks; its HA `text` entity; tests for assigning a slot, writing through it, reading it back, refusing a target that is not text, and a text at and past the target's length, cut whole at a multi-byte character.
 3. ⏳ **The wall look.** An Effects preset for the Waveshare (four rooms, text slots assigned) and the HA automations (`text.set_value` from templates; `switch2` both ways with `light.woonkamer_woonkamer`). Bench: the product owner watches the panel follow HA.
 4. ⏳ **Physical buttons.** ButtonService rows on the Waveshare aimed at `Control.switch2…`; a press toggles the HA light, and the light's state comes back to the switch. Bench.
-5. ⏳ **TouchService.** The GT911 through a platform seam, rows of percent rectangles with an `InputAction`, press and release; Preview clicks on the desktop as the test source; unit tests for hit-testing, overlapping zones and release.
+5. ⏳ **TouchService.** The GT911 through a platform seam, rows of percent rectangles with an `InputAction`, press and release; Preview clicks on the desktop as the test source; unit tests for hit-testing, overlapping zones, release, and a corner touch landing in the right corner in both orientations, which Preview clicks do not exercise.
 6. ⏳ **MIPI-DSI out.** The platform display seam and a driver with a whole-number upscale, shared with the Video plan's step 10. Bench on the Tab5.
 7. ⏳ **The Tab5 board.** Its catalog entry in `deviceModels.json`: I2C pins, the touch rows, the DSI driver and a starter wall look. Bench.
 8. ⏳ **Document it.** home-automation.md gets the desk-as-entities section, a how-to covers the wall controller, MqttModule and ControlModule get card updates, and MoonWalk gets a process "Build a Home Assistant wall controller".
@@ -77,9 +77,9 @@ A MIPI-DSI driver in `Drivers` sends the rendered grid to the panel through a `p
 
 ## Impact and challenges
 
-- **Discovery count:** 26 retained discovery topics per device with `haDesk` on, re-announced on connect, as the light already is. Each retract is a known empty retained payload.
+- **Discovery count:** 30 retained discovery topics per device with `haDesk` on (the light, the update, 24 desk slots and 4 text slots), re-announced on connect, as the light already is. Each retract is a known empty retained payload.
 - **The 512-byte inbound cap** is ample for one text slot (at most 255 characters). The plan keeps the cap and documents it next to the topic.
-- **The broker:** HA runs MQTT for Zigbee2MQTT. Step 3 needs the broker's address and a login for the panel.
+- **The broker:** HA runs MQTT for Zigbee2MQTT. Step 3 needs the broker's address and a login for the panel, which MqttModule already keeps: its `username`, and its `password` stored obfuscated like the WiFi one.
 - **Tab5:** its panel is portrait natively (720×1280), so the driver needs a rotation, and the DSI timing comes from M5Stack's BSP.
 
 ## Estimate
@@ -98,5 +98,5 @@ A MIPI-DSI driver in `Drivers` sends the rendered grid to the panel through a `p
 ## What it removes
 
 - The light's and the update's own discovery publishers become two rows of the one table-driven announcer, so three discovery code paths become one.
-- No token handling: `getJson` stays without headers, and nothing on the device stores an HA secret.
+- No token handling: `getJson` stays without headers, and the device stores no HA token; the broker login it needs is the one MqttModule already keeps.
 - The REST push from a script on the Mac, used for the first bench test, is not carried forward.

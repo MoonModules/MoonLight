@@ -52,3 +52,20 @@ def test_a_base_git_does_not_know_stops_with_one_line_not_a_traceback():
     with pytest.raises(SystemExit) as stop:
         ga.changed_files("no-such-remote/main")
     assert "--base" in str(stop.value)
+
+
+def test_the_branch_range_comes_before_the_paths_and_a_name_with_spaces_stays_whole(tmp_path):
+    """git reads a range after `--` as a path, which named no change at all; and a plan's name holds spaces."""
+    import subprocess
+    git = lambda *a: subprocess.run(["git", *a], cwd=tmp_path, check=True, capture_output=True)
+    git("init", "-q", "-b", "main")
+    git("config", "user.email", "t@t")
+    git("config", "user.name", "t")
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "docs" / "a.md").write_text("one")
+    git("add", "."); git("commit", "-qm", "base")
+    git("switch", "-qc", "topic")
+    (tmp_path / "docs" / "a plan (1 of 2).md").write_text("two")
+    (tmp_path / "other.txt").write_text("three")
+    git("add", "."); git("commit", "-qm", "change")
+    assert ga.changed_files("main", "--", "docs", root=tmp_path) == ["docs/a plan (1 of 2).md"]

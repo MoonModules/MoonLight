@@ -54,6 +54,7 @@ def main() -> int:
                     help="where the JUnit results go; CI points it where its annotations step reads them")
     ap.add_argument("--clip", help="with --ui, perform only the run files whose name holds this, such as 16-restore-a-backup")
     args = ap.parse_args()
+    args.junit_dir = args.junit_dir.resolve()   # the caller's folder, since the runs below start in the repo
     if args.clip and not args.ui:
         ap.error("--clip narrows the UI suite: pass --ui with it")
     # The UI lane is OPT-IN: it needs a MoonLight listening, so a bare run stays the

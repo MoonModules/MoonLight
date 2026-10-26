@@ -156,6 +156,21 @@ TEST_CASE("NetworkSendDriver: no destination by default: it idles, and says why"
     CHECK(d.status() != nullptr);        // explains itself rather than idling silently
 }
 
+// The base places the window, so every driver that reads a slice shows it in the same spot.
+TEST_CASE("NetworkSendDriver: start and count follow the correction block, before the driver's own controls") {
+    mm::NetworkSendDriver d;
+    d.defineControls();
+    auto at = [&](const char* name) {
+        for (uint8_t i = 0; i < d.controls().count(); i++)
+            if (std::strcmp(d.controls()[i].name, name) == 0) return static_cast<int>(i);
+        return -1;
+    };
+    REQUIRE(at("fixtureRef") >= 0);
+    CHECK(at("start") == at("fixtureRef") + 1);
+    CHECK(at("count") == at("start") + 1);
+    CHECK(at("protocol") == at("count") + 1);
+}
+
 // One driver feeds N tubes, each its own host and its own run of the window, the unicast shape Art-Net 4 requires.
 TEST_CASE("NetworkSendDriver: a range fans the window out over its tubes, one slice each") {
     mm::Buffer src;
@@ -269,23 +284,41 @@ TEST_CASE("sACN multicast puts the universe number in the destination address") 
     CHECK(addr[2] == 1); CHECK(addr[3] == 44);  // 300 = 0x012C
 }
 
-// A fixture never straddles two universes, or an 11-channel moving head would read a neighbor's channels as its pan and tilt.
-TEST_CASE("A DMX universe carries whole fixtures, never a split one") {
-    constexpr size_t kUniverse = 512;
-    // The driver's rounding restated, since its send path has no seam without a socket: floor the universe to whole fixtures.
-    auto wholeFixtures = [](size_t chunk, uint8_t bytesPerLight) {
-        const size_t whole = (chunk / bytesPerLight) * bytesPerLight;
-        return whole > 0 ? whole : chunk;
-    };
-
-    CHECK(wholeFixtures(kUniverse, 11) == 506);   // 46 fixtures x 11, not 512
-    CHECK(wholeFixtures(kUniverse, 11) % 11 == 0);
-    CHECK(wholeFixtures(kUniverse, 3) == 510);    // 170 pixels x 3
-    CHECK(wholeFixtures(kUniverse, 4) == 512);    // divides exactly: unchanged
-    CHECK(wholeFixtures(kUniverse, 1) == 512);
-
-    // A fixture wider than a universe cannot be served: keep the full universe rather than sending zero bytes forever, so it fails visibly instead of going silently dead.
-    CHECK(wholeFixtures(kUniverse, 255) == 510);
+// A universe carries exactly channels_per_universe channels, the way a receiver with the same setting reads them, so at 512 an RGB light straddles two.
+TEST_CASE("NetworkSendDriver: each Art-Net universe carries exactly channels_per_universe channels") {
+    for (uint16_t perUniverse : {uint16_t(510), uint16_t(512)}) {
+        CAPTURE(perUniverse);
+        mm::Buffer source;
+        REQUIRE(source.allocate(300, 3));   // 900 bytes: a full universe and the rest
+        mm::platform::UdpSocket rx;
+        REQUIRE(rx.open());
+        REQUIRE(rx.bind(mm::ARTNET_PORT));
+        mm::NetworkSendDriver driver;
+        mm::Correction correction;
+        mm::test::rebuildFromPreset(correction, 255, mm::test::PresetOrder::RGB);
+        driver.correctionForTest() = correction;
+        driver.protocol = mm::NetworkSendDriver::kProtoArtNet;
+        std::snprintf(driver.hosts, sizeof(driver.hosts), "%s", "127.0.0.1");
+        driver.packetGap = 0;   // the burst from the tick, no task to wait for
+        driver.channelsPerUniverse = perUniverse;
+        driver.setSourceBuffer(&source);
+        driver.applyState();
+        mm::platform::setTestNowMs(1000);
+        driver.tick();
+        std::vector<uint16_t> lengths;
+        uint8_t buf[1500];
+        for (int i = 0; i < 5000 && lengths.size() < 2; i++) {
+            const int n = rx.recvFrom(buf, sizeof(buf));
+            uint16_t universe = 0, dataLen = 0;
+            const uint8_t* data = nullptr;
+            if (n > 0 && mm::parseArtDmxPacket(buf, static_cast<size_t>(n), universe, data, dataLen)) lengths.push_back(dataLen);
+            else mm::platform::delayUs(100);
+        }
+        CHECK(lengths == std::vector<uint16_t>{perUniverse, static_cast<uint16_t>(900 - perUniverse)});
+        driver.release();
+        rx.close();
+        mm::platform::setTestNowMs(0);
+    }
 }
 
 // E1.31's multicast and Art-Net's broadcast are one stream of universes for the whole window, so the host list plays no part.
@@ -339,7 +372,8 @@ TEST_CASE("NetworkSendDriver: a named host waits for its address while the other
     mm::HostResolver::passForTest();
     d.tick1s();
     CHECK(d.destinationAt(1)[3] == 80);
-    CHECK(d.status() == nullptr);
+    REQUIRE(d.status() != nullptr);
+    CHECK(std::strstr(d.status(), "not resolved") == nullptr);  // the warning clears, and the line reports the sending instead
 }
 
 // A light stream never falls back to broadcast on a network that drops multicast; the card says what to do instead.
@@ -417,9 +451,78 @@ TEST_CASE("NetworkSendDriver: a packet gap of 0 sends the frame as one burst fro
 // A gap too long for the frame rate is shortened so a frame's packets fit in 80% of its period, leaving the rest for the next.
 TEST_CASE("NetworkSendDriver: a long packet gap is shortened so the frame fits its fps period") {
     PaceRig r(1000, 5000, 100);   // 10 ms per frame at 100 fps; three packets plus one destination
-    CHECK(r.driver.effectiveGap(3000, 3) == 8000 / 3);
+    CHECK(r.driver.effectiveGap(3000) == 8000 / 3);
     r.driver.fps = 10;            // 100 ms per frame: the configured gap fits as it is
-    CHECK(r.driver.effectiveGap(3000, 3) == 5000);
+    CHECK(r.driver.effectiveGap(3000) == 5000);
+}
+
+// A render slower than the fps cap would otherwise pack a frame into the cap's short period and go quiet after it: a burst the receiver drops.
+TEST_CASE("NetworkSendDriver: a frame is paced across the period the render delivers, or the fps period when the render is faster") {
+    using D = mm::NetworkSendDriver;
+    CHECK(D::pacingPeriodUs(120, 20833) == 20833);   // a 48 fps render under a 120 cap: its own period
+    CHECK(D::pacingPeriodUs(40, 8333) == 25000);     // a 120 fps render under a 40 cap: the cap's
+    CHECK(D::pacingPeriodUs(40, 0) == 25000);        // before the first frame: the cap's
+}
+
+// The card says what went out in the last second, so a rate a receiver reports can be told from the one the driver sends.
+TEST_CASE("NetworkSendDriver: the status reports the frames sent last second, their packets and their spacing") {
+    {
+        PaceRig r(1000, 0, 20);   // 3000 bytes: three DDP packets in a burst from the tick
+        r.driver.tick();
+        REQUIRE(r.arrivals(3).size() == 3);
+        r.driver.tick1s();
+        REQUIRE(r.driver.status() != nullptr);
+        CHECK(std::string(r.driver.status()) == "1 fps, 3 packets/s, 3 each, a burst");
+    }
+    {
+        PaceRig r(1000, 1000, 20);   // the same three, 1 ms apart from the task
+        r.driver.tick();
+        REQUIRE(r.arrivals(3).size() == 3);
+        mm::platform::delayMs(5);    // the task stores its counts as the frame ends
+        r.driver.tick1s();
+        REQUIRE(r.driver.status() != nullptr);
+        CHECK(std::string(r.driver.status()) == "1 fps, 3 packets/s, 3 each, 1000 us apart");
+    }
+}
+
+// A receiver counts a gap in the DDP sequence as lost packets, so each packet carries the next number, 1 to 15 and round again.
+TEST_CASE("NetworkSendDriver: each DDP packet carries the next sequence number, wrapping from 15 to 1") {
+    PaceRig r(3000, 0, 20);   // 9000 bytes: seven DDP packets a frame
+    std::vector<uint8_t> seqs;
+    uint8_t buf[1500];
+    uint8_t ip[4];
+    for (int frame = 0; frame < 3; frame++) {
+        mm::platform::setTestNowMs(1000 + 100 * (frame + 1));   // past the fps limiter each time
+        r.driver.tick();
+        for (int i = 0; i < 5000 && seqs.size() < 7u * (frame + 1); i++) {
+            if (r.rx.recvFrom(buf, sizeof(buf), ip) > 0) seqs.push_back(buf[1]);
+            else mm::platform::delayUs(100);
+        }
+    }
+    REQUIRE(seqs.size() == 21);
+    for (size_t i = 0; i < seqs.size(); i++) CHECK(seqs[i] == i % 15 + 1);
+}
+
+// A switched-off driver sends nothing, so its card shows no rate from before.
+TEST_CASE("NetworkSendDriver: switching off clears the status") {
+    PaceRig r(1000, 0, 20);
+    r.driver.tick();
+    REQUIRE(r.arrivals(3).size() == 3);
+    r.driver.tick1s();
+    REQUIRE(r.driver.status() != nullptr);
+    r.driver.setEnabled(false);
+    r.driver.applyState();
+    CHECK(r.driver.status() == nullptr);
+}
+
+// A packet waits only for what remains of its slot, so a slow send eats into its own wait rather than adding to it, and a frame that runs late goes back to back.
+TEST_CASE("NetworkSendDriver: a packet waits only for what remains until its slot") {
+    using D = mm::NetworkSendDriver;
+    CHECK(D::slotWait(1000, 3, 200, 1000) == 600);   // on time: the whole way to slot 3
+    CHECK(D::slotWait(1000, 3, 200, 1450) == 150);   // the sends took 450 us: only the rest
+    CHECK(D::slotWait(1000, 3, 200, 1600) == 0);     // at its slot
+    CHECK(D::slotWait(1000, 3, 200, 2500) == 0);     // late: no wait, back to back
+    CHECK(D::slotWait(0xFFFFFF00u, 2, 200, 0xFFFFFF80u) == 272);   // across micros() wrapping
 }
 
 // The send task reads the corrected buffer while it paces a frame, so a correction that grows the buffer waits the task out and restarts it; the next frame goes out whole, four channels a light.

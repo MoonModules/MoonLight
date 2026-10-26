@@ -88,8 +88,9 @@ public:
     virtual void tick20ms() MM_NONBLOCKING { tickChildren(&MoonModule::tick20ms); }
     /// The once-a-second tick for housekeeping, which by default ticks the children.
     virtual void tick1s() MM_NONBLOCKING { tickChildren(&MoonModule::tick1s); }
-    /// Free everything this module holds, buffers and hardware alike, then the children.
+    /// Free everything this module holds, buffers and hardware alike, then the children; a released module reports nothing, so its status clears.
     virtual void release() {
+        clearStatus();
         // An override frees its own hardware; this base frees every buffer it registered.
         for (ScratchBufferBase* b = scratchBuffers_; b; b = b->next_) b->resizeBytes(0);
         // Then the children, in reverse, a module shutting down before those it owns.

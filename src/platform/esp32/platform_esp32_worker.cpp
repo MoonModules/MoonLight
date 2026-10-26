@@ -54,7 +54,7 @@ namespace {
 constexpr uint32_t kStopJoinTimeoutMs = 300;
 
 // The opaque WorkerTask::impl. Holds the RTOS handle, the caller's fn/user, and a stop flag the spawned trampoline checks.
-struct EspWorker {
+struct EspWorker : InternalRamObject {   // the timer interrupt reads it with the flash cache possibly off
     TaskHandle_t handle = nullptr;
     WorkerFn fn = nullptr;
     void* user = nullptr;
@@ -123,7 +123,7 @@ static void sleepTick(EspWorker* w) {
 static void IRAM_ATTR sleepWake(void* arg) {
     BaseType_t woken = pdFALSE;
     vTaskNotifyGiveFromISR(static_cast<EspWorker*>(arg)->handle, &woken);
-    portYIELD_FROM_ISR(woken);
+    if (woken) esp_timer_isr_dispatch_need_yield();   // ESP-IDF's rule for an ISR-dispatched callback, which switches once every due timer ran
 }
 
 // A one-shot esp_timer notifies the task, so a gap below the 10 ms scheduler tick costs no busy-wait; a stop's notification ends it early, as it should.

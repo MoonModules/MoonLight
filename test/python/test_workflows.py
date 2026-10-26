@@ -13,7 +13,9 @@ import gen_moonwalk  # noqa: E402
 WORKFLOWS = ROOT / ".github" / "workflows"
 # A workflow left out names its reason, so the exemption reads as a debt rather than a rule.
 EXEMPT = {"release.yml": "its build steps move into scripts after v7.0.0 ships; its publishing (the release upload, Pages, the container registry) is GitHub's own"}
-SCRIPT = re.compile(r"^uv run (moondeck/\S+\.py)\b")
+# One script call and its arguments, nothing chained after it; a `${{ }}` expression is GitHub's, evaluated before the shell sees the line.
+SCRIPT = re.compile(r"^uv run (moondeck/\S+\.py)(?:\s+[^;&|`]*)?$")
+EXPRESSION = re.compile(r"\$\{\{.*?\}\}")
 # What only GitHub's runner needs: a tool the runner lacks, and the values its cache and path read.
 PLUMBING = re.compile(r'^(sudo apt-get install -y \S+|curl -sSL https://github\.com/errata-ai/vale/\S+ \| tar -xz -C "\$RUNNER_TEMP" vale'
                       r'|echo .+ >> "\$GITHUB_(OUTPUT|PATH)")$')
@@ -25,7 +27,7 @@ def jobs():
         if path.name in EXEMPT:
             continue
         for name, job in (yaml.safe_load(path.read_text(encoding="utf-8")).get("jobs") or {}).items():
-            lines = [line.strip() for step in job.get("steps", []) if "run" in step
+            lines = [EXPRESSION.sub("EXPR", line.strip()) for step in job.get("steps", []) if "run" in step
                      for line in step["run"].splitlines() if line.strip() and not line.strip().startswith("#")]
             yield path.name, name, lines
 
@@ -53,3 +55,10 @@ def test_every_job_that_runs_commands_calls_a_script_a_process_step_names():
 def test_an_exempt_workflow_names_its_reason():
     assert all(reason for reason in EXEMPT.values())
     assert all((WORKFLOWS / name).exists() for name in EXEMPT), "an exemption outlives its workflow"
+
+
+def test_a_script_call_chained_to_another_command_is_not_a_script_call():
+    assert SCRIPT.match("uv run moondeck/test/test_host.py --python --junit-dir results")
+    assert SCRIPT.match(EXPRESSION.sub("EXPR", "uv run moondeck/check/check_sanitizers.py --kind ${{ matrix.kind }} ${{ a && 'b' || '' }}"))
+    assert not SCRIPT.match("uv run moondeck/test/test_host.py && rm -rf results")
+    assert not SCRIPT.match("uv run moondeck/test/test_host.py; echo done")

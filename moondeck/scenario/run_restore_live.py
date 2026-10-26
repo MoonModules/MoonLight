@@ -72,14 +72,18 @@ def main() -> int:
     if app is None:
         print("run_restore_live: no desktop build; run uv run moondeck/build/build_desktop.py first.")
         return 2
+    host = f"localhost:{LAUNCH_PORT}"
+    if answers(host, 0):
+        print(f"run_restore_live: something already answers on {host}; --launch restores only onto the app it starts.")
+        return 2
     with tempfile.TemporaryDirectory() as data:
         log = Path(data) / "app.log"
         with open(log, "w") as out:
             proc = subprocess.Popen([str(app), "--no-browser", "--port", str(LAUNCH_PORT)], stdout=out, stderr=subprocess.STDOUT,
                                     env={**os.environ, "MM_DATA_DIR": str(Path(data) / "fs")})
         try:
-            host = f"localhost:{LAUNCH_PORT}"
-            rc = restore(host, args.bundle, args.readers) if answers(host, 30) else 2
+            # The app it started answers, not one that took the port meanwhile.
+            rc = restore(host, args.bundle, args.readers) if answers(host, 30) and proc.poll() is None else 2
         finally:
             proc.terminate()
             try:

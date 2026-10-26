@@ -302,7 +302,7 @@ FIRMWARES: dict[str, dict] = {
                        "ESP32-C6 over SDIO (esp_hosted), for P4 revisions 0.x/1.x "
                        "ONLY. Ethernet works; WiFi over the C6 associates on some "
                        "boots and not on others.",
-        # Ships while WiFi is intermittent so users can try it (backlog-core § ESP32-P4 round 3). esp-idf #18759 is open upstream; CONFIG_PM_SLEEP_CLK_ICG_ENABLE=n skips the allocation that aborted cpu_start, at the cost of peripheral clock gating during light sleep, which this device never enters.
+        # Ships while WiFi is intermittent so users can try it (backlog-core § ESP32-P4 round 3). CONFIG_PM_SLEEP_CLK_ICG_ENABLE=n in its fragment skips the allocation that aborted cpu_start, at the cost of peripheral clock gating during light sleep, which this device never enters.
         "ships": True,
         "panel_cards": True,
     },

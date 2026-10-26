@@ -63,7 +63,10 @@ public:
     /// Frame-rate limit, so a fast render tick does not saturate the link.
     uint8_t fps = 40;
 
-    /// Bind the format, the host interface and the shared window, after the correction block.
+    /// It sends a slice of the shared buffer.
+    bool hasWindowControls() const override { return true; }
+
+    /// Bind the format and the host interface, after the window.
     void defineDriverControls() override {
         controls_.addSelect("format", format, kFormatOptions, kFormatCount);
         controls_.addSelect("firmware", firmware, kFirmwareOptions, kFirmwareCount);
@@ -99,7 +102,6 @@ public:
                                 static_cast<uint8_t>(n < 255 ? n : 255));
             controls_.setPersistLabel(controls_.count() - 1);
         }
-        addWindowControls();   // start / count: which slice of the shared buffer this sink sends
         controls_.addControl("fps", fps, 1, 120);
     }
 
