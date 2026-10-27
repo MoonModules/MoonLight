@@ -2,7 +2,7 @@
 # /// script
 # requires-python = ">=3.9"
 # ///
-"""Build + run the unit suite under AddressSanitizer and ThreadSanitizer.
+"""Build + run the unit suite under AddressSanitizer, ThreadSanitizer or RealtimeSanitizer, as CI does: `--kind <k> --filter ''` runs one lane over the whole suite.
 
 WHY THIS EXISTS: the render/encode multicore split put a second thread beside code that had been
 single-threaded for its whole life — a shared output buffer handed between cores, an atomic stop
@@ -44,7 +44,7 @@ BREW_LLVM = Path("/opt/homebrew/opt/llvm/bin")
 
 
 def compiler() -> tuple[str, str]:
-    """(cc, cxx) — Homebrew LLVM on macOS, the system compiler elsewhere."""
+    """(cc, cxx): Homebrew LLVM on macOS, CC and CXX or the system compiler elsewhere."""
     if sys.platform == "darwin":
         cxx = BREW_LLVM / "clang++"
         if not cxx.exists():
@@ -53,7 +53,8 @@ def compiler() -> tuple[str, str]:
                 "  brew install llvm"
             )
         return str(BREW_LLVM / "clang"), str(cxx)
-    return os.environ.get("CC", "clang"), os.environ.get("CXX", "clang++")
+    # The system compiler, as CMake picks it; an empty variable, as a CI matrix leaves one, means unset.
+    return os.environ.get("CC") or "cc", os.environ.get("CXX") or "c++"
 
 
 def runtime_works(kind: str, cxx: str) -> bool:
@@ -77,7 +78,7 @@ def runtime_works(kind: str, cxx: str) -> bool:
             return False   # timeout = the runtime hung; non-zero = it crashed
 
 
-def run_one(kind: str, filt: str | None) -> bool:
+def run_one(kind: str, filt: str | None, junit: Path | None = None) -> bool:
     """Build + run mm_tests under one sanitizer. Returns True on a clean run."""
     cc, cxx = compiler()
     if not runtime_works(kind, cxx):
@@ -104,18 +105,23 @@ def run_one(kind: str, filt: str | None) -> bool:
          f"-DCMAKE_CXX_FLAGS={flags}", f"-DCMAKE_EXE_LINKER_FLAGS=-fsanitize={kind}"],
         check=True, stdout=subprocess.DEVNULL,
     )
-    subprocess.run(["cmake", "--build", str(build), "--target", "mm_tests", "-j8"],
+    subprocess.run(["cmake", "--build", str(build), "--target", "mm_tests", f"-j{os.cpu_count() or 8}"],
                    check=True, stdout=subprocess.DEVNULL)
 
     env = dict(os.environ)
     # Leak detection is a separate concern from the races/UAF this gate is for, and it fires on
     # third-party static init. Keep the signal on what we're actually hunting.
     env["ASAN_OPTIONS"] = "detect_leaks=0"
-    env["TSAN_OPTIONS"] = "halt_on_error=0"
+    env["TSAN_OPTIONS"] = "halt_on_error=0"   # every race of the run reported, the run still failing: halting at the first hid the next one behind each fix
+    # RTSan reports and does not halt: the render path's known blocking calls are counted by check_code and backlogged, so halting would fail every run; the log is the signal.
+    env["RTSAN_OPTIONS"] = "halt_on_error=0"
 
     cmd = [str(build / "test" / "mm_tests")]
     if filt:
         cmd.append(f"-tc={filt}")
+    if junit:
+        junit.parent.mkdir(parents=True, exist_ok=True)
+        cmd += ["--reporters=junit", f"--out={junit}"]
     proc = subprocess.run(cmd, env=env)
     ok = proc.returncode == 0
     print(f"  {kind}: {'PASS' if ok else 'FAIL'}")
@@ -124,10 +130,12 @@ def run_one(kind: str, filt: str | None) -> bool:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--kind", choices=["address", "thread", "both"], default="both")
+    # `realtime` is the runtime half of the hot-path check: MM_NONBLOCKING marks the tick methods, -Wfunction-effects proves what it can at compile time, and RTSan catches what reaches blocking through virtual dispatch. It needs Clang 20, so CI names clang-20 through CC and CXX.
+    ap.add_argument("--kind", choices=["address", "thread", "realtime", "both"], default="both")
     # The concurrency suites are the point of this gate; the full suite is available but slower.
     ap.add_argument("--filter", default="render-split*,worker seam*,TryLock*",
                     help="doctest -tc filter; pass '' for the whole suite")
+    ap.add_argument("--junit", type=Path, help="write the unit results as JUnit here, for CI's annotations")
     args = ap.parse_args()
 
     if not shutil.which("cmake"):
@@ -136,12 +144,12 @@ def main() -> int:
     kinds = ["address", "thread"] if args.kind == "both" else [args.kind]
     # Run BOTH, then aggregate — `all(generator)` short-circuits, so an ASan failure would skip TSan
     # entirely and hide a race behind a use-after-free. They are independent signals; report both.
-    results = [run_one(k, args.filter or None) for k in kinds]
+    results = [run_one(k, args.filter or None, args.junit) for k in kinds]
     ok = all(results)
     if not args.filter:   # a filtered run is part of the suite, so only the whole one is the record
         _findings.write("check_sanitizers", RULES,
                         [{"rule": RULE_OF[k], "message": f"mm_tests fails under the {k} sanitizer", "level": "error"}
-                         for k, passed in zip(kinds, results) if not passed])
+                         for k, passed in zip(kinds, results) if not passed and k in RULE_OF])
     print("\nSanitizers:", "PASS" if ok else "FAIL")
     return 0 if ok else 1
 

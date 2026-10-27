@@ -771,6 +771,10 @@ int wifiTxPower();
 
 /// Cap the WiFi transmit power in quarter-dBm units, 8 to 84; 0 keeps the stack default.
 bool wifiSetTxPower(int8_t quarterDbm);
+#ifndef ESP_PLATFORM   // a host-test seam, which no ESP32 code calls
+/// The last cap a test radio took, in quarter dBm, 0 while none was pushed.
+int8_t testLastTxPower();
+#endif
 
 /// Advertise this device over mDNS as `_http._tcp` and `_wled._tcp`, which is how the WLED app and Home Assistant find it.
 bool mdnsInit(const char* deviceName);
@@ -898,7 +902,9 @@ public:
     bool bind(uint16_t port, const uint8_t localIp[4] = nullptr);
     /// Receive one datagram without blocking: bytes copied, or -1 when nothing is pending; a datagram longer than `maxLen` is truncated, and `srcIp` and `srcPort` answer who sent it.
     int recvFrom(uint8_t* buf, size_t maxLen, uint8_t srcIp[4] = nullptr, uint16_t* srcPort = nullptr);
-    /// Block until any of `sockets` has a datagram waiting or `timeoutMs` passes: how many are readable, 0 on a timeout, -1 where a platform cannot wait.
+    /// The most sockets one wait watches.
+    static constexpr int kMaxWaitSockets = 16;
+    /// Block until any of the first kMaxWaitSockets `sockets` has a datagram waiting or `timeoutMs` passes: which are readable, bit i for `sockets[i]`, 0 on a timeout, -1 where a platform cannot wait.
     static int waitReadable(UdpSocket* const* sockets, int count, uint32_t timeoutMs);
     /// Send once to an explicit address.
     bool sendToAddr(const uint8_t ip[4], uint16_t port, const uint8_t* data, size_t len);

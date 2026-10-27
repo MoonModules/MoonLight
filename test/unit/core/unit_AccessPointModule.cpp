@@ -1,4 +1,5 @@
 /// @module AccessPointModule
+/// @also WiFiModule, NetworkModule
 /// The device's own network: when it opens by its `opens` rule, how it appears, the captive portal a joining phone sees, and the handoff to the home network.
 
 #include "doctest.h"
@@ -467,4 +468,15 @@ TEST_CASE("the access point broadcasts MM- and four MAC digits, whatever the dev
     n.at(1000);
     CHECK(std::string(mm::platform::testLastApConfig().name) == anonymous);
     CHECK(std::string(n.ap.name()) == anonymous);   // what the card shows
+}
+
+// Lowering the TX power is how a flicker coupled from the radio into a data wire is told apart from other causes, so the cap set on the WiFi card has to reach the radio on the next tick, in its quarter-dBm units.
+// @step diagnose-lights/txpower
+TEST_CASE("a TX power set on the WiFi card reaches the radio on the next tick") {
+    ApNetwork n;
+    n.net.setup();   // nothing to join, so the access point opens: the radio is up
+    REQUIRE(mm::platform::wifiApConnected());
+    *controlPtr<int16_t>(n.wifi, "txPowerSetting") = 2;
+    n.at(1000);
+    CHECK(mm::platform::testLastTxPower() == 8);   // 2 dBm
 }

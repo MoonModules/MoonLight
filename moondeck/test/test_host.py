@@ -10,6 +10,7 @@ C++. The commit gate and CI both run them; this is the same command with a card 
   uv run moondeck/test/test_host.py --python   # just Python
   uv run moondeck/test/test_host.py --js       # just JS
   uv run moondeck/test/test_host.py --ui       # just the UI run (needs a running device)
+  uv run moondeck/test/test_host.py --python --junit-dir results   # as CI runs it, the results where its annotations read them
 
 The Python deps ride in a PEP-723 block per test file, so they are named here rather than
 installed: `uv run --with` resolves them per run and leaves no environment behind.
@@ -49,8 +50,11 @@ def main() -> int:
     only.add_argument("--python", action="store_true", help="run only the Python suite")
     only.add_argument("--js", action="store_true", help="run only the JS suite")
     only.add_argument("--ui", action="store_true", help="run only the UI suite (needs a device)")
+    ap.add_argument("--junit-dir", type=Path, default=ROOT / "build" / "moondeck-logs",
+                    help="where the JUnit results go; CI points it where its annotations step reads them")
     ap.add_argument("--clip", help="with --ui, perform only the run files whose name holds this, such as 16-restore-a-backup")
     args = ap.parse_args()
+    args.junit_dir = args.junit_dir.resolve()   # the caller's folder, since the runs below start in the repo
     if args.clip and not args.ui:
         ap.error("--clip narrows the UI suite: pass --ui with it")
     # The UI lane is OPT-IN: it needs a MoonLight listening, so a bare run stays the
@@ -63,7 +67,7 @@ def main() -> int:
         cmd = ["uv", "run"]
         for d in PY_DEPS:
             cmd += ["--with", d]
-        junit = ROOT / "build" / "moondeck-logs" / "junit-python.xml"   # the results beside the console, to be kept as runs
+        junit = args.junit_dir / "junit-python.xml"   # the results beside the console, to be kept as runs
         junit.parent.mkdir(parents=True, exist_ok=True)
         junit.unlink(missing_ok=True)   # a run that writes none records none, rather than the last one's results as this tree's
         cmd += ["pytest", "test/python", "-q", f"--junitxml={junit}"]
@@ -86,7 +90,7 @@ def main() -> int:
             if not tests:
                 print("\n=== JS (test/js) ===\nSKIP: no test files found", flush=True)
             else:
-                junit = ROOT / "build" / "moondeck-logs" / "junit-js.xml"
+                junit = args.junit_dir / "junit-js.xml"
                 junit.parent.mkdir(parents=True, exist_ok=True)
                 junit.unlink(missing_ok=True)
                 console = "spec" if sys.stdout.isatty() else "tap"   # what node picks on its own, named now that a second reporter writes the results

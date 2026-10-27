@@ -35,17 +35,20 @@ public:
     /// The hardware block this driver claims, so two drivers cannot corrupt one peripheral; virtual rather than RTTI, which ESP32 builds compile without.
     virtual LedHwBlock hwBlock() const { return LedHwBlock::None; }
 
-    /// Lead every driver card with the correction block, then the driver's own controls; a driver overrides defineDriverControls, so the placement is never re-implemented.
+    /// Lead every driver card with the correction block, then the window, then the driver's own controls; a driver overrides defineDriverControls, so the placement is never re-implemented.
     void defineControls() final {
         if (hasCorrectionControls()) defineCorrectionControls();
+        if (hasWindowControls()) addWindowControls();
         defineDriverControls();
     }
 
-    /// A driver's own controls, added after the correction block; this is what a driver overrides.
+    /// A driver's own controls, added after the correction block and the window; this is what a driver overrides.
     virtual void defineDriverControls() {}
 
     /// Whether this driver exposes the correction controls, which a raw-RGB sink opts out of.
     virtual bool hasCorrectionControls() const { return true; }
+    /// Whether this driver reads a slice of the shared buffer, so its card shows start and count.
+    virtual bool hasWindowControls() const { return false; }
     /// Set the Layer this driver reads its dimensions from: the active one, not a wiring constraint on how many layers feed it.
     void setLayer(Layer* layer) { layer_ = layer; }
 
@@ -223,6 +226,14 @@ protected:
     }
 
 private:
+    /// Add the two window controls, which defineControls places after the correction block.
+    void addWindowControls() {
+        controls_.addControl("start", start_, 0);
+        controls_.setNumberField(controls_.count() - 1);   // typed: a light index is a number to read, not a position on a 2-billion slider
+        controls_.addControl("count", count_, 0);
+        controls_.setNumberField(controls_.count() - 1);
+    }
+
     /// Take the global level, remembered for self-triggered rebuilds, and answer the level the table bakes.
     uint8_t adoptBrightness(uint8_t globalBrightness) MM_NONBLOCKING {
         lastGlobalBrightness_ = globalBrightness;
@@ -279,14 +290,6 @@ protected:
     /// How many lights it reads from `start`; 0 reads them all.
     /// @guide So drivers share one buffer: a status LED takes `start 0, count 1` and the strip `start 1`.
     int32_t count_ = 0;
-
-    /// Add the two window controls, which a driver calls where its own controls go.
-    void addWindowControls() {
-        controls_.addControl("start", start_, 0);
-        controls_.setNumberField(controls_.count() - 1);   // typed: a light index is a number to read, not a position on a 2-billion slider
-        controls_.addControl("count", count_, 0);
-        controls_.setNumberField(controls_.count() - 1);
-    }
 
     /// Whether `name` is one of the window controls, for a driver's own prepare test.
     static bool isWindowControl(const char* name) {

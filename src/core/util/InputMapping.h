@@ -71,6 +71,10 @@ inline constexpr unsigned long kMaxPadNumber = 64;
 
 /// What one physical input does: a surface control, and how the input changes it.
 /// @xref{the-target-is-the-surface|what a target may name}.
+/// @field target The bank of the Control card the row drives: a switch, an encoder, a fader or a pad.
+/// @field number Which control of that bank, from 1.
+/// @field kind Toggle flips the target each press, set writes the value while held and 0 on release, delta nudges the target by the value.
+/// @field value What set writes, or the signed step delta adds; a toggle ignores it.
 struct InputAction {
     /// How the input changes its target; a toggle is its own kind because a delta cannot express it.
     enum class Kind : uint8_t {
@@ -79,10 +83,10 @@ struct InputAction {
         Delta,        ///< add `value` to the target, clamped to its declared bounds. A nudge.
     };
 
-    uint8_t type = 0;             ///< the surface bank, an index into kTargetTypes; 0 for an unassigned row
-    uint8_t number = 1;           ///< which control of that bank, from 1
+    uint8_t type = 0;             ///< an index into kTargetTypes, the `target` field; 0 for an unassigned row
+    uint8_t number = 1;           ///< the `number` field, stored as the editor shows it
     Kind    kind = Kind::Toggle;   ///< which of the three this row does
-    int16_t value = 0;            ///< Set: what to write. Delta: the signed nudge. Toggle: unused.
+    int16_t value = 0;            ///< the `value` field, signed for a delta
 
     /// Whether this row names a target at all.
     bool assigned() const { return type != 0; }
@@ -278,6 +282,19 @@ inline void writeInputTargetDetailField(JsonSink& sink, const InputAction& a) {
     sink.appendf("{\"name\":\"target\",\"type\":\"select\",\"optionsRef\":\"targets\",\"value\":%d},"
                  "{\"name\":\"number\",\"type\":\"uint8\",\"value\":%d}",
                  static_cast<int>(a.type), static_cast<int>(a.number));
+}
+
+/// Open an input row's editable fields with its GPIO, a pin field, which shows -1 as unused where a slider would show it as GPIO 0.
+inline void openInputPinFields(JsonSink& sink, int8_t pin) {
+    sink.appendf("{\"fields\":[{\"name\":\"pin\",\"type\":\"pin\",\"value\":%d,\"min\":-1,\"max\":%d}", static_cast<int>(pin), MM_MAX_GPIO);
+}
+
+/// An input row's GPIO from an edit, bounded before the narrowing cast, which would otherwise wrap onto another pin; false past the last GPIO.
+inline bool parseInputPin(const char* valueJson, int8_t& pin) {
+    const int v = json::parseInt(valueJson, "value");
+    if (v < -1 || v > MM_MAX_GPIO) return false;
+    pin = static_cast<int8_t>(v);
+    return true;
 }
 
 /// The action half as editable fields, so a user retargets an input without the interface: @xref{a-set-needs-a-release-to-clear-it|why a Set is not always offered}.

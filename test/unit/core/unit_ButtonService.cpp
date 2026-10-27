@@ -88,6 +88,7 @@ struct Rig {
 
 }  // namespace
 
+// @step hold-to-play/add-button
 TEST_CASE("a press toggles the control its row targets, once per press") {
     Rig rig;
     rig.addRow("Control.switch1", "toggle");
@@ -180,6 +181,23 @@ TEST_CASE("a row with no pin, or no target, is a valid state and does nothing") 
     rig.hold(false, 100);
     rig.hold(true, 200);
     CHECK(rig.surface->switch1 == true);
+}
+
+TEST_CASE("a new row's pin is a pin field reading -1, so the editor shows it unused rather than as GPIO 0") {
+    // A slider cannot show -1, so a fresh row read as pin 0, and choosing 0 changed nothing: the button was never polled (#159).
+    Rig rig;
+    uint32_t id = 0;
+    REQUIRE(rig.buttons->addListRow(id));
+    char buf[512];
+    JsonSink sink(buf, sizeof(buf));
+    rig.buttons->writeListRowDetail(sink, 0);
+    CHECK(std::strstr(buf, "{\"name\":\"pin\",\"type\":\"pin\",\"value\":-1,") != nullptr);
+
+    // Past the last GPIO is refused rather than narrowed into another pin; -1 and 0 are both pins a user means.
+    CHECK_FALSE(rig.buttons->setListRowField(id, "pin", "{\"value\":300}"));
+    CHECK_FALSE(rig.buttons->setListRowField(id, "pin", "{\"value\":-2}"));
+    CHECK(rig.buttons->setListRowField(id, "pin", "{\"value\":0}"));
+    CHECK(rig.buttons->setListRowField(id, "pin", "{\"value\":-1}"));
 }
 
 TEST_CASE("rows are added and deleted at runtime") {

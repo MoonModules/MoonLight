@@ -20,6 +20,14 @@ Forward-looking to-build items for the **light domain** (`src/light/`: drivers, 
 
 ## Effects
 
+### Network Receive on a P4 past 3,000 packets a second (2026-10-26)
+
+Below about 3,000 packets a second a P4 receives every frame; past it packets go, more for Art-Net than for DDP, as [the table](../../reference/performance.md#network-receive) shows.
+The measured split, from a `--task-cpu-stats` build: the Ethernet receive task and lwIP's take about 160 µs of core 1 per packet, and Network Receive's task tens of microseconds per socket call on top, a `select` hundreds.
+Both network tasks may run on either core, yet stay on core 1 with core 0 idle.
+Two levers, each its own change: the network tasks on core 0, where pinning them by `ETH_MAC_FLAG_PIN_TO_CORE` and lwIP's task affinity kept Ethernet from coming up, so that needs its own look first; and lwIP's raw `udp_recv` callback writing into staging from lwIP's task, with no socket, no `select` and no receive task.
+Ranking the Ethernet task below the receive task, and lwIP in IRAM, were measured and do not help.
+
 ### The ring's refill jitter (2026-10-22, from the internal RAM plan)
 
 LCD-MM's refill interrupt fires every 89 µs at 3-row slices, yet almost every second it goes about 1.1 ms without firing.

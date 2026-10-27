@@ -6,6 +6,9 @@
     "Effects"
   ],
   "mode": "mutate",
+  "steps_proved": [
+    "first-script/add"
+  ],
   "live_only": true,
   "description": "Each of hpwit's MoonLive effects alone in one layer over the board's own layout and drivers: its frame time, free internal RAM and largest block, read against the rig with no effect. Each waits 10 s, past the slower seconds that follow a change. The scripts are staged from the repository and removed afterwards, and only the effects are replaced.",
   "top": [

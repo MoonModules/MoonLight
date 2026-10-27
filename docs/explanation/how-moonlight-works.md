@@ -50,7 +50,7 @@ Look at that picture again, because every card has the same parts:
 | **`{ }`** | Open its live state, for [issue reports](../reference/logging-an-issue.md) |
 | `status`, `width`, `height` … | The settings, one per row |
 | The **Grid** box inside | A child card, cards nest |
-| **+ add module** | Add a child here |
+| **+** and **🗑** | Add a child here, or delete every child you added |
 
 Two of those are unusual and worth pausing on.
 

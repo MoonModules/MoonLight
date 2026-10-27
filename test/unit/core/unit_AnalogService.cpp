@@ -8,6 +8,7 @@
 #include "core/module/Scheduler.h"
 #include "core/module/MoonModule.h"
 #include "platform/platform.h"
+#include "core/util/JsonSink.h"
 
 #include <cstdio>
 #include <cstring>
@@ -175,6 +176,15 @@ TEST_CASE("an out-of-range pin is refused rather than narrowed into a different 
     CHECK_FALSE(rig.svc->setListRowField(rig.rowId, "pin", "{\"value\":-2}"));
     CHECK(rig.svc->setListRowField(rig.rowId, "pin", "{\"value\":-1}"));
     CHECK(rig.svc->setListRowField(rig.rowId, "pin", "{\"value\":48}"));
+}
+
+TEST_CASE("an analog row's pin is a pin field, so an unset row reads -1 rather than GPIO 0") {
+    Rig rig;
+    rig.set("pin", -1);
+    char buf[512];
+    JsonSink sink(buf, sizeof(buf));
+    rig.svc->writeListRowDetail(sink, 0);
+    CHECK(std::strstr(buf, "{\"name\":\"pin\",\"type\":\"pin\",\"value\":-1,") != nullptr);
 }
 
 TEST_CASE("an analog row pointed at a pad refuses, rather than firing it every tick") {

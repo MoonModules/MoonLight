@@ -24,7 +24,7 @@ namespace mm {
 ///
 /// ## Learning a key
 ///
-/// Add a row, press its learn button, then press the remote key: the next code received binds to that row. Learning a key another row holds moves the binding. Pick what the row drives from its target, and whether a press toggles it or nudges it by a value. The status line reports each step.
+/// Add a row, press its learn button, then press the remote key: the next code received binds to that row. Learning a key another row holds moves the binding. The status line reports each step.
 ///
 /// ## Checking a key
 ///
@@ -46,6 +46,9 @@ public:
     void defineControls() override {
         controls_.addPin("pin", pin_);
         /// The learned codes, each row binding one remote key to a control.
+        /// @field code The remote key's code, learned or typed in hex or decimal.
+        /// @field learn Arms the row: the next key pressed on the remote becomes its code.
+        /// @fields InputAction
         /// @guide A `set` row is not offered, since a remote reports a press with no release.
         controls_.addList("codes", *this);
         MoonModule::defineControls();

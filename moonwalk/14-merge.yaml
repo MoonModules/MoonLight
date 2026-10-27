@@ -40,10 +40,14 @@ processes:
         section: Open it
         say: Open the pull request against main.
         when: { run: { command: "gh pr create --base main" } }
+        asks:
+          - What it changes, and why.
+          - What an agent wrote.
+          - What you tested, and on which hardware.
         detail: |
           Push first, and allow edits by maintainers.
 
-          You vouch for every line, agent-written or not, and answer reviewers in your own words; the description says what an agent wrote and what you tested, on which hardware.
+          You vouch for every line, agent-written or not, and answer reviewers in your own words.
 
           With edits allowed, a maintainer makes the mechanical fixes, a dropped generated file or a platform stub, rather than asking for another round.
       - id: ci
@@ -63,22 +67,32 @@ processes:
         say: Run the Python host tests.
         when: { run: { script: moondeck/test/test_host.py, args: "--python" } }
         detail: |
-          Workflow `test.yml`. It first checks that every MoonLive script is valid C++, then runs `pytest test/python`. It covers MoonDeck, the build scripts and the Improv wire format.
+          Workflow `test.yml`, through this command. It covers MoonDeck, the build scripts, the Improv wire format, and that every MoonLive script is valid C++.
       - id: js
         say: Run the JavaScript host tests.
         when: { run: { script: moondeck/test/test_host.py, args: "--js" } }
         detail: |
           Workflow `test.yml`. It runs `node --test` over `test/js`, so the web installer and the device agree on the golden vector.
+      - id: restore
+        say: Restore a backup onto the desktop app.
+        when: { run: { script: moondeck/scenario/run_restore_live.py, args: "--launch --bundle test/fixtures/backup-flat-2026-09-30.json --readers 2" } }
+        detail: |
+          Workflow `test.yml`, after building the desktop app. A backup from before config files were state documents, restored while two other clients read the device: every value back and the report clean. It starts its own app on an empty data folder, beside one already running.
       - id: teensy
         say: Build the Teensy 4.1 firmwares.
-        when: { run: { script: moondeck/build/build_teensy.py, args: "--firmware teensy41" } }
+        when: { run: { script: moondeck/build/build_teensy.py, args: "--all" } }
         detail: |
           Workflow `test.yml`. It builds every shipping Teensy firmware and keeps the HEX images as an artifact, so a pull request's build can be flashed before it merges.
       - id: sanitizers
         say: Run the unit tests under three sanitizers.
         when: { run: { script: moondeck/check/check_sanitizers.py } }
         detail: |
-          Workflow `test.yml`, on Linux. AddressSanitizer finds use-after-free, ThreadSanitizer finds data races, and RealtimeSanitizer reports allocation or blocking on the render path without failing the run. The local script runs ASan on macOS.
+          Workflow `test.yml`, on Linux. AddressSanitizer finds use-after-free, ThreadSanitizer finds data races, and RealtimeSanitizer reports allocation or blocking on the render path without failing the run. CI runs one lane each, `--kind <kind> --filter ''`; on macOS the script runs ASan alone.
+      - id: findings
+        say: Run the commit checks.
+        when: { process: commit }
+        detail: |
+          Workflow `findings.yml` runs check_code, check_docgen, check_prose, check_specs, check_taglines, check_devices and check_firmwares, each its own step, annotates their errors in the files the pull request changes, and hands code scanning the SARIF.
       - id: prose
         say: Lint the prose a pull request adds.
         when: { run: { script: moondeck/check/check_prose.py } }
@@ -86,9 +100,9 @@ processes:
           Workflow `prose.yml` runs Vale over the lines a pull request adds and annotates only an error such as an em-dash or a British spelling; it never fails the pull request. The local gate is this script.
       - id: generated
         say: Check a fork's generated files.
-        when: { manual: "Workflow generated-files.yml names each metrics or scenario file it changes." }
+        when: { run: { script: moondeck/ci/github_annotations.py, args: "--generated --base upstream/main" } }
         detail: |
-          It runs on pull requests from a fork only. The merge regenerates these files on the maintainer's machine, so leave them out unless you mean to change one. It warns and never fails.
+          Workflow `generated-files.yml` names each metrics or scenario file a pull request from a fork changes. The merge regenerates these files on the maintainer's machine, so leave them out unless you mean to change one. It warns and never fails.
   - id: review-finding
     title: Handle a review finding
     actor: agent

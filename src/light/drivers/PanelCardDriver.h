@@ -36,13 +36,14 @@ public:
     /// The card's own gain, held at full so it does not compound our own brightness.
     static constexpr uint8_t kCardGain = 0xFF;
 
+    /// The wire formats, in option order, which kFormatOptions fixes so a saved setting keeps its meaning.
+    enum Format : uint8_t { kFormatColorLight5A75, kFormatCount };
     /// Wire formats; the control exists because the category is panel cards, not one vendor.
     static constexpr const char* kFormatOptions[] = {"ColorLight 5A-75"};
-    /// How many wire formats the selector offers.
-    static constexpr uint8_t kFormatCount = 1;
+    static_assert(sizeof(kFormatOptions) / sizeof(kFormatOptions[0]) == kFormatCount, "one option per format");
 
     /// The card's wire format.
-    uint8_t format = 0;
+    uint8_t format = kFormatColorLight5A75;
 
     /// Card firmware generations: a control rather than a probe, since this driver is send-only and has no receive seam.
     static constexpr const char* kFirmwareOptions[] = {"v12 and older", "v13 and newer"};
@@ -62,7 +63,10 @@ public:
     /// Frame-rate limit, so a fast render tick does not saturate the link.
     uint8_t fps = 40;
 
-    /// Bind the format, the host interface and the shared window, after the correction block.
+    /// It sends a slice of the shared buffer.
+    bool hasWindowControls() const override { return true; }
+
+    /// Bind the format and the host interface, after the window.
     void defineDriverControls() override {
         controls_.addSelect("format", format, kFormatOptions, kFormatCount);
         controls_.addSelect("firmware", firmware, kFirmwareOptions, kFirmwareCount);
@@ -98,7 +102,6 @@ public:
                                 static_cast<uint8_t>(n < 255 ? n : 255));
             controls_.setPersistLabel(controls_.count() - 1);
         }
-        addWindowControls();   // start / count: which slice of the shared buffer this sink sends
         controls_.addControl("fps", fps, 1, 120);
     }
 

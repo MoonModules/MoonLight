@@ -2,6 +2,7 @@
 
 #include "doctest.h"
 #include "light/layers/Buffer.h"
+#include "platform/platform.h"
 
 // allocate(N,3) reserves count×channels bytes; count/channelsPerLight/bytes/data/span all reflect that.
 TEST_CASE("Buffer allocate and accessors") {
@@ -64,6 +65,26 @@ TEST_CASE("Buffer double free is safe") {
     buf.free(); // should not crash
     CHECK(buf.data() == nullptr);
     CHECK(buf.count() == 0);
+}
+
+// A layer whose region moves every frame resizes its buffer each time, so the same size keeps the block, cleared, and takes nothing from the heap; any other size gets exactly what it needs, so a shrunken layer holds no more than it uses.
+TEST_CASE("Buffer keeps its block through a resize to the same size") {
+    mm::Buffer buf;
+    REQUIRE(buf.allocate(100, 3));
+    const size_t bytes = mm::platform::allocatedBytes();
+    const uint32_t blocks = mm::platform::allocatedCount();
+    buf.data()[0] = 0xAB;
+
+    CHECK(buf.holds(100, 3));
+    CHECK(buf.holds(75, 4));         // the same bytes in another layout
+    CHECK_FALSE(buf.holds(99, 3));
+    REQUIRE(buf.allocate(100, 3));
+    CHECK(mm::platform::allocatedBytes() == bytes);
+    CHECK(mm::platform::allocatedCount() == blocks);
+    CHECK(buf.data()[0] == 0);       // cleared, as a fresh one is
+
+    REQUIRE(buf.allocate(60, 3));    // smaller: exactly what it needs
+    CHECK(mm::platform::allocatedBytes() == bytes - 300 + 180);
 }
 
 // allocate() refuses zero-count or zero-channels (returns false, no allocation, buffer left empty so a caller that ignores the bool doesn't get a partial state).

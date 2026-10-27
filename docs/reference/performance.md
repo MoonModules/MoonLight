@@ -341,16 +341,38 @@ What a received frame costs and how much of it arrives, measured 2026-10-14 with
 | 12,288 lights, a serpentine layout placed on the grid (mapped twice) | 1.1 ms | 4.5 ms |
 | 64×64 serpentine sweep alone on its layer, the whole tick | | 2.96 ms in one copy, 5.83 ms mapped twice |
 
-**What arrives** at 12,288 lights, 40 frames a second sent as 1,040 DDP packets, mapped by the receiver:
+**What arrives, P4 Ethernet to P4 Ethernet**, measured 2026-10-27: the receiver running only Network Receive, the sender capped at 120 frames a second, each column the median of five one-second readings of both cards' status, so a received figure can read above its sent one.
 
-| Sender to receiver | Packets/s | Frames/s | Receiver tick |
-|---|---|---|---|
-| S3 WiFi to S3 WiFi | 600 to 980 | 20 to 23 | 6.8 to 8.2 ms |
-| P4 Ethernet to S3 WiFi | 616 | 23 | 5.8 ms |
-| S3 WiFi to P4 Ethernet | 984 | 32 | 0.3 ms |
-| P4 Ethernet to P4 Ethernet | 790 to 846 | 8 to 19 | 0.8 ms |
+| Grid | Protocol | Sent fps, packets/s | Received fps, packets/s | Lost/s |
+|---|---|---|---|---|
+| 64×64 | DDP | 125, 1,098 | 120, 1,087 | 0 |
+| 64×64 | Art-Net | 121, 3,025 | 123, 3,096 | 0 |
+| 64×64 | E1.31 | 124, 3,025 | 121, 3,040 | 0 |
+| 128×96 | DDP | 90, 2,366 | 91, 2,369 | 19 |
+| 128×96 | Art-Net | 95, 6,935 | 50, 1,135 | 4,956 |
+| 128×96 | E1.31 | 97, 6,935 | 50, 1,070 | 4,184 |
+| 128×128 | DDP | 80, 2,800 | 27, 2,495 | 182 |
+| 128×128 | Art-Net | 78, 7,566 | 17, 197 | 3,370 |
+| 128×128 | E1.31 | 80, 7,178 | 29, 270 | 4,384 |
+| 160×160 | DDP | 54, 2,916 | 6, 1,867 | 1,033 |
+| 160×160 | Art-Net | 51, 7,701 | 45, 1,408 | 7,125 |
+| 160×160 | E1.31 | 51, 7,701 | 45, 1,433 | 5,466 |
+| 192×192 | DDP | 36, 2,772 | 1, 1,197 | 1,608 |
+| 192×192 | Art-Net | 37, 8,029 | 36, 1,178 | 83 |
+| 192×192 | E1.31 | 37, 7,378 | 33, 1,121 | 524 |
+| 256×256 | DDP | 21, 2,740 | 0, 915 | 1,799 |
+| 256×256 | Art-Net | 22, 8,492 | 19, 644 | 188 |
+| 256×256 | E1.31 | 22, 8,492 | 18, 591 | 60 |
 
-The loss is the sender's burst: the access point drops it on WiFi, and on Ethernet the push packet at its end is the one most often lost. A [Network Send](../moonmodules/light/drivers.md#networksend) `packet_gap` of 0.5 ms recovered 96% of the packets on WiFi, and took P4 to P4 to 26 to 36 frames a second.
+The preview costs the receiver while someone watches it: 128×128 DDP arrives at 44 frames a second with the preview off, 29 with it on and unwatched, and 20 watched, with 139, 181 and 455 lost a second.
+
+Past the ceiling the lost count reads below what goes missing in Art-Net and E1.31: at 192×192, 83 a second in Art-Net where some 6,800 packets a second never arrive.
+
+**An ESP32-S3 over WiFi**, the 64×64 HUB75 board, receiving from a P4 on 2026-10-26: 124 of 125 frames a second in DDP with none lost, and 123 of 124 in Art-Net, 3,073 of 3,100 packets.
+
+**The receiver takes about 3,000 packets a second whole**, in any protocol: 64×64 at 120 frames a second in all three, and 128×96 DDP at 90 losing under 1%. A sender's `fps` keeps a stream below it. Art-Net and E1.31 carry a third of DDP's lights a packet, so they reach it at a third of the grid. Past it frames break up, as a lost packet takes its frame's push or a universe with it. Mapped by the sender changes nothing here, since it saves the render's copy on core 0 and the limit is core 1.
+
+**Where a packet's time goes.** Ethernet's receive task and lwIP's take about 160 µs of core 1 per packet, and Network Receive's task more on top, most of it in lwIP's socket calls. Far past the ceiling those two network tasks fill core 1 and the receive task gets none, which is receive livelock: 128×96 Art-Net at 7,300 packets a second arrives as 200. A millisecond's wait after each drain, so one wake drains several packets, took Network Receive's task from 56% to 36% of core 1 at 3,000 packets a second. Ranking the Ethernet task below the receive task ends the livelock, but loses packets below the ceiling instead, so it keeps its default 15. lwIP's code in IRAM and its buffers in internal RAM changed little. The task table of a `--task-cpu-stats` build shows each task's share.
 
 ## Prepare only what a change reshapes
 

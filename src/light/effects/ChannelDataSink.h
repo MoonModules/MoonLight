@@ -59,33 +59,45 @@ public:
         return layer->lut().hasLUT() ? kPathTwice : kPathOneCopy;
     }
 
-    /// Copy staging to the output when a write changed it, or whole when asked; a write in progress waits for the next frame.
+    /// Copy staging to the output when a write changed it, or whole when asked; what a writer holds waits for the next frame.
     void copyWiringFrame(uint8_t* out, size_t bytes, bool force) {
         if (!force && !dirty_.load(std::memory_order_acquire)) return;
-        LockGuard guard(lock_);
-        if (!guard) return;
-        dirty_.store(false, std::memory_order_release);
-        std::memcpy(out, staging_.data(), staging_.bytes() < bytes ? staging_.bytes() : bytes);
+        const size_t n = staging_.bytes() < bytes ? staging_.bytes() : bytes;
+        copyInChunks(n, [&](size_t at, size_t len) { std::memcpy(out + at, staging_.data() + at, len); });
     }
 
     /// The one clamped write into staging, bound-checked before any addition. `kWait` is for a writer task, which waits out the render copy; without it a busy lock drops the write.
     template <bool kWait = true>
-    void write(size_t offset, const uint8_t* data, size_t len) {
-        if (!staging_ || offset >= staging_.bytes()) return;
-        const size_t n = offset + len > staging_.bytes() ? staging_.bytes() - offset : len;
-        if constexpr (kWait) {
-            // A copy takes microseconds, while a yield costs a whole tick (10 ms at 100 Hz) in which the mailbox fills.
-            for (uint32_t spins = 0; !lock_.tryAcquire(); spins++) if (spins >= kSpins) platform::yield();
-        } else if (!lock_.tryAcquire()) {
+    void write(size_t offset, const uint8_t* data, size_t len, bool frameDone = true) {
+        if (!staging_ || offset >= staging_.bytes()) {
+            if (frameDone && staging_) dirty_.store(true, std::memory_order_release);   // a frame's last packet past staging still ends the frame
             return;
         }
+        const size_t n = offset + len > staging_.bytes() ? staging_.bytes() - offset : len;
+        if (!acquire<kWait>()) return;
         std::memcpy(staging_.data() + offset, data, n);
-        dirty_.store(true, std::memory_order_release);   // inside the lock, so a copy that takes it next sees this write
+        // Inside the lock, so a copy that takes it next sees this write; a frame's earlier packets wait for its last, so the render copies it once.
+        if (frameDone) dirty_.store(true, std::memory_order_release);
         lock_.release();
+    }
+
+    /// Take the lock for a write: a writer task spins out one chunk of the render copy rather than a frame while the socket's queue fills, and the tick gives up at once.
+    template <bool kWait>
+    bool acquire() {
+        if constexpr (!kWait) return lock_.tryAcquire();
+        for (uint32_t spins = 0; !lock_.tryAcquire(); spins++) if (spins >= kSpins) platform::yield();
+        return true;
     }
 
     /// The held frame's bytes, for a test pinning the lifecycle.
     const uint8_t* data() const { return staging_.data(); }
+    /// One staged byte, read under the lock a writer task takes, for a test watching that task's write land.
+    uint8_t byteAt(size_t i) {
+        acquire<true>();
+        const uint8_t b = staging_.data()[i];
+        lock_.release();
+        return b;
+    }
     /// How many bytes staging holds.
     size_t bytes() const { return staging_.bytes(); }
 
@@ -95,30 +107,48 @@ private:
         uint8_t* buf = owner_.buffer();
         if (!buf || !staging_) return;
         const uint32_t gen = layer ? layer->bufferGen() : 0;
-        if (!dirty_.load(std::memory_order_acquire) && layer && gen == lastGen_) return;
-        LockGuard guard(lock_);
-        if (!guard) return;   // a write holds staging: copy on the next tick
-        dirty_.store(false, std::memory_order_release);
+        // Nothing new and nobody else wrote the layer: our own tick's bump is the next generation, not someone else's write.
+        if (!dirty_.load(std::memory_order_acquire) && layer && gen == lastGen_) { lastGen_ = gen + 1; return; }
         // By the layout's positions for a sender-mapped frame the layer maps, else as it is: row by row, or wiring order on an identity mapping.
-        const size_t bufBytes = static_cast<size_t>(owner_.nrOfLights()) * owner_.channelsPerLight();
-        if (placement_) gatherPlaced(buf, bufBytes);
-        else std::memcpy(buf, staging_.data(), staging_.bytes() < bufBytes ? staging_.bytes() : bufBytes);
+        const size_t cpl = owner_.channelsPerLight();
+        const size_t bufBytes = static_cast<size_t>(owner_.nrOfLights()) * cpl;
+        if (placement_) {
+            const size_t cells = bufBytes / cpl < placement_.count() ? bufBytes / cpl : placement_.count();
+            copyInChunks(cells * cpl, [&](size_t at, size_t len) { gatherPlaced(buf, at / cpl, (at + len) / cpl); });
+        } else {
+            const size_t n = staging_.bytes() < bufBytes ? staging_.bytes() : bufBytes;
+            copyInChunks(n, [&](size_t at, size_t len) { std::memcpy(buf + at, staging_.data() + at, len); });
+        }
         lastGen_ = gen + 1;   // the Layer bumps the generation after this tick, for our own copy
     }
 
-    /// Each cell takes the light the layout places at its position; a cell with none keeps its value.
-    void gatherPlaced(uint8_t* buf, size_t bufBytes) {
+    /// Run `copy` over `total` bytes a chunk at a time under the lock, so a writer waits one chunk; a lock held past the spins leaves the rest dirty for the next frame.
+    template <typename Copy>
+    void copyInChunks(size_t total, Copy&& copy) {
+        dirty_.store(false, std::memory_order_release);   // before the first chunk, so a write landing behind the copy marks it again
+        for (size_t at = 0; at < total; at += kChunkBytes) {
+            uint32_t spins = 0;
+            while (!lock_.tryAcquire()) {
+                if (++spins >= kSpins) { dirty_.store(true, std::memory_order_release); return; }
+            }
+            copy(at, total - at < kChunkBytes ? total - at : kChunkBytes);
+            lock_.release();
+        }
+    }
+
+    /// Cells `from` up to `to` take the light the layout places at their position; a cell with none keeps its value.
+    void gatherPlaced(uint8_t* buf, size_t from, size_t to) {
         const size_t cpl = owner_.channelsPerLight();
         const size_t physLights = staging_.bytes() / cpl;
-        const size_t cells = bufBytes / cpl < placement_.count() ? bufBytes / cpl : placement_.count();
-        for (size_t cell = 0; cell < cells; cell++) {
+        for (size_t cell = from; cell < to; cell++) {
             const size_t src = placement_[cell];
             if (src >= physLights) continue;   // kNoDriver, or past a shorter frame
             MappingLUT::copyLight(buf + cell * cpl, staging_.data() + src * cpl, cpl);
         }
     }
 
-    static constexpr uint32_t kSpins = 256;   ///< tries before a writer sleeps, a few microseconds of spinning
+    static constexpr uint32_t kSpins = 256;   ///< tries before a waiter gives up, a few microseconds of spinning
+    static constexpr size_t kChunkBytes = 4096;   ///< one lock hold, tens of microseconds
     EffectBase& owner_;
     ScratchBuffer<uint8_t> staging_{owner_};             ///< the held frame
     ScratchBuffer<nrOfLightsType> placement_{owner_};    ///< each cell's physical light by layout position, only under static modifiers

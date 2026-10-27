@@ -8,7 +8,7 @@
 ///
 /// The snapshot call is the textbook introspection one and needs the trace facility: without it the snapshot is empty and the module shows only its own cost table.
 /// The per-task CPU figure needs run-time stats, which cost a timer read on every context switch, measured at about 5 percent of the tick.
-/// So that one is gated behind its own build flag and reported as unmeasured when compiled out.
+/// So that one is gated behind its own build flag and reported as unmeasured when compiled out, and a share covers the interval since the last snapshot, as top reports it.
 ///
 /// ## The scratch buffer is lazy and internal
 ///
@@ -66,12 +66,20 @@ size_t taskSnapshot(TaskInfo* out, size_t maxTasks) {
     uint32_t totalRunTime = 0;
     const UBaseType_t got = uxTaskGetSystemState(raw, kScratch, &totalRunTime);
     const size_t n = got < maxTasks ? got : maxTasks;
+#if defined(MM_TASK_CPU_STATS) && MM_TASK_CPU_STATS
+    // Each task's counter at the previous snapshot, by task number, so a share covers only the interval since.
+    static UBaseType_t prevNumber[kScratch] = {};
+    static uint32_t prevRunTime[kScratch] = {};
+    static UBaseType_t prevCount = 0;
+    static uint32_t prevTotal = 0;
+    const uint32_t interval = totalRunTime - prevTotal;
+#endif
     for (size_t i = 0; i < n; i++) {
         const TaskStatus_t& t = raw[i];
         TaskInfo& o = out[i];
         std::snprintf(o.name, sizeof(o.name), "%s", t.pcTaskName ? t.pcTaskName : "?");
         o.state = mapState(t.eCurrentState);
-        o.priority = static_cast<uint8_t>(t.uxCurrentPriority);
+        o.priority = static_cast<uint8_t>(t.uxBasePriority);   // as created: the current one carries a borrowed priority while the task holds a mutex
         o.stackFreeBytes = t.usStackHighWaterMark;
         // TaskStatus_t.xCoreID exists only when configTASKLIST_INCLUDE_COREID is set (it is not by default, even on a dual-core chip). Without it we can't know the per-task core, so report
         // -1 (unknown); the current-task-per-core view (core0/core1) still works via a separate call.
@@ -81,13 +89,23 @@ size_t taskSnapshot(TaskInfo* out, size_t maxTasks) {
         o.core = -1;
     #endif
     #if defined(MM_TASK_CPU_STATS) && MM_TASK_CPU_STATS
-        o.cpuPermille = totalRunTime ? static_cast<uint32_t>(1000ULL * t.ulRunTimeCounter / totalRunTime)
-                                     : 0;
+        uint32_t before = 0;
+        for (UBaseType_t k = 0; k < prevCount; k++)
+            if (prevNumber[k] == t.xTaskNumber) { before = prevRunTime[k]; break; }
+        o.cpuPermille = interval ? static_cast<uint32_t>(1000ULL * (t.ulRunTimeCounter - before) / interval) : 0;
     #else
         o.cpuPermille = kTaskCpuUnmeasured;
         (void)totalRunTime;
     #endif
     }
+#if defined(MM_TASK_CPU_STATS) && MM_TASK_CPU_STATS
+    for (UBaseType_t i = 0; i < got && i < kScratch; i++) {
+        prevNumber[i] = raw[i].xTaskNumber;
+        prevRunTime[i] = raw[i].ulRunTimeCounter;
+    }
+    prevCount = got < kScratch ? got : kScratch;
+    prevTotal = totalRunTime;
+#endif
     return n;
 }
 

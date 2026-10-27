@@ -63,36 +63,10 @@ CONFIG_ESP_SYSTEM_MEMPROT_FEATURE=n
 CONFIG_HEAP_HAS_EXEC_HEAP=y
 
 
-# esp-dsp's OPTIMIZED P4 assembly kernels: the default, and what we ship. The line below forces
-# the portable C kernels instead and is currently OFF.
-#
-# Why it exists at all. The assembly FFT uses the P4's hardware-loop instruction (esp.lp.setup),
-# and that unit carries a documented erratum - Espressif's own soc_caps:
-# SOC_CPU_HAS_HWLOOP_STATE_BUG, "HWLOOP state doesn't go to DIRTY after executing the last
-# instruction of a loop". FreeRTOS saves those registers lazily, keyed on that DIRTY flag, so a
-# task switched out of the FFT has its loop state silently dropped and faults on resume (bench:
-# a crash loop the moment HLS added a second task, Illegal instruction / Load access fault inside
-# dsps_fft2r_fc32_arp4.S). IDF patches the erratum on the coprocessor RESTORE paths but not on
-# SAVE. Cost of the portable kernels: audio tick ~615 us -> ~658 us.
-# Tracked in esp-idf#19025 (ours, naming the unguarded save path) and esp-dsp#119 (the same fault
-# from another reporter, on IDF v5.5-beta1).
-#
-# Off since 2026-09-08, and the ROOT CAUSE is now known (esp-idf#19025, Espressif's diagnosis of
-# 2026-09-09, reproduced deterministically by them). It is not the save path named above; that was
-# our guess and it was wrong. Two separate things:
-#   1. esp-dsp: some assembly kernels violate the P4's hardware-loop constraints (the loop start
-#      and last instruction must be 4-byte aligned, and the last instruction must not be a
-#      coprocessor op). An interrupt landing exactly on a misaligned loop boundary corrupts the
-#      loop counter: WDT, illegal instruction, or a load fault. Timing-dependent, which is why it
-#      hid for a 20-minute soak, and why the ANSI kernels "fixed" it: they never enter that assembly.
-#   2. ESP-IDF: the context-save erratum workaround was gated on a misnamed config macro, so it was
-#      always on regardless of silicon revision. Being corrected to apply only on rev < v3.0.
-# Both fixes are upstream (an esp-dsp release, an IDF fix with regression tests). Until they land the
-# optimized kernels are the desired config and we run them; re-enable this line if the fault
-# returns. When the esp-dsp release ships, re-run the FFT + HLS soak against it (backlog-core).
-# Ruled OUT as the cause of the P4 shield's 22 s reboot loop the same day: putting it back changed
-# nothing (3 reboots in 70 s against 4), which is what a blocked network cascade looks like, not an
-# FFT fault. Lives in the board fragment because every P4 image (rev1/rev3, eth/eth-wifi) layers on it.
+# esp-dsp's optimized P4 assembly kernels: the default, and what we ship. The line below forces the portable C kernels instead, and is off.
+# Some of those kernels break the P4's hardware-loop constraints, so an interrupt landing on a loop boundary corrupts the loop counter: the FFT crash
+# loop (Illegal instruction, Load access fault) of 2026-08-28, once HLS added a second task. Turn the line on if it returns; the portable kernels
+# take the audio tick from about 615 to 658 us. Status: docs/reference/issues-in-other-projects.md. In the board fragment, since every P4 image layers on it.
 # CONFIG_DSP_ANSI=y
 
 # The capture: the UVC host and the JPEG decode, on the only chip here with a High-Speed USB host.
@@ -104,7 +78,7 @@ CONFIG_MM_USB_VIDEO=y
 # attached device.
 CONFIG_USB_HOST_CONTROL_TRANSFER_MAX_SIZE=4096
 
-# FreeRTOS in IRAM: ESP-IDF 6.1 leaves pxPortGetCoprocArea, pxPortUpdateCoprocOwner and vPortTaskPinToCore in flash, which an interrupt calls
-# to save a task's FPU registers, so one landing during a flash write panicked with a Cache error (bench P4, 2026-10-25). It costs 14 KB of DIRAM
-# on the P4 (138.7 to 153.0 of 572 KB). The line goes once ESP-IDF places them: https://github.com/espressif/esp-idf/issues/19308
+# FreeRTOS in IRAM: ESP-IDF 6.1 leaves pxPortGetCoprocArea in flash, which an interrupt entry calls to save the hardware-loop (HWLOOP) registers of
+# a task that used them, and a context switch calls to restore them; one landing during a flash write panicked with a Cache error in it (bench P4,
+# 2026-10-25). It costs 14 KB of DIRAM on the P4 (138.7 to 153.0 of 572 KB). Status, and when the line goes: docs/reference/issues-in-other-projects.md.
 CONFIG_FREERTOS_IN_IRAM=y

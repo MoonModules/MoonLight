@@ -41,7 +41,7 @@ PACKAGES = {
     ("Windows", "ARM64"): ("win32-arm64", "sha512-PIhhEkE9uPBleRBrQEJpUn7MBnibZzbGzYWPmY3x+YoVg/95zbjB4CxPPOQ8l5tYYM4mMaCthF8/1DIfBQQyWQ=="),
 }
 # What the firmware serves besides the bundle, copied as they are: the vendored file is minified upstream, the PNG compressed.
-COPIED = ["index.html", "vendor/prism.js", "moonmodules-logo.png"]
+COPIED = ["index.html", "vendor/prism.js", "momo.png"]
 
 
 def esbuild() -> Path:

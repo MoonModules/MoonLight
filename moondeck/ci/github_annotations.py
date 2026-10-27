@@ -3,9 +3,12 @@
 
 Workflow commands are what a job prints, so they need no token: a pull request from a fork, whose token is read-only, gets the same annotations as ours. Each failing test is annotated where its failure points; a check's error-level findings are annotated in the files the pull request changes, since those are the ones it answers for.
 
+A pull request from a fork also hears which generated files it changes: the metrics and a scenario's observation blocks are measured on the contributor's machine and regenerated at the merge, so each is named with a warning rather than failed, since a pull request can mean to change one.
+
 Run:
   uv run moondeck/ci/github_annotations.py --junit results/*.xml
-  uv run moondeck/ci/github_annotations.py --findings --changed changed.txt
+  uv run moondeck/ci/github_annotations.py --findings --base upstream/main
+  uv run moondeck/ci/github_annotations.py --generated --base upstream/main
 """
 
 from __future__ import annotations
@@ -13,6 +16,7 @@ from __future__ import annotations
 import argparse
 import os
 import re
+import subprocess
 import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -89,6 +93,22 @@ def findings(changed: set, out=sys.stdout, directory: Path | None = None) -> lis
     return rows
 
 
+def changed_files(base: str, *filters: str, root: Path = ROOT) -> list:
+    """The paths the branch changes since it left `base`, as the pull request shows them; `filters` narrow it as git diff's own arguments do, a `--` and paths last."""
+    r = subprocess.run(["git", "diff", "--name-only", "-z", f"{base}...HEAD", *filters], cwd=root, capture_output=True, text=True, check=False)
+    if r.returncode != 0:
+        sys.exit(f"github_annotations: git does not know {base} ({r.stderr.strip()}); pass the ref the branch left with --base")
+    return [p for p in r.stdout.split("\0") if p]
+
+
+def generated(base: str, out=sys.stdout) -> list:
+    """Warn on each generated file the branch changes: the metrics whole, a scenario only when it already existed, since a new one is written by hand."""
+    files = changed_files(base, "--", "docs/reference/metrics") + changed_files(base, "--diff-filter=M", "--", "test/scenarios")
+    for f in files:
+        print(f"::warning file={_prop(f)}::Generated on your machine: the merge regenerates it on ours, so leave it out of the pull request unless you mean to change it.", file=out)
+    return files
+
+
 def summary(title: str, rows: list) -> str:
     """The rows as a Markdown table for the job summary."""
     if not rows:
@@ -103,14 +123,16 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--junit", nargs="*", default=None, help="JUnit files whose failing tests to annotate")
     ap.add_argument("--findings", action="store_true", help="annotate the checks' error-level findings in the changed files")
-    ap.add_argument("--changed", type=Path, help="a file listing the changed paths, one per line")
+    ap.add_argument("--generated", action="store_true", help="warn on each generated file the branch changes")
+    ap.add_argument("--base", help="the ref the branch left, for --findings and --generated; on main, where no pull request has one, --findings annotates none")
     args = ap.parse_args()
     text = ""
     if args.junit is not None:
         text += summary("Tests", junit([p for p in args.junit if Path(p).exists()]))
     if args.findings:
-        changed = set(args.changed.read_text(encoding="utf-8").split()) if args.changed and args.changed.exists() else set()
-        text += summary("Findings", findings(changed))
+        text += summary("Findings", findings(set(changed_files(args.base)) if args.base else set()))
+    if args.generated and args.base:
+        generated(args.base)
     if text and os.environ.get("GITHUB_STEP_SUMMARY"):
         with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as fh:
             fh.write(text)

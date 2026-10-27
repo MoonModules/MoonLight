@@ -270,6 +270,8 @@ private:
     };
 
     /// A row per claimed GPIO.
+    /// @field claims Each module claiming the pin and its role there.
+    /// @field warning Why the claim is a risk: two claims on one pin, a GPIO the chip lacks, a pin reserved for flash, PSRAM or USB, an input-only pin driven, or a boot strap.
     PinListSource pins_;
 };
 

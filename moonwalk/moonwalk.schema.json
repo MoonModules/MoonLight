@@ -140,6 +140,12 @@
           "type": "string",
           "description": "Opens a numbered section of the generated page with this heading, as a tutorial groups its steps into chapters."
         },
+        "asks": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "minItems": 1,
+          "description": "What the person answers at this step in their own words, one question each: the headings of a pull request's description, the fields of an issue form."
+        },
         "say": {
           "type": "string",
           "description": "One line: the docs line, the tour bubble, the caption, the test's name."

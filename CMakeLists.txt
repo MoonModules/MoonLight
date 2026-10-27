@@ -244,6 +244,14 @@ endif()
 target_link_libraries(mm_platform PUBLIC mm_core)
 set_target_properties(mm_core     PROPERTIES LINK_INTERFACE_MULTIPLICITY 3)
 set_target_properties(mm_platform PROPERTIES LINK_INTERFACE_MULTIPLICITY 3)
+# GNU ld reads an archive once, so the core and platform cycle repeats on the link line; Apple's linker resolves the cycle itself and warns on the repeat, which its own switch silences.
+if(APPLE)
+    include(CheckLinkerFlag)
+    check_linker_flag(CXX "LINKER:-no_warn_duplicate_libraries" MM_HAS_NO_WARN_DUPLICATE_LIBRARIES)
+    if(MM_HAS_NO_WARN_DUPLICATE_LIBRARIES)
+        add_link_options(LINKER:-no_warn_duplicate_libraries)
+    endif()
+endif()
 
 # Generate build_id.h from library.json + git: the build id and the default version, for build_info.cpp alone.
 # ALWAYS out-of-date on purpose — see the same rule in esp32/main/CMakeLists.txt for why: MM_BUILD_ID

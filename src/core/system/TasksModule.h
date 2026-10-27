@@ -22,7 +22,7 @@ namespace mm {
 ///
 /// ## Reading a task row
 ///
-/// A row shows the task's name, state, core, priority and the minimum free stack seen. Expand it for its modules, each as `Name · Nus · NB · Nheap`, and a closing `∑ modules` line that cross-checks them against the tick.
+/// A row shows the task's name, state, core, priority and the minimum free stack seen, and expands to its modules.
 ///
 /// A `cpu` percentage appears only in a profiling build, since the run-time counter costs about 5% of the tick.
 ///
@@ -148,6 +148,7 @@ private:
     };
 
     /// A row per FreeRTOS task.
+    /// @field modules The render task's modules, each as `Name · Nus · NB · Nheap`, and a closing `∑ modules` line that cross-checks them against the tick.
     TaskListSource tasks_;
     /// What executes on the first core.
     char core0_[16] = {};

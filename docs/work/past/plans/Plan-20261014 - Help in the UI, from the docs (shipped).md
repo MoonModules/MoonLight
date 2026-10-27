@@ -144,5 +144,5 @@ The change is gradual, the textbook strangler fig: the new path grows module by 
     | 5 ✅ | One comment kind per declaration, and its rule | 561 notes in 92 headers, class and file scope; `check_docgen` reports a `//` on a declaration |
     | 6 ✅ | `@defgroup` goes | 137 files and three generators; a file's lead is its first `///` block before any code |
     | 7 ✅ | `@moreinfo` becomes `@technical` | 273 files: the marker, the generators, `check_docgen` and `check_clang_query`, the standards and the tests; the past plans keep the old name as history |
-    | 8 → | `@technical` trimmed, Guides that add | moved to [the processes plan](../../present/Plan-20261015%20-%20Processes%2C%20described%20once%20(16%20of%2023).md), step 12 |
+    | 8 → | `@technical` trimmed, Guides that add | moved to [the processes plan](../../present/Plan-20261015%20-%20Processes%2C%20described%20once%20(17%20of%2023).md), step 18 |
 14. ✅ **Publishing.** Each release attaches its `help.json` as `MoonLight-help.json`, which the Pages deploy mirrors beside the release's binaries, and the app reads the copy of the release its device runs, falling back to the site's `help/help.json`. Both answered after the merge's run, and the fallback to the branch's copy is gone.

@@ -26,15 +26,8 @@ struct Rack : public mm::MoonModule {
     const char* acceptsChildRoles() const override { return "generic"; }
 };
 
-// Sends one raw request and returns the reply once its status line has arrived.
-std::string request(mm::HttpServerModule& http, const std::string& req) {
-    mm::platform::TcpConnection client;
-    if (!connectAndAccept(http, client, kTestPort)) return {};
-    if (!client.write(reinterpret_cast<const uint8_t*>(req.data()), req.size())) return {};
-    std::string reply = pumpUntil(http, client, 12);
-    client.close();
-    return reply;
-}
+// One raw request on the test port.
+std::string request(mm::HttpServerModule& http, const std::string& req) { return requestOnce(http, kTestPort, req); }
 
 std::string withBody(const char* head, const std::string& body) {
     return std::string(head) + " HTTP/1.1\r\nContent-Length: " + std::to_string(body.size()) + "\r\n\r\n" + body;

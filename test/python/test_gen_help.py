@@ -244,9 +244,11 @@ struct DriverBase {
     int start = 0;
     void defineControls() {
         if (hasCorrectionControls()) defineCorrectionControls();
+        if (hasWindowControls()) addWindowControls();
         defineDriverControls();
     }
     virtual bool hasCorrectionControls() const { return true; }
+    virtual bool hasWindowControls() const { return false; }
     void defineCorrectionControls() { controls_.addControl("localBrightness", localBrightness); }
     void addWindowControls() { controls_.addControl("start", start); }
     virtual void defineDriverControls() {}
@@ -254,7 +256,8 @@ struct DriverBase {
 struct WireDriver : DriverBase {
     /// The data pins.
     int pins = 0;
-    void defineDriverControls() override { controls_.addControl("pins", pins); addWindowControls(); }
+    bool hasWindowControls() const override { return true; }
+    void defineDriverControls() override { controls_.addControl("pins", pins); }
 };
 struct BridgeDriver : DriverBase {
     /// The bridge's address.
@@ -276,6 +279,7 @@ def test_a_base_classs_template_method_and_its_helpers_publish_the_controls_a_dr
     """A driver adds its own controls in the hook its base's `defineControls` calls, between the base's own blocks, and a block the driver opts out of is not its control."""
     ci, tu = parsed(tmp_path / "Drivers.h", DRIVERS)
     cls = {c.spelling: c for c in tu.cursor.walk_preorder() if c.kind == ci.CursorKind.STRUCT_DECL and c.is_definition()}
+    assert list(gen_help.controls_of(cls["WireDriver"])) == ["localBrightness", "start", "pins"]
     assert gen_help.controls_of(cls["WireDriver"]) == {"localBrightness": "This driver's dim.", "pins": "The data pins.",
                                                       "start": "The first light it reads.\n@guide Two drivers can share one buffer."}
     # A negated branch on a literal `false` runs, and a run of `///` above an `add…` line is that control's comment.
@@ -358,6 +362,50 @@ void Slot::defineControls() {
     hdr = ci.Index.create().parse(str(header), args=["-x", "c++", "-std=c++20"])
     cls = next(c for c in hdr.cursor.walk_preorder() if c.kind == ci.CursorKind.STRUCT_DECL and c.spelling == "Slot")
     assert gen_help.controls_of(cls) == {"clk": "The clock pin."}
+
+
+def test_a_lists_field_lines_are_its_row_fields_help_and_fields_takes_a_types_own(tmp_path):
+    """A list's rows have fields of their own, each documented on one `@field` line beside the list; `@fields` takes the lines a shared type writes once, so every list using it shows the same help."""
+    ci, tu = parsed(tmp_path / "Rows.h", """struct Controls { void addList(const char*, int&) {} };
+/// What a row does.
+/// @field target The bank it drives.
+struct Action {};
+struct Svc {
+    Controls controls_;
+    int rows = 0;
+    void defineControls() {
+        /// The rows.
+        /// @field pin The GPIO; -1 leaves the row unused.
+        /// @fields Action
+        /// @guide One row per button.
+        controls_.addList("rows", rows);
+    }
+};
+""")
+    cls = next(c for c in tu.cursor.walk_preorder() if c.kind == ci.CursorKind.STRUCT_DECL and c.spelling == "Svc")
+    assert gen_help.control_help(gen_help.controls_of(cls)["rows"]) == {
+        "line": "The rows.", "more": "One row per button.",
+        "fields": {"pin": {"line": "The GPIO; -1 leaves the row unused."}, "target": {"line": "The bank it drives."}}}
+
+
+def test_fields_naming_a_type_without_field_lines_stops_the_generator(tmp_path):
+    """A typo in `@fields` would leave every row field without help and say nothing, so it fails as an unknown `@ref` does."""
+    ci, tu = parsed(tmp_path / "Typo.h", """struct Controls { void addList(const char*, int&) {} };
+/// No fields here.
+struct Action {};
+struct Svc {
+    Controls controls_;
+    int rows = 0;
+    void defineControls() {
+        /// The rows.
+        /// @fields Actoin
+        controls_.addList("rows", rows);
+    }
+};
+""")
+    cls = next(c for c in tu.cursor.walk_preorder() if c.kind == ci.CursorKind.STRUCT_DECL and c.spelling == "Svc")
+    with pytest.raises(LookupError, match="@fields Actoin"):
+        gen_help.controls_of(cls)
 
 
 def test_a_lead_may_name_several_clips_each_with_its_title():

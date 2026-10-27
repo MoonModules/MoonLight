@@ -4,13 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MoonLight</title>
-    <link rel="icon" type="image/png" href="/moonmodules-logo.png">
+    <link rel="icon" type="image/png" href="/momo.png">
     <link rel="stylesheet" href="style.css">
 </head>
 <body data-theme="dark">
     <header id="status-bar">
         <button type="button" id="nav-toggle" class="header-btn" aria-label="Toggle navigation" title="Toggle navigation">☰</button>
-        <img id="brand-logo" src="/moonmodules-logo.png" alt="MoonLight">
+        <img id="brand-logo" src="/momo.png" alt="MoonLight">
         <span class="brand">MoonLight</span>
         <span id="device-name"></span>
         <span id="sys-stats"></span>
@@ -29,13 +29,12 @@
         <nav id="nav"></nav>
         <div id="nav-overlay"></div>
         <div class="main-area">
-            <!-- Workspace: preview pane + module cards side by side on wide screens
-                 (.mode-docked), or cards full-width with the preview as a floating,
-                 draggable picture-in-picture on narrow screens / when popped out
-                 (.mode-pip). The mode class is toggled by preview3d.js::setupLayout. -->
+            <!-- Workspace: the preview beside the module cards on wide screens (.mode-docked),
+                 under them (.mode-under) or floating and draggable (.mode-pip) on small screens
+                 or when chosen. The mode class is toggled by preview3d.js::setupLayout. -->
             <div class="workspace mode-docked">
                 <div class="preview-pane">
-                    <!-- Drag handle: only grabbable in PiP mode (a separate element so
+                    <!-- Drag handle: only grabbable while floating (a separate element so
                          it never fights the canvas's camera-orbit pointer handler). -->
                     <div class="preview-bar">
                         <span class="preview-grip" title="Drag preview">⠿</span>
@@ -48,6 +47,7 @@
                         <button type="button" id="preview-record" class="preview-bar-btn" aria-label="Record a GIF of the preview" title="Record three seconds of the preview as a GIF, to show a preset">⏺</button>
                         <button type="button" id="preview-numbers" class="preview-bar-btn" aria-label="Toggle LED sequence numbers" title="Show LED sequence numbers (when zoomed in enough to read)">№</button>
                         <button type="button" id="preview-reset" class="preview-bar-btn" aria-label="Reset preview to defaults" title="Reset preview (camera, dot size, numbers, layout)">⌖</button>
+                        <button type="button" id="preview-under" class="preview-bar-btn" aria-label="Put the preview under the cards" title="Put the preview under the cards" hidden>⬓</button>
                         <button type="button" id="preview-dock" class="preview-bar-btn" aria-label="Pop preview out or dock" title="Pop preview out / dock">⤢</button>
                         <button type="button" id="preview-close" class="preview-bar-btn" aria-label="Hide preview" title="Hide preview">✕</button>
                     </div>
@@ -57,10 +57,9 @@
                     <canvas id="preview"></canvas>
                     <canvas id="preview-labels"></canvas>
                 </div>
-                <!-- Grab handle to resize the card column (docked mode only, where cards sit
-                     beside the preview). Dragging it widens/narrows #main; the width persists
-                     to localStorage. Hidden in PiP mode (cards are full-width there). -->
-                <div id="cards-resize" class="cards-resize" role="separator" aria-orientation="vertical" aria-label="Resize module cards" title="Drag to resize the module cards"></div>
+                <!-- The split between cards and preview: sideways beside the preview, up and down
+                     under it, hidden while it floats. preview3d.js::setupLayout drives it. -->
+                <div id="cards-resize" class="cards-resize" role="separator" aria-orientation="vertical" aria-label="Resize the module cards and the preview" title="Drag to share the room between the cards and the preview"></div>
                 <main id="main"></main>
             </div>
             <!-- Re-show affordance: appears only when the PiP is dismissed. -->

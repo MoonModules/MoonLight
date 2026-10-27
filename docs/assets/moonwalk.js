@@ -574,6 +574,13 @@ function showPanel(panel, model, pid, done, onDone, host = {}) {
             }
             for (const how of [howTo(s), linkOf(s, host)]) if (how) block.append(how);   // a call shows both: the line to send and its entry on the REST API page
             if (s.detail) { const d = control("div"); d.innerHTML = host.helpMarkdown(s.detail); block.append(d); }
+            // What the person answers in their own words: a pull request's headings, an issue form's fields.
+            if (s.asks?.length) {
+                block.append(control("p", { className: "mm-map-note" }, "In your own words:"));
+                const list = control("ul");
+                for (const q of s.asks) list.append(control("li", {}, q));
+                block.append(list);
+            }
             view.append(block);
         });
         if (p.outro) md(p.outro);

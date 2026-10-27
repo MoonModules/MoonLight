@@ -2,6 +2,10 @@
   "name": "scenario_Effects_pipeline_builds_and_renders",
   "module": "Effects",
   "mode": "construct",
+  "steps_proved": [
+    "first-light-show/grid-size",
+    "panel-cards/layout"
+  ],
   "also": [
     "Layouts",
     "GridLayout",

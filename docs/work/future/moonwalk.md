@@ -1,6 +1,6 @@
 # MoonWalk
 
-Step 2 of [Processes, described once](../present/Plan-20261015%20-%20Processes%2C%20described%20once%20(16%20of%2023).md): MoonWalk, the model every process is written in and the map that shows them, chosen against [the inventory](processes-inventory.md) and approved on 2026-10-16. The schema is [moonwalk/moonwalk.schema.json](../../../moonwalk/moonwalk.schema.json).
+Step 2 of [Processes, described once](../present/Plan-20261015%20-%20Processes%2C%20described%20once%20(17%20of%2023).md): MoonWalk, the model every process is written in and the map that shows them, chosen against [the inventory](processes-inventory.md) and approved on 2026-10-16. The schema is [moonwalk/moonwalk.schema.json](../../../moonwalk/moonwalk.schema.json).
 
 ## What it must do
 

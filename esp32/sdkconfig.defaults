@@ -103,12 +103,9 @@ CONFIG_FREERTOS_VTASKLIST_INCLUDE_COREID=y
 # they are what turns a silent corruption into a loud abort.
 CONFIG_COMPILER_OPTIMIZATION_PERF=y
 
-# Parlio's completion ISR must run with the flash cache DISABLED. A control change writes the
-# config to flash, and a DMA completion landing in that window fetched the handler from flash while
-# the cache was off: `Guru Meditation Error: Core 0 panic'ed (Cache error)` inside
-# pxPortGetCoprocArea, reproduced on the P4 bench by resizing a Parlio-driven layout. Our own done
-# callback was already IRAM_ATTR; the IDF driver's handler around it was not.
-# (github.com/MoonModules/MoonLight/issues/44)
+# Parlio's completion ISR must run with the flash cache disabled: a control change writes the config to flash, and a DMA completion can land
+# in that window. Our own done callback was already IRAM_ATTR; the IDF driver's handler around it was not (github.com/MoonModules/MoonLight/issues/44).
+# The Cache error in pxPortGetCoprocArea seen then is the fault sdkconfig.defaults.esp32p4rev1-eth explains.
 CONFIG_PARLIO_TX_ISR_CACHE_SAFE=y
 CONFIG_PARLIO_RX_ISR_CACHE_SAFE=y
 # ...and the driver's own objects with it. The TX option above places the HANDLER in IRAM but,
@@ -135,3 +132,5 @@ CONFIG_ESP_WIFI_IRAM_OPT=n
 CONFIG_ESP_WIFI_RX_IRAM_OPT=n
 # WiFi keeps no copy of its config in NVS: the WiFi card hands it the credentials at every join, and the copy cost 4.9 KB of internal RAM.
 CONFIG_ESP_WIFI_NVS_ENABLED=n
+# A paced send's gap ends in the timer interrupt (platform::sleepUs); why, measured: sleepWake in src/platform/esp32/platform_esp32_worker.cpp.
+CONFIG_ESP_TIMER_SUPPORTS_ISR_DISPATCH_METHOD=y

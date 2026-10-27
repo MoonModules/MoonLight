@@ -12,9 +12,9 @@ namespace mm {
 /// A fountain that throws the project's whole sprite cast, launched from the floor on a sweeping nozzle and falling back under gravity.
 /// @card SpriteFountainEffect.gif
 ///
-/// The cast is fish, Pacman and his ghosts, toasters and toast, and the three invaders.
+/// The cast is fish, Pacman and his ghosts, toasters and toast, the three invaders, and Luna and Momo.
 ///
-/// Colors come from the active palette, one per sprite, held for its whole flight.
+/// Colors come from the active palette, one per sprite, held for its whole flight. Pacman, the toasters, Luna and Momo keep their own.
 ///
 /// @technical
 ///

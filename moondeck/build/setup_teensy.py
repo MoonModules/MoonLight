@@ -21,6 +21,7 @@ import shutil
 import subprocess
 import sys
 import tarfile
+import tempfile
 import urllib.request
 import zipfile
 from pathlib import Path
@@ -91,7 +92,7 @@ def head(repo: Path) -> str:
 def missing(loader: bool = True) -> list:
     """The parts not installed at their pin, empty when the SDK is ready to build, and to flash when `loader` is set."""
     out = [name for name, (_, pin) in REPOS.items() if head(sdk_root() / name) != pin]
-    out += [p.name for name in REPOS for p in patches_for(name) if not patch_applied(sdk_root() / name, p)]
+    out += [f"{name} patches" for name in REPOS if not patches_applied(sdk_root() / name, patches_for(name))]
     if not (gcc_bin() / "arm-none-eabi-g++").exists() and not (gcc_bin() / "arm-none-eabi-g++.exe").exists():
         out.append(f"arm-gnu-toolchain {GCC_VERSION}")
     if loader and platform.system() in LOADER_BUILD and not loader_path().exists():
@@ -144,16 +145,23 @@ def patches_for(part: str) -> list:
     return sorted(PATCH_DIR.glob(f"{part}-*.patch"))
 
 
-def patch_applied(repo: Path, patch: Path) -> bool:
-    """Whether the patch is already in the working tree: its reverse applies cleanly."""
-    return subprocess.run(["git", "-C", str(repo), "apply", "--reverse", "--check", str(patch)],
-                          capture_output=True).returncode == 0
+def patches_applied(repo: Path, patches: list) -> bool:
+    """Whether the working tree is its pin with the patches applied in order, built in a scratch index so two patches touching neighboring lines check as one stack. A part we do not patch counts as applied, whatever is edited in it."""
+    if not patches:
+        return True
+    with tempfile.TemporaryDirectory() as tmp:
+        env = {**os.environ, "GIT_INDEX_FILE": str(Path(tmp) / "index")}
+
+        def git(*args) -> bool:
+            return subprocess.run(["git", "-C", str(repo), *args], env=env, capture_output=True).returncode == 0
+
+        return git("read-tree", "HEAD") and all(git("apply", "--cached", str(p)) for p in patches) and git("diff", "--quiet")
 
 
 def apply_patches(part: str, repo: Path) -> bool:
-    """Apply the part's patches when its tree lacks any; True when they were applied."""
+    """Put the part's tree back at its pin with its patches applied in order, when it differs from that; True when they were applied."""
     patches = patches_for(part)
-    if all(patch_applied(repo, patch) for patch in patches):
+    if patches_applied(repo, patches):
         return False
     # An edited patch meets the tree its earlier version changed, so every patch starts from the pinned tree.
     subprocess.run(["git", "-C", str(repo), "checkout", "--force", "."], check=True)

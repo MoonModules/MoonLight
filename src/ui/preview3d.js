@@ -2,7 +2,7 @@
 // cloud. Extracted from app.js as a self-contained module (same pattern as
 // install-picker.js): app.js wires it at three points only —
 //   preview.init()            once, after the canvas exists
-//   preview.setupLayout()     once, for docked-split ↔ floating-PiP responsiveness
+//   preview.setupLayout()     once, for the side, under and popup layouts and the split handle
 //   preview.onBinaryMessage(buf)  per WebSocket binary frame
 // It owns its own GL context, camera, and geometry; it talks to the rest of the
 // app only through the DOM (#preview canvas, --bg-0 theme color) and
@@ -123,7 +123,7 @@ const DOT_MIN = 0.25, DOT_MAX = 1.5;   // matches the slider range; clamp so a b
 const clampDot = (v) => Math.min(DOT_MAX, Math.max(DOT_MIN, Number.isFinite(v) ? v : 1));
 // localStorage value (or a manual edit) can't push the dot size to a performance-killing extreme.
 let dotScale_ = clampDot(parseFloat(localStorage.getItem("mm_preview_dot")));
-let resetLayout_ = null;     // set by setupLayout(): restores docked/PiP state to defaults
+let resetLayout_ = null;     // set by setupLayout(): restores the layout to its defaults
 let previewBox_ = null;      // {x,y,z} bounding-box extent for camera auto-fit
 let previewPos_ = null;      // the table's raw (x,y,z) bytes: what the stride test reads
 let previewTableStride_ = 1; // the stride the CACHED table was built at, the finest available
@@ -384,12 +384,15 @@ function initWebGL() {
 
 }
 
-// Responsive layout: docked split-pane on wide screens, a draggable floating
-// picture-in-picture on narrow screens (or when the user pops the preview out).
-// One canvas throughout — only the wrapper's class/position change, so the WebGL
-// context is never lost. Width drives the default mode; a manual toggle overrides.
-const PIP_BELOW = 960;           // px: auto-PiP under this width
-const LS_KEY = "MoonLight.preview.v1";   // {corner, dismissed, forcePip}
+// Three layouts, a class on .workspace: the preview beside the cards on a wide screen (mode-docked),
+// and on a small screen, or wherever the user picks it, under the cards (mode-under) or floating
+// (mode-pip). One canvas throughout: only the wrapper's class and position change, so the WebGL
+// context is never lost. The one split handle between cards and preview resizes whichever way the
+// layout splits, and a side preview dragged narrower than it can be read falls into the small layout.
+const PIP_BELOW = 960;           // px: a screen narrower than this always uses the small layout
+const MIN_PREVIEW_W = 240;       // px: a side preview narrower than this falls into the small layout
+const MIN_CARDS_W = 280;         // px: the narrowest the card column gets beside the preview
+const LS_KEY = "MoonLight.preview.v1";   // {small, forceSmall, dismissed, at, cardsW, underShare}
 
 // Hostile-storage guards (a 3-line idiom shared with the rest of the UI; localStorage
 // throws in private mode / when disabled, and may hold a hand-edited non-JSON value).
@@ -401,61 +404,87 @@ function savePrefs(p) {
     try { localStorage.setItem(LS_KEY, JSON.stringify(p)); } catch (_) { /* ignore */ }
 }
 
+const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+
 function setupLayout() {
     const ws = document.querySelector(".workspace");
     const pane = document.querySelector(".preview-pane");
     const bar = document.querySelector(".preview-bar");
     const canvas = document.getElementById("preview");
-    if (!ws || !pane || !bar || !canvas) return;
+    const split = document.getElementById("cards-resize");
+    if (!ws || !pane || !bar || !canvas || !split) return;
 
     const prefs = loadPrefs();
-    let forcePip = !!prefs.forcePip;          // user popped the preview out on a wide screen
-    let dismissed = !!prefs.dismissed;        // user hid the PiP entirely
-    let corner = prefs.corner || "br";        // tl | tr | bl | br
+    let small = prefs.small === "under" ? "under" : "popup";   // the small layout the user picked
+    let forceSmall = !!prefs.forceSmall;                         // the small layout on a wide screen too
+    let dismissed = !!prefs.dismissed;                           // the user hid the preview
+    let at = prefs.at || null;                                   // the popup's place, fractions of the room it moves in; null is bottom right
+    let cardsW = Number(prefs.cardsW) || 480;                    // px: the card column beside the preview
+    let underShare = clamp(Number(prefs.underShare) || 0.4, 0.15, 0.85);   // the preview's share of the height under the cards
+    const save = () => savePrefs({ small, forceSmall, dismissed, at, cardsW, underShare });
 
+    const root = document.documentElement.style;
+    const applySizes = () => {
+        root.setProperty("--cards-width", cardsW + "px");
+        root.setProperty("--under-share", String(underShare));
+    };
     const refit = () => { if (lastVerts) redrawCached(); };
+    const isSmall = () => forceSmall || window.innerWidth < PIP_BELOW;
+    const mode = () => (isSmall() ? small : "side");
 
-    // Place the PiP at its snapped corner (left/top so dragging can move it freely).
-    function placeCorner() {
-        if (!ws.classList.contains("mode-pip")) { pane.style.left = pane.style.top = ""; return; }
-        const m = 12, w = pane.offsetWidth, h = pane.offsetHeight;
-        const x = corner.includes("l") ? m : window.innerWidth - w - m;
-        const y = corner.includes("t") ? 56 : window.innerHeight - h - m;
-        pane.style.left = x + "px";
-        pane.style.top = y + "px";
-        pane.style.right = "auto";
-        pane.style.bottom = "auto";
+    // The popup moves in the viewport below the status bar, a margin from each edge.
+    const M = 12, TOP = 56;
+    function popupRoom() {
+        return { x0: M, y0: TOP,
+                 x1: Math.max(M, window.innerWidth - pane.offsetWidth - M),
+                 y1: Math.max(TOP, window.innerHeight - pane.offsetHeight - M) };
+    }
+    function placePopup() {
+        if (mode() !== "popup") { pane.style.left = pane.style.top = pane.style.right = pane.style.bottom = ""; return; }
+        const r = popupRoom(), f = at || { x: 1, y: 1 };
+        pane.style.left = Math.round(r.x0 + (r.x1 - r.x0) * clamp(f.x, 0, 1)) + "px";
+        pane.style.top = Math.round(r.y0 + (r.y1 - r.y0) * clamp(f.y, 0, 1)) + "px";
+        pane.style.right = pane.style.bottom = "auto";
     }
 
-    // Pick the mode from width + the manual override, apply classes, re-fit the canvas.
     function applyMode() {
-        const pip = forcePip || window.innerWidth < PIP_BELOW;
-        ws.classList.toggle("mode-pip", pip);
-        ws.classList.toggle("mode-docked", !pip);
-        const hidden = pip && dismissed;
+        const m = mode();
+        ws.classList.toggle("mode-docked", m === "side");
+        ws.classList.toggle("mode-under", m === "under");
+        ws.classList.toggle("mode-pip", m === "popup");
+        const hidden = m !== "side" && dismissed;
         ws.classList.toggle("preview-hidden", hidden);
         // Tell the app whether frames are wanted. The device streams the preview only to clients on
         // its `/wsp` channel, so a dismissed pane closing that socket is what actually stops the
         // traffic at the source, not just hiding pixels the device already paid to send.
         if (wantsFrames_) wantsFrames_(!hidden);
         const showBtn = document.getElementById("preview-show");
-        if (showBtn) showBtn.hidden = !(pip && dismissed);
-        // The dock button means "pop out" when docked, "re-dock" when floating.
+        if (showBtn) showBtn.hidden = !hidden;
+        // Dock means beside the cards, which a small screen has no room for.
         const dockBtn = document.getElementById("preview-dock");
-        if (dockBtn) dockBtn.textContent = pip ? "⤡" : "⤢";
-        requestAnimationFrame(() => { placeCorner(); refit(); });
+        if (dockBtn) {
+            dockBtn.hidden = window.innerWidth < PIP_BELOW;
+            dockBtn.textContent = m === "side" ? "⤢" : "⤡";
+            dockBtn.title = m === "side" ? "Take the preview out of the side" : "Put the preview beside the cards";
+        }
+        const underBtn = document.getElementById("preview-under");
+        if (underBtn) {
+            underBtn.hidden = m === "side";
+            underBtn.textContent = m === "under" ? "⧉" : "⬓";
+            underBtn.title = m === "under" ? "Float the preview" : "Put the preview under the cards";
+            underBtn.setAttribute("aria-label", underBtn.title);
+        }
+        split.setAttribute("aria-orientation", m === "under" ? "horizontal" : "vertical");
+        requestAnimationFrame(() => { placePopup(); refit(); });
     }
 
-    // Let the preview "reset" button restore the docked/PiP layout to defaults too (back to
-    // auto docked-vs-PiP, not dismissed, default corner) — these vars are closure-local here.
+    // Let the preview "reset" button restore the layout to defaults too; these vars are closure-local here.
     resetLayout_ = () => {
-        forcePip = false; dismissed = false; corner = "br";
-        savePrefs({ corner, dismissed, forcePip });
-        applyMode();
+        small = "popup"; forceSmall = false; dismissed = false; at = null; cardsW = 480; underShare = 0.4;
+        save(); applySizes(); applyMode();
     };
 
-    // matchMedia catches only the breakpoint crossing; this resize listener also keeps
-    // the PiP pinned to its corner as the window changes. rAF-throttled.
+    // The resize listener keeps the popup on screen and crosses the small-screen breakpoint. rAF-throttled.
     let ticking = false;
     window.addEventListener("resize", () => {
         if (ticking) return;
@@ -463,27 +492,24 @@ function setupLayout() {
         requestAnimationFrame(() => { ticking = false; applyMode(); });
     });
 
-    // Dock / pop-out toggle.
     document.getElementById("preview-dock")?.addEventListener("click", () => {
-        forcePip = !ws.classList.contains("mode-pip") ? true : false;
-        savePrefs({ corner, dismissed, forcePip });
-        applyMode();
+        forceSmall = mode() === "side";
+        save(); applyMode();
     });
-    // Hide the preview; reveal the re-show pill. Dismissal takes visible effect only in
-    // PiP mode (the pill replaces the floating preview); closing from docked mode also
-    // pops it out (forcePip) so the result is immediate — closing a docked preview hides
-    // it now rather than only when narrow auto-PiP later kicks in.
+    document.getElementById("preview-under")?.addEventListener("click", () => {
+        small = small === "under" ? "popup" : "under";
+        save(); applyMode();
+    });
+    // Hiding takes effect in the small layout, which the re-show pill belongs to, so closing a side preview leaves the side.
     document.getElementById("preview-close")?.addEventListener("click", () => {
         dismissed = true;
-        if (!ws.classList.contains("mode-pip")) forcePip = true;
-        savePrefs({ corner, dismissed, forcePip });
-        applyMode();
+        if (mode() === "side") forceSmall = true;
+        save(); applyMode();
     });
     document.getElementById("preview-show")?.addEventListener("click", () => {
         dismissed = false;
-        forcePip = false;   // bring it back in the width-appropriate mode (docked on wide)
-        savePrefs({ corner, dismissed, forcePip });
-        applyMode();
+        forceSmall = false;   // back in the width-appropriate layout (beside the cards on wide)
+        save(); applyMode();
     });
     // Sequence-number overlay toggle. The active state reflects the flag; the labels
     // themselves only appear when also legible (few enough on-screen — see drawSeqLabels).
@@ -505,12 +531,12 @@ function setupLayout() {
         });
     }
 
-    // Drag the PiP by its bar; snap to the nearest corner on release. Pointer events
-    // on the BAR only (the canvas keeps its own orbit handler, untouched).
+    // Drag the popup by its bar; it stays where it is dropped. Pointer events on the BAR only
+    // (the canvas keeps its own orbit handler, untouched).
     let drag = null;
     bar.addEventListener("pointerdown", (e) => {
-        if (!ws.classList.contains("mode-pip")) return;          // bar inert when docked
-        if (e.target.closest(".preview-bar-btn")) return;        // let buttons click
+        if (mode() !== "popup") return;                            // bar inert in the other layouts
+        if (e.target.closest(".preview-bar-btn, .preview-dot")) return;   // let the controls work
         const r = pane.getBoundingClientRect();
         drag = { dx: e.clientX - r.left, dy: e.clientY - r.top };
         pane.classList.add("dragging");
@@ -519,27 +545,74 @@ function setupLayout() {
     });
     bar.addEventListener("pointermove", (e) => {
         if (!drag) return;
-        const w = pane.offsetWidth, h = pane.offsetHeight;
-        let x = e.clientX - drag.dx, y = e.clientY - drag.dy;
-        x = Math.max(0, Math.min(window.innerWidth - w, x));     // clamp to viewport
-        y = Math.max(44, Math.min(window.innerHeight - h, y));
-        pane.style.left = x + "px";
-        pane.style.top = y + "px";
-        pane.style.right = pane.style.bottom = "auto";
+        const r = popupRoom();
+        pane.style.left = clamp(e.clientX - drag.dx, r.x0, r.x1) + "px";
+        pane.style.top = clamp(e.clientY - drag.dy, r.y0, r.y1) + "px";
     });
-    bar.addEventListener("pointerup", (e) => {
+    // Every way a drag ends, a cancel or a lost capture as well as a release, drops it and keeps where the popup is.
+    const endDrag = (e) => {
         if (!drag) return;
         drag = null;
         pane.classList.remove("dragging");
         try { bar.releasePointerCapture(e.pointerId); } catch (_) { /* ignore */ }
-        // Snap to nearest corner by the pane's center.
-        const r = pane.getBoundingClientRect();
-        const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
-        corner = (cy < window.innerHeight / 2 ? "t" : "b") + (cx < window.innerWidth / 2 ? "l" : "r");
-        savePrefs({ corner, dismissed, forcePip });
-        placeCorner();
+        // Kept as fractions of the room, so the popup holds its place through a rotation or a resize.
+        const r = popupRoom(), b = pane.getBoundingClientRect();
+        at = { x: r.x1 > r.x0 ? (b.left - r.x0) / (r.x1 - r.x0) : 0,
+               y: r.y1 > r.y0 ? (b.top - r.y0) / (r.y1 - r.y0) : 0 };
+        save();
+    };
+    for (const type of ["pointerup", "pointercancel", "lostpointercapture"]) bar.addEventListener(type, endDrag);
+
+    // The split handle: sideways it sets the card column's width, and dragged so wide the preview
+    // drops under MIN_PREVIEW_W it moves the preview to the small layout, and back while the same
+    // drag returns. Under the cards it sets the preview's share of the height. Window listeners, so
+    // the drag survives the handle changing layout under the pointer.
+    let splitFrom = null, raf = 0, pending = null;
+    const onSplitMove = (e) => {
+        const r = ws.getBoundingClientRect();
+        if (splitFrom === "under") {
+            pending = () => { underShare = clamp((r.bottom - e.clientY) / r.height, 0.15, 0.85); applySizes(); refit(); };
+        } else {
+            const want = Math.round(r.right - e.clientX);
+            const tooWide = want > r.width - MIN_PREVIEW_W - 16;   // 16: the gap beside the handle
+            pending = () => {
+                if (!tooWide) cardsW = Math.max(MIN_CARDS_W, want);
+                if (forceSmall !== tooWide) { forceSmall = tooWide; applyMode(); }
+                applySizes();
+            };
+        }
+        if (!raf) raf = requestAnimationFrame(() => { raf = 0; if (pending) pending(); });
+    };
+    const stopSplit = () => {
+        if (!splitFrom) return;
+        if (raf) { cancelAnimationFrame(raf); raf = 0; if (pending) pending(); }   // a release before the next frame keeps the last move
+        splitFrom = null;
+        split.classList.remove("dragging");
+        document.body.classList.remove("cards-resizing", "rows");
+        save();
+        window.removeEventListener("pointermove", onSplitMove);
+        window.removeEventListener("pointerup", stopSplit);
+        window.removeEventListener("pointercancel", stopSplit);
+    };
+    split.addEventListener("pointerdown", (e) => {
+        const m = mode();
+        if (m === "popup") return;
+        e.preventDefault();
+        splitFrom = m;
+        split.classList.add("dragging");
+        document.body.classList.add("cards-resizing");
+        document.body.classList.toggle("rows", m === "under");
+        window.addEventListener("pointermove", onSplitMove);
+        window.addEventListener("pointerup", stopSplit);
+        window.addEventListener("pointercancel", stopSplit);
+    });
+    // Double-click restores the default split, a common resize-handle affordance.
+    split.addEventListener("dblclick", () => {
+        if (mode() === "under") underShare = 0.4; else cardsW = 480;
+        save(); applySizes(); refit();
     });
 
+    applySizes();
     applyMode();
 }
 
@@ -855,7 +928,7 @@ function redrawCached() {
 }
 
 // The preview "reset" (⌖) button: restore the WHOLE preview to defaults — camera, dot-size
-// slider, sequence-number toggle, and docked/PiP layout. One button clears every preview
+// slider, sequence-number toggle, and the layout. One button clears every preview
 // preference (all browser-local; nothing touches the device). Lives here since it owns the
 // camera + dot/number state; the layout part defers to setupLayout's resetLayout_ hook.
 function resetCamera() {
@@ -876,7 +949,7 @@ function resetCamera() {
     showSeqNumbers_ = false;
     document.getElementById("preview-numbers")?.classList.remove("active");
 
-    // Layout: back to auto docked/PiP, not dismissed, default corner.
+    // Layout: back to the width's own layout, not dismissed, the default sizes and popup place.
     if (resetLayout_) resetLayout_();
 
     if (lastVerts) redrawCached();

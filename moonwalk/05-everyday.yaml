@@ -280,7 +280,7 @@ processes:
         when: { add: { module: Services, type: ButtonService } }
       - id: row
         say: Add one row per button.
-        when: { manual: "Set pin to the GPIO, target to Control.fader1 (then fader2), kind to set, value to 255, and activeLow on for a button wired to ground." }
+        when: { manual: "Set pin to the GPIO, target to Control.fader1 (then fader2), kind to set and value to 255." }
         detail: |
           The card's `pressed` readout shows each press before anything is bound. A `value` below 255 blends the trick over Standby instead of covering it.
       - id: try

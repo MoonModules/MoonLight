@@ -124,6 +124,7 @@
 #include "lwip/sockets.h"
 #include "lwip/inet.h"
 #include "lwip/netdb.h"   // getaddrinfo: hostname resolution for TcpConnection::connect
+#include "platform/select_wait.h"   // the select() wait the desktop shares, after the socket headers
 
 #include <atomic>
 #include <cstdarg>
@@ -1999,20 +2000,10 @@ int UdpSocket::recvFrom(uint8_t* buf, size_t maxLen, uint8_t srcIp[4], uint16_t*
 
 // select() over the bound sockets, the textbook wait for a receive task; the render loop keeps polling recvFrom instead.
 int UdpSocket::waitReadable(UdpSocket* const* sockets, int count, uint32_t timeoutMs) {
-    fd_set readable;
-    FD_ZERO(&readable);
-    int maxFd = -1;
-    for (int i = 0; i < count; i++) {
-        if (!sockets[i] || sockets[i]->fd_ < 0) continue;
-        FD_SET(sockets[i]->fd_, &readable);
-        if (sockets[i]->fd_ > maxFd) maxFd = sockets[i]->fd_;
-    }
-    if (maxFd < 0) { delayMs(timeoutMs); return 0; }   // nothing open: wait out the period rather than spin
-    timeval tv{};
-    tv.tv_sec = static_cast<decltype(tv.tv_sec)>(timeoutMs / 1000);
-    tv.tv_usec = static_cast<decltype(tv.tv_usec)>((timeoutMs % 1000) * 1000);
-    const int r = ::select(maxFd + 1, &readable, nullptr, nullptr, &tv);
-    return r < 0 ? 0 : r;
+    int fds[kMaxWaitSockets];
+    const int n = count < kMaxWaitSockets ? count : kMaxWaitSockets;
+    for (int i = 0; i < n; i++) fds[i] = sockets[i] ? sockets[i]->fd_ : -1;
+    return detail::selectReadable(fds, n, timeoutMs, [](int fd) { return fd; });
 }
 
 // Join an IPv4 multicast group so the bound socket receives datagrams sent to it (WLED audio sync multicasts to 239.0.0.1). INADDR_ANY as the interface lets lwip pick the default route's netif.

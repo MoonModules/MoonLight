@@ -43,6 +43,16 @@ inline std::string pumpUntil(mm::HttpServerModule& http, mm::platform::TcpConnec
     return out;
 }
 
+/// Sends one raw request on its own connection and returns the reply once its status line has arrived.
+inline std::string requestOnce(mm::HttpServerModule& http, uint16_t port, const std::string& req) {
+    mm::platform::TcpConnection client;
+    if (!connectAndAccept(http, client, port)) return {};
+    if (!client.write(reinterpret_cast<const uint8_t*>(req.data()), req.size())) return {};
+    std::string reply = pumpUntil(http, client, 12);
+    client.close();
+    return reply;
+}
+
 /// Tick the server and read `client` until the server closes it: the whole answer.
 inline std::string readUntilClosed(mm::HttpServerModule& http, mm::platform::TcpConnection& client) {
     std::string out;

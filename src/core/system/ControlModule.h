@@ -312,6 +312,8 @@ public:
             controls_.setLive(controls_.count() - 1);
         }
         /// One pad per preset file. Click applies, right-click names, drag rearranges.
+        /// @field name The preset's name, shown on its pad.
+        /// @field captures Which containers the preset sets: Layouts, Effects, Drivers or Services.
         /// @guide Right-click a pad to rename it, delete it or save over it. A pad is a position: slot 14 stays slot 14.
         controls_.addList("presets", *this);
         // The save form: input for the next save rather than configuration, so none of it is written to flash.

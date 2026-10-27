@@ -70,9 +70,9 @@ inline size_t buildE131Packet(uint8_t* outBuf, uint16_t universe, uint8_t sequen
     return totalLen;
 }
 
-/// Parse and validate a data packet, zero-copy; priority, sequence and sync are ignored, last write winning.
+/// Parse and validate a data packet, zero-copy, reporting its sequence when asked; priority and sync are ignored, last write winning.
 inline bool parseE131Packet(const uint8_t* pkt, size_t len, uint16_t& universeOut,
-                            const uint8_t*& dataOut, uint16_t& dataLenOut) {
+                            const uint8_t*& dataOut, uint16_t& dataLenOut, uint8_t* sequenceOut = nullptr) {
     if (!pkt || len < E131_HEADER_SIZE) return false;
     if (std::memcmp(pkt + 4, "ASC-E1.17\0\0\0", 12) != 0) return false;
     if (pkt[18] != 0 || pkt[19] != 0 || pkt[20] != 0 || pkt[21] != 0x04) return false;
@@ -86,6 +86,7 @@ inline bool parseE131Packet(const uint8_t* pkt, size_t len, uint16_t& universeOu
     universeOut = detail::getU16(pkt + 113);
     dataOut = pkt + E131_HEADER_SIZE;
     dataLenOut = dataLen;
+    if (sequenceOut) *sequenceOut = pkt[111];
     return true;
 }
 

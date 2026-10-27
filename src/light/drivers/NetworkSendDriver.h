@@ -20,7 +20,7 @@ namespace mm {
 /// Streams the buffer over UDP as Art-Net, E1.31 or DDP, its packets paced so receivers keep up, to Falcon and Advatek controllers, xLights and LedFx.
 /// @card NetworkSendDriver.png
 ///
-/// One driver feeds many receivers, each taking a contiguous run of the window under its own address. A wall of tubes is one driver, the twin of one LED driver fanning out to several lanes.
+/// One driver feeds many receivers, each a run of the window at its own address, as an LED driver fans out over pins.
 ///
 /// @attribution Art-Net, E1.31, DDP, troyhacks
 ///
@@ -28,7 +28,7 @@ namespace mm {
 ///
 /// ## Mixed fixtures
 ///
-/// A chain of mixed fixtures needs one driver per fixture type, each with its own `start`, `count` and `fixture`, the richest motion fixture first.
+/// Mixed fixtures take a driver per fixture type, each with its own `start`, `count` and `fixture`, the richest motion fixture first.
 ///
 /// | driver | window | fixtures |
 /// |---|---|---|
@@ -83,24 +83,31 @@ public:
     /// How many receivers one driver can feed: a wall of tubes, not a subnet scan.
     static constexpr uint8_t kMaxDestinations = 32;
     /// Receiver addresses or names, in fan-out order; blank idles.
-    /// @guide A name resolves in the background, `.local` by mDNS and anything else by DNS. It sends nothing until it first resolves, keeps its last address while it stops answering, and the status names the ones still waiting.
+    /// @guide A name resolves by mDNS for `.local`, else by DNS; it sends once resolved, keeps its last address while silent, and the status names the ones waiting.
     char hosts[64] = {};
     /// Lights per receiver; blank splits evenly, one number to all, a list each.
     char lightsPerHost[64] = {};
     /// How packets travel: unicast, Art-Net broadcast or E1.31 multicast.
-    /// @guide Art-Net 4 requires unicast; broadcast loads every host. E1.31 `multicast` needs [IGMP snooping](https://moonmodules.org/MoonLight/explanation/architecture/moonlight.html#multicast-and-igmp-snooping), and the status says when it is dropped.
+    /// @guide Art-Net 4 requires unicast; broadcast loads every host. E1.31 `multicast` needs [IGMP snooping](https://moonmodules.org/MoonLight/explanation/architecture/moonlight.html#multicast-and-igmp-snooping).
     uint8_t addressing = 0;
     /// The wire protocol: Art-Net, E1.31 or DDP; the port follows.
     uint8_t protocol = 0;
-    /// The first universe, emitted verbatim with no one-based adjust; DDP ignores it.
+    /// The first universe, sent as is; DDP ignores it.
     uint16_t universeStart = 0;
+    /// Channels each Art-Net or E1.31 universe carries, exactly; DDP ignores it.
+    /// @guide A light stays in one universe when its channels divide this: **510** does for RGB, RGBWW and 6 channels, **512** fills every universe. RGBW takes 508, a 13-channel head 507.
+    uint16_t channelsPerUniverse = static_cast<uint16_t>(MAX_CHANNELS_PER_UNIVERSE);
     /// Frame-rate limit, so a fast render tick does not flood the LAN.
+    /// @guide It sets the load, fps times a frame's packets a second: lowering it eases a receiver.
     uint8_t fps = 50;
-    /// Microseconds between a frame's packets; 0 sends a burst.
-    /// @guide The pause lets a receiver keep up, @xref{paced-packets-sent-from-a-task|sent from a task} so the render loop never waits.
+    /// Microseconds from the start of one packet to the next; 0 sends a burst.
+    /// @guide The pause lets a receiver keep up, @xref{paced-packets-sent-from-a-task|sent from a task}. A frame fills at most 80% of its period, so a high fps or a large grid shrinks the gap.
     uint16_t packetGap = 500;
 
-    /// Bind the protocol, the destinations, the universe offset, the window and the rate cap.
+    /// It sends a slice of the shared buffer.
+    bool hasWindowControls() const override { return true; }
+
+    /// Bind the protocol, the destinations, the universe offset and the rate cap.
     void defineDriverControls() override {
         controls_.addSelect("protocol", protocol, kProtocolOptions, kProtocolCount);
         const uint8_t p = protocol < kProtocolCount ? protocol : 0;
@@ -115,7 +122,7 @@ public:
         controls_.addText("lightsPerHost", lightsPerHost, sizeof(lightsPerHost));
         controls_.setHidden(controls_.count() - 1, !unicast);
         controls_.addControl("universe_start", universeStart);
-        addWindowControls();   // start / count: the slice of the shared buffer this sink sends
+        controls_.addControl("channels_per_universe", channelsPerUniverse, 1, 512);
         controls_.addControl("fps", fps, 1, 120);
         controls_.addControl("packet_gap", packetGap, 0, 5000);
     }
@@ -135,9 +142,15 @@ public:
         return kModes[p][addressing < kModeCount[p] ? addressing : 0];
     }
 
-    /// Refresh the named hosts' addresses from the resolver, which never blocks, and the status they drive.
+    /// Refresh the named hosts' addresses from the resolver, which never blocks, and the status: a warning, or what went out this second.
     void tick1s() MM_NONBLOCKING override {
         DriverBase::tick1s();
+        const uint32_t frames = framesSent_.load(std::memory_order_relaxed);
+        const uint32_t packets = packetsSent_.load(std::memory_order_relaxed);
+        framesLastSecond_ = frames - framesAtSecond_;
+        packetsLastSecond_ = packets - packetsAtSecond_;
+        framesAtSecond_ = frames;
+        packetsAtSecond_ = packets;
         refreshHosts();
     }
 
@@ -154,7 +167,7 @@ public:
     /// How many times the send task was started, so a test can tell a running stream from a restarted one.
     uint32_t taskStartsForTest() const { return taskStarts_; }
 
-    /// Stop the send task and close the socket on release, then chain to the base to clear any status this driver set.
+    /// Stop the send task and close the socket on release, then chain to the base, which clears the status.
     void release() override {
         stopSendTask();
         socket_.close();
@@ -227,6 +240,14 @@ public:
 
     /// Correct the window into the staging buffer, then chunk it into packets and send.
     void tick() MM_NONBLOCKING override {
+        // The render's frame period, smoothed over about eight frames, which the pacing spreads a frame across.
+        const uint32_t nowUs = platform::micros();
+        if (lastTickUs_) {
+            const uint32_t sample = nowUs - lastTickUs_ < 1000000u ? nowUs - lastTickUs_ : 1000000u;   // a stall counts as one second at most
+            const uint32_t period = framePeriodUs_.load(std::memory_order_relaxed);
+            framePeriodUs_.store((period * 7 + sample) / 8, std::memory_order_relaxed);
+        }
+        lastTickUs_ = nowUs;
         if (!sourceBuffer_ || !sourceBuffer_->data()) return;
 
         // No destination means idle: it never falls back to broadcasting the whole LAN.
@@ -284,16 +305,38 @@ public:
     /// Test-only accessor for the corrected buffer, pinning the no-allocation contract.
     const Buffer& correctedBuffer() const { return corrected_; }
 
-    /// The gap, shortened so a frame's packets fit in 80% of its `fps` period, leaving room for the next.
-    uint32_t effectiveGap(size_t totalBytes, uint8_t bytesPerLight) const {
-        // The chunk sendFrame uses: whole fixtures per universe, a full universe when a fixture is wider.
-        const size_t whole = bytesPerLight ? (MAX_CHANNELS_PER_UNIVERSE / bytesPerLight) * bytesPerLight : 0;
-        const size_t chunk = protocol == kProtoDdp ? DDP_MAX_PAYLOAD : (whole ? whole : MAX_CHANNELS_PER_UNIVERSE);
+    /// The slot spacing: the gap, shortened so a frame's slots fit in 80% of its period, leaving room for the next.
+    uint32_t effectiveGap(size_t totalBytes) const {
+        const size_t chunk = packetPayload();
         // An upper bound: one partial packet per destination on top of the whole ones.
         const uint32_t packets = static_cast<uint32_t>((totalBytes + chunk - 1) / chunk) + nDest_;
-        const uint32_t budget = fps ? 800000u / fps : 0;
+        const uint32_t budget = pacingPeriodUs(fps, framePeriodUs_.load(std::memory_order_relaxed)) / 5 * 4;
         const uint32_t fit = packets > 1 ? budget / (packets - 1) : budget;
         return packetGap < fit ? packetGap : fit;
+    }
+
+    /// The bytes one packet carries: a DDP packet's most, or a universe's channels, clamped to what a universe holds.
+    size_t packetPayload() const {
+        if (protocol == kProtoDdp) return DDP_MAX_PAYLOAD;
+        return channelsPerUniverse >= 1 && channelsPerUniverse <= 512 ? channelsPerUniverse : MAX_CHANNELS_PER_UNIVERSE;
+    }
+
+    /// The period a frame is paced across: the render's own when it is slower than `fps` allows, else the `fps` one.
+    static uint32_t pacingPeriodUs(uint8_t fps, uint32_t framePeriodUs) {
+        const uint32_t capped = fps ? 1000000u / fps : 0;
+        return framePeriodUs > capped ? framePeriodUs : capped;
+    }
+
+    /// Microseconds to wait before packet `i` of a frame begun at `startUs`, slots `spacingUs` apart: what remains until its slot, 0 when a slow send already used it up. Wraps with micros().
+    static uint32_t slotWait(uint32_t startUs, uint32_t i, uint32_t spacingUs, uint32_t nowUs) {
+        const int32_t left = static_cast<int32_t>(startUs + i * spacingUs - nowUs);
+        return left > 0 ? static_cast<uint32_t>(left) : 0;
+    }
+
+    /// The universe sequence after `seq`: E1.31 runs 0 to 255, Art-Net 1 to 255 since its 0 means none.
+    static uint8_t nextSequence(uint8_t seq, uint8_t protocol) {
+        if (seq < 255) return static_cast<uint8_t>(seq + 1);
+        return protocol == kProtoE131 ? 0 : 1;
     }
 
     /// Whether a task paces the packets, rather than the tick sending a burst: the test seam for the fallback.
@@ -313,10 +356,15 @@ private:
     Buffer* sourceBuffer_ = nullptr;
     /// Owned: source bytes after brightness/order/white. Sized off the hot path (resizeCorrected).
     Buffer corrected_;
-    /// Art-Net/E1.31 per-frame sequence counter; wraps at 255, which both protocols expect.
-    uint8_t sequence_ = 0;
+    /// Art-Net/E1.31 per-frame sequence counter, so each universe counts up once a frame, as nextSequence steps it.
+    uint8_t sequence_ = 1;
+    /// DDP's per-packet sequence counter for each destination, 1 to 15, 0 before its first packet: each receiver sees its own run unbroken.
+    uint8_t ddpSequence_[kMaxDestinations] = {};
     /// millis() of the last frame sent: the `fps` rate limiter's reference point.
     uint32_t lastSendTime_ = 0;
+    /// micros() of the last tick, and the smoothed time between ticks, the render's frame period.
+    uint32_t lastTickUs_ = 0;
+    std::atomic<uint32_t> framePeriodUs_{0};   ///< written by the tick, read by the send task
     /// E1.31 component id, built once in setup() from the MAC so it is stable per device.
     uint8_t cid_[E131_CID_LENGTH] = {};
     /// Destination hosts, derived in prepare() (never in tick()); a name's address is refreshed each second.
@@ -325,8 +373,14 @@ private:
     nrOfLightsType destCounts_[kMaxDestinations] = {};
     /// How many entries of `dest_` / `destCounts_` are live.
     uint8_t nDest_ = 0;
-    /// The unresolved-names warning, which the status points at.
-    char statusBuf_[32] = {};
+    /// The status line the buffer holds: an unresolved-names warning, or what went out this second.
+    char statusBuf_[64] = {};
+    /// Frames and packets sent since start, by the tick or the task, which tick1s turns into rates.
+    std::atomic<uint32_t> framesSent_{0}, packetsSent_{0};
+    /// The last frame's packet count and slot spacing, for the status.
+    std::atomic<uint32_t> packetsPerFrame_{0}, packetSpacing_{0};
+    uint32_t framesAtSecond_ = 0, packetsAtSecond_ = 0;       ///< the counts at the last tick1s
+    uint32_t framesLastSecond_ = 0, packetsLastSecond_ = 0;   ///< sent in the second before it
     /// The light-count warning prepare found, restored once the names resolve.
     const char* prepareWarn_ = nullptr;
 
@@ -356,7 +410,7 @@ private:
                 platform::waitNotify(sendTask_, 100);
                 continue;
             }
-            sendFrame<true>(frame_.data, frame_.totalBytes, frame_.bytesPerLight, effectiveGap(frame_.totalBytes, frame_.bytesPerLight));
+            sendFrame<true>(frame_.data, frame_.totalBytes, frame_.bytesPerLight, effectiveGap(frame_.totalBytes));
             frameState_.exchange(kFrameIdle, std::memory_order_acq_rel);
         }
     }
@@ -367,7 +421,8 @@ private:
         taskStarts_++;
         sendStop_.store(false, std::memory_order_release);
         frameState_.exchange(kFrameIdle, std::memory_order_acq_rel);
-        platform::spawnPinnedTask(sendTask_, "mmSend", &sendTrampoline, this, 4096, 3, 1);
+        // Priority 7, above the encode (5) and capture (6) tasks on core 1: it wakes every gap, the shortest period there (rate-monotonic priority).
+        platform::spawnPinnedTask(sendTask_, "mmSend", &sendTrampoline, this, 4096, 7, 1);
     }
 
     void stopSendTask() {
@@ -377,21 +432,16 @@ private:
         frameState_.exchange(kFrameIdle, std::memory_order_acq_rel);
     }
 
-    /// Chunk a frame into packets and send them, `gapUs` apart from the task (`kPaced`) and back to back from the tick, whose instance holds no wait.
+    /// Chunk a frame into packets and send them, each in its slot `spacingUs` apart from the task (`kPaced`) and back to back from the tick, whose instance holds no wait.
     template <bool kPaced>
-    void sendFrame(const uint8_t* data, size_t totalBytes, uint8_t bytesPerLight, uint32_t gapUs) {
-        // Rounded DOWN to whole fixtures: one straddling two universes reads a neighbor's channels.
-        size_t chunk = (protocol == kProtoDdp) ? DDP_MAX_PAYLOAD : MAX_CHANNELS_PER_UNIVERSE;
+    void sendFrame(const uint8_t* data, size_t totalBytes, uint8_t bytesPerLight, uint32_t spacingUs) {
+        const size_t chunk = packetPayload();
         uint8_t* packet = packet_;
         const uint16_t port = protocolPort(protocol);
-        if (protocol != kProtoDdp && bytesPerLight > 1) {
-            const size_t whole = (chunk / bytesPerLight) * bytesPerLight;
-            // A fixture wider than a universe keeps the full one, so the failure is visible.
-            if (whole > 0) chunk = whole;
-        }
 
         const Addressing sendMode = mode();
-        uint32_t packets = 0;   // sent so far this frame, so the first goes out at once
+        uint32_t packets = 0;   // sent so far this frame: the first goes out at once, and the status reports the count
+        const uint32_t frameStart = kPaced ? platform::micros() : 0;   // slot 0, which the others count from
         size_t offset = 0;   // byte cursor into `data`, walking destination by destination
         for (uint8_t d = 0; d < nDest_ && offset < totalBytes; d++) {
             // This destination's run: its light count × the wire stride, clipped to what's left.
@@ -412,18 +462,22 @@ private:
                         break;
                     case kProtoDdp:
                         // Byte-addressed, and relative to this destination's own strip.
+                        ddpSequence_[d] = ddpSequence_[d] % DDP_SEQUENCE_MAX + 1;
                         packetLen = buildDdpPacket(packet, static_cast<uint32_t>(sent),
                                                    /*push=*/sent + n >= runBytes,
-                                                   src, static_cast<uint16_t>(n));
+                                                   src, static_cast<uint16_t>(n), ddpSequence_[d]);
                         break;
                     default:
                         packetLen = buildArtDmxPacket(packet, universe, sequence_,
                                                       src, static_cast<uint16_t>(n));
                         break;
                 }
-                // A pause before every packet but the first, then a failed send retried after a backoff when paced, else dropped: one dark tube stalls no other.
+                // Every packet but the first waits for its slot, then a failed send is retried after a backoff when paced, else dropped: one dark tube stalls no other.
                 if constexpr (kPaced) {
-                    if (gapUs && packets++ > 0) platform::sleepUs(sendTask_, gapUs);
+                    if (spacingUs && packets > 0) {
+                        const uint32_t wait = slotWait(frameStart, packets, spacingUs, platform::micros());
+                        if (wait) platform::sleepUs(sendTask_, wait);
+                    }
                     if (sendStop_.load(std::memory_order_acquire)) return;
                 }
                 uint8_t grp[4];
@@ -437,13 +491,18 @@ private:
                         }
                     }
                 });
+                packets++;
                 sent += n;
                 universe++;
             }
             offset += runBytes;
         }
 
-        sequence_++;
+        sequence_ = nextSequence(sequence_, protocol);
+        packetsPerFrame_.store(packets, std::memory_order_relaxed);
+        packetSpacing_.store(spacingUs, std::memory_order_relaxed);
+        framesSent_.fetch_add(1, std::memory_order_relaxed);
+        packetsSent_.fetch_add(packets, std::memory_order_relaxed);
     }
 
     /// The UDP port for a protocol index: each wire format has its own registered port.
@@ -473,8 +532,22 @@ private:
         } else if (mode() == Addressing::Multicast && NetworkPath::multicastDropped) {
             // A light stream never falls back to broadcast, which would flood every device on the LAN.
             setStatus("multicast blocked here: use unicast", Severity::Warning);
+        } else if (prepareWarn_) {
+            setStatus(prepareWarn_, Severity::Warning);
         } else {
-            setStatus(prepareWarn_, prepareWarn_ ? Severity::Warning : Severity::Status);
+            // What reached the wire this second, so a rate the receiver sees can be told from one the driver sends.
+            const uint32_t spacing = packetSpacing_.load(std::memory_order_relaxed);
+            const uint32_t packets = packetsPerFrame_.load(std::memory_order_relaxed);
+            // Frames and packets a second first, as Network Receive reports what arrived, so the two cards compare at a glance.
+            if (sendTask_.impl && spacing)
+                mm::formatTo(statusBuf_, sizeof(statusBuf_), "%u fps, %u packets/s, %u each, %u us apart",
+                             static_cast<unsigned>(framesLastSecond_), static_cast<unsigned>(packetsLastSecond_),
+                             static_cast<unsigned>(packets), static_cast<unsigned>(spacing));
+            else
+                mm::formatTo(statusBuf_, sizeof(statusBuf_), "%u fps, %u packets/s, %u each, a burst",
+                             static_cast<unsigned>(framesLastSecond_), static_cast<unsigned>(packetsLastSecond_),
+                             static_cast<unsigned>(packets));
+            setStatus(statusBuf_, Severity::Status);
         }
     }
 

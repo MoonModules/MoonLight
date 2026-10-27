@@ -230,8 +230,9 @@
       "read": [
         "sender:fps",
         "NetworkReceive.tick",
-        "NetworkReceive.packets_per_s",
-        "NetworkReceive.frames_per_s"
+        "NetworkReceive.status[packets/s]",
+        "NetworkReceive.status[fps]",
+        "NetworkReceive.status[lost/s]"
       ],
       "description": "4096 lights split over two receivers by unicast DDP, 2048 each. Read on host.",
       "observed": {
@@ -267,8 +268,9 @@
       "read": [
         "sender:fps",
         "NetworkReceive.tick",
-        "NetworkReceive.packets_per_s",
-        "NetworkReceive.frames_per_s"
+        "NetworkReceive.status[packets/s]",
+        "NetworkReceive.status[fps]",
+        "NetworkReceive.status[lost/s]"
       ],
       "description": "4096 lights split over two receivers by unicast DDP, 2048 each. Read on receiver2.",
       "device": "receiver2",
@@ -351,8 +353,9 @@
       "read": [
         "sender:fps",
         "NetworkReceive.tick",
-        "NetworkReceive.packets_per_s",
-        "NetworkReceive.frames_per_s"
+        "NetworkReceive.status[packets/s]",
+        "NetworkReceive.status[fps]",
+        "NetworkReceive.status[lost/s]"
       ],
       "description": "12288 lights split over two receivers by unicast DDP, 6144 each. Read on host.",
       "observed": {
@@ -388,8 +391,9 @@
       "read": [
         "sender:fps",
         "NetworkReceive.tick",
-        "NetworkReceive.packets_per_s",
-        "NetworkReceive.frames_per_s"
+        "NetworkReceive.status[packets/s]",
+        "NetworkReceive.status[fps]",
+        "NetworkReceive.status[lost/s]"
       ],
       "description": "12288 lights split over two receivers by unicast DDP, 6144 each. Read on receiver2.",
       "device": "receiver2",
@@ -488,8 +492,9 @@
       "read": [
         "sender:fps",
         "NetworkReceive.tick",
-        "NetworkReceive.packets_per_s",
-        "NetworkReceive.frames_per_s"
+        "NetworkReceive.status[packets/s]",
+        "NetworkReceive.status[fps]",
+        "NetworkReceive.status[lost/s]"
       ],
       "description": "4096 lights to both receivers in one stream, Art-Net broadcast. Read on host.",
       "observed": {
@@ -525,8 +530,9 @@
       "read": [
         "sender:fps",
         "NetworkReceive.tick",
-        "NetworkReceive.packets_per_s",
-        "NetworkReceive.frames_per_s"
+        "NetworkReceive.status[packets/s]",
+        "NetworkReceive.status[fps]",
+        "NetworkReceive.status[lost/s]"
       ],
       "description": "4096 lights to both receivers in one stream, Art-Net broadcast. Read on receiver2.",
       "device": "receiver2",
@@ -579,8 +585,9 @@
       "read": [
         "sender:fps",
         "NetworkReceive.tick",
-        "NetworkReceive.packets_per_s",
-        "NetworkReceive.frames_per_s"
+        "NetworkReceive.status[packets/s]",
+        "NetworkReceive.status[fps]",
+        "NetworkReceive.status[lost/s]"
       ],
       "description": "4096 lights to both receivers in one stream, E1.31 multicast. Read on host.",
       "observed": {
@@ -616,8 +623,9 @@
       "read": [
         "sender:fps",
         "NetworkReceive.tick",
-        "NetworkReceive.packets_per_s",
-        "NetworkReceive.frames_per_s"
+        "NetworkReceive.status[packets/s]",
+        "NetworkReceive.status[fps]",
+        "NetworkReceive.status[lost/s]"
       ],
       "description": "4096 lights to both receivers in one stream, E1.31 multicast. Read on receiver2.",
       "device": "receiver2",

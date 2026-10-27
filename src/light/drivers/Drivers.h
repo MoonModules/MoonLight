@@ -472,11 +472,8 @@ public:
         }
     }
 
-    /// Publish the fixture layout and the scripted palettes, and close the relay for `on`.
+    /// Start the saved palette, publish the fixture layout, and close the relay for `on`; the scripted palettes were listed when the controls were bound.
     void setup() override {
-        // The filesystem module mounts first, so this scan is the one that sees every script; from here a file change rescans.
-        refreshLivePalettes();
-        LivePalettes::set(live_.ptrs, live_.tags, live_.count, live_.present);
         // The saved choice starts as picking it does, a script palette compiled, since at boot nothing reacts to the value.
         onControlChanged("palette");
         dark_ = MoonModule::safeMode();

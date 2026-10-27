@@ -2,6 +2,14 @@
   "name": "scenario_Layers_stack_and_blend_live",
   "module": "Effects",
   "mode": "mutate",
+  "steps_proved": [
+    "stack-layers/add-layer",
+    "stack-layers/add-effect",
+    "stack-layers/blend",
+    "stack-layers/opacity",
+    "first-light-show/add-effect",
+    "hold-to-play/opacity"
+  ],
   "also": [
     "Layer",
     "Layouts",

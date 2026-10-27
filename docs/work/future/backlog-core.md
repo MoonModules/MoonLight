@@ -418,43 +418,6 @@ declared rather than for a buffer to fill, and to time out on stall rather than 
   next regression there would surface only on a board. Add the runtime assertion together with the
   fix, not before: asserting the current behavior would encode the bug.
 
-- **ESP32-P4 panics with `Cache error` every few minutes, pre-existing** (2026-08-19): the bench
-  P4 (Waveshare P4-NANO, `esp32p4rev1-eth`) reboots roughly every four minutes while IDLE, with
-  `Guru Meditation Error: Core 0 panic'ed (Cache error)`, sometimes followed by an
-  `Illegal instruction` and a `CHIP_LP_WDT_RESET` on the way down.
-
-  **What the device reports about its own restarts:** `bootReason` alternates between `PANIC` and
-  the watchdog. The serial shows why: the `Cache error` panic sometimes completes its dump and
-  reboots cleanly (`PANIC`), and sometimes the panic HANDLER itself then dies with an
-  `Illegal instruction` before it finishes, leaving the low-power watchdog to reset the chip
-  (`rst:0x10 CHIP_LP_WDT_RESET`, `W boot.esp32p4: CPU has been reset by WDT`). So a WDT boot reason
-  here is a SYMPTOM of the same fault, not a second one: nothing is hanging a task. Worth checking
-  `bootReason` over several restarts rather than one, because either value can appear.
-
-  **Not caused by MoonLive, and not a regression.** Established by two independent checks: the board
-  runs the DEFAULT module tree (GridLayout + NoiseEffect, no MoonLive module at all, so none of that
-  code executes), and a firmware built from a clean `main` crashes identically. The filesystem is
-  healthy throughout: LittleFS mounts, `/.config` lists, and writes succeed.
-
-  What is known about the fault site: `MEPC` resolves to `pxPortGetCoprocArea`
-  (`freertos/.../portable/riscv/port.c`) reached from `rtos_int_enter` (`portasm.S`), which is FreeRTOS's
-  RISC-V coprocessor-context save on INTERRUPT ENTRY. That is a symptom of something faulting inside
-  an ISR context rather than a bug in the kernel itself, and the P4 is the only RISC-V target with a
-  coprocessor, which is why no other board shows it. The prior art at
-  `Plan-20260718 - MoonI80 lapping-v2 clock-oracle ring` (in the plans archive)
-  is a DIFFERENT cause with the same panic name (an ISR reading PSRAM while a flash write disabled
-  the cache, fixed with a `spi_flash_cache_enabled()` defer guard) and is worth re-reading first:
-  the same shape on another ISR would present exactly like this.
-
-  Next step is a decoded backtrace from the full panic dump rather than the register line, then
-  bisecting which ISR is live (audio, the LED driver, ethernet) by disabling each. Two hypotheses
-  were tested and falsified during the session that found it, so start from evidence.
-
-  A SEPARATE P4 boot loop, also found that session, WAS a real regression and is fixed: the MoonLive
-  engine had grown to 1440 bytes held by value in every scripted module, and `registerType`'s `T
-  probe` constructs each module on the main task's stack at boot. Re-indexing its seeded-member table
-  by member rather than by arena byte took it to 784 bytes and the board boots clean.
-
 - **ESP32-P4 DHCP hostname not shown by the router (recheck later)** — the device sets its DHCP hostname (option 12 = `deviceName`, default `MM-XXXX`) in the `ETHERNET_EVENT_CONNECTED` handler, verified working on two boards: the S3 over WiFi (router shows `MM-70BC`) and the Olimex over RMII Ethernet (`MM-BD3C`) — the *same* `ethEventHandler` code path the P4 uses. Yet the bench P4 (Waveshare P4-NANO, RMII) still shows as blank/"Unknown" in the GL.iNet client list, while serial confirms `set_hostname` succeeds with no error. Two unconfirmed suspects, neither our logic: (1) the router holds a **sticky lease** for the P4's MAC and won't relearn the hostname until it fully expires (the per-client "forget" isn't exposed in this GL.iNet UI, and a plain reboot didn't clear it); (2) a P4-specific IDF netif quirk serializing option 12 differently on the newer P4 Ethernet path. Since the shared code path is proven on two other boards, this is not treated as a code bug. Recheck after the P4's lease naturally expires, or on a different router, before spending more on it.
 
 ### A Service that calls another device's API (robwomp, 2026-10-11)
@@ -1410,12 +1373,7 @@ Rounds 1 (board + Ethernet-only) and 2 (Parlio LED driver) have landed. Remainin
 
   **Round 4 — the IDF-update regression (2026-07-03).** After the IDF bump to `v6.1-dev-5215-g0d928780081`, the variant stopped building entirely, then stopped booting. Two distinct causes, both IDF/component-manager side (all our config was correct):
   - ❌→✅ **Build: `esp_hosted.h` not found — the manifest `if` syntax changed.** The component manager (now 3.0.3) silently skipped `esp_hosted`/`esp_wifi_remote` (`NOTICE: Skipping optional dependency`) because our `idf_component.yml` rule used the bare `CONFIG_MM_P4_WIFI == True`. The current manager only recognises a Kconfig variable in the **`$CONFIG{...}`** form (its `KCONFIG_VAR_REGEX = \$CONFIG\{([^}]+)}`); the bare `CONFIG_X` falls through to plain string-eval → false → skipped. **Fixed:** `if: "$CONFIG{MM_P4_WIFI} == True"` (note: NO `CONFIG_` prefix inside the braces). Confirmed by [idf-component-manager #104](https://github.com/espressif/idf-component-manager/issues/104) + the official manifest docs. This also supersedes open-issue #3 above — with the correct syntax the pull is reliable (no `set-target` dance needed for the *dependency*).
-  - ❌ **Boot: `sleep_clock_icg_startup_init` aborts with `ESP_ERR_NO_MEM` (0x101) → reboot loop.** A KNOWN, OPEN ESP-IDF bug: **[esp-idf #18759 (IDFGH-17859)](https://github.com/espressif/esp-idf/issues/18759)** — on ESP32-P4 + PSRAM, this sleep-clock retention init runs unconditionally at a SECONDARY boot phase (before `app_main`, NOT gated by `CONFIG_PM_ENABLE`) and fails to allocate its REGDMA retention links when early internal DRAM is tight, which it is once esp_hosted's SDIO stack is pulled in (WiFi build only; the eth-only P4 has DRAM to spare). Espressif's guidance on the issue: reduce early internal-DRAM static usage. Bench findings (2026-07-03): `CONFIG_SPIRAM_TRY_ALLOCATE_WIFI_LWIP` does NOT help (those buffers allocate after the boot init); `CONFIG_PM_POWER_DOWN_PERIPHERAL_IN_LIGHT_SLEEP=y` drops the ICG file but only moves the failure to the next retention alloc (PCR / int_wdt) then a `sleep_retention.c:914` assert; `.bss`/`.noinit` → PSRAM (`CONFIG_SPIRAM_ALLOW_{BSS,NOINIT}_SEG_EXTERNAL_MEMORY`) still fails — because `MALLOC_CAP_RETENTION` is a *specific reserved memory region*, not general DRAM, so freeing general DRAM doesn't reach it. MoonLight ran the same board on IDF 5.5 without it, so it's a 6.1-era regression. **RESOLVED for us 2026-08-19 by resolution path 1 below** (`CONFIG_PM_SLEEP_CLK_ICG_ENABLE=n` on IDF v6.1-rc1) — a workaround, since the allocation failure is untouched and #18759 remains open upstream.
-
-    **Resolution paths (each independent):**
-    1. **Upstream fix — SHIPPED on master, needs a v6.1 back-port or a cherry-pick (rechecked 2026-07-27).** #18759 was marked **Done** on 2026-07-27 and has since been **reopened — it is OPEN upstream** (rechecked 2026-08-20; see the status note at the end of this item). The fix is exactly the knob we wanted: commit `7d31b82d27d` ("change(esp_pm): add kconfig option for REGDMA sleep clock ICG", 2026-07-06) adds **`CONFIG_PM_SLEEP_CLK_ICG_ENABLE`** (`bool`, default `y`) — set it **`n`** and the crashing `sleep_clock_icg_startup_init` is not built/run. Since a 236-FPS LED controller never light-sleeps, ICG retention is dead weight for us, so `=n` costs nothing. **But it is on `origin/master` only — NOT back-ported to `release/v6.1`** (our pinned IDF `14f663f`/dev-5880 and the current `origin/release/v6.1` are the same commit; neither has it). So bumping the pinned v6.1 IDF does *not* get it yet. **Decision (2026-07-27): wait for the next v6.1 beta** that carries the back-port, rather than cherry-pick `7d31b82d27d` onto the pinned IDF — a manual local IDF patch is bespoke, drifts, and complicates the single-pinned-IDF story for a fix that is a clean one-line sdkconfig change once it's in the branch. **DONE 2026-08-19 — that plan executed exactly as written.** v6.1-rc1 published carrying the option as `4b8e1e87106` (verified present in `components/esp_pm/Kconfig` at the pinned commit `44f0c59f7c8`); the IDF pin was bumped, `CONFIG_PM_SLEEP_CLK_ICG_ENABLE=n` added to `sdkconfig.defaults.esp32p4rev1-eth-wifi`, and the P4-WiFi boot bench-tested: it boots, associates (RSSI -52) and serves the UI. The variant is out of the installer's experimental set and ships as a normal firmware. Reported back on the upstream issue ([comment](https://github.com/espressif/esp-idf/issues/18759#issuecomment-5345660136)), which also told the original reporter the option had landed — nobody had announced it in the thread. **#18759 stays OPEN upstream** and we did not ask for it to be closed: the retention allocation still fails under early-DRAM pressure, the option merely means nothing requests that memory. Round 3 is now unblocked, and its remaining defect is throughput, not boot (see open issue 0 above).
-    2. **IDF 5.5 fallback — investigated 2026-07-03, NOT a cheap escape.** MoonLight ran this exact board on IDF **5.5** without the crash, so a 5.5 build of just this variant (everything else on 6.1) looked like a timeline-independent path. A bench attempt against IDF 5.5.4 found `src/platform/esp32/` has drifted to genuinely require IDF **6.x**: four distinct 5.5↔6.1 API breaks in `platform_esp32.cpp` / `platform_config.h` — (a) `RMT_LL_TX_CANDIDATES_PER_INST` renamed (5.5: `SOC_RMT_TX_CANDIDATES_PER_GROUP`); (b) `esp_eth_phy_ip101.h` moved (5.5: ctor lives in core `esp_eth_phy.h`, no standalone header); (c) `CHIP_ESP32S31` enum is 6.1-only; (d) `ETH_ESP32_EMAC_DEFAULT_CONFIG()` in 5.5 has out-of-declaration-order designated initializers — a C++ **hard error no compiler flag suppresses** (`-fpermissive` doesn't touch it). So a working 5.5 binary needs permanent `#if`-IDF-version compat branches in the platform layer (an EMAC-init back-port + a second IDF 5.5.4 in the CI matrix) — a real feature, not a throwaway. Only worth it if #18759 stalls long enough that a shippable P4-WiFi is needed sooner.
-    3. **Version-matched C6 slave reflash** (see round-3 item 1) — may change the boot memory picture, but is blocked behind the boot crash (host must boot to test the C6 handshake), so it only matters once 1 or 2 gets us to `app_main` stably.
+  - **Boot: `sleep_clock_icg_startup_init` aborts with `ESP_ERR_NO_MEM`.** Worked around in the P4 WiFi fragment; tracked in [Issues in other projects](../../reference/issues-in-other-projects.md) as esp-idf #18759.
 - **Round 4 — Parlio loopback self-test FIXED (2026-07-09), real long strip still to prove.** The Parlio loopback self-test now passes on P4 hardware at any grid size (verified on MM-P4, jumper GPIO 32↔33, at both 8×8 and 128×128). A real *long* WS2812 strip (not just the bench panel) is the remaining hardware proof.
 
   **The bug it exposed (fixed):** on IDF `v6.1-beta1` the self-test failed `bad bit 0/0` at large grids — it worked at 8×8 but not 128×128. Two stacked hardware limits, both hit only because the test built a frame sized to the *whole operational grid*: (1) the P4 Parlio has no DMA-EOF, so one non-loop transfer is hard-capped at `PARLIO_LL_TX_MAX_BITS_PER_FRAME` (~0.5 Mbit) — a 128×128 grid (~1.2 Mbit) is rejected outright with `ESP_ERR_INVALID_ARG`, so nothing transmits; and (2) even once the transfer fits, the shared RMT-RX capture can't hold a large symbol count (a big frame → `rx captured 0 symbols`). Both surfaced as the same misleading `bad bit 0/0`. **A wrong first guess** (an IDF `sample_edge`→`shift_edge` clock-edge rename) was tried on hardware and rejected — both edge values fail, ruling the edge out; the serial log (`loopback: N bytes in …`, `rx captured 0 symbols`) is what pinned the real cause. **The fix:** the self-test now caps its frame to a small fixed `ParallelLedDriver::kLoopbackTestLights` (256) instead of the operational grid — the test only needs to prove the peripheral emits correct WS2812 bits, which a few hundred lights exercise fully (encode → fused correct+transpose → single-shot DMA → latch pad), and 256 fits under both the transfer cap and the capture buffer on every parallel driver, so it runs identically at any grid size. **Lesson:** an on-device self-test must size its own probe to the peripheral's real limits, not to the user's configured output size. (This whole diagnosis is a good "verify against the working reference before concluding" case — the PO's memory that it *had* worked at fd6c1d8e is what redirected the hunt from "capability gap" to "regression".)
@@ -1545,73 +1503,9 @@ The P4 build runs at **360 MHz** because IDF's `Kconfig.cpu` caps a `SELECTS_REV
 
 Neither ships until a rev-3 P4 can prove 400 runs clean — no untested clock config, per the same rule the S31/320 and this P4/400 bootloop both taught.
 
-## ESP32-P4: the esp-dsp assembly FFT faults once a second task runs (workaround shipped)
+## ESP32-P4: esp-dsp's assembly FFT and the hardware-loop erratum
 
-**Found:** bench, 2026-08-28, bringing up HLS on the P4.
-
-**Symptom:** a crash loop the moment the HLS encode task exists alongside the render loop —
-`Guru Meditation Error: ... (Illegal instruction)` or `(Load access fault)`, the type varying
-between boots, always faulting on the twiddle-table load in `dsps_fft2r_fc32_arp4.S:52`
-(`flw fa0, 0(t3)`) reached from `platform::audioFft`. The LED output freezes after a few frames
-and the board reboots. Present only with audio analysis running AND a second task; either alone
-is stable, which is why it never surfaced before HLS.
-
-**Cause:** the P4's hardware-loop unit has a documented silicon erratum, declared by Espressif's
-own `soc_caps.h`: `SOC_CPU_HAS_HWLOOP_STATE_BUG` — "HWLOOP state doesn't go to DIRTY after
-executing the last instruction of a loop". FreeRTOS saves the HWLP registers lazily and keys that
-save on the DIRTY flag, so a context switch out of the FFT concludes there is nothing to save and
-the loop state is lost; the resumed kernel then reads its table through a stale register. The
-esp-dsp `_arp4` kernel uses `esp.lp.setup` (the hardware-loop instruction), which is why the FFT
-is where it lands. IDF v6.1-rc1 carries workarounds for this erratum at two sites in
-`portasm.S` (lines 217 and 795, gated `ESP32P4_REV_MIN_FULL <= 1`, which our `REV_MIN_FULL=0`
-build satisfies) — **both on the RESTORE side**. The **save** site (~line 676) reads
-`CSR_HWLP_STATE_REG`, skips saving unless it equals `HWLP_DIRTY_STATE`, and carries no erratum
-guard at all. That is precisely what the erratum breaks: a task switched out after a loop's last
-instruction reports non-DIRTY, so its hardware-loop registers are never saved, and the resumed
-FFT reads its twiddle table through a stale register. Restore is patched; save is not.
-
-**Workaround shipped:** `CONFIG_DSP_ANSI=y` in `sdkconfig.defaults.esp32p4rev1-eth`, which swaps
-esp-dsp's hand-written assembly kernels for portable C. Measured cost on the bench P4: the Audio
-module's tick goes from ~615 us to ~658 us, about 40 us (7%) against 3.3 ms of tick headroom.
-Stability confirmed over a soak with HLS streaming: zero crashes, zero corrupt packets.
-
-**Reported upstream:** [esp-idf#19025](https://github.com/espressif/esp-idf/issues/19025)
-
-**Root cause found upstream (2026-09-09), and it is not the one above.** Espressif reproduced it
-deterministically and found two separate problems. The "Cause" paragraph above, which names the
-unguarded HWLP save path, was our reading of `portasm.S` and it was wrong; it stays as the record of
-what we thought. What is actually happening:
-
-1. **esp-dsp violates the P4's hardware-loop constraints.** The loop start (`esp.lp.setup`) and the
-   last loop instruction must be 4-byte aligned, the body needs enough 32-bit instructions, and the
-   last instruction must not be a coprocessor (FPU/PIE) op. Some kernels are misaligned, and an
-   interrupt landing exactly on that boundary corrupts the loop counter. That is why it is
-   timing-dependent (it hid for a 20-minute soak on 2026-09-08) and why `CONFIG_DSP_ANSI` cured it:
-   the C kernels never enter the misaligned assembly. Fix: an esp-dsp release with `.balign 4`.
-2. **The IDF erratum workaround was gated on a misnamed macro** (`ESP32P4_REV_MIN_FULL` without
-   the `CONFIG_` prefix), so it was always on for every revision. Being corrected to rev < v3.0 only,
-   with a positive test (preemption inside a live hardware loop) and negative tests (interrupt at a
-   misaligned boundary).
-
-**To do when the esp-dsp release lands:** bump the managed component, drop the `CONFIG_DSP_ANSI`
-line for good, and re-run the workload that found it (continuous FFT + the H.264/HLS encoder as a
-second task, sustained HTTP load) on the rev v1 board. We have the reproducing workload and told
-them we would report back; that soak is the report.
-(2026-08-28), which names the unguarded save path. Espressif already had the symptom on file from
-another reporter: [esp-dsp#119](https://github.com/espressif/esp-dsp/issues/119) hits the same
-fault at the same instruction on IDF v5.5-beta1 and settles on the same `CONFIG_DSP_ANSI=y`
-workaround at the same ~7% cost, and [esp-dsp#102](https://github.com/espressif/esp-dsp/issues/102)
-tracks P4 hardware loops in general. So the bug is real, reproducible by others, and spans at
-least v5.5-beta1 to v6.1-rc1 - but it is unfixed, and the workaround stays until it is answered.
-
-**What is NOT proven:** the save-path gap is read from the source and matches every symptom, but
-it has not been confirmed by instrumenting the switch itself (logging `CSR_HWLP_STATE_REG` on a
-switch out of the FFT), nor reduced to a minimal project. Offered upstream if triage wants it. Ruled out on the bench, so nobody re-treads them: worker stack size (8K -> 16K),
-core placement (worker on core 1 vs core 0), heap corruption (comprehensive heap poisoning reports
-nothing), an unpinned task migrating with coprocessor state (our main task is pinned to core 0),
-an FFT size mismatch (512 <= 1024 <= 4096), and a cross-task race on the single `audioFft` call
-site. **To report upstream** (esp-dsp and/or esp-idf) with the repro above; the workaround stands
-until it is answered, and reverting it needs a bench soak with audio + HLS together.
+Tracked in [Issues in other projects](../../reference/issues-in-other-projects.md) as esp-idf #19025 and esp-dsp #119 and #102, with the FFT and HLS soak to run once esp-dsp's alignment release ships.
 
 ## Flaky unit tests: the AudioService sync suite contends on a fixed UDP port
 

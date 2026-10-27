@@ -1,0 +1,24 @@
+The Teensy 4.1 driver asks the controller to insert checksums on every frame it sends, whatever lwIP's checksum options say,
+while its controller setup follows them. With lwIP computing checksums in software, as a build carrying the W5500 as well does,
+the PHY sends no IP frame and stalls. The per-frame flags now follow the same options.
+
+diff --git a/src/qnethernet/drivers/driver_teensy41.cpp b/src/qnethernet/drivers/driver_teensy41.cpp
+index 690f490..6ef0d14 100644
+--- a/src/qnethernet/drivers/driver_teensy41.cpp
++++ b/src/qnethernet/drivers/driver_teensy41.cpp
+@@ -971,10 +971,13 @@ FLASHMEM bool init() {
+     s_txRing[i].control = tx_bd_control::kTxCrc;
+     s_txRing[i].extend1 = 0
+                           | tx_bd_extend1::kInterrupt
+-#if !QNETHERNET_ENABLE_RAW_FRAME_SUPPORT
++#if !QNETHERNET_ENABLE_RAW_FRAME_SUPPORT && \
++    ((CHECKSUM_GEN_UDP == 0) || (CHECKSUM_GEN_TCP == 0) || (CHECKSUM_GEN_ICMP == 0))
+                           | tx_bd_extend1::kProtocolChecksum
++#endif
++#if !QNETHERNET_ENABLE_RAW_FRAME_SUPPORT && (CHECKSUM_GEN_IP == 0)
+                           | tx_bd_extend1::kIpHeaderChecksum
+-#endif  // !QNETHERNET_ENABLE_RAW_FRAME_SUPPORT
++#endif
+                           ;
+   }
+   s_txRing[kTxSize - 1].control |= tx_bd_control::kWrap;

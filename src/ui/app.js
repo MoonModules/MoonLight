@@ -67,7 +67,6 @@ const LS_THEME     = "mm_theme";
 const LS_TABS      = "mm_selectedTabs";   // { [containerName]: childName }: the open tab per container
 const LS_EXPANDED  = "mm_expanded";       // [moduleName, …]: modules whose "controls" <details> is open
 const LS_TA_SIZE   = "mm_textareaSizes";  // { "<module>:<control>": heightPx }: user-dragged textarea heights
-const LS_CARDS_W   = "mm_cardsWidth";     // px: dragged width of the docked card column (right side)
 
 // The open tab per container, persisted so a reload doesn't dump you back on the first child.
 let selectedTabs = {};
@@ -89,60 +88,6 @@ function saveExpanded() { localStorage.setItem(LS_EXPANDED, JSON.stringify([...e
 let textareaSizes = {};
 try { textareaSizes = JSON.parse(lsRead(LS_TA_SIZE, "{}")) || {}; } catch { textareaSizes = {}; }
 function saveTextareaSize(key, heightPx) { textareaSizes[key] = heightPx; localStorage.setItem(LS_TA_SIZE, JSON.stringify(textareaSizes)); }
-
-// The width the user dragged the docked card column to: VIEW-ONLY state (like the tab/expander/textarea
-// state above). Applied as the --cards-width CSS custom property (the #main flex-basis reads it, clamped in
-// CSS so it can't crowd out the preview or vanish); restored on boot. Only meaningful in docked mode, where
-// the cards sit beside the preview; PiP/narrow mode makes them full-width and hides the handle.
-function applyCardsWidth(px) { document.documentElement.style.setProperty("--cards-width", px + "px"); }
-(function restoreCardsWidth() {
-    const w = parseInt(lsRead(LS_CARDS_W, ""), 10);
-    if (Number.isFinite(w) && w > 0) applyCardsWidth(w);
-})();
-
-// Wire the card-column resize handle (index.html #cards-resize). Dragging it left/right sets --cards-width
-// live and persists the final value. The handle sits at the LEFT edge of #main, so dragging left widens the
-// cards (they grow toward the preview); width = the pane's right edge minus the pointer x. Bounded by the
-// same clamp the CSS enforces, and coalesced through requestAnimationFrame so a drag doesn't thrash layout.
-function setupCardsResize() {
-    const handle = document.getElementById("cards-resize");
-    const main = document.getElementById("main");
-    if (!handle || !main) return;
-    const MIN = 280, MAX = 900;
-    let dragging = false, raf = 0, pendingW = 0;
-    const onMove = (clientX) => {
-        // #main's right edge is fixed (the workspace's right edge); width grows as the pointer moves left.
-        const right = main.getBoundingClientRect().right;
-        pendingW = Math.max(MIN, Math.min(MAX, Math.round(right - clientX)));
-        if (raf) return;
-        raf = requestAnimationFrame(() => { raf = 0; applyCardsWidth(pendingW); });
-    };
-    const stop = () => {
-        if (!dragging) return;
-        dragging = false;
-        handle.classList.remove("dragging");
-        document.body.classList.remove("cards-resizing");
-        if (pendingW > 0) localStorage.setItem(LS_CARDS_W, String(pendingW));
-        window.removeEventListener("pointermove", onPointerMove);
-        window.removeEventListener("pointerup", stop);
-        window.removeEventListener("pointercancel", stop);
-    };
-    const onPointerMove = (e) => { if (dragging) onMove(e.clientX); };
-    handle.addEventListener("pointerdown", (e) => {
-        // Only resize in docked mode: the handle is CSS-hidden otherwise, but guard anyway.
-        if (!document.querySelector(".workspace")?.classList.contains("mode-docked")) return;
-        e.preventDefault();
-        dragging = true;
-        pendingW = main.getBoundingClientRect().width;
-        handle.classList.add("dragging");
-        document.body.classList.add("cards-resizing");
-        window.addEventListener("pointermove", onPointerMove);
-        window.addEventListener("pointerup", stop);
-        window.addEventListener("pointercancel", stop);
-    });
-    // Double-click resets to the default width (a common resize-handle affordance).
-    handle.addEventListener("dblclick", () => { applyCardsWidth(480); localStorage.setItem(LS_CARDS_W, "480"); });
-}
 
 function lsRead(key, defaultVal) {
     // Blocked storage (a private window, a policy) reads as unset rather than throwing, for every caller.
@@ -373,7 +318,6 @@ async function init() {
     applyHelpShown(helpOn);
     setupStatusBarButtons();
     setupUpdateBadge();
-    setupCardsResize();
     // Open the WebSocket FIRST, before any HTTP fetch: the device answers the subscription it sends on open with the state the page shows, so the socket is the one state source.
     // Safari opens more parallel connections up front and gives up on a contended one sooner, so a socket opened after the page's other loads lands in the busiest moment of the device's small socket pool and is abandoned: the interface shows but never goes live. Opened first, it takes an uncontended slot.
     connectWs();
@@ -892,6 +836,27 @@ async function deleteModule(name) {
     refetchState();
 }
 
+/// Remove every child a user added to `mod`, as the state document does it: `$patch: replace` listing none. Wired children and the container's own settings stay.
+async function clearChildren(mod) {
+    let doc = {$patch: "replace"};
+    for (let m = mod; m; m = findParentOf(m.name)) doc = {[m.name]: doc};
+    await fetch("/api/state", {method: "PATCH", body: JSON.stringify(doc)});
+    refetchState();
+}
+
+/// The clear button, press twice like a card's own 🗑, on a container holding anything a user added; null when there is nothing to clear.
+function createClearButton(mod, depth, className) {
+    if (!(mod.children || []).some(c => isUserEditableChild(c, depth + 1))) return null;
+    const btn = document.createElement("button");
+    btn.className = className;
+    btn.type = "button";
+    btn.textContent = "🗑";
+    btn.title = "Delete every " + rolesAcceptedBy(mod).join(" / ") + " in " + mod.name;
+    btn.setAttribute("aria-label", btn.title);
+    armPressTwice(btn, () => clearChildren(mod), {armedText: "✓", armedTitle: "Click again to delete them all"});
+    return btn;
+}
+
 // move to absolute index (0..siblings.length-1). Called from drag-and-drop.
 async function moveModuleTo(name, toIndex) {
     await fetch("/api/modules/" + encodeURIComponent(name) + "/move", {
@@ -1035,47 +1000,6 @@ function buildNavFooter() {
         links.appendChild(a);
     }
     footer.appendChild(links);
-
-    // Diagnostic bundle download. Fetches /api/state + /api/system from
-    // the *same* origin we're on (the device itself): sidesteps Chrome's
-    // mixed-content blocker that prevents the install page (HTTPS Pages)
-    // from doing the same fetch against the device (HTTP LAN). Output is
-    // a single JSON blob the user can attach to a bug report.
-    const diag = document.createElement("a");
-    diag.href = "#";
-    diag.className = "nav-diag-link";
-    diag.textContent = "Download diagnostics";
-    diag.addEventListener("click", async (ev) => {
-        ev.preventDefault();
-        try {
-            const [stateResp, systemResp] = await Promise.all([
-                fetch("/api/state"),
-                fetch("/api/system"),
-            ]);
-            const [stateJson, systemJson] = await Promise.all([
-                stateResp.json(),
-                systemResp.json(),
-            ]);
-            const bundle = {
-                capturedAt: new Date().toISOString(),
-                origin: location.origin,
-                state: stateJson,
-                system: systemJson,
-            };
-            const blob = new Blob([JSON.stringify(bundle, null, 2)],
-                                  { type: "application/json" });
-            // Devicename comes from system.deviceName if present, else
-            // falls back to the hostname (e.g. "MM-BD3C.local") so the
-            // filename is still useful when SystemModule's wire shape
-            // doesn't include the name field.
-            const devName = (systemJson && systemJson.deviceName)
-                || location.hostname || "device";
-            saveBlob(blob, `MoonLight-diag-${devName}-${Date.now()}.json`);
-        } catch (e) {
-            alert(`Diagnostic capture failed: ${e && e.message ? e.message : e}`);
-        }
-    });
-    footer.appendChild(diag);
 
     const copy = document.createElement("div");
     copy.className = "nav-copyright";
@@ -1285,10 +1209,9 @@ function renderModuleTree(mod, parentEl, depth) {
     // from mod.children on every render, so adding a layer adds its tab: there is no tab registry
     // to keep in sync, which is the whole of the "dynamic" requirement.
     if (depth === 0) {
-        // The "+" tab takes over the add affordance, so hide the footer's duplicate button. The
+        // The "+" and 🗑 tabs take over the footer's buttons, so hide its duplicates. The
         // footer element stays: it is what the tab's handler walks up to find this card's mod.
-        const addBtn = card.querySelector(".card-footer > .add-btn");
-        if (addBtn) addBtn.style.display = "none";
+        for (const btn of card.querySelectorAll(".card-footer > .add-btn")) btn.style.display = "none";
         renderChildTabs(mod, childrenEl, depth);
         return;
     }
@@ -1421,6 +1344,8 @@ function renderChildTabs(mod, childrenEl, depth) {
             if (footer) openTypePicker(mod, addTab);
         });
         strip.appendChild(addTab);
+        const clearTab = createClearButton(mod, depth, "tab tab-add");
+        if (clearTab) strip.appendChild(clearTab);
     }
     childrenEl.appendChild(scrollableStrip(strip, mod.name));
 
@@ -2052,7 +1977,7 @@ function createCard(mod, depth) {
     title.className = "card-title";
 
     // The enabled toggle is built here but appended later: it joins the
-    // right-hand action cluster (next to ✎ × ?) rather than sitting at the start
+    // right-hand action cluster (next to ✎ 🗑 ?) rather than sitting at the start
     // of the row, for visual grouping with the other per-card controls.
     // Rendered as a <button> styled as a 26×26 rounded box (matching .card-btn);
     // showing ✓ when on, blank when off. Stores its checked state in
@@ -2157,7 +2082,7 @@ function createCard(mod, depth) {
         title.appendChild(stats);
     }
 
-    // Enable checkbox joins the right-hand action cluster, before ✎/×.
+    // Enable checkbox joins the right-hand action cluster, before ✎/🗑.
     if (enabled) title.appendChild(enabled);
 
     // Delete / replace buttons for user-managed children (any role a container
@@ -2177,7 +2102,7 @@ function createCard(mod, depth) {
         const assignBtn = document.createElement("button");
         assignBtn.className = "card-btn assign-toggle" + (assignMode ? " active" : "");
         // 🔗 for "link a control to what it drives", ✓ while the mode is on. Single glyph like the
-        // ✎ and × beside it, so the action row stays one row of 26px boxes.
+        // ✎ and 🗑 beside it, so the action row stays one row of 26px boxes.
         assignBtn.textContent = assignMode ? "✓" : "🔗";
         assignBtn.title = assignMode ? "Done assigning"
                                      : "Choose what each fader, knob and switch drives";
@@ -2189,10 +2114,10 @@ function createCard(mod, depth) {
     }
 
     // `{ }` → this card as a state document: the one JSON a preset holds, PATCH /api/state takes and the gallery shares, so it copies into any of them.
-    // On EVERY card, unlike ✎/× (user-editable children only): any card's state is worth sharing or keeping.
+    // On EVERY card, unlike ✎/🗑 (user-editable children only): any card's state is worth sharing or keeping.
     const api = document.createElement("a");
     api.className = "card-api";
-    // A glyph, not a word: braces read as JSON at a glance and match the ✎/× glyph style.
+    // A glyph, not a word: braces read as JSON at a glance and match the ✎/🗑 glyph style.
     api.textContent = "{ }";
     api.title = "This card as JSON: copy it, save it as a preset, or open its diagnostics";
     // Relative, so it follows whatever host the UI is served from; the link itself opens the document for a middle-click.
@@ -2590,7 +2515,7 @@ function createCard(mod, depth) {
 
     // -- Children block + footer --
     // The .card-children wrapper lives inside this card so the parent's border
-    // encloses its children; renderModuleTree recurses into it. The "+ add module"
+    // encloses its children; renderModuleTree recurses into it. The "+"
     // footer only appears on parents that accept user-created children: a parent
     // hosting only code-wired children (e.g. Network → Improv) renders the
     // children block but no add button.
@@ -2602,12 +2527,14 @@ function createCard(mod, depth) {
         card.appendChild(childrenEl);
 
         if (acceptsNewChildren(mod)) {
-            // -- Footer: + add module --
+            // -- Footer: + and 🗑 --
             const footer = document.createElement("div");
             footer.className = "card-footer";
             const addBtn = document.createElement("button");
             addBtn.className = "add-btn";
-            addBtn.textContent = "+ add module";
+            addBtn.textContent = "+";
+            addBtn.title = "add " + rolesAcceptedBy(mod).join(" / ");
+            addBtn.setAttribute("aria-label", addBtn.title);
             addBtn.addEventListener("click", () => {
                 // The picker is a modal, so the button stays where it is: it used to be hidden
                 // and restored through a MutationObserver because the picker was appended into
@@ -2615,6 +2542,8 @@ function createCard(mod, depth) {
                 openTypePicker(mod, addBtn);
             });
             footer.appendChild(addBtn);
+            const clearBtn = createClearButton(mod, depth, "add-btn");
+            if (clearBtn) footer.appendChild(clearBtn);
             card.appendChild(footer);
         }
     }
@@ -2633,7 +2562,7 @@ function createCard(mod, depth) {
 // `armed` class, optional armed label/title), a second click runs `onConfirm`.
 // Disarms after 3s or when the pointer leaves. Used by the delete and reboot
 // buttons: no browser confirm() popup. `armedText` is optional (delete swaps
-// × → ✓; reboot keeps its glyph). The pre-arm title is captured live so a
+// 🗑 → ✓; reboot keeps its glyph). The pre-arm title is captured live so a
 // title updated elsewhere (e.g. reboot's crashed-state text) restores correctly.
 function armPressTwice(btn, onConfirm, opts = {}) {
     let armed = false;
@@ -2745,10 +2674,10 @@ function createActionButtons(mod) {
     });
     wrap.appendChild(replaceBtn);
 
-    // Delete: press × once to arm, again to confirm: see armPressTwice.
+    // Delete: press 🗑 once to arm, again to confirm: see armPressTwice.
     const delBtn = document.createElement("button");
     delBtn.className = "card-btn card-btn-del";
-    delBtn.textContent = "×";
+    delBtn.textContent = "🗑";
     delBtn.title = "Delete";
     delBtn.setAttribute("aria-label", "Delete");
     armPressTwice(delBtn, () => deleteModule(mod.name),
@@ -2758,22 +2687,7 @@ function createActionButtons(mod) {
     return wrap;
 }
 
-function findParent(childName) {
-    function walk(node, modules) {
-        for (const m of modules) {
-            if (m === node) return null;  // shouldn't happen, defensive
-            if (m.children && m.children.some(c => c.name === childName)) return m;
-            if (m.children) {
-                const p = walk(node, m.children);
-                if (p) return p;
-            }
-        }
-        return null;
-    }
-    return walk(null, state.modules);
-}
-
-// Whether this module renders any nested children at all (a "+ add module"
+// Whether this module renders any nested children at all (a "+"
 // button included if it also accepts new ones via the UI). True whenever the
 // module has at least one child today OR is one of the light-pipeline
 // containers that users can add to. This lets code-wired children (e.g.
@@ -2793,7 +2707,7 @@ function rolesAcceptedBy(parentMod) {
     return csv ? csv.split(",") : [];
 }
 
-// Whether the "+ add module" affordance applies: derived from acceptsChildRoles
+// Whether the "+" affordance applies: derived from acceptsChildRoles
 // being non-empty, so there's a single source of truth (no separate list).
 function acceptsNewChildren(mod) {
     return rolesAcceptedBy(mod).length > 0;
@@ -3141,10 +3055,7 @@ function createControl(moduleName, moduleType, ctrl, writeTo = (name, value) => 
         });
         row.appendChild(input);
         resetButton(() => { input.value = numberFieldText(input, def); });
-        return row;
-    }
-
-    switch (ctrl.type) {
+    } else switch (ctrl.type) {
         case "uint8": {
             const input = document.createElement("input");
             input.type = "range";
@@ -4521,6 +4432,7 @@ function buildListEntries(container, rows, details, openSet, opts) {
     const moduleName = opts && opts.moduleName;
     const ctrlName = opts && opts.ctrlName;
     const optionSets = (opts && opts.optionSets) || {};   // shared option arrays, keyed by name (optionsRef)
+    const fieldHelp = listFieldHelp(moduleName, ctrlName);   // once per list, not per row
     container.replaceChildren();
     if (rows.length === 0 && (!editable || fixedRows)) {
         const empty = document.createElement("div");
@@ -4531,7 +4443,7 @@ function buildListEntries(container, rows, details, openSet, opts) {
     }
     // Rows live in their own scroll box so a long list (e.g. the seeded fixture presets) caps its
     // height (~5 rows, see .list-scroll in the CSS) and scrolls, instead of eating the whole card.
-    // The "+ Add" button stays OUTSIDE this box, pinned below the scroll area: the standard
+    // The "+" button stays OUTSIDE this box, pinned below the scroll area: the standard
     // scrollable-list-with-fixed-footer pattern.
     const scroll = document.createElement("div");
     scroll.className = "list-scroll";
@@ -4572,7 +4484,7 @@ function buildListEntries(container, rows, details, openSet, opts) {
         summary.setAttribute("aria-expanded", String(!detailPanel.hidden));
         const locked = !!(item && item.locked);
         if (editable) {
-            // Right-side row actions: delete (✕) then a `⠿` drag-to-reorder handle, in that order -
+            // Right-side row actions: delete (🗑) then a `⠿` drag-to-reorder handle, in that order -
             // handles on the RIGHT, after delete, keep every row's controls aligned in one column
             // (the common data-grid layout). A `locked` (seeded) row isn't draggable and has no
             // delete: the server refuses both, so the UI shows neither, and locked rows have an
@@ -4586,7 +4498,7 @@ function buildListEntries(container, rows, details, openSet, opts) {
                 const del = document.createElement("button");
                 del.type = "button";
                 del.className = "list-action-btn";
-                del.textContent = "✕";
+                del.textContent = "🗑";
                 del.title = "Delete";
                 del.addEventListener("click", (e) => { e.stopPropagation(); listDeleteRow(moduleName, ctrlName, item.id); });
                 actions.appendChild(del);
@@ -4633,10 +4545,10 @@ function buildListEntries(container, rows, details, openSet, opts) {
             });
             // Editable detail: render each field descriptor as an inline control, unless
             // the row is locked (then fall back to the read-only key/value render).
-            if (locked) fillListDetail(detailPanel, details[i] ?? item);
-            else fillEditableListDetail(detailPanel, details[i] ?? item, moduleName, ctrlName, item.id, optionSets);
+            if (locked) fillListDetail(detailPanel, details[i] ?? item, fieldHelp);
+            else fillEditableListDetail(detailPanel, details[i] ?? item, moduleName, ctrlName, item.id, optionSets, fieldHelp);
         } else {
-            fillListDetail(detailPanel, details[i] ?? item);
+            fillListDetail(detailPanel, details[i] ?? item, fieldHelp);
         }
         const toggle = () => {
             detailPanel.hidden = !detailPanel.hidden;
@@ -4650,11 +4562,13 @@ function buildListEntries(container, rows, details, openSet, opts) {
         scroll.appendChild(entry);
     });
     if (editable && !fixedRows) {
-        // "+ Add" appends a new row (server assigns the id, then state refreshes).
+        // "+" appends a new row (server assigns the id, then state refreshes).
         const addBtn = document.createElement("button");
         addBtn.type = "button";
         addBtn.className = "list-add-btn";
-        addBtn.textContent = "+ Add";
+        addBtn.textContent = "+";
+        addBtn.title = "add to " + ctrlName;
+        addBtn.setAttribute("aria-label", addBtn.title);
         addBtn.addEventListener("click", () => listAddRow(moduleName, ctrlName));
         container.appendChild(addBtn);
     }
@@ -4678,9 +4592,16 @@ function peekButton(input) {
     return peek;
 }
 
+// A list's row-field help, each field's `@field` line beside the list control in the module's header.
+function listFieldHelp(moduleName, ctrlName) {
+    return helpFor(allModules().find(m => m.name === moduleName)?.type)?.controls?.[ctrlName]?.fields || {};
+}
+// One field's help: its own line, else its stem's, so a numbered field such as `ch3` takes `ch`'s.
+const rowFieldHelp = (fieldHelp, name) => fieldHelp[name] || fieldHelp[String(name).replace(/\d+$/, "")] || null;
+
 // Render an editable row's detail: each field is a control, drawn by createControl like a module's, with its edits written to the row.
 // The row stands in as the control's module (`<module>/<list>/<id>`), so its edit guards, pending sends and reset buttons are its own.
-function fillEditableListDetail(panel, detail, moduleName, ctrlName, id, optionSets) {
+function fillEditableListDetail(panel, detail, moduleName, ctrlName, id, optionSets, fieldHelp = listFieldHelp(moduleName, ctrlName)) {
     panel.replaceChildren();
     optionSets = optionSets || {};
     const fields = detail && Array.isArray(detail.fields) ? detail.fields : [];
@@ -4693,7 +4614,7 @@ function fillEditableListDetail(panel, detail, moduleName, ctrlName, id, optionS
             const ctrl = ((await res.json()).controls || []).find(c => c.name === ctrlName);
             const i = (Array.isArray(ctrl?.value) ? ctrl.value : []).findIndex(r => r.id === id);
             const fresh = i >= 0 && Array.isArray(ctrl.detail) ? ctrl.detail[i] : null;
-            if (fresh) fillEditableListDetail(panel, fresh, moduleName, ctrlName, id, ctrl.optionSets || optionSets);
+            if (fresh) fillEditableListDetail(panel, fresh, moduleName, ctrlName, id, ctrl.optionSets || optionSets, fieldHelp);
         } catch (_) { /* the next state push redraws it */ }
     };
     // The joined WiFi network's addressing, while that network carries the page, asks first.
@@ -4715,12 +4636,17 @@ function fillEditableListDetail(panel, detail, moduleName, ctrlName, id, optionS
     };
     for (const f of fields) {
         if (f.readonly && typeof f.value === "string" && /^https?:\/\//.test(f.value)) {
-            panel.appendChild(rowLink(f));
+            const link = rowLink(f);
+            controlHelp(link, rowFieldHelp(fieldHelp, f.name));
+            panel.appendChild(link);
             continue;
         }
         const ctrl = { ...f, type: f.readonly ? "display" : f.type,
                        options: f.options || (f.optionsRef ? optionSets[f.optionsRef] : undefined) };
-        panel.appendChild(createControl(rowMid, null, ctrl, write));
+        const el = createControl(rowMid, null, ctrl, write);
+        if (!el) continue;
+        controlHelp(el, rowFieldHelp(fieldHelp, f.name));
+        panel.appendChild(el);
     }
 }
 
@@ -4752,9 +4678,9 @@ function listSummaryText(item) {
         .join("  ·  ");
 }
 
-// Render a read-only row's detail, each scalar or list of scalars a display control, as a card shows one.
-// `cached` and `ageSec` are one "last seen" (a device emits one or the other); a `*Sec` value reads as a relative age.
-function fillListDetail(panel, detail) {
+// Render a read-only row's detail, each scalar or list of scalars a display control, as a card shows one, with its field's help.
+// `cached` and `ageSec` are one "last seen" (a device emits one or the other), documented as `ageSec`; a `*Sec` value reads as a relative age.
+function fillListDetail(panel, detail, fieldHelp = {}) {
     panel.replaceChildren();
     if (!detail || typeof detail !== "object") return;
     for (const [k, v] of Object.entries(detail)) {
@@ -4764,7 +4690,9 @@ function fillListDetail(panel, detail) {
         const lastSeen = k === "ageSec" || k === "cached";
         const ctrl = { name: lastSeen ? "last seen" : k, type: "display", value: k === "cached" ? "cached" : v,
                        age: k.endsWith("Sec") };
-        panel.appendChild(createControl("", null, ctrl));
+        const el = createControl("", null, ctrl);
+        controlHelp(el, rowFieldHelp(fieldHelp, lastSeen ? "ageSec" : k));
+        panel.appendChild(el);
     }
 }
 
@@ -6043,7 +5971,7 @@ function attachDragHandlers(card, mod) {
         // Compute target absolute index within parent's children. Identify the
         // drop-target by name, not by object identity: state is replaced on
         // every WS push, so `mod` captured at render time is stale within ~1s.
-        const parent = findParent(mod.name);
+        const parent = findParentOf(mod.name);
         if (!parent) return;
         const targetIdx = (parent.children || []).findIndex(c => c.name === mod.name);
         if (targetIdx < 0) return;
@@ -8858,7 +8786,7 @@ function buildFilePathControl(row, label, key, moduleName, ctrl) {
     newBtn.title = "New script";
     const delBtn = document.createElement("button");
     delBtn.className = "card-btn card-btn-del";
-    delBtn.textContent = "×";                  // the card's own delete, red on the symbol
+    delBtn.textContent = "🗑";                 // the card's own delete, the glyph every delete uses
     delBtn.title = "Delete this script";
     // The SAME button reverts a factory script, because it is the same operation: the
     // editor only ever saves to the user directory, so an edited factory script is a second

@@ -93,6 +93,9 @@ def main():
                     help="compile the test binaries (mm_tests + mm_scenarios) instead of the firmware. "
                          "The default build makes only MoonLight; the ~130 test units are a separate, "
                          "slower compile, run afterwards by test_desktop.py / run_scenario.py.")
+    ap.add_argument("--configure", action="store_true",
+                    help="configure the tree and generate build_id.h, without compiling: what check_code and "
+                         "check_docgen read, as CI's findings job runs them")
     args = ap.parse_args()
 
     bdir = host_build_dir()
@@ -115,7 +118,7 @@ def main():
         extra += ["-DMM_MOONLIVE_NO_HOST_JIT=ON"]
         print("Forcing MM_MOONLIVE_HAS_HOST_JIT=0 — the x86-64 desktop's view.")
     what = "test binaries" if args.tests else "desktop target"
-    print(f"Building {what} into {bdir}/ ...")
+    print(f"Configuring {bdir}/ and generating build_id.h ..." if args.configure else f"Building {what} into {bdir}/ ...")
     # CMAKE_BUILD_TYPE is honoured by single-config generators (Ninja, Make).
     # Visual Studio is multi-config and ignores it — we pass --config Release at
     # build time below. Setting CMAKE_BUILD_TYPE on multi-config is harmless.
@@ -125,6 +128,8 @@ def main():
     )
     if r.returncode != 0:
         sys.exit(r.returncode)
+    if args.configure:
+        sys.exit(subprocess.run([sys.executable, str(ROOT / "moondeck" / "build" / "generate_build_info.py")], cwd=ROOT).returncode)
 
     # Build a SPECIFIC target, never the whole "all" — the firmware and the ~130 test translation units are
     # separate concerns. Default builds only MoonLight (the "give me the desktop binary" path stays

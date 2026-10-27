@@ -38,6 +38,18 @@ public:
 
 } // namespace
 
+// A switched-off module reports nothing: a status from while it ran would read as current.
+TEST_CASE("switching a module off clears its status, and its children's") {
+    Counting parent, child;
+    parent.addChild(&child);
+    parent.setStatus("running", mm::MoonModule::Severity::Warning);
+    child.setStatus("child running");
+    parent.setEnabled(false);
+    parent.applyState();
+    CHECK(parent.status() == nullptr);
+    CHECK(child.status() == nullptr);
+}
+
 // A parent's default tick() fans out to every enabled child, no per-container boilerplate needed.
 TEST_CASE("tick default propagates to enabled children") {
     Counting parent;

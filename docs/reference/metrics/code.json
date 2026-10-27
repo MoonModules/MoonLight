@@ -1,18 +1,18 @@
 {
  "#define used as a constant": 1,
  "(duplicated lines)": 3285,
- "(total)": 1646,
+ "(total)": 1642,
  "blocking call on the render path": 194,
- "complex function": 294,
+ "complex function": 293,
  "deeply nested": 109,
  "double in firmware code": 2,
  "duplicated block": 732,
  "large file": 25,
  "large stack frame": 31,
- "long function": 49,
+ "long function": 48,
  "long parameter list": 35,
  "module type in the UI": 78,
  "mutable static state": 44,
  "name spread": 22,
- "raw allocation in light": 30
+ "raw allocation in light": 28
 }

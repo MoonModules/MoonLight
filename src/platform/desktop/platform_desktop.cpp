@@ -191,6 +191,7 @@ extern char** environ;   // posix_spawnp wants the environment explicitly
 #include <net/bpf.h>
 #endif
 #endif
+#include "platform/select_wait.h"   // the select() wait the ESP32 shares, after the socket headers
 
 namespace mm::platform {
 
@@ -1974,8 +1975,13 @@ uint32_t wifiApClientCount() { return testApUp_ ? testApClients_ : 0; }
 // Host sockets work whatever the link predicates above say, and there is no initialization race, so this is always safe.
 bool networkReady() { return true; }
 int wifiTxPower() { return 0; }
-// Zero is a successful no-op and anything else fails, there being no radio. The module passes its no-override sentinel through here to lift a prior cap, which is trivially true with no radio.
-bool wifiSetTxPower(int8_t quarterDbm) { return quarterDbm == 0; }
+static int8_t testTxPower_ = 0;   // the last cap a test radio took, in quarter dBm
+int8_t testLastTxPower() { return testTxPower_; }
+// A test access point takes the cap, so a host test sees what reaches the radio. With no radio, zero is a successful no-op, as lifting a cap is, and anything else fails.
+bool wifiSetTxPower(int8_t quarterDbm) {
+    if (testApUp_) { testTxPower_ = quarterDbm; return true; }
+    return quarterDbm == 0;
+}
 
 static bool testMdns_ = false;      // the host has no mDNS responder of ours, so a test opts in
 static uint32_t testMdnsInits_ = 0;
@@ -2244,24 +2250,10 @@ int UdpSocket::recvFrom(uint8_t* buf, size_t maxLen, uint8_t srcIp[4], uint16_t*
 
 // select() over the bound sockets, the textbook wait for a receive task; the render loop keeps polling recvFrom instead.
 int UdpSocket::waitReadable(UdpSocket* const* sockets, int count, uint32_t timeoutMs) {
-    fd_set readable;
-    FD_ZERO(&readable);
-    int maxFd = -1;
-    for (int i = 0; i < count; i++) {
-        if (!sockets[i] || sockets[i]->fd_ < 0) continue;
-#ifndef _WIN32
-        if (sockets[i]->fd_ >= FD_SETSIZE) continue;   // FD_SET past the set's size is undefined on POSIX
-#endif
-        FD_SET(sock(sockets[i]->fd_), &readable);
-        if (sockets[i]->fd_ > maxFd) maxFd = sockets[i]->fd_;
-    }
-    if (maxFd < 0) { delayMs(timeoutMs); return 0; }   // nothing open: wait out the period rather than spin
-    timeval tv{};
-    tv.tv_sec = static_cast<decltype(tv.tv_sec)>(timeoutMs / 1000);
-    tv.tv_usec = static_cast<decltype(tv.tv_usec)>((timeoutMs % 1000) * 1000);
-    const int r = ::select(maxFd + 1, &readable, nullptr, nullptr, &tv);
-    if (r < 0) { delayMs(timeoutMs); return 0; }   // an error must not spin the receive loop
-    return r;
+    int fds[kMaxWaitSockets];
+    const int n = count < kMaxWaitSockets ? count : kMaxWaitSockets;
+    for (int i = 0; i < n; i++) fds[i] = sockets[i] ? sockets[i]->fd_ : -1;
+    return detail::selectReadable(fds, n, timeoutMs, [](int fd) { return sock(fd); });
 }
 
 // Test override forcing a multicast join to fail, since a test cannot take the host's network away.

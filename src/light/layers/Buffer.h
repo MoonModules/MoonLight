@@ -11,7 +11,7 @@ namespace mm {
 
 /// The contiguous light data every effect writes and every driver reads.
 ///
-/// Allocated once outside the hot path and reused each frame.
+/// Allocated once outside the hot path and reused each frame, and kept by a resize to the same size.
 /// A layer and a driver group each own one when memory allows, and share one when it is tight.
 /// @technical
 ///
@@ -57,13 +57,16 @@ public:
         return *this;
     }
 
-    /// Size the buffer for `nrOfLights` at `cpl` channels each, returning false when memory refuses.
+    /// Size the buffer for `nrOfLights` at `cpl` channels each, cleared, returning false when memory refuses.
     bool allocate(nrOfLightsType nrOfLights, uint8_t cpl) {
-        free();
         size_t totalBytes = static_cast<size_t>(nrOfLights) * cpl;
-        if (totalBytes == 0) return false;
-        data_ = static_cast<uint8_t*>(platform::alloc(totalBytes));
-        if (!data_) return false;
+        // The same size keeps the block, so a layer rebuilt every frame at its size takes nothing from the heap.
+        if (!holds(nrOfLights, cpl)) {
+            free();
+            if (totalBytes == 0) return false;
+            data_ = static_cast<uint8_t*>(platform::alloc(totalBytes));
+            if (!data_) return false;
+        }
         count_ = nrOfLights;
         channelsPerLight_ = cpl;
         clear();
@@ -101,6 +104,10 @@ public:
     uint8_t channelsPerLight() const { return channelsPerLight_; }
     /// How many bytes the lights occupy.
     size_t bytes() const { return static_cast<size_t>(count_) * channelsPerLight_; }
+    /// Whether `allocate` keeps the current block for this size: it holds exactly that many bytes.
+    bool holds(nrOfLightsType nrOfLights, uint8_t cpl) const {
+        return data_ && static_cast<size_t>(nrOfLights) * cpl == bytes();
+    }
 
 private:
     uint8_t* data_ = nullptr;

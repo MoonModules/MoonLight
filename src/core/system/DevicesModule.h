@@ -135,6 +135,12 @@ public:
         MoonModule::defineControls();
         controls_.addSelect("addressing", addressing, kAddressingNames + 1, kDevModeCount);
         /// The discovered devices; a row expands to its details.
+        /// @field name The device's name, else its address.
+        /// @field ip Its address on the network.
+        /// @field url Its own page, opened in a new tab.
+        /// @field type What it is: a MoonLight, a WLED, a Hue bridge or a generic device.
+        /// @field color How many color lights a Hue bridge has.
+        /// @field ageSec When it was last heard, or cached for one restored from flash and not heard since.
         controls_.addList("devices", *this);   // this module is the ListSource
     }
 

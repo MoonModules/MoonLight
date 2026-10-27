@@ -9,6 +9,9 @@
     "Effects"
   ],
   "mode": "mutate",
+  "steps_proved": [
+    "multi-device/unattended"
+  ],
   "live_only": true,
   "description": "hpwit's effects as one show, played by the hpwit-show service, which builds its own six layers and the surface slots with one live push: the cheap effects over the whole rig, the per-pixel ones in Region windows the service moves, since a window costs its share of the rig. Effects, Services and Control are restored afterwards, and the scripts staged from the repository are removed.",
   "top": [

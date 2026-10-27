@@ -18,8 +18,7 @@ namespace mm {
 
 namespace {
 
-/// One directory level, collected. fsList hands entries to a C callback while the directory is open.
-/// Removing a file from inside that callback mutates what is being walked, which LittleFS does not promise to survive. So a level is read out first, then acted on.
+/// One directory level, read out before it is acted on, since removing a file inside fsList's callback mutates the open walk, which LittleFS does not promise to survive.
 struct DirLevel {
     static constexpr uint8_t kMax = 64;   ///< entries per level; a deeper listing is deleted in passes
     char names[kMax][40];
@@ -37,7 +36,7 @@ void collectEntry(const char* name, bool isDir, uint32_t, void* user) {
     lvl->count++;
 }
 
-// True for a mount's root, which removeTree refuses to wipe: a user deletes what is inside a mount, not the mount. Counted in significant segments, since the filesystems skip repeated slashes and "." alike, so "//" is the flash root and "/sd//" the card's.
+// True for a mount's root, which removeTree refuses to wipe; counted in significant segments, as the filesystems skip repeated slashes and ".": "//" is the flash root, "/sd//" the card's.
 bool isMountRoot(const char* path) {
     if (!path || path[0] != '/') return false;
     uint8_t segments = 0;
@@ -92,6 +91,8 @@ FilesystemModule::~FilesystemModule() {
 void FilesystemModule::setScheduler(Scheduler* s) {
     scheduler_ = s;
     instance_ = this;
+    // Before the lifecycle's first phase: a module binding its controls may list its scripts, as Drivers lists its palettes.
+    mountStorage();
     if (s) {
         s->setLoadAllHook(&loadAllHookTrampoline_);
         // Scheduler::setControl calls this after a mutation so a control set from anywhere (IR, WLED bridge, /api/control) schedules the same debounced save. noteDirty is a static. A plain function pointer suffices, no trampoline needed.
@@ -99,19 +100,18 @@ void FilesystemModule::setScheduler(Scheduler* s) {
     }
 }
 
+bool FilesystemModule::mountStorage() {
+    if (!mounted_) mounted_ = platform::fsMount() && platform::fsMkdir(CONFIG_DIR);
+    return mounted_;
+}
+
 void FilesystemModule::setup() {
-    // Both failures name the directory and report once here, because a failed save per module per change would bury the one fact that explains it.
-    if (!platform::fsMount()) {
-        std::printf("FilesystemModule: cannot use %s, persistence disabled\n",
-                    platform::fsRootPath());
-        return;
-    }
-    if (!platform::fsMkdir(CONFIG_DIR)) {
-        std::printf("FilesystemModule: cannot create %s%s, persistence disabled\n",
+    // A failure names the directory and reports once here, because a failed save per module per change would bury the one fact that explains it.
+    if (!mountStorage()) {
+        std::printf("FilesystemModule: cannot use %s%s, persistence disabled\n",
                     platform::fsRootPath(), CONFIG_DIR);
         return;
     }
-    mounted_ = true;
     std::printf("FilesystemModule: mounted, %zu / %zu bytes used\n",
                 platform::filesystemUsed(), platform::filesystemTotal());
 }
@@ -187,12 +187,7 @@ void FilesystemModule::loadAllHookTrampoline_(Scheduler* s) {
 }
 
 void FilesystemModule::loadAll(Scheduler* s) {
-    if (!mounted_) {
-        // setup() hasn't run yet (we're in phase 2, before phase 3 setup). Mount now so we can read; setup() later calls fsMount again (idempotent).
-        if (!platform::fsMount()) return;
-        if (!platform::fsMkdir(CONFIG_DIR)) return;   // setup() reports it; stay unmounted
-        mounted_ = true;
-    }
+    if (!mountStorage()) return;   // setup() reports it
     for (uint8_t i = 0; i < s->moduleCount(); i++) {
         MoonModule* m = s->module(i);
         if (!m || m == this) continue;
@@ -227,7 +222,9 @@ void FilesystemModule::loadSubtree(Scheduler& s, MoonModule* m) {
     if (!r.ok) std::printf("FilesystemModule: %s not loaded: %s\n", path, r.error);
     // The board migrates nothing, so the first module it drops is named until the next boot. Only a backup taken before the next save still holds it, since that save rewrites the file without it. Allocated only then, since nearly every boot drops nothing.
     constexpr size_t kSkippedLen = 192;   // the 64-byte path, the reason and the hint
-    if (r.skipped && !skippedStr_) {
+    // The first skip is the one named, so a message that found no memory leaves the warning out rather than naming a later module.
+    if (r.skipped && !skipSeen_) {
+        skipSeen_ = true;
         skippedStr_ = static_cast<char*>(platform::alloc(kSkippedLen));
         if (skippedStr_) std::snprintf(skippedStr_, kSkippedLen, "%s skipped at boot: %s; back up before anything is saved, then restore to migrate it", r.where, r.error);
     }

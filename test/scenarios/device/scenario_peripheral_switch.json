@@ -2,6 +2,9 @@
   "name": "scenario_peripheral_switch",
   "module": "ParallelLedDriver",
   "mode": "mutate",
+  "steps_proved": [
+    "driver-setup/add-parallel"
+  ],
   "instances": {
     "Grid": "GridLayout"
   },
