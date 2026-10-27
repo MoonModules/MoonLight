@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MoonLight device API
-  version: 6.1.0-dev
+  version: 7.0.0-dev
   summary: The HTTP routes a MoonLight device serves, on port 80 on a board and 8080 on a desktop.
   description: |
     Every route answers every client and allows any origin; an `OPTIONS` request on any path answers 204 as the CORS preflight.

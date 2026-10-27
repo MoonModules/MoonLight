@@ -29,7 +29,7 @@ For a device still on old firmware (no Backup button yet), the [installer page](
 
 ---
 
-## Unreleased
+## v7.0.0
 
 ### Network Send fills each universe with `channels_per_universe` channels exactly
 

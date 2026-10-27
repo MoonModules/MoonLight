@@ -881,6 +881,8 @@ body.help-hidden .control-row.has-help { margin-bottom: 6px; }
    whole card, and scrolls past that. The "+ Add" button sits outside it and stays pinned below.
    5 rows × ~35px (8px padding ×2 + 13px line + 1px border) ≈ 176px; a partial 6th row cues scroll. */
 .list-scroll { max-height: 176px; overflow-y: auto; }
+/* An open row's detail, help included, is taller than 5 summaries: the box then caps at the viewport, so the row fits whole. */
+.list-scroll:where(:has(> .list-entry > .list-detail:not([hidden]))) { max-height: 80vh; }
 .list-empty { padding: 8px 10px; font-size: 12px; color: var(--fg-muted); }
 .list-entry { border-top: 1px solid var(--border); }
 .list-entry:first-child { border-top: 0; }

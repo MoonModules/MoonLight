@@ -139,7 +139,7 @@ The three risks, all settled on the board: the fifth argument (`ctrls`) arrives 
 | | Board (maker) | Why | Where, price |
 |--|--|--|--|
 | <img src="../../assets/hardware/boards/teensy41.webp" width="80" alt="Teensy 4.1"> | [Teensy 4.1 with pins](https://www.antratek.nl/teensy-4-1-pins), with the Ethernet chip (PJRC) | The `teensy41` firmware | Antratek €42.96, Tinytronics €38.25 |
-| <img src="../../assets/hardware/boards/teensy41-ethernet-kit.webp" width="80" alt="Ethernet Kit"> | [Ethernet Kit](https://www.antratek.nl/ethernet-kit-for-teensy-4-1) (PJRC) | The jack for the on-board PHY; needs soldering | Antratek €12.04, Tinytronics €9.50 |
+| <img src="../../assets/hardware/boards/teensy41-with-ethernet-kit.webp" width="80" alt="A Teensy 4.1 cabled to the Ethernet Kit"> | [Ethernet Kit](https://www.antratek.nl/ethernet-kit-for-teensy-4-1) (PJRC) | The jack for the on-board PHY; needs soldering | Antratek €12.04, Tinytronics €9.50 |
 | <img src="../../assets/hardware/boards/aps6404l-psram.webp" width="80" alt="APS6404L PSRAM"> | [PSRAM APS6404L 8 MB](https://www.tinytronics.nl/en/components/ics-and-microcontroller-chips/ics/aps6404l-3sqr-psram-8mb-sop8) (AP Memory) | Optional, once a layout outgrows the RAM | Tinytronics €3 |
 
 **After the phases: offer the patches upstream.** The files in `teensy/patches/` fix upstream code, so each goes back to its maintainer once the port is done, which lets the patch files go.

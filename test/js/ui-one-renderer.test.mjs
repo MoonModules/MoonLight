@@ -14,6 +14,19 @@ for (const name of ["fillEditableListDetail", "fillListDetail", "openPadEditor",
     });
 }
 
+// A locked row, such as a built-in fixture profile, sends field descriptors as an editable row does; the read-only render once skipped them and the row opened empty.
+test("a locked row's fields show read-only, a select as its option's label", () => {
+    const drawn = [];
+    const fill = new Function("createControl", "controlHelp", "rowFieldHelp",
+        `${fnSource("fillListDetail")}; return fillListDetail;`)(
+        (mid, type, ctrl) => (drawn.push(ctrl), ctrl), () => {}, () => null);
+    const panel = { replaceChildren() {}, appendChild() {} };
+    fill(panel, { fields: [{ name: "name", type: "text", value: "GRB" },
+                           { name: "ch0", type: "select", value: 2, optionsRef: "channelRole" }] },
+         {}, { channelRole: ["none", "Red", "Green"] });
+    assert.deepEqual(drawn.map(c => [c.name, c.type, c.value]), [["name", "display", "GRB"], ["ch0", "display", "Green"]]);
+});
+
 // The list rebuild keeps a value still being typed only for fields it can find by this key; moving row fields onto createControl once dropped it, so no field survived a rebuild.
 test("every field createControl draws carries the key a list rebuild restores it by", () => {
     const body = fnSource("createControl");

@@ -4545,7 +4545,7 @@ function buildListEntries(container, rows, details, openSet, opts) {
             });
             // Editable detail: render each field descriptor as an inline control, unless
             // the row is locked (then fall back to the read-only key/value render).
-            if (locked) fillListDetail(detailPanel, details[i] ?? item, fieldHelp);
+            if (locked) fillListDetail(detailPanel, details[i] ?? item, fieldHelp, optionSets);
             else fillEditableListDetail(detailPanel, details[i] ?? item, moduleName, ctrlName, item.id, optionSets, fieldHelp);
         } else {
             fillListDetail(detailPanel, details[i] ?? item, fieldHelp);
@@ -4679,10 +4679,18 @@ function listSummaryText(item) {
 }
 
 // Render a read-only row's detail, each scalar or list of scalars a display control, as a card shows one, with its field's help.
+// A locked row's field descriptors show the same way, a select as its option's label.
 // `cached` and `ageSec` are one "last seen" (a device emits one or the other), documented as `ageSec`; a `*Sec` value reads as a relative age.
-function fillListDetail(panel, detail, fieldHelp = {}) {
+function fillListDetail(panel, detail, fieldHelp = {}, optionSets = {}) {
     panel.replaceChildren();
     if (!detail || typeof detail !== "object") return;
+    for (const f of Array.isArray(detail.fields) ? detail.fields : []) {
+        const options = f.options || (f.optionsRef ? optionSets[f.optionsRef] : undefined);
+        const value = Array.isArray(options) && Number.isInteger(f.value) ? options[f.value] ?? f.value : f.value;
+        const el = createControl("", null, { name: f.name, type: "display", value });
+        controlHelp(el, rowFieldHelp(fieldHelp, f.name));
+        panel.appendChild(el);
+    }
     for (const [k, v] of Object.entries(detail)) {
         const isScalarArray = Array.isArray(v) && v.every(e => typeof e !== "object");
         if (typeof v === "object" && !isScalarArray) continue;
