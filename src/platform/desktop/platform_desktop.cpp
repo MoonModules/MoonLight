@@ -191,6 +191,7 @@ extern char** environ;   // posix_spawnp wants the environment explicitly
 #include <net/bpf.h>
 #endif
 #endif
+#include "platform/select_wait.h"   // the select() wait the ESP32 shares, after the socket headers
 
 namespace mm::platform {
 
@@ -2247,37 +2248,12 @@ int UdpSocket::recvFrom(uint8_t* buf, size_t maxLen, uint8_t srcIp[4], uint16_t*
     return static_cast<int>(n);
 }
 
-// Which of `fds` select left set, bit i for fds[i]; -1 is a socket left out of the wait.
-static int readableMask(const int* fds, int count, fd_set* readable) {
-    int mask = 0;
-    for (int i = 0; i < count; i++)
-        if (fds[i] >= 0 && FD_ISSET(sock(fds[i]), readable)) mask |= 1 << i;
-    return mask;
-}
-
 // select() over the bound sockets, the textbook wait for a receive task; the render loop keeps polling recvFrom instead.
 int UdpSocket::waitReadable(UdpSocket* const* sockets, int count, uint32_t timeoutMs) {
-    fd_set readable;
-    FD_ZERO(&readable);
-    int fds[16];
-    const int n = count < 16 ? count : 16;
-    int maxFd = -1;
-    for (int i = 0; i < n; i++) {
-        fds[i] = sockets[i] ? sockets[i]->fd_ : -1;
-#ifndef _WIN32
-        if (fds[i] >= FD_SETSIZE) fds[i] = -1;   // FD_SET past the set's size is undefined on POSIX
-#endif
-        if (fds[i] < 0) continue;
-        FD_SET(sock(fds[i]), &readable);
-        if (fds[i] > maxFd) maxFd = fds[i];
-    }
-    if (maxFd < 0) { delayMs(timeoutMs); return 0; }   // nothing open: wait out the period rather than spin
-    timeval tv{};
-    tv.tv_sec = static_cast<decltype(tv.tv_sec)>(timeoutMs / 1000);
-    tv.tv_usec = static_cast<decltype(tv.tv_usec)>((timeoutMs % 1000) * 1000);
-    const int r = ::select(maxFd + 1, &readable, nullptr, nullptr, &tv);
-    if (r < 0) { delayMs(timeoutMs); return 0; }   // an error must not spin the receive loop
-    return r == 0 ? 0 : readableMask(fds, n, &readable);
+    int fds[kMaxWaitSockets];
+    const int n = count < kMaxWaitSockets ? count : kMaxWaitSockets;
+    for (int i = 0; i < n; i++) fds[i] = sockets[i] ? sockets[i]->fd_ : -1;
+    return detail::selectReadable(fds, n, timeoutMs, [](int fd) { return sock(fd); });
 }
 
 // Test override forcing a multicast join to fail, since a test cannot take the host's network away.

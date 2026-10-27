@@ -226,6 +226,14 @@ protected:
     }
 
 private:
+    /// Add the two window controls, which defineControls places after the correction block.
+    void addWindowControls() {
+        controls_.addControl("start", start_, 0);
+        controls_.setNumberField(controls_.count() - 1);   // typed: a light index is a number to read, not a position on a 2-billion slider
+        controls_.addControl("count", count_, 0);
+        controls_.setNumberField(controls_.count() - 1);
+    }
+
     /// Take the global level, remembered for self-triggered rebuilds, and answer the level the table bakes.
     uint8_t adoptBrightness(uint8_t globalBrightness) MM_NONBLOCKING {
         lastGlobalBrightness_ = globalBrightness;
@@ -282,14 +290,6 @@ protected:
     /// How many lights it reads from `start`; 0 reads them all.
     /// @guide So drivers share one buffer: a status LED takes `start 0, count 1` and the strip `start 1`.
     int32_t count_ = 0;
-
-    /// Add the two window controls, which defineControls places after the correction block.
-    void addWindowControls() {
-        controls_.addControl("start", start_, 0);
-        controls_.setNumberField(controls_.count() - 1);   // typed: a light index is a number to read, not a position on a 2-billion slider
-        controls_.addControl("count", count_, 0);
-        controls_.setNumberField(controls_.count() - 1);
-    }
 
     /// Whether `name` is one of the window controls, for a driver's own prepare test.
     static bool isWindowControl(const char* name) {

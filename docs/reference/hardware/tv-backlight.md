@@ -23,20 +23,18 @@ source (console, player)  →  HDMI splitter  →  output 1  →  TV
 ESP32-P4 GPIO  →  WS2812B strip
 ```
 
-## The setup in MoonLight
+## The modules
 
-Three modules do the work, one in each of Services, Layouts and Effects.
+Three modules do the work, one in each of Services, Layouts and Effects, and an LED driver on the strip's pin outputs it, as for any strip: [LED drivers](led-drivers.md).
 
-1. **The Picture service**, in Services, with `source` on `usb capture`. The P4's JPEG engine decodes the grabber's MJPEG and shrinks it to `width` × `height`; a picture a few times the strip's light count per edge, in the TV's aspect, is plenty, such as 64 × 36. `noiseFloor` turns the grabber's near-black into black, and `staleMs` darkens the strip when the source stops. [The Picture service](../../moonmodules/core/services.md#picture).
-2. **The Backlight layout**, in Layouts: the MoonLive layout script `backlight.mll`, and the only layout. Set `wallCols` × `wallRows` to the picture's aspect, then the strip's lights per edge (`top`, `right`, `bottom`, `left`), a `gapLength` and `gapStart` where a TV stand covers the strip, and the `startCorner`, `position` and `reverse` where and how the strip enters. It is Hyperion's shape, so a layout copied from Hyperion carries over.
-3. **The Picture effect**, in Effects on a layer, which shows the picture across the layout and gives each light the color under it. `sampling` on `area` averages each light's share, `edgeDepth` reaches further into the picture, as Hyperion's 8% does, `smoothing` settles a noisy source, and `snapAbove` lets a scene cut through at once. [The Picture effect](../../moonmodules/light/effects.md#picture).
-
-Then an LED driver on the strip's pin outputs it, as for any strip: [LED drivers](led-drivers.md).
+- **The Picture service**, in Services, with `source` on `usb capture`. The P4's JPEG engine decodes the grabber's MJPEG and shrinks it to `width` × `height`; a picture a few times the strip's light count per edge, in the TV's aspect, is plenty, such as 64 × 36. `noiseFloor` turns the grabber's near-black into black, and `staleMs` darkens the strip when the source stops. [The Picture service](../../moonmodules/core/services.md#picture).
+- **The Backlight layout**, in Layouts: the MoonLive layout script `backlight.mll`. `wallCols` × `wallRows` take the picture's aspect, then come the strip's lights per edge (`top`, `right`, `bottom`, `left`), a `gapLength` and `gapStart` where a TV stand covers the strip, and the `startCorner`, `position` and `reverse` where and how the strip enters. It is Hyperion's shape, so a layout copied from Hyperion carries over.
+- **The Picture effect**, in Effects on a layer, which shows the picture across the layout and gives each light the color under it. `sampling` on `area` averages each light's share, `edgeDepth` reaches further into the picture, as Hyperion's 8% does, `smoothing` settles a noisy source, and `snapAbove` lets a scene cut through at once. [The Picture effect](../../moonmodules/light/effects.md#picture).
 
 **The Backlight layout alone, or beside a panel.** Its lights sit on the edge pixels of a `wallCols` × `wallRows` wall, and the layer takes the wall's size, so the Picture effect spreads the picture over the wall and each light reads the edge beneath it.
-To show the picture on a panel as well, such as a HUB75 panel of the same size, put a Grid of `wallCols` × `wallRows` before the Backlight layout in Layouts. The strip's lights sit on the Grid's own pixels, so the layer stays `wallCols` × `wallRows` and an effect renders no extra pixel for the strip: an edge pixel lights its panel light and its strip light alike. The panel's lights come first, which a HUB75 driver takes as its panel, and the strip's LED driver starts after them, its `start` set to the panel's light count.
+A Grid of `wallCols` × `wallRows` before the Backlight layout in Layouts shows the picture on a panel as well, such as a HUB75 panel of the same size. The strip's lights sit on the Grid's own pixels, so the layer stays `wallCols` × `wallRows` and an effect renders no extra pixel for the strip: an edge pixel lights its panel light and its strip light alike. The panel's lights come first, which a HUB75 driver takes as its panel, and the strip's LED driver starts after them, its `start` set to the panel's light count.
 
-## What the splitter costs
+## Limits
 
 - **HDMI-CEC stops at the splitter**: the TV and the source do not switch each other on and off.
 - **Colors come out unbalanced**: orange and yellow read greenish, since the Picture service has no channel balance or HDR decoding.

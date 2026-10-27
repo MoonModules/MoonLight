@@ -163,7 +163,18 @@
    "controls": {
     "profiles": {
      "line": "The editable list of profile rows.",
-     "more": "A row carries a name, a channel count and one role picker per channel. Built-in rows are read-only, and custom rows persist across a reboot."
+     "more": "Built-in rows are read-only, and custom rows persist across a reboot.",
+     "fields": {
+      "name": {
+       "line": "The profile's name, as a driver's fixture picker lists it."
+      },
+      "channels": {
+       "line": "How many DMX channels the fixture takes."
+      },
+      "ch": {
+       "line": "What one channel carries, such as red, dimmer or pan; none for a spacer or a channel set elsewhere."
+      }
+     }
     }
    },
    "role": "generic",
@@ -1036,7 +1047,15 @@
      "line": "the manual playback rate; 1000/fps milliseconds per frame"
     },
     "playlist": {
-     "line": "The tracks to play, in order; each row picks a scanned .fseq file."
+     "line": "The tracks to play, in order; each row picks a scanned .fseq file.",
+     "fields": {
+      "file": {
+       "line": "The .fseq file the track plays, from those the scan found."
+      },
+      "play": {
+       "line": "Plays this track now."
+      }
+     }
     },
     "position": {
      "line": "How far into the current track playback is, in frames."
@@ -3912,7 +3931,15 @@
     },
     "presets": {
      "line": "One pad per preset file. Click applies, right-click names, drag rearranges.",
-     "more": "Right-click a pad to rename it, delete it or save over it. A pad is a position: slot 14 stays slot 14."
+     "more": "Right-click a pad to rename it, delete it or save over it. A pad is a position: slot 14 stays slot 14.",
+     "fields": {
+      "name": {
+       "line": "The preset's name, shown on its pad."
+      },
+      "captures": {
+       "line": "Which containers the preset sets: Layouts, Effects, Drivers or Services."
+      }
+     }
     },
     "name": {
      "line": "The name the next save gives its preset.",
@@ -4173,13 +4200,18 @@
    "guide": [
     {
      "title": "Reading a task row",
-     "text": "A row shows the task's name, state, core, priority and the minimum free stack seen. Expand it for its modules, each as `Name · Nus · NB · Nheap`, and a closing `∑ modules` line that cross-checks them against the tick.\n\nA `cpu` percentage appears only in a profiling build, since the run-time counter costs about 5% of the tick."
+     "text": "A row shows the task's name, state, core, priority and the minimum free stack seen, and expands to its modules.\n\nA `cpu` percentage appears only in a profiling build, since the run-time counter costs about 5% of the tick."
     }
    ],
    "image": "https://moonmodules.org/MoonLight/assets/core/TasksModule.png",
    "controls": {
     "tasks": {
-     "line": "A row per FreeRTOS task."
+     "line": "A row per FreeRTOS task.",
+     "fields": {
+      "modules": {
+       "line": "The render task's modules, each as `Name · Nus · NB · Nheap`, and a closing `∑ modules` line that cross-checks them against the tick."
+      }
+     }
     },
     "core0": {
      "line": "What executes on the first core."
@@ -4206,7 +4238,15 @@
    "image": "https://moonmodules.org/MoonLight/assets/core/PinsModule.png",
    "controls": {
     "pins": {
-     "line": "A row per claimed GPIO."
+     "line": "A row per claimed GPIO.",
+     "fields": {
+      "claims": {
+       "line": "Each module claiming the pin and its role there."
+      },
+      "warning": {
+       "line": "Why the claim is a risk: two claims on one pin, a GPIO the chip lacks, a pin reserved for flash, PSRAM or USB, an input-only pin driven, or a boot strap."
+      }
+     }
     }
    },
    "role": "generic",
@@ -4221,11 +4261,7 @@
    "guide": [
     {
      "title": "What a row does",
-     "text": "Each row binds one pin to a target, a surface control such as `Control.switch1`. Its kind toggles the target, sets a value while held and 0 on release, or nudges the target by a value. A catalog board's first button targets `Control.switch1`, which switches the lights and their relay."
-    },
-    {
-     "title": "Wiring",
-     "text": "A switch to ground with the internal pull-up is active low, the usual wiring. A switch feeding 3V3 is active high. The live pressed readout shows a button working before it is bound."
+     "text": "Each row binds one pin to a target, a surface control such as `Control.switch1`. A catalog board's first button targets `Control.switch1`, which switches the lights and their relay. The live pressed readout shows a button working before it is bound."
     }
    ],
    "image": "https://moonmodules.org/MoonLight/assets/core/ButtonService.png",
@@ -4234,7 +4270,27 @@
      "line": "How long a level must hold before it counts as a press, shared by every button."
     },
     "buttons": {
-     "line": "The buttons, each with a pin, its wiring, a live pressed readout and a target."
+     "line": "The buttons, each with a pin, its wiring, a live pressed readout and a target.",
+     "fields": {
+      "pin": {
+       "line": "The GPIO the button is wired to; -1 leaves the row unused."
+      },
+      "activeLow": {
+       "line": "Active low for a switch to ground, the usual wiring; active high for one feeding 3V3."
+      },
+      "target": {
+       "line": "The bank of the Control card the row drives: a switch, an encoder, a fader or a pad."
+      },
+      "number": {
+       "line": "Which control of that bank, from 1."
+      },
+      "kind": {
+       "line": "Toggle flips the target each press, set writes the value while held and 0 on release, delta nudges the target by the value."
+      },
+      "value": {
+       "line": "What set writes, or the signed step delta adds; a toggle ignores it."
+      }
+     }
     }
    },
    "role": "service",
@@ -4253,7 +4309,7 @@
     },
     {
      "title": "Learning an input",
-     "text": "Press learn on a row, then move or press the input to bind. A stick must travel a short way. A pad's first stick positions are rest, so plugging one in off-center moves nothing."
+     "text": "A stick must travel a short way to bind. A pad's first stick positions are rest, so plugging one in off-center moves nothing."
     }
    ],
    "image": "https://moonmodules.org/MoonLight/assets/core/GamepadService.png",
@@ -4264,7 +4320,27 @@
     },
     "inputs": {
      "line": "The rows: each a button or stick of the standard layout, a learn button and a target.",
-     "more": "Assign the surface's controls on the Control card to play a game with the starter rows."
+     "more": "Assign the surface's controls on the Control card to play a game with the starter rows.",
+     "fields": {
+      "input": {
+       "line": "The button or stick of the standard gamepad layout the row reads."
+      },
+      "learn": {
+       "line": "Arms the row: the next button pressed or stick moved becomes its input."
+      },
+      "target": {
+       "line": "The bank of the Control card the row drives: a switch, an encoder, a fader or a pad."
+      },
+      "number": {
+       "line": "Which control of that bank, from 1."
+      },
+      "kind": {
+       "line": "Toggle flips the target each press, set writes the value while held and 0 on release, delta nudges the target by the value."
+      },
+      "value": {
+       "line": "What set writes, or the signed step delta adds; a toggle ignores it."
+      }
+     }
     }
    },
    "role": "service",
@@ -4333,7 +4409,7 @@
     },
     {
      "title": "Targets",
-     "text": "A row pointed at a pad does nothing, since a pedal held at 40% has no sensible reading as a preset. Reversed bounds mean inverted. Scripts reach the same pins with `adcRead(pin)` and `adcMax()`, the path for a sensor whose mapping is a condition rather than a range."
+     "text": "A row pointed at a pad does nothing, since a pedal held at 40% has no sensible reading as a preset. Scripts reach the same pins with `adcRead(pin)` and `adcMax()`, the path for a sensor whose mapping is a condition rather than a range."
     }
    ],
    "image": "https://moonmodules.org/MoonLight/assets/core/AnalogService.png",
@@ -4346,7 +4422,33 @@
      "more": "Without it a resting pedal rewrites its target fifty times a second."
     },
     "inputs": {
-     "line": "The pins, each with its raw travel, an invert and a target."
+     "line": "The pins, each with its raw travel, an invert and a target.",
+     "fields": {
+      "pin": {
+       "line": "The ADC-capable GPIO the pedal or pot is wired to; -1 leaves the row unused."
+      },
+      "inMin": {
+       "line": "The raw count at one end of the travel."
+      },
+      "inMax": {
+       "line": "The raw count at the other end; below inMin reads the travel inverted."
+      },
+      "invert": {
+       "line": "Reads the travel the other way round, for a pot wired backwards."
+      },
+      "target": {
+       "line": "The bank of the Control card the row drives: a switch, an encoder, a fader or a pad."
+      },
+      "number": {
+       "line": "Which control of that bank, from 1."
+      },
+      "kind": {
+       "line": "Toggle flips the target each press, set writes the value while held and 0 on release, delta nudges the target by the value."
+      },
+      "value": {
+       "line": "What set writes, or the signed step delta adds; a toggle ignores it."
+      }
+     }
     }
    },
    "role": "service",
@@ -4362,7 +4464,7 @@
    "guide": [
     {
      "title": "Learning a key",
-     "text": "Add a row, press its learn button, then press the remote key: the next code received binds to that row. Learning a key another row holds moves the binding. Pick what the row drives from its target, and whether a press toggles it or nudges it by a value. The status line reports each step."
+     "text": "Add a row, press its learn button, then press the remote key: the next code received binds to that row. Learning a key another row holds moves the binding. The status line reports each step."
     },
     {
      "title": "Checking a key",
@@ -4376,7 +4478,27 @@
     },
     "codes": {
      "line": "The learned codes, each row binding one remote key to a control.",
-     "more": "A `set` row is not offered, since a remote reports a press with no release."
+     "more": "A `set` row is not offered, since a remote reports a press with no release.",
+     "fields": {
+      "code": {
+       "line": "The remote key's code, learned or typed in hex or decimal."
+      },
+      "learn": {
+       "line": "Arms the row: the next key pressed on the remote becomes its code."
+      },
+      "target": {
+       "line": "The bank of the Control card the row drives: a switch, an encoder, a fader or a pad."
+      },
+      "number": {
+       "line": "Which control of that bank, from 1."
+      },
+      "kind": {
+       "line": "Toggle flips the target each press, set writes the value while held and 0 on release, delta nudges the target by the value."
+      },
+      "value": {
+       "line": "What set writes, or the signed step delta adds; a toggle ignores it."
+      }
+     }
     }
    },
    "role": "service",
@@ -4745,7 +4867,27 @@
      ]
     },
     "devices": {
-     "line": "The discovered devices; a row expands to its details."
+     "line": "The discovered devices; a row expands to its details.",
+     "fields": {
+      "name": {
+       "line": "The device's name, else its address."
+      },
+      "ip": {
+       "line": "Its address on the network."
+      },
+      "url": {
+       "line": "Its own page, opened in a new tab."
+      },
+      "type": {
+       "line": "What it is: a MoonLight, a WLED, a Hue bridge or a generic device."
+      },
+      "color": {
+       "line": "How many color lights a Hue bridge has."
+      },
+      "ageSec": {
+       "line": "When it was last heard, or cached for one restored from flash and not heard since."
+      }
+     }
     }
    },
    "role": "generic",
@@ -4905,11 +5047,48 @@
     },
     "available": {
      "line": "The networks in range; Connect joins one now.",
-     "more": "Tap a network, type its password, Connect. A join from the access point shows the device's `.local` link on the row first, since the phone often lands back on its own network."
+     "more": "Tap a network, type its password, Connect.",
+     "fields": {
+      "password": {
+       "line": "The network's password, asked for a secured network outside the known list."
+      },
+      "connect": {
+       "line": "Joins the network, keeping it among the known ones."
+      },
+      "afterJoining": {
+       "line": "The device's `.local` link, shown before the join since a phone often lands back on its own network, where the link still reaches the device."
+      }
+     }
     },
     "known": {
      "line": "The networks it joins, in priority order.",
-     "more": "Each has its name, password and IP settings. A Static setting that cannot work joins by DHCP, with the reason on its row. Editing the addressing of the network the page arrives through asks first."
+     "more": "A Static setting that cannot work joins by DHCP, with the reason on its row. Editing the addressing of the network the page arrives through asks first.",
+     "fields": {
+      "ssid": {
+       "line": "The network's name."
+      },
+      "password": {
+       "line": "The network's password, shown scrambled; empty for an open network."
+      },
+      "connect": {
+       "line": "Joins this network now rather than waiting for its turn."
+      },
+      "ipSettings": {
+       "line": "DHCP takes an address from the router; static uses the four below."
+      },
+      "ip": {
+       "line": "The device's own address on this network."
+      },
+      "gateway": {
+       "line": "The router's address, the way off the network."
+      },
+      "subnet": {
+       "line": "The network's mask, 255.255.255.0 on a home network."
+      },
+      "dns": {
+       "line": "The name server's address, often the router's own."
+      }
+     }
     },
     "rssi": {
      "line": "The signal strength of the joined network."

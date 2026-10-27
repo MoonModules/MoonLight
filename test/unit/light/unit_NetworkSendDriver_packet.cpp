@@ -9,14 +9,14 @@
 #include <string>
 #include <vector>
 
-// The built packet contains the exact header layout the Art-Net spec mandates: ID, OpCode, version, sequence, physical, universe, length, data.
+// The built packet contains the exact header layout the Art-Net spec mandates: ID, OpCode, version, sequence, physical, universe, an even length, data.
 TEST_CASE("ArtNet packet header format") {
     uint8_t data[3] = {255, 0, 128};
-    uint8_t packet[mm::ARTNET_HEADER_SIZE + 3];
+    uint8_t packet[mm::ARTNET_HEADER_SIZE + 4];
 
     size_t len = mm::buildArtDmxPacket(packet, 0, 42, data, 3);
 
-    CHECK(len == mm::ARTNET_HEADER_SIZE + 3);
+    CHECK(len == mm::ARTNET_HEADER_SIZE + 4);   // Art-Net 4 asks for an even Length: three channels go out as four
 
     // "Art-Net\0" at offset 0
     CHECK(std::memcmp(packet, "Art-Net", 8) == 0);
@@ -39,14 +39,15 @@ TEST_CASE("ArtNet packet header format") {
     CHECK(packet[14] == 0x00);
     CHECK(packet[15] == 0x00);
 
-    // Length: 3 big-endian at offset 16
+    // Length: 4 big-endian at offset 16, the three channels rounded up to even
     CHECK(packet[16] == 0x00);
-    CHECK(packet[17] == 0x03);
+    CHECK(packet[17] == 0x04);
 
-    // Data at offset 18
+    // Data at offset 18, then the zero channel that pads it
     CHECK(packet[18] == 255);
     CHECK(packet[19] == 0);
     CHECK(packet[20] == 128);
+    CHECK(packet[21] == 0);
 }
 
 // Universe 259 (0x0103) is encoded little-endian (low byte first), matching the Art-Net wire format.
@@ -425,6 +426,21 @@ struct PaceRig {
         }
         return at;
     }
+    // The DDP sequence byte of each packet over `frames` frames of `perFrame` packets, in arrival order.
+    std::vector<uint8_t> ddpSequences(int frames, size_t perFrame) {
+        std::vector<uint8_t> seqs;
+        uint8_t buf[1500];
+        uint8_t ip[4];
+        for (int frame = 0; frame < frames; frame++) {
+            mm::platform::setTestNowMs(1000 + 100 * (frame + 1));   // past the fps limiter each time
+            driver.tick();
+            for (int i = 0; i < 5000 && seqs.size() < perFrame * (frame + 1); i++) {
+                if (rx.recvFrom(buf, sizeof(buf), ip) > 0) seqs.push_back(buf[1]);
+                else mm::platform::delayUs(100);
+            }
+        }
+        return seqs;
+    }
 };
 }  // namespace
 
@@ -488,19 +504,17 @@ TEST_CASE("NetworkSendDriver: the status reports the frames sent last second, th
 // A receiver counts a gap in the DDP sequence as lost packets, so each packet carries the next number, 1 to 15 and round again.
 TEST_CASE("NetworkSendDriver: each DDP packet carries the next sequence number, wrapping from 15 to 1") {
     PaceRig r(3000, 0, 20);   // 9000 bytes: seven DDP packets a frame
-    std::vector<uint8_t> seqs;
-    uint8_t buf[1500];
-    uint8_t ip[4];
-    for (int frame = 0; frame < 3; frame++) {
-        mm::platform::setTestNowMs(1000 + 100 * (frame + 1));   // past the fps limiter each time
-        r.driver.tick();
-        for (int i = 0; i < 5000 && seqs.size() < 7u * (frame + 1); i++) {
-            if (r.rx.recvFrom(buf, sizeof(buf), ip) > 0) seqs.push_back(buf[1]);
-            else mm::platform::delayUs(100);
-        }
-    }
+    const std::vector<uint8_t> seqs = r.ddpSequences(3, 7);
     REQUIRE(seqs.size() == 21);
     for (size_t i = 0; i < seqs.size(); i++) CHECK(seqs[i] == i % 15 + 1);
+}
+
+// A receiver checks the sequence of the packets sent to it, so each destination of a fan-out counts its own, not the next one's after the other host's.
+TEST_CASE("NetworkSendDriver: each DDP destination carries its own sequence") {
+    PaceRig r(1000, 0, 20);   // 3000 bytes split over two hosts: two DDP packets each
+    std::snprintf(r.driver.hosts, sizeof(r.driver.hosts), "%s", "127.0.0.1,127.0.0.1");
+    r.driver.applyState();
+    CHECK(r.ddpSequences(2, 4) == std::vector<uint8_t>{1, 2, 1, 2, 3, 4, 3, 4});
 }
 
 // A switched-off driver sends nothing, so its card shows no rate from before.

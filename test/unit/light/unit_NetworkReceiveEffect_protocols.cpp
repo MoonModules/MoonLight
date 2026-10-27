@@ -143,7 +143,7 @@ TEST_CASE("cross-protocol datagrams are rejected") {
     uint8_t cid[mm::E131_CID_LENGTH];
     cidFill(cid);
     uint8_t payload[3] = {1, 2, 3};
-    uint8_t art[mm::ARTNET_HEADER_SIZE + 3];
+    uint8_t art[mm::ARTNET_HEADER_SIZE + 4];   // three channels, padded to an even four
     uint8_t e131[mm::E131_HEADER_SIZE + 3];
     uint8_t ddp[mm::DDP_HEADER_SIZE + 3];
     const size_t artLen = mm::buildArtDmxPacket(art, 0, 0, payload, 3);
@@ -171,7 +171,7 @@ TEST_CASE("isArtPoll recognizes polls and nothing else") {
     CHECK_FALSE(mm::isArtPoll(poll, 10));   // truncated
 
     uint8_t payload[3] = {1, 2, 3};
-    uint8_t art[mm::ARTNET_HEADER_SIZE + 3];
+    uint8_t art[mm::ARTNET_HEADER_SIZE + 4];   // three channels, padded to an even four
     const size_t artLen = mm::buildArtDmxPacket(art, 0, 0, payload, 3);
     CHECK_FALSE(mm::isArtPoll(art, artLen)); // OpDmx is not a poll
 }

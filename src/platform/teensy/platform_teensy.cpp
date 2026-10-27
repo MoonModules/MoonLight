@@ -10,6 +10,7 @@
 #include <qnethernet/util/ip_tools.h>
 #include <lwip/opt.h>
 
+#include <algorithm>
 #include <cerrno>
 #include <cstdio>
 #include <cstdlib>
@@ -18,7 +19,6 @@
 #include <string>
 #include <vector>
 
-#include <algorithm>
 #include <smalloc_i.h>   // PJRC's smalloc, with its block header, which the pool's accounting reads
 
 extern "C" {

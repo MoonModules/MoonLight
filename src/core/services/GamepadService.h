@@ -36,7 +36,7 @@ inline constexpr uint8_t kGamepadInputCount = sizeof(kGamepadInputs) / sizeof(kG
 ///
 /// ## Learning an input
 ///
-/// Press learn on a row, then move or press the input to bind. A stick must travel a short way. A pad's first stick positions are rest, so plugging one in off-center moves nothing.
+/// A stick must travel a short way to bind. A pad's first stick positions are rest, so plugging one in off-center moves nothing.
 class GamepadService : public MoonModule, public ListSource {
 public:
     /// A service, so the container accepts it as a child.
@@ -48,6 +48,9 @@ public:
         controls_.setHidden(controls_.count() - 1, true);
         controls_.setLive(controls_.count() - 1);
         /// The rows: each a button or stick of the standard layout, a learn button and a target.
+        /// @field input The button or stick of the standard gamepad layout the row reads.
+        /// @field learn Arms the row: the next button pressed or stick moved becomes its input.
+        /// @fields InputAction
         /// @guide Assign the surface's controls on the Control card to play a game with the starter rows.
         controls_.addList("inputs", *this);
         MoonModule::defineControls();

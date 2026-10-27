@@ -69,6 +69,8 @@ public:
         controls_.addControl("fps", fps_, 1, kMaxFps);
         controls_.setHidden(controls_.count() - 1, fpsSource_ != kFpsManual);
         /// The tracks to play, in order; each row picks a scanned .fseq file.
+        /// @field file The .fseq file the track plays, from those the scan found.
+        /// @field play Plays this track now.
         controls_.addList("playlist", *this);
         /// How far into the current track playback is, in frames.
         controls_.addProgress("position", frameIndex_, frameCount_, ProgressUnit::Count);

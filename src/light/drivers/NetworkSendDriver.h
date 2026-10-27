@@ -358,8 +358,8 @@ private:
     Buffer corrected_;
     /// Art-Net/E1.31 per-frame sequence counter, so each universe counts up once a frame, as nextSequence steps it.
     uint8_t sequence_ = 1;
-    /// DDP's per-packet sequence counter, 1 to 15.
-    uint8_t ddpSequence_ = 1;
+    /// DDP's per-packet sequence counter for each destination, 1 to 15, 0 before its first packet: each receiver sees its own run unbroken.
+    uint8_t ddpSequence_[kMaxDestinations] = {};
     /// millis() of the last frame sent: the `fps` rate limiter's reference point.
     uint32_t lastSendTime_ = 0;
     /// micros() of the last tick, and the smoothed time between ticks, the render's frame period.
@@ -462,10 +462,10 @@ private:
                         break;
                     case kProtoDdp:
                         // Byte-addressed, and relative to this destination's own strip.
+                        ddpSequence_[d] = ddpSequence_[d] % DDP_SEQUENCE_MAX + 1;
                         packetLen = buildDdpPacket(packet, static_cast<uint32_t>(sent),
                                                    /*push=*/sent + n >= runBytes,
-                                                   src, static_cast<uint16_t>(n), ddpSequence_);
-                        ddpSequence_ = ddpSequence_ == DDP_SEQUENCE_MAX ? 1 : ddpSequence_ + 1;
+                                                   src, static_cast<uint16_t>(n), ddpSequence_[d]);
                         break;
                     default:
                         packetLen = buildArtDmxPacket(packet, universe, sequence_,

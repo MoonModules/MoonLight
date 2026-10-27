@@ -63,7 +63,15 @@ public:
         controls_.addReadOnly("scanned", scannedStr_, sizeof(scannedStr_));
         controls_.addList("available", available_);
         /// The networks it joins, in priority order.
-        /// @guide Each has its name, password and IP settings. A Static setting that cannot work joins by DHCP, with the reason on its row. Editing the addressing of the network the page arrives through asks first.
+        /// @field ssid The network's name.
+        /// @field password The network's password, shown scrambled; empty for an open network.
+        /// @field connect Joins this network now rather than waiting for its turn.
+        /// @field ipSettings DHCP takes an address from the router; static uses the four below.
+        /// @field ip The device's own address on this network.
+        /// @field gateway The router's address, the way off the network.
+        /// @field subnet The network's mask, 255.255.255.0 on a home network.
+        /// @field dns The name server's address, often the router's own.
+        /// @guide A Static setting that cannot work joins by DHCP, with the reason on its row. Editing the addressing of the network the page arrives through asks first.
         controls_.addList("known", *this);
         // Meaningful only while associated, so hidden elsewhere rather than showing zero.
         controls_.addReadOnlyInt("rssi", rssi_, "dBm");
@@ -612,7 +620,10 @@ private:
         }
     };
     /// The networks in range; Connect joins one now.
-    /// @guide Tap a network, type its password, Connect. A join from the access point shows the device's `.local` link on the row first, since the phone often lands back on its own network.
+    /// @field password The network's password, asked for a secured network outside the known list.
+    /// @field connect Joins the network, keeping it among the known ones.
+    /// @field afterJoining The device's `.local` link, shown before the join since a phone often lands back on its own network, where the link still reaches the device.
+    /// @guide Tap a network, type its password, Connect.
     Available available_{*this};
 
     /// The signal strength of the joined network.

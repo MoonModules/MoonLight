@@ -210,12 +210,31 @@ def _line_comment(call) -> str:
     return "\n".join(run)
 
 
+# A list's row field, `@field <name> <help>` on one line as Doxygen's `@param` documents a parameter, and `@fields <Type>`, the `@field` lines on that type's own comment, for fields several lists share.
+_FIELD_RE = re.compile(r"(?m)^@field\s+(\w+)\s+(.+)$")
+_FIELDS_RE = re.compile(r"(?m)^@fields\s+(\w+)\s*$")
+
+
 def control_help(text: str) -> dict:
-    """A control's comment as its help: the first line is its line, and a `@guide` line below it its longer help, Doxygen's brief and detailed description."""
+    """A control's comment as its help: the first line is its line, a `@guide` line below it its longer help, Doxygen's brief and detailed description, and each `@field` line a list row field's own line."""
+    fields = {name: {"line": line.strip()} for name, line in _FIELD_RE.findall(text)}
+    text = _FIELD_RE.sub("", text)
     # Only a line opening `@guide`, so the word inside a sentence stays text.
     m = re.search(r"(?m)^@guide\b", text)
     line, more = (text[:m.start()], text[m.end():]) if m else (text, "")
-    return {"line": line.strip(), **({"more": more.strip()} if more.strip() else {})}
+    return {"line": line.strip(), **({"more": more.strip()} if more.strip() else {}), **({"fields": fields} if fields else {})}
+
+
+def expand_fields(text: str, unit) -> str:
+    """Each `@fields <Type>` in a control's comment replaced by the `@field` lines on that type's comment in the unit, so a field several lists share is written once."""
+    def type_fields(m):
+        decl = next((c for c in unit.walk_preorder() if c.kind.name in ("STRUCT_DECL", "CLASS_DECL")
+                     and c.spelling == m.group(1) and c.is_definition()), None)
+        lines = _FIELD_RE.findall(comment_text(decl.raw_comment)) if decl is not None else []
+        if not lines:   # a typo would otherwise leave the fields without help and say nothing, as an unknown @ref would
+            raise LookupError(f"@fields {m.group(1)}: no type of that name with @field lines in the registry's translation unit")
+        return "\n".join(f"@field {name} {line}" for name, line in lines)
+    return _FIELDS_RE.sub(type_fields, text)
 
 
 def controls_of(cls) -> dict:
@@ -253,7 +272,8 @@ def controls_of(cls) -> dict:
                 # A member the call names says it; else the call's own comment, then the member an accessor returns.
                 named = comment_text(field.raw_comment) if field is not None else ""
                 behind = _referenced_field(args[1], through_accessor=True) if len(args) > 1 and not named else None
-                controls[name] = named or _line_comment(node) or (comment_text(behind.raw_comment) if behind is not None else "")
+                text = named or _line_comment(node) or (comment_text(behind.raw_comment) if behind is not None else "")
+                controls[name] = expand_fields(text, node.translation_unit.cursor) if "@fields" in text else text
                 return
             method = own(node)
             if method is not None and method.hash not in entered:

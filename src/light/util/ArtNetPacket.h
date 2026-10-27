@@ -26,7 +26,7 @@ constexpr size_t MAX_CHANNELS_PER_UNIVERSE = 510; // 170 RGB lights
 constexpr size_t ARTNET_HEADER_SIZE = 18;
 constexpr size_t ARTNET_POLL_REPLY_SIZE = 239;
 
-/// Build a data packet into `outBuf`, which must hold the header and the data; answers the total size.
+/// Build a data packet into `outBuf`, which holds the header and the data rounded up to even, an odd length padded with a zero channel as Art-Net 4 asks; answers the total size.
 inline size_t buildArtDmxPacket(uint8_t* outBuf, uint16_t universe, uint8_t sequence,
                                 const uint8_t* data, uint16_t dataLen) {
     // "Art-Net\0" header
@@ -50,14 +50,16 @@ inline size_t buildArtDmxPacket(uint8_t* outBuf, uint16_t universe, uint8_t sequ
     outBuf[14] = static_cast<uint8_t>(universe & 0xFF);
     outBuf[15] = static_cast<uint8_t>(universe >> 8);
 
-    // Length (big-endian)
-    outBuf[16] = static_cast<uint8_t>(dataLen >> 8);
-    outBuf[17] = static_cast<uint8_t>(dataLen & 0xFF);
+    // Length (big-endian), even
+    const uint16_t wireLen = static_cast<uint16_t>(dataLen + (dataLen & 1));
+    outBuf[16] = static_cast<uint8_t>(wireLen >> 8);
+    outBuf[17] = static_cast<uint8_t>(wireLen & 0xFF);
 
     // DMX data
     std::memcpy(outBuf + ARTNET_HEADER_SIZE, data, dataLen);
+    if (wireLen != dataLen) outBuf[ARTNET_HEADER_SIZE + dataLen] = 0;
 
-    return ARTNET_HEADER_SIZE + dataLen;
+    return ARTNET_HEADER_SIZE + wireLen;
 }
 
 /// Parse and validate a data packet, zero-copy, reporting its sequence when asked (0 is a sender without one); the version is deliberately not checked.

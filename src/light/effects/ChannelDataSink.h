@@ -91,6 +91,13 @@ public:
 
     /// The held frame's bytes, for a test pinning the lifecycle.
     const uint8_t* data() const { return staging_.data(); }
+    /// One staged byte, read under the lock a writer task takes, for a test watching that task's write land.
+    uint8_t byteAt(size_t i) {
+        acquire<true>();
+        const uint8_t b = staging_.data()[i];
+        lock_.release();
+        return b;
+    }
     /// How many bytes staging holds.
     size_t bytes() const { return staging_.bytes(); }
 

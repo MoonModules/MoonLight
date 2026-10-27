@@ -126,7 +126,10 @@ public:
         // The persisted rows INCLUDE the built-ins, so restoring replaces rather than duplicates.
         seedBuiltins();
         /// The editable list of profile rows.
-        /// @guide A row carries a name, a channel count and one role picker per channel. Built-in rows are read-only, and custom rows persist across a reboot.
+        /// @field name The profile's name, as a driver's fixture picker lists it.
+        /// @field channels How many DMX channels the fixture takes.
+        /// @field ch What one channel carries, such as red, dimmer or pan; none for a spacer or a channel set elsewhere.
+        /// @guide Built-in rows are read-only, and custom rows persist across a reboot.
         controls_.addList("profiles", *this);   // this module is the (editable) ListSource
     }
 

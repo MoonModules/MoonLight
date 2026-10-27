@@ -364,6 +364,50 @@ void Slot::defineControls() {
     assert gen_help.controls_of(cls) == {"clk": "The clock pin."}
 
 
+def test_a_lists_field_lines_are_its_row_fields_help_and_fields_takes_a_types_own(tmp_path):
+    """A list's rows have fields of their own, each documented on one `@field` line beside the list; `@fields` takes the lines a shared type writes once, so every list using it shows the same help."""
+    ci, tu = parsed(tmp_path / "Rows.h", """struct Controls { void addList(const char*, int&) {} };
+/// What a row does.
+/// @field target The bank it drives.
+struct Action {};
+struct Svc {
+    Controls controls_;
+    int rows = 0;
+    void defineControls() {
+        /// The rows.
+        /// @field pin The GPIO; -1 leaves the row unused.
+        /// @fields Action
+        /// @guide One row per button.
+        controls_.addList("rows", rows);
+    }
+};
+""")
+    cls = next(c for c in tu.cursor.walk_preorder() if c.kind == ci.CursorKind.STRUCT_DECL and c.spelling == "Svc")
+    assert gen_help.control_help(gen_help.controls_of(cls)["rows"]) == {
+        "line": "The rows.", "more": "One row per button.",
+        "fields": {"pin": {"line": "The GPIO; -1 leaves the row unused."}, "target": {"line": "The bank it drives."}}}
+
+
+def test_fields_naming_a_type_without_field_lines_stops_the_generator(tmp_path):
+    """A typo in `@fields` would leave every row field without help and say nothing, so it fails as an unknown `@ref` does."""
+    ci, tu = parsed(tmp_path / "Typo.h", """struct Controls { void addList(const char*, int&) {} };
+/// No fields here.
+struct Action {};
+struct Svc {
+    Controls controls_;
+    int rows = 0;
+    void defineControls() {
+        /// The rows.
+        /// @fields Actoin
+        controls_.addList("rows", rows);
+    }
+};
+""")
+    cls = next(c for c in tu.cursor.walk_preorder() if c.kind == ci.CursorKind.STRUCT_DECL and c.spelling == "Svc")
+    with pytest.raises(LookupError, match="@fields Actoin"):
+        gen_help.controls_of(cls)
+
+
 def test_a_lead_may_name_several_clips_each_with_its_title():
     _, fields = gen_help.block_tags("Lead.\n@video a.webm On a desktop.\n@video b.webm On a\ndevice.")
     assert fields["video"] == ["a.webm On a desktop.", "b.webm On a device."]

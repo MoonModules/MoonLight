@@ -4432,6 +4432,7 @@ function buildListEntries(container, rows, details, openSet, opts) {
     const moduleName = opts && opts.moduleName;
     const ctrlName = opts && opts.ctrlName;
     const optionSets = (opts && opts.optionSets) || {};   // shared option arrays, keyed by name (optionsRef)
+    const fieldHelp = listFieldHelp(moduleName, ctrlName);   // once per list, not per row
     container.replaceChildren();
     if (rows.length === 0 && (!editable || fixedRows)) {
         const empty = document.createElement("div");
@@ -4544,10 +4545,10 @@ function buildListEntries(container, rows, details, openSet, opts) {
             });
             // Editable detail: render each field descriptor as an inline control, unless
             // the row is locked (then fall back to the read-only key/value render).
-            if (locked) fillListDetail(detailPanel, details[i] ?? item);
-            else fillEditableListDetail(detailPanel, details[i] ?? item, moduleName, ctrlName, item.id, optionSets);
+            if (locked) fillListDetail(detailPanel, details[i] ?? item, fieldHelp);
+            else fillEditableListDetail(detailPanel, details[i] ?? item, moduleName, ctrlName, item.id, optionSets, fieldHelp);
         } else {
-            fillListDetail(detailPanel, details[i] ?? item);
+            fillListDetail(detailPanel, details[i] ?? item, fieldHelp);
         }
         const toggle = () => {
             detailPanel.hidden = !detailPanel.hidden;
@@ -4591,9 +4592,16 @@ function peekButton(input) {
     return peek;
 }
 
+// A list's row-field help, each field's `@field` line beside the list control in the module's header.
+function listFieldHelp(moduleName, ctrlName) {
+    return helpFor(allModules().find(m => m.name === moduleName)?.type)?.controls?.[ctrlName]?.fields || {};
+}
+// One field's help: its own line, else its stem's, so a numbered field such as `ch3` takes `ch`'s.
+const rowFieldHelp = (fieldHelp, name) => fieldHelp[name] || fieldHelp[String(name).replace(/\d+$/, "")] || null;
+
 // Render an editable row's detail: each field is a control, drawn by createControl like a module's, with its edits written to the row.
 // The row stands in as the control's module (`<module>/<list>/<id>`), so its edit guards, pending sends and reset buttons are its own.
-function fillEditableListDetail(panel, detail, moduleName, ctrlName, id, optionSets) {
+function fillEditableListDetail(panel, detail, moduleName, ctrlName, id, optionSets, fieldHelp = listFieldHelp(moduleName, ctrlName)) {
     panel.replaceChildren();
     optionSets = optionSets || {};
     const fields = detail && Array.isArray(detail.fields) ? detail.fields : [];
@@ -4606,7 +4614,7 @@ function fillEditableListDetail(panel, detail, moduleName, ctrlName, id, optionS
             const ctrl = ((await res.json()).controls || []).find(c => c.name === ctrlName);
             const i = (Array.isArray(ctrl?.value) ? ctrl.value : []).findIndex(r => r.id === id);
             const fresh = i >= 0 && Array.isArray(ctrl.detail) ? ctrl.detail[i] : null;
-            if (fresh) fillEditableListDetail(panel, fresh, moduleName, ctrlName, id, ctrl.optionSets || optionSets);
+            if (fresh) fillEditableListDetail(panel, fresh, moduleName, ctrlName, id, ctrl.optionSets || optionSets, fieldHelp);
         } catch (_) { /* the next state push redraws it */ }
     };
     // The joined WiFi network's addressing, while that network carries the page, asks first.
@@ -4628,12 +4636,17 @@ function fillEditableListDetail(panel, detail, moduleName, ctrlName, id, optionS
     };
     for (const f of fields) {
         if (f.readonly && typeof f.value === "string" && /^https?:\/\//.test(f.value)) {
-            panel.appendChild(rowLink(f));
+            const link = rowLink(f);
+            controlHelp(link, rowFieldHelp(fieldHelp, f.name));
+            panel.appendChild(link);
             continue;
         }
         const ctrl = { ...f, type: f.readonly ? "display" : f.type,
                        options: f.options || (f.optionsRef ? optionSets[f.optionsRef] : undefined) };
-        panel.appendChild(createControl(rowMid, null, ctrl, write));
+        const el = createControl(rowMid, null, ctrl, write);
+        if (!el) continue;
+        controlHelp(el, rowFieldHelp(fieldHelp, f.name));
+        panel.appendChild(el);
     }
 }
 
@@ -4665,9 +4678,9 @@ function listSummaryText(item) {
         .join("  ·  ");
 }
 
-// Render a read-only row's detail, each scalar or list of scalars a display control, as a card shows one.
-// `cached` and `ageSec` are one "last seen" (a device emits one or the other); a `*Sec` value reads as a relative age.
-function fillListDetail(panel, detail) {
+// Render a read-only row's detail, each scalar or list of scalars a display control, as a card shows one, with its field's help.
+// `cached` and `ageSec` are one "last seen" (a device emits one or the other), documented as `ageSec`; a `*Sec` value reads as a relative age.
+function fillListDetail(panel, detail, fieldHelp = {}) {
     panel.replaceChildren();
     if (!detail || typeof detail !== "object") return;
     for (const [k, v] of Object.entries(detail)) {
@@ -4677,7 +4690,9 @@ function fillListDetail(panel, detail) {
         const lastSeen = k === "ageSec" || k === "cached";
         const ctrl = { name: lastSeen ? "last seen" : k, type: "display", value: k === "cached" ? "cached" : v,
                        age: k.endsWith("Sec") };
-        panel.appendChild(createControl("", null, ctrl));
+        const el = createControl("", null, ctrl);
+        controlHelp(el, rowFieldHelp(fieldHelp, lastSeen ? "ageSec" : k));
+        panel.appendChild(el);
     }
 }
 

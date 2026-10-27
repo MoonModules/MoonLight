@@ -19,11 +19,7 @@ namespace mm {
 ///
 /// ## What a row does
 ///
-/// Each row binds one pin to a target, a surface control such as `Control.switch1`. Its kind toggles the target, sets a value while held and 0 on release, or nudges the target by a value. A catalog board's first button targets `Control.switch1`, which switches the lights and their relay.
-///
-/// ## Wiring
-///
-/// A switch to ground with the internal pull-up is active low, the usual wiring. A switch feeding 3V3 is active high. The live pressed readout shows a button working before it is bound.
+/// Each row binds one pin to a target, a surface control such as `Control.switch1`. A catalog board's first button targets `Control.switch1`, which switches the lights and their relay. The live pressed readout shows a button working before it is bound.
 ///
 /// @technical
 ///
@@ -39,6 +35,9 @@ public:
     void defineControls() override {
         controls_.addControl("debounceMs", debounceMs_, 1, 200);
         /// The buttons, each with a pin, its wiring, a live pressed readout and a target.
+        /// @field pin The GPIO the button is wired to; -1 leaves the row unused.
+        /// @field activeLow Active low for a switch to ground, the usual wiring; active high for one feeding 3V3.
+        /// @fields InputAction
         controls_.addList("buttons", *this);
         MoonModule::defineControls();
     }
@@ -77,10 +76,10 @@ public:
     void writeListRowDetail(JsonSink& sink, uint8_t row) const override {
         if (row >= count_) { sink.append("{}"); return; }
         const Row& r = rows_[row];
-        sink.appendf("{\"fields\":[{\"name\":\"pin\",\"type\":\"uint8\",\"value\":%d},"
-                     "{\"name\":\"activeLow\",\"type\":\"select\",\"value\":%d,"
+        openInputPinFields(sink, r.pin);
+        sink.appendf(",{\"name\":\"activeLow\",\"type\":\"select\",\"value\":%d,"
                      "\"options\":[\"active high\",\"active low\"]},",
-                     static_cast<int>(r.pin), r.activeLow ? 1 : 0);
+                     r.activeLow ? 1 : 0);
         writeInputActionDetailFields(sink, r.action);
         sink.append("]}");
     }
@@ -117,7 +116,7 @@ public:
         if (!r) return false;
         if (setInputActionField(r->action, field, valueJson)) { markDirty(); return true; }
         if (std::strcmp(field, "pin") == 0) {
-            r->pin = static_cast<int8_t>(json::parseInt(valueJson, "value"));
+            if (!parseInputPin(valueJson, r->pin)) return false;
             beginPin(*r);          // live, so entering a GPIO works now rather than at reboot
             markDirty();
             return true;
@@ -154,8 +153,8 @@ public:
 private:
     /// One button: its wiring, its target, and the debounce state it carries between polls.
     struct Row {
-        uint32_t    id = 0;
-        int8_t      pin = -1;
+        uint32_t    id = 0;          ///< the handle the editor addresses the row by
+        int8_t      pin = -1;        ///< the `pin` field, bounded by parseInputPin
         bool        activeLow = true;    ///< a switch to ground with a pull-up: the usual wiring
         InputAction action{};
         bool        open = false;        ///< the pin was accepted by the seam, so it is worth polling

@@ -24,7 +24,7 @@ namespace mm {
 ///
 /// ## Targets
 ///
-/// A row pointed at a pad does nothing, since a pedal held at 40% has no sensible reading as a preset. Reversed bounds mean inverted. Scripts reach the same pins with `adcRead(pin)` and `adcMax()`, the path for a sensor whose mapping is a condition rather than a range.
+/// A row pointed at a pad does nothing, since a pedal held at 40% has no sensible reading as a preset. Scripts reach the same pins with `adcRead(pin)` and `adcMax()`, the path for a sensor whose mapping is a condition rather than a range.
 ///
 /// @technical
 ///
@@ -43,6 +43,11 @@ public:
         // In target units, without which every tick would write a value one different.
         controls_.addControl("deadband", deadband_, 0, 32);
         /// The pins, each with its raw travel, an invert and a target.
+        /// @field pin The ADC-capable GPIO the pedal or pot is wired to; -1 leaves the row unused.
+        /// @field inMin The raw count at one end of the travel.
+        /// @field inMax The raw count at the other end; below inMin reads the travel inverted.
+        /// @field invert Reads the travel the other way round, for a pot wired backwards.
+        /// @fields InputAction
         controls_.addList("inputs", *this);
         MoonModule::defineControls();
     }
@@ -76,11 +81,10 @@ public:
     void writeListRowDetail(JsonSink& sink, uint8_t row) const override {
         if (row >= count_) { sink.append("{}"); return; }
         const Row& r = rows_[row];
-        sink.appendf("{\"fields\":[{\"name\":\"pin\",\"type\":\"uint8\",\"value\":%d},"
-                     "{\"name\":\"inMin\",\"type\":\"uint16\",\"value\":%u,\"min\":0,\"max\":%u},"
+        openInputPinFields(sink, r.pin);
+        sink.appendf(",{\"name\":\"inMin\",\"type\":\"uint16\",\"value\":%u,\"min\":0,\"max\":%u},"
                      "{\"name\":\"inMax\",\"type\":\"uint16\",\"value\":%u,\"min\":0,\"max\":%u},"
                      "{\"name\":\"invert\",\"type\":\"bool\",\"value\":%s},",
-                     static_cast<int>(r.pin),
                      static_cast<unsigned>(r.inMin), static_cast<unsigned>(platform::adcMaxCount()),
                      static_cast<unsigned>(r.inMax), static_cast<unsigned>(platform::adcMaxCount()),
                      r.invert ? "true" : "false");
@@ -128,10 +132,7 @@ public:
         }
         if (std::strcmp(field, "kind") == 0 || std::strcmp(field, "value") == 0) return false;
         if (std::strcmp(field, "pin") == 0) {
-            // Bounded before the narrowing cast, which would otherwise wrap onto another pin.
-            const int pin = json::parseInt(valueJson, "value");
-            if (pin < -1 || pin > 48) return false;
-            r->pin = static_cast<int8_t>(pin);
+            if (!parseInputPin(valueJson, r->pin)) return false;
             r->primed = false;      // a new pin starts its average fresh
             r->sent = false;
             markDirty();
@@ -183,11 +184,11 @@ public:
 private:
     /// One analog input: its wiring, its travel, its target, and its own filter state.
     struct Row {
-        uint32_t    id = 0;
-        int8_t      pin = -1;
+        uint32_t    id = 0;          ///< the handle the editor addresses the row by
+        int8_t      pin = -1;        ///< the `pin` field, bounded by parseInputPin
         uint16_t    inMin = 0;           ///< the raw count the travel STARTS at
         uint16_t    inMax = 0;           ///< and where it ends: set to full scale when a row is added
-        bool        invert = false;      ///< a pot wired the other way round
+        bool        invert = false;      ///< the `invert` field
         InputAction action{};
         uint16_t    raw = 0;             ///< the last reading, unfiltered: what a user calibrates from
         uint16_t    smoothed = 0;        ///< the running average, in raw counts

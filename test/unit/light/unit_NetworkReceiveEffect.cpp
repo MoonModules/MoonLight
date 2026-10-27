@@ -60,14 +60,14 @@ TEST_CASE("ArtNet OpDmx build→parse round-trip") {
 // Bad magic, non-OpDmx opcodes, truncated headers, and lying length fields are all rejected, the receiver drops them.
 TEST_CASE("ArtNet OpDmx parse rejects malformed packets") {
     uint8_t payload[3] = {9, 9, 9};
-    uint8_t pkt[mm::ARTNET_HEADER_SIZE + 3];
+    uint8_t pkt[mm::ARTNET_HEADER_SIZE + 4];   // three channels, padded to an even four
     const size_t len = mm::buildArtDmxPacket(pkt, 0, 0, payload, 3);
 
     uint16_t universe = 0, dataLen = 0;
     const uint8_t* data = nullptr;
 
     // Bad magic.
-    uint8_t bad[mm::ARTNET_HEADER_SIZE + 3];
+    uint8_t bad[mm::ARTNET_HEADER_SIZE + 4];
     std::memcpy(bad, pkt, len);
     bad[0] = 'X';
     CHECK_FALSE(mm::parseArtDmxPacket(bad, len, universe, data, dataLen));
@@ -224,7 +224,7 @@ TEST_CASE("NetworkReceiveEffect receives over localhost UDP") {
     mm::platform::UdpSocket tx;
     REQUIRE(tx.open());
     uint8_t payload[3] = {42, 43, 44};
-    uint8_t pkt[mm::ARTNET_HEADER_SIZE + 3];
+    uint8_t pkt[mm::ARTNET_HEADER_SIZE + 4];   // three channels, padded to an even four
     const size_t len = mm::buildArtDmxPacket(pkt, 0, 0, payload, 3);
     const uint8_t loopback[4] = {127, 0, 0, 1};
     REQUIRE(tx.sendToAddr(loopback, mm::ARTNET_PORT, pkt, len));
@@ -560,7 +560,7 @@ std::vector<uint8_t> ddp(uint32_t offset, uint8_t red, bool push) {
 }
 
 std::vector<uint8_t> artnet(uint16_t universe, uint8_t red, uint8_t seq) {
-    std::vector<uint8_t> p(mm::ARTNET_HEADER_SIZE + 3);
+    std::vector<uint8_t> p(mm::ARTNET_HEADER_SIZE + 4);   // three channels, padded to an even four
     const uint8_t payload[3] = {red, 0, 0};
     p.resize(mm::buildArtDmxPacket(p.data(), universe, seq, payload, 3));
     return p;
@@ -603,6 +603,27 @@ TEST_CASE("NetworkReceiveEffect counts Art-Net losses per universe, and none for
     CHECK(s.r.fx.lostPerS() == 1);
 }
 
+// Two packets swapped on the way arrive one behind the other; E1.31 reads a packet less than 20 behind as late, so a swap loses nothing and is no wrap of the sequence.
+TEST_CASE("NetworkReceiveEffect counts a late packet as none lost, not as a wrap of the sequence") {
+    LoopbackStream s;
+    s.send(mm::ARTNET_PORT, {artnet(0, 1, 8), artnet(0, 2, 10), artnet(0, 3, 9), artnet(0, 4, 11)},   // 9 overtaken by 10
+            [&] { return s.buf[0] == 4; });
+    s.secondPassed();
+    CHECK(s.r.fx.packetsPerS() == 4);
+    CHECK(s.r.fx.lostPerS() == 1);   // 9 missing when 10 came; its late arrival and 11 lose nothing
+}
+
+// A narrower universe spreads the frame over more of them, so a live change of channels_per_universe sizes the sequences anew and a loss in the upper universes still counts.
+TEST_CASE("NetworkReceiveEffect counts losses in every universe once channels_per_universe narrows live") {
+    LoopbackStream s;
+    REQUIRE(s.r.fx.affectsPrepare("channels_per_universe"));
+    s.r.fx.channelsPerUniverse = 170;   // 768 bytes: universes 0 to 4
+    s.r.fx.prepare();                   // what the live change runs
+    s.send(mm::ARTNET_PORT, {artnet(4, 1, 1), artnet(4, 3, 3)}, [&] { return s.buf[680] == 3; });   // 2 lost in universe 4
+    s.secondPassed();
+    CHECK(s.r.fx.lostPerS() == 1);
+}
+
 // The status reads like the sender's, frames and packets a second first, so the two cards compare at a glance.
 TEST_CASE("NetworkReceiveEffect shows the last second's frames, packets and losses in its status") {
     LoopbackStream s;
@@ -632,11 +653,10 @@ TEST_CASE("NetworkReceiveEffect shows a DDP frame at its push once the sender ma
     r.fx.setup();
     mm::platform::UdpSocket tx;
     REQUIRE(tx.open());
-    const uint8_t* staged = r.fx.stagingData();
     const uint8_t* shown = r.layer.buffer().data();
     deliver(r, tx, mm::DDP_PORT, {ddp(0, 10, false)}, [&] { return shown[0] == 10; });   // no push seen yet: it shows
     deliver(r, tx, mm::DDP_PORT, {ddp(3, 20, true)}, [&] { return shown[3] == 20; });    // the first push
-    deliver(r, tx, mm::DDP_PORT, {ddp(0, 30, false)}, [&] { return staged[0] == 30; });
+    deliver(r, tx, mm::DDP_PORT, {ddp(0, 30, false)}, [&] { return r.fx.stagedAt(0) == 30; });   // under the receive task's lock
     r.layer.tick();
     CHECK(shown[0] == 10);   // held: its frame has not ended
     deliver(r, tx, mm::DDP_PORT, {ddp(3, 40, true)}, [&] { return shown[3] == 40; });

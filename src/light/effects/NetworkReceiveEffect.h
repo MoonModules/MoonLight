@@ -76,7 +76,9 @@ public:
     uint32_t lostPerS() const { return lostPerS_; }
 
     /// Who maps sizes staging, by logical cells or by physical lights, so only it rebuilds.
-    bool affectsPrepare(const char* name) const override { return std::strcmp(name, "mapped_by") == 0; }
+    bool affectsPrepare(const char* name) const override {
+        return std::strcmp(name, "mapped_by") == 0 || std::strcmp(name, "channels_per_universe") == 0;   // the latter sizes the per-universe sequences
+    }
 
     /// A task still running would read a destroyed object, so the destructor stops it too.
     ~NetworkReceiveEffect() override { stopReceiveTask(); }
@@ -158,6 +160,8 @@ public:
 
     /// Test seam: the staging bytes, so a test can pin the buffer's lifecycle.
     const uint8_t* stagingData() const { return sink_.data(); }
+    /// Test seam: one staged byte, synchronized with the receive task's writes.
+    uint8_t stagedAt(size_t i) { return sink_.byteAt(i); }
     /// Test seam: how many staging bytes are allocated.
     size_t stagingBytes() const { return sink_.bytes(); }
 
@@ -308,7 +312,11 @@ private:
     void countGap(uint16_t universe, uint16_t tag, uint8_t seq, uint8_t first) {
         if (universe < universeStart || static_cast<size_t>(universe - universeStart) >= lastSeq_.count()) return;
         uint16_t& last = lastSeq_[universe - universeStart];
-        if ((last & 0xFF00) == tag) countLost(missed(static_cast<uint8_t>(last), seq, first, 255));
+        if ((last & 0xFF00) == tag) {
+            const uint32_t step = ahead(static_cast<uint8_t>(last), seq, first, 255);
+            if (step == 0) return;   // a repeat or a late packet: nothing lost, and the sequence stays where it was
+            countLost(step - 1);
+        }
         last = static_cast<uint16_t>(tag | seq);
     }
     /// Count the DDP packets missing before this one by byte offset, since DDP's 4-bit sequence wraps after 15: a jump past the last end, or a frame restarting short of its usual end.
@@ -326,12 +334,13 @@ private:
     }
     /// Add the packets a gap missed, touching the shared counter only when there are some.
     void countLost(uint32_t n) { if (n) lost_.fetch_add(n, std::memory_order_relaxed); }
-    /// The sequence numbers skipped between `prev` and `seq` on a counter that runs from `first` to `last` and wraps; a repeat skips none.
-    static uint32_t missed(uint8_t prev, uint8_t seq, uint8_t first, uint8_t last) {
+    /// How far `seq` lies ahead of `prev` on a counter that runs from `first` to `last` and wraps; 0 for a repeat or a packet at most kLateWindow - 1 behind, which E1.31-2018 §6.7.2 reads as out of order rather than a wrap.
+    static uint32_t ahead(uint8_t prev, uint8_t seq, uint8_t first, uint8_t last) {
         const uint32_t cycle = last - first + 1u;
         const uint32_t step = (seq + cycle - prev) % cycle;
-        return step ? step - 1 : 0;
+        return step > cycle - kLateWindow ? 0 : step;
     }
+    static constexpr uint32_t kLateWindow = 20;   ///< E1.31's window: a packet less than 20 behind the last is late, not a wrap
     /// A count over `spanMs` as a per-second rate.
     static uint32_t perSecond(uint32_t count, uint32_t spanMs) { return static_cast<uint32_t>(uint64_t{count} * 1000 / spanMs); }
 

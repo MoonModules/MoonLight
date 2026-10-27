@@ -15,7 +15,7 @@
   "boards": [
     "sender"
   ],
-  "description": "Two boards: the sender board sends with Network Send, this device receives with Network Receive, each running only what the scenario builds. It sweeps grid size, identity against serpentine layout, mapped by the receiver against the sender, and one layer against two at 40 frames a second; then, with the sender uncapped, the grid from 64x64 to 256x256 in DDP, Art-Net and E1.31; then the preview off, unwatched and watched. Each step reads both cards' status: frames, packets and lost packets a second, sent against received.",
+  "description": "Two boards: the sender board sends with Network Send, this device receives with Network Receive, each running only what the scenario builds. It sweeps grid size, identity against serpentine layout, mapped by the receiver against the sender, and one layer against two at 40 frames a second; then, with the sender capped at 120 frames a second, the grid from 64x64 to 256x256 in DDP, Art-Net and E1.31; then the preview off, unwatched and watched. Each step reads both cards' status: frames, packets and lost packets a second, sent against received.",
   "top": [
     "Layouts",
     "Effects"
@@ -302,27 +302,27 @@
         },
         "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
           "tick_us": {
-            "p50": 116,
+            "p50": 113,
             "p95": 1327,
             "min": 56,
             "max": 1327,
-            "n": 5
+            "n": 7
           },
           "free_heap": {
-            "p50": 33857176,
+            "p50": 33860288,
             "p95": 33884240,
             "min": 30857324,
             "max": 33884240,
-            "n": 5
+            "n": 7
           },
           "max_alloc_block": {
-            "p50": 184320,
+            "p50": 278528,
             "p95": 303104,
             "min": 172032,
             "max": 303104,
-            "n": 5
+            "n": 7
           },
-          "last_updated": "2026-10-26"
+          "last_updated": "2026-10-27"
         },
         "host=teensy41 sender=esp32p4rev1-eth": {
           "tick_us": {
@@ -471,27 +471,27 @@
         },
         "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
           "tick_us": {
-            "p50": 72,
+            "p50": 71,
             "p95": 1209,
             "min": 56,
             "max": 1209,
-            "n": 5
+            "n": 6
           },
           "free_heap": {
             "p50": 33858236,
             "p95": 33884252,
             "min": 30856992,
             "max": 33884252,
-            "n": 5
+            "n": 6
           },
           "max_alloc_block": {
             "p50": 184320,
             "p95": 303104,
             "min": 172032,
             "max": 303104,
-            "n": 5
+            "n": 6
           },
-          "last_updated": "2026-10-26"
+          "last_updated": "2026-10-27"
         },
         "host=teensy41 sender=esp32p4rev1-eth": {
           "tick_us": {
@@ -647,27 +647,27 @@
         },
         "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
           "tick_us": {
-            "p50": 148,
+            "p50": 130,
             "p95": 2503,
             "min": 93,
             "max": 2503,
-            "n": 5
+            "n": 6
           },
           "free_heap": {
             "p50": 33853292,
             "p95": 33879908,
             "min": 30851496,
             "max": 33879908,
-            "n": 5
+            "n": 6
           },
           "max_alloc_block": {
             "p50": 184320,
             "p95": 303104,
             "min": 172032,
             "max": 303104,
-            "n": 5
+            "n": 6
           },
-          "last_updated": "2026-10-26"
+          "last_updated": "2026-10-27"
         },
         "host=teensy41 sender=esp32p4rev1-eth": {
           "tick_us": {
@@ -816,27 +816,27 @@
         },
         "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
           "tick_us": {
-            "p50": 87,
+            "p50": 69,
             "p95": 1060,
             "min": 59,
             "max": 1060,
-            "n": 5
+            "n": 6
           },
           "free_heap": {
             "p50": 33852960,
             "p95": 33879860,
             "min": 30853428,
             "max": 33879860,
-            "n": 5
+            "n": 6
           },
           "max_alloc_block": {
             "p50": 184320,
             "p95": 303104,
             "min": 172032,
             "max": 303104,
-            "n": 5
+            "n": 6
           },
-          "last_updated": "2026-10-26"
+          "last_updated": "2026-10-27"
         },
         "host=teensy41 sender=esp32p4rev1-eth": {
           "tick_us": {
@@ -1022,27 +1022,27 @@
         },
         "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
           "tick_us": {
-            "p50": 177,
+            "p50": 172,
             "p95": 2793,
-            "min": 121,
+            "min": 99,
             "max": 2793,
-            "n": 5
+            "n": 6
           },
           "free_heap": {
             "p50": 33799896,
             "p95": 33833612,
             "min": 30802584,
             "max": 33833612,
-            "n": 5
+            "n": 6
           },
           "max_alloc_block": {
             "p50": 184320,
             "p95": 303104,
             "min": 172032,
             "max": 303104,
-            "n": 5
+            "n": 6
           },
-          "last_updated": "2026-10-26"
+          "last_updated": "2026-10-27"
         },
         "host=teensy41 sender=esp32p4rev1-eth": {
           "tick_us": {
@@ -1191,27 +1191,27 @@
         },
         "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
           "tick_us": {
-            "p50": 137,
+            "p50": 129,
             "p95": 4492,
             "min": 87,
             "max": 4492,
-            "n": 5
+            "n": 6
           },
           "free_heap": {
             "p50": 33807788,
             "p95": 33838344,
             "min": 30797700,
             "max": 33838344,
-            "n": 5
+            "n": 6
           },
           "max_alloc_block": {
             "p50": 184320,
             "p95": 303104,
             "min": 172032,
             "max": 303104,
-            "n": 5
+            "n": 6
           },
-          "last_updated": "2026-10-26"
+          "last_updated": "2026-10-27"
         },
         "host=teensy41 sender=esp32p4rev1-eth": {
           "tick_us": {
@@ -1367,27 +1367,27 @@
         },
         "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
           "tick_us": {
-            "p50": 1485,
+            "p50": 1053,
             "p95": 14334,
             "min": 712,
             "max": 14334,
-            "n": 5
+            "n": 6
           },
           "free_heap": {
             "p50": 33739588,
             "p95": 33776036,
             "min": 30741112,
             "max": 33776036,
-            "n": 5
+            "n": 6
           },
           "max_alloc_block": {
             "p50": 184320,
             "p95": 303104,
             "min": 172032,
             "max": 303104,
-            "n": 5
+            "n": 6
           },
-          "last_updated": "2026-10-26"
+          "last_updated": "2026-10-27"
         },
         "host=teensy41 sender=esp32p4rev1-eth": {
           "tick_us": {
@@ -1536,27 +1536,27 @@
         },
         "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
           "tick_us": {
-            "p50": 100,
+            "p50": 85,
             "p95": 1936,
             "min": 74,
             "max": 1936,
-            "n": 5
+            "n": 6
           },
           "free_heap": {
             "p50": 33748460,
             "p95": 33770364,
             "min": 30738108,
             "max": 33770364,
-            "n": 5
+            "n": 6
           },
           "max_alloc_block": {
             "p50": 184320,
             "p95": 303104,
             "min": 172032,
             "max": 303104,
-            "n": 5
+            "n": 6
           },
-          "last_updated": "2026-10-26"
+          "last_updated": "2026-10-27"
         },
         "host=teensy41 sender=esp32p4rev1-eth": {
           "tick_us": {
@@ -1742,27 +1742,27 @@
         },
         "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
           "tick_us": {
-            "p50": 4234,
+            "p50": 1801,
             "p95": 21412,
             "min": 333,
             "max": 21412,
-            "n": 5
+            "n": 6
           },
           "free_heap": {
-            "p50": 33703032,
+            "p50": 33699476,
             "p95": 33739936,
             "min": 30703012,
             "max": 33739936,
-            "n": 5
+            "n": 6
           },
           "max_alloc_block": {
             "p50": 184320,
             "p95": 303104,
             "min": 172032,
             "max": 303104,
-            "n": 5
+            "n": 6
           },
-          "last_updated": "2026-10-26"
+          "last_updated": "2026-10-27"
         },
         "host=teensy41 sender=esp32p4rev1-eth": {
           "tick_us": {
@@ -1911,27 +1911,27 @@
         },
         "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
           "tick_us": {
-            "p50": 2676,
+            "p50": 1416,
             "p95": 18402,
             "min": 425,
             "max": 18402,
-            "n": 5
+            "n": 6
           },
           "free_heap": {
-            "p50": 33713408,
+            "p50": 33698996,
             "p95": 33734348,
             "min": 30714596,
             "max": 33734348,
-            "n": 5
+            "n": 6
           },
           "max_alloc_block": {
             "p50": 184320,
             "p95": 303104,
             "min": 172032,
             "max": 303104,
-            "n": 5
+            "n": 6
           },
-          "last_updated": "2026-10-26"
+          "last_updated": "2026-10-27"
         },
         "host=teensy41 sender=esp32p4rev1-eth": {
           "tick_us": {
@@ -2087,27 +2087,27 @@
         },
         "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
           "tick_us": {
-            "p50": 8982,
+            "p50": 8406,
             "p95": 31505,
             "min": 5818,
             "max": 31505,
-            "n": 5
+            "n": 6
           },
           "free_heap": {
             "p50": 33512728,
             "p95": 33553916,
             "min": 30528064,
             "max": 33553916,
-            "n": 5
+            "n": 6
           },
           "max_alloc_block": {
             "p50": 184320,
             "p95": 294912,
             "min": 172032,
             "max": 294912,
-            "n": 5
+            "n": 6
           },
-          "last_updated": "2026-10-26"
+          "last_updated": "2026-10-27"
         },
         "host=teensy41 sender=esp32p4rev1-eth": {
           "tick_us": {
@@ -2256,27 +2256,27 @@
         },
         "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
           "tick_us": {
-            "p50": 350,
+            "p50": 186,
             "p95": 7290,
             "min": 79,
             "max": 7290,
-            "n": 5
+            "n": 6
           },
           "free_heap": {
             "p50": 33529948,
             "p95": 33554352,
             "min": 30507480,
             "max": 33554352,
-            "n": 5
+            "n": 6
           },
           "max_alloc_block": {
             "p50": 184320,
             "p95": 303104,
             "min": 172032,
             "max": 303104,
-            "n": 5
+            "n": 6
           },
-          "last_updated": "2026-10-26"
+          "last_updated": "2026-10-27"
         },
         "host=teensy41 sender=esp32p4rev1-eth": {
           "tick_us": {
@@ -2447,27 +2447,27 @@
         },
         "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
           "tick_us": {
-            "p50": 9711,
+            "p50": 8287,
             "p95": 32675,
             "min": 6210,
             "max": 32675,
-            "n": 5
+            "n": 6
           },
           "free_heap": {
             "p50": 33669556,
             "p95": 33701068,
             "min": 30659092,
             "max": 33701068,
-            "n": 5
+            "n": 6
           },
           "max_alloc_block": {
             "p50": 184320,
             "p95": 294912,
             "min": 172032,
             "max": 294912,
-            "n": 5
+            "n": 6
           },
-          "last_updated": "2026-10-26"
+          "last_updated": "2026-10-27"
         },
         "host=teensy41 sender=esp32p4rev1-eth": {
           "tick_us": {
@@ -2616,27 +2616,27 @@
         },
         "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
           "tick_us": {
-            "p50": 8588,
+            "p50": 8064,
             "p95": 28646,
             "min": 4725,
             "max": 28646,
-            "n": 5
+            "n": 6
           },
           "free_heap": {
             "p50": 33659276,
             "p95": 33701820,
             "min": 30651316,
             "max": 33701820,
-            "n": 5
+            "n": 6
           },
           "max_alloc_block": {
             "p50": 184320,
             "p95": 294912,
             "min": 172032,
             "max": 294912,
-            "n": 5
+            "n": 6
           },
-          "last_updated": "2026-10-26"
+          "last_updated": "2026-10-27"
         },
         "host=teensy41 sender=esp32p4rev1-eth": {
           "tick_us": {
@@ -2792,27 +2792,27 @@
         },
         "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
           "tick_us": {
-            "p50": 17205,
+            "p50": 15438,
             "p95": 48065,
             "min": 13801,
             "max": 48065,
-            "n": 5
+            "n": 6
           },
           "free_heap": {
             "p50": 33381376,
             "p95": 33416912,
             "min": 30381984,
             "max": 33416912,
-            "n": 5
+            "n": 6
           },
           "max_alloc_block": {
             "p50": 184320,
             "p95": 294912,
             "min": 172032,
             "max": 294912,
-            "n": 5
+            "n": 6
           },
-          "last_updated": "2026-10-26"
+          "last_updated": "2026-10-27"
         },
         "host=teensy41 sender=esp32p4rev1-eth": {
           "tick_us": {
@@ -2961,27 +2961,27 @@
         },
         "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
           "tick_us": {
-            "p50": 20520,
+            "p50": 16042,
             "p95": 59786,
             "min": 14173,
             "max": 59786,
-            "n": 5
+            "n": 6
           },
           "free_heap": {
-            "p50": 33342964,
+            "p50": 33321152,
             "p95": 33350084,
             "min": 30339504,
             "max": 33350084,
-            "n": 5
+            "n": 6
           },
           "max_alloc_block": {
             "p50": 184320,
             "p95": 294912,
             "min": 172032,
             "max": 294912,
-            "n": 5
+            "n": 6
           },
-          "last_updated": "2026-10-26"
+          "last_updated": "2026-10-27"
         },
         "host=teensy41 sender=esp32p4rev1-eth": {
           "tick_us": {
@@ -3192,27 +3192,27 @@
         },
         "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
           "tick_us": {
-            "p50": 351,
+            "p50": 309,
             "p95": 3872,
-            "min": 107,
+            "min": 99,
             "max": 3872,
-            "n": 5
+            "n": 6
           },
           "free_heap": {
             "p50": 33798536,
             "p95": 33833656,
             "min": 30806044,
             "max": 33833656,
-            "n": 5
+            "n": 6
           },
           "max_alloc_block": {
             "p50": 184320,
             "p95": 303104,
             "min": 172032,
             "max": 303104,
-            "n": 5
+            "n": 6
           },
-          "last_updated": "2026-10-26"
+          "last_updated": "2026-10-27"
         },
         "host=teensy41 sender=esp32p4rev1-eth": {
           "tick_us": {
@@ -3362,27 +3362,27 @@
         },
         "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
           "tick_us": {
-            "p50": 434,
+            "p50": 291,
             "p95": 15212,
             "min": 117,
             "max": 15212,
-            "n": 5
+            "n": 6
           },
           "free_heap": {
             "p50": 33796688,
             "p95": 33832548,
             "min": 30803948,
             "max": 33832548,
-            "n": 5
+            "n": 6
           },
           "max_alloc_block": {
             "p50": 184320,
             "p95": 303104,
             "min": 172032,
             "max": 303104,
-            "n": 5
+            "n": 6
           },
-          "last_updated": "2026-10-26"
+          "last_updated": "2026-10-27"
         },
         "host=teensy41 sender=esp32p4rev1-eth": {
           "tick_us": {
@@ -3532,27 +3532,27 @@
         },
         "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
           "tick_us": {
-            "p50": 850,
+            "p50": 679,
             "p95": 7244,
             "min": 157,
             "max": 7244,
-            "n": 5
+            "n": 6
           },
           "free_heap": {
             "p50": 33795376,
             "p95": 33832188,
             "min": 30797872,
             "max": 33832188,
-            "n": 5
+            "n": 6
           },
           "max_alloc_block": {
             "p50": 184320,
             "p95": 303104,
             "min": 172032,
             "max": 303104,
-            "n": 5
+            "n": 6
           },
-          "last_updated": "2026-10-26"
+          "last_updated": "2026-10-27"
         },
         "host=teensy41 sender=esp32p4rev1-eth": {
           "tick_us": {
@@ -3660,27 +3660,27 @@
       "observed": {
         "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
           "tick_us": {
-            "p50": 2572,
+            "p50": 1748,
             "p95": 3966,
-            "min": 1748,
+            "min": 697,
             "max": 3966,
-            "n": 3
+            "n": 4
           },
           "free_heap": {
-            "p50": 33708280,
+            "p50": 33706636,
             "p95": 33724596,
-            "min": 33706636,
+            "min": 33701060,
             "max": 33724596,
-            "n": 3
+            "n": 4
           },
           "max_alloc_block": {
             "p50": 278528,
             "p95": 294912,
             "min": 184320,
             "max": 294912,
-            "n": 3
+            "n": 4
           },
-          "last_updated": "2026-10-26"
+          "last_updated": "2026-10-27"
         }
       },
       "samples": 5
@@ -3710,26 +3710,26 @@
         "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
           "tick_us": {
             "p50": 175,
-            "p95": 1733,
+            "p95": 73537,
             "min": 148,
-            "max": 1733,
-            "n": 3
+            "max": 73537,
+            "n": 4
           },
           "free_heap": {
-            "p50": 33701008,
+            "p50": 33696580,
             "p95": 33735676,
             "min": 33683056,
             "max": 33735676,
-            "n": 3
+            "n": 4
           },
           "max_alloc_block": {
             "p50": 278528,
             "p95": 294912,
             "min": 184320,
             "max": 294912,
-            "n": 3
+            "n": 4
           },
-          "last_updated": "2026-10-26"
+          "last_updated": "2026-10-27"
         }
       },
       "samples": 5
@@ -3759,26 +3759,26 @@
         "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
           "tick_us": {
             "p50": 173,
-            "p95": 1348,
+            "p95": 66923,
             "min": 164,
-            "max": 1348,
-            "n": 3
+            "max": 66923,
+            "n": 4
           },
           "free_heap": {
             "p50": 33698192,
             "p95": 33735776,
             "min": 33683064,
             "max": 33735776,
-            "n": 3
+            "n": 4
           },
           "max_alloc_block": {
             "p50": 278528,
             "p95": 294912,
             "min": 184320,
             "max": 294912,
-            "n": 3
+            "n": 4
           },
-          "last_updated": "2026-10-26"
+          "last_updated": "2026-10-27"
         }
       },
       "samples": 5
@@ -3841,23 +3841,23 @@
             "p95": 8909,
             "min": 402,
             "max": 8909,
-            "n": 3
+            "n": 4
           },
           "free_heap": {
             "p50": 33651336,
             "p95": 33680536,
             "min": 33633216,
             "max": 33680536,
-            "n": 3
+            "n": 4
           },
           "max_alloc_block": {
             "p50": 278528,
             "p95": 294912,
             "min": 184320,
             "max": 294912,
-            "n": 3
+            "n": 4
           },
-          "last_updated": "2026-10-26"
+          "last_updated": "2026-10-27"
         }
       },
       "samples": 5
@@ -3888,25 +3888,25 @@
           "tick_us": {
             "p50": 92530,
             "p95": 118426,
-            "min": 92530,
+            "min": 69,
             "max": 118426,
-            "n": 2
+            "n": 3
           },
           "free_heap": {
-            "p50": 33648708,
+            "p50": 33651696,
             "p95": 33667104,
             "min": 33648708,
             "max": 33667104,
-            "n": 2
+            "n": 3
           },
           "max_alloc_block": {
-            "p50": 184320,
+            "p50": 286720,
             "p95": 294912,
             "min": 184320,
             "max": 294912,
-            "n": 2
+            "n": 3
           },
-          "last_updated": "2026-10-26"
+          "last_updated": "2026-10-27"
         }
       },
       "samples": 5
@@ -3937,25 +3937,25 @@
           "tick_us": {
             "p50": 429,
             "p95": 2052,
-            "min": 429,
+            "min": 69,
             "max": 2052,
-            "n": 2
+            "n": 3
           },
           "free_heap": {
-            "p50": 33640116,
+            "p50": 33647528,
             "p95": 33668640,
             "min": 33640116,
             "max": 33668640,
-            "n": 2
+            "n": 3
           },
           "max_alloc_block": {
-            "p50": 184320,
+            "p50": 286720,
             "p95": 294912,
             "min": 184320,
             "max": 294912,
-            "n": 2
+            "n": 3
           },
-          "last_updated": "2026-10-26"
+          "last_updated": "2026-10-27"
         }
       },
       "samples": 5
@@ -4014,27 +4014,27 @@
       "observed": {
         "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
           "tick_us": {
-            "p50": 2672,
+            "p50": 4021,
             "p95": 14855,
             "min": 2672,
             "max": 14855,
-            "n": 2
+            "n": 3
           },
           "free_heap": {
-            "p50": 33506740,
+            "p50": 33545340,
             "p95": 33549824,
             "min": 33506740,
             "max": 33549824,
-            "n": 2
+            "n": 3
           },
           "max_alloc_block": {
-            "p50": 184320,
+            "p50": 278528,
             "p95": 294912,
             "min": 184320,
             "max": 294912,
-            "n": 2
+            "n": 3
           },
-          "last_updated": "2026-10-26"
+          "last_updated": "2026-10-27"
         }
       },
       "samples": 5
@@ -4063,27 +4063,27 @@
       "observed": {
         "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
           "tick_us": {
-            "p50": 17434,
+            "p50": 21044,
             "p95": 35856,
             "min": 17434,
             "max": 35856,
-            "n": 2
+            "n": 3
           },
           "free_heap": {
-            "p50": 33533816,
+            "p50": 33546248,
             "p95": 33566264,
             "min": 33533816,
             "max": 33566264,
-            "n": 2
+            "n": 3
           },
           "max_alloc_block": {
-            "p50": 184320,
+            "p50": 278528,
             "p95": 294912,
             "min": 184320,
             "max": 294912,
-            "n": 2
+            "n": 3
           },
-          "last_updated": "2026-10-26"
+          "last_updated": "2026-10-27"
         }
       },
       "samples": 5
@@ -4112,27 +4112,27 @@
       "observed": {
         "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
           "tick_us": {
-            "p50": 13734,
-            "p95": 19203,
+            "p50": 19203,
+            "p95": 38124,
             "min": 13734,
-            "max": 19203,
-            "n": 2
+            "max": 38124,
+            "n": 3
           },
           "free_heap": {
-            "p50": 33537548,
+            "p50": 33545468,
             "p95": 33561220,
             "min": 33537548,
             "max": 33561220,
-            "n": 2
+            "n": 3
           },
           "max_alloc_block": {
-            "p50": 184320,
+            "p50": 278528,
             "p95": 294912,
             "min": 184320,
             "max": 294912,
-            "n": 2
+            "n": 3
           },
-          "last_updated": "2026-10-26"
+          "last_updated": "2026-10-27"
         }
       },
       "samples": 5
@@ -4191,27 +4191,27 @@
       "observed": {
         "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
           "tick_us": {
-            "p50": 6777,
+            "p50": 9149,
             "p95": 14100,
             "min": 6777,
             "max": 14100,
-            "n": 2
+            "n": 3
           },
           "free_heap": {
-            "p50": 33390708,
+            "p50": 33414736,
             "p95": 33437908,
             "min": 33390708,
             "max": 33437908,
-            "n": 2
+            "n": 3
           },
           "max_alloc_block": {
-            "p50": 184320,
+            "p50": 278528,
             "p95": 294912,
             "min": 184320,
             "max": 294912,
-            "n": 2
+            "n": 3
           },
-          "last_updated": "2026-10-26"
+          "last_updated": "2026-10-27"
         }
       },
       "samples": 5
@@ -4240,27 +4240,27 @@
       "observed": {
         "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
           "tick_us": {
-            "p50": 8939,
+            "p50": 9895,
             "p95": 13374,
             "min": 8939,
             "max": 13374,
-            "n": 2
+            "n": 3
           },
           "free_heap": {
-            "p50": 33398292,
+            "p50": 33418404,
             "p95": 33437868,
             "min": 33398292,
             "max": 33437868,
-            "n": 2
+            "n": 3
           },
           "max_alloc_block": {
-            "p50": 184320,
+            "p50": 278528,
             "p95": 294912,
             "min": 184320,
             "max": 294912,
-            "n": 2
+            "n": 3
           },
-          "last_updated": "2026-10-26"
+          "last_updated": "2026-10-27"
         }
       },
       "samples": 5
@@ -4289,27 +4289,27 @@
       "observed": {
         "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
           "tick_us": {
-            "p50": 12391,
-            "p95": 17221,
+            "p50": 17221,
+            "p95": 19173,
             "min": 12391,
-            "max": 17221,
-            "n": 2
+            "max": 19173,
+            "n": 3
           },
           "free_heap": {
-            "p50": 33386564,
+            "p50": 33421172,
             "p95": 33431712,
             "min": 33386564,
             "max": 33431712,
-            "n": 2
+            "n": 3
           },
           "max_alloc_block": {
-            "p50": 184320,
+            "p50": 278528,
             "p95": 294912,
             "min": 184320,
             "max": 294912,
-            "n": 2
+            "n": 3
           },
-          "last_updated": "2026-10-26"
+          "last_updated": "2026-10-27"
         }
       },
       "samples": 5
@@ -4368,27 +4368,27 @@
       "observed": {
         "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
           "tick_us": {
-            "p50": 8335,
+            "p50": 12453,
             "p95": 15524,
             "min": 8335,
             "max": 15524,
-            "n": 2
+            "n": 3
           },
           "free_heap": {
-            "p50": 33065740,
+            "p50": 33077232,
             "p95": 33101620,
             "min": 33065740,
             "max": 33101620,
-            "n": 2
+            "n": 3
           },
           "max_alloc_block": {
-            "p50": 184320,
+            "p50": 278528,
             "p95": 294912,
             "min": 184320,
             "max": 294912,
-            "n": 2
+            "n": 3
           },
-          "last_updated": "2026-10-26"
+          "last_updated": "2026-10-27"
         }
       },
       "samples": 5
@@ -4417,27 +4417,27 @@
       "observed": {
         "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
           "tick_us": {
-            "p50": 21542,
+            "p50": 22197,
             "p95": 22676,
             "min": 21542,
             "max": 22676,
-            "n": 2
+            "n": 3
           },
           "free_heap": {
-            "p50": 33051312,
+            "p50": 33064132,
             "p95": 33093936,
             "min": 33051312,
             "max": 33093936,
-            "n": 2
+            "n": 3
           },
           "max_alloc_block": {
-            "p50": 184320,
+            "p50": 278528,
             "p95": 294912,
             "min": 184320,
             "max": 294912,
-            "n": 2
+            "n": 3
           },
-          "last_updated": "2026-10-26"
+          "last_updated": "2026-10-27"
         }
       },
       "samples": 5
@@ -4466,27 +4466,27 @@
       "observed": {
         "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
           "tick_us": {
-            "p50": 9954,
+            "p50": 18461,
             "p95": 21096,
             "min": 9954,
             "max": 21096,
-            "n": 2
+            "n": 3
           },
           "free_heap": {
-            "p50": 33040828,
+            "p50": 33065668,
             "p95": 33091636,
             "min": 33040828,
             "max": 33091636,
-            "n": 2
+            "n": 3
           },
           "max_alloc_block": {
-            "p50": 184320,
+            "p50": 278528,
             "p95": 294912,
             "min": 184320,
             "max": 294912,
-            "n": 2
+            "n": 3
           },
-          "last_updated": "2026-10-26"
+          "last_updated": "2026-10-27"
         }
       },
       "samples": 5
@@ -4547,25 +4547,25 @@
           "tick_us": {
             "p50": 4767,
             "p95": 7748,
-            "min": 4767,
+            "min": 1353,
             "max": 7748,
-            "n": 2
+            "n": 3
           },
           "free_heap": {
-            "p50": 33626504,
+            "p50": 33655836,
             "p95": 33690204,
             "min": 33626504,
             "max": 33690204,
-            "n": 2
+            "n": 3
           },
           "max_alloc_block": {
-            "p50": 184320,
+            "p50": 278528,
             "p95": 294912,
             "min": 184320,
             "max": 294912,
-            "n": 2
+            "n": 3
           },
-          "last_updated": "2026-10-26"
+          "last_updated": "2026-10-27"
         }
       },
       "samples": 5
@@ -4593,27 +4593,27 @@
       "observed": {
         "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
           "tick_us": {
-            "p50": 8878,
-            "p95": 12361,
+            "p50": 12361,
+            "p95": 13012,
             "min": 8878,
-            "max": 12361,
-            "n": 2
+            "max": 13012,
+            "n": 3
           },
           "free_heap": {
             "p50": 33647680,
             "p95": 33685244,
-            "min": 33647680,
+            "min": 33628056,
             "max": 33685244,
-            "n": 2
+            "n": 3
           },
           "max_alloc_block": {
-            "p50": 208896,
+            "p50": 278528,
             "p95": 294912,
             "min": 208896,
             "max": 294912,
-            "n": 2
+            "n": 3
           },
-          "last_updated": "2026-10-26"
+          "last_updated": "2026-10-27"
         }
       },
       "samples": 5
@@ -4646,27 +4646,27 @@
       "observed": {
         "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
           "tick_us": {
-            "p50": 65,
+            "p50": 197,
             "p95": 454,
             "min": 65,
             "max": 454,
-            "n": 2
+            "n": 3
           },
           "free_heap": {
-            "p50": 33723196,
+            "p50": 33761528,
             "p95": 33799096,
             "min": 33723196,
             "max": 33799096,
-            "n": 2
+            "n": 3
           },
           "max_alloc_block": {
-            "p50": 270336,
+            "p50": 286720,
             "p95": 303104,
             "min": 270336,
             "max": 303104,
-            "n": 2
+            "n": 3
           },
-          "last_updated": "2026-10-26"
+          "last_updated": "2026-10-27"
         }
       },
       "samples": 5
