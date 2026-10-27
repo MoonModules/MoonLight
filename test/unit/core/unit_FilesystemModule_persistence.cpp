@@ -134,6 +134,21 @@ TEST_CASE("A settings location that cannot be written to fails the mount, not ev
     std::filesystem::remove_all(root);
 }
 
+// A module listing its scripts while binding its controls, as Drivers does so a saved palette resolves at load, needs the files: storage mounts when persistence attaches, before the first phase.
+TEST_CASE("the storage mounts when persistence attaches, before any module binds its controls") {
+    TempRoot temp("mount_early");
+    const std::string config = std::string(temp.path) + mm::FilesystemModule::CONFIG_DIR;
+    mm::Scheduler scheduler;
+    auto* fs = new mm::FilesystemModule();
+    fs->setTypeName("FilesystemModule");
+    CHECK_FALSE(std::filesystem::exists(config));
+    fs->setScheduler(&scheduler);
+    CHECK(std::filesystem::is_directory(config));   // mounted, before the scheduler's first phase
+    scheduler.addModule(fs);
+    scheduler.setup();
+    scheduler.release();
+}
+
 // Persistence round-trip: set deviceName → save → recreate Scheduler+modules → load → assert.
 // Uses fsSetRoot to isolate the test from any real /.config/ on disk.
 // A control change (deviceName) saved with flush() reappears on the next boot once a fresh Scheduler loads the same path.

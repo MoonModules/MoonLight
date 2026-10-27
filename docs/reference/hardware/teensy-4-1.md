@@ -14,7 +14,7 @@ The one firmware, `teensy41`, finds at boot which of the two the board has; it i
 ## The board
 
 - NXP i.MX RT1062: one Cortex-M7 at 600 MHz, no WiFi, one core.
-- 1 MB RAM: 512 KB of tightly coupled memory, shared between code and the stack, and 512 KB of OCRAM, which holds the heap.
+- 1 MB RAM: 512 KB of tightly coupled memory and 512 KB of OCRAM. The tightly coupled memory holds the code that runs from it, the variables, a 64 KB stack and, between them, the heap MoonLight's buffers come from first, the fastest RAM on the chip. OCRAM holds the rest of the heap and MoonLive's compiled code, since the tightly coupled data memory runs no code.
 - 8 MB flash, with 1 MB of it holding MoonLight's settings (LittleFS), kept across power cycles and USB uploads.
 - Pads for 8 or 16 MB PSRAM, empty on the boards MoonLight runs on so far.
 - A microSD slot (pins 42 to 47) and USB host pins. A card goes in with the board unpowered: the slot sits on the 3.3 V rail, and a card's inrush resets the board.

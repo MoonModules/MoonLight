@@ -525,6 +525,16 @@ TEST_CASE("NetworkSendDriver: a packet waits only for what remains until its slo
     CHECK(D::slotWait(0xFFFFFF00u, 2, 200, 0xFFFFFF80u) == 272);   // across micros() wrapping
 }
 
+// A receiver counts a gap in a universe's sequence as lost packets, so E1.31 wraps through 0 and Art-Net skips it, as each standard numbers them.
+TEST_CASE("NetworkSendDriver: the universe sequence wraps to 0 in E1.31 and to 1 in Art-Net") {
+    using D = mm::NetworkSendDriver;
+    CHECK(D::nextSequence(1, D::kProtoE131) == 2);
+    CHECK(D::nextSequence(255, D::kProtoE131) == 0);
+    CHECK(D::nextSequence(0, D::kProtoE131) == 1);
+    CHECK(D::nextSequence(254, D::kProtoArtNet) == 255);
+    CHECK(D::nextSequence(255, D::kProtoArtNet) == 1);
+}
+
 // The send task reads the corrected buffer while it paces a frame, so a correction that grows the buffer waits the task out and restarts it; the next frame goes out whole, four channels a light.
 TEST_CASE("NetworkSendDriver: a correction that grows the buffer under a paced send restarts the task safely") {
     PaceRig r(400, 1000, 20);   // 1200 bytes of RGB: one DDP packet

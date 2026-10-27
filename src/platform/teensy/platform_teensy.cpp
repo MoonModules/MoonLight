@@ -18,10 +18,17 @@
 #include <string>
 #include <vector>
 
+#include <algorithm>
+#include <smalloc_i.h>   // PJRC's smalloc, with its block header, which the pool's accounting reads
+
 extern "C" {
 extern unsigned long _heap_start;   // the linker script's OCRAM heap, which sbrk grows through
 extern unsigned long _heap_end;
+extern unsigned long _ebss;         // the end of DTCM's variables, where PJRC's stack trap sits
+extern unsigned long _estack;       // the top of DTCM, where the stack starts down
 extern char* __brkval;
+extern char* __malloc_sbrk_base;   // newlib malloc's arena: where its first chunk starts
+extern void* __malloc_av_[];        // its bins (newlib's `mbinptr __malloc_av_[]`, pointers alike), whose third word is the top chunk
 
 // The desktop's live UI folder is tried through stdio first; with no stdio filesystem here, the open fails and the embedded UI is served.
 int _open(const char*, int, ...) { errno = ENOSYS; return -1; }
@@ -42,36 +49,104 @@ void pauseLoop() { ::yield(); }   // nothing else needs the core
 void delayMs(uint32_t ms) { ::delay(ms); }
 void delayUs(uint32_t us) { ::delayMicroseconds(us); }
 
-// --- Heap: malloc on OCRAM, with the size kept before each block so the counters stay exact -----
+// --- Heap: a DTCM pool through PJRC's smalloc first, single-cycle and uncached, then malloc on OCRAM, which also holds MoonLive's code; the stack keeps kStackBytes above an MPU trap ---
 
 namespace {
-constexpr size_t kAllocHeader = 8;   // malloc's alignment on the Cortex-M7
+constexpr size_t kAllocHeader = 8;            // the size and the raw block, before an 8-byte aligned user block
+constexpr size_t kStackBytes = 64 * 1024;     // the loop's stack, which ESP32's main task fits in 12 KB
+constexpr uintptr_t kTrapBytes = 32;          // the MPU's smallest region
+constexpr uint32_t kStackPaint = 0x57AC57ACu; // what the stack's unused part holds, so its deepest reach shows
+static_assert(sizeof(void*) == 4 && sizeof(size_t) == 4, "the header holds two 32-bit words");
+
 size_t g_allocatedBytes = 0;
 size_t g_allocatedPeak = 0;
 uint32_t g_allocCount = 0;
 
+smalloc_pool g_dtcm{};
+uintptr_t g_dtcmStart = 0, g_dtcmEnd = 0;     // the pool, a whole number of smalloc headers
+uintptr_t g_stackFloor = 0;                   // above the pool and the trap
+size_t g_dtcmTaken = 0;                       // pool bytes in blocks, smalloc's headers included
+
 size_t heapTop() { return reinterpret_cast<size_t>(&_heap_end) - reinterpret_cast<size_t>(__brkval); }
+size_t poolBlockBytes(const void* raw) { return USER_TO_HEADER(raw)->rsz + 2 * HEADER_SZ; }
+
+// Once, before the first allocation: the pool, the trap at the stack's floor, and the paint under the running frame.
+void initDtcm() {
+    static bool done = false;
+    if (done) return;
+    done = true;
+    const uintptr_t sp = reinterpret_cast<uintptr_t>(__builtin_frame_address(0));
+    const uintptr_t start = (reinterpret_cast<uintptr_t>(&_ebss) + kTrapBytes + 7) & ~uintptr_t{7};   // past PJRC's trap at _ebss
+    const uintptr_t end = (reinterpret_cast<uintptr_t>(&_estack) - kStackBytes - kTrapBytes) & ~(kTrapBytes - 1);
+    if (end <= start || sp < end + 2 * kTrapBytes) return;   // no room, or the stack is already below its floor: OCRAM alone
+    const size_t size = (end - start) - (end - start) % HEADER_SZ;
+    // Zeroed first: smalloc finds its blocks by the headers in the pool itself, and RAM keeps a previous boot's across a reset.
+    std::memset(reinterpret_cast<void*>(start), 0, size);
+    if (!sm_set_pool(&g_dtcm, reinterpret_cast<void*>(start), size, 0, nullptr)) return;
+    g_dtcmStart = start;
+    g_dtcmEnd = start + size;
+    g_stackFloor = end + kTrapBytes;
+    // The region one below the exec region in allowExecInOcram; a higher region wins over PJRC's DTCM one.
+    const uint32_t trap = ((SCB_MPU_TYPE >> 8) & 0xFF) - 2;
+    asm volatile("dsb" ::: "memory");
+    SCB_MPU_RBAR = end | SCB_MPU_RBAR_REGION(trap) | SCB_MPU_RBAR_VALID;
+    SCB_MPU_RASR = SCB_MPU_RASR_AP(0) | SCB_MPU_RASR_XN | SCB_MPU_RASR_SIZE(4) | SCB_MPU_RASR_ENABLE;   // no access, 32 bytes
+    asm volatile("dsb\n isb" ::: "memory");
+    for (uintptr_t p = g_stackFloor; p + 256 < sp; p += 4) *reinterpret_cast<volatile uint32_t*>(p) = kStackPaint;
+}
+
+bool inDtcm(const void* p) { const auto a = reinterpret_cast<uintptr_t>(p); return a >= g_dtcmStart && a < g_dtcmEnd; }
+
+// The largest block the pool still gives, walking it as smalloc does: over a block by its size, over free space a header at a time.
+size_t dtcmMaxBlock() {
+    if (!g_dtcmEnd) return 0;
+    size_t best = 0, run = 0;
+    auto* h = reinterpret_cast<smalloc_hdr*>(g_dtcmStart);
+    while (reinterpret_cast<uintptr_t>(h) < g_dtcmEnd) {
+        if (smalloc_is_alloc(&g_dtcm, h)) {
+            run = 0;
+            h = reinterpret_cast<smalloc_hdr*>(reinterpret_cast<uint8_t*>(h) + h->rsz + 2 * HEADER_SZ);
+            continue;
+        }
+        run += HEADER_SZ;
+        if (run > best) best = run;
+        h++;
+    }
+    const size_t overhead = 2 * HEADER_SZ + kAllocHeader + 4;   // smalloc's two headers, ours, and the alignment slack
+    return best > overhead ? best - overhead : 0;
+}
 }  // namespace
 
 void* alloc(size_t bytes) {
-    void* raw = std::malloc(bytes + kAllocHeader);
+    initDtcm();
+    // smalloc aligns to 4, so 4 more bytes leave room to align the user block to 8 as malloc does.
+    void* raw = g_dtcmEnd ? sm_malloc_pool(&g_dtcm, bytes + kAllocHeader + 4) : nullptr;
+    if (raw) g_dtcmTaken += poolBlockBytes(raw);
+    else raw = std::malloc(bytes + kAllocHeader);
     if (!raw) return nullptr;
-    *static_cast<size_t*>(raw) = bytes;
+    auto* user = reinterpret_cast<uint8_t*>((reinterpret_cast<uintptr_t>(raw) + kAllocHeader + 7) & ~uintptr_t{7});
+    reinterpret_cast<size_t*>(user)[-2] = bytes;
+    reinterpret_cast<void**>(user)[-1] = raw;
     g_allocatedBytes += bytes;
     if (g_allocatedBytes > g_allocatedPeak) g_allocatedPeak = g_allocatedBytes;
     g_allocCount++;
-    return static_cast<uint8_t*>(raw) + kAllocHeader;
+    return user;
 }
 
 void free(void* ptr) {
     if (!ptr) return;
-    void* raw = static_cast<uint8_t*>(ptr) - kAllocHeader;
-    g_allocatedBytes -= *static_cast<size_t*>(raw);
+    void* raw = static_cast<void**>(ptr)[-1];
+    g_allocatedBytes -= static_cast<size_t*>(ptr)[-2];
     g_allocCount--;
-    std::free(raw);
+    if (inDtcm(raw)) {
+        g_dtcmTaken -= poolBlockBytes(raw);
+        sm_free_pool(&g_dtcm, raw);
+    } else {
+        std::free(raw);
+    }
 }
 
-void* allocInternal(size_t bytes) { return alloc(bytes); }   // one RAM, no PSRAM to keep out of
+void* allocInternal(size_t bytes) { return alloc(bytes); }   // no PSRAM to keep out of
 
 bool ptrIsPsram(const void* /*p*/) { return false; }   // alloc never reaches the optional PSRAM chip
 
@@ -79,12 +154,31 @@ size_t allocatedBytes() { return g_allocatedBytes; }
 size_t allocatedPeak() { return g_allocatedPeak; }
 uint32_t allocatedCount() { return g_allocCount; }
 
-size_t freeHeap() { return heapTop() + mallinfo().fordblks; }
+size_t freeHeap() { return heapTop() + mallinfo().fordblks + (g_dtcmEnd - g_dtcmStart - g_dtcmTaken); }
 size_t freeInternalHeap() { return freeHeap(); }
-// malloc keeps freed memory at the top as its "top chunk" (keepcost) rather than returning it, and that chunk borders the never-used space.
-size_t maxAllocBlock() { return heapTop() + mallinfo().keepcost; }
+// The largest block malloc gives: its top chunk with the space it borders, or a free chunk inside, walking newlib's dlmalloc arena, where a chunk is free when the next one's PREV_INUSE bit is clear.
+size_t ocramMaxBlock() {
+    constexpr size_t kSizeWord = sizeof(size_t), kPrevInUse = 1, kSizeFlags = 3, kMinChunk = 16;
+    // From the top a request rounds up to 8 with its size word, and leaves a minimum chunk behind.
+    const size_t top = heapTop() + mallinfo().keepcost;
+    size_t best = top > kMinChunk + kSizeWord ? ((top - kMinChunk) & ~size_t{7}) - kSizeWord : 0;
+    if (__malloc_sbrk_base != reinterpret_cast<char*>(-1)) {
+        const auto* top = static_cast<const uint8_t*>(__malloc_av_[2]);
+        auto* p = reinterpret_cast<const uint8_t*>((reinterpret_cast<uintptr_t>(__malloc_sbrk_base) + 7) & ~uintptr_t{7});
+        while (p < top) {
+            const size_t size = reinterpret_cast<const size_t*>(p)[1] & ~kSizeFlags;
+            if (size == 0) break;
+            const uint8_t* next = p + size;
+            const bool free = !(reinterpret_cast<const size_t*>(next)[1] & kPrevInUse);
+            if (free && size - kSizeWord > best) best = size - kSizeWord;
+            p = next;
+        }
+    }
+    return best > kAllocHeader ? best - kAllocHeader : 0;
+}
+size_t maxAllocBlock() { return std::max(ocramMaxBlock(), dtcmMaxBlock()); }
 size_t maxInternalAllocBlock() { return maxAllocBlock(); }
-size_t totalHeap() { return reinterpret_cast<size_t>(&_heap_end) - reinterpret_cast<size_t>(&_heap_start); }
+size_t totalHeap() { return reinterpret_cast<size_t>(&_heap_end) - reinterpret_cast<size_t>(&_heap_start) + (g_dtcmEnd - g_dtcmStart); }
 size_t totalInternalHeap() { return totalHeap(); }
 
 namespace {
@@ -117,11 +211,22 @@ void writeExec(void* dst, const void* src, size_t len) {
     SCB_CACHE_ICIALLU = 0;        // and no stale line from the block's previous code
     asm volatile("dsb\n isb" ::: "memory");
 }
-size_t maxExecAllocBlock() { return maxAllocBlock(); }
+size_t maxExecAllocBlock() { return ocramMaxBlock(); }
 
 // --- Tasks: none without an RTOS, so callers keep their work on the one loop -------------------
 
-size_t taskSnapshot(TaskInfo*, size_t) { return 0; }
+// One row, the loop, whose free stack is the painted words still untouched above the floor.
+size_t taskSnapshot(TaskInfo* out, size_t maxTasks) {
+    if (!out || maxTasks == 0 || !g_dtcmEnd) return 0;
+    uintptr_t p = g_stackFloor;
+    while (p < reinterpret_cast<uintptr_t>(&_estack) && *reinterpret_cast<const uint32_t*>(p) == kStackPaint) p += 4;
+    out[0] = TaskInfo{};
+    std::snprintf(out[0].name, sizeof(out[0].name), "loop");
+    out[0].state = TaskState::Running;
+    out[0].core = 0;
+    out[0].stackFreeBytes = static_cast<uint32_t>(p - g_stackFloor);
+    return 1;
+}
 void currentTaskOnCore(int, char* out, size_t cap) { if (out && cap) out[0] = '\0'; }
 const char* renderTaskName() { return ""; }
 bool spawnPinnedTask(WorkerTask&, const char*, WorkerFn, void*, size_t, uint8_t, int) { return false; }

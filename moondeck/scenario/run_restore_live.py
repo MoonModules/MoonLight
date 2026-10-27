@@ -48,9 +48,16 @@ def answers(host: str, seconds: float) -> bool:
             time.sleep(1)
 
 
+RESTORE_TIMEOUT_S = 300   # a hung restore fails the run rather than holding a CI job until its own limit
+
+
 def restore(host: str, bundle: str, readers: int) -> int:
     driver = ROOT / "moondeck" / "scenario" / "restore_backup.mjs"
-    return subprocess.run(["node", str(driver), host, str(Path(bundle).resolve()), str(readers)]).returncode
+    try:
+        return subprocess.run(["node", str(driver), host, str(Path(bundle).resolve()), str(readers)], timeout=RESTORE_TIMEOUT_S).returncode
+    except subprocess.TimeoutExpired:
+        print(f"run_restore_live: the restore did not finish within {RESTORE_TIMEOUT_S} s.")
+        return 1
 
 
 def main() -> int:

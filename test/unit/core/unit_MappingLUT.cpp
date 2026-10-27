@@ -155,3 +155,55 @@ TEST_CASE("MappingLUT free and rebuild") {
     lut.finalize();
     CHECK(lut.logicalCount() == 2);
 }
+
+// A region moving every frame rebuilds the table each time, so a rebuild at about the same size keeps its blocks and maps as a fresh table does.
+TEST_CASE("MappingLUT rebuild at the same size keeps its blocks") {
+    BlockCapGuard guard;
+    mm::platform::setTestMaxAllocBlock(1 << 20);
+    mm::MappingLUT lut;
+    REQUIRE(lut.build(4, 8));
+    const size_t bytes = mm::platform::allocatedBytes();
+    const uint32_t blocks = mm::platform::allocatedCount();
+    lut.setOverwrites(false);
+
+    REQUIRE(lut.build(4, 8));
+    CHECK(mm::platform::allocatedBytes() == bytes);
+    CHECK(mm::platform::allocatedCount() == blocks);
+    CHECK(lut.overwrites());   // a rebuild starts as a fresh table
+    mm::nrOfLightsType m[] = {2, 5};
+    for (mm::nrOfLightsType i = 0; i < 4; i++) lut.setMapping(i, m, 2);
+    lut.finalize();
+    std::vector<mm::nrOfLightsType> out;
+    lut.forEachDestination(3, [&](mm::nrOfLightsType idx) { out.push_back(idx); });
+    REQUIRE(out.size() == 2);
+    CHECK(out[1] == 5);
+
+    REQUIRE(lut.build(40, 80));   // grown: allocated afresh
+    CHECK(mm::platform::allocatedBytes() > bytes);
+}
+
+// A layer's fold meets its lights in wire order, not logical order, so the table is built in place: counted, turned into runs, then each light placed in its cell's run, with no copy of the table. It maps as one filled in logical order does, single block or paged.
+TEST_CASE("MappingLUT built in place maps as one filled in logical order") {
+    BlockCapGuard guard;
+    for (const size_t cap : {size_t{1} << 20, size_t{16}}) {   // a single block, then pages: 20 bytes of destinations above a 16-byte block
+        mm::platform::setTestMaxAllocBlock(cap);
+        // Wire order (logical, physical): cell 2 first, cell 0 split around it, cell 1 empty.
+        const std::vector<std::pair<mm::nrOfLightsType, mm::nrOfLightsType>> wire = {{2, 7}, {0, 3}, {2, 8}, {0, 4}, {3, 9}};
+        mm::MappingLUT lut;
+        REQUIRE(lut.beginBuild(4));
+        for (const auto& [li, dest] : wire) lut.count(li);
+        REQUIRE(lut.startRuns());
+        for (const auto& [li, dest] : wire) lut.place(li, dest);
+        lut.endBuild();
+
+        CHECK(lut.hasLUT());
+        CHECK(lut.isPaged() == (cap == 16));
+        CHECK(lut.destinationCount() == 5);
+        const std::vector<std::vector<mm::nrOfLightsType>> want = {{3, 4}, {}, {7, 8}, {9}};
+        for (mm::nrOfLightsType li = 0; li < 4; li++) {
+            std::vector<mm::nrOfLightsType> got;
+            lut.forEachDestination(li, [&](mm::nrOfLightsType idx) { got.push_back(idx); });
+            CHECK(got == want[li]);
+        }
+    }
+}

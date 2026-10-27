@@ -333,6 +333,12 @@ public:
         return left > 0 ? static_cast<uint32_t>(left) : 0;
     }
 
+    /// The universe sequence after `seq`: E1.31 runs 0 to 255, Art-Net 1 to 255 since its 0 means none.
+    static uint8_t nextSequence(uint8_t seq, uint8_t protocol) {
+        if (seq < 255) return static_cast<uint8_t>(seq + 1);
+        return protocol == kProtoE131 ? 0 : 1;
+    }
+
     /// Whether a task paces the packets, rather than the tick sending a burst: the test seam for the fallback.
     bool sendsInTask() const { return sendTask_.impl != nullptr; }
 
@@ -350,7 +356,7 @@ private:
     Buffer* sourceBuffer_ = nullptr;
     /// Owned: source bytes after brightness/order/white. Sized off the hot path (resizeCorrected).
     Buffer corrected_;
-    /// Art-Net/E1.31 per-frame sequence counter, so each universe counts up once a frame; it runs 1 to 255, as Art-Net's 0 means none.
+    /// Art-Net/E1.31 per-frame sequence counter, so each universe counts up once a frame, as nextSequence steps it.
     uint8_t sequence_ = 1;
     /// DDP's per-packet sequence counter, 1 to 15.
     uint8_t ddpSequence_ = 1;
@@ -492,7 +498,7 @@ private:
             offset += runBytes;
         }
 
-        sequence_ = sequence_ == 255 ? 1 : sequence_ + 1;
+        sequence_ = nextSequence(sequence_, protocol);
         packetsPerFrame_.store(packets, std::memory_order_relaxed);
         packetSpacing_.store(spacingUs, std::memory_order_relaxed);
         framesSent_.fetch_add(1, std::memory_order_relaxed);

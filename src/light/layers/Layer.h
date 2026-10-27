@@ -418,32 +418,18 @@ public:
         return ctx.ok;
     }
 
-    /// Build the folded mapping as a counting-sort CSR, since folding scatters while setMapping demands sequential writes.
+    /// Build the folded mapping in place as a compressed sparse row: count each cell's lights, turn the counts into runs, then place each light in its cell's run.
     bool buildFoldedLUT(const Coord3D& logical,
                         nrOfLightsType logicalCount, nrOfLightsType driverCount) {
         if (logicalCount == 0 || driverCount == 0) { lut_.setIdentity(0); return true; }
-
-        // Each physical light yields at most one destination, the tight overflow-free ceiling.
-        auto* counts = static_cast<nrOfLightsType*>(
-            platform::alloc(static_cast<size_t>(logicalCount + 1) * sizeof(nrOfLightsType)));
-        auto* dests = static_cast<nrOfLightsType*>(
-            platform::alloc(static_cast<size_t>(driverCount) * sizeof(nrOfLightsType)));
-        if (!counts || !dests) {
-            if (counts) platform::free(counts);
-            if (dests) platform::free(dests);
-            return false;
-        }
-        for (nrOfLightsType i = 0; i <= logicalCount; i++) counts[i] = 0;
+        if (!lut_.beginBuild(logicalCount)) return false;
 
         // One callback does both passes through the placeLights ctx, so it captures nothing.
         struct FoldCtx {
             Layer* self;   // for the dynamic child list (the modifier chain)
             Coord3D logical; nrOfLightsType logicalCount;  // final box, for the flatten + guard
-            nrOfLightsType* counts;   // pass A: per-cell count.  pass B: per-cell write cursor.
-            nrOfLightsType* dests;    // pass B only.
-            nrOfLightsType destCap;   // what dests holds, which pass B must not exceed
-            bool scatter;
-        } fctx{this, logical, logicalCount, counts, dests, driverCount, /*scatter=*/false};
+            bool place;    // the second pass, which places what the first counted
+        } fctx{this, logical, logicalCount, /*place=*/false};
 
         auto onCoord = [](void* c, nrOfLightsType driverIdx, lengthType x, lengthType y, lengthType z) {
             auto* f = static_cast<FoldCtx*>(c);
@@ -462,52 +448,19 @@ public:
                 static_cast<nrOfLightsType>(pos.y) * static_cast<nrOfLightsType>(f->logical.x) +
                 static_cast<nrOfLightsType>(pos.x);
             if (li >= f->logicalCount) return;                                       // defensive
-            // The bound makes a disagreement between the two passes cost a destination, not memory.
-            if (f->scatter) {
-                const nrOfLightsType slot = f->counts[li];
-                if (slot >= f->destCap) return;
-                f->dests[slot] = driverIdx;
-                f->counts[li]++;
-            } else {
-                f->counts[li]++;                                    // pass A: bump the count
-            }
+            if (f->place) f->self->lut_.place(li, driverIdx);
+            else f->self->lut_.count(li);
         };
 
         // A gap is dropped from the LUT and stays black: a wire slot present, with no source.
         static constexpr CoordCallback kDropGap =
             [](void*, nrOfLightsType, lengthType, lengthType, lengthType) {};
 
-        // Pass A: count.
         layouts_->placeLights(CoordSink{onCoord, kDropGap, &fctx});
-
-        // Prefix-sum counts → offsets (counts[li] becomes the start of cell li's run).
-        nrOfLightsType running = 0;
-        for (nrOfLightsType i = 0; i < logicalCount; i++) {
-            nrOfLightsType c = counts[i];
-            counts[i] = running;
-            running += c;
-        }
-        counts[logicalCount] = running;   // total destinations
-
-        // Pass B: scatter. counts[] is now the per-cell write cursor.
-        fctx.scatter = true;
+        if (!lut_.startRuns()) return false;
+        fctx.place = true;
         layouts_->placeLights(CoordSink{onCoord, kDropGap, &fctx});
-
-        // Each cell's cursor now holds its end offset, which is the next cell's start.
-        if (!lut_.build(logicalCount, running)) {   // running == total destinations
-            platform::free(counts);
-            platform::free(dests);
-            return false;
-        }
-        nrOfLightsType start = 0;
-        for (nrOfLightsType i = 0; i < logicalCount; i++) {
-            nrOfLightsType end = counts[i];          // end of cell i's run
-            lut_.setMapping(i, &dests[start], static_cast<nrOfLightsType>(end - start));
-            start = end;
-        }
-        lut_.finalize();
-        platform::free(counts);
-        platform::free(dests);
+        lut_.endBuild();
         return true;
     }
 
@@ -578,7 +531,7 @@ private:
         bool reduced = false;
         while (count > 0) {
             size_t needed = static_cast<size_t>(count) * channelsPerLight_;
-            if (canAllocate(needed)) {
+            if (buffer_.holds(count, channelsPerLight_) || canAllocate(needed)) {
                 if (buffer_.allocate(count, channelsPerLight_)) {
                     setDynamicBytes(buffer_.bytes() + lut_.memoryUsed());
                     if (reduced) setStatus("buffer reduced — not enough memory", Severity::Warning);

@@ -306,7 +306,7 @@ private:
     }
     /// Count the packets missing before `seq` in this universe's sequence, which runs from `first` to 255.
     void countGap(uint16_t universe, uint16_t tag, uint8_t seq, uint8_t first) {
-        if (universe < universeStart || universe - universeStart >= lastSeq_.count()) return;
+        if (universe < universeStart || static_cast<size_t>(universe - universeStart) >= lastSeq_.count()) return;
         uint16_t& last = lastSeq_[universe - universeStart];
         if ((last & 0xFF00) == tag) countLost(missed(static_cast<uint8_t>(last), seq, first, 255));
         last = static_cast<uint16_t>(tag | seq);

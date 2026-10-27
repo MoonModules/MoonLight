@@ -54,9 +54,9 @@ public:
     /// Stay out of the UI: this is a pure engine, and FileManagerModule shows its status. @xref{conditional-controls-and-the-first-boot}
     bool appearsInUi() const override { return false; }
 
-    /// Adopt the scheduler, register the singleton and wire the persistence hooks.
+    /// Adopt the scheduler, register the singleton, wire the persistence hooks and mount the storage: before the lifecycle's first phase, since a module binding its controls may list its scripts.
     void setScheduler(Scheduler* s);
-    /// Mount the filesystem and create the config directory.
+    /// Report whether the storage mounted, once.
     void setup() override;
     /// Once the debounce or the ceiling expires, write every dirty subtree. @xref{saving-is-debounced-and-bounded}
     void tick1s() MM_NONBLOCKING override;
@@ -115,6 +115,8 @@ private:
 
     // The module holds no standing buffer: each operation allocates and frees its own.
 
+    /// Mount the storage and create the config directory, latched on success; false leaves persistence off.
+    bool mountStorage();
     /// Refresh the status string from the age of the last save.
     void updateLastSavedStr();
     /// The C hook the scheduler calls, which forwards to the load below.

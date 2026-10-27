@@ -549,7 +549,8 @@ function setupLayout() {
         pane.style.left = clamp(e.clientX - drag.dx, r.x0, r.x1) + "px";
         pane.style.top = clamp(e.clientY - drag.dy, r.y0, r.y1) + "px";
     });
-    bar.addEventListener("pointerup", (e) => {
+    // Every way a drag ends, a cancel or a lost capture as well as a release, drops it and keeps where the popup is.
+    const endDrag = (e) => {
         if (!drag) return;
         drag = null;
         pane.classList.remove("dragging");
@@ -559,7 +560,8 @@ function setupLayout() {
         at = { x: r.x1 > r.x0 ? (b.left - r.x0) / (r.x1 - r.x0) : 0,
                y: r.y1 > r.y0 ? (b.top - r.y0) / (r.y1 - r.y0) : 0 };
         save();
-    });
+    };
+    for (const type of ["pointerup", "pointercancel", "lostpointercapture"]) bar.addEventListener(type, endDrag);
 
     // The split handle: sideways it sets the card column's width, and dragged so wide the preview
     // drops under MIN_PREVIEW_W it moves the preview to the small layout, and back while the same

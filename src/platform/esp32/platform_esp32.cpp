@@ -2022,7 +2022,9 @@ int UdpSocket::waitReadable(UdpSocket* const* sockets, int count, uint32_t timeo
     timeval tv{};
     tv.tv_sec = static_cast<decltype(tv.tv_sec)>(timeoutMs / 1000);
     tv.tv_usec = static_cast<decltype(tv.tv_usec)>((timeoutMs % 1000) * 1000);
-    if (::select(maxFd + 1, &readable, nullptr, nullptr, &tv) <= 0) return 0;
+    const int r = ::select(maxFd + 1, &readable, nullptr, nullptr, &tv);
+    if (r < 0) delayMs(timeoutMs);   // a failing select waits out the period rather than spin the receive task
+    if (r <= 0) return 0;
     return readableMask(fds, n, &readable);
 }
 

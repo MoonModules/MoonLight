@@ -1,0 +1,158 @@
+Allocate each built-in driver's frame buffers when its init finds the hardware, instead of as statics:
+a program carrying both drivers then spends 15 KB on a Teensy 4.1 PHY or 48 KB on a W5500, not both.
+Applies after QNEthernet-w5500-bounded-waits.patch, whose include line it borders.
+
+diff --git a/src/qnethernet/drivers/driver_teensy41.cpp b/src/qnethernet/drivers/driver_teensy41.cpp
+index 690f490..0b06213 100644
+--- a/src/qnethernet/drivers/driver_teensy41.cpp
++++ b/src/qnethernet/drivers/driver_teensy41.cpp
+@@ -12,6 +12,7 @@
+ 
+ // C++ includes
+ #include <atomic>
++#include <cstdlib>
+ #include <cstring>
+ 
+ #include <core_pins.h>
+@@ -316,8 +317,10 @@ enum class InitStates {
+ // Ethernet buffers
+ alignas(64) static BufferDescriptor s_rxRing[kRxSize];
+ alignas(64) static BufferDescriptor s_txRing[kTxSize];
+-alignas(64) static uint8_t s_rxBufs[kRxSize * kBufSize] BUFFER_DMAMEM;
+-alignas(64) static uint8_t s_txBufs[kTxSize * kBufSize] BUFFER_DMAMEM;
++// Allocated when init finds the PHY, so a program that also carries another
++// driver spends them only on a board that has this hardware
++static uint8_t* s_rxBufs = nullptr;
++static uint8_t* s_txBufs = nullptr;
+ static volatile BufferDescriptor* s_pRxBD = &s_rxRing[0];
+ static volatile BufferDescriptor* s_pTxBD = &s_txRing[0];
+ 
+@@ -953,6 +956,18 @@ FLASHMEM bool init() {
+   // Note: The original code left RXD0, RXEN, and RXER with PULLDOWN
+   configure_rmii_pins();
+ 
++  if (s_rxBufs == nullptr) {
++    s_rxBufs = static_cast<uint8_t*>(aligned_alloc(64, kRxSize * kBufSize));
++    s_txBufs = static_cast<uint8_t*>(aligned_alloc(64, kTxSize * kBufSize));
++    if (s_rxBufs == nullptr || s_txBufs == nullptr) {
++      std::free(s_rxBufs);
++      std::free(s_txBufs);
++      s_rxBufs = nullptr;
++      s_txBufs = nullptr;
++      return false;
++    }
++  }
++
+   (void)std::memset(s_rxRing, 0, sizeof(s_rxRing));
+   (void)std::memset(s_txRing, 0, sizeof(s_txRing));
+   s_pRxBD = &s_rxRing[0];
+diff --git a/src/qnethernet/drivers/driver_w5500.cpp b/src/qnethernet/drivers/driver_w5500.cpp
+index 632ac94..2e001b0 100644
+--- a/src/qnethernet/drivers/driver_w5500.cpp
++++ b/src/qnethernet/drivers/driver_w5500.cpp
+@@ -29,6 +29,7 @@
+ #include <atomic>
+ #include <cstdio>
+ #include <cstring>
++#include <new>
+ #include <type_traits>
+ 
+ #include <Arduino.h>
+@@ -232,7 +233,7 @@ static constexpr size_t kLocalInputBufSize = 2 * kRxBufSizeKB * 1024;
+ static uint8_t s_spiBuf[3 + kMaxFrameLen] BUFFER_DMAMEM;
+ static uint8_t* const s_frameBuf = &s_spiBuf[3];
+ 
+-static struct InputBuf {
++struct InputBuf {
+   std::array<uint8_t, kRxBufSizeKB * 1024> rxBuf;
+   qindesign::network::internal::ByteBuffer<kLocalInputBufSize> buf;
+ 
+@@ -248,7 +249,11 @@ static struct InputBuf {
+     }
+     return ntohs(v);
+   }
+-} s_inputBuf BUFFER_DMAMEM;
++};
++
++// Allocated when init finds the chip, so a program that also carries another
++// driver spends it only on a board that has this hardware
++static InputBuf* s_inputBuf = nullptr;
+ 
+ // Interrupts
+ static std::atomic_flag s_rxNotAvail  = ATOMIC_FLAG_INIT;
+@@ -797,6 +802,13 @@ FLASHMEM bool init() {
+     return false;
+   }
+ 
++  if (s_inputBuf == nullptr) {
++    s_inputBuf = new (std::nothrow) InputBuf{};
++    if (s_inputBuf == nullptr) {
++      return false;
++    }
++  }
++
+   s_initState = EnetInitStates::kInitialized;
+ 
+   return true;
+@@ -862,14 +874,14 @@ static bool readAndScan() {
+     const uint16_t ptr = *kSn_RX_RD;
+ 
+     // Read all the data
+-    read(ptr, blocks::kSocketRx, s_inputBuf.rxBuf.data(), rxSize);
++    read(ptr, blocks::kSocketRx, s_inputBuf->rxBuf.data(), rxSize);
+ 
+     // Scan the data and append to the input buffer as we go
+     size_t end = 0;
+     bool doSocketReceive = true;  // Whether to notify the chip of received data
+                                   // We don't if we've reset the socket
+     while (end + 2 <= rxSize) {   // Account for a 2-byte frame length
+-      const uint16_t frameLen = readFrameLen(&s_inputBuf.rxBuf[end]);
++      const uint16_t frameLen = readFrameLen(&s_inputBuf->rxBuf[end]);
+       // The frame length includes its 2-byte self
+ 
+       // Check for bad data
+@@ -891,13 +903,13 @@ static bool readAndScan() {
+ 
+       // Only append if the frame isn't too large and if there's space
+       if ((size_t{frameLen} - 2) <= kMaxFrameLen) {
+-        if (frameLen > s_inputBuf.buf.remaining()) {
++        if (frameLen > s_inputBuf->buf.remaining()) {
+           retval = false;
+           break;
+         }
+ 
+         const size_t written =
+-            s_inputBuf.buf.write(&s_inputBuf.rxBuf[end], frameLen);
++            s_inputBuf->buf.write(&s_inputBuf->rxBuf[end], frameLen);
+         if (written != frameLen) {
+           LWIP_PLATFORM_ASSERT("Expeceted complete buffer write");
+         }
+@@ -937,13 +949,13 @@ struct pbuf* proc_input(struct netif* const netif, const int counter) {
+   }
+ 
+   // Check for buffered data
+-  if (s_inputBuf.buf.empty()) {
++  if (s_inputBuf->buf.empty()) {
+     return nullptr;
+   }
+ 
+-  // At this point, we can assume data in s_inputBuf.buf is correct
++  // At this point, we can assume data in s_inputBuf->buf is correct
+ 
+-  const uint16_t frameLen = s_inputBuf.readFrameLen();
++  const uint16_t frameLen = s_inputBuf->readFrameLen();
+   // Note: This will be >= 2 because that's guaranteed in readAndScan()
+ 
+   // Process the frame
+@@ -953,9 +965,9 @@ struct pbuf* proc_input(struct netif* const netif, const int counter) {
+   if (p == nullptr) {
+     LINK_STATS_INC(link.drop);
+     LINK_STATS_INC(link.memerr);
+-    (void)s_inputBuf.buf.read((void*)nullptr, frameSize);
++    (void)s_inputBuf->buf.read((void*)nullptr, frameSize);
+   } else {
+-    const err_t read = s_inputBuf.buf.read(p, ETH_PAD_SIZE);
++    const err_t read = s_inputBuf->buf.read(p, ETH_PAD_SIZE);
+     if (read != ERR_OK) {
+       LWIP_PLATFORM_ASSERT("Expected space for pbuf fill");
+     }
