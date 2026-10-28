@@ -5,7 +5,7 @@ The installer fetches, per release, one ESP Web Tools manifest per *shipping* fi
 parts to flash. Those parts MUST be files the release workflow actually stages onto Pages —
 the staging step (`.github/workflows/release.yml`) downloads them with these globs:
 
-    firmware-*.bin   shared-ota-data.bin   partition-table-*.bin
+    firmware-*.bin   shared-*.bin
 
 A manifest that references a filename outside those globs points at a file that never reaches
 Pages → the installer 404s at fetch-firmware. That exact mismatch (a manifest referencing a
@@ -33,8 +33,9 @@ GENERATE = ROOT / "moondeck" / "build" / "generate_manifest.py"
 
 # The exact globs the deploy's `gh release download` stages onto Pages (release.yml,
 # "Stage cumulative release content"). A manifest part must match one of these, or the
-# installer fetches a file that isn't there. Keep in lockstep with that step's --pattern list.
-STAGED_GLOBS = ["firmware-*.bin", "shared-*.bin", "partition-table-*.bin"]
+# installer fetches a file that isn't there. Keep in lockstep with that step's --pattern list,
+# less its `partition-table-*.bin`, which only the releases up to v7.0.0 publish.
+STAGED_GLOBS = ["firmware-*.bin", "shared-*.bin"]
 # shared-*.bin covers shared-ota-data.bin plus the MoonBase pair (shared-moonbase-<chip>.bin,
 # shared-ota-data-slot0.bin); the same glob appears in release.yml's upload files and the
 # Pages self-host download patterns, which is exactly the sync this test guards.
@@ -42,7 +43,6 @@ STAGED_GLOBS = ["firmware-*.bin", "shared-*.bin", "partition-table-*.bin"]
 # A minimal but realistic IDF flasher_args.json — the four files every MoonLight build emits.
 # generate_manifest.py maps these to the bundle names (firmware-<F>-v<ver>.bin, etc.).
 FLASHER_ARGS = {
-    "flash_settings": {"flash_size": "4MB"},
     "flash_files": {
         "0x1000": "bootloader/bootloader.bin",
         "0x8000": "partition_table/partition-table.bin",
