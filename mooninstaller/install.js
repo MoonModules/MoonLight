@@ -751,11 +751,11 @@ document.addEventListener('DOMContentLoaded', () => {
           + `(esptool-js) has no chip definition for it. Flash with esptool.py instead `
           + `(which does support ${chip}); no dev environment needed:\n\n`
           + `1. Install esptool:   pipx install esptool   (or: pip install esptool)\n`
-          + `2. Download the 4 firmware-esp32s31-*.bin files from the release below.\n`
+          + `2. Download the 4 .bin files named below from the release.\n`
           + `3. Flash (replace <your-port>, e.g. /dev/ttyUSB0 or COM3):\n\n`
           + `   esptool --chip esp32s31 --port <your-port> --baud 460800 write-flash \\\n`
           + `     0x2000  firmware-esp32s31-<ver>-bootloader.bin \\\n`
-          + `     0x8000  partition-table-16mb.bin \\\n`
+          + `     0x8000  firmware-esp32s31-<ver>-partition-table.bin \\\n`
           + `     0xe000  shared-ota-data.bin \\\n`
           + `     0x10000 firmware-esp32s31-<ver>.bin\n\n`
           + `Then re-open this page to provision WiFi, or use the device's own UI. `

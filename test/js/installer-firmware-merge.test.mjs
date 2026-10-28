@@ -29,7 +29,7 @@ test("parseFirmwaresFromAssets: a firmware needs BOTH a manifest and an app .bin
         asset("firmware-esp32-v2.0.0.bin"),
         // bootloader / partition-table / ota-data are install fragments, not the app image
         asset("firmware-esp32-v2.0.0-bootloader.bin"),
-        asset("partition-table-4mb.bin"),
+        asset("firmware-esp32-v2.0.0-partition-table.bin"),
         // a manifest with NO matching app .bin (partial upload) — must be dropped
         asset("manifest-esp32s3-n16r8.json"),
     ];

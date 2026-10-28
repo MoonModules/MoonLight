@@ -203,17 +203,15 @@ jobs:
           # CI uses one per matrix job, dev machines use as many as built.
           B=build/esp32-${{ matrix.firmware }}
           PREFIX="firmware-${{ matrix.firmware }}-v$V"
-          # App + bootloader are unique per firmware, so staged with the prefix.
-          cp "$B/MoonLight.bin"             "dist/${PREFIX}.bin"
-          cp "$B/bootloader/bootloader.bin" "dist/${PREFIX}-bootloader.bin"
-          # ota-data is byte-identical for ALL firmwares, and partition-table is
-          # identical within a flash-size group, so both are staged under SHARED names and the
-          # release uploads each once instead of one-per-firmware. Every matrix job
-          # writes the same shared filename(s); the flatten step keeps one copy
-          # (byte-identical, so last-writer-wins is correct). The generated
-          # manifests point at these same names (generate_manifest.py).
-          SIZE=$(jq -r .flash_settings.flash_size "$B/flasher_args.json" | tr 'A-Z' 'a-z')
-          cp "$B/partition_table/partition-table.bin" "dist/partition-table-$SIZE.bin"
+          # App, bootloader and partition table are unique per firmware (one flash size
+          # holds several layouts), so staged with the prefix.
+          cp "$B/MoonLight.bin"                       "dist/${PREFIX}.bin"
+          cp "$B/bootloader/bootloader.bin"           "dist/${PREFIX}-bootloader.bin"
+          cp "$B/partition_table/partition-table.bin" "dist/${PREFIX}-partition-table.bin"
+          # ota-data is byte-identical for ALL firmwares, so it is staged under a SHARED
+          # name and the release uploads it once. Every matrix job writes the same file;
+          # the flatten step keeps one copy (byte-identical, so last-writer-wins is
+          # correct). The generated manifests point at this name (generate_manifest.py).
           cp "$B/ota_data_initial.bin"                "dist/shared-ota-data.bin"
           # Per-firmware flasher_args.json: the release job feeds it to
           # generate_manifest.py so offsets come from the real build.
@@ -743,7 +741,6 @@ jobs:
             dist/firmware-*.bin
             dist/firmware-*.hex
             dist/shared-*.bin
-            dist/partition-table-*.bin
             dist/manifest-*.json
             dist/MoonLight-*.tar.gz
             dist/MoonLight-*.zip
@@ -979,7 +976,8 @@ jobs:
           # Use each release's OWN published manifest, not a freshly generated one:
           # the asset-naming scheme has changed across releases (v1.0.0 used
           # per-firmware `firmware-<F>-v<ver>-partition-table.bin` / `-ota-data.bin`;
-          # v2.0.0 uses shared `partition-table-<size>.bin` / `shared-ota-data.bin`),
+          # v2.0.0 to v7.0.0 used shared `partition-table-<size>.bin` / `shared-ota-data.bin`;
+          # later ones a per-firmware `-partition-table.bin` and `shared-ota-data.bin`),
           # so regenerating an old tag's manifest with today's generator points it at
           # files that release never published → a fetch-firmware 404. Each release's
           # own manifest already names its own files correctly; we just rewrite its

@@ -130,6 +130,16 @@ def test_app_and_bootloader_carry_the_version(tmp_path):
     assert f"firmware-{fw}-v{VERSION}-bootloader.bin" in names, f"{fw}: bootloader part misnamed: {names}"
 
 
+def test_every_firmware_names_its_own_partition_table(tmp_path):
+    """Firmwares of one flash size still differ in layout (esp32-pico's MoonBase table puts the app at 0xF0000, esp32s3-n8r8's dual-OTA table at 0x10000), so each manifest names its own partition table: a name shared by flash size lets one firmware's table replace another's in the release, and the installer writes the wrong layout."""
+    tables = {}
+    for fw in (f for f in _shipping_firmwares() if _platform(f) == "esp32"):
+        parts = _generate(fw, tmp_path)["builds"][0]["parts"]
+        tables[fw] = next(p["path"].rsplit("/", 1)[-1] for p in parts if p["offset"] == 0x8000)
+    assert len(set(tables.values())) == len(tables), f"firmwares share a partition-table file: {tables}"
+    assert all(name == f"firmware-{fw}-v{VERSION}-partition-table.bin" for fw, name in tables.items()), tables
+
+
 def test_a_teensy_manifest_is_its_flat_image_at_offset_zero(tmp_path):
     """The installer's Teensy writer takes one image starting at the flash base, so the manifest names the release's `.bin` at 0 under the Teensy family."""
     teensy = [f for f in _shipping_firmwares() if _platform(f) == "teensy"]

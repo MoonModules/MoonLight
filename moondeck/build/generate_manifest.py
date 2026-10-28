@@ -46,17 +46,14 @@ from firmwares import FIRMWARES, chip_family  # noqa: E402
 # filenames the release publishes (the same names release.yml stages from
 # esp32/build/).
 #
-# Two of the four parts are byte-identical across firmwares and so are shared
-# (uploaded once, every firmware's manifest points at the shared name):
-#   * ota_data_initial.bin: a fixed 0xFF region, identical for ALL firmwares.
-#   * partition-table.bin: identical within a flash-size GROUP (4/8/16 MB), so
-#     it is named per group (`partition-table-<size>.bin`). The {size} field is
-#     filled from flasher_args' flash_settings.flash_size (see resolve below).
-# App + bootloader stay per-firmware ({prefix}), as both differ per variant.
+# App, bootloader and partition table are per-firmware ({prefix}): firmwares of one flash
+# size still differ in layout (a MoonBase table puts the app at 0xF0000, a dual-OTA table at
+# 0x10000). Only ota_data_initial.bin, a fixed 0xFF region identical for ALL firmwares, is
+# shared (uploaded once, every firmware's manifest points at the shared name).
 PART_NAME_MAP = {
     APP_BIN: "{prefix}.bin",
     "bootloader.bin": "{prefix}-bootloader.bin",
-    "partition-table.bin": "partition-table-{size}.bin",
+    "partition-table.bin": "{prefix}-partition-table.bin",
     "ota_data_initial.bin": "shared-ota-data.bin",
 }
 
@@ -65,12 +62,10 @@ PART_NAME_MAP = {
 CHIP_FAMILIES = {f: chip_family(f) for f in FIRMWARES}
 
 
-def parts_from_flasher_args(flasher_args: dict, prefix: str, size: str) -> list[dict]:
+def parts_from_flasher_args(flasher_args: dict, prefix: str) -> list[dict]:
     """Convert IDF's flasher_args.json `flash_files` map into Web Tools parts.
 
-    `prefix` names the per-firmware parts (app + bootloader); `size` (e.g. "4mb")
-    names the shared partition-table group. `{prefix}` / `{size}` in the
-    PART_NAME_MAP templates are filled here; the shared parts ignore `prefix`.
+    `prefix` names the per-firmware parts; the shared part ignores it.
     """
     flash_files = flasher_args.get("flash_files", {})
     parts: list[dict] = []
@@ -84,7 +79,7 @@ def parts_from_flasher_args(flasher_args: dict, prefix: str, size: str) -> list[
             continue
         offset = int(offset_hex, 16) if isinstance(offset_hex, str) else int(offset_hex)
         parts.append({
-            "path": template.format(prefix=prefix, size=size),
+            "path": template.format(prefix=prefix),
             "offset": offset,
         })
     # Web Tools doesn't require a specific order, but sorted-by-offset is the
@@ -160,14 +155,7 @@ def esp32_parts(args, prefix: str) -> list[dict] | None:
         print(f"generate_manifest: {args.flasher_args} not valid JSON: {e}")
         return None
 
-    # Flash-size group for the shared partition-table name (partition-table-<size>.bin).
-    # IDF records it in flasher_args; lowercased so "16MB" → "16mb".
-    size = str(flasher_args.get("flash_settings", {}).get("flash_size", "")).lower()
-    if not size:
-        print(f"generate_manifest: no flash_settings.flash_size in {args.flasher_args}")
-        return None
-
-    parts = parts_from_flasher_args(flasher_args, prefix, size)
+    parts = parts_from_flasher_args(flasher_args, prefix)
 
     # MoonBase firmwares: flasher_args stages the app at the first app partition: the factory
     # slot, MoonBase's home: because IDF knows nothing about the two-image scheme. Remap the app
