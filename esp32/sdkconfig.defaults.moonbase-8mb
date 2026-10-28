@@ -1,0 +1,4 @@
+# MoonBase on an 8 MB board: the factory recovery image, ONE 3 MB app slot, and 4 MB of LittleFS.
+# The flash size is set here because the table spans exactly that much.
+CONFIG_ESPTOOLPY_FLASHSIZE_8MB=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions/8mb_moonbase.csv"

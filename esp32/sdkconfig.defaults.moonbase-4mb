@@ -1,3 +1,6 @@
+# MoonBase on a 4 MB board: the factory recovery image and ONE 2496 KB app slot, where dual-OTA
+# affords two 1856 KB slots. The flash size is set here because the table spans exactly that much.
+CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
 CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions/4mb_moonbase.csv"
 
 # No SD card backend on a 4 MB image: its flash is better spent on everything else, so SD ships only where there is more.

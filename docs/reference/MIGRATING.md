@@ -31,6 +31,12 @@ For a device still on old firmware (no Backup button yet), the [installer page](
 
 ## v7.0.0
 
+### The Adafruit MatrixPortal S3 has its own firmware, `esp32s3-n8r2`
+
+**Action: *nothing*; to use the board's whole 8 MB, *install over USB* once with *Erase chip first* ticked.**
+
+A MatrixPortal ran the `esp32s3-zero` image, which keeps working on it but uses 4 MB of its 8. The `esp32s3-n8r2` image has a 3 MB app slot and 4 MB of filesystem. Its partition table differs from the Zero's, which an update over the air never rewrites, so moving takes one install over USB, and the device comes back unprovisioned: take a backup first and restore it after.
+
 ### Network Send fills each universe with `channels_per_universe` channels exactly
 
 **Action: on a Network Send driving fixtures whose channels do not divide 510 over Art-Net or E1.31, such as RGBW strips (4) or a 13-channel moving head, set `channels_per_universe` to a multiple of the fixture's channels, 508 or 507, where the receiver needs each fixture inside one universe. RGB, RGBWW and 6-channel fixtures need nothing.**

@@ -73,6 +73,14 @@
       "description": "ESP32-S3-Zero (N4R2: 4 MB embedded flash, 2 MB embedded QUAD PSRAM) - WiFi only, no Ethernet. Its own variant because neither other S3 image can boot here: both assume 8/16 MB flash and set SPIRAM_MODE_OCT, and octal mode fails PSRAM init on this board's quad part. A thumbnail-sized board for small installations."
     },
     {
+      "name": "esp32s3-n8r2",
+      "platform": "esp32",
+      "chip": "esp32s3",
+      "eth_only": false,
+      "ships": true,
+      "description": "ESP32-S3 (N8R2: 8 MB flash, 2 MB QUAD PSRAM) - WiFi only, no Ethernet. Its own variant because the N8R8/N16R8 images set SPIRAM_MODE_OCT, which fails PSRAM init on a quad part, and the S3-Zero image uses half the flash (Adafruit MatrixPortal S3)."
+    },
+    {
       "name": "esp32c3",
       "platform": "esp32",
       "chip": "esp32c3",

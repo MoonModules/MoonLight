@@ -195,7 +195,7 @@ FIRMWARES: dict[str, dict] = {
     "esp32-pico": {
         "chip": "esp32",
         "fragments": ["sdkconfig.defaults", "sdkconfig.defaults.eth",
-                      "sdkconfig.defaults.esp32-pico"],
+                      "sdkconfig.defaults.esp32-pico", "sdkconfig.defaults.moonbase-8mb"],
         "moonbase": True,   # 8 MB: factory MoonBase + one app slot (see moonbase/)
         "eth_only": False,
         "description": "ESP32-PICO-V3-02 (classic ESP32 SiP: 8 MB embedded flash + 2 MB "
@@ -256,7 +256,7 @@ FIRMWARES: dict[str, dict] = {
     },
     "esp32s3-zero": {
         "chip": "esp32s3",
-        "fragments": ["sdkconfig.defaults", "sdkconfig.defaults.esp32s3-zero",
+        "fragments": ["sdkconfig.defaults", "sdkconfig.defaults.esp32s3-quad",
                       "sdkconfig.defaults.moonbase-4mb"],
         "moonbase": True,   # 4 MB: factory MoonBase + one big app slot (see moonbase/)
         "eth_only": False,
@@ -269,6 +269,21 @@ FIRMWARES: dict[str, dict] = {
         # No Ethernet fragment: the Zero breaks out no SPI header for a W5500, and its
         # appeal is the size, so a variant carrying an unusable PHY would only cost flash
         # on a part that has 48 KB to spare.
+        "panel_cards": False,
+    },
+    "esp32s3-n8r2": {
+        "chip": "esp32s3",
+        "fragments": ["sdkconfig.defaults", "sdkconfig.defaults.esp32s3-quad",
+                      "sdkconfig.defaults.moonbase-8mb"],
+        "moonbase": True,   # 8 MB: factory MoonBase + one app slot (see moonbase/)
+        "eth_only": False,
+        "description": "ESP32-S3 (N8R2: 8 MB flash, 2 MB QUAD PSRAM) - WiFi only, no "
+                       "Ethernet. Its own variant because the N8R8/N16R8 images set "
+                       "SPIRAM_MODE_OCT, which fails PSRAM init on a quad part, and the "
+                       "S3-Zero image uses half the flash (Adafruit MatrixPortal S3).",
+        "ships": True,
+        # No Ethernet fragment, as on the S3-Zero: the MatrixPortal breaks out no SPI header
+        # for a W5500.
         "panel_cards": False,
     },
     "esp32c3": {

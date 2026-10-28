@@ -67,7 +67,7 @@ The Ethernet PHY and its pins are runtime settings. Each firmware carries the dr
 
 ## MoonBase and the partition layout
 
-Some variants carry [MoonBase](../explanation/architecture/moonbase.md), the second boot image: `esp32`, `esp32-eth`, `esp32-wrover`, `esp32-pico`, `esp32-16mb`, `esp32s3-zero`, `esp32c3`, and `qemu`, which is emulated. On those, `flash_esp32.py` writes the whole layout in one pass: the app in the large `ota_0` slot, MoonBase in `factory`, and an otadata that boots the app. A network update writes the app and never the partition table, so a device on an older table adopts a new one only through a full serial flash. On the 4 MB classic that also moves the filesystem, and the device comes back unprovisioned.
+Some variants carry [MoonBase](../explanation/architecture/moonbase.md), the second boot image: `esp32`, `esp32-eth`, `esp32-wrover`, `esp32-pico`, `esp32-16mb`, `esp32s3-zero`, `esp32s3-n8r2`, `esp32c3`, and `qemu`, which is emulated. On those, `flash_esp32.py` writes the whole layout in one pass: the app in the large `ota_0` slot, MoonBase in `factory`, and an otadata that boots the app. A network update writes the app and never the partition table, so a device on an older table adopts a new one only through a full serial flash. On the 4 MB classic that also moves the filesystem, and the device comes back unprovisioned.
 
 ## ESP-IDF version
 
