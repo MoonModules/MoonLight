@@ -1,4 +1,4 @@
-# MoonBase on a classic ESP32 with 8 MB flash (the ESP32-PICO-V3-02's embedded part).
+# Partition table for any 8 MB board WITH MoonBase (the classic ESP32-PICO-V3-02, the S3 N8R2).
 #
 # The same trade the 4 MB and 16 MB MoonBase tables make: dual-OTA spends half the app area on a
 # second copy of the firmware that sits idle except during an update, where MoonBase is a small

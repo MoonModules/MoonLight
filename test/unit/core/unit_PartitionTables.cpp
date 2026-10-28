@@ -31,7 +31,7 @@ uint32_t declaredFlashBytes(const std::string& file) {
         {"esp32dev.csv",          4u * 1024 * 1024},
         {"4mb_moonbase.csv",      4u * 1024 * 1024},
         {"wled_4mb_1mb_fs.csv",   4u * 1024 * 1024},
-        {"esp32dev_8mb_moonbase.csv", 8u * 1024 * 1024},
+        {"8mb_moonbase.csv",      8u * 1024 * 1024},
         {"esp32s3_n8r8.csv",      8u * 1024 * 1024},
         {"ota_16mb.csv",         16u * 1024 * 1024},
         {"ota_16mb_moonbase.csv", 16u * 1024 * 1024},

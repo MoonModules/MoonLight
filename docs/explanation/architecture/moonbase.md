@@ -32,7 +32,7 @@ Dual-OTA spends half the app area on a second copy of the firmware that is idle 
 
 A 4 MB board has no choice, having room for one application and not two, and its app slot grows by a third in exchange. On a **16 MB** board the choice is deliberate rather than forced, and the freed 4 MB goes to the filesystem, 11 MB rather than 7.
 
-Which boards use MoonBase is a per-variant decision recorded in `moondeck/build/build_esp32.py` rather than a property of flash size. Today the 4 MB classic, the S3-Zero and `esp32-16mb` use it, and it may become the default everywhere.
+Which boards use MoonBase is a per-variant decision recorded in `moondeck/build/build_esp32.py` rather than a property of flash size; [the build system](../../reference/build-system.md) lists the variants that use it today. It may become the default everywhere.
 
 ## The update cycle
 

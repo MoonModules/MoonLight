@@ -271,6 +271,20 @@ FIRMWARES: dict[str, dict] = {
         # on a part that has 48 KB to spare.
         "panel_cards": False,
     },
+    "esp32s3-n8r2": {
+        "chip": "esp32s3",
+        "fragments": ["sdkconfig.defaults", "sdkconfig.defaults.esp32s3-n8r2"],
+        "moonbase": True,   # 8 MB: factory MoonBase + one app slot (see moonbase/)
+        "eth_only": False,
+        "description": "ESP32-S3 (N8R2: 8 MB flash, 2 MB QUAD PSRAM) - WiFi only, no "
+                       "Ethernet. Its own variant because the N8R8/N16R8 images set "
+                       "SPIRAM_MODE_OCT, which fails PSRAM init on a quad part, and the "
+                       "S3-Zero image uses half the flash (Adafruit MatrixPortal S3).",
+        "ships": True,
+        # No Ethernet fragment, as on the S3-Zero: the MatrixPortal breaks out no SPI header
+        # for a W5500.
+        "panel_cards": False,
+    },
     "esp32c3": {
         "chip": "esp32c3",
         "fragments": ["sdkconfig.defaults", "sdkconfig.defaults.esp32c3",
