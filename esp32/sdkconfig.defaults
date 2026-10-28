@@ -26,7 +26,6 @@ CONFIG_LOG_DEFAULT_LEVEL_INFO=y
 CONFIG_PARTITION_TABLE_CUSTOM=y
 CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions/esp32dev.csv"
 CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
-CONFIG_ESPTOOLPY_FLASHSIZE="4MB"
 
 # Task watchdog: PANIC on a wedged task so the device self-heals (reboot + backtrace) instead of hanging
 # SILENTLY forever: a silent hang looks dead and needs a physical power-cycle, the worst failure mode

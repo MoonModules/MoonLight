@@ -1,17 +1,11 @@
 # ESP32-PICO-V3-02: classic ESP32 (Xtensa LX6) in a SiP package with 8 MB flash and 2 MB PSRAM
 # both EMBEDDED in the chip. The QuinLED Dig-Next-2 carries one.
-# Append to sdkconfig.defaults + sdkconfig.defaults.eth (later fragment wins).
+# Append to sdkconfig.defaults + sdkconfig.defaults.eth (later fragment wins); the 8 MB flash size
+# and partition table come from the moonbase-8mb fragment.
 #
 # Its own variant rather than a reuse of `esp32` or `esp32-wrover` for two reasons: the flash is
 # 8 MB where the classic base sets 4, and the PSRAM must be on (the base has none) — a 4 MB image
 # on this part would waste half the flash, and the wrover image's 4 MB table would too.
-
-# The 8 MB flash and its MoonBase partition table: a factory recovery image, ONE 3 MB app slot, and
-# 4 MB of LittleFS. The 4 MB base table affords only 1856 KB slots and 256 KB of filesystem.
-CONFIG_ESPTOOLPY_FLASHSIZE_8MB=y
-CONFIG_ESPTOOLPY_FLASHSIZE="8MB"
-CONFIG_PARTITION_TABLE_CUSTOM=y
-CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions/8mb_moonbase.csv"
 
 # PSRAM: 2 MB, embedded in the SiP. QUAD mode, and there is nothing to select — on classic-ESP32
 # silicon CONFIG_SPIRAM=y IS quad (CONFIG_SPIRAM_MODE_OCT exists only on the S3), which is the same
