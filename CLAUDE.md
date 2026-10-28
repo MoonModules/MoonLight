@@ -110,7 +110,7 @@ On "run pre-merge", **write the gate list out before running any of it, judgment
 
 ### Release
 
-On "run pre-release": [Release](docs/moonwalk.md#release). Every commit and merge check runs over the tagged tree, triggers ignored, plus the ESP32 firmware build for every shipped variant; the rest is the product owner's judgment.
+On "run pre-release": [Release](docs/moonwalk.md#release). Every commit and merge check runs over the tagged tree, triggers ignored, plus one ESP32 firmware build per chip family; the rest is the product owner's judgment.
 
 ## Documentation
 

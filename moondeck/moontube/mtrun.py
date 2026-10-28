@@ -212,6 +212,14 @@ def all_names(modules: list) -> set:
 # The driver: one interaction per method, all through the UI
 # ---------------------------------------------------------------------------
 
+def active_wifi() -> dict:
+    """The WiFi name and password of the network MoonDeck is set to, from moondeck.json."""
+    registry = Path(__file__).resolve().parents[2] / "moondeck" / "moondeck.json"
+    data = json.loads(registry.read_text())
+    network = next(n for n in data["networks"] if n["name"] == data["active_network"])
+    return network["wifi"]
+
+
 def device_for(requirement: str) -> str | None:
     """A bench device that satisfies a requirement, from moondeck.json.
 
@@ -389,11 +397,14 @@ class Driver:
 
         The DEVICE names a module, not the run file: an added RipplesEffect may land
         as "Ripples-2". A step binds the name it got, later steps refer to it.
+        `{wifi_ssid}` and `{wifi_password}` are the bench network's, from the registry, so a run file never carries a password.
         """
         if not isinstance(value, str):
             return value
         def sub(m):
             key = m.group(1)
+            if key in ("wifi_ssid", "wifi_password"):
+                return active_wifi()[key[5:]]
             if key not in self.bindings:
                 raise KeyError(f"step refers to {{{key}}}, which no earlier step bound")
             return self.bindings[key]
@@ -643,12 +654,12 @@ class Driver:
         # the Layer card's own add button, and `.first` was the WRONG one: the Layer's,
         # which offers effects where a layer was wanted. app.js scopes the same way for
         # the same reason (renderModuleTree: "Scope to direct children of this card").
-        # The strip lives in the card's own .card-children wrapper (renderChildTabs
+        # The strip lives in a .tab-scroll box (scrollableStrip) in the card's own .card-children wrapper (renderChildTabs
         # appends it there, and createCard appends that to the card), so this is the
         # full path to THIS card's + tab. No unscoped fallback: `.tab-add` anywhere
         # under the card is a child card's + button, which is the exact mix-up this
         # scoping exists to prevent.
-        add = card.locator("> .card-children > .tab-strip > .tab-add")
+        add = card.locator("> .card-children > .tab-scroll > .tab-strip > .tab-add")
         footer = card.locator("> .card-footer > button")
 
         if add.count():
@@ -1032,8 +1043,14 @@ class Driver:
     # than loosening the module actions, so the resilient path stays the default and
     # the raw one is visibly the exception.
 
-    def upload_file(self, selector: str, path: str) -> bool:
-        """Click an element that opens the browser's file chooser, and hand it `path`, from the repository root, as a person picking that file does."""
+    def upload_file(self, selector: str, path: str, presses: int = 1) -> bool:
+        """Click an element that opens the browser's file chooser, and hand it `path`, from the repository root, as a person picking that file does.
+
+        `presses` is how many presses the element asks for: a button that arms on the first press and acts on the second opens the chooser on the last, and the arming disarms within seconds, so both presses belong to one step.
+        """
+        for _ in range(presses - 1):
+            if not self.tap(self.page.locator(selector)):
+                return False
         with self.page.expect_file_chooser(timeout=5000) as chooser:
             if not self.tap(self.page.locator(selector)):
                 return False
@@ -1436,6 +1453,14 @@ class Driver:
         The popup is drawn by the OS compositor and cannot be captured, so what the
         recording shows is the pointer on the control and the value changing.
         """
+        # A short list of choices is a segmented control, radio buttons underneath, and its segment is pressed like a button.
+        segmented = self.control(module, control, ".segmented")
+        if segmented.count():
+            segment = segmented.first.locator("label").filter(has_text=re.compile(rf"^{re.escape(value)}$"))
+            if not segment.count() or not self.tap(segment):
+                return False
+            self.page.wait_for_timeout(420)
+            return True
         el = self.control(module, control, "select")
         if not self._ready(el):
             return False
@@ -1503,7 +1528,7 @@ class Driver:
         "scroll_to":      lambda a: (a["selector"],),
         "hero":           lambda a: (float(a.get("seconds", 6.0)),),
         "pick_file":      lambda a: (a["module"], a["control"], a["value"]),
-        "upload_file":    lambda a: (a["selector"], a["file"]),
+        "upload_file":    lambda a: (a["selector"], a["file"], a.get("presses", 1)),
         "new_script":     lambda a: (a["module"], a["control"], a["value"]),
         "type_script":    lambda a: (a["text"], int(a.get("delay", 45))),
     }
@@ -1655,7 +1680,7 @@ class Driver:
         if not ok:
             # Name the module, not the whole arg dict: a failed add is read as "could
             # not add NoiseEffect under Layer", which says where to look.
-            what = args.get("module") or args.get("parent") or ""
+            what = args.get("module") or args.get("parent") or args.get("selector") or ""
             detail = f" ({args.get('type')})" if args.get("type") else ""
             self.failures.append(f"{a} on {what!r}{detail} did not complete")
 

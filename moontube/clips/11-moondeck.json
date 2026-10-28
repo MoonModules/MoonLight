@@ -10,43 +10,115 @@
       "title": "MoonDeck",
       "description": "One console, every target",
       "caption": "MoonDeck. One console, every target.",
-      "seconds": 4.2
+      "seconds": 4.0
     },
     {
       "action": "goto",
       "url": "http://localhost:8420/",
       "caption": "This is MoonDeck, the console the project is developed from. It runs in a browser on your own machine, and every button on it is a script in the repository. One command starts it: uv run moondeck slash moondeck dot py.",
-      "speech": 16.5
+      "speech": 17.0
     },
     {
       "action": "click",
-      "selector": "[data-tab=\"desktop\"]",
+      "selector": "[data-tab=\"repo\"]",
       "caption": "The obvious question first: why not PlatformIO. The ESP32 build here is native to Espressif's own framework, tracking pre-release versions against a pinned commit for chips like the P4, which a packaged platform does not let you do.",
       "speech": 19.6
     },
     {
       "action": "click",
-      "selector": "[data-tab=\"desktop\"]",
+      "selector": "[data-tab=\"repo\"]",
       "caption": "And the drivers reach for the vendor's own peripherals directly, rather than through an Arduino layer that would sit between the code and the hardware it is timing.",
-      "speech": 12.5
+      "speech": 12.7
     },
     {
       "action": "click",
-      "selector": "[data-tab=\"desktop\"]",
+      "selector": "[data-tab=\"repo\"]",
       "caption": "But the real reason is the size of the job. Compile, upload and monitor is three of these buttons. The rest is everything else a day's work needs.",
       "speech": 10.9
     },
     {
       "action": "click",
+      "selector": "[data-tab=\"repo\"]",
+      "caption": "Five tabs, and they run in the order of a change. Repo comes first, and it is where MoonDeck opens: everything that reads or checks the repository itself, with no device involved.",
+      "speech": 14.5
+    },
+    {
+      "action": "scroll_to",
+      "selector": ".group-header:text-is(\"test\")",
+      "caption": "The first group on the Repo tab is test. Every group is a list of scripts, each with its last result and how long it took.",
+      "speech": 9.9
+    },
+    {
+      "action": "click",
+      "selector": ".status-dot[data-id=\"test_desktop\"]",
+      "caption": "Test is the group that keeps the agents honest. Nearly three thousand unit tests, the scenario suite that drives a whole pipeline, and the host tests for the scripts themselves.",
+      "speech": 13.6
+    },
+    {
+      "action": "scroll_to",
+      "selector": ".group-header:text-is(\"tools\")",
+      "caption": "Below it, the tools.",
+      "speech": 2.6
+    },
+    {
+      "action": "click",
+      "selector": ".status-dot[data-id=\"check_clang_tidy\"]",
+      "caption": "Tools is the deeper analysis: static analysis, the hot path, complexity. Slower, so they are run when something is being changed rather than on every commit.",
+      "speech": 13.8
+    },
+    {
+      "action": "scroll_to",
+      "selector": ".group-header:text-is(\"check\")",
+      "caption": "Then the checks.",
+      "speech": 2.0
+    },
+    {
+      "action": "click",
+      "selector": ".status-dot[data-id=\"check_specs\"]",
+      "caption": "Check is the group that reads the repository rather than running it: specs against code, documentation against what generates it, the platform boundary, the catalogs.",
+      "speech": 13.2
+    },
+    {
+      "action": "click",
+      "selector": ".status-dot[data-id=\"repo_health\"]",
+      "caption": "Repo health is the one worth knowing about. It measures flash, memory and speed every commit, so a regression shows up as a number rather than as a feeling months later.",
+      "speech": 14.1
+    },
+    {
+      "action": "scroll_to",
+      "selector": ".group-header:text-is(\"docs\")",
+      "caption": "And last, the docs.",
+      "speech": 2.8
+    },
+    {
+      "action": "click",
+      "selector": ".status-dot[data-id=\"build_docs\"]",
+      "caption": "And docs builds the documentation site and the screenshots in it, from the same repository, so the published pages cannot drift from the code.",
+      "speech": 12.0
+    },
+    {
+      "action": "click",
+      "selector": "#walk-open",
+      "caption": "MoonWalk sits in the header. It opens the map of every process on the contributor's stages, and each step that runs a script shows whether this change needs it, whether its last pass still holds, and how long it took.",
+      "speech": 17.4
+    },
+    {
+      "action": "click",
+      "selector": ".mm-walk-dialog[open] .mm-walk-head button",
+      "caption": "Close it, and back to the tabs.",
+      "speech": 3.2
+    },
+    {
+      "action": "click",
       "selector": "[data-tab=\"desktop\"]",
-      "caption": "Desktop is the first tab, and the one used most. MoonLight runs on this computer as a real device, so almost everything is proven here before any hardware is touched.",
-      "speech": 13.0
+      "caption": "Desktop is next. MoonLight runs on this computer as a real device, so almost everything is proven here before any hardware is touched.",
+      "speech": 11.1
     },
     {
       "action": "click",
       "selector": ".status-dot[data-id=\"build_desktop\"]",
       "caption": "Build compiles the firmware for this machine, in seconds rather than the minutes a chip build takes.",
-      "speech": 7.3
+      "speech": 7.5
     },
     {
       "action": "click",
@@ -56,75 +128,63 @@
     },
     {
       "action": "click",
-      "selector": ".status-dot[data-id=\"test_desktop\"]",
-      "caption": "Test is the group that keeps the agents honest. Two thousand unit tests, the scenario suite that drives a whole pipeline, and the host tests for the scripts themselves.",
-      "speech": 13.0
-    },
-    {
-      "action": "click",
-      "selector": ".status-dot[data-id=\"check_specs\"]",
-      "caption": "Check is the group that reads the repository rather than running it: specs against code, documentation against what generates it, the platform boundary, the catalogs.",
-      "speech": 12.8
-    },
-    {
-      "action": "click",
-      "selector": ".status-dot[data-id=\"repo_health\"]",
-      "caption": "Repo health is the one worth knowing about. It measures flash, memory and speed every commit, so a regression shows up as a number rather than as a feeling months later.",
-      "speech": 13.7
-    },
-    {
-      "action": "click",
-      "selector": ".status-dot[data-id=\"check_clang_tidy\"]",
-      "caption": "Tools is the deeper analysis: static analysis, the hot path, complexity. Slower, so they are run when something is being changed rather than on every commit.",
-      "speech": 13.3
-    },
-    {
-      "action": "click",
-      "selector": ".status-dot[data-id=\"build_docs\"]",
-      "caption": "And docs builds the documentation site and the screenshots in it, from the same repository, so the published pages cannot drift from the code.",
-      "speech": 12.2
-    },
-    {
-      "action": "click",
       "selector": "[data-tab=\"esp32\"]",
-      "caption": "The second tab is the chip itself. Setup fetches the framework, build compiles the firmware, flash writes it over USB, and monitor shows the serial output.",
-      "speech": 13.4
+      "caption": "The ESP32 tab is the chip itself. Setup fetches the framework, build compiles the firmware, flash writes it over USB, and monitor shows the serial output.",
+      "speech": 14.6
     },
     {
       "action": "click",
       "selector": ".status-dot[data-id=\"flash_esp32\"]",
       "caption": "That is the compile, upload and monitor a normal tool gives you, and it is one group of one tab here. Erase sits beside it, and asks before it runs.",
-      "speech": 12.6
+      "speech": 12.9
     },
     {
       "action": "click",
       "selector": ".status-dot[data-id=\"qemu_run\"]",
       "caption": "There is also an emulator, which runs the firmware with no chip attached at all: useful for the boot path when the device is not on the desk.",
-      "speech": 12.2
+      "speech": 11.9
+    },
+    {
+      "action": "click",
+      "selector": "[data-tab=\"teensy\"]",
+      "caption": "Then the Teensy tab, for the Teensy 4.1. It is the same shape as the ESP32 tab, with its own toolchain: setup installs the Teensy SDK at its pinned versions.",
+      "speech": 14.7
+    },
+    {
+      "action": "click",
+      "selector": ".status-dot[data-id=\"build_teensy\"]",
+      "caption": "One firmware, teensy forty one, that finds at boot whether the board has its own Ethernet or a W five thousand five hundred module.",
+      "speech": 10.5
+    },
+    {
+      "action": "click",
+      "selector": ".status-dot[data-id=\"flash_teensy\"]",
+      "caption": "Flash finds the board by PJRC's USB vendor id, so there are no port dropdowns, and monitor reads its serial output.",
+      "speech": 11.2
     },
     {
       "action": "click",
       "selector": "[data-tab=\"live\"]",
-      "caption": "The third tab is live, and it drives real devices over the network rather than building anything.",
-      "speech": 8.4
+      "caption": "The last tab is Live, and it drives real devices over the network rather than building anything.",
+      "speech": 8.1
     },
     {
       "action": "click",
       "selector": ".status-dot[data-id=\"live_scenario\"]",
       "caption": "Live scenarios are the same tests the scenario clip ran, run against hardware on your bench instead of against this computer.",
-      "speech": 10.6
+      "speech": 11.0
     },
     {
       "action": "click",
       "selector": ".status-dot[data-id=\"ui_clip\"]",
       "caption": "And video records these clips. The one you are watching was made by a button on this page, driving the interface the way a person would.",
-      "speech": 10.1
+      "speech": 9.9
     },
     {
       "action": "click",
-      "selector": "[data-tab=\"desktop\"]",
-      "caption": "Forty six of them, across three tabs. Every one is a script that runs the same way from a terminal, so a person, an agent and the build server all take the identical path.",
-      "speech": 13.7
+      "selector": "[data-tab=\"repo\"]",
+      "caption": "Fifty five of them, across five tabs. Every one is a script that runs the same way from a terminal, so a person, an agent and the build server all take the identical path.",
+      "speech": 13.8
     }
   ]
 }

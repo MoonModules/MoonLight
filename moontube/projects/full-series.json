@@ -1,7 +1,7 @@
 {
-  "name": "MoonLight-v6",
+  "name": "MoonLight-v7",
   "title": "MoonLight",
-  "description": "All seventeen clips in the order a newcomer meets them, from why it was rebuilt to who it was learned from.",
+  "description": "All twenty-one clips in the order a newcomer meets them, from why it was rebuilt to who it was learned from.",
   "width": 1280,
   "clips": [
     {
@@ -11,6 +11,10 @@
         "source": "media/video/introewowi.mov",
         "width": 320
       }
+    },
+    {
+      "clip": "17-whats-new-in-7",
+      "title": "What is new in seven"
     },
     {
       "clip": "01-install-desktop",
@@ -87,6 +91,18 @@
       "clip": "11-moondeck",
       "title": "The console it is built from",
       "bars": 0
+    },
+    {
+      "clip": "14-help-and-moonwalk",
+      "title": "Help on every card"
+    },
+    {
+      "clip": "15-the-website",
+      "title": "The website, tab by tab"
+    },
+    {
+      "clip": "16-restore-a-backup",
+      "title": "Restore a backup"
     },
     {
       "clip": "12-getting-involved",

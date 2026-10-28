@@ -8,20 +8,20 @@
       "action": "chapter",
       "title": "Layers",
       "description": "Effects, modifiers, and what blends between them",
-      "seconds": 5.9,
+      "seconds": 5.8,
       "caption": "Layers. Blending, and what sits between the effect and the lights."
     },
     {
       "action": "open_card",
       "module": "Effects",
       "caption": "Everything that paints lives here, under a layer. An effect, and anything that reshapes what it draws.",
-      "speech": 8.6
+      "speech": 7.8
     },
     {
       "action": "clear_children",
       "module": "Layer",
       "caption": "Clearing what is there first, so we start from an empty layer and build it up in front of you.",
-      "speech": 7.0
+      "speech": 7.4
     },
     {
       "action": "add_module",
@@ -29,7 +29,7 @@
       "type": "BouncingBallsEffect",
       "as": "balls",
       "caption": "An effect paints into its layer's own buffer. This one is bouncing balls, and it knows nothing about the shape it lands on.",
-      "speech": 9.0
+      "speech": 8.9
     },
     {
       "action": "add_module",
@@ -43,7 +43,7 @@
       "action": "open_card",
       "module": "Effects",
       "caption": "Same balls, folded down the middle. I changed the mapping, not the effect: the two are kept apart on purpose.",
-      "speech": 9.0
+      "speech": 8.5
     },
     {
       "action": "add_module",
@@ -51,7 +51,7 @@
       "type": "Layer",
       "as": "layer2",
       "caption": "Blending happens between layers rather than inside one, so here is a second layer stacked on the first.",
-      "speech": 8.9
+      "speech": 8.6
     },
     {
       "action": "add_module",
@@ -59,7 +59,7 @@
       "type": "RipplesEffect",
       "as": "ripples",
       "caption": "It gets its own effect, painting into its own buffer, completely independent of the one below it.",
-      "speech": 8.5
+      "speech": 8.3
     },
     {
       "action": "add_module",
@@ -67,7 +67,15 @@
       "type": "CircleModifier",
       "as": "circle",
       "caption": "And its own modifier, because each layer is reshaped on its own terms rather than sharing one setting.",
-      "speech": 7.9
+      "speech": 7.6
+    },
+    {
+      "action": "choose",
+      "module": "{layer2}",
+      "control": "blendMode",
+      "value": "multiply",
+      "caption": "Blend mode says how a layer combines with what is beneath it. Additive is the default, and there are eight: multiply, screen, darken, lighten, difference and exclusion beside alpha.",
+      "speech": 15.5
     },
     {
       "action": "drag_slider",
@@ -76,13 +84,13 @@
       "to": 0.45,
       "seconds": 7.7,
       "caption": "The drivers composite the layers from the bottom up, and opacity says how much of this one lands on top of the other.",
-      "speech": 9.1
+      "speech": 8.7
     },
     {
       "action": "open_card",
       "module": "Effects",
       "caption": "Two effects, two modifiers, one wall. Every piece of that is a module you can add, remove or swap while it runs.",
-      "speech": 9.6
+      "speech": 9.5
     }
   ]
 }

@@ -9,20 +9,20 @@
       "action": "chapter",
       "title": "Your device",
       "description": "What a device adds",
-      "seconds": 7.2,
+      "seconds": 7.6,
       "caption": "Your device. The same tree as on a computer, and what a device adds to it."
     },
     {
       "action": "open_card",
       "module": "Control",
       "caption": "Every card you just saw on a computer is here too. What changes is what is behind it: this one has pins, a radio and a microphone.",
-      "speech": 13.1
+      "speech": 12.0
     },
     {
       "action": "open_card",
       "module": "Layouts",
       "caption": "Layouts: the same grid, here sixty four by sixty four. Four thousand and ninety six lights, on a device that costs a few euros.",
-      "speech": 12.7
+      "speech": 12.9
     },
     {
       "action": "open_card",
@@ -47,62 +47,62 @@
     {
       "action": "open_card",
       "module": "{onboard}",
-      "caption": "A pin, a light count, and the preset that says which channel does what. That is the whole contract between a frame and a wire.",
-      "speech": 10.9
+      "caption": "A pin, a light count, and the fixture profile that says which channel does what. That is the whole contract between a frame and a wire.",
+      "speech": 11.9
     },
     {
       "action": "open_card",
       "module": "System",
       "caption": "System: the same card, now reporting the chip it runs on. Two of its parts only mean something on hardware.",
-      "speech": 9.3
+      "speech": 9.1
     },
     {
       "action": "open_card",
-      "module": "I2cScan",
-      "caption": "I2cScan: on real hardware it finds the chips actually wired to the bus.",
-      "speech": 6.5
+      "module": "I2cBus",
+      "caption": "I2cBus: the board's I2C pins, stated once, and a scan that names every chip wired to them.",
+      "speech": 9.0
     },
     {
       "action": "open_card",
       "module": "Pins",
       "caption": "Pins: which pin every module has claimed, so two never fight over one.",
-      "speech": 6.2
+      "speech": 6.5
     },
     {
       "action": "open_card",
       "module": "File Manager",
       "caption": "File Manager: this is the device's own flash, so a backup here is worth taking.",
-      "speech": 7.0
+      "speech": 6.8
     },
     {
       "action": "open_card",
       "module": "Network",
-      "caption": "Network: the WiFi it joined. Mqtt and Devices work as they do on a computer.",
-      "speech": 8.1
+      "caption": "Network: the WiFi card holds the networks it knows, the access point has its own, and Mqtt and Devices work as they do on a computer.",
+      "speech": 11.1
     },
     {
       "action": "open_card",
       "module": "Services",
       "caption": "Services: the inputs, and on a device they read real pins.",
-      "speech": 6.1
+      "speech": 5.7
     },
     {
       "action": "open_card",
       "module": "Audio",
       "caption": "Audio: this device has a microphone, so it is listening to the room.",
-      "speech": 7.1
+      "speech": 6.5
     },
     {
       "action": "open_card",
       "module": "Firmware",
       "caption": "Firmware: it finds the next release and installs it over the air. This one is an S3.",
-      "speech": 7.9
+      "speech": 8.8
     },
     {
       "action": "open_card",
       "module": "Firmware",
       "caption": "Behind it sits MoonBase, a second boot image that ships on the four megabyte devices. It is what brings a classic ESP32 back when an update goes wrong.",
-      "speech": 12.6
+      "speech": 12.7
     },
     {
       "action": "open_card",

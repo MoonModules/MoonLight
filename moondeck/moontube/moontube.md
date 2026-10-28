@@ -43,7 +43,7 @@ Only `action` and that action's own arguments are required.
 | `expect` | test | read back over REST; a mismatch fails the run |
 | `as` | both | bind the created module's name for later steps |
 
-`as` matters because the DEVICE names a module, not the run file: an added `RipplesEffect` may land as `Ripples-2`. Bind it once, then write `{ripples}` in any later step. A `{name}` nothing bound is an error rather than a literal, so a typo fails loudly instead of hunting a card by that name.
+`as` matters because the DEVICE names a module, not the run file: an added `RipplesEffect` may land as `Ripples-2`. Bind it once, then write `{ripples}` in any later step. A `{name}` nothing bound is an error rather than a literal, so a typo fails loudly instead of hunting a card by that name. The two names `{wifi_ssid}` and `{wifi_password}` are the bench network's, read from `moondeck/moondeck.json` (gitignored), so a run file never carries a password.
 
 ## Actions
 
@@ -75,7 +75,7 @@ Another MoonLight surface has no module tree, so a run there names elements dire
 | Action | Arguments | The interaction |
 |---|---|---|
 | `goto` | `url` | opens a page |
-| `upload_file` | `selector`, `file` | clicks an element that opens the browser's file chooser and picks `file`, from the repository root |
+| `upload_file` | `selector`, `file`, `presses` | clicks an element that opens the browser's file chooser and picks `file`, from the repository root; `presses` of 2 is a button that arms on the first press, as Restore does |
 | `click` | `selector`, `accept` | clicks any element; `accept` answers the native `confirm()` the click opens with OK, as the help's download question |
 | `type_into` | `selector`, `text`, `delay` | types into any field |
 | `choose_option` | `selector`, `value` | a plain `<select>`, by label (a trailing `*` matches a prefix) |

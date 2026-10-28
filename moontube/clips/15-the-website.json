@@ -10,25 +10,25 @@
       "title": "The website",
       "description": "Organized by who reads it",
       "caption": "The website. Organized by who reads it.",
-      "seconds": 4.5
+      "seconds": 4.6
     },
     {
       "action": "goto",
       "url": "http://localhost:8422/MoonLight/",
       "caption": "The home page is the project's README, so GitHub and the website say the same thing: every effect as an animated card, and what MoonLight runs on.",
-      "speech": 11.8
+      "speech": 11.5
     },
     {
       "action": "wait",
       "seconds": 2,
       "caption": "The tabs follow the reader: getting started first, then the pages generated from the code, then reference for users and developers for contributors.",
-      "speech": 10.9
+      "speech": 11.3
     },
     {
       "action": "click",
       "selector": ".md-tabs__link[href$=\"getting-started.html\"]",
       "caption": "Getting started explains how MoonLight works for you, one card per idea, each with a picture.",
-      "speech": 7.9
+      "speech": 8.2
     },
     {
       "action": "scroll_to",
@@ -46,7 +46,7 @@
       "action": "click",
       "selector": ".md-tabs__link[href$=\"light/effects.html\"]",
       "caption": "The catalogs are generated from the code itself. Every effect is a card that plays its own preview.",
-      "speech": 9.2
+      "speech": 8.7
     },
     {
       "action": "type_into",
@@ -59,18 +59,18 @@
       "action": "click",
       "selector": ".md-tabs__link[href$=\"light/drivers.html\"]",
       "caption": "Modifiers, layouts and drivers work the same way, and so do the services and the system modules.",
-      "speech": 9.2
+      "speech": 8.8
     },
     {
       "action": "click",
       "selector": ".md-tabs__link[href$=\"moonwalk.html\"]",
       "caption": "MoonWalk puts every process on one map: installing, building a show, contributing. The same map opens on the device.",
-      "speech": 10.3
+      "speech": 10.1
     },
     {
       "action": "click",
       "selector": ".md-tabs__link[href$=\"reference/tests.html\"]",
-      "caption": "Tests lists every test and every check by subject, with the counts on every branch.",
+      "caption": "Tests lists every test and every check by subject, with what each check last found.",
       "speech": 8.0
     },
     {
@@ -84,32 +84,32 @@
       "action": "click",
       "selector": ".md-tabs__link[href$=\"reference/attributions.html\"]",
       "caption": "Attributions credits the people and projects MoonLight learned from, each with the modules that use their work.",
-      "speech": 9.0
+      "speech": 8.6
     },
     {
       "action": "click",
       "selector": ".md-tabs__link[href$=\"reference/installing-on-linux.html\"]",
       "caption": "Reference holds what you look up while using it: the hardware, presets, home automation and the REST API.",
-      "speech": 8.7
+      "speech": 8.8
     },
     {
       "action": "click",
       "selector": ".md-tabs__link[href$=\"architecture/index.html\"]",
-      "caption": "Developers holds the architecture, the standards, and how the build and the tests work.",
-      "speech": 7.3
+      "caption": "Developers holds the architecture, why we write our own code, and how the build and the tests work.",
+      "speech": 8.2
     },
     {
       "action": "type_into",
       "selector": ".md-search__input",
       "text": "serpentine",
       "caption": "And search covers the whole site, every page and every card.",
-      "speech": 6.1
+      "speech": 6.4
     },
     {
       "action": "wait",
       "seconds": 2,
       "caption": "MoonLight's website: what it is, how to use it, and how it is built.",
-      "speech": 7.3
+      "speech": 7.1
     }
   ]
 }

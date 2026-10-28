@@ -8,7 +8,7 @@
       "action": "chapter",
       "title": "Drivers",
       "description": "Getting the frame out, on a desktop",
-      "seconds": 4.6,
+      "seconds": 4.8,
       "caption": "Drivers. Getting the finished frame out of the device."
     },
     {
@@ -35,7 +35,7 @@
       "type": "NdiDriver",
       "as": "ndi",
       "caption": "N D I sends the frame onto the network as video, so O B S or Resolume can pick it up as a source like any camera.",
-      "speech": 9.5
+      "speech": 9.3
     },
     {
       "action": "delete_module",
@@ -49,13 +49,13 @@
       "type": "RtspDriver",
       "as": "rtsp",
       "caption": "R T S P serves the same frame as a stream, which a player opens by U R L over the network.",
-      "speech": 7.2
+      "speech": 7.3
     },
     {
       "action": "delete_module",
       "module": "{rtsp}",
       "caption": "Out it goes. Several of these can run at once, each driving its own slice of the same buffer.",
-      "speech": 7.7
+      "speech": 7.8
     },
     {
       "action": "add_module",
@@ -63,27 +63,27 @@
       "type": "HlsDriver",
       "as": "hls",
       "caption": "H L S writes the frame out as segments any player opens, V L C on a laptop or on the television.",
-      "speech": 8.7
+      "speech": 7.7
     },
     {
       "action": "delete_module",
       "module": "{hls}",
       "caption": "And away. Notice the lights never stop while I do this: a driver comes and goes on the next frame.",
-      "speech": 8.4
+      "speech": 7.9
     },
     {
       "action": "add_module",
       "parent": "Drivers",
       "type": "NetworkSendDriver",
       "as": "netsend",
-      "caption": "Network send speaks Art Net, s A C N and D D P, so real fixtures on a real rig listen to this one. Moving heads and par cans take the same universes a strip does: a fixture is lights and a few channels of pan, tilt and color, which is a layout like any other.",
-      "speech": 18.5
+      "caption": "Network send speaks Art Net, s A C N and D D P, so real fixtures on a real rig listen to this one. Moving heads and par cans take the same universes a strip does: a fixture profile says which channel carries pan, tilt and each color. Its destinations can be named, like panel zero one dot local, sent unicast, broadcast or multicast, and the streams are paced and count their losses.",
+      "speech": 28.3
     },
     {
       "action": "delete_module",
       "module": "{netsend}",
       "caption": "Removing it again, because the next one goes lower than I P.",
-      "speech": 5.0
+      "speech": 5.1
     },
     {
       "action": "add_module",
@@ -91,7 +91,7 @@
       "type": "PanelCardDriver",
       "as": "card",
       "caption": "Panel card talks to the receiving cards a professional rig is built from, over raw Ethernet frames below I P, the way a sender card does.",
-      "speech": 11.2
+      "speech": 11.3
     },
     {
       "action": "delete_module",
@@ -105,19 +105,19 @@
       "type": "HueDriver",
       "as": "hue",
       "caption": "Hue drives the bulbs in the room through their own bridge, so the same effect lands on the lamps you already own.",
-      "speech": 7.3
+      "speech": 7.6
     },
     {
       "action": "delete_module",
       "module": "{hue}",
       "caption": "And that one goes too, leaving the device the way we found it.",
-      "speech": 4.4
+      "speech": 4.5
     },
     {
       "action": "open_card",
       "module": "Drivers",
       "caption": "One frame, and any of these carries it. The pin drivers are in this same list, and they come into their own on a device that has pins to clock.",
-      "speech": 10.1
+      "speech": 10.0
     }
   ]
 }

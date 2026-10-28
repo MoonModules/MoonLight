@@ -9,32 +9,32 @@
       "action": "chapter",
       "title": "Install it",
       "description": "A browser, a USB cable, no toolchain",
-      "seconds": 6.8,
+      "seconds": 7.0,
       "caption": "Install it. A browser, a USB cable, and no toolchain to set up."
     },
     {
       "action": "goto",
       "url": "http://localhost:8421/install/?device=MM%20testbench%20S3&firmware=esp32s3-n16r8&release=latest&autoport=1",
       "caption": "This is the web installer, and it runs entirely in the browser. There is no toolchain to install and nothing to download first: the page talks to the chip over USB by itself.",
-      "speech": 14.9
+      "speech": 14.7
     },
     {
       "action": "click",
       "selector": ".device-summary-left",
-      "caption": "Pick your device. The installer knows every pin on it, so the right firmware and the right wiring come along with the choice, and you never look up a pin map.",
-      "speech": 10.9
+      "caption": "Pick your device. The installer knows every pin on it, so the right firmware and the right wiring come along with the choice, and you never look up a pin map. The list now includes the Teensy four point one and the ESP32 C3.",
+      "speech": 17.8
     },
     {
       "action": "click",
       "selector": "#erase-before-flash",
       "caption": "Erase first. That wipes whatever was on the chip before, so this install starts from nothing instead of sitting on top of an older one that might disagree with it.",
-      "speech": 12.5
+      "speech": 12.7
     },
     {
       "action": "click",
       "selector": "#rp-install",
       "caption": "Now one button, and it does the rest. It erases the flash, writes the firmware and verifies what it wrote, all over the same cable that is powering the device right now.",
-      "speech": 13.9
+      "speech": 13.4
     },
     {
       "action": "wait_for",
@@ -42,7 +42,7 @@
       "text": "Detected",
       "timeout": 90,
       "caption": "It finds the chip by itself. An S3 with sixteen megabytes of flash, detected over the serial link rather than something you had to tell it, so a wrong choice cannot brick the device.",
-      "speech": 14.5
+      "speech": 14.3
     },
     {
       "action": "wait_for",
@@ -50,7 +50,7 @@
       "text": "Writing firmware",
       "timeout": 240,
       "caption": "Erasing, and then writing. The erase clears the old contents and the write puts MoonLight there, and the whole interface you are about to use travels with the firmware.",
-      "speech": 12.0
+      "speech": 12.1
     },
     {
       "action": "wait_for",
@@ -58,12 +58,12 @@
       "timeout": 300,
       "caption": "The flash is done, so now it asks for your WiFi. It asks over the cable, which means the password goes straight to the chip and never crosses a network to get there.",
       "text": "Connect",
-      "speech": 13.7
+      "speech": 13.1
     },
     {
       "action": "type_into",
       "selector": "#wifi-ssid",
-      "text": "MoonModules",
+      "text": "{wifi_ssid}",
       "delay": 90,
       "caption": "Your network name goes in first.",
       "speech": 3.4
@@ -71,10 +71,10 @@
     {
       "action": "type_into",
       "selector": "#wifi-password",
-      "text": "zonledmod",
+      "text": "{wifi_password}",
       "delay": 70,
       "caption": "And then its password, typed once, straight down the wire.",
-      "speech": 5.5
+      "speech": 5.6
     },
     {
       "action": "click",
@@ -88,13 +88,13 @@
       "text": "http",
       "timeout": 180,
       "caption": "It joins the network and reports the address it was given, so you know exactly where to find it without hunting through your router's client list.",
-      "speech": 10.6
+      "speech": 10.3
     },
     {
       "action": "wait",
       "seconds": 2.5,
       "caption": "One link, and the device is yours. Everything from here happens in that interface, live, on the device itself, and nothing needs flashing again.",
-      "speech": 11.9
+      "speech": 12.4
     }
   ]
 }

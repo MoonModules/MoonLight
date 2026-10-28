@@ -2,6 +2,8 @@
 
 A backup is every setting a device holds in one `.json` bundle: the configuration of every module, your [presets](presets.md) and your MoonLive scripts. Taking one and putting it back, on the same device or another: [Back up and restore a device](../moonwalk.md#backup-restore).
 
+<video src="../assets/moontube/16-restore-a-backup.webm" controls playsinline width="720" title="A backup from before the config files changed shape, restored through the File Manager: the report of what was renamed, then the effect and the brightness back as they were saved."></video>
+
 ## What a backup holds
 
 The browser walks the whole filesystem. Every file is byte-verified against the directory listing as it is read, with three outcomes. A file shorter than listed aborts the backup, because silent truncation is worse than no backup at all. A file longer than listed is binary rather than text, so it is skipped and named. A file that cannot be read is skipped and named too.

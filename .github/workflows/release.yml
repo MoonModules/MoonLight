@@ -919,13 +919,13 @@ jobs:
             org.opencontainers.image.licenses=GPL-3.0
 
   # Deploy the web installer to GitHub Pages. Separate from `release` because
-  # the `github-pages` environment's protection rule only allows `main` — so
-  # this job is gated to main and carries the environment, while `release`
-  # (which must run on tags too) stays free of it. The cumulative-content step
-  # restages the last 5 stable + 5 prerelease releases on every run, so a tag
-  # release's binaries reach the installer at the next main deploy.
+  # the `github-pages` environment's protection rule allows only `main` and `v*`
+  # tags, so this job is gated to those and carries the environment, while
+  # `release` (which runs on any ref) stays free of it. A tag deploys in its own
+  # run, so a release reaches the installer with its binaries. The cumulative-
+  # content step restages the last 5 stable + 5 prerelease releases on every run.
   deploy-pages:
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
     needs: [release]
     runs-on: ubuntu-latest
     permissions:

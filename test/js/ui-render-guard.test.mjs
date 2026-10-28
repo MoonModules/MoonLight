@@ -18,6 +18,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { fnSource } from "./app-source.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const app = readFileSync(join(ROOT, "src", "ui", "app.js"), "utf8");
@@ -30,6 +31,22 @@ test("the editing guard lives in exactly one place", () => {
     for (const shape of ["input, textarea", "closest(\"select\")", 'select[data-open="true"]']) {
         assert.ok(body.includes(shape), `userIsEditing must consider ${shape}`);
     }
+});
+
+// A press on a switch leaves focus on its checkbox. Counted as editing, it parked the Stats card on its old structure after consent went on, so the charts stayed empty until focus moved.
+test("a focused switch or segment is not an edit, a focused text field is", () => {
+    const guard = (el) => new Function("document", "window", `${fnSource("userIsEditing")}; return userIsEditing();`)(
+        { activeElement: el, querySelector: () => null }, { getSelection: () => null });
+    const matchesFor = (tag, type) => (sel) => {
+        if (sel === "input, textarea") return tag === "input" || tag === "textarea";
+        if (sel === '[type="checkbox"], [type="radio"]') return type === "checkbox" || type === "radio";
+        return false;
+    };
+    const el = (tag, type) => ({ matches: matchesFor(tag, type), closest: () => null });
+    assert.equal(guard(el("input", "checkbox")), false);
+    assert.equal(guard(el("input", "radio")), false);
+    assert.equal(guard(el("input", "text")), true);
+    assert.equal(guard(el("textarea", "")), true);
 });
 
 test("the WebSocket full state does not rebuild the DOM while the user is interacting", () => {

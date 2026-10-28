@@ -70,6 +70,8 @@ def _resolve_executable() -> Path:
 
 
 EXECUTABLE = _resolve_executable()
+# The path from the repository root is part of both launch forms, `build/macos/MoonLight` from the root and the absolute path, so one pattern finds either.
+PROCESS_PATTERN = str(EXECUTABLE.relative_to(ROOT))
 
 
 def _is_running() -> bool:
@@ -83,7 +85,7 @@ def _is_running() -> bool:
             ["tasklist", "/FI", f"IMAGENAME eq {name}"],
             capture_output=True, text=True)
         return name in r.stdout
-    r = subprocess.run(["pgrep", "-f", str(EXECUTABLE)], capture_output=True)
+    r = subprocess.run(["pgrep", "-f", PROCESS_PATTERN], capture_output=True)
     return r.returncode == 0
 
 
@@ -93,8 +95,8 @@ def _kill_running():
         subprocess.run(["taskkill", "/F", "/IM", EXECUTABLE.name],
                        capture_output=True)
     else:
-        # Match the full path to avoid hitting unrelated programs called "MoonLight".
-        subprocess.run(["pkill", "-f", str(EXECUTABLE)], capture_output=True)
+        # Match the path from the repository root to avoid hitting unrelated programs called "MoonLight".
+        subprocess.run(["pkill", "-f", PROCESS_PATTERN], capture_output=True)
 
 
 def main():

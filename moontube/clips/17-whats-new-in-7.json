@@ -1,0 +1,61 @@
+{
+  "name": "17-whats-new-in-7",
+  "description": "What version seven adds that you can see on a screen: a game, the FSEQ player, network streams, and the Gallery.",
+  "speed": 1.7,
+  "voice": "poppy",
+  "steps": [
+    {
+      "action": "chapter",
+      "title": "What is new in seven",
+      "description": "Games, shows and a gallery",
+      "seconds": 6.3,
+      "caption": "What is new in seven. Games, shows and a gallery."
+    },
+    {
+      "action": "open_card",
+      "module": "Effects",
+      "caption": "Version seven adds a good deal. Here are the parts you can see on a screen, starting with the effects.",
+      "speech": 9.6
+    },
+    {
+      "action": "replace_module",
+      "module": "Pulse",
+      "type": "BreakoutEffect",
+      "as": "game",
+      "caption": "Breakout joins Pong, Space Invaders and Tetrix. Every game plays itself, and a game pad or a MIDI desk can take over a paddle.",
+      "speech": 12.0
+    },
+    {
+      "action": "wait",
+      "seconds": 6,
+      "caption": "There goes the paddle after the ball. Ten seconds after the last input, the game takes the paddle back.",
+      "speech": 9.4
+    },
+    {
+      "action": "replace_module",
+      "module": "{game}",
+      "type": "FseqPlayerEffect",
+      "as": "fseq",
+      "caption": "The FSEQ player plays shows made in xLights or Falcon Player, from flash or a microSD card, as a playlist with shuffle and loop.",
+      "speech": 11.7
+    },
+    {
+      "action": "open_card",
+      "module": "Effects",
+      "caption": "A full transport: play, pause, stop, previous and next, and a position bar for the show that is playing.",
+      "speech": 9.7
+    },
+    {
+      "action": "open_card",
+      "module": "Control",
+      "caption": "Network streams, Art Net, E one thirty one and D D P, now arrive whole as well, with the Network receive effect. Presets are state documents now, saved on the pads on this card.",
+      "speech": 17.1
+    },
+    {
+      "action": "scroll_to",
+      "selector": "[data-module=\"Control\"] .gallery",
+      "caption": "Under the pads sits the Gallery: presets and scripts other people published, installed with a click. The rest of what is new is in the release notes, and on the other clips of this series.",
+      "speech": 14.5
+    }
+  ]
+}

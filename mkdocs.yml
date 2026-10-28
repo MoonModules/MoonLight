@@ -188,6 +188,8 @@ nav:
       - Getting started: getting-started.md
       # What a new user reads after the first install: the cards, the pipeline, live changes.
       - How MoonLight works: explanation/how-moonlight-works.md
+      # Every clip of the series in watching order, each linking the page it plays on.
+      - Videos: videos.md
       # The web installer is a separate app deployed at /install/ (staged verbatim by the
       # release workflow, not built by MkDocs). A full URL (not a site-relative path) so
       # MkDocs treats it as the external resource it is.

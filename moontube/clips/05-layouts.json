@@ -9,7 +9,7 @@
       "title": "Layouts",
       "description": "Where the lights are",
       "caption": "Layouts. Where the lights are.",
-      "seconds": 3.6
+      "seconds": 3.8
     },
     {
       "action": "open_card",
@@ -21,13 +21,13 @@
       "action": "open_card",
       "module": "Grid",
       "caption": "Here is a grid, sixteen by sixteen: two hundred and fifty six lights, addressed by row and column. Its size is a control like any other, so it grows while it runs.",
-      "speech": 15.3
+      "speech": 15.4
     },
     {
       "action": "clear_children",
       "module": "Layouts",
       "caption": "To show you another shape I take this one out first, so only one layout is on screen at a time.",
-      "speech": 8.8
+      "speech": 8.9
     },
     {
       "action": "add_module",
@@ -35,7 +35,7 @@
       "type": "RingLayout",
       "as": "ring",
       "caption": "A ring. The lights sit around a circle now, and the same effect follows them without being told.",
-      "speech": 8.9
+      "speech": 9.1
     },
     {
       "action": "set_number",
@@ -43,7 +43,7 @@
       "control": "nrOfLEDs",
       "value": 240,
       "caption": "A ring counts lights rather than rows, so this one goes to two hundred and forty around the circle.",
-      "speech": 8.8
+      "speech": 8.9
     },
     {
       "action": "clear_children",
@@ -65,13 +65,13 @@
       "control": "ledCount",
       "value": 900,
       "caption": "Nine hundred lights along the spiral, and it winds further out to hold them.",
-      "speech": 7.6
+      "speech": 7.7
     },
     {
       "action": "clear_children",
       "module": "Layouts",
       "caption": "And again, to make room. This is the whole point of keeping layout and effect apart.",
-      "speech": 7.7
+      "speech": 7.6
     },
     {
       "action": "add_module",
@@ -87,7 +87,7 @@
       "control": "width",
       "value": 24,
       "caption": "A cube sizes on three axes. Twenty four wide, and the other two follow in a moment.",
-      "speech": 9.1
+      "speech": 8.8
     },
     {
       "action": "set_number",
@@ -103,7 +103,7 @@
       "control": "depth",
       "value": 24,
       "caption": "And twenty four deep: nearly fourteen thousand lights in a solid block.",
-      "speech": 7.1
+      "speech": 7.0
     },
     {
       "action": "clear_children",
@@ -125,13 +125,13 @@
       "control": "nrOfTubes",
       "value": 24,
       "caption": "Twenty four tubes now, each still its own column.",
-      "speech": 5.6
+      "speech": 5.2
     },
     {
       "action": "clear_children",
       "module": "Layouts",
       "caption": "One last time. Everything so far ships compiled into the firmware, ready to pick from a list.",
-      "speech": 8.8
+      "speech": 8.7
     },
     {
       "action": "add_module",
@@ -139,7 +139,7 @@
       "type": "MoonLiveLayout",
       "as": "live",
       "caption": "But when the list does not have your shape, you write it yourself. This script runs on the device.",
-      "speech": 8.8
+      "speech": 8.6
     },
     {
       "action": "pick_file",
@@ -147,15 +147,15 @@
       "control": "script",
       "value": "rose.mll",
       "caption": "This is a rose curve, written in MoonLive and compiled on the device itself while you watch.",
-      "speech": 8.7
+      "speech": 8.6
     },
     {
       "action": "pick_file",
       "module": "{live}",
       "control": "script",
       "value": "sixteen-rings.mll",
-      "caption": "And sixteen rings on a wall, from the same twenty lines. One effect, every shape.",
-      "speech": 8.9
+      "caption": "And sixteen rings on a wall, each one placed by a short script. One effect, every shape.",
+      "speech": 9.9
     }
   ]
 }

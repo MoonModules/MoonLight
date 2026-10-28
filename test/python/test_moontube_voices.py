@@ -89,5 +89,6 @@ def test_the_intros_overview_names_a_project_that_exists():
     intro = json.loads((ROOT / "moontube" / "slides" / "00-intro.json").read_text(encoding="utf-8"))
     named = [s["overview"] for s in intro["slides"] if "overview" in s]
     assert named == ["full-series"]
-    rows = mtnarrate.overview_rows(json.loads((PROJECTS / "full-series.json").read_text(encoding="utf-8")), intro["name"])
-    assert len(rows) == 16
+    project = json.loads((PROJECTS / "full-series.json").read_text(encoding="utf-8"))
+    rows = mtnarrate.overview_rows(project, intro["name"])
+    assert len(rows) == sum(1 for c in project["clips"] if c.get("clip") != intro["name"])

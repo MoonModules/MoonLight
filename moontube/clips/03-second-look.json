@@ -8,7 +8,7 @@
       "action": "chapter",
       "title": "The second look",
       "description": "Five buttons, pressed",
-      "seconds": 6.2,
+      "seconds": 6.3,
       "caption": "The second look. Five buttons, pressed."
     },
     {
@@ -22,8 +22,8 @@
       "module": "System",
       "control": "mode",
       "value": "expert",
-      "caption": "Mode decides how much you see. Expert adds controls, each marked with a stripe.",
-      "speech": 9.0
+      "caption": "Mode decides how much you see. Expert adds controls, each marked with a small slider.",
+      "speech": 10.2
     },
     {
       "action": "choose",
@@ -31,7 +31,7 @@
       "control": "mode",
       "value": "developer",
       "caption": "Developer shows the rest, so you can tell a setting is there before you need it.",
-      "speech": 7.1
+      "speech": 6.5
     },
     {
       "action": "choose",
@@ -39,7 +39,7 @@
       "control": "mode",
       "value": "user",
       "caption": "Back to user: the same device, with only what running it takes.",
-      "speech": 7.2
+      "speech": 6.8
     },
     {
       "action": "open_card",
@@ -51,80 +51,79 @@
       "action": "open_card",
       "module": "Layer",
       "caption": "A child module is a tab inside its parent, and it carries the same five.",
-      "speech": 7.9
+      "speech": 7.8
     },
     {
-      "action": "follow_link",
+      "action": "click",
       "selector": ".card[data-module=\"Layer\"] .card-api",
-      "seconds": 3.2,
-      "caption": "{ } opens this one card's JSON: every control, its value, its live telemetry.",
-      "speech": 8.4
+      "caption": "{ } shows this card as JSON: the state document a preset holds, with a copy button and a link to its diagnostics.",
+      "speech": 11.9
     },
     {
       "action": "open_card",
       "module": "Layer",
-      "caption": "Paste that into an issue and the report carries what someone would have to ask you for.",
-      "speech": 7.4
+      "caption": "Save it as a preset, or open the diagnostics and paste them into an issue, and the report carries what someone would have to ask you for.",
+      "speech": 12.9
     },
     {
       "action": "click_control",
       "module": "Layer",
       "control": "enabled",
       "caption": "⏻ turns a module off. The layer stops and the lights hold their last frame.",
-      "speech": 7.4
+      "speech": 7.1
     },
     {
       "action": "click_control",
       "module": "Layer",
       "control": "enabled",
       "caption": "On again, and it picks up where it was.",
-      "speech": 4.7
+      "speech": 4.6
     },
     {
       "action": "replace_module",
       "module": "Pulse",
       "type": "RipplesEffect",
       "caption": "✎ swaps the effect inside this layer for another type. Same slot in the pipeline.",
-      "speech": 10.5
+      "speech": 10.2
     },
     {
       "action": "replace_module",
       "module": "Ripples",
       "type": "PulseEffect",
       "caption": "Swap it back. Nothing else in the tree noticed.",
-      "speech": 5.7
+      "speech": 6.4
     },
     {
       "action": "delete_module",
       "module": "Layer",
       "caption": "🗑 deletes a module. These two appear only where a module is yours to change.",
-      "speech": 8.6
+      "speech": 8.5
     },
     {
       "action": "add_module",
       "parent": "Effects",
       "type": "Layer",
       "caption": "And add one back, because a layer is a module like any other.",
-      "speech": 6.0
+      "speech": 6.1
     },
     {
       "action": "add_module",
       "parent": "Layer",
       "type": "PulseEffect",
       "caption": "With its effect, and the lights are running again.",
-      "speech": 4.9
+      "speech": 4.4
     },
     {
       "action": "open_card",
       "module": "Layouts",
       "caption": "The same pattern everywhere: Layouts, and its Grid inside.",
-      "speech": 6.5
+      "speech": 6.3
     },
     {
       "action": "open_card",
       "module": "Grid",
       "caption": "Grid: the layout's own card, reached the same way.",
-      "speech": 5.0
+      "speech": 5.6
     },
     {
       "action": "set_number",
@@ -137,7 +136,7 @@
         "control": "width",
         "value": 256
       },
-      "speech": 14.3
+      "speech": 13.6
     },
     {
       "action": "set_number",
@@ -150,7 +149,7 @@
         "control": "height",
         "value": 256
       },
-      "speech": 12.3
+      "speech": 12.7
     }
   ]
 }

@@ -8,14 +8,14 @@
       "action": "chapter",
       "title": "Your computer as a device",
       "description": "The same interface, no device",
-      "seconds": 5.3,
+      "seconds": 5.4,
       "caption": "Your computer as a device. The same interface, no device."
     },
     {
       "action": "open_card",
       "module": "Control",
       "caption": "Control: a remote, a button or a fader, pointed at anything on this page.",
-      "speech": 6.0
+      "speech": 6.3
     },
     {
       "action": "open_card",
@@ -27,7 +27,7 @@
       "action": "open_card",
       "module": "Grid",
       "caption": "Grid: width, height and depth, applied while it runs.",
-      "speech": 4.3
+      "speech": 4.2
     },
     {
       "action": "set_number",
@@ -40,7 +40,7 @@
         "control": "width",
         "value": 256
       },
-      "speech": 8.4
+      "speech": 8.3
     },
     {
       "action": "set_number",
@@ -53,37 +53,43 @@
         "control": "height",
         "value": 256
       },
-      "speech": 8.0
+      "speech": 7.7
     },
     {
       "action": "open_card",
       "module": "Effects",
       "caption": "Effects: what the lights show, stacked in layers.",
-      "speech": 4.6
+      "speech": 4.0
     },
     {
       "action": "open_card",
       "module": "Layer",
       "caption": "Layer: one effect and its modifiers, blended onto the ones below.",
-      "speech": 5.1
+      "speech": 5.2
     },
     {
       "action": "open_card",
       "module": "Drivers",
       "caption": "Drivers: how the finished frame leaves. A computer has no LED pins, so it previews and sends over the network.",
-      "speech": 8.4
+      "speech": 8.7
     },
     {
       "action": "open_card",
       "module": "FixtureProfiles",
       "caption": "FixtureProfiles: the named wirings every driver refers to.",
-      "speech": 4.3
+      "speech": 6.3
     },
     {
       "action": "open_card",
       "module": "Preview",
       "caption": "Preview: the picture on this page, which is a driver like any other.",
-      "speech": 4.6
+      "speech": 4.5
+    },
+    {
+      "action": "wait",
+      "seconds": 2,
+      "caption": "Along the top, the info button turns on help for every card and control, and the map button opens MoonWalk, every process on one map. A later clip shows both.",
+      "speech": 11.9
     },
     {
       "action": "add_module",
@@ -91,49 +97,49 @@
       "type": "NetworkSendDriver",
       "as": "netsend",
       "caption": "The network half of it: a driver that sends the finished frame to another device instead of down a wire.",
-      "speech": 7.3
+      "speech": 7.7
     },
     {
       "action": "open_card",
       "module": "{netsend}",
       "caption": "Art Net, s A C N or DDP, to anything that listens: the same frame the preview shows, addressed to another device.",
-      "speech": 8.8
+      "speech": 9.3
     },
     {
       "action": "open_card",
       "module": "System",
-      "caption": "System: the device itself, its name, its uptime, how fast it renders.",
-      "speech": 5.8
+      "caption": "System: the device itself, its name, its uptime, how fast it renders. It has a factory reset, and two failed boots in a row start safe mode, which keeps the lights dark until you have fixed what hangs the board.",
+      "speech": 14.5
     },
     {
       "action": "open_card",
       "module": "Tasks",
       "caption": "Tasks: what runs each frame, and what each costs.",
-      "speech": 4.8
+      "speech": 4.9
     },
     {
       "action": "open_card",
       "module": "File Manager",
-      "caption": "File Manager: every file on the device, and one button that backs them all up.",
-      "speech": 7.5
+      "caption": "File Manager: every file on the device, one button that backs them all up and one that puts them back.",
+      "speech": 7.6
     },
     {
       "action": "open_card",
       "module": "Network",
-      "caption": "Network: the connection, and the other devices it can see.",
-      "speech": 5.0
+      "caption": "Network: the connection, with its own cards for WiFi, Ethernet and the access point, and the other devices it can see.",
+      "speech": 8.9
     },
     {
       "action": "open_card",
       "module": "Mqtt",
       "caption": "Mqtt: a broker, for a home automation system.",
-      "speech": 4.7
+      "speech": 4.8
     },
     {
       "action": "open_card",
       "module": "Devices",
       "caption": "Devices: every other MoonLight on the network, found on their own.",
-      "speech": 5.1
+      "speech": 5.0
     },
     {
       "action": "open_card",
@@ -145,7 +151,7 @@
       "action": "open_card",
       "module": "Audio",
       "caption": "Audio: synthesized out of the box, so the effects react before a microphone is wired.",
-      "speech": 7.2
+      "speech": 7.1
     },
     {
       "action": "open_card",
@@ -157,7 +163,7 @@
       "action": "open_card",
       "module": "MoonCloud",
       "caption": "MoonCloud: see what everyone else is running.",
-      "speech": 4.1
+      "speech": 5.2
     },
     {
       "action": "open_card",
@@ -170,7 +176,7 @@
       "module": "Stats",
       "control": "consent",
       "caption": "Nothing leaves the device until you say so, so here is what saying so gives you: the totals every other MoonLight reports.",
-      "speech": 9.1
+      "speech": 9.4
     },
     {
       "action": "open_card",
@@ -183,7 +189,7 @@
       "module": "Talk",
       "control": "consent",
       "caption": "Same for Talk. Consent on, and the question reaches the people running the same firmware.",
-      "speech": 6.7
+      "speech": 7.6
     }
   ]
 }

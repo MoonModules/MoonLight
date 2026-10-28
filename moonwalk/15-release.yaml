@@ -9,7 +9,7 @@ processes:
     systems: [MoonInstaller]
     page: contributing/principles-and-process.md
     intro: |
-      The event where the binary ships, so on "run pre-release" every commit and merge check runs over the tagged tree, whatever it triggers, and every shipped firmware builds. The rest is the product owner's judgment.
+      The event where the binary ships, so on "run pre-release" every commit and merge check runs over the tagged tree, whatever it triggers, and one firmware per chip family builds. The rest is the product owner's judgment.
     steps:
       - id: merge-checks
         section: Checks
@@ -18,11 +18,11 @@ processes:
         detail: |
           Every check runs, its trigger ignored, since this is the event where the binary ships; MoonDeck's `/api/gates?every=1` lists them that way. Pre-merge's Reviewer, title and CodeRabbit steps read a branch, which a tagged commit on main is not.
       - id: firmwares
-        say: Build every shipped ESP32 firmware.
+        say: Build one ESP32 firmware per chip family.
         actor: contributor
         when: { run: { script: moondeck/build/build_esp32.py, args: "--firmware <name>" } }
         detail: |
-          Once per shipped variant: the rows marked `ships` in `FIRMWARES` in `moondeck/build/build_esp32.py`, which `firmwares.py` joins into the one registry, built [one at a time](moonwalk.md#esp32-build-flash).
+          Once per chip family among the rows marked `ships` in `FIRMWARES` in `moondeck/build/build_esp32.py`: the variant that layers the most fragments, and for the classic ESP32 `esp32`, the commit gate's own, built [one at a time](moonwalk.md#esp32-build-flash). A family's variants compile the same code and differ only in their fragments, and the release workflow builds every shipped variant after the tag.
       - id: hardware
         section: Judgment
         say: Test it on real hardware.
@@ -33,6 +33,12 @@ processes:
       - id: notes
         say: Write the release notes.
         when: { manual: "What a user notices, from the commits since the last tag." }
+      - id: clips
+        say: Update and re-record the MoonTube clips.
+        actor: product-owner
+        when: { manual: "Planned ahead, since the series takes a few hours; the product owner starts it." }
+        detail: |
+          First update the clips: fix the captions and steps the release made false or outdated, from the release notes and MIGRATING, and add a step where a topic gained something. Then add the release clip, `moontube/clips/NN-whats-new-in-N.json`, covering what shows on a screen, and embed it at the top of [Videos](../docs/videos.md). Hardware and invisible changes stay in the release notes. Then re-record every clip, each with `mtmeasure.py`, `mtvideo.py` and `mtvoiceover.py` and `--run moontube/clips/<name>.json` ([MoonTube](../moondeck/moontube/moontube.md#clips-and-projects)); a clip the interface outgrew fails rather than publishes. The desktop app runs on a fresh build, the bench board is on the network because the install clip reflashes it, and the laptop stays open. The tag deploys the clips with the site.
       - id: smoke
         say: Smoke-test all platforms on minor and major bumps.
         when: { manual: "Install and run it on each desktop OS and a board per chip family." }

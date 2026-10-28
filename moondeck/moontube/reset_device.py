@@ -39,6 +39,9 @@ BOOT_CHILDREN = {
     "Services": ["AudioService"],
 }
 
+# A boot module a clip addresses by name, so a saved state that renamed it is a leftover too: the layers clip finds its Layer by that name, and a layer called Sky is none.
+BOOT_NAMES = {"Layer": "Layer"}
+
 # The grid a fresh GridLayout self-initializes to, `defaultGridSize` in src/light/layouts/GridLayout.h.
 DEFAULT_GRID = 16
 
@@ -225,7 +228,7 @@ def reset(host: str) -> int:
         for child in list(node.get("children") or []):
             t, n = child.get("type"), child.get("name")
             # One of each boot type is kept; a duplicate of it is still a leftover.
-            if t in keep_types and t not in seen:
+            if t in keep_types and t not in seen and BOOT_NAMES.get(t, n) == n:
                 seen.append(t)
                 continue
             if _delete(host, n):
@@ -236,14 +239,14 @@ def reset(host: str) -> int:
 
     # ADD BACK what boot wires and the take removed.
     added = 0
-    state = _get(host, "/api/state")
-    mods = state.get("modules", [])
     for container, keep_types in BOOT_CHILDREN.items():
+        # Read again per container: a Layer added a step ago is where the Pulse goes.
+        mods = _get(host, "/api/state").get("modules", [])
         node = next((m for m, _ in _walk(mods) if m.get("name") == container
                      or m.get("type") == container), None)
         if not node:
             continue
-        have = {c.get("type") for c in (node.get("children") or [])}
+        have = {c.get("type") for c in (node.get("children") or []) if BOOT_NAMES.get(c.get("type"), c.get("name")) == c.get("name")}
         for t in keep_types:
             if t in have:
                 continue

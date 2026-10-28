@@ -577,8 +577,9 @@ document.addEventListener("selectionchange", () => { if (structuralRenderPending
 // structure. Live VALUES keep flowing either way, since updateValues() patches in place.
 function userIsEditing() {
     const el = document.activeElement;
-    if (el && (el.matches("input, textarea") || el.closest("select")
-               || document.querySelector('select[data-open="true"]'))) return true;
+    // A switch or a segment keeps focus after its press, and its press is the whole edit: counting it would hold the card the press changed on stale structure until focus moved.
+    const typing = el && el.matches("input, textarea") && !el.matches('[type="checkbox"], [type="radio"]');
+    if (typing || (el && el.closest("select")) || document.querySelector('select[data-open="true"]')) return true;
     const sel = window.getSelection();
     return !!(sel && !sel.isCollapsed && sel.rangeCount > 0 && String(sel).length > 0);
 }

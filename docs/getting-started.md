@@ -109,7 +109,7 @@ A tour of this website, tab by tab: what each part holds and who it is for.
 
 <video src="assets/moontube/15-the-website.webm" controls playsinline width="720" title="The website, tab by tab: the home page, getting started, the catalogs, MoonWalk, the tests, reference and developers."></video>
 
-The whole series, all seventeen clips in one chaptered video, is on YouTube: [MoonLight v6.0.0, the full tour](https://youtu.be/F_YgmiUyWVQ).
+The rest of the series, in watching order: [Videos](videos.md).
 
 ## How we build it
 

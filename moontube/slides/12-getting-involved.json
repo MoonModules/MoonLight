@@ -28,12 +28,11 @@
       "kicker": "What is next",
       "title": "Where this goes",
       "bullets": [
-        "Sensors, and the classic game console",
-        "Teensy, beside the boards already supported",
-        "Controller surfaces, MIDI and analog live stages",
+        "Sensors, and more boards beside the Teensy",
+        "More control surfaces, beside the MIDI desks and game pads",
         "And what users ask for: the backlog is public, and so is the reasoning"
       ],
-      "say": "What comes next: sensors, and a classic game console. Teensy, beside the boards already supported. Controller surfaces, MIDI, and the analog live stage. But that list is ours, and input from users will shape the future just as much: the backlog is in the repository, and so is the reasoning behind every item, because a plan you can read is a plan you can argue with. And the whole thing is open source, which is the point: whatever we build, you can take."
+      "say": "What comes next: sensors, and more boards beside the Teensy, which arrived in version seven. More control surfaces, after the MIDI desks and game pads that are here now. But that list is ours, and input from users will shape the future just as much: the backlog is in the repository, and so is the reasoning behind every item, because a plan you can read is a plan you can argue with. And the whole thing is open source, which is the point: whatever we build, you can take."
     },
     {
       "kicker": "Before you go",
