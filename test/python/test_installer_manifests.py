@@ -5,7 +5,7 @@ The installer fetches, per release, one ESP Web Tools manifest per *shipping* fi
 parts to flash. Those parts MUST be files the release workflow actually stages onto Pages —
 the staging step (`.github/workflows/release.yml`) downloads them with these globs:
 
-    firmware-*.bin   shared-ota-data.bin   partition-table-*.bin
+    firmware-*.bin   shared-*.bin
 
 A manifest that references a filename outside those globs points at a file that never reaches
 Pages → the installer 404s at fetch-firmware. That exact mismatch (a manifest referencing a
@@ -33,8 +33,9 @@ GENERATE = ROOT / "moondeck" / "build" / "generate_manifest.py"
 
 # The exact globs the deploy's `gh release download` stages onto Pages (release.yml,
 # "Stage cumulative release content"). A manifest part must match one of these, or the
-# installer fetches a file that isn't there. Keep in lockstep with that step's --pattern list.
-STAGED_GLOBS = ["firmware-*.bin", "shared-*.bin", "partition-table-*.bin"]
+# installer fetches a file that isn't there. Keep in lockstep with that step's --pattern list,
+# less its `partition-table-*.bin`, which only the releases up to v7.0.0 publish.
+STAGED_GLOBS = ["firmware-*.bin", "shared-*.bin"]
 # shared-*.bin covers shared-ota-data.bin plus the MoonBase pair (shared-moonbase-<chip>.bin,
 # shared-ota-data-slot0.bin); the same glob appears in release.yml's upload files and the
 # Pages self-host download patterns, which is exactly the sync this test guards.
@@ -42,7 +43,6 @@ STAGED_GLOBS = ["firmware-*.bin", "shared-*.bin", "partition-table-*.bin"]
 # A minimal but realistic IDF flasher_args.json — the four files every MoonLight build emits.
 # generate_manifest.py maps these to the bundle names (firmware-<F>-v<ver>.bin, etc.).
 FLASHER_ARGS = {
-    "flash_settings": {"flash_size": "4MB"},
     "flash_files": {
         "0x1000": "bootloader/bootloader.bin",
         "0x8000": "partition_table/partition-table.bin",
@@ -128,6 +128,16 @@ def test_app_and_bootloader_carry_the_version(tmp_path):
     names = [p["path"].rsplit("/", 1)[-1] for p in manifest["builds"][0]["parts"]]
     assert f"firmware-{fw}-v{VERSION}.bin" in names, f"{fw}: app part not named for firmware+version: {names}"
     assert f"firmware-{fw}-v{VERSION}-bootloader.bin" in names, f"{fw}: bootloader part misnamed: {names}"
+
+
+def test_every_firmware_names_its_own_partition_table(tmp_path):
+    """Firmwares of one flash size still differ in layout (esp32-pico's MoonBase table puts the app at 0xF0000, esp32s3-n8r8's dual-OTA table at 0x10000), so each manifest names its own partition table: a name shared by flash size lets one firmware's table replace another's in the release, and the installer writes the wrong layout."""
+    tables = {}
+    for fw in (f for f in _shipping_firmwares() if _platform(f) == "esp32"):
+        parts = _generate(fw, tmp_path)["builds"][0]["parts"]
+        tables[fw] = next(p["path"].rsplit("/", 1)[-1] for p in parts if p["offset"] == 0x8000)
+    assert len(set(tables.values())) == len(tables), f"firmwares share a partition-table file: {tables}"
+    assert all(name == f"firmware-{fw}-v{VERSION}-partition-table.bin" for fw, name in tables.items()), tables
 
 
 def test_a_teensy_manifest_is_its_flat_image_at_offset_zero(tmp_path):

@@ -139,16 +139,14 @@ def stage_local_builds(builds: list[Path]) -> list[str]:
         firmware = build_dir.name[len("esp32-"):]
         prefix = f"firmware-{firmware}-v{LOCAL_VERSION}"
 
-        # The four .bin files that go alongside a firmware in the release. Mirrors release.yml's "Stage release artifacts" step: app + bootloader are per-firmware; ota-data + partition-table are SHARED (ota-data once globally, partition-table once per flash-size group), matching the names generate_manifest.py emits so the preview's manifests resolve them.
+        # The four .bin files that go alongside a firmware in the release. Mirrors release.yml's "Stage release artifacts" step: app, bootloader and partition table are per-firmware; ota-data is SHARED, matching the names generate_manifest.py emits so the preview's manifests resolve them.
         try:
-            flasher = json.loads((build_dir / "flasher_args.json").read_text(encoding="utf-8"))
-            size = str(flasher.get("flash_settings", {}).get("flash_size", "")).lower()
             shutil.copy(build_dir / APP_BIN,
                         releases_dir / f"{prefix}.bin")
             shutil.copy(build_dir / "bootloader" / "bootloader.bin",
                         releases_dir / f"{prefix}-bootloader.bin")
             shutil.copy(build_dir / "partition_table" / "partition-table.bin",
-                        releases_dir / f"partition-table-{size}.bin")
+                        releases_dir / f"{prefix}-partition-table.bin")
             shutil.copy(build_dir / "ota_data_initial.bin",
                         releases_dir / "shared-ota-data.bin")
             # MoonBase firmwares also ship the shared maintenance image + the slot-0 otadata their manifests reference (same names release.yml stages).
