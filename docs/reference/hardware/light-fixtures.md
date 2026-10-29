@@ -41,7 +41,7 @@ That is a DIFFERENT model: this one is 11/13 channels with a plain linear dimmer
 | 10 | 0-255 | blue, 0 = closed | `B` |
 | 11 | 0-255 | white, 0 = closed | `W` |
 
-CH6 is a straight linear dimmer. Today the driver holds it fully open and keeps brightness in the color values; routing brightness onto it is the better model and is [backlogged](../../work/future/backlog-light.md). The channels left unmapped hold at 0, which is what a light driver wants: **strobe off** (CH7) and full-speed movement (CH5). The fine channels are unused until 16-bit positioning is wired up.
+CH6 is a straight linear dimmer. The driver holds it fully open and keeps brightness in the color values; routing brightness onto it is the better model and is [backlogged](https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287080535). The channels left unmapped hold at 0, which is what a light driver wants: **strobe off** (CH7) and full-speed movement (CH5). The fine channels repeat the coarse byte, so a full-scale aim reaches the fixture's 65535; true 16-bit positioning waits on a 16-bit aim.
 
 Two things matter when driving it by hand. Every channel at 255 makes the fixture **strobe**, because CH7 is a strobe channel rather than part of the dimmer. And the 13-channel mode's CH12 at 250-255 selects **sound mode**, where the fixture ignores DMX movement and runs its own program.
 

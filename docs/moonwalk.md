@@ -10,4 +10,4 @@ On a device, the help on every card links the steps it takes part in and opens t
 
 <video src="assets/moontube/14-help-and-moonwalk.webm" controls playsinline width="720" title="Help on every card and control, a help link opening MoonWalk at its step, and a control's tests on the test page."></video>
 
-The map is drawn from the stage files under [moonwalk/](../moonwalk/), one per stage; [the MoonWalk model](work/future/moonwalk.md) describes them. How to use the map, run it and write a process: [the MoonWalk reference](reference/moonwalk.md).
+The map is drawn from the stage files under [moonwalk/](../moonwalk/), one per stage; [the MoonWalk model](explanation/architecture/moonwalk.md) describes them. How to use the map, run it and write a process: [the MoonWalk reference](reference/moonwalk.md).

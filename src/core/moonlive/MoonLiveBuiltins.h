@@ -165,7 +165,7 @@ struct BuiltinTable {
 
 /// Bytes the script's own members may occupy: the byte budget the arena allocates, where the count is what the record tables hold.
 static constexpr uint8_t kCtrlBytes = 64;        // arena bytes the script's members share
-static constexpr uint8_t kMaxCtrls  = 16;        // records: how many members/controls may exist
+static constexpr uint8_t kMaxCtrls  = 16;        // records: how many members/controls may exist; 16 cost 280 B per scripted module on an S3 (1312 → 1592)
 
 /// The sanity bound on code size, not the working limit: a compile sizes its staging from the token count.
 static constexpr size_t  kCodeCap = 16384;

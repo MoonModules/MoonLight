@@ -37,10 +37,11 @@ SUFFIXES = (".h", ".hpp", ".c", ".cpp", ".inc", ".md", ".py", ".js", ".css", ".h
 # Paths exempt, with the reason each earns it.
 EXEMPT = (
     "docs/friend-repos/", # monthly digests OF OTHER PROJECTS, quoted from their sources
-    "docs/work/past/",    # dated records: what was true at a moment, kept unrewritten
+    "docs/contributing/lessons.md",   # dated records: what was true at a moment, kept unrewritten
     ".coderabbit.yaml",   # a review tool's configuration: keys, not prose; .yaml is here for MoonWalk's stage files
     "docs/reference/metrics/",      # generated
     "docs/reference/tests/",        # generated from test comments (fix the test, not the page)
+    "docs/work/backlog_mirror/",    # generated from the Project's cards (fix the card, not the page)
     "docs/moonmodules/",  # partly generated technical pages
     "src/platform/desktop/vendor/",   # upstream single-header code (miniaudio): not our prose
     "src/ui/vendor/",                 # upstream browser code (Prism): not our prose either

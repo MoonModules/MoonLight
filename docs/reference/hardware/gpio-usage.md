@@ -22,7 +22,7 @@ For **LED output** specifically — the pins a WS2812-class strand data line can
 | **ESP32-P4 (P4-NANO)** | 20, 21, 22, 23, 24, 25, 26, 27, 32, 33, 39-48 | 20 | Board-specific: the NANO commits eth-RMII (28-31/49-52), C6-SDIO (14-19/54), I2C (7-8), UART0 (37-38). A carrier board changes the exposed set — the MHC-WLED shield routes through transceivers (no bare GPIO). |
 | **ESP32-S31 (coreboard)** | take from the [coreboard reference](esp32-s31-coreboard.md) free set | — | Most of the header is committed to on-board RGMII eth + ES8311 codec + SD + USB-host; don't guess. |
 
-**Mapping these to actual device-model defaults** (which of a board's usable pins to pre-fill in `deviceModels.json`) is a separate, per-board step: the catalog defaults one strip for a bare dev board (the user wires the rest), or the exact wired set for a purpose-built board (QuinLED Dig-Octa: `0,1,2,3,4,5,12,13`). That per-model work is tracked in [backlog-core § LED output pins](../../work/future/backlog-core.md).
+**Mapping these to actual device-model defaults** (which of a board's usable pins to pre-fill in `deviceModels.json`) is a separate, per-board step: the catalog defaults one strip for a bare dev board (the user wires the rest), or the exact wired set for a purpose-built board (QuinLED Dig-Octa: `0,1,2,3,4,5,12,13`). That per-model work is tracked in [backlog/core § LED output pins](https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287077175).
 
 ## ESP32 (classic)
 
@@ -67,7 +67,7 @@ For **LED output** specifically — the pins a WS2812-class strand data line can
 | Avoid | GPIOs | Why |
 |-------|-------|-----|
 | Reserved | **flash/PSRAM pins per module** | The HP SPI flash + PSRAM bus (module-specific; the Waveshare P4-NANO wires them internally). Off-limits. |
-| Role-conflict | **34-38** | Strapping pins (boot mode). Don't drive at reset; the first LED-driver default wrongly landed here (see [lessons.md](../../work/past/lessons.md)). |
+| Role-conflict | **34-38** | Strapping pins (boot mode). Don't drive at reset; the first LED-driver default wrongly landed here (see [lessons.md](../../contributing/lessons.md)). |
 | Role-conflict | **37, 38** | UART0 console on the P4-NANO (`CONFIG_ESP_CONSOLE_UART_DEFAULT`) — the runtime `ESP_LOGI` lines come out here, not over USB. |
 | Board-wired (P4-NANO) | **Ethernet RMII** 28-31 / 49-52, **C6 SDIO** 14-19 / 54, **I2C** 7-8 | Consumed by the NANO's on-board Ethernet PHY, the C6 WiFi co-processor, and the I2C bus. |
 | Board-wired (P4-ETH) | **Ethernet RMII** 28-31 / 34-35 / 49-52, **ES8311 audio** 7-13, **USB D-/D+** 24-25, **microSD** 39-45 | The [Waveshare ESP32-P4-ETH](esp32-p4-eth.md) has no C6/WiFi. It carries its own onboard ES8311 codec, a native USB-C port, and a microSD slot. That page has the full per-signal map. |

@@ -28,7 +28,7 @@ on:
   # Both branches are listed on purpose. A workflow whose trigger names a branch nobody is
   # pushing to runs never, and reports nothing while looking healthy — this job sat idle for
   # two commits when the working branch was called `next` instead of `next-iteration`
-  # (docs/work/past/lessons.md). `main` keeps it firing once this branch is merged and retired.
+  # (docs/contributing/lessons.md). `main` keeps it firing once this branch is merged and retired.
   push:
     branches:
       - main

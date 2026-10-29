@@ -312,7 +312,7 @@ def test_the_commit_checks_fold_into_one_subprocess_per_trigger_group_each_withi
     # Every check keeps its id, so a run record and a link keyed on it still find it.
     ids = [s["id"] for pid in ["commit", *groups.values(), "desktop-tests"] for s in processes[pid]["steps"] if "run" in s["when"]]
     assert sorted(ids) == sorted(["specs", "prose", "commit", "docs", "docgen", "taglines", "code", "build-desktop", "build-tests", "test", "scenarios",
-                                  "esp32-fresh", "esp32-fresh-moonbase", "no-jit", "kpi", "js", "devices", "python", "firmwares", "improv"])
+                                  "esp32-fresh", "esp32-fresh-moonbase", "no-jit", "kpi", "js", "devices", "python", "firmwares", "improv", "backlog"])
     over = [w for w in gen_moonwalk.size_warnings(processes) if w[0] == "document-commit"]
     assert over == []   # the parent, each group and the stage within their caps
 
@@ -497,6 +497,25 @@ def test_the_pull_request_template_is_the_contribute_pr_process():
         "stale: uv run moondeck/docs/gen_moonwalk.py --pr-template"
 
 
+def test_the_bug_report_form_is_the_log_issue_process():
+    """The issue form GitHub shows is generated from the process, so an edit to either alone fails here rather than drifting."""
+    model = gen_moonwalk.build()
+    assert gen_moonwalk.ISSUE_FORM.read_text(encoding="utf-8") == gen_moonwalk.issue_form(model["processes"]), \
+        "stale: uv run moondeck/docs/gen_moonwalk.py --issue-form"
+
+
+def test_the_bug_report_form_asks_each_question_as_a_field():
+    """Each question a step asks becomes a text field, and the form reads as valid YAML."""
+    import yaml
+    processes = {"log-issue": {"title": "Log an issue", "goal": "A bug report.", "intro": "Describe it: what you saw.",
+                               "steps": [{"id": "describe", "say": "Describe it.", "asks": ["What happens?"]}, {"id": "open", "say": "Open it."}]}}
+    form = yaml.safe_load(gen_moonwalk.issue_form(processes))
+    assert form["name"] == "Bug report" and form["description"] == "A bug report."
+    fields = [b for b in form["body"] if b["type"] == "textarea"]
+    assert [(f["id"], f["attributes"]["label"]) for f in fields] == [("describe", "What happens?")]
+    assert "Log an issue" in form["body"][0]["attributes"]["value"]
+
+
 def test_the_pull_request_template_asks_each_question_as_a_heading():
     """Each question a step asks becomes a heading the contributor writes under."""
     processes = {"contribute-pr": {"title": "Contribute", "goal": "One topic.",
@@ -504,3 +523,13 @@ def test_the_pull_request_template_asks_each_question_as_a_heading():
     text = gen_moonwalk.pr_template(processes)
     assert "## What it changes\n" in text and "## What you tested\n" in text
     assert "One topic. [Contribute](" in text
+
+
+def test_open_work_reads_each_mirrored_cards_process_field(tmp_path):
+    """A card's Process field puts it under its process on the map; a card with none stays off it."""
+    import json
+    (tmp_path / "cards.json").write_text(json.dumps([
+        {"title": "Fix the join", "area": "Core", "module": "", "kind": "Bug", "status": "Backlog", "process": "wifi", "card": "https://x/5?pane=issue&itemId=1", "number": None},
+        {"title": "No process", "area": "Core", "module": "", "kind": "Feature", "status": "Backlog", "process": "", "card": "https://x/5?pane=issue&itemId=2", "number": None}]), encoding="utf-8")
+    assert gen_moonwalk.open_work(tmp_path) == {"wifi": [{"title": "Fix the join", "card": "https://x/5?pane=issue&itemId=1"}]}
+

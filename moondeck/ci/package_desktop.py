@@ -598,6 +598,12 @@ def package_windows(binary: Path, version: str) -> Path:
     return out
 
 
+def show_ccache_stats() -> None:
+    """The compiler cache's hit rate, printed after a successful build so a cache that stopped hitting shows in the log."""
+    if shutil.which("ccache"):
+        subprocess.run(["ccache", "--show-stats"], check=False)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--version", default="",
@@ -630,6 +636,7 @@ def main() -> int:
             return 2
         binary = configure_and_build_macos(args.version)
         package_macos(binary, version)
+        show_ccache_stats()
         return 0
 
     if system == "Windows":
@@ -644,6 +651,7 @@ def main() -> int:
             return 2
         binary = configure_and_build_linux(args.version)
         package_linux(binary, version)
+        show_ccache_stats()
         return 0
 
     print(f"package_desktop: host '{system}' not supported. "

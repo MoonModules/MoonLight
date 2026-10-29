@@ -56,7 +56,7 @@ The product owner is the critical success factor. They review every line before 
 
 **An agent posts on GitHub only what the product owner has read**: a comment, a review reply or an issue goes out after they said so. Text in their name to another project or community carries no agent attribution line or trailer.
 
-**Report the real situation.** A reason to stop is a real one (a failing theory, a broken tree, a decision needed), never the time of day, and an item reported as open exists under `docs/work/future/`.
+**Report the real situation.** A reason to stop is a real one (a failing theory, a broken tree, a decision needed), never the time of day, and an item reported as open exists as a card on [the Project](https://github.com/users/MoonModules/projects/5).
 
 **Reverting is the product owner's call**, whatever prompted it: a contradicting doc, a reviewer finding, a failing check, or the agent's own second thoughts. State the case and wait.
 
@@ -84,7 +84,7 @@ Every activity is a [MoonWalk](docs/moonwalk.md) process, the one home of its st
 
 ### Main and branch
 
-**The product owner creates every branch**, and main stays releasable: [the branch](docs/moonwalk.md#branch). A change goes from [a spec and a plan](docs/moonwalk.md#pick-spec-plan) to a pull request the plan describes. **Moving the plan to `docs/work/past/plans/` is the product owner's call**, because "the code is written" is not "the plan is realized".
+**The product owner creates every branch**, and main stays releasable: [the branch](docs/moonwalk.md#branch). A change goes from [a spec and a plan](docs/moonwalk.md#pick-spec-plan) to a pull request the plan describes. **Closing the plan, as a closed issue labeled `plan`, is the product owner's call**, because "the code is written" is not "the plan is realized".
 
 **A contributed pull request is one topic, max 400 changed lines and ten files**, tests included, based on main: [Contribute a pull request](docs/moonwalk.md#contribute-pr). The contributor vouches for every line, agent-written or not, answers reviewers in their own words, and says what an agent wrote and what was tested. **A contribution is reviewed and finished as [Review and finish a contribution](docs/moonwalk.md#review-contribution) describes**. The contributor fixes their own code first and the maintainer finishes, case by case. The merge keeps their commits and authorship.
 
@@ -116,4 +116,4 @@ On "run pre-release": [Release](docs/moonwalk.md#release). Every commit and merg
 
 Published at [moonmodules.org/MoonLight](https://moonmodules.org/MoonLight/); sources under `docs/`, laid out in [the documentation hierarchy](docs/contributing/documentation-standards.md#the-hierarchy). Docs describe the system as it is; git is the history; specs precede implementation.
 
-`docs/work/` is the exemption to present tense: `future` is what does not exist yet, `present` is being built, `past` is what shipped and the lessons it taught. Agents read it when planning, on request, and it shrinks under mandatory subtraction like everything else.
+`docs/work/` is the exemption to present tense: it holds the plans being built and `backlog_mirror/`, the generated copy of [the Project](https://github.com/users/MoonModules/projects/5)'s cards, where the backlog lives; design studies are in [docs/design/](docs/design/index.md). A shipped or stopped plan is a [closed issue labeled `plan`](https://github.com/MoonModules/MoonLight/issues?q=label%3Aplan%20is%3Aclosed), and hard-won lessons are in [lessons.md](docs/contributing/lessons.md). Agents read the work when planning, on request, and it shrinks under mandatory subtraction like everything else.

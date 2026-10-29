@@ -126,13 +126,13 @@ Every page serves one of four reader needs, and only one. This is [Diátaxis](ht
 
 The test for any page is the cell it sits in. A tutorial that stops to explain, or a reference that starts to teach, is two pages: move the other half to where it belongs.
 
-Two kinds of page sit outside the grid on purpose. **The rules**, [coding-standards.md](coding-standards.md) and this page in `contributing/` and [CLAUDE.md](../../CLAUDE.md) at the repo root, are for contributors and bind every change. `legal/` sits outside it too. **Work on its way to the code** lives under `docs/work/`, apart from the pages that describe the system. `future` holds what is planned, `present` what is being built, which moves to `past` at its PR, and `past` the closed plans, shipped or cancelled.
+Two kinds of page sit outside the grid on purpose. **The rules**, [coding-standards.md](coding-standards.md) and this page in `contributing/` and [CLAUDE.md](../../CLAUDE.md) at the repo root, are for contributors and bind every change. `legal/` sits outside it too. **Work on its way to the code** lives under `docs/work/`, apart from the pages that describe the system. It holds the plans being built; the backlog is [the Project](https://github.com/users/MoonModules/projects/5)'s cards, mirrored to `backlog_mirror`, a survey before a plan is a [design study](../design/index.md) in `design/`, and a plan that ships or stops becomes a [closed issue labeled `plan`](https://github.com/MoonModules/MoonLight/issues?q=label%3Aplan%20is%3Aclosed).
 
 Two scales below a page. **A module** has one reference card and one header (see [Module pages](#module-pages)); **a line of code** carries its own reason in a comment (see [Comments](#comments)).
 
 **The split that decides everything else.** A hand-written page says what the code cannot; the header is the code's own documentation. So a fact about behavior belongs in the `.h`, beside the code. A fact about intent, cost or sequence has no member to sit on, and is written.
 
-**A shipped plan is a working document, not testimony.** It may be edited, trimmed, or deleted: whatever its PR already carries is duplication. Only a dated record stating what was true at a moment (release notes, an inventory quoted from another project) is kept unrewritten.
+**A shipped plan is a working document, not testimony.** Its closed issue keeps what no PR carries, and may be edited or trimmed: whatever its PR already carries is duplication. A dated record of a past state, such as release notes or an inventory quoted from another project, stays as written.
 
 ## Writing
 

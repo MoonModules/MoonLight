@@ -89,8 +89,8 @@ def run_one(kind: str, filt: str | None, junit: Path | None = None) -> bool:
         # the build, and must FAIL. A gate that turns every unexpected failure into a green skip is
         # worse than no gate: it would have quietly stopped guarding the multicore code.
         if kind == "thread" and sys.platform == "darwin":
-            print("  SKIPPED — TSan's runtime is broken on macOS/arm64 (hello-world segfaults; a")
-            print("  toolchain bug, not a finding). Thread races are gated by Linux CI.")
+            print("  SKIPPED: TSan's runtime is broken on macOS/arm64 (hello-world segfaults; a")
+            print("  toolchain bug, not a finding). `act -j sanitizers` runs CI's Linux lane locally.")
             return True
         print(f"  FAIL — the {kind} runtime does not run a hello-world on this host.")
         print("  That is a broken toolchain or build, not a skippable condition. Investigate.")

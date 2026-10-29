@@ -52,7 +52,7 @@ These act on the grid as a surface rather than on a shape. Between them they cov
 | `draw::blendPixel` | Lerps a pixel toward a color by an amount, rather than replacing it | GameOfLife, Tetrix | — |
 | `draw::addPixel` | Adds light to a pixel, saturating instead of wrapping to black | Blurz | — |
 | `draw::scroll` | Shifts the whole grid along an axis, optionally wrapping, the shift register | FreqMatrix | — |
-| `draw::splat` | Draws a point at a fractional position, splitting its light across neighbouring pixels so motion is smooth on a coarse grid | *(no caller yet, the particle kernel is its consumer)* | — |
+| `draw::splat` | Draws a point at a fractional position, splitting its light across neighboring pixels so motion is smooth on a coarse grid | Fireworks | — |
 
 </div>
 
@@ -318,4 +318,4 @@ Everything else writes; this reads. Once a frame can be sampled at an arbitrary 
 
 </div>
 
-**On the "no caller yet" entries.** Each was added for a named consumer in the [power-function plan](../../work/future/power-functions-analysis-top-down.md): `splat`, `combineMax` and the remaining SDF and easing forms are what the particle kernel and the shader tier build on. They are listed rather than hidden so the gap between what exists and what is used stays visible.
+**On the "no caller yet" entries.** Each exists for a named consumer: `combineMax` and the remaining SDF and easing forms are what the particle kernel and the shader tier build on. They are listed rather than hidden so the gap between what exists and what is used stays visible.

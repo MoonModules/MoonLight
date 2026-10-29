@@ -45,7 +45,7 @@ So the position is neither enthusiasm nor resignation. A tool this consequential
 
 It is not a verdict on the libraries we moved away from. They work, they have thousands of users, and they were built by people solving real problems on hardware we have never touched.
 
-It is also not arms-length criticism. We built, maintained and contributed to the projects this one descends from, and the code we spent years inside was written by other people *and by us*. Those lessons are recorded in [what we built](../work/past/index.md).
+It is also not arms-length criticism. We built, maintained and contributed to the projects this one descends from, and the code we spent years inside was written by other people *and by us*. Those lessons are recorded in [what we built](https://github.com/MoonModules/MoonLight/issues?q=label%3Aplan%20is%3Aclosed).
 
 And it is not a general recommendation. No-dependency is right for *this* project because of what this project is for: total control of the target, and a test system with no blind spots. For most software it would be a bad trade.
 
@@ -100,4 +100,4 @@ This is the current iteration of years of LED and light-system development, and 
 | **StarLight** | Standalone LED firmware | [ewowi/StarLight](https://github.com/ewowi/StarLight) |
 | **MoonLight** | Ground-up build: 60+ effects, memory-optimized mapping, 11 driver types | [ewowi/MoonLight](https://github.com/ewowi/MoonLight) |
 
-We built and maintained these, so MoonLight rests on our own hands-on experience. Their lessons are distilled in [`docs/work/past/`](../work/past/index.md). We carry the ideas forward and write our own code, crediting by name whoever inspired a feature.
+We built and maintained these, so MoonLight rests on our own hands-on experience. Their lessons are distilled in [lessons.md](../contributing/lessons.md). We carry the ideas forward and write our own code, crediting by name whoever inspired a feature.

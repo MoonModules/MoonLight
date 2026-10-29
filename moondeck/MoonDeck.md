@@ -97,6 +97,24 @@ uv run moondeck/test/test_desktop.py
 
 Runs `./build/<host>/test/mm_tests -s` (doctest with all test cases shown) — same per-host build dir as the desktop build above.
 
+### release_stage
+
+The release's build and staging steps, one subcommand each, so `release.yml` calls a script for each and a release's assets stage locally too: `tag` and `version` for the release name, `firmwares` for the build matrix, `stage-esp32` and `stage-teensy` for the binaries, `gather`, `extras` and `manifests` for the release, `container-context` and `smoke-images` for the container, `pages-site` and `merge-docs` for the site. The upload, the `latest` tag, the registry push and Pages stay GitHub's own. The process: [CI on a release tag](https://moonmodules.org/MoonLight/moonwalk.html#ci-on-release).
+
+```bash
+uv run moondeck/ci/release_stage.py tag --input-tag v7.1.0 --ref refs/tags/v7.1.0 --ref-name v7.1.0
+uv run moondeck/ci/release_stage.py stage-esp32 --firmware esp32s3-n16r8 --version 7.1.0
+```
+
+### run_process
+
+Run a MoonWalk process's script steps from the terminal, as the MoonDeck UI runs a gate: a step calling a subprocess stands for that subprocess's steps, and each run is recorded, so the map marks it. By default only the steps the change triggers run and a step whose last pass still holds is skipped; `--every` runs every step, `--rerun` ignores a holding pass, and `--base main` judges the change as a merge does.
+
+```bash
+uv run moondeck/run/run_process.py ci-on-pr     # what CI runs on a pull request, locally
+uv run moondeck/run/run_process.py commit --every
+```
+
 ### test_host
 
 Run the host test suites: the Python ones, the JS ones, and the UI ones. The UI runs drive a real browser against a running device, cost minutes and skip without a desktop and a Playwright browser, so they run on request only and are never a gate.
@@ -615,8 +633,8 @@ drivers** — so the render path itself is covered.
 The gap is real but narrow: `src/platform/esp32/` has no tick methods (it is free functions the
 tick path calls into), and while a call INTO one of them is reported at the call site, the
 function's own body is never analyzed. A platform function that blocks internally without
-carrying `MM_NONBLOCKING` is invisible. Closing that needs an xtensa clang — backlogged as
-"ESP32 clang/LLVM toolchain" in backlog-core.md.
+carrying `MM_NONBLOCKING` is invisible. Closing that needs an xtensa clang: backlogged as
+[ESP32 clang/LLVM toolchain](https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287129673).
 
 The count lives in the code check: [check_code](#check_code) runs the same build and adds one `blocking call on the render path` row per site, whose committed count may only fall. This script is the detailed view of those sites, on request. `-Wno-error=function-effects` keeps the build green, since each finding is a judgment: fix it, annotate the callee, or accept it with a scoped reason.
 
@@ -814,6 +832,15 @@ Output shape:
 - **Summary** footer: commit count, release count, generation timestamp.
 
 The MoonDeck button writes the file, prints a `MOONDECK_VIEW: /api/history-report` marker that the log renderer auto-opens in the View pane (and renders as an "Open in View pane → …" clickable link). Re-runs on identical git state produce a deterministic file except for the timestamp line in the footer.
+
+### project_mirror
+
+Render the [GitHub Project](https://github.com/users/MoonModules/projects/5), the backlog's one home, to `docs/work/backlog_mirror/`, one Markdown document per Area grouped by module, so the repository versions every card edit and a reader reads the backlog as documents. It also writes `build/project.json` (gitignored) for an agent to search. Each card in a document carries its link, and the docs link a backlog item by that card URL, which survives a retitle. `--check` writes nothing and fails when a document differs from what the board renders, when a doc links a card the board does not hold, or when it links a generated document's heading instead of the card; it is the commit step, and without a network it skips. The Project is public, so any `gh` account reads it.
+
+```bash
+uv run moondeck/report/project_mirror.py           # render the board into docs/work/backlog_mirror/
+uv run moondeck/report/project_mirror.py --check   # the commit check: fail on a stale or hand-edited document
+```
 
 ### screenshot_modules
 
@@ -1204,7 +1231,7 @@ uv run moondeck/qemu/run_qemu.py --gdb            # freeze at reset, wait for a 
 
 Uses [Espressif's QEMU fork](https://github.com/espressif/qemu) ([docs](https://docs.espressif.com/projects/esp-idf/en/stable/esp32/api-guides/tools/qemu.html)), which emulates the ESP32's CPU, memory and enough peripherals to boot a real firmware image. Install it with `python3 $IDF_PATH/tools/idf_tools.py install qemu-xtensa`.
 
-**Why it earns its place: it EXECUTES the code.** Every other check compares emitted bytes against a model of what they should be, so none can catch a mistake the model shares. The emulator runs the instructions the way silicon does, including Xtensa's register window, `entry`/`retw` and the exception path, so a JIT defect faults here, on this machine, in seconds, instead of on a bench with only a crash dump to read. That is what it was built for ([the register-window frame bug](../docs/work/past/lessons.md#lessons-from-the-moonlive-on-xtensa-branch-the-register-window-frame-bug)).
+**Why it earns its place: it EXECUTES the code.** Every other check compares emitted bytes against a model of what they should be, so none can catch a mistake the model shares. The emulator runs the instructions the way silicon does, including Xtensa's register window, `entry`/`retw` and the exception path, so a JIT defect faults here, on this machine, in seconds, instead of on a bench with only a crash dump to read. That is what it was built for ([the register-window frame bug](../docs/contributing/lessons.md#lessons-from-the-moonlive-on-xtensa-branch-the-register-window-frame-bug)).
 
 The emulated board is a full device, not a console toy: the `qemu` firmware variant swaps WiFi (no radio exists) for QEMU's emulated OpenCores MAC, so the guest gets a DHCP address and the REST API and web UI work exactly as on hardware. The same scripts, tests and browser drive it. Host port 8410 forwards to the guest's HTTP server, deliberately not 8080 so a desktop build can run alongside.
 

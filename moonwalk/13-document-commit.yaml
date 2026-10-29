@@ -26,8 +26,8 @@ processes:
         detail: |
           A break is documented rather than carried. The entry buys one way to do each thing.
       - id: delete
-        say: Delete the shipped backlog item or spec draft.
-        when: { manual: "The backlog item is under docs/work/future, the plan under docs/work/present; both leave in the pull request that ships them." }
+        say: Close the shipped card.
+        when: { manual: "A card a pull request ships without a plan moves to Done on the Project; a card a plan absorbed is gone already, and the plan closes as an issue." }
     outro: |
       The docs build and the documentation checks run with [the commit checks](moonwalk.md#commit). The merge gate verifies the docs landed with the code.
   - id: commit
@@ -107,6 +107,11 @@ processes:
         when: { run: { script: moondeck/check/check_docgen.py } }
         detail: |
           A ratchet against the counts committed in `docs/reference/metrics/docgen.json`, per rule and in total: [check_docgen](../moondeck/MoonDeck.md#check_docgen).
+      - id: backlog
+        say: Check the backlog matches the Project.
+        when: { run: { script: moondeck/report/project_mirror.py, args: "--check" } }
+        detail: |
+          The cards are the backlog's home and `docs/work/backlog_mirror/` their generated copy, so the repository versions every card edit. A FAIL means a card changed since the last render or a file was edited by hand: run the script without `--check` and stage what it writes. Without a network it skips.
       - id: taglines
         say: Check the front pages agree on the platforms.
         given: [{ changed: [README.md, CLAUDE.md] }]

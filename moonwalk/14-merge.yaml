@@ -61,7 +61,7 @@ processes:
     actor: ci
     goal: Every pull request builds and tests on every platform.
     intro: |
-      GitHub Actions runs these jobs on every pull request, a fork's included, scoped to the paths each job covers. Each job reproduces locally with the MoonDeck script named in its step.
+      GitHub Actions runs these jobs on every pull request, a fork's included, scoped to the paths each job covers. Each job reproduces locally with the MoonDeck script named in its step, and `uv run moondeck/run/run_process.py ci-on-pr --base main` runs the ones the branch triggers. [act](https://github.com/nektos/act) runs the workflows themselves in Linux containers, as GitHub does: `act -j <job>`.
     steps:
       - id: python
         say: Run the Python host tests.
@@ -87,7 +87,7 @@ processes:
         say: Run the unit tests under three sanitizers.
         when: { run: { script: moondeck/check/check_sanitizers.py } }
         detail: |
-          Workflow `test.yml`, on Linux. AddressSanitizer finds use-after-free, ThreadSanitizer finds data races, and RealtimeSanitizer reports allocation or blocking on the render path without failing the run. CI runs one lane each, `--kind <kind> --filter ''`; on macOS the script runs ASan alone.
+          Workflow `test.yml`, on Linux. AddressSanitizer finds use-after-free, ThreadSanitizer finds data races, and RealtimeSanitizer reports allocation or blocking on the render path without failing the run. CI runs one lane each, `--kind <kind> --filter ''`; `act -j sanitizers --matrix kind:thread` runs ThreadSanitizer in CI's Linux lane on any machine with Docker, in a container of the host's own architecture, since TSan's runtime fails under emulation.
       - id: findings
         say: Run the commit checks.
         when: { process: commit }
@@ -172,7 +172,7 @@ processes:
       - id: docs-in-sync
         section: Judgment
         say: Check the docs match what the branch ships.
-        when: { manual: "Headers, MIGRATING entries, shipped drafts deleted." }
+        when: { manual: "Headers, MIGRATING entries, the shipped card closed." }
       - id: title
         say: Match the title and description to the commits.
         when: { run: { command: "git log main..HEAD" } }
@@ -193,7 +193,7 @@ processes:
         say: Push and merge.
         when: { manual: "The product owner's step, never an agent's." }
     outro: |
-      Lessons are carried forward rarely, since most learning lives in the pull request's record. A gotcha worth keeping goes to [lessons.md](work/past/lessons.md); a hardened rule goes to CLAUDE.md or [the coding standards](contributing/coding-standards.md).
+      Lessons are carried forward rarely, since most learning lives in the pull request's record. A gotcha worth keeping goes to [lessons.md](contributing/lessons.md); a hardened rule goes to CLAUDE.md or [the coding standards](contributing/coding-standards.md).
   - id: review-contribution
     title: Review and finish a contribution
     actor: product-owner

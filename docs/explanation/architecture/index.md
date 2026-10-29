@@ -61,7 +61,7 @@ flowchart LR
 | [MoonCloud](mooncloud.md) | The opt-in server side, and the only server a device talks to |
 | [MoonDeck](moondeck.md) | One script per task, two front ends |
 | [MoonTube](../../../moondeck/moontube/moontube.md) | One run file per clip: performed as a UI test, filmed as a documentation video |
-| [MoonWalk](../../moonwalk.md) | Every process, from a first reader to a release, described once and drawn on one map |
+| [MoonWalk](moonwalk.md) | Every process, from a first reader to a release, described once and drawn on one map |
 
 ## Core and light domain
 

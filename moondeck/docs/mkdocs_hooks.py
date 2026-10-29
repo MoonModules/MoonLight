@@ -90,7 +90,7 @@ def _rewrite_out_of_docs_links(markdown: str, src_uri: str) -> str:
         target = os.path.normpath(str(page_dir / rel)).replace(os.sep, "/")
         if target.startswith(_OUT_OF_DOCS) and not target.startswith("docs/"):
             return f"]({_repo_url(target)}{frag})"
-        # Fallback for links authored relative to the REPO ROOT (common in the transient docs/work/ notes, written before their file sat this deep under docs/): strip leading `../` and see if the remainder is itself an out-of-docs repo path. Catches `../../moondeck/x.py` from a docs/work/past/plans/ page, which resolves to a nonexistent docs/moondeck/x.py, AND a bare `src/x.js` / `docs/plan.md` with no `../` at all (same intent, written root-relative), both 404 in-site, so send them to the GitHub blob.
+        # Fallback for links authored relative to the REPO ROOT (common in the transient docs/work/ notes, written before their file sat this deep under docs/): strip leading `../` and see if the remainder is itself an out-of-docs repo path. Catches `../../moondeck/x.py` from a docs/work/ page, which resolves to a nonexistent docs/moondeck/x.py, AND a bare `src/x.js` / `docs/plan.md` with no `../` at all (same intent, written root-relative), both 404 in-site, so send them to the GitHub blob.
         stripped = re.sub(r'^(?:\.\./)+', '', rel)
         if stripped.startswith(_ROOT_REL_PREFIXES):
             return f"]({_repo_url(stripped)}{frag})"
