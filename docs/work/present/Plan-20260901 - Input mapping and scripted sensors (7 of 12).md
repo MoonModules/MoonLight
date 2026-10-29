@@ -1,6 +1,6 @@
 # Plan: input mapping and scripted sensors
 
-Turns [input-mapping-analysis.md](../future/input-mapping-analysis.md) into steps. Two threads
+Turns [analysis-input-mapping.md](../future/analysis-input-mapping.md) into steps. Two threads
 run together throughout, deliberately:
 
 - **Compiled modules** for the inputs a board ships with, declared in the device catalog.
@@ -164,7 +164,7 @@ sensor is: a stream, with events derivable from it.
 So every sensor step below has two acceptance criteria, and both are on the bench: **an effect reads
 the value per frame through the published frame**, and **a threshold drives a control through the
 table**. A sensor that only does one is half-built. The full reasoning is in
-[input-mapping-analysis.md](../future/input-mapping-analysis.md).
+[analysis-input-mapping.md](../future/analysis-input-mapping.md).
 
 ## Step 0: the decisions ✅
 
@@ -256,18 +256,17 @@ and a test that the rename left no `IrService` behind. Bench: the Dig-2-Go's GPI
 and the infrared remote on another, both driving `Control.switch1`, so two inputs reaching one target
 is proven rather than assumed.
 
-## Step 1b: an encoder that shows what it selects 🚧 (the Open Stage Control session has no strip widget; its label and pad-matrix gaps stay in backlog-core)
+## Step 1b: an encoder that shows what it selects 🚧 (the Open Stage Control session has no strip widget; its label and pad-matrix gaps stay in backlog-services)
 
 Small, and it follows step 1 rather than joining it, so the rebuild is not also carrying a UI change.
 
 Infrared's palette actions need a destination. There is no `LightsControl` module and there will not
-be one ([backlog-mixed.md](../future/backlog-mixed.md)): `palette` stays on `Drivers` because
+be one: `palette` stays on `Drivers` because
 that is where it is consumed, and the surface reaches into it, exactly as `fader1` already targets
 `Drivers.brightness` and `switch1` targets `Drivers.on`.
 
 - **`encoder1` targets `Drivers.palette`**, hardcoded for now. That matches the existing pair and the
-  backlog's own note that per-control assignment is a later UI plus persistence job
-  ([power-functions-analysis-top-down.md](../future/power-functions-analysis-top-down.md)).
+  fact that per-control assignment is a later UI plus persistence job.
 - **Wrap or clamp follows the bound control's type**: a palette ring wraps, a brightness clamps.
 
 A `uint8_t` encoder covers 256 options, comfortably past the palette count. Worth stating as the
@@ -295,7 +294,7 @@ cannot show text simply ignores it. The shipped
 [Open Stage Control session](../../reference/examples/open-stage-control.json) gains a text widget
 bound to it, which is also worth doing because that session already has known gaps (its widget labels
 do not render and its pad matrix draws nothing, both recorded in
-[backlog-core.md](../future/backlog-core.md)): adding the strip is the moment to fix the session
+[backlog-services.md](../future/backlog-services.md#the-open-stage-control-sessions-labels-2026-08-30)): adding the strip is the moment to fix the session
 by building one widget of each kind in its own editor and copying the shape it produces.
 
 **Test:** the infrared remote's palette next/prev rows driving `Control.encoder1`, with the palette
@@ -676,7 +675,7 @@ to zero, so a pedal pushed fully down settled at 253 rather than 255 and full br
 unreachable. It now takes the remaining distance whole once the step rounds to nothing.
 
 **Still open**: the bench half. A pot on an ADC pin, both paths on the same hardware. The SE16 and
-LightCrafter sense pins are the natural rig and are now free (see `backlog-light.md`), but the scale
+LightCrafter sense pins are the natural rig and are now free (see `backlog-platform.md`), but the scale
 factor per board needs the schematic.
 
 ## Step 4: I2C sensors 🚧 (only the shared bus and its scan, `I2cBusModule`; no register read, sensor module, published frame or `i2cRead` builtin)
@@ -773,7 +772,7 @@ peripheral (PCNT for the encoder, RMT or a timed capture for the echo) rather th
 **Test:** an encoder on the bench driving `Control.encoder1` through the module, and an HC-SR04
 reporting distance through a script.
 
-## Step 6: PIR, and the trigger vocabulary ✅ (a PIR is a `set` row, which already holds a level, so no `level` kind: two kinds would do one job; the help and the momentary-row test name it. Multi-click waits for a panel that needs it, in backlog-core)
+## Step 6: PIR, and the trigger vocabulary ✅ (a PIR is a `set` row, which already holds a level, so no `level` kind: two kinds would do one job; the help and the momentary-row test name it. Multi-click waits for a panel that needs it, in backlog-ui)
 
 The cheap finish. A PIR is a digital pin, so it needs no seam at all: it is a `ButtonService` row
 with the `set` event, which holds the pin's level rather than reacting to a press. MoonLight

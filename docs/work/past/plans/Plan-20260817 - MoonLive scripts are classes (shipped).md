@@ -750,7 +750,7 @@ therefore needs a host test that proves the semantics and a bench run that prove
    The P4 is up and holds its scripts, but it panics with `Cache error` every few minutes while
    idle. Established as PRE-EXISTING rather than a regression: it runs the default module tree with
    no MoonLive module at all, and a firmware built from a clean `main` crashes identically. Recorded
-   in [backlog-core](../../future/backlog-core.md). A SEPARATE P4 boot loop found in the same
+   in [backlog-platform](../../future/backlog-platform.md#esp32-p4-wifi-through-the-c6-co-processor). A SEPARATE P4 boot loop found in the same
    session WAS this branch's regression and is fixed: the engine had grown to 1440 bytes held by
    value in every scripted module, which `registerType`'s stack probe could not absorb.
 

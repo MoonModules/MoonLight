@@ -4,7 +4,7 @@ Draft for the product owner's approval. A band plays, and the lights answer each
 
 ## The design basis
 
-The core backlog already analyzed this, and the plan follows its conclusions rather than reopening them ([backlog-core: notes as an effect input, the rest of the band, everything as MIDI](../future/backlog-core.md)):
+Analyzed when the plan was picked, and settled:
 
 - **Notes are performance data, not control-surface input.** A desk sets controls; a keyboard's notes are read by an effect, which decides what a note means, the way it reads audio.
 - **Two frames, kept separate.** A `MidiFrame` carries what arrived as notes; an `AudioFrame` per analyzed channel carries what arrived as sound. A per-band onset never pretends to be a note-on with a fake pitch and velocity.
@@ -34,7 +34,7 @@ An **Akai MPK261**: 61 semi-weighted keys, 16 RGB-backlit pads, 8 knobs, 8 fader
 - per channel, which of the 128 notes are held and how hard (velocity);
 - the note starts and ends since the last frame as ordered events, each with its channel, pitch and velocity, so two hits of the same pitch between frames stay two and a note shorter than a frame still fires;
 - pitch bend, modulation and sustain per channel;
-- the MIDI clock's beat phase when a clock runs.
+- the MIDI clock's beat phase when a clock runs, the field [the audio plan, step 5](Plan-20261028%20-%20Audio%20that%20answers%20the%20music%20(0%20of%205).md) fills from the music when none does.
 
 An effect opts in, as audio effects do, and on a board with no MIDI it sees an empty frame and draws its idle state.
 
@@ -72,7 +72,7 @@ Each step ends in something verified on the bench.
 Two routes, the first needing no code:
 
 - **Drum triggers:** clip-on triggers into a trigger module send MIDI, so steps 1 to 3 already cover an acoustic kit.
-- **Per-band onsets** in `AudioService`: the single `onset` fires on any hit, so a kick and a snare look alike. An onset per band group (low for the kick, mid and high for the snare and cymbals) separates them from the bands already computed. Best with a direct out or an aux send from the mixer giving the kit alone.
+- **Per-band onsets**, built by [the audio plan, step 4](Plan-20261028%20-%20Audio%20that%20answers%20the%20music%20(0%20of%205).md): an onset per range (low for the kick, mid and high for the snare and cymbals). Best with a direct out or an aux send from the mixer giving the kit alone.
 - Verify with a kit, or a recorded kit track, through one microphone or line input.
 
 ### 6. Analog instruments, an investigation ⏳
@@ -86,7 +86,7 @@ Decided per instrument, cheapest first:
 | Voice | a pitch-to-MIDI box | pitch plus loudness envelope on one clean channel |
 | Any instrument, loudness only | a direct out or aux send | the existing level and bands on its own channel |
 
-The on-device column needs a second audio channel: the multi-channel front-ends the [audio roadmap](../future/audio-dsp-roadmap.md) anticipates, such as a 4-channel TDM codec (the ES7210 on the Waveshare RGB-Matrix board) or line inputs from the mixer. The budget allows one or two analyzed channels per board.
+The on-device column needs a second audio channel: the multi-channel front-ends [the audio plan's backlog](Plan-20261028%20-%20Audio%20that%20answers%20the%20music%20(0%20of%205).md#backlog) lists, such as a 4-channel TDM codec (the ES7210 on the Waveshare RGB-Matrix board) or line inputs from the mixer. The budget allows one or two analyzed channels per board.
 
 ### 7. Follow the musicians ⏳
 
@@ -112,9 +112,16 @@ The sensors, from what is listed to what a stage needs:
 
 **On the bench (2026-10-19): two HLK-LD2450 kit B** from Hi-Link's own store, each with a USB-to-serial adapter, a Bluetooth antenna and a cable. The adapter lets the radar be tried on a computer with Hi-Link's tool before the UART seam exists: targets, range and zone exclusion on day one. Two units answer the stage questions: whether two 24 GHz radars side by side interfere, and how their targets merge where their views overlap.
 
-The LD2450's Bluetooth only updates its firmware, so every reading goes over UART, whose protocol is simple and has plenty of open firmware to read as prior art. Two siblings fit other jobs: the **LD2451** is larger and reaches further, far enough to track cars, and the **LD2410** is low-powered, so it does not see through walls and needs no distance gates set to stop it. The **LD2410C** also sends its UART data over Bluetooth Low Energy when it is only powered from 5 V, with an option to switch that off or require pairing, which would let a board read a radar with no wire. The radar's UART seam is the same one wired DMX-512 needs, [RS-485 / DMX-512 wired output](../future/backlog-light.md#rs-485-dmx-512-wired-output-future-the-physical-dmx-driver), so one seam serves both.
+The LD2450's Bluetooth only updates its firmware, so every reading goes over UART, whose protocol is simple and has plenty of open firmware to read as prior art. Two siblings fit other jobs: the **LD2451** is larger and reaches further, far enough to track cars, and the **LD2410** is low-powered, so it does not see through walls and needs no distance gates set to stop it. The **LD2410C** also sends its UART data over Bluetooth Low Energy when it is only powered from 5 V, with an option to switch that off or require pairing, which would let a board read a radar with no wire. The radar's UART seam is the same one wired DMX-512 needs, [RS-485 / DMX-512 wired output](../future/backlog-drivers.md#rs-485-and-dmx-512-wired-output-the-physical-dmx-driver), so one seam serves both.
 
 The order: the radar first, which needs a UART seam the platform does not have yet; PosiStageNet in second, which is UDP and needs no new seam; the ToF zone grid as the indoor alternative once the input-mapping plan's I2C step lands and a VL53L8CX read is measured that does not stall the render task: an 8 × 8 frame over I2C is large, so the candidates are SPI, a lower ranging rate, or reading on a task off the render core. Verify with a person walking the bench stage and the heads following.
+
+## Backlog
+
+On the topic and not a step. What remains here when the plan ships moves to `docs/work/future/`, item by item, then.
+
+- **MIDI learn: any note or CC onto any control (robwomp, 2026-10-12).** The MIDI service decodes two known layouts, Mackie Control and an Akai APC40 mkII profile, so a controller sending plain notes or CCs outside them drives nothing: a user with a generic controller on Linux got no note or CC data in. The infrared and gamepad services already map an arbitrary input onto any control with `learn` rows, and MIDI gets the same rows: each one's `learn` arm captures the next note or CC with its channel, a target names the control, and the value scales into the target's range (a CC's 0 to 127, a note's velocity, or a note as a toggle). That is MIDI learn as consoles and DAWs offer it, through the same primitive, so one mechanism maps every input. The two profiles stay for the desks whose layout they describe, since they carry the way back (motor faders, knob rings, lit pads); a learned row has none unless the controller echoes its CCs. The bench instrument's knobs and faders reach the control surface through it.
+- **The OpenLamp convention (2026-09-22).** [openlamp-spec-midi](https://github.com/openlamp/openlamp-spec-midi) is an MIT-licensed convention for driving WLED over MIDI: notes 59-68 for hues plus black and white, notes 48-56 for off, on, toggle and blackout, CC 1 for brightness, CC 3-4 for hue and saturation, CC 5-8 for effect, speed, intensity and palette, Program Change for presets, MIDI channel for targeting, and MIDI clock for beat sync. The [organization](https://github.com/openlamp) also has an Ableton Link and MIDI-clock tempo library, worth reading when step 1 wires the clock's beat phase, and a CC0 asset set of 72 palette illustrations and 216 effect previews in eight languages. Its engine is Python and cloud-free by design, so nothing there ports to a device; the value is in agreeing what a note and a CC *mean*, which buys a user their existing mappings. Judged against principle 2 before adopting: a candidate standard, but a draft "likely to change, and early on to change quickly" with low single-digit stars, so the sequence is MIDI learn above with the OpenLamp numbers as the default mapping where they fit, rather than a port of their model. It maps notes to *fixed meanings*, the control-surface half; notes as performance data (step 1) is the opposite, and the transport delivers raw messages so each consumer interprets.
 
 ## Open questions
 
@@ -125,4 +132,4 @@ The order: the radar first, which needs a UART seam the platform does not have y
 
 ## What it removes
 
-Nothing in code: it adds a MIDI frame, a position frame, two effects and a follow formation on the existing transports and fixtures, plus the UART seam the radar needs. In the docs, the three backlog sections it is built from (notes as an effect input, the rest of the band, everything as MIDI) leave the backlog once this plan is approved, since a plan is where an item goes when it is picked.
+Nothing in code: it adds a MIDI frame, a position frame, two effects and a follow formation on the existing transports and fixtures, plus the UART seam the radar needs. In the docs, the five backlog sections on its topic are gone from the core backlog, since a plan is where an item goes when it is picked: three (notes as an effect input, the rest of the band, everything as MIDI) settled the design basis above, and two (MIDI learn, the OpenLamp convention) sit in the backlog above.

@@ -62,7 +62,7 @@ what the trees say, not what the stages below predicted.
 
 - **DMX Out** (and **DMX In**). The fixture model, the channel roles and the moving-head effects all
   landed, so a head can be driven over Art-Net today; what is missing is WIRED DMX-512 over RS-485.
-  Tracked in [backlog-light § RS-485](../../future/backlog-light.md), where the analysis notes the
+  Tracked in [backlog-drivers § RS-485](../../future/backlog-drivers.md#rs-485-and-dmx-512-wired-output-the-physical-dmx-driver), where the analysis notes the
   channel-mapping half is already solved and what remains is the transport (a UART in RS-485 mode,
   break/mark timing) plus a physical transceiver. **This is the one Must-class gap for the rename.**
 - ~~**HUB75.**~~ **Out of scope, decided 2026-09-07.** MoonLight drives these panels; MoonLight
@@ -117,7 +117,7 @@ The previous status recorded four gates beyond effect breadth. Two have since sh
   bench-verified over Art-Net; wired DMX output has not. See the driver gap above.
 - **LightsControl maturity — NOT STARTED.** No such module exists. `LightPresetsModule` is the
   fixture-preset library, a different thing. Still backlogged
-  ([backlog-mixed](../../future/backlog-mixed.md)).
+  ([backlog-core](../../future/backlog-core.md)).
 - **Documentation pass — OPEN**, and cheaper than it was: the catalog pages exist and
   `check_specs.py` keeps them honest, so what remains is a read-through rather than a build-out.
 
@@ -156,7 +156,7 @@ void loop() {
 **Open design questions**, to settle in the stage plan rather than now:
 - Where an animated palette script is ticked. MoonLight runs it as a node in the layer; our MoonLive scripts are modules, and a palette is global state owned by Drivers, so the tick site is not automatic.
 - Whether animating the active palette every frame is acceptable on the hot path, given the 256-entry expansion our `colorFromPalette` interpolates against.
-- Interaction with the eventual LightsControl hub ([backlog-mixed](../../future/backlog-mixed.md)), which is slated to absorb the palette control from Drivers.
+- Interaction with the eventual LightsControl hub ([backlog-core](../../future/backlog-core.md)), which is slated to absorb the palette control from Drivers.
 
 Checkout note: the MoonLight tree read for this research was at `65869217` (2026-05-26) and may lag upstream; re-fetch before implementing.
 
@@ -216,7 +216,7 @@ and fixture model, and the doc model (in a better shape than this plan proposed)
 The proving-ground stage: build the shared tools, prove them on one hard effect.
 
 - **Palette.** Take **MoonLight's palette set** (~80 gradient palettes, [palettes.h](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Modules/palettes.h): study + carry the gradient *data*, written into our own format). The definition format is the textbook **gradient-stop** one: a compact `{position, R, G, B, …}` list (position 0..255, terminating at 255), expanded off-loop into a 256-entry lookup. Our `Palette` type + `colorFromPalette(palette, index, brightness)`: the per-light lookup is an array index + one `scale8` (hot-path-tuned; the 256-entry table precomputed on selection, not per frame). Generalises `PlasmaPaletteEffect`'s hard-coded table.
-  - **Ownership (decided 2026-06-30):** the **active palette is global**, owned by the **Drivers** container (already the home of global render params — brightness, lightPreset, the shared Correction) via a new `palette` select control. Effects read it through a static `Palettes::active()` seam (the `AudioModule::latestFrame()` pattern), so an effect just calls `colorFromPalette(Palettes::active(), idx)`. This mirrors MoonLight's global `layerP.palette` without needing MoonLight's `ModuleLightsControl` — which, with **presets** and the **external-controller hub** concept, is **backlogged** ([backlog-mixed.md](../../future/backlog-mixed.md)) and will absorb the palette control from Drivers when built. Presets are *not* a palette dependency — separate feature, backlogged.
+  - **Ownership (decided 2026-06-30):** the **active palette is global**, owned by the **Drivers** container (already the home of global render params — brightness, lightPreset, the shared Correction) via a new `palette` select control. Effects read it through a static `Palettes::active()` seam (the `AudioModule::latestFrame()` pattern), so an effect just calls `colorFromPalette(Palettes::active(), idx)`. This mirrors MoonLight's global `layerP.palette` without needing MoonLight's `ModuleLightsControl` — which, with **presets** and the **external-controller hub** concept, is **backlogged** ([the backlog](../../future/index.md)) and will absorb the palette control from Drivers when built. Presets are *not* a palette dependency — separate feature, backlogged.
   - Palettes are light-domain → live under `src/light/` (file split decided in the stage plan).
 - **The shared primitive library** (file split — one `light/Fx.h` vs focused `light/Beat.h`/`Noise.h`/`Blend.h` — decided in the stage plan; recognisable names, our implementation, FastLED credited as prior art). Hot-path-tuned, integer-only, LUT-backed:
   - *timing/beat:* `beatsin8/16`, `beat8/16`, `triwave8` (on `sin8` + `elapsed()`).
@@ -293,7 +293,7 @@ carrying MoonLight's Troy / Wowi / Ambient looks. A head is drivable today over 
 **Left:** the WIRED transport. A DMX-512 output driver over RS-485 (UART, break/mark-after-break
 timing, a transceiver on the board) and, if wanted, DMX input. The channel-mapping half is
 already solved by the per-light channel model, so this is a transport and a hardware question
-rather than a domain one: [backlog-light § RS-485](../../future/backlog-light.md) has the
+rather than a domain one: [backlog-drivers § RS-485](../../future/backlog-drivers.md#rs-485-and-dmx-512-wired-output-the-physical-dmx-driver) has the
 analysis. **This is the one remaining Must-class item for the rename**, and since 2026-09-07 it is this
 plan's alone: the Release 4 scope plan also listed it, shipped without it, and closed pointing here.
 One home for it now.

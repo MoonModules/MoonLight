@@ -9,7 +9,7 @@ which rules out anything requiring new device code for the capture side. Tier 1 
 browser: back up via the existing file API, restore the same way, and report what didn't carry over
 instead of losing it silently. Tiers 2 (single-archive endpoint) and 3 (MoonBase-hosted restore)
 come later, in that order (PO decision). The feature is also one of the three deciding factors for
-"MoonBase as the only update mechanism" (backlog-core).
+"MoonBase as the only update mechanism" (backlog-platform).
 
 Schema drift across versions is handled per ADR-0013 (no migration code: the robust loader ignores
 unknown keys, defaults absent ones, clamps stale values), the restore's job is to make the
@@ -18,7 +18,7 @@ MIGRATING.md; it lives in the browser, so firmware stays migration-free).
 
 Verified live against Schelpje's July firmware: /api/dir?hidden=1 and /api/file work as needed.
 PO decisions: single JSON bundle format (not .zip, also required by the flash-budget rule in
-backlog-core.md:819 against bundling a zip lib into app.js); tier order 1 → 2 → 3.
+backlog-ui.md against bundling a zip lib into app.js); tier order 1 → 2 → 3.
 
 ## Design
 
@@ -90,13 +90,13 @@ the diagnostics feature already documents, app.js:778-782).
 - src/ui/migrate.js, the rename map (pure data + a tiny applyMigrations(bundle) function),
   embedded like the other UI files (src/ui/embed_ui.cmake picks up the directory, verify;
   otherwise add the file to its list + HTTP route, the safe-storage precedent noted in
-  backlog-core.md:417 describes the glue).
+  backlog-ui.md describes the glue).
 - mooninstaller/install.js, the erase-confirm text gains the backup pointer.
 - docs/moonmodules/core/services.md is wrong home; the File Manager card lives in
   docs/moonmodules/core/system.md § File Manager, add the Backup/Restore bullets + the
   "contains the WiFi password" caveat + the report semantics; MIGRATING.md header gains one line
   ("the device UI's Backup/Restore carries config across breaks and reports what didn't apply").
-- docs/backlog/backlog-core.md, the tier-1 part of the backup/restore follow-up moves from
+- docs/work/future/backlog-ui.md, the tier-1 part of the backup/restore follow-up moves from
   backlog to shipped-by (deleted per subtraction; tiers 2/3 stay).
 
 ## Tests

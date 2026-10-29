@@ -227,7 +227,8 @@ What actually went wrong, and the rules that fall out:
 - **A metric you never validated is not a meter.** The GDMA error count was used as the success signal for most of the session — and then the product owner reported *visually clean, flicker-free strands in a state that still logged 121 mount failures*. The proxy and the reality had come apart, which means every "confirmed" and "no change" read off that proxy was worthless. Validate a proxy against ground truth **once**, early, or don't lean on it.
 - **The PO's eyes found in one sentence what six theories missed.** "I put asyncTransmit off and it's MUCH better" and, later, a blind sweep of `ledsPerPin` landing *exactly* on the allocator's internal/PSRAM boundary (96 good / 128 bad, against a ~38 KB largest free internal block): both were better data than anything the agent produced. When a human at the bench reports a reproducible observation, that is the primary instrument; the logs are supporting evidence. (This is the *[Invite the product owner to test, then stop](../../../CLAUDE.md#roles)* rule earning its place: the rule exists because the agent kept racing past the one measurement that mattered.)
 - **A fix that shrinks the feature below its own baseline is not a fix.** Internal-RAM-first "worked" and was nearly shipped as the answer — while capping a shift display at ~1,500 lights, *fewer* than direct mode already drives. It ships as an explicitly-labelled **stopgap**, and the PO's push-back ("not scalable — check you're not running in a very bad circle") is what caught it.
-- **Prune the record as hypotheses die.** `docs/work/future/shift-register-driver-analysis.md` § 7.5 had accumulated three successive "the mechanism is X" write-ups, each stated with confidence and each wrong — actively poisoning the next attempt. It is now split into **what is TRUE (measured)** and **what is FALSE (guessed, then refuted — do not re-derive)**. A design doc that records dead theories as findings is worse than no doc.
+- **Build the floor test before optimizing.** Six encode optimizations ran before a diagnostic encoder that stores only a fixed pattern measured the floor at 19 µs a light, which showed the stall was a frame-close fault rather than speed. When an artifact can be correctness or speed, the cheap floor test comes first.
+- **Prune the record as hypotheses die.** The shift-register design record had accumulated three successive "the mechanism is X" write-ups, each stated with confidence and each wrong — actively poisoning the next attempt. It is now split into **what is TRUE (measured)** and **what is FALSE (guessed, then refuted — do not re-derive)**. A design doc that records dead theories as findings is worse than no doc.
 
 The one thing that *is* solid after all that: the frame renders correctly from **internal RAM** and incorrectly from **PSRAM** on the S3 — established by the PO's blind sweep, not by any of the reasoning above — while the same PSRAM frame runs perfectly on a P4. The mechanism remains **unknown**, and the next attempt starts from the PO's `asyncTransmit` observation, not from a seventh theory.
 
@@ -544,3 +545,18 @@ Three weeks without a Windows run left three build breaks waiting, while CI's `b
 - **Check the compiler's output before optimizing the algorithm.** Removing branches and a whole wasted transpose gained nothing measurable; the disassembly showed the store loop's variable shifts costing more than the transpose, and unrolling them gained 37%.
 - **A depth that runs clean is the measurement, not free RAM.** `ringAuto` took 28 buffers because RAM allowed it; 21 smaller ones run clean, and the RAM went back to WiFi and the UI.
 - **Two fix attempts, then stop.** The ring's 1.1 ms of jitter survived two; it is in the backlog with its measurements rather than chased further.
+
+## The 16-bit Layer: built, measured, reversed (2026-09-04)
+
+A decaying plane at 8 bits cannot fade: multiplying by 0.994 a frame either truncates to black too fast or rounds back and freezes. The plan answered by widening the Layer buffer to 16 bits per channel, end to end. It worked, and it cost too much:
+
+| 128x128 | 8-bit | 16-bit | cost |
+|---|---|---|---|
+| ESP32-S3 | 18.25 ms | 28.58 ms | +56.5% (effect +50%, driver read +63%) |
+| desktop arm64 | 0.48 ms | 0.76 ms | +57.9% |
+
+The answer that shipped widens only the planes that accumulate: Trails, Nebula, Fluid and the scripted trail each own a 16-bit plane and narrow once on the way out through `draw::blit16` with temporal dithering, so the buffer and the driver read stay 8 bits. Only the effects that need it pay, in memory freed with the effect.
+
+- **Measure the whole path, not the kernel.** On the S3 the driver read was the larger half: reassembling two bytes per channel happens lights times channels per frame whatever the effect does, and an in-order core punishes it. No host benchmark would have found it.
+- **Precision is a per-consumer property, not a pipeline one.** "16-bit end to end" is a tidy sentence and an expensive design; the code needed 16 bits in the four places that accumulate.
+- **A measured reversal is worth more than the feature.** The number is what stops the wide buffer being proposed again, which is why it lives here rather than in a commit message.

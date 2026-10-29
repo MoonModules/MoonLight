@@ -30,7 +30,7 @@ they diverge from MoonLight — register each here.
 <!-- Invisible fixes (not listed — no visible change): GEQ/StarSky/PaintBrush overflow guards on huge
 grids, Tetrix 49-day millis wrap, GoL 3D OOB read + colorIndex≠0 marker, RubiksCube float→int (identical
 pixels), Solid/NoiseMeter/Blurz comment+robustness. The DemoReel extrude improvement was reverted (crash)
-and backlogged — see backlog-light.md. -->
+and backlogged — see the backlog (docs/work/future/index.md). -->
 
 <!-- StarField: the blur control was flagged as inverted, but it matches MoonLight (fadeToBlackBy(blur):
 higher = stronger fade = shorter streaks). No code change — the doc comment was corrected to state the

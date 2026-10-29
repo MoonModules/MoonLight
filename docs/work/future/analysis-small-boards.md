@@ -1,14 +1,44 @@
-# nRF (Nordic) + Zephyr as a MoonLight target — feasibility analysis
+# Small boards: RP2350, RP2040 and Nordic
 
-> **Forward-looking research document — exception to CLAUDE.md present-tense rule.** Feasibility study only, no implementation. Assesses whether the Nordic nRF52/53/54 BLE SoC families, running Zephyr (nRF Connect SDK), can join the supported-target list the way Teensy does — a constrained secondary target behind the existing `src/platform/` seam. Researched 2026-07; sources cited at the bottom.
+The microcontroller boards MoonLight's next ports target, and where to buy them in the EU. **No MoonLight firmware runs on these boards.** They are the targets of the next ports, and a board moves from here to a page of its own when its port ships. The Teensy 4.1 has [its own page](../../reference/hardware/teensy-4-1.md).
 
-## Verdict
+Prices are from 2026-10-11 and include Dutch VAT unless marked ex. AliExpress is worth it only for Waveshare, Seeed and WeAct boards through their official stores, checking the seller per listing; Raspberry Pi and Nordic have no official store there.
+
+## RP2350
+
+| | Board (maker) | Why | Where, price |
+|--|--|--|--|
+| <img src="../../assets/hardware/boards/pico2-w.webp" width="100" alt="Raspberry Pi Pico 2 W"> | [Pico 2 W](https://www.antratek.nl/raspberry-pi-pico-2-w) (Raspberry Pi) | The reference board, with WiFi | Antratek €12.04, [Kiwi](https://www.kiwi-electronics.com/en/raspberry-pi-pico-2-w-with-header-20342) €8.77 |
+| <img src="../../assets/hardware/boards/w5500-evb-pico2.webp" width="100" alt="W5500-EVB-Pico2"> | [W5500-EVB-Pico2](https://thepihut.com/products/wiznet-w5500-evb-pico2) (WIZnet) | Wired Ethernet | The Pi Hut £11.20 |
+| <img src="../../assets/hardware/boards/pico-plus-2-w.webp" width="100" alt="Pimoroni Pico Plus 2 W"> | [Pico Plus 2 W](https://shop.pimoroni.com/products/pimoroni-pico-plus-2-w) (Pimoroni) | 8 MB PSRAM, 16 MB flash, WiFi | about €25, pre-order |
+| <img src="../../assets/hardware/boards/rp2350-zero.webp" width="100" alt="Waveshare RP2350-Zero"> | [RP2350-Zero](https://www.tinytronics.nl/en/development-boards/microcontroller-boards/others/waveshare-rp2350-zero-mini-development-board) (Waveshare) | The tiny one | Tinytronics €6, [AliExpress](https://www.aliexpress.com/w/wholesale-waveshare-rp2350-zero.html) about €6 |
+
+## RP2040
+
+| | Board (maker) | Why | Where, price |
+|--|--|--|--|
+| <img src="../../assets/hardware/boards/pico-w.webp" width="100" alt="Raspberry Pi Pico W"> | [Pico W](https://www.antratek.nl/raspberry-pi-pico-w) (Raspberry Pi) | The only RP2040 with WiFi | Antratek €9.08, Kiwi €6.52 |
+| <img src="../../assets/hardware/boards/rp2040-zero.webp" width="100" alt="Waveshare RP2040-Zero"> | [RP2040-Zero](https://www.tinytronics.nl/en/development-boards/microcontroller-boards/others/waveshare-rp2040-zero) (Waveshare) | The mini one people own | Tinytronics €5, [AliExpress](https://www.aliexpress.com/w/wholesale-waveshare-rp2040-zero.html) |
+| <img src="../../assets/hardware/boards/xiao-rp2040.webp" width="100" alt="Seeed XIAO RP2040"> | [XIAO RP2040](https://www.kiwi-electronics.com/en/seeed-studio-xiao-rp2040-10969) (Seeed) | The XIAO form factor | Kiwi €4.46 |
+
+## Nordic
+
+No Nordic development kit is needed: the XIAO and the Debug Probe below cover the nRF52840, and the nRF5340 comes after it, on a module board.
+
+| | Board (maker) | Why | Where, price |
+|--|--|--|--|
+| <img src="../../assets/hardware/boards/xiao-nrf52840-plus.webp" width="100" alt="Seeed XIAO nRF52840 Plus"> | [XIAO nRF52840 Plus](https://www.antratek.nl/seeed-studio-xiao-nrf52840-plus) (Seeed) | Tiny, UF2 bootloader, debugged through the Debug Probe | Antratek €12.09 |
+| <img src="../../assets/hardware/boards/mdbt53-db-40.webp" width="100" alt="Raytac MDBT53-DB-40"> | [MDBT53-DB-40](https://www.digikey.nl/en/products/detail/raytac/MDBT53-DB-40/16630695) (Raytac) | The nRF5340, once the nRF52840 port runs. Zephyr supports it. | DigiKey, about €15 ex. Raytac ships it in about 14 days, with its own shipping fee. |
+
+## Nordic and Zephyr as a target
+
+### Verdict
 
 **As a big-LED controller: poor fit. As a portable-core + BLE-UI showcase: a genuinely interesting spike, gated on one load-bearing question (BLE-UI feasibility), which the research below finds to be *clean, not hacky*.** Strongest yes: Zephyr is a first-class C++20 + BSD-sockets + LittleFS RTOS whose primitives map onto almost every function in `platform.h` cleanly *and* MoonLight's core is deliberately domain-neutral, so "MoonLight's runtime runs on a tiny BLE chip" is a real, achievable, marketable claim — the port is mechanical, not architectural. Strongest no: the chips have no WiFi, no PSRAM, and no wide parallel LED DMA peripheral, so nRF loses badly at the large-installation job MoonLight's light domain is tuned for.
 
 The reframe from the product owner (see [§ Reframing](#reframing-core-as-library-and-the-ble-ui-question) below) changes the weighing: the question is not "can nRF drive 16 K LEDs" (it can't) but "is MoonLight's **core** a compelling showcase on a small BLE device, and can its **UI** reach that device over BLE with no WiFi/HTTP?" On the first, the core is ~90% portable as-is. On the second — the crux — a BLE GATT channel comfortably carries our JSON control/state model (BLE 5 sustains ~100–700 kB/s, orders of magnitude above what the UI needs), and config-over-Web-Bluetooth is well-trodden prior art. The one honest caveat is client reach: **Web Bluetooth is Chrome/Edge/Android/desktop only — never iOS Safari** — so a no-install browser UI works everywhere except iPhone, where a companion app or a third-party BLE browser is required. That caveat shapes the spike; it does not sink it. Recommendation moves from "defer" to **"a scoped showcase spike is justified regardless of the LED limits, if the iOS-client gap is acceptable for a demo."**
 
-## The nRF hardware
+### The nRF hardware
 
 | Chip | Core(s) | Clock | RAM | Flash | Radio | Notes |
 |------|---------|-------|-----|-------|-------|-------|
@@ -20,7 +50,7 @@ The reframe from the product owner (see [§ Reframing](#reframing-core-as-librar
 
 **No PSRAM, anywhere in the family.** There is no external-RAM interface comparable to ESP32's PSRAM (the nRF52840 QSPI does execute-in-place flash, not a mappable data heap). The RAM ceiling is the table above minus the BLE controller/stack (~30–60 KB), Zephyr kernel, and network buffers. Rough usable-for-buffers estimate: ~150 KB on a 256 KB part, ~350 KB on the 5340, ~700–800 KB on the 54H20. Against MoonLight's memory-scaling table (16 K lights proven on the ESP32's ~320 KB internal; Teensy's 1 MB rated "comfortable headroom"), the 52840/54L15 sit **below the no-PSRAM ESP32**, the 5340 slightly above it, and only the 54H20 reaches Teensy class.
 
-### WS2812 output — the DMA story
+#### WS2812 output — the DMA story
 
 Nordic has no RMT, no LCD_CAM/i80, no Parlio, no FlexIO — no one-shot wide-parallel DMA peripheral at all. Three documented single-lane routes exist, each abusing a serial peripheral + EasyDMA:
 
@@ -30,7 +60,7 @@ Nordic has no RMT, no LCD_CAM/i80, no Parlio, no FlexIO — no one-shot wide-par
 
 Realistic total: **~4–6 heterogeneous lanes** (4× PWM + 1× I2S + 1× SPIM3), each behind a *different* peripheral driver — versus 8–16 *uniform* lanes on one peripheral on ESP32-S3/P4, or 40+ on Teensy via FlexIO. Combined with the RAM ceiling (a 4-lane PWM setup burns 48 B/LED/lane just for encode buffers: 4 × 500 LEDs ≈ 96 KB of the ~150 KB usable), the honest capability estimate for a 256 KB part is **~1–2 K LEDs total**, ~4 K on the 5340, maybe 8–10 K on the 54H20. One more hazard FastLED's issue tracker documents: the BLE controller runs at interrupt priorities application code can't mask, so any *non*-DMA (bit-banged) output glitches under radio load — DMA routes are mandatory, which the three above all are.
 
-## Zephyr fit with the `platform.h` seam
+### Zephyr fit with the `platform.h` seam
 
 Zephyr fundamentals check out: **C++20 is a supported standard** (`CONFIG_STD_CPP20`, full GNU libstdc++ available), with the usual embedded restrictions — no `std::thread`/`std::mutex` (Zephyr `k_thread`/`k_mutex` instead — irrelevant to us, the seam already hides threading behind `spawnPinnedTask`), no static-object *destructors*, exceptions/RTTI opt-in. BSD sockets (subset), LittleFS, and a devicetree-driven driver model are all first-class.
 
@@ -38,7 +68,7 @@ Zephyr fundamentals check out: **C++20 is a supported standard** (`CONFIG_STD_CP
 |---|---|---|
 | Time (`millis`/`micros`), yield/delay, `reboot` | `k_uptime_get`, `k_cycle_get_32`, `k_yield`, `k_msleep`, `k_busy_wait`, `sys_reboot` | **Easy** — direct 1:1 |
 | Heap (`alloc`/`free`, introspection) | `k_malloc` / `sys_heap` + runtime stats | **Easy**; `hasPsram = false`, one heap — the `maxAllocBlock`-style diagnostics need `sys_heap` stats plumbing |
-| `allocExec`/`writeExec` (MoonLive JIT) | Cortex-M executes from RAM; no W^X obstacle | **Easy mechanically, but pointless today**: MoonLive has Xtensa/RISC-V/arm64 backends, no ARM Thumb-2 emitter — scripted modules fail cleanly (run dark) until a Thumb-2 backend exists, exactly the per-ISA cost the MoonLive IR-seam design anticipated |
+| `allocExec`/`writeExec` (MoonLive JIT) | Cortex-M executes from RAM; no W^X obstacle | **Easy**: the Thumb-2 backend the Teensy uses (`src/platform/teensy/moonlive_asm_thumb2.cpp`) emits Thumb-2, the instruction set the nRF52840's Cortex-M4 shares; unverified there |
 | RTOS introspection (`taskSnapshot`), `spawnPinnedTask`/`notifyTask` | `k_thread_foreach`, `k_thread_create` + `k_event`/`k_sem` | **Easy** — but every viable nRF is **single application core** (the 5340/54H20 second core belongs to the radio stack), so the multicore Step 2 render/encode split has no core to pin to. The seam already handles this: `spawnPinnedTask` returns false → the caller runs inline, the documented allocate-and-degrade fallback. Same stance as Teensy ("desktop is OS-threaded, Teensy single-core" — measured on the P4, see performance.md) |
 | GPIO capability/live state | Zephyr `gpio` API + hand-written per-pin caps table | **With effort** — same per-chip table work every target needs |
 | **LED DMA seams** (`rmtWs2812*`, `i80Ws2812*`, `parlioWs2812*`) | **None of these peripherals exist** | **New seam required**: an `nrfPwm`/`i2s` WS2812 function pair in the same init/buffer/transmit/wait shape. The capability-flag pattern absorbs this cleanly (`rmtTxChannels = 0`, `lcdLanes = 0`, `parlioLanes = 0`, a new lane constant) — the existing drivers go inert exactly as they do on desktop, and a new driver guards on the new flag. Loopback self-test possible via GPIOTE+timer capture, but bespoke |
@@ -54,7 +84,7 @@ Zephyr fundamentals check out: **C++20 is a supported standard** (`CONFIG_STD_CP
 
 Summary: the seam itself is no obstacle — Zephyr is the most MoonLight-shaped RTOS outside ESP-IDF, and the `platform_config.h` flag pattern (everything inert-by-`if constexpr` when a capability constant is 0/false) absorbs the missing peripherals exactly as it does for desktop. The three *structural* gaps are: **single app core** (multicore split degrades to inline — acceptable, Teensy has the same), **no PSRAM** (hard memory ceiling, the 256 KB parts sit below the no-PSRAM ESP32), and **no native IP networking** (below).
 
-## The architectural question: is nRF an IP-networked LED controller?
+### The architectural question: is nRF an IP-networked LED controller?
 
 Honestly: **no, not natively.** MoonLight's product surface is IP end to end — the HTTP config server + WebSocket UI, ArtNet/DDP/WLED-sync over UDP, mDNS discovery, OTA over HTTP, Improv provisioning *of WiFi credentials*. An nRF SoC has BLE + 802.15.4 and nothing else:
 
@@ -64,33 +94,28 @@ Honestly: **no, not natively.** MoonLight's product surface is IP end to end —
 
 So the honest framing: **as an IP node it fits our architecture but loses to ESP32 on every axis we care about; as a BLE node it doesn't fit our architecture.** The genuinely nRF-shaped use case — a battery-powered, BLE- or Matter-controlled wearable/small-strip product, phone-app-controlled, sub-500 LEDs — is real, but it is not the product MoonLight is (large installations, web UI, network protocols, no-reboot live reconfig of a mains-powered controller).
 
-## Precedent
+### Precedent
 
 - **FastLED** supports nRF52 (Adafruit nRF52 boards): the `clockless_arm_nrf52` path drives WS281x via the **PWM peripheral + EasyDMA**, effectively one strip per PWM instance, with documented friction (BLE interrupt priority vs timing, per-board pin/compile issues — GitHub issues #595, #747). It proves single-to-few-lane WS2812 works; nobody uses it at installation scale.
 - **WLED is ESP-only** (ESP8266/ESP32 families); no nRF port exists or is planned — a data point that the networked-LED-controller product category has not found nRF worth the port either.
 - **Zephyr itself** ships three single-lane `led_strip` WS2812 drivers (SPI default, I2S, GPIO-bitbang) with nRF DK sample overlays — good bring-up references for a platform-layer driver, all small-N demos.
 - **Nordic's own I2S-WS2812 blog** (2016, still the canonical reference) demonstrates the 4-bit-symbol I2S encode; community repos (electronut, cheehieu, edwios) replicate it at 12–240 LEDs.
 
-## Reframing: core-as-library and the BLE-UI question
+### Reframing: core-as-library and the BLE-UI question
 
 The sections above answer "is nRF a good LED-installation controller" (no). But MoonLight is **more than its light domain** — its `src/core/` is a domain-neutral runtime that the architecture explicitly holds apart from lights (see [architecture.md § Core and light domain](../../explanation/architecture/index.md#core-and-light-domain): *"Core: MoonModule base, controls, scheduling, persistence, platform abstraction... Domain-neutral. Knows nothing about lights."*). Offered as a **library**, that core is a compelling thing in its own right, and the interesting fit question becomes: does MoonLight's *runtime* — not its LED pipeline — run cleanly on a tiny BLE device, and can its UI reach it? This reframes nRF from "loses the big-installation race" to "a showcase of how far MoonLight's core stretches."
 
-### 1. How much of the core is portable as-is?
+#### 1. How much of the core is portable as-is?
 
-Nearly all of it. Walking `src/core/` against the domain line:
-
-- **Portable, domain-neutral, zero LED/network dependency**: the MoonModule base + lifecycle (`setup`/`tick`/`release`, child propagation, the enabled-gate), the Scheduler, ModuleFactory, the Control system (bind-to-member, defaults, conditional `hidden`), the persistence system (FilesystemModule → LittleFS flat POD image), the state/JSON model, and the **generic UI-from-modules contract** (the UI renders whatever a module *declares*; there is no per-module UI code). This is the bulk of the core, and it needs nothing nRF lacks — Zephyr gives it a heap, a filesystem, and a clock, which is all the runtime asks.
-- **Portable but inert-by-flag**: the network/service modules (HttpServerModule, NetworkModule, the ArtNet/DDP/WLED-sync drivers, mDNS, OTA) are core-resident but *gate on capability flags already* (`hasNetwork`, `hasWiFi`, `hasOta`). On a `hasNetwork = false` build they compile to nothing via `if constexpr` — exactly the desktop-stub pattern. So they don't *block* the port; they simply aren't present, and the UI transport that would normally ride HTTP/WS has to come from somewhere else (§ 3).
-- **MoonLive** (the live-script engine) is portable in structure but needs an **ARM Thumb-2 backend** to actually emit code (it has Xtensa/RISC-V/arm64 today); until then scripted modules fail cleanly and run dark. Not a blocker for a core showcase — every *non*-scripted module works.
-- **Entangled with the light domain (stays behind, correctly)**: layouts, layers, mapping/blending, effects, modifiers, the LED drivers. None of this is core; it's `src/light/`, and a core-as-library showcase simply doesn't ship most of it (it ships one small LED driver as the visible output, § 2).
+Nearly all of it. What the core owns, and how its network modules go inert on a capability flag: [MoonCore](../../explanation/architecture/mooncore.md). Zephyr gives the runtime a heap, a filesystem, and a clock, which is all it asks, and the UI transport that would normally ride HTTP/WS has to come from somewhere else (§ 3).
 
 The honest figure: **the domain-neutral core ports with essentially no architectural work** — it's the same code the desktop build already runs headless-of-LEDs. The port cost is the platform seam (§ Zephyr fit above) plus one new thing the desktop never needed: a **UI transport that isn't HTTP** (§ 3). That single item is the whole ballgame.
 
-### 2. A few LEDs is a feature, not only a shortfall
+#### 2. A few LEDs is a feature, not only a shortfall
 
 The ~1–2 K-LED ceiling on a 256 KB nRF part reads as a shortfall against 16 K-on-ESP32 — but for the device class nRF actually *is* (battery-powered, BLE-remote, wearable, retail/prop lighting), a handful to a few hundred WS2812 is the whole point, and MoonLight's pipeline runs identically at that scale (the architecture's *"effects must run at every grid size"* rule guarantees a 16-LED strip or an 8×8 matrix is a first-class configuration, not a degraded one). The single-lane I2S-EasyDMA route (≈ 1365 LEDs, § WS2812 output) is *more* than enough for this niche, and the PWM route gives a few independent short strips. So the small-device story isn't "MoonLight crippled" — it's "the same full pipeline, small, battery-friendly, phone-controlled," which is a coherent product the ESP32 line doesn't naturally serve (ESP32 + WiFi is mains-power-shaped). Re-weighed: the LED limit is a *positioning*, not a *defect*, for this specific niche.
 
-### 3. THE crux — can MoonLight's UI run over BLE (no WiFi/HTTP)?
+#### 3. THE crux — can MoonLight's UI run over BLE (no WiFi/HTTP)?
 
 MoonLight's UI ↔ device link is, at its heart, a **JSON control/state channel**: the browser sends control *writes*, the device *notifies* state back (today over a WebSocket). Nothing about that model is HTTP-specific — it maps directly onto a **BLE GATT custom service**: one **write** (or write-without-response) characteristic for control-set, one **notify** characteristic for state-push. This is the exact shape of well-established prior art, and the research says the path is **clean, not hacky**:
 
@@ -101,11 +126,11 @@ MoonLight's UI ↔ device link is, at its heart, a **JSON control/state channel*
 
 **Verdict on the crux:** the BLE-UI path is **clean at the protocol/device level and a well-trodden pattern** — it is a weekend-to-two-weeks spike, not a research project, *for the device firmware + an Android/desktop Web Bluetooth client*. It becomes a larger undertaking only if the showcase must include a first-class iOS client (then: a small companion app, a separate effort). Framed as a demo/advertisement, the Android/desktop Web Bluetooth client is enough to make the claim land.
 
-### The advertising value
+#### The advertising value
 
 "MoonLight's full runtime — the same MoonModule lifecycle, controls, persistence, and generic UI you run on a 16 K-LED ESP32 installation — also runs on a coin-cell BLE chip, configured live from your browser over Bluetooth" is a strong, concrete credibility claim. It demonstrates the domain-neutral-core thesis better than any doc: the *same* core, top to bottom, from a battery BLE wearable to a mains ESP32 wall of light. That is a real reason to do the spike **independent of** whether nRF ever becomes a shipping LED target.
 
-## Recommendation
+### Recommendation
 
 **Do a scoped showcase spike; do not commit to nRF as a shipping LED target.** The two questions have opposite answers and must not be conflated:
 
@@ -119,9 +144,9 @@ MoonLight's UI ↔ device link is, at its heart, a **JSON control/state channel*
 
 That spike answers the three real unknowns — how much RAM survives Zephyr + the BLE stack (does the core fit a 256 KB part?), BLE-radio-vs-DMA timing under load, and end-to-end BLE control/state round-trip latency in the actual UI — for about two weeks, and produces a genuinely marketable artifact whether or not nRF ever ships as an LED target.
 
-**What would additionally have to be true to promote it from showcase to a shipping target:** a concrete product pull toward BLE/Matter-controlled small-strip devices (wearables, retail, battery props); a decision on the iOS client (companion app vs. Android/desktop-only); and, for scripting on-device, the ARM Thumb-2 MoonLive backend (already the named cost for Teensy, so nRF rides along once Teensy lands).
+**What would additionally have to be true to promote it from showcase to a shipping target:** a concrete product pull toward BLE/Matter-controlled small-strip devices (wearables, retail, battery props); a decision on the iOS client (companion app vs. Android/desktop-only).
 
-## Sources
+### Sources
 
 - Nordic product pages: [nRF52840](https://www.nordicsemi.com/Products/nRF52840), [nRF5340](https://www.nordicsemi.com/Products/nRF5340), [nRF54L15](https://www.nordicsemi.com/Products/nRF54L15), [nRF54H20](https://www.nordicsemi.com/Products/nRF54H20), [nRF7002 Wi-Fi 6 companion IC](https://www.nordicsemi.com/Products/nRF7002)
 - Family comparisons: [nRF52840 vs nRF54L15 (BLEFYI)](https://blefyi.com/compare/nrf52840-vs-nrf54l15/), [nRF5340 vs nRF54L15 (BLEFYI)](https://blefyi.com/compare/nrf5340-vs-nrf54l15/), [nRF54H20 announcement (CNX)](https://www.cnx-software.com/2023/04/13/nrf54h20-cortex-m33-risc-v-wireless-soc-bluetooth-5-4-le-audio-bluetooth-mesh-thread-matter/)
@@ -132,3 +157,18 @@ That spike answers the three real unknowns — how much RAM survives Zephyr + th
 - BLE-UI throughput: [Punch Through — Maximizing BLE Throughput](https://punchthrough.com/ble-throughput-part-4/), [Memfault Interrupt — A Practical Guide to BLE Throughput](https://interrupt.memfault.com/blog/ble-throughput-primer), [Nordic GATT Throughput Service (the ~97 kB/s @ 251-byte PDU figure)](https://nrfconnectdocs.nordicsemi.com/ncs/2.1.4/nrf/libraries/bluetooth_services/services/throughput.html)
 - Web Bluetooth support: [caniuse — Web Bluetooth](https://caniuse.com/web-bluetooth), [MDN — Web Bluetooth API](https://developer.mozilla.org/en-US/docs/Web/API/Web_Bluetooth_API), [WebBluetoothCG implementation status](https://github.com/WebBluetoothCG/web-bluetooth/blob/main/implementation-status.md), [Chromium issue — Web Bluetooth on iOS (unimplemented)](https://issues.chromium.org/issues/41280428)
 - Config-over-BLE / Web Bluetooth prior art: [Zephyr + Web Bluetooth getting started](https://dev.to/denladeside/getting-started-with-zephyr-and-web-bluetooth-355d), [Moddable JSON-defined GATT services](https://www.moddable.com/documentation/network/ble/ble), [Nordic custom BLE service tutorial](https://github.com/NordicPlayground/nRF5x-custom-ble-service-tutorial), [ESP32 WiFi provisioning over BLE (Espressif/community)](https://randomnerdtutorials.com/esp32-wi-fi-provisioning-ble-arduino/), [UriShX esp32_web-ble_wifi_config (Web-BLE config portal)](https://github.com/UriShX/esp32_web-ble_wifi_config)
+
+## Tools
+
+| | Tool (maker) | Why | Where, price |
+|--|--|--|--|
+| <img src="../../assets/hardware/boards/pi-debug-probe.webp" width="100" alt="Raspberry Pi Debug Probe"> | [Debug Probe](https://www.kiwi-electronics.com/en/raspberry-pi-debug-probe-11345) (Raspberry Pi) | SWD for the RP2040, the RP2350 and both Nordic chips, through pyOCD or OpenOCD | Kiwi €13.18 |
+| <img src="../../assets/hardware/boards/sn74ahct125n.webp" width="100" alt="SN74AHCT125N"> | [SN74AHCT125N](https://www.tinytronics.nl/en/components/ics-and-microcontroller-chips/ics/sn74ahct125n-4-channel-level-converter-3.3v-to-5v-14-pin-dip) (TI), two or three | 3.3 V to 5 V for WS2812 data, since every board here drives its pins at 3.3 V | Tinytronics €1 each |
+
+## Where to order
+
+- Antratek: the Pico 2 W, the Pico W and the XIAO nRF52840 Plus, together with any Teensy items.
+- Tinytronics: the level shifters and both Zero boards.
+- Kiwi: the Debug Probe.
+- The Pi Hut: the W5500-EVB-Pico2.
+- DigiKey: the Raytac board, when the nRF5340 comes up.

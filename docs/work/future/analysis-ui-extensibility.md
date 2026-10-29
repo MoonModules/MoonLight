@@ -93,7 +93,7 @@ The convergent answer is **a small registry + a per-module widget contract, both
 
 There are **three tiers** the top-down should name, so a module reaches for the lightest that fits (minimalism): (a) **generic controls** — no custom UI, the default; (b) **generic-with-richer-list-detail** — a module whose need is just nested/tabular detail; (c) **full custom widget** — a Custom Element for genuinely bespoke UI (file tree, board diagram). FileManager is (c); TasksModule today is (a)-with-a-workaround that (b) would fix; Memory/Pins are likely (b) or (c).
 
-This is directly tied to the [System Modules design](system-modules.md): Tasks/Memory/Pins are the *next* modules that will want tier (b)/(c) UI, so the extension architecture should land before (or alongside) building Memory and Pins — otherwise each repeats FileManager's inlined-in-app.js mistake.
+This is directly tied to the system modules: Tasks and Pins ([core system](../../moonmodules/core/system.md)) and [Memory](backlog-core.md#memory-the-largest-buffers-by-name) are the modules that will want tier (b)/(c) UI, so the extension architecture should land before (or alongside) building Memory and Pins — otherwise each repeats FileManager's inlined-in-app.js mistake.
 
 ## The acceptance test (from the governing statement)
 

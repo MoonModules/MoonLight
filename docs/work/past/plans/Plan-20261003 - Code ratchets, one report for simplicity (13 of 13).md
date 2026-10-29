@@ -6,7 +6,7 @@ Plan of 2026-10-03, every step done by 2026-10-25. The documentation ratchets ma
 
 ## Why
 
-- **Duplication is unmeasured.** The FNV-1a hash was written six times before a review caught it; the I80 and Parlio drivers share about 245 of 362 lines ([backlog-light](../../future/backlog-light.md)). Nothing counts a clone, so a seventh copy costs nothing until a reviewer happens to look.
+- **Duplication is unmeasured.** The FNV-1a hash was written six times before a review caught it; the I80 and Parlio drivers share about 245 of 362 lines ([backlog-drivers](../../future/backlog-drivers.md)). Nothing counts a clone, so a seventh copy costs nothing until a reviewer happens to look.
 - **The complexity ratchet is partly dead.** `check_lizard.py` whitelists functions by name in `whitelizard.txt`; 36 of its 172 entries name files that no longer exist since the `src/core` reshuffle, so those pin nothing, and `repo-health` counts 298 functions over the threshold against a gate that knows 172.
 - **Boundaries are stated, not checked.** The architecture says core knows nothing about lights, yet six core files include `light/` headers. The UI is documented as module-driven, yet `app.js` and `migrate.js` name module types in dozens of literals.
 - **A concept is spread thin.** Renaming the light presets to fixture profiles touched 87 files, 23 of which name the type. The cost of changing a concept is invisible until someone pays it.
@@ -40,7 +40,7 @@ Plan of 2026-10-03, every step done by 2026-10-25. The documentation ratchets ma
 | Core without light, enforced by the build | [MoonCore, the domain boundary](../../../explanation/architecture/mooncore.md), `CMakeLists.txt` (`mm_core`), and the `relative include path` rule |
 | How a finding becomes a fix, and why there is no formatter | [coding-standards, Tooling and checks](../../../contributing/coding-standards.md#tooling-and-checks) |
 | The Reviewer's two judgment questions | [the pre-merge process](../../../moonwalk.md#pre-merge) |
-| Left open | three decisions, [backlog-core](../../future/backlog-core.md#three-decisions-left-open-by-the-code-ratchets-2026-10-25-from-the-code-ratchets-plan) |
+| Left open | three decisions, [backlog-process-and-docs](../../future/backlog-process-and-docs.md#three-decisions-left-open-by-the-code-ratchets-2026-10-25-from-the-code-ratchets-plan) |
 
 ## Decided against
 

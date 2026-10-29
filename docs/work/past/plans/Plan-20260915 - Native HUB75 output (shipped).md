@@ -30,7 +30,7 @@ Two bytes a slot, since the bus word is 16 bits. **Four panels miss the Parlio c
 
 **This is the fact the issue does not account for.** #102 proposes the P4-Nano as lead candidate because Espressif's reference uses PARLIO, but [platform_esp32_parlio.cpp:238](../../../../src/platform/esp32/platform_esp32_parlio.cpp) records the hardware cap: `kParlioMaxTransferBytes = 0x7FFFF / 8` = 65,535 bytes, width-invariant. PARLIO carries one panel comfortably, reaches its limit at four, and cannot do sixteen at any useful depth.
 
-The route that scales is the one the [shift-register analysis](../../future/shift-register-driver-analysis.md) already established for a structurally identical problem: **i80/LCD_CAM, whose DMA reaches PSRAM**, proven on this exact path to 16,384 lights. `hasLcdCam` is true on S3, P4 and S31.
+The route that scales is the one the [shift-register work](../../../explanation/architecture/moonlight.md#what-bounds-a-parallel-driver) already established for a structurally identical problem: **i80/LCD_CAM, whose DMA reaches PSRAM**, proven on this exact path to 16,384 lights. `hasLcdCam` is true on S3, P4 and S31.
 
 ### GPIO requirements
 
@@ -69,7 +69,7 @@ frame time = (height / 2) x bitDepth x line time
 refresh    = 1 / frame time
 ```
 
-Predicted at a 20 MHz shift clock (the rate the i80 path already runs, per the [shift-register analysis](../../future/shift-register-driver-analysis.md)), ignoring latch overhead, so these are ceilings rather than promises:
+Predicted at a 20 MHz shift clock (the rate the i80 path already runs, per the [shift-register work](../../../../src/platform/esp32/platform_esp32_moon_i80.cpp)), ignoring latch overhead, so these are ceilings rather than promises:
 
 | Geometry | 4-bit | 6-bit | 8-bit |
 |---|---:|---:|---:|
@@ -178,7 +178,7 @@ The PO's MoonHub75 (a LILYGO T7-S3 on the passive adapter) drove a 64×64 1/32-s
 ## Risks
 
 - **Refresh at depth may disappoint on 16 panels.** The encoder cost is linear in bit planes and the scan is serial. **Settled by publishing the prediction, not by measuring first**: § Refresh computes the ceiling per geometry and depth, the driver reports what it actually achieves, and the docs name PanelCard as the path above whatever that turns out to be. A user meets the limit with an explanation rather than a surprise.
-- **The [48×256 white-flash](../../future/backlog-light.md) is open on the i80 path.** Six theories ruled out, cause unfound. A HUB75 driver rides the same peripheral, so it may inherit it. **Settled by shipping and watching**: Phase 1 targets 1-4 panels, a size at which the flash has never been seen, so it does not block. If a tester on a large HUB75 wall reports it, that is the seventh theory the backlog entry is missing — the flash following a non-WS2812 encoder through the same peripheral would exonerate the WS2812 slot encoding, which six hardware tests could not do.
+- **The [48×256 white-flash](../../future/backlog-drivers.md) is open on the i80 path.** Six theories ruled out, cause unfound. A HUB75 driver rides the same peripheral, so it may inherit it. **Settled by shipping and watching**: Phase 1 targets 1-4 panels, a size at which the flash has never been seen, so it does not block. If a tester on a large HUB75 wall reports it, that is the seventh theory the backlog entry is missing — the flash following a non-WS2812 encoder through the same peripheral would exonerate the WS2812 slot encoding, which six hardware tests could not do.
 - **Pin count is the tightest constraint on the classic ESP32 and shapes the target list.** See § GPIO requirements: the classic cannot host a full port without a strap pin, so it is excluded rather than half-supported.
 
 ## What this plan does not do

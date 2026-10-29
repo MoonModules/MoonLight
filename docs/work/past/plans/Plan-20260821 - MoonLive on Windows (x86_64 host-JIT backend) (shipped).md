@@ -4,7 +4,7 @@
 
 MoonLive is MoonLight's on-device JIT: user-authored effect / modifier / layout scripts compile to native code and run in the pipeline. Today only `__aarch64__` desktops have a working host backend — `MM_MOONLIVE_HAS_HOST_JIT` is 0 on x86-64 Windows, x86-64 Linux, and Intel macOS. On those targets `MoonLiveCompiler::compileSource` fails cleanly and scripted modules render dark: no crash, no MoonLive.
 
-The PO's dev machine is Windows-x86_64, so the entire scripting subsystem is dormant for them. This branch closes `docs/backlog/backlog-light.md:295-307` ("MoonLive has no x86-64 backend"). It also unlocks two free wins as side effects — SysV x86_64 covers Linux and Intel macOS.
+The PO's dev machine is Windows-x86_64, so the entire scripting subsystem is dormant for them. This branch closes `docs/work/future/backlog-moonlive.md` ("MoonLive has no x86-64 backend"). It also unlocks two free wins as side effects — SysV x86_64 covers Linux and Intel macOS.
 
 The backend seam already exists: the shared IR walk in `src/core/moonlive/moonlive_lower.h:23-31` binds to whichever assembler the target provides, and three concrete implementations (arm64 host, RISC-V, Xtensa) prove the contract. Adding x86_64 is one more assembler behind the unchanged IR, per `src/platform/desktop/moonlive_asm_host.h`'s own comment ("host ISA (arm64 / x86-64)"). Windows exec-memory allocation is already implemented at `src/platform/desktop/platform_desktop.cpp:183-224` (`VirtualAlloc` + PAGE_EXECUTE_READWRITE + `FlushInstructionCache`).
 
@@ -51,7 +51,7 @@ Each step compiles clean and either changes visible test-suite counts or lands a
     - `moondeck/moonlive/emit_isa.cpp` — matching case so `disasm.py` can drive the x86_64 encoding.
 
 13. **Docs & backlog:**
-    - `docs/backlog/backlog-light.md:295-307` — move entry to a shipped-item note or delete per docs model (backlog shrinks under mandatory subtraction).
+    - `docs/work/future/backlog-moonlive.md` — move entry to a shipped-item note or delete per docs model (backlog shrinks under mandatory subtraction).
     - `docs/explanation/architecture/index.md:461-475` — if the wording "arm64-only host backend" appears, update to "arm64 or x86_64 host backend".
     - This plan file lives on the branch, becomes the PR description, is deleted once realized (per CLAUDE.md's plan-lifecycle rule).
 
@@ -72,7 +72,7 @@ Each step compiles clean and either changes visible test-suite counts or lands a
 - `moondeck/moonlive/emit_isa.cpp` — matching case.
 
 **Docs:**
-- `docs/backlog/backlog-light.md` — subtract shipped entry.
+- `docs/work/future/backlog-moonlive.md` — subtract shipped entry.
 - `docs/explanation/architecture/index.md` — factual update if needed.
 
 ## Verification

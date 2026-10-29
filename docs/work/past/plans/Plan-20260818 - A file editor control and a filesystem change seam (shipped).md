@@ -170,7 +170,7 @@ core knows nothing about scripts and the light domain supplies the directory. Sc
 - `src/light/moonlive/MoonLive{Effect,Layout,Modifier}.h`: hold the helper, shrink
 - `docs/moonmodules/core/ui.md`, `docs/moonmodules/light/MoonLiveEffect.md`: the control type row
   and the save-recompile loop
-- `docs/backlog/backlog-light.md`: delete the "editing a script's CONTENTS does not recompile it"
+- `docs/work/future/backlog-moonlive.md`: delete the "editing a script's CONTENTS does not recompile it"
   entry, which this closes
 
 ## Verification

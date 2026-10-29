@@ -3,7 +3,7 @@
 Classic screensavers on a light wall (a Discord request): sprites, small movable bitmaps with
 transparency, and the first consumer, After Dark's flying toasters. The power-functions catalog
 anticipated this: compositing was deferred "until sprites arrive"
-([bottom-up](../../future/power-functions-analysis-bottom-up.md) § below-the-cut); this is the arrival.
+(the power-functions survey put compositing below the cut until sprites arrived); this is the arrival.
 
 ## Division of labor (the design decision)
 
@@ -64,7 +64,7 @@ drift; then a board (S3 128x128).
 
 ## Later (filed, not scope)
 
-- P4 PPA acceleration behind the same `draw::sprite` signature (backlog-light entry).
+- P4 PPA acceleration behind the same `draw::sprite` signature (backlog-effects entry).
 - Porter-Duff `over` when a sprite/layer consumer needs real alpha.
 - MoonLive exposure: scripts cannot carry bitmap data yet; lands with the stage-3 builtin
   table + array support.
@@ -159,6 +159,6 @@ Desktop build zero warnings; ctest green (new draw asserts + golden). Live: the 
 localhost:8080's preview and the HLS stream (a TV full of toasters is the demo the Discord
 thread wants a clip of); PO judges flap cadence and drift; then a board (S3 128x128).
 
-## Out of scope (already filed in backlog-light)
+## Out of scope (already filed in backlog-effects)
 
 P4 PPA acceleration behind the same signature; Porter-Duff alpha; MoonLive sprite data.

@@ -9,7 +9,7 @@ Plan of 2026-10-25, a Feature, for approval. A MoonLight panel on the wall shows
 - **Inputs** share one binding table, `InputMapping`: a row is a source (a pin, an IR code, a gamepad input) plus an `InputAction` aimed at a desk slot (toggle, set while held, nudge). ButtonService, InfraredService, GamepadService and AnalogService each add only the source half.
 - **I2cBusModule** opens the board's one bus; a device module claims its address through `i2cDevices()`, the way AudioService claims the ES8311.
 - **TextEffect** draws multi-line text in a 4×6 or 6×8 font, 128 characters at most. There is no display driver for an LCD panel, and the P4 HDMI and MIPI-DSI output is step 10 of [Video in, LED walls out](Plan-20261024%20-%20Video%20in%2C%20LED%20walls%20out%20%280%20of%2010%29.md).
-- **The backlog** names the Tab5 as "a local wall preview or touch console" needing a `platform::` MIPI-DSI seam ([backlog-light](../future/backlog-light.md)), and says a touch input is "a Service under `Services` … exactly as the button and infrared rows do".
+- **The Tab5** is a local wall preview or touch console, which needs a `platform::` MIPI-DSI seam; a touch input is a Service under `Services`, as the button and infrared rows are.
 - **Proven on the bench (2026-10-25):** a live `PATCH /api/state?live=1` from a script on the Mac put the HA states on the Waveshare as one TextEffect, using the 6×8 font, 10 characters by 8 lines.
 
 ## The rule this plan follows

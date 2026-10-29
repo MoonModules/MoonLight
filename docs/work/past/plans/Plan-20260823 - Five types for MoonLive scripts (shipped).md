@@ -13,7 +13,7 @@ renders wrong" and never as an error:
 
 Not one was a mistake in a script. Each was a script author choosing a storage width and the engine
 silently disagreeing. The product owner and the agent settled the replacement in
-[backlog-moonlive.md](../../future/backlog-moonlive.md): **five types, `int`,
+[backlog-moonlive.md](../../future/analysis-moonlive.md): **five types, `int`,
 `byte`, `bool`, `fixed`, `string`, each usable as scalar or array. Every scalar occupies one uniform
 4-byte slot; arrays pack by element.** A type becomes a semantic rather than a width, which deletes
 the machinery instead of patching it a fifth time.

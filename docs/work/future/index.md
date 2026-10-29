@@ -1,18 +1,8 @@
 # Future: what does not exist yet
 
-The to-build list, split along the codebase's own boundary:
+Two kinds of file:
 
-- [backlog-core.md](backlog-core.md): core and infrastructure.
-- [backlog-light.md](backlog-light.md): the light domain, drivers, effects, sensors.
-- [backlog-mixed.md](backlog-mixed.md): items where a core mechanism meets a light one.
-- [backlog-moonlive.md](backlog-moonlive.md): the MoonLive language and its engine, in the order the steps are built.
+- **`backlog-<area>.md`**: the to-build list, one file per Area of the [Project's](https://github.com/users/MoonModules/projects/5) Backlog view, grouped by module, each item with its fields on one line.
+- **`analysis-<topic>.md`**: a survey of a problem before it is planned, cited by the backlog items and plans it informs; read when planning, not otherwise.
 
-The analyses beside them survey a problem before it is planned: read when planning, not otherwise.
-
-- [code-hosting-comparison.md](code-hosting-comparison.md): GitHub, Codeberg, a self-hosted Forgejo and GitLab.com as MoonLight's home, their rules on agent-written code first.
-- [processes-inventory.md](processes-inventory.md): every process MoonLight has, by content, with its copies, its gaps and the two step vocabularies; step 1 of the processes plan.
-- [moonwalk.md](moonwalk.md): MoonWalk, the model every process is written in, the journey as a story map, a process shaped after Arazzo, a step as Given, When, Then; step 2 of the processes plan.
-
-`archive_images/moonlight/` stages images captured in MoonLight: each moves to `docs/assets/light/<type>/<ClassName>.<ext>` and into its module's `@card` when the module ships, or is deleted, so the folder drains to empty.
-
-An item leaves here when it becomes a plan in [present](../present/index.md), and a shipped item is deleted rather than marked done. Tags in titles: *(investigation)* needs measurement first, *(deferred)* waits on a prerequisite, *(future)* is directional.
+How an item arrives, leaves and is titled: [Pick, spec and plan a topic](../../moonwalk.md#pick-spec-plan).

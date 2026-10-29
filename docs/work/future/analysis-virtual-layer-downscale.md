@@ -17,8 +17,7 @@ Concretely: a `Fire` effect on a 32×32 grid, driven onto 10 Hue bulbs, makes ea
 of its ~102-pixel slice of the fire — the flames' *summary*, not one stray pixel.
 
 The mirror case (**physical ≥ virtual**, e.g. a 128×128 wall from a 32×32 effect) is **already
-solved** — the existing `MappingLUT` fans a small logical grid out across a larger physical set (1:N
-upscale). The genuinely new capability is the **downscale** direction (physical < virtual): render
+solved** by the [1:N mapping](../../explanation/architecture/moonlight.md#mapping-and-blending). The genuinely new capability is the **downscale** direction (physical < virtual): render
 big, summarize small.
 
 ## Why this is a Layer feature, not a modifier
@@ -58,8 +57,7 @@ lights. Care points a future plan must resolve:
 
 - **`rebuildLUT` assumes logical ≤ physical.** It backward-maps each *physical* light to *one* logical
   cell (a fan-out / scatter). A virtual grid *larger* than physical needs the inverse: many logical
-  cells → one physical light. `MappingLUT` today has 1:1, 1:0 (unmapped), and 1:N (fan-out) mapping
-  types but **no N:1-averaged type** — that's the new mapping the feature introduces.
+  cells → one physical light. The [four mapping types](../../explanation/architecture/moonlight.md#mapping-and-blending) hold **no N:1-averaged type**: that's the new mapping the feature introduces.
 - **Memory:** the virtual buffer is `virtualW × virtualH × virtualD × channels`, which can dwarf the
   physical light count (32×32×3 = 3 KB is fine; larger virtual grids need the same PSRAM-first
   allocation + degradation-status discipline the Layer already uses).
