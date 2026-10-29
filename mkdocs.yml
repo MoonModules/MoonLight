@@ -98,6 +98,15 @@ plugins:
   # A page MoonWalk took over keeps its address: each old URL forwards to its process in the live view, so links from the installer, the README and the help still land.
   - redirects:
       redirect_maps:
+        work/past/lessons.md: contributing/lessons.md
+        work/future/analysis-code-hosting.md: 'https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287225872'
+        work/future/analysis-effects-power-functions-inventory.md: 'https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287226010'
+        work/future/analysis-input-mapping.md: 'https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287226167'
+        work/future/analysis-leddriver.md: 'https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287226322'
+        work/future/analysis-moonlive.md: 'https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287226461'
+        work/future/analysis-small-boards.md: 'https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287226570'
+        work/future/analysis-ui-extensibility.md: 'https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287226736'
+        work/future/analysis-virtual-layer-downscale.md: 'https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287226894'
         reference/tests/unit-tests.md: reference/tests.md
         reference/tests/scenario-tests.md: reference/tests.md
         reference/metrics/code.md: reference/tests.md#check_code
@@ -108,7 +117,7 @@ plugins:
         how-to/building.md: moonwalk.md#desktop-build-test
         gettingstarted.md: getting-started.md
         moonmodules/light/index.md: explanation/how-moonlight-works.md
-        reference/hardware/small-boards.md: work/future/analysis-small-boards.md
+        reference/hardware/small-boards.md: 'https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287226570'
         tutorials/how-moonlight-works.md: explanation/how-moonlight-works.md
         tutorials/generative-effects.md: explanation/generative-effects.md
         how-to/updating-firmware.md: moonwalk.md#update-firmware

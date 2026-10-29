@@ -42,7 +42,7 @@ Confirm the firmware is innocent before reaching for the soldering iron: [Diagno
 - **Share a solid, thick common ground** between the strip's supply and the board.
 - If the TX power check implicated RF coupling, set a per-board `Network.txPowerSetting` cap, the `deviceModels.json` mechanism the ESP32-S3 N16R8 Dev uses.
 
-How the bench found this is in [lessons.md](../work/past/lessons.md).
+How the bench found this is in [lessons.md](../contributing/lessons.md).
 
 ## The lights stutter once a second
 

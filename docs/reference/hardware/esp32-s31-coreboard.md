@@ -83,7 +83,7 @@ Pin map, **bench-verified** (link + DHCP confirmed on the CoreBoard). The RGMII 
   CH9102X with the alternate BOM). Auto-download via DTR/RTS → EN/BOOT.
 - **Buttons**: BOOT (GPIO61), RESET (EN).
 - **J5, power/enable jumper** (a 2-pin header next to the 5V→3.3V DC/DC converter U4 and the 3.3V
-  power-on LED D11). **Leave it installed.** With J5 removed the board is *half-powered*: the CP2102N runs off USB VBUS so its port still enumerates, but the ESP32-S31's 3.3V/EN rail is incomplete and the chip drives nothing, you get a serial port that opens but zero bytes from the MCU, at any baud, in any reset/download mode (see [lessons.md](../../work/past/lessons.md), which cost an hour of chasing a cable that wasn't the problem).
+  power-on LED D11). **Leave it installed.** With J5 removed the board is *half-powered*: the CP2102N runs off USB VBUS so its port still enumerates, but the ESP32-S31's 3.3V/EN rail is incomplete and the chip drives nothing, you get a serial port that opens but zero bytes from the MCU, at any baud, in any reset/download mode (see [lessons.md](../../contributing/lessons.md), which cost an hour of chasing a cable that wasn't the problem).
 - **40-pin GPIO header** (J2). Optional 32.768 kHz crystal footprint (Y1, NC by default).
 
 ## Free GPIO for user peripherals (LED strips, loopback)
@@ -107,7 +107,7 @@ The board's own peripherals claim a large, contiguous low-GPIO block; the **J2 h
 
 The two pins in **one column are physically stacked**, so a 2-pin jumper cap bridges them with no flying wire, that adjacency is what makes a column a good loopback pair.
 
-**Free on J2 for user I/O** (read off the table above, minus the board peripherals and boot straps): the numbered GPIOs on cols 5–16 (**4, 36, 37, 38, 39, 40, 42, 43, 44, 45, 46, 47, 48, 49**) are plain I/O clear of Ethernet (2, 5–19), audio (50–57), the SD lines (broken out as `D0`–`D3` / `CLK` / `CMD` by function, cols 13–16), the onboard LED (60) and the straps (0, 1, 3, 61). The `C` label at col 17 is a chip-enable, not a GPIO. **The GPIO numbers here are read from the board silkscreen and not yet bench-confirmed**: the S31 reference pin tables have been found off-by-one before (see the [S31 Ethernet lesson](../../work/past/lessons.md)), so probe a pin before committing a design to it.
+**Free on J2 for user I/O** (read off the table above, minus the board peripherals and boot straps): the numbered GPIOs on cols 5–16 (**4, 36, 37, 38, 39, 40, 42, 43, 44, 45, 46, 47, 48, 49**) are plain I/O clear of Ethernet (2, 5–19), audio (50–57), the SD lines (broken out as `D0`–`D3` / `CLK` / `CMD` by function, cols 13–16), the onboard LED (60) and the straps (0, 1, 3, 61). The `C` label at col 17 is a chip-enable, not a GPIO. **The GPIO numbers here are read from the board silkscreen, unconfirmed on the bench**: the S31 reference pin tables have been found off-by-one before (see the [S31 Ethernet lesson](../../contributing/lessons.md)), so probe a pin before committing a design to it.
 
 **Recommended assignment** (what the S31 catalog entry uses):
 

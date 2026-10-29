@@ -2,8 +2,8 @@
 
 Hard-won debugging lessons and gotchas, recorded with the code that proved them. The PR-merge *carry-forward* gate writes new entries here (CLAUDE.md § Lifecycle Events). This is the **lesson** record: a bug, its root cause, and the fix. Two neighbours hold the other genres, and a lesson belongs in whichever fits:
 
-- A durable **rule** that graduated from a lesson lives in [CLAUDE.md](../../../CLAUDE.md) or [coding-standards.md](../../contributing/coding-standards.md), not here.
-- The forward-looking **design intent** of a feature is a [plan](index.md).
+- A durable **rule** that graduated from a lesson lives in [CLAUDE.md](../../CLAUDE.md) or [coding-standards.md](coding-standards.md), not here.
+- The forward-looking **design intent** of a feature is a [plan](https://github.com/MoonModules/MoonLight/issues?q=label%3Aplan%20is%3Aclosed).
 
 Entries run oldest-first by branch. A lesson fully absorbed into a rule doc or the code is pruned (per *Mandatory subtraction*): the git history is the permanent record, this file is the working narrative on top.
 
@@ -57,7 +57,7 @@ Bench notes: a board that drops STA mid-session falls back to softAP silently, p
 
 ## Diagnosing LED flicker: eliminate firmware with hardware tests before blaming (or fixing) the wire
 
-A classic ESP32 driving WS2812 on RMT showed random wrong colors on LEDs the effect left black. Instead of guessing (WiFi, buffering, timing), a four-step elimination each a *measurement*: (1) capture the source/preview buffer, clean, so corruption is downstream of the logical buffer; (2) whole-frame loopback self-test through a jumper, bit-exact PASS even under WiFi load, so the firmware/peripheral is innocent; (3) sweep `txPowerSetting` 20→1 dBm, flicker constant, so it's NOT WiFi coupling; (4) check pulse timing, 350/700/1250 ns spec-exact, not a timing-margin bug. Every firmware cause eliminated by test, the remaining cause is the physical data path, and "constant regardless of TX power" fingers signal integrity, a missing 3.3→5 V level shift. Fix is hardware (documented in [LED signal integrity](../../reference/troubleshooting.md#stray-pixels-or-wrong-colors-on-lights-that-should-be-off)).
+A classic ESP32 driving WS2812 on RMT showed random wrong colors on LEDs the effect left black. Instead of guessing (WiFi, buffering, timing), a four-step elimination each a *measurement*: (1) capture the source/preview buffer, clean, so corruption is downstream of the logical buffer; (2) whole-frame loopback self-test through a jumper, bit-exact PASS even under WiFi load, so the firmware/peripheral is innocent; (3) sweep `txPowerSetting` 20→1 dBm, flicker constant, so it's NOT WiFi coupling; (4) check pulse timing, 350/700/1250 ns spec-exact, not a timing-margin bug. Every firmware cause eliminated by test, the remaining cause is the physical data path, and "constant regardless of TX power" fingers signal integrity, a missing 3.3→5 V level shift. Fix is hardware (documented in [LED signal integrity](../reference/troubleshooting.md#stray-pixels-or-wrong-colors-on-lights-that-should-be-off)).
 
 **Red-herring note:** the flicker's *appearance* shifted (blue-only → random) after an unrelated `lightPreset` RGB→GRB default change plus a pin swap. The electrical fault was identical; only the color mapping changed. A changed symptom is not proof a code change caused it.
 
@@ -89,7 +89,7 @@ The first audio-reactive capability: `AudioModule` (a SystemModule Peripheral) r
 - **Effects reach the producer via `AudioModule::latestFrame()` (a static accessor), not a boot setter**, because an audio effect can be added through the UI after boot and a setter only wired the boot instance. The active mic registers in `setup()`, clears in `teardown()`, returns a static silent frame when there's no mic.
 - **Two hardware-only bugs, now pinned:** a missing `registerType<AudioModule>` made `create(...)->markWiredByCode()` deref null and boot-loop; the I²S read blocked the tick ~7.7 ms at a 20 ms timeout (fixed to non-blocking + a cross-tick sample accumulator, dropping to ~400 µs). The INMP441 is on the **left** I²S slot here (right reads empty), the first bench suspect when level floors with sound present.
 - **Shipped the manual core; the adaptive conditioner was prototyped and removed.** Auto noise-floor + AGC + smoothing needs tuning in a *quiet* room; the dev environment (a campground van with strong varying low-frequency rumble) was the adversarial worst case that kept it from settling. Land the manual core, treat adaptive auto-tuning as its own increment, tune it where the noise floor is real-quiet. Also: `level` is overall RMS (independent of the FFT), don't derive it from the bands or it stops fluctuating with volume.
-- **Designed fresh from the datasheet + textbook DSP, not a prior project.** The datasheet made even a behavior-reference unnecessary: a flat ±3 dB mic has no per-frequency error to correct, so the hand-tuned band-correction table years of prior-project work produced was the wrong tool; the textbook defaults sufficed. The DSP choices and *why* live in [AudioService.md](../../moonmodules/core/services.md#audio).
+- **Designed fresh from the datasheet + textbook DSP, not a prior project.** The datasheet made even a behavior-reference unnecessary: a flat ±3 dB mic has no per-frequency error to correct, so the hand-tuned band-correction table years of prior-project work produced was the wrong tool; the textbook defaults sufficed. The DSP choices and *why* live in [AudioService.md](../moonmodules/core/services.md#audio).
 - **A floating or strap-pin line fakes a signal.** It reads near full scale or bounces, so an RMS above zero never confirms a mic: confirm it by RMS tracking sound on one fixed pin, and re-read the silkscreen first (a 45 read as 15 put WS on a strap).
 
 ## ESP32-P4 round 3, WiFi via the C6: the abstraction the earlier round feared wasn't needed
@@ -109,11 +109,11 @@ A deferred "fuller error handling" item for `rmtWs2812Show`/`rmtWs2812Wait` (�
 
 A mic-less **classic ESP32** boot-looped (TG1WDT_SYS_RESET at ~736 ms, silent hang). Bisect (clean-built known-good still looped; disabling AudioModule wiring booted clean) fingered AudioModule: auto-wired via `addChild` + `markWiredByCode()` (gated on `platform::hasI2sMic`), it ran `setup()` → `reinit()` → `audioMicInit()` → `i2s_channel_enable()`, which on the classic's older I²S driver **blocks forever** when no mic clocks the pins. The P4 was never affected (newer I²S returns silence or fails cleanly).
 
-The fix (a design fix, not a band-aid): don't auto-wire AudioModule (register it in the factory so it's user-addable); default the mic pins to unset (0); `reinit()` no-ops on any unset pin (`setStatus("set …"); return;`). Classic then boots 191 FPS, 0 WDT resets. This drove the general rule now in [MoonInstaller, config provenance](../../explanation/architecture/mooninstaller.md#config-provenance-mcu-devicemodel) and [coding-standards.md § Defaults](../../contributing/coding-standards.md#defaults): chip-/board-fixed pins (RMII Ethernet) *must* default (omitting them is a chicken-and-egg lockout); user-soldered pins (mic, LED strands) stay empty until set. Never auto-run a peripheral whose init can block on absent hardware.
+The fix (a design fix, not a band-aid): don't auto-wire AudioModule (register it in the factory so it's user-addable); default the mic pins to unset (0); `reinit()` no-ops on any unset pin (`setStatus("set …"); return;`). Classic then boots 191 FPS, 0 WDT resets. This drove the general rule now in [MoonInstaller, config provenance](../explanation/architecture/mooninstaller.md#config-provenance-mcu-devicemodel) and [coding-standards.md § Defaults](coding-standards.md#defaults): chip-/board-fixed pins (RMII Ethernet) *must* default (omitting them is a chicken-and-egg lockout); user-soldered pins (mic, LED strands) stay empty until set. Never auto-run a peripheral whose init can block on absent hardware.
 
 ## Live reconfiguration falls out of the prepare-pass for free, MoonLight's "initless" goal, a different mechanism
 
-MoonLight reconfigures every module live the instant a control changes (pins, leds-per-pin, output protocol, mic pin/rate), no reboot. The design note lives in [architecture.md § Live reconfiguration](../../explanation/architecture/moonmodule.md#live-reconfiguration-every-change-applies-on-the-next-frame). The lineage is MoonLight's "initless drivers" (a driver with no `addLeds`/`initLed` step, reading a mutable Context at `show()` time). MoonLight reaches the same outcome by a different mechanism: our drivers *do* have an explicit rebuild (`RmtLedDriver::reinit()`, the i80/Parlio DMA-bus rebuild), but it's driven by the generic tier-3 `onBuildState()` sweep, not hand-built per driver, so any module returning `true` from `controlChangeTriggersBuildState` inherits live-reconfig, spanning drivers, audio, effects, layouts, modifiers, and network I/O alike. Credit the lineage for the idea, but name the property by what the user sees when the mechanism differs.
+MoonLight reconfigures every module live the instant a control changes (pins, leds-per-pin, output protocol, mic pin/rate), no reboot. The design note lives in [architecture.md § Live reconfiguration](../explanation/architecture/moonmodule.md#live-reconfiguration-every-change-applies-on-the-next-frame). The lineage is MoonLight's "initless drivers" (a driver with no `addLeds`/`initLed` step, reading a mutable Context at `show()` time). MoonLight reaches the same outcome by a different mechanism: our drivers *do* have an explicit rebuild (`RmtLedDriver::reinit()`, the i80/Parlio DMA-bus rebuild), but it's driven by the generic tier-3 `onBuildState()` sweep, not hand-built per driver, so any module returning `true` from `controlChangeTriggersBuildState` inherits live-reconfig, spanning drivers, audio, effects, layouts, modifiers, and network I/O alike. Credit the lineage for the idea, but name the property by what the user sees when the mechanism differs.
 
 ## Lessons from the catalog-driven installer branch (3-layer device model)
 
@@ -181,7 +181,7 @@ The catalog/summary pages hand-author each card image as a raw `<img src="../../
 "Disabling a module frees its hardware" (so the pin map's freed-pin display is truthful and a shared GPIO is genuinely reusable) resolves to a single core primitive, not per-module bookkeeping — but getting there passed through a wrong turn worth remembering.
 
 - **The shipped design.** `MoonModule::applyState()` is the sole resource-lifecycle router: it calls `onBuildState()` (pure build — acquire) on an `effectivelyEnabled()` node and `teardown()` (release) otherwise, recursing the tree so each child is routed by its *own* effective-enabled. A module's `onBuildState()` therefore contains **no `enabled()` check** — it just builds; core decides whether to build or tear down. `effectivelyEnabled()` walks `parent_`, so a disabled *parent* releases its whole subtree (a disabled Layer frees its effects' heap), and a `respectsEnabled()==false` ancestor (Network/HttpServer) is neutral, never forcing children on. This mirrors the loop gate (`tickChildren` / `Scheduler::shouldRun`): the same "one place owns the enabled decision" shape, now applied to acquire/release.
-- **The wrong turn: per-module `if (enabled())`.** The first cut at disable-releases-resources had each resource-holder self-gate — `if (enabled()) reinit()` pasted into `setup()`, `onBuildState()`, `onCorrectionChanged()`, and the buffer setters (~24 sites). It worked but pushed orchestration into catalog modules (a driver "remembering" a rule that isn't its job) and it was inconsistent (some `if(!enabled()) return;`, some `if(enabled()) …`). The lift into `applyState()` deleted all of it: the release code was already in each module's `teardown()`, so the `onBuildState` disabled-branch was a *duplicate* — removing it is pure subtraction. (This is the [*Complexity lives in core*](../../../CLAUDE.md) clause on "extend the core mechanism to the sibling path, don't re-implement per module" — the canonical repo example.)
+- **The wrong turn: per-module `if (enabled())`.** The first cut at disable-releases-resources had each resource-holder self-gate: `if (enabled()) reinit()` pasted into `setup()`, `onBuildState()`, `onCorrectionChanged()`, and the buffer setters (~24 sites). It worked but pushed orchestration into catalog modules (a driver "remembering" a rule that isn't its job) and it was inconsistent (some `if(!enabled()) return;`, some `if(enabled()) …`). The lift into `applyState()` deleted all of it: the release code was already in each module's `teardown()`, so the `onBuildState` disabled-branch was a *duplicate* — removing it is pure subtraction. (This is the [*Complexity lives in core*](../../CLAUDE.md) clause on "extend the core mechanism to the sibling path, don't re-implement per module" — the canonical repo example.)
 - **The cold-boot symptom that started it (keep — it's the reproduction).** On the P4 (MHC-WLED shield, GPIO 20 = `O20` level-shifted output), a *disabled* RmtLed on pin 20 grabbed the RMT channel at boot, so the *enabled* ParlioLed on the same pin drove nothing — LEDs dark. Toggling RmtLed off→on→off "fixed" it live (the disable freed the RMT channel, then ParlioLed's next enabled sweep re-inited over the now-free pin) — which is exactly what masked it during runtime-only testing: **a toggle test never exercises a cold boot.** The lesson: a lifecycle bug that a live toggle papers over still bites on the boot path — test persisted-disabled-at-boot explicitly (a disabled module's `applyState()` must route to teardown, asserted host-side).
 - **The gotcha `applyState` sidesteps: `teardown()` is not always a clean inverse of `setup()`.** HueDriver's `teardown()` frees its light-name buffers, but its `setup()` (inherited no-op) does NOT re-fetch them — `loop1s()`/`onBuildControls()` rebuild them lazily. Under the router this is fine (release lives in `teardown`, rebuild is lazy, `onBuildState` is pure), but it's why "disable = blindly call `teardown` then `setup`" can't be a blanket rule: route through `applyState` (build-or-teardown), never a mechanical setup↔teardown swap.
 - **IrService + the `active_` election show release lives in `teardown`.** IrService has no channel member — its RMT-RX channel is a `static` behind the platform layer, keyed by pin — so its `teardown()` calls the `platform::irStop()` seam (the existing `closeChannel()`); re-acquire is lazy on the next `irRead`. AudioService/DevicesModule vacate their `active_` singleton seat in `teardown()` (and in a destructor, so a bare destruction never dangles the static). All acquisitions belong in `onBuildState`, all releases in `teardown` — `applyState` picks which runs.
@@ -210,7 +210,7 @@ Setting a **multi-channel preset** (a moving-head / DMX fixture, or even **RGBCC
 
 - **The bug: a fixed 4-byte-per-light `wire` scratch, assuming ≤4 channels (RGBW).** The per-light encode ran `correction_.apply(src, wire + lane * 4)` into `wire[kMaxLanes * 4]` (parallel) / `wire[4]` (RMT), and `encodeWs2812LcdSlots` read `wire[lane * 4 + ch]` — the stride hard-coded to 4. A correction with `outChannels > 4` wrote **past its 4-byte slot**, overflowing into adjacent lanes and off the array end → heap/stack corruption. `outChannels` is set from the preset's role count, so a fixture preset (Pan/Tilt/Dimmer/… = 8–16+ ch) — or RGBCCT (5) — walks straight off the end. The persisted preset re-applied every boot, so it crashed, rebooted, crashed = bootloop.
 - **The reproducing bootloop was the ideal debugger, not a disaster.** Same panic every boot → each hypothesis got a definitive yes/no. `addr2line` on the backtrace + a one-line `ESP_LOGW` dumping the state pre-crash (`st`, `io`, `buf`, `bytes`, fifo head/tail) turned "it crashes somewhere in tx_color" into hard facts. Two decisive isolation flashes (queue_depth 2→1, then PSRAM→internal buffer) **ruled OUT** the new Step 1.5 double-buffer as the cause — the crash was identical. Then flashing the **previous commit** in a git worktree crashed too, but landed in `tlsf_malloc` (`remove_free_block`) — the unmistakable signature of a **corrupted heap**, i.e. a buffer overflow, present *before* Step 1.5. General: a crash inside the allocator on a *later* malloc is almost never the allocator's fault — it's an earlier overflow that trashed the free-list; find the writer, not the reader. And a reliable repro earns instrumentation, not guesswork (the anti-stalling rule cuts *both* ways: >2 blind fix attempts = stop, but a repro you can *measure* is exactly when to keep going).
-- **The fix is NOT a channel cap — it's sizing the scratch to the channel count (no maxed caps).** The first instinct (reject `outChannels > 4` with a status) was wrong: RGBCCT is already 5, and MoonLight's principle is *no arbitrary caps — the only limit is memory* ([CLAUDE.md](../../../CLAUDE.md)). So `wire` became a **heap buffer sized to `kMaxLanes × outChannels`** (parallel) / `outChannels` (RMT), allocated off the hot path (in `parseConfig`/`resizeSymbols`, grows-only, freed on release), and the encoder's lane stride became the `channels` parameter instead of a literal 4. Now any channel count lays out without overrun; the driver **drives** a 16-channel fixture, it doesn't refuse it. **Heap in the hot path?** No: allocation is off the hot path (once per config change), `tick()` only reads the member pointer — same pattern `NetworkSendDriver`'s `corrected_` and the DMA buffer already use, so no per-frame alloc and no cache penalty at these sizes (tens–hundreds of bytes stays in L1). Verified end-to-end: the SE16, still holding the multi-channel preset that bootlooped it, now boots clean and reports `driving 2304 of 16384 lights`.
+- **The fix is NOT a channel cap; it's sizing the scratch to the channel count (no maxed caps).** The first instinct (reject `outChannels > 4` with a status) was wrong: RGBCCT is already 5, and MoonLight's principle is *no arbitrary caps — the only limit is memory* ([CLAUDE.md](../../CLAUDE.md)). So `wire` became a **heap buffer sized to `kMaxLanes × outChannels`** (parallel) / `outChannels` (RMT), allocated off the hot path (in `parseConfig`/`resizeSymbols`, grows-only, freed on release), and the encoder's lane stride became the `channels` parameter instead of a literal 4. Now any channel count lays out without overrun; the driver **drives** a 16-channel fixture, it doesn't refuse it. **Heap in the hot path?** No: allocation is off the hot path (once per config change), `tick()` only reads the member pointer — same pattern `NetworkSendDriver`'s `corrected_` and the DMA buffer already use, so no per-frame alloc and no cache penalty at these sizes (tens–hundreds of bytes stays in L1). Verified end-to-end: the SE16, still holding the multi-channel preset that bootlooped it, now boots clean and reports `driving 2304 of 16384 lights`.
 - **General: a fixed-stride scratch is a silent cap.** Any `buf[N * FIXED_STRIDE]` where the real element size is runtime-derived is a maxed cap hiding as a buffer — it works until an input exceeds the stride, then it's a memory-corruption bug, not a clean rejection. Either size it to the actual stride (off the hot path) or assert the input fits; never let it overrun. The tell that this class of bug exists: a driver that assumes RGB(W) but reads its channel count from a user-settable preset.
 
 ## Six dead hypotheses on one bug: what a debugging session looks like when the *method* is broken
@@ -225,7 +225,7 @@ What actually went wrong, and the rules that fall out:
 - **Absence of evidence is not evidence.** The "silent underrun" story existed *only* because the S3 has no underrun interrupt. A chip that cannot report X is not telling you X is happening. The moment a control condition appeared (a P4, which *does* report), the theory evaporated.
 - **Check the datasheet number before theorising about it.** "PSRAM is too slow" cost real time and was refutable in ten seconds by looking up the octal-PSRAM bandwidth against the 26.67 MB/s the frame needs.
 - **A metric you never validated is not a meter.** The GDMA error count was used as the success signal for most of the session — and then the product owner reported *visually clean, flicker-free strands in a state that still logged 121 mount failures*. The proxy and the reality had come apart, which means every "confirmed" and "no change" read off that proxy was worthless. Validate a proxy against ground truth **once**, early, or don't lean on it.
-- **The PO's eyes found in one sentence what six theories missed.** "I put asyncTransmit off and it's MUCH better" and, later, a blind sweep of `ledsPerPin` landing *exactly* on the allocator's internal/PSRAM boundary (96 good / 128 bad, against a ~38 KB largest free internal block): both were better data than anything the agent produced. When a human at the bench reports a reproducible observation, that is the primary instrument; the logs are supporting evidence. (This is the *[Invite the product owner to test, then stop](../../../CLAUDE.md#roles)* rule earning its place: the rule exists because the agent kept racing past the one measurement that mattered.)
+- **The PO's eyes found in one sentence what six theories missed.** "I put asyncTransmit off and it's MUCH better" and, later, a blind sweep of `ledsPerPin` landing *exactly* on the allocator's internal/PSRAM boundary (96 good / 128 bad, against a ~38 KB largest free internal block): both were better data than anything the agent produced. When a human at the bench reports a reproducible observation, that is the primary instrument; the logs are supporting evidence. (This is the *[Invite the product owner to test, then stop](../../CLAUDE.md#roles)* rule earning its place: the rule exists because the agent kept racing past the one measurement that mattered.)
 - **A fix that shrinks the feature below its own baseline is not a fix.** Internal-RAM-first "worked" and was nearly shipped as the answer — while capping a shift display at ~1,500 lights, *fewer* than direct mode already drives. It ships as an explicitly-labelled **stopgap**, and the PO's push-back ("not scalable — check you're not running in a very bad circle") is what caught it.
 - **Build the floor test before optimizing.** Six encode optimizations ran before a diagnostic encoder that stores only a fixed pattern measured the floor at 19 µs a light, which showed the stall was a frame-close fault rather than speed. When an artifact can be correctness or speed, the cheap floor test comes first.
 - **Prune the record as hypotheses die.** The shift-register design record had accumulated three successive "the mechanism is X" write-ups, each stated with confidence and each wrong — actively poisoning the next attempt. It is now split into **what is TRUE (measured)** and **what is FALSE (guessed, then refuted — do not re-derive)**. A design doc that records dead theories as findings is worse than no doc.
@@ -319,207 +319,92 @@ Streaming panel-card frames from an S31 at ~5 300 packets/s degraded with uptime
 
 ## Lessons from the power-function branch (shared toolbox, particles, shaders)
 
-A branch that built a shared library and migrated existing effects onto it. The gotchas all
-share a shape: a green build, plausible-looking output, and a defect only counting could see.
+A branch that built a shared library and migrated existing effects onto it. The gotchas all share a shape: a green build, plausible-looking output, and a defect only counting could see.
 
 - **A ported function's SIGN is part of its contract, and getting it wrong is silent.** Our
-  `sin16`/`cos16` returned unsigned 0..65535; FastLED master (`i16 sin16lut`) and WLED main
-  (`int16_t sin16_t`) both return signed. WLED effects write `sin16_t(x) + 32768` when they
-  want an unsigned value — arithmetic that is exactly half a scale wrong against an unsigned
-  return, with no compile error and no crash. A ported effect just looks subtly off. **When
-  adopting a function that exists upstream, verify its range and sign against upstream's
-  `master`/`main`, not against a release and not against memory** — the contract to bind to is
-  the one users will have. Local checkouts of both live beside this repo for exactly this.
+  `sin16`/`cos16` returned unsigned 0..65535; FastLED master (`i16 sin16lut`) and WLED main (`int16_t sin16_t`) both return signed. WLED effects write `sin16_t(x) + 32768` when they want an unsigned value — arithmetic that is exactly half a scale wrong against an unsigned return, with no compile error and no crash. A ported effect just looks subtly off. **When adopting a function that exists upstream, verify its range and sign against upstream's `master`/`main`, not against a release and not against memory** — the contract to bind to is the one users will have. Local checkouts of both live beside this repo for exactly this.
 
 - **"It looks like noise" is not evidence that it IS noise.** `fbm16` summed its octaves after
-  shifting each sample down by 8 — which fits a 32-bit accumulator and produces output that
-  passes every visual check, while being an 8-bit field wearing a 16-bit type: 195 distinct
-  values over 20,000 samples, low byte never set. That is precisely the banding the 16-bit tier
-  exists to remove, shipped inside the fix for it. **For a function whose value IS its
-  distribution, assert on the distribution — count distinct values, check the range is
-  reached.** An eyeball, and a test that only checks bounds, both pass.
+  shifting each sample down by 8 — which fits a 32-bit accumulator and produces output that passes every visual check, while being an 8-bit field wearing a 16-bit type: 195 distinct values over 20,000 samples, low byte never set. That is precisely the banding the 16-bit tier exists to remove, shipped inside the fix for it. **For a function whose value IS its distribution, assert on the distribution — count distinct values, check the range is reached.** An eyeball, and a test that only checks bounds, both pass.
 
 - **Two framerate bugs can cancel, and fixing one alone looks like a regression.** Fireworks
-  counts frames for its launch roll (20x the shells at 1200 fps) *and* floors its trail fade at
-  1 per render (erasing the trail 20x faster). Together they roughly cancel, so the effect
-  looked fine and the audit passed. Fixing only the launch made the measured ratio worse —
-  three times, before the second bug was found. **When a targeted fix makes a metric worse,
-  stop patching and look for the compensating bug** rather than tuning the fix.
+  counts frames for its launch roll (20x the shells at 1200 fps) *and* floors its trail fade at 1 per render (erasing the trail 20x faster). Together they roughly cancel, so the effect looked fine and the audit passed. Fixing only the launch made the measured ratio worse — three times, before the second bug was found. **When a targeted fix makes a metric worse, stop patching and look for the compensating bug** rather than tuning the fix.
 
 - **A "no-op" rewrite of a shared primitive needs a differential test, not a review.**
-  Replacing `wrap()`'s per-span loops with modulo changed its endpoint behavior: the loops are
-  asymmetric (reducing from above stops *at* `span`, climbing from below stops at `0`), which
-  no amount of reading the new code reveals. Diffing old against new across every span and
-  2.8M inputs found it in seconds. **For a hot-path primitive whose replacement is meant to be
-  behavior-identical, prove it by exhaustive comparison against the original.**
+  Replacing `wrap()`'s per-span loops with modulo changed its endpoint behavior: the loops are asymmetric (reducing from above stops *at* `span`, climbing from below stops at `0`), which no amount of reading the new code reveals. Diffing old against new across every span and 2.8M inputs found it in seconds. **For a hot-path primitive whose replacement is meant to be behavior-identical, prove it by exhaustive comparison against the original.**
 
 ## Lessons from the MoonLive-on-Xtensa branch (the register-window frame bug)
 
-MoonLive's JIT ran on desktop arm64 and on RISC-V, and reset every Xtensa board the moment a
-script called a host function. Three days, because every check we had was looking at the
-instructions and the defect was in the stack layout around them.
+MoonLive's JIT ran on desktop arm64 and on RISC-V, and reset every Xtensa board the moment a script called a host function. Three days, because every check we had was looking at the instructions and the defect was in the stack layout around them.
 
 - **On Xtensa, the top 32 bytes of a call8 frame belong to the hardware, not to the routine.**
-  The window-overflow handler (`_WindowOverflow8`, esp-idf `components/xtensa/xtensa_vectors.S`)
-  writes two 16-byte bands into a spilled frame: the top 16 take an *older* frame's a0-a3
-  (`s32e aN, a9, -16..-4`), and the next 16 take the routine's *own* a4-a7
-  (`s32e aN, a0, -32..-20`, where a0 is that frame's top). GCC obeys the same rule — every
-  call8-making function it compiles reserves locals + exactly 32, at every size. Our emitter
-  reserved 16, so the parked control-arena pointer sat inside the second band and a window
-  spill overwrote it with an expression temp. **A frame-layout question is answered by the
-  platform's own spill handler and a compiler probe, not by the ISA prose.**
+  The window-overflow handler (`_WindowOverflow8`, esp-idf `components/xtensa/xtensa_vectors.S`) writes two 16-byte bands into a spilled frame: the top 16 take an *older* frame's a0-a3 (`s32e aN, a9, -16..-4`), and the next 16 take the routine's *own* a4-a7 (`s32e aN, a0, -32..-20`, where a0 is that frame's top). GCC obeys the same rule — every call8-making function it compiles reserves locals + exactly 32, at every size. Our emitter reserved 16, so the parked control-arena pointer sat inside the second band and a window spill overwrote it with an expression temp. **A frame-layout question is answered by the platform's own spill handler and a compiler probe, not by the ISA prose.**
 
 - **Window rotation is deterministic; the SPILL is not, so the contract is spatial.** Rotation
-  happens only at `call8`/`retw`, in our own instruction stream. The spill is lazy: it fires on
-  any interrupt that lands while a call is in flight, at an instruction we do not choose. No
-  ordering, no code sequence and no "quiet moment" can dodge it — only the layout can be right
-  or wrong. This is also the whole symptom explanation: deep call chains (plasma's `sin`/`beat`
-  into libm) gave every tick interrupt a wide window and died in under a second, brief leaf
-  calls almost never coincided, and call-free scripts never faulted at all. **A crash whose
-  frequency tracks how LONG a call runs, rather than what it computes, is an interrupt-timing
-  bug — look at what the hardware writes asynchronously, not at the code path.**
+  happens only at `call8`/`retw`, in our own instruction stream. The spill is lazy: it fires on any interrupt that lands while a call is in flight, at an instruction we do not choose. No ordering, no code sequence and no "quiet moment" can dodge it — only the layout can be right or wrong. This is also the whole symptom explanation: deep call chains (plasma's `sin`/`beat` into libm) gave every tick interrupt a wide window and died in under a second, brief leaf calls almost never coincided, and call-free scripts never faulted at all. **A crash whose frequency tracks how LONG a call runs, rather than what it computes, is an interrupt-timing bug — look at what the hardware writes asynchronously, not at the code path.**
 
 - **Byte-perfect encodings prove the instructions, and say nothing about the frame.** Round-trip
-  checks against `xtensa-esp32-elf-as` passed for every instruction we emit, including the
-  `entry` whose immediate was the bug. Two other backends running the identical IR pipeline were
-  flawless, which read as "the compiler is fine, the target is haunted". **When a defect is
-  target-specific and every static check is green, suspect the contract with the platform
-  (frame, ABI, alignment) rather than the code generator.**
+  checks against `xtensa-esp32-elf-as` passed for every instruction we emit, including the `entry` whose immediate was the bug. Two other backends running the identical IR pipeline were flawless, which read as "the compiler is fine, the target is haunted". **When a defect is target-specific and every static check is green, suspect the contract with the platform (frame, ABI, alignment) rather than the code generator.**
 
 - **The guardrail had to see the bug before the fix went in.** `MM_ISA_RESERVED_TOP` was raised
-  to 32 in the structural checker *first*, and it failed on the shipped emitter, naming the
-  offending frame offset. Only then did the emitter constant change. A test written after a fix
-  proves the fix compiles; a test that fails first proves it *detects*. The checker decodes the
-  real `entry` immediate out of the emitted bytes, so it pins the invariant rather than the
-  constant.
+  to 32 in the structural checker *first*, and it failed on the shipped emitter, naming the offending frame offset. Only then did the emitter constant change. A test written after a fix proves the fix compiles; a test that fails first proves it *detects*. The checker decodes the real `entry` immediate out of the emitted bytes, so it pins the invariant rather than the constant.
 
 - **A reserve constant is coupled to the widest call the emitter can produce.** 32 is exact for
-  `call8`; `call12` would need 48 (its extra save area holds a8-a11 as well). We only ever emit
-  `call8`, so the checker's 32 is an equality — but nothing in the code says so, and a future
-  wider call would leave the test green while the frames went wrong again. hpwit, who wrote the
-  new-parser Xtensa compiler, independently reached the same floor from experience ("I always
-  start at at least 32") and phrases it as a minimum for exactly this reason. The reserve is
-  therefore derived from the emitted call opcode rather than written down, so widening the call
-  moves the reserve with it or fails the build.
+  `call8`; `call12` would need 48 (its extra save area holds a8-a11 as well). We only ever emit `call8`, so the checker's 32 is an equality — but nothing in the code says so, and a future wider call would leave the test green while the frames went wrong again. hpwit, who wrote the new-parser Xtensa compiler, independently reached the same floor from experience ("I always start at at least 32") and phrases it as a minimum for exactly this reason. The reserve is therefore derived from the emitted call opcode rather than written down, so widening the call moves the reserve with it or fails the build.
 
 ## Lessons from the script-functions branch: a tidier disassembly can be the broken one
 
-Local calls and recursion in MoonLive cost four stacked defects, and every one of them was
-invisible to a green test suite. The theme is narrower than "test on hardware": it is that the
-evidence which *looks* most authoritative here is the evidence that lies.
+Local calls and recursion in MoonLive cost four stacked defects, and every one of them was invisible to a green test suite. The theme is narrower than "test on hardware": it is that the evidence which *looks* most authoritative here is the evidence that lies.
 
 - **A cleaner-looking emitted block can be the broken one.** Removing the spill pass's function
-  boundary remap makes `crosshair.mlv` disassemble BETTER on Xtensa (three tidy `entry`/`retw.n`
-  pairs instead of two and a stray) and keeps all 1282 host tests green. It also boot-loops an S3
-  with `StoreProhibited` and the light-buffer pointer holding `0xff`: a store through a register
-  that a mid-statement frame boundary left holding a colour byte. Two things conspire — the host
-  backend never executes that path, and the disassembler decodes the zero padding between
-  functions as instructions. **A change to function-boundary or frame code gets a flash and a
-  soak, never a listing review.**
+  boundary remap makes `crosshair.mlv` disassemble BETTER on Xtensa (three tidy `entry`/`retw.n` pairs instead of two and a stray) and keeps all 1282 host tests green. It also boot-loops an S3 with `StoreProhibited` and the light-buffer pointer holding `0xff`: a store through a register that a mid-statement frame boundary left holding a colour byte. Two things conspire — the host backend never executes that path, and the disassembler decodes the zero padding between functions as instructions. **A change to function-boundary or frame code gets a flash and a soak, never a listing review.**
 
 - **The host backend cannot pin an argument-passing contract, because its register map hides
-  one.** A script-to-script call emitted no argument setup at all, so each callee parked whatever
-  the caller had left in the argument registers and its first control read faulted at
-  `EXCVADDR 0x9`, offset 9 into a null arena. On arm64 the same omission fails nothing: R0..R4 map
-  onto the ABI argument registers and `bl` leaves them alone, so the values survive by luck of the
-  mapping. **Where a backend's register map coincides with the ABI, a test on that backend proves
-  the contract holds by accident rather than by construction — say so in the test.**
+  one.** A script-to-script call emitted no argument setup at all, so each callee parked whatever the caller had left in the argument registers and its first control read faulted at `EXCVADDR 0x9`, offset 9 into a null arena. On arm64 the same omission fails nothing: R0..R4 map onto the ABI argument registers and `bl` leaves them alone, so the values survive by luck of the mapping. **Where a backend's register map coincides with the ABI, a test on that backend proves the contract holds by accident rather than by construction — say so in the test.**
 
 - **An index into an array a later pass rewrites is a bug with a delay.** `CallScript` first
-  carried the callee's IR index. The spill pass inserts a Reload before a read, so every index past
-  its first insertion shifts and the call named an op that no longer started a function. A function
-  NUMBER survives any rewrite. **When one pass hands a position to another, hand it a name.**
+  carried the callee's IR index. The spill pass inserts a Reload before a read, so every index past its first insertion shifts and the call named an op that no longer started a function. A function NUMBER survives any rewrite. **When one pass hands a position to another, hand it a name.**
 
 - **`swap()` must swap the whole object.** `IrProgram::swap` exchanged the ops, counts and slots
-  but not the function table, so the spill pass's carefully remapped boundaries went into the
-  discarded half and the lowering read the stale ones. The remap was correct; the transfer was not.
+  but not the function table, so the spill pass's carefully remapped boundaries went into the discarded half and the lowering read the stale ones. The remap was correct; the transfer was not.
 
 - **An empty function is a real case in a guard that brackets a body.** The recursion depth guard
   is emitted at a function's first real op, because it must follow the host arguments being parked.
-  A function whose entire body is that parking (`nop() {}` parses) never reached the emission point
-  while its epilogue still decremented, so every call to it drove the counter DOWN, two calls
-  wrapped the byte past zero, and the next legal call was refused as too deep. **Any guard with an
-  entry and an exit needs the zero-length body as a test, not just the deep one.**
+  A function whose entire body is that parking (`nop() {}` parses) never reached the emission point while its epilogue still decremented, so every call to it drove the counter DOWN, two calls wrapped the byte past zero, and the next legal call was refused as too deep. **Any guard with an entry and an exit needs the zero-length body as a test, not just the deep one.**
 
 - **The toolchain answers ISA questions faster than reasoning does.** "Must an Xtensa `entry` be
-  4-byte aligned?" took one `xtensa-esp32-elf-as` invocation to settle: it refuses with
-  `Error: unaligned entry instruction`. The same question had already cost an afternoon of
-  hypotheses. hpwit's `new-parser` hits the identical wall and leaves it unhandled, which is
-  confirmation the question is real rather than self-inflicted. **Assemble the case before
-  theorising about it.**
+  4-byte aligned?" took one `xtensa-esp32-elf-as` invocation to settle: it refuses with `Error: unaligned entry instruction`. The same question had already cost an afternoon of hypotheses. hpwit's `new-parser` hits the identical wall and leaves it unhandled, which is confirmation the question is real rather than self-inflicted. **Assemble the case before theorising about it.**
 
 ## Lessons from the particles branch
 
 - **A stateful effect is a jitter meter; a stateless one hides the same fault.** A shader recomputes
-  every pixel from `t`, so a late frame is simply skipped and the next one is correct. A particle's
-  position is the previous position plus velocity, and `FrameTime` deliberately spends a whole stall
-  at once to keep the trajectory true in real time, so one frame after an 80 ms gap moves every
-  particle **6.7x its usual distance** (measured). The first particle effect on the branch therefore
-  exposed a 1 Hz `esp_littlefs_info` scan running inline on the render thread that had been there all
-  along and that no shader had ever revealed. **When motion starts stuttering after a change that
-  should not have touched timing, suspect a pre-existing periodic cost, and measure the frame deltas
-  before theorising.** The reverse also holds: a smooth shader is not evidence that the render loop
-  is clean.
+  every pixel from `t`, so a late frame is simply skipped and the next one is correct. A particle's position is the previous position plus velocity, and `FrameTime` deliberately spends a whole stall at once to keep the trajectory true in real time, so one frame after an 80 ms gap moves every particle **6.7x its usual distance** (measured). The first particle effect on the branch therefore exposed a 1 Hz `esp_littlefs_info` scan running inline on the render thread that had been there all along and that no shader had ever revealed. **When motion starts stuttering after a change that should not have touched timing, suspect a pre-existing periodic cost, and measure the frame deltas before theorising.** The reverse also holds: a smooth shader is not evidence that the render loop is clean.
 
 - **Standardising a duplicated sentence requires deciding which version is TRUE first.** Three front
-  pages had drifted into four orderings of the same six platforms, so a check was written to hold
-  them to one wording. The wording picked was the most formal-looking existing one, which happened
-  to demote five of the six targets to secondary and was simply wrong. Enforcing it would have
-  spread a false claim to every file the check covered. **A consistency check is only as good as the
-  value it pins; establish the fact, then enforce it.**
+  pages had drifted into four orderings of the same six platforms, so a check was written to hold them to one wording. The wording picked was the most formal-looking existing one, which happened to demote five of the six targets to secondary and was simply wrong. Enforcing it would have spread a false claim to every file the check covered. **A consistency check is only as good as the value it pins; establish the fact, then enforce it.**
 
 - **A test that passes with the bug reintroduced is worse than no test.** Three separate tests on
-  this branch (the fade idle-gap, the collide spread, the filesystem throttle) were each written,
-  seen green, and then found to pass with their own defect deliberately restored. Two were deleted
-  and one was rewritten. The habit that catches it is cheap: **sabotage the fix and confirm the test
-  goes red before believing it.** Two of those three had also been failing for a reason unrelated to
-  what they claimed to assert, which the control check surfaced immediately.
+  this branch (the fade idle-gap, the collide spread, the filesystem throttle) were each written, seen green, and then found to pass with their own defect deliberately restored. Two were deleted and one was rewritten. The habit that catches it is cheap: **sabotage the fix and confirm the test goes red before believing it.** Two of those three had also been failing for a reason unrelated to what they claimed to assert, which the control check surfaced immediately.
 
 - **A build script that does not build what the next command tests produces a confident false
-  green.** `build_desktop.py` builds `MoonLight` but not `mm_tests`/`mm_scenarios` unless given
-  `--tests`, so `ctest` straight after it runs whatever binary was there before. It reported "1377
-  passed" against a test binary two hours old, on a change whose new option string was not even
-  present in it. The tell is cheap and worth the habit: **after changing code, confirm the test
-  binary actually contains the change** (a `grep` for a new string, or a run of just the new case)
-  before believing a green suite. The staleness guards in `run_scenario.py` exist for exactly this
-  and are why the scenario half never went unnoticed; the unit half has no such guard.
+  green.** `build_desktop.py` builds `MoonLight` but not `mm_tests`/`mm_scenarios` unless given `--tests`, so `ctest` straight after it runs whatever binary was there before. It reported "1377 passed" against a test binary two hours old, on a change whose new option string was not even present in it. The tell is cheap and worth the habit: **after changing code, confirm the test binary actually contains the change** (a `grep` for a new string, or a run of just the new case) before believing a green suite. The staleness guards in `run_scenario.py` exist for exactly this and are why the scenario half never went unnoticed; the unit half has no such guard.
 
 - **A freshness guard keyed on mtime must exclude files the build itself rewrites.** The same guard
-  then cried wolf: `build_info.h` embeds a `+` when `git status` reports a dirty tree, and a gate run
-  dirties the tree by writing its own scenario baselines and metrics. So every gate run left the
-  next one reporting a stale runner, a self-inflicted loop that reads exactly like a real staleness
-  failure. **Generated build metadata is not source**, and a guard that cannot tell them apart
-  teaches people to ignore it.
+  then cried wolf: `build_info.h` embeds a `+` when `git status` reports a dirty tree, and a gate run dirties the tree by writing its own scenario baselines and metrics. So every gate run left the next one reporting a stale runner, a self-inflicted loop that reads exactly like a real staleness failure. **Generated build metadata is not source**, and a guard that cannot tell them apart teaches people to ignore it.
 
 - **An ISA-guarded test is not run by the machine that wrote it, and a JIT's bytes are only true
-  where they execute.** The MoonLive backends are `#if`-guarded per architecture, so an arm64 bench
-  compiles neither the x86-64 encoder tests nor the x86-64 emitted code — a whole backend can be
-  wrong while the local suite is green and confident. A Q16.16 multiply that borrowed a register the
-  allocator hands out returned garbage on every x86-64 desktop; 1458 local tests passed, and CI is
-  where it surfaced. Two smaller defects hid in the same blind spot: a one-byte arena where the code
-  now does a 32-bit load, and an unmigrated type keyword in a test file arm64 never compiles.
+  where they execute.** The MoonLive backends are `#if`-guarded per architecture, so an arm64 bench compiles neither the x86-64 encoder tests nor the x86-64 emitted code — a whole backend can be wrong while the local suite is green and confident. A Q16.16 multiply that borrowed a register the allocator hands out returned garbage on every x86-64 desktop; 1458 local tests passed, and CI is where it surfaced. Two smaller defects hid in the same blind spot: a one-byte arena where the code now does a 32-bit load, and an unmigrated type keyword in a test file arm64 never compiles.
 
   **On an Apple Silicon machine that blind spot is one command wide:** `cmake -B build/x86
   -DCMAKE_OSX_ARCHITECTURES=x86_64` then `arch -x86_64 ./build/x86/test/mm_tests`. Rosetta runs the
   emitted x86-64 instructions for real, so the tests that only exist on that host actually execute.
-  Worth doing on any change to a backend, an encoder, or the register allocator — it is minutes,
-  and it is the difference between finding these locally and finding them in CI.
+  Worth doing on any change to a backend, an encoder, or the register allocator — it is minutes, and it is the difference between finding these locally and finding them in CI.
 
 ## A lossy channel never closes a client for slowness (2026-08-25)
 
-The preview transport spent a bench day being patched before the pattern surfaced: every
-symptom (reconnect storms, blank refreshes, renderWait spikes charged to the LEDs) traced to a
-synchronous send path that treated a slow socket as a fault, spinning up to a stall budget on
-the output core and then **closing the client**. That converts ordinary congestion into
-disconnects, disconnects into re-primed state, and re-primed state into more congestion, a
-feedback loop.
+The preview transport spent a bench day being patched before the pattern surfaced: every symptom (reconnect storms, blank refreshes, renderWait spikes charged to the LEDs) traced to a synchronous send path that treated a slow socket as a fault, spinning up to a stall budget on the output core and then **closing the client**. That converts ordinary congestion into disconnects, disconnects into re-primed state, and re-primed state into more congestion, a feedback loop.
 
-The rule that replaced it, and holds generally: **on a lossy stream, drop at the source and let
-TCP pace the rest.** Write only what the socket takes now (`writeSome`, never a wait), skip the
-frame when the previous one has not drained, report the skip to the receiver (its one honest
-congestion signal), and close only on a real error or FIN. The receiver steers quality from the
-drop reports. Every give-up budget that remains must bound *lack of progress*, never elapsed
-total, or slow-but-healthy transfers get truncated.
+The rule that replaced it, and holds generally: **on a lossy stream, drop at the source and let TCP pace the rest.** Write only what the socket takes now (`writeSome`, never a wait), skip the frame when the previous one has not drained, report the skip to the receiver (its one honest congestion signal), and close only on a real error or FIN. The receiver steers quality from the drop reports. Every give-up budget that remains must bound *lack of progress*, never elapsed total, or slow-but-healthy transfers get truncated.
 
 ## A control test must fail against the bug it claims to catch
 

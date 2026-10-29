@@ -29,14 +29,14 @@ Reading across the friend-repo digests, the themes the wider ESP32-LED ecosystem
 
 ## What these projects do that MoonLight doesn't (yet)
 
-Observational: where the landscape is ahead of MoonLight. These are *not* commitments; real adoption decisions live in the [`../backlog/`](../work/future/index.md), cross-referenced where one already exists.
+Observational: where the landscape is ahead of MoonLight. These are *not* commitments; real adoption decisions live on [the Project](https://github.com/users/MoonModules/projects/5), cross-referenced where one already exists.
 
 - **A guided setup/installer wizard on-device** (NightDriverStrip's Setup Wizard, WLED's installer), MoonLight has the web installer + Improv, but no on-device first-run wizard.
 - **A large built-in effect library**: MoonLight ships a focused set (concrete-first); the WLED family ships dozens. Breadth is a deliberate non-goal until the core is proven.
 
 ## Candidates for MoonLight
 
-Concrete ideas the digests surfaced, waiting for a decision. Each leaves this list when it is decided: into the [backlog](../work/future/index.md), or dropped. Study to think, write fresh, never copy.
+Concrete ideas the digests surfaced, waiting for a decision. Each leaves this list when it is decided: into the [backlog](https://github.com/users/MoonModules/projects/5), or dropped. Study to think, write fresh, never copy.
 
 - **Run compiled MoonLive code under QEMU in CI** ([hpwit-new-parser](hpwit-new-parser.md), September 2026): a tier that executes the compiled Xtensa bytes found three compiler bugs in its first week, the class host tests cannot see.
 - **Run every effect with the clock started near a wraparound** ([wled-WLED](wled-WLED.md), September 2026): WLED's Stream effect broke after an hour at top speed from a 32-bit time compared against a 16-bit one.
