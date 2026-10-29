@@ -256,7 +256,7 @@ and a test that the rename left no `IrService` behind. Bench: the Dig-2-Go's GPI
 and the infrared remote on another, both driving `Control.switch1`, so two inputs reaching one target
 is proven rather than assumed.
 
-## Step 1b: an encoder that shows what it selects 🚧 (the Open Stage Control session has no strip widget; its label and pad-matrix gaps stay in backlog/services)
+## Step 1b: an encoder that shows what it selects 🚧 (the Open Stage Control session has no strip widget; its label and pad-matrix gaps stay on [their card](https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287130773))
 
 Small, and it follows step 1 rather than joining it, so the rebuild is not also carrying a UI change.
 
@@ -294,7 +294,7 @@ cannot show text simply ignores it. The shipped
 [Open Stage Control session](../reference/examples/open-stage-control.json) gains a text widget
 bound to it, which is also worth doing because that session already has known gaps (its widget labels
 do not render and its pad matrix draws nothing, both recorded in
-[backlog/services.md](https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287130773)): adding the strip is the moment to fix the session
+[their card](https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287130773)): adding the strip is the moment to fix the session
 by building one widget of each kind in its own editor and copying the shape it produces.
 
 **Test:** the infrared remote's palette next/prev rows driving `Control.encoder1`, with the palette
@@ -675,7 +675,7 @@ to zero, so a pedal pushed fully down settled at 253 rather than 255 and full br
 unreachable. It now takes the remaining distance whole once the step rounds to nothing.
 
 **Still open**: the bench half. A pot on an ADC pin, both paths on the same hardware. The SE16 and
-LightCrafter sense pins are the natural rig and are now free (see `backlog/platform.md`), but the scale
+LightCrafter sense pins are the natural rig and are now free ([their card](https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287086286)), but the scale
 factor per board needs the schematic.
 
 ## Step 4: I2C sensors 🚧 (only the shared bus and its scan, `I2cBusModule`; no register read, sensor module, published frame or `i2cRead` builtin)
@@ -772,7 +772,7 @@ peripheral (PCNT for the encoder, RMT or a timed capture for the echo) rather th
 **Test:** an encoder on the bench driving `Control.encoder1` through the module, and an HC-SR04
 reporting distance through a script.
 
-## Step 6: PIR, and the trigger vocabulary ✅ (a PIR is a `set` row, which already holds a level, so no `level` kind: two kinds would do one job; the help and the momentary-row test name it. Multi-click waits for a panel that needs it, in backlog/ui)
+## Step 6: PIR, and the trigger vocabulary ✅ (a PIR is a `set` row, which already holds a level, so no `level` kind: two kinds would do one job; the help and the momentary-row test name it. Multi-click waits for a panel that needs it, on [its card](https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287131477))
 
 The cheap finish. A PIR is a digital pin, so it needs no seam at all: it is a `ButtonService` row
 with the `set` event, which holds the pin's level rather than reacting to a press. MoonLight

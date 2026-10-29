@@ -71,3 +71,17 @@ def test_a_script_call_chained_to_another_command_is_not_a_script_call():
     assert SCRIPT.match(EXPRESSION.sub("EXPR", "uv run moondeck/check/check_sanitizers.py --kind ${{ matrix.kind }} ${{ a && 'b' || '' }}"))
     assert not SCRIPT.match("uv run moondeck/test/test_host.py && rm -rf results")
     assert not SCRIPT.match("uv run moondeck/test/test_host.py; echo done")
+
+
+def test_a_job_that_runs_uv_sets_it_up_first():
+    """GitHub's runner image ships no uv, so a job calling `uv run` before `astral-sh/setup-uv` fails with command not found."""
+    late = []
+    for path in sorted(WORKFLOWS.glob("*.yml")):
+        for name, job in (yaml.safe_load(path.read_text(encoding="utf-8")).get("jobs") or {}).items():
+            ready = False
+            for step in job.get("steps", []):
+                ready = ready or str(step.get("uses", "")).startswith("astral-sh/setup-uv")
+                if "uv run" in step.get("run", "") and not ready:
+                    late.append(f"{path.name} {name}: {step.get('name') or step.get('id') or step['run'].splitlines()[0]}")
+                    break
+    assert late == [], "add `- uses: astral-sh/setup-uv@v3` before these steps:\n" + "\n".join(late)

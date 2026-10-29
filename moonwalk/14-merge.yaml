@@ -61,7 +61,7 @@ processes:
     actor: ci
     goal: Every pull request builds and tests on every platform.
     intro: |
-      GitHub Actions runs these jobs on every pull request, a fork's included, scoped to the paths each job covers. Each job reproduces locally with the MoonDeck script named in its step, and `uv run moondeck/run/run_process.py ci-on-pr` runs the ones the change triggers. [act](https://github.com/nektos/act) runs the workflows themselves in Linux containers, as GitHub does: `act -j <job>`.
+      GitHub Actions runs these jobs on every pull request, a fork's included, scoped to the paths each job covers. Each job reproduces locally with the MoonDeck script named in its step, and `uv run moondeck/run/run_process.py ci-on-pr --base main` runs the ones the branch triggers. [act](https://github.com/nektos/act) runs the workflows themselves in Linux containers, as GitHub does: `act -j <job>`.
     steps:
       - id: python
         say: Run the Python host tests.

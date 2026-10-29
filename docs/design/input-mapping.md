@@ -55,7 +55,7 @@ drives a control, and nothing reads it again until the next one. Its natural rat
 
 **A continuous input is a stream.** A microphone at 22 kHz, an IMU at 50 Hz, a distance sensor an
 effect samples every frame: an effect wants *the current value on the hot path*, not a notification.
-Routing that through `setControl` would be wrong twice over. It would put a control write, a name lookup and a persistence dirty-flag on the render path at frame rate, which the [hot-path rules](../explanation/architecture/moonmodule.md#hot-path-discipline) forbid. And it would be lossy: a control is a setting a person edits, where a stream is data an effect reads.
+Routing that through `setControl` would be wrong twice over. It would put a control write, a name lookup and a persistence dirty-flag on the render path at frame rate, which the [hot-path rules](../explanation/architecture/moonmodule.md#hot-path-discipline) forbid. And it would be lossy: a control is a setting a person edits, while a stream is data an effect reads.
 
 **The pattern for a stream already exists and is already domain-neutral.** `AudioService` publishes
 an `AudioFrame` and effects reach it through the static `AudioService::latestFrame()`; `AudioSpectrumEffect`, `GEQEffect`, `SpectrumEffect` and `NoiseMeterEffect` all consume it that way.

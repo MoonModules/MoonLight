@@ -9,7 +9,7 @@ Their content rules come first, since they decide whether MoonLight may be hoste
 |---|---|---|---|---|
 | Allows an agent-written project | yes | no, Terms §2(1)7 | yes, our own rules | yes, no rule on it |
 | Run by | Microsoft | a German non-profit | us | GitLab Inc. |
-| Hosted CI runners | Linux x86 and arm64, macOS, Windows | Linux x86 on request (Woodpecker) | none: self-hosted only | Linux x86; macOS and Windows in beta |
+| Hosted CI runners | Linux x86 and arm64, macOS, Windows | Linux x86 on request (Woodpecker) | none: self-hosted only | Linux x86 and arm64; macOS and Windows in beta |
 | Release API as MoonLight reads it | yes | Gitea shape | Gitea shape | its own shape |
 | Static site with custom domain | Pages | Codeberg Pages | any static host beside it | GitLab Pages |
 | Container registry | ghcr.io | Forgejo packages | Forgejo packages | GitLab registry |
@@ -44,7 +44,7 @@ Plain git moves unchanged: the repo-health and KPI scripts, MoonCloud on Cloudfl
 | GitHub | MoonLight uses it for | Codeberg and Forgejo | GitLab.com |
 |---|---|---|---|
 | Actions, 4 workflows | build, test, release, docs deploy | Forgejo Actions reads GitHub-style workflow files; most `actions/*` steps run | `.gitlab-ci.yml`, a rewrite of the four workflows |
-| Hosted runners: Linux x86 and arm64, macOS, Windows | the desktop builds: `.deb` on both architectures, `.dmg`, `setup.exe` | Codeberg's Woodpecker is `linux/amd64` only and *"provided as-is"*; the others need self-hosted runners | macOS and Windows in beta, outside the service-level agreement; arm64 needs a self-hosted runner |
+| Hosted runners: Linux x86 and arm64, macOS, Windows | the desktop builds: `.deb` on both architectures, `.dmg`, `setup.exe` | Codeberg's Woodpecker is `linux/amd64` only and *"provided as-is"*; the others need self-hosted runners | macOS and Windows in beta, outside the service-level agreement; arm64 hosted on every tier, the small size on the free one |
 | Releases and `api.github.com` | the installer, the UI's update badge and OTA picker, MoonBase's recovery page and the Dockerfile read releases, the release `name` and the `prerelease` flag | the Gitea-shaped releases API: similar fields, different URLs | the Releases API, with assets as links to files in a package registry |
 | `raw.githubusercontent.com` | MoonLive script downloads, the Gallery | `/raw/` URLs, CORS to verify | `/-/raw/` URLs, CORS to verify |
 | Pages, custom domain | moonmodules.org/MoonLight and the installer at `/install/` | Codeberg Pages from a `pages` branch or an Actions build; with self-hosting, any static host | GitLab Pages |
@@ -61,6 +61,6 @@ The URLs in the docs, the README, `mkdocs.yml` and the packaging metadata are a 
 ## The deciding costs
 
 Any move pays the same three costs:
-- **Runners:** macOS, Windows and arm64 for the desktop builds, hosted on GitHub alone.
+- **Runners:** macOS and Windows for the desktop builds, hosted outside a beta on GitHub alone.
 - **The release API:** read by the firmware, MoonBase and the installer, with its shape followed exactly on GitHub alone.
 - **Review:** CodeRabbit, which reaches GitHub and GitLab.

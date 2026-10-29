@@ -29,9 +29,9 @@ Each row is a compromise the balls effect makes, and the language feature that w
 
 The library recorded what it needs from the engine while it was built, deferred so the compiled side could finish first. That list is the real roadmap, and it is more specific than "add a language feature":
 
-5. **Two entry shapes:** `frame()` for composing kernels (the scalable path) and `pixel(x,y,z)`
+- **5. Two entry shapes:** `frame()` for composing kernels (the scalable path) and `pixel(x,y,z)`
    for per-pixel ergonomics (honest ceiling around 32×32).
-6. **Stateful handles** (a `Pool`, a `BeatPhase`): script-declared, arena-allocated at compile
+- **6. Stateful handles** (a `Pool`, a `BeatPhase`): script-declared, arena-allocated at compile
    time, passed as an opaque first argument. No script-side memory management.
 
 Item 5 is worth noting against the arena work below: a particle pool as a HANDLE means the script does not spend its own 64 bytes on particle state at all. That is a better answer than widening the arena, and it is already designed.

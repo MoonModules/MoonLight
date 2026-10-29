@@ -30,7 +30,7 @@ So the enabling feature is a **Layer virtual/render size that can exceed the phy
 
 ## Proposed shape (for a future implementation plan)
 
-Two parts; the first is the enabler, the second is the actual summarize:
+Two parts; the first is the enabler, the second is the actual summary:
 
 ### 1. Layer virtual size (the enabler)
 
@@ -41,7 +41,7 @@ A Layer control (or layout property) setting a **render box independent of, and 
 - **Memory:** the virtual buffer is `virtualW × virtualH × virtualD × channels`, which can dwarf the
   physical light count (32×32×3 = 3 KB is fine; larger virtual grids need the same PSRAM-first allocation + degradation-status discipline the Layer already uses).
 
-### 2. The pooling down-map (the summarize)
+### 2. The pooling down-map (the summary)
 
 `physical[i] = mean(non-black pixels of virtual region i)`. Two open sub-designs for the future plan:
 

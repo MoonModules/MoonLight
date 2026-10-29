@@ -291,7 +291,9 @@ def merge_docs(site_dir: Path) -> None:
 def gcc_version() -> str:
     """The Arm toolchain version setup_teensy.py pins, which keys the toolchain cache."""
     found = re.search(r'^GCC_VERSION = "(.*)"', SETUP_TEENSY.read_text(encoding="utf-8"), re.MULTILINE)
-    return found.group(1) if found else ""
+    if not found:
+        raise SystemExit(f"no GCC_VERSION in {SETUP_TEENSY.relative_to(ROOT)}: the Teensy toolchain cache needs its key")
+    return found.group(1)
 
 
 def main() -> int:

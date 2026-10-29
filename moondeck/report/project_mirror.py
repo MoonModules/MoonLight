@@ -15,6 +15,7 @@ import os
 import re
 import subprocess
 import sys
+import urllib.parse
 from collections import Counter
 from pathlib import Path
 
@@ -23,6 +24,7 @@ DEFAULT_OUT = ROOT / "build" / "project.json"
 DEFAULT_MD = ROOT / "docs" / "work" / "backlog_mirror"
 REPO_URL = "https://github.com/MoonModules/MoonLight/blob/main/"
 FIELDS = ("status", "area", "module", "kind", "trigger", "platform", "stage", "process")
+DATA_FILE = "cards.json"   # the open cards as data, beside the per-Area documents
 
 
 def owner_env(owner: str) -> dict:
@@ -138,8 +140,6 @@ def render(items: list[dict], project_url: str, folder: str = "docs/work/backlog
     return docs
 
 
-DATA_FILE = "cards.json"
-
 
 def cards_data(live: list[dict]) -> str:
     """The open cards as data, for a build that reads the backlog rather than parsing its documents: no timestamp and a stable order, so an unchanged board writes the same file."""
@@ -173,6 +173,29 @@ def dead_links(items: list[dict], docs_root: Path) -> list[str]:
     return out
 
 
+# A repository link's path, a balanced parenthesis group included, since a plan's file name holds one.
+REPO_LINK = re.compile(r"\]\(" + re.escape(REPO_URL) + r"((?:[^()#\s]|\([^()\s]*\))+)")
+
+
+def generated_pages() -> set[str]:
+    """The catalog pages the docs build generates from help.json, which a card may link though no file holds them."""
+    sys.path.insert(0, str(ROOT / "moondeck" / "docs"))
+    from gen_help import CATALOGS
+    return {f"docs/moonmodules/{page}" for page in CATALOGS}
+
+
+def missing_targets(items: list[dict], root: Path = ROOT, generated: set[str] | None = None) -> list[str]:
+    """An open card's link into this repository whose file is gone, which the rendered document would carry as a dead relative link."""
+    generated = generated_pages() if generated is None else generated
+    out = []
+    for r in items:
+        for m in REPO_LINK.finditer(r["body"]) if r["status"] != "Done" else ():
+            path = urllib.parse.unquote(m.group(1))
+            if not (root / path).exists() and path not in generated:
+                out.append(f"card {r['title']!r} links {path}, which the repository does not hold")
+    return out
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--owner", default="MoonModules")
@@ -185,9 +208,9 @@ def main() -> int:
     try:
         project = f"https://github.com/users/{args.owner}/projects/{args.number}"
         items = normalize(fetch(args.owner, args.number), card_ids(args.owner, args.number), project)
-    except RuntimeError as e:
+    except (RuntimeError, FileNotFoundError) as e:   # FileNotFoundError: no `gh` on the PATH
         if args.check:
-            print(f"SKIP: the board is unreachable ({e})")
+            print(f"SKIP: the board is unreadable: offline, no `gh`, or no token with the project scope ({e})")
             return 0
         sys.exit(f"project_mirror: gh could not read project {args.number} of {args.owner}: {e}")
     folder = args.markdown.resolve()
@@ -195,7 +218,7 @@ def main() -> int:
     docs = render(items, project, rel)
 
     if args.check:
-        diff, dead = differences(docs, folder), dead_links(items, ROOT / "docs")
+        diff, dead = differences(docs, folder), dead_links(items, ROOT / "docs") + missing_targets(items)
         if diff:
             print(f"FAIL: {len(diff)} backlog document(s) differ from the board: {', '.join(diff)}. Run project_mirror.py and stage the result.")
         for d in dead:

@@ -183,7 +183,7 @@ Kind: Bug · Stage: Release · Process: release · [Card](https://github.com/use
 
 Hit on v4.0.0 (2026-08-24): the release published at 16:15:59, a main deploy ran at 16:16 and enumerated releases *before* it existed, and the installer offered v3.0.0 as newest for hours. Re-running the workflow with the tag fixed it, and that manual re-run is the current workaround.
 
-Note the device's own OTA picker is unaffected — it reads `api.github.com` live ([app.js](../../src/ui/app.js) `RELEASES_API`), which is why a device could offer v4.0.0 while the installer could not. Two independent paths to the same release list.
+Note the device's own OTA picker is unaffected — it reads `api.github.com` live ([app.js](../../../src/ui/app.js) `RELEASES_API`), which is why a device could offer v4.0.0 while the installer could not. Two independent paths to the same release list.
 
 `restage-pages-for-tag` in the same workflow already covers this: on a `v*` tag it re-invokes the workflow on `main` with `tag=<the tag>`, so `deploy-pages` runs under the allowed ref and the manifests land in `releases/<tag>/`. The open item is narrower than the symptom suggested — whether the dispatched run can still lose the race, since it is a *second* run whose release enumeration happens later, and whether relaxing the `github-pages` environment's branch policy (needs repo-admin) would remove the indirection entirely.
 

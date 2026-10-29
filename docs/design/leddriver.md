@@ -88,9 +88,9 @@ Whole-frame, `slotBytes = 1` (8-lane bus), 3 channels, 3 slots/bit, our i80 mode
 
 Ring, same 8 lanes, RGB (hpwit's own sizing, 144 B/buffer):
 
-| `nbDmaBuffer` | Ring internal RAM | Lights supported |
+| `nbDmaBuffer` | Ring internal RAM | Lights its memory allows |
 |---|---:|---|
-| 6 (default) | (6+2) × 144 = **1,152 B** | **any**: 2 K, 16 K, 130 K; the count does not appear in the formula |
+| 6 (default) | (6+2) × 144 = **1,152 B** | **any**: 2 K, 16 K, 130 K; the count does not appear in the formula, so wire time and ISR headroom bind first |
 | 32 | (32+2) × 144 ≈ **4.9 KB** | **any** |
 | 75 (StarLight-era) | (75+2) × 144 ≈ **11 KB** | **any** |
 

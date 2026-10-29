@@ -1,6 +1,6 @@
 # Lessons
 
-Hard-won debugging lessons and gotchas, recorded with the code that proved them. The PR-merge *carry-forward* gate writes new entries here (CLAUDE.md § Lifecycle Events). This is the **lesson** record: a bug, its root cause, and the fix. Two neighbours hold the other genres, and a lesson belongs in whichever fits:
+Hard-won debugging lessons and gotchas, recorded with the code that proved them. The [pre-merge](../moonwalk.md#pre-merge) process writes new entries here. This is the **lesson** record: a bug, its root cause, and the fix. Two neighbors hold the other genres, and a lesson belongs in whichever fits:
 
 - A durable **rule** that graduated from a lesson lives in [CLAUDE.md](../../CLAUDE.md) or [coding-standards.md](coding-standards.md), not here.
 - The forward-looking **design intent** of a feature is a plan: one [being built](https://github.com/MoonModules/MoonLight/tree/main/docs/work), or [a closed plan issue](https://github.com/MoonModules/MoonLight/issues?q=label%3Aplan%20is%3Aclosed) once it ships.

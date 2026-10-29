@@ -138,7 +138,6 @@ def main() -> int:
     ap.add_argument("--junit", type=Path, help="write the unit results as JUnit here, for CI's annotations")
     args = ap.parse_args()
 
-
     if not shutil.which("cmake"):
         sys.exit("cmake not found")
 

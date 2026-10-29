@@ -89,7 +89,7 @@ A field is 0 when its source is absent, so an effect on a board without a microp
 
 ## What it costs, per chip
 
-**Analysis is not where the frame goes.** AudioService adds 13 to 22 µs to an average tick, its 512-point FFT every 23 ms at 22,050 Hz included ([performance.md](../reference/performance.md), 2026-06-17); the effects drawing the bands cost more than the analysis feeding them. Each step keeps it that way, and its desktop test and bench run record the tick it adds.
+**Analysis is not where the frame goes.** AudioService's fixed I2S block read adds 13 to 22 µs to an average tick ([performance.md](../reference/performance.md), 2026-06-17); the 512-point FFT every 23 ms at 22,050 Hz waits for a measurement of its own. Each step keeps it that way, and its desktop test and bench run record the tick it adds.
 
 | Step | What it adds per block | Estimate, to be measured |
 |---|---|---|

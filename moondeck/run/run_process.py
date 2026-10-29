@@ -21,11 +21,11 @@ import gen_moonwalk  # noqa: E402
 import walk_status   # noqa: E402
 
 
-def plan(steps: list[dict], every: bool, rerun: bool) -> list[tuple[dict, str]]:
-    """Each step with what happens to it: `run`, or a skip and its reason."""
+def plan(steps: list[dict], rerun: bool) -> list[tuple[dict, str]]:
+    """Each step with what happens to it: `run`, or a skip and its reason. A step's `triggered` already counts `--every`."""
     out = []
     for s in steps:
-        if not (every or s["triggered"]):
+        if not s["triggered"]:
             out.append((s, "skip: the change does not touch its paths"))
         elif s["fresh"] and not rerun:
             out.append((s, "skip: its last pass still holds"))
@@ -52,7 +52,7 @@ def main() -> int:
 
     failed = 0
     lines = []
-    for s, what in plan(steps, args.every, args.rerun):
+    for s, what in plan(steps, args.rerun):
         label = f"{s['process']}/{s['id']}"
         if what != "run":
             lines.append(f"SKIP {label}: {what[6:]}")

@@ -1,6 +1,6 @@
 """The Project mirror: the record an agent searching build/project.json relies on, and the documents it renders to docs/work/backlog_mirror/. Run: `uv run moondeck/test/test_host.py --python`."""
 
-from project_mirror import FIELDS, REPO_URL, dead_links, differences, normalize, relative_links, render
+from project_mirror import FIELDS, REPO_URL, dead_links, differences, missing_targets, normalize, relative_links, render
 
 
 def item(title, area="", **fields):
@@ -83,6 +83,17 @@ def test_a_link_to_a_gone_card_or_into_the_mirror_fails(tmp_path):
     found = dead_links(live, tmp_path)
     assert len(found) == 3 and all("bad.md" in f for f in found)
     assert any("999 is not on the board" in f for f in found) and sum("link the card or the Project instead" in f for f in found) == 2
+
+
+def test_an_open_cards_link_to_a_file_the_repository_lacks_fails_and_a_generated_catalog_page_counts(tmp_path):
+    (tmp_path / "src").mkdir(); (tmp_path / "src" / "Foo.h").write_text("")
+    (tmp_path / "Plan (1 of 2).md").write_text("")
+    cards = [{"title": "Good", "status": "Backlog", "body": f"[a]({REPO_URL}src/Foo.h#L3) [p]({REPO_URL}Plan%20(1%20of%202).md)"},
+             {"title": "Catalog", "status": "Backlog", "body": f"[g]({REPO_URL}docs/moonmodules/light/drivers.md#hue)"},
+             {"title": "Bad", "status": "Backlog", "body": f"[b]({REPO_URL}docs/src/Foo.h)"},
+             {"title": "Shipped", "status": "Done", "body": f"[c]({REPO_URL}gone.h)"}]
+    found = missing_targets(cards, tmp_path, {"docs/moonmodules/light/drivers.md"})
+    assert found == ["card 'Bad' links docs/src/Foo.h, which the repository does not hold"]
 
 
 def test_the_data_file_lists_the_open_cards_in_a_stable_order_without_a_timestamp():
