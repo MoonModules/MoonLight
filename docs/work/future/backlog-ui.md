@@ -79,7 +79,7 @@ From ESPHome's trigger vocabulary: the same debounce
 timers with more states, so one button does several things. Built when a panel needs more actions
 than it has buttons.
 
-### A desktop build reports firmware "unknown", so the update UI guesses from the browser (202
+### A desktop build reports firmware "unknown", so the update UI guesses from the browser (2026-09-06)
 
 Kind: Bug · Platform: desktop
 

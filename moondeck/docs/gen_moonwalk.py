@@ -5,7 +5,7 @@
 # ///
 """Generate moonwalk.json, MoonWalk's journey map every runner reads, from the stage files under moonwalk/.
 
-Each `moonwalk/NN-<stage>.yaml` is one stage of the journey and its processes, validated against moonwalk/moonwalk.schema.json; the model is docs/work/future/moonwalk.md. The docs build serves the result at <site>/moonwalk/moonwalk.json, through mkdocs_hooks.py.
+Each `moonwalk/NN-<stage>.yaml` is one stage of the journey and its processes, validated against moonwalk/moonwalk.schema.json; the model is docs/explanation/architecture/moonwalk.md. The docs build serves the result at <site>/moonwalk/moonwalk.json, through mkdocs_hooks.py.
 
 Usage:
     uv run moondeck/docs/gen_moonwalk.py                  # validate, print the counts

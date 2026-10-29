@@ -108,7 +108,7 @@ plugins:
         how-to/building.md: moonwalk.md#desktop-build-test
         gettingstarted.md: getting-started.md
         moonmodules/light/index.md: explanation/how-moonlight-works.md
-        reference/hardware/small-boards.md: work/future/small-boards.md
+        reference/hardware/small-boards.md: work/future/analysis-small-boards.md
         tutorials/how-moonlight-works.md: explanation/how-moonlight-works.md
         tutorials/generative-effects.md: explanation/generative-effects.md
         how-to/updating-firmware.md: moonwalk.md#update-firmware
@@ -271,6 +271,7 @@ nav:
           - MoonInstaller: explanation/architecture/mooninstaller.md
           - MoonCloud: explanation/architecture/mooncloud.md
           - MoonDeck: explanation/architecture/moondeck.md
+          - MoonWalk: explanation/architecture/moonwalk.md
           - Web UI: moonmodules/core/ui.md
       - Why we write our own code: explanation/why-we-write-our-own.md
       # The bugs and fixes MoonLight waits on in the projects it builds on, each with its workaround and when it goes.

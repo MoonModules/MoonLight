@@ -24,9 +24,13 @@ Start with `i80`. Choose `MoonI80` only when you hit one of those two limits. It
 | **`Parlio`** | P4 | 1 to 16 |
 | **`GPIO-DMA`** | Teensy 4.1 | 1 to 16, on pins 0, 1, 14 to 27 and 38 to 41, in any order |
 
+RMT LED cannot drive an expander: each channel emits its own self-timed stream with no clock line, and a '595 needs a shift clock.
+
 ## Two limits
 
 A strand holds at most **2,048 lights**, on every peripheral. On the classic ESP32 the `i80` DMA cannot reach PSRAM, so the whole frame must also fit internal RAM. Past either limit the driver idles with a status rather than crashing.
+
+A frame takes the longest strand's wire time, about 30 µs a light, whatever the lane count: 256 lights a strand is about 7.5 ms and 1,024 about 30 ms. More strands of fewer lights is how a wall gets its frame rate, and `frameTime` on the card reports that floor.
 
 ## Lane, pin, strand
 
@@ -35,6 +39,8 @@ A lane is one bus data line, a strand is one chain of LEDs. Wired directly, one 
 ## Wiring a 74HCT595 pin expander
 
 On an S3, P4 or S31 with `i80` or `MoonI80` as the `peripheral`, `pinExpander` on and `latchPin` set, each data pin drives one register and its 8 outputs drive 8 strands.
+
+A rig costs its data pins plus two GPIOs: the shift clock on `clockPin` and the latch on `latchPin`, shared by every register. The clock is the peripheral's own pixel clock and costs no DMA bytes; the latch rides as a bit in every bus word.
 
 The expander buys pins, not memory: the register is serial-in, so the DMA frame grows eightfold, about 1.1 KB per light. `i80` holds the whole frame, which past about 96 lights per strand falls to PSRAM too slow for the expander's clock. `MoonI80` streams the frame and drives 128 reliably.
 

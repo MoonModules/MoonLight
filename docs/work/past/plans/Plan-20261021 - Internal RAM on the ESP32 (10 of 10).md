@@ -15,7 +15,7 @@ Plan of 2026-10-21, every step done 2026-10-22. An ESP32-S3 driving 3,840 lights
 | The floor as a test, and the `browser` step | `scenario_RAM_floor`, [testing.md, Performance contracts](../../../reference/testing.md#performance-contracts-contracttarget) |
 | What a user notices | [MIGRATING](../../../reference/MIGRATING.md#lcd-mms-ring-is-smaller-and-refuses-psram), [troubleshooting](../../../reference/troubleshooting.md#free-memory-is-low-with-the-interface-open) |
 | What it taught | [lessons](../../past/lessons.md#lessons-from-the-internal-ram-plan-2026-10-22) |
-| Left open | the ring's refill jitter ([backlog-drivers](../../future/backlog-drivers.md#the-rings-refill-jitter-2026-10-22-from-the-internal-ram-plan)), the 3.0.0 update-connection symptom ([backlog-platform](../../future/backlog-platform.md#an-updates-connection-that-would-not-open-until-a-reset-2026-10-22-from-the-internal-ra)) |
+| Left open | the ring's refill jitter ([backlog-drivers](../../future/backlog-drivers.md#the-rings-refill-jitter-2026-10-22-from-the-internal-ram-plan)), the 3.0.0 update-connection symptom ([backlog-platform](../../future/backlog-platform.md#an-updates-connection-that-would-not-open-until-a-reset-2026-10-22-from-the-internal-ram-plan)) |
 
 ## What was done
 

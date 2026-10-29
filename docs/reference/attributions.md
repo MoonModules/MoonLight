@@ -5,7 +5,7 @@ The people, projects and published algorithms whose work shaped MoonLight. Almos
 | Name | Kind | Known for |
 |------|------|-----------|
 | [4wheeljive](https://github.com/4wheeljive) | 🧑 | Jeff Holman: flow fields, from a Petrick concept. |
-| [Adafruit](https://www.adafruit.com) | 🏢 | The LCD_CAM discovery behind the S3 driver. |
+| [Adafruit](https://www.adafruit.com) | 🏢 | The [LCD_CAM discovery](https://blog.adafruit.com/2022/06/14/esp32uesday-hacking-the-esp32-s3-lcd-peripheral/) behind the S3 driver. |
 | [After Dark](https://en.wikipedia.org/wiki/After_Dark_%28software%29) | 🎨 | Berkeley Systems' screensavers, the Flying Toasters and the aquarium among them. |
 | [Aircoookie](https://github.com/Aircoookie) | 🧑 | Christian Schwinne, creator of WLED. |
 | [Andrew Tuline / atuline](https://github.com/atuline) | 🧑 | The WLED-SR audio-reactive effects. |

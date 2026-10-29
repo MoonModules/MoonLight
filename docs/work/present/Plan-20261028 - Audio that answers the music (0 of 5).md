@@ -45,7 +45,7 @@ Each step ends in a desktop test and a bench look.
 ### 1. Balanced bars by construction ⏳
 
 - A band is the power summed over its slice, normalized by the sample rate and the window's power, in `AudioBands.h`; the loudest-bin estimator goes.
-- Desktop tests: synthesized white noise reads every band within 1 dB of flat; pink noise falls 3 dB an octave; a sine lights one band; the dominant peak, flux and onset read as before.
+- Desktop tests: synthesized white noise reads every band within 1 dB of flat; pink noise falls 3 dB an octave; a sine lights one band; the dominant peak reads as before. Flux and onset are recomputed from the new bands, and a synthesized kick still fires `onset` while steady pink noise does not.
 - Bench: pink noise from a phone through the microphone, and the bars sit level.
 
 ### 2. One level path, no knobs ⏳
@@ -58,7 +58,7 @@ Each step ends in a desktop test and a bench look.
 
 ### 3. The kick is found in any song ⏳
 
-- Three sums over fixed ranges (20 to 150 Hz, 150 Hz to 2 kHz, above 2 kHz) beside the sixteen bands, in the frame's units, so an effect keyed on the bass finds the kick whichever band it lands in; MoonLive gains `audioBass`, `audioMid` and `audioTreble`.
+- Three sums beside the sixteen bands, each a `uint8_t` 0 to 255 on the bands' scale: the power of the FFT bins whose centers fall in 20 to 150 Hz, 150 Hz to 2 kHz, and 2 kHz to Nyquist, normalized as step 1 normalizes a band, so a sum reads on the same dB scale as a band, so an effect keyed on the bass finds the kick whichever band it lands in; MoonLive gains `audioBass`, `audioMid` and `audioTreble`.
 - Bench: `BeatRipplesEffect` keyed on the bass sum through a kick-drum track.
 
 ### 4. A kick and a snare look different ⏳
@@ -85,7 +85,7 @@ Each step ends in a desktop test and a bench look.
 | 4 | `onsetLow`, `onsetMid`, `onsetHigh` | `audioOnset(range)` |
 | 5 | `bpm`, `beatPhase`, `beat` | `audioBpm`, `audioBeat` |
 
-A field is 0 when its source is absent, so an effect on a board without a microphone draws its idle state, as today.
+A field is 0 when its source is absent, so an effect on a board without a microphone draws its idle state, as today. The new fields are local: the WLED audio-sync packet carries none of them, so a board in receive mode leaves them at 0 while it keeps its own `bandsSmoothed` across the fresh frame, and a desktop test pins both.
 
 ## Effects on the new signals
 

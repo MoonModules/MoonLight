@@ -43,7 +43,7 @@ namespace mm {
 /// `flux` is the onset detection function, measuring how much the spectrum rose since the last block.
 /// `onset` is zero except on the one block where a hit was detected, meaning flux well above its own recent mean, at most one per refractory window.
 /// An effect that flashes on it catches the drum, within the block's latency of roughly 23 ms.
-/// One that wants to land on the beat needs a tempo tracker, which the audio roadmap carries as backlog.
+/// One that wants to land on the beat needs a tempo tracker, which the audio plan under `docs/work/present/` carries as its last step.
 struct AudioFrame {
     uint16_t level = 0;                ///< raw overall sound level (RMS), the instantaneous VU value
     uint16_t levelSmoothed = 0;        ///< `level` under an exponential moving average

@@ -1,6 +1,6 @@
 # MoonWalk
 
-The reference for MoonWalk, the map of every MoonLight process. The map is one renderer, [moonwalk.js](https://github.com/MoonModules/MoonLight/blob/main/docs/assets/moonwalk.js), drawing one file, `moonwalk.json`, which [a generator](https://github.com/MoonModules/MoonLight/blob/main/moondeck/docs/gen_moonwalk.py) builds from the stage files under [moonwalk/](https://github.com/MoonModules/MoonLight/tree/main/moonwalk). Why it is shaped so: [the MoonWalk model](../work/future/moonwalk.md). The map itself: [MoonWalk](../moonwalk.md).
+The reference for MoonWalk, the map of every MoonLight process. The map is one renderer, [moonwalk.js](https://github.com/MoonModules/MoonLight/blob/main/docs/assets/moonwalk.js), drawing one file, `moonwalk.json`, which [a generator](https://github.com/MoonModules/MoonLight/blob/main/moondeck/docs/gen_moonwalk.py) builds from the stage files under [moonwalk/](https://github.com/MoonModules/MoonLight/tree/main/moonwalk). Why it is shaped so: [the MoonWalk model](../explanation/architecture/moonwalk.md). The map itself: [MoonWalk](../moonwalk.md).
 
 | Part | For | It covers |
 |--|--|--|

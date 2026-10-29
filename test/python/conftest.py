@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-for folder in ("check", "docs"):
+for folder in ("check", "docs", "report"):
     sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "moondeck" / folder))
 
 

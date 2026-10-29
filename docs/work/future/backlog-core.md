@@ -500,7 +500,7 @@ The absent-key fix (`json::hasKey` guard in `applyControlValue`, so a saved file
 - **Test coverage.** `unit_Control_apply_absent_key` pins the absent-key contract; extend with a type-change round-trip (save int16, load into uint8 Select) and a narrowed-range clamp case so a future schema change can't regress silently.
 This is hardening, not a known bug — the shipped fix is correct for the cases that occur today.
 
-### A second instance says it is serving, serves nothing, and shares the first one's config (2
+### A second instance says it is serving, serves nothing, and shares the first one's config (2026-09-29)
 
 Kind: Bug · Platform: desktop
 

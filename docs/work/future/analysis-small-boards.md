@@ -62,7 +62,7 @@ Realistic total: **~4–6 heterogeneous lanes** (4× PWM + 1× I2S + 1× SPIM3),
 
 ### Zephyr fit with the `platform.h` seam
 
-Zephyr fundamentals check out: **C++20 is a supported standard** (`CONFIG_STD_CPP20`, full GNU libstdc++ available), with the usual embedded restrictions — no `std::thread`/`std::mutex` (Zephyr `k_thread`/`k_mutex` instead — irrelevant to us, the seam already hides threading behind `spawnPinnedTask`), no static-object *destructors*, exceptions/RTTI opt-in. BSD sockets (subset), LittleFS, and a devicetree-driven driver model are all first-class.
+Zephyr fundamentals check out: **C++20 is a supported language standard** (`CONFIG_STD_CPP20`), and the full GNU libstdc++ is there when the toolchain carries it and the application selects it (`CONFIG_GLIBCXX_LIBCPP`), with the usual embedded restrictions — no `std::thread`/`std::mutex` (Zephyr `k_thread`/`k_mutex` instead — irrelevant to us, the seam already hides threading behind `spawnPinnedTask`), no static-object *destructors*, exceptions/RTTI opt-in. BSD sockets (subset), LittleFS, and a devicetree-driven driver model are all first-class.
 
 | `platform.h` seam group | Zephyr provides | Assessment |
 |---|---|---|

@@ -139,7 +139,7 @@ static constexpr uint8_t kAsmFixups = 255;
 using CodePos = uint16_t;
 static constexpr CodePos kUnbound = 0xFFFF;
 
-/// How many frame slots one program may hold at once: what is live rather than a total, since a block hands its slots back at its brace.
+/// How many frame slots are live at once (a block hands its slots back at its brace), bounded by stack at 4 bytes a slot, not by encoding: Xtensa's `s32i` reaches 256.
 static constexpr uint8_t kMaxLocals = 32;
 
 /// The most arguments one call can carry, bounded by the frame rather than the register file, which is what makes a wide builtin work.

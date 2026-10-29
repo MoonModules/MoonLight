@@ -117,7 +117,7 @@ Kind: Feature · Stage: Install
 
 clear "Pre-release (beta)" warning on RC/latest picks, yank-by-asset-tag instead of yank-by-release-deletion.
 
-### Offer MoonLight/MoonLight as a library
+### Offer MoonLight as a library
 
 Kind: Feature
 
@@ -355,7 +355,7 @@ The preamble is now copied into five scripts (`setup_esp_idf.py`, `ci/verify_ver
 
 **`run_scenario.py` was the fifth site, fixed 2026-09-30 ahead of a Windows run.** Its sibling `run_live_scenario.py` got the preamble on the Windows day; this one did not, and it relays the output of `mm_scenarios`, which prints an arrow and an em-dash of its own (`test/scenario_runner.cpp` carries 29 non-ASCII characters, several inside `printf`). Nothing had caught it because the in-process tier had only ever run on macOS, where an attached console and a pipe are both UTF-8. Left alone it would have read as a scenario failure rather than an encoding one, which is the misdiagnosis the live runner's fix was written to prevent. Five sites in two days is the count the one-home argument above should now be weighed against.
 
-### A Windows scenario run recorded tick averages 250x its own repeat, cause unknown (2026-09-
+### A Windows scenario run recorded tick averages 250x its own repeat, cause unknown (2026-09-29)
 
 Kind: Investigation · Platform: desktop
 

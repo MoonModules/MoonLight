@@ -137,11 +137,11 @@ the hard case. See step 4b.
 A GPIO carries one bit. The sensors an installation actually wants mostly do not: a motion sensor
 worth having reports distance or an occupancy zone, not a level, and that arrives over a bus.
 
-**I2C is the common case, and the seam is already written**: step 4 of [the plan](../present/Plan-20260901%20-%20Input%20mapping%20and%20scripted%20sensors%20%287%20of%2012%29.md) names the commit and the three functions.
+**I2C is the common case, and its seam is proposed rather than shipped**: the unmerged commit `11f8eb76` adds `i2cInit`, `i2cWriteReg` and `i2cReadRegs`, and step 4 of [the plan](../present/Plan-20260901%20-%20Input%20mapping%20and%20scripted%20sensors%20%287%20of%2012%29.md) merges it.
 
 What it unlocks, in the order an installation asks for it: a **ToF distance sensor** (VL53L0X: a
 hand's distance drives a parameter, the well-behaved version of "motion"), a **light-level sensor**
-(BH1750: the piece dims itself to the room), an **IMU** (the MPU6050 the commit already drives), and
+(BH1750: the piece dims itself to the room), an **IMU** (the MPU6050 that commit would add), and
 a **gesture/proximity sensor** (APDS-9960). All four are the same shape: init the bus, poll a
 register set on `tick20ms` or `tick1s`, publish a value.
 

@@ -132,7 +132,7 @@ Option B (children first on `tick`; parent first on `setup` / `defineControls` /
 
 ### Per-type behavior lives with the type
 
-A struct or enum that is the semantic owner of some data owns the functions that interpret, serialize or validate it. A control descriptor, a packet and a module role are each such an owner. They live next to the type, never at the call sites. Free functions in the same `.cpp` count; member methods on the owning class are stronger; virtual methods on a base class are strongest. The wrong shape is the same `switch (type)` repeated in every consumer: adding a variant means hunting across N files, and the compiler cannot say when one is missed.
+A struct or enum that is the semantic owner of some data owns the functions that interpret, serialize or validate it. A control descriptor, a packet and a module role are each such an owner. They live next to the type, never at the call sites. The wrong shape is the same `switch (type)` repeated in every consumer: adding a variant means hunting across N files, and the compiler cannot say when one is missed.
 
 Three concrete patterns, all already common in this codebase:
 
@@ -140,9 +140,11 @@ Three concrete patterns, all already common in this codebase:
 - **Methods on the owning class.** [Buffer.h](../src/light/layers/Buffer.h)'s `allocate` / `free` / `clear`; [Scheduler.h](../src/core/module/Scheduler.h)'s `addModule` / `tick` / `prepareTree`; [ControlList](../src/core/module/Control.h)'s `addX` family. Best when the class has identity and the operations naturally form a small interface.
 - **Virtual methods on a base class.** [MoonModule.h](../src/core/module/MoonModule.h)'s lifecycle (`setup`, `tick`, `tick1s`, `defineControls`, `prepare`, …). Best when polymorphism is already in play.
 
-Counter-example to avoid: a `switch (c.type)` on `ControlType` duplicated across the HTTP server, the filesystem module and the scenario runner. That shape forces a new ControlType to be added in four places, and the compiler can't catch a missed switch on a non-exhaustive enum. The per-type dispatch instead lives next to `ControlType` in [Control.cpp](../src/core/module/Control.cpp); consumers call `writeControlValue(sink, c)` and don't need to know the enum's shape.
+Counter-example to avoid: a `switch (c.type)` on `ControlType` duplicated across the HTTP server, the filesystem module and the scenario runner, so a new ControlType is added in four places and the compiler can't catch a missed one. The dispatch lives next to `ControlType` in [Control.cpp](../src/core/module/Control.cpp) instead; consumers call `writeControlValue(sink, c)`.
 
-When a `switch (type)` outside the type's home file is legitimate: the caller has a genuinely different concern. The HTTP server mapping `ApplyResult` to status codes is a transport policy, not per-type behavior, and scenario_runner's `switch (JsonVal::type)` dispatches on *its own* discriminator. The rule is "per-type dispatch lives with the type", not "switches are banned".
+A `switch (type)` outside the type's home file is legitimate when the caller has a different concern: the HTTP server mapping `ApplyResult` to status codes is transport policy, and scenario_runner's `switch (JsonVal::type)` dispatches on its own discriminator.
+
+**The UI follows the same rule**: `app.js` dispatches on control types, never on module names, and a module that needs more than the generic controls brings its own widget from its own file.
 
 **A flat parser that returns a zero sentinel for a missing key must be paired with a presence check before the value is applied as authoritative.** `json::parseInt(json, key)` returns 0 for an absent key, indistinguishable from a real 0. On a persistence-overlay load path that clobbers a non-zero default when an older or partial file omits the key. Guard with `json::hasKey()` first: an absent key leaves the control untouched (its default stands); a present key (even value 0) applies. Any "control resets to its default/0 after reboot" symptom is this overlay smell, not a control-init bug.
 

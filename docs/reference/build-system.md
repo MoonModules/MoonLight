@@ -83,7 +83,7 @@ Some variants carry [MoonBase](../explanation/architecture/moonbase.md), the sec
 
 ### The v6 ecosystem
 
-Anything the IDF makes the recognized way to build, install, provision or ship is the path to take rather than a bespoke one. It is adopted step by step, each its own commit and hardware re-test, and only once it clears the v6.0 floor. None may leak an IDF assumption into shared `src/` or the desktop and Teensy builds. The plan per item is in [backlog-core](../work/future/backlog-core.md).
+Anything the IDF makes the recognized way to build, install, provision or ship is the path to take rather than a bespoke one. It is adopted step by step, each its own commit and hardware re-test, and only once it clears the v6.0 floor. None may leak an IDF assumption into shared `src/` or the desktop and Teensy builds. The plan per item is in [backlog-platform](../work/future/backlog-platform.md#adopting-the-v6x-ecosystem-changes).
 
 | Change | Where MoonLight stands |
 |---|---|

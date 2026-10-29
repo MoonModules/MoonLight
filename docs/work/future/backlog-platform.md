@@ -4,11 +4,17 @@ To-build items for the platform layer and boards, grouped by module, each with i
 
 ## Across modules
 
-### SIMD inner loops for noise and the bilinear lerp on the S3 and P4
+### SIMD inner loops for noise and the bilinear lerp on the S3
 
 Kind: Feature · Platform: S3
 
-The noise inner loop and the bilinear resampler are the per-pixel cost of every field and transport effect. PIE variants behind `src/platform/`, bit-identical to the scalar forms by test, and the FPU `curl16` where `hasFpu`, measured per target through the KPI gate; the P4 gets the same. The P4's PPA fits `upscale16`, a scaled blit, and nothing in advection, which displaces every pixel by its own velocity.
+The noise inner loop and the bilinear resampler are the per-pixel cost of every field and transport effect. PIE variants behind `src/platform/`, bit-identical to the scalar forms by test, and the FPU `curl16` where `hasFpu`, measured through the KPI gate.
+
+### SIMD inner loops for noise and the bilinear lerp on the P4
+
+Kind: Feature · Platform: P4
+
+The same PIE variants and FPU `curl16` as on the S3, measured on the P4 through the KPI gate. The P4's PPA fits `upscale16`, a scaled blit, and nothing in advection, which displaces every pixel by its own velocity.
 
 ### Network Receive on a P4 past 3,000 packets a second (2026-10-26)
 
@@ -19,7 +25,7 @@ Network Receive's task spends tens of microseconds per socket call, a `select` h
 Both network tasks may run on either core, yet stay on core 1 with core 0 idle.
 Two levers, each its own change: the network tasks on core 0, where pinning them by `ETH_MAC_FLAG_PIN_TO_CORE` and lwIP's task affinity kept Ethernet from coming up, so that needs its own look first; and lwIP's raw `udp_recv` callback writing into staging from lwIP's task, with no socket, no `select` and no receive task.
 
-### The `.deb` ships the systemd unit, raw Ethernet included (2026-10-22, from robwomp on Disc
+### The `.deb` ships the systemd unit, raw Ethernet included (2026-10-22, from robwomp on Discord)
 
 Kind: Feature · Platform: Pi · Stage: Install
 
@@ -43,7 +49,7 @@ Kind: Investigation
 
 `CONFIG_LWIP_L2_TO_L3_COPY` copies every received frame so a socket the blocked loop stops draining cannot hold the 32 WiFi receive buffers; without it, every firmware upload stalled at 150 to 860 KB. Its cost is unmeasured: the frame rate on a busy DDP stream with and without it, same scene. If it costs much, firmware uploads move onto the transfer slots so nothing blocks the loop, and the copy goes.
 
-### An update's connection that would not open until a reset (2026-10-22, from the internal RA
+### An update's connection that would not open until a reset (2026-10-22, from the internal RAM plan)
 
 Kind: Investigation
 

@@ -1,4 +1,4 @@
-// MoonWalk's journey map: every process from moonwalk/*.yaml, drawn from moonwalk.json as a story map, stages (or systems) as columns and each process's steps inside it. The model is docs/work/future/moonwalk.md.
+// MoonWalk's journey map: every process from moonwalk/*.yaml, drawn from moonwalk.json as a story map, stages (or systems) as columns and each process's steps inside it. The model is docs/explanation/architecture/moonwalk.md.
 // Two hosts: on the docs site it adds a map button to every page's header and draws the map on the MoonWalk page, through Material's document$ so instant navigation mounts it too; the device's app imports it from the site and calls drawMap with its own state, so a device shows what it has done and what comes next.
 
 const ROOT = new URL("../", import.meta.url);

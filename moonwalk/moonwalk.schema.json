@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://moonmodules.org/MoonLight/moonwalk/moonwalk.schema.json",
   "title": "A journey stage and its processes",
-  "description": "One file per stage of the journey (moonwalk/NN-<stage>.yaml). A process is shaped after an Arazzo workflow, a step after Given, When, Then; see docs/work/future/moonwalk.md.",
+  "description": "One file per stage of the journey (moonwalk/NN-<stage>.yaml). A process is shaped after an Arazzo workflow, a step after Given, When, Then; see docs/explanation/architecture/moonwalk.md.",
   "type": "object",
   "required": [
     "stage",

@@ -21,7 +21,7 @@ the device ISAs use does not apply to it.
 
 POSIX HOSTS ONLY, every ISA: this shells out to `c++` and `objdump`, and a Windows machine with
 only MSVC has neither. The x86-64 entry is therefore usable from Linux and Intel macOS but not
-from the Windows desktop whose backend it disassembles. Backlogged (backlog-light.md).
+from the Windows desktop whose backend it disassembles. Backlogged (backlog-process-and-docs.md).
 """
 
 import argparse

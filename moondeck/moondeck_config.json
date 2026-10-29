@@ -232,6 +232,14 @@
       "script": "report/history_report.py"
     },
     {
+      "id": "project_mirror",
+      "tab": "repo",
+      "group": "check",
+      "label": "Project Mirror",
+      "help": "project_mirror",
+      "script": "report/project_mirror.py"
+    },
+    {
       "id": "install_playwright",
       "tab": "repo",
       "group": "docs",

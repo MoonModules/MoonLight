@@ -18,7 +18,7 @@ MoonWalk is the model every MoonLight process is written in, and the map that sh
 | A process | a goal, its actor, the processes it depends on, its steps, its branches | an Arazzo workflow | middle |
 | A step | a precondition, an action, an expectation | Given, When, Then (Gherkin) | zoomed in |
 
-**Arazzo-shaped, not Arazzo.** Arazzo requires every step to call an API operation or another workflow, and most of the journey's steps are a click in the app, a command or a person plugging in a board. So the model keeps Arazzo's structure and names (`dependsOn`, `onSuccess`, `onFailure`, a workflow per process, several per document) with its own step shape. A process whose steps are all API calls can be exported to Arazzo, which is where Redocly's Respect and Spectral come in.
+**Arazzo-shaped, not Arazzo.** Arazzo requires every step to call an API operation or another workflow, and most of the journey's steps are a click in the app, a command or a person plugging in a board. So the model keeps Arazzo's structure and names (`dependsOn`, `inputs`, a workflow per process, several per document) with its own step shape. A process whose steps are all API calls can be exported to Arazzo, which is where Redocly's Respect and Spectral come in.
 
 ## One YAML file per stage
 

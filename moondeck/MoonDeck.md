@@ -616,7 +616,7 @@ The gap is real but narrow: `src/platform/esp32/` has no tick methods (it is fre
 tick path calls into), and while a call INTO one of them is reported at the call site, the
 function's own body is never analyzed. A platform function that blocks internally without
 carrying `MM_NONBLOCKING` is invisible. Closing that needs an xtensa clang — backlogged as
-"ESP32 clang/LLVM toolchain" in backlog-core.md.
+"ESP32 clang/LLVM toolchain" in backlog-process-and-docs.md.
 
 The count lives in the code check: [check_code](#check_code) runs the same build and adds one `blocking call on the render path` row per site, whose committed count may only fall. This script is the detailed view of those sites, on request. `-Wno-error=function-effects` keeps the build green, since each finding is a judgment: fix it, annotate the callee, or accept it with a scoped reason.
 
@@ -814,6 +814,15 @@ Output shape:
 - **Summary** footer: commit count, release count, generation timestamp.
 
 The MoonDeck button writes the file, prints a `MOONDECK_VIEW: /api/history-report` marker that the log renderer auto-opens in the View pane (and renders as an "Open in View pane → …" clickable link). Re-runs on identical git state produce a deterministic file except for the timestamp line in the footer.
+
+### project_mirror
+
+Mirror the [GitHub Project](https://github.com/users/MoonModules/projects/5)'s items to `build/project.json` (gitignored), so an agent searches the board offline as it searches the docs. The Project stays the one copy, and each record carries the item's title, body, issue number and URL, and every field, empty when unset. The Project is private to the MoonModules account, so the read uses that account's stored `gh` token when `gh` holds one, leaving the active account alone.
+
+```bash
+uv run moondeck/report/project_mirror.py              # default: build/project.json
+uv run moondeck/report/project_mirror.py --owner MoonModules --number 5 --out /tmp/p.json
+```
 
 ### screenshot_modules
 

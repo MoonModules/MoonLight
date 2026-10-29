@@ -13,11 +13,7 @@ processes:
       properties:
         kind: { type: string, enum: [Feature, Restructure], description: "Does the topic add to the system, or reshape it?" }
     intro: |
-      A topic is one module, effect, driver or capability. The plan is the contract for the branch. A draft may wait in `docs/work/future/` until its topic is picked.
-
-      The pull request description links the plan, and the plan moves to `docs/work/past/plans/` in that same pull request, the product owner's call, once every step is built and verified, the judgment steps included, since the code being written is not the plan being realized. It keeps its count, `(7 of 7)`, which with the folder says it shipped; a plan that did not ship is named `(cancelled)`, `(superseded)` or `(attempted, reverted)`.
-
-      A finished step's knowledge moves to the docs, in the plan or once it leaves, and the step stays listed: shortened to one line of what it built, with a link to where its knowledge landed. Only the detail goes, so the plan still says what was done.
+      A topic is one module, effect, driver or capability. The plan is the contract for the branch. A draft may wait in `docs/work/future/` until its topic is picked. A backlog item under `docs/work/future/` moves into the plan on its topic when that plan is written, so one topic has one home while it is being built, and `docs/work/future/` keeps only what no plan covers.
     steps:
       - id: pick
         say: Name one module, effect, driver or capability.
@@ -39,11 +35,18 @@ processes:
         say: Write the plan.
         actor: agent
         when: { manual: "Save it as docs/work/present/Plan-YYYYMMDD - title.md." }
+        detail: |
+          Written in plan mode, and edited as reality changes once approved. Each step carries its status: ✅ built and verified, 🚧 partly built with what is missing named beside it, ⏳ not started. The file name counts them, `(3 of 7)` for three steps ✅ of seven, when the product owner asks, since a renamed file is a new file to git. Everything on the topic that is not a step sits in the plan's own `Backlog` section.
       - id: approve
         say: Approve the plan.
         when: { manual: "Read it first: code starts after the approval." }
         detail: |
           Each cycle subtracts as well as adds.
+      - id: close
+        say: Move the shipped plan to past.
+        when: { manual: "In the pull request that ships it, once every step is built and verified, the judgment steps included: the product owner's call." }
+        detail: |
+          The pull request links the plan, and the plan keeps its count, `(7 of 7)`; a plan that did not ship, or that no work stands behind any more, moves named `(cancelled)`, `(superseded)` or `(attempted, reverted)`. A finished step's knowledge moves to the docs, and the step stays as one line of what it built, linking where its knowledge landed. The plan keeps what no commit holds: the alternatives rejected and why the chosen shape won. What its backlog still holds moves back to `docs/work/future/`, decided item by item at that moment.
   - id: branch
     title: Branch and work on it
     actor: product-owner
