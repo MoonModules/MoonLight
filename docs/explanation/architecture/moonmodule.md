@@ -97,7 +97,7 @@ Each MoonModule has two documentation surfaces under `docs/moonmodules/`. An end
 
 ## Disabling a module releases its resources
 
-`applyState()` is the sole resource-lifecycle router: it calls `onBuildState()` on an effectively-enabled node and `teardown()` otherwise, recursing the tree so each child is routed by its own effective-enabled state. A module's `onBuildState()` therefore contains no `enabled()` check. It builds, and core decides whether to build or tear down.
+`applyState()` is the sole resource-lifecycle router: it calls `prepare()` on an effectively-enabled node and `release()` otherwise, recursing the tree so each child is routed by its own effective-enabled state. A module's `prepare()` therefore contains no `enabled()` check. It builds, and core decides whether to build or tear down.
 
 `effectivelyEnabled()` walks the parent chain, so a disabled parent releases its whole subtree: a disabled Layer frees its effects' heap. An ancestor that does not respect enabling, such as Network or HttpServer, stays neutral and never forces a child on.
 
