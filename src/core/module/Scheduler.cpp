@@ -6,14 +6,19 @@
 #include "core/util/JsonUtil.h"   // mm::json::parseBool for the "enabled" pseudo-control
 #include "platform/platform.h"
 
-#include <cstdio>   // std::snprintf in freeName
+#include <cstdio>   // std::snprintf in freeName, std::printf in addModule
 #include <cstring>  // std::strcmp in firstInTree
 
 namespace mm {
 
-void Scheduler::addModule(MoonModule* mod) {
-    if (!mod || moduleCount_ >= modules_.size()) return;
+bool Scheduler::addModule(MoonModule* mod) {
+    if (!mod) return false;
+    if (moduleCount_ >= modules_.size()) {
+        std::printf("scheduler: no room for module %s, %u top-level modules is the limit\n", mod->name(), static_cast<unsigned>(modules_.size()));
+        return false;
+    }
     modules_[moduleCount_++] = mod;
+    return true;
 }
 
 void Scheduler::setup() {

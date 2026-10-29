@@ -50,11 +50,11 @@ public:
     /// Tell every module in the tree that `owner`'s list rows changed, so one resolving from that list re-resolves.
     void notifyListChanged(const MoonModule& owner);
 
-    /// Register a top-level module, which the boot then walks in declared order.
-    void addModule(MoonModule* mod);
+    /// Register a top-level module, which the boot then walks in declared order; false, with a log line, when the array is full.
+    bool addModule(MoonModule* mod);
     /// Run the boot phases over every registered module.
     void setup();
-    /// One pass: tick every top-level module, then pace and publish the timing.
+    /// One pass: tick every top-level module, then pace and publish the timing: @xref{three-cadences-cover-every-module}.
     void tick() MM_NONBLOCKING;
     /// Release every module, in reverse of the order they were added.
     void release();
@@ -62,7 +62,7 @@ public:
     /// Milliseconds since setup, which is the clock every effect animates against.
     uint32_t elapsed() const;
 
-    /// Rebuild derived state across the whole tree, immediately, on the calling thread.
+    /// Rebuild derived state across the whole tree, immediately, on the calling thread: @xref{rebuilding-derived-state}.
     void prepareTree();
 
     /// Ask for a rebuild at the next frame boundary, which is safe from any task.
@@ -127,7 +127,7 @@ public:
         ReadOnly,         ///< tried to write a display-only control
     };
 
-    /// Set one control by module and control name, applying the whole control-change reaction.
+    /// Set one control by module and control name, applying the whole control-change reaction: @xref{driving-one-control-from-anywhere}.
     SetControlResult setControl(const char* moduleName, const char* controlName, const char* valueJson, bool live = false);
 
     /// The reaction to a control that changed: visibility rebuilt, the module told, and the tree re-prepared when the control reshapes it.
