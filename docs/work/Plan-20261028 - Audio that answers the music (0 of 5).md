@@ -6,15 +6,15 @@ The yardstick is music information retrieval, the field whose libraries (Essenti
 
 ## The design basis
 
-- **One pipeline, no engine select** ([CLAUDE.md, principle 3](../../../CLAUDE.md#principles)): one analysis path, the same on every chip.
+- **One pipeline, no engine select** ([CLAUDE.md, principle 3](../../CLAUDE.md#principles)): one analysis path, the same on every chip.
 - **The textbook.** A band is the power in its slice of the spectrum, normalized so that white noise reads flat (Welch's periodogram). A noise gate opens fast and closes slow with hysteresis, as every studio gate does. Automatic gain is one offset that holds the loudest band at the top, with a fast attack and a slow release, as a compressor's make-up gain does.
 - **Study, credit, write fresh.** MoonLight's audio path is its own implementation, from the INMP441 datasheet and standard DSP; the people whose thinking it studies are credited by name below and in the header's `@attribution`.
 - **Measured on synthesized signals** on the desktop, then judged by eye on the bench: the product owner's eyes are the measurement for a light show.
 
 ## What exists
 
-- **`AudioService`** ([AudioService.h](../../../src/core/services/AudioService.h)): a 512-sample block, a DC blocker, a Hann window, esp-dsp's FFT on the ESP32 and a DFT on the desktop, a frame every 23 ms.
-- **The bands** ([AudioBands.h](../../../src/core/services/AudioBands.h)): sixteen log-spaced bands, each the loudest bin of its slice. Pink noise, the spectrum real music resembles, falls toward the treble on that estimator, which the learner in `BandConditioner` then corrects per band.
+- **`AudioService`** ([AudioService.h](../../src/core/services/AudioService.h)): a 512-sample block, a DC blocker, a Hann window, esp-dsp's FFT on the ESP32 and a DFT on the desktop, a frame every 23 ms.
+- **The bands** ([AudioBands.h](../../src/core/services/AudioBands.h)): sixteen log-spaced bands, each the loudest bin of its slice. Pink noise, the spectrum real music resembles, falls toward the treble on that estimator, which the learner in `BandConditioner` then corrects per band.
 - **The level path**: `floor` is a silence threshold and a window bottom at once; `levels` switches between a manual `gain` and a learned window; `BandConditioner` and `LevelConditioner` learn a floor and a peak each and apply a compressor's ratio. Three mechanisms share the one job of "show the music at the right size", from three places.
 - **`OnsetDetector`**: one `onset` for a hit anywhere in the spectrum, so a kick and a snare look alike.
 - **The readers**: thirteen effects read `bands[16]`, the WLED sync packet carries sixteen, and MoonLive reads `audioBand(i)` and `audioPeakHz`.
@@ -76,7 +76,7 @@ Each step ends in a desktop test and a bench look.
 
 ## What an effect reads
 
-[`AudioFrame`](../../../src/core/util/AudioFrame.h) is the whole contract: one flat struct per tick, every field a small integer, read through `AudioService::latestFrame()` by an effect and through builtins by a MoonLive script. Today it carries the level (raw and smoothed), the sixteen bands (raw and with meter ballistics), the dominant frequency with its magnitude, the flux and `onset`. So an effect sees volume, a spectrum and "a hit happened"; twelve of the seventeen audio effects draw the bands, the rest read the level or `onset`. The plan widens the struct and nothing else:
+[`AudioFrame`](../../src/core/util/AudioFrame.h) is the whole contract: one flat struct per tick, every field a small integer, read through `AudioService::latestFrame()` by an effect and through builtins by a MoonLive script. Today it carries the level (raw and smoothed), the sixteen bands (raw and with meter ballistics), the dominant frequency with its magnitude, the flux and `onset`. So an effect sees volume, a spectrum and "a hit happened"; twelve of the seventeen audio effects draw the bands, the rest read the level or `onset`. The plan widens the struct and nothing else:
 
 | Step | New fields | MoonLive |
 |---|---|---|
@@ -86,6 +86,28 @@ Each step ends in a desktop test and a bench look.
 | 5 | `bpm`, `beatPhase`, `beat` | `audioBpm`, `audioBeat` |
 
 A field is 0 when its source is absent, so an effect on a board without a microphone draws its idle state, as today. The new fields are local: the WLED audio-sync packet carries none of them, so a board in receive mode leaves them at 0 while it keeps its own `bandsSmoothed` across the fresh frame, and a desktop test pins both.
+
+## What it costs, per chip
+
+**Analysis is not where the frame goes.** AudioService adds 13 to 22 µs to an average tick, its 512-point FFT every 23 ms at 22,050 Hz included ([performance.md](../reference/performance.md), 2026-06-17); the effects drawing the bands cost more than the analysis feeding them. Each step keeps it that way, and its desktop test and bench run record the tick it adds.
+
+| Step | What it adds per block | Estimate, to be measured |
+|---|---|---|
+| 1 | a power sum over the 256 bins, replacing the loudest-bin search | the same loop as today |
+| 2 | a few multiplies for the floor, gate and offset | negligible |
+| 3 | three sums over bins step 1 already reads | negligible |
+| 4 | three flux decisions | negligible |
+| 5 | an autocorrelation of about 6 s of flux, some 260 values, over the 30-odd lags of 60 to 200 BPM, plus a phase fit | about 8,000 multiply-adds, under 0.1 ms on a classic ESP32 at 240 MHz, and 1 KB of history |
+
+**Beat tracking is cheap here because it runs on the onset curve, not on the audio.** The expensive half of a beat tracker is the onset analysis, which the FFT already pays for. A tracker gets costly when it evaluates every lag at the audio rate, or runs a dynamic program over a long history every sample; this one evaluates once per block over a few hundred values.
+
+**The same signals on every chip, the headroom spent on resolution.** Every chip that analyzes audio carries all five steps, so an effect behaves alike on each, as decided for the filter-bank trial. A chip with spare cycles spends them on how finely the signals are measured, never on extra ones:
+
+- **A 1024-point FFT for the bass.** At 22,050 Hz and 512 points a bin is 43 Hz wide, so 20 to 150 Hz is three bins; 1024 points halve the bin width, at twice the block latency. The decimated FFT in [the backlog](#backlog) is the other route to the same bass.
+- **50% overlap.** A new block every 256 samples halves the onset step from 23 to 12 ms, which tightens the beat phase.
+- **44,100 Hz** for the treble sum and the hi-hat onset.
+
+Each is chosen per chip by the platform, a default rather than a user setting, so it adds no knob. The classic ESP32 is the floor: each step is measured there first, and a step over its budget there, about 1% of a 60 fps tick, gets cheaper on that chip rather than dropped from it.
 
 ## Effects on the new signals
 
@@ -105,7 +127,7 @@ The modifier is the recommended first, since it turns the existing catalog audio
 
 ## Backlog
 
-On the topic and not a step. What remains here when the plan ships moves to `docs/work/future/`, item by item, then.
+On the topic and not a step. What remains here when the plan ships returns to the Project as cards, item by item, then.
 
 - **Analyzer-grade accuracy**, what a rig cannot show, each taken when a user or an effect asks: a transform sized by the chip (2048 points on the S3, 4096 on the P4) for two bass notes to read as two bars; a biquad pre-filter chain (rumble high-pass, anti-alias low-pass) from esp-dsp's `dsps_biquad_f32`; calibration against a measured chain and a self-test on the card; the 31 ISO 266 third-octave bands for an analyzer effect. Troy's rewrite has all four, checked against a hardware analyzer.
 - **A second, decimated FFT for the low bands (2026-10-05).** At the default 22.05 kHz a 512-sample block gives 43 Hz bins every 23 ms, so the bands below about 130 Hz own one bin each and two bass tones a semitone apart land in the same band. A longer FFT alone buys resolution at the cost of time for every band (2048 samples: 10.8 Hz, but 93 ms). The textbook multirate answer keeps both: low-pass and decimate by 4 to 5.5 kHz, run a 512-point FFT on that for the bands under about 2.7 kHz (about 11 Hz bins), and keep the 23 ms FFT for the rest. Cost is one more 512-point FFT and a small decimation filter per block. Pinned on the desktop by two synthesized bass tones (50 and 60 Hz) landing in different bands, then measured on an S3 against the Audio module's tick time.

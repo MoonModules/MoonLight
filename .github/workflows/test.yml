@@ -164,6 +164,9 @@ jobs:
       - uses: ./.github/actions/ccache
         with:
           key: sanitizer-${{ matrix.kind }}
+      # The job declares the build tools it needs rather than leaning on the runner's preinstalls, so it runs on any Ubuntu image, act's included.
+      - name: install the build tools
+        run: sudo apt-get install -y cmake
       # The whole suite under one sanitizer, as check_sanitizers.py runs it locally. RTSan is clang-only, so that lane names clang-20;
       # the others take the runner's default compiler. The address lane writes the unit results as JUnit for the annotations: one lane is enough.
       - name: build + run unit tests under ${{ matrix.kind }}sanitizer

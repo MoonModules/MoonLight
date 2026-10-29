@@ -13,7 +13,7 @@ processes:
       properties:
         kind: { type: string, enum: [Feature, Restructure], description: "Does the topic add to the system, or reshape it?" }
     intro: |
-      A topic is one module, effect, driver or capability. The plan is the contract for the branch. A draft may wait in `docs/work/future/` until its topic is picked. A backlog item under `docs/work/future/` moves into the plan on its topic when that plan is written, so one topic has one home while it is being built, and `docs/work/future/` keeps only what no plan covers.
+      A topic is one module, effect, driver or capability, picked from [the Project](https://github.com/users/MoonModules/projects/5): a card the product owner accepts moves from Backlog to Next and becomes an issue through the card's own Convert to issue, which an agent may pick up, and moves to In progress when work starts. The plan is the contract for the branch. It absorbs the cards on its topic, which are deleted, so one topic has one home while it is being built and the Project keeps only what no plan covers.
     steps:
       - id: pick
         say: Name one module, effect, driver or capability.
@@ -23,7 +23,7 @@ processes:
         actor: agent
         when: { manual: "The architect shapes it and the researcher maps the prior art." }
         detail: |
-          The spec holds enough to build from, checked against the README, CLAUDE.md and the [architecture](explanation/architecture/index.md). When in doubt on a spec, ask.
+          The spec holds enough to build from, checked against the README, CLAUDE.md and the [architecture](explanation/architecture/index.md). It lives on the topic's card until a plan absorbs it, and a long investigation is a [design study](design/index.md) the card cites. When in doubt on a spec, ask.
       - id: end-states
         say: Name two to four end states.
         actor: agent
@@ -34,7 +34,7 @@ processes:
       - id: plan
         say: Write the plan.
         actor: agent
-        when: { manual: "Save it as docs/work/present/Plan-YYYYMMDD - title.md." }
+        when: { manual: "Save it as docs/work/Plan-YYYYMMDD - title.md." }
         detail: |
           Written in plan mode, and edited as reality changes once approved. Each step carries its status: ✅ built and verified, 🚧 partly built with what is missing named beside it, ⏳ not started. The file name counts them, `(3 of 7)` for three steps ✅ of seven, when the product owner asks, since a renamed file is a new file to git. Everything on the topic that is not a step sits in the plan's own `Backlog` section.
       - id: approve
@@ -43,10 +43,10 @@ processes:
         detail: |
           Each cycle subtracts as well as adds.
       - id: close
-        say: Move the shipped plan to past.
+        say: Close the shipped plan as an issue.
         when: { manual: "In the pull request that ships it, once every step is built and verified, the judgment steps included: the product owner's call." }
         detail: |
-          The pull request links the plan, and the plan keeps its count, `(7 of 7)`; a plan that did not ship, or that no work stands behind any more, moves named `(cancelled)`, `(superseded)` or `(attempted, reverted)`. A finished step's knowledge moves to the docs, and the step stays as one line of what it built, linking where its knowledge landed. The plan keeps what no commit holds: the alternatives rejected and why the chosen shape won. What its backlog still holds moves back to `docs/work/future/`, decided item by item at that moment.
+          The plan becomes a closed issue labeled `plan` and its file is deleted. The body keeps what no commit holds: the goal, the outcome, the decisions with the alternatives rejected and why, where its knowledge lives, its steps as one line each, and the plan and close dates. A shipped plan closes as completed; one that did not ship, or that no work stands behind any more, closes as not planned, its body saying cancelled, superseded or attempted and reverted. What its backlog still holds returns to the Project as cards, decided item by item at that moment.
   - id: branch
     title: Branch and work on it
     actor: product-owner

@@ -99,14 +99,14 @@ plugins:
   - redirects:
       redirect_maps:
         work/past/lessons.md: contributing/lessons.md
-        work/future/analysis-code-hosting.md: 'https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287225872'
-        work/future/analysis-effects-power-functions-inventory.md: 'https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287226010'
-        work/future/analysis-input-mapping.md: 'https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287226167'
-        work/future/analysis-leddriver.md: 'https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287226322'
-        work/future/analysis-moonlive.md: 'https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287226461'
-        work/future/analysis-small-boards.md: 'https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287226570'
-        work/future/analysis-ui-extensibility.md: 'https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287226736'
-        work/future/analysis-virtual-layer-downscale.md: 'https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287226894'
+        work/future/analysis-code-hosting.md: design/code-hosting.md
+        work/future/analysis-effects-power-functions-inventory.md: design/effects-power-functions-inventory.md
+        work/future/analysis-input-mapping.md: design/input-mapping.md
+        work/future/analysis-leddriver.md: design/leddriver.md
+        work/future/analysis-moonlive.md: design/moonlive.md
+        work/future/analysis-small-boards.md: design/small-boards.md
+        work/future/analysis-ui-extensibility.md: design/ui-extensibility.md
+        work/future/analysis-virtual-layer-downscale.md: design/virtual-layer-downscale.md
         reference/tests/unit-tests.md: reference/tests.md
         reference/tests/scenario-tests.md: reference/tests.md
         reference/metrics/code.md: reference/tests.md#check_code
@@ -117,7 +117,7 @@ plugins:
         how-to/building.md: moonwalk.md#desktop-build-test
         gettingstarted.md: getting-started.md
         moonmodules/light/index.md: explanation/how-moonlight-works.md
-        reference/hardware/small-boards.md: 'https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287226570'
+        reference/hardware/small-boards.md: design/small-boards.md
         tutorials/how-moonlight-works.md: explanation/how-moonlight-works.md
         tutorials/generative-effects.md: explanation/generative-effects.md
         how-to/updating-firmware.md: moonwalk.md#update-firmware
@@ -283,6 +283,17 @@ nav:
           - MoonWalk: explanation/architecture/moonwalk.md
           - Web UI: moonmodules/core/ui.md
       - Why we write our own code: explanation/why-we-write-our-own.md
+      # Pre-decision surveys, each cited by the card or plan it informs; a study leaves once its topic ships.
+      - Design studies:
+          - Overview: design/index.md
+          - Code hosting: design/code-hosting.md
+          - Effects on the power functions: design/effects-power-functions-inventory.md
+          - Input mapping: design/input-mapping.md
+          - LED drivers: design/leddriver.md
+          - MoonLive roadmap: design/moonlive.md
+          - Small boards: design/small-boards.md
+          - UI extensibility: design/ui-extensibility.md
+          - Render larger, pool down: design/virtual-layer-downscale.md
       # The bugs and fixes MoonLight waits on in the projects it builds on, each with its workaround and when it goes.
       - Issues in other projects: reference/issues-in-other-projects.md
       - Power functions: moonmodules/light/power-functions.md

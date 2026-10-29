@@ -28,7 +28,7 @@ A source is then a transport plus a decoder, delivering frames with a small desc
 
 ## How it lands on what MoonLight has: two families
 
-The three axes describe any stream, and they do not make every stream one module: two families, each with its own semantics, meeting in the layer, as [MoonLight, frames from outside](../../explanation/architecture/moonlight.md#frames-from-outside) describes. The roadmap across both:
+The three axes describe any stream, and they do not make every stream one module: two families, each with its own semantics, meeting in the layer, as [MoonLight, frames from outside](../explanation/architecture/moonlight.md#frames-from-outside) describes. The roadmap across both:
 
 | | Channel data, the pixel protocols | Pictures |
 |---|---|---|
@@ -40,7 +40,7 @@ The three axes describe any stream, and they do not make every stream one module
 
 Recording is the bridge between transports and files: a live stream in, an FSEQ file out, written from the drivers' output. Art-Net "from the SD card" is that recording, as Falcon Player records it; FSEQ does not travel as a stream, since Falcon Player copies the file to its remotes.
 
-Mapped by the receiver or by the sender, `mapped_by`, and the paths a sender-mapped frame takes: [MoonLight, frames from outside](../../explanation/architecture/moonlight.md#frames-from-outside). What each path costs: [Performance, Network Receive](../../reference/performance.md#network-receive).
+Mapped by the receiver or by the sender, `mapped_by`, and the paths a sender-mapped frame takes: [MoonLight, frames from outside](../explanation/architecture/moonlight.md#frames-from-outside). What each path costs: [Performance, Network Receive](../reference/performance.md#network-receive).
 
 ## Real time and not real time
 
@@ -61,7 +61,7 @@ Not real time also names a third case that never reaches the device as a stream:
 
 ## The roadmap
 
-Each family's consumer is an effect doing one gather per frame, and modifiers stay the one home for geometry: [MoonLight, frames from outside](../../explanation/architecture/moonlight.md#frames-from-outside).
+Each family's consumer is an effect doing one gather per frame, and modifiers stay the one home for geometry: [MoonLight, frames from outside](../explanation/architecture/moonlight.md#frames-from-outside).
 
 ```mermaid
 flowchart TB
@@ -172,7 +172,7 @@ A live browser source costs bandwidth, lights × 3 bytes × fps: about 60 KB/s f
 
 TouchMyLight's cube is the first user, so 3D works from the start.
 
-- **A light list is mapped by the sender, and carries no positions:** placed by the layout on 1D, 2D and 3D layouts alike ([MoonLight, frames from outside](../../explanation/architecture/moonlight.md#frames-from-outside)), with the layout numbering its lights as the xLights model does ([the FSEQ player's card](../../moonmodules/light/effects.md#fseqplayer)).
+- **A light list is mapped by the sender, and carries no positions:** placed by the layout on 1D, 2D and 3D layouts alike ([MoonLight, frames from outside](../explanation/architecture/moonlight.md#frames-from-outside)), with the layout numbering its lights as the xLights model does ([the FSEQ player's card](../moonmodules/light/effects.md#fseqplayer)).
 - **A picture reaches a 3D layout by projection:** each light samples the picture at its position seen along one axis, the planar projection media servers use.
 - **A volume is the native 3D stream:** a frame per depth slice, copied straight into a 3D layer.
 
@@ -232,13 +232,13 @@ What MoonLight builds first, so that every contribution after it is one source i
 
 | # | Piece | Where | What it does |
 |---|---|---|---|
-| G1 | **Light-list placement** ✅ built | `Layer::placeByLayout` | a sender-mapped frame placed by the layout's positions: [frames from outside](../../explanation/architecture/moonlight.md#frames-from-outside) |
-| G2 | **Network Receive's `mapped_by`** ✅ built | `NetworkReceiveEffect` | `receiver` or `sender`, the status naming the path: [its card](../../moonmodules/light/effects.md#networkreceive), the cost in [Performance](../../reference/performance.md#network-receive) |
-| G3 | **The picture source** ✅ built | `PictureService` | from #138's `VideoService`, a test pattern its first source: [its card](../../moonmodules/core/services.md#picture) |
-| G4 | **The picture effect** ✅ built | `PictureEffect` | from #138's sampler, point or area in linear light, fit or stretch: [its card](../../moonmodules/light/effects.md#picture) |
-| G5 | **Sender mapping skips the board's mapping** ✅ built | `Layer::wiringSource`, `Drivers` | a sender-mapped frame alone on its layer goes to the output in one copy on any layout: [frames from outside](../../explanation/architecture/moonlight.md#frames-from-outside) |
-| G6 | **The channel-data sink** ✅ built | `ChannelDataSink` | extracted from Network Receive, so a file source is a thin effect on it: [its header](../../../src/light/effects/ChannelDataSink.h) |
-| G7 | **A contributor page** ✅ built | docs | [Adding a picture or channel-data source](../../reference/adding-a-stream-source.md) |
+| G1 | **Light-list placement** ✅ built | `Layer::placeByLayout` | a sender-mapped frame placed by the layout's positions: [frames from outside](../explanation/architecture/moonlight.md#frames-from-outside) |
+| G2 | **Network Receive's `mapped_by`** ✅ built | `NetworkReceiveEffect` | `receiver` or `sender`, the status naming the path: [its card](../moonmodules/light/effects.md#networkreceive), the cost in [Performance](../reference/performance.md#network-receive) |
+| G3 | **The picture source** ✅ built | `PictureService` | from #138's `VideoService`, a test pattern its first source: [its card](../moonmodules/core/services.md#picture) |
+| G4 | **The picture effect** ✅ built | `PictureEffect` | from #138's sampler, point or area in linear light, fit or stretch: [its card](../moonmodules/light/effects.md#picture) |
+| G5 | **Sender mapping skips the board's mapping** ✅ built | `Layer::wiringSource`, `Drivers` | a sender-mapped frame alone on its layer goes to the output in one copy on any layout: [frames from outside](../explanation/architecture/moonlight.md#frames-from-outside) |
+| G6 | **The channel-data sink** ✅ built | `ChannelDataSink` | extracted from Network Receive, so a file source is a thin effect on it: [its header](../../src/light/effects/ChannelDataSink.h) |
+| G7 | **A contributor page** ✅ built | docs | [Adding a picture or channel-data source](../reference/adding-a-stream-source.md) |
 
 The picture sources still to come, the browser among them, are steps of [Video in, LED walls out](Plan-20261024%20-%20Video%20in%2C%20LED%20walls%20out%20(0%20of%2010).md).
 
@@ -250,24 +250,24 @@ Each later piece is a small pull request, one topic, based on current main, with
 
 | Pull request | Who | On |
 |---|---|---|
-| ✅ **Backlight wiring** (#140): start corner, direction, a count per edge and a gap, [the layout script](../../../moonlive/layouts/backlight.mll) | Gohnnyman | nothing |
+| ✅ **Backlight wiring** (#140): start corner, direction, a count per edge and a gap, [the layout script](../../moonlive/layouts/backlight.mll) | Gohnnyman | nothing |
 | ⏳ Color trim, split from #139 | Gohnnyman | nothing; a separate idea |
-| ✅ **FSEQ playback** from the filesystem with a playlist, on the channel-data sink: [its card](../../moonmodules/light/effects.md#fseqplayer) | TouchMyLight | G1, G2, G6 |
-| ✅ **Border sampling**: edge depth, smoothing, [the Picture effect's card](../../moonmodules/light/effects.md#picture) | Gohnnyman | G4 |
-| ✅ **USB capture** with its MJPEG decoder on the P4: [the Picture service's card](../../moonmodules/core/services.md#picture), the seam in [platform.h](../../../src/platform/platform.h) | Gohnnyman | G3 |
+| ✅ **FSEQ playback** from the filesystem with a playlist, on the channel-data sink: [its card](../moonmodules/light/effects.md#fseqplayer) | TouchMyLight | G1, G2, G6 |
+| ✅ **Border sampling**: edge depth, smoothing, [the Picture effect's card](../moonmodules/light/effects.md#picture) | Gohnnyman | G4 |
+| ✅ **USB capture** with its MJPEG decoder on the P4: [the Picture service's card](../moonmodules/core/services.md#picture), the seam in [platform.h](../../src/platform/platform.h) | Gohnnyman | G3 |
 | ⏳ Recording the drivers' output to FSEQ on SD, clock sync | open | FSEQ playback |
 
-Pull requests #138 and #139 close with thanks once G3 and G4 land, their good parts credited in the groundwork; a stacked pull request waits for the one below it, as [CLAUDE.md](../../../CLAUDE.md) says.
+Pull requests #138 and #139 close with thanks once G3 and G4 land, their good parts credited in the groundwork; a stacked pull request waits for the one below it, as [CLAUDE.md](../../CLAUDE.md) says.
 
 ## Skeletons for the contributions
 
 What each pull request builds, settled before code so it arrives small and on design. The names follow the open naming question below. Each passes `check_specs` with a card, and its tests pass on the desktop before a board sees it.
 
-**FSEQ player (TouchMyLight), on G6** ✅: built as [the FSEQ player](../../moonmodules/light/effects.md#fseqplayer).
+**FSEQ player (TouchMyLight), on G6** ✅: built as [the FSEQ player](../moonmodules/light/effects.md#fseqplayer).
 
-**The picture source (G3) and the picture effect (G4), from #138** ✅: built as [the Picture service](../../moonmodules/core/services.md#picture), [`PictureFrame`](../../../src/core/util/PictureFrame.h) and [the Picture effect](../../moonmodules/light/effects.md#picture).
+**The picture source (G3) and the picture effect (G4), from #138** ✅: built as [the Picture service](../moonmodules/core/services.md#picture), [`PictureFrame`](../../src/core/util/PictureFrame.h) and [the Picture effect](../moonmodules/light/effects.md#picture).
 
-**Backlight wiring (#140)** ✅: built into [the Backlight layout script](../../../moonlive/layouts/backlight.mll), Hyperion's count per edge and gap included.
+**Backlight wiring (#140)** ✅: built into [the Backlight layout script](../../moonlive/layouts/backlight.mll), Hyperion's count per edge and gap included.
 
 **Color trim (#139's second commit).** Output calibration, so it lives in the fixture profile and the correction, judged against a 3×3 correction matrix before code.
 
@@ -283,12 +283,12 @@ Tests: a trim scaling one channel and leaving the others; a trim of 255 being th
 
 Built: G1 to G7, the FSEQ player, border sampling, USB capture and the backlight wiring. Around them, measuring Network Receive on real boards built:
 
-- **Network Receive's receive task** on core 1 and its `packets_per_s` and `frames_per_s`: [its card](../../moonmodules/light/effects.md#networkreceive).
-- **TryLock's release by exchange**, which PSRAM's emulated read-modify-write needs: [its header](../../../src/core/util/TryLock.h).
-- **The receive defaults**, a UDP mailbox of 32 and 30 Ethernet receive buffers on the P4: the reasons beside them in [the base sdkconfig](../../../esp32/sdkconfig.defaults) and [the P4's](../../../esp32/sdkconfig.defaults.esp32p4rev1-eth).
-- **Network Send's paced packets**, `packet_gap`: [its card](../../moonmodules/light/drivers.md#networksend).
-- **Scenarios over several boards** (`--board name=host`): [Testing, several boards](../../reference/testing.md#several-boards).
-- **The measurements**: [Performance, Network Receive](../../reference/performance.md#network-receive).
+- **Network Receive's receive task** on core 1 and its `packets_per_s` and `frames_per_s`: [its card](../moonmodules/light/effects.md#networkreceive).
+- **TryLock's release by exchange**, which PSRAM's emulated read-modify-write needs: [its header](../../src/core/util/TryLock.h).
+- **The receive defaults**, a UDP mailbox of 32 and 30 Ethernet receive buffers on the P4: the reasons beside them in [the base sdkconfig](../../esp32/sdkconfig.defaults) and [the P4's](../../esp32/sdkconfig.defaults.esp32p4rev1-eth).
+- **Network Send's paced packets**, `packet_gap`: [its card](../moonmodules/light/drivers.md#networksend).
+- **Scenarios over several boards** (`--board name=host`): [Testing, several boards](../reference/testing.md#several-boards).
+- **The measurements**: [Performance, Network Receive](../reference/performance.md#network-receive).
 
 Open here: the color trim, recording and clock sync; the picture sources are in [Video in, LED walls out](Plan-20261024%20-%20Video%20in%2C%20LED%20walls%20out%20(0%20of%2010).md). The rest is in the backlog below.
 
@@ -301,7 +301,7 @@ Open here: the color trim, recording and clock sync; the picture sources are in 
 - **E1.31 multicast never arrives.** Network Receive binds 5568 but never joins the multicast groups, so both receivers in `scenario_NetworkSend_one_sender_many_receivers` read 0 packets while Network Send multicast; `UdpSocket::membership` exists in the platform layer and goes unused. Join the groups of the universes the layer covers, from `universe_start` on.
 - **The Art-Net broadcast counts do not add up.** In the same scenario at 64x64 (about 1,000 packets/s sent, 40 frames), the S3 counted 1,212 packets/s and 96 frames/s while the P4 counted 488 and 39. Another bench board broadcasting, or duplicates over WiFi; a packet capture on port 6454 settles it.
 - **A sending P4 reboots with 30 Ethernet transmit buffers.** With 30 x 1600 bytes for transmit a P4 rebooted about 15 s into sending; IDF takes every Ethernet DMA buffer from internal RAM, about 96 KB with 30 + 30, so internal-heap exhaustion is the suspect, unverified. troyhacks raised and reverted the same values within 26 minutes ([bdf6c17e](https://github.com/troyhacks/esp32-arduino-libs/commit/bdf6c17e), [c8a43b7e](https://github.com/troyhacks/esp32-arduino-libs/commit/c8a43b7e)). Transmit stays at 10.
-- **The P4's HTTP server answers "incomplete request body" under a stream.** Two `set_control` writes and one `apply_state` failed this way while the P4 received DDP over Ethernet; the same short body window [backlog-core](../future/backlog-core.md#a-request-body-shares-the-two-upload-slots-2026-10-25-from-the-pre-merge-review) already names.
+- **The P4's HTTP server answers "incomplete request body" under a stream.** Two `set_control` writes and one `apply_state` failed this way while the P4 received DDP over Ethernet; the same short body window [backlog/core](https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287075256) already names.
 - **`CONFIG_ETH_IRAM_OPTIMIZATION=y` on the P4.** The one Ethernet change troyhacks kept; measure it with `scenario_NetworkReceive_two_boards`, P4 to P4.
 - **A UDP mailbox of 64 on the P4.** Espressif's own P4 Arduino default; 32 against 64 measured the same on the S3 over WiFi, so measure it P4 to P4 over Ethernet, where bursts arrive at wire speed.
 - **The receive task's priority on Ethernet.** Ours runs at 3 on core 1, below the driver task (`mmEncode`, 5); troyhacks' Art-Net receive runs at 20 on core 0, blocking in `recvfrom()`, above lwIP's own thread (`tcpip`, 18), which a busy drain could starve. On the S3 over WiFi 6 against 3 changed nothing, the loss being at the access point. Measure 6 (above the driver task) and 19 (above lwIP) P4 to P4.

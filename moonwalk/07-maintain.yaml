@@ -200,21 +200,25 @@ processes:
       - id: version
         say: Check the version on the Firmware card.
         when: { open: { module: FirmwareUpdateModule } }
+        asks: ["Which version and firmware does the device run?"]
         detail: |
           A fix may already be in the current version.
       - id: diagnostics
         say: Copy each card's diagnostics.
         when: { manual: "The card's { }, then diagnostics; select all in the new tab and copy." }
+        asks: ["The diagnostics of System, Firmware and the card that went wrong."]
         detail: |
           Always System and Firmware, and the card that went wrong. The Layer card for lights, the Drivers card for pins or wiring. Wrap each in a fenced code block. [Which cards to include](reference/logging-an-issue.md#2-attach-the-output).
       - id: describe
         say: Describe the steps, the expected and the actual.
         when: { manual: "Steps to reproduce, what should happen, what happens instead." }
+        asks: ["Steps to reproduce, what should happen, and what happens instead."]
         detail: |
           A device that crashed or does not boot serves no `{ }`. Say what the LEDs did and what changed shortly before. Say whether it repeats after a power cycle, and add the serial boot log if you have one. A `bootReason` of `PANIC`, `TASK_WDT` or `BROWNOUT` on the System card goes in the first line.
       - id: photo
         say: Add a photo of what you see.
         when: { manual: "A fixture in the wrong colors, or a screenshot of the interface." }
+        asks: ["A photo or screenshot of what you see."]
       - id: open
         say: Open the issue on GitHub.
         when: { open: { url: "https://github.com/MoonModules/MoonLight/issues/new" } }

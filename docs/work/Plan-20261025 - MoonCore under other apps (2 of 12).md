@@ -4,7 +4,7 @@ Plan of 2026-10-25, a Restructure, for approval. Another repository takes MoonLi
 
 ## What exists
 
-- **Core compiles without light** ([Code ratchets](../past/plans/Plan-20261003%20-%20Code%20ratchets%2C%20one%20report%20for%20simplicity%20(13%20of%2013).md), step 12): `mm_core` compiles through an include root without `light/`, every core header on its own, and `relative include path` keeps `..` from reaching past it.
+- **Core compiles without light** ([Code ratchets](https://github.com/MoonModules/MoonLight/issues/197), step 12): `mm_core` compiles through an include root without `light/`, every core header on its own, and `relative include path` keeps `..` from reaching past it.
 - **Core links without light.** On the desktop, `libmm_core.a` and `libmm_platform.a` need no `mm::` symbol outside themselves. The app supplies `main.cpp` and the type registry (`module_types.cpp`), both outside core.
 - **The root CMakeLists assumes it is the top level.** It always builds the MoonLight app and the tests, and names paths through `CMAKE_SOURCE_DIR` (23 times, 7 more in `test/`) and the include root through `CMAKE_BINARY_DIR`. Under `add_subdirectory` or `FetchContent` those point into the consumer's tree.
 - **`mm_core` builds three MoonLight inputs**: the web UI (`ui_embed`, from `src/ui`), the version (`build_info_gen`, from `library.json`) and the script catalog (`moonlive_catalog`, from `moonlive/`).
@@ -16,7 +16,7 @@ Plan of 2026-10-25, a Restructure, for approval. Another repository takes MoonLi
   - MoonLive's light script kinds in `MoonLiveScriptFile.h` (`.mle`, `.mll`, `.mlm`, `.mlp`, beside core's own `.mls`), and the generated `script_catalog.h`, which lists MoonLight's scripts. The light kinds' modules and builtins already live in `src/light/moonlive/`.
 - **The UI names light types**: 69 literals in `src/ui`, counted by `check_code`'s `module type in the UI`. The 3D view is core's; the preview frames it shows come from `PreviewDriver`, a light driver.
 - No install or export rules, so `find_package` has nothing to find.
-- **FastLED-MM** (2026-04 to 2026-05) is a PlatformIO and Arduino project on projectMM, MoonLight's predecessor, with ArduinoJson and ESPAsyncWebServer. A sketch is an effect module filling a `CRGB leds[]` and a driver module calling `FastLED.show()`; it shows a live preview and takes Art-Net. Its README says it is on hold until MoonLight ships as a library. [how-moonlight-works.md](../../explanation/how-moonlight-works.md) names it as the second domain.
+- **FastLED-MM** (2026-04 to 2026-05) is a PlatformIO and Arduino project on projectMM, MoonLight's predecessor, with ArduinoJson and ESPAsyncWebServer. A sketch is an effect module filling a `CRGB leds[]` and a driver module calling `FastLED.show()`; it shows a live preview and takes Art-Net. Its README says it is on hold until MoonLight ships as a library. [how-moonlight-works.md](../explanation/how-moonlight-works.md) names it as the second domain.
 
 ## End states
 

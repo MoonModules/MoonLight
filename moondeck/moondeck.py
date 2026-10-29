@@ -118,7 +118,7 @@ sys.path.insert(0, str(SCRIPTS_DIR / "docs"))
 from gen_moonwalk import regenerate as regenerate_moonwalk  # noqa: E402  the one home of regenerating MoonWalk's map on request
 import walk_status  # noqa: E402  MoonWalk's rule for which steps a change needs and which passes hold
 WALK_JSON = ROOT / "build" / "moonwalk" / "moonwalk.json"
-WALK_RUNS = LOG_DIR / "walk-runs.json"   # each step's last run on this machine: its tree, result and seconds
+WALK_RUNS = walk_status.WALK_RUNS
 IN_CHECKOUT = walk_status.in_checkout()   # outside a git checkout a run counts for nothing on the map
 
 

@@ -1,6 +1,6 @@
 # Plan: input mapping and scripted sensors
 
-Turns [analysis-input-mapping.md](../future/analysis-input-mapping.md) into steps. Two threads
+Turns [the input-mapping analysis](../design/input-mapping.md) into steps. Two threads
 run together throughout, deliberately:
 
 - **Compiled modules** for the inputs a board ships with, declared in the device catalog.
@@ -22,9 +22,9 @@ else records it.
 
 Two definitions are in the repo today and they do not agree.
 
-- [`docs/moonmodules/light/drivers.md:3`](../../moonmodules/light/drivers.md): "A driver sends
+- [`docs/moonmodules/light/drivers.md:3`](../moonmodules/light/drivers.md): "A driver sends
   lights somewhere." Output-only, light-specific.
-- [`docs/explanation/architecture/index.md:143`](../../explanation/architecture/index.md): "producers vs consumers: producers generate
+- [`docs/explanation/architecture/index.md:143`](../explanation/architecture/index.md): "producers vs consumers: producers generate
   data, consumers process and output it. Effects are producers, drivers are consumers." A role in a
   dataflow, said of the light domain.
 
@@ -156,7 +156,7 @@ distance an effect samples every frame is not a control a person edits, and rout
 
 The pattern for a stream exists and is already domain-neutral: `AudioService` publishes an
 `AudioFrame` that effects pull through a static `latestFrame()`, which
-[the architecture](../../explanation/architecture/moonmodule.md#data-exchange-between-modules) states as the shared-struct
+[the architecture](../explanation/architecture/moonmodule.md#data-exchange-between-modules) states as the shared-struct
 pull. A sensor service does the same, and may *also* carry mapping rows for thresholds a person
 cares about ("closer than 50 cm" drives a switch). One module, two outputs, because that is what a
 sensor is: a stream, with events derivable from it.
@@ -164,7 +164,7 @@ sensor is: a stream, with events derivable from it.
 So every sensor step below has two acceptance criteria, and both are on the bench: **an effect reads
 the value per frame through the published frame**, and **a threshold drives a control through the
 table**. A sensor that only does one is half-built. The full reasoning is in
-[analysis-input-mapping.md](../future/analysis-input-mapping.md).
+[the input-mapping analysis](../design/input-mapping.md).
 
 ## Step 0: the decisions ✅
 
@@ -225,7 +225,7 @@ firmware's opinion. Neither survives a board with three buttons or a remote with
 
 **`IrService` is renamed `InfraredService`.** "IR" is an abbreviation the code does not need: the
 project's own standard is the textbook name a new contributor reads without expanding it
-([CLAUDE.md, industry standards](../../../CLAUDE.md)), and every sibling is already spelled out
+([CLAUDE.md, industry standards](../../CLAUDE.md)), and every sibling is already spelled out
 (`AudioService`, `ButtonService`, `FilesystemModule`). The rename touches the class, the file, the
 factory registration, the catalog entries that add it per board, and its spec anchor. Cheap now, and
 it stops the abbreviation spreading to the doc, the UI card and the device catalog.
@@ -256,7 +256,7 @@ and a test that the rename left no `IrService` behind. Bench: the Dig-2-Go's GPI
 and the infrared remote on another, both driving `Control.switch1`, so two inputs reaching one target
 is proven rather than assumed.
 
-## Step 1b: an encoder that shows what it selects 🚧 (the Open Stage Control session has no strip widget; its label and pad-matrix gaps stay in backlog-services)
+## Step 1b: an encoder that shows what it selects 🚧 (the Open Stage Control session has no strip widget; its label and pad-matrix gaps stay in backlog/services)
 
 Small, and it follows step 1 rather than joining it, so the rebuild is not also carrying a UI change.
 
@@ -291,10 +291,10 @@ a strip of small text displays across the top, showing whatever was last touched
 **Hardware and Open Stage Control.** Some surfaces have these displays (the X-Touch's scribble
 strips) and some do not, so the strip is published as a control like any other and a surface that
 cannot show text simply ignores it. The shipped
-[Open Stage Control session](../../reference/examples/open-stage-control.json) gains a text widget
+[Open Stage Control session](../reference/examples/open-stage-control.json) gains a text widget
 bound to it, which is also worth doing because that session already has known gaps (its widget labels
 do not render and its pad matrix draws nothing, both recorded in
-[backlog-services.md](../future/backlog-services.md#the-open-stage-control-sessions-labels-2026-08-30)): adding the strip is the moment to fix the session
+[backlog/services.md](https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287130773)): adding the strip is the moment to fix the session
 by building one widget of each kind in its own editor and copying the shape it produces.
 
 **Test:** the infrared remote's palette next/prev rows driving `Control.encoder1`, with the palette
@@ -675,7 +675,7 @@ to zero, so a pedal pushed fully down settled at 253 rather than 255 and full br
 unreachable. It now takes the remaining distance whole once the step rounds to nothing.
 
 **Still open**: the bench half. A pot on an ADC pin, both paths on the same hardware. The SE16 and
-LightCrafter sense pins are the natural rig and are now free (see `backlog-platform.md`), but the scale
+LightCrafter sense pins are the natural rig and are now free (see `backlog/platform.md`), but the scale
 factor per board needs the schematic.
 
 ## Step 4: I2C sensors 🚧 (only the shared bus and its scan, `I2cBusModule`; no register read, sensor module, published frame or `i2cRead` builtin)
@@ -772,7 +772,7 @@ peripheral (PCNT for the encoder, RMT or a timed capture for the echo) rather th
 **Test:** an encoder on the bench driving `Control.encoder1` through the module, and an HC-SR04
 reporting distance through a script.
 
-## Step 6: PIR, and the trigger vocabulary ✅ (a PIR is a `set` row, which already holds a level, so no `level` kind: two kinds would do one job; the help and the momentary-row test name it. Multi-click waits for a panel that needs it, in backlog-ui)
+## Step 6: PIR, and the trigger vocabulary ✅ (a PIR is a `set` row, which already holds a level, so no `level` kind: two kinds would do one job; the help and the momentary-row test name it. Multi-click waits for a panel that needs it, in backlog/ui)
 
 The cheap finish. A PIR is a digital pin, so it needs no seam at all: it is a `ButtonService` row
 with the `set` event, which holds the pin's level rather than reacting to a press. MoonLight

@@ -10,7 +10,7 @@ Three requests turn out to be one mechanism. A user asks for a mask that grows a
 
 ## The pipeline today
 
-Per frame and per layer, effects draw into the layer's buffer in child order, the modifiers fold coordinates (once at mapping time, or per frame through `modifyLive`), and then the Drivers container composites every enabled layer into the physical frame through [BlendMap](../../../src/light/layers/BlendMap.h): the bottom layer overwrites, every layer above blends with its `blendMode` (alpha or additive) and `opacity`. Then brightness, correction and output.
+Per frame and per layer, effects draw into the layer's buffer in child order, the modifiers fold coordinates (once at mapping time, or per frame through `modifyLive`), and then the Drivers container composites every enabled layer into the physical frame through [BlendMap](../../src/light/layers/BlendMap.h): the bottom layer overwrites, every layer above blends with its `blendMode` (alpha or additive) and `opacity`. Then brightness, correction and output.
 
 Alpha is already `lerp(backdrop, source, opacity)`, the specification's normal mode, so the existing stage has the right form: new modes add a function, not a stage. Modifiers stay geometry: they decide where a color comes from, never how bright it is.
 

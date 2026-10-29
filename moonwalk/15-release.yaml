@@ -48,3 +48,29 @@ processes:
         when: { run: { command: "git tag vX.Y.Z && git push --tags" } }
         detail: |
           The release workflow builds, publishes and deploys the site. A `vX.Y.Z-rcN` tag publishes a GitHub release flagged pre-release, offered to readers who pick the pre-release channel; everyone else stays on stable. The moving `latest` pre-release is named by the bare version, `X.Y.Z-dev.N`: the app builds the asset's filename from that name, so a `v` prefix hides the update badge.
+  - id: ci-on-release
+    title: CI on a release tag
+    actor: ci
+    goal: A pushed tag builds every binary and stages the release, the installer and the site.
+    dependsOn: [release]
+    intro: |
+      GitHub Actions runs `release.yml` on a `v*` tag, and on main for the rolling `latest`. Each build and staging step is a script, so it reproduces locally; the upload, the `latest` tag, the container registry and Pages are GitHub's own.
+    steps:
+      - id: verify
+        say: Check the tag matches the version.
+        when: { run: { script: moondeck/ci/verify_version.py, args: "--tag <tag>" } }
+      - id: stage-firmwares
+        say: Stage each ESP32 firmware's files.
+        when: { run: { script: moondeck/ci/release_stage.py, args: "stage-esp32 --firmware <name> --version <version>" } }
+      - id: stage-teensy
+        say: Build and stage the Teensy firmware.
+        when: { run: { script: moondeck/ci/release_stage.py, args: "stage-teensy --tag <tag> --version <version>" } }
+      - id: manifests
+        say: Write the installer's manifests.
+        when: { run: { script: moondeck/ci/release_stage.py, args: "manifests --tag <tag> --version <version> --repo MoonModules/MoonLight" } }
+      - id: container
+        say: Build the container's context.
+        when: { run: { script: moondeck/ci/release_stage.py, args: "container-context" } }
+      - id: pages
+        say: Stage the installer for the site.
+        when: { run: { script: moondeck/ci/release_stage.py, args: "pages-site" } }

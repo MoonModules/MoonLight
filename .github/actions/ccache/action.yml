@@ -20,7 +20,9 @@ runs:
     - if: inputs.install == 'true' && runner.os == 'macOS'
       shell: bash
       run: brew install ccache
-    - uses: actions/cache@v4
+    # act sets ACT, and runs no JavaScript action nested in a composite one; a cache only speeds a run, so a local run goes without it.
+    - if: ${{ !env.ACT }}
+      uses: actions/cache@v4
       with:
         path: .ccache
         key: ccache-${{ inputs.key }}-${{ github.sha }}

@@ -107,7 +107,7 @@ def check_idf_pin(idf_path: Path) -> None:
 # *build-time* cost only: the linker dead-strips the unused code, so they add ~0
 # bytes of flash to esp32p4rev1-eth (our coprocessorWifi() is the empty stub there, so
 # no esp_hosted symbol is referenced; confirmed: their .text size is 0x0 in the
-# .map). Left as-is rather than fought; see docs/work/future/.
+# .map). Left as-is rather than fought.
 ETH_ONLY_EXCLUDE = ["esp_wifi", "wpa_supplicant", "esp_coex"]
 
 # Firmware catalogue. Each entry describes one shipping firmware variant.
@@ -317,7 +317,7 @@ FIRMWARES: dict[str, dict] = {
                        "ESP32-C6 over SDIO (esp_hosted), for P4 revisions 0.x/1.x "
                        "ONLY. Ethernet works; WiFi over the C6 associates on some "
                        "boots and not on others.",
-        # Ships while WiFi is intermittent so users can try it (backlog-platform § ESP32-P4 round 3). CONFIG_PM_SLEEP_CLK_ICG_ENABLE=n in its fragment skips the allocation that aborted cpu_start, at the cost of peripheral clock gating during light sleep, which this device never enters.
+        # Ships while WiFi is intermittent so users can try it (backlog/platform § ESP32-P4 round 3). CONFIG_PM_SLEEP_CLK_ICG_ENABLE=n in its fragment skips the allocation that aborted cpu_start, at the cost of peripheral clock gating during light sleep, which this device never enters.
         "ships": True,
         "panel_cards": True,
     },

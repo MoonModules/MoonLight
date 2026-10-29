@@ -14,6 +14,7 @@ from functools import lru_cache
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent.parent
+WALK_RUNS = ROOT / "build" / "moondeck-logs" / "walk-runs.json"   # each step's last run on this machine: its tree, result and seconds
 DURATIONS = ROOT / "build" / "moondeck-logs" / "durations.json"   # each call's recent passing runs on this machine, beside its run record: a duration is this machine's, as a run is
 SLOW_SECONDS = 45   # where the measured runs split: the checks finish within about 30 s, the builds, sweeps and flashes take a minute and more
 KEEP = 5            # passing runs kept per call: a clean build and an incremental one both count

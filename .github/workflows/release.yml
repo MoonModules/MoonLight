@@ -103,9 +103,7 @@ jobs:
         with:
           persist-credentials: false
       - id: gen
-        run: |
-          set -euo pipefail
-          echo "list=$(jq -c '[.firmwares[] | select(.ships and .platform == "esp32") | {firmware: .name, chip}]' mooninstaller/firmwares.json)" >> "$GITHUB_OUTPUT"
+        run: uv run moondeck/ci/release_stage.py firmwares
 
   build-esp32:
     needs: [verify-version, firmwares]
@@ -146,13 +144,7 @@ jobs:
         id: tag
         env:
           INPUT_TAG: ${{ inputs.tag }}
-          REF_NAME: ${{ github.ref_name }}
-          IS_MAIN: ${{ github.ref == 'refs/heads/main' }}
-        run: |
-          set -euo pipefail
-          if [ -n "$INPUT_TAG" ]; then echo "tag=$INPUT_TAG" >> "$GITHUB_OUTPUT"
-          elif [ "$IS_MAIN" = "true" ]; then echo "tag=latest" >> "$GITHUB_OUTPUT"
-          else echo "tag=$REF_NAME" >> "$GITHUB_OUTPUT"; fi
+        run: uv run moondeck/ci/release_stage.py tag --input-tag "$INPUT_TAG" --ref "$GITHUB_REF" --ref-name "$GITHUB_REF_NAME"
 
       # The semver burned into the binary + stamped on the assets/manifest. A
       # `latest` build gets `<core>-dev.<N>` (N = commits since the last v* tag)
@@ -168,10 +160,7 @@ jobs:
         # injection from a crafted tag/ref.
         env:
           TAG: ${{ steps.tag.outputs.tag }}
-        run: |
-          set -euo pipefail
-          V=$(uv run python moondeck/build/compute_version.py --tag "$TAG")
-          echo "version=$V" >> "$GITHUB_OUTPUT"
+        run: uv run moondeck/ci/release_stage.py version --tag "$TAG"
 
       # The espressif/idf image ships ccache and turns it on; the workspace mount carries the cache in and out.
       - uses: ./.github/actions/ccache
@@ -192,50 +181,11 @@ jobs:
           command: python ../moondeck/build/build_esp32.py --firmware ${{ matrix.firmware }} --release "${{ steps.tag.outputs.tag }}" --version "${{ steps.ver.outputs.version }}" && ccache --show-stats
           extra_docker_args: -e CCACHE_DIR=/app/${{ github.repository }}/.ccache
 
+      # Per-firmware build dir build/esp32-<firmware>/ (build_esp32.py points idf.py at it with -B), so several firmwares coexist: CI uses one per matrix job, dev machines as many as built. The version is the one computed above, matching the binary's MM_VERSION.
       - name: Stage release artifacts
-        run: |
-          set -euo pipefail
-          mkdir -p dist
-          V="${{ steps.ver.outputs.version }}"   # computed once above; matches the binary's MM_VERSION
-          # Per-firmware build dir under build/esp32-<firmware>/ (plan-19.1).
-          # build_esp32.py points idf.py at this dir via -B, so the build
-          # tree lives outside esp32/ and multiple firmwares can coexist:
-          # CI uses one per matrix job, dev machines use as many as built.
-          B=build/esp32-${{ matrix.firmware }}
-          PREFIX="firmware-${{ matrix.firmware }}-v$V"
-          # App, bootloader and partition table are unique per firmware (one flash size
-          # holds several layouts), so staged with the prefix.
-          cp "$B/MoonLight.bin"                       "dist/${PREFIX}.bin"
-          cp "$B/bootloader/bootloader.bin"           "dist/${PREFIX}-bootloader.bin"
-          cp "$B/partition_table/partition-table.bin" "dist/${PREFIX}-partition-table.bin"
-          # ota-data is byte-identical for ALL firmwares, so it is staged under a SHARED
-          # name and the release uploads it once. Every matrix job writes the same file;
-          # the flatten step keeps one copy (byte-identical, so last-writer-wins is
-          # correct). The generated manifests point at this name (generate_manifest.py).
-          cp "$B/ota_data_initial.bin"                "dist/shared-ota-data.bin"
-          # Per-firmware flasher_args.json: the release job feeds it to
-          # generate_manifest.py so offsets come from the real build.
-          cp "$B/flasher_args.json"                   "dist/flasher-${{ matrix.firmware }}.json"
-          # MoonBase, the second boot image on the 4 MB tables (built alongside those firmwares
-          # by build_esp32.py): chip-shared, so staged under a shared name like the partition
-          # table. The slot-0 otadata is what makes a fresh install boot the APP with MoonBase
-          # standing by: blank otadata would boot MoonBase. Their manifests reference both
-          # (generate_manifest.py), and install-picker.js excludes them from OTA offers.
-          for MB in build/moonbase-*/MoonLight-moonbase.bin; do
-            [ -f "$MB" ] || continue
-            CHIP=$(basename "$(dirname "$MB")"); CHIP=${CHIP#moonbase-}
-            cp "$MB" "dist/shared-moonbase-$CHIP.bin"
-            uv run python -c "import sys; sys.path.insert(0,'moondeck/build'); \
-              import build_esp32, pathlib; \
-              pathlib.Path('dist/shared-ota-data-slot0.bin').write_bytes(build_esp32.otadata_slot0_bytes())"
-          done
-          # The migration image, which a board running WLED installs through WLED's own update page to move to MoonLight (moonbase/migrate/): one per chip, so shared like MoonBase.
-          for RP in build/migrate-*/MoonLight-migrate.bin; do
-            [ -f "$RP" ] || continue
-            CHIP=$(basename "$(dirname "$RP")"); CHIP=${CHIP#migrate-}
-            case "$CHIP" in *-pause) continue ;; esac   # the rehearsal image never ships
-            cp "$RP" "dist/shared-migrate-$CHIP.bin"
-          done
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: uv run moondeck/ci/release_stage.py stage-esp32 --firmware ${{ matrix.firmware }} --version "$VERSION"
 
       - uses: actions/upload-artifact@v4
         with:
@@ -265,27 +215,18 @@ jobs:
         shell: bash
         env:
           INPUT_TAG: ${{ inputs.tag }}
-          REF_NAME: ${{ github.ref_name }}
-          IS_MAIN: ${{ github.ref == 'refs/heads/main' }}
-        run: |
-          set -euo pipefail
-          if [ -n "$INPUT_TAG" ]; then echo "tag=$INPUT_TAG" >> "$GITHUB_OUTPUT"
-          elif [ "$IS_MAIN" = "true" ]; then echo "tag=latest" >> "$GITHUB_OUTPUT"
-          else echo "tag=$REF_NAME" >> "$GITHUB_OUTPUT"; fi
+        run: uv run moondeck/ci/release_stage.py tag --input-tag "$INPUT_TAG" --ref "$GITHUB_REF" --ref-name "$GITHUB_REF_NAME"
       - name: Compute version
         id: ver
         shell: bash
         env:
           TAG: ${{ steps.tag.outputs.tag }}
-        run: |
-          set -euo pipefail
-          V=$(uv run python moondeck/build/compute_version.py --tag "$TAG")
-          echo "version=$V" >> "$GITHUB_OUTPUT"
+        run: uv run moondeck/ci/release_stage.py version --tag "$TAG"
       - uses: ./.github/actions/ccache
         with:
           key: macos-arm64
       - name: Build + package macOS arm64
-        run: uv run moondeck/ci/package_desktop.py --version "${{ steps.ver.outputs.version }}" && ccache --show-stats
+        run: uv run moondeck/ci/package_desktop.py --version "${{ steps.ver.outputs.version }}"
       - uses: actions/upload-artifact@v4
         with:
           name: desktop-macos
@@ -311,22 +252,13 @@ jobs:
         shell: bash
         env:
           INPUT_TAG: ${{ inputs.tag }}
-          REF_NAME: ${{ github.ref_name }}
-          IS_MAIN: ${{ github.ref == 'refs/heads/main' }}
-        run: |
-          set -euo pipefail
-          if [ -n "$INPUT_TAG" ]; then echo "tag=$INPUT_TAG" >> "$GITHUB_OUTPUT"
-          elif [ "$IS_MAIN" = "true" ]; then echo "tag=latest" >> "$GITHUB_OUTPUT"
-          else echo "tag=$REF_NAME" >> "$GITHUB_OUTPUT"; fi
+        run: uv run moondeck/ci/release_stage.py tag --input-tag "$INPUT_TAG" --ref "$GITHUB_REF" --ref-name "$GITHUB_REF_NAME"
       - name: Compute version
         id: ver
         shell: bash
         env:
           TAG: ${{ steps.tag.outputs.tag }}
-        run: |
-          set -euo pipefail
-          V=$(uv run python moondeck/build/compute_version.py --tag "$TAG")
-          echo "version=$V" >> "$GITHUB_OUTPUT"
+        run: uv run moondeck/ci/release_stage.py version --tag "$TAG"
       # The runner image does NOT ship NSIS (the first release run after the installer merged
       # proved it: "no makensis on this CI runner"). choco installs it into
       # Program Files (x86)\NSIS, one of the two locations find_makensis already searches.
@@ -404,27 +336,18 @@ jobs:
         shell: bash
         env:
           INPUT_TAG: ${{ inputs.tag }}
-          REF_NAME: ${{ github.ref_name }}
-          IS_MAIN: ${{ github.ref == 'refs/heads/main' }}
-        run: |
-          set -euo pipefail
-          if [ -n "$INPUT_TAG" ]; then echo "tag=$INPUT_TAG" >> "$GITHUB_OUTPUT"
-          elif [ "$IS_MAIN" = "true" ]; then echo "tag=latest" >> "$GITHUB_OUTPUT"
-          else echo "tag=$REF_NAME" >> "$GITHUB_OUTPUT"; fi
+        run: uv run moondeck/ci/release_stage.py tag --input-tag "$INPUT_TAG" --ref "$GITHUB_REF" --ref-name "$GITHUB_REF_NAME"
       - name: Compute version
         id: ver
         shell: bash
         env:
           TAG: ${{ steps.tag.outputs.tag }}
-        run: |
-          set -euo pipefail
-          V=$(uv run python moondeck/build/compute_version.py --tag "$TAG")
-          echo "version=$V" >> "$GITHUB_OUTPUT"
+        run: uv run moondeck/ci/release_stage.py version --tag "$TAG"
       - uses: ./.github/actions/ccache
         with:
           key: linux-x64
       - name: Build + package Linux x64
-        run: uv run moondeck/ci/package_desktop.py --version "${{ steps.ver.outputs.version }}" && ccache --show-stats
+        run: uv run moondeck/ci/package_desktop.py --version "${{ steps.ver.outputs.version }}"
       - name: Check the glibc floor
         run: uv run moondeck/ci/check_glibc_floor.py dist/moonlight_*_amd64.deb
       - uses: actions/upload-artifact@v4
@@ -469,27 +392,18 @@ jobs:
         shell: bash
         env:
           INPUT_TAG: ${{ inputs.tag }}
-          REF_NAME: ${{ github.ref_name }}
-          IS_MAIN: ${{ github.ref == 'refs/heads/main' }}
-        run: |
-          set -euo pipefail
-          if [ -n "$INPUT_TAG" ]; then echo "tag=$INPUT_TAG" >> "$GITHUB_OUTPUT"
-          elif [ "$IS_MAIN" = "true" ]; then echo "tag=latest" >> "$GITHUB_OUTPUT"
-          else echo "tag=$REF_NAME" >> "$GITHUB_OUTPUT"; fi
+        run: uv run moondeck/ci/release_stage.py tag --input-tag "$INPUT_TAG" --ref "$GITHUB_REF" --ref-name "$GITHUB_REF_NAME"
       - name: Compute version
         id: ver
         shell: bash
         env:
           TAG: ${{ steps.tag.outputs.tag }}
-        run: |
-          set -euo pipefail
-          V=$(uv run python moondeck/build/compute_version.py --tag "$TAG")
-          echo "version=$V" >> "$GITHUB_OUTPUT"
+        run: uv run moondeck/ci/release_stage.py version --tag "$TAG"
       - uses: ./.github/actions/ccache
         with:
           key: linux-arm64
       - name: Build + package Linux arm64
-        run: uv run moondeck/ci/package_desktop.py --version "${{ steps.ver.outputs.version }}" && ccache --show-stats
+        run: uv run moondeck/ci/package_desktop.py --version "${{ steps.ver.outputs.version }}"
       - name: Check the glibc floor
         run: uv run moondeck/ci/check_glibc_floor.py dist/moonlight_*_arm64.deb
       - uses: actions/upload-artifact@v4
@@ -509,7 +423,7 @@ jobs:
       - uses: astral-sh/setup-uv@v3
       - name: the Arm toolchain's version, which keys its cache
         id: gcc
-        run: echo "version=$(sed -n 's/^GCC_VERSION = "\(.*\)"/\1/p' moondeck/build/setup_teensy.py)" >> "$GITHUB_OUTPUT"
+        run: uv run moondeck/ci/release_stage.py gcc-version
       - uses: actions/cache@v4
         with:
           path: ~/teensy/arm-gnu-toolchain-*
@@ -523,36 +437,20 @@ jobs:
         shell: bash
         env:
           INPUT_TAG: ${{ inputs.tag }}
-          REF_NAME: ${{ github.ref_name }}
-          IS_MAIN: ${{ github.ref == 'refs/heads/main' }}
-        run: |
-          set -euo pipefail
-          if [ -n "$INPUT_TAG" ]; then echo "tag=$INPUT_TAG" >> "$GITHUB_OUTPUT"
-          elif [ "$IS_MAIN" = "true" ]; then echo "tag=latest" >> "$GITHUB_OUTPUT"
-          else echo "tag=$REF_NAME" >> "$GITHUB_OUTPUT"; fi
+        run: uv run moondeck/ci/release_stage.py tag --input-tag "$INPUT_TAG" --ref "$GITHUB_REF" --ref-name "$GITHUB_REF_NAME"
       - name: Compute version
         id: ver
         shell: bash
         env:
           TAG: ${{ steps.tag.outputs.tag }}
-        run: |
-          set -euo pipefail
-          V=$(uv run python moondeck/build/compute_version.py --tag "$TAG")
-          echo "version=$V" >> "$GITHUB_OUTPUT"
+        run: uv run moondeck/ci/release_stage.py version --tag "$TAG"
       - name: Install the Teensy SDK
         run: uv run moondeck/build/setup_teensy.py --no-loader
       - name: Build the Teensy 4.1 firmwares
         env:
           TAG: ${{ steps.tag.outputs.tag }}
           V: ${{ steps.ver.outputs.version }}
-        run: |
-          set -euo pipefail
-          mkdir -p dist
-          for fw in $(jq -r '.firmwares[] | select(.ships and .platform == "teensy") | .name' mooninstaller/firmwares.json); do
-            uv run moondeck/build/build_teensy.py --firmware "$fw" --release "$TAG" --version "$V"
-            cp "build/$fw/MoonLight.hex" "dist/firmware-$fw-v$V.hex"
-            cp "build/$fw/MoonLight.bin" "dist/firmware-$fw-v$V.bin"
-          done
+        run: uv run moondeck/ci/release_stage.py stage-teensy --tag "$TAG" --version "$V"
       - uses: actions/upload-artifact@v4
         with:
           name: firmware-teensy41
@@ -598,41 +496,19 @@ jobs:
           path: artifacts
 
       - name: Flatten artifacts into dist/
-        run: |
-          set -euo pipefail
-          mkdir -p dist
-          find artifacts -type f -exec mv {} dist/ \;
-          ls -la dist/
+        run: uv run moondeck/ci/release_stage.py gather
 
       # The Open Stage Control surface, so someone who owns a device can download it beside the
       # firmware instead of being sent to a path inside the repo. It is a plain session file with
-      # no build step: copied, not generated.
-      - name: Stage the control-surface session
-        run: |
-          set -euo pipefail
-          cp docs/reference/examples/open-stage-control.json \
-             dist/MoonLight-control-surface.json
-          ls -la dist/MoonLight-control-surface.json
-
-      # The module help this release's app shows, so a device reads the help of the firmware it runs: a newer file names controls it lacks. deploy-pages mirrors it beside the release's binaries, where the device's page can read it.
-      - name: Stage the module help
-        run: cp docs/help/help.json dist/MoonLight-help.json
+      # no build step: copied, not generated. The module help beside it is the one this release's app shows, so a device reads the help of the firmware it runs (a newer file names controls it lacks); deploy-pages mirrors it beside the release's binaries, where the device's page can read it.
+      - name: Stage the control-surface session and the module help
+        run: uv run moondeck/ci/release_stage.py extras
 
       - name: Resolve effective tag
         id: tag
         env:
           INPUT_TAG: ${{ inputs.tag }}
-          REF_NAME: ${{ github.ref_name }}
-          IS_MAIN: ${{ github.ref == 'refs/heads/main' }}
-        run: |
-          set -euo pipefail
-          if [ -n "$INPUT_TAG" ]; then
-            echo "tag=$INPUT_TAG" >> "$GITHUB_OUTPUT"
-          elif [ "$IS_MAIN" = "true" ]; then
-            echo "tag=latest" >> "$GITHUB_OUTPUT"
-          else
-            echo "tag=$REF_NAME" >> "$GITHUB_OUTPUT"
-          fi
+        run: uv run moondeck/ci/release_stage.py tag --input-tag "$INPUT_TAG" --ref "$GITHUB_REF" --ref-name "$GITHUB_REF_NAME"
 
       # Same computation as the build job's "Compute version" — the manifest's
       # version must match the binary's MM_VERSION + the asset names. Channel +
@@ -644,36 +520,14 @@ jobs:
         # no shell injection from a crafted tag/ref.
         env:
           TAG: ${{ steps.tag.outputs.tag }}
-        run: |
-          set -euo pipefail
-          V=$(uv run python moondeck/build/compute_version.py --tag "$TAG")
-          echo "version=$V" >> "$GITHUB_OUTPUT"
+        run: uv run moondeck/ci/release_stage.py version --tag "$TAG"
 
+      # Absolute GitHub release-asset URLs, uploaded as release assets and read by the on-device OTA picker (the device fetches the .bin directly, no CORS). The Pages-relative manifests are generated in the deploy-pages job, where the web installer (CORS-bound) consumes them. The shipping list is the mooninstaller/firmwares.json the build matrix reads, so manifests and builds cannot drift.
       - name: Generate the installer manifests (release-asset URLs)
         env:
           TAG: ${{ steps.tag.outputs.tag }}
-          REPO: ${{ github.repository }}
-        run: |
-          set -euo pipefail
-          V="${{ steps.ver.outputs.version }}"   # computed once above; matches binary + asset names
-          # Absolute GitHub release-asset URLs. Uploaded as release assets;
-          # read by the on-device OTA picker (device fetches the .bin directly
-          # — no CORS). The Pages-relative manifests are generated in the
-          # deploy-pages job, where the web installer (CORS-bound) consumes them.
-          BASE="https://github.com/${REPO}/releases/download/$TAG"
-          # The shipping firmware list — the same mooninstaller/firmwares.json the
-          # build matrix reads, so manifests and builds can't drift.
-          for F in $(jq -r '.firmwares[] | select(.ships and .platform != "desktop") | .name' mooninstaller/firmwares.json); do
-            # An ESP32 manifest takes its offsets from IDF's flasher args; a Teensy one is the flat image at 0.
-            ARGS=()
-            [ -f "dist/flasher-$F.json" ] && ARGS=(--flasher-args "dist/flasher-$F.json")
-            uv run python moondeck/build/generate_manifest.py \
-              --firmware "$F" \
-              --version "$V" \
-              --release-url "$BASE" \
-              "${ARGS[@]}" \
-              --out "dist/manifest-$F.json"
-          done
+          V: ${{ steps.ver.outputs.version }}
+        run: uv run moondeck/ci/release_stage.py manifests --tag "$TAG" --version "$V" --repo "$GITHUB_REPOSITORY"
 
       - name: Re-create the `latest` release fresh
         # The `latest` tag is a moving prerelease: every main-branch build
@@ -797,65 +651,14 @@ jobs:
       # would be rejected where `moonmodules/moonlight` is accepted.
       - name: Resolve image name
         id: img
-        env:
-          REPO: ${{ github.repository }}
-        run: |
-          set -euo pipefail
-          echo "name=ghcr.io/$(echo "$REPO" | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+        run: uv run moondeck/ci/release_stage.py image-name --repo "$GITHUB_REPOSITORY"
 
       # A build context of just the .deb, so the image installs THIS run's package instead of
       # resolving one from the API the way a local `docker build` does. Written here rather than
       # kept as a second Dockerfile in the repo: it is four lines, and two Dockerfiles that must
       # agree about the runtime is exactly the duplication that drifts.
       - name: Write the release Dockerfile
-        run: |
-          set -euo pipefail
-          mkdir -p ctx
-          # One .deb per architecture, named by the arch BuildKit will ask for. TARGETARCH is
-          # amd64 or arm64, the same suffix package_desktop.py writes, so the stage below picks
-          # its own package by name and neither list has to be kept in step with the other.
-          for a in amd64 arm64; do
-            deb=$(ls dist/moonlight_*_"$a".deb | head -1)
-            test -n "$deb"
-            cp "$deb" "ctx/moonlight_$a.deb"
-          done
-          ls -la ctx/
-          cat > ctx/Dockerfile <<'DOCKERFILE'
-          # --platform=$TARGETPLATFORM: the unpack must happen on the TARGET's architecture, or
-          # buildx would run the amd64 stage for both and ship an amd64 binary inside an arm64
-          # image. ARG TARGETARCH is set by BuildKit, no --build-arg needed.
-          FROM --platform=$TARGETPLATFORM debian:trixie-slim AS fetch
-          ARG TARGETARCH
-          COPY moonlight_$TARGETARCH.deb /tmp/moonlight.deb
-          # libcurl4t64 is installed because the binary LINKS it (the one outbound HTTPS call), and
-          # libpulse0 because its audio input LOADS it at runtime, which ldd cannot see; the sweep
-          # then collects both plus everything they need. See ../../Dockerfile.
-          RUN apt-get update \
-           && apt-get install -y --no-install-recommends libcurl4t64 libpulse0 \
-           && rm -rf /var/lib/apt/lists/* \
-           && dpkg-deb -x /tmp/moonlight.deb /rootfs \
-           && mkdir -p /deps \
-           && pulse=$(find /usr/lib -name libpulse.so.0 | head -1) \
-           && test -n "$pulse" \
-           && { ldd /rootfs/usr/bin/MoonLight; ldd "$pulse"; echo "libpulse.so.0 => $pulse (0)"; } | awk '/=> \//{print $3}' | sort -u | grep -vE '/(libc|libm|libstdc\+\+|libgcc_s)\.so' | xargs -I{} cp -L {} /deps/
-          # Both binaries are built on Ubuntu 22.04 and need glibc 2.35 at most, which
-          # check_glibc_floor.py enforces, so debian13 (2.41) runs them. See ../../Dockerfile.
-          # Pinned by digest, not by tag: `cc-debian13` is mutable, so an unpinned base means two
-          # builds of the same commit can ship different runtimes. Re-pin deliberately when picking
-          # up base updates (docker buildx imagetools inspect gcr.io/distroless/cc-debian13:latest).
-          # This digest is the multi-arch INDEX, not one platform's manifest, so the same pin serves
-          # amd64 and arm64; buildx resolves the right manifest per platform.
-          FROM gcr.io/distroless/cc-debian13@sha256:9b615fff20e1a4fad29c2b30562580b212c7dd5e2225236735cca0070ed11c78
-          COPY --from=fetch /rootfs/usr/bin/MoonLight /usr/bin/MoonLight
-          # The libraries the loader resolved, collected in the fetch stage. Without them the
-          # container dies at startup on "libcurl.so.4: cannot open shared object file", which the
-          # run before publishing now catches.
-          COPY --from=fetch /deps/ /usr/lib/
-          ENV XDG_DATA_HOME=/data
-          VOLUME /data
-          EXPOSE 8080
-          ENTRYPOINT ["/usr/bin/MoonLight"]
-          DOCKERFILE
+        run: uv run moondeck/ci/release_stage.py container-context
 
       # Each architecture's image runs before any is published, since an image whose binary dies at
       # startup (a missing library, a glibc its base lacks) installs cleanly and fails on a user's board.
@@ -876,27 +679,7 @@ jobs:
       # loop makes a response time a matter of the runner, so it must survive its start: the loader
       # resolves every library and glibc symbol in the first second or the process dies.
       - name: Run each image
-        run: |
-          set -euo pipefail
-          docker run -d --name smoke-amd64 --platform linux/amd64 -p 18080:8080 moonlight-smoke:amd64
-          ok=0
-          for i in $(seq 1 60); do
-            if curl -fs http://localhost:18080/api/system > /dev/null; then ok=1; break; fi
-            sleep 1
-          done
-          docker logs smoke-amd64 | tail -20
-          docker rm -f smoke-amd64
-          test "$ok" = 1 || { echo "the amd64 image did not answer within 60 s" >&2; exit 1; }
-          echo "the amd64 image answers"
-          docker run -d --name smoke-arm64 --platform linux/arm64 moonlight-smoke:arm64
-          sleep 15
-          running=$(docker inspect -f '{{.State.Running}}' smoke-arm64)
-          docker logs smoke-arm64 2>&1 | tail -20 | tee arm64.log
-          docker rm -f smoke-arm64
-          if [ "$running" != true ] || grep -qE "GLIBC_|cannot open shared object" arm64.log; then
-            echo "the arm64 image did not survive its start" >&2; exit 1
-          fi
-          echo "the arm64 image runs"
+        run: uv run moondeck/ci/release_stage.py smoke-images
 
       # Two tags: the exact version, which never moves, and `latest`, which follows this workflow's
       # own notion of latest (the rolling prerelease from main, or a tagged release). A user pins
@@ -944,11 +727,7 @@ jobs:
           path: artifacts
 
       - name: Flatten artifacts into dist/
-        run: |
-          set -euo pipefail
-          mkdir -p dist
-          find artifacts -type f -exec mv {} dist/ \;
-          ls -la dist/
+        run: uv run moondeck/ci/release_stage.py gather
 
       - name: Stage cumulative release content
         env:
@@ -1008,48 +787,15 @@ jobs:
             echo "Staged binaries + relative manifests into releases/$T"
           done
 
+      # The install page and the picker modules at the root; each release's binaries and manifests live under releases/<tag>/.
       - name: Stage GitHub Pages site
-        run: |
-          set -euo pipefail
-          # Install page + the shared install-picker module sit at the root.
-          # Each release's binaries + manifests live under releases/<tag>/.
-          mkdir -p pages/install
-          cp -r mooninstaller/. pages/install/
-          cp src/ui/install-picker.js pages/install/
-          # The device-catalog / chip-detection half of the picker, mooninstaller
-          # only (not embedded in firmware), imported by index.html. Must ship to
-          # Pages alongside install-picker.js or the ES-module import 404s.
-          cp src/ui/install-picker-devices.js pages/install/
-          # library.json — install page reads the project version from it.
-          cp library.json pages/install/
-          # Board picker images live in docs/assets/deviceModels/ (the project's asset
-          # home, also a library for boards not yet in the catalog). Stage ONLY the
-          # images a deviceModels.json entry actually references, under install/assets/,
-          # so an "image": "assets/deviceModels/<slug>.jpg" resolves same-origin from
-          # /install/ without shipping the unused library to Pages.
-          mkdir -p pages/install/assets/deviceModels
-          # rel is "assets/deviceModels/<slug>.<ext>" (the path served from /install/);
-          # the source file lives in docs/<rel> (i.e. docs/assets/deviceModels/...).
-          jq -r '.[].image // empty' mooninstaller/deviceModels.json | while read -r rel; do
-            src="docs/$rel"
-            [ -f "$src" ] && cp "$src" "pages/install/$rel" \
-              || echo "WARNING: deviceModels.json image not found: $src"
-          done
-          ls -la pages/ pages/install/
+        run: uv run moondeck/ci/release_stage.py pages-site
 
-      - name: Build docs site into Pages root
-        run: |
-          set -euo pipefail
-          # Render the docs/ tree (Material for MkDocs) as the Pages ROOT
-          # (moonmodules.github.io/MoonLight/) — the project's front door.
-          # Config: mkdocs.yml; deps declared inline in the build script (uv
-          # provisions them). Build to a temp dir, then copy INTO pages/ so the
-          # installer staged above under pages/install/ survives (a plain
-          # --site-dir pages would wipe it — mkdocs cleans its output dir).
-          # history/ and backlog/ are excluded in mkdocs.yml (internal docs).
-          uv run moondeck/docs/build_docs.py --strict --site-dir "$RUNNER_TEMP/docs-site"
-          cp -r "$RUNNER_TEMP/docs-site/." pages/
-          ls -la pages/
+      # The docs/ tree (Material for MkDocs) is the Pages ROOT (moonmodules.github.io/MoonLight/), the project's front door. Config: mkdocs.yml; the build script declares its deps inline. It builds to a temp dir that is then copied INTO pages/, so the installer staged above under pages/install/ survives (a plain --site-dir pages would wipe it, since mkdocs cleans its output dir). history/ and backlog/ are excluded in mkdocs.yml (internal docs).
+      - name: Render the docs site
+        run: uv run moondeck/docs/build_docs.py --strict --site-dir "$RUNNER_TEMP/docs-site"
+      - name: Merge the docs site into the Pages root
+        run: uv run moondeck/ci/release_stage.py merge-docs --site-dir "$RUNNER_TEMP/docs-site"
 
       - uses: actions/upload-pages-artifact@v3
         with:

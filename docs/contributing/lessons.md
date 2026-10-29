@@ -3,7 +3,7 @@
 Hard-won debugging lessons and gotchas, recorded with the code that proved them. The PR-merge *carry-forward* gate writes new entries here (CLAUDE.md § Lifecycle Events). This is the **lesson** record: a bug, its root cause, and the fix. Two neighbours hold the other genres, and a lesson belongs in whichever fits:
 
 - A durable **rule** that graduated from a lesson lives in [CLAUDE.md](../../CLAUDE.md) or [coding-standards.md](coding-standards.md), not here.
-- The forward-looking **design intent** of a feature is a [plan](https://github.com/MoonModules/MoonLight/issues?q=label%3Aplan%20is%3Aclosed).
+- The forward-looking **design intent** of a feature is a plan: one [being built](https://github.com/MoonModules/MoonLight/tree/main/docs/work), or [a closed plan issue](https://github.com/MoonModules/MoonLight/issues?q=label%3Aplan%20is%3Aclosed) once it ships.
 
 Entries run oldest-first by branch. A lesson fully absorbed into a rule doc or the code is pruned (per *Mandatory subtraction*): the git history is the permanent record, this file is the working narrative on top.
 
@@ -322,7 +322,7 @@ Streaming panel-card frames from an S31 at ~5 300 packets/s degraded with uptime
 A branch that built a shared library and migrated existing effects onto it. The gotchas all share a shape: a green build, plausible-looking output, and a defect only counting could see.
 
 - **A ported function's SIGN is part of its contract, and getting it wrong is silent.** Our
-  `sin16`/`cos16` returned unsigned 0..65535; FastLED master (`i16 sin16lut`) and WLED main (`int16_t sin16_t`) both return signed. WLED effects write `sin16_t(x) + 32768` when they want an unsigned value — arithmetic that is exactly half a scale wrong against an unsigned return, with no compile error and no crash. A ported effect just looks subtly off. **When adopting a function that exists upstream, verify its range and sign against upstream's `master`/`main`, not against a release and not against memory** — the contract to bind to is the one users will have. Local checkouts of both live beside this repo for exactly this.
+  `sin16`/`cos16` returned unsigned 0..65535; FastLED master (`i16 sin16lut`) and WLED main (`int16_t sin16_t`) both return signed. WLED effects write `sin16_t(x) + 32768` when they want an unsigned value: arithmetic that is exactly half a scale wrong against an unsigned return, with no compile error and no crash. A ported effect just looks subtly off. **When adopting a function that exists upstream, verify its range and sign against upstream's `master`/`main`, not against a release and not against memory**: the contract to bind to is the one users will have. Local checkouts of both live beside this repo for exactly this.
 
 - **"It looks like noise" is not evidence that it IS noise.** `fbm16` summed its octaves after
   shifting each sample down by 8 — which fits a 32-bit accumulator and produces output that passes every visual check, while being an 8-bit field wearing a 16-bit type: 195 distinct values over 20,000 samples, low byte never set. That is precisely the banding the 16-bit tier exists to remove, shipped inside the fix for it. **For a function whose value IS its distribution, assert on the distribution — count distinct values, check the range is reached.** An eyeball, and a test that only checks bounds, both pass.

@@ -11,8 +11,15 @@ sys.path.insert(0, str(ROOT / "moondeck" / "docs"))
 import gen_moonwalk  # noqa: E402
 
 WORKFLOWS = ROOT / ".github" / "workflows"
-# A workflow left out names its reason, so the exemption reads as a debt rather than a rule.
-EXEMPT = {"release.yml": "its build steps move into scripts after v7.0.0 ships; its publishing (the release upload, Pages, the container registry) is GitHub's own"}
+# A step left out names its reason, so the exemption reads as a debt rather than a rule: what only GitHub's own services or runner can do. Keyed by (workflow, job, step name).
+EXEMPT = {
+    ("release.yml", "build-windows-x64", "Install NSIS (the Windows installer compiler)"): "runner plumbing: choco installs the tool this runner image lacks",
+    ("release.yml", "build-linux-x64", "Install libcurl (MoonCloud, only used once consent is given in the app)"): "runner plumbing: apt installs the library this runner image lacks",
+    ("release.yml", "build-linux-arm64", "Install libcurl (MoonCloud, only used once consent is given in the app)"): "runner plumbing: apt installs the library this runner image lacks",
+    ("release.yml", "release", "Re-create the `latest` release fresh"): "publishing: the `latest` tag force-push and the release deletion are GitHub's own",
+    ("release.yml", "deploy-pages", "Stage cumulative release content"): "publishing: it downloads the kept releases' assets through GitHub's release API",
+    ("release.yml", "restage-pages-for-tag", "Dispatch a main-context Pages deploy for this tag"): "publishing: it dispatches a GitHub workflow run",
+}
 # One script call and its arguments, nothing chained after it; a `${{ }}` expression is GitHub's, evaluated before the shell sees the line.
 SCRIPT = re.compile(r"^uv run (moondeck/\S+\.py)(?:\s+[^;&|`]*)?$")
 EXPRESSION = re.compile(r"\$\{\{.*?\}\}")
@@ -24,10 +31,9 @@ PLUMBING = re.compile(r'^(sudo apt-get install -y \S+|curl -sSL https://github\.
 def jobs():
     """Each (workflow, job, its run lines) of the workflows the rule covers."""
     for path in sorted(WORKFLOWS.glob("*.yml")):
-        if path.name in EXEMPT:
-            continue
         for name, job in (yaml.safe_load(path.read_text(encoding="utf-8")).get("jobs") or {}).items():
-            lines = [EXPRESSION.sub("EXPR", line.strip()) for step in job.get("steps", []) if "run" in step
+            lines = [EXPRESSION.sub("EXPR", line.strip()) for step in job.get("steps", [])
+                     if "run" in step and (path.name, name, step.get("name")) not in EXEMPT
                      for line in step["run"].splitlines() if line.strip() and not line.strip().startswith("#")]
             yield path.name, name, lines
 
@@ -52,9 +58,12 @@ def test_every_job_that_runs_commands_calls_a_script_a_process_step_names():
     assert lost == [], "no MoonWalk step names a script these jobs run, so MoonDeck cannot run them:\n" + "\n".join(lost)
 
 
-def test_an_exempt_workflow_names_its_reason():
+def test_an_exempt_step_names_its_reason_and_still_exists():
     assert all(reason for reason in EXEMPT.values())
-    assert all((WORKFLOWS / name).exists() for name in EXEMPT), "an exemption outlives its workflow"
+    steps = {(path.name, job_name, step.get("name")) for path in WORKFLOWS.glob("*.yml")
+             for job_name, job in (yaml.safe_load(path.read_text(encoding="utf-8")).get("jobs") or {}).items()
+             for step in job.get("steps", []) if "run" in step}
+    assert set(EXEMPT) <= steps, "an exemption outlives its step"
 
 
 def test_a_script_call_chained_to_another_command_is_not_a_script_call():

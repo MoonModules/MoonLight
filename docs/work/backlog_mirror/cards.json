@@ -1,0 +1,2142 @@
+[
+ {
+  "title": "`applyControlValue` should say whether the value changed (2026-10-03)",
+  "area": "Core",
+  "module": "",
+  "kind": "Restructure",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287077117",
+  "number": null
+ },
+ {
+  "title": "`ListSource` methods compile twice: ~8.6 KB of thunks (2026-10-01)",
+  "area": "Core",
+  "module": "",
+  "kind": "Restructure",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287076985",
+  "number": null
+ },
+ {
+  "title": "A bus pin that belongs to another peripheral is accepted",
+  "area": "Core",
+  "module": "PinsModule",
+  "kind": "Bug",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287076440",
+  "number": null
+ },
+ {
+  "title": "A config written for next boot is overwritten by the next save (2026-10-04)",
+  "area": "Core",
+  "module": "FilesystemModule",
+  "kind": "Bug",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287074945",
+  "number": null
+ },
+ {
+  "title": "A device without a deviceModel is not told its catalog half is missing (bench, 2026-08-26)",
+  "area": "Core",
+  "module": "",
+  "kind": "Bug",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287076840",
+  "number": null
+ },
+ {
+  "title": "A driven GPIO the Pins map never sees: bus padding, and a hidden clockPin",
+  "area": "Core",
+  "module": "PinsModule",
+  "kind": "Bug",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287076362",
+  "number": null
+ },
+ {
+  "title": "A non-ASCII Windows profile path defeats the desktop settings directory (2026-08-23)",
+  "area": "Core",
+  "module": "",
+  "kind": "Bug",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287077638",
+  "number": null
+ },
+ {
+  "title": "A Progress total rides the value patch (2026-10-19)",
+  "area": "Core",
+  "module": "",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287076676",
+  "number": null
+ },
+ {
+  "title": "A request body shares the two upload slots (2026-10-25, from the pre-merge review)",
+  "area": "Core",
+  "module": "HttpServerModule",
+  "kind": "Bug",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287075256",
+  "number": null
+ },
+ {
+  "title": "A script's setControl rebuilds a control subtree on every write (2026-09-06)",
+  "area": "Core",
+  "module": "Scheduler",
+  "kind": "Bug",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287076587",
+  "number": null
+ },
+ {
+  "title": "A second I2C bus, once a board wires one (2026-10-06)",
+  "area": "Core",
+  "module": "I2cBusModule",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287075332",
+  "number": null
+ },
+ {
+  "title": "A second instance says it is serving, serves nothing, and shares the first one's config (2026-09-29)",
+  "area": "Core",
+  "module": "",
+  "kind": "Bug",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287077564",
+  "number": null
+ },
+ {
+  "title": "A slot whose target is gone sends 0 to its followers (2026-10-08)",
+  "area": "Core",
+  "module": "ControlModule",
+  "kind": "Bug",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287074535",
+  "number": null
+ },
+ {
+  "title": "Advanced network settings (2026-10-03)",
+  "area": "Core",
+  "module": "NetworkModule",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287076054",
+  "number": null
+ },
+ {
+  "title": "An early state push costs 3 to 5 ms on the S3 (2026-10-01)",
+  "area": "Core",
+  "module": "",
+  "kind": "Investigation",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287077064",
+  "number": null
+ },
+ {
+  "title": "An explicit `Custom` Ethernet preset is reseeded to a named one",
+  "area": "Core",
+  "module": "EthernetModule",
+  "kind": "Bug",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287074778",
+  "number": null
+ },
+ {
+  "title": "Clock sync: a shared monotonic clock across devices",
+  "area": "Core",
+  "module": "",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287077324",
+  "number": null
+ },
+ {
+  "title": "Config backup and restore: identity, a recipe, and tiers 2 and 3",
+  "area": "Core",
+  "module": "FilesystemModule",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287075118",
+  "number": null
+ },
+ {
+  "title": "Config provenance: firmware/MCU → deviceModel (catalog follow-ups)",
+  "area": "Core",
+  "module": "",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287077405",
+  "number": null
+ },
+ {
+  "title": "DevicesModule: interop plugins and the command half",
+  "area": "Core",
+  "module": "DevicesModule",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287074692",
+  "number": null
+ },
+ {
+  "title": "Drivers' palette and fixture-profile lists, sent once rather than in every view (2026-10-13)",
+  "area": "Core",
+  "module": "",
+  "kind": "Restructure",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287077706",
+  "number": null
+ },
+ {
+  "title": "Effects and Drivers find their source one way, not two (2026-10-08)",
+  "area": "Core",
+  "module": "Scheduler",
+  "kind": "Restructure",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287076507",
+  "number": null
+ },
+ {
+  "title": "Generic control and state topics over MQTT: the automation escape hatch",
+  "area": "Core",
+  "module": "MqttModule",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287075589",
+  "number": null
+ },
+ {
+  "title": "HA update entity via MQTT discovery: release check",
+  "area": "Core",
+  "module": "MqttModule",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287075650",
+  "number": null
+ },
+ {
+  "title": "Hot path: move blocking work off the render callbacks (architecture)",
+  "area": "Core",
+  "module": "",
+  "kind": "Restructure",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287077246",
+  "number": null
+ },
+ {
+  "title": "Improv-as-REST follow-ups",
+  "area": "Core",
+  "module": "ImprovProvisioningModule",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287075428",
+  "number": null
+ },
+ {
+  "title": "Live RMII Ethernet reconfigure",
+  "area": "Core",
+  "module": "EthernetModule",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287074861",
+  "number": null
+ },
+ {
+  "title": "Memory: the largest buffers, by name",
+  "area": "Core",
+  "module": "SystemModule",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287074597",
+  "number": null
+ },
+ {
+  "title": "ModuleFactory: registration can fail silently (uint8_t ceiling, unchecked bool)",
+  "area": "Core",
+  "module": "ModuleFactory",
+  "kind": "Bug",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287075508",
+  "number": null
+ },
+ {
+  "title": "NetworkModule treats a panel-output NIC as the device's uplink (2026-09-28)",
+  "area": "Core",
+  "module": "NetworkModule",
+  "kind": "Bug",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287076135",
+  "number": null
+ },
+ {
+  "title": "One board-preset helper for Ethernet and the SD card (2026-10-12)",
+  "area": "Core",
+  "module": "",
+  "kind": "Restructure",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287076913",
+  "number": null
+ },
+ {
+  "title": "Persistence overlay: partial-save and schema-change audit",
+  "area": "Core",
+  "module": "",
+  "kind": "Investigation",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287077474",
+  "number": null
+ },
+ {
+  "title": "PinsModule: strict reject-on-add mode",
+  "area": "Core",
+  "module": "PinsModule",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287076292",
+  "number": null
+ },
+ {
+  "title": "Playlist in core: one sequencer for FSEQ, effects and DemoReel (2026-10-19)",
+  "area": "Core",
+  "module": "",
+  "kind": "Restructure",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287076772",
+  "number": null
+ },
+ {
+  "title": "Refresh a multicast membership on a fixed pace (2026-10-09)",
+  "area": "Core",
+  "module": "NetworkModule",
+  "kind": "Bug",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287075801",
+  "number": null
+ },
+ {
+  "title": "Remove the 6.0 network adoption (2026-10-04)",
+  "area": "Core",
+  "module": "NetworkModule",
+  "kind": "Restructure",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287075864",
+  "number": null
+ },
+ {
+  "title": "Remove the flat config conversion (2026-10-08)",
+  "area": "Core",
+  "module": "FilesystemModule",
+  "kind": "Restructure",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287075031",
+  "number": null
+ },
+ {
+  "title": "Runtime board presets (multi-commit, partially landed)",
+  "area": "Core",
+  "module": "",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287077175",
+  "number": null
+ },
+ {
+  "title": "Some devices stop answering mDNS over WiFi (2026-10-08)",
+  "area": "Core",
+  "module": "NetworkModule",
+  "kind": "Bug",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287075946",
+  "number": null
+ },
+ {
+  "title": "The access point never blocks a WiFi retry (2026-10-09)",
+  "area": "Core",
+  "module": "NetworkModule",
+  "kind": "Bug",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287075741",
+  "number": null
+ },
+ {
+  "title": "The HTTP server is audited for the two PHP request-handling bug classes (2026-10-21)",
+  "area": "Core",
+  "module": "HttpServerModule",
+  "kind": "Investigation",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287075179",
+  "number": null
+ },
+ {
+  "title": "The persisted interface label carries the negotiated link speed (2026-09-28)",
+  "area": "Core",
+  "module": "NetworkModule",
+  "kind": "Bug",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287076214",
+  "number": null
+ },
+ {
+  "title": "What disable means: release the memory, or keep the module hot (2026-10-20)",
+  "area": "Core",
+  "module": "",
+  "kind": "Investigation",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287076730",
+  "number": null
+ },
+ {
+  "title": "16 bits at the output: what remains",
+  "area": "Drivers",
+  "module": "",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287081005",
+  "number": null
+ },
+ {
+  "title": "A '595 expander on Parlio",
+  "area": "Drivers",
+  "module": "ParlioPeripheral",
+  "kind": "Investigation",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287079383",
+  "number": null
+ },
+ {
+  "title": "A '595 expander on the Teensy's GPIO-DMA bus",
+  "area": "Drivers",
+  "module": "GpioDmaPeripheral",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287078012",
+  "number": null
+ },
+ {
+  "title": "A control change reaches a driver at the frame boundary (2026-10-21)",
+  "area": "Drivers",
+  "module": "DriverBase",
+  "kind": "Restructure",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287077803",
+  "number": null
+ },
+ {
+  "title": "A power budget the device knows about (2026-09-02)",
+  "area": "Drivers",
+  "module": "",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287080199",
+  "number": null
+ },
+ {
+  "title": "An identity correction is one copy (2026-10-14)",
+  "area": "Drivers",
+  "module": "DriverBase",
+  "kind": "Restructure",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287077859",
+  "number": null
+ },
+ {
+  "title": "ArtPoll discovery: know which tubes are alive",
+  "area": "Drivers",
+  "module": "NetworkSendDriver",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287078870",
+  "number": null
+ },
+ {
+  "title": "Brightness belongs on a fixture's DIMMER channel, not only in the color values (WANTED)",
+  "area": "Drivers",
+  "module": "",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287080535",
+  "number": null
+ },
+ {
+  "title": "Chunked transfer (Step 4): the 16K lever",
+  "area": "Drivers",
+  "module": "",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287080935",
+  "number": null
+ },
+ {
+  "title": "Classic-ESP32 shift-register ring on raw I2S: the high-light-count classic driver",
+  "area": "Drivers",
+  "module": "",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287080365",
+  "number": null
+ },
+ {
+  "title": "Clocked and one-lane strips over SPI",
+  "area": "Drivers",
+  "module": "",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287079973",
+  "number": null
+ },
+ {
+  "title": "Configure a ColorLight card without Windows (2026-10-16, asked)",
+  "area": "Drivers",
+  "module": "PanelCardDriver",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287079294",
+  "number": null
+ },
+ {
+  "title": "Depth that degrades instead of failing",
+  "area": "Drivers",
+  "module": "Hub75Driver",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287078249",
+  "number": null
+ },
+ {
+  "title": "Four-scan panels whose physical layout is not their logical one",
+  "area": "Drivers",
+  "module": "Hub75Driver",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287078323",
+  "number": null
+ },
+ {
+  "title": "Frames to a board over USB serial, the desktop as renderer",
+  "area": "Drivers",
+  "module": "",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287080036",
+  "number": null
+ },
+ {
+  "title": "Graceful blank-on-stall: a stalled bus darkens the strip (2026-07-15)",
+  "area": "Drivers",
+  "module": "",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287080268",
+  "number": null
+ },
+ {
+  "title": "HLS upscaling is cache-hostile on large walls (2026-08-28)",
+  "area": "Drivers",
+  "module": "HlsDriver",
+  "kind": "Investigation",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287078077",
+  "number": null
+ },
+ {
+  "title": "Migrate HueDriver's name buffers to ScratchBuffer (finish the ScratchBuffer sweep)",
+  "area": "Drivers",
+  "module": "HueDriver",
+  "kind": "Restructure",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287078467",
+  "number": null
+ },
+ {
+  "title": "MoonI80 prime-only ring: no stall backstop (sibling-path gap)",
+  "area": "Drivers",
+  "module": "",
+  "kind": "Bug",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287080110",
+  "number": null
+ },
+ {
+  "title": "MoonI80 ring: the first frame after a rebuild trips a transient give-up status (2026-07-16)",
+  "area": "Drivers",
+  "module": "MoonI80Peripheral",
+  "kind": "Bug",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287078773",
+  "number": null
+ },
+ {
+  "title": "MoonI80 streaming ring: open instruments and cleanups",
+  "area": "Drivers",
+  "module": "MoonI80Peripheral",
+  "kind": "Investigation",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287078616",
+  "number": null
+ },
+ {
+  "title": "MoonLight hangs when a USB network adapter is re-plugged (2026-09-28)",
+  "area": "Drivers",
+  "module": "PanelCardDriver",
+  "kind": "Bug",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287078957",
+  "number": null
+ },
+ {
+  "title": "Multi-card walls: does a daisy chain work today?",
+  "area": "Drivers",
+  "module": "PanelCardDriver",
+  "kind": "Investigation",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287079144",
+  "number": null
+ },
+ {
+  "title": "Multicore step 2b: a ping-pong second output buffer",
+  "area": "Drivers",
+  "module": "",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287080455",
+  "number": null
+ },
+ {
+  "title": "One encode, two readers: HLS and RTSP sharing the encoder (2026-09-22)",
+  "area": "Drivers",
+  "module": "",
+  "kind": "Restructure",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287080774",
+  "number": null
+ },
+ {
+  "title": "P4 Parlio streaming ring: lift the ceiling past about 21K lights",
+  "area": "Drivers",
+  "module": "ParlioPeripheral",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287079464",
+  "number": null
+ },
+ {
+  "title": "Pan/tilt travel is hardcoded, and positioning is 8-bit (WANTED)",
+  "area": "Drivers",
+  "module": "",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287080613",
+  "number": null
+ },
+ {
+  "title": "Preview does not resume after a long tab hibernation (observed once, 2026-08-27)",
+  "area": "Drivers",
+  "module": "PreviewDriver",
+  "kind": "Bug",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287079553",
+  "number": null
+ },
+ {
+  "title": "Repaint only what changed",
+  "area": "Drivers",
+  "module": "Hub75Driver",
+  "kind": "Investigation",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287078195",
+  "number": null
+ },
+ {
+  "title": "Repeated planes: full top brightness and 8-bit depth",
+  "area": "Drivers",
+  "module": "Hub75Driver",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287078402",
+  "number": null
+ },
+ {
+  "title": "RMT int_ena read-modify-write race (classic ESP32, level-5 refill)",
+  "area": "Drivers",
+  "module": "RmtLedDriver",
+  "kind": "Bug",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287079890",
+  "number": null
+ },
+ {
+  "title": "RMT over DMA on the S3/P4, with a completion callback (Funkelfetisch, July 2026)",
+  "area": "Drivers",
+  "module": "RmtLedDriver",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287079737",
+  "number": null
+ },
+ {
+  "title": "RmtLedDriver's out-of-memory status has no test, and cannot have one yet (2026-09-09)",
+  "area": "Drivers",
+  "module": "RmtLedDriver",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287079814",
+  "number": null
+ },
+ {
+  "title": "RS-485 and DMX-512 wired output: the physical-DMX driver",
+  "area": "Drivers",
+  "module": "",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287080691",
+  "number": null
+ },
+ {
+  "title": "Self-describing preview frame header",
+  "area": "Drivers",
+  "module": "PreviewDriver",
+  "kind": "Restructure",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287079652",
+  "number": null
+ },
+ {
+  "title": "Smaller asks from the same thread",
+  "area": "Drivers",
+  "module": "PanelCardDriver",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287079230",
+  "number": null
+ },
+ {
+  "title": "Spout and Syphon as video outputs, only if proven",
+  "area": "Drivers",
+  "module": "",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287080849",
+  "number": null
+ },
+ {
+  "title": "Stop reading fixtureRef after the release that follows 2026-10-05",
+  "area": "Drivers",
+  "module": "DriverBase",
+  "kind": "Restructure",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287077925",
+  "number": null
+ },
+ {
+  "title": "The interface picker re-enumerates adapters on every control rebuild (2026-09-28)",
+  "area": "Drivers",
+  "module": "PanelCardDriver",
+  "kind": "Bug",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287079059",
+  "number": null
+ },
+ {
+  "title": "The ring's memory readout counts one buffer, not the pool (CodeRabbit, 2026-09-09)",
+  "area": "Drivers",
+  "module": "MoonI80Peripheral",
+  "kind": "Bug",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287078684",
+  "number": null
+ },
+ {
+  "title": "The ring's refill jitter (2026-10-22, from the internal RAM plan)",
+  "area": "Drivers",
+  "module": "MoonI80Peripheral",
+  "kind": "Investigation",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287078532",
+  "number": null
+ },
+ {
+  "title": "The shift-register driver init",
+  "area": "Drivers",
+  "module": "Hub75Driver",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287078142",
+  "number": null
+ },
+ {
+  "title": "16-bit noise: warp16 / turbulence16",
+  "area": "Effects",
+  "module": "",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287082034",
+  "number": null
+ },
+ {
+  "title": "A real 2D/3D PacMan",
+  "area": "Effects",
+  "module": "",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287081828",
+  "number": null
+ },
+ {
+  "title": "Add real z-axis variation to 2D effects",
+  "area": "Effects",
+  "module": "",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287081899",
+  "number": null
+ },
+ {
+  "title": "Aurora hitches on the desktop and not on the S3 (2026-09-04)",
+  "area": "Effects",
+  "module": "AuroraEffect",
+  "kind": "Bug",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287081062",
+  "number": null
+ },
+ {
+  "title": "BlurzEffect: a compounding blur has no rate carry",
+  "area": "Effects",
+  "module": "BlurzEffect",
+  "kind": "Bug",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287081157",
+  "number": null
+ },
+ {
+  "title": "BouncingBalls onto the particle kernel: a rework, not a swap",
+  "area": "Effects",
+  "module": "BouncingBallsEffect",
+  "kind": "Restructure",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287081225",
+  "number": null
+ },
+ {
+  "title": "Clear the grid on an effect's FIRST frame",
+  "area": "Effects",
+  "module": "",
+  "kind": "Bug",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287082101",
+  "number": null
+ },
+ {
+  "title": "DemoReel: a 3D test for the hosted D1/D2 extrude",
+  "area": "Effects",
+  "module": "DemoReelEffect",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287081326",
+  "number": null
+ },
+ {
+  "title": "E1.31 multicast receive (IGMP join)",
+  "area": "Effects",
+  "module": "NetworkReceiveEffect",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287081542",
+  "number": null
+ },
+ {
+  "title": "FixedPoint fades outside the Layer's aggregation (2026-09-07)",
+  "area": "Effects",
+  "module": "FixedPointEffect",
+  "kind": "Restructure",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287081402",
+  "number": null
+ },
+ {
+  "title": "Moving-head effects from MoonLight, including two of troyhack's (2026-09-04)",
+  "area": "Effects",
+  "module": "",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287081692",
+  "number": null
+ },
+ {
+  "title": "Speed up the fluid solver: 4 fps at 128x128, and it is not the divide (2026-09-05)",
+  "area": "Effects",
+  "module": "FluidEffect",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287081468",
+  "number": null
+ },
+ {
+  "title": "Sprite follow-ups",
+  "area": "Effects",
+  "module": "",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287081753",
+  "number": null
+ },
+ {
+  "title": "The catalog sweep: every natural-motion effect onto the power functions",
+  "area": "Effects",
+  "module": "",
+  "kind": "Restructure",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287081620",
+  "number": null
+ },
+ {
+  "title": "worley cellular noise, when an effect needs it",
+  "area": "Effects",
+  "module": "",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287081966",
+  "number": null
+ },
+ {
+  "title": "Fixture model: moving heads and beams",
+  "area": "Layouts",
+  "module": "",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287082264",
+  "number": null
+ },
+ {
+  "title": "Mixing light types in one Layouts",
+  "area": "Layouts",
+  "module": "",
+  "kind": "Investigation",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287082337",
+  "number": null
+ },
+ {
+  "title": "Render larger than the fixture and pool down onto a few lights (Hue, PAR)",
+  "area": "Layouts",
+  "module": "",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287082192",
+  "number": null
+ },
+ {
+  "title": "MultiplyModifier mapping-LUT memory at large grids",
+  "area": "Modifiers",
+  "module": "MultiplyModifier",
+  "kind": "Investigation",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287082394",
+  "number": null
+ },
+ {
+  "title": "Retro looks on a picture: scanlines, chroma bleed, tracking glitches (robwomp, 2026-10-21)",
+  "area": "Modifiers",
+  "module": "",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287082480",
+  "number": null
+ },
+ {
+  "title": "A for loop whose step never advances holds the render task (2026-10-29)",
+  "area": "MoonLive",
+  "module": "",
+  "kind": "Bug",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287082667",
+  "number": null
+ },
+ {
+  "title": "A MoonLive control past a limit vanishes without a word (2026-10-08)",
+  "area": "MoonLive",
+  "module": "",
+  "kind": "Bug",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287082998",
+  "number": null
+ },
+ {
+  "title": "A MoonLive script's branch tables are fixed and on the stack (2026-10-08)",
+  "area": "MoonLive",
+  "module": "",
+  "kind": "Bug",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287082924",
+  "number": null
+ },
+ {
+  "title": "A scripted control's name can disagree with the file that declares it (2026-09-04)",
+  "area": "MoonLive",
+  "module": "",
+  "kind": "Bug",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287082787",
+  "number": null
+ },
+ {
+  "title": "A scripted driver",
+  "area": "MoonLive",
+  "module": "",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287082735",
+  "number": null
+ },
+ {
+  "title": "A scripted modifier needs a way to drop a light",
+  "area": "MoonLive",
+  "module": "",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287083694",
+  "number": null
+ },
+ {
+  "title": "A scripted modifier that animates every frame",
+  "area": "MoonLive",
+  "module": "",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287083636",
+  "number": null
+ },
+ {
+  "title": "A scripted modifier that reshapes the grid",
+  "area": "MoonLive",
+  "module": "",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287083746",
+  "number": null
+ },
+ {
+  "title": "A scripted module's DIMENSION chip still comes from its type, not its script",
+  "area": "MoonLive",
+  "module": "",
+  "kind": "Bug",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287083143",
+  "number": null
+ },
+ {
+  "title": "Catch device-backend operand defects on the host",
+  "area": "MoonLive",
+  "module": "",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287083336",
+  "number": null
+ },
+ {
+  "title": "Changing a live MoonLiveEffect's script does not rebind it (2026-09-29)",
+  "area": "MoonLive",
+  "module": "",
+  "kind": "Bug",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287083569",
+  "number": null
+ },
+ {
+  "title": "Desktop backend: a control-arena write is not seen by a second `run()` of an already-compiled program (2026-08-20)",
+  "area": "MoonLive",
+  "module": "",
+  "kind": "Bug",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287082850",
+  "number": null
+ },
+ {
+  "title": "Downloading a scripted palette can repoint the active one (2026-09-06)",
+  "area": "MoonLive",
+  "module": "",
+  "kind": "Bug",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287083503",
+  "number": null
+ },
+ {
+  "title": "Drain MoonLive's print() through a queue",
+  "area": "MoonLive",
+  "module": "",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287083459",
+  "number": null
+ },
+ {
+  "title": "MoonLive core/platform layering + JIT sdkconfig scoping (CodeRabbit #29, 3 findings left)",
+  "area": "MoonLive",
+  "module": "",
+  "kind": "Restructure",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287083200",
+  "number": null
+ },
+ {
+  "title": "RISC-V emits 1.7 times the code Xtensa does (2026-10-08)",
+  "area": "MoonLive",
+  "module": "",
+  "kind": "Investigation",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287083063",
+  "number": null
+ },
+ {
+  "title": "Size the MoonLive control arena to the script",
+  "area": "MoonLive",
+  "module": "",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287083397",
+  "number": null
+ },
+ {
+  "title": "The code cap, per platform (2026-10-16)",
+  "area": "MoonLive",
+  "module": "",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287082596",
+  "number": null
+ },
+ {
+  "title": "The compile-failure latch is not provable on the host",
+  "area": "MoonLive",
+  "module": "",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287083272",
+  "number": null
+ },
+ {
+  "title": "The next language steps, in order",
+  "area": "MoonLive",
+  "module": "",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287082542",
+  "number": null
+ },
+ {
+  "title": "A flashable SD image with MoonLight already on it (robwomp, 2026-09-08)",
+  "area": "Platform",
+  "module": "",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287084753",
+  "number": null
+ },
+ {
+  "title": "A StadBeest eye reset once by the task watchdog (2026-10-24)",
+  "area": "Platform",
+  "module": "",
+  "kind": "Investigation",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287084185",
+  "number": null
+ },
+ {
+  "title": "A Teensy sometimes drops a message the page sends (2026-10-13)",
+  "area": "Platform",
+  "module": "",
+  "kind": "Bug",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287084990",
+  "number": null
+ },
+ {
+  "title": "Adopting the v6.x ecosystem changes",
+  "area": "Platform",
+  "module": "",
+  "kind": "Investigation",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287085832",
+  "number": null
+ },
+ {
+  "title": "An HTTPS request on a board without PSRAM (2026-10-24, from the JSON plan)",
+  "area": "Platform",
+  "module": "",
+  "kind": "Investigation",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287084099",
+  "number": null
+ },
+ {
+  "title": "An update's connection that would not open until a reset (2026-10-22, from the internal RAM plan)",
+  "area": "Platform",
+  "module": "",
+  "kind": "Investigation",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287084374",
+  "number": null
+ },
+ {
+  "title": "Back to WLED over WiFi (2026-10-09)",
+  "area": "Platform",
+  "module": "",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287084501",
+  "number": null
+ },
+ {
+  "title": "Bench-verified classic parallel setups, not yet in the catalog",
+  "area": "Platform",
+  "module": "",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287086478",
+  "number": null
+ },
+ {
+  "title": "Boot-time buffer degradation on non-PSRAM at 128×128",
+  "area": "Platform",
+  "module": "",
+  "kind": "Investigation",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287085395",
+  "number": null
+ },
+ {
+  "title": "Classic-board memory: the wins are system-level, not per-module (2026-09-09)",
+  "area": "Platform",
+  "module": "",
+  "kind": "Investigation",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287086575",
+  "number": null
+ },
+ {
+  "title": "ESP32 UDP receive is bounded by PACKET COUNT, not bytes",
+  "area": "Platform",
+  "module": "",
+  "kind": "Investigation",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287085150",
+  "number": null
+ },
+ {
+  "title": "ESP32-P4 400 MHz on rev-3+ silicon",
+  "area": "Platform",
+  "module": "",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287086159",
+  "number": null
+ },
+ {
+  "title": "ESP32-P4 DHCP hostname not shown by the router (recheck later)",
+  "area": "Platform",
+  "module": "",
+  "kind": "Investigation",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287086097",
+  "number": null
+ },
+ {
+  "title": "ESP32-P4 Parlio: a real long WS2812 strip",
+  "area": "Platform",
+  "module": "",
+  "kind": "Investigation",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287086025",
+  "number": null
+ },
+ {
+  "title": "ESP32-P4 WiFi through the C6 co-processor",
+  "area": "Platform",
+  "module": "",
+  "kind": "Bug",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287085924",
+  "number": null
+ },
+ {
+  "title": "Ethernet on the QuinLED Dig-Next-2 (W5500 over SPI)",
+  "area": "Platform",
+  "module": "",
+  "kind": "Investigation",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287085683",
+  "number": null
+ },
+ {
+  "title": "LED output from a Raspberry Pi's own pins (robwomp, 2026-10-11)",
+  "area": "Platform",
+  "module": "",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287086230",
+  "number": null
+ },
+ {
+  "title": "LEDs on the Teensy flash white, then the board resets (2026-10-13)",
+  "area": "Platform",
+  "module": "",
+  "kind": "Bug",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287084894",
+  "number": null
+ },
+ {
+  "title": "LightCrafter 16: questions for the maker (2026-10-07)",
+  "area": "Platform",
+  "module": "",
+  "kind": "Investigation",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287086342",
+  "number": null
+ },
+ {
+  "title": "Link-time optimization on the ESP32 builds",
+  "area": "Platform",
+  "module": "",
+  "kind": "Investigation",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287085768",
+  "number": null
+ },
+ {
+  "title": "Memory ceiling on non-PSRAM ESP32 with WiFi and Ethernet",
+  "area": "Platform",
+  "module": "",
+  "kind": "Investigation",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287085323",
+  "number": null
+ },
+ {
+  "title": "MoonBase follow-ups",
+  "area": "Platform",
+  "module": "",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287084833",
+  "number": null
+ },
+ {
+  "title": "Move more devices to MoonLight over WiFi (2026-10-09)",
+  "area": "Platform",
+  "module": "",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287084435",
+  "number": null
+ },
+ {
+  "title": "Network Receive on a P4 past 3,000 packets a second (2026-10-26)",
+  "area": "Platform",
+  "module": "",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287083932",
+  "number": null
+ },
+ {
+  "title": "Platform API: `std::span` migration",
+  "area": "Platform",
+  "module": "",
+  "kind": "Restructure",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287085617",
+  "number": null
+ },
+ {
+  "title": "SD card writes over SPI stop the card on the Dig-Octa (2026-10-12)",
+  "area": "Platform",
+  "module": "",
+  "kind": "Bug",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287085076",
+  "number": null
+ },
+ {
+  "title": "SE16 / LightCrafter power monitoring: sense pins free, module still to build (2026-09-02)",
+  "area": "Platform",
+  "module": "",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287086286",
+  "number": null
+ },
+ {
+  "title": "Sensor input on Raspberry Pi 5: microphone, IMU, line-in",
+  "area": "Platform",
+  "module": "",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287086408",
+  "number": null
+ },
+ {
+  "title": "SIMD inner loops for noise and the bilinear lerp on the P4",
+  "area": "Platform",
+  "module": "",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287083858",
+  "number": null
+ },
+ {
+  "title": "SIMD inner loops for noise and the bilinear lerp on the S3",
+  "area": "Platform",
+  "module": "",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287083794",
+  "number": null
+ },
+ {
+  "title": "The `.deb` ships the systemd unit, raw Ethernet included (2026-10-22, from robwomp on Discord)",
+  "area": "Platform",
+  "module": "",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287083996",
+  "number": null
+ },
+ {
+  "title": "The arm64 `.deb` is untested on Raspberry Pi OS bookworm (2026-09-13)",
+  "area": "Platform",
+  "module": "",
+  "kind": "Investigation",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287084649",
+  "number": null
+ },
+ {
+  "title": "The desktop build advertises no mDNS (2026-09-06)",
+  "area": "Platform",
+  "module": "",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287084562",
+  "number": null
+ },
+ {
+  "title": "Trim the TLS certificate bundle to the common roots",
+  "area": "Platform",
+  "module": "",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287085540",
+  "number": null
+ },
+ {
+  "title": "What the WiFi buffer copy costs (2026-10-24)",
+  "area": "Platform",
+  "module": "",
+  "kind": "Investigation",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287084278",
+  "number": null
+ },
+ {
+  "title": "WiFi Art-Net performance",
+  "area": "Platform",
+  "module": "",
+  "kind": "Investigation",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287085235",
+  "number": null
+ },
+ {
+  "title": "WiFi runtime disable",
+  "area": "Platform",
+  "module": "",
+  "kind": "Investigation",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287085471",
+  "number": null
+ },
+ {
+  "title": "`check_docgen` reads declarations from the clang AST (2026-10-15)",
+  "area": "Process and docs",
+  "module": "",
+  "kind": "Restructure",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287087063",
+  "number": null
+ },
+ {
+  "title": "A catalog entry extends another (2026-10-18)",
+  "area": "Process and docs",
+  "module": "",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287086933",
+  "number": null
+ },
+ {
+  "title": "A preview GIF for every MoonLive script (2026-10-19)",
+  "area": "Process and docs",
+  "module": "",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287130339",
+  "number": null
+ },
+ {
+  "title": "A scenario that runs until something breaks (2026-09-29)",
+  "area": "Process and docs",
+  "module": "",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287129420",
+  "number": null
+ },
+ {
+  "title": "A tagged release does not reach the web installer until the next main deploy",
+  "area": "Process and docs",
+  "module": "",
+  "kind": "Bug",
+  "status": "Backlog",
+  "process": "release",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287128996",
+  "number": null
+ },
+ {
+  "title": "A Windows scenario run recorded tick averages 250x its own repeat, cause unknown (2026-09-29)",
+  "area": "Process and docs",
+  "module": "",
+  "kind": "Investigation",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287130012",
+  "number": null
+ },
+ {
+  "title": "An example: MoonLight in a pod beside the music server (belrik, 2026-10-21)",
+  "area": "Process and docs",
+  "module": "",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287087152",
+  "number": null
+ },
+ {
+  "title": "An offline test run takes 16 minutes instead of one (2026-10-03)",
+  "area": "Process and docs",
+  "module": "",
+  "kind": "Bug",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287129170",
+  "number": null
+ },
+ {
+  "title": "British spellings and em-dashes predate the prose gate (319 files)",
+  "area": "Process and docs",
+  "module": "",
+  "kind": "Restructure",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287128769",
+  "number": null
+ },
+ {
+  "title": "build_desktop.py cannot relink while the app is running (2026-09-28)",
+  "area": "Process and docs",
+  "module": "",
+  "kind": "Bug",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287130177",
+  "number": null
+ },
+ {
+  "title": "build_esp32.py reports success without building, under Git Bash (2026-09-28)",
+  "area": "Process and docs",
+  "module": "",
+  "kind": "Bug",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287130100",
+  "number": null
+ },
+ {
+  "title": "CI: pin GitHub Actions to commit SHAs (supply-chain hardening)",
+  "area": "Process and docs",
+  "module": "",
+  "kind": "Restructure",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287129085",
+  "number": null
+ },
+ {
+  "title": "clang-tidy: triage the remaining 30 findings",
+  "area": "Process and docs",
+  "module": "",
+  "kind": "Restructure",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287129754",
+  "number": null
+ },
+ {
+  "title": "disasm.py cannot run on Windows (2026-08-21)",
+  "area": "Process and docs",
+  "module": "",
+  "kind": "Bug",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287130264",
+  "number": null
+ },
+ {
+  "title": "ESP32 clang/LLVM toolchain: extend the clang checks to src/platform/esp32/",
+  "area": "Process and docs",
+  "module": "",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287129673",
+  "number": null
+ },
+ {
+  "title": "Flaky unit tests: the AudioService sync suite contends on a fixed UDP port",
+  "area": "Process and docs",
+  "module": "AudioService",
+  "kind": "Bug",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287086639",
+  "number": null
+ },
+ {
+  "title": "GCC Release-mode truncation warnings (17, non-blocking)",
+  "area": "Process and docs",
+  "module": "",
+  "kind": "Bug",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287088042",
+  "number": null
+ },
+ {
+  "title": "Headers link the docs by page, not by host (2026-10-21, from the PR 150 review)",
+  "area": "Process and docs",
+  "module": "",
+  "kind": "Restructure",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287086721",
+  "number": null
+ },
+ {
+  "title": "Installer UX polish",
+  "area": "Process and docs",
+  "module": "",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287087561",
+  "number": null
+ },
+ {
+  "title": "Live full-suite run leaks state between scenarios",
+  "area": "Process and docs",
+  "module": "",
+  "kind": "Bug",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287129508",
+  "number": null
+ },
+ {
+  "title": "macOS code-signing (Developer ID)",
+  "area": "Process and docs",
+  "module": "",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287087327",
+  "number": null
+ },
+ {
+  "title": "MoonDeck doc-asset endpoint hardening",
+  "area": "Process and docs",
+  "module": "",
+  "kind": "Restructure",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287128928",
+  "number": null
+ },
+ {
+  "title": "MoonDeck scripts crash on Windows whenever their output is redirected (2026-08-22)",
+  "area": "Process and docs",
+  "module": "",
+  "kind": "Bug",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287129942",
+  "number": null
+ },
+ {
+  "title": "Network round-trip test: drop and reorder measurement",
+  "area": "Process and docs",
+  "module": "",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287128844",
+  "number": null
+ },
+ {
+  "title": "Offer MoonLight as a library",
+  "area": "Process and docs",
+  "module": "",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287087985",
+  "number": null
+ },
+ {
+  "title": "Pin the preview cancel over loopback (test)",
+  "area": "Process and docs",
+  "module": "",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287129830",
+  "number": null
+ },
+ {
+  "title": "Promote the one-line // cap to an error, once the 604 .cpp blocks are homed (2026-09-21)",
+  "area": "Process and docs",
+  "module": "",
+  "kind": "Restructure",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287129590",
+  "number": null
+ },
+ {
+  "title": "Publish SHA-256 sums with release assets",
+  "area": "Process and docs",
+  "module": "",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287087501",
+  "number": null
+ },
+ {
+  "title": "Remove the tests' own clock resets, now the listener's job (2026-10-25)",
+  "area": "Process and docs",
+  "module": "",
+  "kind": "Restructure",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287086775",
+  "number": null
+ },
+ {
+  "title": "Retire the OTA fallback repository, once a device has another recovery route",
+  "area": "Process and docs",
+  "module": "",
+  "kind": "Restructure",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287087252",
+  "number": null
+ },
+ {
+  "title": "sigrok/fx2lafw cross-check + MoonDeck LED driver test script",
+  "area": "Process and docs",
+  "module": "",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287130440",
+  "number": null
+ },
+ {
+  "title": "The prose sweep, now counted and ratcheted (2026-09-28)",
+  "area": "Process and docs",
+  "module": "",
+  "kind": "Restructure",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287087002",
+  "number": null
+ },
+ {
+  "title": "The restructured scenarios lost four things the archive asserted (2026-09-29)",
+  "area": "Process and docs",
+  "module": "",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287129247",
+  "number": null
+ },
+ {
+  "title": "The static set runs on every supported device before the rename (2026-09-29)",
+  "area": "Process and docs",
+  "module": "",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287129341",
+  "number": null
+ },
+ {
+  "title": "Three decisions left open by the code ratchets (2026-10-25, from the Code ratchets plan)",
+  "area": "Process and docs",
+  "module": "",
+  "kind": "Investigation",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287086853",
+  "number": null
+ },
+ {
+  "title": "Windows code-signing",
+  "area": "Process and docs",
+  "module": "",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287087406",
+  "number": null
+ },
+ {
+  "title": "A Service that calls another device's API (robwomp, 2026-10-11)",
+  "area": "Services",
+  "module": "",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287130713",
+  "number": null
+ },
+ {
+  "title": "An SD card inserted after boot mounts only when its module restarts (2026-10-12)",
+  "area": "Services",
+  "module": "SdCardService",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287130634",
+  "number": null
+ },
+ {
+  "title": "IR RX live-reconfigure recovery (unconfirmed, park until it recurs)",
+  "area": "Services",
+  "module": "InfraredService",
+  "kind": "Bug",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287130529",
+  "number": null
+ },
+ {
+  "title": "MoonCloud: share a MoonLive script over MoonTalk (2026-09-10)",
+  "area": "Services",
+  "module": "",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287130853",
+  "number": null
+ },
+ {
+  "title": "Read a vehicle's CAN bus and drive lights from it (2026-09-11)",
+  "area": "Services",
+  "module": "",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287130992",
+  "number": null
+ },
+ {
+  "title": "The Open Stage Control session's labels (2026-08-30)",
+  "area": "Services",
+  "module": "",
+  "kind": "Investigation",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287130773",
+  "number": null
+ },
+ {
+  "title": "The sensors an installation needs (2026-09-01)",
+  "area": "Services",
+  "module": "",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287130923",
+  "number": null
+ },
+ {
+  "title": "A desktop build reports firmware \"unknown\", so the update UI guesses from the browser (2026-09-06)",
+  "area": "UI",
+  "module": "",
+  "kind": "Bug",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287131545",
+  "number": null
+ },
+ {
+  "title": "Double-click and multi-click on a button (2026-10-25)",
+  "area": "UI",
+  "module": "",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287131477",
+  "number": null
+ },
+ {
+  "title": "File Manager follow-ups",
+  "area": "UI",
+  "module": "",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287131328",
+  "number": null
+ },
+ {
+  "title": "Moving-head preview = peer interpreter",
+  "area": "UI",
+  "module": "",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287131696",
+  "number": null
+ },
+ {
+  "title": "RGBW preview end-to-end",
+  "area": "UI",
+  "module": "",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287131627",
+  "number": null
+ },
+ {
+  "title": "Sparse fixture-profile editor",
+  "area": "UI",
+  "module": "FixtureProfilesModule",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287131084",
+  "number": null
+ },
+ {
+  "title": "Split app.js by feature, and take the module names out of it (2026-10-15)",
+  "area": "UI",
+  "module": "",
+  "kind": "Restructure",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287131241",
+  "number": null
+ },
+ {
+  "title": "The update overlay's Cancel button does nothing on a plain OTA (2026-09-14)",
+  "area": "UI",
+  "module": "",
+  "kind": "Bug",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287131157",
+  "number": null
+ },
+ {
+  "title": "UI features deferred from v1",
+  "area": "UI",
+  "module": "",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287131412",
+  "number": null
+ }
+]

@@ -277,6 +277,15 @@ A function's local variables live in registers and on the render task's stack wh
 
 The exec block is the emitted machine code, so its size varies by ISA. `lines.mlv` is the cheapest of the three because `line()` moves the per-cell loop out of emitted code into the shared `draw::line`. That is the argument for adding power functions as builtins rather than writing them in script.
 
+**Every shipped script as a class** (2026-08, [the class series](https://github.com/MoonModules/MoonLight/issues/167)): `ember.mlv` uses every construct at once, and the two Xtensa targets emit byte-identical code.
+
+| | classic (Xtensa) | S3 (Xtensa) | S31 (RISC-V) |
+|---|---:|---:|---:|
+| `ember.mlv` tick | 81 µs | 117 µs | 33 µs |
+| `ember.mlv` exec block | 1396 B | 1396 B | 1620 B |
+| `grid.mlv` exec block | 499 B | 499 B | 880 B |
+| `plasma.mlv` exec block | 1378 B | 1378 B | 2644 B |
+
 **A script calling its own functions** pays for a recursion guard: nine instructions in a function's prologue, emitted only when the program contains a `CallScript`. `crosshair.mlv` (three functions, two calls per frame) ticks at 219 µs on the classic against 204 µs without the guard, roughly 5-10%. Unbounded recursion degrades instead of resetting: the classic ran a non-terminating script for 110 s at 109 fps.
 
 **Two cost models** (2026-08-22, shiffy's 80x48 = 3,840 lights). A shader is a function of position and time, so it pays per light. A particle script pays per object, with the per-particle work inside one C++ loop per call.
@@ -443,6 +452,20 @@ Compiling the co-processor in costs roughly **4× per request and 2× on through
 
 Measured on IDF v6.1-rc1; the remaining penalty is tracked in [backlog/platform](https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287085924).
 
+## State over the WebSocket (`teensy41`)
+
+A `/ws` client receives the roots it views in full and an outline of the rest ([Web UI, side navigation](../moonmodules/core/ui.md#side-navigation)). Measured 2026-10-13 on the Teensy 4.1, one client for 30 seconds per row, subscribing as the page does (the root plus System, FirmwareUpdate, MoonCloud, PreviewDriver and MidiService). The first row is the firmware before it, which sent the whole tree to every client.
+
+| Client views | Document on open | Per second |
+|---|---:|---|
+| Whole tree, any root | 46,348 bytes | 1,040 bytes: 722 of patches, 318 of the WLED frame |
+| Services (the SdCard card) | 9,872 bytes | 553 bytes |
+| Effects | 9,028 bytes | 430 bytes |
+| Control | 12,061 bytes | 351 bytes |
+| Drivers, the largest root | 35,349 bytes | 392 bytes |
+
+Drivers' palette and fixture-profile lists are 25 KB of the tree. The largest block a document needs is one 2 KB fragment, or 15 KB for the fixture-profiles list, the largest single control. A `PATCH /api/state` document of up to 30 KB applies on an S3 (2026-10, [presets as state documents](https://github.com/MoonModules/MoonLight/issues/196)).
+
 ## Multicore: the whole output stage on core 1 (`multicore`, Step 2)
 
 The `multicore` control on the Drivers container runs **every driver's per-frame work** on a **core-1 task**, while core 0 renders the next frame. That work is the LED encode, the ArtNet packet build and the preview frame build. A frame costs `max(render, output)` instead of `render + output`. It stacks with `doubleBuffer`: that hides the WS2812 wire behind DMA, and `multicore` hides the encode behind the render.
@@ -530,6 +553,8 @@ Tick µs; FPS in parens for the 16K row:
 
 All curves scale **about linearly** in pixel count, which rules out a realloc or fragmentation pathology. The heavy effect is the 16K bottleneck on every board. On heavy compute the ranking is P4 ≫ S3 > classic, the P4's 400 MHz dual core being ~3× the S3. At light-16K the **classic (4,360 µs) beats the S3 (7,949 µs)**. The S3's PSRAM buffer has higher access latency than the classic's internal RAM, and the classic's uint16 LUT is half the size. On the heavy effect compute dominates and the S3 leads.
 
+Pulse, the boot default, costs 250 to 280 µs at 16² on an S3, which boots its defaults at 373 fps (v5.0.0, 2026-09-22).
+
 ### MultiplyModifier: compute down, memory up (Noise effect)
 
 With the default 2×2 kaleidoscope the modifier makes the logical grid ¼ size, so the effect computes on fewer pixels. The modifier **reduces** the tick at large grids, and its cost is the 1:N mapping-LUT **memory**.
@@ -550,3 +575,5 @@ The modifier roughly **halves** the heavy tick at every grid: a quarter of the l
 Per-target image size, capacity and headroom are generated every commit into [repo-health](metrics/repo-health.md#firmware-size), across all 14 firmware variants.
 
 What that table cannot show is where the bytes go. On the default `esp32`, roughly a third of the image is the WiFi stack (`esp_wifi`, `wpa_supplicant`, `esp_phy`). Then come lwIP at ~180 KB, mbedTLS plus the Mozilla root bundle at ~170 KB, and FreeRTOS and the IDF core at ~150 KB. MoonLight's own code is ~120 KB, about a tenth of the binary. That is why `esp32-eth` is the smaller build: excluding WiFi is the single largest saving available. Proportions shift with the IDF version and sdkconfig; measure with `idf.py -B build/esp32-esp32 size-components`.
+
+Two things the UI offers cost the image almost nothing. The MoonLive script catalog holds names only, about 12 bytes each against about 800 for a script, so a library of 270 scripts is 3 KB of flash against the 220 KB of script text it names, fetched from GitHub on demand (2026-09, [the script library](https://github.com/MoonModules/MoonLight/issues/184)). The help is `help.json`, 247 KB and 57 KB gzipped (2026-10-29), fetched from the site in one request; the fetch, the cache and the rendering add 2 to 3 KB to `app.js`.

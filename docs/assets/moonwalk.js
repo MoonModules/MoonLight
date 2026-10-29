@@ -485,6 +485,12 @@ function showPanel(panel, model, pid, done, onDone, host = {}) {
     }
     const meta = [model.stages.find((s) => s.id === p.stage)?.title, p.actor, ...(p.systems || [])].join(" · ");
     panel.append(control("h3", {}, p.title), control("p", { className: "mm-map-meta" }, meta), control("p", {}, p.goal));
+    // The open backlog cards whose Process field names this process, each linking its card on the Project.
+    if (p.open?.length) {
+        const list = control("p", { className: "mm-map-meta" }, `Open work (${p.open.length}): `);
+        p.open.forEach((c, i) => list.append(i ? ", " : "", c.card ? control("a", { href: c.card, target: "_blank", rel: "noopener" }, c.title) : c.title));
+        panel.append(list);
+    }
     // Done on the device is what the state shows, so it has no checkbox to undo and says on what it rests, at the top where a reader looks for it.
     if (host.device?.has(pid)) {
         const why = conditionText(p.steps.flatMap((s) => s.then || []));

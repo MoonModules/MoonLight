@@ -20,7 +20,7 @@ namespace mm::particles {
 ///
 /// Why time is scaled rather than quantised: power-functions.md#particles
 ///
-/// A stall is spent whole in the next frame rather than clamped, so motion stays true to elapsed time and a stall elsewhere stays visible as a jump.
+/// A stall is spent in the next frame up to eight reference frames (`kMaxScale`) and the excess is discarded, so motion stays close to elapsed time and a stall elsewhere still shows as a jump.
 class FrameTime {
 public:
     /// `referenceHz` is the rate the effect's numbers are written against; 60 is the convention.

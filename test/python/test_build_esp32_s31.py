@@ -79,6 +79,6 @@ def test_s31_is_a_preview_target():
 def test_ci_target_is_the_firmwares_declared_chip():
     # The release matrix carries each firmware's chip from firmwares.json and builds for it, so no second rule can map a firmware to the wrong IDF target.
     workflow = (ROOT / ".github/workflows/release.yml").read_text()
-    assert "{firmware: .name, chip}" in workflow
+    assert '"chip": f["chip"]' in (ROOT / "moondeck/ci/release_stage.py").read_text(encoding="utf-8")
     assert "target: ${{ matrix.chip }}" in workflow
 

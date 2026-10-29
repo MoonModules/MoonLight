@@ -31,7 +31,7 @@ public:
 
     /// Parallel lanes this peripheral's silicon provides on the current chip (0 = not this chip).
     virtual uint8_t lanesAvailable() const MM_NONBLOCKING = 0;
-    /// Can this peripheral host the 74HCT595 pin expander? (Needs a streaming backend, since PSRAM fails at the expander's clock.)
+    /// Can this peripheral host the 74HCT595 pin expander? Its frame grows eightfold and DMA cannot read PSRAM at the expander's clock, so a whole-frame backend holds what fits internal RAM and a streaming one goes further.
     virtual bool supportsPinExpander() const = 0;
     /// Whether this peripheral can run the async double-buffer, overlapping encode and wire.
     virtual bool supportsDoubleBuffer() const { return true; }
