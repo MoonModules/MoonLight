@@ -6,39 +6,29 @@
 
 namespace mm {
 
-/// Where a fixture's non-color channels live inside one light.
+/// Where a fixture's non-color channels live inside one light, @xref{why-color-has-no-entry|color having none}.
 ///
 /// @technical
 ///
-/// A light is `channelsPerLight` bytes wide, and that width is a runtime value: 3 for RGB, 4 for RGBW, 11 for a mini moving head, 25 for a bigger one.
-/// The pipeline does not care which, since a wider light simply has more bytes and a driver that cannot use them ignores them.
-/// This says which of those bytes are pan, tilt, zoom and so on, so an effect drives a moving head through the same buffer it paints pixels into.
+/// A light is `channelsPerLight` bytes wide at runtime (3 for RGB, 4 for RGBW, 11 or 25 for a moving head), and this says which bytes are pan, tilt, zoom and the rest, so an effect steers a moving head through the buffer it paints.
 ///
 /// ## Why color has no entry
 ///
-/// Color is always at offset 0.
-/// Every effect and every draw primitive writes RGB or RGBW at the start of a light.
-/// `Correction` places those bytes at the fixture's own color channels on the way out.
-/// The offsets here are the channels an effect could not otherwise reach at all.
+/// Color is always at offset 0, where every draw primitive writes RGB or RGBW, and `Correction` moves it to the fixture's color channels on the way out; these offsets are the channels an effect has no other way to reach.
 ///
 /// ## Why an absent channel is safe
 ///
-/// `kAbsent` means the fixture has no such channel, and every setter is then a no-op.
-/// That is what keeps a moving-head effect harmless on an LED strip.
-/// It calls `setPan`, the strip carries no pan channel, and nothing is written.
-/// The same effect on a moving head steers it.
-/// MoonLight's LightsHeader is the same idea, credited in the work archive.
+/// An absent role's setters write nothing, so one moving-head effect steers a moving head and leaves an LED strip untouched; MoonLight's LightsHeader is the same idea, credited in the work archive.
 ///
 /// ## Layer slots are not fixture channels
 ///
-/// These are offsets into the layer's light, which is not the fixture's layout.
-/// A layer light always begins with RGB or RGBW, because every draw primitive writes there, so motion is packed after the color in a fixed order.
-/// The fixture's own offsets live in `Correction`, whose `apply` maps a layer slot to a fixture channel on the way out.
-/// Keeping the two apart is what stopped pan from landing on the red channel, which happened when both claimed byte 0.
+/// These are offsets into the layer's light, motion packed after the color in a fixed order; `Correction::apply` maps each slot to the fixture's own channel, so motion and color never claim the same byte.
+///
+/// A slot past the layer's width widens the layer: pan at slot 4 on a 3-channel layer makes every light 5 bytes wide at the next prepare, and `setChannelsPerLight` rejects zero.
 struct FixtureChannels {
-    /// Marks a role this fixture does not carry, making every setter for it a no-op.
+    /// Marks a role this fixture does not carry, making every setter for it a no-op: @xref{why-an-absent-channel-is-safe}.
     static constexpr uint8_t kAbsent = 255;
-    /// Where motion starts in a layer light, after the RGBW the effects paint into.
+    /// Where motion starts in a layer light, after the RGBW the effects paint into: @xref{layer-slots-are-not-fixture-channels}.
     static constexpr uint8_t kMotionBase = 4;
 
     uint8_t pan    = kAbsent;   ///< the slot carrying pan, or absent

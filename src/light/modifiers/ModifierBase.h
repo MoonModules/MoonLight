@@ -15,13 +15,13 @@ namespace mm {
 
 /// A modifier sits between an [effect](https://moonmodules.org/MoonLight/moonmodules/light/effects.html) and the output: it reshapes where the pixels land, or masks them, without changing what the effect draws.
 ///
-/// Modifiers compose: a @ref Layer applies its whole stack in child order, each reshaping the result of the one below. A static modifier is baked into the layer's mapping at rebuild. A dynamic one also runs a pass every frame, and an animated one rebuilds its static fold on its own clock.
+/// Modifiers compose: a @ref Layer folds its static modifiers in child order, each reshaping the result of the one below, into its mapping at rebuild. A dynamic modifier instead runs a pass every frame after all effects, on the logical buffer the static mapping then carries to the lights, whatever its place, and an animated one rebuilds its static fold on its own clock.
 ///
 /// A modifier folds coordinates rather than drawing, so it uses little of the shared [power functions](https://moonmodules.org/MoonLight/moonmodules/light/power-functions.html). Each card's emoji are its tags, as the [tag emoji legend](https://moonmodules.org/MoonLight/explanation/architecture/index.html#tag-emoji-legend) explains.
 ///
 /// @technical
 ///
-/// A layer builds its mapping by folding every physical light through each enabled modifier, and the whole chain collapses into one table, so the per-frame render stays a single lookup.
+/// A layer builds its mapping by folding every physical light through each enabled static modifier, and the whole chain collapses into one table, so the per-frame render stays a single lookup.
 ///
 /// Three hooks do it, each a no-op by default, so a modifier implements only what it needs. The build walks physical lights, so several folding onto one logical cell is the fan-out, which costs nothing, and the mapping cannot overflow. Float math is fine in a static fold, since it runs while the mapping builds, never per frame.
 ///
