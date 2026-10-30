@@ -30,7 +30,9 @@ namespace mm {
 ///
 /// A panel lights where output-enable, the addressed row and the latched row meet, and the latch holds the row last strobed. So row r's words name row r - 1, the latch word moves the address to r in the dark, and row 0's words name the last row.
 ///
-/// The lit window follows the data in the latch, not the plane being clocked in. Row 0's words light the last row of the plane before, so they take that plane's window, and plane 0's take the top plane's, the one the buffer wraps from. With the current plane's window instead, the last row of each half-panel weighed its bits double and its top bit almost nothing: a line at the seam and along the bottom edge, which a uniform white hides.
+/// The lit window follows the data in the latch: row 0's words light the last row of the plane before, so they take that plane's window, and plane 0's take the top plane's, where the buffer wraps.
+///
+/// With the current plane's window, the last row of each half weighed its bits double and its top bit almost nothing: a line at the seam and the bottom edge, hidden by white.
 ///
 /// ## Brightness is time
 ///
@@ -38,7 +40,7 @@ namespace mm {
 ///
 /// Below about a quarter brightness, the lowest plane of a 64-column row rounds to nothing.
 
-/// Encode one RGB frame into @xref{the-wire-layout|bit planes}, @xref{the-address-lags-the-data-by-one-row|the address and the lit window a row late}, @xref{brightness-is-time|brightness as time}; bytes written, or 0 on a bad geometry: a dark frame beats half a frame.
+/// Encode one RGB frame into @xref{the-wire-layout|bit planes}, @xref{the-address-lags-the-data-by-one-row|the address a row late}, @xref{brightness-is-time|brightness as time}; bytes written, or 0 on a bad geometry: a dark frame beats half a frame.
 inline size_t hub75Encode(const uint8_t* rgb, uint8_t* out,
                           const Hub75Geometry& geo, const Hub75Layout& lay = {}) {
     if (!rgb || !out) return 0;

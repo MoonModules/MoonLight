@@ -212,7 +212,7 @@ TEST_CASE("HUB75 encode: the DMA wrap lights the last row once, from row 0's dat
     CHECK((slot(out, 0) & (1u << lay.a)) == (lastRow & 1 ? (1u << lay.a) : 0u));
 }
 
-// Seen on two chained 64x64 panels: a line at the seam (row 31) and along the bottom edge (row 63), brighter below half gray and nearly dark just above it. Row 0's words lit the last row with the plane being clocked in, while the latch held the plane before it, so that row weighed its bits double and its top bit almost nothing. A uniform white sums to the same total, which is why the wrap test above passes either way.
+// Seen on two chained 64x64 panels: a line at rows 31 and 63, the last row lit with the next plane's window while the latch held the plane before. White sums the same, so the wrap test above passes either way.
 TEST_CASE("HUB75 encode: every row of a value is lit as long as every other, the last row of each half included") {
     mm::Hub75Geometry geo;
     geo.width = 64; geo.height = 64; geo.scanRate = 32; geo.bitDepth = 6; geo.brightness = 255;
@@ -221,8 +221,7 @@ TEST_CASE("HUB75 encode: every row of a value is lit as long as every other, the
     std::vector<uint8_t> out(geo.frameBytes(), 0);
     REQUIRE(mm::hub75Encode(rgb.data(), out.data(), geo, lay) == geo.frameBytes());
 
-    // The panel's view: a row lights what the row before it latched, so each latched row's brightness is the lit words
-    // of the row that follows, counted where its data bit is set, summed over the planes. The buffer wraps.
+    // As the panel sees it: a row lights what the row before it latched, so a row's brightness sums the next row's lit words over the planes where its bit is set.
     const uint16_t rows = geo.scanRows();
     const size_t rowsInFrame = static_cast<size_t>(geo.bitDepth) * rows;
     std::vector<uint32_t> upper(rows, 0), lower(rows, 0);
