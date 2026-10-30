@@ -32,8 +32,6 @@ namespace mm {
 ///
 /// The lit window follows the data in the latch: row 0's words light the last row of the plane before, so they take that plane's window, and plane 0's take the top plane's, where the buffer wraps.
 ///
-/// With the current plane's window, the last row of each half weighed its bits double and its top bit almost nothing: a line at the seam and the bottom edge, hidden by white.
-///
 /// ## Brightness is time
 ///
 /// A panel's chips only switch a column on or off, so plane p lights 2^p as long as plane 0 and brightness shortens every plane's window.
