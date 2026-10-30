@@ -59,13 +59,8 @@ processes:
           enum: [ESP32, Windows, Linux, macOS]
           description: Where does MoonLight run?
     intro: |
-      MoonLight takes the sending card's place: it renders the effect and sends the frames to the receiving card over raw Ethernet, with no PC and no sending card. Gigabit matters for wire time, not bandwidth: [why](reference/hardware/panel-cards.md#the-one-hardware-fact-that-decides-everything).
+      MoonLight takes the sending card's place: it renders the effect and sends the frames to the receiving card over raw Ethernet, with no PC and no sending card. It starts from a card already set up for its panels, a LEDVision test pattern filling the wall: [set the card up](reference/hardware/panel-cards.md#8-set-the-card-up-in-ledvision). Gigabit matters for wire time, not bandwidth: [why](reference/hardware/panel-cards.md#the-one-hardware-fact-that-decides-everything).
     steps:
-      - id: ledvision
-        say: Set the panels up in LEDVision.
-        when: { process: panel-card-ledvision }
-        detail: |
-          The card must know its panels before MoonLight sends anything. A test pattern from LEDVision fills the wall correctly when this is done.
       - id: wire
         say: Wire the controller, card and panels.
         when: { manual: "Ethernet to the card, HUB75 ribbons to the panels, 5 V to both." }
@@ -131,54 +126,9 @@ processes:
         say: Read the status line.
         when: { manual: "It reads a link speed and a packet rate, such as 1000 Mbit - 5200 packets/s." }
         detail: |
-          A `100 Mbit` warning still sends, fine for a small wall. `no ethernet link` means cable, card power or the wrong port. Panels dark with a healthy status: [when it does not light up](reference/hardware/panel-cards.md#8-when-it-does-not-light-up).
+          A `100 Mbit` warning still sends, fine for a small wall. `no ethernet link` means cable, card power or the wrong port. Panels dark with a healthy status: [when the wall stays dark](reference/hardware/panel-cards.md#9-when-the-wall-stays-dark).
     outro: |
       The card owns panel order and the picture is MoonLight's. A card on firmware v13 flickers with network activity, whichever sender drives it: [downgrade it](moonwalk.md#panel-card-downgrade).
-  - id: panel-card-ledvision
-    title: Set the panels up in LEDVision
-    actor: user
-    goal: The receiving card knows its panels, and a LEDVision test pattern fills the wall correctly.
-    systems: [MoonLight]
-    page: reference/hardware/panel-cards.md
-    intro: |
-      The card stores its panel size, count and driver IC, written once with ColorLight's LEDVision on Windows. MoonLight then needs no panel wiring settings. Use an 8.x build: this project's wall runs 8.8, and a video walkthrough uses 8.5. Labels move between versions, so treat the shape as right and the wording as approximate.
-    steps:
-      - id: connect
-        say: Connect the card to this machine.
-        when: { manual: "Cable it to the Ethernet port, and power the card and the panels." }
-      - id: download
-        say: Install LEDVision.
-        when: { open: { url: "https://en.colorlightinside.com/product/download/380" } }
-        detail: |
-          Go to the receiving-card setup, usually under `Settings`. Some versions ask for a password, commonly `168`.
-      - id: panel
-        say: Load the panel definition.
-        when: { manual: "Pick your panel from the built-in module list, or load the .rcfgx or .rcvx file your supplier provided." }
-        detail: |
-          The supplier's file is the reliable route for a panel that is not a well-known model.
-      - id: cabinet
-        say: Set the cabinet size.
-        when: { manual: "Enter how many pixels one card drives, across and down." }
-      - id: arrangement
-        say: Set the panel arrangement.
-        when: { manual: "Choose how the HUB75 ribbons chain and which physical panel is first." }
-        detail: |
-          This makes the card, not MoonLight, responsible for panel order. Every other row mirrored, or panels in the wrong places, is fixed here.
-      - id: send
-        say: Send the settings to the receiving card.
-        when: { manual: "Send to receiving card, in LEDVision's receiving-card setup." }
-      - id: save
-        say: Save the settings on the card.
-        when: { manual: "A separate action from sending in most versions." }
-        detail: |
-          Skipping it makes the wall come back wrong after a power cycle.
-      - id: test
-        say: Run a LEDVision test pattern.
-        when: { manual: "It fills the wall correctly." }
-        detail: |
-          This separates configured panels from a working sender.
-    outro: |
-      A video of the whole card setup, driven from FPP instead of MoonLight: [Setting up a Colorlight Card with FPP v6.3 and LED Vision 8.5](https://www.youtube.com/watch?v=L4lHbwUszAs).
   - id: panel-card-downgrade
     title: Clear the v13 flicker from a ColorLight card
     actor: user
@@ -207,7 +157,7 @@ processes:
         say: Choose your network adapter.
         when: { manual: "Set Send Mode to the network-card mode and pick the adapter." }
         detail: |
-          Restart LEDUpgrade after: it binds the adapter at startup.
+          Restart LEDUpgrade after: it binds the adapter at startup. On a machine with more than one network adapter the choice may not take; disabling the other adapters does.
       - id: detect
         say: Detect Receiver Cards.
         when: { manual: "It reports something like 5A 13.17 (v8.0): firmware 13.17 on v8.0 hardware." }

@@ -19,7 +19,9 @@ namespace mm {
 ///
 /// ## What a row does
 ///
-/// Each row binds one pin to a target, a surface control such as `Control.switch1`. A catalog board's first button targets `Control.switch1`, which switches the lights and their relay. The live pressed readout shows a button working before it is bound.
+/// Each row binds one pin to a surface control; a catalog board's first button targets `Control.switch1`, the lights and their relay. The pressed readout shows a button working before it is bound.
+///
+/// A push button takes `toggle`, each press flipping the target. A latching switch takes `set` with value 1: on while closed, off once open.
 ///
 /// @technical
 ///

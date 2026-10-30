@@ -6,7 +6,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { collectFiles, restoreDirs, diffRestore } from "../../src/ui/migrate.js";
+import { collectFiles, restoreDirs, diffRestore, cloneIdentity, restoreBundle } from "../../src/ui/migrate.js";
 
 const tree = {
     "/": [{ name: ".config", isDir: true, size: 0 }, { name: "scripts", isDir: true, size: 0 }],
@@ -166,4 +166,65 @@ test("a child the live tree does not hold yet has its type checked and its contr
     const rep = diffRestore(files, state, ["Services"]);
     assert.equal(rep.length, 1);
     assert.match(rep[0].detail, /AudioService does not exist/);
+});
+
+
+// A clone: pole 1's backup onto pole 2. Everything but the identity comes from the backup.
+const pole1 = {
+    "/.config/SystemModule.json": JSON.stringify({ System: { deviceName: "Pole-1", logLevel: 3 } }),
+    "/.config/NetworkModule.json": JSON.stringify({ Network: { mDNS: true,
+        WiFi: { type: "WiFiModule", known: [{ ssid: "venue", password: "secret1" }], txPowerSetting: 2 },
+        Ethernet: { type: "EthernetModule", ethType: 1, ipSettings: 1, ip: "10.0.0.1", gateway: "10.0.0.254", subnet: "255.255.255.0", dns: "10.0.0.254" } } }),
+    "/.config/Effects.json": JSON.stringify({ Effects: { Layer: { type: "Layer",
+        Receive: { type: "NetworkReceiveEffect", universe_start: 0, channels_per_universe: 510 } } } }),
+    "/.config/identity": "02 11 22 33 44 55\n",
+    "/moonlive/show.mle": "class S {}",
+};
+const pole2 = {
+    "/.config/SystemModule.json": JSON.stringify({ System: { deviceName: "Pole-2" } }),
+    "/.config/NetworkModule.json": JSON.stringify({ Network: {
+        WiFi: { type: "WiFiModule", known: [{ ssid: "venue", password: "secret2" }] },
+        Ethernet: { type: "EthernetModule", ipSettings: 1, ip: "10.0.0.2", gateway: "10.0.0.254", subnet: "255.255.255.0", dns: "10.0.0.254" } } }),
+};
+
+test("a clone keeps the target's name, WiFi networks and static IP, and takes everything else from the backup", () => {
+    const { files, report } = cloneIdentity(pole1, pole2);
+    const sys = JSON.parse(files["/.config/SystemModule.json"]).System;
+    assert.equal(sys.deviceName, "Pole-2");
+    assert.equal(sys.logLevel, 3);
+    const net = JSON.parse(files["/.config/NetworkModule.json"]).Network;
+    assert.deepEqual(net.WiFi.known, [{ ssid: "venue", password: "secret2" }]);
+    assert.equal(net.WiFi.txPowerSetting, 2);
+    assert.equal(net.Ethernet.ip, "10.0.0.2");
+    assert.equal(net.Ethernet.ethType, 1);
+    assert.equal(files["/moonlive/show.mle"], "class S {}");
+    assert.ok(report.every(e => e.kind === "kept"));
+});
+
+test("a clone never carries the backup's stored hardware address, which the device's name derives from", () => {
+    const { files } = cloneIdentity(pole1, pole2);
+    assert.ok(!("/.config/identity" in files));
+});
+
+test("a clone onto a device with no value of its own drops the backup's, so the device keeps its default", () => {
+    const { files } = cloneIdentity(pole1, {});
+    const doc = JSON.parse(files["/.config/SystemModule.json"]);
+    assert.ok(!("deviceName" in doc.System));
+    assert.ok(!("ip" in JSON.parse(files["/.config/NetworkModule.json"]).Network.Ethernet));
+});
+
+test("restoreBundle reads the target's identity before writing, and writes the clone", async () => {
+    const written = {};
+    const fetchFn = async (url, opts = {}) => {
+        const path = decodeURIComponent((url.split("path=")[1] || ""));
+        if (url.startsWith("/api/state")) return { ok: true, json: async () => ({ modules: [] }) };
+        if (url.startsWith("/api/types")) return { ok: true, json: async () => ({ types: [] }) };
+        if (url.startsWith("/api/dir")) return { ok: true };
+        if (opts.method === "POST") { written[path] = opts.body; return { ok: true }; }
+        return path in pole2 ? { ok: true, text: async () => pole2[path] } : { ok: false, status: 404 };
+    };
+    await restoreBundle({ format: "MoonLight-config-backup", version: 1, files: pole1 }, fetchFn, true);
+    assert.equal(JSON.parse(written["/.config/SystemModule.json"]).System.deviceName, "Pole-2");
+    assert.ok(!("/.config/identity" in written));
+    assert.equal(written["/.config/Effects.json"], pole1["/.config/Effects.json"]);   // the show comes across as it is
 });

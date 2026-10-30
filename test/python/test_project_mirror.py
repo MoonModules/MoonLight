@@ -1,6 +1,6 @@
 """The Project mirror: the record an agent searching build/project.json relies on, and the documents it renders to docs/work/backlog_mirror/. Run: `uv run moondeck/test/test_host.py --python`."""
 
-from project_mirror import FIELDS, REPO_URL, dead_links, differences, missing_targets, normalize, relative_links, render
+from project_mirror import FIELDS, REPO_URL, differences, missing_targets, normalize, relative_links, render, unstable_links
 
 
 def item(title, area="", **fields):
@@ -76,13 +76,12 @@ def test_a_card_carries_its_url_and_the_documents_link_it():
     assert "[Card](https://github.com/users/O/projects/5?pane=issue&itemId=123)" in render([rec], "u")["core.md"]
 
 
-def test_a_link_to_a_gone_card_or_into_the_mirror_fails(tmp_path):
-    live = [{"card": "https://github.com/users/O/projects/5?pane=issue&itemId=123"}]
-    (tmp_path / "ok.md").write_text("[a](https://github.com/users/O/projects/5?pane=issue&itemId=123)\n")
+def test_a_doc_linking_a_cards_board_address_or_the_mirror_fails_and_an_issue_link_passes(tmp_path):
+    (tmp_path / "ok.md").write_text("[a](https://github.com/MoonModules/MoonLight/issues/216)\n")
     (tmp_path / "bad.md").write_text("[b](https://github.com/users/O/projects/5?pane=issue&itemId=999) [c](../backlog_mirror/core.md#x) [d](backlog_mirror/ui.md)\n")
-    found = dead_links(live, tmp_path)
+    found = unstable_links(tmp_path)
     assert len(found) == 3 and all("bad.md" in f for f in found)
-    assert any("999 is not on the board" in f for f in found) and sum("link the card or the Project instead" in f for f in found) == 2
+    assert any("card 999 by its board address" in f for f in found) and sum("link the issue or the Project instead" in f for f in found) == 2
 
 
 def test_an_open_cards_link_to_a_file_the_repository_lacks_fails_and_a_generated_catalog_page_counts(tmp_path):

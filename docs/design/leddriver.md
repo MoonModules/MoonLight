@@ -4,7 +4,7 @@ What shipped and where it lives: [Choosing and wiring an LED driver](../referenc
 
 ## LED output from a Raspberry Pi's own pins
 
-Backlog: [LED output from a Raspberry Pi's own pins](https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287086230). The prerequisite is a `src/platform/rpi/` backend; a Pi runs the desktop build and reaches LEDs through the network drivers.
+Backlog: [LED output from a Raspberry Pi's own pins](https://github.com/MoonModules/MoonLight/issues/218). The prerequisite is a `src/platform/rpi/` backend; a Pi runs the desktop build and reaches LEDs through the network drivers.
 
 **Pi 4 and earlier (BCM2711 and before).** rpi_ws281x (BSD-2, <https://github.com/jgarff/rpi_ws281x>) drives the header by DMA through PWM (2 channels), PCM (1) or SPI (1), up to about 2,700 lights a string on PWM and 5,400 on PCM. It is the reference for that route; its last release is v1.0.0 of March 2023.
 
@@ -20,7 +20,7 @@ Backlog: [LED output from a Raspberry Pi's own pins](https://github.com/users/Mo
 
 ## The classic ESP32 past 2,048 lights
 
-Backlog: [Classic-ESP32 shift-register ring on raw I2S](https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287080365).
+Backlog: [Classic-ESP32 shift-register ring on raw I2S](https://github.com/MoonModules/MoonLight/issues/218).
 
 ### Verdict
 
@@ -139,15 +139,15 @@ This is not a niche worry: every ESP32 LED library that streams rather than whol
 
 The 74HCT595 expander ships on `i80` and `MoonI80`, the LCD_CAM peripheral of the S3, P4 and S31 ([Wiring a 74HCT595 pin expander](../reference/hardware/led-drivers.md#wiring-a-74hct595-pin-expander)). What it needs from a peripheral: a shift clock on a pin, the latch as one bit of every bus word, and eight bus words per slot, so the DMA frame grows eightfold. RMT has no clock line and never qualifies. The other two parallel peripherals could:
 
-- **Parlio (P4).** `ParlioPeripheral::supportsPinExpander()` is false. The transmit unit generates its pixel clock itself, and `platform_esp32_parlio.cpp` leaves `clk_out_gpio_num` unconnected because WS2812 ignores it; connected, it is the '595's shift clock. Whether Parlio's clock output and bit packing carry the expander's protocol is a bench question, and the eightfold frame meets the single-transaction ceiling the [chunked transfer](https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287080935) lifts. Backlog: [A '595 expander on Parlio](https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287079383).
-- **GPIO-DMA (Teensy 4.1).** `GpioDmaPeripheral::supportsPinExpander()` is false. The port write carries no clock of its own, so the shift clock has to come from the writes themselves, at a DMA rate still to measure. FlexIO clocks by itself, and [the Teensy plan](../work/Plan-20261010%20-%20Teensy%204.1%20(3%20of%206).md) set it aside because no 8 contiguous FlexIO pins stay free beside the W5500. TriantaduoWS2811 (<https://github.com/wramsdell/TriantaduoWS2811>) is the prior art: 32 strands from 3 Teensy pins through FlexIO clocking '595s at zero CPU cost. Backlog: [A '595 expander on the Teensy's GPIO-DMA bus](https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287078012).
+- **Parlio (P4).** `ParlioPeripheral::supportsPinExpander()` is false. The transmit unit generates its pixel clock itself, and `platform_esp32_parlio.cpp` leaves `clk_out_gpio_num` unconnected because WS2812 ignores it; connected, it is the '595's shift clock. Whether Parlio's clock output and bit packing carry the expander's protocol is a bench question, and the eightfold frame meets the single-transaction ceiling the [chunked transfer](https://github.com/MoonModules/MoonLight/issues/218) lifts. Backlog: [A '595 expander on Parlio](https://github.com/MoonModules/MoonLight/issues/218).
+- **GPIO-DMA (Teensy 4.1).** `GpioDmaPeripheral::supportsPinExpander()` is false. The port write carries no clock of its own, so the shift clock has to come from the writes themselves, at a DMA rate still to measure. FlexIO clocks by itself, and [the Teensy plan](../work/Plan-20261010%20-%20Teensy%204.1%20(3%20of%206).md) set it aside because no 8 contiguous FlexIO pins stay free beside the W5500. TriantaduoWS2811 (<https://github.com/wramsdell/TriantaduoWS2811>) is the prior art: 32 strands from 3 Teensy pins through FlexIO clocking '595s at zero CPU cost. Backlog: [A '595 expander on the Teensy's GPIO-DMA bus](https://github.com/MoonModules/MoonLight/issues/218).
 - **RP1 PIO (Pi 5).** Research grade, above.
 
 The expander multiplies slots, not pins, so each peripheral's frame or ring grows eightfold too: the memory question arrives with the clock question.
 
 ## The sigrok cross-check
 
-Backlog: [sigrok/fx2lafw cross-check + MoonDeck LED driver test script](https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287130440).
+Backlog: [sigrok/fx2lafw cross-check + MoonDeck LED driver test script](https://github.com/MoonModules/MoonLight/issues/218).
 
 The loopback test trusts the chip's own clock, and on an ESP32 it runs on the chip whose WiFi causes the flicker it looks for. An analyzer with its own clock crosses it: where the two disagree there is a real bug. The reference device is a NanoDLA v1.3 (CY7C68013A, fx2lafw firmware, 24 MS/s on 8 channels, 10 to 15 dollars); any board sigrok's `fx2lafw` driver enumerates works the same. 24 MS/s is 41 ns a sample, enough to tell a 350 ns pulse from a 700 ns one and marginal for a timing-margin test (320 against 380 ns). A DSLogic Plus (16 channels at 100 MS/s) is the upgrade when a flicker reproduces that 24 MS/s cannot resolve, and the scripts carry over unchanged.
 

@@ -1,44 +1,49 @@
 {
-  "commit": "76bfadbf",
+  "commit": "4e653f4d",
   "flash": {
-    "esp32s3-n16r8": 2355408,
-    "esp32": 2145104,
-    "esp32p4rev1-eth": 2416496,
-    "esp32p4rev1-eth-wifi": 2669040,
-    "esp32s3-n8r8": 2331664,
-    "esp32s31": 2659712,
-    "esp32-16mb": 2399680,
-    "esp32-eth": 1681040,
-    "esp32-wrover": 1843760,
+    "esp32s3-n16r8": 2355984,
+    "esp32": 2145792,
+    "esp32p4rev1-eth": 2418032,
+    "esp32p4rev1-eth-wifi": 2670560,
+    "esp32s3-n8r8": 2355984,
+    "esp32s31": 2660656,
+    "esp32-16mb": 2263392,
+    "esp32-eth": 1747760,
+    "esp32-wrover": 2196080,
     "qemu": 1383648,
-    "esp32p4rev3-eth": 2414048,
-    "esp32s3-zero": 2117296,
-    "esp32-pico": 2107168,
-    "desktop-macos": 2274600,
+    "esp32p4rev3-eth": 2422832,
+    "esp32s3-zero": 2125456,
+    "esp32-pico": 2316864,
+    "desktop-macos": 2274648,
     "desktop-windows": 1925120,
-    "esp32c3": 2251520,
+    "esp32c3": 2252320,
     "desktop-linux": 2548000,
-    "esp32s3-n32r16": 2377888,
-    "teensy41": 1167304
+    "esp32s3-n32r16": 2378864,
+    "teensy41": 1168328,
+    "esp32p4rev3-eth-wifi": 2675184,
+    "esp32s3-n8r2": 2247072
   },
   "measured": {
-    "esp32p4rev1-eth": "2026-10-27",
-    "esp32s31": "2026-10-27",
-    "esp32": "2026-10-27",
-    "esp32-pico": "2026-09-09",
-    "esp32s3-n16r8": "2026-10-27",
-    "esp32s3-n8r8": "2026-10-25",
-    "esp32s3-zero": "2026-10-25",
-    "esp32-16mb": "2026-10-22",
-    "esp32p4rev1-eth-wifi": "2026-10-27",
-    "esp32-eth": "2026-09-11",
-    "esp32p4rev3-eth": "2026-10-25",
-    "desktop-macos": "2026-10-27",
+    "esp32p4rev1-eth": "2026-10-30",
+    "esp32s31": "2026-10-30",
+    "esp32": "2026-10-30",
+    "esp32-pico": "2026-10-30",
+    "esp32s3-n16r8": "2026-10-30",
+    "esp32s3-n8r8": "2026-10-30",
+    "esp32s3-zero": "2026-10-30",
+    "esp32-16mb": "2026-10-30",
+    "esp32p4rev1-eth-wifi": "2026-10-30",
+    "esp32-eth": "2026-10-30",
+    "esp32p4rev3-eth": "2026-10-30",
+    "desktop-macos": "2026-10-30",
     "desktop-windows": "2026-09-30",
-    "esp32c3": "2026-10-27",
+    "esp32c3": "2026-10-30",
     "desktop-linux": "2026-10-12",
-    "esp32s3-n32r16": "2026-10-27",
-    "teensy41": "2026-10-27"
+    "esp32s3-n32r16": "2026-10-30",
+    "teensy41": "2026-10-30",
+    "esp32-wrover": "2026-10-30",
+    "esp32p4rev3-eth-wifi": "2026-10-30",
+    "esp32s3-n8r2": "2026-10-30"
   },
   "perf": {
     "esp32": {
@@ -795,8 +800,8 @@
       }
     },
     "desktop-macos": {
-      "tick_us": 7,
-      "fps": 142857,
+      "tick_us": 8,
+      "fps": 125000,
       "scenario_p50": {
         "Effects_pipeline_builds_and_renders": {
           "p50": 7,
@@ -836,20 +841,20 @@
     }
   },
   "loc": {
-    "core": 33397,
-    "light": 31681,
+    "core": 33413,
+    "light": 31677,
     "platform": 22993,
-    "ui": 13043,
-    "test": 76140,
-    "moondeck": 32680
+    "ui": 13138,
+    "test": 76758,
+    "moondeck": 33648
   },
   "comments": {
     "core": {
-      "lines": 6760,
+      "lines": 6762,
       "ratio": 0.224
     },
     "light": {
-      "lines": 6660,
+      "lines": 6655,
       "ratio": 0.236
     },
     "platform": {
@@ -857,32 +862,32 @@
       "ratio": 0.206
     },
     "ui": {
-      "lines": 3481,
-      "ratio": 0.283
+      "lines": 3491,
+      "ratio": 0.281
     },
     "test": {
-      "lines": 7505,
-      "ratio": 0.114
+      "lines": 7520,
+      "ratio": 0.113
     },
     "moondeck": {
-      "lines": 4420,
-      "ratio": 0.155
+      "lines": 4470,
+      "ratio": 0.153
     }
   },
   "tests": {
-    "cases": 2836,
+    "cases": 2841,
     "scenarios": 36
   },
   "docs": {
-    "md_files": 170,
-    "md_lines": 31236,
-    "plans_files": 59,
-    "backlog_lines": 4001,
-    "lessons_lines": 546,
+    "md_files": 114,
+    "md_lines": 18090,
+    "plans_files": 10,
+    "backlog_lines": 2996,
+    "lessons_lines": 447,
     "claude_md_lines": 119
   },
   "complexity": {
-    "functions": 5520,
+    "functions": 5521,
     "over_threshold": 345,
     "worst_ccn": 128
   }

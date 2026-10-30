@@ -10,6 +10,23 @@ The browser walks the whole filesystem. Every file is byte-verified against the 
 
 One thing is left out on purpose: `/.hls`, the streaming encoder's scratch output, which is rewritten every second and would fill the report with skipped binaries.
 
+## Restore or clone
+
+Choosing a bundle asks what it is for. **Restore** puts a device back as the backup was, its identity included: the same device after an erase or a failed update. **Clone** makes a device another one like the backup, as a cloned disk image gets its own machine identity: the device keeps what makes it itself and takes everything else.
+
+| Kept by a clone | Why it differs per device |
+|---|---|
+| `deviceName` | its network name: the mDNS hostname, the access point and the DHCP hostname all derive from it |
+| WiFi's known networks | each with its password, which stays on the device it was typed into |
+| Ethernet's static IP settings | two devices claiming one address both drop off the network |
+| the desktop's stored hardware address | the default device name derives from it |
+
+What differs per device beyond its identity, such as each pole's Art-Net universe start, is set after the clone, by hand or through [the HTTP API](integrating.md).
+
+## Many devices alike
+
+A device's setup is two parts, and each already has its tool. The **board** is its device model: the [installer](https://moonmodules.org/MoonLight/install/) applies a model's pins, drivers and layout while it flashes. The **show** is everything else: clone it from a backup of the first device, or apply it as a [preset](presets.md), a state document a click recalls and the gallery shares. Flash each device with its model, then clone or apply the show onto it.
+
 ## What a restore reports
 
 The report lists what needed an eye:
@@ -20,7 +37,7 @@ The report lists what needed an eye:
 
 Most of a restore applies live, module by module, as each file lands. Two things do not, and the dialog names both:
 
-- **Network settings** apply at boot, because bringing an interface up is not a re-runnable operation. The dialog offers the restart, after which the device joins the network the backup names. Its file is written **last** for that reason: joining another network mid-restore would cut off the writes still to come.
+- **Network settings** apply at boot, because bringing an interface up is not a re-runnable operation. The dialog offers the restart, after which a restored device joins the network the backup names and a cloned one rejoins its own. Its file is written **last** for that reason: joining another network mid-restore would cut off the writes still to come.
 - **The web server's port**, which binds at boot.
 
 ## Why the browser does the work

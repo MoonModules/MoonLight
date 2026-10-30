@@ -582,22 +582,6 @@ Portable GPIO libraries (WiringPi, libgpiod) are too slow for LED timing, so the
 On a Pi 5, own PIO programs reach the hardware through the kernel's PIO driver, which piolib shows; Adafruit's PioMatter proves HUB75 that way, and HUB75 on a Pi is a second backend once this one exists.
 The research, with sources: [the LED-driver analysis](../../design/leddriver.md).
 
-### SE16 / LightCrafter power monitoring: sense pins free, module still to build (2026-09-02)
-
-Kind: Feature · Platform: S3 · [Card](https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287086286)
-
-Both boards carry voltage and current sensors. MoonLight records the SE 16 V1's pins
-(`MoonBase/Modules/ModuleIO.h`, board presets): **voltage GPIO 8, current GPIO 9**; the LightCrafter's are on [its page](../../reference/hardware/lightcrafter-16.md#power-sensing).
-
-**Still open**, per board: `voltagePin`/`currentPin` in the two device definitions, "Power
-monitoring" moving from `planned` to `supported`, the SE16's scale factors (the divider ratio and
-shunt value, which are NOT in MoonLight's preset and need the schematic), and a reading checked
-against a meter.
-
-Worth doing because it also gives the ADC seam a real bench rig: an on-board analog signal beats a
-hand-wired potentiometer. NOTE the pin move is unverified on hardware, both boards being offline
-when it was made: confirm LED output still works after the change before trusting it.
-
 ### LightCrafter 16: questions for the maker (2026-10-07)
 
 Kind: Investigation · Platform: S3 · [Card](https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287086342)
@@ -671,3 +655,26 @@ clean boot), and each risks a different failure: too few WiFi buffers drops pack
 small a stack overflows under a rare path. So measure one at a time on a board that is actually
 serving the UI, not idle. The payoff is real: at 88 KB free a classic board is one large allocation
 away from trouble, which is what drove both driver decisions on 2026-09-09.
+
+### A serial UART for sensors and scripts (2026-10-29)
+
+Kind: Feature · [Card](https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287640906)
+
+A UART that reads and writes a byte stream, as a platform seam with MoonLive builtins, so a serial device is a compiled module or a script written from its datasheet. The platform has none today: the only UART use is the Improv provisioning listener.
+
+**Who needs it**
+- The HLK-LD2450 24 GHz radar, up to three targets with x and y, at 256000 baud. Step 7 of [Audio reactive live performance](../Plan-20261013%20-%20Audio%20reactive%20live%20performance%20(0%20of%207).md) tracks performers with it. Two kit B units are on the bench.
+- Wired DMX-512 output, the same UART in RS-485 half-duplex mode: [RS-485 and DMX-512 wired output](https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287080691).
+- A DIN MIDI port, which is a UART at 31250 baud. MIDI reaches the board over USB, the network and the browser today.
+- GPS modules, sending NMEA text lines at 9600 baud.
+- BLE-to-serial modules (Nordic UART Service, HM-10): BLE without a BLE stack beside WiFi on the ESP32.
+- A radar as a presence trigger where a PIR gives false positives and active infrared shows in night-vision gear, such as a trail camera.
+
+**The shape**, following the [input-mapping plan](../Plan-20260901%20-%20Input%20mapping%20and%20scripted%20sensors%20(7%20of%2012).md)'s rule that a seam ships with its builtin:
+- The driver fills a receive ring buffer from its interrupt, so a read never blocks the render path. Pins are claimed through the Pins module. UART0 is the console; a classic ESP32 and an S3 have two more, a C3 one, a P4 four.
+- Builtins with the Arduino names: `serialBegin(rx, tx, baud)`, `serialAvailable()`, `serialRead()`, `serialWrite(b)`, plus a bulk read into an array, since at 256000 baud up to about 500 bytes arrive per 20 ms tick.
+- The seam is device-neutral: a device's protocol lives in its module or its script.
+
+**Open**
+- Delivery beyond a polled buffer: a callback per byte, line or frame; a line or frame mode for NMEA and radar packets; passing the stream through to the network.
+- Whether the input-mapping plan takes it as a step, with the LD2450 as its bench sensor. The plan's sensor table has no UART row yet; [the input-mapping design study](../../design/input-mapping.md) names the radar's need for it.

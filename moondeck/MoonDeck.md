@@ -634,7 +634,7 @@ The gap is real but narrow: `src/platform/esp32/` has no tick methods (it is fre
 tick path calls into), and while a call INTO one of them is reported at the call site, the
 function's own body is never analyzed. A platform function that blocks internally without
 carrying `MM_NONBLOCKING` is invisible. Closing that needs an xtensa clang: backlogged as
-[ESP32 clang/LLVM toolchain](https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287129673).
+[ESP32 clang/LLVM toolchain](https://github.com/MoonModules/MoonLight/issues/220).
 
 The count lives in the code check: [check_code](#check_code) runs the same build and adds one `blocking call on the render path` row per site, whose committed count may only fall. This script is the detailed view of those sites, on request. `-Wno-error=function-effects` keeps the build green, since each finding is a judgment: fix it, annotate the callee, or accept it with a scoped reason.
 
@@ -835,11 +835,20 @@ The MoonDeck button writes the file, prints a `MOONDECK_VIEW: /api/history-repor
 
 ### project_mirror
 
-Render the [GitHub Project](https://github.com/users/MoonModules/projects/5), the backlog's one home, to `docs/work/backlog_mirror/`, one Markdown document per Area grouped by module, so the repository versions every card edit and a reader reads the backlog as documents. It also writes `build/project.json` (gitignored) for an agent to search. Each card in a document carries its link, and the docs link a backlog item by that card URL, which survives a retitle. `--check` writes nothing and fails when a document differs from what the board renders, when a doc links a card the board does not hold, or when it links a generated document's heading instead of the card; it is the commit step, and without a network it skips. The Project is public, so any `gh` account reads it.
+Render the [GitHub Project](https://github.com/users/MoonModules/projects/5), the backlog's one home, to `docs/work/backlog_mirror/`, one Markdown document per Area grouped by module, so the repository versions every card edit and a reader reads the backlog as documents. It also writes `build/project.json` (gitignored) for an agent to search. Each card in a document carries its link. A doc links a backlog item by an issue, its own or a tracking issue listing its card, since GitHub keeps an issue's address and not a card's. `--check` writes nothing and fails when a document differs from what the board renders, when a doc links a card by its board address, or when it links a generated document's heading instead of the issue; it is the commit step, and without a network it skips. The Project is public, so any `gh` account reads it.
 
 ```bash
 uv run moondeck/report/project_mirror.py           # render the board into docs/work/backlog_mirror/
 uv run moondeck/report/project_mirror.py --check   # the commit check: fail on a stale or hand-edited document
+```
+
+### discord_reader
+
+An MCP server that lets an agent read the MoonModules Discord server, so a support question or a discussion is read rather than pasted as screenshots. A bot with View Channel and Read Message History reads every channel its role can see, minus the GitHub Activity feeds, which mirror GitHub. Its tools list the channels, read one channel, read the whole server over a time window with a link per message (the daily summary's source), and fetch a posted attachment. The token stays in the macOS keychain.
+
+```bash
+security add-generic-password -s discord-reader -a bot -w                                             # store the bot token, once
+claude mcp add --scope user discord -- uv run --script "$PWD/moondeck/report/discord_reader.py"       # register it, once per machine
 ```
 
 ### screenshot_modules
