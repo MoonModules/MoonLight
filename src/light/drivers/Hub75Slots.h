@@ -30,13 +30,15 @@ namespace mm {
 ///
 /// A panel lights where output-enable, the addressed row and the latched row meet, and the latch holds the row last strobed. So row r's words name row r - 1, the latch word moves the address to r in the dark, and row 0's words name the last row.
 ///
+/// The lit window follows the data in the latch, not the plane being clocked in. Row 0's words light the last row of the plane before, so they take that plane's window, and plane 0's take the top plane's, the one the buffer wraps from. With the current plane's window instead, the last row of each half-panel weighed its bits double and its top bit almost nothing: a line at the seam and along the bottom edge, which a uniform white hides.
+///
 /// ## Brightness is time
 ///
 /// A panel's chips only switch a column on or off, so plane p lights 2^p as long as plane 0 and brightness shortens every plane's window.
 ///
 /// Below about a quarter brightness, the lowest plane of a 64-column row rounds to nothing.
 
-/// Encode one RGB frame into @xref{the-wire-layout|bit planes}, @xref{the-address-lags-the-data-by-one-row|the address a row late}, @xref{brightness-is-time|brightness as time}; bytes written, or 0 on a bad geometry: a dark frame beats half a frame.
+/// Encode one RGB frame into @xref{the-wire-layout|bit planes}, @xref{the-address-lags-the-data-by-one-row|the address and the lit window a row late}, @xref{brightness-is-time|brightness as time}; bytes written, or 0 on a bad geometry: a dark frame beats half a frame.
 inline size_t hub75Encode(const uint8_t* rgb, uint8_t* out,
                           const Hub75Geometry& geo, const Hub75Layout& lay = {}) {
     if (!rgb || !out) return 0;
@@ -71,10 +73,12 @@ inline size_t hub75Encode(const uint8_t* rgb, uint8_t* out,
             const uint16_t darkWord = addrMask(latched);
             const uint16_t litWord = static_cast<uint16_t>(darkWord | (1u << lay.oe));
             const uint16_t latchWord = static_cast<uint16_t>(addrMask(r) | (1u << lay.lat));
+            // The plane whose data the latch holds while these words clock in, the previous one for row 0: its window is the one these words light.
+            const uint8_t shownPlane = r == 0 ? static_cast<uint8_t>((plane + geo.bitDepth - 1) % geo.bitDepth) : plane;
             // Lit words: the top plane fills the row less its latch, each lower plane half the one above; 32 bits hold 2,048 words at 6 bits.
             const uint32_t span = 255u << (geo.bitDepth - 1);
             const uint32_t litWords =
-                (static_cast<uint32_t>(rowWords - 1) * geo.brightness * (1u << plane) + span / 2) / span;
+                (static_cast<uint32_t>(rowWords - 1) * geo.brightness * (1u << shownPlane) + span / 2) / span;
             for (uint16_t pair = 0; pair < pairs; pair++)
             for (uint16_t x = 0; x < geo.width; x++) {
                 // Pair p of step r is row r + p*scanRate, paired half a panel below.

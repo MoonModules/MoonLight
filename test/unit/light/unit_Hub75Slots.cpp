@@ -27,6 +27,12 @@ uint16_t slot(const std::vector<uint8_t>& out, size_t n) {
     return static_cast<uint16_t>(out[n * 2] | (out[n * 2 + 1] << 8));
 }
 
+/// The first slot of the row that lights plane p's first row: the one after it latches, since a row is lit while the next one clocks in, and the buffer wraps.
+size_t litRowBase(const mm::Hub75Geometry& geo, uint8_t p) {
+    const size_t rowsInFrame = static_cast<size_t>(geo.bitDepth) * geo.scanRows();
+    return (static_cast<size_t>(p) * geo.scanRows() + 1) % rowsInFrame * geo.width;
+}
+
 }  // namespace
 
 TEST_CASE("HUB75 encode: the frame is bit-plane major, one word per column") {
@@ -206,6 +212,37 @@ TEST_CASE("HUB75 encode: the DMA wrap lights the last row once, from row 0's dat
     CHECK((slot(out, 0) & (1u << lay.a)) == (lastRow & 1 ? (1u << lay.a) : 0u));
 }
 
+// Seen on two chained 64x64 panels: a line at the seam (row 31) and along the bottom edge (row 63), brighter below half gray and nearly dark just above it. Row 0's words lit the last row with the plane being clocked in, while the latch held the plane before it, so that row weighed its bits double and its top bit almost nothing. A uniform white sums to the same total, which is why the wrap test above passes either way.
+TEST_CASE("HUB75 encode: every row of a value is lit as long as every other, the last row of each half included") {
+    mm::Hub75Geometry geo;
+    geo.width = 64; geo.height = 64; geo.scanRate = 32; geo.bitDepth = 6; geo.brightness = 255;
+    mm::Hub75Layout lay;
+    std::vector<uint8_t> rgb(static_cast<size_t>(geo.width) * geo.height * 3, 0x7F);   // below half: every plane but the top one
+    std::vector<uint8_t> out(geo.frameBytes(), 0);
+    REQUIRE(mm::hub75Encode(rgb.data(), out.data(), geo, lay) == geo.frameBytes());
+
+    // The panel's view: a row lights what the row before it latched, so each latched row's brightness is the lit words
+    // of the row that follows, counted where its data bit is set, summed over the planes. The buffer wraps.
+    const uint16_t rows = geo.scanRows();
+    const size_t rowsInFrame = static_cast<size_t>(geo.bitDepth) * rows;
+    std::vector<uint32_t> upper(rows, 0), lower(rows, 0);
+    for (size_t b = 0; b < rowsInFrame; b++) {
+        const size_t latchedFrom = (b + rowsInFrame - 1) % rowsInFrame;
+        const uint16_t data = slot(out, latchedFrom * geo.width);
+        uint32_t lit = 0;
+        for (uint16_t x = 0; x < geo.width; x++) lit += (slot(out, b * geo.width + x) & (1u << lay.oe)) != 0;
+        const uint16_t row = static_cast<uint16_t>(latchedFrom % rows);
+        if (data & (1u << lay.r1)) upper[row] += lit;
+        if (data & (1u << lay.r2)) lower[row] += lit;
+    }
+    REQUIRE(upper[0] > 0);
+    for (uint16_t r = 0; r < rows; r++) {
+        CAPTURE(r);
+        CHECK(upper[r] == upper[0]);   // row r of the upper half
+        CHECK(lower[r] == upper[0]);   // row r + 32: the lower half, row 63 the bottom edge
+    }
+}
+
 // Seen on a 64x64 panel: row 63 ghosting onto row 32, rows 0 and 32 brighter, flashing. The peripheral idles its lines LOW between scans, and with OE encoded as the panel reads it (active low) that idle bus lit address 0 with the last latched row.
 TEST_CASE("HUB75 encode: the OE bit is set where the panel is lit, so an all-zero idle bus is dark") {
     mm::Hub75Geometry geo;
@@ -215,7 +252,7 @@ TEST_CASE("HUB75 encode: the OE bit is set where the panel is lit, so an all-zer
     std::vector<uint8_t> out(geo.frameBytes(), 0);
     REQUIRE(mm::hub75Encode(rgb.data(), out.data(), geo, lay) == geo.frameBytes());
     // The top plane fills its row, so every column word lights but the latch word.
-    const size_t top = static_cast<size_t>(geo.bitDepth - 1) * geo.scanRows() * geo.width;
+    const size_t top = litRowBase(geo, geo.bitDepth - 1);
     for (uint16_t x = 0; x + 1 < geo.width; x++) CHECK((slot(out, top + x) & (1u << lay.oe)) != 0);
     CHECK((slot(out, top + geo.width - 1) & (1u << lay.oe)) == 0);
 }
@@ -237,9 +274,9 @@ TEST_CASE("HUB75 encode: a row clocks exactly its width, so the last column reac
 }
 
 namespace {
-// How many words of plane p's first row carry the OE (lit) bit.
+// How many words light plane p's first row: the words of the row after it that carry the OE (lit) bit.
 size_t litWords(const std::vector<uint8_t>& out, const mm::Hub75Geometry& geo, const mm::Hub75Layout& lay, uint8_t p) {
-    const size_t base = static_cast<size_t>(p) * geo.scanRows() * geo.width;
+    const size_t base = litRowBase(geo, p);
     size_t n = 0;
     for (uint16_t x = 0; x < geo.width; x++) n += (slot(out, base + x) & (1u << lay.oe)) != 0;
     return n;
