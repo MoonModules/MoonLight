@@ -1,6 +1,6 @@
 # MoonAtlas example: a bright row at a HUB75 panel's seam
 
-A report from the bench: two 64x64 HUB75 panels chained side by side, 128x64 on an ESP32, show a bright line along row 32 or 33. The maintainer knows the driver's name and nothing of its wire format. Three queries and one 60-line read take them from the symptom to a hypothesis with predictions to check on the panels, and to the test that missed it, and a MoonLive script then puts the prediction on the panels with no firmware build. Output from the tree on 2026-10-29; the transcript at the end is the session as it ran.
+A report from the bench: two 64x64 HUB75 panels chained side by side, 128x64 on an ESP32, show a bright line along row 32 or 33. The maintainer knows the driver's name and nothing of its wire format. Three queries and one 60-line read take them from the symptom to a hypothesis with predictions to check on the panels, and to the test that missed it, and a MoonLive script then puts the prediction on the panels with no firmware build. Output from the tree on 2026-10-29, and line numbers name the encoder and its test as they were before the fix; the transcript at the end is the session as it ran.
 
 ## What it is
 
