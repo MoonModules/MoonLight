@@ -34,11 +34,32 @@ Running the same script from several processes is a call, its explanation living
 
 **Text and shape have caps, as the help's cards do.** Text past a cap goes to its Diátaxis kind rather than being squeezed: a table to a reference page, a reason to an explanation, a symptom to Troubleshooting, a second route to its own process.
 
+**A step has no loop**, as Gherkin has none: a format with variables and repetition is a programming language, so work that repeats over boards or measures a spread stays a script a `run` step names. **A `call` gets no derived `then`**, since its result is not in its action; one is written by hand where the call changes the device. **A process no runner verifies is listed, not counted**, since a count of them could never fall: they are the ones a person alone can judge.
+
 ## Done is observed
 
 **A step is done when its `then` holds now.** The app reads its own state, so "WiFi is set up" is done the moment a network is known, however it got there. This is the onboarding checklist's textbook rule, completion observed rather than recorded, and it needs no storage. A process is done when every expectation the state can answer holds, and it has at least one: its last step alone is not enough, since a last step is often one the state cannot see.
 
 What the state cannot show is vouched for by whoever knows it. The installer marks the install done, since it knows the platform for certain where a running device cannot tell a desktop from a Linux board or a container. MoonDeck marks a process done when every script its steps run last passed, and a run counts only while it is newer than the sources it covers, as a firmware build does. Those marks stay in the browser. The website cannot read a device, since an https page cannot call a device's http address, so there only the reader's marks count.
+
+## The definition in the repository, the runs on GitHub
+
+A process file is the definition and one run of it is an instance, the split workflow engines make. The repository keeps the one definition; GitHub keeps the instances and the work. It is no process engine, editor or server: a schema, the process files, one generator and an adapter in each runner.
+
+- **Two kinds of step.** A volatile step acts on a device or in the app, and nothing records it. A recorded step changes the repository or what ships, such as a commit gate, a merge, a release or a verification on hardware, and leaves a record of its run. The kind follows from the process, not the action: every gate process MoonDeck lists, plus `pick-spec-plan` and `contribute-pr`, records its steps.
+- **Every CI job runs locally too.** A workflow is a thin caller of the MoonDeck script its process step names, which `test_workflows.py` holds it to, so GitHub is one runner of the processes among others: [run_process](../../../moondeck/MoonDeck.md#run_process) runs a process's script steps, and [act](https://github.com/nektos/act) runs the Linux jobs in containers. Only publishing (the release upload, Pages, the container registry) is GitHub's alone.
+- **What copies a process is generated, what points at it is written.** The pull request template is generated from `contribute-pr`'s questions, the bug form from Log an issue; `CONTRIBUTING.md` is one sentence linking the process.
+- **The work is the Project's cards**, mirrored into `docs/work/backlog_mirror/` by [project_mirror](../../../moondeck/MoonDeck.md#project_mirror), so git versions every card edit. A card accepted moves to Next and becomes an issue. A doc links an issue, the item's own or a tracking issue listing its card, since GitHub keeps an issue's address and not a card's, as [Pick, spec and plan a topic](../../moonwalk.md#pick-spec-plan) describes, and a plan that ships or stops becomes a closed issue labeled `plan`. A card's Process field, rather than a label per process, links work to the process it serves, and the map lists each process's open cards from it.
+
+| Project field | Holds |
+|---|---|
+| Status | Inbox, Backlog, Next, In progress, Waiting (blocked on someone outside the project: a reply, a part, a tester), In review, Done |
+| Area | the `src/` tree and the module roles, plus Process and docs |
+| Module | the module's class name, empty for an item across modules |
+| Kind | Bug, Feature, Restructure, Investigation |
+| Trigger | what makes the item worth building, so a met trigger is found by scanning one column |
+| Platform | classic, S3, P4, C3, Teensy, desktop, Pi, all |
+| Stage, Process | the MoonWalk stage and process the item serves |
 
 ## The map
 

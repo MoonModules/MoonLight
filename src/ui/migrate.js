@@ -532,9 +532,48 @@ export function diffRestore(files, stateModules, typeNames = []) {
     return report;
 }
 
+// What makes a device itself rather than its configuration: a clone keeps the target's own, as a cloned disk image gets its own machine identity.
+// Each entry is a config file and the key paths in its document; a file listed with no paths is kept whole.
+export const IDENTITY = {
+    "/.config/SystemModule.json": [["System", "deviceName"]],
+    "/.config/NetworkModule.json": [["Network", "WiFi", "known"],
+        ...["ipSettings", "ip", "gateway", "subnet", "dns"].map(k => ["Network", "Ethernet", k])],
+    "/.config/identity": [],   // the desktop's stored hardware address, which its name derives from
+};
+/// Turn a backup's files into a clone of it for another device: the target's identity, from `targetFiles` (its own current files), replaces the bundle's.
+/// Returns {files, report}; a key the target lacks is dropped, so the device keeps what it holds.
+export function cloneIdentity(files, targetFiles) {
+    const out = { ...files };
+    const report = [];
+    const at = (obj, path) => path.reduce((o, k) => (o && typeof o === "object" ? o[k] : undefined), obj);
+    for (const [file, paths] of Object.entries(IDENTITY)) {
+        if (!(file in out)) continue;
+        if (paths.length === 0) {
+            delete out[file];
+            report.push({ kind: "kept", where: file, detail: "this device's own, not the backup's" });
+            continue;
+        }
+        let doc, target = null;
+        try { doc = JSON.parse(out[file]); } catch (_) { continue; }
+        try { target = JSON.parse(targetFiles[file]); } catch (_) {}
+        for (const path of paths) {
+            const parent = at(doc, path.slice(0, -1));
+            const key = path[path.length - 1];
+            if (!parent || typeof parent !== "object" || !(key in parent)) continue;
+            const mine = at(target, path);
+            if (mine === undefined) delete parent[key];
+            else parent[key] = mine;
+            report.push({ kind: "kept", where: `${file} ${path.join(".")}`, detail: "this device's own, not the backup's" });
+        }
+        out[file] = JSON.stringify(doc);
+    }
+    return { files: out, report };
+}
+
 /// Restore a backup bundle onto a device through `fetchFn`, the browser's fetch or a test's against a host: migrate, write, report.
+/// `clone` keeps the target's identity (cloneIdentity) instead of restoring the backup's.
 /// Returns {entries, hasNetwork}: the report's entries, and whether a network file waits for the next boot.
-export async function restoreBundle(bundle, fetchFn) {
+export async function restoreBundle(bundle, fetchFn, clone = false) {
     // Restore is the one supported upgrade path, so it reads the format the previous name wrote as well as its own.
     const kBackupFormats = ["MoonLight-config-backup", "projectMM-config-backup"];   // a bundle already saved carries the name it was saved under
     if (!kBackupFormats.includes(bundle.format) || !bundle.files) {
@@ -547,7 +586,22 @@ export async function restoreBundle(bundle, fetchFn) {
     let live = [];
     try { live = (await (await fetchFn("/api/state")).json()).modules || []; } catch (_) {}
     // The rename map first: MIGRATING.md's schema breaks, applied client-side and reported.
-    const { files, report } = applyMigrations(bundle.files, live);
+    const migrated = applyMigrations(bundle.files, live);
+    let { files } = migrated;
+    const report = [...migrated.report];
+    if (clone) {
+        // The target's own identity files, read before anything is written over them.
+        const targetFiles = {};
+        for (const file of Object.keys(IDENTITY)) {
+            try {
+                const res = await fetchFn("/api/file?path=" + encodeURIComponent(file));
+                if (res.ok) targetFiles[file] = await res.text();
+            } catch (_) {}
+        }
+        const cloned = cloneIdentity(files, targetFiles);
+        files = cloned.files;
+        report.push(...cloned.report);
+    }
     // Directories before files (mkdir is non-recursive); existing dirs answer 500, harmless.
     for (const dir of restoreDirs(files)) {
         await fetchFn("/api/dir?path=" + encodeURIComponent(dir), { method: "POST", body: "" }).catch(() => {});

@@ -1425,6 +1425,69 @@
     }
   },
   {
+    "name": "Olimex ESP32-P4-PC",
+    "chip": "ESP32-P4",
+    "firmwares": [
+      "esp32p4rev1-eth"
+    ],
+    "image": "assets/deviceModels/esp32-p4-olimex-p4-pc.jpg",
+    "url": "https://www.olimex.com/Products/IoT/ESP32-P4/ESP32-P4-PC/open-source-hardware",
+    "supported": [
+      "LEDs",
+      "Ethernet",
+      "Audio",
+      "SD card"
+    ],
+    "planned": [
+      "HDMI",
+      "Speaker",
+      "Camera",
+      "USB host"
+    ],
+    "state": {
+      "System": {
+        "deviceModel": "Olimex ESP32-P4-PC",
+        "I2cBus": {
+          "type": "I2cBusModule",
+          "sda": 7,
+          "scl": 8
+        }
+      },
+      "Drivers": {
+        "$patch": "replace",
+        "ParallelLed": {
+          "type": "ParallelLedDriver",
+          "peripheral": "Parlio",
+          "pins": "14,15,16,17,18,19,46,47"
+        }
+      },
+      "Network": {
+        "$patch": "replace",
+        "Ethernet": {
+          "type": "EthernetModule",
+          "ethBoard": "P4 RMII"
+        }
+      },
+      "Services": {
+        "$patch": "replace",
+        "Audio": {
+          "type": "AudioService",
+          "mode": 2,
+          "sckPin": 12,
+          "wsPin": 10,
+          "sdPin": 11,
+          "mclkPin": 13,
+          "codec": "ES8311",
+          "codecAddr": "0x18"
+        },
+        "SdCard": {
+          "type": "SdCardService",
+          "board": "P4 SDMMC"
+        }
+      }
+    }
+  },
+  {
     "name": "MHC-WLED ESP32-P4 shield",
     "chip": "ESP32-P4",
     "firmwares": [

@@ -116,7 +116,7 @@ processes:
         say: Restore the bundle in the File Manager.
         when: { open: { module: FileManagerModule } }
         detail: |
-          Press **Restore**, choose the bundle and confirm twice. The second press is deliberate: restoring overwrites the device's files.
+          Press **Restore**, choose the bundle and confirm twice. The second press is deliberate: restoring overwrites the device's files. Then pick **restore** for this device or an erased one, and **clone** for another device, which keeps its own name, WiFi and IP address: [Restore or clone](reference/backup-and-restore.md#restore-or-clone).
       - id: report
         say: Read the report.
         when: { manual: "It lists what was renamed and mapped, the values to review, and what this firmware lacks." }
@@ -129,12 +129,6 @@ processes:
         when: { open: { module: Drivers } }
         detail: |
           The backup carries the old board's pins: a board wired differently shows wrong lights, which look like a broken effect.
-      - id: rename
-        say: Give the clone its own name.
-        given: [{ input: target, equals: Another device }]
-        when: { open: { module: SystemModule } }
-        detail: |
-          The [device name](explanation/architecture/mooncore.md#device-name-one-identity-every-network-name-derives-from-it) comes across with the backup.
   - id: diagnose-lights
     title: Diagnose dark or flickering lights
     actor: user

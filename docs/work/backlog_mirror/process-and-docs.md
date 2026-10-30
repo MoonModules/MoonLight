@@ -404,3 +404,27 @@ At 0.5 to 1 MB each that is 25 to 50 MB more, so a smaller format (128 px, 2 s) 
 Kind: Feature · [Card](https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287130440)
 
 - **sigrok/fx2lafw cross-check + MoonDeck "LED driver test" Python script** — the independent-clock proof and the run-from-MoonDeck flow ([the LED-driver analysis](../../design/leddriver.md)). The on-board RMT-RX loopback (shipped) is the cheap CI correctness gate but a *compromised witness* for WiFi-induced flicker — the RX capture runs on the same ESP32 whose WiFi causes the glitch. The real flicker test is a **sustained capture (seconds) with WiFi associated + a packet flood**, decoding every frame for a byte-slip or reset-gap deviation; it validates the SHIPPED render↔encode split's WiFi isolation (drivers tick on core 1; WiFi lives on core 0). A DSLogic Plus (100 MS/s) upgrade is reactive — only if a flicker reproduces that 24 MS/s can't resolve.
+
+### The live runner restores every board when one fails mid-run (2026-10-30)
+
+Kind: Bug · Stage: Test · [Card](https://github.com/users/MoonModules/projects/5?pane=issue&itemId=288372589)
+
+`run_live_scenario.py` puts every other board back after the step loop, not in a `finally`: a two-board run whose receiver rebooted left the sender's scenario canvas and its Network Send running on the P4, still streaming to the S3. The restore of every board belongs in a `finally`, so an exception or a dead board still puts the others back.
+
+From the Streams plan, #215.
+
+### Recorded runs of a process, with their state (2026-10-30)
+
+Kind: Feature · [Card](https://github.com/users/MoonModules/projects/5?pane=issue&itemId=288372818)
+
+A recorded step (a plan step, a commit gate, a merge, a release, a verification on hardware) leaves a record of its run, in one of three states: Started, Done or Stuck. Automated steps record as check runs on the commit or pull request, the local gates included through `gh api`, so a pull request shows which gate passed on which commit. Manual steps record in an issue created from an issue form generated from the process file. Stuck, a run waiting at a prompt for minutes, is reported as `walk_status` reports a stale gate, and reaches the product owner where they read.
+
+From the Processes plan's step 19.
+
+### Issues in other projects stay current (2026-10-30)
+
+Kind: Feature · [Card](https://github.com/users/MoonModules/projects/5?pane=issue&itemId=288380943)
+
+A MoonDeck check asks `gh` for the state of each row of [Issues in other projects](https://moonmodules.org/MoonLight/reference/issues-in-other-projects.html) and of the release that carries its fix, and flags a row whose issue closed or whose fix shipped, so a workaround does not outlive its reason.
+
+From the Processes plan's step 20.

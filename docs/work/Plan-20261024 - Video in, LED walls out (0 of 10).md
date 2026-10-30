@@ -4,7 +4,7 @@ Plan of 2026-10-24, a Feature, for approval. **Recommended (2026-10-25):** appro
 
 ## What exists
 
-- **The picture family** ([Streams plan](Plan-20261013%20-%20Streams%2C%20every%20frame%20from%20outside%20(11%20of%2013).md)): a source is a transport plus a decoder delivering RGB888 frames, and the Picture effect samples them per light. A live source paces itself and the newest frame wins.
+- **The picture family** ([streams design study](../design/streams.md)): a source is a transport plus a decoder delivering RGB888 frames, and the Picture effect samples them per light. A live source paces itself and the newest frame wins.
 - **The Picture service** (`PictureService.h`) has two sources, an enum: `test pattern` and `usb capture`. A capture source runs its own task, which awaits a frame, decodes it into the service's buffer and publishes it. `adding-a-stream-source.md` names "a source per file behind a small registry" as the next step.
 - **The capture seam** (`platform.h`, `videoCapture*`) is "decode into RGB888 at most this size". Only the P4 implements it, for a UVC grabber's MJPEG through the hardware JPEG decoder. The desktop has a stand-in that synthesizes frames for the tests; `usbvideo_frames.h` holds the shared mode pick, JPEG header parse and area shrink.
 - **No JPEG decoder on the desktop**, and no YUV conversion anywhere.
@@ -41,7 +41,7 @@ PipeWire is the Linux media graph: a camera, an application's video and a consum
 
 ### The browser, as a source and as an authoring tool
 
-The split follows the Streams plan's [browser and device](Plan-20261013%20-%20Streams%2C%20every%20frame%20from%20outside%20(11%20of%2013).md#browser-and-device) rule: what runs with no browser open belongs on the device, what happens once with a person at the screen belongs in the browser.
+The split follows the streams study's [browser and device](../design/streams.md#browser-and-device) rule: what runs with no browser open belongs on the device, what happens once with a person at the screen belongs in the browser.
 
 - **The browser as a picture source**, `browser`: a page draws a video file, a webcam or a shared screen (`getDisplayMedia`) onto a canvas at the picture's size and sends the RGB frames over the existing WebSocket into the service's pixels, as WLED streams a tab (DedeHai, PR #4997). A `<video>` element first, since it plays every file the browser does, and GIF frame by frame after it through `ImageDecoder`. About 7 KB a frame at 64x36, 200 KB/s at 30 fps. It needs no hardware, so every board tests the picture path with it.
 - **Converter and baking pages**: crop, scale and convert images and video to GIF, and bake a whole video into FSEQ for this layout ahead of time, sampled per light with the area filter in linear light, so the board plays it standalone through the FSEQ player. An hour is about 1.3 GB at 64x64 and 30 fps and 5.3 GB at 12,288 lights and 40 fps, so a baked movie travels on the SD card rather than over WiFi.

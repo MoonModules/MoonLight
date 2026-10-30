@@ -7576,7 +7576,7 @@ function renderFileManager(mod, host) {
     const restBtn = document.createElement("button");
     restBtn.className = "fm-tool fm-tool--icon fm-tool--danger";
     restBtn.textContent = "⟲";
-    restBtn.title = "Restore config from a backup bundle, overwrites the device's files, then reports anything that didn't carry over";
+    restBtn.title = "Restore or clone config from a backup bundle, overwrites the device's files, then reports anything that didn't carry over";
     armPressTwice(restBtn, () => restInput.click(), { armedText: "✓" });
     bar.appendChild(restBtn);
     bar.appendChild(restInput);
@@ -7857,8 +7857,40 @@ async function fmBackupConfig() {
 }
 
 async function fmRestoreConfig(file, refresh) {
-    const { entries, hasNetwork } = await restoreBundle(JSON.parse(await file.text()), fetch);
+    const bundle = JSON.parse(await file.text());
+    const clone = await fmAskRestoreOrClone(bundle);
+    if (clone === undefined) return;   // canceled
+    const { entries, hasNetwork } = await restoreBundle(bundle, fetch, clone);
     fmShowRestoreReport(entries, refresh, hasNetwork);
+}
+
+// Restore puts a device back as it was; Clone makes this device another one like it, keeping its own name and network.
+// Resolves false for Restore, true for Clone, undefined for cancel.
+function fmAskRestoreOrClone(bundle) {
+    return new Promise(resolve => {
+        const ov = document.createElement("div");
+        ov.className = "fw-overlay";
+        const box = document.createElement("div");
+        box.className = "fw-overlay-box";
+        const h = document.createElement("h2");
+        h.textContent = `Restore ${bundle.device || "backup"}`;
+        const msg = document.createElement("p");
+        msg.className = "fw-overlay-msg";
+        msg.textContent = "Restore puts this device back as the backup was, its name and network included. "
+            + "Clone makes it another device like the backup, keeping its own name, WiFi and IP address.";
+        box.append(h, msg);
+        const mk = (text, value) => {
+            const b = document.createElement("button");
+            b.textContent = text;
+            b.addEventListener("click", () => { ov.remove(); resolve(value); });
+            box.appendChild(b);
+        };
+        mk("restore", false);
+        mk("clone", true);
+        mk("cancel", undefined);
+        ov.appendChild(box);
+        document.body.appendChild(ov);
+    });
 }
 
 // The report dialog. Not an alert: the list can be long and deserves reading.
@@ -7892,7 +7924,7 @@ function fmShowRestoreReport(entries, refresh, offerRestart) {
     const note = document.createElement("p");
     note.className = "fw-overlay-msg";
     note.textContent = offerRestart
-        ? "Settings are applied live, except network settings: restart the device to apply them (after the restart it joins the network the backup names)."
+        ? "Settings are applied live, except network settings: restart the device to apply them."
         : "Settings are applied live.";
     box.appendChild(note);
     if (offerRestart) {

@@ -9,7 +9,7 @@ namespace mm {
 ///
 /// @technical
 ///
-/// SHA-1 is broken for security.
+/// SHA-1 is broken for security, which is why the WebSocket accept key (RFC 6455) is its one use.
 ///
 /// An inline free function in the namespace, so any unit includes it with no implementation file and calls it unqualified, at the cost of a small copy per unit.
 

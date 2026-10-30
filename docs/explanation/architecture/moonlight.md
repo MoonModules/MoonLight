@@ -261,7 +261,7 @@ Two rules separate those channels from color, and both matter:
 
 This is what makes a moving head reachable by the same pipeline as a pixel. The light domain produces one logical light per fixture, and the driver expands each into that fixture's channel block through the profile. It is also the cheapest thing to configure, since only the start address and the fixture type are needed, never a per-fixture address table.
 
-The trade is deliberate: **a chain must be homogeneous**. Mixing fixture types on one universe, or leaving gaps between fixtures, has no expression in this model, and neither does a fixture whose address does not sit on the stride. Those need a per-fixture address map, which is the fixture-model work ([backlog](https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287082264)). Until then, a mixed rig gives each fixture type its own driver instance with its own fixture profile, start address and count.
+The trade is deliberate: **a chain must be homogeneous**. Mixing fixture types on one universe, or leaving gaps between fixtures, has no expression in this model, and neither does a fixture whose address does not sit on the stride. Those need a per-fixture address map, which is the fixture-model work ([backlog](https://github.com/MoonModules/MoonLight/issues/219)). Until then, a mixed rig gives each fixture type its own driver instance with its own fixture profile, start address and count.
 
 ## Multicast and IGMP snooping
 
@@ -293,7 +293,7 @@ How lighting uses the core [multi-device runtime](mooncore.md#multi-device-runti
 
 - **The same effect on every board.** [Shared controls](mooncore.md#multi-device-runtime) carry the surface, and whatever the Control card assigns it to, so several boards run one effect with one set of controls. This is the controls half of supersync; the clock is the other.
 - **Synced visuals from the shared clock.** Effects animate off elapsed time ([Effects](#effects)), so a synced clock is what makes a wall of controllers animate in lockstep regardless of each one's frame rate. This is the light-domain payoff of the core clock sync.
-- **Light distribution**: one device sending rendered light data to another uses the existing ArtNet / E1.31 / DDP standards. The ArtNet *driver* sends to fixtures; device-to-device distribution as a sync topology is filed in [backlog/core](https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287077324). No bespoke protocol.
+- **Light distribution**: one device sending rendered light data to another uses the existing ArtNet / E1.31 / DDP standards. The ArtNet *driver* sends to fixtures; device-to-device distribution as a sync topology is part of the backlog card Clock sync. No bespoke protocol.
 
 ## What bounds a parallel driver
 

@@ -159,17 +159,16 @@ CARD_LINK = re.compile(r"projects/\d+\?pane=issue&itemId=(\d+)")
 MIRROR_LINK = re.compile(r"\]\(([^)\s]*backlog_mirror/[a-z-]+\.md(?:#[\w-]+)?)\)")
 
 
-def dead_links(items: list[dict], docs_root: Path) -> list[str]:
-    """A card link whose card is gone, and a link into the generated mirror, which should link the card or the Project instead."""
-    alive = {r["card"].rsplit("=", 1)[-1] for r in items if r.get("card")}
+def unstable_links(docs_root: Path) -> list[str]:
+    """A doc linking a card's board address, which GitHub does not promise to keep, where the card's issue is the stable link; and a link into the generated mirror."""
     out = []
     for p in sorted(docs_root.rglob("*.md")):
         if p.parent.name == "backlog_mirror":
             continue
         text = p.read_text(encoding="utf-8")
         rel = p.relative_to(ROOT) if p.is_relative_to(ROOT) else p
-        out += [f"{rel}: card {m.group(1)} is not on the board" for m in CARD_LINK.finditer(text) if m.group(1) not in alive]
-        out += [f"{rel}: links the mirror ({m.group(1)}), link the card or the Project instead" for m in MIRROR_LINK.finditer(text)]
+        out += [f"{rel}: links card {m.group(1)} by its board address; convert the card to an issue and link the issue" for m in CARD_LINK.finditer(text)]
+        out += [f"{rel}: links the mirror ({m.group(1)}), link the issue or the Project instead" for m in MIRROR_LINK.finditer(text)]
     return out
 
 
@@ -218,7 +217,7 @@ def main() -> int:
     docs = render(items, project, rel)
 
     if args.check:
-        diff, dead = differences(docs, folder), dead_links(items, ROOT / "docs") + missing_targets(items)
+        diff, dead = differences(docs, folder), unstable_links(ROOT / "docs") + unstable_links(ROOT / "moondeck") + missing_targets(items)
         if diff:
             print(f"FAIL: {len(diff)} backlog document(s) differ from the board: {', '.join(diff)}. Run project_mirror.py and stage the result.")
         for d in dead:

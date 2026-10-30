@@ -1,6 +1,6 @@
 # Driving LED panels with a receiving card
 
-You bought a panel receiving card, most likely a **ColorLight** one, the family MoonLight supports. The steps are in [Drive LED panels through a receiving card](../../moonwalk.md#panel-cards), with [Set the panels up in LEDVision](../../moonwalk.md#panel-card-ledvision) and [Clear the v13 flicker](../../moonwalk.md#panel-card-downgrade) beside it. Below is what those steps lean on: why the link matters, which board, what the settings mean, and what to check when the wall stays dark.
+You bought a panel receiving card, most likely a **ColorLight** one, the family MoonLight supports. The MoonLight steps are in [Drive LED panels through a receiving card](../../moonwalk.md#panel-cards), with [Clear the v13 flicker](../../moonwalk.md#panel-card-downgrade) beside it. Below is what those steps lean on: why the link matters, which board, what the settings mean, how the card itself is set up, and what to check when the wall stays dark.
 
 > New here? Start with **[Install MoonLight](../../moonwalk.md#install)**, then **[How MoonLight works](../../explanation/how-moonlight-works.md)**.
 
@@ -64,7 +64,7 @@ The panel-card firmware is already on for these boards. A classic-ESP32 build do
 
 The driver has **no geometry controls**. The wall's shape lives in the Layout, once, so that everything else (effects, modifiers, the preview) sees the same picture.
 
-**A plain Grid is usually all you need.** Two 128x64 panels stacked is a 128x128 grid, and that is the whole configuration. The reason it is that simple is worth knowing: the driver reads only the wall's width and height and sends the image row by row. Which physical panel a row lands on, and in what order the HUB75 ribbons chain, was already settled on the card in [LEDVision](../../moonwalk.md#panel-card-ledvision). The card owns panel arrangement; MoonLight owns the picture.
+**A plain Grid is usually all you need.** Two 128x64 panels stacked is a 128x128 grid, and that is the whole configuration. The reason it is that simple is worth knowing: the driver reads only the wall's width and height and sends the image row by row. Which physical panel a row lands on, and in what order the HUB75 ribbons chain, was already settled on the card in [LEDVision](#8-set-the-card-up-in-ledvision). The card owns panel arrangement; MoonLight owns the picture.
 
 That is also why this needs none of the physical detail you may have filled in elsewhere. An output page that asks for scan rate, address lines and chain order is describing panels driven *directly*, where the software has to generate the HUB75 timing itself. Through a receiving card, none of that is the sender's business: the card generates the timing, and the sender hands it an image. That holds for any sender, [FPP](https://github.com/FalconChristmas/fpp) included, which reaches these cards over Ethernet exactly as MoonLight does.
 
@@ -163,16 +163,42 @@ The mismatch is not subtle in one direction: leave a downgraded card on `v13 and
 
 ---
 
-## 8. When it does not light up
+## 8. Set the card up in LEDVision
+
+The card stores its panel size, count and driver IC, written once with ColorLight's [LEDVision](https://en.colorlightinside.com/product/download/380) on Windows. MoonLight then needs no panel settings. Use **8.8**, the last version with net card output; 8.5 works as well. Labels move between versions, so the wording below is approximate. The example is two 128x64 panels stacked, 128x128 in all.
+
+**Intelligent Setting defines one panel.** The cabinet size, the data group order and the receiver mapping after it define the wall, and a wall that stays wrong after Intelligent Setting is usually one of those three.
+
+**A module is one data group, not one panel.** A HUB75 panel has two sets of color lines: RGB1 drives its top half and RGB2 its bottom half. So a 128x64 panel is two data groups of 128x32 each, at 32 scan, and LEDVision counts in data groups.
+
+1. **Connect** the card to the machine's Ethernet port. Power the panels through their own power pins, never the HUB75 ribbon. Use the outputs in order: the first panel on J1, the next on J2.
+2. **Open the receiving-card setup**, usually under `Settings`. Some versions ask for a password: `168` or `admin`. Choose **net card** as the sending method.
+3. **Run Intelligent Setting.** Pick the driver IC printed on the panel's chips, such as FM6124, and complete every step of the guide. In its pixel grid, click pixels 1 to 128 in the first row, then click each row below it, and every row fills in. A less common panel can load its supplier's .rcfgx or .rcvx file instead.
+4. **Check the module.** Intelligent module settings reads width 128, height 64, and shows `1-1` above `2-1`.
+5. **Set the cabinet size**: the pixels this card drives, 128 x 128.
+6. **Set the data group order** in data group swap, as the ribbons chain: J1 on the top panel and J2 on the bottom one reads 1, 2, 3, 4 downward. Mirrored rows or misplaced panels are fixed here.
+7. **Set the receiver mapping**: the card's area reads 128 x 128. Apply.
+8. **Send to receivers, twice**: once on the receiver parameters tab, and again on the receiver mapping tab. LEDVision holds the settings only while it is open, and each tab writes its own part.
+9. **Save on the card**, a separate action from sending in most versions. Skipped, the wall comes back wrong after a power cycle.
+10. **Run a LEDVision test pattern.** It fills the wall, which proves the card before MoonLight sends anything.
+
+**Pixel noise on longer ribbons is the panel clock.** Lower DCLK in the receiver parameters and send again; tuning the SCK duty ratio and blanking phase brings it back up, to 25 MHz on 50 cm ribbons.
+
+A video of the card setup, driven from FPP: [Setting up a Colorlight Card with FPP v6.3 and LED Vision 8.5](https://www.youtube.com/watch?v=L4lHbwUszAs).
+
+---
+
+## 9. When the wall stays dark
 
 | Symptom | Look at |
 |---|---|
 | `no ethernet link` | On a desktop, check `interface` first: a string that matches no adapter fails the bind and reports exactly this, with nothing to distinguish it from an unplugged cable. Then cable seated, card powered, and plugged into the card's **input** port. On a 100 Mbit controller, try a gigabit switch in between. |
 | Status healthy, panels dark | The Layout, not the driver. If the wall is 0 lights, or the driver's window (`start`/`count`) selects none, there is nothing to send. |
-| Image tears or rolls | Link speed ([§2](#the-one-hardware-fact-that-decides-everything)). Check the status line says 1000 Mbit. |
+| Image tears or rolls | Link speed ([§2](#the-one-hardware-fact-that-decides-everything)). Check the status line says 1000 Mbit. On a desktop, a USB network adapter has been seen to tear where a built-in port does not. |
+| Lit when cabled directly, dark through several switches | The frames are raw Ethernet, and the cards react badly to other traffic. Carry them in one VLAN: the first switch gives the untagged port from the controller a PVID, the switches pass it tagged between them, and the last strips the tag on the card's port. |
 | A new frame only every few seconds | `firmware` ([§7](#7-card-firmware-and-the-flicker)) is set to `v13 and newer` on a card running v12 or older. The duplicate sync latches twice and aborts the refresh. |
 | Flicker in time with network activity | The card's own v13 firmware defect ([§7](#7-card-firmware-and-the-flicker)), not the sender. Downgrade the card. |
-| Every other row or column mirrored | With a receiving card, this is the card's own panel configuration: revisit it in LEDVision ([LEDVision](../../moonwalk.md#panel-card-ledvision)). The layout's `snake` / `snakeP` apply only to walls wired as a pixel strip. |
+| Every other row or column mirrored | With a receiving card, this is the card's own panel configuration: revisit the data group order in LEDVision ([§8](#8-set-the-card-up-in-ledvision)). The layout's `snake` / `snakeP` apply only to walls wired as a pixel strip. |
 | Panels in the wrong places | Same: the chain order is set on the card. |
 | Right image, wrong colors | `fixture` on the driver, which is where channel order and RGBW synthesis live for every driver. There is no separate color-order control here. |
 | Works on ESP32, not on desktop | Permission ([§6](#6-from-a-desktop)). The driver shows a warning that says so. |

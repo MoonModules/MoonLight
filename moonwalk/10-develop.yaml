@@ -14,9 +14,10 @@ processes:
       Every task is one MoonDeck script, and the script is the contract. It picks the build directory, applies the flags the gate expects and tees its output where the report reads it. Never run `ctest`, `cmake`, `pytest`, `node --test` or `idf.py` directly when a script wraps it; a task with no script is worth saying rather than working around. Where each build writes: [Build directories](reference/build-system.md#build-directories).
     steps:
       - id: build
-        say: Build the desktop firmware, with zero warnings.
+        say: Build the desktop firmware, warning-free.
         when: { run: { script: moondeck/build/build_desktop.py } }
         detail: |
+          Warning-free beyond the two kinds the code check counts, a stack frame over 512 bytes and a blocking call on the render path: [why they stay warnings](../moondeck/MoonDeck.md#check_code).
           Build only when the next step needs it, rather than after every edit. Desktop and Raspberry Pi build from the same root `CMakeLists.txt`, natively or cross-compiled.
       - id: run
         say: Run it.

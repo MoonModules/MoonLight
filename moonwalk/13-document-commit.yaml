@@ -126,9 +126,11 @@ processes:
         given: [{ changed: [src/**, test/**, "!test/js/**", "!test/python/**"] }]
         when: { run: { script: moondeck/check/check_code.py } }
       - id: build-desktop
-        say: Build the desktop firmware, with zero warnings.
+        say: Build the desktop firmware, warning-free.
         given: [{ changed: [src/**, test/**, "!test/js/**", "!test/python/**"] }]
         when: { run: { script: moondeck/build/build_desktop.py } }
+        detail: |
+          Warning-free beyond the two kinds the code check counts, a stack frame over 512 bytes and a blocking call on the render path: [why they stay warnings](../moondeck/MoonDeck.md#check_code).
       - id: tests
         say: Test the change on the desktop.
         given: [{ changed: [src/**, test/**, "!test/js/**", "!test/python/**"] }]

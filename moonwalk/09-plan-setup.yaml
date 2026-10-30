@@ -13,7 +13,7 @@ processes:
       properties:
         kind: { type: string, enum: [Feature, Restructure], description: "Does the topic add to the system, or reshape it?" }
     intro: |
-      A topic is one module, effect, driver or capability, picked from [the Project](https://github.com/users/MoonModules/projects/5): a card the product owner accepts moves from Backlog to Next and becomes an issue through the card's own Convert to issue, which an agent may pick up, and moves to In progress when work starts. The plan is the contract for the branch. It absorbs the cards on its topic, which are deleted, so one topic has one home while it is being built and the Project keeps only what no plan covers.
+      A topic is one module, effect, driver or capability, picked from [the Project](https://github.com/users/MoonModules/projects/5): a card the product owner accepts moves from Backlog to Next and becomes an issue through the card's own Convert to issue, which an agent may pick up (a doc links an issue, the item's own or the tracking issue listing its card, since GitHub keeps an issue's address and not a card's), and moves to In progress when work starts. The plan is the contract for the branch. It absorbs the cards on its topic, which are deleted, so one topic has one home while it is being built and the Project keeps only what no plan covers.
     steps:
       - id: pick
         say: Name one module, effect, driver or capability.
@@ -46,7 +46,7 @@ processes:
         say: Close the shipped plan as an issue.
         when: { manual: "In the pull request that ships it, once every step is built and verified, the judgment steps included: the product owner's call." }
         detail: |
-          The plan becomes a closed issue labeled `plan` and its file is deleted. The body keeps what no commit holds: the goal, the outcome, the decisions with the alternatives rejected and why, where its knowledge lives, its steps as one line each, and the plan and close dates. A shipped plan closes as completed; one that did not ship, or that no work stands behind any more, closes as not planned, its body saying cancelled, superseded or attempted and reverted. What its backlog still holds returns to the Project as cards, decided item by item at that moment.
+          First, what only the plan holds moves home: a reason to the explanation, a fact to a reference page, a lesson to the lessons, analysis an open plan uses to a [design study](design/index.md). Then the plan becomes a closed issue labeled `plan` and its file is deleted. The body keeps what no commit holds: the goal, the outcome, the decisions with the rejected alternatives and why, where its knowledge lives, one line per step, and the plan and close dates. A shipped plan closes as completed; one that did not ship closes as not planned, saying cancelled, superseded or reverted. Its remaining backlog returns to the Project as cards, decided item by item.
   - id: branch
     title: Branch and work on it
     actor: product-owner

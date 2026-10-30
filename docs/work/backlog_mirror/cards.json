@@ -670,6 +670,16 @@
   "number": null
  },
  {
+  "title": "Network Send backs off on a full transmit queue (2026-10-30)",
+  "area": "Drivers",
+  "module": "",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=288372423",
+  "number": null
+ },
+ {
   "title": "One encode, two readers: HLS and RTSP sharing the encoder (2026-09-22)",
   "area": "Drivers",
   "module": "",
@@ -707,6 +717,16 @@
   "status": "Backlog",
   "process": "",
   "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287079553",
+  "number": null
+ },
+ {
+  "title": "Record the drivers' output to FSEQ, with clock sync (2026-10-30)",
+  "area": "Drivers",
+  "module": "",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=288371989",
   "number": null
  },
  {
@@ -928,6 +948,16 @@
   "process": "",
   "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287081326",
   "number": null
+ },
+ {
+  "title": "E1.31 multicast never arrives (2026-10-30)",
+  "area": "Effects",
+  "module": "",
+  "kind": "Bug",
+  "status": "Next",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=288372206",
+  "number": 216
  },
  {
   "title": "E1.31 multicast receive (IGMP join)",
@@ -1260,6 +1290,16 @@
   "number": null
  },
  {
+  "title": "A serial UART for sensors and scripts (2026-10-29)",
+  "area": "Platform",
+  "module": "",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287640906",
+  "number": null
+ },
+ {
   "title": "A StadBeest eye reset once by the task watchdog (2026-10-24)",
   "area": "Platform",
   "module": "",
@@ -1507,16 +1547,6 @@
   "status": "Backlog",
   "process": "",
   "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287085076",
-  "number": null
- },
- {
-  "title": "SE16 / LightCrafter power monitoring: sense pins free, module still to build (2026-09-02)",
-  "area": "Platform",
-  "module": "",
-  "kind": "Feature",
-  "status": "Backlog",
-  "process": "",
-  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287086286",
   "number": null
  },
  {
@@ -1810,6 +1840,16 @@
   "number": null
  },
  {
+  "title": "Issues in other projects stay current (2026-10-30)",
+  "area": "Process and docs",
+  "module": "",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=288380943",
+  "number": null
+ },
+ {
   "title": "Live full-suite run leaks state between scenarios",
   "area": "Process and docs",
   "module": "",
@@ -1900,6 +1940,16 @@
   "number": null
  },
  {
+  "title": "Recorded runs of a process, with their state (2026-10-30)",
+  "area": "Process and docs",
+  "module": "",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=288372818",
+  "number": null
+ },
+ {
   "title": "Remove the tests' own clock resets, now the listener's job (2026-10-25)",
   "area": "Process and docs",
   "module": "",
@@ -1927,6 +1977,16 @@
   "status": "Backlog",
   "process": "",
   "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287130440",
+  "number": null
+ },
+ {
+  "title": "The live runner restores every board when one fails mid-run (2026-10-30)",
+  "area": "Process and docs",
+  "module": "",
+  "kind": "Bug",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=288372589",
   "number": null
  },
  {
@@ -2030,16 +2090,6 @@
   "number": null
  },
  {
-  "title": "The Open Stage Control session's labels (2026-08-30)",
-  "area": "Services",
-  "module": "",
-  "kind": "Investigation",
-  "status": "Backlog",
-  "process": "",
-  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287130773",
-  "number": null
- },
- {
   "title": "The sensors an installation needs (2026-09-01)",
   "area": "Services",
   "module": "",
@@ -2057,16 +2107,6 @@
   "status": "Backlog",
   "process": "",
   "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287131545",
-  "number": null
- },
- {
-  "title": "Double-click and multi-click on a button (2026-10-25)",
-  "area": "UI",
-  "module": "",
-  "kind": "Feature",
-  "status": "Backlog",
-  "process": "",
-  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287131477",
   "number": null
  },
  {
