@@ -72,10 +72,6 @@ public:
         // Applied unconditionally, so brightness works even before the fixture-profile library is up.
         const uint8_t tableBrightness = adoptBrightness(globalBrightness);
         correction_.whiteMode = static_cast<WhiteMode>(whiteMode_);
-        correction_.balRed = balanceRed_;
-        correction_.balGreen = balanceGreen_;
-        correction_.balBlue = balanceBlue_;
-        correction_.whiteLevel = whiteLevel_;
         correction_.curve = static_cast<Correction::Curve>(curveSel_);
         // A missing id falls back to the default, so a driver degrades rather than crashing.
         if (auto* lib = FixtureProfilesModule::active()) {
@@ -93,6 +89,7 @@ public:
         const bool firstTable = correction_.wantsTable() && !lut16_;
         if (firstTable) lut16_.resize(256);
         correction_.lut16 = lut16_.data();
+        resolveGainTables();
         if (firstTable) correction_.rebuildBrightness(tableBrightness);   // a table that existed was filled by the rebuild above
         onCorrectionChanged();      // let a driver resize its correction-applied buffer
     }
@@ -134,6 +131,8 @@ public:
     void release() override {
         freeWire();          // the shared correction scratch: owned here, so no driver re-frees it
         correction_.lut16 = nullptr;   // the table goes with the module's scratch buffers below
+        correction_.gainLut = nullptr;
+        correction_.gainLut16 = nullptr;
         clearFailBuf();
         clearConfigErr();
         setConfigWarn(nullptr);
@@ -179,16 +178,14 @@ protected:
     /// The resolved correction: the wiring comes from a named profile by stable id, and the render loop never reads the library.
     Correction correction_;
     ScratchBuffer<uint16_t> lut16_{*this};   // the correction's 16-bit table, allocated the first time it is wanted
+    ScratchBuffer<uint8_t> gainLut_{*this};    // the gained tables, only for a profile whose LED type carries a gain
+    ScratchBuffer<uint16_t> gainLut16_{*this};   // the same to 16 bits, only where a channel is read wide
     uint32_t profileId_ = 0;          // stable id into the FixtureProfiles library (0 → resolve to default)
     /// The fixture profile applied per light, for channel order and white.
     /// @guide A reorder or a reboot keeps it. After renaming the profile, re-pick it: the next reboot falls back to the default.
     uint8_t fixtureSel_ = 0;
     /// How the white channel is derived, shown when the profile carries one.
     uint8_t whiteMode_ = static_cast<uint8_t>(WhiteMode::Min);
-    /// One die pulled down to meet the others, which corrects a strip's color cast.
-    uint8_t balanceRed_ = 255, balanceGreen_ = 255, balanceBlue_ = 255;
-    /// The white die's own trim, which the three above cannot reach.
-    uint8_t whiteLevel_ = 255;
     /// This driver's dim, multiplied with the global brightness.
     uint8_t localBrightness_ = 255;
     /// How brightness maps to output: CIE 1931, a gamma, or linear.
@@ -215,17 +212,10 @@ protected:
         buildFixtureOptions();                        // fill fixtureOptions_ from the library, sync id and row
         controls_.addSelect("fixture", fixtureSel_, fixtureOptions_, fixtureOptionCount_);
         controls_.setPersistLabel(controls_.count() - 1);   // saved by name, so a longer or reordered library never moves it
-        // Trim DOWN only: there is no headroom above 255, so raising clips rather than balancing. A strip whose green die runs hot is corrected here rather than in every effect.
-        controls_.addControl("balanceRed", balanceRed_, 0, 255);
-        controls_.addControl("balanceGreen", balanceGreen_, 0, 255);
-        controls_.addControl("balanceBlue", balanceBlue_, 0, 255);
         controls_.addSelect("whiteMode", whiteMode_, kWhiteModeOptions, kWhiteModeCount);
         // Hidden unless the referenced profile carries a channel there is something to synthesize for.
         auto* lib = FixtureProfilesModule::active();
         controls_.setHidden(controls_.count() - 1, !(lib && lib->profileHasSynthChannel(profileId_)));
-        // A separate emitter the three RGB trims cannot reach, so it carries its own.
-        controls_.addControl("whiteLevel", whiteLevel_, 0, 255);
-        controls_.setHidden(controls_.count() - 1, !(lib && lib->profileHasWhiteDie(profileId_)));
         // Hidden, and only read: the name an older config saved.
         controls_.addText("fixtureRef", fixtureRef_, sizeof(fixtureRef_));
         controls_.setHidden(controls_.count() - 1, true);
@@ -234,12 +224,22 @@ protected:
     /// Set this driver's default referenced profile by name, from its constructor.
     void setDefaultFixtureName(const char* name) { defaultFixture_ = name; }
 
+    /// Give the correction the gained tables its profile asks for, and take them back when it asks for none. Only a profile whose LED type carries a gain pays for them, the way the 16-bit table is allocated only where it is read.
+    void resolveGainTables() {
+        const bool wants = correction_.wantsGains();
+        if (wants && !gainLut_) gainLut_.resize(Correction::kGainRows * 256);
+        if (!wants) gainLut_.resize(0);
+        correction_.gainLut = wants ? gainLut_.data() : nullptr;
+        const bool wide = wants && correction_.wantsTable();
+        if (wide && !gainLut16_) gainLut16_.resize(Correction::kGainRows * 256);
+        if (!wide) gainLut16_.resize(0);
+        correction_.gainLut16 = gainLut16_ ? gainLut16_.data() : nullptr;
+    }
+
     /// Whether `name` is one of the correction controls, for a driver's own prepare test.
     static bool isCorrectionControl(const char* name) {
         return std::strcmp(name, "fixture") == 0 || std::strcmp(name, "fixtureRef") == 0 || std::strcmp(name, "localBrightness") == 0
-            || std::strcmp(name, "whiteMode") == 0 || std::strcmp(name, "curve") == 0
-            || std::strcmp(name, "balanceRed") == 0 || std::strcmp(name, "balanceGreen") == 0
-            || std::strcmp(name, "balanceBlue") == 0 || std::strcmp(name, "whiteLevel") == 0;
+            || std::strcmp(name, "whiteMode") == 0 || std::strcmp(name, "curve") == 0;
     }
 
 private:

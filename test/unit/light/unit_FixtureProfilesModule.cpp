@@ -622,3 +622,26 @@ TEST_CASE("A saved profile without an id gets its own, and its name is not seede
     CHECK(grb == 1);
     CHECK(builtinId(m, "GRB") > 1);   // not the id the next saved row holds
 }
+
+// A cast is a property of the LED type, so the gain is the profile's; an edit must survive the row being written and restored.
+TEST_CASE("FixtureProfiles gain: an edited gain is kept, serialized and restored") {
+    FixtureProfilesModule m;
+    m.setup();
+    uint32_t id = 0;
+    REQUIRE(m.addListRow(id));
+    REQUIRE(m.setListRowField(id, "channels", "{\"value\":4}"));
+    REQUIRE(m.setListRowField(id, "ch3", "{\"value\":4}"));   // a white die, so gainWhite is offered
+
+    CHECK(m.setListRowField(id, "gainGreen", "{\"value\":180}"));
+    CHECK(m.setListRowField(id, "gainWhite", "{\"value\":150}"));
+
+    // The correction the driver resolves carries them.
+    Correction c;
+    REQUIRE(m.deriveCorrection(id, 255, c));
+    CHECK(c.gainGreen == 180);
+    CHECK(c.gainWhite == 150);
+
+    // The row the UI re-reads carries them, rather than snapping back to 255.
+    const std::string rows = profilesJson(m);
+    CHECK(rows.find("\"gains\":[255,180,255,150]") != std::string::npos);
+}

@@ -106,6 +106,10 @@ public:
         const Profile* p = find(id);
         if (!p) return false;
         // The option indices are aligned with the enum, so a role byte IS a ChannelRole value.
+        out.gainRed = p->gainRed;
+        out.gainGreen = p->gainGreen;
+        out.gainBlue = p->gainBlue;
+        out.gainWhite = p->gainWhite;
         out.rebuild(brightness, reinterpret_cast<const ChannelRole*>(roleAt(*p)), p->channelCount);
         return true;
     }
@@ -136,6 +140,7 @@ public:
         /// @field name The profile's name, as a driver's fixture picker lists it.
         /// @field channels How many DMX channels the fixture takes.
         /// @field ch What one channel carries, such as red, dimmer or pan; none for a spacer or a channel set elsewhere.
+        /// @field gain One die pulled down to meet the others, 255 for a type that needs none; the gain lands on emitted light, so 128 is half of it.
         /// @guide Built-in rows are read-only, and custom rows persist across a reboot.
         controls_.addList("profiles", *this);   // this module is the (editable) ListSource
     }
@@ -156,6 +161,11 @@ public:
         for (uint8_t c = 0; c < p.channelCount; c++)
             sink.appendf("%s%u", c ? "," : "", static_cast<unsigned>(roles[c]));
         sink.append("]");
+        // Only a type that needs one, so every built-in row stays the shape it was.
+        if (hasGain(p))
+            sink.appendf(",\"gains\":[%u,%u,%u,%u]", static_cast<unsigned>(p.gainRed),
+                         static_cast<unsigned>(p.gainGreen), static_cast<unsigned>(p.gainBlue),
+                         static_cast<unsigned>(p.gainWhite));
         if (p.locked) sink.append(",\"locked\":true");
         sink.append("}");
     }
@@ -183,6 +193,13 @@ public:
             sink.appendf(",{\"name\":\"ch%u\",\"type\":\"select\",\"value\":%u,\"optionsRef\":\"channelRole\"}",
                          static_cast<unsigned>(c), static_cast<unsigned>(roles[c]));
         }
+        const char* const kGainFields[] = {"gainRed", "gainGreen", "gainBlue", "gainWhite"};
+        const uint8_t gains[] = {p.gainRed, p.gainGreen, p.gainBlue, p.gainWhite};
+        // The white gain reaches the white dies alone, so a profile carrying none is not offered a field that changes nothing.
+        const uint8_t offered = profileHasWhiteDie(p.id) ? 4u : 3u;
+        for (uint8_t gi = 0; gi < offered; gi++)
+            sink.appendf(",{\"name\":\"%s\",\"type\":\"uint8\",\"value\":%u,\"min\":0,\"max\":255}",
+                         kGainFields[gi], static_cast<unsigned>(gains[gi]));
         sink.append("]}");
     }
 
@@ -257,6 +274,7 @@ public:
             setChannelCount(p, static_cast<uint8_t>(v));
             return true;
         }
+        if (setGain(p, field, valueJson)) return true;
         return setChannelRole(p, field, valueJson);
     }
 
@@ -288,6 +306,8 @@ private:
         uint16_t poolOffset = 0;   // start of this profile's roles in pool_ (set by rebuildPool); 48 x 255 fits
         uint16_t poolLen = 0;      // the OLD slice size, distinct from channelCount mid-change
         bool     locked = false;
+        /// Per-channel gain, 255 where this LED type needs none: an off batch gets a profile of its own.
+        uint8_t  gainRed = 255, gainGreen = 255, gainBlue = 255, gainWhite = 255;
     };
 
     static_assert(kMaxProfiles * 255 <= 0xFFFF, "a full library's role pool must fit the 16-bit pool offsets");
@@ -329,6 +349,25 @@ private:
         return field[0] == 'c' && field[1] == 'h' && field[2] >= '0' && field[2] <= '9';
     }
 
+    /// Whether this profile carries a gain, which is what decides whether a driver allocates the gained tables.
+    static bool hasGain(const Profile& p) {
+        return p.gainRed != 255 || p.gainGreen != 255 || p.gainBlue != 255 || p.gainWhite != 255;
+    }
+
+    /// Set the gain a `gainRed`-style field names; false for any other field or an out-of-range value.
+    bool setGain(Profile& p, const char* field, const char* valueJson) {
+        uint8_t* slot = std::strcmp(field, "gainRed") == 0     ? &p.gainRed
+                      : std::strcmp(field, "gainGreen") == 0   ? &p.gainGreen
+                      : std::strcmp(field, "gainBlue") == 0    ? &p.gainBlue
+                      : std::strcmp(field, "gainWhite") == 0   ? &p.gainWhite
+                                                               : nullptr;
+        if (!slot) return false;
+        const int v = mm::json::parseInt(valueJson, "value");
+        if (v < 0 || v > 255) return false;
+        *slot = static_cast<uint8_t>(v);
+        return true;
+    }
+
     /// Set the role of the channel a `chN` field names; false for any other field or an out-of-range value.
     bool setChannelRole(Profile& p, const char* field, const char* valueJson) {
         if (!isChannelField(field)) return false;
@@ -357,7 +396,18 @@ private:
         const int ch = mm::json::readInt(mm::json::member(doc, row, "channels"), 3);
         p.channelCount = static_cast<uint8_t>(ch < 1 ? 1 : ch > 255 ? 255 : ch);
         p.locked = mm::json::readBool(mm::json::member(doc, row, "locked"), false);
+        restoreGains(doc, row, p);
         if (p.id >= nextId_) nextId_ = p.id + 1;   // never reissue a persisted id
+    }
+
+    /// Read one persisted row's gains, an absent array leaving the type ungained. Clamped, since a corrupt file can carry a value outside the range the UI offers.
+    void restoreGains(const mm::json::JsonDoc& doc, const mm::json::JsonNode* row, Profile& p) {
+        const mm::json::JsonNode* gains = mm::json::member(doc, row, "gains");
+        uint8_t* slot[] = {&p.gainRed, &p.gainGreen, &p.gainBlue, &p.gainWhite};
+        for (uint8_t gi = 0; gi < 4; gi++) {
+            const int v = mm::json::readInt(mm::json::element(doc, gains, gi), 255);
+            *slot[gi] = static_cast<uint8_t>(v < 0 ? 255 : v > 255 ? 255 : v);
+        }
     }
 
     /// Read one persisted row's roles into its slice of the pool, an absent or invalid one as None. It is clamped, since a corrupt file can carry a byte the UI mis-renders and the Correction drops.
