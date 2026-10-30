@@ -642,3 +642,130 @@ TEST_CASE("Dimmer fine is driven wide open with its coarse byte") {
     c.apply(src, out, 3);
     CHECK((out[0] == 255 && out[1] == 255));
 }
+
+// The gain lives on the fixture profile, since a cast is a property of the LED type; a driver allocates these tables only for a profile that carries one.
+namespace {
+struct Gained {
+    uint8_t lut[mm::Correction::kGainRows * 256] = {};
+    uint16_t lut16[mm::Correction::kGainRows * 256] = {};
+    /// Wire the tables a driver would own, then fill them through the production rebuild.
+    void wire(Correction& c) {
+        c.gainLut = lut;
+        c.gainLut16 = lut16;
+    }
+};
+}  // namespace
+
+// An LED's three emitters are not equally efficient, so a neutral triple can render with a cast. The profile's gain pulls one die down to meet the others, at the output rather than in every effect.
+TEST_CASE("Correction gain: one channel's gain leaves the others untouched") {
+    Correction c;
+    Gained g;
+    g.wire(c);
+    c.gainGreen = 128;
+    mm::test::rebuildFromPreset(c, 255, mm::test::PresetOrder::RGB);
+    const uint8_t src[3] = {200, 200, 200};   // the triple a green-cast strip renders wrong
+    uint8_t out[3] = {};
+    c.apply(src, out, 3);
+    CHECK(out[0] == 200);
+    CHECK(out[1] == 100);   // half the green light, which is what 128 says
+    CHECK(out[2] == 200);
+}
+
+// A white phosphor is separate hardware, so an RGB gain must say nothing about it.
+TEST_CASE("Correction gain: an RGB gain does not reach the white die") {
+    Correction c;
+    Gained g;
+    g.wire(c);
+    c.gainBlue = 128;
+    mm::test::rebuildFromPreset(c, 255, mm::test::PresetOrder::RGBW);
+    const uint8_t src[3] = {200, 200, 200};
+    uint8_t out[4] = {};
+    c.apply(src, out, 3);
+    CHECK(out[0] == 200);
+    CHECK(out[1] == 200);
+    CHECK(out[2] == 100);   // blue gained
+    CHECK(out[3] == 200);   // the white component, ungained
+}
+
+// The gain lands on emitted light, after the curve, so its value means what it says at any curve.
+TEST_CASE("Correction gain: the curve and the gain compose to the gain's own ratio") {
+    Correction c;
+    Gained g;
+    g.wire(c);
+    c.gainBlue = 128;
+    mm::test::rebuildFromPreset(c, 255, mm::test::PresetOrder::RGB);
+    c.curve = Correction::Curve::Gamma22;
+    c.rebuildBrightness(255);   // the same offsets, the tables refilled through the curve
+    const uint8_t src[3] = {200, 200, 200};
+    uint8_t out[3] = {};
+    c.apply(src, out, 3);
+    CHECK(out[0] == 149);   // red: the curve alone, (200/255)^2.2 * 255
+    CHECK(out[2] == 75);    // blue: that light at 128/255 of it, not an index pulled down before the curve
+}
+
+// Every built-in profile carries no gain, so it allocates nothing and every channel reads the one curve.
+TEST_CASE("Correction gain: a profile with no gain wants no tables") {
+    Correction c;
+    mm::test::rebuildFromPreset(c, 255, mm::test::PresetOrder::RGBW);
+    CHECK_FALSE(c.wantsGains());
+    const uint8_t src[3] = {200, 160, 120};
+    uint8_t out[4] = {};
+    c.apply(src, out, 3);
+    CHECK(out[0] == 200);
+    CHECK(out[1] == 160);
+    CHECK(out[2] == 120);
+    CHECK(out[3] == 120);
+}
+
+// The white die carries its own gain, since it is often brighter than the trio beside it.
+TEST_CASE("Correction gainWhite: gains the white die without touching RGB") {
+    const uint8_t src[3] = {200, 160, 120};   // the white component is the minimum, 120
+
+    Correction full;
+    mm::test::rebuildFromPreset(full, 255, mm::test::PresetOrder::RGBW);
+    uint8_t a[4] = {};
+    full.apply(src, a, 3);
+
+    Correction half;
+    Gained g;
+    g.wire(half);
+    half.gainWhite = 128;
+    mm::test::rebuildFromPreset(half, 255, mm::test::PresetOrder::RGBW);
+    uint8_t b[4] = {};
+    half.apply(src, b, 3);
+
+    CHECK(a[3] == 120);
+    CHECK(b[3] == 60);                                   // the white die alone moves
+    CHECK((b[0] == a[0] && b[1] == a[1] && b[2] == a[2]));
+}
+
+// A die asked for nothing goes out, rather than resting on the floor that keeps a fade from snapping off.
+TEST_CASE("Correction gainWhite: zero puts the white die out") {
+    Correction c;
+    Gained g;
+    g.wire(c);
+    c.gainWhite = 0;
+    mm::test::rebuildFromPreset(c, 255, mm::test::PresetOrder::RGBW);
+    const uint8_t src[3] = {200, 160, 120};
+    uint8_t out[4] = {};
+    c.apply(src, out, 3);
+    CHECK(out[3] == 0);
+    CHECK(out[0] == 200);   // and the trio is untouched
+}
+
+// A driver resolving a profile assigns a Correction whole, and a test does the same, so a gained one must carry no pointer into the object it came from.
+TEST_CASE("Correction gain: a copied correction reads its own tables") {
+    Correction built;
+    Gained g;
+    g.wire(built);
+    built.gainGreen = 128;
+    mm::test::rebuildFromPreset(built, 255, mm::test::PresetOrder::RGB);
+
+    Correction copy = built;   // what a driver's assignment does
+    const uint8_t src[3] = {200, 200, 200};
+    uint8_t out[3] = {};
+    copy.apply(src, out, 3);
+    CHECK(out[0] == 200);
+    CHECK(out[1] == 100);   // the gain survives the copy, read through the copy's own curve
+    CHECK(out[2] == 200);
+}

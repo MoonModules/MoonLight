@@ -89,6 +89,7 @@ public:
         const bool firstTable = correction_.wantsTable() && !lut16_;
         if (firstTable) lut16_.resize(256);
         correction_.lut16 = lut16_.data();
+        resolveGainTables();
         if (firstTable) correction_.rebuildBrightness(tableBrightness);   // a table that existed was filled by the rebuild above
         onCorrectionChanged();      // let a driver resize its correction-applied buffer
     }
@@ -130,6 +131,8 @@ public:
     void release() override {
         freeWire();          // the shared correction scratch: owned here, so no driver re-frees it
         correction_.lut16 = nullptr;   // the table goes with the module's scratch buffers below
+        correction_.gainLut = nullptr;
+        correction_.gainLut16 = nullptr;
         clearFailBuf();
         clearConfigErr();
         setConfigWarn(nullptr);
@@ -175,6 +178,8 @@ protected:
     /// The resolved correction: the wiring comes from a named profile by stable id, and the render loop never reads the library.
     Correction correction_;
     ScratchBuffer<uint16_t> lut16_{*this};   // the correction's 16-bit table, allocated the first time it is wanted
+    ScratchBuffer<uint8_t> gainLut_{*this};    // the gained tables, only for a profile whose LED type carries a gain
+    ScratchBuffer<uint16_t> gainLut16_{*this};   // the same to 16 bits, only where a channel is read wide
     uint32_t profileId_ = 0;          // stable id into the FixtureProfiles library (0 → resolve to default)
     /// The fixture profile applied per light, for channel order and white.
     /// @guide A reorder or a reboot keeps it. After renaming the profile, re-pick it: the next reboot falls back to the default.
@@ -218,6 +223,18 @@ protected:
 
     /// Set this driver's default referenced profile by name, from its constructor.
     void setDefaultFixtureName(const char* name) { defaultFixture_ = name; }
+
+    /// Give the correction the gained tables its profile asks for, and take them back when it asks for none. Only a profile whose LED type carries a gain pays for them, the way the 16-bit table is allocated only where it is read.
+    void resolveGainTables() {
+        const bool wants = correction_.wantsGains();
+        if (wants && !gainLut_) gainLut_.resize(Correction::kGainRows * 256);
+        if (!wants) gainLut_.resize(0);
+        correction_.gainLut = wants ? gainLut_.data() : nullptr;
+        const bool wide = wants && correction_.wantsTable();
+        if (wide && !gainLut16_) gainLut16_.resize(Correction::kGainRows * 256);
+        if (!wide) gainLut16_.resize(0);
+        correction_.gainLut16 = gainLut16_ ? gainLut16_.data() : nullptr;
+    }
 
     /// Whether `name` is one of the correction controls, for a driver's own prepare test.
     static bool isCorrectionControl(const char* name) {

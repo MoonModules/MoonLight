@@ -31,6 +31,19 @@ struct Correction {
     /// Marks a role this light does not carry.
     static constexpr uint8_t kAbsent = 255;   // color role not carried by this light
 
+    /// How many gained rows the tables carry: red, green, blue and the white dies.
+    static constexpr uint8_t kGainRows = 4;
+
+    /// The tables one light is read through, so a channel's gain costs a pointer at rebuild and nothing per light.
+    template <typename T>
+    struct Tables {
+        const T* base = nullptr;    ///< the ungained curve, which amber, UV and every channel at gain 255 read
+        const T* red = nullptr;     ///< the red die's table, gained or the curve itself
+        const T* green = nullptr;   ///< the green die's
+        const T* blue = nullptr;    ///< the blue die's
+        const T* white = nullptr;   ///< both white dies, which the RGB gains do not reach
+    };
+
     /// The perceptual curve the output LUT is filled through; Linear is a requirement, not a fallback, since correcting twice darkens as the square.
     enum class Curve : uint8_t { Cie = 0, Gamma22, Gamma28, Linear };
 
@@ -47,6 +60,12 @@ struct Correction {
     uint16_t* lut16 = nullptr;
     /// Set by a driver whose output resolves more than a byte, so the 16-bit table is filled whatever the profile.
     bool wide = false;
+    /// The fixture profile's per-channel gain, 255 where the LED type needs none. Applied after the curve, so the value means emitted light: green at 128 is half the green.
+    uint8_t gainRed = 255, gainGreen = 255, gainBlue = 255, gainWhite = 255;
+    /// The gained tables, `kGainRows` of 256, which a driver allocates only for a profile that carries a gain; null leaves every channel on the ungained curve.
+    uint8_t* gainLut = nullptr;
+    /// The same to 16 bits, so a wide output keeps its full resolution rather than the 8-bit table's levels.
+    uint16_t* gainLut16 = nullptr;
     /// Which curve the brightness rebuild fills through; a driver's setting, not a global one.
     Curve curve = Curve::Cie;
     /// Output byte position of the red role; each color role's position is recomputed from the role array.
@@ -81,16 +100,64 @@ struct Correction {
     /// Whether the fixture carries red, green and blue alone, resolved at rebuild so a plain strip skips every optional role per light.
     bool plainRgb = true;
     uint8_t outChannels = 3;        // bytes emitted per light (= channelsPerLight of the wiring)
+    /// Each color channel's gained row, or null for the ungained curve. Into the driver's `gainLut`, never this object's own table, so a Correction stays copyable.
+    const uint8_t* rowRed = nullptr;     ///< red's gained row, or null for the curve itself
+    const uint8_t* rowGreen = nullptr;   ///< green's
+    const uint8_t* rowBlue = nullptr;    ///< blue's
+    const uint8_t* rowWhite = nullptr;   ///< the white dies'
+    /// Red's gained row to 16 bits, or null where no wide table is filled, which leaves the channel 8-bit.
+    const uint16_t* rowRed16 = nullptr;
+    const uint16_t* rowGreen16 = nullptr;   ///< green's, likewise
+    const uint16_t* rowBlue16 = nullptr;    ///< blue's
+    const uint16_t* rowWhite16 = nullptr;   ///< the white dies'
     WhiteMode whiteMode = WhiteMode::Min;   // how white is synthesized from RGB (white lights only)
 
-    /// Refresh the brightness LUT alone, leaving the channel offsets untouched; order is the design: brightness is a linear pre-scale and the curve is applied last.
+    /// Whether any channel carries a gain, so a driver allocates the gained tables only for a profile that needs them.
+    bool wantsGains() const MM_NONBLOCKING {
+        return gainRed != 255 || gainGreen != 255 || gainBlue != 255 || gainWhite != 255;
+    }
+
+    /// Refresh the brightness LUT alone, leaving the channel offsets untouched; order is the design: brightness is a linear pre-scale, the curve lands next, and the gain last, on emitted light.
     void rebuildBrightness(uint8_t brightness) MM_NONBLOCKING {
+        const uint8_t gain[kGainRows] = {gainRed, gainGreen, gainBlue, gainWhite};
         for (int v = 0; v < 256; v++) {
             const float out = shape(static_cast<float>(v) * brightness / 255.0f);   // scale first, then curve
             const bool lit = v > 0 && brightness > 0;
             briLut[v] = static_cast<uint8_t>(quantize(out, 255, lit));
             if (wantsTable() && lut16) lut16[v] = static_cast<uint16_t>(quantize(out * 257.0f, 65535, lit));   // 255 * 257 = 65535
+            for (uint8_t g = 0; g < kGainRows; g++) {
+                // From the curve's own float, so the gain does not quantize a value the curve already rounded.
+                const float scaled = out * gain[g] / 255.0f;
+                const bool onAtAll = lit && gain[g] > 0;
+                if (gainLut) gainLut[g * 256 + v] = static_cast<uint8_t>(quantize(scaled, 255, onAtAll));
+                if (gainLut16) gainLut16[g * 256 + v] = static_cast<uint16_t>(quantize(scaled * 257.0f, 65535, onAtAll));
+            }
         }
+        resolveTables();
+    }
+
+    /// Point each channel at its gained row, or at null where its gain is 255 or the gained tables are absent.
+    void resolveTables() MM_NONBLOCKING {
+        const uint8_t gain[kGainRows] = {gainRed, gainGreen, gainBlue, gainWhite};
+        const uint8_t** row8[kGainRows] = {&rowRed, &rowGreen, &rowBlue, &rowWhite};
+        const uint16_t** row16[kGainRows] = {&rowRed16, &rowGreen16, &rowBlue16, &rowWhite16};
+        for (uint8_t g = 0; g < kGainRows; g++) {
+            const bool gained = gain[g] != 255;
+            *row8[g] = gained && gainLut ? gainLut + g * 256 : nullptr;
+            *row16[g] = gained && gainLut16 ? gainLut16 + g * 256 : nullptr;
+        }
+    }
+
+    /// The 8-bit tables one light is read through, the gained rows over the curve this object carries.
+    Tables<uint8_t> tables8() const MM_NONBLOCKING {
+        return Tables<uint8_t>{briLut, rowRed ? rowRed : briLut, rowGreen ? rowGreen : briLut,
+                               rowBlue ? rowBlue : briLut, rowWhite ? rowWhite : briLut};
+    }
+
+    /// The same to 16 bits, each row null where no table is filled, which leaves that channel 8-bit.
+    Tables<uint16_t> tables16() const MM_NONBLOCKING {
+        return Tables<uint16_t>{lut16, rowRed16 ? rowRed16 : lut16, rowGreen16 ? rowGreen16 : lut16,
+                                rowBlue16 ? rowBlue16 : lut16, rowWhite16 ? rowWhite16 : lut16};
     }
 
     /// Whether the 16-bit table is filled: a profile with fine roles, or a wide driver.
@@ -145,19 +212,20 @@ struct Correction {
     }
 
     /// Hot path: transform one source light into its output bytes, integer-only and allocation-free.
-    inline void apply(const uint8_t* src, uint8_t* out, uint8_t srcChannels) const { applyThrough(briLut, src, out, srcChannels); }
+    inline void apply(const uint8_t* src, uint8_t* out, uint8_t srcChannels) const { applyThrough(tables8(), src, out, srcChannels); }
 
     /// Hot path, wide drivers only: the same transform through the 16-bit table, one value per channel; needs `lut16`.
-    inline void applyWide(const uint8_t* src, uint16_t* out, uint8_t srcChannels) const { applyThrough(lut16, src, out, srcChannels); }
+    inline void applyWide(const uint8_t* src, uint16_t* out, uint8_t srcChannels) const { applyThrough(tables16(), src, out, srcChannels); }
 
     /// The transform through a curve table of either width, so the 8-bit and 16-bit outputs share every line. A remap, not a copy: the layer's packed slots become the fixture's own offsets.
     template <typename T>
-    inline void MM_RAMFUNC applyThrough(const T* lut, const uint8_t* src, T* out, uint8_t srcChannels) const {
+    inline void MM_RAMFUNC applyThrough(const Tables<T>& t, const uint8_t* src, T* out, uint8_t srcChannels) const {
+        const T* lut = t.base;
         // A plain strip: the curve on each color and nothing optional, the drivers' commonest light.
         if (plainRgb) {
-            if (offRed != kAbsent)   out[offRed] = lut[src[0]];
-            if (offGreen != kAbsent) out[offGreen] = lut[src[1]];
-            if (offBlue != kAbsent)  out[offBlue] = lut[src[2]];
+            if (offRed != kAbsent)   out[offRed] = t.red[src[0]];
+            if (offGreen != kAbsent) out[offGreen] = t.green[src[1]];
+            if (offBlue != kAbsent)  out[offBlue] = t.blue[src[2]];
             return;
         }
         constexpr T kFull = static_cast<T>(~T{0});   // 255 or 65535
@@ -190,7 +258,7 @@ struct Correction {
         } else {
             w = r < g ? (r < b ? r : b) : (g < b ? g : b);  // min(r,g,b): the white component
             // Computed off the PRE-subtraction values, which only rebalance the RGB emitters.
-            if (offWarmWhite != kAbsent) out[offWarmWhite] = lut[w];
+            if (offWarmWhite != kAbsent) out[offWarmWhite] = t.white[w];
             // yellow ≈ min(R,G) (the shared red+green component).
             if (offYellow != kAbsent)    out[offYellow] = lut[r < g ? r : g];
             // Driven from the blue with no red or green to pair with, so it stays dark on warm colors.
@@ -201,13 +269,13 @@ struct Correction {
             // White last: it is the only emitter that rebalances RGB.
             if (offWhite != kAbsent) {
                 if (whiteMode == WhiteMode::Accurate) { r -= w; g -= w; b -= w; }  // pull white out of RGB
-                out[offWhite] = lut[w];
+                out[offWhite] = t.white[w];
             }
         }
         // The curve, applied ONCE: everything above this line is linear light.
-        if (offRed != kAbsent)   out[offRed] = lut[r];
-        if (offGreen != kAbsent) out[offGreen] = lut[g];
-        if (offBlue != kAbsent)  out[offBlue] = lut[b];
+        if (offRed != kAbsent)   out[offRed] = t.red[r];
+        if (offGreen != kAbsent) out[offGreen] = t.green[g];
+        if (offBlue != kAbsent)  out[offBlue] = t.blue[b];
         if constexpr (sizeof(T) == 1) { if (hasFine) applyFine(r, g, b, w, out); }
     }
 
@@ -215,12 +283,17 @@ struct Correction {
     void applyFine(uint8_t r, uint8_t g, uint8_t b, uint8_t w, uint8_t* out) const {
         if (offDimmerFine != kAbsent) out[offDimmerFine] = 255;   // wide open is 65535, not 65280
         const uint8_t value[5] = {r, g, b, w, w};   // both whites carry the white component, 0 when none is synthesized
+        // Each channel's own gained table, so a fine channel is gained exactly as an 8-bit one and at full resolution.
+        const Tables<uint16_t> w16 = tables16();
+        const Tables<uint8_t> n8 = tables8();
+        const uint16_t* wide16[5] = {w16.red, w16.green, w16.blue, w16.white, w16.white};
+        const uint8_t* narrow8[5] = {n8.red, n8.green, n8.blue, n8.white, n8.white};
         const uint8_t coarse[5] = {offRed, offGreen, offBlue, offWhite, offWarmWhite};
         const uint8_t fine[5] = {offRedFine, offGreenFine, offBlueFine, offWhiteFine, offWarmWhiteFine};
         for (uint8_t k = 0; k < 5; k++) {
             if (fine[k] == kAbsent) continue;
             // Without its table (an allocation that failed) the channel stays 8-bit: the coarse byte as written, the fine one 0.
-            const uint16_t q = lut16 ? lut16[value[k]] : static_cast<uint16_t>(briLut[value[k]] << 8);
+            const uint16_t q = wide16[k] ? wide16[k][value[k]] : static_cast<uint16_t>(narrow8[k][value[k]] << 8);
             if (coarse[k] != kAbsent) out[coarse[k]] = static_cast<uint8_t>(q >> 8);
             out[fine[k]] = static_cast<uint8_t>(q & 0xFF);
         }

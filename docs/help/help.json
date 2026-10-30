@@ -173,6 +173,9 @@
       },
       "ch": {
        "line": "What one channel carries, such as red, dimmer or pan; none for a spacer or a channel set elsewhere."
+      },
+      "gain": {
+       "line": "One die pulled down to meet the others, 255 for a type that needs none; the gain lands on emitted light, so 128 is half of it."
       }
      }
     }
