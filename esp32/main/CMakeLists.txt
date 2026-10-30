@@ -19,6 +19,7 @@ idf_component_register(
     "../../src/platform/esp32/platform_esp32_h264.cpp"
         "../../src/platform/esp32/platform_esp32_ota.cpp"
         "../../src/platform/esp32/platform_esp32_improv.cpp"
+        "../../src/platform/esp32/platform_esp32_ble.cpp"
         "../../src/platform/esp32/platform_esp32_rmt.cpp"
         "../../src/platform/esp32/platform_esp32_pwm.cpp"
         "../../src/platform/esp32/rmt_hi_vector.S"

@@ -16,6 +16,7 @@ add_executable(mm_tests
     unit/core/unit_ActiveInstance.cpp
     unit/test_main.cpp
     unit/core/unit_Color.cpp
+    unit/core/unit_BleMessage.cpp
     unit/core/unit_math8.cpp
     unit/core/unit_math16.cpp
     unit/core/unit_AreaSample.cpp

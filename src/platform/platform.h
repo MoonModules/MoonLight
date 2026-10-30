@@ -883,6 +883,21 @@ bool improvProvisioningInit(const ImprovDeviceInfo& info,
 /// Drain the serial listener, called every tick: the work itself where the listener has no task of its own, a no-op where a task runs it.
 void improvPoll() MM_NONBLOCKING;
 
+/// One encrypted GATT control peripheral, independent of Wi-Fi association.
+struct BleControlHandle { void* impl = nullptr; };
+/// Whether this target has a compiled BLE peripheral.
+bool bleControlAvailable() MM_NONBLOCKING;
+/// Start the radio with the advertised name and public identity.
+bool bleControlStart(BleControlHandle& handle, const char* name, const char* identity);
+/// Stop the host before releasing its callback storage.
+void bleControlStop(BleControlHandle& handle);
+/// Take one complete, newline-delimited request; zero when empty or contended.
+size_t bleControlReceive(BleControlHandle& handle, char* out, size_t capacity) MM_NONBLOCKING;
+/// Replace the readable response; an eight-byte notification carries revision and uptime.
+bool bleControlPublish(BleControlHandle& handle, const char* response, uint32_t revision) MM_NONBLOCKING;
+/// Whether the peripheral has an active central connection.
+bool bleControlConnected(const BleControlHandle& handle) MM_NONBLOCKING;
+
 /// One UDP socket: the wire every light protocol sends and receives on.
 class UdpSocket {
 public:
