@@ -1,0 +1,21 @@
+// Ramp: gray rising from black on the left to white on the right, the same on every row, the test pattern for a panel's bit planes.
+// Every row matches its neighbors, so a row that differs is a fault in how the panel is driven, not in the picture:
+// a HUB75 row lit with the wrong plane's on-time reads brighter than its neighbors below half gray and darker just above it.
+
+class RampEffect {
+
+  int dimensions() { return 2; }
+
+  string tags() { return "💫"; }
+
+  void tick() {
+    int span = width - 1;
+    if (span < 1) { span = 1; }
+    for (int x = 0; x < width; x = x + 1) {
+      int v = div(x * 255, span);
+      for (int y = 0; y < height; y = y + 1) {
+        setRGB(y * width + x, v, v, v);
+      }
+    }
+  }
+}

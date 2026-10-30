@@ -7,6 +7,7 @@
     {"effects/basics/dot.mle", 0x1e5cd842f29bd16cull},
     {"effects/basics/gradient.mle", 0x066b6e80d9fb84cbull},
     {"effects/basics/lines.mle", 0x61a519a99d69b4c6ull},
+    {"effects/basics/ramp.mle", 0x56270ce14f72fa1full},
     {"effects/basics/random-pixel.mle", 0xf7fb12703b9df7e6ull},
     {"effects/basics/sparkle.mle", 0x6ea5f2562ef2cd4full},
     {"effects/moving-heads/mh-aim.mle", 0xa3b9705009ee6730ull},
