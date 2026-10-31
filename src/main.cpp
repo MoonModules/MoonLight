@@ -114,6 +114,8 @@
 ///
 #include "module_types.h"
 
+#include <csignal>   // sig_atomic_t: the stop flag a signal handler writes
+
 #include "core/util/JsonFetch.h"   // poll(): the JSON worker stops once nothing uses it
 #include "core/module/Scheduler.h"
 #include "core/util/ModuleFactory.h"
@@ -178,7 +180,7 @@ static void printModuleMetrics(mm::MoonModule* mod, int depth) {
     }
 }
 
-void mm_main(volatile bool& keepRunning, uint16_t httpPort) {
+void mm_main(volatile std::sig_atomic_t& keepRunning, uint16_t httpPort) {
     mm::registerModuleTypes();
     mm::Scheduler scheduler;
 

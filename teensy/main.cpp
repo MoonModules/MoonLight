@@ -3,13 +3,14 @@
 #include <Arduino.h>
 #include <CrashReport.h>
 
+#include <csignal>   // sig_atomic_t: mm_main's stop flag
 #include <cstdint>
 
 #include "platform/platform.h"   // bootRecord: the reset cause, read before the crash report clears it
 
-extern void mm_main(volatile bool& keepRunning, uint16_t httpPort);
+extern void mm_main(volatile std::sig_atomic_t& keepRunning, uint16_t httpPort);
 
-static volatile bool running = true;
+static volatile std::sig_atomic_t running = 1;
 
 void setup() {
     Serial.begin(115200);
