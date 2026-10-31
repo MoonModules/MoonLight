@@ -204,6 +204,10 @@ public:
             platform::hub75Deinit(hub_);
             return;
         }
+        if (!sizeLightScratch()) {   // its status names the shortage
+            platform::hub75Deinit(hub_);
+            return;
+        }
 
         running_ = true;
         std::snprintf(statusBuf_, sizeof(statusBuf_), "%ux%u, 1/%u scan, %u-bit (%s)",
@@ -223,25 +227,23 @@ public:
         const nrOfLightsType lights =
             static_cast<nrOfLightsType>(geo_.width) * geo_.height;
         if (srcCh == 0 || outCh < 3 || lights == 0) return;
-        if (sourceBuffer_->count() < lights) return;     // frame smaller than the panel
         if (!wire_ || wireCap_ < static_cast<size_t>(lights) * 3) return;   // not ready
+        // A layout with fewer lights than the panel's box leaves the rest of the panel dark.
+        const nrOfLightsType have = sourceBuffer_->count() < lights ? sourceBuffer_->count() : lights;
 
         // A plane reads (x, r) and the pixel half a panel below in one pass, so correct first.
         const uint8_t* src = sourceBuffer_->data();
         if (outCh == 3) {
-            for (nrOfLightsType i = 0; i < lights; i++) {
+            for (nrOfLightsType i = 0; i < have; i++) {
                 correction_.apply(src + static_cast<size_t>(i) * srcCh,
                                   wire_ + static_cast<size_t>(i) * 3, srcCh);
             }
         } else {
-            uint8_t scratch[8];   // outChannels is bounded by the wiring; 8 covers RGBWW and up
-            const uint8_t n = outCh <= sizeof(scratch) ? outCh : static_cast<uint8_t>(sizeof(scratch));
-            for (nrOfLightsType i = 0; i < lights; i++) {
-                correction_.apply(src + static_cast<size_t>(i) * srcCh, scratch, srcCh);
-                uint8_t* d = wire_ + static_cast<size_t>(i) * 3;
-                d[0] = scratch[0]; d[1] = scratch[1]; d[2] = n > 2 ? scratch[2] : 0;
-            }
+            if (lightScratch_.count() < outCh) return;   // not ready
+            for (nrOfLightsType i = 0; i < have; i++)
+                correctToRgb(src + static_cast<size_t>(i) * srcCh, srcCh, wire_ + static_cast<size_t>(i) * 3, false);
         }
+        std::memset(wire_ + static_cast<size_t>(have) * 3, 0, static_cast<size_t>(lights - have) * 3);
 
         // Brightness is the planes' lit time, read each frame so the slider applies on the next one.
         geo_.brightness = effectiveBrightness();
@@ -253,6 +255,7 @@ public:
     void onCorrectionChanged() override {
         if (!running_) return;
         ensureWire(static_cast<size_t>(geo_.width) * geo_.height * 3);
+        sizeLightScratch();
     }
 
     /// Publish the measured refresh rate; MM_NONBLOCKING stays, or the base's contract widens and the compiler refuses.

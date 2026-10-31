@@ -1439,6 +1439,13 @@ const char* hub75Backend(const Hub75Handle& h);
 /// Release the port and its buffer.
 void hub75Deinit(Hub75Handle& h);
 
+#ifndef ESP_PLATFORM
+/// Open the desktop's HUB75 port on LCD_CAM with a frame of the geometry's size, so a test drives the driver's tick into bit planes; off, the port refuses as on a chip without the silicon.
+void setTestHub75(bool on);
+/// The frame the driver last packed while the test port is open, `bytes` long; null while closed.
+const uint8_t* hub75TestFrame(size_t* bytes);
+#endif
+
 // I2S audio input: two seams only, the read and the FFT, with everything between them domain code.
 
 /// Which codec sits in front of the microphone, none for a microphone that speaks I2S itself.
