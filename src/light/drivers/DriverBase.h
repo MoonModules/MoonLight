@@ -150,6 +150,23 @@ public:
 protected:
     Layer* layer_ = nullptr;
 
+    /// One light of a wiring wider than RGB, for correctToRgb, sized off the hot path by sizeLightScratch.
+    ScratchBuffer<uint8_t> lightScratch_{*this};
+    /// Size lightScratch_ to the wiring, saying so in the status when memory runs out; true when an RGB wiring needs none or the light fits.
+    bool sizeLightScratch() {
+        if (correction_.outChannels <= 3 || lightScratch_.resize(correction_.outChannels)) return true;
+        setStatus("not enough memory for one light of this fixture", Severity::Error);
+        return false;
+    }
+
+    /// Correct one light for a wire that carries RGB alone, reading red, green and blue where the profile puts them, 0 for a role it lacks; `scratch` holds one light of the wiring.
+    void correctToRgb(const uint8_t* src, uint8_t srcCh, uint8_t* scratch, uint8_t* rgb) const MM_NONBLOCKING {
+        correction_.apply(src, scratch, srcCh);
+        rgb[0] = correction_.offRed != Correction::kAbsent ? scratch[correction_.offRed] : 0;
+        rgb[1] = correction_.offGreen != Correction::kAbsent ? scratch[correction_.offGreen] : 0;
+        rgb[2] = correction_.offBlue != Correction::kAbsent ? scratch[correction_.offBlue] : 0;
+    }
+
     /// The correction scratch; the size differs per driver, so the caller passes the byte count and the lifecycle lives here.
     uint8_t* wire_ = nullptr;
     size_t   wireCap_ = 0;   // bytes the allocation returned (0 when it failed)

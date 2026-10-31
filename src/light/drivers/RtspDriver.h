@@ -51,8 +51,8 @@ public:
     /// The catalog tag this driver carries.
     static constexpr const char* kTags = "🖥️";
 
-    /// Bind the scratch buffers to this module, so their memory is accounted for.
-    RtspDriver() : rgb_(*this), corrScratch_(*this) {}
+    /// Bind the frame buffer to this module, so its memory is accounted for.
+    RtspDriver() : rgb_(*this) {}
 
     /// The catalog tags shown on this driver's card.
     const char* tags() const override { return kTags; }
@@ -102,7 +102,7 @@ public:
             setStatus("out of memory for the video frame", Severity::Error);
             return;
         }
-        if (correction_.outChannels > 3) corrScratch_.resize(correction_.outChannels);
+        if (!sizeLightScratch()) return;   // its status names the shortage
 
         platform::EncoderConfig cfg{};
         cfg.width       = static_cast<uint16_t>(width_);
@@ -266,7 +266,7 @@ private:
         if (srcCh < 3) return;   // a non-color buffer (DMX roles) has no frame to send
 
         uint8_t* dst = rgb_.data();
-        const bool wide = outCh > 3 && corrScratch_.count() >= outCh;
+        const bool wide = outCh > 3 && lightScratch_.count() >= outCh;
         const size_t rowBytes = static_cast<size_t>(width_) * 3;
         for (nrOfLightsType i = 0; i < n; i++) {
             const uint8_t* s = src + static_cast<size_t>(i) * srcCh;
@@ -274,9 +274,7 @@ private:
             if (outCh == 3) {
                 correction_.apply(s, rgb, srcCh);
             } else if (wide) {
-                uint8_t* c = corrScratch_.data();
-                correction_.apply(s, c, srcCh);
-                rgb[0] = c[0]; rgb[1] = c[1]; rgb[2] = c[2];
+                correctToRgb(s, srcCh, &lightScratch_[0], rgb);
             } else {
                 rgb[0] = s[0]; rgb[1] = s[1]; rgb[2] = s[2];
             }
@@ -341,7 +339,6 @@ public:
 private:
     Buffer*  sourceBuffer_ = nullptr;
     ScratchBuffer<uint8_t> rgb_;
-    ScratchBuffer<uint8_t> corrScratch_;
 
     platform::TcpServer     control_;
     platform::TcpConnection client_;
