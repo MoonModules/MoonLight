@@ -11,6 +11,7 @@
 #include "platform/platform.h"
 
 #include <cstring>
+#include <memory>
 
 // The E1.31 and DDP receive: round trips, rejected malformed and cross-protocol datagrams, DDP clamping, ArtPoll, and one loopback trip over all three sockets.
 
@@ -239,6 +240,15 @@ TEST_CASE("applyDmx honours channels_per_universe") {
 }
 
 // --- localhost round-trip: all three protocols into one effect ------------------------
+
+// A rebuild prepares again without a release; the effect binds its three ports afresh rather than reporting them in use by itself.
+TEST_CASE("NetworkReceiveEffect binds its ports again on a second prepare") {
+    auto r = std::make_unique<Rig>();   // on the heap: a rig outgrows a test's stack frame
+    r->fx.setup();
+    REQUIRE(r->fx.status() == nullptr);   // all three binds succeeded
+    r->fx.prepare();
+    CHECK(r->fx.status() == nullptr);
+}
 
 // Three senders, one per protocol, hit the same effect on its three ports; each payload lands. The autodetect proof.
 TEST_CASE("NetworkReceiveEffect receives all three protocols at once over localhost") {
