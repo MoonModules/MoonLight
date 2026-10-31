@@ -10,7 +10,7 @@ src/
   main.cpp                              ← shared pipeline wiring (mm_main), platform-neutral
   platform/
     desktop/
-      main_desktop.cpp                  ← desktop entry point: int main() + SIGINT
+      main_desktop.cpp                  ← desktop entry point: int main() + SIGINT and SIGTERM
       platform_config.h                 ← desktop platform constants
     esp32/
       platform_config.h                 ← ESP32 platform constants (reads sdkconfig)
@@ -18,11 +18,11 @@ esp32/
   CMakeLists.txt                        ← ESP-IDF project root (thin wrapper)
   main/
     CMakeLists.txt                      ← idf_component_register() pointing at src/
-    main.cpp                            ← ESP32 entry point: app_main() + Ethernet init
+    main.cpp                            ← ESP32 entry point: app_main() + NVS init
   sdkconfig.defaults                    ← board-specific defaults
 ```
 
-The shared `src/main.cpp` defines `mm_main(keepRunning, gridW, gridH)`, the full pipeline wiring. Each platform provides a thin entry point that does platform-specific init (SIGINT on desktop, Ethernet on ESP32) then calls `mm_main()`.
+The shared `src/main.cpp` defines `mm_main(keepRunning, httpPort)`, the full pipeline wiring. Each platform provides a thin entry point that does platform-specific init (SIGINT and SIGTERM on desktop, NVS on ESP32; the network starts in the platform layer) then calls `mm_main()`.
 
 The project is a small set of CMake libraries. A core library is platform-independent, a platform library is selected at configure time, and the application target links both and provides the entry point. Further decomposition (effects, networking, drivers as separate libraries) happens when the codebase is large enough to justify it.
 
