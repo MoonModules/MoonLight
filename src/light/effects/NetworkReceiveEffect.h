@@ -96,6 +96,10 @@ public:
     /// Bind the three receive sockets independently, and size the staging buffer to the layer.
     void prepare() override {
         stopReceiveTask();   // the task writes into staging, which is resized below
+        // Closed first: a rebuild prepares again without a release, and a socket bound once refuses a second bind.
+        artnetSocket_.close();
+        e131Socket_.close();
+        ddpSocket_.close();
         const bool artnetOk = artnetSocket_.open() && artnetSocket_.bind(ARTNET_PORT);
         const bool e131Ok = e131Socket_.open() && e131Socket_.bind(E131_PORT);
         const bool ddpOk = ddpSocket_.open() && ddpSocket_.bind(DDP_PORT);
