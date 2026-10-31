@@ -30,7 +30,7 @@ using namespace mm;
 
 namespace {
 
-// Inject a presence packet from `a.b.c.d` with `name`; `mm` marks it a MoonLight peer.
+// Inject a presence packet from `a.b.c.d` with `name`; `mm` marks it a MoonLight peer. Addresses are RFC 5737's 192.0.2.0/24, since one the test machine holds lists as itself.
 void inject(DevicesModule& dev, const char* name, bool mm,
             uint8_t a, uint8_t b, uint8_t c, uint8_t d) {
     const uint8_t ip[4] = {a, b, c, d};
@@ -54,23 +54,23 @@ std::string rowFor(DevicesModule& dev, const char* ip) {
 
 TEST_CASE("DevicesModule: a plain WLED packet lists a WLED device with its name") {
     DevicesModule dev;
-    inject(dev, "wled-desk", /*mm=*/false, 192, 168, 1, 50);
-    std::string row = rowFor(dev, "192.168.1.50");
+    inject(dev, "wled-desk", /*mm=*/false, 192, 0, 2, 50);
+    std::string row = rowFor(dev, "192.0.2.50");
     CHECK(std::strstr(row.c_str(), "\"type\":\"WLED\"") != nullptr);
     CHECK(std::strstr(row.c_str(), "wled-desk") != nullptr);
 }
 
 TEST_CASE("DevicesModule: a MoonLight-marked packet lists a MoonLight device") {
     DevicesModule dev;
-    inject(dev, "MM-Bench", /*mm=*/true, 192, 168, 1, 60);
-    std::string row = rowFor(dev, "192.168.1.60");
+    inject(dev, "MM-Bench", /*mm=*/true, 192, 0, 2, 60);
+    std::string row = rowFor(dev, "192.0.2.60");
     CHECK(std::strstr(row.c_str(), "\"type\":\"MoonLight\"") != nullptr);
     CHECK(std::strstr(row.c_str(), "MM-Bench") != nullptr);
 }
 
 TEST_CASE("DevicesModule: a short / garbage datagram is ignored, never listed") {
     DevicesModule dev;
-    const uint8_t ip[4] = {192, 168, 1, 70};
+    const uint8_t ip[4] = {192, 0, 2, 70};
     const uint8_t garbage[8] = {1, 2, 3, 4, 5, 6, 7, 8};
     dev.injectPacketForTest(garbage, sizeof(garbage), ip);
     CHECK(dev.listRowCount() == 0);
@@ -79,11 +79,11 @@ TEST_CASE("DevicesModule: a short / garbage datagram is ignored, never listed") 
 // The P4-bench bug: two DIFFERENT devices (a WLED and a MoonLight peer) must each keep their OWN name + type, no cross-contamination between packets.
 TEST_CASE("DevicesModule: distinct devices don't cross-contaminate name or type") {
     DevicesModule dev;
-    inject(dev, "wled-desk", /*mm=*/false, 192, 168, 1, 186);  // a WLED
-    inject(dev, "MM-S3",     /*mm=*/true,  192, 168, 1, 157);  // a MoonLight peer
+    inject(dev, "wled-desk", /*mm=*/false, 192, 0, 2, 186);  // a WLED
+    inject(dev, "MM-S3",     /*mm=*/true,  192, 0, 2, 157);  // a MoonLight peer
 
-    std::string wled = rowFor(dev, "192.168.1.186");
-    std::string mm   = rowFor(dev, "192.168.1.157");
+    std::string wled = rowFor(dev, "192.0.2.186");
+    std::string mm   = rowFor(dev, "192.0.2.157");
     CHECK(std::strstr(wled.c_str(), "wled-desk") != nullptr);
     CHECK(std::strstr(wled.c_str(), "\"type\":\"WLED\"") != nullptr);
     CHECK(std::strstr(wled.c_str(), "MM-S3") == nullptr);   // the contamination bug
@@ -94,10 +94,10 @@ TEST_CASE("DevicesModule: distinct devices don't cross-contaminate name or type"
 // A peer RENAME must propagate: a later packet from the same IP with a new name updates the row in place, the live-update requirement (the name rides the presence packet).
 TEST_CASE("DevicesModule: a peer rename updates the existing row's name") {
     DevicesModule dev;
-    inject(dev, "MM-OldName", /*mm=*/true, 192, 168, 1, 100);
-    REQUIRE(std::strstr(rowFor(dev, "192.168.1.100").c_str(), "MM-OldName") != nullptr);
-    inject(dev, "MM-NewName", /*mm=*/true, 192, 168, 1, 100);   // same device, new name
-    std::string row = rowFor(dev, "192.168.1.100");
+    inject(dev, "MM-OldName", /*mm=*/true, 192, 0, 2, 100);
+    REQUIRE(std::strstr(rowFor(dev, "192.0.2.100").c_str(), "MM-OldName") != nullptr);
+    inject(dev, "MM-NewName", /*mm=*/true, 192, 0, 2, 100);   // same device, new name
+    std::string row = rowFor(dev, "192.0.2.100");
     CHECK(std::strstr(row.c_str(), "MM-NewName") != nullptr);
     CHECK(std::strstr(row.c_str(), "MM-OldName") == nullptr);
 }
@@ -105,9 +105,9 @@ TEST_CASE("DevicesModule: a peer rename updates the existing row's name") {
 // A MoonLight device stays MoonLight even when a later plain-WLED packet arrives from the same address, the type only RAISES toward MoonLight, never downgrades. (A MoonLight peer could be seen via an unmarked packet too; that must not relabel it WLED.)
 TEST_CASE("DevicesModule: a MoonLight device is not downgraded by a later WLED packet") {
     DevicesModule dev;
-    inject(dev, "MM-Peer", /*mm=*/true,  192, 168, 1, 90);   // first: a MoonLight-marked packet
-    inject(dev, "MM-Peer", /*mm=*/false, 192, 168, 1, 90);   // later: a plain WLED packet, same IP
-    std::string row = rowFor(dev, "192.168.1.90");
+    inject(dev, "MM-Peer", /*mm=*/true,  192, 0, 2, 90);   // first: a MoonLight-marked packet
+    inject(dev, "MM-Peer", /*mm=*/false, 192, 0, 2, 90);   // later: a plain WLED packet, same IP
+    std::string row = rowFor(dev, "192.0.2.90");
     CHECK(std::strstr(row.c_str(), "\"type\":\"MoonLight\"") != nullptr);
     CHECK(std::strstr(row.c_str(), "\"type\":\"WLED\"") == nullptr);
 }
@@ -132,9 +132,9 @@ TEST_CASE("DevicesModule: a DISABLED module does not claim the active_ seat at b
 }
 
 namespace {
-// Inject one marked MoonLight presence copy from 192.168.1.d, as the broadcast or the multicast copy.
+// Inject one marked MoonLight presence copy from 192.0.2.d, as the broadcast or the multicast copy.
 void injectCopy(DevicesModule& dev, uint8_t d, bool broadcast) {
-    const uint8_t ip[4] = {192, 168, 1, d};
+    const uint8_t ip[4] = {192, 0, 2, d};
     uint8_t pkt[WledPacket::kSize];
     WledPacket::build(pkt, ip, "peer", /*boardType=*/34, /*lightsOn=*/true);
     WledPacket::stampMmMarker(pkt);
@@ -224,7 +224,7 @@ TEST_CASE("DevicesModule: a peer without multicast does not undo another peer's 
 
 // The copy flag sits in the marker's low byte, so a peer still recognizes us whichever copy arrives.
 TEST_CASE("WledPacket: either copy of a MoonLight packet carries the marker") {
-    const uint8_t ip[4] = {192, 168, 1, 64};
+    const uint8_t ip[4] = {192, 0, 2, 64};
     uint8_t pkt[WledPacket::kSize];
     WledPacket::build(pkt, ip, "peer", 34, true);
     WledPacket::stampMmMarker(pkt);
@@ -239,8 +239,8 @@ TEST_CASE("WledPacket: either copy of a MoonLight packet carries the marker") {
 // A board is known by the name it announces, in both directions, and only from what was heard this session.
 TEST_CASE("DevicesModule: a board heard announcing itself answers its name for its address, and its address for its name") {
     DevicesModule dev;
-    inject(dev, "MM-S31", /*mm=*/true, 192, 168, 1, 125);
-    const uint8_t at[4] = {192, 168, 1, 125}, elsewhere[4] = {192, 168, 1, 126};
+    inject(dev, "MM-S31", /*mm=*/true, 192, 0, 2, 125);
+    const uint8_t at[4] = {192, 0, 2, 125}, elsewhere[4] = {192, 0, 2, 126};
     REQUIRE(dev.nameOf(at) != nullptr);
     CHECK(std::strcmp(dev.nameOf(at), "MM-S31") == 0);
     CHECK(dev.nameOf(elsewhere) == nullptr);
@@ -254,12 +254,12 @@ TEST_CASE("DevicesModule: a board heard announcing itself answers its name for i
 // A restored row carries the address of the network it was saved on, which a new router may have handed to another board.
 TEST_CASE("DevicesModule: a board restored from the last boot is not looked up until it is heard again") {
     DevicesModule dev;
-    REQUIRE(dev.restoreList("{\"devices\":[{\"name\":\"MM-Eye\",\"ip\":\"192.168.1.30\",\"type\":\"MoonLight\"}]}", "devices"));
+    REQUIRE(dev.restoreList("{\"devices\":[{\"name\":\"MM-Eye\",\"ip\":\"192.0.2.30\",\"type\":\"MoonLight\"}]}", "devices"));
     uint8_t ip[4] = {};
-    const uint8_t at[4] = {192, 168, 1, 30};
+    const uint8_t at[4] = {192, 0, 2, 30};
     CHECK_FALSE(dev.addressOf("MM-Eye", ip));
     CHECK(dev.nameOf(at) == nullptr);
-    inject(dev, "MM-Eye", /*mm=*/true, 192, 168, 1, 30);
+    inject(dev, "MM-Eye", /*mm=*/true, 192, 0, 2, 30);
     CHECK(dev.addressOf("MM-Eye", ip));
 }
 
@@ -267,9 +267,9 @@ TEST_CASE("DevicesModule: a board restored from the last boot is not looked up u
 TEST_CASE("DevicesModule: a board heard at a new address is looked up there, not at the address it left") {
     DevicesModule dev;
     mm::platform::setTestNowMs(1000);
-    inject(dev, "MM-Eye", /*mm=*/true, 192, 168, 1, 31);   // where it was
+    inject(dev, "MM-Eye", /*mm=*/true, 192, 0, 2, 31);   // where it was
     mm::platform::setTestNowMs(5000);
-    inject(dev, "MM-Eye", /*mm=*/true, 192, 168, 1, 30);   // where it is now, listed after the old row
+    inject(dev, "MM-Eye", /*mm=*/true, 192, 0, 2, 30);   // where it is now, listed after the old row
     uint8_t ip[4] = {};
     REQUIRE(dev.addressOf("MM-Eye", ip));
     CHECK(ip[3] == 30);
@@ -280,14 +280,14 @@ TEST_CASE("DevicesModule: a status names a known peer by its board and an unknow
     DevicesModule dev;
     dev.setup();
     dev.applyState();   // claims the seat a status reads through
-    inject(dev, "MM-S31", /*mm=*/true, 192, 168, 1, 125);
+    inject(dev, "MM-S31", /*mm=*/true, 192, 0, 2, 125);
     inject(dev, "MM-a-name-of-23-letters", /*mm=*/true, 255, 255, 255, 254);
     char peer[HostResolver::kPeerChars];
-    const uint8_t known[4] = {192, 168, 1, 125}, unknown[4] = {192, 168, 1, 9}, longest[4] = {255, 255, 255, 254};
+    const uint8_t known[4] = {192, 0, 2, 125}, unknown[4] = {192, 0, 2, 9}, longest[4] = {255, 255, 255, 254};
     HostResolver::formatPeer(peer, sizeof(peer), known);
-    CHECK(std::string(peer) == "MM-S31 (192.168.1.125)");
+    CHECK(std::string(peer) == "MM-S31 (192.0.2.125)");
     HostResolver::formatPeer(peer, sizeof(peer), unknown);
-    CHECK(std::string(peer) == "192.168.1.9");
+    CHECK(std::string(peer) == "192.0.2.9");
     HostResolver::formatPeer(peer, sizeof(peer), longest);
     CHECK(std::string(peer) == "MM-a-name-of-23-letters (255.255.255.254)");   // the longest name a board holds fits whole
     dev.release();
@@ -298,7 +298,7 @@ TEST_CASE("DevicesModule: a host setting naming a board resolves from the device
     DevicesModule dev;
     dev.setup();
     dev.applyState();
-    inject(dev, "MM-Bridge", /*mm=*/true, 192, 168, 1, 101);
+    inject(dev, "MM-Bridge", /*mm=*/true, 192, 0, 2, 101);
     uint8_t ip[4] = {};
     CHECK(HostResolver::lookup("MM-Bridge.local", ip) == HostResolver::State::Resolved);   // no pass of the lookup task ran
     CHECK(ip[3] == 101);
