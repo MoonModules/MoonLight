@@ -52,7 +52,7 @@ A picture source decoding GIF from flash or the SD card, one decoder per source 
 
 ### HDMI out on the ESP32-P4-PC
 
-HDMI out is the textbook way to feed commercial LED walls: Novastar and Colorlight sending cards take HDMI or DVI as their input. The Olimex ESP32-P4-PC (on the bench) has HDMI and MIPI-DSI out; a driver beside `NdiDriver` writes the rendered output to it as a picture, scaled to the mode the card asks for.
+HDMI out is the textbook way to feed commercial LED walls: Novastar and Colorlight sending cards take HDMI or DVI as their input. The Olimex ESP32-P4-PC (on the bench) has HDMI and MIPI-DSI out; a driver beside `NdiDriver` writes the rendered output to it as a picture, scaled to the mode the card asks for. Its shape, on Espressif's LT8912B component and the standard timings: [#223](https://github.com/MoonModules/MoonLight/issues/223).
 
 ### The video processor
 
@@ -85,7 +85,7 @@ Nothing new connects the ends: a picture source, the Picture effect on a layer, 
 7. ⏳ The browser as a picture source behind the registry: a video file, a webcam and a shared screen shown on every board, the frame rate and bandwidth measured.
 8. ⏳ GIF from flash and the SD card as a picture source, PPM as the decoder's test format; its RAM and flash measured on an S3 and a P4.
 9. ⏳ Browser pages: a converter to GIF, and a video baked into FSEQ for the layout and played by the FSEQ player.
-10. ⏳ HDMI out on the ESP32-P4-PC as a driver, shown on a Novastar or ColorLight sending card.
+10. ⏳ HDMI out on the ESP32-P4-PC as a driver, shown on a Novastar or ColorLight sending card: [#223](https://github.com/MoonModules/MoonLight/issues/223).
 
 ## Decisions (recommended)
 
@@ -101,7 +101,6 @@ Nothing new connects the ends: a picture source, the Picture effect on a layer, 
 - The Picture service's 512-pixel cap: a wall of 768x384 samples a 512-wide picture. Enough, or does the cap rise on boards with PSRAM? **Recommended (2026-10-25):** keep 512: sampling a 512-wide picture onto a 768x384 wall reads fine, and the cap rises on PSRAM boards when a wall needs it.
 - RTP/JPEG (RFC 2435) beside HTTP: only if a tester's source speaks nothing else.
 - How far video goes on a board without a hardware decoder: GIF and image sequences, or a software decoder measured in flash first.
-- How HDMI out is wired on the ESP32-P4-PC: its sources name HDMI and MIPI-DSI but no bridge chip; Olimex's separate P4 HDMI adapter uses Lontium's LT8912B (MIPI-DSI to HDMI, up to 1080p60), so check the schematic.
 
 ## What it removes
 

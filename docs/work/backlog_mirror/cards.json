@@ -670,16 +670,6 @@
   "number": null
  },
  {
-  "title": "Network Send backs off on a full transmit queue (2026-10-30)",
-  "area": "Drivers",
-  "module": "",
-  "kind": "Feature",
-  "status": "Backlog",
-  "process": "",
-  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=288372423",
-  "number": null
- },
- {
   "title": "One encode, two readers: HLS and RTSP sharing the encoder (2026-09-22)",
   "area": "Drivers",
   "module": "",

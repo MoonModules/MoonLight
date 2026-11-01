@@ -7,11 +7,15 @@
 #include "light/drivers/HlsDriver.h"
 #include "light/drivers/Correction.h"
 #include "correction_presets.h"
+#include "wall_fixture.h"
 #include "light/layers/Buffer.h"
 #include "light/layouts/Layouts.h"
 #include "light/layouts/GridLayout.h"
 #include <string>
 #include <vector>
+
+using mm::test::Wall;
+using mm::test::wire;
 
 namespace {
 
@@ -26,32 +30,8 @@ struct EncSeamGuard {
     }
 };
 
-// A wall wired as production wires it: the Layout gives the Layer its physical size and the driver reads that, never its own controls.
-struct Wall {
-    mm::Layouts layouts;
-    mm::GridLayout grid;
-    mm::Layer layer;
-
-    Wall(uint16_t width, uint16_t height) {
-        grid.width = width;
-        grid.height = height;
-        grid.depth = 1;
-        layouts.addChild(&grid);
-        layouts.applyState();
-        layer.setLayouts(&layouts);
-        layer.setChannelsPerLight(3);
-        layer.applyState();
-    }
-};
-
 void setUp(mm::HlsDriver& driver, mm::Buffer& source, Wall& wall, mm::nrOfLightsType count) {
-    REQUIRE(source.allocate(count, 3));
-    mm::Correction correction;
-    mm::test::rebuildFromPreset(correction, 255, mm::test::PresetOrder::RGB);
-    driver.setLayer(&wall.layer);
-    driver.setSourceBuffer(&source);
-    driver.correctionForTest() = correction;
-    driver.applyState();
+    wire(driver, source, wall, count);
     mm::platform::encoderTestClearFrames();
     // Virtual time from the START: prepare() stamps the warm-up deadline from millis(), and a real-clock stamp against later virtual ticks is a wraparound flake (passes in isolation, fails in the full run depending on process uptime).
     mm::platform::setTestNowMs(1);

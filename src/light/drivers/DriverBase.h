@@ -126,6 +126,18 @@ public:
     /// Rebake only the brightness table for a level that moves every tick, the soft start, leaving the resolved profile as it is.
     void rampBrightness(uint8_t globalBrightness) MM_NONBLOCKING { correction_.rebuildBrightness(adoptBrightness(globalBrightness)); }
 
+    /// Correct `n` lights of `src` into tight RGB at `dst`, for an output that carries RGB only: a wider wiring is corrected into `scratch` and its first three channels kept, and without a scratch the colors pass through.
+    void correctToRgb(const uint8_t* src, uint8_t srcCh, uint8_t* dst, nrOfLightsType n, uint8_t* scratch) const MM_NONBLOCKING {
+        const uint8_t outCh = correction_.outChannels;
+        for (nrOfLightsType i = 0; i < n; i++) {
+            const uint8_t* s = src + static_cast<size_t>(i) * srcCh;
+            uint8_t* d = dst + static_cast<size_t>(i) * 3;
+            if (outCh == 3) correction_.apply(s, d, srcCh);
+            else if (scratch) { correction_.apply(s, scratch, srcCh); d[0] = scratch[0]; d[1] = scratch[1]; d[2] = scratch[2]; }
+            else { d[0] = s[0]; d[1] = s[1]; d[2] = s[2]; }
+        }
+    }
+
     /// Clear every shared status string, so a stopped driver leaves nothing behind; the owner calls it before destroying the driver, since a base destructor cannot prevent the vptr race.
     void release() override {
         freeWire();          // the shared correction scratch: owned here, so no driver re-frees it

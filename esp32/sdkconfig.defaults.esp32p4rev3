@@ -14,7 +14,7 @@
 #
 # TWO images cover every P4 that exists, not one per revision: REV_MIN_300 supports
 # v3.0 through v3.99 (REV_MAX_FULL=399), so v3.0 and v3.1 share this one. The rev1 image
-# covers v0.0 through v1.99 the same way.
+# covers v1.0 through v1.99 the same way.
 #
 # NOT VERIFIED ON HARDWARE. Both bench boards are v1.3, so this image has never been
 # booted. It is published so someone with current silicon can test it: a v3 board

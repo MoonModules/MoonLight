@@ -31,6 +31,8 @@ AGENT = "DiscordBot (https://github.com/MoonModules/MoonLight, 1)"
 TEXT_TYPES = (0, 5, 15)
 # Bot feeds that mirror GitHub: the issues and pull requests themselves are the source.
 SKIP_CATEGORIES = ("GitHub Activity",)
+# A picture or a log, not a video: the size an agent reads, streamed to disk and refused beyond it.
+MAX_ATTACHMENT = 25 * 2**20
 # The daily summary, read on its own to find where the last one stopped, never summarized again.
 SUMMARY_CHANNEL = "1565668213759676426"
 
@@ -85,9 +87,28 @@ def _channels() -> dict[str, str]:
     return out
 
 
-def _threads(channels: dict[str, str]) -> list[dict]:
-    """The active threads of those channels."""
-    return [t for t in _get(f"/guilds/{GUILD}/threads/active")["threads"] if t.get("parent_id") in channels]
+def _threads(channels: dict[str, str], since: datetime | None = None) -> list[dict]:
+    """The active threads of those channels, and with `since` the public threads archived after it, whose messages a window may still hold."""
+    out = [t for t in _get(f"/guilds/{GUILD}/threads/active")["threads"] if t.get("parent_id") in channels]
+    if since is None:
+        return out
+    seen = {t["id"] for t in out}
+    for cid in channels:
+        before = None
+        while True:   # newest archived first, paged by archive time
+            try:
+                page = _get(f"/channels/{cid}/threads/archived/public", limit=100, **({"before": before} if before else {}))
+            except urllib.error.HTTPError as e:
+                if e.code in (403, 404):
+                    break   # a channel the bot may not read, or a kind without threads
+                raise
+            fresh = [t for t in page.get("threads", []) if datetime.fromisoformat(t["thread_metadata"]["archive_timestamp"]) >= since]
+            out += [t for t in fresh if t["id"] not in seen]
+            seen.update(t["id"] for t in fresh)
+            if not page.get("has_more") or len(fresh) < len(page.get("threads", [])):
+                break
+            before = page["threads"][-1]["thread_metadata"]["archive_timestamp"]
+    return out
 
 
 def _resolve(channel: str) -> str:
@@ -116,8 +137,10 @@ def _messages(cid: str, start: datetime, end: datetime) -> list[dict]:
     while True:
         try:
             page = _get(f"/channels/{cid}/messages", limit=100, **({"before": before} if before else {}))
-        except urllib.error.HTTPError:
-            return []
+        except urllib.error.HTTPError as e:
+            if e.code == 403:
+                return []   # a channel the bot may not read; any other failure is an incomplete read, and says so
+            raise
         for m in page:
             t = datetime.fromisoformat(m["timestamp"])
             if t < start:
@@ -157,6 +180,8 @@ def list_channels() -> str:
 
 def read_messages(channel: str, hours: float = 24, limit: int = 300) -> str:
     """Messages of one channel or thread (id or name), oldest first, from the last `hours`, at most `limit`."""
+    if limit <= 0:
+        return "no messages in that window"
     cid = _resolve(channel)
     end = datetime.now(timezone.utc)
     got = _messages(cid, end - timedelta(hours=hours), end)[-limit:]
@@ -168,7 +193,7 @@ def read_server(start: str, end: str) -> str:
     s, e = _utc(start), _utc(end)
     chs = _channels()
     places = [(cid, name) for cid, name in chs.items() if cid != SUMMARY_CHANNEL]
-    places += [(t["id"], f"{chs[t['parent_id']]} > thread {t['name']}") for t in _threads(chs)]
+    places += [(t["id"], f"{chs[t['parent_id']]} > thread {t['name']}") for t in _threads(chs, s)]
     out = []
     for cid, name in places:
         got = _messages(cid, s, e)
@@ -183,10 +208,20 @@ def fetch_attachment(url: str) -> str:
     if not url.startswith(("https://cdn.discordapp.com/", "https://media.discordapp.net/")):
         raise ValueError("only Discord attachment URLs")
     req = urllib.request.Request(url, headers={"User-Agent": AGENT})
+    too_large = ValueError(f"attachment larger than {MAX_ATTACHMENT // 2**20} MB")
     with urllib.request.urlopen(req, timeout=30) as r:
-        data = r.read()
-    path = Path(tempfile.mkdtemp(prefix="discord-")) / Path(url.split("?")[0]).name
-    path.write_bytes(data)
+        # Refused on the announced size before a byte is read or a directory made; the count below covers a missing header.
+        if int(r.headers.get("Content-Length") or 0) > MAX_ATTACHMENT:
+            raise too_large
+        path = Path(tempfile.mkdtemp(prefix="discord-")) / Path(url.split("?")[0]).name
+        got = 0
+        with path.open("wb") as f:
+            while chunk := r.read(64 * 1024):
+                got += len(chunk)
+                if got > MAX_ATTACHMENT:
+                    f.close(); path.unlink(); path.parent.rmdir()
+                    raise too_large
+                f.write(chunk)
     return str(path)
 
 

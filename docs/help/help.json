@@ -3445,6 +3445,55 @@
    "doc": "light/drivers.md#rtsp",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/drivers/RtspDriver.h"
   },
+  "HdmiDriver": {
+   "line": "Shows the layer on a monitor through the board's HDMI port, scaled to the screen.",
+   "summary": "The grid becomes the picture, one light per pixel, output correction applied, so the screen shows what the wall shows. A monitor, a projector, or the HDMI input of an LED wall's sending card (Novastar, ColorLight) takes it.\n\nESP32-P4 boards with an LT8912B bridge, such as the Olimex ESP32-P4-PC; the bridge sits on the board's I2C bus, which the device model sets. The bridge, its clocks and hot-plug are the platform's (platform_esp32_hdmi.cpp).",
+   "attribution": "[Espressif](https://moonmodules.org/MoonLight/reference/attributions.html#espressif), [Olimex](https://moonmodules.org/MoonLight/reference/attributions.html#olimex)",
+   "guide": [
+    {
+     "title": "Connect the monitor",
+     "text": "A monitor connected or woken later is picked up within a second. Set its input to HDMI rather than automatic: on automatic some monitors leave the signal for another input. A picture of noise after a cold start is the bridge missing the stream on its first configuration: reset the board."
+    },
+    {
+     "title": "Status line",
+     "text": "| It says | It means |\n|---|---|\n| `no I2C bus for the bridge` | Set System's I2C bus pins, as the board's device model does |\n| `no monitor connected` | Plug it in, or wake it |\n| `<w>x<h> on <mode>` | Live |"
+    }
+   ],
+   "image": "https://moonmodules.org/MoonLight/assets/light/drivers/HdmiDriver.png",
+   "controls": {
+    "localBrightness": {
+     "line": "This driver's dim, multiplied with the global brightness."
+    },
+    "curve": {
+     "line": "How brightness maps to output: CIE 1931, a gamma, or linear."
+    },
+    "fixture": {
+     "line": "The fixture profile applied per light, for channel order and white.",
+     "more": "A reorder or a reboot keeps it. After renaming the profile, re-pick it: the next reboot falls back to the default."
+    },
+    "whiteMode": {
+     "line": "How the white channel is derived, shown when the profile carries one."
+    },
+    "fixtureRef": {
+     "line": "The profile name an older config saved, read once and then emptied."
+    },
+    "mode": {
+     "line": "The screen mode; 1280x720 suits a 1080p monitor, which scales it by exactly 1.5."
+    },
+    "scaling": {
+     "line": "0 fit, 1 stretch: fit keeps the grid's shape with black bars, stretch fills the screen."
+    },
+    "fps": {
+     "line": "Frame-rate ceiling; the screen refreshes on its own."
+    }
+   },
+   "role": "driver",
+   "tags": "🖥️",
+   "dim": 0,
+   "doc": "light/drivers.md#hdmi",
+   "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/drivers/HdmiDriver.h",
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#hdmidriver"
+  },
   "PanelCardDriver": {
    "line": "Streams the buffer to ColorLight 5A-75 receiving cards as raw Ethernet, taking the place of the sending card that normally feeds them.",
    "summary": "The board renders and sends, so it replaces a host PC driving the same wall. There are no geometry controls: the wall comes from the [Layout](https://moonmodules.org/MoonLight/moonmodules/light/layouts.html), cut into card rows.",
@@ -3867,7 +3916,7 @@
      "line": "The flash chip size."
     },
     "flashMode": {
-     "line": "How the chip reads its flash, such as QIO or DIO."
+     "line": "How the chip reads its flash and at what clock, such as QIO, 80 MHz."
     },
     "mac": {
      "line": "The hardware address, which tooling identifies the device by."

@@ -29,6 +29,7 @@ The people, projects and published algorithms whose work shaped MoonLight. Almos
 | [E1.31 / sACN](https://en.wikipedia.org/wiki/Architecture_for_Control_Networks) | 📜 | Streaming ACN, DMX over IP as ANSI standardizes it. |
 | Eric Marciniak | 🧑 | The car-lights fixture. |
 | [ESPHome](https://esphome.io) | 🧰 | Home Assistant discovery, and HUB75. |
+| [Espressif](https://www.espressif.com) | 🏢 | The ESP32 family and ESP-IDF, and the esp_lcd_lt8912b component the HDMI output drives its bridge with. |
 | [Euclidean distance](https://en.wikipedia.org/wiki/Euclidean_distance) File:Euclidean_distance_2d.svg | 🧮 | The straight-line metric. |
 | [ewowi](https://github.com/ewowi) | 🧑 | MoonLight, StarLight, WLED 2D, LED preview. |
 | [FastLED](https://github.com/FastLED/FastLED) | 🧰 | The canonical LED-effects library whose names and models MoonLight carries forward (`scale8`, `sin8`, the gradient-palette model, the `beatsin8` family) so a contributor recognizes them on sight. The implementations are our own, integer-only and hot-path-tuned. Color maths and the basic power functions. |
@@ -62,6 +63,7 @@ The people, projects and published algorithms whose work shaped MoonLight. Almos
 | [NetMindz](https://github.com/netmindz) | 🧑 | Will Tatam: WLED audio sync, and the statistics work. |
 | [ObjectFLED](https://github.com/KurtMF/ObjectFLED) | 🧰 | Parallel WS2812 output on the Teensy 4 by DMA to a GPIO port. |
 | [OctoWS2811](https://www.pjrc.com/teensy/td_libs_OctoWS2811.html) | 🧰 | Paul Stoffregen's parallel WS2812 library for the Teensy, timer-driven DMA. |
+| [Olimex](https://www.olimex.com) | 🏢 | The ESP32-P4-PC, and its board demo whose HDMI bring-up the output follows. |
 | [Pac-Man](https://en.wikipedia.org/wiki/Pac-Man) | 🎨 | Namco's 1980 arcade game. |
 | [Philips Hue](https://developers.meethue.com) | 🏢 | The smart-light bridge and its local REST API. |
 | [Piper](https://github.com/OHF-Voice/piper1-gpl) | 🧰 | OHF-Voice's offline text-to-speech that narrates the documentation clips, the voice you hear, with voice models from rhasspy. GPL, and used as a tool rather than linked: MoonTube calls it to render an audio track. |
@@ -84,7 +86,7 @@ The people, projects and published algorithms whose work shaped MoonLight. Almos
 | [Tasmota](https://github.com/arendst/Tasmota) | 🧰 | With MycilaSafeBoot, the safeboot pattern behind [MoonBase](../explanation/architecture/moonbase.md), our from-scratch minimal take on it. |
 | [toggledbits](https://github.com/toggledbits) | 🧑 | Patrick Rigney: MatrixFireFast, the 2D fire the Fire effect adapts. |
 | [Transpose](https://en.wikipedia.org/wiki/Transpose) File:Matrix_transpose.gif | 🧮 | Rows becoming columns. |
-| [troyhacks](https://github.com/troyhacks) | 🧑 | Reworked the WLED-MM audio DSP onto Espressif's [esp-dsp](https://github.com/espressif/esp-dsp) FFT, the same choice AudioService makes, and WLED-MM's Art-Net, WLED effects, and P4 tuning. |
+| [troyhacks](https://github.com/troyhacks) | 🧑 | Reworked the WLED-MM audio DSP onto Espressif's [esp-dsp](https://github.com/espressif/esp-dsp) FFT, the same choice AudioService makes, and WLED-MM's Art-Net, WLED effects, P4 tuning, and the P4's HDMI clock rule with its 720p timing. |
 | [Waveshare](https://www.waveshare.com) | 🏢 | The ESP32-S3 RGB Matrix board and its HUB75 pin map. |
 | [wladi / myhome-control](https://shop.myhome-control.de) | 🧑🏢 | Designer of the [MHC-WLED ESP32-P4 shield](https://shop.myhome-control.de/en/ABC-WLED-ESP32-P4-shield/HW10027), and the source of the pinout details that got its line-in audio working. |
 | [WLED](https://github.com/wled/WLED) | 🧰 | MoonLight is born out of WLED and takes the usermod idea further, where everything is a module. A MoonLight device also acts as a WLED device and talks to WLED devices. |

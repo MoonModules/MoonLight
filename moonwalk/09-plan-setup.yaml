@@ -44,7 +44,7 @@ processes:
           Each cycle subtracts as well as adds.
       - id: close
         say: Close the shipped plan as an issue.
-        when: { manual: "In the pull request that ships it, once every step is built and verified, the judgment steps included: the product owner's call." }
+        when: { manual: "In the pull request that ships it, once every step is built and verified, the judgment steps included, or once it is stopped: the product owner's call." }
         detail: |
           First, what only the plan holds moves home: a reason to the explanation, a fact to a reference page, a lesson to the lessons, analysis an open plan uses to a [design study](design/index.md). Then the plan becomes a closed issue labeled `plan` and its file is deleted. The body keeps what no commit holds: the goal, the outcome, the decisions with the rejected alternatives and why, where its knowledge lives, one line per step, and the plan and close dates. A shipped plan closes as completed; one that did not ship closes as not planned, saying cancelled, superseded or reverted. Its remaining backlog returns to the Project as cards, decided item by item.
   - id: branch

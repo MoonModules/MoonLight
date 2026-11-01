@@ -51,15 +51,23 @@ constexpr uint8_t kPin = 4;
 
 struct Rig {
     Scheduler scheduler;
-    FakeSurface* surface = new FakeSurface();
+    FakeSurface* surface = nullptr;
     ButtonService* buttons = new ButtonService();
-    Rig() {
+    /// Without the surface, the tree is as before the surface's config is restored.
+    explicit Rig(bool withSurface = true) {
         platform::clearTestGpioLevel();
-        surface->setName("Control");
+        if (withSurface) addSurface();
         buttons->setName("Button");
-        scheduler.addModule(surface);
         scheduler.addModule(buttons);
         scheduler.setup();
+    }
+
+    /// The Control surface, added to a running tree as a restore adds it.
+    void addSurface() {
+        surface = new FakeSurface();
+        surface->setName("Control");
+        surface->defineControls();
+        REQUIRE(scheduler.addModule(surface));
     }
     ~Rig() { scheduler.release(); platform::clearTestGpioLevel(); }
 
@@ -129,6 +137,25 @@ TEST_CASE("a momentary row writes while held and clears on release, which is wha
     CHECK(rig.surface->switch1 == true);       // held: written
     rig.hold(false, 100);
     CHECK(rig.surface->switch1 == false);      // released: cleared, unlike a toggle
+}
+
+TEST_CASE("a set row on a switch open at boot turns its target off, so the target follows the switch from the start") {
+    Rig rig;
+    REQUIRE(rig.surface->switch1 == true);     // a saved state the open switch contradicts
+    rig.addRow("Control.switch1", "set", 1);
+    rig.hold(false, 100);                       // open, and never pressed
+    CHECK(rig.surface->switch1 == false);
+}
+
+TEST_CASE("a set row whose surface is missing retries on the slow tick rather than every poll, so a surface restored later follows the switch") {
+    Rig rig(false);
+    rig.addRow("Control.switch1", "set", 1);
+    rig.hold(false, 100);                       // the first write finds no surface
+    rig.addSurface();
+    rig.hold(false, 100);                       // the polls alone leave it: a retry per poll would flood the status
+    CHECK(rig.surface->switch1 == true);
+    rig.buttons->tick1s();
+    CHECK(rig.surface->switch1 == false);
 }
 
 TEST_CASE("a delta row nudges its target, clamped by the control") {

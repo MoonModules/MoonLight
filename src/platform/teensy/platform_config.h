@@ -68,6 +68,8 @@ constexpr bool hasNamedNetInterfaces = false;
 constexpr bool hasNdi = false;
 /// No H.264 encoder.
 constexpr bool hasHls = false;
+/// False: the Teensy has no display controller.
+constexpr bool hasHdmi = false;
 /// No RTSP server.
 constexpr bool hasRtsp = false;
 /// No USB MIDI host.

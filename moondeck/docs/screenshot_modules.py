@@ -150,6 +150,7 @@ MODULES = [
     ("Hub75Driver",         "Drivers",  {}, False),
     ("NdiDriver",           "Drivers",  {}, False),
     ("HlsDriver",           "Drivers",  {}, False),
+    ("HdmiDriver",          "Drivers",  {}, False),
     ("RtspDriver",          "Drivers",  {}, False),
     ("PwmLightDriver",      "Drivers",  {"pins": "6,7,5"}, False),
 ]

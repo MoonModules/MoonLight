@@ -82,10 +82,11 @@ def test_reading_the_server_leaves_out_the_summary_channel(monkeypatch):
         f"/guilds/{dr.GUILD}/threads/active": {"threads": []},
         "/channels/t1/messages": day, "/channels/f1/messages": [],
         f"/channels/{dr.SUMMARY_CHANNEL}/messages": day,
+        **{f"/channels/{c}/threads/archived/public": {"threads": [], "has_more": False} for c in ("t1", "f1", dr.SUMMARY_CHANNEL)},
     })
     out = dr.read_server("2026-10-29T05:00:00", "2026-10-30T05:00:00")
     assert "=== MoonLight / #moonlight-dev (1)" in out and "moonlight-daily" not in out
-    assert all(dr.SUMMARY_CHANNEL not in path for path, _ in calls)
+    assert (f"/channels/{dr.SUMMARY_CHANNEL}/messages", {"limit": 100}) not in calls   # its threads are read, its own posts are not
 
 
 def test_a_message_line_carries_its_reply_its_attachment_and_its_link():
@@ -101,6 +102,17 @@ def test_a_message_line_carries_its_reply_its_attachment_and_its_link():
 def test_an_attachment_is_fetched_only_from_discord():
     with pytest.raises(ValueError):
         dr.fetch_attachment("https://example.com/shot.png")
+
+
+def test_an_attachment_announced_as_too_large_is_refused_before_a_byte_is_read(monkeypatch):
+    class Big(io.BytesIO):
+        headers = {"Content-Length": str(dr.MAX_ATTACHMENT + 1)}
+
+        def read(self, n=-1):
+            raise AssertionError("a byte was read")
+    monkeypatch.setattr(dr.urllib.request, "urlopen", lambda req, timeout: Big())
+    with pytest.raises(ValueError):
+        dr.fetch_attachment("https://cdn.discordapp.com/attachments/1/2/big.mov")
 
 
 def test_a_rate_limited_answer_waits_as_told_then_asks_again(monkeypatch):
@@ -130,3 +142,23 @@ def test_a_channel_is_found_by_the_start_of_its_name_and_an_empty_name_is_refuse
     assert dr._resolve("#moonlight-dev") == "t1"
     with pytest.raises(ValueError):
         dr._resolve("#")
+
+
+def test_a_thread_archived_inside_the_window_is_read_and_one_archived_before_it_is_not(monkeypatch):
+    def archived(cid):
+        return {"threads": [{"id": "a1", "parent_id": cid, "name": "late", "thread_metadata": {"archive_timestamp": "2026-10-29T20:00:00+00:00"}},
+                            {"id": "a0", "parent_id": cid, "name": "old", "thread_metadata": {"archive_timestamp": "2026-10-20T20:00:00+00:00"}}],
+                "has_more": True}
+    serve(monkeypatch, {f"/guilds/{dr.GUILD}/threads/active": {"threads": []}, "/channels/t1/threads/archived/public": archived("t1")})
+    got = dr._threads({"t1": "#dev"}, utc("2026-10-29T05:00:00"))
+    assert [t["id"] for t in got] == ["a1"]
+
+
+def test_a_failure_other_than_a_refused_channel_is_raised_not_read_as_an_empty_channel(monkeypatch):
+    serve(monkeypatch, {"/channels/t1/messages": urllib.error.HTTPError("u", 401, "Unauthorized", {}, io.BytesIO(b"{}"))})
+    with pytest.raises(urllib.error.HTTPError):
+        dr._messages("t1", utc("2026-10-29T05:00:00"), utc("2026-10-30T05:00:00"))
+
+
+def test_a_limit_of_zero_reads_no_messages():
+    assert dr.read_messages("anything", limit=0) == "no messages in that window"

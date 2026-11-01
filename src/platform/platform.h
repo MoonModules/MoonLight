@@ -256,7 +256,7 @@ const char* cpuInfo();
 /// PSRAM interface type and clock, such as "octal, 80 MHz", and empty where this build has no PSRAM.
 const char* psramType();
 
-/// How the chip reads its program flash now, "QIO", "DIO" or "octal" and the like, read from the running hardware; empty where the host has none to report.
+/// How the chip reads its program flash and at what clock, such as "QIO, 80 MHz": the mode read from the running hardware, the clock from the build; empty where the host has none to report.
 const char* flashMode();
 
 /// WiFi co-processor status for a board whose radio lives on a separate chip, empty on a native radio.
@@ -522,6 +522,49 @@ const uint8_t* ndiTestFrameData(size_t i);
 const char* ndiTestSenderName();
 /// Drop every recorded frame.
 void ndiTestClearFrames();
+#endif
+
+// --- HDMI out, gated by `hasHdmi`: a display mode, a frame, and hot-plug ------------------------
+
+/// One display mode the HDMI output runs.
+struct HdmiMode {
+    uint16_t width;    ///< active pixels across
+    uint16_t height;   ///< active lines
+    uint8_t  hz;       ///< refresh rate
+};
+
+/// The modes this platform offers, in the order the driver's `mode` control lists them; 0 where it has none.
+size_t hdmiModes(const HdmiMode** out);
+
+/// Start the output in mode `index`, replacing a running one; false where the platform or board has none, such as no I2C bus open for the bridge.
+bool hdmiOpen(uint8_t index);
+
+/// Stop the output and free its framebuffer; safe when closed.
+void hdmiClose();
+
+/// Hand one tight-RGB frame to the output, which scales it to the screen, keeping its aspect when `fit`. Never blocks: a frame arriving before the previous one is shown replaces it.
+bool hdmiWrite(const uint8_t* rgb, uint16_t w, uint16_t h, bool fit) MM_NONBLOCKING;
+
+/// Whether a monitor is connected now, the HDMI hot-plug detect.
+bool hdmiConnected() MM_NONBLOCKING;
+
+#ifndef ESP_PLATFORM
+/// Report a monitor connected or not: the desktop's stand-in records what the driver handed over, as the NDI seam does, so the driver is tested without a bridge.
+void setTestHdmiConnected(bool connected);
+/// The mode the output was opened in, -1 while closed.
+int hdmiTestOpenMode();
+/// How many frames were handed over since the last clear.
+size_t hdmiTestFrameCount();
+/// The last frame's width.
+uint16_t hdmiTestFrameWidth();
+/// The last frame's height.
+uint16_t hdmiTestFrameHeight();
+/// Whether the last frame asked to keep its aspect.
+bool hdmiTestFrameFit();
+/// The last frame's tight-RGB bytes.
+const uint8_t* hdmiTestFrameData();
+/// Drop the recorded frames and close the output.
+void hdmiTestClear();
 #endif
 
 // --- HLS output, gated by `hasHls`: the seam carries numbers rather than an encoder argv -------

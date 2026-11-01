@@ -399,16 +399,22 @@ const char* psramType() {
 #endif
 }
 
+#if defined(CONFIG_ESPTOOLPY_FLASHFREQ_VAL)
+    #define MM_FLASH_CLOCK ", " MM_STR(CONFIG_ESPTOOLPY_FLASHFREQ_VAL) " MHz"
+#else
+    #define MM_FLASH_CLOCK ""
+#endif
+
 const char* flashMode() {
-    // Read from the cache's flash controller, so it reports what the bootloader set up rather than what this image was built for: a network update replaces the app and keeps the bootloader, and with it the mode.
-    if (bootloader_flash_is_octal_mode_enabled()) return "octal";
+    // The mode is read from the cache's flash controller, so it shows what the bootloader set up, which a network update keeps; the clock is the build's, as the PSRAM's is, since IDF has no runtime getter.
+    if (bootloader_flash_is_octal_mode_enabled()) return "octal" MM_FLASH_CLOCK;
     switch (bootloader_flash_get_spi_mode()) {
-        case ESP_ROM_SPIFLASH_QIO_MODE:    return "QIO";
-        case ESP_ROM_SPIFLASH_QOUT_MODE:   return "QOUT";
-        case ESP_ROM_SPIFLASH_DIO_MODE:    return "DIO";
-        case ESP_ROM_SPIFLASH_DOUT_MODE:   return "DOUT";
-        case ESP_ROM_SPIFLASH_FASTRD_MODE: return "fast read";
-        default:                           return "slow read";
+        case ESP_ROM_SPIFLASH_QIO_MODE:    return "QIO" MM_FLASH_CLOCK;
+        case ESP_ROM_SPIFLASH_QOUT_MODE:   return "QOUT" MM_FLASH_CLOCK;
+        case ESP_ROM_SPIFLASH_DIO_MODE:    return "DIO" MM_FLASH_CLOCK;
+        case ESP_ROM_SPIFLASH_DOUT_MODE:   return "DOUT" MM_FLASH_CLOCK;
+        case ESP_ROM_SPIFLASH_FASTRD_MODE: return "fast read" MM_FLASH_CLOCK;
+        default:                           return "slow read" MM_FLASH_CLOCK;
     }
 }
 

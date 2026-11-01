@@ -83,6 +83,8 @@ constexpr bool hasNdi = true;
 
 /// True: the host streams H.264 by piping frames to the ffmpeg on PATH, a dependency of the user's.
 constexpr bool hasHls = true;
+/// True: the desktop's stand-in records the frames, so the driver and its card exist here; a picture needs a board with the bridge.
+constexpr bool hasHdmi = true;
 
 /// True: ffmpeg encodes the elementary stream and MoonLight's own RTSP server ships it.
 constexpr bool hasRtsp = true;

@@ -303,42 +303,6 @@ def _tracked_files():
     return set(r.stdout.split("\n")) if r.returncode == 0 else None
 
 
-def _appendix_lines(text: str) -> int:
-    """How many `///` lines follow an `@technical` in one file: the depth its comments hold outside the code."""
-    n, inside = 0, False
-    for line in text.split("\n"):
-        s = line.strip()
-        if not s.startswith("///") or "@guide" in s:
-            inside = False
-        elif inside:
-            n += 1
-        elif "@technical" in s:   # anywhere on the line, as _header_rules reads it
-            inside = True
-    return n
-
-
-def _appendix_total() -> int:
-    """The tree's appendix size, ratcheted so a cleanup cannot pass by moving comments rather than cutting them."""
-    return sum(_appendix_lines((ROOT / rel).read_text(encoding="utf-8")) for rel in _headers())
-
-
-def _appendix_growth() -> list:
-    """The changed files whose appendix grew against HEAD, so a rise names where it came from."""
-    import subprocess
-    r = subprocess.run(["git", "diff", "--name-only", "HEAD"], cwd=ROOT, capture_output=True, text=True)
-    covered = {rel.as_posix() for rel in _headers()}
-    out = []
-    for rel in r.stdout.split():
-        if rel not in covered:
-            continue
-        old = subprocess.run(["git", "show", f"HEAD:{rel}"], cwd=ROOT, capture_output=True, text=True)
-        was = _appendix_lines(old.stdout) if old.returncode == 0 else 0
-        now = _appendix_lines((ROOT / rel).read_text(encoding="utf-8"))
-        if now > was:
-            out.append((rel, was, now))
-    return out
-
-
 def _prose_pair(lines: list, k: int, end: int, start: int):
     """The stripped bodies of lines `k` and `k + 1` when both are prose of one comment block, or None.
 
@@ -1256,8 +1220,8 @@ def _committed_counts():
     return ratchet.committed_counts(COUNTS)
 
 
-def _counts(found, appendix=None) -> dict:
-    """The counts the ratchet compares: the warnings per rule and in total, and the appendix lines.
+def _counts(found) -> dict:
+    """The counts the ratchet compares: the warnings per rule and in total.
 
     LABELED, as the findings record names them, so the counts file and the test page name a rule alike. The
     total is its own entry, because a per-rule comparison alone misses a rule that is below the
@@ -1267,12 +1231,10 @@ def _counts(found, appendix=None) -> dict:
     warned = [(key, why) for key, why in found if not _blocks(key, why)]
     now = Counter(_rule_label(_rule_name(why)) for _, why in warned)
     now["(total)"] = len(warned)
-    if appendix is not None:
-        now["(appendix lines)"] = appendix
     return dict(now)
 
 
-def _ratchet(found, appendix=None) -> list:
+def _ratchet(found) -> list:
     """Which rules rose against the committed counts. The list only shrinks.
 
     A warning is staged work, and staged work that grows is not a sweep. Per RULE rather than on
@@ -1283,14 +1245,9 @@ def _ratchet(found, appendix=None) -> list:
     base = _committed_counts()
     if base is None:
         return []
-    now = _counts(found, appendix)
-    # The appendix is its own row, because warnings that fall while the appendix grows were moved, not cut; a baseline without the row is a first run for it.
-    base = dict(base)
-    if "(appendix lines)" not in base:
-        now.pop("(appendix lines)", None)
-    elif "(appendix lines)" not in now:
-        base.pop("(appendix lines)")
-    return ratchet.risen(base, now)
+    # The appendix is budgeted per section by the rules above, never as a total: a total refuses every new file's appendix.
+    base = {k: v for k, v in base.items() if k != "(appendix lines)"}
+    return ratchet.risen(base, _counts(found))
 
 
 def main() -> int:
@@ -1313,14 +1270,13 @@ def main() -> int:
 
     # The counts are the number to beat, and their git history is the sweep's trend. Recorded on
     # every run that measured every rule: a skipped write loses the number to beat.
-    appendix = _appendix_total()
     if measured:
-        ratchet.record(COUNTS, _counts(found, appendix))
+        ratchet.record(COUNTS, _counts(found))
 
     errors = [f for f in found if _blocks(f[0], f[1])]
     warnings = [f for f in found if not _blocks(f[0], f[1])]
 
-    risen = _ratchet(found, appendix)
+    risen = _ratchet(found)
     if unverified := _unverified_processes():
         print(f"Information, not counted: {len(unverified)} process(es) no runner verifies:")
         for _, why in unverified:
@@ -1336,9 +1292,6 @@ def main() -> int:
         print("ROSE against the committed counts. These only shrink:")
         for rule, was, now in risen:
             print(f"  {rule}: {was} -> {now}")
-            if rule == "(appendix lines)":
-                for rel, a, b in _appendix_growth():
-                    print(f"    {rel}: {a} -> {b}")
         print("  Fix them, or say in the commit why the rule itself changed.\n")
     if errors:
         _report(errors, "ERRORS. These fail the gate.")

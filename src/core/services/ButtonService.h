@@ -50,6 +50,16 @@ public:
         beginPins();
     }
 
+    /// Retry a set row whose write failed, once a second: its target may be on a surface restored after the row.
+    void tick1s() MM_NONBLOCKING override {
+        for (uint8_t i = 0; i < count_; i++) {
+            Row& r = rows_[i];
+            if (!r.open || r.synced || !r.tried || r.action.kind != InputAction::Kind::Set) continue;
+            r.synced = act(r);
+        }
+        MoonModule::tick1s();
+    }
+
     /// Poll every configured button, which 50 Hz catches comfortably.
     void tick20ms() MM_NONBLOCKING override {
         for (uint8_t i = 0; i < count_; i++) pollRow(rows_[i]);
@@ -116,7 +126,7 @@ public:
     bool setListRowField(uint32_t id, const char* field, const char* valueJson) override {
         Row* r = find(id);
         if (!r) return false;
-        if (setInputActionField(r->action, field, valueJson)) { markDirty(); return true; }
+        if (setInputActionField(r->action, field, valueJson)) { r->synced = r->tried = false; markDirty(); return true; }
         if (std::strcmp(field, "pin") == 0) {
             if (!parseInputPin(valueJson, r->pin)) return false;
             beginPin(*r);          // live, so entering a GPIO works now rather than at reboot
@@ -163,6 +173,8 @@ private:
         bool        pressed = false;     ///< the settled state
         bool        candidate = false;   ///< the level being timed
         uint16_t    sinceChange = 0;     ///< ms the candidate has held
+        bool        synced = false;      ///< a set row has written its settled state once, so its target follows the switch from the start
+        bool        tried = false;       ///< the first write ran; a failed one is retried on the slow tick rather than every poll
     };
 
     /// The row with this id, or null.
@@ -185,6 +197,12 @@ private:
         if (!r.open) setStatus("that pin cannot be used as an input", Severity::Warning);
         r.pressed = r.candidate = false;
         r.sinceChange = 0;
+        r.synced = r.tried = false;
+    }
+
+    /// Whether the level is the one the row already acted on; a set row never written goes on once, so a switch open at boot turns its target off.
+    static bool settled(const Row& r, bool raw, bool set) MM_NONBLOCKING {
+        return raw == r.pressed && (r.synced || r.tried || !set);
     }
 
     /// Read one row, debounce it, and act on a settled edge.
@@ -194,17 +212,24 @@ private:
 
         // By time rather than by sample count, which would change meaning with the poll rate.
         if (raw != r.candidate) { r.candidate = raw; r.sinceChange = 0; return; }
-        if (raw == r.pressed)   { r.sinceChange = 0; return; }        // already settled here
+        const bool set = r.action.kind == InputAction::Kind::Set;
+        if (settled(r, raw, set)) { r.sinceChange = 0; return; }
         if (r.sinceChange < debounceMs_) { r.sinceChange += 20; return; }
 
         r.pressed = raw;
         r.sinceChange = 0;
         // Only a set row acts on the release: the others would fire twice for one push.
-        if (r.action.kind != InputAction::Kind::Set && !r.pressed) return;
-        statusBuf_[0] = 0;   // cleared first, so the report below is about this press
-        // Reported either way, since doing nothing looks identical to a broken switch.
-        if (runInputAction(r.action, r.pressed, statusBuf_, sizeof(statusBuf_)) || statusBuf_[0])
-            setStatus(statusBuf_);
+        if (!set && !r.pressed) return;
+        const bool done = act(r);
+        if (set) { r.synced = done; r.tried = true; }   // a target still missing, as on a surface restoring, is retried by tick1s
+    }
+
+    /// Run the row's action on its settled state and report it, since doing nothing looks identical to a broken switch.
+    bool act(const Row& r) MM_NONBLOCKING {
+        statusBuf_[0] = 0;   // cleared first, so the report is about this press
+        const bool done = runInputAction(r.action, r.pressed, statusBuf_, sizeof(statusBuf_));
+        if (done || statusBuf_[0]) setStatus(statusBuf_);
+        return done;
     }
 
     /// How many buttons one device carries, with room for a pedalboard.

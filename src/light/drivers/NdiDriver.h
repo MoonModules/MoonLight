@@ -131,19 +131,7 @@ public:
 
         // A wider wiring corrects into a one-light scratch, since the protocol carries RGB only.
         const bool wide = outCh > 3 && corrScratch_.count() >= outCh;
-        for (nrOfLightsType i = 0; i < n; i++) {
-            const uint8_t* s = src + static_cast<size_t>(i) * srcCh;
-            uint8_t* d = dst + static_cast<size_t>(i) * 3;
-            if (outCh == 3) {
-                correction_.apply(s, d, srcCh);
-            } else if (wide) {
-                uint8_t* c = &corrScratch_[0];
-                correction_.apply(s, c, srcCh);
-                d[0] = c[0]; d[1] = c[1]; d[2] = c[2];
-            } else {
-                d[0] = s[0]; d[1] = s[1]; d[2] = s[2];   // passthrough, same fallback as NetworkSend
-            }
-        }
+        correctToRgb(src, srcCh, dst, n, wide ? &corrScratch_[0] : nullptr);
         // Blanked, so a layout that shrank cannot show the previous frame's tail.
         if (n < want) std::memset(dst + static_cast<size_t>(n) * 3, 0,
                                   static_cast<size_t>(want - n) * 3);

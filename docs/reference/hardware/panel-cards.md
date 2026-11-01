@@ -165,26 +165,26 @@ The mismatch is not subtle in one direction: leave a downgraded card on `v13 and
 
 ## 8. Set the card up in LEDVision
 
-The card stores its panel size, count and driver IC, written once with ColorLight's [LEDVision](https://en.colorlightinside.com/product/download/380) on Windows. MoonLight then needs no panel settings. Use **8.8**, the last version with net card output; 8.5 works as well. Labels move between versions, so the wording below is approximate. The example is two 128x64 panels stacked, 128x128 in all.
+The card stores its panel size, count and driver IC, written once with ColorLight's [LEDVision](https://en.colorlightinside.com/product/download/380) on Windows. MoonLight then needs no panel settings. Use **8.8**, the last version with net card output; 8.5 works too. Labels move between versions. The example is two 128x64 panels stacked, 128x128 in all.
 
-**Intelligent Setting defines one panel.** The cabinet size, the data group order and the receiver mapping after it define the wall, and a wall that stays wrong after Intelligent Setting is usually one of those three.
+**Intelligent Setting defines one panel.** The cabinet size, the data group order and the receiver mapping define the wall; a wall still wrong after Intelligent Setting is usually one of those three.
 
-**A module is one data group, not one panel.** A HUB75 panel has two sets of color lines: RGB1 drives its top half and RGB2 its bottom half. So a 128x64 panel is two data groups of 128x32 each, at 32 scan, and LEDVision counts in data groups.
+**A module is one data group, not one panel.** A HUB75 panel has two sets of color lines: RGB1 drives its top half and RGB2 its bottom half. So the example's 128x64 panel is two data groups of 128x32 each, and LEDVision counts in data groups. Its 1/32 scan is that panel's, not a rule of its size: a panel's specification gives its scan.
 
-1. **Connect** the card to the machine's Ethernet port. Power the panels through their own power pins, never the HUB75 ribbon. Use the outputs in order: the first panel on J1, the next on J2.
+1. **Connect** the card to the machine's Ethernet port, and give the card its own 5 V supply. Power the panels through their own power pins, never the HUB75 ribbon. Use the outputs in order: the first panel on J1, the next on J2.
 2. **Open the receiving-card setup**, usually under `Settings`. Some versions ask for a password: `168` or `admin`. Choose **net card** as the sending method.
-3. **Run Intelligent Setting.** Pick the driver IC printed on the panel's chips, such as FM6124, and complete every step of the guide. In its pixel grid, click pixels 1 to 128 in the first row, then click each row below it, and every row fills in. A less common panel can load its supplier's .rcfgx or .rcvx file instead.
+3. **Run Intelligent Setting.** Pick the driver IC printed on the panel's chips, such as FM6124, and complete every step of the guide. In its pixel grid, click the pixel that lights at each step; on the example's panel that is 1 to 128 along the first row, then each row below, but a panel's own pattern decides the order. A less common panel can load its supplier's .rcfgx or .rcvx file instead.
 4. **Check the module.** Intelligent module settings reads width 128, height 64, and shows `1-1` above `2-1`.
 5. **Set the cabinet size**: the pixels this card drives, 128 x 128.
 6. **Set the data group order** in data group swap, as the ribbons chain: J1 on the top panel and J2 on the bottom one reads 1, 2, 3, 4 downward. Mirrored rows or misplaced panels are fixed here.
 7. **Set the receiver mapping**: the card's area reads 128 x 128. Apply.
-8. **Send to receivers, twice**: once on the receiver parameters tab, and again on the receiver mapping tab. LEDVision holds the settings only while it is open, and each tab writes its own part.
-9. **Save on the card**, a separate action from sending in most versions. Skipped, the wall comes back wrong after a power cycle.
-10. **Run a LEDVision test pattern.** It fills the wall, which proves the card before MoonLight sends anything.
+8. **Send to receivers, twice**: once on the receiver parameters tab, and again on the receiver mapping tab. Each tab writes its own part.
+9. **Save on the card**, separate from sending in most versions, or the wall comes back wrong after a power cycle.
+10. **Run a LEDVision test pattern.** A full wall proves the card before MoonLight sends anything.
 
 **Pixel noise on longer ribbons is the panel clock.** Lower DCLK in the receiver parameters and send again; tuning the SCK duty ratio and blanking phase brings it back up, to 25 MHz on 50 cm ribbons.
 
-A video of the card setup, driven from FPP: [Setting up a Colorlight Card with FPP v6.3 and LED Vision 8.5](https://www.youtube.com/watch?v=L4lHbwUszAs).
+A video: [Setting up a Colorlight Card with FPP v6.3 and LED Vision 8.5](https://www.youtube.com/watch?v=L4lHbwUszAs).
 
 ---
 

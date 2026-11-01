@@ -46,6 +46,18 @@ menu "MoonLight"
             MIDI service with no computer. Set by the S3 images with flash to spare
             (n8r8, n16r8); the 4 MB S3-Zero leaves it off.
 
+    config MM_HDMI
+        bool "HDMI out through an LT8912B MIPI-DSI bridge (ESP32-P4 only)"
+        # Constrain the VALUE, not the visibility, for the reason MM_HLS gives above: idf_component.yml
+        # gates esp_lcd_lt8912b on $CONFIG{MM_HDMI}, which the solver cannot read when hidden.
+        default y if IDF_TARGET_ESP32P4
+        default n
+        help
+            Pulls Espressif's esp_lcd_lt8912b component and compiles the HDMI output:
+            the MIPI-DSI bus, the LT8912B bridge on the board's I2C bus, and a PPA
+            scale into the DPI framebuffer, behind HdmiDriver. Only the P4 has a
+            MIPI-DSI controller; other chips keep this off and build nothing.
+
     config MM_USB_VIDEO
         bool "USB video capture from a UVC grabber (ESP32-P4 only)"
         # Constrain the VALUE, not the visibility, for the reason MM_HLS gives above: a `depends on`

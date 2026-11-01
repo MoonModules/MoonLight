@@ -67,7 +67,7 @@ A live browser source costs lights × 3 bytes × fps: about 60 KB/s for a 600-li
 
 - **A light list carries no positions:** the layout places it, on 1D, 2D and 3D layouts alike, numbering its lights as the xLights model does.
 - **A picture reaches a 3D layout by projection:** each light samples the picture at its position seen along one axis, the planar projection media servers use.
-- **A volume is the native 3D stream:** a frame per depth slice, copied straight into a 3D layer.
+- **A volume would be the native 3D stream:** a frame per depth slice, copied straight into a 3D layer. No source delivers one yet.
 - **The P4's hardware video codec encodes H.264 but does not decode it**; its JPEG codec works both ways. So video arrives as MJPEG from a grabber, raw from a camera, or baked in the browser, and leaves through the H.264 encoder HLS drives. The Olimex ESP32-P4-PC carries every piece on one board: HDMI and MIPI-DSI out, a MIPI-CSI connector, four USB host ports, a microSD slot, Ethernet with PoE and 32 MB of PSRAM.
 
 ## Where MoonLight stands among the tools
@@ -101,7 +101,7 @@ ESPixelStick, the reference small-device FSEQ player, plays uncompressed FSEQ v2
 | A backlight effect of its own | one sampler setting of the picture effect; a card of its own duplicates the picture path |
 | PPM as a user format | GIF covers the need with tools users own; PPM stays a test fixture |
 | HDR tone curves (PQ, HLG) | no planned source delivers HDR |
-| Video decoding beyond MJPEG on the device | the browser bakes video; the device decodes only what its hardware decodes |
+| Video decoding beyond MJPEG and GIF on the device | the browser bakes video; the device decodes only a format it has a decoder for, MJPEG in the P4's hardware and GIF in software |
 | FSEQ extras up front (zstd, `.xlz`, FPP Connect, MultiSync) | the bundling that stalled WLED's attempts; each extra waits for a measurement or a user |
 | One module for every transport and data type | one module model with typed data, as GStreamer and TouchDesigner do; one module would flatten the pixel protocols' semantics |
 | A feed written straight into the drivers' output | WLED's realtime override gives up blending, modifiers and composition |

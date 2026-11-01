@@ -156,7 +156,7 @@ def differences(docs: dict[str, str], folder: Path) -> list[str]:
 
 
 CARD_LINK = re.compile(r"projects/\d+\?pane=issue&itemId=(\d+)")
-MIRROR_LINK = re.compile(r"\]\(([^)\s]*backlog_mirror/[a-z-]+\.md(?:#[\w-]+)?)\)")
+MIRROR_LINK = re.compile(r"\]\(([^)\s]*backlog_mirror/[a-z-]+\.(?:md|html)(?:#[\w-]+)?)\)")   # the source or its published page
 
 
 def unstable_links(docs_root: Path) -> list[str]:

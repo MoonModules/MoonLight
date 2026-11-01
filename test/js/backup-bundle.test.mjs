@@ -206,6 +206,13 @@ test("a clone never carries the backup's stored hardware address, which the devi
     assert.ok(!("/.config/identity" in files));
 });
 
+test("a clone leaves a backup file that is no object as it is, rather than failing on it", () => {
+    for (const bad of ["null", "\"abc\"", "7", "[]"]) {
+        const { files } = cloneIdentity({ "/.config/NetworkModule.json": bad }, pole2);
+        assert.equal(files["/.config/NetworkModule.json"], bad);
+    }
+});
+
 test("a clone onto a device with no value of its own drops the backup's, so the device keeps its default", () => {
     const { files } = cloneIdentity(pole1, {});
     const doc = JSON.parse(files["/.config/SystemModule.json"]);
@@ -213,18 +220,37 @@ test("a clone onto a device with no value of its own drops the backup's, so the 
     assert.ok(!("ip" in JSON.parse(files["/.config/NetworkModule.json"]).Network.Ethernet));
 });
 
+// A device answering a restore from pole2's files and recording what is written; `failing` names a path whose read fails.
+const deviceFetch = (written, failing) => async (url, opts = {}) => {
+    const path = decodeURIComponent((url.split("path=")[1] || ""));
+    if (url.startsWith("/api/state")) return { ok: true, json: async () => ({ modules: [] }) };
+    if (url.startsWith("/api/types")) return { ok: true, json: async () => ({ types: [] }) };
+    if (url.startsWith("/api/dir")) return { ok: true };
+    if (opts.method === "POST") { written[path] = opts.body; return { ok: true }; }
+    if (path === failing) return { ok: false, status: 500 };
+    return path in pole2 ? { ok: true, text: async () => pole2[path] } : { ok: false, status: 404 };
+};
+
 test("restoreBundle reads the target's identity before writing, and writes the clone", async () => {
     const written = {};
-    const fetchFn = async (url, opts = {}) => {
-        const path = decodeURIComponent((url.split("path=")[1] || ""));
-        if (url.startsWith("/api/state")) return { ok: true, json: async () => ({ modules: [] }) };
-        if (url.startsWith("/api/types")) return { ok: true, json: async () => ({ types: [] }) };
-        if (url.startsWith("/api/dir")) return { ok: true };
-        if (opts.method === "POST") { written[path] = opts.body; return { ok: true }; }
-        return path in pole2 ? { ok: true, text: async () => pole2[path] } : { ok: false, status: 404 };
-    };
+    const fetchFn = deviceFetch(written);
     await restoreBundle({ format: "MoonLight-config-backup", version: 1, files: pole1 }, fetchFn, true);
     assert.equal(JSON.parse(written["/.config/SystemModule.json"]).System.deviceName, "Pole-2");
     assert.ok(!("/.config/identity" in written));
     assert.equal(written["/.config/Effects.json"], pole1["/.config/Effects.json"]);   // the show comes across as it is
+});
+
+test("a clone keeps the target's value where the backup has none, since the file is written whole", () => {
+    const backup = { ...pole1, "/.config/NetworkModule.json": JSON.stringify({ Network: { Ethernet: { type: "EthernetModule", ethType: 1 } } }) };
+    const net = JSON.parse(cloneIdentity(backup, pole2).files["/.config/NetworkModule.json"]).Network;
+    assert.equal(net.Ethernet.ip, "10.0.0.2");
+    assert.deepEqual(net.WiFi.known, [{ ssid: "venue", password: "secret2" }]);
+    assert.equal(net.Ethernet.ethType, 1);
+});
+
+test("a clone whose read of the target's identity fails stops before writing anything", async () => {
+    const written = {};
+    const fetchFn = deviceFetch(written, "/.config/NetworkModule.json");
+    await assert.rejects(restoreBundle({ format: "MoonLight-config-backup", version: 1, files: pole1 }, fetchFn, true), /nothing was written/);
+    assert.deepEqual(written, {});
 });

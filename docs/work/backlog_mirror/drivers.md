@@ -596,11 +596,3 @@ Kind: Feature · [Card](https://github.com/users/MoonModules/projects/5?pane=iss
 A live stream in, an FSEQ file out: the drivers' output written to the SD card, as Falcon Player records. It is the bridge between the two kinds of stream, and how a show "from the SD card" is made. Playing a recording on several boards then needs clock sync: every board computes the same frame index from a shared clock, so seek, loop and sync are arithmetic ([live and recorded](../../design/streams.md#live-and-recorded)).
 
 From the Streams plan, #215.
-
-### Network Send backs off on a full transmit queue (2026-10-30)
-
-Kind: Feature · [Card](https://github.com/users/MoonModules/projects/5?pane=issue&itemId=288372423)
-
-A burst that fills the transmit queue loses packets, the push packet at the end of an Ethernet burst included, so the receiver never shows the frame. Network Send already paces its packets (`packet_gap`); on a full queue (`ENOMEM`) it backs off and retries rather than dropping, as Espressif advises ([esp-idf#13602](https://github.com/espressif/esp-idf/issues/13602)), rather than adding transmit buffers.
-
-From the Streams plan, #215.

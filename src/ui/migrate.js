@@ -499,7 +499,6 @@ export function diffRestore(files, stateModules, typeNames = []) {
     (function walk(mods) {
         for (const m of mods || []) { known.add(m.type); walk(m.children); }
     })(stateModules);
-    const isObject = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
 
     for (const [path, content] of Object.entries(files)) {
         if (!path.startsWith("/.config/") || !path.endsWith(".json")) continue;
@@ -532,6 +531,9 @@ export function diffRestore(files, stateModules, typeNames = []) {
     return report;
 }
 
+/// A plain JSON object, neither null nor an array.
+const isObject = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
+
 // What makes a device itself rather than its configuration: a clone keeps the target's own, as a cloned disk image gets its own machine identity.
 // Each entry is a config file and the key paths in its document; a file listed with no paths is kept whole.
 export const IDENTITY = {
@@ -541,7 +543,7 @@ export const IDENTITY = {
     "/.config/identity": [],   // the desktop's stored hardware address, which its name derives from
 };
 /// Turn a backup's files into a clone of it for another device: the target's identity, from `targetFiles` (its own current files), replaces the bundle's.
-/// Returns {files, report}; a key the target lacks is dropped, so the device keeps what it holds.
+/// Returns {files, report}: a key the target holds is the target's, whether or not the backup has it, and a key the target lacks is dropped, so the device keeps what it holds.
 export function cloneIdentity(files, targetFiles) {
     const out = { ...files };
     const report = [];
@@ -555,14 +557,19 @@ export function cloneIdentity(files, targetFiles) {
         }
         let doc, target = null;
         try { doc = JSON.parse(out[file]); } catch (_) { continue; }
+        if (!isObject(doc)) continue;   // a file that is no object holds no identity to replace, and is left as it is
         try { target = JSON.parse(targetFiles[file]); } catch (_) {}
         for (const path of paths) {
-            const parent = at(doc, path.slice(0, -1));
             const key = path[path.length - 1];
-            if (!parent || typeof parent !== "object" || !(key in parent)) continue;
             const mine = at(target, path);
-            if (mine === undefined) delete parent[key];
-            else parent[key] = mine;
+            let parent = at(doc, path.slice(0, -1));
+            if (mine !== undefined) {
+                // The file is written whole, so a value the backup lacks is put back, or the target would lose it.
+                parent = path.slice(0, -1).reduce((o, k) => (isObject(o[k]) ? o[k] : (o[k] = {})), doc);
+                parent[key] = mine;
+            } else if (isObject(parent) && key in parent) {
+                delete parent[key];
+            } else continue;
             report.push({ kind: "kept", where: `${file} ${path.join(".")}`, detail: "this device's own, not the backup's" });
         }
         out[file] = JSON.stringify(doc);
@@ -590,13 +597,13 @@ export async function restoreBundle(bundle, fetchFn, clone = false) {
     let { files } = migrated;
     const report = [...migrated.report];
     if (clone) {
-        // The target's own identity files, read before anything is written over them.
+        // The target's identity files, read before any write. A file it lacks (404) has nothing to keep; any other failure stops the clone, which would otherwise replace the device's identity.
         const targetFiles = {};
-        for (const file of Object.keys(IDENTITY)) {
-            try {
-                const res = await fetchFn("/api/file?path=" + encodeURIComponent(file));
-                if (res.ok) targetFiles[file] = await res.text();
-            } catch (_) {}
+        for (const [file, paths] of Object.entries(IDENTITY)) {
+            if (paths.length === 0 || !(file in files)) continue;
+            const res = await fetchFn("/api/file?path=" + encodeURIComponent(file));
+            if (res.ok) targetFiles[file] = await res.text();
+            else if (res.status !== 404) throw new Error(`could not read this device's ${file} (HTTP ${res.status}); nothing was written`);
         }
         const cloned = cloneIdentity(files, targetFiles);
         files = cloned.files;

@@ -14,7 +14,7 @@ processes:
         say: Describe what shipped in the module's header.
         when: { manual: "A fact about behavior goes in the .h, beside the code." }
         detail: |
-          The header is the module's own documentation and feeds its catalog card. Write `///` comments as [Comments](contributing/documentation-standards.md#comments) says: one line above the code it explains.
+          The header is the module's own documentation and feeds its catalog card. Write `///` comments as [Comments](contributing/documentation-standards.md#comments) says: one line above the code it explains. Depth a line cannot hold goes to the file lead's `@technical`, one `##` section of at most ten lines, with an `@xref{slug|label}` back from the comment it came out of: [The comment budget](contributing/documentation-standards.md#the-comment-budget). A platform file holds its own that way too.
       - id: page
         say: Write intent, cost and sequence on a page.
         when: { manual: "A task goes in a MoonWalk process under moonwalk/; a why under docs/explanation/, a fact under docs/reference/." }
