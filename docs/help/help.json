@@ -155,6 +155,10 @@
      "text": "A fine role is the low byte of a 16-bit channel, the DMX convention. `RGB 16-bit`, `GRB 16-bit` and `RGBW 16-bit` ship built in. Effects stay 8-bit, and brightness and curve go to 16 bits on output. Pan and tilt widen by repeating their byte, and a master dimmer is held wide open."
     },
     {
+     "title": "Color balance",
+     "text": "A batch whose white looks tinted gets a profile of its own with the strong die pulled down: green at 220 takes a green cast out. The gain applies after the curve, so 128 is half the light, and every driver on that profile follows."
+    },
+    {
      "title": "Which profile a chip takes",
      "text": "| Chip | Profile |\n|---|---|\n| WS2812B, WS2813, WS2815 | `GRB` |\n| SK6812 RGBW | `GRBW` |\n| WS2814 | `WRGB` |\n| WS2816 | `GRB 16-bit` |\n| UCS8903 | `RGB 16-bit` |\n| UCS8904 | `RGBW 16-bit` |\n\nA WS2811 orders its colors as its maker wired it, so try `RGB`, then the other five orders. The TM1814 and TM1914 need a settings preamble that a profile cannot describe."
     }
@@ -173,6 +177,18 @@
       },
       "ch": {
        "line": "What one channel carries, such as red, dimmer or pan; none for a spacer or a channel set elsewhere."
+      },
+      "gainRed": {
+       "line": "The red die pulled down to meet the others, 255 for none; on emitted light, so 128 is half."
+      },
+      "gainGreen": {
+       "line": "The green die, likewise."
+      },
+      "gainBlue": {
+       "line": "The blue die, likewise."
+      },
+      "gainWhite": {
+       "line": "The white dies, cold and warm, offered where the profile carries one."
       }
      }
     }
