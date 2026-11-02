@@ -89,7 +89,9 @@ public:
         const bool firstTable = correction_.wantsTable() && !lut16_;
         if (firstTable) lut16_.resize(256);
         correction_.lut16 = lut16_.data();
-        if (firstTable) correction_.rebuildBrightness(tableBrightness);   // a table that existed was filled by the rebuild above
+        const bool firstGain = resolveGainTables();
+        if (firstTable || firstGain) correction_.rebuildBrightness(tableBrightness);   // a table that existed was filled by the rebuild above
+        showGainShortage();
         onCorrectionChanged();      // let a driver resize its correction-applied buffer
     }
 
@@ -130,6 +132,9 @@ public:
     void release() override {
         freeWire();          // the shared correction scratch: owned here, so no driver re-frees it
         correction_.lut16 = nullptr;   // the table goes with the module's scratch buffers below
+        correction_.gainLut = nullptr;
+        correction_.gainLut16 = nullptr;
+        correction_.resolveTables();   // back onto the curve, so no row points into a freed table
         clearFailBuf();
         clearConfigErr();
         setConfigWarn(nullptr);
@@ -192,6 +197,8 @@ protected:
     /// The resolved correction: the wiring comes from a named profile by stable id, and the render loop never reads the library.
     Correction correction_;
     ScratchBuffer<uint16_t> lut16_{*this};   // the correction's 16-bit table, allocated the first time it is wanted
+    ScratchBuffer<uint8_t> gainLut_{*this};    // the gained tables, only for a profile whose LED type carries a gain
+    ScratchBuffer<uint16_t> gainLut16_{*this};   // the same to 16 bits, only where a channel is read wide
     uint32_t profileId_ = 0;          // stable id into the FixtureProfiles library (0 → resolve to default)
     /// The fixture profile applied per light, for channel order and white.
     /// @guide A reorder or a reboot keeps it. After renaming the profile, re-pick it: the next reboot falls back to the default.
@@ -235,6 +242,34 @@ protected:
 
     /// Set this driver's default referenced profile by name, from its constructor.
     void setDefaultFixtureName(const char* name) { defaultFixture_ = name; }
+
+    /// Give the correction the gained tables its profile asks for, and take them back when it asks for none; true when one is new, which the rebuild before could not fill.
+    bool resolveGainTables() {
+        const bool wants = correction_.wantsGains();
+        const bool wide = wants && correction_.wantsTable();
+        const bool freshGain = fitGainTable(gainLut_, wants);
+        const bool freshWide = fitGainTable(gainLut16_, wide);
+        correction_.gainLut = wants ? gainLut_.data() : nullptr;
+        correction_.gainLut16 = gainLut16_ ? gainLut16_.data() : nullptr;
+        return freshGain || freshWide;
+    }
+
+    /// Warn while a gain the profile asks for has no table to live in, so the strip shows ungained light visibly rather than silently; the next rebuild retries the allocation.
+    void showGainShortage() {
+        const bool dropped = correction_.wantsGains() && (!gainLut_ || (correction_.wantsTable() && !gainLut16_));
+        if (dropped) setStatus(kNoGainMemory, Severity::Warning);
+        else if (gainsDropped_ && status() == kNoGainMemory) clearStatus();
+        gainsDropped_ = dropped;
+    }
+
+    /// Size one gained table to whether it is wanted, true when this call allocated it.
+    template <typename T>
+    static bool fitGainTable(ScratchBuffer<T>& table, bool wanted) {
+        const bool fresh = wanted && !table;
+        if (fresh) table.resize(Correction::kGainRows * 256);
+        if (!wanted) table.resize(0);
+        return fresh;
+    }
 
     /// Whether `name` is one of the correction controls, for a driver's own prepare test.
     static bool isCorrectionControl(const char* name) {
@@ -326,6 +361,9 @@ protected:
     /// The status verdicts this driver set; each is cleared only when the status still shows the one this driver set.
     const char* configErr_ = nullptr;
     const char* configWarn_ = nullptr;
+    /// The warning while a profile's gains have no table, which the driving line yields to.
+    static constexpr const char* kNoGainMemory = "out of memory for the color balance, gains off";
+    bool gainsDropped_ = false;
     char* failBuf_ = nullptr;
     /// The status buffer size: the widest verdict is the loopback's worst case, which a narrower buffer clips.
     static constexpr size_t kFailBufLen = 64;
@@ -369,6 +407,7 @@ protected:
     /// Show how many lights are driven, set last so an error or warning from earlier in the same parse still wins.
     void setDrivingInfo(unsigned driven, unsigned total, unsigned channels = 1,
                         const char* mode = nullptr) {
+        if (gainsDropped_) { setStatus(kNoGainMemory, Severity::Warning); return; }
         if (char* buf = failBufEnsure()) {
             int n;
             if (channels > 1)
