@@ -26,8 +26,8 @@ inline constexpr uint8_t kWhiteModeCount =
     sizeof(kWhiteModeOptions) / sizeof(kWhiteModeOptions[0]);
 
 
-/// The transform itself, its offsets derived cold from the role array so the hot path stays an indexed store per channel.
-struct Correction {
+/// What a correction resolves to, copied whole: the curve's table, the gains and the channel offsets.
+struct CorrectionData {
     /// Marks a role this light does not carry.
     static constexpr uint8_t kAbsent = 255;   // color role not carried by this light
 
@@ -46,14 +46,6 @@ struct Correction {
 
     /// The perceptual curve the output LUT is filled through; Linear is a requirement, not a fallback, since correcting twice darkens as the square.
     enum class Curve : uint8_t { Cie = 0, Gamma22, Gamma28, Linear };
-
-    /// CIE 1931 lightness, inverted: a control position to a luminance fraction; the constants place the toe so the two segments meet in slope.
-    static float cieLuminance(float control255) MM_NONBLOCKING {
-        const float L = control255 * 100.0f / 255.0f;
-        return (L <= 8.0f) ? (L / 903.3f)
-                           : ((L + 16.0f) / 116.0f) * ((L + 16.0f) / 116.0f) * ((L + 16.0f) / 116.0f);
-    }
-
 
     uint8_t briLut[256] = {};       // briLut[v] = curve(v * brightness / 255)
     /// The same curve to 16 bits, filled only when the table is wanted; the driver owns the 256 entries.
@@ -100,17 +92,34 @@ struct Correction {
     /// Whether the fixture carries red, green and blue alone, resolved at rebuild so a plain strip skips every optional role per light.
     bool plainRgb = true;
     uint8_t outChannels = 3;        // bytes emitted per light (= channelsPerLight of the wiring)
-    /// Each color channel's gained row, or null for the ungained curve. Into the driver's `gainLut`, never this object's own table, so a Correction stays copyable.
-    const uint8_t* rowRed = nullptr;     ///< red's gained row, or null for the curve itself
-    const uint8_t* rowGreen = nullptr;   ///< green's
-    const uint8_t* rowBlue = nullptr;    ///< blue's
-    const uint8_t* rowWhite = nullptr;   ///< the white dies'
-    /// Red's gained row to 16 bits, or null where no wide table is filled, which leaves the channel 8-bit.
-    const uint16_t* rowRed16 = nullptr;
-    const uint16_t* rowGreen16 = nullptr;   ///< green's, likewise
-    const uint16_t* rowBlue16 = nullptr;    ///< blue's
-    const uint16_t* rowWhite16 = nullptr;   ///< the white dies'
     WhiteMode whiteMode = WhiteMode::Min;   // how white is synthesized from RGB (white lights only)
+};
+
+/// The transform itself, its offsets derived cold from the role array so the hot path stays an indexed store per channel.
+struct Correction : CorrectionData {
+    /// A plain RGB strip on the CIE curve, every table on that curve.
+    Correction() = default;
+    /// A copy resolves its own tables, since the ungained ones point into the curve each correction carries.
+    Correction(const Correction& o) : CorrectionData(o) { resolveTables(); }
+    /// The same on assignment, which is how a driver is handed a correction.
+    Correction& operator=(const Correction& o) {
+        CorrectionData::operator=(o);
+        resolveTables();
+        return *this;
+    }
+
+    /// The 8-bit tables one light is read through, resolved at rebuild: each channel's gained row, or the curve itself.
+    Tables<uint8_t> t8{briLut, briLut, briLut, briLut, briLut};
+    /// The same to 16 bits, each row null where no table is filled, which leaves that channel 8-bit.
+    Tables<uint16_t> t16{};
+
+    /// CIE 1931 lightness, inverted: a control position to a luminance fraction; the constants place the toe so the two segments meet in slope.
+    static float cieLuminance(float control255) MM_NONBLOCKING {
+        const float L = control255 * 100.0f / 255.0f;
+        return (L <= 8.0f) ? (L / 903.3f)
+                           : ((L + 16.0f) / 116.0f) * ((L + 16.0f) / 116.0f) * ((L + 16.0f) / 116.0f);
+    }
+
 
     /// Whether any channel carries a gain, so a driver allocates the gained tables only for a profile that needs them.
     bool wantsGains() const MM_NONBLOCKING {
@@ -136,28 +145,18 @@ struct Correction {
         resolveTables();
     }
 
-    /// Point each channel at its gained row, or at null where its gain is 255 or the gained tables are absent.
+    /// Point each channel at its gained row, or at the curve where its gain is 255 or the gained tables are absent, so a light reads its table without a test.
     void resolveTables() MM_NONBLOCKING {
         const uint8_t gain[kGainRows] = {gainRed, gainGreen, gainBlue, gainWhite};
-        const uint8_t** row8[kGainRows] = {&rowRed, &rowGreen, &rowBlue, &rowWhite};
-        const uint16_t** row16[kGainRows] = {&rowRed16, &rowGreen16, &rowBlue16, &rowWhite16};
+        const uint8_t* row8[kGainRows];
+        const uint16_t* row16[kGainRows];
         for (uint8_t g = 0; g < kGainRows; g++) {
             const bool gained = gain[g] != 255;
-            *row8[g] = gained && gainLut ? gainLut + g * 256 : nullptr;
-            *row16[g] = gained && gainLut16 ? gainLut16 + g * 256 : nullptr;
+            row8[g] = gained && gainLut ? gainLut + g * 256 : briLut;
+            row16[g] = gained && gainLut16 ? gainLut16 + g * 256 : lut16;
         }
-    }
-
-    /// The 8-bit tables one light is read through, the gained rows over the curve this object carries.
-    Tables<uint8_t> tables8() const MM_NONBLOCKING {
-        return Tables<uint8_t>{briLut, rowRed ? rowRed : briLut, rowGreen ? rowGreen : briLut,
-                               rowBlue ? rowBlue : briLut, rowWhite ? rowWhite : briLut};
-    }
-
-    /// The same to 16 bits, each row null where no table is filled, which leaves that channel 8-bit.
-    Tables<uint16_t> tables16() const MM_NONBLOCKING {
-        return Tables<uint16_t>{lut16, rowRed16 ? rowRed16 : lut16, rowGreen16 ? rowGreen16 : lut16,
-                                rowBlue16 ? rowBlue16 : lut16, rowWhite16 ? rowWhite16 : lut16};
+        t8 = Tables<uint8_t>{briLut, row8[0], row8[1], row8[2], row8[3]};
+        t16 = Tables<uint16_t>{lut16, row16[0], row16[1], row16[2], row16[3]};
     }
 
     /// Whether the 16-bit table is filled: a profile with fine roles, or a wide driver.
@@ -212,10 +211,10 @@ struct Correction {
     }
 
     /// Hot path: transform one source light into its output bytes, integer-only and allocation-free.
-    inline void apply(const uint8_t* src, uint8_t* out, uint8_t srcChannels) const { applyThrough(tables8(), src, out, srcChannels); }
+    inline void apply(const uint8_t* src, uint8_t* out, uint8_t srcChannels) const { applyThrough(t8, src, out, srcChannels); }
 
     /// Hot path, wide drivers only: the same transform through the 16-bit table, one value per channel; needs `lut16`.
-    inline void applyWide(const uint8_t* src, uint16_t* out, uint8_t srcChannels) const { applyThrough(tables16(), src, out, srcChannels); }
+    inline void applyWide(const uint8_t* src, uint16_t* out, uint8_t srcChannels) const { applyThrough(t16, src, out, srcChannels); }
 
     /// The transform through a curve table of either width, so the 8-bit and 16-bit outputs share every line. A remap, not a copy: the layer's packed slots become the fixture's own offsets.
     template <typename T>
@@ -284,8 +283,8 @@ struct Correction {
         if (offDimmerFine != kAbsent) out[offDimmerFine] = 255;   // wide open is 65535, not 65280
         const uint8_t value[5] = {r, g, b, w, w};   // both whites carry the white component, 0 when none is synthesized
         // Each channel's own gained table, so a fine channel is gained exactly as an 8-bit one and at full resolution.
-        const Tables<uint16_t> w16 = tables16();
-        const Tables<uint8_t> n8 = tables8();
+        const Tables<uint16_t>& w16 = t16;
+        const Tables<uint8_t>& n8 = t8;
         const uint16_t* wide16[5] = {w16.red, w16.green, w16.blue, w16.white, w16.white};
         const uint8_t* narrow8[5] = {n8.red, n8.green, n8.blue, n8.white, n8.white};
         const uint8_t coarse[5] = {offRed, offGreen, offBlue, offWhite, offWarmWhite};

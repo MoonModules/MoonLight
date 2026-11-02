@@ -89,8 +89,8 @@ public:
         const bool firstTable = correction_.wantsTable() && !lut16_;
         if (firstTable) lut16_.resize(256);
         correction_.lut16 = lut16_.data();
-        resolveGainTables();
-        if (firstTable) correction_.rebuildBrightness(tableBrightness);   // a table that existed was filled by the rebuild above
+        const bool firstGain = resolveGainTables();
+        if (firstTable || firstGain) correction_.rebuildBrightness(tableBrightness);   // a table that existed was filled by the rebuild above
         onCorrectionChanged();      // let a driver resize its correction-applied buffer
     }
 
@@ -133,6 +133,7 @@ public:
         correction_.lut16 = nullptr;   // the table goes with the module's scratch buffers below
         correction_.gainLut = nullptr;
         correction_.gainLut16 = nullptr;
+        correction_.resolveTables();   // back onto the curve, so no row points into a freed table
         clearFailBuf();
         clearConfigErr();
         setConfigWarn(nullptr);
@@ -224,16 +225,24 @@ protected:
     /// Set this driver's default referenced profile by name, from its constructor.
     void setDefaultFixtureName(const char* name) { defaultFixture_ = name; }
 
-    /// Give the correction the gained tables its profile asks for, and take them back when it asks for none. Only a profile whose LED type carries a gain pays for them, the way the 16-bit table is allocated only where it is read.
-    void resolveGainTables() {
+    /// Give the correction the gained tables its profile asks for, and take them back when it asks for none; true when one is new, which the rebuild before could not fill.
+    bool resolveGainTables() {
         const bool wants = correction_.wantsGains();
-        if (wants && !gainLut_) gainLut_.resize(Correction::kGainRows * 256);
-        if (!wants) gainLut_.resize(0);
-        correction_.gainLut = wants ? gainLut_.data() : nullptr;
         const bool wide = wants && correction_.wantsTable();
-        if (wide && !gainLut16_) gainLut16_.resize(Correction::kGainRows * 256);
-        if (!wide) gainLut16_.resize(0);
+        const bool freshGain = fitGainTable(gainLut_, wants);
+        const bool freshWide = fitGainTable(gainLut16_, wide);
+        correction_.gainLut = wants ? gainLut_.data() : nullptr;
         correction_.gainLut16 = gainLut16_ ? gainLut16_.data() : nullptr;
+        return freshGain || freshWide;
+    }
+
+    /// Size one gained table to whether it is wanted, true when this call allocated it.
+    template <typename T>
+    static bool fitGainTable(ScratchBuffer<T>& table, bool wanted) {
+        const bool fresh = wanted && !table;
+        if (fresh) table.resize(Correction::kGainRows * 256);
+        if (!wanted) table.resize(0);
+        return fresh;
     }
 
     /// Whether `name` is one of the correction controls, for a driver's own prepare test.

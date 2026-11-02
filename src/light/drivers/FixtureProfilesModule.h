@@ -26,6 +26,10 @@ namespace mm {
 ///
 /// A fine role is the low byte of a 16-bit channel, the DMX convention. `RGB 16-bit`, `GRB 16-bit` and `RGBW 16-bit` ship built in. Effects stay 8-bit, and brightness and curve go to 16 bits on output. Pan and tilt widen by repeating their byte, and a master dimmer is held wide open.
 ///
+/// ## Color balance
+///
+/// A batch whose white looks tinted gets a profile of its own with the strong die pulled down: green at 220 takes a green cast out. The gain applies after the curve, so 128 is half the light, and every driver on that profile follows.
+///
 /// ## Which profile a chip takes
 ///
 /// | Chip | Profile |
@@ -140,7 +144,10 @@ public:
         /// @field name The profile's name, as a driver's fixture picker lists it.
         /// @field channels How many DMX channels the fixture takes.
         /// @field ch What one channel carries, such as red, dimmer or pan; none for a spacer or a channel set elsewhere.
-        /// @field gain One die pulled down to meet the others, 255 for a type that needs none; the gain lands on emitted light, so 128 is half of it.
+        /// @field gainRed The red die pulled down to meet the others, 255 for none; on emitted light, so 128 is half.
+        /// @field gainGreen The green die, likewise.
+        /// @field gainBlue The blue die, likewise.
+        /// @field gainWhite The white dies, cold and warm, offered where the profile carries one.
         /// @guide Built-in rows are read-only, and custom rows persist across a reboot.
         controls_.addList("profiles", *this);   // this module is the (editable) ListSource
     }

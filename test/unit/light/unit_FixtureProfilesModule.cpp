@@ -645,3 +645,28 @@ TEST_CASE("FixtureProfiles gain: an edited gain is kept, serialized and restored
     const std::string rows = profilesJson(m);
     CHECK(rows.find("\"gains\":[255,180,255,150]") != std::string::npos);
 }
+
+// The gained tables are allocated after the rebuild that fills them, so a first gain on an 8-bit wiring must be filled then too, not wait for the next brightness change.
+TEST_CASE("A driver applies its profile's first gain at once on an 8-bit wiring") {
+    FixtureProfilesModule lib;
+    lib.defineControls();
+    uint32_t id = 0;
+    REQUIRE(lib.addListRow(id));   // R, G, B
+    REQUIRE(lib.setListRowField(id, "gainGreen", "{\"value\":128}"));
+
+    mm::NetworkSendDriver drv;
+    drv.defineControls();
+    drv.rebuildCorrection(255);   // running at full brightness on its default profile, which has no gain
+    for (uint8_t i = 0; i < drv.controls().count(); i++)
+        if (std::strcmp(drv.controls()[i].name, "fixture") == 0)
+            *static_cast<uint8_t*>(drv.controls()[i].ptr) = lib.indexOfId(id);
+    drv.rebuildControls();
+    drv.onControlChanged("fixture");   // one rebuild, as a pick on the card makes
+
+    const uint8_t white[3] = {255, 255, 255};
+    uint8_t out[3] = {};
+    drv.correction().apply(white, out, 3);
+    CHECK(out[0] == 255);
+    CHECK(out[1] == 128);   // half the green, from this rebuild on
+    CHECK(out[2] == 255);
+}
