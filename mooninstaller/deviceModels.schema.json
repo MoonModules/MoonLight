@@ -68,7 +68,8 @@
             "Buttons",
             "I2C",
             "Relay",
-            "SD card"
+            "SD card",
+            "HDMI"
           ]
         },
         "description": "What the firmware drives on this board, shown as solid chips. A new word here needs a module that drives it."

@@ -434,7 +434,7 @@ processes:
           WantedBy=multi-user.target
           ```
 
-          `Restart=always` covers a crash as well as a reboot. Adjust `User`, and the path for a source build: where you built, such as `/home/pi/MoonLight/build/MoonLight`. A container does this with `--restart unless-stopped` instead.
+          `Restart=always` covers a crash as well as a reboot. Adjust `User`, and the path for a source build: where you built, such as `/home/pi/MoonLight/build/linux/MoonLight`. For HDMI out, that user is in the `video` group (`sudo usermod -aG video <user>`), which Raspberry Pi OS's first user already is. A container does this with `--restart unless-stopped` instead.
       - id: enable
         say: Enable the service at boot.
         when: { run: { command: "sudo systemctl enable --now moonlight" } }

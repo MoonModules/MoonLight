@@ -256,7 +256,7 @@ and a test that the rename left no `IrService` behind. Bench: the Dig-2-Go's GPI
 and the infrared remote on another, both driving `Control.switch1`, so two inputs reaching one target
 is proven rather than assumed.
 
-## Step 1b: an encoder that shows what it selects 🚧 (the Open Stage Control session has no strip widget; its label and pad-matrix gaps stay on [their card](https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287130773))
+## Step 1b: an encoder that shows what it selects 🚧 (the Open Stage Control session has no strip widget; its label and pad-matrix gaps stay on [the backlog](#backlog))
 
 Small, and it follows step 1 rather than joining it, so the rebuild is not also carrying a UI change.
 
@@ -294,7 +294,7 @@ cannot show text simply ignores it. The shipped
 [Open Stage Control session](../reference/examples/open-stage-control.json) gains a text widget
 bound to it, which is also worth doing because that session already has known gaps (its widget labels
 do not render and its pad matrix draws nothing, both recorded in
-[their card](https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287130773)): adding the strip is the moment to fix the session
+[the backlog](#backlog)): adding the strip is the moment to fix the session
 by building one widget of each kind in its own editor and copying the shape it produces.
 
 **Test:** the infrared remote's palette next/prev rows driving `Control.encoder1`, with the palette
@@ -675,7 +675,7 @@ to zero, so a pedal pushed fully down settled at 253 rather than 255 and full br
 unreachable. It now takes the remaining distance whole once the step rounds to nothing.
 
 **Still open**: the bench half. A pot on an ADC pin, both paths on the same hardware. The SE16 and
-LightCrafter sense pins are the natural rig and are now free ([their card](https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287086286)), but the scale
+LightCrafter sense pins are the natural rig and are now free ([the backlog](#backlog)), but the scale
 factor per board needs the schematic.
 
 ## Step 4: I2C sensors 🚧 (only the shared bus and its scan, `I2cBusModule`; no register read, sensor module, published frame or `i2cRead` builtin)
@@ -772,7 +772,7 @@ peripheral (PCNT for the encoder, RMT or a timed capture for the echo) rather th
 **Test:** an encoder on the bench driving `Control.encoder1` through the module, and an HC-SR04
 reporting distance through a script.
 
-## Step 6: PIR, and the trigger vocabulary ✅ (a PIR is a `set` row, which already holds a level, so no `level` kind: two kinds would do one job; the help and the momentary-row test name it. Multi-click waits for a panel that needs it, on [its card](https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287131477))
+## Step 6: PIR, and the trigger vocabulary ✅ (a PIR is a `set` row, which already holds a level, so no `level` kind: two kinds would do one job; the help and the momentary-row test name it. Multi-click waits for a panel that needs it, on [the backlog](#backlog))
 
 The cheap finish. A PIR is a digital pin, so it needs no seam at all: it is a `ButtonService` row
 with the `set` event, which holds the pin's level rather than reacting to a press. MoonLight
@@ -803,6 +803,12 @@ It touches inputs at exactly one point, which is why it came up here: a sensor o
 lights on another is the obvious use, and the two-step model already makes that expressible (a remote
 device's surface is just another target). That is enough to note; the design belongs in its own
 analysis alongside the backlog's existing network entries.
+
+## Backlog
+
+- **SE16 and LightCrafter power monitoring.** Both boards carry voltage and current sensors: the SE 16 V1's on GPIO 8 (voltage) and 9 (current), the LightCrafter's on [its page](../reference/hardware/lightcrafter-16.md#power-sensing). Open per board: `voltagePin` and `currentPin` in the two device definitions, "Power monitoring" from `planned` to `supported`, the SE16's scale factors (its divider ratio and shunt, from the schematic), and a reading checked against a meter. It gives the ADC seam a real bench rig, better than a hand-wired potentiometer.
+- **The Open Stage Control session's labels.** The shipped session ([open-stage-control.json](../reference/examples/open-stage-control.json)) works for every fader, encoder and switch, but draws no widget names and an empty pad matrix. A session Open Stage Control saves itself carries no `label` key on a fader, so the reliable fix is to build one widget of each kind in its editor, save, and copy the shape. Cosmetic: only the labels and the pad grid are missing.
+- **Double-click and multi-click on a button**, from ESPHome's trigger vocabulary: the same debounce timers with more states, so one button does several things. Built when a panel needs more actions than it has buttons.
 
 ## Not in this plan
 

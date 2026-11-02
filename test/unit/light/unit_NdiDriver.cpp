@@ -7,11 +7,15 @@
 #include "light/drivers/NdiDriver.h"
 #include "light/drivers/Correction.h"
 #include "correction_presets.h"
+#include "wall_fixture.h"
 #include "light/layers/Buffer.h"
 #include "light/layouts/Layouts.h"
 #include "light/layouts/GridLayout.h"
 #include <memory>
 #include <string>
+
+using mm::test::Wall;
+using mm::test::wire;
 
 namespace {
 
@@ -26,32 +30,8 @@ struct NdiSeamGuard {
     }
 };
 
-// A wall of `width` x `height`, wired as production wires it: the Layout gives the Layer its physical size and the driver reads that. The driver has no geometry of its own.
-struct Wall {
-    mm::Layouts layouts;
-    mm::GridLayout grid;
-    mm::Layer layer;
-
-    Wall(uint16_t width, uint16_t height) {
-        grid.width = width;
-        grid.height = height;
-        grid.depth = 1;
-        layouts.addChild(&grid);
-        layouts.applyState();
-        layer.setLayouts(&layouts);
-        layer.setChannelsPerLight(3);
-        layer.applyState();
-    }
-};
-
 void setUp(mm::NdiDriver& driver, mm::Buffer& source, Wall& wall, mm::nrOfLightsType count) {
-    REQUIRE(source.allocate(count, 3));
-    mm::Correction correction;
-    mm::test::rebuildFromPreset(correction, 255, mm::test::PresetOrder::RGB);
-    driver.setLayer(&wall.layer);
-    driver.setSourceBuffer(&source);
-    driver.correctionForTest() = correction;
-    driver.applyState();
+    wire(driver, source, wall, count);
     mm::platform::ndiTestClearFrames();
 }
 

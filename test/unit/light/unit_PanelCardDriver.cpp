@@ -7,6 +7,7 @@
 #include "light/drivers/PanelCardDriver.h"
 #include "light/drivers/Correction.h"
 #include "correction_presets.h"
+#include "wall_fixture.h"
 #include "light/layers/Buffer.h"
 #include "light/layouts/Layouts.h"
 #include "light/layouts/GridLayout.h"
@@ -14,37 +15,16 @@
 #include "core/util/JsonSink.h"   // writeControlMetadata: the schema the UI parses
 #include <string>   // status() substring checks
 
+using mm::test::Wall;
+using mm::test::wire;
+
 namespace {
 
 // Build a driver over a `count`-light source with a plain RGB correction, ready to tick.
 // Build a driver over a `count`-light source. With no Layer wired the driver falls back to the panel arrangement for the wall size, which is exactly what a bare unit test wants: geometry it states rather than geometry it has to construct a Layout for.
-// A wall of `width` x `height`, wired the way production wires it: a Layout gives the Layer its physical size, and the driver reads that. The driver has no geometry of its own to set.
-struct Wall {
-    mm::Layouts layouts;
-    mm::GridLayout grid;
-    mm::Layer layer;
-
-    Wall(uint16_t width, uint16_t height) {
-        grid.width = width;
-        grid.height = height;
-        grid.depth = 1;
-        layouts.addChild(&grid);
-        layouts.applyState();
-        layer.setLayouts(&layouts);
-        layer.setChannelsPerLight(3);
-        layer.applyState();
-    }
-};
-
 void setUp(mm::PanelCardDriver& driver, mm::Buffer& source, Wall& wall,
            mm::nrOfLightsType count) {
-    REQUIRE(source.allocate(count, 3));
-    mm::Correction correction;
-    mm::test::rebuildFromPreset(correction, 255, mm::test::PresetOrder::RGB);
-    driver.setLayer(&wall.layer);
-    driver.setSourceBuffer(&source);
-    driver.correctionForTest() = correction;
-    driver.applyState();
+    wire(driver, source, wall, count);
     mm::platform::ethTestClearFrames();
 }
 

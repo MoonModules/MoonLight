@@ -3037,6 +3037,7 @@ VideoCaptureStats videoCaptureStats() MM_NONBLOCKING {
     VideoCaptureStats s;
     s.decoded = g_grabber.decoded.load();
     s.failed = g_grabber.failed.load();
+    if (g_grabber.open.load()) s.stream = {g_grabber.openW, g_grabber.openH, g_grabber.openFps};   // set before open, which publishes it
     return s;
 }
 

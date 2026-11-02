@@ -71,14 +71,6 @@ Two design questions stay open:
 - **Modifier chain visualization**: the `children[]` order is the apply order (modifiers compose as a chain, M₁∘M₂∘…), so a visual that shows the stacking, and that order matters, helps a user reason about a multi-modifier layer.
 - **Canvas or node-graph view**: v2 tried it; powerful for complex setups but it doubles the UI surface, so it waits on user demand.
 
-### Double-click and multi-click on a button (2026-10-25)
-
-Kind: Feature · [Card](https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287131477)
-
-From ESPHome's trigger vocabulary: the same debounce
-timers with more states, so one button does several things. Built when a panel needs more actions
-than it has buttons.
-
 ### A desktop build reports firmware "unknown", so the update UI guesses from the browser (2026-09-06)
 
 Kind: Bug · Platform: desktop · [Card](https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287131545)

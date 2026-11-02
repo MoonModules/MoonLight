@@ -74,3 +74,5 @@ processes:
       - id: pages
         say: Stage the installer for the site.
         when: { run: { script: moondeck/ci/release_stage.py, args: "pages-site" } }
+        detail: |
+          The site stages every kept release from its published assets, so an asset fixed on a release after it shipped reaches the installer with a pages-only run, which builds nothing: `gh workflow run release.yml --ref main -f pages_only=true`.

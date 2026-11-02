@@ -864,14 +864,14 @@ body.help-hidden .control-row.has-help { margin-bottom: 6px; }
     opacity: 0.7;
 }
 
-/* List control (ControlType::List) — a column of clickable rows, each
-   expanding to a read-only detail panel. The row stretches full width, so it
+/* List control (ControlType::List): a column of clickable rows, each
+   expanding to a detail panel. The row stretches full width, so it
    overrides the flex layout to stack the label above the list. */
 .control-list-row { flex-direction: column; align-items: stretch; gap: 4px; }
-/* In the column layout the label's `flex: 0 0 100px` basis would reserve 100px of
-   HEIGHT (it's a fixed-width basis meant for the horizontal row) — the big gap above
-   the list. Reset it to auto height so the label hugs its text. */
-.control-list-row .control-label { flex: 0 0 auto; }
+/* In the column layout the label's fixed-width basis would reserve that much HEIGHT,
+   a big gap above the list, so the list's own label hugs its text. The fields inside
+   an opened row are rows again and keep the shared label column. */
+.control-list-row > .control-label { flex: 0 0 auto; }
 .list-control {
     border: 1px solid var(--border);
     border-radius: 6px;
@@ -2266,6 +2266,8 @@ button.fileedit-pick:disabled { opacity: 0.6; cursor: default; }
     justify-content: center;
     background: rgba(10, 10, 20, 0.85);
 }
+dialog.fw-overlay-box { color: var(--fg); }
+dialog.fw-overlay-box::backdrop { background: rgba(10, 10, 20, 0.85); }
 .fw-overlay-box {
     background: var(--card-bg-1);
     border: 1px solid var(--border);

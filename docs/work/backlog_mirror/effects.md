@@ -192,3 +192,13 @@ Kind: Bug · [Card](https://github.com/users/MoonModules/projects/5?pane=issue&i
   **What the user sees.** Switching to one of these leaves the old frame underneath for a moment — an audio effect with no signal yet, or a simulation still seeding, paints nothing and inherits whatever was there. Owning the background is each effect's job ([Layer.h](../../../src/light/layers/Layer.h)).
 
   **Why it waits.** It is fourteen effects' worth of change across audio-reactive and simulation families, each needing its own judgement about whether to clear, fade, or seed differently — not a mechanical sweep. `unit_Effects_gridsweep.cpp` already measures it (`afterFirst`) and asserts only the settled frame, so the number is visible without blocking.
+
+### E1.31 multicast never arrives (2026-10-30)
+
+Kind: Bug · Status: Next · Issue: [#216](https://github.com/MoonModules/MoonLight/issues/216) · [Card](https://github.com/users/MoonModules/projects/5?pane=issue&itemId=288372206)
+
+Network Receive binds port 5568 but never joins the multicast groups, so a receiver reads 0 packets while a sender multicasts sACN: both receivers in `scenario_NetworkSend_one_sender_many_receivers` show it. `UdpSocket::joinMulticast` exists in the platform layer and Network Receive does not call it.
+
+The fix: join the group of each universe the layer covers, from `universe_start` on; E1.31 section 9.3.1 puts universe N at 239.255.(N >> 8).(N & 0xFF). Pinned by a test that the receiver joins exactly those groups, and by the scenario reading packets again.
+
+From the Streams plan, #215.

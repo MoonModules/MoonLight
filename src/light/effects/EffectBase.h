@@ -102,3 +102,4 @@ public:
 #include <cstring>                // memset / memcpy / strcmp: buffer and control-name handling
 #include <cmath>                  // sqrtf / sinf / log10f: per-frame float math, never per-light
 #include <array>                  // std::array: fixed-size effect state tables
+#include <algorithm>              // std::min / std::max / std::clamp: bounds on a size or a count

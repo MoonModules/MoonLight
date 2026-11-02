@@ -695,25 +695,35 @@
   },
   "AudioSpectrumEffect": {
    "line": "The 16 mic frequency bands spread across X, each column lit bottom-up by its magnitude.",
-   "summary": "The classic equalizer display. The bands scale to any width, so a wide grid gives each several columns and a narrow one samples. On a grid at least three rows tall, the bottom row becomes a horizontal level bar and the spectrum bars sit above it. On a single row the bars collapse to per-column brightness.",
-   "attribution": "[Andrew Tuline](https://moonmodules.org/MoonLight/reference/attributions.html#andrew-tuline)",
+   "summary": "The classic equalizer display. The bands scale to any width, so a wide grid gives each several columns and a narrow one samples. On a grid at least three rows tall, the bottom rows can be a horizontal level bar under the spectrum, as tall as a bar is wide, with a square at its right end that flashes red on each detected hit. On a single row the bars collapse to per-column brightness.",
+   "attribution": "[Andrew Tuline](https://moonmodules.org/MoonLight/reference/attributions.html#andrew-tuline), [troyhacks](https://moonmodules.org/MoonLight/reference/attributions.html#troyhacks)",
+   "guide": [
+    {
+     "title": "Comparing audio engines",
+     "text": "The sweep colors with the level bar off draw what WLED-MM's GEQ PPA draws: the same bars, heights and color sweep, so two boards side by side differ only in their audio. Point one at the other's WLED audio sync to see both engines through this one effect."
+    }
+   ],
    "image": "https://moonmodules.org/MoonLight/assets/light/effects/AudioSpectrumEffect.gif",
    "controls": {
     "colorMode": {
-     "line": "Bars colored by height, the VU look, or per band, a rainbow.",
+     "line": "By height (a VU), per band, or sweep: GEQ PPA's drifting rainbow.",
      "tests": [
       {
        "title": "Effects teardown under a running pipeline",
        "url": "https://moonmodules.org/MoonLight/reference/tests.html#uncategorized:scenario:scenario_Effects_teardown_under_a_running_pipeline"
       }
      ]
+    },
+    "levelBar": {
+     "line": "A level bar under the bars, and a square that flashes red on a hit."
     }
    },
    "role": "effect",
    "tags": "💫🎶",
    "dim": 2,
    "doc": "light/effects.md#audiospectrum",
-   "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/AudioSpectrumEffect.h"
+   "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/AudioSpectrumEffect.h",
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#audiospectrumeffect"
   },
   "RadialSpectrumEffect": {
    "line": "The spectrum as ripples: each band owns a sector around the center, mirrored left and right with the bass at top and bottom.",
@@ -3461,6 +3471,74 @@
    "doc": "light/drivers.md#rtsp",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/drivers/RtspDriver.h"
   },
+  "HdmiDriver": {
+   "line": "Shows the layer on a monitor through the board's HDMI port, scaled to the screen.",
+   "summary": "One light per pixel, corrected as the wall is, for a monitor, a projector or an LED wall's sending card (Novastar, ColorLight).\n\nESP32-P4 boards with an LT8912B bridge, such as the Olimex ESP32-P4-PC; a Linux machine's HDMI port, such as a Raspberry Pi's, without a desktop; a Mac or Windows PC's second display.",
+   "attribution": "[Espressif](https://moonmodules.org/MoonLight/reference/attributions.html#espressif), [Olimex](https://moonmodules.org/MoonLight/reference/attributions.html#olimex)",
+   "guide": [
+    {
+     "title": "Connect the monitor",
+     "text": "A monitor plugged in or woken later is picked up within a second. Set its input to HDMI, not automatic, which some monitors leave for another input. Noise after a cold start: reset the board."
+    },
+    {
+     "title": "Status line",
+     "text": "| It says | It means |\n|---|---|\n| `no HDMI output on this board` | No bus for the bridge, or no HDMI port it may open |\n| `output did not come up, retrying` | No bridge answers, or a desktop holds it |\n| `no monitor connected` | Plug one in: a second, on a computer |\n| `<w>x<h> on <mode>` | Live; orange when the monitor lacks the size |"
+    }
+   ],
+   "image": "https://moonmodules.org/MoonLight/assets/light/drivers/HdmiDriver.png",
+   "controls": {
+    "localBrightness": {
+     "line": "This driver's dim, multiplied with the global brightness."
+    },
+    "curve": {
+     "line": "How brightness maps to output: CIE 1931, a gamma, or linear."
+    },
+    "fixture": {
+     "line": "The fixture profile applied per light, for channel order and white.",
+     "more": "A reorder or a reboot keeps it. After renaming the profile, re-pick it: the next reboot falls back to the default."
+    },
+    "whiteMode": {
+     "line": "How the white channel is derived, shown when the profile carries one."
+    },
+    "fixtureRef": {
+     "line": "The profile name an older config saved, read once and then emptied."
+    },
+    "mode": {
+     "line": "The screen mode; 1280x720 suits a 1080p monitor, which scales it by exactly 1.5.",
+     "tests": [
+      {
+       "title": "HdmiDriver shows the layer on the monitor",
+       "url": "https://moonmodules.org/MoonLight/reference/tests.html#hdmidriver:live:scenario_HdmiDriver_shows_the_layer_on_the_monitor"
+      }
+     ]
+    },
+    "scaling": {
+     "line": "Fit keeps the grid's shape with black bars, stretch fills the screen."
+    },
+    "fps": {
+     "line": "Frame-rate ceiling; the screen refreshes on its own."
+    },
+    "monitor": {
+     "line": "What the monitor says of itself in its EDID: name, preferred size, a mode it lacks.",
+     "tests": [
+      {
+       "title": "HdmiDriver shows the layer on the monitor",
+       "url": "https://moonmodules.org/MoonLight/reference/tests.html#hdmidriver:live:scenario_HdmiDriver_shows_the_layer_on_the_monitor"
+      }
+     ]
+    },
+    "bridge": {
+     "line": "The bridge's synthesizer word against the one programmed, and the sync it measures.",
+     "more": "**DDS**, the bridge's clock read back, sits near the programmed value on a clean picture (5455 against 5555 at 1280x720) and further off in noise (571e). **Sync**'s second number is lines per frame: 741 at 1280x720."
+    }
+   },
+   "role": "driver",
+   "tags": "🖥️",
+   "dim": 0,
+   "doc": "light/drivers.md#hdmi",
+   "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/drivers/HdmiDriver.h",
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#hdmidriver"
+  },
   "PanelCardDriver": {
    "line": "Streams the buffer to ColorLight 5A-75 receiving cards as raw Ethernet, taking the place of the sending card that normally feeds them.",
    "summary": "The board renders and sends, so it replaces a host PC driving the same wall. There are no geometry controls: the wall comes from the [Layout](https://moonmodules.org/MoonLight/moonmodules/light/layouts.html), cut into card rows.",
@@ -3883,7 +3961,7 @@
      "line": "The flash chip size."
     },
     "flashMode": {
-     "line": "How the chip reads its flash, such as QIO or DIO."
+     "line": "How the chip reads its flash, and its clock where known, such as QIO, 80 MHz."
     },
     "mac": {
      "line": "The hardware address, which tooling identifies the device by."
@@ -4106,7 +4184,7 @@
    "controls": {
     "source": {
      "line": "Where the picture comes from.",
-     "more": "The test pattern is a test card in the layout of Philips' PM5544, drawn at any size. With **usb capture**, MJPEG from an HDMI grabber fills the picture at its set size."
+     "more": "The test pattern is a test card in the layout of Philips' PM5544, drawn at any size. With **usb capture**, MJPEG from an HDMI grabber fills the picture; the status names the grabber's mode."
     },
     "fps": {
      "line": "Frames a second asked of a capture device, which streams the nearest rate it offers."
@@ -4277,7 +4355,7 @@
    "guide": [
     {
      "title": "What a row does",
-     "text": "Each row binds one pin to a target, a surface control such as `Control.switch1`. A catalog board's first button targets `Control.switch1`, which switches the lights and their relay. The live pressed readout shows a button working before it is bound."
+     "text": "Each row binds one pin to a surface control; a catalog board's first button targets `Control.switch1`, the lights and their relay. The pressed readout shows a button working before it is bound.\n\nA push button takes `toggle`, each press flipping the target. A latching switch takes `set` with value 1: on while closed, off once open."
     }
    ],
    "image": "https://moonmodules.org/MoonLight/assets/core/ButtonService.png",

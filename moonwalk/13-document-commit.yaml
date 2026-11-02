@@ -14,7 +14,7 @@ processes:
         say: Describe what shipped in the module's header.
         when: { manual: "A fact about behavior goes in the .h, beside the code." }
         detail: |
-          The header is the module's own documentation and feeds its catalog card. Write `///` comments as [Comments](contributing/documentation-standards.md#comments) says: one line above the code it explains.
+          The header is the module's own documentation and feeds its catalog card. Write `///` comments as [Comments](contributing/documentation-standards.md#comments) says: one line above the code it explains. Depth a line cannot hold goes to the file lead's `@technical`, one `##` section of at most ten lines, with an `@xref{slug|label}` back from the comment it came out of: [The comment budget](contributing/documentation-standards.md#the-comment-budget). A platform file holds its own that way too.
       - id: page
         say: Write intent, cost and sequence on a page.
         when: { manual: "A task goes in a MoonWalk process under moonwalk/; a why under docs/explanation/, a fact under docs/reference/." }
@@ -126,9 +126,11 @@ processes:
         given: [{ changed: [src/**, test/**, "!test/js/**", "!test/python/**"] }]
         when: { run: { script: moondeck/check/check_code.py } }
       - id: build-desktop
-        say: Build the desktop firmware, with zero warnings.
+        say: Build the desktop firmware, warning-free.
         given: [{ changed: [src/**, test/**, "!test/js/**", "!test/python/**"] }]
         when: { run: { script: moondeck/build/build_desktop.py } }
+        detail: |
+          Warning-free beyond the two kinds the code check counts, a stack frame over 512 bytes and a blocking call on the render path: [why they stay warnings](../moondeck/MoonDeck.md#check_code).
       - id: tests
         say: Test the change on the desktop.
         given: [{ changed: [src/**, test/**, "!test/js/**", "!test/python/**"] }]

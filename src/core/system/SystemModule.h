@@ -148,7 +148,7 @@ public:
             controls_.addReadOnly("flash", flashStr_, sizeof(flashStr_));
             // Read once from the hardware: a board updated over the network keeps its bootloader's mode, and DIO fetches code over two lines where QIO uses four.
             if (const char* fm = platform::flashMode(); fm && fm[0]) {
-                /// How the chip reads its flash, such as QIO or DIO.
+                /// How the chip reads its flash, and its clock where known, such as QIO, 80 MHz.
                 controls_.addReadOnly("flashMode", const_cast<char*>(fm));
                 controls_.setAdvanced(controls_.count() - 1);   // expert, as psramType
             }

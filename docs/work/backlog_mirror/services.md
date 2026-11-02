@@ -29,18 +29,6 @@ A user-added Service holds a list of HTTP requests, each a method, a URL and a b
 Inbound control already exists (`/api/control`, MQTT, OSC, MIDI); this is its outbound twin, and the generic complement to the typed command half of DevicesModule below, which knows each ecosystem's API.
 Requests leave the render thread, since a slow peer must never stall a frame.
 
-### The Open Stage Control session's labels (2026-08-30)
-
-Kind: Investigation · [Card](https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287130773)
-
-Found wiring a real control surface to the [OSC module](../../moonmodules/core/services.md).
-
-**The shipped Open Stage Control session renders no labels, and its pad matrix draws nothing.**
-[`docs/reference/examples/open-stage-control.json`](../../reference/examples/open-stage-control.json) works for every fader, encoder and switch, but the widget names never appear and the `matrix` of pads is an empty box.
-Five attempts at the label property failed (`@{}`, `JS{}`, `#{}` with `unit`, an explicit string, omitting it so `"auto"` applies), and notably a session SAVED by Open Stage Control itself carries no `label` key on a fader at all, so the name is drawn from something else.
-The session was written by reading a minified app's bundled HTML docs; the reliable fix is to build one widget of each kind by hand in its editor, save, and copy the shape it produces.
-Cosmetic: the control path works, only the labels and the pad grid are missing.
-
 ### MoonCloud: share a MoonLive script over MoonTalk (2026-09-10)
 
 Kind: Feature · [Card](https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287130853)

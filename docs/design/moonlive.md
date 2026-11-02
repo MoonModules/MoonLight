@@ -1,6 +1,6 @@
 # MoonLive: the language roadmap
 
-[MoonLive](../explanation/architecture/moonlive.md) is the engine as built (grammar, IR, codegen), and [power-functions.md](../moonmodules/light/power-functions.md) is the builtin surface it calls into. This analysis is the ordered plan for closing the gap between them: which language features to add next, and why that order. Every limit quoted was measured against the shipped compiler, not read off the source. The steps are one backlog item, [The next language steps, in order](https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287082542), and the code cap is [its own item](https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287082596).
+[MoonLive](../explanation/architecture/moonlive.md) is the engine as built (grammar, IR, codegen), and [power-functions.md](../moonmodules/light/power-functions.md) is the builtin surface it calls into. This analysis is the ordered plan for closing the gap between them: which language features to add next, and why that order. Every limit quoted was measured against the shipped compiler, not read off the source. The steps and the code cap are two backlog items, both listed in [MoonLive language and catalog](https://github.com/MoonModules/MoonLight/issues/221).
 
 ## What this is for
 

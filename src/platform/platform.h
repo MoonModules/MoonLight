@@ -47,6 +47,7 @@
   #define MM_PRINTF_FORMAT(fmt_arg, va_arg)
 #endif
 
+namespace mm::edid { struct Monitor; }   // what the HDMI seam reports about the monitor; edid.h defines it for the code that reads it
 
 namespace mm::platform {
 
@@ -256,7 +257,7 @@ const char* cpuInfo();
 /// PSRAM interface type and clock, such as "octal, 80 MHz", and empty where this build has no PSRAM.
 const char* psramType();
 
-/// How the chip reads its program flash now, "QIO", "DIO" or "octal" and the like, read from the running hardware; empty where the host has none to report.
+/// How the chip reads its program flash and at what clock, such as "QIO, 80 MHz": the mode read from the running hardware, the clock from the build; empty where the host has none to report.
 const char* flashMode();
 
 /// WiFi co-processor status for a board whose radio lives on a separate chip, empty on a native radio.
@@ -522,6 +523,75 @@ const uint8_t* ndiTestFrameData(size_t i);
 const char* ndiTestSenderName();
 /// Drop every recorded frame.
 void ndiTestClearFrames();
+#endif
+
+// --- HDMI out, gated by `hasHdmi`: a display mode, a frame, and hot-plug ------------------------
+
+/// One display mode the HDMI output runs.
+struct HdmiMode {
+    uint16_t width;    ///< active pixels across
+    uint16_t height;   ///< active lines
+    uint8_t  hz;       ///< refresh rate
+};
+
+/// The modes this platform offers, in the order the driver's `mode` control lists them; 0 where it has none.
+size_t hdmiModes(const HdmiMode** out) MM_NONBLOCKING;
+
+/// Start the output in mode `index`, replacing a running one; false where the platform or board has none, such as no I2C bus open for the bridge.
+bool hdmiOpen(uint8_t index);
+
+/// Stop the output and free its framebuffer; safe when closed.
+void hdmiClose();
+
+/// Hand one tight-RGB frame to the output, which scales it to the screen, keeping its aspect when `fit`. Never blocks: a frame arriving before the previous one is shown replaces it.
+bool hdmiWrite(const uint8_t* rgb, uint16_t w, uint16_t h, bool fit) MM_NONBLOCKING;
+
+/// What the link reports back: Down while the output is not set up and is retried (an ESP32's bridge absent or failing, a Linux screen held by a desktop), then the monitor on its hot-plug detect.
+enum class HdmiLink : uint8_t { Down, NoMonitor, Monitor };
+
+/// The link's state now; NoMonitor until the first poll after opening.
+HdmiLink hdmiLink() MM_NONBLOCKING;
+
+/// The mode the display runs now: the one opened, or the display's own where it has no such size; false while no display is up.
+bool hdmiActiveMode(HdmiMode& out) MM_NONBLOCKING;
+
+/// The connected monitor's EDID, reduced to this platform's modes in `hdmiModes` order; false until one is read after the monitor connected, or where the monitor gives none.
+bool hdmiMonitor(edid::Monitor& out) MM_NONBLOCKING;
+
+/// The bridge's own view of the stream it sends.
+struct HdmiBridgeState {
+    uint16_t dds;       ///< its clock synthesizer's read-back, the word's two middle bytes that settle
+    uint16_t ddsWant;   ///< the same bytes of the word the mode's pixel clock programs
+    uint16_t hsync;     ///< the horizontal sync it measures on its input
+    uint16_t vsync;     ///< the vertical sync it measures on its input
+};
+
+/// The bridge's state as last read; false while the link is down or before the first read.
+bool hdmiBridge(HdmiBridgeState& out) MM_NONBLOCKING;
+
+#ifndef ESP_PLATFORM
+/// Report a link state: the desktop's stand-in records what the driver handed over, as the NDI seam does, so the driver is tested without a bridge.
+void setTestHdmiLink(HdmiLink link);
+/// Report a monitor's EDID as read.
+void setTestHdmiMonitor(const edid::Monitor& monitor);
+/// Report the bridge's state as read.
+void setTestHdmiBridge(const HdmiBridgeState& state);
+/// Report the mode the display runs, as one without the opened size keeps its own.
+void setTestHdmiActiveMode(const HdmiMode& mode);
+/// The mode the output was opened in, -1 while closed.
+int hdmiTestOpenMode();
+/// How many frames were handed over since the last clear.
+size_t hdmiTestFrameCount();
+/// The last frame's width.
+uint16_t hdmiTestFrameWidth();
+/// The last frame's height.
+uint16_t hdmiTestFrameHeight();
+/// Whether the last frame asked to keep its aspect.
+bool hdmiTestFrameFit();
+/// The last frame's tight-RGB bytes.
+const uint8_t* hdmiTestFrameData();
+/// Drop the recorded frames and close the output.
+void hdmiTestClear();
 #endif
 
 // --- HLS output, gated by `hasHls`: the seam carries numbers rather than an encoder argv -------
@@ -1544,6 +1614,7 @@ struct VideoCaptureStats {
     uint32_t decoded = 0;   ///< frames decoded into a picture
     uint32_t dropped = 0;   ///< frames that arrived while the one before was still being decoded
     uint32_t failed = 0;    ///< frames the decoder refused, a mis-read payload stride among them
+    VideoCaptureFormat stream;   ///< the mode the device streams, 0 wide until it streams
 };
 /// The counters above, read atomically enough for a once-a-second status line.
 VideoCaptureStats videoCaptureStats() MM_NONBLOCKING;

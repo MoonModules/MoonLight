@@ -55,6 +55,13 @@ dependencies:
   # microphone behind a codec. Which board has one, and on which pins, is AudioService's runtime
   # configuration from the device model; the Kconfig gate keeps the component out of every image
   # that does not set MM_AUDIO_CODEC. Referenced only from platform_esp32_es8311.cpp.
+  # esp_lcd_lt8912b: Espressif's driver for the Lontium LT8912B MIPI-DSI to HDMI bridge, the one their
+  # ESP32-P4 Function EV Board and Olimex's ESP32-P4-PC demo use, with its video timings. Referenced
+  # only from platform_esp32_hdmi*.{c,cpp}; the Kconfig gate keeps it out of every image without MM_HDMI.
+  espressif/esp_lcd_lt8912b:
+    version: "^0.2.1"
+    rules:
+      - if: "$CONFIG{MM_HDMI} == True"
   # usb_host_uvc: the UVC (webcam) host a grabber's frames are read through. It declares
   # espressif/usb as a public dependency, so the host stack comes with it. Gated on MM_USB_VIDEO
   # rather than on the target, so a P4 image that leaves the capture out carries neither.

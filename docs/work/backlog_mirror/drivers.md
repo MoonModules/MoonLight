@@ -182,7 +182,7 @@ Kind: Feature · [Card](https://github.com/users/MoonModules/projects/5?pane=iss
 
 `NetworkSendDriver` unicasts to a list of receivers (`hosts` + `lightsPerHost`), which is the Art-Net-4-conformant model. What it cannot do is **tell whether a receiver is actually there**: UDP is fire-and-forget, so a dead tube is invisible to the sender. The spec's own answer is discovery — *"The transmitting device must regularly ArtPoll the network to detect any change in devices which are subscribed"* — and it is the natural next increment.
 
-**Why it earns its place (product-owner experience, 2026-07-13):** a dead tube in a prior setup *made the other tubes hiccup*. The mechanism is that a send to an unresolvable address stalls or errors **inside the frame loop**, delaying the packets for every destination after it — so one dark tube degrades the live ones, every frame. The send loop tolerates that (a failed send drops only that packet), but tolerating is not the same as **knowing**: with discovery we can simply **skip destinations that haven't answered**, which removes the stall at its source rather than absorbing it.
+**Why it earns its place (product-owner experience, 2026-07-13):** a dead tube in a prior setup *made the other tubes hiccup*. The mechanism is that a send to an unresolvable address stalls or errors **inside the frame loop**, delaying the packets for every destination after it — so one dark tube degrades the live ones, every frame. The send loop tolerates that (a failed send is retried up to three times when paced and then dropped, or dropped at once when unpaced, so it costs only that packet), but tolerating is not the same as **knowing**: with discovery we can simply **skip destinations that haven't answered**, which removes the stall at its source rather than absorbing it.
 
 **Scope (~130–150 lines + tests; the receive half already exists).** `ArtNetPacket.h` already builds+parses, `UdpSocket` already binds and reports the sender's IP:
 - **ArtPoll send** — broadcast a 14-byte poll every ~3 s (this is the one packet Art-Net *does* broadcast, by design).
@@ -588,3 +588,11 @@ Kind: Feature · [Card](https://github.com/users/MoonModules/projects/5?pane=iss
   - Sources: [Worldsemi product list](https://www.world-semi.com/) and [Worldsemi's examples](https://github.com/WorldsemiLED/worldsemi-led-examples); the 4 kHz PWM reported for the WS2915 is unconfirmed.
   - Temporal dithering on an 8-bit wire, fed by the same 16-bit table.
   - Pan and tilt beyond 8 bits, once a layer slot carries motion wider than 8 bits; today their fine byte repeats the coarse one.
+
+### Record the drivers' output to FSEQ, with clock sync (2026-10-30)
+
+Kind: Feature · [Card](https://github.com/users/MoonModules/projects/5?pane=issue&itemId=288371989)
+
+A live stream in, an FSEQ file out: the drivers' output written to the SD card, as Falcon Player records. It is the bridge between the two kinds of stream, and how a show "from the SD card" is made. Playing a recording on several boards then needs clock sync: every board computes the same frame index from a shared clock, so seek, loop and sync are arithmetic ([live and recorded](../../design/streams.md#live-and-recorded)).
+
+From the Streams plan, #215.

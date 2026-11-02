@@ -20,6 +20,8 @@ add_executable(mm_tests
     unit/core/unit_math16.cpp
     unit/core/unit_AreaSample.cpp
     unit/core/unit_usbvideo_frames.cpp
+    unit/core/unit_edid.cpp
+    unit/core/unit_stop_signal.cpp
     unit/core/unit_noise.cpp
     unit/core/unit_fields.cpp
     unit/core/unit_crc.cpp
@@ -102,6 +104,7 @@ add_executable(mm_tests
     unit/core/unit_Sort.cpp
     unit/core/unit_sanitizeHostname.cpp
     unit/core/unit_platform_clock.cpp
+    unit/core/unit_platform_hdmi.cpp
     unit/core/unit_platform_worker.cpp
     unit/core/unit_platform_httpfetch.cpp
     unit/core/unit_HostList.cpp
@@ -129,6 +132,7 @@ add_executable(mm_tests
     unit/light/unit_NetworkSendDriver_no_alloc_in_loop.cpp
     unit/light/unit_NetworkSendDriver_packet.cpp
     unit/light/unit_NdiDriver.cpp
+    unit/light/unit_HdmiDriver.cpp
     unit/light/unit_HlsDriver.cpp
     unit/light/unit_RtpH264.cpp
     unit/light/unit_RtspSession.cpp
@@ -157,6 +161,7 @@ add_executable(mm_tests
     unit/light/unit_FseqPlayerEffect.cpp
     unit/light/unit_GEQ3DEffect.cpp
     unit/light/unit_GEQEffect.cpp
+    unit/light/unit_AudioSpectrumEffect.cpp
     unit/light/unit_GridBlacksLayout.cpp
     unit/light/unit_LayoutComposition.cpp
     unit/light/unit_LissajousEffect.cpp

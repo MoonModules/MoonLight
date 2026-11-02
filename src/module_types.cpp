@@ -143,6 +143,7 @@
 #include "light/drivers/NetworkSendDriver.h"
 #include "light/drivers/NdiDriver.h"
 #include "light/drivers/HlsDriver.h"
+#include "light/drivers/HdmiDriver.h"
 #include "light/drivers/RtspDriver.h"
 #include "light/drivers/PreviewDriver.h"
 /// LED drivers are compiled in per chip, gated on the peripheral each one needs, so a board carries only the drivers its silicon can run: @xref{why-led-drivers-are-gated-by-the-preprocessor}.
@@ -336,6 +337,8 @@ void mm::registerModuleTypes() {
         mm::ModuleFactory::registerType<mm::HlsDriver>("HlsDriver", "light/drivers.md#hls");
     if constexpr (mm::platform::hasRtsp)
         mm::ModuleFactory::registerType<mm::RtspDriver>("RtspDriver", "light/drivers.md#rtsp");
+    if constexpr (mm::platform::hasHdmi)
+        mm::ModuleFactory::registerType<mm::HdmiDriver>("HdmiDriver", "light/drivers.md#hdmi");
     // Same firmware gate as the include above.
 #if defined(MM_PANEL_CARDS) || MM_LINKS_ALL_LED_DRIVERS
     mm::ModuleFactory::registerType<mm::PanelCardDriver>("PanelCardDriver", "light/drivers.md#panelcard");

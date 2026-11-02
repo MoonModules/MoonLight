@@ -35,6 +35,8 @@ idf_component_register(
         "../../src/platform/esp32/platform_esp32_usb_midi.cpp"
         "../../src/platform/esp32/platform_esp32_usbvideo.cpp"
         "../../src/platform/esp32/platform_esp32_es8311.cpp"
+        "../../src/platform/esp32/platform_esp32_hdmi.cpp"
+        "../../src/platform/esp32/platform_esp32_hdmi_modes.c"
     INCLUDE_DIRS
         "../../src"
         "../../src/platform/esp32"

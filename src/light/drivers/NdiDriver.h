@@ -105,9 +105,10 @@ public:
         setStatus(statusBuf_, Severity::Status);
     }
 
-    /// Close the sender, so the source stops being advertised.
+    /// Close the sender, so the source stops being advertised, and free the staging with it.
     void release() override {
         if (open_) { platform::ndiSenderClose(); open_ = false; }
+        DriverBase::release();
     }
 
     /// Send a corrected frame to the NDI receivers, at most `fps` times a second.
@@ -129,22 +130,9 @@ public:
         uint8_t* dst = &rgb_[0];
         const uint8_t* src   = sourceBuffer_->data();
         const uint8_t  srcCh = sourceBuffer_->channelsPerLight();
-        const uint8_t  outCh = correction_.outChannels;
         if (srcCh < 3) return;   // a non-color buffer (DMX roles) has no frame to send
 
-        // A wider wiring corrects into a one-light scratch, since the protocol carries RGB only.
-        const bool wide = outCh > 3 && lightScratch_.count() >= outCh;
-        for (nrOfLightsType i = 0; i < n; i++) {
-            const uint8_t* s = src + static_cast<size_t>(i) * srcCh;
-            uint8_t* d = dst + static_cast<size_t>(i) * 3;
-            if (outCh == 3) {
-                correction_.apply(s, d, srcCh);
-            } else if (wide) {
-                correctToRgb(s, srcCh, &lightScratch_[0], d);
-            } else {
-                d[0] = s[0]; d[1] = s[1]; d[2] = s[2];   // passthrough, same fallback as NetworkSend
-            }
-        }
+        correctFrameToRgb(src, srcCh, dst, n);   // the protocol carries RGB only
         // Blanked, so a layout that shrank cannot show the previous frame's tail.
         if (n < want) std::memset(dst + static_cast<size_t>(n) * 3, 0,
                                   static_cast<size_t>(want - n) * 3);

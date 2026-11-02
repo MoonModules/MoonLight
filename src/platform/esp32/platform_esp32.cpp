@@ -399,16 +399,41 @@ const char* psramType() {
 #endif
 }
 
+// The P4's Kconfig names the clock as a number; the classic ESP32 and the S3 name only the choice, so it is read from that.
+#if defined(CONFIG_ESPTOOLPY_FLASHFREQ_VAL)
+    #define MM_FLASH_CLOCK ", " MM_STR(CONFIG_ESPTOOLPY_FLASHFREQ_VAL) " MHz"
+#elif defined(CONFIG_ESPTOOLPY_FLASHFREQ_120M)
+    #define MM_FLASH_CLOCK ", 120 MHz"
+#elif defined(CONFIG_ESPTOOLPY_FLASHFREQ_80M)
+    #define MM_FLASH_CLOCK ", 80 MHz"
+#elif defined(CONFIG_ESPTOOLPY_FLASHFREQ_64M)
+    #define MM_FLASH_CLOCK ", 64 MHz"
+#elif defined(CONFIG_ESPTOOLPY_FLASHFREQ_60M)
+    #define MM_FLASH_CLOCK ", 60 MHz"
+#elif defined(CONFIG_ESPTOOLPY_FLASHFREQ_48M)
+    #define MM_FLASH_CLOCK ", 48 MHz"
+#elif defined(CONFIG_ESPTOOLPY_FLASHFREQ_40M)
+    #define MM_FLASH_CLOCK ", 40 MHz"
+#elif defined(CONFIG_ESPTOOLPY_FLASHFREQ_32M)
+    #define MM_FLASH_CLOCK ", 32 MHz"
+#elif defined(CONFIG_ESPTOOLPY_FLASHFREQ_26M)
+    #define MM_FLASH_CLOCK ", 26 MHz"
+#elif defined(CONFIG_ESPTOOLPY_FLASHFREQ_20M)
+    #define MM_FLASH_CLOCK ", 20 MHz"
+#else
+    #define MM_FLASH_CLOCK ""
+#endif
+
 const char* flashMode() {
-    // Read from the cache's flash controller, so it reports what the bootloader set up rather than what this image was built for: a network update replaces the app and keeps the bootloader, and with it the mode.
-    if (bootloader_flash_is_octal_mode_enabled()) return "octal";
+    // The mode is read from the cache's flash controller, so it shows what the bootloader set up, which a network update keeps; the clock is the build's, as the PSRAM's is, since IDF has no runtime getter.
+    if (bootloader_flash_is_octal_mode_enabled()) return "octal" MM_FLASH_CLOCK;
     switch (bootloader_flash_get_spi_mode()) {
-        case ESP_ROM_SPIFLASH_QIO_MODE:    return "QIO";
-        case ESP_ROM_SPIFLASH_QOUT_MODE:   return "QOUT";
-        case ESP_ROM_SPIFLASH_DIO_MODE:    return "DIO";
-        case ESP_ROM_SPIFLASH_DOUT_MODE:   return "DOUT";
-        case ESP_ROM_SPIFLASH_FASTRD_MODE: return "fast read";
-        default:                           return "slow read";
+        case ESP_ROM_SPIFLASH_QIO_MODE:    return "QIO" MM_FLASH_CLOCK;
+        case ESP_ROM_SPIFLASH_QOUT_MODE:   return "QOUT" MM_FLASH_CLOCK;
+        case ESP_ROM_SPIFLASH_DIO_MODE:    return "DIO" MM_FLASH_CLOCK;
+        case ESP_ROM_SPIFLASH_DOUT_MODE:   return "DOUT" MM_FLASH_CLOCK;
+        case ESP_ROM_SPIFLASH_FASTRD_MODE: return "fast read" MM_FLASH_CLOCK;
+        default:                           return "slow read" MM_FLASH_CLOCK;
     }
 }
 

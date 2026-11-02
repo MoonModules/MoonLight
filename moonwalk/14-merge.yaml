@@ -129,7 +129,7 @@ processes:
         say: Report each finding as fixed or skipped.
         when: { manual: "One line per finding: flagged, then done or skipped, plus why. The commit message carries them under Reviews." }
         detail: |
-          The line goes into the draft commit message, `build/commit-message.md`, the moment the finding is processed, and the commit reads it (`git commit -F`). A conversation's summary and a new session both lose what was only said.
+          The commit message is written at commit time, so a finding is processed and committed in one session: a new session sees the diff, not what was only said.
   - id: pre-merge
     title: Run pre-merge, then merge
     actor: product-owner

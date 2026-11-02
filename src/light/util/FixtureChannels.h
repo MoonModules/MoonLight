@@ -18,7 +18,7 @@ namespace mm {
 ///
 /// ## Why an absent channel is safe
 ///
-/// An absent role's setters write nothing, so one moving-head effect steers a moving head and leaves an LED strip untouched; MoonLight's LightsHeader is the same idea, credited in the work archive.
+/// An absent role's setters write nothing, so one moving-head effect steers a moving head and leaves an LED strip untouched; the predecessor MoonLight's [LightsHeader](https://github.com/ewowi/MoonLight/blob/main/src/MoonLight/Layers/LightsHeader.h) is the same idea.
 ///
 /// ## Layer slots are not fixture channels
 ///

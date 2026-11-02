@@ -8,28 +8,34 @@
       "action": "open_card",
       "module": "File Manager",
       "caption": "A backup carries every setting, and Restore puts them back, on this device or another.",
-      "speech": 7.5
+      "speech": 7.1
     },
     {
       "action": "upload_file",
-      "selector": "button[title^='Restore config']",
+      "selector": "button[title^='Restore or clone config']",
       "file": "test/fixtures/backup-flat-2026-09-30.json",
       "caption": "Restore asks twice, so a click cannot overwrite anything by accident. This backup was made in September, before the config files changed shape.",
       "presses": 2,
-      "speech": 12.1
+      "speech": 12.3
+    },
+    {
+      "action": "click",
+      "selector": ".fw-overlay-box button:has-text('restore')",
+      "caption": "Then it asks what the backup is for. Restore puts this device back as it was; Clone makes it another device like the backup, keeping its own name and network.",
+      "speech": 13.3
     },
     {
       "action": "wait_for",
       "selector": ".fw-overlay-box h2",
       "text": "Restore complete",
       "caption": "The report lists what was renamed on the way, and anything that did not carry over.",
-      "speech": 7.2
+      "speech": 6.7
     },
     {
       "action": "click",
       "selector": ".fw-overlay-box button:has-text('close')",
       "caption": "Close the report, and look at the cards.",
-      "speech": 4.5
+      "speech": 4.3
     },
     {
       "action": "open_card",
@@ -51,7 +57,7 @@
         "control": "brightness",
         "value": 46
       },
-      "speech": 3.5
+      "speech": 3.7
     }
   ]
 }

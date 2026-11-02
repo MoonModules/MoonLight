@@ -24,21 +24,31 @@ CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
 # P4 chips already in the field (e.g. a v1.x P4-NANO): the bootloader rejects the
 # chip at startup. IDF gates the sub-v3 revisions behind SELECTS_REV_LESS_V3
 # (rev <3.0 and >=3.0 are "huge hardware difference", so a binary targets one or
-# the other, not both); enable it, then pin the minimum to v0 to run on any
-# pre-v3 P4. Revisit if/when the field moves to v3.x P4 silicon.
+# the other, not both); enable it, then pin the minimum to v1.0, the oldest silicon
+# on a board anyone runs (the v0.x engineering samples are left out, since IDF caps their
+# flash at 40 MHz).
 # ONE BINARY CANNOT COVER BOTH P4 GENERATIONS. IDF states it at the top of
 # esp_hw_support/port/esp32p4/Kconfig.hw_support: "Support of ESP32-P4 rev. <3.0 and
 # >=3.0 is mutually exclusive ... huge hardware difference ... not compatible". The
 # Kconfig enforces it structurally: REV_MIN_0/1/100 require SELECTS_REV_LESS_V3=y and
 # REV_MIN_300/301 require it =n, with the max clamped to 199 or 399. So this image
-# supports revisions 0.0 through 1.99 and will refuse to boot on a v3.x chip. v3.x is what a
+# supports revisions 1.0 through 1.99 and will refuse to boot on a v3.x chip. v3.x is what a
 # board bought today carries (Espressif calls v1.x "engineering samples" and does not recommend
 # it for new designs); this image exists for the v1.x boards already in the field and on our
 # bench, which is the only silicon we can test on. A v3.x board needs its own variant; those now
 # exist as esp32p4rev3-eth and esp32p4rev3-eth-wifi (sdkconfig.defaults.esp32p4rev3 layers
 # the revision over this file), not a flag flipped here.
 CONFIG_ESP32P4_SELECTS_REV_LESS_V3=y
-CONFIG_ESP32P4_REV_MIN_0=y
+CONFIG_ESP32P4_REV_MIN_100=y
+
+# Quad I/O flash at 80 MHz: code fetched from flash over two lines at 40 MHz (DIO, the IDF
+# default, and the 40 MHz IDF forces with a v0.x minimum) reads a quarter of what four lines
+# at 80 MHz do. The P4's flash has its own pins, so no board gives up a GPIO for it.
+CONFIG_ESPTOOLPY_FLASHMODE_QIO=y
+CONFIG_ESPTOOLPY_FLASHFREQ_80M=y
+# The second-stage bootloader sits under the 24 KB the 0x8000 partition offset leaves it, and QIO
+# support fills the last of that on the v3 build: at Warn it fits on every revision.
+CONFIG_BOOTLOADER_LOG_LEVEL_WARN=y
 
 # PSRAM (P4-NANO has 32 MB; the P4 uses a HEX/200 MHz PSRAM controller, not the
 # S3's octal mode). Round 1 makes no large allocations, so PSRAM is enabled for

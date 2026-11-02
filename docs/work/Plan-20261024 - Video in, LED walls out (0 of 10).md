@@ -4,7 +4,7 @@ Plan of 2026-10-24, a Feature, for approval. **Recommended (2026-10-25):** appro
 
 ## What exists
 
-- **The picture family** ([Streams plan](Plan-20261013%20-%20Streams%2C%20every%20frame%20from%20outside%20(11%20of%2013).md)): a source is a transport plus a decoder delivering RGB888 frames, and the Picture effect samples them per light. A live source paces itself and the newest frame wins.
+- **The picture family** ([streams design study](../design/streams.md)): a source is a transport plus a decoder delivering RGB888 frames, and the Picture effect samples them per light. A live source paces itself and the newest frame wins.
 - **The Picture service** (`PictureService.h`) has two sources, an enum: `test pattern` and `usb capture`. A capture source runs its own task, which awaits a frame, decodes it into the service's buffer and publishes it. `adding-a-stream-source.md` names "a source per file behind a small registry" as the next step.
 - **The capture seam** (`platform.h`, `videoCapture*`) is "decode into RGB888 at most this size". Only the P4 implements it, for a UVC grabber's MJPEG through the hardware JPEG decoder. The desktop has a stand-in that synthesizes frames for the tests; `usbvideo_frames.h` holds the shared mode pick, JPEG header parse and area shrink.
 - **No JPEG decoder on the desktop**, and no YUV conversion anywhere.
@@ -41,7 +41,7 @@ PipeWire is the Linux media graph: a camera, an application's video and a consum
 
 ### The browser, as a source and as an authoring tool
 
-The split follows the Streams plan's [browser and device](Plan-20261013%20-%20Streams%2C%20every%20frame%20from%20outside%20(11%20of%2013).md#browser-and-device) rule: what runs with no browser open belongs on the device, what happens once with a person at the screen belongs in the browser.
+The split follows the streams study's [browser and device](../design/streams.md#browser-and-device) rule: what runs with no browser open belongs on the device, what happens once with a person at the screen belongs in the browser.
 
 - **The browser as a picture source**, `browser`: a page draws a video file, a webcam or a shared screen (`getDisplayMedia`) onto a canvas at the picture's size and sends the RGB frames over the existing WebSocket into the service's pixels, as WLED streams a tab (DedeHai, PR #4997). A `<video>` element first, since it plays every file the browser does, and GIF frame by frame after it through `ImageDecoder`. About 7 KB a frame at 64x36, 200 KB/s at 30 fps. It needs no hardware, so every board tests the picture path with it.
 - **Converter and baking pages**: crop, scale and convert images and video to GIF, and bake a whole video into FSEQ for this layout ahead of time, sampled per light with the area filter in linear light, so the board plays it standalone through the FSEQ player. An hour is about 1.3 GB at 64x64 and 30 fps and 5.3 GB at 12,288 lights and 40 fps, so a baked movie travels on the SD card rather than over WiFi.
@@ -52,7 +52,7 @@ A picture source decoding GIF from flash or the SD card, one decoder per source 
 
 ### HDMI out on the ESP32-P4-PC
 
-HDMI out is the textbook way to feed commercial LED walls: Novastar and Colorlight sending cards take HDMI or DVI as their input. The Olimex ESP32-P4-PC (on the bench) has HDMI and MIPI-DSI out; a driver beside `NdiDriver` writes the rendered output to it as a picture, scaled to the mode the card asks for.
+HDMI out is the textbook way to feed commercial LED walls: Novastar and Colorlight sending cards take HDMI or DVI as their input. The Olimex ESP32-P4-PC (on the bench) has HDMI and MIPI-DSI out; a driver beside `NdiDriver` writes the rendered output to it as a picture, scaled to the mode the card asks for. Its shape, on Espressif's LT8912B component and the standard timings: [#223](https://github.com/MoonModules/MoonLight/issues/223).
 
 ### The video processor
 
@@ -85,7 +85,7 @@ Nothing new connects the ends: a picture source, the Picture effect on a layer, 
 7. ⏳ The browser as a picture source behind the registry: a video file, a webcam and a shared screen shown on every board, the frame rate and bandwidth measured.
 8. ⏳ GIF from flash and the SD card as a picture source, PPM as the decoder's test format; its RAM and flash measured on an S3 and a P4.
 9. ⏳ Browser pages: a converter to GIF, and a video baked into FSEQ for the layout and played by the FSEQ player.
-10. ⏳ HDMI out on the ESP32-P4-PC as a driver, shown on a Novastar or ColorLight sending card.
+10. ⏳ HDMI out on the ESP32-P4-PC as a driver, shown on a Novastar or ColorLight sending card: [#223](https://github.com/MoonModules/MoonLight/issues/223).
 
 ## Decisions (recommended)
 
@@ -101,7 +101,6 @@ Nothing new connects the ends: a picture source, the Picture effect on a layer, 
 - The Picture service's 512-pixel cap: a wall of 768x384 samples a 512-wide picture. Enough, or does the cap rise on boards with PSRAM? **Recommended (2026-10-25):** keep 512: sampling a 512-wide picture onto a 768x384 wall reads fine, and the cap rises on PSRAM boards when a wall needs it.
 - RTP/JPEG (RFC 2435) beside HTTP: only if a tester's source speaks nothing else.
 - How far video goes on a board without a hardware decoder: GIF and image sequences, or a software decoder measured in flash first.
-- How HDMI out is wired on the ESP32-P4-PC: its sources name HDMI and MIPI-DSI but no bridge chip; Olimex's separate P4 HDMI adapter uses Lontium's LT8912B (MIPI-DSI to HDMI, up to 1080p60), so check the schematic.
 
 ## What it removes
 

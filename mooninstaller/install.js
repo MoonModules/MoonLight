@@ -1360,6 +1360,7 @@ document.addEventListener('DOMContentLoaded', () => {
         WiFi:     m => /^(Network|Ethernet|WiFi)Module$/.test(m.type || ""),
         Audio:    m => /^Audio/.test(m.type || ""),
         MIDI:     m => m.type === "MidiService",
+        HDMI:     m => m.type === "HdmiDriver",
       };
       function capActive(b, cap) {
         const test = CAP_MODULE[cap];

@@ -579,32 +579,8 @@ def test_the_ratchet_refuses_a_rule_that_rose_against_the_committed_counts(monke
     # The labels the report writes ARE the keys the comparison uses, in both directions.
     assert check_docgen._rule_label(check_docgen._rule_name(block)) in base
 
-    # And what a run records is what the comparison reads: the labels, the total and the appendix.
-    assert check_docgen._counts([(cpp, block)] * 2, 7) == {"multi-line comment blocks": 2, "(total)": 2, "(appendix lines)": 7}
-
-
-def test_the_appendix_is_measured_from_technical_to_the_end_of_its_run():
-    """The appendix is what a file holds outside its code: every `///` line after `@technical`, up to the
-    first line that is not `///`. A lead without one measures zero, so a file with no appendix is not counted."""
-    import check_docgen
-    text = ("/// Lead.\n///\n/// @technical\n///\n/// ## Why\n///\n/// One fact.\n"
-            "#include <x>\n/// A member comment, not appendix.\nint x;\n")
-    assert check_docgen._appendix_lines(text) == 4
-    assert check_docgen._appendix_lines("/// Lead only.\nint x;\n") == 0
-    # A marker after the summary text opens the appendix too, as it does for the lead rules.
-    assert check_docgen._appendix_lines("/// Lead. @technical\n/// ## Why\n/// One fact.\nint x;\n") == 2
-
-
-def test_the_ratchet_refuses_an_appendix_that_grew(monkeypatch):
-    """Warnings that fall while the appendix grows were moved, not cut, so the appendix only shrinks too.
-    A baseline written before the number existed carries no row, and a first run must not fail on that."""
-    import check_docgen
-    monkeypatch.setattr(check_docgen, "_committed_counts", lambda: {"(total)": 10, "(appendix lines)": 100})
-    assert check_docgen._ratchet([], 100) == [], "held: silent"
-    assert check_docgen._ratchet([], 90) == [], "cut: silent"
-    assert check_docgen._ratchet([], 120) == [("(appendix lines)", 100, 120)]
-    monkeypatch.setattr(check_docgen, "_committed_counts", lambda: {"(total)": 10})
-    assert check_docgen._ratchet([], 120) == [], "no baseline yet: the first run records it"
+    # And what a run records is what the comparison reads: the labels and the total.
+    assert check_docgen._counts([(cpp, block)] * 2) == {"multi-line comment blocks": 2, "(total)": 2}
 
 
 def test_the_ratchet_catches_a_rule_the_baseline_never_had(monkeypatch):
@@ -1027,7 +1003,6 @@ def test_without_llvm_the_help_freshness_is_skipped_and_the_report_is_left_as_it
     written = []
     monkeypatch.setattr(check_docgen.ratchet, "record", lambda *a: written.append(a))
     monkeypatch.setattr(check_docgen, "_violations", lambda fresh: list(fresh))
-    monkeypatch.setattr(check_docgen, "_appendix_total", lambda: 0)
     monkeypatch.setattr(sys, "argv", ["check_docgen.py"])
     assert check_docgen.main() == 0, "the run's exit code reflects only the rules it measured"
     assert "SKIP help.json freshness: clang not found, so docgen.json is left as it is." in capsys.readouterr().out

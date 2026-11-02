@@ -1,0 +1,172 @@
+{
+  "name": "scenario_HdmiDriver_shows_the_layer_on_the_monitor",
+  "module": "HdmiDriver",
+  "mode": "mutate",
+  "instances": {
+    "Grid": "GridLayout",
+    "Hdmi": "HdmiDriver"
+  },
+  "also": [
+    "Layouts",
+    "GridLayout",
+    "Effects",
+    "Layer",
+    "NoiseEffect",
+    "Drivers"
+  ],
+  "live_only": true,
+  "description": "On a board with an HDMI bridge and a monitor on it (the Olimex ESP32-P4-PC on the bench): the output comes up in 1280x720, the monitor is seen on hot-plug and its EDID read, the status line names the layer's size and the mode, a layout resize follows without restarting the output, and a mode change, a disable and enable, and a delete and add each restart it and come back. Software can see this much; whether the monitor shows the picture rather than noise is the product owner's eyes, which is why the steps leave the output running at the end.",
+  "top": [
+    "Layouts",
+    "Effects",
+    "Drivers"
+  ],
+  "fixture": [
+    {
+      "name": "fix-grid",
+      "op": "apply_state",
+      "document": {
+        "Layouts": {
+          "Grid": {
+            "type": "GridLayout",
+            "width": 16,
+            "height": 16
+          }
+        }
+      }
+    },
+    {
+      "name": "fix-layer",
+      "op": "apply_state",
+      "document": {
+        "Effects": {
+          "Layer": {
+            "type": "Layer",
+            "FX": {
+              "type": "NoiseEffect"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "fix-hdmi",
+      "op": "apply_state",
+      "document": {
+        "Drivers": {
+          "Hdmi": {
+            "type": "HdmiDriver",
+            "mode": 2
+          }
+        }
+      }
+    }
+  ],
+  "steps": [
+    {
+      "name": "output-up-and-monitor-seen",
+      "description": "The bridge is set up, the monitor's hot-plug line is high, and the status line names the layer and the mode.",
+      "op": "expect_control",
+      "id": "Hdmi",
+      "key": "status",
+      "equals": "16x16 on 1280x720 60 Hz",
+      "within": 20
+    },
+    {
+      "name": "edid-read",
+      "description": "The monitor answered on DDC: its name and preferred size are on the card.",
+      "op": "expect_control",
+      "id": "Hdmi",
+      "key": "monitor",
+      "not_equals": "",
+      "within": 10,
+      "measure": true,
+      "settle": 5
+    },
+    {
+      "name": "resize-grid",
+      "op": "set_control",
+      "id": "Grid",
+      "key": "width",
+      "value": 32
+    },
+    {
+      "name": "status-follows-the-layer",
+      "description": "A resize re-prepares the driver in the same mode, which keeps the output running.",
+      "op": "expect_control",
+      "id": "Hdmi",
+      "key": "status",
+      "equals": "32x16 on 1280x720 60 Hz",
+      "within": 5,
+      "measure": true
+    },
+    {
+      "name": "mode-800x600",
+      "op": "set_control",
+      "id": "Hdmi",
+      "key": "mode",
+      "value": 0
+    },
+    {
+      "name": "output-restarts-in-the-new-mode",
+      "op": "expect_control",
+      "id": "Hdmi",
+      "key": "status",
+      "equals": "32x16 on 800x600 60 Hz",
+      "within": 20
+    },
+    {
+      "name": "disable",
+      "op": "set_control",
+      "id": "Hdmi",
+      "key": "enabled",
+      "value": false
+    },
+    {
+      "name": "enable",
+      "op": "set_control",
+      "id": "Hdmi",
+      "key": "enabled",
+      "value": true
+    },
+    {
+      "name": "enabled-output-comes-back",
+      "op": "expect_control",
+      "id": "Hdmi",
+      "key": "status",
+      "equals": "32x16 on 800x600 60 Hz",
+      "within": 20
+    },
+    {
+      "name": "delete",
+      "op": "apply_state",
+      "document": {
+        "Drivers": {
+          "$patch": "replace"
+        }
+      }
+    },
+    {
+      "name": "add-again",
+      "op": "apply_state",
+      "document": {
+        "Drivers": {
+          "Hdmi": {
+            "type": "HdmiDriver"
+          }
+        }
+      }
+    },
+    {
+      "name": "added-output-comes-back",
+      "description": "A new driver starts in the default mode.",
+      "op": "expect_control",
+      "id": "Hdmi",
+      "key": "status",
+      "equals": "32x16 on 1280x720 60 Hz",
+      "within": 20,
+      "measure": true,
+      "settle": 5
+    }
+  ]
+}

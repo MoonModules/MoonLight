@@ -31,7 +31,7 @@ public:
     /// The sources `source` picks from, in option order.
     enum Source : uint8_t { kTestPattern, kUsbCapture, kSourceCount };
     /// Where the picture comes from.
-    /// @guide The test pattern is a test card in the layout of Philips' PM5544, drawn at any size. With **usb capture**, MJPEG from an HDMI grabber fills the picture at its set size.
+    /// @guide The test pattern is a test card in the layout of Philips' PM5544, drawn at any size. With **usb capture**, MJPEG from an HDMI grabber fills the picture; the status names the grabber's mode.
     uint8_t source = kTestPattern;
     /// Frames a second asked of a capture device, which streams the nearest rate it offers.
     uint8_t fps = 30;
@@ -168,9 +168,11 @@ public:
         if (skipped) mm::formatTo(skipText, sizeof(skipText), ", %u skipped", static_cast<unsigned>(skipped));
         mm::formatTo(tail, sizeof(tail), "%s%s%s", skipText, failed ? ", frames failing" : "",
                      one ? ", one picture" : "");
-        if (used) mm::formatTo(status_, sizeof(status_), "live, %u x %u at %u fps%s", w, h,
+        char from[24] = {};   // the grabber's own mode, which the picture is scaled down from
+        if (st.stream.width) mm::formatTo(from, sizeof(from), " from %ux%u", static_cast<unsigned>(st.stream.width), static_cast<unsigned>(st.stream.height));
+        if (used) mm::formatTo(status_, sizeof(status_), "live, %u x %u%s at %u fps%s", w, h, from,
                                static_cast<unsigned>(used), tail);
-        else mm::formatTo(status_, sizeof(status_), "no frames, %u x %u%s", w, h, tail);
+        else mm::formatTo(status_, sizeof(status_), "no frames, %u x %u%s%s", w, h, from, tail);
         setStatus(status_, failed || one || !used ? Severity::Warning : Severity::Status);
     }
 

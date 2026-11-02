@@ -1131,9 +1131,7 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
                 while True:
                     read_error = None
                     try:
-                        mod = client.get(_mod_path(mod_id))
-                        got = next((c.get("value") for c in (mod.get("controls") or [])
-                                    if c.get("name") == key), None)
+                        got = _control_value(client.get(_mod_path(mod_id)), key)   # a control, or the module's own `status` or `enabled`
                     except Exception as ce:
                         got, read_error = None, ce
                     holds = got is not None and ((_as_written(got) != want) if negated else (_as_written(got) == want))
@@ -1562,16 +1560,16 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
             except Exception:
                 pass
 
-        # Restore: each container's document as it was, which removes, re-creates and re-types until the tree is the one the run started with.
+        # The controls it wrote, put back first: a control's prior value is read at its first write, after the fixture's canvas, so inside a snapshot container it is the fixture's value.
+        put_back = _restore_controls(client, prior_controls)
+        if put_back:
+            print(f"  restored {put_back} control(s) the scenario had set")
+        # Then each container's document as it was, last since it holds every value of its tree: it removes, re-creates and re-types until the tree is the one the run started with.
         for doc in snapshot_docs:
             try:
                 client.patch("/api/state", doc)
             except Exception as e:
                 print(f"  WARN: couldn't restore {next(iter(doc), '?')}: {e}")
-        # And the controls it wrote, after the tree, so a module the restore re-created takes its values.
-        put_back = _restore_controls(client, prior_controls)
-        if put_back:
-            print(f"  restored {put_back} control(s) the scenario had set")
         # And the files it created that no step removed, after the controls, so nothing still selects a file as it goes.
         for path_ in created_files:
             try:

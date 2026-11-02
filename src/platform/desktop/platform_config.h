@@ -83,6 +83,10 @@ constexpr bool hasNdi = true;
 
 /// True: the host streams H.264 by piping frames to the ffmpeg on PATH, a dependency of the user's.
 constexpr bool hasHls = true;
+/// True: Linux drives a card's HDMI port through DRM/KMS, and macOS and Windows cover a second display with a full-screen window.
+constexpr bool hasHdmi = true;
+/// False: a desktop's display has no bridge chip to read back, so the driver hides its readout.
+constexpr bool hasHdmiBridge = false;
 
 /// True: ffmpeg encodes the elementary stream and MoonLight's own RTSP server ships it.
 constexpr bool hasRtsp = true;

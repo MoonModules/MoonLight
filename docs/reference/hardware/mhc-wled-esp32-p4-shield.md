@@ -93,4 +93,4 @@ The loopback self-test drives a WS2812 frame out one pin and reads it back on a 
 
 ## Cross-reference
 
-Chip-level GPIO constraints (straps, flash/PSRAM) for the P4 are in [gpio-usage.md § ESP32-P4](gpio-usage.md#esp32-p4); the sections here are the *board* wiring. The catalog entry is [`mooninstaller/deviceModels.json`](../../mooninstaller/deviceModels.json) (`MHC-WLED ESP32-P4 shield`). RS-485 / DMX-512 as a first-class MoonLight output is tracked in the [RS-485 / DMX-512 wired-output backlog item](https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287080691).
+Chip-level GPIO constraints (straps, flash/PSRAM) for the P4 are in [gpio-usage.md § ESP32-P4](gpio-usage.md#esp32-p4); the sections here are the *board* wiring. The catalog entry is [`mooninstaller/deviceModels.json`](../../mooninstaller/deviceModels.json) (`MHC-WLED ESP32-P4 shield`). RS-485 / DMX-512 as a first-class MoonLight output is tracked in the [RS-485 / DMX-512 wired-output backlog item](https://github.com/MoonModules/MoonLight/issues/219).

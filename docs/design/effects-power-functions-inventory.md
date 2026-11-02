@@ -1,6 +1,6 @@
 # Effects on the power functions, an inventory
 
-One row per effect in the tree on 2026-09-03 (58), recording what each uses and which power functions it could run on, all of them in [power-functions.md](../moonmodules/light/power-functions.md): gradient noise, `PolarLut`, `Oscillators`, `advect` and the velocity rules, `decay`, `lineAA` and `disc` among them. It is the input for [the catalog sweep](https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287081620), under [the migration rule](../moonmodules/light/power-functions.md#migrating-an-effect). A rewritten effect's row is deleted, not ticked.
+One row per effect in the tree on 2026-09-03 (58), recording what each uses and which power functions it could run on, all of them in [power-functions.md](../moonmodules/light/power-functions.md): gradient noise, `PolarLut`, `Oscillators`, `advect` and the velocity rules, `decay`, `lineAA` and `disc` among them. It is the input for [the catalog sweep](https://github.com/MoonModules/MoonLight/issues/221), under [the migration rule](../moonmodules/light/power-functions.md#migrating-an-effect). A rewritten effect's row is deleted, not ticked.
 
 **Kind.** N = natural motion (physics, fields, noise, trails, rotation, oscillation): rewritten on the kernels. A = algorithmic (a rule set or a game is the effect): keeps its logic, draws through the library. M = audio meter (bars, levels, spectra): the geometry and ballistics rows apply. U = utility or test: no rewrite owed. Anything in doubt is N.
 

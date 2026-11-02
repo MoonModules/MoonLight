@@ -9,6 +9,13 @@
 #include <ctime>
 #include <cstring>
 
+#include "stop_signal.h"   // stopOnSigterm
+#ifdef MM_MAC_SCREEN
+#include <atomic>
+#include <thread>
+#include "main_thread.h"   // runMainThread
+#endif
+
 #ifdef _WIN32
 #include <io.h>      // _write
 #else
@@ -162,11 +169,8 @@ int main(int argc, char** argv) {
     saInt.sa_flags = SA_RESETHAND;
     sigaction(SIGINT, &saInt, nullptr);
 
-    // SIGTERM is how systemd, Docker and kill stop a service: the same clean stop, so a HUB75 panel goes dark rather than freezing lit. Not one-shot: a second one would cut the stop short, and a service manager escalates to SIGKILL itself.
-    struct sigaction saTerm{};
-    saTerm.sa_handler = [](int) { running = 0; };
-    sigemptyset(&saTerm.sa_mask);
-    sigaction(SIGTERM, &saTerm, nullptr);
+    // The same clean stop for a service manager, so a HUB75 panel goes dark rather than freezing lit.
+    mm::platform::stopOnSigterm(running);
 
     // Ignore SIGPIPE, write() on a closed TCP connection delivers it by default, which kills the process silently (no crash report) when a browser tab closes mid-response. We handle broken writes via return-value checks instead.
     signal(SIGPIPE, SIG_IGN);
@@ -183,7 +187,15 @@ int main(int argc, char** argv) {
 
     if (openBrowser) openLocalUi(httpPort);
 
+#ifdef MM_MAC_SCREEN
+    // AppKit serves windows only on the main thread, which the HDMI output's window needs, so MoonLight's loop runs on a thread of its own here.
+    std::atomic<bool> appDone{false};   // the loop's own flag, so no thread but a signal handler writes `running`
+    std::thread app([httpPort, &appDone] { mm_main(running, httpPort); appDone.store(true); });
+    mm::platform::runMainThread(appDone);
+    app.join();
+#else
     mm_main(running, httpPort);
+#endif
 
     cleanExit = true;
     isoTimestamp(tbuf, sizeof(tbuf));
