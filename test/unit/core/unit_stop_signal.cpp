@@ -1,3 +1,5 @@
+/// @module platform
+
 /// SIGTERM, the stop systemd, Docker and kill send, clears the flag the main loop watches, as Ctrl+C does.
 
 #include "doctest.h"

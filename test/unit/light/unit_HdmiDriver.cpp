@@ -91,7 +91,7 @@ TEST_CASE("HdmiDriver shows a GRB profile's colors in screen order") {
 
 TEST_CASE("HdmiDriver stretches when scaling is set to stretch") {
     Bench b;
-    b.driver.scaling = 1;
+    b.driver.scaling = mm::HdmiDriver::kScalingStretch;
     b.driver.prepare();
     mm::platform::setTestNowMs(1000);
     b.driver.tick();

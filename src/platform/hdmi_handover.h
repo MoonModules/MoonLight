@@ -60,14 +60,14 @@ public:
         const uint32_t before = seq_.load(std::memory_order_acquire);
         if (before & 1) return false;
         out = value_;
-        std::atomic_thread_fence(std::memory_order_acquire);   // the copy's loads complete before the count is read again
-        return seq_.load(std::memory_order_relaxed) == before;
+        // A read-don't-modify-write orders the copy before the second look at the count, as a fence would, and thread sanitizers accept it: Boehm's seqlock reader.
+        return seq_.fetch_add(0, std::memory_order_release) == before;
     }
     /// The writer's own view, which no write can tear since only the writer writes.
     const T& written() const MM_NONBLOCKING { return value_; }
 
 private:
-    std::atomic<uint32_t> seq_{0};
+    mutable std::atomic<uint32_t> seq_{0};   // mutable: a reader's read-don't-modify-write changes nothing it can see
     T value_{};
 };
 

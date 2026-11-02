@@ -6,7 +6,6 @@
 #include <new>      // std::nothrow_t, for InternalRamObject's allocation
 #include "platform_config.h"  // hasOta / hasPsram / …: flags this header's contract refers to
 #include "nonblocking.h"      // MM_NONBLOCKING, which every declaration below carries
-#include "edid.h"             // edid::Monitor, what the HDMI seam reports about the monitor
 
 /// The one interface every module reaches hardware through, so the same source drives an ESP32, a Teensy, a Raspberry Pi and a desktop.
 ///
@@ -48,6 +47,7 @@
   #define MM_PRINTF_FORMAT(fmt_arg, va_arg)
 #endif
 
+namespace mm::edid { struct Monitor; }   // what the HDMI seam reports about the monitor; edid.h defines it for the code that reads it
 
 namespace mm::platform {
 

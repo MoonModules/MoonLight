@@ -50,7 +50,7 @@ Source: [platform.h](../../../src/platform/platform.h)
 
 ## Video output
 
-NDI and HLS. Present where the target can carry them and absent elsewhere, which a module discovers by asking rather than by target.
+NDI, HLS, RTSP and HDMI. Present where the target can carry them and absent elsewhere, which a module discovers by asking rather than by target. HDMI hands a frame to the display and reads back the monitor: its hot-plug, its EDID and the mode it runs. An ESP32-P4 drives an LT8912B bridge; a computer drives its own display.
 
 Source: [platform.h](../../../src/platform/platform.h)
 

@@ -1245,8 +1245,6 @@ def _ratchet(found) -> list:
     base = _committed_counts()
     if base is None:
         return []
-    # The appendix is budgeted per section by the rules above, never as a total: a total refuses every new file's appendix.
-    base = {k: v for k, v in base.items() if k != "(appendix lines)"}
     return ratchet.risen(base, _counts(found))
 
 

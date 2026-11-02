@@ -583,14 +583,6 @@ def test_the_ratchet_refuses_a_rule_that_rose_against_the_committed_counts(monke
     assert check_docgen._counts([(cpp, block)] * 2) == {"multi-line comment blocks": 2, "(total)": 2}
 
 
-def test_the_ratchet_leaves_the_appendix_total_alone(monkeypatch):
-    """The appendix is budgeted per section, never as a total, since a total refuses every new file's appendix.
-    A baseline written while the total was a row still carries it, and the comparison skips it."""
-    import check_docgen
-    monkeypatch.setattr(check_docgen, "_committed_counts", lambda: {"(total)": 10, "(appendix lines)": 100})
-    assert check_docgen._ratchet([]) == []
-
-
 def test_the_ratchet_catches_a_rule_the_baseline_never_had(monkeypatch):
     """A rule at zero is ABSENT from the report, so the baseline has no row for it. Iterating the
     baseline alone let such a rule rise silently while the total fell, which is the same hole the

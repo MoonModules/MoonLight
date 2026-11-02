@@ -3513,7 +3513,7 @@
      ]
     },
     "scaling": {
-     "line": "0 fit, 1 stretch: fit keeps the grid's shape with black bars, stretch fills the screen."
+     "line": "Fit keeps the grid's shape with black bars, stretch fills the screen."
     },
     "fps": {
      "line": "Frame-rate ceiling; the screen refreshes on its own."

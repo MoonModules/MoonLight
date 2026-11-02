@@ -1,8 +1,10 @@
 #pragma once
 #include "core/module/Control.h"
+#include "core/module/Scheduler.h"   // requestPrepare: a refused output is opened again
 #include "core/util/ScratchBuffer.h"
 #include "core/util/format.h"   // formatTo: the monitor line, written once a second without blocking
 #include "light/drivers/DriverBase.h"
+#include "platform/edid.h"   // edid::Monitor, the monitor readout
 #include "platform/platform.h"
 
 #include <cstdio>
@@ -60,7 +62,7 @@ public:
         }
         if (mode >= modeCount_) mode = modeCount_ > kDefaultMode ? kDefaultMode : 0;
         controls_.addSelect("mode", mode, modeOptions_, modeCount_);
-        controls_.addSelect("scaling", scaling, kScalingOptions, 2);
+        controls_.addSelect("scaling", scaling, kScalingOptions, kScalingCount);
         controls_.addControl("fps", fps, 1, 60);
         /// What the monitor says of itself in its EDID: name, preferred size, a mode it lacks.
         controls_.addReadOnly("monitor", monitorStr_, sizeof(monitorStr_));
@@ -129,7 +131,14 @@ public:
     /// Follow the monitor coming and going, its EDID arriving, and the bridge's state.
     void tick1s() MM_NONBLOCKING override {
         DriverBase::tick1s();
-        if (!open_) return;
+        if (!open_) {
+            // Refused while a slow bring-up still unwinds, or before the display's card is there: tried again, not left as the board's verdict.
+            if (layer_ && ++retryIn_ >= kRetrySeconds) {
+                retryIn_ = 0;
+                if (Scheduler* s = Scheduler::instance()) s->requestPrepare(this);
+            }
+            return;
+        }
         edid::Monitor m;
         const bool read = platform::hdmiMonitor(m);
         platform::HdmiMode a{};
@@ -156,20 +165,23 @@ public:
         uint8_t* dst = &rgb_[0];
         correctFrameToRgb(sourceBuffer_->data(), srcCh, dst, n);   // corrected like every other driver, so the screen shows what the wall shows
         if (n < want) std::memset(dst + static_cast<size_t>(n) * 3, 0, static_cast<size_t>(want - n) * 3);
-        platform::hdmiWrite(dst, static_cast<uint16_t>(width_), static_cast<uint16_t>(height_), scaling == 0);
+        platform::hdmiWrite(dst, static_cast<uint16_t>(width_), static_cast<uint16_t>(height_), scaling == kScalingFit);
     }
 
     /// The screen mode; 1280x720 suits a 1080p monitor, which scales it by exactly 1.5.
     uint8_t mode    = kDefaultMode;
-    /// 0 fit, 1 stretch: fit keeps the grid's shape with black bars, stretch fills the screen.
-    uint8_t scaling = 0;
+    /// The ways `scaling` places the layer, in option order.
+    enum Scaling : uint8_t { kScalingFit, kScalingStretch, kScalingCount };
+    /// Fit keeps the grid's shape with black bars, stretch fills the screen.
+    uint8_t scaling = kScalingFit;
     /// Frame-rate ceiling; the screen refreshes on its own.
     uint8_t fps     = 30;
 
 private:
     static constexpr uint8_t kMaxModes = 8;
     static constexpr uint8_t kDefaultMode = 2;   // 1280x720 at 60 Hz in the platform's list
-    static constexpr const char* kScalingOptions[2] = {"fit", "stretch"};
+    static constexpr uint8_t kRetrySeconds = 5;  // between tries to open a refused output
+    static constexpr const char* kScalingOptions[kScalingCount] = {"fit", "stretch"};
 
     /// The status for the link's state now: the line prepare() formatted while a monitor is connected, a warning when that monitor does not list the mode.
     void writeStatus() MM_NONBLOCKING {
@@ -229,6 +241,7 @@ private:
     edid::Monitor monitor_;     ///< the monitor the readout describes
     bool           monitorRead_ = false;  ///< whether monitor_ holds a read EDID
     uint32_t       lastSendMs_ = 0;
+    uint8_t        retryIn_ = 0;          ///< seconds since the output was last refused
     uint8_t        modeCount_ = 0;
     char           modeNames_[kMaxModes][20]{};
     const char*    modeOptions_[kMaxModes]{};

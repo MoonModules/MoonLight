@@ -105,9 +105,10 @@ public:
         setStatus(statusBuf_, Severity::Status);
     }
 
-    /// Close the sender, so the source stops being advertised.
+    /// Close the sender, so the source stops being advertised, and free the staging with it.
     void release() override {
         if (open_) { platform::ndiSenderClose(); open_ = false; }
+        DriverBase::release();
     }
 
     /// Send a corrected frame to the NDI receivers, at most `fps` times a second.

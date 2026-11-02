@@ -2,8 +2,6 @@
 
 #include "light/effects/EffectBase.h"
 
-#include <algorithm>   // std::min
-
 namespace mm {
 
 /// The 16 mic frequency bands spread across X, each column lit bottom-up by its magnitude.

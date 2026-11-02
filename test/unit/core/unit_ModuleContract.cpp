@@ -33,7 +33,6 @@ const std::vector<Known> kKeepsMemory = {
     {"Effects", "its Layer keeps the pixel buffer while disabled"},
     {"Layer", "its pixel buffer_ is a plain Buffer that release() does not free"},
     {"Drivers", "outputBuffer_ is a plain Buffer that release() does not free"},
-    {"NdiDriver", "release() is overridden without chaining to the base, so the rgb_ and lightScratch_ scratch buffers stay, where the NDI library loads and the buffers exist", true},
 };
 
 // Types whose enabled flag does not gate them, which the lifecycle then cannot switch off.
@@ -56,7 +55,6 @@ const std::vector<Known> kHoldsAllocation = {
     {"RandomMapModifier", "the permutation is taken with a raw platform::alloc and freed only in the destructor"},
     {"NetworkSendDriver", "corrected_ is a plain Buffer, outside the scratch list that release() frees"},
     {"PanelCardDriver", "corrected_ is a plain Buffer, outside the scratch list that release() frees"},
-    {"NdiDriver", "release() is overridden without chaining to the base, so its scratch buffers stay, where the NDI library loads and the buffers exist", true},
 };
 
 // Types leaving an allocation behind once removed.

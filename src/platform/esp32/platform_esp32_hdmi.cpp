@@ -123,8 +123,9 @@ struct Hdmi {
     Seqlock<MonitorReport> monitor;
     std::atomic<uint16_t> dds{0};    // the synthesizer read-back as last read, 0 before the first
     std::atomic<uint32_t> sync{0};   // the measured sync, v in the high half and h in the low
-    // The frame the tick hands over.
+    // The frame the tick hands over, grown by the task so the tick never allocates.
     FrameSlot slot;
+    std::atomic<size_t> frameWant{0};
     uint8_t* frame = nullptr;
     size_t frameCap = 0;
     uint16_t frameW = 0, frameH = 0;
@@ -350,6 +351,17 @@ void pollHotPlug(Poll& p) {
     g.link.store(static_cast<uint8_t>(p.up && hpd == 1 ? HdmiLink::Monitor : HdmiLink::NoMonitor));
 }
 
+// Grow the frame to what the tick last asked for, while the tick cannot be writing it: the PPA reads it by DMA, so cache-line aligned.
+void growFrame() {
+    const size_t want = g.frameWant.load(std::memory_order_relaxed);
+    if (want <= g.frameCap || !g.slot.claimIdle()) return;
+    heap_caps_free(g.frame);
+    g.frameCap = (want + 127) & ~size_t(127);
+    g.frame = static_cast<uint8_t*>(heap_caps_aligned_alloc(128, g.frameCap, MALLOC_CAP_SPIRAM | MALLOC_CAP_DMA));
+    if (!g.frame) g.frameCap = 0;   // the tick keeps asking; a smaller layer fits again
+    g.slot.release();
+}
+
 void hdmiTask(void*) {
     Poll p;
     p.up = bringUpPanel();
@@ -359,6 +371,7 @@ void hdmiTask(void*) {
         if (!g.run.load()) break;
         const TickType_t now = xTaskGetTickCount();
         if (now - lastPoll >= pdMS_TO_TICKS(kHotPlugPollMs)) { lastPoll = now; pollHotPlug(p); }
+        growFrame();
         if (p.up && g.slot.claimShow()) { show(); g.slot.release(); }
     }
     tearDownPanel();
@@ -389,6 +402,7 @@ bool hdmiOpen(uint8_t index) {
     static bool shutdownRegistered = false;   // before a software restart, as a chip reset leaves it: @xref{closing-releases-everything|closing}
     if (!shutdownRegistered) shutdownRegistered = esp_register_shutdown_handler(hdmiClose) == ESP_OK;
     g.mode = index;
+    g.frameWant.store(0, std::memory_order_relaxed);
     g.slot.release();
     g.link.store(static_cast<uint8_t>(HdmiLink::NoMonitor));
     g.run.store(true);
@@ -412,6 +426,7 @@ void hdmiClose() {
         if (!g.exited.load()) return;   // still running: it keeps what it uses, and the next close frees it
         g.task = nullptr;
     }
+    while (!g.slot.claimUnlessWriting()) vTaskDelay(1);   // a write in flight is one memcpy; the slot then stays taken until the next open
     heap_caps_free(g.frame);
     g.frame = nullptr;
     g.frameCap = 0;
@@ -423,11 +438,10 @@ bool hdmiWrite(const uint8_t* rgb, uint16_t w, uint16_t h, bool fit) MM_NONBLOCK
     if (!rgb || w == 0 || h == 0 || !g.run.load() || !g.slot.claimWrite()) return false;
     const size_t bytes = static_cast<size_t>(w) * h * 3;
     if (bytes > g.frameCap) {
-        // Grown only, on the first frame of a larger layer: the PPA reads it by DMA, so cache-line aligned.
-        heap_caps_free(g.frame);
-        g.frameCap = (bytes + 127) & ~size_t(127);
-        g.frame = static_cast<uint8_t*>(heap_caps_aligned_alloc(128, g.frameCap, MALLOC_CAP_SPIRAM | MALLOC_CAP_DMA));
-        if (!g.frame) { g.frameCap = 0; g.slot.release(); return false; }
+        g.frameWant.store(bytes, std::memory_order_relaxed);   // the task grows it; this frame is dropped
+        g.slot.release();
+        if (g.task) xTaskNotifyGive(g.task);
+        return false;
     }
     std::memcpy(g.frame, rgb, bytes);
     g.frameW = w;
