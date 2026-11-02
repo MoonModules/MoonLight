@@ -15,9 +15,10 @@
 #include <unistd.h>
 #endif
 
-extern void mm_main(volatile bool& keepRunning, uint16_t httpPort);
+extern void mm_main(volatile std::sig_atomic_t& keepRunning, uint16_t httpPort);
 
-static volatile bool running = true;
+// sig_atomic_t: the one type a signal handler may write and the main thread read.
+static volatile std::sig_atomic_t running = 1;
 static bool cleanExit = false;
 
 // Write a string literal to the error stream from a signal handler, its length taken from the array bound so it can never drift from the text.
@@ -56,9 +57,7 @@ static void crashHandler(int sig) {
     raise(sig);
 }
 
-// Local time as an ISO-8601 stamp, thread-safely.
-// `std::localtime` returns a pointer to a SHARED static tm, so two threads formatting a timestamp can each see the other's value, flagged independently by clang-tidy (concurrency-mt-unsafe) and CodeQL (critical).
-// The reentrant form is spelled differently per platform, hence the branch.
+// Local time as an ISO-8601 stamp, thread-safely: `std::localtime` shares one static tm across threads (clang-tidy concurrency-mt-unsafe, CodeQL critical), and the reentrant form is spelled per platform, hence the branch.
 static void isoTimestamp(char* out, size_t n) {
     const std::time_t t = std::time(nullptr);
     std::tm tm{};
@@ -80,9 +79,7 @@ static void atExitHandler() {
     }
 }
 
-// Show the interface the moment the server is up, since a user launching from a file manager has no terminal to read an address out of.
-// And typing one is exactly the step that loses someone on a first run.
-// Best effort, a failure being silent because the banner already printed the address and a missing browser must not stop the server; a flag opts out for a headless box.
+// Open the interface once the server is up, since a user launched from a file manager has no terminal to read an address from; best effort, as the banner printed it, and a flag opts out for a headless box.
 static void openLocalUi(uint16_t port) {
     char url[64];
     std::snprintf(url, sizeof(url), "http://localhost:%u/", static_cast<unsigned>(port));
@@ -94,7 +91,7 @@ static void openLocalUi(uint16_t port) {
 #else
     std::snprintf(cmd, sizeof(cmd), "xdg-open \"%s\" >/dev/null 2>&1 &", url);
 #endif
-    // Degrade visibly: a box with no xdg-open (the headless case --no-browser exists for) would otherwise do nothing at all, leaving the user waiting for a window that is never coming. The URL is already on stdout above, so this only has to say the auto-open failed.
+    // Degrade visibly: a box without xdg-open, the headless case --no-browser is for, would leave the user waiting for a window; the URL is already on stdout, so this says only that the auto-open failed.
     if (std::system(cmd) != 0) {
         std::printf("  (could not open a browser automatically, open %s yourself)\n", url);
     }
@@ -138,12 +135,12 @@ int main(int argc, char** argv) {
 #ifdef _WIN32
     // Winsock is initialized by a static RAII guard in platform_desktop.cpp, so it covers test binaries too (they link mm_platform but have their own main()). Nothing to do here.
 
-    // Windows has no sigaction, use signal() with one-shot semantics (the handler is restored to SIG_DFL on entry, so re-raise produces the OS crash dialog). No SIGPIPE on Windows; broken socket writes return an error from send(), which the code already checks.
+    // Windows has no sigaction: signal() is one-shot, restoring SIG_DFL on entry so a re-raise shows the OS crash dialog. No SIGPIPE there; a broken socket write returns an error from send(), which the code checks.
     signal(SIGSEGV, crashHandler);
     signal(SIGFPE,  crashHandler);
     signal(SIGABRT, crashHandler);
     // signal() is one-shot on Windows, so the handler is already reset after the first Ctrl+C and a second one force-quits: the same escalation SA_RESETHAND gives the POSIX branch below.
-    signal(SIGINT,  [](int) { running = false; });
+    signal(SIGINT,  [](int) { running = 0; });
 #else
     struct sigaction sa{};
     sa.sa_handler = crashHandler;
@@ -154,16 +151,22 @@ int main(int argc, char** argv) {
     sigaction(SIGBUS,  &sa, nullptr);
     sigaction(SIGABRT, &sa, nullptr);
 
-    // The first interrupt asks for a clean stop and restores the default handler, so a second one kills the process outright. Without that a wedged shutdown leaves the key doing nothing however many times it is pressed, and the only way out is another terminal.
+    // The first interrupt asks for a clean stop and restores the default handler, so a second kills a wedged shutdown outright rather than leaving the key dead and another terminal the only way out.
     struct sigaction saInt{};
     saInt.sa_handler = [](int) {
-        running = false;
+        running = 0;
         // Say so, because the first press otherwise looks ignored while teardown runs. safeWrite, not printf: only async-signal-safe calls are legal in a handler.
         safeWrite("\nStopping. Press Ctrl+C again to force quit.\n");
     };
     sigemptyset(&saInt.sa_mask);
     saInt.sa_flags = SA_RESETHAND;
     sigaction(SIGINT, &saInt, nullptr);
+
+    // SIGTERM is how systemd, Docker and kill stop a service: the same clean stop, so a HUB75 panel goes dark rather than freezing lit. Not one-shot: a second one would cut the stop short, and a service manager escalates to SIGKILL itself.
+    struct sigaction saTerm{};
+    saTerm.sa_handler = [](int) { running = 0; };
+    sigemptyset(&saTerm.sa_mask);
+    sigaction(SIGTERM, &saTerm, nullptr);
 
     // Ignore SIGPIPE, write() on a closed TCP connection delivers it by default, which kills the process silently (no crash report) when a browser tab closes mid-response. We handle broken writes via return-value checks instead.
     signal(SIGPIPE, SIG_IGN);
@@ -173,9 +176,7 @@ int main(int argc, char** argv) {
 
     char tbuf[32];
     isoTimestamp(tbuf, sizeof(tbuf));
-    // The banner, then the URL, then how to stop.
-    // This window IS the app on a desktop: there is no tray icon and no GUI, so it has to say what it is and how to end it.
-    // The tick lines that follow print for the first 60 s and then go quiet unless the log level asks for them, so this stays readable once the machine settles.
+    // The banner, the URL, then how to stop: this window is the app on a desktop, with no tray icon or GUI, and the tick lines below print for the first 60 s, then go quiet unless the log level asks.
     std::printf("MoonLight started at %s\n", tbuf);
     std::printf("\n  MoonLight is running: http://localhost:%u/\n", static_cast<unsigned>(httpPort));
     std::printf("  Close this window (or press Ctrl-C) to stop.\n\n");

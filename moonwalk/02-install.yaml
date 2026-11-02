@@ -442,7 +442,7 @@ processes:
         say: Check the service runs.
         when: { run: { command: "systemctl status moonlight" } }
         detail: |
-          To stop the board cleanly later: `sudo shutdown now`, since an SD card cut off mid-write can corrupt the filesystem. The service comes back at the next boot.
+          `sudo systemctl stop moonlight` stops MoonLight cleanly, its drivers releasing their outputs. To stop the board: `sudo shutdown now`, since an SD card cut off mid-write can corrupt the filesystem. The service comes back at the next boot.
   - id: container-overlay-root
     title: Start the container on an overlay root
     actor: user

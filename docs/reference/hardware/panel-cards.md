@@ -8,7 +8,7 @@ You bought a panel receiving card, most likely a **ColorLight** one, the family 
 
 ## 1. What you actually bought
 
-An LED wall is normally driven by two boxes. A **sending card** (a PCI-E board in a PC, or a standalone unit) takes video in and puts a specialised signal on Ethernet. A **receiving card** sits in each cabinet, decodes that signal, and drives the panels over HUB75 ribbon cables. The card you bought is a receiving card.
+An LED wall is normally driven by two boxes. A **sending card** (a PCI-E board in a PC, or a standalone unit) takes video in and puts a specialized signal on Ethernet. A **receiving card** sits in each cabinet, decodes that signal, and drives the panels over HUB75 ribbon cables. The card you bought is a receiving card.
 
 **MoonLight takes the sending card's place.** The board renders the effect and emits the frames itself, so there is no PC in the installation and no sending card to buy.
 
@@ -24,7 +24,7 @@ Supported: **ColorLight 5A-75** (5A-75B and 5A-75E use the same wire format).
 
 | Part | Notes |
 |---|---|
-| ColorLight 5A-75 receiving card | The one this guide is about |
+| ColorLight 5A-75 receiving card | The 5A-75B or 5A-75E |
 | HUB75 panels | Any size; you tell MoonLight the geometry later |
 | 5 V power supply | Sized from the panels' own rating: see the note on power in [§5](#5-power-wifi-and-the-status-line) |
 | Cat5e or Cat6 cable | Controller → the card's **input** port |
@@ -163,7 +163,7 @@ The mismatch is not subtle in one direction: leave a downgraded card on `v13 and
 
 ---
 
-## 8. When it does not light up
+## 8. When the wall stays dark
 
 | Symptom | Look at |
 |---|---|
@@ -186,4 +186,5 @@ The mismatch is not subtle in one direction: leave a downgraded card on `v13 and
 - **[Setting up a Colorlight Card with FPP v6.3 and LED Vision 8.5](https://www.youtube.com/watch?v=L4lHbwUszAs)**: a video walkthrough of the card and panel side. A different sender, the same cards and the same LEDVision work.
 - **[Drivers](../../moonmodules/light/drivers.md#panelcard)**: the Panel Card control reference.
 - **[Layouts](../../moonmodules/light/layouts.md#panels)**: the Panels layout in full.
+- **[HUB75 refresh rates](hub75-refresh.md#colorlight-5a-75-receiving-cards)**: each card's refresh ceilings, for sizing panels per port.
 - **[Effects](../../moonmodules/light/effects.md)** and **[live scripting](../../moonmodules/light/moonlive.md)**: a wall is a big canvas, and scripted effects are the fastest way to fill it.

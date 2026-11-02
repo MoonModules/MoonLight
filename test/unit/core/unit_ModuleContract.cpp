@@ -33,7 +33,7 @@ const std::vector<Known> kKeepsMemory = {
     {"Effects", "its Layer keeps the pixel buffer while disabled"},
     {"Layer", "its pixel buffer_ is a plain Buffer that release() does not free"},
     {"Drivers", "outputBuffer_ is a plain Buffer that release() does not free"},
-    {"NdiDriver", "release() is overridden without chaining to the base, so the rgb_ and corrScratch_ scratch buffers stay, where the NDI library loads and the buffers exist", true},
+    {"NdiDriver", "release() is overridden without chaining to the base, so the rgb_ and lightScratch_ scratch buffers stay, where the NDI library loads and the buffers exist", true},
 };
 
 // Types whose enabled flag does not gate them, which the lifecycle then cannot switch off.
@@ -154,7 +154,7 @@ Row place(uint8_t index) {
         s.prepareTree();
         for (int i = 0; i < 3; i++) { mm::platform::setTestNowMs(now); s.tick(); now += 1100; }
         row.dynamicAfter = dynamicTotal(*m);
-        // A module added by document is measured from before its add, less its own objects. A standalone one stood in the tree before beforeAdd was taken, so its objects are already in that baseline and only what it holds beyond them counts; its setup-time allocations are in the baseline too and are not covered. A module standing in the tree before the add has no add to measure from.
+        // Measured from before the add: a module added by document less its own objects, a standalone one, already in that baseline with its setup allocations, by what it holds beyond them. Others have no add.
         if (byDocument || standalone)
             row.heldAfterDisable = static_cast<long>(mm::platform::allocatedBytes()) - static_cast<long>(beforeAdd) - (byDocument ? static_cast<long>(objectBytes(*m)) : 0L);
         // Removed the way the API's DELETE removes it, a top-level module leaving with its tree; a module the API refuses to remove (PreviewDriver) is out of this check.

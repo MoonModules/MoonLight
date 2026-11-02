@@ -10,11 +10,12 @@
 #include "light/layers/Buffer.h"
 #include "light/layouts/Layouts.h"
 #include "light/layouts/GridLayout.h"
+#include <memory>
 #include <string>
 
 namespace {
 
-// The NDI seams and virtual time are process-global, so a REQUIRE that aborts mid-case would strand a forced mode (or a frozen clock) for whichever test runs next, the classic passes-alone / fails-in-sequence flake. A scope guard restores both however the case leaves.
+// The NDI seams and virtual time are process-global, so a REQUIRE that aborts mid-case would strand a forced mode or a frozen clock for the next test, the passes-alone, fails-in-sequence flake; a guard restores both.
 struct NdiSeamGuard {
     explicit NdiSeamGuard(mm::platform::NdiTestMode mode) {
         mm::platform::setTestNdiMode(mode);
@@ -126,6 +127,32 @@ TEST_CASE("NdiDriver applies the driver's own brightness correction") {
     REQUIRE(f != nullptr);
     CHECK(f[0] < 200);            // dimmed, not passed through raw
     CHECK(f[0] > 0);
+}
+
+// A wire that carries RGB alone takes a wider profile's color from where the profile puts it, not its first three channels.
+TEST_CASE("NdiDriver sends a white-first profile's colors, not its white") {
+    NdiSeamGuard seam{mm::platform::NdiTestMode::ForceAvailable};
+    // On the heap: a driver and a layer outgrow a test's stack frame.
+    auto source = std::make_unique<mm::Buffer>();
+    auto driver = std::make_unique<mm::NdiDriver>();
+    auto wall = std::make_unique<Wall>(2, 1);
+    setUp(*driver, *source, *wall, 2);
+    auto wrgb = std::make_unique<mm::Correction>();
+    wrgb->curve = mm::Correction::Curve::Linear;
+    const mm::ChannelRole roles[4] = {mm::ChannelRole::White, mm::ChannelRole::Red, mm::ChannelRole::Green, mm::ChannelRole::Blue};
+    wrgb->rebuild(255, roles, 4);
+    driver->correctionForTest() = *wrgb;
+    driver->prepare();
+
+    paint(*source, 0, 10, 20, 30);
+
+    mm::platform::setTestNowMs(1000);
+    driver->tick();
+
+    REQUIRE(mm::platform::ndiTestFrameCount() == 1);
+    const uint8_t* f = mm::platform::ndiTestFrameData(0);
+    REQUIRE(f != nullptr);
+    CHECK(f[0] == 10); CHECK(f[1] == 20); CHECK(f[2] == 30);
 }
 
 // fps is a CEILING: a second tick inside the interval must not produce a second frame, or a fast render loop would flood the receiver with frames it never asked for.

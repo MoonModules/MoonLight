@@ -131,7 +131,7 @@ processes:
         say: Read the status line.
         when: { manual: "It reads a link speed and a packet rate, such as 1000 Mbit - 5200 packets/s." }
         detail: |
-          A `100 Mbit` warning still sends, fine for a small wall. `no ethernet link` means cable, card power or the wrong port. Panels dark with a healthy status: [when it does not light up](reference/hardware/panel-cards.md#8-when-it-does-not-light-up).
+          A `100 Mbit` warning still sends, fine for a small wall. `no ethernet link` means cable, card power or the wrong port. Panels dark with a healthy status: [when the wall stays dark](reference/hardware/panel-cards.md#8-when-the-wall-stays-dark).
     outro: |
       The card owns panel order and the picture is MoonLight's. A card on firmware v13 flickers with network activity, whichever sender drives it: [downgrade it](moonwalk.md#panel-card-downgrade).
   - id: panel-card-ledvision
